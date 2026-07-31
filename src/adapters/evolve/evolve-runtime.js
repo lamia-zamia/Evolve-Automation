@@ -51,6 +51,7 @@ import {
   migrateSetting as migrateSettingRecord,
   migrateSettingsRecord,
 } from "../../domain/settings-migration.ts";
+import { describeDroppedOverride } from "../../domain/override-resolution.ts";
 import { createOverrideEvaluation } from "../../settings/override-evaluation.ts";
 import { createQueuedSettings } from "../../settings/queued-settings.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
@@ -3468,8 +3469,8 @@ function startEvolveRuntimeComposition(
       keepOldValue,
     );
 
-  const updateStandAloneSettings = () =>
-    migrateSettingsRecord(settingsRaw, {
+  const updateStandAloneSettings = () => {
+    const report = migrateSettingsRecord(settingsRaw, {
       settingsSections,
       // The 28 default-reset builders, in their load-bearing order.
       defaultResets: [
@@ -3515,6 +3516,13 @@ function startEvolveRuntimeComposition(
       })),
       crafterOriginalIds: Object.values(crafter).map((job) => job._originalId),
     });
+    for (const dropped of report.droppedOverrides) {
+      GameLog.logDanger("special", describeDroppedOverride(dropped), [
+        "events",
+        "major_events",
+      ]);
+    }
+  };
 
   publishTestSurface({
     settingsMigration: { updateStandAloneSettings },

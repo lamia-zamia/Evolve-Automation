@@ -154,6 +154,80 @@ function readStoredConditions(
   return entries;
 }
 
+/** One override condition as it is persisted and as the editor writes it. */
+export interface StoredOverrideCondition extends Record<string, unknown> {
+  ret: unknown;
+}
+
+/** An override definition the storage boundary removed because it can never evaluate. */
+export interface DroppedOverride {
+  readonly settingKey: string;
+  /** Absent when the setting's whole entry was unusable rather than one of its conditions. */
+  readonly conditionNumber?: number;
+}
+
+export interface NormalizedStoredOverrides {
+  readonly overrides: Record<string, StoredOverrideCondition[]>;
+  readonly dropped: readonly DroppedOverride[];
+}
+
+export function describeDroppedOverride(dropped: DroppedOverride): string {
+  return dropped.conditionNumber === undefined
+    ? `Overrides for setting ${dropped.settingKey} removed: not a list of conditions.`
+    : `Condition ${dropped.conditionNumber} for setting ${dropped.settingKey} removed: not a valid override condition.`;
+}
+
+/**
+ * The storage boundary for override definitions. Conditions that could never evaluate are dropped
+ * once here rather than failing on every tick, and a stored result is coerced to the type of the
+ * setting it overrides so a number typed into a string setting still applies.
+ */
+export function normalizeStoredOverrides(
+  storedOverrides: unknown,
+  settingsRaw: Readonly<Record<string, unknown>>,
+): NormalizedStoredOverrides {
+  const overrides: Record<string, StoredOverrideCondition[]> = {};
+  const dropped: DroppedOverride[] = [];
+  if (!isKeyedObject(storedOverrides)) {
+    return { overrides, dropped };
+  }
+  for (const [settingKey, conditions] of Object.entries(storedOverrides)) {
+    if (!Array.isArray(conditions)) {
+      dropped.push({ settingKey });
+      continue;
+    }
+    const kept: StoredOverrideCondition[] = [];
+    for (let index = 0; index < conditions.length; index++) {
+      const condition: unknown = conditions[index];
+      if (parseOverrideCondition(condition) === undefined) {
+        dropped.push({ settingKey, conditionNumber: index + 1 });
+        continue;
+      }
+      kept.push(
+        coerceStoredResult(
+          condition as StoredOverrideCondition,
+          settingsRaw[settingKey],
+        ),
+      );
+    }
+    overrides[settingKey] = kept;
+  }
+  return { overrides, dropped };
+}
+
+function coerceStoredResult(
+  condition: StoredOverrideCondition,
+  settingValue: unknown,
+): StoredOverrideCondition {
+  if (typeof settingValue === "string" && typeof condition.ret === "number") {
+    return { ...condition, ret: String(condition.ret) };
+  }
+  if (typeof settingValue === "number" && typeof condition.ret === "string") {
+    return { ...condition, ret: Number(condition.ret) };
+  }
+  return condition;
+}
+
 /**
  * The tick rate the game accepts: rounded to a half tick and capped at 240. The lower bound is half a
  * tick, because the raw value is rounded and floored in doubled units before being halved.

@@ -37,16 +37,32 @@ const resetNames = [
   "resetMutableTraitSettings",
 ];
 
+// A well-formed override condition, as the editor writes it.
+function condition(fields = {}) {
+  return {
+    type1: "Boolean",
+    arg1: true,
+    type2: "Boolean",
+    arg2: true,
+    cmp: "==",
+    ret: true,
+    ...fields,
+  };
+}
+
 // A rich settingsRaw fixture exercising every migration branch. Returns a fresh
 // deep copy each call so the legacy and pure runs mutate independent records.
 function makeFixture() {
   const raw = {
     overrides: {
       // string setting with numeric ret -> coerced to string
-      stringSetting: [{ ret: 5 }],
+      stringSetting: [condition({ ret: 5 })],
       // number setting with string ret -> coerced to number
-      numberSetting: [{ ret: "7" }],
-      tickTimeout: [{ ret: 1 }],
+      numberSetting: [condition({ ret: "7" })],
+      tickTimeout: [condition({ ret: 1 })],
+      // dropped at the storage boundary: no operand types, and not a condition list
+      brokenSetting: [condition(), { ret: 1 }, "nonsense"],
+      unusableSetting: { ret: 1 },
     },
     triggers: [
       {
@@ -147,7 +163,7 @@ function makePureResets(record, order) {
 
 const pureRaw = makeFixture();
 const pureOrder = [];
-migrateSettingsRecord(pureRaw, {
+const pureReport = migrateSettingsRecord(pureRaw, {
   settingsSections,
   defaultResets: makePureResets(pureRaw, pureOrder),
   prestigeAscensionSkipCustom,
@@ -189,6 +205,15 @@ assert.equal(settingsRaw.someMarketDefault, "seeded");
 // Override return-type coercion.
 assert.strictEqual(settingsRaw.overrides.stringSetting[0].ret, "5");
 assert.strictEqual(settingsRaw.overrides.numberSetting[0].ret, 7);
+
+// Conditions that could never evaluate are removed once, and reported to the caller.
+assert.equal(settingsRaw.overrides.brokenSetting.length, 1);
+assert.equal(settingsRaw.overrides.unusableSetting, undefined);
+assert.deepEqual(pureReport.droppedOverrides, [
+  { settingKey: "brokenSetting", conditionNumber: 2 },
+  { settingKey: "brokenSetting", conditionNumber: 3 },
+  { settingKey: "unusableSetting" },
+]);
 
 // Trigger migrations.
 const [boolT, unlockedT, researchedT, builtT] = settingsRaw.triggers;

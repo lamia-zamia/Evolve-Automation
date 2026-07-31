@@ -1346,6 +1346,217 @@
     };
   }
 
+  // src/domain/override-resolution.ts
+  function isKeyedObject(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function parseOverrideCondition(value) {
+    if (!isKeyedObject(value)) {
+      return void 0;
+    }
+    const { type1, type2, cmp } = value;
+    if (typeof type1 !== "string" || typeof type2 !== "string" || typeof cmp !== "string") {
+      return void 0;
+    }
+    return {
+      type1,
+      arg1: value.arg1,
+      type2,
+      arg2: value.arg2,
+      comparator: cmp,
+      result: value.ret
+    };
+  }
+  function evaluateCondition(stored, evaluator) {
+    const condition = parseOverrideCondition(stored);
+    if (condition === void 0) {
+      return { kind: "failure", reason: { kind: "malformed-condition" } };
+    }
+    for (const operandType of [condition.type1, condition.type2]) {
+      if (!evaluator.hasOperandType(operandType)) {
+        return {
+          kind: "failure",
+          reason: { kind: "unknown-operand-type", operandType }
+        };
+      }
+    }
+    if (!evaluator.hasComparator(condition.comparator)) {
+      return {
+        kind: "failure",
+        reason: { kind: "unknown-comparator", comparator: condition.comparator }
+      };
+    }
+    try {
+      const left = evaluator.readOperand(condition.type1, condition.arg1);
+      const right = evaluator.readOperand(condition.type2, condition.arg2);
+      if (!evaluator.compare(condition.comparator, left, right)) {
+        return { kind: "no-match" };
+      }
+      return {
+        kind: "match",
+        value: evaluator.comparatorReturnsRightOperand(condition.comparator) ? right : condition.result
+      };
+    } catch (error) {
+      return {
+        kind: "failure",
+        reason: { kind: "evaluation-error", detail: String(error) }
+      };
+    }
+  }
+  function readStoredConditions(storedOverrides) {
+    if (!isKeyedObject(storedOverrides)) {
+      return [];
+    }
+    const entries = [];
+    for (const [settingKey, conditions] of Object.entries(storedOverrides)) {
+      if (Array.isArray(conditions)) {
+        entries.push([settingKey, conditions]);
+      }
+    }
+    return entries;
+  }
+  function describeDroppedOverride(dropped) {
+    return dropped.conditionNumber === void 0 ? `Overrides for setting ${dropped.settingKey} removed: not a list of conditions.` : `Condition ${dropped.conditionNumber} for setting ${dropped.settingKey} removed: not a valid override condition.`;
+  }
+  function normalizeStoredOverrides(storedOverrides, settingsRaw) {
+    const overrides = {};
+    const dropped = [];
+    if (!isKeyedObject(storedOverrides)) {
+      return { overrides, dropped };
+    }
+    for (const [settingKey, conditions] of Object.entries(storedOverrides)) {
+      if (!Array.isArray(conditions)) {
+        dropped.push({ settingKey });
+        continue;
+      }
+      const kept = [];
+      for (let index = 0; index < conditions.length; index++) {
+        const condition = conditions[index];
+        if (parseOverrideCondition(condition) === void 0) {
+          dropped.push({ settingKey, conditionNumber: index + 1 });
+          continue;
+        }
+        kept.push(
+          coerceStoredResult(
+            condition,
+            settingsRaw[settingKey]
+          )
+        );
+      }
+      overrides[settingKey] = kept;
+    }
+    return { overrides, dropped };
+  }
+  function coerceStoredResult(condition, settingValue) {
+    if (typeof settingValue === "string" && typeof condition.ret === "number") {
+      return { ...condition, ret: String(condition.ret) };
+    }
+    if (typeof settingValue === "number" && typeof condition.ret === "string") {
+      return { ...condition, ret: Number(condition.ret) };
+    }
+    return condition;
+  }
+  function normalizeTickRate(rawTickRate) {
+    return Math.min(240, Math.max(1, Math.round(Number(rawTickRate) * 2)) / 2);
+  }
+  function overridesForcedByActiveTasks(activeTasks) {
+    const forced = {};
+    if (activeTasks.storageTaskActive) {
+      forced.autoStorage = false;
+    }
+    if (activeTasks.trashTaskActive) {
+      forced.autoEject = false;
+    }
+    if (activeTasks.taxTaskActive) {
+      forced.autoTax = false;
+    }
+    return forced;
+  }
+  function describeOverrideFailure(failure2) {
+    return `Condition ${failure2.conditionNumber} for setting ${failure2.settingKey} invalid! Fix or remove it. (${describeFailureReason(failure2.reason)})`;
+  }
+  function describeFailureReason(reason) {
+    switch (reason.kind) {
+      case "malformed-condition":
+        return "condition is not a valid override condition";
+      case "unknown-operand-type":
+        return `${reason.operandType} variable not found`;
+      case "unknown-comparator":
+        return `${reason.comparator} comparator not found`;
+      case "type-mismatch":
+        return `Expected type: ${reason.expected}; Override type: ${reason.actual}`;
+      case "evaluation-error":
+        return reason.detail;
+    }
+  }
+  function resolveOverrides({
+    settingsRaw,
+    evaluator,
+    activeTasks
+  }) {
+    const values = {};
+    const listToggles = /* @__PURE__ */ new Map();
+    const failures = [];
+    for (const [settingKey, conditions] of readStoredConditions(
+      settingsRaw.overrides
+    )) {
+      const base = settingsRaw[settingKey];
+      for (let index = 0; index < conditions.length; index++) {
+        const outcome = evaluateCondition(conditions[index], evaluator);
+        if (outcome.kind === "no-match") {
+          continue;
+        }
+        if (outcome.kind === "failure") {
+          failures.push({
+            settingKey,
+            conditionNumber: index + 1,
+            reason: outcome.reason
+          });
+          continue;
+        }
+        if (typeof base === typeof outcome.value) {
+          values[settingKey] = outcome.value;
+          break;
+        }
+        if (Array.isArray(base)) {
+          const toggles = listToggles.get(settingKey) ?? [];
+          toggles.push(outcome.value);
+          listToggles.set(settingKey, toggles);
+          continue;
+        }
+        failures.push({
+          settingKey,
+          conditionNumber: index + 1,
+          reason: {
+            kind: "type-mismatch",
+            expected: typeof base,
+            actual: typeof outcome.value
+          }
+        });
+      }
+    }
+    Object.assign(values, overridesForcedByActiveTasks(activeTasks));
+    values.tickRate = normalizeTickRate(values.tickRate ?? settingsRaw.tickRate);
+    const lists = {};
+    for (const [settingKey, toggles] of listToggles) {
+      const base = settingsRaw[settingKey];
+      if (!Array.isArray(base)) {
+        continue;
+      }
+      const next = base.slice();
+      for (const item of toggles) {
+        const index = next.indexOf(item);
+        if (index > -1) {
+          next.splice(index, 1);
+        } else {
+          next.push(item);
+        }
+      }
+      lists[settingKey] = next;
+    }
+    return { values, lists, failures };
+  }
+
   // src/domain/settings-migration.ts
   function has(record, key) {
     return Object.prototype.hasOwnProperty.call(record, key);
@@ -1427,18 +1638,11 @@
       settingsRaw.migrationVersion = 1;
     }
     defaultResets.forEach((reset) => reset(false));
-    for (const key in settingsRaw.overrides) {
-      const overrides = settingsRaw.overrides[key];
-      for (let i = 0; i < overrides.length; i++) {
-        const override = overrides[i];
-        if (typeof settingsRaw[key] === "string" && typeof override.ret === "number") {
-          override.ret = String(override.ret);
-        }
-        if (typeof settingsRaw[key] === "number" && typeof override.ret === "string") {
-          override.ret = Number(override.ret);
-        }
-      }
-    }
+    const normalizedOverrides = normalizeStoredOverrides(
+      settingsRaw.overrides,
+      settingsRaw
+    );
+    settingsRaw.overrides = normalizedOverrides.overrides;
     settingsRaw.triggers.forEach((t) => {
       if (t.requirementType === "Boolean" && t.requirementCount !== 1) {
         t.requirementId = t.requirementCount ? t.requirementId : !t.requirementId;
@@ -1712,6 +1916,7 @@
       delete settingsRaw[id];
       delete settingsRaw.overrides[id];
     });
+    return { droppedOverrides: normalizedOverrides.dropped };
   }
 
   // src/application/settings-reset.ts
@@ -1778,176 +1983,6 @@
         applySettings(settingsRaw, { autoTrigger: false }, reset);
       }
     };
-  }
-
-  // src/domain/override-resolution.ts
-  function isKeyedObject(value) {
-    return typeof value === "object" && value !== null;
-  }
-  function parseOverrideCondition(value) {
-    if (!isKeyedObject(value)) {
-      return void 0;
-    }
-    const { type1, type2, cmp } = value;
-    if (typeof type1 !== "string" || typeof type2 !== "string" || typeof cmp !== "string") {
-      return void 0;
-    }
-    return {
-      type1,
-      arg1: value.arg1,
-      type2,
-      arg2: value.arg2,
-      comparator: cmp,
-      result: value.ret
-    };
-  }
-  function evaluateCondition(stored, evaluator) {
-    const condition = parseOverrideCondition(stored);
-    if (condition === void 0) {
-      return { kind: "failure", reason: { kind: "malformed-condition" } };
-    }
-    for (const operandType of [condition.type1, condition.type2]) {
-      if (!evaluator.hasOperandType(operandType)) {
-        return {
-          kind: "failure",
-          reason: { kind: "unknown-operand-type", operandType }
-        };
-      }
-    }
-    if (!evaluator.hasComparator(condition.comparator)) {
-      return {
-        kind: "failure",
-        reason: { kind: "unknown-comparator", comparator: condition.comparator }
-      };
-    }
-    try {
-      const left = evaluator.readOperand(condition.type1, condition.arg1);
-      const right = evaluator.readOperand(condition.type2, condition.arg2);
-      if (!evaluator.compare(condition.comparator, left, right)) {
-        return { kind: "no-match" };
-      }
-      return {
-        kind: "match",
-        value: evaluator.comparatorReturnsRightOperand(condition.comparator) ? right : condition.result
-      };
-    } catch (error) {
-      return {
-        kind: "failure",
-        reason: { kind: "evaluation-error", detail: String(error) }
-      };
-    }
-  }
-  function readStoredConditions(storedOverrides) {
-    if (!isKeyedObject(storedOverrides)) {
-      return [];
-    }
-    const entries = [];
-    for (const [settingKey, conditions] of Object.entries(storedOverrides)) {
-      if (Array.isArray(conditions)) {
-        entries.push([settingKey, conditions]);
-      }
-    }
-    return entries;
-  }
-  function normalizeTickRate(rawTickRate) {
-    return Math.min(240, Math.max(1, Math.round(Number(rawTickRate) * 2)) / 2);
-  }
-  function overridesForcedByActiveTasks(activeTasks) {
-    const forced = {};
-    if (activeTasks.storageTaskActive) {
-      forced.autoStorage = false;
-    }
-    if (activeTasks.trashTaskActive) {
-      forced.autoEject = false;
-    }
-    if (activeTasks.taxTaskActive) {
-      forced.autoTax = false;
-    }
-    return forced;
-  }
-  function describeOverrideFailure(failure2) {
-    return `Condition ${failure2.conditionNumber} for setting ${failure2.settingKey} invalid! Fix or remove it. (${describeFailureReason(failure2.reason)})`;
-  }
-  function describeFailureReason(reason) {
-    switch (reason.kind) {
-      case "malformed-condition":
-        return "condition is not a valid override condition";
-      case "unknown-operand-type":
-        return `${reason.operandType} variable not found`;
-      case "unknown-comparator":
-        return `${reason.comparator} comparator not found`;
-      case "type-mismatch":
-        return `Expected type: ${reason.expected}; Override type: ${reason.actual}`;
-      case "evaluation-error":
-        return reason.detail;
-    }
-  }
-  function resolveOverrides({
-    settingsRaw,
-    evaluator,
-    activeTasks
-  }) {
-    const values = {};
-    const listToggles = /* @__PURE__ */ new Map();
-    const failures = [];
-    for (const [settingKey, conditions] of readStoredConditions(
-      settingsRaw.overrides
-    )) {
-      const base = settingsRaw[settingKey];
-      for (let index = 0; index < conditions.length; index++) {
-        const outcome = evaluateCondition(conditions[index], evaluator);
-        if (outcome.kind === "no-match") {
-          continue;
-        }
-        if (outcome.kind === "failure") {
-          failures.push({
-            settingKey,
-            conditionNumber: index + 1,
-            reason: outcome.reason
-          });
-          continue;
-        }
-        if (typeof base === typeof outcome.value) {
-          values[settingKey] = outcome.value;
-          break;
-        }
-        if (Array.isArray(base)) {
-          const toggles = listToggles.get(settingKey) ?? [];
-          toggles.push(outcome.value);
-          listToggles.set(settingKey, toggles);
-          continue;
-        }
-        failures.push({
-          settingKey,
-          conditionNumber: index + 1,
-          reason: {
-            kind: "type-mismatch",
-            expected: typeof base,
-            actual: typeof outcome.value
-          }
-        });
-      }
-    }
-    Object.assign(values, overridesForcedByActiveTasks(activeTasks));
-    values.tickRate = normalizeTickRate(values.tickRate ?? settingsRaw.tickRate);
-    const lists = {};
-    for (const [settingKey, toggles] of listToggles) {
-      const base = settingsRaw[settingKey];
-      if (!Array.isArray(base)) {
-        continue;
-      }
-      const next = base.slice();
-      for (const item of toggles) {
-        const index = next.indexOf(item);
-        if (index > -1) {
-          next.splice(index, 1);
-        } else {
-          next.push(item);
-        }
-      }
-      lists[settingKey] = next;
-    }
-    return { values, lists, failures };
   }
 
   // src/settings/override-evaluation.ts
@@ -57199,52 +57234,60 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       mapCb,
       keepOldValue
     );
-    const updateStandAloneSettings = () => migrateSettingsRecord(settingsRaw, {
-      settingsSections,
-      // The 28 default-reset builders, in their load-bearing order.
-      defaultResets: [
-        resetEvolutionSettings,
-        resetWarSettings,
-        resetHellSettings,
-        resetMechSettings,
-        resetFleetSettings,
-        resetGovernmentSettings,
-        resetAuthoritySettings,
-        resetBuildingSettings,
-        resetWeightingSettings,
-        resetMarketSettings,
-        resetResearchSettings,
-        resetProjectSettings,
-        resetJobSettings,
-        resetMagicSettings,
-        resetProductionSettings,
-        resetStorageSettings,
-        resetGeneralSettings,
-        resetInterfaceSettings,
-        resetStateLogSettings,
-        resetAchievementGuardSettings,
-        resetChallengeHelperSettings,
-        resetPrestigeSettings,
-        resetEjectorSettings,
-        resetPlanetSettings,
-        resetLoggingSettings,
-        resetTriggerSettings,
-        resetMinorTraitSettings,
-        resetMutableTraitSettings
-      ],
-      prestigeAscensionSkipCustom: Boolean(
-        settings.prestigeAscensionSkipCustom
-      ),
-      techIds,
-      marketPriorityIds: MarketManager.priorityList.map((res) => res.id),
-      resourceIds: Object.values(resources).map((res) => res.id),
-      projectIds: Object.values(projects).map((project) => project.id),
-      buildings: Object.values(buildings).map((building3) => ({
-        vueBinding: building3._vueBinding,
-        switchable: building3.isSwitchable()
-      })),
-      crafterOriginalIds: Object.values(crafter).map((job) => job._originalId)
-    });
+    const updateStandAloneSettings = () => {
+      const report = migrateSettingsRecord(settingsRaw, {
+        settingsSections,
+        // The 28 default-reset builders, in their load-bearing order.
+        defaultResets: [
+          resetEvolutionSettings,
+          resetWarSettings,
+          resetHellSettings,
+          resetMechSettings,
+          resetFleetSettings,
+          resetGovernmentSettings,
+          resetAuthoritySettings,
+          resetBuildingSettings,
+          resetWeightingSettings,
+          resetMarketSettings,
+          resetResearchSettings,
+          resetProjectSettings,
+          resetJobSettings,
+          resetMagicSettings,
+          resetProductionSettings,
+          resetStorageSettings,
+          resetGeneralSettings,
+          resetInterfaceSettings,
+          resetStateLogSettings,
+          resetAchievementGuardSettings,
+          resetChallengeHelperSettings,
+          resetPrestigeSettings,
+          resetEjectorSettings,
+          resetPlanetSettings,
+          resetLoggingSettings,
+          resetTriggerSettings,
+          resetMinorTraitSettings,
+          resetMutableTraitSettings
+        ],
+        prestigeAscensionSkipCustom: Boolean(
+          settings.prestigeAscensionSkipCustom
+        ),
+        techIds,
+        marketPriorityIds: MarketManager.priorityList.map((res) => res.id),
+        resourceIds: Object.values(resources).map((res) => res.id),
+        projectIds: Object.values(projects).map((project) => project.id),
+        buildings: Object.values(buildings).map((building3) => ({
+          vueBinding: building3._vueBinding,
+          switchable: building3.isSwitchable()
+        })),
+        crafterOriginalIds: Object.values(crafter).map((job) => job._originalId)
+      });
+      for (const dropped of report.droppedOverrides) {
+        GameLog.logDanger("special", describeDroppedOverride(dropped), [
+          "events",
+          "major_events"
+        ]);
+      }
+    };
     publishTestSurface({
       settingsMigration: { updateStandAloneSettings }
     });

@@ -1,3 +1,9 @@
+import {
+  normalizeStoredOverrides,
+  type DroppedOverride,
+  type StoredOverrideCondition,
+} from "./override-resolution.ts";
+
 // Pure settings schema/migration over the raw persisted record.
 //
 // These functions replace the getter-bag `createSettingsMigration`/`createSettingsState`
@@ -5,9 +11,7 @@
 // resets) is passed explicitly, and every write lands on the `settingsRaw` record handed in.
 // No ambient globals, no live getters.
 
-export interface SettingOverride extends Record<string, unknown> {
-  ret: unknown;
-}
+export type SettingOverride = StoredOverrideCondition;
 
 export interface TriggerSetting extends Record<string, unknown> {
   requirementType: string;
@@ -111,6 +115,11 @@ export interface SettingsMigrationContext {
   crafterOriginalIds: readonly string[];
 }
 
+/** What the migration removed rather than carried across, for the caller to report. */
+export interface SettingsMigrationReport {
+  readonly droppedOverrides: readonly DroppedOverride[];
+}
+
 /**
  * Run the one-time settings schema migration, mutating `settingsRaw` in place.
  * Faithful port of the legacy `updateStandAloneSettings`, with all reads supplied
@@ -119,7 +128,7 @@ export interface SettingsMigrationContext {
 export function migrateSettingsRecord(
   settingsRaw: SettingsRecord,
   context: SettingsMigrationContext,
-): void {
+): SettingsMigrationReport {
   const {
     settingsSections,
     defaultResets,
@@ -181,25 +190,13 @@ export function migrateSettingsRecord(
   // Apply default settings
   defaultResets.forEach((reset) => reset(false));
 
-  // Validate overrides types, and fix if needed
-  for (const key in settingsRaw.overrides) {
-    const overrides = settingsRaw.overrides[key] as SettingOverride[];
-    for (let i = 0; i < overrides.length; i++) {
-      const override = overrides[i] as SettingOverride;
-      if (
-        typeof settingsRaw[key] === "string" &&
-        typeof override.ret === "number"
-      ) {
-        override.ret = String(override.ret);
-      }
-      if (
-        typeof settingsRaw[key] === "number" &&
-        typeof override.ret === "string"
-      ) {
-        override.ret = Number(override.ret);
-      }
-    }
-  }
+  // Validate override definitions once here, so a condition that could never evaluate is removed
+  // instead of failing on every tick.
+  const normalizedOverrides = normalizeStoredOverrides(
+    settingsRaw.overrides,
+    settingsRaw,
+  );
+  settingsRaw.overrides = normalizedOverrides.overrides;
   // Migrate pre-overrides settings
   settingsRaw.triggers.forEach((t) => {
     // Normalize manually-added boolean triggers to match UI
@@ -492,4 +489,6 @@ export function migrateSettingsRecord(
     delete settingsRaw[id];
     delete settingsRaw.overrides[id];
   });
+
+  return { droppedOverrides: normalizedOverrides.dropped };
 }

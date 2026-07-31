@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
+  describeDroppedOverride,
   describeOverrideFailure,
+  normalizeStoredOverrides,
   normalizeTickRate,
   overridesForcedByActiveTasks,
   parseOverrideCondition,
@@ -250,6 +252,64 @@ for (const overrides of [undefined, null, 5, { autoBuild: "not a list" }]) {
   });
   assert.deepEqual(resolution.values, { tickRate: 4 });
   assert.deepEqual(resolution.failures, []);
+}
+
+// --- Storage boundary: drop what can never evaluate, coerce what can ---
+{
+  const stored = {
+    stringSetting: [condition({ ret: 5 })],
+    numberSetting: [condition({ ret: "7" })],
+    booleanSetting: [condition({ ret: 1 })],
+    mixed: [condition(), null, condition({ cmp: 9 }), { ret: "orphan" }],
+    notAList: { ret: 1 },
+  };
+  const { overrides, dropped } = normalizeStoredOverrides(stored, {
+    stringSetting: "hello",
+    numberSetting: 3,
+    booleanSetting: false,
+  });
+
+  assert.equal(overrides.stringSetting[0].ret, "5");
+  assert.equal(overrides.numberSetting[0].ret, 7);
+  // Only string/number are coerced; a number result on a boolean setting is left for the resolver
+  // to reject, because there is no safe repair.
+  assert.equal(overrides.booleanSetting[0].ret, 1);
+  assert.equal(overrides.mixed.length, 1);
+  assert.equal(overrides.notAList, undefined);
+  assert.deepEqual(dropped, [
+    { settingKey: "mixed", conditionNumber: 2 },
+    { settingKey: "mixed", conditionNumber: 3 },
+    { settingKey: "mixed", conditionNumber: 4 },
+    { settingKey: "notAList" },
+  ]);
+  assert.equal(
+    describeDroppedOverride(dropped[0]),
+    "Condition 2 for setting mixed removed: not a valid override condition.",
+  );
+  assert.equal(
+    describeDroppedOverride(dropped[3]),
+    "Overrides for setting notAList removed: not a list of conditions.",
+  );
+
+  // The stored conditions are copied, never edited in place.
+  assert.equal(stored.stringSetting[0].ret, 5);
+  assert.equal(stored.mixed.length, 4);
+
+  // A condition that needs no coercion keeps every field it was stored with.
+  const untouched = normalizeStoredOverrides(
+    { plain: [{ ...condition(), note: "kept" }] },
+    {},
+  );
+  assert.equal(untouched.overrides.plain[0].note, "kept");
+  assert.deepEqual(untouched.dropped, []);
+}
+
+// --- A missing or unusable overrides bag normalizes to nothing ---
+for (const stored of [undefined, null, "text"]) {
+  assert.deepEqual(normalizeStoredOverrides(stored, {}), {
+    overrides: {},
+    dropped: [],
+  });
 }
 
 console.log("Override resolution domain tests passed");
