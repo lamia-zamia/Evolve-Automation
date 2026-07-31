@@ -53746,6 +53746,170 @@
     };
   }
 
+  // src/settings/override-operand-readers.ts
+  function lookup(bag, argument, kind) {
+    const entry = typeof argument === "string" ? bag[argument] : void 0;
+    if (entry === void 0) {
+      throw new Error(`${kind} ${String(argument)} not found`);
+    }
+    return entry;
+  }
+  function createOverrideOperandReaders({
+    readSettings: readSettings3,
+    readSettingsRaw,
+    readState,
+    readGame,
+    readBuildingIds,
+    readBuildings,
+    readResources: readResources2,
+    readTechIds,
+    readArpaIds,
+    readJobIds,
+    readRaces,
+    readSmelterManager,
+    readFactoryManager,
+    readWarManager,
+    readFastEval,
+    readGovernor
+  }) {
+    const building3 = (argument) => lookup(readBuildingIds(), argument, "building");
+    const project = (argument) => lookup(readArpaIds(), argument, "project");
+    const job = (argument) => lookup(readJobIds(), argument, "job");
+    const research = (argument) => lookup(readTechIds(), argument, "research");
+    const resource2 = (argument) => lookup(readResources2(), argument, "resource");
+    function resolveRaceId(argument) {
+      const race2 = readGame().global.race;
+      if (argument === "species" || argument === "gods" || argument === "old_gods") {
+        return race2[argument];
+      }
+      if (argument === "srace") {
+        return race2.srace ?? "protoplasm";
+      }
+      return argument;
+    }
+    function resolveDate(argument) {
+      const game = readGame();
+      if (argument === "total") {
+        return game.global.stats.days;
+      }
+      if (argument === "impact") {
+        const orbitDecay = game.global.race.orbit_decay;
+        return orbitDecay ? Number(orbitDecay) - game.global.stats.days : -1;
+      }
+      return game.global.city.calendar[String(argument)];
+    }
+    function resolveIndustry(argument) {
+      if (argument === "smelters") {
+        return readSmelterManager().maxOperating();
+      }
+      if (argument === "factories") {
+        return readFactoryManager().maxOperating();
+      }
+      return argument;
+    }
+    function currentRaceName() {
+      const game = readGame();
+      const species = game.global.race.species;
+      const chosen = game.global.race.evoFinalMenu;
+      const raceId = species === "protoplasm" && chosen ? chosen : species;
+      return lookup(game.races, raceId, "race").name;
+    }
+    function resolveOther(argument) {
+      const game = readGame();
+      switch (argument) {
+        case "rname":
+          return currentRaceName();
+        case "tpfleet":
+          return game.global.space.shipyard?.ships?.length ?? 0;
+        case "mrelay":
+          return Number(game.global.space.m_relay?.charged) / 1e4;
+        case "satcost":
+          return readBuildings().SunSwarmSatellite.cost.Money ?? 0;
+        case "bcar":
+          return game.global.portal.carport?.damaged ?? 0;
+        case "alevel":
+          return game.alevel() - 1;
+        case "tknow":
+          return readState().knowledgeRequiredByTechs;
+        default:
+          return argument;
+      }
+    }
+    return {
+      String: (argument) => argument,
+      Number: (argument) => argument,
+      Boolean: (argument) => argument,
+      SettingDefault: (argument) => readSettingsRaw()[String(argument)],
+      SettingCurrent: (argument) => readSettings3()[String(argument)],
+      Eval: (argument) => readFastEval()(String(argument)),
+      BuildingCost: (argument) => {
+        const [buildingId2, resourceId3] = String(argument).split(".");
+        return lookup(readBuildingIds(), buildingId2, "building").cost[String(resourceId3)] ?? 0;
+      },
+      BuildingUnlocked: (argument) => building3(argument).isUnlocked(),
+      BuildingClickable: (argument) => building3(argument).isClickable(),
+      BuildingAffordable: (argument) => building3(argument).isAffordable(true),
+      BuildingCount: (argument) => building3(argument).count,
+      BuildingEnabled: (argument) => building3(argument).stateOnCount,
+      BuildingDisabled: (argument) => building3(argument).stateOffCount,
+      BuildingQueued: (argument) => readState().queuedTargetsAll.includes(building3(argument)),
+      ProjectUnlocked: (argument) => project(argument).isUnlocked(),
+      ProjectCount: (argument) => project(argument).count,
+      ProjectProgress: (argument) => project(argument).progress,
+      JobUnlocked: (argument) => job(argument).isUnlocked(),
+      JobCount: (argument) => job(argument).count,
+      JobMax: (argument) => job(argument).max,
+      JobWorkers: (argument) => job(argument).workers,
+      JobServants: (argument) => job(argument).servants,
+      ResearchUnlocked: (argument) => research(argument).isUnlocked(),
+      ResearchComplete: (argument) => research(argument).isResearched(),
+      ResourceUnlocked: (argument) => resource2(argument).isUnlocked(),
+      ResourceQuantity: (argument) => resource2(argument).currentQuantity,
+      ResourceStorage: (argument) => resource2(argument).maxQuantity,
+      ResourceMaxCost: (argument) => resource2(argument).maxCost,
+      // rateOfChange holds the full diff of the resource at the moment overrides are checked.
+      ResourceIncome: (argument) => resource2(argument).rateOfChange,
+      ResourceRatio: (argument) => resource2(argument).storageRatio,
+      ResourceSatisfied: (argument) => resource2(argument).usefulRatio >= 1,
+      ResourceSatisfyRatio: (argument) => resource2(argument).usefulRatio,
+      ResourceDemanded: (argument) => resource2(argument).isDemanded(),
+      RaceId: (argument) => resolveRaceId(argument),
+      RacePillared: (argument) => {
+        const pillared = readGame().global.pillars[String(resolveRaceId(argument))];
+        return pillared !== void 0 && pillared >= readGame().alevel();
+      },
+      RaceGenus: (argument) => {
+        const species = String(readGame().global.race.species);
+        return readRaces()[species]?.genus === argument;
+      },
+      MimicGenus: (argument) => (readGame().global.race.ss_genus ?? "none") === argument,
+      TraitLevel: (argument) => readGame().global.race[String(argument)] ?? 0,
+      ResetType: (argument) => readSettings3().prestigeType === argument,
+      Challenge: (argument) => readGame().global.race[String(argument)] ? true : false,
+      Universe: (argument) => readGame().global.race.universe === argument,
+      Government: (argument) => readGame().global.civic.govern?.type === argument,
+      Governor: (argument) => readGovernor()() === argument,
+      Queue: (argument) => {
+        if (argument === "queue") {
+          return readGame().global.queue.queue.length;
+        }
+        if (argument === "r_queue") {
+          return readGame().global.r_queue.queue.length;
+        }
+        if (argument === "evo") {
+          return readSettingsRaw().evolutionQueue.length;
+        }
+        throw new Error(`queue ${String(argument)} not found`);
+      },
+      Date: (argument) => resolveDate(argument),
+      Soldiers: (argument) => readWarManager()[String(argument)],
+      PlanetBiome: (argument) => readGame().global.city.biome === argument,
+      PlanetTrait: (argument) => readGame().global.city.ptrait.includes(argument),
+      Industry: (argument) => resolveIndustry(argument),
+      Other: (argument) => resolveOther(argument)
+    };
+  }
+
   // src/settings/override-catalog.ts
   function createOverrideCatalog({
     readSettings: readSettings3,
@@ -53772,12 +53936,6 @@
     readFastEval,
     readGovernor
   }) {
-    const buildSelectOptions = (...args) => readBuildSelectOptions()(...args);
-    const fastEval = (...args) => readFastEval()(...args);
-    const getGovernor = (...args) => readGovernor()(...args);
-    const historicalRelayChargeRatio = () => {
-      return readGame().global.space.m_relay?.charged / 1e4;
-    };
     const prestigeTypes = [
       { val: "none", label: "None", hint: "Endless game" },
       {
@@ -53841,7 +53999,7 @@
       { val: "eden", label: "Eden", hint: "Build Garden Of Eden." },
       { val: "apotheosis", label: "Apotheosis", hint: "Kill the God." }
     ];
-    const prestigeOptions = buildSelectOptions(prestigeTypes);
+    const prestigeOptions = readBuildSelectOptions()(prestigeTypes);
     const checkCompare = {
       "==": (a, b) => a == b,
       "!=": (a, b) => a != b,
@@ -53881,272 +54039,280 @@
       readBiomeList,
       readTraitList
     });
-    const argMap = {
-      race: (r) => r === "species" || r === "gods" || r === "old_gods" ? readGame().global.race[r] : r === "srace" ? readGame().global.race.srace ?? "protoplasm" : r,
-      date: (d) => d === "total" ? readGame().global.stats.days : d === "impact" ? readGame().global.race["orbit_decay"] ? readGame().global.race["orbit_decay"] - readGame().global.stats.days : -1 : readGame().global.city.calendar[d],
-      industry: (b) => b === "smelters" ? readSmelterManager().maxOperating() : b === "factories" ? readFactoryManager().maxOperating() : b,
-      other: (o) => o === "rname" ? readGame().races[readGame().global.race.species === "protoplasm" && readGame().global.race.evoFinalMenu ? readGame().global.race.evoFinalMenu : readGame().global.race.species].name : o === "tpfleet" ? readGame().global.space.shipyard?.ships?.length ?? 0 : o === "mrelay" ? historicalRelayChargeRatio() : o === "satcost" ? readBuildings().SunSwarmSatellite.cost.Money ?? 0 : o === "bcar" ? readGame().global.portal.carport?.damaged ?? 0 : o === "alevel" ? readGame().alevel() - 1 : o === "tknow" ? readState().knowledgeRequiredByTechs : o
-    };
+    const read = createOverrideOperandReaders({
+      readSettings: readSettings3,
+      readSettingsRaw,
+      readState,
+      readGame,
+      readBuildingIds,
+      readBuildings,
+      readResources: readResources2,
+      readTechIds,
+      readArpaIds,
+      readJobIds,
+      readRaces,
+      readSmelterManager,
+      readFactoryManager,
+      readWarManager,
+      readFastEval,
+      readGovernor
+    });
     const checkTypes = {
       String: {
-        fn: (v) => v,
+        fn: read.String,
         arg: "string",
         def: "none",
         desc: "Returns string"
       },
       Number: {
-        fn: (v) => v,
+        fn: read.Number,
         arg: "number",
         def: 0,
         desc: "Returns number"
       },
       Boolean: {
-        fn: (v) => v,
+        fn: read.Boolean,
         arg: "boolean",
         def: false,
         desc: "Returns boolean"
       },
       SettingDefault: {
-        fn: (s) => readSettingsRaw()[s],
+        fn: read.SettingDefault,
         arg: "string",
         def: "masterScriptToggle",
         desc: "Returns default value of setting, types varies"
       },
       SettingCurrent: {
-        fn: (s) => readSettings3()[s],
+        fn: read.SettingCurrent,
         arg: "string",
         def: "masterScriptToggle",
         desc: "Returns current value of setting, types varies"
       },
       Eval: {
-        fn: (s) => fastEval(s),
+        fn: read.Eval,
         arg: "string",
         def: "Math.PI",
         desc: "Returns result of evaluating code"
       },
       BuildingCost: {
-        fn: (id) => {
-          let [b, r] = id.split(".");
-          return readBuildingIds()[b].cost[r] ?? 0;
-        },
+        fn: read.BuildingCost,
         ...argType.building_cost,
         desc: "Return material cost of building as number\n(Due to technical limitations some options might not appear in list until you unlock corresponding building in game)"
       },
       BuildingUnlocked: {
-        fn: (b) => readBuildingIds()[b].isUnlocked(),
+        fn: read.BuildingUnlocked,
         ...argType.building,
         desc: "Return true when building is unlocked"
       },
       BuildingClickable: {
-        fn: (b) => readBuildingIds()[b].isClickable(),
+        fn: read.BuildingClickable,
         ...argType.building,
         desc: "Return true when building have all required resources, and can be purchased"
       },
       BuildingAffordable: {
-        fn: (b) => readBuildingIds()[b].isAffordable(true),
+        fn: read.BuildingAffordable,
         ...argType.building,
         desc: "Return true when building is affordable, i.e. costs of all resources below storage caps"
       },
       BuildingCount: {
-        fn: (b) => readBuildingIds()[b].count,
+        fn: read.BuildingCount,
         ...argType.building,
         desc: "Returns amount of buildings as number"
       },
       BuildingEnabled: {
-        fn: (b) => readBuildingIds()[b].stateOnCount,
+        fn: read.BuildingEnabled,
         ...argType.building,
         desc: "Returns amount of powered buildings as number"
       },
       BuildingDisabled: {
-        fn: (b) => readBuildingIds()[b].stateOffCount,
+        fn: read.BuildingDisabled,
         ...argType.building,
         desc: "Returns amount of unpowered buildings as number"
       },
       BuildingQueued: {
-        fn: (b) => readState().queuedTargetsAll.includes(readBuildingIds()[b]),
+        fn: read.BuildingQueued,
         ...argType.building,
         desc: "Returns true when building in queue"
       },
       ProjectUnlocked: {
-        fn: (p) => readArpaIds()[p].isUnlocked(),
+        fn: read.ProjectUnlocked,
         ...argType.project,
         desc: "Return true when project is unlocked"
       },
       ProjectCount: {
-        fn: (p) => readArpaIds()[p].count,
+        fn: read.ProjectCount,
         ...argType.project,
         desc: "Returns amount of projects as number"
       },
       ProjectProgress: {
-        fn: (p) => readArpaIds()[p].progress,
+        fn: read.ProjectProgress,
         ...argType.project,
         desc: "Returns progress of projects as number"
       },
       JobUnlocked: {
-        fn: (j) => readJobIds()[j].isUnlocked(),
+        fn: read.JobUnlocked,
         ...argType.job,
         desc: "Returns true when job is unlocked"
       },
       JobCount: {
-        fn: (j) => readJobIds()[j].count,
+        fn: read.JobCount,
         ...argType.job,
         desc: "Returns current amount of employees(both workers, and servants) as number"
       },
       JobMax: {
-        fn: (j) => readJobIds()[j].max,
+        fn: read.JobMax,
         ...argType.job,
         desc: "Returns maximum amount of assigned workers as number"
       },
       JobWorkers: {
-        fn: (j) => readJobIds()[j].workers,
+        fn: read.JobWorkers,
         ...argType.job,
         desc: "Returns current amount of workers as number"
       },
       JobServants: {
-        fn: (j) => readJobIds()[j].servants,
+        fn: read.JobServants,
         ...argType.job_servant,
         desc: "Returns current amount of servants as number"
       },
       ResearchUnlocked: {
-        fn: (r) => readTechIds()[r].isUnlocked(),
+        fn: read.ResearchUnlocked,
         ...argType.research,
         desc: "Returns true when research is unlocked"
       },
       ResearchComplete: {
-        fn: (r) => readTechIds()[r].isResearched(),
+        fn: read.ResearchComplete,
         ...argType.research,
         desc: "Returns true when research is complete"
       },
       ResourceUnlocked: {
-        fn: (r) => readResources2()[r].isUnlocked(),
+        fn: read.ResourceUnlocked,
         ...argType.resource,
         desc: "Returns true when resource or support is unlocked"
       },
       ResourceQuantity: {
-        fn: (r) => readResources2()[r].currentQuantity,
+        fn: read.ResourceQuantity,
         ...argType.resource,
         desc: "Returns current amount of resource or support as number"
       },
       ResourceStorage: {
-        fn: (r) => readResources2()[r].maxQuantity,
+        fn: read.ResourceStorage,
         ...argType.resource,
         desc: "Returns maximum amount of resource or support as number. Power returns 'Disabled' amount."
       },
       ResourceMaxCost: {
-        fn: (r) => readResources2()[r].maxCost,
+        fn: read.ResourceMaxCost,
         ...argType.resource,
         desc: "Returns maximum cost of resource as number."
       },
       ResourceIncome: {
-        fn: (r) => readResources2()[r].rateOfChange,
+        fn: read.ResourceIncome,
         ...argType.resource,
         desc: "Returns current income of resource or unused support as number"
       },
-      // rateOfChange holds full diff of resource at the moment when overrides checked
       ResourceRatio: {
-        fn: (r) => readResources2()[r].storageRatio,
+        fn: read.ResourceRatio,
         ...argType.resource,
         desc: "Returns storage ratio of resource as number. Number 0.5 means that storage is 50% full, and such."
       },
       ResourceSatisfied: {
-        fn: (r) => readResources2()[r].usefulRatio >= 1,
+        fn: read.ResourceSatisfied,
         ...argType.resource,
         desc: "Returns true when current amount of resource above maximum costs"
       },
       ResourceSatisfyRatio: {
-        fn: (r) => readResources2()[r].usefulRatio,
+        fn: read.ResourceSatisfyRatio,
         ...argType.resource,
         desc: "Returns satisfy ratio of resource. Number 0.5 means that storead amount equal half of maximum costs"
       },
       ResourceDemanded: {
-        fn: (r) => readResources2()[r].isDemanded(),
+        fn: read.ResourceDemanded,
         ...argType.resource,
         desc: "Returns true when resource is demanded, i.e. missed by some prioritized task, such as queue or trigger"
       },
       RaceId: {
-        fn: (r) => argMap.race(r),
+        fn: read.RaceId,
         ...argType.race,
         desc: "Returns ID of selected race as string"
       },
       RacePillared: {
-        fn: (r) => readGame().global.pillars[argMap.race(r)] >= readGame().alevel(),
+        fn: read.RacePillared,
         ...argType.race,
         desc: "Returns true when selected race pillared at current star level"
       },
       RaceGenus: {
-        fn: (g) => readRaces()[readGame().global.race.species]?.genus === g,
+        fn: read.RaceGenus,
         ...argType.genus,
         desc: "Returns true when playing selected genus"
       },
       MimicGenus: {
-        fn: (g) => (readGame().global.race.ss_genus ?? "none") === g,
+        fn: read.MimicGenus,
         ...argType.genus_ss,
         desc: "Returns true when mimicking selected genus"
       },
       TraitLevel: {
-        fn: (t) => readGame().global.race[t] ?? 0,
+        fn: read.TraitLevel,
         ...argType.trait,
         desc: "Returns trait level as number"
       },
       ResetType: {
-        fn: (r) => readSettings3().prestigeType === r,
+        fn: read.ResetType,
         arg: "select",
         options: prestigeOptions,
         def: "mad",
         desc: "Returns true when selected reset is active"
       },
       Challenge: {
-        fn: (c) => readGame().global.race[c] ? true : false,
+        fn: read.Challenge,
         ...argType.challenge,
         desc: "Returns true when selected challenge is active"
       },
       Universe: {
-        fn: (u) => readGame().global.race.universe === u,
+        fn: read.Universe,
         ...argType.universe,
         desc: "Returns true when playing in selected universe"
       },
       Government: {
-        fn: (g) => readGame().global.civic.govern?.type === g,
+        fn: read.Government,
         ...argType.government,
         desc: "Returns true when selected government is active"
       },
       Governor: {
-        fn: (g) => getGovernor() === g,
+        fn: read.Governor,
         ...argType.governor,
         desc: "Returns true when selected governor is active"
       },
       Queue: {
-        fn: (q) => q === "evo" ? readSettingsRaw().evolutionQueue.length : readGame().global[q].queue.length,
+        fn: read.Queue,
         ...argType.queue,
         desc: "Returns amount of items in queue as number"
       },
       Date: {
-        fn: (d) => argMap.date(d),
+        fn: read.Date,
         ...argType.date,
         desc: "Returns ingame date as number"
       },
       Soldiers: {
-        fn: (s) => readWarManager()[s],
+        fn: read.Soldiers,
         ...argType.soldiers,
         desc: "Returns amount of soldiers as number"
       },
       PlanetBiome: {
-        fn: (b) => readGame().global.city.biome === b,
+        fn: read.PlanetBiome,
         ...argType.biome,
         desc: "Returns true when playing in selected biome"
       },
       PlanetTrait: {
-        fn: (t) => readGame().global.city.ptrait.includes(t),
+        fn: read.PlanetTrait,
         ...argType.ptrait,
         desc: "Returns true when planet have selected trait"
       },
       Industry: {
-        fn: (r) => argMap.industry(r),
+        fn: read.Industry,
         ...argType.industry,
         desc: "Returns information about Industry buildings"
       },
       Other: {
-        fn: (o) => argMap.other(o),
+        fn: read.Other,
         ...argType.other,
         desc: "Other uncategorized variables"
       }
