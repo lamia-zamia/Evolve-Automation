@@ -150,7 +150,7 @@ export function createBuildingWeightingPolicy({
       id: "truepath-test-launch-sabotage",
       enabled: (snapshot) =>
         snapshot.truepathRace &&
-        getBuildings().SpaceTestLaunch.isUnlocked() &&
+        snapshot.testLaunchUnlocked &&
         !snapshot.worldUnified,
       match: (building: any, snapshot) => {
         if (building === getBuildings().SpaceTestLaunch) {
@@ -164,9 +164,7 @@ export function createBuildingWeightingPolicy({
     {
       id: "eris-digsite-unsecured",
       enabled: (snapshot) =>
-        snapshot.truepathRace &&
-        getBuildings().ErisDigsite.isUnlocked() &&
-        getBuildings().ErisDigsite.count < 100,
+        snapshot.truepathRace && snapshot.erisDigsiteUnsecured,
       match: (building: any) =>
         building === getBuildings().ErisDrone ||
         building === getBuildings().ErisTank ||
@@ -178,7 +176,7 @@ export function createBuildingWeightingPolicy({
     {
       id: "andromeda-miners-disabled",
       enabled: (snapshot) =>
-        snapshot.minerJobsDisabled && getBuildings().GatewayStarbase.count > 0,
+        snapshot.minerJobsDisabled && snapshot.andromedaReached,
       match: (building: any, snapshot) =>
         building === getBuildings().CoalMine ||
         (building === getBuildings().Mine &&
@@ -251,14 +249,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "best-freighter",
-      enabled: () => {
-        return (
-          getBuildings().GorddonFreighter.isAutoBuildable() &&
-          getBuildings().GorddonFreighter.isAffordable(true) &&
-          getBuildings().Alien1SuperFreighter.isAutoBuildable() &&
-          getBuildings().Alien1SuperFreighter.isAffordable(true)
-        );
-      },
+      enabled: (snapshot) => snapshot.freighterChoiceOpen,
       match: (building: any) => {
         if (
           building === getBuildings().GorddonFreighter ||
@@ -291,15 +282,9 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "lake-transport-vs-bireme",
-      enabled: (snapshot) => {
-        return (
-          getBuildings().LakeBireme.isAutoBuildable() &&
-          getBuildings().LakeBireme.isAffordable(true) &&
-          getBuildings().LakeTransport.isAutoBuildable() &&
-          getBuildings().LakeTransport.isAffordable(true) &&
-          snapshot.lakeSupportSpare <= 1
-        ); // Build any if there's spare support
-      },
+      // Build any if there's spare support
+      enabled: (snapshot) =>
+        snapshot.lakeShipChoiceOpen && snapshot.lakeSupportSpare <= 1,
       match: (building: any, snapshot) => {
         if (
           building === getBuildings().LakeBireme ||
@@ -341,14 +326,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "spire-port-vs-base-camp",
-      enabled: () => {
-        return (
-          getBuildings().SpirePort.isAutoBuildable() &&
-          getBuildings().SpirePort.isAffordable(true) &&
-          getBuildings().SpireBaseCamp.isAutoBuildable() &&
-          getBuildings().SpireBaseCamp.isAffordable(true)
-        );
-      },
+      enabled: (snapshot) => snapshot.spireSupplyChoiceOpen,
       match: (building: any) => {
         if (
           building === getBuildings().SpirePort ||
@@ -446,7 +424,7 @@ export function createBuildingWeightingPolicy({
     {
       id: "embassy-knowledge-required",
       enabled: (snapshot) =>
-        getBuildings().GorddonEmbassy.count === 0 &&
+        snapshot.embassyMissing &&
         snapshot.knowledgeCapacity < snapshot.embassyKnowledgeTarget,
       match: (building: any) => building === getBuildings().GorddonEmbassy,
       describe: (_match, _building, snapshot) =>
@@ -746,8 +724,7 @@ export function createBuildingWeightingPolicy({
       id: "prestige-blocked-ignition",
       enabled: (snapshot) =>
         snapshot.truepathRace &&
-        (!snapshot.prestigeRetireAllowed ||
-          getBuildings().TauGas2MatrioshkaBrain.count < 1000),
+        (!snapshot.prestigeRetireAllowed || snapshot.matrioshkaBrainIncomplete),
       match: (building: any) =>
         building === getBuildings().TauGas2IgniteGasGiant,
       describe: () => "Prestiging not currently allowed",
@@ -909,10 +886,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "unused-ejectors",
-      enabled: (snapshot) =>
-        getBuildings().BlackholeMassEjector.count * 1000 -
-          snapshot.assignedEjectorCapacity >
-        100,
+      enabled: (snapshot) => snapshot.unusedEjectorCapacity > 100,
       match: (building: any) =>
         building === getBuildings().BlackholeMassEjector,
       describe: () => "Still have some unused ejectors",
@@ -932,9 +906,7 @@ export function createBuildingWeightingPolicy({
     {
       id: "need-more-fuel-production",
       enabled: (snapshot) =>
-        snapshot.oilStorageBelowMissionCost &&
-        getBuildings().OilWell.count <= 0 &&
-        getBuildings().GasMoonOilExtractor.count <= 0,
+        snapshot.oilStorageBelowMissionCost && snapshot.noOilProduction,
       match: (building: any) =>
         building === getBuildings().OilWell ||
         building === getBuildings().GasMoonOilExtractor,

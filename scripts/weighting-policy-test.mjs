@@ -102,6 +102,16 @@ const snapshotOf = ({ weights = {}, ...overrides } = {}) =>
     horseshoesSufficient: false,
     horseshoeTitle: "Horseshoe",
     zenBelowCap: false,
+    testLaunchUnlocked: false,
+    erisDigsiteUnsecured: false,
+    andromedaReached: false,
+    freighterChoiceOpen: false,
+    lakeShipChoiceOpen: false,
+    spireSupplyChoiceOpen: false,
+    embassyMissing: false,
+    matrioshkaBrainIncomplete: false,
+    unusedEjectorCapacity: 0,
+    noOilProduction: false,
     galaxyAssaultPending: false,
     stargatePiracySupressed: false,
     galaxyPiracyCoveredByFleet: false,
@@ -135,7 +145,6 @@ const snapshotOf = ({ weights = {}, ...overrides } = {}) =>
     spireBaseCampPrebuildIncomplete: false,
     lakeBiremeSupplyRate: 0.85,
     nextCitadelPowerDraw: 0,
-    assignedEjectorCapacity: 0,
     worldUnified: false,
     testLaunchSuccessChance: 0.2,
     spireWaygateComplete: false,
@@ -277,10 +286,13 @@ assert.equal(
 
 const digsiteRule = ruleById("eris-digsite-unsecured");
 const truepathSnapshot = snapshotOf({ truepathRace: true });
-buildings.ErisDigsite.count = 42;
-assert.equal(digsiteRule.enabled(truepathSnapshot), true);
+const digsiteOpen = snapshotOf({
+  truepathRace: true,
+  erisDigsiteUnsecured: true,
+});
+assert.equal(digsiteRule.enabled(digsiteOpen), true);
 assert.equal(
-  digsiteRule.enabled(emptySnapshot),
+  digsiteRule.enabled(snapshotOf({ erisDigsiteUnsecured: true })),
   false,
   "the Eris digsite only exists in a True Path run",
 );
@@ -295,8 +307,11 @@ assert.equal(
   ),
   10,
 );
-buildings.ErisDigsite.count = 100;
-assert.equal(digsiteRule.enabled(truepathSnapshot), false);
+assert.equal(
+  digsiteRule.enabled(truepathSnapshot),
+  false,
+  "a secured digsite needs no more Eris hardware",
+);
 
 // The management toggle, the Authority unlock, and the cap comparison are all
 // folded into one snapshot answer, so the rule only identifies the buildings.
@@ -362,16 +377,17 @@ assert.equal(fuelDepotRule.match(buildings.Mine), false);
 
 // Fuel production waits for both wells to be missing as well.
 const fuelWellRule = ruleById("need-more-fuel-production");
-const oilShort = snapshotOf({ oilStorageBelowMissionCost: true });
+const oilShort = snapshotOf({
+  oilStorageBelowMissionCost: true,
+  noOilProduction: true,
+});
 assert.equal(fuelWellRule.enabled(oilShort), true);
 assert.equal(fuelWellRule.enabled(emptySnapshot), false);
-buildings.OilWell.count = 1;
 assert.equal(
-  fuelWellRule.enabled(oilShort),
+  fuelWellRule.enabled(snapshotOf({ oilStorageBelowMissionCost: true })),
   false,
   "an existing well already answers the shortfall",
 );
-buildings.OilWell.count = 0;
 assert.equal(fuelWellRule.match(buildings.GasMoonOilExtractor), true);
 assert.equal(fuelWellRule.match(buildings.Mine), false);
 
@@ -774,7 +790,7 @@ assert.equal(
 // that combines them reads nothing live.
 context.buildings = {
   ...context.buildings,
-  SpaceTestLaunch: { _vueBinding: "SpaceTestLaunch", isUnlocked: () => true },
+  SpaceTestLaunch: { _vueBinding: "SpaceTestLaunch" },
   SpireWaygate: { _vueBinding: "SpireWaygate" },
   SpireEdenicGate: { _vueBinding: "SpireEdenicGate" },
   SpireSphinx: { _vueBinding: "SpireSphinx" },
@@ -784,13 +800,28 @@ context.buildings = {
 };
 
 const sabotageRule = ruleById("truepath-test-launch-sabotage");
-assert.equal(sabotageRule.enabled(truepathSnapshot), true);
+const launchable = snapshotOf({
+  truepathRace: true,
+  testLaunchUnlocked: true,
+});
+assert.equal(sabotageRule.enabled(launchable), true);
 assert.equal(
-  sabotageRule.enabled(snapshotOf({ truepathRace: true, worldUnified: true })),
+  sabotageRule.enabled(
+    snapshotOf({
+      truepathRace: true,
+      testLaunchUnlocked: true,
+      worldUnified: true,
+    }),
+  ),
   false,
   "a unified world can no longer be sabotaged",
 );
 assert.equal(sabotageRule.enabled(emptySnapshot), false);
+assert.equal(
+  sabotageRule.enabled(truepathSnapshot),
+  false,
+  "a run that has not unlocked the launch weighs nothing for it",
+);
 assert.equal(
   sabotageRule.match(
     context.buildings.SpaceTestLaunch,
@@ -913,15 +944,22 @@ context.buildings = {
   ...context.buildings,
   CoalMine: { _vueBinding: "CoalMine" },
   Mine: { _vueBinding: "Mine" },
-  GatewayStarbase: { _vueBinding: "GatewayStarbase", count: 1 },
 };
-const minersOff = snapshotOf({ minerJobsDisabled: true });
+const minersOff = snapshotOf({
+  minerJobsDisabled: true,
+  andromedaReached: true,
+});
 const chrysotileOnly = snapshotOf({
   minerJobsDisabled: true,
   mineIsOnlyChrysotileSource: true,
 });
 assert.equal(andromedaRule.enabled(minersOff), true);
 assert.equal(andromedaRule.enabled(emptySnapshot), false);
+assert.equal(
+  andromedaRule.enabled(snapshotOf({ minerJobsDisabled: true })),
+  false,
+  "miners are only stranded once Andromeda is reached",
+);
 assert.equal(
   andromedaRule.match(context.buildings.CoalMine, emptySnapshot),
   true,
@@ -1027,9 +1065,16 @@ context.buildings = {
   LakeBireme: lakeBireme,
   LakeTransport: lakeTransport,
 };
-assert.equal(lakeRule.enabled(emptySnapshot), true);
+assert.equal(lakeRule.enabled(snapshotOf({ lakeShipChoiceOpen: true })), true);
 assert.equal(
-  lakeRule.enabled(snapshotOf({ lakeSupportSpare: 5 })),
+  lakeRule.enabled(emptySnapshot),
+  false,
+  "a ship the script cannot build right now is not a choice",
+);
+assert.equal(
+  lakeRule.enabled(
+    snapshotOf({ lakeShipChoiceOpen: true, lakeSupportSpare: 5 }),
+  ),
   false,
   "spare Lake support makes either ship worth building",
 );
@@ -1053,18 +1098,21 @@ assert.equal(lakeRule.match(lakeTransport, emptySnapshot), lakeBireme);
 // Unused ejector capacity is built capacity minus the capacity the game has
 // already assigned.
 const ejectorRule = ruleById("unused-ejectors");
-const ejector = { _vueBinding: "BlackholeMassEjector", count: 0 };
+const ejector = { _vueBinding: "BlackholeMassEjector", count: 1 };
 context.buildings = { ...context.buildings, BlackholeMassEjector: ejector };
 assert.equal(
   ejectorRule.enabled(emptySnapshot),
   false,
   "an unbuilt ejector has no unused capacity",
 );
-ejector.count = 1;
-assert.equal(ejectorRule.enabled(emptySnapshot), true);
 assert.equal(
-  ejectorRule.enabled(snapshotOf({ assignedEjectorCapacity: 950 })),
+  ejectorRule.enabled(snapshotOf({ unusedEjectorCapacity: 1_000 })),
+  true,
+);
+assert.equal(
+  ejectorRule.enabled(snapshotOf({ unusedEjectorCapacity: 50 })),
   false,
+  "a nearly-full ejector is not worth another one",
 );
 assert.equal(ejectorRule.match(ejector, emptySnapshot), true);
 assert.equal(
@@ -1099,6 +1147,15 @@ context.buildings = {
   GorddonFreighter: freighter,
   Alien1SuperFreighter: superFreighter,
 };
+assert.equal(
+  freighterRule.enabled(snapshotOf({ freighterChoiceOpen: true })),
+  true,
+);
+assert.equal(
+  freighterRule.enabled(emptySnapshot),
+  false,
+  "there is no better freighter to prefer while only one is buildable",
+);
 assert.equal(
   freighterRule.match(freighter, emptySnapshot),
   superFreighter,
@@ -1333,6 +1390,7 @@ context.buildings = {
   GorddonEmbassy: { _vueBinding: "GorddonEmbassy", count: 0 },
 };
 const embassyWanted = snapshotOf({
+  embassyMissing: true,
   knowledgeCapacity: 5_000_000,
   embassyKnowledgeTarget: 6_000_000,
 });
@@ -1342,12 +1400,68 @@ assert.equal(
   embassyRule.describe(true, context.buildings.GorddonEmbassy, embassyWanted),
   "6000000 Max Knowledge required",
 );
-context.buildings.GorddonEmbassy.count = 1;
 assert.equal(
-  embassyRule.enabled(embassyWanted),
+  embassyRule.enabled(
+    snapshotOf({
+      knowledgeCapacity: 5_000_000,
+      embassyKnowledgeTarget: 6_000_000,
+    }),
+  ),
   false,
   "one Embassy is all the script wants",
 );
+
+// The Spire supply pair and the Matrioshka Brain gate are the last two named
+// buildings the rules asked about directly.
+const spireSupplyRule = ruleById("spire-port-vs-base-camp");
+const spirePortCandidate = { _vueBinding: "SpirePort", count: 2 };
+const spireCampCandidate = { _vueBinding: "SpireBaseCamp", count: 2 };
+context.buildings = {
+  ...context.buildings,
+  SpirePort: spirePortCandidate,
+  SpireBaseCamp: spireCampCandidate,
+  TauGas2IgniteGasGiant: { _vueBinding: "TauGas2IgniteGasGiant" },
+};
+assert.equal(
+  spireSupplyRule.enabled(snapshotOf({ spireSupplyChoiceOpen: true })),
+  true,
+);
+assert.equal(spireSupplyRule.enabled(emptySnapshot), false);
+assert.equal(
+  spireSupplyRule.match(spireCampCandidate, emptySnapshot),
+  spirePortCandidate,
+  "at two of each, one more Port supplies more than one more Base Camp",
+);
+assert.equal(
+  spireSupplyRule.match(spirePortCandidate, emptySnapshot),
+  undefined,
+);
+
+const ignitionRule = ruleById("prestige-blocked-ignition");
+assert.equal(
+  ignitionRule.enabled(snapshotOf({ truepathRace: true })),
+  true,
+  "an unallowed retirement blocks ignition on its own",
+);
+assert.equal(
+  ignitionRule.enabled(
+    snapshotOf({ truepathRace: true, prestigeRetireAllowed: true }),
+  ),
+  false,
+);
+assert.equal(
+  ignitionRule.enabled(
+    snapshotOf({
+      truepathRace: true,
+      prestigeRetireAllowed: true,
+      matrioshkaBrainIncomplete: true,
+    }),
+  ),
+  true,
+  "an unfinished Matrioshka Brain blocks ignition even when retirement is allowed",
+);
+assert.equal(ignitionRule.enabled(emptySnapshot), false);
+assert.equal(ignitionRule.match(context.buildings.TauGas2IgniteGasGiant), true);
 
 // Both Slave Market blockers are snapshot answers, and a full pen outranks the
 // money question.

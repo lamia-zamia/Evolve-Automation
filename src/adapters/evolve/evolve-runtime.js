@@ -3253,6 +3253,12 @@ function startEvolveRuntimeComposition(
         getMissionMaxResourceCost: (resource) =>
           resources[resource].techMissionMaxCost,
         getResourceTitle: (resource) => resources[resource].title,
+        getBuildingCount: (building) => buildings[building].count,
+        isBuildingUnlocked: (building) => buildings[building].isUnlocked(),
+        isBuildingAutoBuildable: (building) =>
+          buildings[building].isAutoBuildable(),
+        isBuildingAffordable: (building) =>
+          buildings[building].isAffordable(true),
         isAchievementGuardsEnabled: () => settings.achievementGuards,
         isBananaRepublicGuardEnabled: () => settings.guardBananaRepublic,
         isGalaxyAssaultPending: () => galaxyAssaultPending(),

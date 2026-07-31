@@ -153,6 +153,26 @@ export type BuildingWeightingSnapshot = {
   readonly horseshoeTitle: string;
   /** Zen is below its cap, so no more Meditation Spaces are needed. */
   readonly zenBelowCap: boolean;
+  /** The True Path Test Launch exists as a buildable action. */
+  readonly testLaunchUnlocked: boolean;
+  /** The Eris Digsite exists and is short of the 100 that secure it. */
+  readonly erisDigsiteUnsecured: boolean;
+  /** A Gateway Starbase stands, so Andromeda is reached and its jobs matter. */
+  readonly andromedaReached: boolean;
+  /** Both freighters are auto-buildable and affordable, so only the better one is wanted. */
+  readonly freighterChoiceOpen: boolean;
+  /** Both Lake ships are auto-buildable and affordable, so only the better one is wanted. */
+  readonly lakeShipChoiceOpen: boolean;
+  /** Both Spire supply buildings are auto-buildable and affordable, so only the better one is wanted. */
+  readonly spireSupplyChoiceOpen: boolean;
+  /** No Gorddon Embassy has been built, and one is all the script wants. */
+  readonly embassyMissing: boolean;
+  /** The Matrioshka Brain is short of the 1000 segments the retirement route needs. */
+  readonly matrioshkaBrainIncomplete: boolean;
+  /** Built Mass Ejector capacity the game has not assigned to any resource. */
+  readonly unusedEjectorCapacity: number;
+  /** Neither oil well exists, so nothing is producing Oil yet. */
+  readonly noOilProduction: boolean;
   /** A fleet is being accumulated for an assault mission. */
   readonly galaxyAssaultPending: boolean;
   /** Built defense platforms already out-defend all stargate piracy. */
@@ -224,11 +244,6 @@ export type BuildingWeightingSnapshot = {
    * it; the value is still defined, and meaningless, before the citadel exists.
    */
   readonly nextCitadelPowerDraw: number;
-  /**
-   * Mass Ejector capacity the game has already assigned to resources. `0`
-   * before the first ejector exists.
-   */
-  readonly assignedEjectorCapacity: number;
   /** Unification is researched, so the Test Launch can no longer be sabotaged. */
   readonly worldUnified: boolean;
   /**

@@ -39,6 +39,10 @@ export interface WeightingSnapshotDependencies {
   readonly getRequiredResourceStorage: (resource: string) => unknown;
   readonly getMissionMaxResourceCost: (resource: string) => unknown;
   readonly getResourceTitle: (resource: string) => unknown;
+  readonly getBuildingCount: (building: string) => unknown;
+  readonly isBuildingUnlocked: (building: string) => unknown;
+  readonly isBuildingAutoBuildable: (building: string) => unknown;
+  readonly isBuildingAffordable: (building: string) => unknown;
   readonly isAchievementGuardsEnabled: () => unknown;
   readonly isBananaRepublicGuardEnabled: () => unknown;
   readonly isGalaxyAssaultPending: () => unknown;
@@ -154,6 +158,10 @@ export function createWeightingSnapshotReader({
   getRequiredResourceStorage,
   getMissionMaxResourceCost,
   getResourceTitle,
+  getBuildingCount,
+  isBuildingUnlocked,
+  isBuildingAutoBuildable,
+  isBuildingAffordable,
   isAchievementGuardsEnabled,
   isBananaRepublicGuardEnabled,
   isGalaxyAssaultPending,
@@ -323,8 +331,7 @@ export function createWeightingSnapshotReader({
       ),
     });
 
-  // `global.interstellar.mass_ejector` is absent until the first Mass Ejector
-  // is built, and nothing can be assigned before then.
+  // Nothing can be assigned before the first Mass Ejector exists.
   const readAssignedEjectorCapacity = (): number => {
     const assigned = getAssignedEjectorCapacity();
     return assigned === undefined
@@ -370,6 +377,31 @@ export function createWeightingSnapshotReader({
       getMissionMaxResourceCost(resource),
       `resources.${resource}.techMissionMaxCost`,
     );
+
+  const buildingCount = (building: string): number =>
+    requireNumber(getBuildingCount(building), `buildings.${building}.count`);
+
+  // `Action.isUnlocked()` is an exact boolean: it either fails one of the tab
+  // tests or answers whether the building has a Vue view.
+  const buildingUnlocked = (building: string): boolean =>
+    requireBoolean(
+      isBuildingUnlocked(building),
+      `buildings.${building}.isUnlocked()`,
+    );
+
+  // `isAutoBuildable()` chains on `settings["bat" + binding]`, which is absent
+  // until that building's AutoBuild setting is first written, and
+  // `isAffordable()` forwards the game's own `checkAffordable`. Both keep the
+  // game's truthiness test.
+  const buildableNow = (building: string): boolean =>
+    Boolean(isBuildingAutoBuildable(building)) &&
+    Boolean(isBuildingAffordable(building));
+
+  // `global.interstellar.mass_ejector` is absent until the first Mass Ejector
+  // is built, and each one handles 1000 units per second.
+  const readUnusedEjectorCapacity = (): number =>
+    buildingCount("BlackholeMassEjector") * 1000 -
+    readAssignedEjectorCapacity();
 
   // Money that is about to cap is spare regardless of income, which is why the
   // storage test comes first.
@@ -520,6 +552,23 @@ export function createWeightingSnapshotReader({
         "resources.Horseshoe.title",
       ),
       zenBelowCap: quantity("Zen") < capacity("Zen"),
+      testLaunchUnlocked: buildingUnlocked("SpaceTestLaunch"),
+      erisDigsiteUnsecured:
+        buildingUnlocked("ErisDigsite") && buildingCount("ErisDigsite") < 100,
+      andromedaReached: buildingCount("GatewayStarbase") > 0,
+      freighterChoiceOpen:
+        buildableNow("GorddonFreighter") &&
+        buildableNow("Alien1SuperFreighter"),
+      lakeShipChoiceOpen:
+        buildableNow("LakeBireme") && buildableNow("LakeTransport"),
+      spireSupplyChoiceOpen:
+        buildableNow("SpirePort") && buildableNow("SpireBaseCamp"),
+      embassyMissing: buildingCount("GorddonEmbassy") === 0,
+      matrioshkaBrainIncomplete: buildingCount("TauGas2MatrioshkaBrain") < 1000,
+      unusedEjectorCapacity: readUnusedEjectorCapacity(),
+      noOilProduction:
+        buildingCount("OilWell") <= 0 &&
+        buildingCount("GasMoonOilExtractor") <= 0,
       galaxyAssaultPending: requireBoolean(
         isGalaxyAssaultPending(),
         "isGalaxyAssaultPending()",
@@ -620,7 +669,6 @@ export function createWeightingSnapshotReader({
         getNextCitadelPowerDraw(),
         "getNextCitadelPowerDraw()",
       ),
-      assignedEjectorCapacity: readAssignedEjectorCapacity(),
       worldUnified: researched("world_control", 1),
       // Only True Path has a Test Launch, and only its foreign governments can
       // sabotage one.

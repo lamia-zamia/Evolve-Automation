@@ -24019,7 +24019,7 @@
       },
       {
         id: "truepath-test-launch-sabotage",
-        enabled: (snapshot) => snapshot.truepathRace && getBuildings().SpaceTestLaunch.isUnlocked() && !snapshot.worldUnified,
+        enabled: (snapshot) => snapshot.truepathRace && snapshot.testLaunchUnlocked && !snapshot.worldUnified,
         match: (building3, snapshot) => {
           if (building3 === getBuildings().SpaceTestLaunch) {
             return snapshot.testLaunchSuccessChance;
@@ -24030,14 +24030,14 @@
       },
       {
         id: "eris-digsite-unsecured",
-        enabled: (snapshot) => snapshot.truepathRace && getBuildings().ErisDigsite.isUnlocked() && getBuildings().ErisDigsite.count < 100,
+        enabled: (snapshot) => snapshot.truepathRace && snapshot.erisDigsiteUnsecured,
         match: (building3) => building3 === getBuildings().ErisDrone || building3 === getBuildings().ErisTank || building3 === getBuildings().ErisTrooper,
         describe: () => "Eris Digsite is not yet secured",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingTruepathDigsite
       },
       {
         id: "andromeda-miners-disabled",
-        enabled: (snapshot) => snapshot.minerJobsDisabled && getBuildings().GatewayStarbase.count > 0,
+        enabled: (snapshot) => snapshot.minerJobsDisabled && snapshot.andromedaReached,
         match: (building3, snapshot) => building3 === getBuildings().CoalMine || building3 === getBuildings().Mine && !snapshot.mineIsOnlyChrysotileSource,
         describe: () => "Miners disabled in Andromeda",
         multiplier: () => 0
@@ -24090,9 +24090,7 @@
       },
       {
         id: "best-freighter",
-        enabled: () => {
-          return getBuildings().GorddonFreighter.isAutoBuildable() && getBuildings().GorddonFreighter.isAffordable(true) && getBuildings().Alien1SuperFreighter.isAutoBuildable() && getBuildings().Alien1SuperFreighter.isAffordable(true);
-        },
+        enabled: (snapshot) => snapshot.freighterChoiceOpen,
         match: (building3) => {
           if (building3 === getBuildings().GorddonFreighter || building3 === getBuildings().Alien1SuperFreighter) {
             let regCount = getBuildings().GorddonFreighter.count;
@@ -24114,9 +24112,8 @@
       },
       {
         id: "lake-transport-vs-bireme",
-        enabled: (snapshot) => {
-          return getBuildings().LakeBireme.isAutoBuildable() && getBuildings().LakeBireme.isAffordable(true) && getBuildings().LakeTransport.isAutoBuildable() && getBuildings().LakeTransport.isAffordable(true) && snapshot.lakeSupportSpare <= 1;
-        },
+        // Build any if there's spare support
+        enabled: (snapshot) => snapshot.lakeShipChoiceOpen && snapshot.lakeSupportSpare <= 1,
         match: (building3, snapshot) => {
           if (building3 === getBuildings().LakeBireme || building3 === getBuildings().LakeTransport) {
             let biremeCount = getBuildings().LakeBireme.count;
@@ -24142,9 +24139,7 @@
       },
       {
         id: "spire-port-vs-base-camp",
-        enabled: () => {
-          return getBuildings().SpirePort.isAutoBuildable() && getBuildings().SpirePort.isAffordable(true) && getBuildings().SpireBaseCamp.isAutoBuildable() && getBuildings().SpireBaseCamp.isAffordable(true);
-        },
+        enabled: (snapshot) => snapshot.spireSupplyChoiceOpen,
         match: (building3) => {
           if (building3 === getBuildings().SpirePort || building3 === getBuildings().SpireBaseCamp) {
             let portCount = getBuildings().SpirePort.count;
@@ -24226,7 +24221,7 @@
       },
       {
         id: "embassy-knowledge-required",
-        enabled: (snapshot) => getBuildings().GorddonEmbassy.count === 0 && snapshot.knowledgeCapacity < snapshot.embassyKnowledgeTarget,
+        enabled: (snapshot) => snapshot.embassyMissing && snapshot.knowledgeCapacity < snapshot.embassyKnowledgeTarget,
         match: (building3) => building3 === getBuildings().GorddonEmbassy,
         describe: (_match, _building, snapshot) => `${getNumberString(snapshot.embassyKnowledgeTarget)} Max Knowledge required`,
         multiplier: () => 0
@@ -24442,7 +24437,7 @@
       },
       {
         id: "prestige-blocked-ignition",
-        enabled: (snapshot) => snapshot.truepathRace && (!snapshot.prestigeRetireAllowed || getBuildings().TauGas2MatrioshkaBrain.count < 1e3),
+        enabled: (snapshot) => snapshot.truepathRace && (!snapshot.prestigeRetireAllowed || snapshot.matrioshkaBrainIncomplete),
         match: (building3) => building3 === getBuildings().TauGas2IgniteGasGiant,
         describe: () => "Prestiging not currently allowed",
         multiplier: () => 0
@@ -24551,7 +24546,7 @@
       },
       {
         id: "unused-ejectors",
-        enabled: (snapshot) => getBuildings().BlackholeMassEjector.count * 1e3 - snapshot.assignedEjectorCapacity > 100,
+        enabled: (snapshot) => snapshot.unusedEjectorCapacity > 100,
         match: (building3) => building3 === getBuildings().BlackholeMassEjector,
         describe: () => "Still have some unused ejectors",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUnusedEjectors
@@ -24565,7 +24560,7 @@
       },
       {
         id: "need-more-fuel-production",
-        enabled: (snapshot) => snapshot.oilStorageBelowMissionCost && getBuildings().OilWell.count <= 0 && getBuildings().GasMoonOilExtractor.count <= 0,
+        enabled: (snapshot) => snapshot.oilStorageBelowMissionCost && snapshot.noOilProduction,
         match: (building3) => building3 === getBuildings().OilWell || building3 === getBuildings().GasMoonOilExtractor,
         describe: () => "Need more fuel",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingFuel
@@ -24708,6 +24703,10 @@
     getRequiredResourceStorage,
     getMissionMaxResourceCost,
     getResourceTitle,
+    getBuildingCount,
+    isBuildingUnlocked,
+    isBuildingAutoBuildable,
+    isBuildingAffordable,
     isAchievementGuardsEnabled,
     isBananaRepublicGuardEnabled,
     isGalaxyAssaultPending,
@@ -24869,6 +24868,13 @@
       getMissionMaxResourceCost(resource2),
       `resources.${resource2}.techMissionMaxCost`
     );
+    const buildingCount = (building3) => requireNumber(getBuildingCount(building3), `buildings.${building3}.count`);
+    const buildingUnlocked = (building3) => requireBoolean(
+      isBuildingUnlocked(building3),
+      `buildings.${building3}.isUnlocked()`
+    );
+    const buildableNow = (building3) => Boolean(isBuildingAutoBuildable(building3)) && Boolean(isBuildingAffordable(building3));
+    const readUnusedEjectorCapacity = () => buildingCount("BlackholeMassEjector") * 1e3 - readAssignedEjectorCapacity();
     const readSlaveIncomeInsufficient = () => {
       const moneyIncome = income("Money");
       return quantity("Money") + moneyIncome < capacity("Money") && moneyIncome < requireNumber(getSlaveIncomeTarget(), "settings.slaveIncome");
@@ -24988,6 +24994,16 @@
           "resources.Horseshoe.title"
         ),
         zenBelowCap: quantity("Zen") < capacity("Zen"),
+        testLaunchUnlocked: buildingUnlocked("SpaceTestLaunch"),
+        erisDigsiteUnsecured: buildingUnlocked("ErisDigsite") && buildingCount("ErisDigsite") < 100,
+        andromedaReached: buildingCount("GatewayStarbase") > 0,
+        freighterChoiceOpen: buildableNow("GorddonFreighter") && buildableNow("Alien1SuperFreighter"),
+        lakeShipChoiceOpen: buildableNow("LakeBireme") && buildableNow("LakeTransport"),
+        spireSupplyChoiceOpen: buildableNow("SpirePort") && buildableNow("SpireBaseCamp"),
+        embassyMissing: buildingCount("GorddonEmbassy") === 0,
+        matrioshkaBrainIncomplete: buildingCount("TauGas2MatrioshkaBrain") < 1e3,
+        unusedEjectorCapacity: readUnusedEjectorCapacity(),
+        noOilProduction: buildingCount("OilWell") <= 0 && buildingCount("GasMoonOilExtractor") <= 0,
         galaxyAssaultPending: requireBoolean(
           isGalaxyAssaultPending(),
           "isGalaxyAssaultPending()"
@@ -25083,7 +25099,6 @@
           getNextCitadelPowerDraw(),
           "getNextCitadelPowerDraw()"
         ),
-        assignedEjectorCapacity: readAssignedEjectorCapacity(),
         worldUnified: researched("world_control", 1),
         // Only True Path has a Test Launch, and only its foreign governments can
         // sabotage one.
@@ -56595,6 +56610,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getRequiredResourceStorage: (resource2) => resources[resource2].storageRequired,
         getMissionMaxResourceCost: (resource2) => resources[resource2].techMissionMaxCost,
         getResourceTitle: (resource2) => resources[resource2].title,
+        getBuildingCount: (building3) => buildings[building3].count,
+        isBuildingUnlocked: (building3) => buildings[building3].isUnlocked(),
+        isBuildingAutoBuildable: (building3) => buildings[building3].isAutoBuildable(),
+        isBuildingAffordable: (building3) => buildings[building3].isAffordable(true),
         isAchievementGuardsEnabled: () => settings.achievementGuards,
         isBananaRepublicGuardEnabled: () => settings.guardBananaRepublic,
         isGalaxyAssaultPending: () => galaxyAssaultPending(),

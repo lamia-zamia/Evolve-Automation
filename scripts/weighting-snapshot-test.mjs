@@ -71,6 +71,12 @@ const defaultGates = () => ({
   getRequiredResourceStorage: () => 1,
   getMissionMaxResourceCost: () => 0,
   getResourceTitle: () => "Horseshoe",
+  // A building that no run has reached yet is locked, unbuilt, and — because
+  // its AutoBuild setting has not been written — not auto-buildable either.
+  getBuildingCount: () => 0,
+  isBuildingUnlocked: off,
+  isBuildingAutoBuildable: () => undefined,
+  isBuildingAffordable: off,
   isAchievementGuardsEnabled: off,
   isBananaRepublicGuardEnabled: off,
   isGalaxyAssaultPending: off,
@@ -166,6 +172,16 @@ assert.equal(empty.heliumStorageBelowMissionCost, false);
 assert.equal(empty.horseshoesSufficient, false);
 assert.equal(empty.horseshoeTitle, "Horseshoe");
 assert.equal(empty.zenBelowCap, false);
+assert.equal(empty.testLaunchUnlocked, false);
+assert.equal(empty.erisDigsiteUnsecured, false);
+assert.equal(empty.andromedaReached, false);
+assert.equal(empty.freighterChoiceOpen, false);
+assert.equal(empty.lakeShipChoiceOpen, false);
+assert.equal(empty.spireSupplyChoiceOpen, false);
+assert.equal(empty.embassyMissing, true);
+assert.equal(empty.matrioshkaBrainIncomplete, true);
+assert.equal(empty.unusedEjectorCapacity, 0);
+assert.equal(empty.noOilProduction, true);
 assert.equal(empty.galaxyAssaultPending, false);
 assert.equal(empty.stargatePiracySupressed, false);
 assert.equal(empty.galaxyPiracyCoveredByFleet, false);
@@ -199,7 +215,6 @@ assert.equal(empty.spirePortPrebuildIncomplete, false);
 assert.equal(empty.spireBaseCampPrebuildIncomplete, false);
 assert.equal(empty.lakeBiremeSupplyRate, 0.85);
 assert.equal(empty.nextCitadelPowerDraw, 30);
-assert.equal(empty.assignedEjectorCapacity, 0);
 assert.equal(empty.worldUnified, false);
 assert.equal(empty.testLaunchSuccessChance, 0);
 assert.equal(empty.spireWaygateComplete, false);
@@ -580,7 +595,7 @@ assert.equal(gated.spirePortPrebuildIncomplete, true);
 assert.equal(gated.spireBaseCampPrebuildIncomplete, false);
 assert.equal(gated.lakeBiremeSupplyRate, 0.8);
 assert.equal(gated.nextCitadelPowerDraw, 172.5);
-assert.equal(gated.assignedEjectorCapacity, 1_500);
+assert.equal(gated.unusedEjectorCapacity, -1_500);
 assert.equal(gated.gasGiantNameContestActive, true);
 assert.deepEqual(askedTechs, [
   "world_control:1",
@@ -795,11 +810,85 @@ assert.equal(
   "a race that cannot sacrifice reads no altar state",
 );
 
-// Ejector capacity is absent until the first Mass Ejector is built.
-gates = { ...defaultGates(), getAssignedEjectorCapacity: () => 2_400 };
-assert.equal(read().assignedEjectorCapacity, 2_400);
-gates = { ...defaultGates(), getAssignedEjectorCapacity: () => 0 };
-assert.equal(read().assignedEjectorCapacity, 0);
+// Unused ejector capacity is what the built ejectors handle minus what the game
+// has assigned. The assignment is absent until the first ejector is built, and
+// no ejector means no unused capacity at all.
+gates = {
+  ...defaultGates(),
+  getBuildingCount: (building) => (building === "BlackholeMassEjector" ? 3 : 0),
+  getAssignedEjectorCapacity: () => 2_400,
+};
+assert.equal(read().unusedEjectorCapacity, 600);
+gates = {
+  ...defaultGates(),
+  getBuildingCount: (building) => (building === "BlackholeMassEjector" ? 3 : 0),
+};
+assert.equal(
+  read().unusedEjectorCapacity,
+  3_000,
+  "an ejector with nothing assigned to it is entirely unused",
+);
+
+// The remaining named-building questions the rules ask about the run.
+const withBuildings = (counts = {}, overrides = {}) => ({
+  ...defaultGates(),
+  getBuildingCount: (building) => counts[building] ?? 0,
+  ...overrides,
+});
+gates = withBuildings({}, { isBuildingUnlocked: () => true });
+let named = read();
+assert.equal(named.testLaunchUnlocked, true);
+assert.equal(named.erisDigsiteUnsecured, true);
+gates = withBuildings({ ErisDigsite: 100 }, { isBuildingUnlocked: () => true });
+assert.equal(
+  read().erisDigsiteUnsecured,
+  false,
+  "a hundred digsites secure it",
+);
+gates = withBuildings({ ErisDigsite: 42 });
+assert.equal(
+  read().erisDigsiteUnsecured,
+  false,
+  "a locked digsite is not an unsecured one",
+);
+gates = withBuildings({ GatewayStarbase: 1 });
+assert.equal(read().andromedaReached, true);
+gates = withBuildings({ GorddonEmbassy: 1, TauGas2MatrioshkaBrain: 1_000 });
+named = read();
+assert.equal(named.embassyMissing, false);
+assert.equal(named.matrioshkaBrainIncomplete, false);
+gates = withBuildings({ OilWell: 1 });
+assert.equal(read().noOilProduction, false);
+gates = withBuildings({ GasMoonOilExtractor: 1 });
+assert.equal(read().noOilProduction, false);
+
+// A paired-building choice is only open while both halves are auto-buildable
+// and affordable right now.
+const pairChoice = (buildable, affordable) =>
+  withBuildings(
+    {},
+    {
+      isBuildingAutoBuildable: (building) => buildable.includes(building),
+      isBuildingAffordable: (building) => affordable.includes(building),
+    },
+  );
+const BOTH_FREIGHTERS = ["GorddonFreighter", "Alien1SuperFreighter"];
+gates = pairChoice(BOTH_FREIGHTERS, BOTH_FREIGHTERS);
+assert.equal(read().freighterChoiceOpen, true);
+gates = pairChoice(BOTH_FREIGHTERS, ["GorddonFreighter"]);
+assert.equal(
+  read().freighterChoiceOpen,
+  false,
+  "one unaffordable freighter closes the choice",
+);
+gates = pairChoice(["GorddonFreighter"], BOTH_FREIGHTERS);
+assert.equal(read().freighterChoiceOpen, false);
+const BOTH_LAKE_SHIPS = ["LakeBireme", "LakeTransport"];
+gates = pairChoice(BOTH_LAKE_SHIPS, BOTH_LAKE_SHIPS);
+assert.equal(read().lakeShipChoiceOpen, true);
+const BOTH_SPIRE = ["SpirePort", "SpireBaseCamp"];
+gates = pairChoice(BOTH_SPIRE, BOTH_SPIRE);
+assert.equal(read().spireSupplyChoiceOpen, true);
 
 // Bloodstone ranks are absent until one is earned, and only rank 2 improves the
 // Bireme supply rate.
@@ -1073,6 +1162,14 @@ rejectsGate(
 rejectsGate(
   { getAssignedEjectorCapacity: () => Number.NaN },
   "getAssignedEjectorCapacity() must be a finite number",
+);
+rejectsGate(
+  { getBuildingCount: (building) => (building === "OilWell" ? "0" : 0) },
+  "buildings.OilWell.count must be a finite number",
+);
+rejectsGate(
+  { isBuildingUnlocked: (building) => building === "ErisDigsite" || undefined },
+  "buildings.SpaceTestLaunch.isUnlocked() must be a boolean",
 );
 
 state = validState();
