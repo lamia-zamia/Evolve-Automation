@@ -368,7 +368,10 @@ import { createResourceToggleBrowserAdapter } from "../browser/resource-toggles.
 import { createTooltipUI } from "../../ui/tooltips.ts";
 import { createCustomRaceUI } from "../../ui/custom-race-ui.ts";
 import { createSettingsShell } from "../../ui/settings-shell.ts";
+import { createOverrideConditionControls } from "../../ui/override-condition-controls.ts";
+import { createOverrideEditorControls } from "../../ui/override-editor.ts";
 import { createSettingsControls } from "../../ui/settings-controls.ts";
+import { createSettingsInputs } from "../../ui/settings-inputs.ts";
 import { createOverrideCatalog } from "../../settings/override-catalog.ts";
 import { createScriptRuntimeUI } from "../../ui/script-runtime.ts";
 
@@ -566,13 +569,27 @@ function startEvolveRuntimeComposition(
     confirm: (...args) => runtimeEnvironment.confirm(...args),
   });
 
+  const overrideEditor = createOverrideEditor({
+    getSettingsRaw: () => settingsRaw,
+    persistence: { save: () => updateSettingsFromState() },
+  });
+  const { buildSelectOptions, buildInputNode, buildObjectListInput } =
+    createSettingsInputs({
+      getJQuery: () => $,
+      getRealNumber: () => getRealNumber,
+    });
+  const conditionControls = createOverrideConditionControls({
+    overrideEditor,
+    getJQuery: () => $,
+    getSettingsRaw: () => settingsRaw,
+    getWin: () => win,
+    getCheckCompare: () => checkCompare,
+    getCheckCustom: () => checkCustom,
+    getCheckTypes: () => checkTypes,
+    buildInputNode,
+  });
   const {
     evaluateCheck: _,
-    openOverrideModal,
-    buildOverrideSettings,
-    buildInputNode,
-    buildInputNodeForDisplay,
-    changeDisplayInputNode,
     buildConditionType,
     buildConditionArg,
     buildConditionComparator,
@@ -580,11 +597,29 @@ function startEvolveRuntimeComposition(
     buildConditionDuplicate,
     buildConditionEvalize,
     buildConditionRet,
-    buildObjectListInput,
+  } = conditionControls;
+  const {
+    openOverrideModal,
+    buildOverrideSettings,
+    buildInputNodeForDisplay,
+    changeDisplayInputNode,
+  } = createOverrideEditorControls({
+    overrideEditor,
+    conditionControls,
+    getJQuery: () => $,
+    getSettingsRaw: () => settingsRaw,
+    getSettings: () => settings,
+    getTechIds: () => techIds,
+    getCheckCustom: () => checkCustom,
+    getOverrideKey: () => overrideKey,
+    getOpenOptionsModal: () => openOptionsModal,
+    getSorterHelper: () => sorterHelper,
+    buildInputNode,
+  });
+  const {
     addSettingsToggle,
     addSettingsNumber,
     addSettingsString,
-    buildSelectOptions,
     addSettingsSelect,
     addSettingsList,
     addInputCallbacks,
@@ -594,23 +629,12 @@ function startEvolveRuntimeComposition(
     buildTableLabel,
     resetCheckbox,
   } = createSettingsControls({
-    overrideEditor: createOverrideEditor({
-      getSettingsRaw: () => settingsRaw,
-      persistence: { save: () => updateSettingsFromState() },
-    }),
     getJQuery: () => $,
     getSettingsRaw: () => settingsRaw,
-    getSettings: () => settings,
-    getTechIds: () => techIds,
-    getWin: () => win,
-    getCheckCompare: () => checkCompare,
-    getCheckCustom: () => checkCustom,
-    getCheckTypes: () => checkTypes,
-    getOverrideKey: () => overrideKey,
     getRealNumber: () => getRealNumber,
-    getOpenOptionsModal: () => openOptionsModal,
-    getSorterHelper: () => sorterHelper,
     getUpdateSettingsFromState: () => updateSettingsFromState,
+    openOverrideModal: (event) => openOverrideModal(event),
+    buildSelectOptions,
   });
   let mechInfoTestContext;
   const { reader: mechInfoReader, observer: mechInfoObserver } =

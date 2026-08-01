@@ -146,9 +146,14 @@ for (const file of factoryFiles) {
     /export function (create\w+)\(\{([\s\S]*?)\}\s*(?::[^)]*)?\)\s*(?::[^{]*)?\{/,
   );
   if (!signature) {
-    contractFailures.push(
-      `${path.relative(root, file)}: factory signature not parsed`,
-    );
+    // A module that declares no factory at all is a type-only or helper module and has no
+    // dependency contract to audit. A declared factory whose signature will not parse is still
+    // a failure.
+    if (/export function create\w+\(/.test(source)) {
+      contractFailures.push(
+        `${path.relative(root, file)}: factory signature not parsed`,
+      );
+    }
     continue;
   }
 

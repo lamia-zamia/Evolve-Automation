@@ -52847,35 +52847,176 @@
     };
   }
 
-  // src/ui/settings-controls.ts
-  function createSettingsControls({
+  // src/ui/override-condition-controls.ts
+  function readOperandType(condition, slot) {
+    return slot === 1 ? condition.type1 : condition.type2;
+  }
+  function readOperandArgument(condition, slot) {
+    return slot === 1 ? condition.arg1 : condition.arg2;
+  }
+  function createOverrideConditionControls({
     overrideEditor,
     getJQuery,
     getSettingsRaw,
-    getSettings,
-    getTechIds,
     getWin,
     getCheckCompare,
     getCheckCustom,
     getCheckTypes,
-    getOverrideKey,
-    getRealNumber,
-    getOpenOptionsModal,
-    getSorterHelper,
-    getUpdateSettingsFromState
+    buildInputNode
   }) {
     const $ = getJQuery();
-    const getRealNumberValue = (...args) => getRealNumber()(...args);
-    const openOptionsModal = (...args) => getOpenOptionsModal()(...args);
-    const sorterHelper = (...args) => getSorterHelper()(...args);
-    const updateSettingsFromState = (...args) => getUpdateSettingsFromState()(...args);
-    function _(check, arg) {
-      return getCheckTypes()[check].fn(arg);
+    function evaluateCheck(operandTypeId, argument) {
+      return getCheckTypes()[operandTypeId]?.fn(argument);
     }
+    function buildConditionType(settingName, index, condition, slot, rebuild) {
+      const types = Object.entries(getCheckTypes()).map(
+        ([id, type]) => `<option value="${id}" title="${type?.desc}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
+      ).join();
+      return $(`<select style="width: 100%">${types}</select>`).val(readOperandType(condition, slot)).on("change", function() {
+        overrideEditor.applyEdit({
+          kind: "set-operand",
+          settingKey: settingName,
+          index,
+          slot,
+          operandType: this.value,
+          argument: getCheckTypes()[this.value]?.def
+        });
+        rebuild();
+      });
+    }
+    function buildConditionArg(settingName, index, condition, slot) {
+      const check = getCheckTypes()[readOperandType(condition, slot)];
+      return check ? buildInputNode(
+        check.arg,
+        check.options,
+        readOperandArgument(condition, slot),
+        (result2) => {
+          overrideEditor.applyEdit({
+            kind: "set-operand-argument",
+            settingKey: settingName,
+            index,
+            slot,
+            argument: result2
+          });
+        }
+      ) : "";
+    }
+    function buildConditionComparator(settingName, index, condition, rebuild) {
+      const types = Object.entries(getCheckCompare()).map(
+        ([id, fn]) => `<option value="${id}" title="${getCheckCustom()[id] ?? fn.toString().substr(10)}">${id}</option>`
+      ).join();
+      return $(`<select style="width: 100%">${types}</select>`).val(condition.comparator).on("change", function() {
+        overrideEditor.applyEdit({
+          kind: "set-comparator",
+          settingKey: settingName,
+          index,
+          comparator: this.value
+        });
+        rebuild();
+      });
+    }
+    function buildConditionRemove(settingName, index, rebuild) {
+      return $(
+        `<a class="button is-small" style="width: 26px; height: 26px"><span>-</span></a>`
+      ).on("click", () => {
+        const outcome = overrideEditor.applyEdit({
+          kind: "remove-condition",
+          settingKey: settingName,
+          index
+        });
+        if (outcome.conditionCount === 0) {
+          $(".script_bg_" + settingName).removeClass("inactive-row");
+        }
+        rebuild();
+      });
+    }
+    function buildConditionDuplicate(settingName, index, rebuild) {
+      return $(
+        `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 1.2rem;">&#9282;</span></a>`
+      ).on("click", () => {
+        overrideEditor.applyEdit({
+          kind: "duplicate-condition",
+          settingKey: settingName,
+          index
+        });
+        rebuild();
+      });
+    }
+    function buildConditionEvalize(settingName, index) {
+      return $(
+        `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 0.9rem;">E</span></a>`
+      ).on("click", () => {
+        const condition = parseOverrideCondition(
+          getSettingsRaw().overrides[settingName]?.[index]
+        );
+        const comparator = condition && getCheckCompare()[condition.comparator]?.toString();
+        if (condition === void 0 || comparator === void 0) {
+          return;
+        }
+        const check = comparator.substr(10).replace(/([ab])/g, (_match, operand) => {
+          const slot = operand === "a" ? 1 : 2;
+          const argument = readOperandArgument(condition, slot);
+          switch (readOperandType(condition, slot)) {
+            case "Number":
+            case "Boolean":
+              return String(argument);
+            case "Eval":
+              return `(${argument})`;
+            case "String":
+              return JSON.stringify(argument);
+            default:
+              return `_("${readOperandType(condition, slot)}",${JSON.stringify(
+                argument
+              )})`;
+          }
+        });
+        getWin().prompt("Eval of this condition:", check);
+      });
+    }
+    function buildConditionRet(settingName, index, condition, type, options2) {
+      return buildInputNode(type, options2, condition.result, (result2) => {
+        overrideEditor.applyEdit({
+          kind: "set-result",
+          settingKey: settingName,
+          index,
+          result: result2
+        });
+      });
+    }
+    return {
+      evaluateCheck,
+      buildConditionType,
+      buildConditionArg,
+      buildConditionComparator,
+      buildConditionRemove,
+      buildConditionDuplicate,
+      buildConditionEvalize,
+      buildConditionRet
+    };
+  }
+
+  // src/ui/override-editor.ts
+  function listNames(value, nameOf) {
+    return Array.isArray(value) ? value.map((item) => nameOf(item) ?? "[Invalid item]").join(", ") : "";
+  }
+  function createOverrideEditorControls({
+    overrideEditor,
+    conditionControls,
+    getJQuery,
+    getSettingsRaw,
+    getSettings,
+    getTechIds,
+    getCheckCustom,
+    getOverrideKey,
+    getOpenOptionsModal,
+    getSorterHelper,
+    buildInputNode
+  }) {
+    const $ = getJQuery();
     function openOverrideModal(event) {
       if (event[getOverrideKey()]) {
         event.preventDefault();
-        openOptionsModal(event.data.label, function(modal) {
+        getOpenOptionsModal()(event.data.label, (modal) => {
           modal.append(
             `<div style="margin-top: 10px; margin-bottom: 10px;" id="script_${event.data.name}Modal"></div>`
           );
@@ -52890,8 +53031,8 @@
     }
     function buildOverrideSettings(settingName, type, options2) {
       const rebuild = () => buildOverrideSettings(settingName, type, options2);
-      let overrides = getSettingsRaw().overrides[settingName] ?? [];
-      let currentNode = $(`#script_${settingName}Modal`);
+      const overrides = getSettingsRaw().overrides[settingName] ?? [];
+      const currentNode = $(`#script_${settingName}Modal`);
       currentNode.empty().off("*");
       currentNode.append(`
           <table style="width:100%; text-align: left">
@@ -52916,10 +53057,10 @@
       for (let i = 0; i < overrides.length; i++) {
         newTableBodyText += `<tr id="script_${settingName}_o${i}" value="${i}" class="script-draggable"><td style="width:16%"></td><td style="width:16%"></td><td style="width:10%"></td><td style="width:16%"></td><td style="width:16%"></td><td style="width:14%"></td><td style="width:12%"><span class="script-lastcolumn"></span></td></tr>`;
       }
-      let listField = typeof getSettingsRaw()[settingName] === "object";
-      let note = listField ? "All values passed checks will be added or removed from list" : "First value passed check will be used. Default value:";
-      let note_2 = "The current value:";
-      let current = listField ? `<td style="width:32%" colspan="2">${note_2}</td>
+      const listField = typeof getSettingsRaw()[settingName] === "object";
+      const note = listField ? "All values passed checks will be added or removed from list" : "First value passed check will be used. Default value:";
+      const note_2 = "The current value:";
+      const current = listField ? `<td style="width:32%" colspan="2">${note_2}</td>
           <td style="width:56%" colspan="4"></td>` : `<td style="width:74%" colspan="5">${note_2}</td>
           <td style="width:14%"></td>`;
       newTableBodyText += `
@@ -52932,7 +53073,7 @@
             ${current}
             <td style="width:12%"></td>
           </tr>`;
-      let tableBodyNode = $(`#script_${settingName}ModalTable`);
+      const tableBodyNode = $(`#script_${settingName}ModalTable`);
       tableBodyNode.append($(newTableBodyText));
       if (!listField) {
         $(`#script_${settingName}_d td:eq(1)`).append(
@@ -52940,9 +53081,9 @@
             type,
             options2,
             getSettingsRaw()[settingName],
-            function(result2) {
+            (result2) => {
               overrideEditor.setSettingValue(settingName, result2);
-              let retType = typeof result2 === "boolean" ? "checked" : "value";
+              const retType = typeof result2 === "boolean" ? "checked" : "value";
               $(".script_" + settingName).prop(
                 retType,
                 getSettingsRaw()[settingName]
@@ -52954,7 +53095,7 @@
       $(`#script_override_true_value td:eq(1)`).append(
         buildInputNodeForDisplay(type, options2, getSettings()[settingName])
       );
-      $(`#script_${settingName}_d a`).on("click", function() {
+      $(`#script_${settingName}_d a`).on("click", () => {
         const outcome = overrideEditor.applyEdit({
           kind: "add-condition",
           settingKey: settingName,
@@ -52966,39 +53107,75 @@
         rebuild();
       });
       for (let i = 0; i < overrides.length; i++) {
-        let override = overrides[i];
+        const condition = parseOverrideCondition(overrides[i]);
+        if (condition === void 0) {
+          continue;
+        }
         let tableElement = $(`#script_${settingName}_o${i}`).children().eq(0);
         tableElement.append(
-          buildConditionType(settingName, i, override, 1, rebuild)
+          conditionControls.buildConditionType(
+            settingName,
+            i,
+            condition,
+            1,
+            rebuild
+          )
         );
-        tableElement = tableElement.next();
-        tableElement.append(buildConditionArg(settingName, i, override, 1));
         tableElement = tableElement.next();
         tableElement.append(
-          buildConditionComparator(settingName, i, override, rebuild)
+          conditionControls.buildConditionArg(settingName, i, condition, 1)
         );
         tableElement = tableElement.next();
         tableElement.append(
-          buildConditionType(settingName, i, override, 2, rebuild)
+          conditionControls.buildConditionComparator(
+            settingName,
+            i,
+            condition,
+            rebuild
+          )
         );
         tableElement = tableElement.next();
-        tableElement.append(buildConditionArg(settingName, i, override, 2));
+        tableElement.append(
+          conditionControls.buildConditionType(
+            settingName,
+            i,
+            condition,
+            2,
+            rebuild
+          )
+        );
         tableElement = tableElement.next();
-        if (!getCheckCustom()[override.cmp]) {
+        tableElement.append(
+          conditionControls.buildConditionArg(settingName, i, condition, 2)
+        );
+        tableElement = tableElement.next();
+        if (!getCheckCustom()[condition.comparator]) {
           tableElement.append(
-            buildConditionRet(settingName, i, override, type, options2)
+            conditionControls.buildConditionRet(
+              settingName,
+              i,
+              condition,
+              type,
+              options2
+            )
           );
         }
         tableElement = tableElement.next();
-        tableElement.append(buildConditionRemove(settingName, i, rebuild));
-        tableElement.append(buildConditionDuplicate(settingName, i, rebuild));
-        tableElement.append(buildConditionEvalize(settingName, i, rebuild));
+        tableElement.append(
+          conditionControls.buildConditionRemove(settingName, i, rebuild)
+        );
+        tableElement.append(
+          conditionControls.buildConditionDuplicate(settingName, i, rebuild)
+        );
+        tableElement.append(
+          conditionControls.buildConditionEvalize(settingName, i)
+        );
       }
       tableBodyNode.sortable({
         items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let newOrder = tableBodyNode.sortable("toArray", {
+        helper: getSorterHelper(),
+        update: () => {
+          const newOrder = tableBodyNode.sortable("toArray", {
             attribute: "value"
           });
           overrideEditor.applyEdit({
@@ -53009,57 +53186,6 @@
           rebuild();
         }
       });
-    }
-    function buildInputNode(type, options2, value, callback) {
-      switch (type) {
-        case "string":
-          return $(`
-                  <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
-            callback(this.value);
-          });
-        case "number":
-          return $(`
-                  <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
-            let parsedValue = getRealNumberValue(this.value);
-            if (isNaN(parsedValue)) {
-              parsedValue = value;
-            }
-            this.value = parsedValue;
-            callback(parsedValue);
-          });
-        case "boolean":
-          return $(`
-                  <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-                    <input type="checkbox">
-                    <span class="check" style="height:5px; max-width:15px"></span><span style="margin-left: 20px;"></span>
-                  </label>`).find("input").prop("checked", value).on("change", function() {
-            callback(this.checked);
-          }).end();
-        case "select":
-          return $(`
-                  <select style="width: 100%">${options2}</select>`).val(value).on("change", function() {
-            callback(this.value);
-          });
-        case "select_cb":
-          return $(`
-                  <select style="width: 100%">${buildSelectOptions(
-            options2()
-          )}</select>`).val(value).on("change", function() {
-            callback(this.value);
-          });
-        case "list":
-          return buildObjectListInput(
-            options2.list,
-            options2.name,
-            options2.id,
-            value,
-            callback
-          );
-        case "list_cb":
-          return buildObjectListInput(options2(), "name", "id", value, callback);
-        default:
-          return "";
-      }
     }
     function buildInputNodeForDisplay(type, options2, value) {
       switch (type) {
@@ -53080,21 +53206,23 @@
                   <select style="width: 100%"  disabled="disabled" class="dropdown is-disabled">${options2}</select>`).val(
             value
           );
-        case "list":
+        case "list": {
+          const list = options2.list;
           return $(`
                   <span></span>`).text(
-            value.map((item) => options2.list[item]?.name ?? "[Invalid item]").join(", ")
+            listNames(value, (item) => list[String(item)]?.["name"])
           );
+        }
         default:
           return $(`
                   <span></span>`).text(JSON.stringify(value));
       }
     }
     function changeDisplayInputNode(currentNode) {
-      let type = currentNode.attr("type");
-      let id = currentNode.attr("value");
-      let value = getSettings()[currentNode.attr("value")];
-      let node = currentNode.find(`td:eq(1)>*:first-child`);
+      const type = currentNode.attr("type");
+      const id = currentNode.attr("value");
+      const value = getSettings()[String(id)];
+      const node = currentNode.find(`td:eq(1)>*:first-child`);
       switch (type) {
         case "string":
         case "number":
@@ -53105,7 +53233,7 @@
         case "list":
           if (id === "researchIgnore") {
             return node.text(
-              value.map((item) => getTechIds()[item]?.name ?? "[Invalid item]").join(", ")
+              listNames(value, (item) => getTechIds()[String(item)]?.name)
             );
           }
         // fall through
@@ -53113,166 +53241,26 @@
           return node.text(JSON.stringify(value));
       }
     }
-    function buildConditionType(settingName, index, override, num, rebuild) {
-      let types = Object.entries(getCheckTypes()).map(
-        ([id, type]) => `<option value="${id}" title="${type.desc}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
-      ).join();
-      return $(`<select style="width: 100%">${types}</select>`).val(override["type" + num]).on("change", function() {
-        overrideEditor.applyEdit({
-          kind: "set-operand",
-          settingKey: settingName,
-          index,
-          slot: num,
-          operandType: this.value,
-          argument: getCheckTypes()[this.value].def
-        });
-        rebuild();
-      });
-    }
-    function buildConditionArg(settingName, index, override, num) {
-      let check = getCheckTypes()[override["type" + num]];
-      return check ? buildInputNode(
-        check.arg,
-        check.options,
-        override["arg" + num],
-        function(result2) {
-          overrideEditor.applyEdit({
-            kind: "set-operand-argument",
-            settingKey: settingName,
-            index,
-            slot: num,
-            argument: result2
-          });
-        }
-      ) : "";
-    }
-    function buildConditionComparator(settingName, index, override, rebuild) {
-      let types = Object.entries(getCheckCompare()).map(
-        ([id, fn]) => `<option value="${id}" title="${getCheckCustom()[id] ?? fn.toString().substr(10)}">${id}</option>`
-      ).join();
-      return $(`<select style="width: 100%">${types}</select>`).val(override.cmp).on("change", function() {
-        overrideEditor.applyEdit({
-          kind: "set-comparator",
-          settingKey: settingName,
-          index,
-          comparator: this.value
-        });
-        rebuild();
-      });
-    }
-    function buildConditionRemove(settingName, id, rebuild) {
-      return $(
-        `<a class="button is-small" style="width: 26px; height: 26px"><span>-</span></a>`
-      ).on("click", function() {
-        const outcome = overrideEditor.applyEdit({
-          kind: "remove-condition",
-          settingKey: settingName,
-          index: id
-        });
-        if (outcome.conditionCount === 0) {
-          $(".script_bg_" + settingName).removeClass("inactive-row");
-        }
-        rebuild();
-      });
-    }
-    function buildConditionDuplicate(settingName, id, rebuild) {
-      return $(
-        `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 1.2rem;">&#9282;</span></a>`
-      ).on("click", function() {
-        overrideEditor.applyEdit({
-          kind: "duplicate-condition",
-          settingKey: settingName,
-          index: id
-        });
-        rebuild();
-      });
-    }
-    function buildConditionEvalize(settingName, id, rebuild) {
-      return $(
-        `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 0.9rem;">E</span></a>`
-      ).on("click", function() {
-        let override = getSettingsRaw().overrides[settingName][id];
-        let check = getCheckCompare()[override.cmp].toString().substr(10).replace(/([ab])/g, (s, v) => {
-          let idx = v === "a" ? 1 : 2;
-          switch (override["type" + idx]) {
-            case "Number":
-            case "Boolean":
-              return override["arg" + idx];
-            case "Eval":
-              return `(${override["arg" + idx]})`;
-            case "String":
-              return JSON.stringify(override["arg" + idx]);
-            default:
-              return `_("${override["type" + idx]}",${JSON.stringify(
-                override["arg" + idx]
-              )})`;
-          }
-        });
-        getWin().prompt("Eval of this condition:", check);
-      });
-    }
-    function buildConditionRet(settingName, index, override, type, options2) {
-      return buildInputNode(
-        type,
-        options2,
-        override.ret,
-        function(result2) {
-          overrideEditor.applyEdit({
-            kind: "set-result",
-            settingKey: settingName,
-            index,
-            result: result2
-          });
-        }
-      );
-    }
-    function buildObjectListInput(list, name, id, value, callback) {
-      let listNode = $(`<input type="text" style="width:100%"></input>`);
-      let onChange = function(event, ui) {
-        event.preventDefault();
-        if (ui.item === null) {
-          let foundItem = Object.values(list).find(
-            (obj) => obj[name] === this.value
-          );
-          if (foundItem !== void 0) {
-            ui.item = { label: this.value, value: foundItem[id] };
-          }
-        }
-        if (ui.item !== null && Object.values(list).some((obj) => obj[id] === ui.item.value)) {
-          this.value = ui.item.label;
-          callback(ui.item.value);
-        } else if (list.hasOwnProperty(value)) {
-          this.value = list[value][name];
-          callback(value);
-        } else {
-          this.value = "";
-          callback(null);
-        }
-      };
-      listNode.autocomplete({
-        minLength: 2,
-        delay: 0,
-        source: function(request, response) {
-          let matcher = new RegExp(
-            $.ui.autocomplete.escapeRegex(request.term),
-            "i"
-          );
-          response(
-            Object.values(list).filter((item) => matcher.test(item[name])).map((item) => ({ label: item[name], value: item[id] }))
-          );
-        },
-        select: onChange,
-        // Dropdown list click
-        focus: onChange,
-        // Arrow keys press
-        change: onChange
-        // Keyboard type
-      });
-      if (Object.values(list).some((obj) => obj[id] === value)) {
-        listNode.val(list[value][name]);
-      }
-      return listNode;
-    }
+    return {
+      openOverrideModal,
+      buildOverrideSettings,
+      buildInputNodeForDisplay,
+      changeDisplayInputNode
+    };
+  }
+
+  // src/ui/settings-controls.ts
+  function createSettingsControls({
+    getJQuery,
+    getSettingsRaw,
+    getRealNumber,
+    getUpdateSettingsFromState,
+    openOverrideModal,
+    buildSelectOptions
+  }) {
+    const $ = getJQuery();
+    const getRealNumberValue = (...args) => getRealNumber()(...args);
+    const updateSettingsFromState = (...args) => getUpdateSettingsFromState()(...args);
     function addSettingsToggle(node, settingName, labelText, hintText, enabledCallBack, disabledCallBack) {
       return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
@@ -53359,11 +53347,6 @@
         },
         openOverrideModal
       ).appendTo(node);
-    }
-    function buildSelectOptions(optionsList) {
-      return optionsList.map(
-        (item) => `<option value="${item.val}" title="${item.hint ?? ""}">${item.label}</option>`
-      ).join();
     }
     function addSettingsSelect(node, settingName, labelText, hintText, optionsList) {
       let options2 = buildSelectOptions(optionsList);
@@ -53546,24 +53529,9 @@
       );
     }
     return {
-      evaluateCheck: _,
-      openOverrideModal,
-      buildOverrideSettings,
-      buildInputNode,
-      buildInputNodeForDisplay,
-      changeDisplayInputNode,
-      buildConditionType,
-      buildConditionArg,
-      buildConditionComparator,
-      buildConditionRemove,
-      buildConditionDuplicate,
-      buildConditionEvalize,
-      buildConditionRet,
-      buildObjectListInput,
       addSettingsToggle,
       addSettingsNumber,
       addSettingsString,
-      buildSelectOptions,
       addSettingsSelect,
       addSettingsList,
       addInputCallbacks,
@@ -53573,6 +53541,127 @@
       buildTableLabel,
       resetCheckbox
     };
+  }
+
+  // src/ui/settings-inputs.ts
+  function createSettingsInputs({
+    getJQuery,
+    getRealNumber
+  }) {
+    const $ = getJQuery();
+    function buildSelectOptions(optionsList) {
+      return optionsList.map(
+        (item) => `<option value="${item.val}" title="${item.hint ?? ""}">${item.label}</option>`
+      ).join();
+    }
+    function buildInputNode(type, options2, value, callback) {
+      switch (type) {
+        case "string":
+          return $(`
+                  <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
+            callback(this.value);
+          });
+        case "number":
+          return $(`
+                  <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
+            const parsed = getRealNumber()(this.value);
+            const result2 = Number.isNaN(parsed) ? value : parsed;
+            this.value = String(result2);
+            callback(result2);
+          });
+        case "boolean":
+          return $(`
+                  <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+                    <input type="checkbox">
+                    <span class="check" style="height:5px; max-width:15px"></span><span style="margin-left: 20px;"></span>
+                  </label>`).find("input").prop("checked", value).on("change", function() {
+            callback(this.checked);
+          }).end();
+        case "select":
+          return $(`
+                  <select style="width: 100%">${options2}</select>`).val(value).on("change", function() {
+            callback(this.value);
+          });
+        case "select_cb":
+          return $(`
+                  <select style="width: 100%">${buildSelectOptions(
+            options2()
+          )}</select>`).val(value).on("change", function() {
+            callback(this.value);
+          });
+        case "list": {
+          const source = options2;
+          return buildObjectListInput(
+            source.list,
+            source.name,
+            source.id,
+            value,
+            callback
+          );
+        }
+        case "list_cb":
+          return buildObjectListInput(
+            options2(),
+            "name",
+            "id",
+            value,
+            callback
+          );
+        default:
+          return "";
+      }
+    }
+    function buildObjectListInput(list, name, id, value, callback) {
+      const listNode = $(`<input type="text" style="width:100%"></input>`);
+      const onChange = function(event, ui) {
+        event.preventDefault();
+        if (ui.item === null) {
+          const foundItem = Object.values(list).find(
+            (obj) => obj[name] === this.value
+          );
+          if (foundItem !== void 0) {
+            ui.item = { label: this.value, value: foundItem[id] };
+          }
+        }
+        if (ui.item !== null && Object.values(list).some((obj) => obj[id] === ui.item?.value)) {
+          this.value = ui.item.label;
+          callback(ui.item.value);
+        } else if (Object.hasOwn(list, String(value))) {
+          this.value = String(list[String(value)]?.[name]);
+          callback(value);
+        } else {
+          this.value = "";
+          callback(null);
+        }
+      };
+      listNode.autocomplete({
+        minLength: 2,
+        delay: 0,
+        source: function(request, response) {
+          const matcher = new RegExp(
+            $.ui.autocomplete.escapeRegex(request.term),
+            "i"
+          );
+          response(
+            Object.values(list).filter((item) => matcher.test(String(item[name]))).map((item) => ({
+              label: String(item[name]),
+              value: item[id]
+            }))
+          );
+        },
+        select: onChange,
+        // Dropdown list click
+        focus: onChange,
+        // Arrow keys press
+        change: onChange
+        // Keyboard type
+      });
+      if (Object.values(list).some((obj) => obj[id] === value)) {
+        listNode.val(list[String(value)]?.[name]);
+      }
+      return listNode;
+    }
+    return { buildSelectOptions, buildInputNode, buildObjectListInput };
   }
 
   // src/settings/override-operand-inputs.ts
@@ -55253,25 +55342,56 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       triggerFileDownload: (...args) => triggerFileDownload(...args),
       confirm: (...args) => runtimeEnvironment.confirm(...args)
     });
+    const overrideEditor = createOverrideEditor({
+      getSettingsRaw: () => settingsRaw,
+      persistence: { save: () => updateSettingsFromState() }
+    });
+    const { buildSelectOptions, buildInputNode, buildObjectListInput } = createSettingsInputs({
+      getJQuery: () => $,
+      getRealNumber: () => getRealNumber
+    });
+    const conditionControls = createOverrideConditionControls({
+      overrideEditor,
+      getJQuery: () => $,
+      getSettingsRaw: () => settingsRaw,
+      getWin: () => win,
+      getCheckCompare: () => checkCompare,
+      getCheckCustom: () => checkCustom,
+      getCheckTypes: () => checkTypes,
+      buildInputNode
+    });
     const {
       evaluateCheck: _,
-      openOverrideModal,
-      buildOverrideSettings,
-      buildInputNode,
-      buildInputNodeForDisplay,
-      changeDisplayInputNode,
       buildConditionType,
       buildConditionArg,
       buildConditionComparator,
       buildConditionRemove,
       buildConditionDuplicate,
       buildConditionEvalize,
-      buildConditionRet,
-      buildObjectListInput,
+      buildConditionRet
+    } = conditionControls;
+    const {
+      openOverrideModal,
+      buildOverrideSettings,
+      buildInputNodeForDisplay,
+      changeDisplayInputNode
+    } = createOverrideEditorControls({
+      overrideEditor,
+      conditionControls,
+      getJQuery: () => $,
+      getSettingsRaw: () => settingsRaw,
+      getSettings: () => settings,
+      getTechIds: () => techIds,
+      getCheckCustom: () => checkCustom,
+      getOverrideKey: () => overrideKey,
+      getOpenOptionsModal: () => openOptionsModal,
+      getSorterHelper: () => sorterHelper,
+      buildInputNode
+    });
+    const {
       addSettingsToggle,
       addSettingsNumber,
       addSettingsString,
-      buildSelectOptions,
       addSettingsSelect,
       addSettingsList,
       addInputCallbacks,
@@ -55281,23 +55401,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       buildTableLabel,
       resetCheckbox
     } = createSettingsControls({
-      overrideEditor: createOverrideEditor({
-        getSettingsRaw: () => settingsRaw,
-        persistence: { save: () => updateSettingsFromState() }
-      }),
       getJQuery: () => $,
       getSettingsRaw: () => settingsRaw,
-      getSettings: () => settings,
-      getTechIds: () => techIds,
-      getWin: () => win,
-      getCheckCompare: () => checkCompare,
-      getCheckCustom: () => checkCustom,
-      getCheckTypes: () => checkTypes,
-      getOverrideKey: () => overrideKey,
       getRealNumber: () => getRealNumber,
-      getOpenOptionsModal: () => openOptionsModal,
-      getSorterHelper: () => sorterHelper,
-      getUpdateSettingsFromState: () => updateSettingsFromState
+      getUpdateSettingsFromState: () => updateSettingsFromState,
+      openOverrideModal: (event) => openOverrideModal(event),
+      buildSelectOptions
     });
     let mechInfoTestContext;
     const { reader: mechInfoReader, observer: mechInfoObserver } = createMechInfoEvolveAdapter({
