@@ -1,7 +1,14 @@
 // The value inputs shared by the settings pages, the override editor, and the trigger editor.
 // Each builds one node and reports an edit through its callback; nothing here writes settings.
 
-import type { EditableInput, JQuery, JQueryNode } from "./jquery.ts";
+import type {
+  AutocompleteEvent,
+  AutocompleteItem,
+  AutocompleteUi,
+  EditableInput,
+  JQuery,
+  JQueryNode,
+} from "./jquery.ts";
 
 /** One entry of a `<select>` built from a list rather than from prepared markup. */
 export interface SelectOptionSource {
@@ -54,17 +61,6 @@ export interface SettingsInputs {
     value: unknown,
     callback: SettingsInputCallback,
   ): JQueryNode;
-}
-
-interface AutocompleteItem {
-  label: string;
-  value: unknown;
-}
-interface AutocompleteUi {
-  item: AutocompleteItem | null;
-}
-interface AutocompleteEvent {
-  preventDefault(): void;
 }
 
 export function createSettingsInputs({

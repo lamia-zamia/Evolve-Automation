@@ -6,6 +6,7 @@ import { createSettingsShell } from "../src/ui/settings-shell.ts";
 const trace = [];
 const handlers = [];
 const overrideModalClicks = [];
+const autocompleteOptions = [];
 
 function makeNode(label, length = 1) {
   const node = {
@@ -81,7 +82,8 @@ function makeNode(label, length = 1) {
     end() {
       return node;
     },
-    autocomplete() {
+    autocomplete(options) {
+      autocompleteOptions.push(options);
       return node;
     },
   };
@@ -143,6 +145,78 @@ assert.deepEqual(clickData, {
   name: "enabled",
   type: "boolean",
 });
+
+// A toggle reports its state changes only. Building it never runs the enabled callback.
+let enabledCalls = 0;
+settingsRaw = { overrides: {}, amount: 1, enabled: true, techs: [] };
+controlContext.settingsRaw = settingsRaw;
+controls.addSettingsToggle(
+  makeNode("section"),
+  "enabled",
+  "Enabled",
+  "hint",
+  () => enabledCalls++,
+);
+assert.equal(enabledCalls, 0);
+const toggleChange = handlers.findLast(
+  ({ args }) => args[0] === "change" && args[1] === "input",
+).args[2];
+toggleChange.call({ checked: true });
+assert.equal(enabledCalls, 1);
+
+// A list setting displays the names of the ids it stores, and edits them through its buttons.
+settingsRaw = { overrides: {}, techs: ["tech-a", "retired"] };
+controlContext.settingsRaw = settingsRaw;
+const techList = {
+  "tech-a": { name: "Alpha", _vueBinding: "tech-a" },
+  "tech-b": { name: "Beta", _vueBinding: "tech-b" },
+};
+controls.addSettingsList(
+  makeNode("section"),
+  "techs",
+  "Researches",
+  "hint",
+  techList,
+);
+// An id the game no longer lists shows as itself instead of failing the render.
+assert.ok(trace.includes("val:.script_techs:Alpha, retired"));
+
+const listClickData = handlers.findLast(
+  ({ args }) => args[0] === "click" && typeof args[1] === "object",
+).args[1];
+assert.deepEqual(listClickData, {
+  label: "Add or Remove (techs)",
+  name: "techs",
+  type: "list",
+  options: { list: techList, name: "name", id: "_vueBinding" },
+});
+
+const listOptions = autocompleteOptions.at(-1);
+const suggestions = [];
+listOptions.source({ term: "Al" }, (items) => suggestions.push(...items));
+assert.deepEqual(suggestions, [{ label: "Alpha", value: "tech-a" }]);
+
+// A typed name that matches an entry selects it; anything else clears the selection.
+const typedInput = { value: "Beta" };
+listOptions.change.call(typedInput, { preventDefault() {} }, { item: null });
+assert.equal(typedInput.value, "Beta");
+
+const addHandler = handlers.findLast(({ args }) => args[1] === "button:eq(1)")
+  .args[2];
+const removeHandler = handlers.findLast(
+  ({ args }) => args[1] === "button:eq(0)",
+).args[2];
+addHandler();
+assert.deepEqual(settingsRaw.techs, ["retired", "tech-a", "tech-b"]);
+assert.ok(trace.includes("val:.script_techs:retired, Alpha, Beta"));
+removeHandler();
+assert.deepEqual(settingsRaw.techs, ["retired", "tech-a"]);
+
+const unknownInput = { value: "Gamma" };
+listOptions.change.call(unknownInput, { preventDefault() {} }, { item: null });
+assert.equal(unknownInput.value, "");
+addHandler();
+assert.deepEqual(settingsRaw.techs, ["retired", "tech-a"]);
 
 const buildNames = [
   "buildPrestigeSettings",

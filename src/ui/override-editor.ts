@@ -4,7 +4,7 @@
 
 import { parseOverrideCondition } from "../domain/override-resolution.ts";
 import type { OverrideEditor } from "../ports/override-editing.ts";
-import type { JQuery, JQueryNode } from "./jquery.ts";
+import type { DelegatedEvent, JQuery, JQueryNode } from "./jquery.ts";
 import type {
   OverrideConditionControls,
   StoredSettings,
@@ -14,17 +14,16 @@ import type {
   SettingsInputOptions,
 } from "./settings-inputs.ts";
 
-/** The click a settings control reports so a modifier-held click opens the override editor. */
-export interface OverrideModalEvent {
-  readonly [key: string]: unknown;
-  preventDefault(): void;
-  readonly data: {
-    readonly label: string;
-    readonly name: string;
-    readonly type: string;
-    readonly options?: SettingsInputOptions;
-  };
+/** What a settings control binds to its click so the editor knows which setting to open. */
+export interface OverrideModalData {
+  readonly label: string;
+  readonly name: string;
+  readonly type: string;
+  readonly options?: SettingsInputOptions;
 }
+
+/** The click a settings control reports so a modifier-held click opens the override editor. */
+export type OverrideModalEvent = DelegatedEvent<OverrideModalData>;
 
 interface OverrideEditorControlsDependencies {
   /** Every stored change the editor makes. This module never writes settings itself. */

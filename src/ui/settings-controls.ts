@@ -1,17 +1,71 @@
-import type { OverrideModalEvent } from "./override-editor.ts";
-import type { SelectOptionSource } from "./settings-inputs.ts";
+// The controls a settings page is built from. Each writes its setting through the raw settings bag
+// and reports a modifier-held click to the override editor.
 
-type AnyRecord = Record<string, any>;
-type AnyFunction = (...args: any[]) => any;
+import type {
+  AutocompleteEvent,
+  AutocompleteItem,
+  AutocompleteUi,
+  EditableInput,
+  JQuery,
+  JQueryNode,
+} from "./jquery.ts";
+import type { StoredSettings } from "./override-condition-controls.ts";
+import type { OverrideModalEvent } from "./override-editor.ts";
+import type { ObjectList, SelectOptionSource } from "./settings-inputs.ts";
 
 interface SettingsControlsDependencies {
-  getJQuery: () => AnyFunction & AnyRecord;
-  getSettingsRaw: () => AnyRecord;
-  getRealNumber: () => AnyFunction;
-  getUpdateSettingsFromState: () => AnyFunction;
+  readonly getJQuery: () => JQuery;
+  readonly getSettingsRaw: () => StoredSettings;
+  readonly getRealNumber: () => (amountText: string) => number;
+  readonly getUpdateSettingsFromState: () => () => void;
   /** Opens the override editor for the clicked setting when the modifier key is held. */
-  openOverrideModal: (event: OverrideModalEvent) => void;
-  buildSelectOptions: (optionsList: readonly SelectOptionSource[]) => string;
+  readonly openOverrideModal: (event: OverrideModalEvent) => void;
+  readonly buildSelectOptions: (
+    optionsList: readonly SelectOptionSource[],
+  ) => string;
+}
+
+export interface SettingsControls {
+  addSettingsToggle(
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+    enabledCallBack?: () => void,
+    disabledCallBack?: () => void,
+  ): JQueryNode;
+  addSettingsNumber(
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+  ): JQueryNode;
+  addSettingsString(
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+  ): JQueryNode;
+  addSettingsSelect(
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+    optionsList: readonly SelectOptionSource[],
+  ): JQueryNode;
+  addSettingsList(
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+    list: ObjectList,
+  ): void;
+  addInputCallbacks(node: JQueryNode, settingKey: string): JQueryNode;
+  addTableInput(node: JQueryNode, settingKey: string): void;
+  addToggleCallbacks(node: JQueryNode, settingKey: string): JQueryNode;
+  addTableToggle(node: JQueryNode, settingKey: string): void;
+  buildTableLabel(note: unknown, title?: unknown, color?: string): JQueryNode;
+  resetCheckbox(...items: string[]): void;
 }
 
 export function createSettingsControls({
@@ -21,20 +75,24 @@ export function createSettingsControls({
   getUpdateSettingsFromState,
   openOverrideModal,
   buildSelectOptions,
-}: SettingsControlsDependencies) {
+}: SettingsControlsDependencies): SettingsControls {
   const $ = getJQuery();
-  const getRealNumberValue: AnyFunction = (...args) => getRealNumber()(...args);
-  const updateSettingsFromState: AnyFunction = (...args) =>
-    getUpdateSettingsFromState()(...args);
+  const getRealNumberValue = (amountText: string): number =>
+    getRealNumber()(amountText);
+  const updateSettingsFromState = (): void => getUpdateSettingsFromState()();
+
+  /** Migration guarantees a list setting stores an array of ids. */
+  const readListSetting = (settingName: string): string[] =>
+    getSettingsRaw()[settingName] as string[];
 
   function addSettingsToggle(
-    node: any,
-    settingName: any,
-    labelText: any,
-    hintText: any,
-    enabledCallBack: any,
-    disabledCallBack: any,
-  ) {
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+    enabledCallBack?: () => void,
+    disabledCallBack?: () => void,
+  ): JQueryNode {
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
             <label title="${hintText}" tabindex="0" class="switch">
@@ -48,7 +106,7 @@ export function createSettingsControls({
         "inactive-row",
         Boolean(getSettingsRaw().overrides[settingName]),
       )
-      .on("change", "input", function (this: any) {
+      .on("change", "input", function (this: EditableInput) {
         getSettingsRaw()[settingName] = this.checked;
         updateSettingsFromState();
 
@@ -74,18 +132,14 @@ export function createSettingsControls({
         openOverrideModal,
       )
       .appendTo(node);
-
-    if (getSettingsRaw()[settingName] && enabledCallBack) {
-      enabledCallBack();
-    }
   }
 
   function addSettingsNumber(
-    node: any,
-    settingName: any,
-    labelText: any,
-    hintText: any,
-  ) {
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+  ): JQueryNode {
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
@@ -97,9 +151,9 @@ export function createSettingsControls({
         "inactive-row",
         Boolean(getSettingsRaw().overrides[settingName]),
       )
-      .on("change", "input", function (this: any) {
-        let parsedValue = getRealNumberValue(this.value);
-        if (!isNaN(parsedValue)) {
+      .on("change", "input", function (this: EditableInput) {
+        const parsedValue = getRealNumberValue(this.value);
+        if (!Number.isNaN(parsedValue)) {
           getSettingsRaw()[settingName] = parsedValue;
           updateSettingsFromState();
         }
@@ -118,11 +172,11 @@ export function createSettingsControls({
   }
 
   function addSettingsString(
-    node: any,
-    settingName: any,
-    labelText: any,
-    hintText: any,
-  ) {
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+  ): JQueryNode {
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
@@ -134,7 +188,7 @@ export function createSettingsControls({
         "inactive-row",
         Boolean(getSettingsRaw().overrides[settingName]),
       )
-      .on("change", "input", function (this: any) {
+      .on("change", "input", function (this: EditableInput) {
         getSettingsRaw()[settingName] = this.value;
         updateSettingsFromState();
         $(".script_" + settingName).val(getSettingsRaw()[settingName]);
@@ -152,13 +206,13 @@ export function createSettingsControls({
   }
 
   function addSettingsSelect(
-    node: any,
-    settingName: any,
-    labelText: any,
-    hintText: any,
-    optionsList: any,
-  ) {
-    let options = buildSelectOptions(optionsList);
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+    optionsList: readonly SelectOptionSource[],
+  ): JQueryNode {
+    const options = buildSelectOptions(optionsList);
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
@@ -174,7 +228,7 @@ export function createSettingsControls({
       )
       .find("select")
       .val(getSettingsRaw()[settingName])
-      .on("change", function (this: any) {
+      .on("change", function (this: EditableInput) {
         getSettingsRaw()[settingName] = this.value;
         updateSettingsFromState();
 
@@ -195,13 +249,13 @@ export function createSettingsControls({
   }
 
   function addSettingsList(
-    node: any,
-    settingName: any,
-    labelText: any,
-    hintText: any,
-    list: AnyRecord,
-  ) {
-    let listBlock = $(`
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+    list: ObjectList,
+  ): void {
+    const listBlock = $(`
           <div class="script_bg_${settingName}" style="display: inline-block; width: 90%; margin-top: 6px;">
             <label title="${hintText}" tabindex="0">
               <span>${labelText}</span>
@@ -230,22 +284,27 @@ export function createSettingsControls({
 
     let selectedItem: string | null = "";
 
-    let updateList = function (this: any) {
-      let techsString = getSettingsRaw()
-        [settingName].map(
-          (id: any) =>
-            Object.values(list).find((obj) => obj._vueBinding === id).name,
-        )
-        .join(", ");
-      $(".script_" + settingName).val(techsString);
+    const updateList = (): void => {
+      const names = readListSetting(settingName).map((id) => {
+        const entry = Object.values(list).find(
+          (candidate) => candidate._vueBinding === id,
+        );
+        // An id the game no longer lists shows as itself rather than failing the whole render.
+        return entry === undefined ? id : String(entry.name);
+      });
+      $(".script_" + settingName).val(names.join(", "));
     };
 
-    let onChange = function (this: any, event: any, ui: any) {
+    const onChange = function (
+      this: EditableInput,
+      event: AutocompleteEvent,
+      ui: AutocompleteUi,
+    ) {
       event.preventDefault();
 
       // If it wasn't selected from list
       if (ui.item === null) {
-        let typedName = Object.values(list).find(
+        const typedName = Object.values(list).find(
           (obj) => obj.name === this.value,
         );
         if (typedName !== undefined) {
@@ -254,9 +313,9 @@ export function createSettingsControls({
       }
 
       // We have an item to switch
-      if (ui.item !== null && list.hasOwnProperty(ui.item.value)) {
+      if (ui.item !== null && Object.hasOwn(list, String(ui.item.value))) {
         this.value = ui.item.label;
-        selectedItem = ui.item.value;
+        selectedItem = String(ui.item.value);
       } else {
         this.value = "";
         selectedItem = null;
@@ -266,15 +325,21 @@ export function createSettingsControls({
     listBlock.find("input").autocomplete({
       minLength: 2,
       delay: 0,
-      source: function (this: any, request: any, response: any) {
-        let matcher = new RegExp(
+      source: function (
+        request: { term: string },
+        response: (items: AutocompleteItem[]) => void,
+      ) {
+        const matcher = new RegExp(
           $.ui.autocomplete.escapeRegex(request.term),
           "i",
         );
         response(
           Object.values(list)
-            .filter((item) => matcher.test(item.name))
-            .map((item) => ({ label: item.name, value: item._vueBinding })),
+            .filter((item) => matcher.test(String(item.name)))
+            .map((item) => ({
+              label: String(item.name),
+              value: item._vueBinding,
+            })),
         );
       },
       select: onChange, // Dropdown list click
@@ -282,28 +347,21 @@ export function createSettingsControls({
       change: onChange, // Keyboard type
     });
 
-    listBlock.on("click", "button:eq(1)", function (this: any) {
-      if (
-        selectedItem &&
-        !getSettingsRaw()[settingName].includes(selectedItem)
-      ) {
-        getSettingsRaw()[settingName].push(selectedItem);
-        getSettingsRaw()[settingName].sort();
+    listBlock.on("click", "button:eq(1)", function () {
+      const selected = readListSetting(settingName);
+      if (selectedItem && !selected.includes(selectedItem)) {
+        selected.push(selectedItem);
+        selected.sort();
         updateSettingsFromState();
         updateList();
       }
     });
 
-    listBlock.on("click", "button:eq(0)", function (this: any) {
-      if (
-        selectedItem &&
-        getSettingsRaw()[settingName].includes(selectedItem)
-      ) {
-        getSettingsRaw()[settingName].splice(
-          getSettingsRaw()[settingName].indexOf(selectedItem),
-          1,
-        );
-        getSettingsRaw()[settingName].sort();
+    listBlock.on("click", "button:eq(0)", function () {
+      const selected = readListSetting(settingName);
+      if (selectedItem && selected.includes(selectedItem)) {
+        selected.splice(selected.indexOf(selectedItem), 1);
+        selected.sort();
         updateSettingsFromState();
         updateList();
       }
@@ -312,11 +370,11 @@ export function createSettingsControls({
     updateList();
   }
 
-  function addInputCallbacks(node: any, settingKey: any) {
+  function addInputCallbacks(node: JQueryNode, settingKey: string): JQueryNode {
     return node
-      .on("change", function (this: any) {
-        let parsedValue = getRealNumberValue(this.value);
-        if (!isNaN(parsedValue)) {
+      .on("change", function (this: EditableInput) {
+        const parsedValue = getRealNumberValue(this.value);
+        if (!Number.isNaN(parsedValue)) {
           getSettingsRaw()[settingKey] = parsedValue;
           updateSettingsFromState();
         }
@@ -329,7 +387,7 @@ export function createSettingsControls({
       );
   }
 
-  function addTableInput(node: any, settingKey: any) {
+  function addTableInput(node: JQueryNode, settingKey: string): void {
     node
       .addClass(
         "script_bg_" +
@@ -346,9 +404,12 @@ export function createSettingsControls({
       );
   }
 
-  function addToggleCallbacks(node: any, settingKey: any) {
+  function addToggleCallbacks(
+    node: JQueryNode,
+    settingKey: string,
+  ): JQueryNode {
     return node
-      .on("change", "input", function (this: any) {
+      .on("change", "input", function (this: EditableInput) {
         getSettingsRaw()[settingKey] = this.checked;
         updateSettingsFromState();
 
@@ -364,7 +425,7 @@ export function createSettingsControls({
       );
   }
 
-  function addTableToggle(node: any, settingKey: any) {
+  function addTableToggle(node: JQueryNode, settingKey: string): void {
     node
       .addClass(
         "script_bg_" +
@@ -387,15 +448,15 @@ export function createSettingsControls({
   }
 
   function buildTableLabel(
-    note: any,
-    title: any = "",
-    color: any = "has-text-info",
-  ) {
+    note: unknown,
+    title: unknown = "",
+    color = "has-text-info",
+  ): JQueryNode {
     return $(`<span class="${color}" title="${title}" >${note}</span>`);
   }
 
-  function resetCheckbox(...items: string[]) {
-    Array.from(items).forEach((item) =>
+  function resetCheckbox(...items: string[]): void {
+    items.forEach((item) =>
       $(".script_" + item).prop("checked", getSettingsRaw()[item]),
     );
   }

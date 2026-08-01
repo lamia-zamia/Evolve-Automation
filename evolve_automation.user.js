@@ -53259,8 +53259,9 @@
     buildSelectOptions
   }) {
     const $ = getJQuery();
-    const getRealNumberValue = (...args) => getRealNumber()(...args);
-    const updateSettingsFromState = (...args) => getUpdateSettingsFromState()(...args);
+    const getRealNumberValue = (amountText) => getRealNumber()(amountText);
+    const updateSettingsFromState = () => getUpdateSettingsFromState()();
+    const readListSetting = (settingName) => getSettingsRaw()[settingName];
     function addSettingsToggle(node, settingName, labelText, hintText, enabledCallBack, disabledCallBack) {
       return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
@@ -53293,9 +53294,6 @@
         },
         openOverrideModal
       ).appendTo(node);
-      if (getSettingsRaw()[settingName] && enabledCallBack) {
-        enabledCallBack();
-      }
     }
     function addSettingsNumber(node, settingName, labelText, hintText) {
       return $(`
@@ -53308,8 +53306,8 @@
         "inactive-row",
         Boolean(getSettingsRaw().overrides[settingName])
       ).on("change", "input", function() {
-        let parsedValue = getRealNumberValue(this.value);
-        if (!isNaN(parsedValue)) {
+        const parsedValue = getRealNumberValue(this.value);
+        if (!Number.isNaN(parsedValue)) {
           getSettingsRaw()[settingName] = parsedValue;
           updateSettingsFromState();
         }
@@ -53349,7 +53347,7 @@
       ).appendTo(node);
     }
     function addSettingsSelect(node, settingName, labelText, hintText, optionsList) {
-      let options2 = buildSelectOptions(optionsList);
+      const options2 = buildSelectOptions(optionsList);
       return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
@@ -53377,7 +53375,7 @@
       ).appendTo(node);
     }
     function addSettingsList(node, settingName, labelText, hintText, list) {
-      let listBlock = $(`
+      const listBlock = $(`
           <div class="script_bg_${settingName}" style="display: inline-block; width: 90%; margin-top: 6px;">
             <label title="${hintText}" tabindex="0">
               <span>${labelText}</span>
@@ -53401,25 +53399,28 @@
         openOverrideModal
       ).appendTo(node);
       let selectedItem = "";
-      let updateList = function() {
-        let techsString = getSettingsRaw()[settingName].map(
-          (id) => Object.values(list).find((obj) => obj._vueBinding === id).name
-        ).join(", ");
-        $(".script_" + settingName).val(techsString);
+      const updateList = () => {
+        const names = readListSetting(settingName).map((id) => {
+          const entry = Object.values(list).find(
+            (candidate) => candidate._vueBinding === id
+          );
+          return entry === void 0 ? id : String(entry.name);
+        });
+        $(".script_" + settingName).val(names.join(", "));
       };
-      let onChange = function(event, ui) {
+      const onChange = function(event, ui) {
         event.preventDefault();
         if (ui.item === null) {
-          let typedName = Object.values(list).find(
+          const typedName = Object.values(list).find(
             (obj) => obj.name === this.value
           );
           if (typedName !== void 0) {
             ui.item = { label: this.value, value: typedName._vueBinding };
           }
         }
-        if (ui.item !== null && list.hasOwnProperty(ui.item.value)) {
+        if (ui.item !== null && Object.hasOwn(list, String(ui.item.value))) {
           this.value = ui.item.label;
-          selectedItem = ui.item.value;
+          selectedItem = String(ui.item.value);
         } else {
           this.value = "";
           selectedItem = null;
@@ -53429,12 +53430,15 @@
         minLength: 2,
         delay: 0,
         source: function(request, response) {
-          let matcher = new RegExp(
+          const matcher = new RegExp(
             $.ui.autocomplete.escapeRegex(request.term),
             "i"
           );
           response(
-            Object.values(list).filter((item) => matcher.test(item.name)).map((item) => ({ label: item.name, value: item._vueBinding }))
+            Object.values(list).filter((item) => matcher.test(String(item.name))).map((item) => ({
+              label: String(item.name),
+              value: item._vueBinding
+            }))
           );
         },
         select: onChange,
@@ -53445,20 +53449,19 @@
         // Keyboard type
       });
       listBlock.on("click", "button:eq(1)", function() {
-        if (selectedItem && !getSettingsRaw()[settingName].includes(selectedItem)) {
-          getSettingsRaw()[settingName].push(selectedItem);
-          getSettingsRaw()[settingName].sort();
+        const selected = readListSetting(settingName);
+        if (selectedItem && !selected.includes(selectedItem)) {
+          selected.push(selectedItem);
+          selected.sort();
           updateSettingsFromState();
           updateList();
         }
       });
       listBlock.on("click", "button:eq(0)", function() {
-        if (selectedItem && getSettingsRaw()[settingName].includes(selectedItem)) {
-          getSettingsRaw()[settingName].splice(
-            getSettingsRaw()[settingName].indexOf(selectedItem),
-            1
-          );
-          getSettingsRaw()[settingName].sort();
+        const selected = readListSetting(settingName);
+        if (selectedItem && selected.includes(selectedItem)) {
+          selected.splice(selected.indexOf(selectedItem), 1);
+          selected.sort();
           updateSettingsFromState();
           updateList();
         }
@@ -53467,8 +53470,8 @@
     }
     function addInputCallbacks(node, settingKey) {
       return node.on("change", function() {
-        let parsedValue = getRealNumberValue(this.value);
-        if (!isNaN(parsedValue)) {
+        const parsedValue = getRealNumberValue(this.value);
+        if (!Number.isNaN(parsedValue)) {
           getSettingsRaw()[settingKey] = parsedValue;
           updateSettingsFromState();
         }
@@ -53524,7 +53527,7 @@
       return $(`<span class="${color}" title="${title}" >${note}</span>`);
     }
     function resetCheckbox(...items) {
-      Array.from(items).forEach(
+      items.forEach(
         (item) => $(".script_" + item).prop("checked", getSettingsRaw()[item])
       );
     }
