@@ -54597,9 +54597,9 @@
     getScriptVersionExtra,
     getScriptVersion
   }) {
-    const $ = (...args) => getJQuery()(...args);
-    const createOptionsModal = (...args) => getCreateOptionsModal()(...args);
-    const openOptionsModal = (...args) => getOpenOptionsModal()(...args);
+    const $ = (target) => getJQuery()(target);
+    const createOptionsModal = () => getCreateOptionsModal()();
+    const openOptionsModal = (title, builder) => getOpenOptionsModal()(title, builder);
     function updateDebugData() {
       getState().forcedUpdate = true;
       getGame().updateDebugData();
@@ -55070,34 +55070,29 @@
       css.appendChild(getDocument().createTextNode(styles));
       getDocument().getElementsByTagName("head")[0].appendChild(css);
     }
-    function checkIgnoredError(e) {
-      if (typeof e !== "string") e = String(e);
-      let ignoreRegexes = [
+    function checkIgnoredError(error) {
+      const message = typeof error === "string" ? error : String(error);
+      const ignoreRegexes = [
         // Currently no known game errors. Example regex:
         // /.*ReferenceError.*defineGovernor.*/,
       ];
-      if (ignoreRegexes.find((regex) => regex.test(e))) {
-        return true;
-      }
-      return false;
+      return ignoreRegexes.some((regex) => regex.test(message));
     }
-    function displayScriptWarningNode(title, msg, stack) {
-      if (typeof stack === "string") {
-        msg = `${msg}
+    function displayScriptWarningNode(title, message, stack) {
+      let msg = typeof stack === "string" ? `${message}
 
 Stack info:
-${stack}`;
-      }
+${stack}` : message;
       const versionPart = getScriptVersion() ?? "unknown";
       msg = `${msg}
 
 Script version: ${versionPart} ${getScriptVersionExtra()}
 `;
       $("#script-script-warning").remove();
-      let clickable = $(
+      const clickable = $(
         `<span id="script-script-warning" style="cursor: pointer; border-right: 1px solid; margin-right: 1rem; padding-right: 1rem">⚠️ ${title}</span>`
       );
-      clickable.on("click", (e) => {
+      clickable.on("click", () => {
         const builder = (currentNode) => {
           currentNode.append(
             $(
@@ -55122,13 +55117,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
         return false;
       });
-      if (getWin()?.Vue?.config && !getWin()?.Vue?.config?.errorHandler) {
-        getWin().Vue.config.errorHandler = (err, vm, info) => {
+      const config = getWin().Vue?.config;
+      if (config && !config.errorHandler) {
+        config.errorHandler = (err) => {
           if (!checkIgnoredError(err)) {
             displayScriptWarningNode(
               "Script Error",
               `Vue error: ${err}`,
-              err?.stack
+              err instanceof Error ? err.stack : void 0
             );
           }
         };

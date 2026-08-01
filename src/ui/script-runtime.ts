@@ -1,14 +1,61 @@
-type AnyRecord = Record<string, any>;
-type AnyFunction = (...args: any[]) => any;
+/**
+ * The browser surface the script runtime uses, as narrow structural types.
+ *
+ * TRANSITIONAL: the implementation is the game's jQuery, document, and window today, and the Vue 2
+ * error handler is installed on `window.Vue`. Keeping the contract this small is what lets each of
+ * those be replaced without touching the style sheet or the warning node.
+ */
+interface ScriptRuntimeNode {
+  append(content: ScriptRuntimeNode): ScriptRuntimeNode;
+  before(content: ScriptRuntimeNode): ScriptRuntimeNode;
+  on(events: string, handler: () => void): ScriptRuntimeNode;
+  remove(): ScriptRuntimeNode;
+  val(value: string): ScriptRuntimeNode;
+}
+
+/** The style element the script appends its own sheet to. */
+interface StyleHost {
+  type: string;
+  appendChild(child: unknown): void;
+}
+
+interface ScriptRuntimeDocument {
+  createElement(tagName: string): StyleHost;
+  createTextNode(data: string): unknown;
+  getElementsByTagName(name: string): readonly StyleHost[];
+}
+
+interface ScriptRuntimeErrorEvent {
+  readonly message?: string;
+  readonly filename?: string;
+  readonly lineno?: number;
+  readonly colno?: number;
+  readonly error?: { readonly stack?: string };
+}
+
+interface ScriptRuntimeWindow {
+  addEventListener(
+    type: string,
+    handler: (event: ScriptRuntimeErrorEvent) => boolean,
+  ): void;
+  Vue?: {
+    config?: {
+      errorHandler?: (error: unknown, vm: unknown, info: unknown) => void;
+    };
+  };
+}
 
 interface ScriptRuntimeUIDependencies {
-  getJQuery: () => AnyFunction & AnyRecord;
-  getDocument: () => AnyRecord;
-  getState: () => AnyRecord;
-  getGame: () => AnyRecord;
-  getWin: () => AnyRecord;
-  getCreateOptionsModal: () => AnyFunction;
-  getOpenOptionsModal: () => AnyFunction;
+  getJQuery: () => (target: string) => ScriptRuntimeNode;
+  getDocument: () => ScriptRuntimeDocument;
+  getState: () => { forcedUpdate: boolean };
+  getGame: () => { updateDebugData(): void };
+  getWin: () => ScriptRuntimeWindow;
+  getCreateOptionsModal: () => () => void;
+  getOpenOptionsModal: () => (
+    title: string,
+    builder: (node: ScriptRuntimeNode) => void,
+  ) => void;
   getScriptVersionExtra: () => string;
   getScriptVersion: () => string | undefined;
 }
@@ -24,11 +71,12 @@ export function createScriptRuntimeUI({
   getScriptVersionExtra,
   getScriptVersion,
 }: ScriptRuntimeUIDependencies) {
-  const $: AnyFunction = (...args) => getJQuery()(...args);
-  const createOptionsModal: AnyFunction = (...args) =>
-    getCreateOptionsModal()(...args);
-  const openOptionsModal: AnyFunction = (...args) =>
-    getOpenOptionsModal()(...args);
+  const $ = (target: string) => getJQuery()(target);
+  const createOptionsModal = () => getCreateOptionsModal()();
+  const openOptionsModal = (
+    title: string,
+    builder: (node: ScriptRuntimeNode) => void,
+  ) => getOpenOptionsModal()(title, builder);
   function updateDebugData() {
     getState().forcedUpdate = true;
     getGame().updateDebugData();
@@ -509,25 +557,26 @@ export function createScriptRuntimeUI({
 
   // Known game errors, bugs, etc that we don't want to show to the user.
   // This should be game errors only.
-  function checkIgnoredError(e: any) {
-    if (typeof e !== "string") e = String(e);
-    let ignoreRegexes: RegExp[] = [
+  function checkIgnoredError(error: unknown): boolean {
+    const message = typeof error === "string" ? error : String(error);
+    const ignoreRegexes: RegExp[] = [
       // Currently no known game errors. Example regex:
       // /.*ReferenceError.*defineGovernor.*/,
     ];
 
-    if (ignoreRegexes.find((regex) => regex.test(e))) {
-      return true;
-    }
-
-    return false;
+    return ignoreRegexes.some((regex) => regex.test(message));
   }
 
-  function displayScriptWarningNode(title: any, msg: any, stack: any) {
+  function displayScriptWarningNode(
+    title: string,
+    message: string,
+    stack: unknown,
+  ) {
     // Add stack info if available. Format is browser-dependent, but better than nothing, I suppose.
-    if (typeof stack === "string") {
-      msg = `${msg}\n\nStack info:\n${stack}`;
-    }
+    let msg =
+      typeof stack === "string"
+        ? `${message}\n\nStack info:\n${stack}`
+        : message;
 
     const versionPart = getScriptVersion() ?? "unknown";
 
@@ -535,11 +584,11 @@ export function createScriptRuntimeUI({
 
     $("#script-script-warning").remove();
 
-    let clickable = $(
+    const clickable = $(
       `<span id="script-script-warning" style="cursor: pointer; border-right: 1px solid; margin-right: 1rem; padding-right: 1rem">⚠️ ${title}</span>`,
     );
-    clickable.on("click", (e: any) => {
-      const builder = (currentNode: any) => {
+    clickable.on("click", () => {
+      const builder = (currentNode: ScriptRuntimeNode) => {
         currentNode.append(
           $(
             `<textarea style="width: 100%; height: 100%; min-height: 400px; margin-bottom: 10px">`,
@@ -557,7 +606,7 @@ export function createScriptRuntimeUI({
 
   // Generic JS & Vue2 error handler so that things don't break invisibly as often
   function addErrorHandler() {
-    getWin().addEventListener("error", (e: any) => {
+    getWin().addEventListener("error", (e) => {
       if (!checkIgnoredError(e?.message)) {
         displayScriptWarningNode(
           "Script Error",
@@ -569,13 +618,14 @@ export function createScriptRuntimeUI({
       return false;
     });
 
-    if (getWin()?.Vue?.config && !getWin()?.Vue?.config?.errorHandler) {
-      getWin().Vue.config.errorHandler = (err: any, vm: any, info: any) => {
+    const config = getWin().Vue?.config;
+    if (config && !config.errorHandler) {
+      config.errorHandler = (err: unknown) => {
         if (!checkIgnoredError(err)) {
           displayScriptWarningNode(
             "Script Error",
             `Vue error: ${err}`,
-            err?.stack,
+            err instanceof Error ? err.stack : undefined,
           );
         }
       };
