@@ -61,6 +61,7 @@ let section;
 const controlTrace = [];
 const tableToggles = [];
 const tableInputs = [];
+const labelColors = [];
 const scroll = { documentElement: { scrollTop: 0 }, body: { scrollTop: 12 } };
 const sharedNode = {
   empty() {
@@ -100,10 +101,13 @@ const actions = {
   addTableToggle(_node, key) {
     tableToggles.push(key);
   },
-  buildTableLabel(label, className) {
+  buildTableLabel(label, title, className) {
     assert.ok(label);
+    // The color is the third argument; the second is the tooltip.
+    assert.equal(title ?? "", "");
     if (className)
       assert.ok(["has-text-success", "has-text-danger"].includes(className));
+    labelColors.push(className);
     return label;
   },
   getSorterHelper() {
@@ -149,6 +153,13 @@ assert.deepEqual(tableInputs, [
   "res_trade_p_Coal",
   "res_galaxy_w_Iron",
   "res_galaxy_p_Iron",
+]);
+// The galaxy trade labels carry their buy/sell color, and the resource rows carry none.
+assert.deepEqual(labelColors, [
+  undefined,
+  undefined,
+  "has-text-success",
+  "has-text-danger",
 ]);
 assert.equal(scroll.documentElement.scrollTop, 12);
 sortableOptions.update();

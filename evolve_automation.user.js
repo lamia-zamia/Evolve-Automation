@@ -46873,9 +46873,13 @@
       tableBodyNode.append(jquery(rows));
       readModel.galaxyRows.forEach((row, index) => {
         let cell = jquery(`#script_market_galaxy_${index}`);
-        cell.append(actions.buildTableLabel(row.buyLabel, "has-text-success"));
+        cell.append(
+          actions.buildTableLabel(row.buyLabel, "", "has-text-success")
+        );
         cell = cell.next();
-        cell.append(actions.buildTableLabel(row.sellLabel, "has-text-danger"));
+        cell.append(
+          actions.buildTableLabel(row.sellLabel, "", "has-text-danger")
+        );
         cell = cell.next();
         actions.addTableInput(cell, row.weightingSettingName);
         cell = cell.next();
