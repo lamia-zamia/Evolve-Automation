@@ -1,9 +1,63 @@
+/**
+ * The DOM surface this panel uses, as narrow structural types.
+ *
+ * TRANSITIONAL: the implementation is the game's jQuery today. Keeping the contract this small is
+ * what lets the DOM implementation be replaced without touching the panel.
+ */
+interface AutomationContainerNode {
+  readonly length: number;
+  append(content: string): unknown;
+  css(property: string, value: string): unknown;
+  on(events: string, handler: () => void): unknown;
+  toggleClass(className: string, state: boolean): unknown;
+}
+
+type AutomationContainerJQuery = (selector: string) => AutomationContainerNode;
+
+type AutomationContainerSettings = {
+  /** Absent until the player first collapses the panel; nothing stores a default for it. */
+  toggleSettingsCollapsed?: boolean;
+};
+
+type AutomationContainerActions = {
+  createSettingToggle: (
+    node: AutomationContainerNode,
+    settingName: string,
+    title: string,
+    enabledCallback?: () => void,
+    disabledCallback?: () => void,
+  ) => void;
+  updateSettingsFromState: () => void;
+  buildScriptSettings: () => void;
+  removeScriptSettings: () => void;
+  createMechInfo: () => void;
+  removeMechInfo: () => void;
+  createCraftToggles: () => void;
+  removeCraftToggles: () => void;
+  createBuildingToggles: () => void;
+  removeBuildingToggles: () => void;
+  createArpaToggles: () => void;
+  removeArpaToggles: () => void;
+  createStorageToggles: () => void;
+  removeStorageToggles: () => void;
+  createMarketToggles: () => void;
+  removeMarketToggles: () => void;
+  createEjectToggles: () => void;
+  removeEjectToggles: () => void;
+  createSupplyToggles: () => void;
+  removeSupplyToggles: () => void;
+  updateDebugData: () => void;
+  updateScriptData: () => void;
+  finalizeScriptData: () => void;
+  autoMarket: (bulkSell?: boolean, ignoreSellRatio?: boolean) => void;
+};
+
 type AutomationContainerDependencies = {
-  getSettingsRaw: () => Record<string, any>;
-  getJQuery: () => any;
+  getSettingsRaw: () => AutomationContainerSettings;
+  getJQuery: () => AutomationContainerJQuery;
   getSafeMode: () => boolean;
   getOverrideKeyLabel: () => string;
-  getActions: () => Record<string, any>;
+  getActions: () => AutomationContainerActions;
 };
 
 export function createAutomationContainer({

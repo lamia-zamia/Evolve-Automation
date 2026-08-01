@@ -50940,6 +50940,19 @@
   }
 
   // src/ui/queue-panels.ts
+  function remainingCostMultiplier(target, isArpaProject, isMultiSegmented) {
+    if (isArpaProject) {
+      const { progress, currentStep } = target;
+      if (progress === void 0 || currentStep === void 0) return 1;
+      return (100 - progress) / currentStep;
+    }
+    if (isMultiSegmented) {
+      const { gameMax, count: count2 } = target;
+      if (gameMax === void 0 || count2 === void 0) return 1;
+      return gameMax - count2;
+    }
+    return 1;
+  }
   function createQueuePanels({
     getJQuery,
     getGame,
@@ -50955,26 +50968,11 @@
     makePlannerStats,
     savePlannerStats
   }) {
-    const dependencies = {
-      getJQuery,
-      getGame,
-      getResources,
-      getPoly,
-      getSettingsRaw,
-      getState,
-      getMultiSegmentedTimeLeft,
-      isProject,
-      isTechnology,
-      getResizeObserver,
-      updateSettingsFromState,
-      makePlannerStats,
-      savePlannerStats
-    };
     function updateActiveTargetsUI(queuedTargets, type) {
-      const $ = dependencies.getJQuery();
-      const game = dependencies.getGame();
-      const resources = dependencies.getResources();
-      const poly = dependencies.getPoly();
+      const $ = getJQuery();
+      const game = getGame();
+      const resources = getResources();
+      const poly = getPoly();
       if (queuedTargets.length) {
         $(`#active_targets .target-type-box.${type}`).show();
       } else {
@@ -50983,7 +50981,8 @@
       }
       $(`#active_targets ul.active_targets-list.${type}`).html(
         queuedTargets.map((target) => {
-          let targetName = target.name, targetTimeLeft = "", targetSegments = "", researchTimeLeft = 0, isArpaProject = type === "arpa" || dependencies.isProject(target), isMultiSegmented = target.is && target.is.multiSegmented, isTablessBuilding = type === "buildings" && !target._tab;
+          let targetName = target.name, targetTimeLeft = "", targetSegments = "", researchTimeLeft = 0;
+          const isArpaProject = type === "arpa" || isProject(target), isMultiSegmented = target.is?.multiSegmented === true, isTablessBuilding = type === "buildings" && !target._tab;
           if (target.count && !isMultiSegmented) {
             targetName += ` #${target.count + 1}`;
           }
@@ -50991,7 +50990,12 @@
             targetTimeLeft = `${target.instance.time}`;
           }
           const costs = target.cost;
-          if (dependencies.isTechnology(target)) {
+          const costMultiplier = remainingCostMultiplier(
+            target,
+            isArpaProject,
+            isMultiSegmented
+          );
+          if (isTechnology(target)) {
             if ($.isEmptyObject(target.cost)) {
               targetTimeLeft = "Waiting on prerequisite";
             } else if (target.cost.Knowledge > game.global.resource.Knowledge.max) {
@@ -50999,22 +51003,18 @@
             }
           } else if (isArpaProject) {
             targetName += ` (${target.progress}%)`;
-            const segmentedTimeLeft = dependencies.getMultiSegmentedTimeLeft(target);
+            const segmentedTimeLeft = getMultiSegmentedTimeLeft(target);
             targetTimeLeft = `${segmentedTimeLeft.timeLeft}</span> <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
           }
           const costsHTML = Object.keys(costs).map((resource2) => {
-            let res = resources[resource2], className = "has-text-success", resourceTimeLeft = "";
-            let resourceCost = costs[resource2];
-            if (isArpaProject) {
-              resourceCost = costs[resource2] * ((100 - target.progress) / target.currentStep);
-            } else if (isMultiSegmented) {
-              resourceCost = costs[resource2] * (target.gameMax - target.count);
-            }
+            const res = resources[resource2];
+            let className = "has-text-success", resourceTimeLeft = "";
+            const resourceCost = costs[resource2] * costMultiplier;
             if (res.currentQuantity < resourceCost) {
               className = "has-text-danger";
               if (res.maxQuantity >= resourceCost && res.income > 0) {
                 const timeLeftRaw = (resourceCost - res.currentQuantity) / res.income;
-                if (dependencies.isTechnology(target) && timeLeftRaw > researchTimeLeft) {
+                if (isTechnology(target) && timeLeftRaw > researchTimeLeft) {
                   researchTimeLeft = timeLeftRaw;
                 }
                 resourceTimeLeft = `${poly.timeFormat(timeLeftRaw)}`;
@@ -51030,7 +51030,7 @@
               }
             }
             const progressBarWidth = res.currentQuantity / resourceCost * 100;
-            const isReplicatingClassName = game.global.race.replicator && game.global.race.replicator.res === resource2 ? "is-replicating" : "";
+            const isReplicatingClassName = game.global.race.replicator?.res === resource2 ? "is-replicating" : "";
             return `
                     <li>
                         <div class='active_targets-resource-row'>
@@ -51046,10 +51046,10 @@
           }).join("");
           if (isMultiSegmented) {
             targetSegments = `(${target.count} / ${target.gameMax})`;
-            const segmentedTimeLeft = dependencies.getMultiSegmentedTimeLeft(target);
+            const segmentedTimeLeft = getMultiSegmentedTimeLeft(target);
             targetTimeLeft = `${segmentedTimeLeft.timeLeft} <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
           }
-          if (dependencies.isTechnology(target) && targetTimeLeft === "") {
+          if (isTechnology(target) && targetTimeLeft === "") {
             targetTimeLeft = poly.timeFormat(researchTimeLeft);
           }
           const targetNameDisplay = `<span class="active-target-title name">${targetName} </span><span class="active-target-title time">${targetTimeLeft} <span class="active-target-segments has-text-special">${targetSegments}</span></span>`;
@@ -51073,7 +51073,7 @@
       );
     }
     function buildActiveTargetsUI() {
-      const $ = dependencies.getJQuery();
+      const $ = getJQuery();
       $("#buildQueue").before(`
             <div id="active_targets-wrapper" class="bldQueue vscroll right">
                 <h2 class="has-text-success">Detailed Queue</h2>
@@ -51096,7 +51096,7 @@
                     </div>
                 </div>
             </div>`);
-      const ResizeObserver = dependencies.getResizeObserver();
+      const ResizeObserver = getResizeObserver();
       if (typeof ResizeObserver === "function") {
         const resizeObserver = new ResizeObserver((entries) => {
           for (const entry of entries) {
@@ -51114,11 +51114,11 @@
       }
     }
     function removeActiveTargetsUI() {
-      dependencies.getJQuery()("#active_targets-wrapper").remove();
+      getJQuery()("#active_targets-wrapper").remove();
     }
     function buildBuildPlannerUI() {
-      const $ = dependencies.getJQuery();
-      const settingsRaw = dependencies.getSettingsRaw();
+      const $ = getJQuery();
+      const settingsRaw = getSettingsRaw();
       if ($("#buildQueue").length === 0) {
         return;
       }
@@ -51137,17 +51137,17 @@
       $("#script_planner-header").on("click", function() {
         settingsRaw.buildPlannerCollapsed = !settingsRaw.buildPlannerCollapsed;
         $("#script_planner").toggle(!settingsRaw.buildPlannerCollapsed);
-        dependencies.updateSettingsFromState();
+        updateSettingsFromState();
       });
       $("#script_planner-reset").on("click", function() {
-        const stats = dependencies.makePlannerStats();
-        dependencies.getState().plannerStats = stats;
-        if (stats !== null) dependencies.savePlannerStats(stats);
+        const stats = makePlannerStats();
+        getState().plannerStats = stats;
+        if (stats !== null) savePlannerStats(stats);
         $("#script_planner-stats-text").html("");
       });
     }
     function removeBuildPlannerUI() {
-      dependencies.getJQuery()("#script_planner-wrapper").remove();
+      getJQuery()("#script_planner-wrapper").remove();
     }
     return {
       updateActiveTargetsUI,

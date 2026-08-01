@@ -1,19 +1,121 @@
-type AnyRecord = Record<string, any>;
+/**
+ * The two queue panels: the detailed active-targets readout beside the build queue, and the build
+ * planner wrapper.
+ *
+ * TRANSITIONAL: the DOM implementation is the game's jQuery today. The structural types below are
+ * the whole surface these panels need, so the implementation can be replaced without touching them.
+ */
+
+interface QueuePanelNode {
+  readonly length: number;
+  readonly [index: number]: unknown;
+  before(content: string): unknown;
+  css(property: string, value: string): unknown;
+  hide(): unknown;
+  html(content: string | readonly string[]): unknown;
+  on(events: string, handler: () => void): unknown;
+  outerHeight(): number;
+  remove(): unknown;
+  show(): unknown;
+  toggle(state: boolean): unknown;
+}
+
+interface QueuePanelJQuery {
+  (selector: string): QueuePanelNode;
+  isEmptyObject(value: unknown): boolean;
+}
+
+/** The fields the readout reads off one queued target, whatever kind of target it is. */
+interface QueuedTarget {
+  readonly name: string;
+  readonly id: string;
+  readonly cost: Readonly<Record<string, number>>;
+  readonly count?: number;
+  readonly is?: { readonly multiSegmented?: boolean };
+  readonly instance?: { readonly time?: unknown };
+  readonly _tab?: string;
+  readonly progress?: number;
+  readonly currentStep?: number;
+  readonly gameMax?: number;
+}
+
+/** The resource fields one cost row reads. */
+interface QueuePanelResource {
+  readonly name: string;
+  readonly title: string;
+  readonly currentQuantity: number;
+  readonly maxQuantity: number;
+  readonly income: number;
+}
+
+interface QueuePanelGame {
+  readonly global: {
+    readonly resource: Readonly<Record<string, { readonly max: number }>>;
+    readonly race: { readonly replicator?: { readonly res?: string } };
+  };
+}
+
+interface QueuePanelPoly {
+  timeFormat(seconds: number): string;
+}
+
+interface QueuePanelSettings {
+  buildPlannerCollapsed?: boolean;
+}
+
+interface QueuePanelState {
+  plannerStats: unknown;
+}
+
+interface SegmentedTimeLeft {
+  readonly timeLeft: string;
+  readonly resource: string;
+}
+
+interface ResizeEntry {
+  readonly borderBoxSize?: readonly { readonly blockSize: number }[];
+}
+
+type ResizeObserverConstructor = new (
+  callback: (entries: readonly ResizeEntry[]) => void,
+) => { observe(target: unknown): void };
 
 export interface QueuePanelsDependencies {
-  getJQuery: () => any;
-  getGame: () => AnyRecord;
-  getResources: () => AnyRecord;
-  getPoly: () => AnyRecord;
-  getSettingsRaw: () => AnyRecord;
-  getState: () => AnyRecord;
-  getMultiSegmentedTimeLeft: (target: AnyRecord) => AnyRecord;
+  getJQuery: () => QueuePanelJQuery;
+  getGame: () => QueuePanelGame;
+  getResources: () => Readonly<Record<string, QueuePanelResource>>;
+  getPoly: () => QueuePanelPoly;
+  getSettingsRaw: () => QueuePanelSettings;
+  getState: () => QueuePanelState;
+  getMultiSegmentedTimeLeft: (target: QueuedTarget) => SegmentedTimeLeft;
   isProject: (target: unknown) => boolean;
   isTechnology: (target: unknown) => boolean;
-  getResizeObserver: () => any;
+  getResizeObserver: () => ResizeObserverConstructor | undefined;
   updateSettingsFromState: () => void;
-  makePlannerStats: () => AnyRecord | null;
+  makePlannerStats: () => Record<string, unknown> | null;
   savePlannerStats: (stats: unknown) => boolean;
+}
+
+/**
+ * How many times a target's listed cost is still owed. A target that does not declare its steps
+ * owes its listed cost once; that is the whole cost of a plain building.
+ */
+function remainingCostMultiplier(
+  target: QueuedTarget,
+  isArpaProject: boolean,
+  isMultiSegmented: boolean,
+): number {
+  if (isArpaProject) {
+    const { progress, currentStep } = target;
+    if (progress === undefined || currentStep === undefined) return 1;
+    return (100 - progress) / currentStep;
+  }
+  if (isMultiSegmented) {
+    const { gameMax, count } = target;
+    if (gameMax === undefined || count === undefined) return 1;
+    return gameMax - count;
+  }
+  return 1;
 }
 
 export function createQueuePanels({
@@ -31,26 +133,14 @@ export function createQueuePanels({
   makePlannerStats,
   savePlannerStats,
 }: QueuePanelsDependencies) {
-  const dependencies = {
-    getJQuery,
-    getGame,
-    getResources,
-    getPoly,
-    getSettingsRaw,
-    getState,
-    getMultiSegmentedTimeLeft,
-    isProject,
-    isTechnology,
-    getResizeObserver,
-    updateSettingsFromState,
-    makePlannerStats,
-    savePlannerStats,
-  };
-  function updateActiveTargetsUI(queuedTargets: AnyRecord[], type: string) {
-    const $ = dependencies.getJQuery();
-    const game = dependencies.getGame();
-    const resources = dependencies.getResources();
-    const poly = dependencies.getPoly();
+  function updateActiveTargetsUI(
+    queuedTargets: readonly QueuedTarget[],
+    type: string,
+  ) {
+    const $ = getJQuery();
+    const game = getGame();
+    const resources = getResources();
+    const poly = getPoly();
 
     if (queuedTargets.length) {
       $(`#active_targets .target-type-box.${type}`).show();
@@ -64,9 +154,9 @@ export function createQueuePanels({
         let targetName = target.name,
           targetTimeLeft = "",
           targetSegments = "",
-          researchTimeLeft = 0,
-          isArpaProject = type === "arpa" || dependencies.isProject(target),
-          isMultiSegmented = target.is && target.is.multiSegmented,
+          researchTimeLeft = 0;
+        const isArpaProject = type === "arpa" || isProject(target),
+          isMultiSegmented = target.is?.multiSegmented === true,
           isTablessBuilding = type === "buildings" && !target._tab;
 
         if (target.count && !isMultiSegmented) {
@@ -78,8 +168,13 @@ export function createQueuePanels({
         }
 
         const costs = target.cost;
+        const costMultiplier = remainingCostMultiplier(
+          target,
+          isArpaProject,
+          isMultiSegmented,
+        );
 
-        if (dependencies.isTechnology(target)) {
+        if (isTechnology(target)) {
           if ($.isEmptyObject(target.cost)) {
             targetTimeLeft = "Waiting on prerequisite";
           } else if (
@@ -90,26 +185,17 @@ export function createQueuePanels({
         } else if (isArpaProject) {
           targetName += ` (${target.progress}%)`;
 
-          const segmentedTimeLeft =
-            dependencies.getMultiSegmentedTimeLeft(target);
+          const segmentedTimeLeft = getMultiSegmentedTimeLeft(target);
           targetTimeLeft = `${segmentedTimeLeft.timeLeft}</span> <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
         }
 
         const costsHTML = Object.keys(costs)
           .map((resource) => {
-            let res = resources[resource],
-              className = "has-text-success",
+            const res = resources[resource];
+            let className = "has-text-success",
               resourceTimeLeft = "";
 
-            let resourceCost = costs[resource];
-
-            if (isArpaProject) {
-              resourceCost =
-                costs[resource] *
-                ((100 - target.progress) / target.currentStep);
-            } else if (isMultiSegmented) {
-              resourceCost = costs[resource] * (target.gameMax - target.count);
-            }
+            const resourceCost = costs[resource] * costMultiplier;
 
             if (res.currentQuantity < resourceCost) {
               className = "has-text-danger";
@@ -118,10 +204,7 @@ export function createQueuePanels({
                 const timeLeftRaw =
                   (resourceCost - res.currentQuantity) / res.income;
 
-                if (
-                  dependencies.isTechnology(target) &&
-                  timeLeftRaw > researchTimeLeft
-                ) {
+                if (isTechnology(target) && timeLeftRaw > researchTimeLeft) {
                   researchTimeLeft = timeLeftRaw;
                 }
 
@@ -145,8 +228,7 @@ export function createQueuePanels({
             const progressBarWidth = (res.currentQuantity / resourceCost) * 100;
 
             const isReplicatingClassName =
-              game.global.race.replicator &&
-              game.global.race.replicator.res === resource
+              game.global.race.replicator?.res === resource
                 ? "is-replicating"
                 : "";
 
@@ -168,12 +250,11 @@ export function createQueuePanels({
         if (isMultiSegmented) {
           targetSegments = `(${target.count} / ${target.gameMax})`;
 
-          const segmentedTimeLeft =
-            dependencies.getMultiSegmentedTimeLeft(target);
+          const segmentedTimeLeft = getMultiSegmentedTimeLeft(target);
           targetTimeLeft = `${segmentedTimeLeft.timeLeft} <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
         }
 
-        if (dependencies.isTechnology(target) && targetTimeLeft === "") {
+        if (isTechnology(target) && targetTimeLeft === "") {
           targetTimeLeft = poly.timeFormat(researchTimeLeft);
         }
 
@@ -203,7 +284,7 @@ export function createQueuePanels({
   }
 
   function buildActiveTargetsUI() {
-    const $ = dependencies.getJQuery();
+    const $ = getJQuery();
     $("#buildQueue").before(`
             <div id="active_targets-wrapper" class="bldQueue vscroll right">
                 <h2 class="has-text-success">Detailed Queue</h2>
@@ -227,9 +308,9 @@ export function createQueuePanels({
                 </div>
             </div>`);
 
-    const ResizeObserver = dependencies.getResizeObserver();
+    const ResizeObserver = getResizeObserver();
     if (typeof ResizeObserver === "function") {
-      const resizeObserver = new ResizeObserver((entries: AnyRecord[]) => {
+      const resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
           if (entry.borderBoxSize) {
             const elementHeight = entry.borderBoxSize[0].blockSize;
@@ -250,12 +331,12 @@ export function createQueuePanels({
   }
 
   function removeActiveTargetsUI() {
-    dependencies.getJQuery()("#active_targets-wrapper").remove();
+    getJQuery()("#active_targets-wrapper").remove();
   }
 
   function buildBuildPlannerUI() {
-    const $ = dependencies.getJQuery();
-    const settingsRaw = dependencies.getSettingsRaw();
+    const $ = getJQuery();
+    const settingsRaw = getSettingsRaw();
     if ($("#buildQueue").length === 0) {
       return;
     }
@@ -275,18 +356,18 @@ export function createQueuePanels({
     $("#script_planner-header").on("click", function () {
       settingsRaw.buildPlannerCollapsed = !settingsRaw.buildPlannerCollapsed;
       $("#script_planner").toggle(!settingsRaw.buildPlannerCollapsed);
-      dependencies.updateSettingsFromState();
+      updateSettingsFromState();
     });
     $("#script_planner-reset").on("click", function () {
-      const stats = dependencies.makePlannerStats();
-      dependencies.getState().plannerStats = stats;
-      if (stats !== null) dependencies.savePlannerStats(stats);
+      const stats = makePlannerStats();
+      getState().plannerStats = stats;
+      if (stats !== null) savePlannerStats(stats);
       $("#script_planner-stats-text").html("");
     });
   }
 
   function removeBuildPlannerUI() {
-    dependencies.getJQuery()("#script_planner-wrapper").remove();
+    getJQuery()("#script_planner-wrapper").remove();
   }
 
   return {
