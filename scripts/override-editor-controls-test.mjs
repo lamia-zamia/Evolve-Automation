@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { overrideComparatorExpressions } from "../src/settings/override-comparators.ts";
 import { createOverrideConditionControls } from "../src/ui/override-condition-controls.ts";
 import { createOverrideEditorControls } from "../src/ui/override-editor.ts";
 import { createSettingsInputs } from "../src/ui/settings-inputs.ts";
@@ -114,7 +115,7 @@ const context = {
   },
   settings: { autoBuild: true, researchIgnore: ["tech-club"] },
   techIds: { "tech-club": { name: "Clubs" } },
-  checkCompare: { "==": (a, b) => a == b },
+  checkCompareExpressions: overrideComparatorExpressions,
   checkCustom: {},
   checkTypes: {
     Number: { fn: Number, desc: "a number", arg: "number", def: 0 },
@@ -133,7 +134,7 @@ const conditionControls = createOverrideConditionControls({
   getWin: () => ({
     prompt: (message, value) => prompts.push({ message, value }),
   }),
-  getCheckCompare: () => context.checkCompare,
+  getCheckCompareExpressions: () => context.checkCompareExpressions,
   getCheckCustom: () => context.checkCustom,
   getCheckTypes: () => context.checkTypes,
   buildInputNode,

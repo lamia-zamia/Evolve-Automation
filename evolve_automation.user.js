@@ -52883,12 +52883,27 @@
   function readOperandArgument(condition, slot) {
     return slot === 1 ? condition.arg1 : condition.arg2;
   }
+  function operandExpression(condition, slot) {
+    const operandType = readOperandType(condition, slot);
+    const argument = readOperandArgument(condition, slot);
+    switch (operandType) {
+      case "Number":
+      case "Boolean":
+        return String(argument);
+      case "Eval":
+        return `(${String(argument)})`;
+      case "String":
+        return JSON.stringify(argument);
+      default:
+        return `_("${operandType}",${JSON.stringify(argument)})`;
+    }
+  }
   function createOverrideConditionControls({
     overrideEditor,
     getJQuery,
     getSettingsRaw,
     getWin,
-    getCheckCompare,
+    getCheckCompareExpressions,
     getCheckCustom,
     getCheckTypes,
     buildInputNode
@@ -52931,8 +52946,8 @@
       ) : "";
     }
     function buildConditionComparator(settingName, index, condition, rebuild) {
-      const types = Object.entries(getCheckCompare()).map(
-        ([id, fn]) => `<option value="${id}" title="${getCheckCustom()[id] ?? fn.toString().substr(10)}">${id}</option>`
+      const types = Object.entries(getCheckCompareExpressions()).map(
+        ([id, express]) => `<option value="${id}" title="${getCheckCustom()[id] ?? express?.("a", "b")}">${id}</option>`
       ).join();
       return $(`<select style="width: 100%">${types}</select>`).val(condition.comparator).on("change", function() {
         overrideEditor.applyEdit({
@@ -52978,28 +52993,17 @@
         const condition = parseOverrideCondition(
           getSettingsRaw().overrides[settingName]?.[index]
         );
-        const comparator = condition && getCheckCompare()[condition.comparator]?.toString();
-        if (condition === void 0 || comparator === void 0) {
+        const express = condition && getCheckCompareExpressions()[condition.comparator];
+        if (condition === void 0 || express === void 0) {
           return;
         }
-        const check = comparator.substr(10).replace(/([ab])/g, (_match, operand) => {
-          const slot = operand === "a" ? 1 : 2;
-          const argument = readOperandArgument(condition, slot);
-          switch (readOperandType(condition, slot)) {
-            case "Number":
-            case "Boolean":
-              return String(argument);
-            case "Eval":
-              return `(${argument})`;
-            case "String":
-              return JSON.stringify(argument);
-            default:
-              return `_("${readOperandType(condition, slot)}",${JSON.stringify(
-                argument
-              )})`;
-          }
-        });
-        getWin().prompt("Eval of this condition:", check);
+        getWin().prompt(
+          "Eval of this condition:",
+          express(
+            operandExpression(condition, 1),
+            operandExpression(condition, 2)
+          )
+        );
       });
     }
     function buildConditionRet(settingName, index, condition, type, options2) {
@@ -53696,6 +53700,102 @@
     return { buildSelectOptions, buildInputNode, buildObjectListInput };
   }
 
+  // src/settings/override-comparators.ts
+  function asNumber(value) {
+    return typeof value === "symbol" ? Number.NaN : Number(value);
+  }
+  function orderedBy(ordered) {
+    return (left, right) => typeof left === "string" && typeof right === "string" ? ordered(left, right) : ordered(asNumber(left), asNumber(right));
+  }
+  var overrideComparators = {
+    "==": {
+      compare: (left, right) => left == right,
+      express: (left, right) => `${left} == ${right}`
+    },
+    "!=": {
+      compare: (left, right) => left != right,
+      express: (left, right) => `${left} != ${right}`
+    },
+    ">": {
+      compare: orderedBy((left, right) => left > right),
+      express: (left, right) => `${left} > ${right}`
+    },
+    "<": {
+      compare: orderedBy((left, right) => left < right),
+      express: (left, right) => `${left} < ${right}`
+    },
+    ">=": {
+      compare: orderedBy((left, right) => left >= right),
+      express: (left, right) => `${left} >= ${right}`
+    },
+    "<=": {
+      compare: orderedBy((left, right) => left <= right),
+      express: (left, right) => `${left} <= ${right}`
+    },
+    "===": {
+      compare: (left, right) => left === right,
+      express: (left, right) => `${left} === ${right}`
+    },
+    "!==": {
+      compare: (left, right) => left !== right,
+      express: (left, right) => `${left} !== ${right}`
+    },
+    AND: {
+      compare: (left, right) => Boolean(left) && Boolean(right),
+      express: (left, right) => `${left} && ${right}`
+    },
+    OR: {
+      compare: (left, right) => Boolean(left) || Boolean(right),
+      express: (left, right) => `${left} || ${right}`
+    },
+    NAND: {
+      compare: (left, right) => !(left && right),
+      express: (left, right) => `!(${left} && ${right})`
+    },
+    NOR: {
+      compare: (left, right) => !(left || right),
+      express: (left, right) => `!(${left} || ${right})`
+    },
+    XOR: {
+      compare: (left, right) => !left != !right,
+      express: (left, right) => `!${left} != !${right}`
+    },
+    XNOR: {
+      compare: (left, right) => !left == !right,
+      express: (left, right) => `!${left} == !${right}`
+    },
+    "AND!": {
+      compare: (left, right) => Boolean(left) && !right,
+      express: (left, right) => `${left} && !${right}`
+    },
+    "OR!": {
+      compare: (left, right) => Boolean(left) || !right,
+      express: (left, right) => `${left} || !${right}`
+    },
+    "A?B": {
+      compare: (left) => Boolean(left),
+      express: (left) => left
+    },
+    "!A?B": {
+      compare: (left) => !left,
+      express: (left) => `!${left}`
+    }
+  };
+  function byComparator(select) {
+    return Object.fromEntries(
+      Object.entries(overrideComparators).map(([id, comparator]) => [
+        id,
+        select(comparator)
+      ])
+    );
+  }
+  var overrideComparisons = byComparator(
+    (comparator) => comparator.compare
+  );
+  var overrideComparatorExpressions = byComparator(
+    (comparator) => comparator.express
+  );
+
   // src/settings/override-operand-inputs.ts
   function listGenera(races, excluded) {
     const genera = [];
@@ -53733,10 +53833,8 @@
           )) {
             for (const resourceId3 of Object.keys(building3.cost)) {
               const id = `${buildingId2}.${resourceId3}`;
-              options2[id] = {
-                name: `${building3.name} (${resources[resourceId3].name})`,
-                id
-              };
+              const name = resources[resourceId3]?.name ?? resourceId3;
+              options2[id] = { name: `${building3.name} (${name})`, id };
             }
           }
           return options2;
@@ -54280,26 +54378,8 @@
       { val: "apotheosis", label: "Apotheosis", hint: "Kill the God." }
     ];
     const prestigeOptions = readBuildSelectOptions()(prestigeTypes);
-    const checkCompare = {
-      "==": (a, b) => a == b,
-      "!=": (a, b) => a != b,
-      ">": (a, b) => a > b,
-      "<": (a, b) => a < b,
-      ">=": (a, b) => a >= b,
-      "<=": (a, b) => a <= b,
-      "===": (a, b) => a === b,
-      "!==": (a, b) => a !== b,
-      AND: (a, b) => a && b,
-      OR: (a, b) => a || b,
-      NAND: (a, b) => !(a && b),
-      NOR: (a, b) => !(a || b),
-      XOR: (a, b) => !a != !b,
-      XNOR: (a, b) => !a == !b,
-      "AND!": (a, b) => a && !b,
-      "OR!": (a, b) => a || !b,
-      "A?B": (a, b) => a,
-      "!A?B": (a, b) => !a
-    };
+    const checkCompare = overrideComparisons;
+    const checkCompareExpressions = overrideComparatorExpressions;
     const checkCustom = {
       "A?B": "Special check, uses Var2 as result if Var1 is truthy",
       "!A?B": "Special check, uses Var2 as result if Var1 is falsy"
@@ -54626,6 +54706,7 @@
       prestigeTypes,
       prestigeOptions,
       checkCompare,
+      checkCompareExpressions,
       checkCustom,
       argType,
       checkTypes,
@@ -55383,7 +55464,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getJQuery: () => $,
       getSettingsRaw: () => settingsRaw,
       getWin: () => win,
-      getCheckCompare: () => checkCompare,
+      getCheckCompareExpressions: () => checkCompareExpressions,
       getCheckCustom: () => checkCustom,
       getCheckTypes: () => checkTypes,
       buildInputNode
@@ -59663,6 +59744,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       prestigeTypes,
       prestigeOptions,
       checkCompare,
+      checkCompareExpressions,
       checkCustom,
       argType,
       checkTypes,

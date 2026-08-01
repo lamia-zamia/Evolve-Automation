@@ -149,10 +149,10 @@ export function createOverrideOperandInputs({
         )) {
           for (const resourceId of Object.keys(building.cost)) {
             const id = `${buildingId}.${resourceId}`;
-            options[id] = {
-              name: `${building.name} (${resources[resourceId].name})`,
-              id,
-            };
+            // A cost naming a resource the script has no wrapper for lists its raw id, which is
+            // also what the BuildingCost reader accepts, rather than emptying the whole list.
+            const name = resources[resourceId]?.name ?? resourceId;
+            options[id] = { name: `${building.name} (${name})`, id };
           }
         }
         return options;

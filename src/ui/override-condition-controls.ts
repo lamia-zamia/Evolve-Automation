@@ -19,7 +19,11 @@ export interface OverrideOperandType {
   readonly def?: unknown;
 }
 
-export type OverrideComparator = (left: unknown, right: unknown) => unknown;
+/** A comparator as the catalog publishes it to the editor: the expression it computes. */
+export type OverrideComparatorExpression = (
+  left: string,
+  right: string,
+) => string;
 
 /** The stored settings the editor reads. Migration guarantees the `overrides` bag exists. */
 export interface StoredSettings extends Record<string, unknown> {
@@ -32,7 +36,10 @@ interface OverrideConditionControlsDependencies {
   readonly getJQuery: () => JQuery;
   readonly getSettingsRaw: () => StoredSettings;
   readonly getWin: () => { prompt(message: string, value: string): unknown };
-  readonly getCheckCompare: () => Record<string, OverrideComparator>;
+  readonly getCheckCompareExpressions: () => Record<
+    string,
+    OverrideComparatorExpression | undefined
+  >;
   readonly getCheckCustom: () => Record<string, string | undefined>;
   readonly getCheckTypes: () => Record<string, OverrideOperandType | undefined>;
   readonly buildInputNode: (
@@ -98,12 +105,32 @@ function readOperandArgument(
   return slot === 1 ? condition.arg1 : condition.arg2;
 }
 
+/** One operand written as the custom expression that reads it. */
+function operandExpression(
+  condition: OverrideCondition,
+  slot: OverrideOperandSlot,
+): string {
+  const operandType = readOperandType(condition, slot);
+  const argument = readOperandArgument(condition, slot);
+  switch (operandType) {
+    case "Number":
+    case "Boolean":
+      return String(argument);
+    case "Eval":
+      return `(${String(argument)})`;
+    case "String":
+      return JSON.stringify(argument);
+    default:
+      return `_("${operandType}",${JSON.stringify(argument)})`;
+  }
+}
+
 export function createOverrideConditionControls({
   overrideEditor,
   getJQuery,
   getSettingsRaw,
   getWin,
-  getCheckCompare,
+  getCheckCompareExpressions,
   getCheckCustom,
   getCheckTypes,
   buildInputNode,
@@ -175,11 +202,11 @@ export function createOverrideConditionControls({
     condition: OverrideCondition,
     rebuild: () => void,
   ): JQueryNode {
-    const types = Object.entries(getCheckCompare())
+    const types = Object.entries(getCheckCompareExpressions())
       .map(
-        ([id, fn]) =>
+        ([id, express]) =>
           `<option value="${id}" title="${
-            getCheckCustom()[id] ?? fn.toString().substr(10)
+            getCheckCustom()[id] ?? express?.("a", "b")
           }">${id}</option>`,
       )
       .join();
@@ -247,31 +274,18 @@ export function createOverrideConditionControls({
       const condition = parseOverrideCondition(
         getSettingsRaw().overrides[settingName]?.[index],
       );
-      const comparator =
-        condition && getCheckCompare()[condition.comparator]?.toString();
-      if (condition === undefined || comparator === undefined) {
+      const express =
+        condition && getCheckCompareExpressions()[condition.comparator];
+      if (condition === undefined || express === undefined) {
         return;
       }
-      const check = comparator
-        .substr(10)
-        .replace(/([ab])/g, (_match: string, operand: string) => {
-          const slot: OverrideOperandSlot = operand === "a" ? 1 : 2;
-          const argument = readOperandArgument(condition, slot);
-          switch (readOperandType(condition, slot)) {
-            case "Number":
-            case "Boolean":
-              return String(argument);
-            case "Eval":
-              return `(${argument})`;
-            case "String":
-              return JSON.stringify(argument);
-            default:
-              return `_("${readOperandType(condition, slot)}",${JSON.stringify(
-                argument,
-              )})`;
-          }
-        });
-      getWin().prompt("Eval of this condition:", check);
+      getWin().prompt(
+        "Eval of this condition:",
+        express(
+          operandExpression(condition, 1),
+          operandExpression(condition, 2),
+        ),
+      );
     });
   }
 

@@ -109,6 +109,18 @@ assert.deepEqual(Object.keys(inputs.building_cost.options()), [
   "city-mine.Money",
 ]);
 
+// A cost naming a resource the script has no wrapper for is listed under its raw id, rather than
+// throwing out of the whole option list.
+context.buildingIds = {
+  ...buildingIds,
+  "city-shrine": { name: "Shrine", cost: { Chrysotile: 2 } },
+};
+assert.deepEqual(inputs.building_cost.options()["city-shrine.Chrysotile"], {
+  name: "Shrine (Chrysotile)",
+  id: "city-shrine.Chrysotile",
+});
+context.buildingIds = buildingIds;
+
 assert.deepEqual(inputs.trait.options(), {
   kindling_kindred: { name: "Kindling Kindred", id: "kindling_kindred" },
 });

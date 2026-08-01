@@ -1,4 +1,8 @@
 import {
+  overrideComparatorExpressions,
+  overrideComparisons,
+} from "./override-comparators.ts";
+import {
   createOverrideOperandInputs,
   type OverrideOperandBuilding,
   type OverrideOperandChallenge,
@@ -161,26 +165,8 @@ export function createOverrideCatalog({
 
   const prestigeOptions = readBuildSelectOptions()(prestigeTypes);
 
-  const checkCompare = {
-    "==": (a: any, b: any) => a == b,
-    "!=": (a: any, b: any) => a != b,
-    ">": (a: any, b: any) => a > b,
-    "<": (a: any, b: any) => a < b,
-    ">=": (a: any, b: any) => a >= b,
-    "<=": (a: any, b: any) => a <= b,
-    "===": (a: any, b: any) => a === b,
-    "!==": (a: any, b: any) => a !== b,
-    AND: (a: any, b: any) => a && b,
-    OR: (a: any, b: any) => a || b,
-    NAND: (a: any, b: any) => !(a && b),
-    NOR: (a: any, b: any) => !(a || b),
-    XOR: (a: any, b: any) => !a != !b,
-    XNOR: (a: any, b: any) => !a == !b,
-    "AND!": (a: any, b: any) => a && !b,
-    "OR!": (a: any, b: any) => a || !b,
-    "A?B": (a: any, b: any) => a,
-    "!A?B": (a: any, b: any) => !a,
-  };
+  const checkCompare = overrideComparisons;
+  const checkCompareExpressions = overrideComparatorExpressions;
 
   const checkCustom = {
     "A?B": "Special check, uses Var2 as result if Var1 is truthy",
@@ -515,6 +501,7 @@ export function createOverrideCatalog({
     prestigeTypes,
     prestigeOptions,
     checkCompare,
+    checkCompareExpressions,
     checkCustom,
     argType,
     checkTypes,
