@@ -7,6 +7,8 @@ const trace = [];
 const handlers = [];
 const overrideModalClicks = [];
 const autocompleteOptions = [];
+/** Labels of nodes whose `is(":empty")` answers true. */
+const emptyNodes = new Set();
 
 function makeNode(label, length = 1) {
   const node = {
@@ -76,8 +78,15 @@ function makeNode(label, length = 1) {
       trace.push(`val:${label}:${value}`);
       return node;
     },
-    is() {
-      return false;
+    is(selector) {
+      return (
+        selector === ":empty" &&
+        [...emptyNodes].some((suffix) => label.endsWith(suffix))
+      );
+    },
+    select() {
+      trace.push(`select:${label}`);
+      return node;
     },
     end() {
       return node;
@@ -90,10 +99,17 @@ function makeNode(label, length = 1) {
   return node;
 }
 
+// Selecting the same thing twice returns the same node, so a value written through one selector
+// reads back through the next.
+const selectedNodes = new Map();
 function jquery(value) {
   const label = typeof value === "string" ? value : value.label;
-  if (label === "#script_settings") return makeNode(label, 0);
-  return makeNode(label);
+  let node = selectedNodes.get(label);
+  if (node === undefined) {
+    node = makeNode(label, label === "#script_settings" ? 0 : 1);
+    selectedNodes.set(label, node);
+  }
+  return node;
 }
 jquery.ui = { autocomplete: { escapeRegex: (value) => value } };
 
@@ -247,12 +263,36 @@ const buildNames = [
   "buildProjectSettings",
   "buildLoggingSettings",
 ];
+/** A `.script-collapsible` heading and the `.script-content` div that follows it. */
+function makeHeading(id, display, searchInputs = []) {
+  return {
+    id,
+    classList: {
+      toggle: (name) => trace.push(`toggle:${id}:${name}`),
+    },
+    nextElementSibling: {
+      style: { display },
+      getElementsByClassName: () => searchInputs,
+    },
+    addEventListener(type, listener) {
+      handlers.push({ label: id, args: [type, listener] });
+    },
+  };
+}
+
+const elements = {
+  script_importExportButtons: { id: "script_importExportButtons" },
+};
+let collapsibles = [];
 const document = {
   documentElement: { scrollTop: 31 },
   body: { scrollTop: 9 },
-  getElementById: (id) => (id === "script_importExportButtons" ? { id } : null),
-  querySelectorAll: () => [],
-  execCommand: () => true,
+  getElementById: (id) => elements[id] ?? null,
+  querySelectorAll: () => collapsibles,
+  execCommand: (command) => {
+    trace.push(`execCommand:${command}`);
+    return true;
+  },
 };
 const shellContext = {
   $: jquery,
@@ -276,6 +316,11 @@ const shell = createSettingsShell({
   getSettingsRaw: () => shellContext.settingsRaw,
   getSettings: () => shellContext.settings,
   getGame: () => shellContext.game,
+  importSettings: (value) => shellContext.importSettings(value),
+  exportSettings: () => shellContext.exportSettings(),
+  triggerFileDownload: (content, filename) =>
+    shellContext.triggerFileDownload(content, filename),
+  confirm: (message) => shellContext.confirm(message),
 });
 trace.length = 0;
 shell.buildScriptSettings();
@@ -294,5 +339,199 @@ assert.equal(trace.length, 0);
 let reset = 0;
 shell.genericResetFunction(() => reset++, "Demo");
 assert.equal(reset, 1);
+
+// A collapsible heading records its own state under its id and clears any search box it closes.
+const search = { value: "carbon" };
+collapsibles = [makeHeading("BuildingSettingsCollapsed", "block", [search])];
+shellContext.game = { global: { settings: { civTabs: 7 } } };
+shellContext.settingsRaw = {};
+trace.length = 0;
+shell.buildScriptSettings();
+const collapse = handlers.findLast(
+  ({ label }) => label === "BuildingSettingsCollapsed",
+).args[1];
+
+collapse();
+assert.equal(shellContext.settingsRaw.BuildingSettingsCollapsed, true);
+assert.equal(collapsibles[0].nextElementSibling.style.display, "none");
+assert.equal(search.value, "");
+assert.ok(trace.includes("filter"));
+assert.ok(
+  trace.includes("toggle:BuildingSettingsCollapsed:script-contentactive"),
+);
+assert.ok(trace.includes("persist-shell"));
+
+collapse();
+assert.equal(shellContext.settingsRaw.BuildingSettingsCollapsed, false);
+assert.equal(collapsibles[0].nextElementSibling.style.display, "block");
+
+// The import/export buttons attach after the game's own, and each drives its own action.
+delete elements.script_importExportButtons;
+trace.length = 0;
+shell.buildImportExport();
+assert.ok(
+  trace.some((entry) =>
+    entry.startsWith(
+      'after:.importExport:<div id="script_importExportButtons"',
+    ),
+  ),
+);
+for (const id of [
+  "script_settingsImport",
+  "script_settingsExport",
+  "script_settingsFile",
+]) {
+  assert.ok(trace.some((entry) => entry.includes(`id="${id}"`)));
+}
+
+// A section's nodes are labelled by the markup they were built from, so match the tail.
+const clickOn = (labelSuffix) =>
+  handlers.findLast(
+    (entry) => entry.label.endsWith(labelSuffix) && entry.args[0] === "click",
+  ).args[1];
+
+// Import reads the game's box, and clears it only when the settings were accepted.
+jquery("#importExport").val('{"a":1}');
+let imported = null;
+shellContext.importSettings = (value) => {
+  imported = value;
+  return true;
+};
+clickOn("#script_settingsImport")();
+assert.equal(imported, '{"a":1}');
+assert.equal(jquery("#importExport").val(), "");
+
+// A rejected import leaves the box alone so the text can be corrected.
+shellContext.importSettings = (value) => {
+  imported = value;
+  return false;
+};
+jquery("#importExport").val('{"b":2}');
+clickOn("#script_settingsImport")();
+assert.equal(imported, '{"b":2}');
+assert.equal(jquery("#importExport").val(), '{"b":2}');
+
+// An empty box imports nothing.
+jquery("#importExport").val("");
+shellContext.importSettings = () => {
+  throw new Error("must not import an empty box");
+};
+clickOn("#script_settingsImport")();
+
+// Export writes the box and copies it.
+trace.length = 0;
+clickOn("#script_settingsExport")();
+assert.equal(jquery("#importExport").val(), "{}");
+assert.ok(trace.includes("select:#importExport"));
+assert.ok(trace.includes("execCommand:copy"));
+
+// The file button downloads the raw settings, pretty printed, under the configured name.
+const downloads = [];
+shellContext.triggerFileDownload = (content, filename) =>
+  downloads.push({ content, filename });
+shellContext.settingsRaw = { amount: 1 };
+clickOn("#script_settingsFile")();
+assert.deepEqual(downloads, [
+  { content: '{\n  "amount": 1\n}', filename: "settings.json" },
+]);
+
+// Already having the buttons, a second call adds nothing.
+elements.script_importExportButtons = { id: "script_importExportButtons" };
+trace.length = 0;
+shell.buildImportExport();
+assert.deepEqual(trace, []);
+
+// An open section builds its content immediately and shows it.
+let contentBuilds = 0;
+shellContext.settingsRaw = {};
+elements.DemoSettingsCollapsed = makeHeading("DemoSettingsCollapsed", "none");
+trace.length = 0;
+shell.buildSettingsSection(
+  "Demo",
+  "Demo",
+  () => reset++,
+  () => contentBuilds++,
+);
+assert.equal(contentBuilds, 1);
+assert.equal(
+  elements.DemoSettingsCollapsed.nextElementSibling.style.display,
+  "block",
+);
+assert.ok(trace.includes("toggle:DemoSettingsCollapsed:script-contentactive"));
+
+// Its reset button confirms first.
+shellContext.confirm = () => false;
+reset = 0;
+clickOn("#script_resetDemo")();
+assert.equal(reset, 0);
+shellContext.confirm = () => true;
+clickOn("#script_resetDemo")();
+assert.equal(reset, 1);
+
+// A collapsed section defers its content until the heading is clicked, and builds it once.
+contentBuilds = 0;
+shellContext.settingsRaw = { DemoSettingsCollapsed: true };
+shell.buildSettingsSection(
+  "Demo",
+  "Demo",
+  () => reset++,
+  () => contentBuilds++,
+);
+assert.equal(contentBuilds, 0);
+const openSection = clickOn("> #DemoSettingsCollapsed");
+emptyNodes.add("#script_DemoContent");
+openSection();
+assert.equal(contentBuilds, 1);
+emptyNodes.delete("#script_DemoContent");
+openSection();
+assert.equal(contentBuilds, 1);
+
+// A secondary section is only a content div in its host, rendered under the prefix.
+const host = makeNode("host");
+const prefixes = [];
+trace.length = 0;
+shell.buildSettingsSection2(
+  host,
+  "warSecondary",
+  "Demo",
+  "Demo",
+  () => reset++,
+  (prefix) => prefixes.push(prefix),
+);
+assert.deepEqual(prefixes, ["warSecondary"]);
+assert.ok(
+  trace.some((entry) => entry.includes('id="script_warSecondaryDemoContent"')),
+);
+
+// Without a prefix it is a full section in its host, rendered under the empty prefix.
+shellContext.settingsRaw = { DemoSettingsCollapsed: true };
+shell.buildSettingsSection2(
+  host,
+  "",
+  "Demo",
+  "Demo",
+  () => reset++,
+  (prefix) => prefixes.push(prefix),
+);
+assert.ok(trace.some((entry) => entry.startsWith("append:host:")));
+emptyNodes.add("#script_DemoContent");
+clickOn("> #DemoSettingsCollapsed")();
+assert.deepEqual(prefixes, ["warSecondary", ""]);
+
+// The headings are plain markup appended to whatever node the caller owns.
+trace.length = 0;
+shell.addStandardHeading(host, "Outer Solar");
+shell.addSettingsHeader1(host, "Fighter");
+shell.addSettingsHeader2(host, "Scout");
+assert.ok(
+  trace[0].includes("has-text-danger") && trace[0].includes("Outer Solar"),
+);
+assert.ok(
+  trace[1].includes("has-text-success") && trace[1].includes("Fighter"),
+);
+assert.ok(trace[2].includes("has-text-caution") && trace[2].includes("Scout"));
+
+shell.removeScriptSettings();
+assert.ok(trace.includes("remove:#script_settings"));
 
 console.log("Settings shell and controls module tests passed");

@@ -1,45 +1,115 @@
-type AnyRecord = Record<string, any>;
-type AnyFunction = (...args: any[]) => any;
+/**
+ * The settings tab shell: the script's settings container, the import/export buttons, and the
+ * collapsible section and heading builders every settings adapter renders into.
+ *
+ * TRANSITIONAL: the node and document surfaces below are the game's jQuery and DOM today. They are
+ * declared as narrow structural types so replacing that surface is a local change.
+ */
+
+/** The single node operation the section and heading builders need from their caller. */
+interface AppendableNode {
+  append(content: unknown): unknown;
+}
+
+/** The jQuery node surface this shell drives itself. */
+interface ShellNode {
+  after(content: ShellNode): ShellNode;
+  append(content: unknown): ShellNode;
+  find(selector: string): ShellNode;
+  is(selector: string): boolean;
+  last(): ShellNode;
+  readonly length: number;
+  on(events: string, handler: () => void): ShellNode;
+  remove(): ShellNode;
+  select(): ShellNode;
+  val(): string;
+  val(value: string): ShellNode;
+}
+
+type ShellJQuery = (selector: string) => ShellNode;
+
+/** The search box a building-settings section clears when it collapses. */
+interface SearchInput {
+  value: string;
+}
+
+/** The `.script-content` div that follows a collapsible heading. */
+interface SectionContent {
+  readonly style: { display: string };
+  getElementsByClassName(className: string): Iterable<SearchInput>;
+}
+
+/** A `.script-collapsible` heading, whose id is also its collapsed-state setting name. */
+interface SectionHeading {
+  readonly id: string;
+  readonly classList: { toggle(className: string): void };
+  readonly nextElementSibling: SectionContent;
+  addEventListener(type: string, listener: () => void): void;
+}
+
+interface ShellDocument {
+  readonly documentElement: { scrollTop: number };
+  readonly body: { scrollTop: number };
+  querySelectorAll(selector: string): Iterable<SectionHeading>;
+  getElementById(id: string): SectionHeading | null;
+  execCommand(command: string): boolean;
+}
+
+/** A settings section that renders itself into the script settings container. */
+type SectionBuilder = () => void;
+
+/**
+ * A settings section that can also render into another parent under a prefix, so the same content
+ * appears both as its own section and inside a larger one.
+ */
+type PrefixedSectionBuilder = (
+  parentNode: AppendableNode,
+  secondaryPrefix: string,
+) => void;
+
+interface ShellGame {
+  readonly global: { readonly settings: { readonly civTabs: number } };
+}
 
 interface SettingsShellDependencies {
-  $: AnyFunction & AnyRecord;
-  getDocument: () => AnyRecord;
-  getSettingsRaw: () => AnyRecord;
-  getSettings: () => AnyRecord;
-  getGame: () => AnyRecord;
-  buildPrestigeSettings: AnyFunction;
-  buildGeneralSettings: AnyFunction;
-  buildInterfaceSettings: AnyFunction;
-  buildStateLogSettings: AnyFunction;
-  buildAchievementGuardSettings: AnyFunction;
-  buildChallengeHelperSettings: AnyFunction;
-  buildGovernmentSettings: AnyFunction;
-  buildAuthoritySettings: AnyFunction;
-  buildEvolutionSettings: AnyFunction;
-  buildPlanetSettings: AnyFunction;
-  buildTraitSettings: AnyFunction;
-  buildTriggerSettings: AnyFunction;
-  buildResearchSettings: AnyFunction;
-  buildWarSettings: AnyFunction;
-  buildHellSettings: AnyFunction;
-  buildMechSettings: AnyFunction;
-  buildFleetSettings: AnyFunction;
-  buildEjectorSettings: AnyFunction;
-  buildMarketSettings: AnyFunction;
-  buildStorageSettings: AnyFunction;
-  buildMagicSettings: AnyFunction;
-  buildProductionSettings: AnyFunction;
-  buildJobSettings: AnyFunction;
-  buildBuildingSettings: AnyFunction;
-  buildWeightingSettings: AnyFunction;
-  buildProjectSettings: AnyFunction;
-  buildLoggingSettings: AnyFunction;
-  filterBuildingSettingsTable: AnyFunction;
-  updateSettingsFromState: AnyFunction;
-  importSettings: AnyFunction;
-  exportSettings: AnyFunction;
-  triggerFileDownload: AnyFunction;
-  confirm: AnyFunction;
+  readonly $: ShellJQuery;
+  readonly getDocument: () => ShellDocument;
+  readonly getSettingsRaw: () => Record<string, unknown>;
+  readonly getSettings: () => { readonly scriptSettingsExportFilename: string };
+  readonly getGame: () => ShellGame;
+  readonly buildPrestigeSettings: PrefixedSectionBuilder;
+  readonly buildGeneralSettings: SectionBuilder;
+  readonly buildInterfaceSettings: SectionBuilder;
+  readonly buildStateLogSettings: SectionBuilder;
+  readonly buildAchievementGuardSettings: SectionBuilder;
+  readonly buildChallengeHelperSettings: SectionBuilder;
+  readonly buildGovernmentSettings: PrefixedSectionBuilder;
+  readonly buildAuthoritySettings: SectionBuilder;
+  readonly buildEvolutionSettings: SectionBuilder;
+  readonly buildPlanetSettings: SectionBuilder;
+  readonly buildTraitSettings: SectionBuilder;
+  readonly buildTriggerSettings: SectionBuilder;
+  readonly buildResearchSettings: SectionBuilder;
+  readonly buildWarSettings: PrefixedSectionBuilder;
+  readonly buildHellSettings: PrefixedSectionBuilder;
+  readonly buildMechSettings: SectionBuilder;
+  readonly buildFleetSettings: PrefixedSectionBuilder;
+  readonly buildEjectorSettings: SectionBuilder;
+  readonly buildMarketSettings: SectionBuilder;
+  readonly buildStorageSettings: SectionBuilder;
+  readonly buildMagicSettings: SectionBuilder;
+  readonly buildProductionSettings: SectionBuilder;
+  readonly buildJobSettings: SectionBuilder;
+  readonly buildBuildingSettings: SectionBuilder;
+  readonly buildWeightingSettings: SectionBuilder;
+  readonly buildProjectSettings: SectionBuilder;
+  readonly buildLoggingSettings: PrefixedSectionBuilder;
+  readonly filterBuildingSettingsTable: () => void;
+  readonly updateSettingsFromState: () => void;
+  readonly importSettings: (serialized: string) => boolean;
+  readonly exportSettings: () => string;
+  readonly triggerFileDownload: (content: string, filename: string) => void;
+  readonly confirm: (message: string) => boolean;
 }
 
 export function createSettingsShell({
@@ -88,19 +158,18 @@ export function createSettingsShell({
 
   function buildScriptSettings() {
     // Don't initialize the settings tab until it's been opened
-    if (getGame().global.settings.civTabs != 7) {
+    if (getGame().global.settings.civTabs !== 7) {
       return;
     }
 
-    let currentScrollPosition =
+    if ($("#script_settings").length !== 0) {
+      return;
+    }
+
+    const currentScrollPosition =
       getDocument().documentElement.scrollTop || getDocument().body.scrollTop;
 
-    let scriptContentNode = $("#script_settings");
-    if (scriptContentNode.length !== 0) {
-      return;
-    }
-
-    scriptContentNode = $(
+    const scriptContentNode = $(
       '<div id="script_settings" style="margin-top: 30px;"></div>',
     );
     $(".settings").append(scriptContentNode);
@@ -134,24 +203,26 @@ export function createSettingsShell({
     buildProjectSettings();
     buildLoggingSettings(scriptContentNode, "");
 
-    let collapsibles = getDocument().querySelectorAll(
+    const collapsibles = getDocument().querySelectorAll(
       "#script_settings .script-collapsible",
     );
-    for (let i = 0; i < collapsibles.length; i++) {
-      collapsibles[i].addEventListener("click", function (this: any) {
-        this.classList.toggle("script-contentactive");
-        let content = this.nextElementSibling;
+    for (const collapsible of collapsibles) {
+      collapsible.addEventListener("click", () => {
+        collapsible.classList.toggle("script-contentactive");
+        const content = collapsible.nextElementSibling;
         if (content.style.display === "block") {
-          getSettingsRaw()[collapsibles[i].id] = true;
+          getSettingsRaw()[collapsible.id] = true;
           content.style.display = "none";
 
-          let search = content.getElementsByClassName("script-searchsettings");
-          if (search.length > 0) {
-            search[0].value = "";
+          const [search] = content.getElementsByClassName(
+            "script-searchsettings",
+          );
+          if (search !== undefined) {
+            search.value = "";
             filterBuildingSettingsTable();
           }
         } else {
-          getSettingsRaw()[collapsibles[i].id] = false;
+          getSettingsRaw()[collapsible.id] = false;
           content.style.display = "block";
         }
 
@@ -164,8 +235,8 @@ export function createSettingsShell({
   }
 
   function buildImportExport() {
-    let importExportBase = $(".importExport").last();
-    if (importExportBase === null) {
+    const importExportBase = $(".importExport").last();
+    if (importExportBase.length === 0) {
       return;
     }
 
@@ -173,7 +244,7 @@ export function createSettingsShell({
       return;
     }
 
-    let importExportNode = $(
+    const importExportNode = $(
       '<div id="script_importExportButtons" style="margin-top: 6px">',
     );
     importExportBase.after(importExportNode);
@@ -182,7 +253,7 @@ export function createSettingsShell({
       ' <button id="script_settingsImport" class="button">Import Script Settings</button>',
     );
 
-    $("#script_settingsImport").on("click", function (this: any) {
+    $("#script_settingsImport").on("click", () => {
       const str = $("#importExport").val();
       if (str.length > 0) {
         if (importSettings(str)) {
@@ -195,7 +266,7 @@ export function createSettingsShell({
       ' <button id="script_settingsExport" class="button">Export Script Settings</button>',
     );
 
-    $("#script_settingsExport").on("click", function (this: any) {
+    $("#script_settingsExport").on("click", () => {
       $("#importExport").val(exportSettings());
       $("#importExport").select();
       getDocument().execCommand("copy");
@@ -205,19 +276,19 @@ export function createSettingsShell({
       ' <button id="script_settingsFile" class="button">Script Settings as File</button>',
     );
 
-    $("#script_settingsFile").on("click", function (this: any) {
+    $("#script_settingsFile").on("click", () => {
       // This one is pretty printed since it's much easier to do when downloading
-      let json = JSON.stringify(getSettingsRaw(), undefined, 2);
+      const json = JSON.stringify(getSettingsRaw(), undefined, 2);
       triggerFileDownload(json, getSettings().scriptSettingsExportFilename);
     });
   }
 
   function buildSettingsSectionImpl(
-    parentNode: any,
-    sectionId: any,
-    sectionName: any,
-    resetFunction: any,
-    updateSettingsContentFunction: any,
+    parentNode: AppendableNode,
+    sectionId: string,
+    sectionName: string,
+    resetFunction: () => void,
+    updateSettingsContentFunction: () => void,
   ) {
     const triggerID = `${sectionId}SettingsCollapsed`;
     const resetID = `script_reset${sectionId}`;
@@ -234,13 +305,16 @@ export function createSettingsShell({
 
     parentNode.append(section);
 
-    if (!getSettingsRaw()[sectionId + "SettingsCollapsed"]) {
+    if (!getSettingsRaw()[triggerID]) {
       // The section is open initially - build it now
       updateSettingsContentFunction();
 
-      let element = getDocument().getElementById(triggerID);
-      element.classList.toggle("script-contentactive");
-      element.nextElementSibling.style.display = "block";
+      // The heading was just appended, so it is missing only when the parent is detached.
+      const element = getDocument().getElementById(triggerID);
+      if (element !== null) {
+        element.classList.toggle("script-contentactive");
+        element.nextElementSibling.style.display = "block";
+      }
     } else {
       // The section is closed - build it only once it's open
       section.find(`> #${triggerID}`).on("click", () => {
@@ -252,14 +326,14 @@ export function createSettingsShell({
 
     section
       .find(`#${resetID}`)
-      .on("click", genericResetFunction.bind(null, resetFunction, sectionName));
+      .on("click", () => genericResetFunction(resetFunction, sectionName));
   }
 
   function buildSettingsSection(
-    sectionId: any,
-    sectionName: any,
-    resetFunction: any,
-    updateSettingsContentFunction: any,
+    sectionId: string,
+    sectionName: string,
+    resetFunction: () => void,
+    updateSettingsContentFunction: () => void,
   ) {
     buildSettingsSectionImpl(
       $("#script_settings"),
@@ -271,12 +345,12 @@ export function createSettingsShell({
   }
 
   function buildSettingsSection2(
-    parentNode: any,
-    secondaryPrefix: any,
-    sectionId: any,
-    sectionName: any,
-    resetFunction: any,
-    updateSettingsContentFunction: any,
+    parentNode: AppendableNode,
+    secondaryPrefix: string,
+    sectionId: string,
+    sectionName: string,
+    resetFunction: () => void,
+    updateSettingsContentFunction: (secondaryPrefix: string) => void,
   ) {
     if (secondaryPrefix !== "") {
       parentNode.append(
@@ -296,7 +370,10 @@ export function createSettingsShell({
     }
   }
 
-  function genericResetFunction(resetFunction: any, sectionName: any) {
+  function genericResetFunction(
+    resetFunction: () => void,
+    sectionName: string,
+  ) {
     if (
       confirm("Are you sure you wish to reset " + sectionName + " Settings?")
     ) {
@@ -304,19 +381,19 @@ export function createSettingsShell({
     }
   }
 
-  function addStandardHeading(node: any, heading: any) {
+  function addStandardHeading(node: AppendableNode, heading: string) {
     node.append(
       `<div style="margin-top: 5px; width: 600px; text-align: left;"><span class="has-text-danger" style="margin-left: 10px;">${heading}</span></div>`,
     );
   }
 
-  function addSettingsHeader1(node: any, headerText: any) {
+  function addSettingsHeader1(node: AppendableNode, headerText: string) {
     node.append(
       `<div style="margin: 4px; width: 100%; display: inline-block; text-align: left;"><span class="has-text-success" style="font-weight: bold;">${headerText}</span></div>`,
     );
   }
 
-  function addSettingsHeader2(node: any, headerText: any) {
+  function addSettingsHeader2(node: AppendableNode, headerText: string) {
     node.append(
       `<div style="margin: 2px; width: 90%; display: inline-block; text-align: left;"><span class="has-text-caution">${headerText}</span></div>`,
     );

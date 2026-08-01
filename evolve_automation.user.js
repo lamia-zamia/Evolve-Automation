@@ -52638,15 +52638,14 @@
       $("#script_settings").remove();
     }
     function buildScriptSettings() {
-      if (getGame().global.settings.civTabs != 7) {
+      if (getGame().global.settings.civTabs !== 7) {
         return;
       }
-      let currentScrollPosition = getDocument().documentElement.scrollTop || getDocument().body.scrollTop;
-      let scriptContentNode = $("#script_settings");
-      if (scriptContentNode.length !== 0) {
+      if ($("#script_settings").length !== 0) {
         return;
       }
-      scriptContentNode = $(
+      const currentScrollPosition = getDocument().documentElement.scrollTop || getDocument().body.scrollTop;
+      const scriptContentNode = $(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
       );
       $(".settings").append(scriptContentNode);
@@ -52678,23 +52677,25 @@
       buildWeightingSettings();
       buildProjectSettings();
       buildLoggingSettings(scriptContentNode, "");
-      let collapsibles = getDocument().querySelectorAll(
+      const collapsibles = getDocument().querySelectorAll(
         "#script_settings .script-collapsible"
       );
-      for (let i = 0; i < collapsibles.length; i++) {
-        collapsibles[i].addEventListener("click", function() {
-          this.classList.toggle("script-contentactive");
-          let content = this.nextElementSibling;
+      for (const collapsible of collapsibles) {
+        collapsible.addEventListener("click", () => {
+          collapsible.classList.toggle("script-contentactive");
+          const content = collapsible.nextElementSibling;
           if (content.style.display === "block") {
-            getSettingsRaw()[collapsibles[i].id] = true;
+            getSettingsRaw()[collapsible.id] = true;
             content.style.display = "none";
-            let search = content.getElementsByClassName("script-searchsettings");
-            if (search.length > 0) {
-              search[0].value = "";
+            const [search] = content.getElementsByClassName(
+              "script-searchsettings"
+            );
+            if (search !== void 0) {
+              search.value = "";
               filterBuildingSettingsTable();
             }
           } else {
-            getSettingsRaw()[collapsibles[i].id] = false;
+            getSettingsRaw()[collapsible.id] = false;
             content.style.display = "block";
           }
           updateSettingsFromState();
@@ -52703,21 +52704,21 @@
       getDocument().documentElement.scrollTop = getDocument().body.scrollTop = currentScrollPosition;
     }
     function buildImportExport() {
-      let importExportBase = $(".importExport").last();
-      if (importExportBase === null) {
+      const importExportBase = $(".importExport").last();
+      if (importExportBase.length === 0) {
         return;
       }
       if (getDocument().getElementById("script_importExportButtons") !== null) {
         return;
       }
-      let importExportNode = $(
+      const importExportNode = $(
         '<div id="script_importExportButtons" style="margin-top: 6px">'
       );
       importExportBase.after(importExportNode);
       importExportNode.append(
         ' <button id="script_settingsImport" class="button">Import Script Settings</button>'
       );
-      $("#script_settingsImport").on("click", function() {
+      $("#script_settingsImport").on("click", () => {
         const str = $("#importExport").val();
         if (str.length > 0) {
           if (importSettings(str)) {
@@ -52728,7 +52729,7 @@
       importExportNode.append(
         ' <button id="script_settingsExport" class="button">Export Script Settings</button>'
       );
-      $("#script_settingsExport").on("click", function() {
+      $("#script_settingsExport").on("click", () => {
         $("#importExport").val(exportSettings());
         $("#importExport").select();
         getDocument().execCommand("copy");
@@ -52736,8 +52737,8 @@
       importExportNode.append(
         ' <button id="script_settingsFile" class="button">Script Settings as File</button>'
       );
-      $("#script_settingsFile").on("click", function() {
-        let json = JSON.stringify(getSettingsRaw(), void 0, 2);
+      $("#script_settingsFile").on("click", () => {
+        const json = JSON.stringify(getSettingsRaw(), void 0, 2);
         triggerFileDownload(json, getSettings().scriptSettingsExportFilename);
       });
     }
@@ -52754,11 +52755,13 @@
             </div>
           </div>`);
       parentNode.append(section);
-      if (!getSettingsRaw()[sectionId + "SettingsCollapsed"]) {
+      if (!getSettingsRaw()[triggerID]) {
         updateSettingsContentFunction();
-        let element = getDocument().getElementById(triggerID);
-        element.classList.toggle("script-contentactive");
-        element.nextElementSibling.style.display = "block";
+        const element = getDocument().getElementById(triggerID);
+        if (element !== null) {
+          element.classList.toggle("script-contentactive");
+          element.nextElementSibling.style.display = "block";
+        }
       } else {
         section.find(`> #${triggerID}`).on("click", () => {
           if (section.find(`#${contentID}`).is(":empty")) {
@@ -52766,7 +52769,7 @@
           }
         });
       }
-      section.find(`#${resetID}`).on("click", genericResetFunction.bind(null, resetFunction, sectionName));
+      section.find(`#${resetID}`).on("click", () => genericResetFunction(resetFunction, sectionName));
     }
     function buildSettingsSection(sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
       buildSettingsSectionImpl(
