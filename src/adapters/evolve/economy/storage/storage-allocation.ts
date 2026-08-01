@@ -10,6 +10,7 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { StorageAllocationReader } from "../../../../ports/storage-allocation.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -51,16 +52,6 @@ function readString(value: unknown, path: string): string {
 
 function resourceId(resource: UnknownRecord, path: string): string {
   return readString(resource["id"], `${path}.id`);
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-): boolean {
-  return Boolean(
-    Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, []),
-  );
 }
 
 function finiteProperty(

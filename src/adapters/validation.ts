@@ -54,6 +54,30 @@ function describeValue(value: unknown): string {
   }
 }
 
+/** Non-throwing counterpart of `requireRecord`: any non-null object, arrays included. */
+export function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null;
+}
+
+/**
+ * As `isRecord`, but rejects arrays. Game data that must be a keyed bag reads through this one,
+ * because an array satisfies `typeof value === "object"` and would otherwise pass as a record
+ * whose keys are its indices.
+ */
+export function isNonArrayRecord(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Non-throwing counterpart of `requireNumber`. `NaN` and both infinities are rejected. */
+export function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/** As `isFiniteNumber`, for the game counts and quantities that cannot be negative. */
+export function isNonNegativeNumber(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 0;
+}
+
 export function requireRecord(value: unknown, path: string): UnknownRecord {
   if (typeof value !== "object" || value === null) {
     throw new TypeError(
@@ -109,4 +133,33 @@ export function requireFunction(
     );
   }
   return value as (...args: unknown[]) => unknown;
+}
+
+/**
+ * Calls a required predicate method on a validated game record, bound to that record. `path` names
+ * the record in the error a missing method throws. The result is coerced rather than validated,
+ * because these game predicates answer with whatever their live model holds.
+ */
+export function callBoolean(
+  record: UnknownRecord,
+  name: string,
+  path: string,
+  ...args: unknown[]
+): boolean {
+  const method = requireFunction(record[name], `${path}.${name}`);
+  return Boolean(Reflect.apply(method, record, args));
+}
+
+/** As `callBoolean`, except the method's result must be a finite number. */
+export function callNumber(
+  record: UnknownRecord,
+  name: string,
+  path: string,
+  ...args: unknown[]
+): number {
+  const method = requireFunction(record[name], `${path}.${name}`);
+  return requireNumber(
+    Reflect.apply(method, record, args),
+    `${path}.${name}()`,
+  );
 }

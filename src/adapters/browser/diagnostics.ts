@@ -1,13 +1,11 @@
+import { isRecord } from "../validation.ts";
+
 export interface BrowserDiagnostics {
   readonly readMechDebugEnabled: () => boolean;
   readonly nowMs: () => number;
   readonly readPerformanceEnabled: () => boolean;
   readonly recordPerformance: (phase: string, durationMs: number) => void;
   readonly flushPerformance: () => void;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 export function createBrowserDiagnostics(

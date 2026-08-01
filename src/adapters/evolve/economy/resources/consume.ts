@@ -9,6 +9,8 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { ConsumeReader } from "../../../../ports/consume.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -22,37 +24,6 @@ export interface ConsumeReaderDependencies {
   readonly getManager: () => unknown;
   readonly getResources: () => unknown;
   readonly isHungryRace: () => boolean;
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-): boolean {
-  return Boolean(
-    Reflect.apply(
-      requireFunction(record[name], `${path}.${name}`),
-      record,
-      args,
-    ),
-  );
-}
-
-function callNumber(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-): number {
-  return requireNumber(
-    Reflect.apply(
-      requireFunction(record[name], `${path}.${name}`),
-      record,
-      args,
-    ),
-    `${path}.${name}()`,
-  );
 }
 
 function readList(manager: UnknownRecord): unknown[] {

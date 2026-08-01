@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 
 import {
+  callBoolean,
+  callNumber,
+  isFiniteNumber,
+  isNonArrayRecord,
+  isNonNegativeNumber,
+  isRecord,
   requireArray,
   requireBoolean,
   requireFunction,
@@ -108,5 +114,66 @@ assert.equal(
 assert.equal(requireNumber(0, "zero"), 0);
 assert.equal(requireString("", "empty"), "");
 assert.equal(requireBoolean(false, "off"), false);
+
+// The two guards differ only in whether an array counts as a keyed bag. `isRecord`
+// is the non-throwing form of `requireRecord`, which accepts one.
+assert.equal(isRecord({}), true);
+assert.equal(isRecord([]), true);
+assert.equal(isRecord(null), false);
+assert.equal(isRecord(undefined), false);
+assert.equal(
+  isRecord(() => 0),
+  false,
+);
+assert.equal(isRecord("game"), false);
+assert.equal(isNonArrayRecord({}), true);
+assert.equal(isNonArrayRecord([]), false);
+assert.equal(isNonArrayRecord(null), false);
+
+// The numeric guards reject what a live game field can hold besides a number.
+assert.equal(isFiniteNumber(0), true);
+assert.equal(isFiniteNumber(-1), true);
+assert.equal(isFiniteNumber(Number.NaN), false);
+assert.equal(isFiniteNumber(Number.POSITIVE_INFINITY), false);
+assert.equal(isFiniteNumber("5"), false);
+assert.equal(isFiniteNumber(undefined), false);
+assert.equal(isNonNegativeNumber(0), true);
+assert.equal(isNonNegativeNumber(-1), false);
+assert.equal(isNonNegativeNumber(Number.NaN), false);
+assert.equal(isNonNegativeNumber(Number.POSITIVE_INFINITY), false);
+
+// A method call is bound to the record it was read from, so a game method reading
+// its own fields through `this` sees them.
+const manager = {
+  fuel: 3,
+  hasFuel() {
+    return this.fuel;
+  },
+  maxOperating(bonus) {
+    return this.fuel + bonus;
+  },
+  broken() {
+    return Number.NaN;
+  },
+};
+assert.equal(callBoolean(manager, "hasFuel", "SmelterManager"), true);
+assert.equal(callNumber(manager, "maxOperating", "SmelterManager", 4), 7);
+
+// The result is coerced for predicates and validated for numbers.
+assert.equal(callBoolean({ off: () => 0 }, "off", "Manager"), false);
+assert.equal(
+  messageOf(() => callNumber(manager, "broken", "SmelterManager")),
+  "SmelterManager.broken() must be a finite number, got number NaN",
+);
+
+// A missing method names its full path rather than failing as "not a function".
+assert.equal(
+  messageOf(() => callBoolean(manager, "isUnlocked", "SmelterManager")),
+  "SmelterManager.isUnlocked must be a function, got undefined",
+);
+assert.equal(
+  messageOf(() => callNumber(manager, "fuel", "SmelterManager")),
+  "SmelterManager.fuel must be a function, got number 3",
+);
 
 console.log("Adapter validation reporting tests passed");

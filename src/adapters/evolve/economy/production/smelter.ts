@@ -8,6 +8,8 @@ import type {
 import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -23,29 +25,6 @@ export interface SmelterReaderDependencies {
   readonly getBuildings: () => unknown;
   readonly haveTech: (tech: string) => boolean;
   readonly consumptionBalanceMin: number;
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-): boolean {
-  const method = requireFunction(record[name], `${path}.${name}`);
-  return Boolean(Reflect.apply(method, record, args));
-}
-
-function callNumber(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-): number {
-  const method = requireFunction(record[name], `${path}.${name}`);
-  return requireNumber(
-    Reflect.apply(method, record, args),
-    `${path}.${name}()`,
-  );
 }
 
 function readCost(value: unknown, path: string): SmelterCostView {

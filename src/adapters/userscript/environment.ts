@@ -1,3 +1,5 @@
+import { isRecord } from "../validation.ts";
+
 declare const unsafeWindow: unknown;
 declare const cloneInto: unknown;
 declare const exportFunction: unknown;
@@ -53,10 +55,6 @@ export function readAmbientUserscriptGlobals(): UserscriptGlobals {
     ),
     gm: readSafely(() => (typeof GM === "undefined" ? undefined : GM)),
   });
-}
-
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function asBridge(value: unknown): BridgeFunction | undefined {

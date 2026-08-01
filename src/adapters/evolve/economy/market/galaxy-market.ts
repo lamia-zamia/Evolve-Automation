@@ -7,6 +7,8 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { GalaxyMarketReader } from "../../../../ports/galaxy-market.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -30,32 +32,6 @@ export interface GalaxyMarketAdapterDependencies {
   readonly getOffers: () => unknown;
   readonly getResources: () => unknown;
   readonly getSettings: () => unknown;
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-): boolean {
-  return Boolean(
-    Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, []),
-  );
-}
-
-function callNumber(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-): number {
-  return requireNumber(
-    Reflect.apply(
-      requireFunction(record[name], `${path}.${name}`),
-      record,
-      args,
-    ),
-    `${path}.${name}()`,
-  );
 }
 
 function requireId(value: unknown, path: string): string {

@@ -4,6 +4,7 @@ import type {
   ReservedCostTarget,
   ResourceCostMap,
 } from "../../domain/cost-conflicts.ts";
+import { isFiniteNumber, isRecord } from "../validation.ts";
 
 export type CostConflictUnavailableReason =
   | "inaccessible-data"
@@ -23,14 +24,6 @@ export type CostConflictInputReadResult =
       readonly resourceId?: string;
       readonly targetIndex?: number;
     };
-
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
 
 function unavailable(
   reason: CostConflictUnavailableReason,

@@ -15,6 +15,8 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { PowerReader } from "../../../../ports/power.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -167,37 +169,6 @@ function readOptionalString(value: unknown, path: string): string {
     throw new TypeError(`${path} must be a string`);
   }
   return value;
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-): boolean {
-  return Boolean(
-    Reflect.apply(
-      requireFunction(record[name], `${path}.${name}`),
-      record,
-      args,
-    ),
-  );
-}
-
-function callNumber(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-): number {
-  return requireNumber(
-    Reflect.apply(
-      requireFunction(record[name], `${path}.${name}`),
-      record,
-      args,
-    ),
-    `${path}.${name}()`,
-  );
 }
 
 function namedRecord(

@@ -8,6 +8,8 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { MiningDroidReader } from "../../../../ports/mining-droid.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -17,28 +19,6 @@ import {
 interface MiningDroidSession {
   readonly manager: UnknownRecord;
   readonly productions: ReadonlyMap<string, UnknownRecord>;
-}
-
-function callBoolean(record: UnknownRecord, name: string, path: string) {
-  return Boolean(
-    Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, []),
-  );
-}
-
-function callNumber(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-) {
-  return requireNumber(
-    Reflect.apply(
-      requireFunction(record[name], `${path}.${name}`),
-      record,
-      args,
-    ),
-    `${path}.${name}()`,
-  );
 }
 
 function readProductionId(production: UnknownRecord, path: string): string {

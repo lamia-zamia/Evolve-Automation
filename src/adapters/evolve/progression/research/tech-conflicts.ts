@@ -1,5 +1,6 @@
 import type { TechConflictInput } from "../../../../domain/progression/research/tech-conflicts.ts";
 import type { Clock } from "../../../../ports/clock.ts";
+import { isNonArrayRecord, isNonNegativeNumber } from "../../../validation.ts";
 
 type TechConflictUnavailableReason =
   | "inaccessible-data"
@@ -35,14 +36,6 @@ interface TechConflictAdapterDependencies {
   readonly fanatAchievements: unknown;
 }
 
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function finiteNonNegative(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
 function unavailable(
   reason: TechConflictUnavailableReason,
   field?: string,
@@ -75,7 +68,7 @@ function numberSetting(
   field: string,
 ): number | undefined {
   const value = settings[field];
-  return finiteNonNegative(value) ? value : undefined;
+  return isNonNegativeNumber(value) ? value : undefined;
 }
 
 function readBooleanResult(value: unknown): boolean | undefined {
@@ -93,19 +86,19 @@ export function readTechConflictInput(
 ): TechConflictInputReadResult {
   try {
     if (
-      !isRecord(rawTech) ||
+      !isNonArrayRecord(rawTech) ||
       typeof rawTech["_vueBinding"] !== "string" ||
-      !isRecord(rawTech["cost"])
+      !isNonArrayRecord(rawTech["cost"])
     ) {
       return unavailable("invalid-target");
     }
     const itemId = rawTech["_vueBinding"];
     const rawSoulGemCost = rawTech["cost"]["Soul_Gem"];
-    if (rawSoulGemCost !== undefined && !finiteNonNegative(rawSoulGemCost)) {
+    if (rawSoulGemCost !== undefined && !isNonNegativeNumber(rawSoulGemCost)) {
       return unavailable("invalid-target", "cost.Soul_Gem");
     }
 
-    if (!isRecord(rawSettings)) return unavailable("invalid-settings");
+    if (!isNonArrayRecord(rawSettings)) return unavailable("invalid-settings");
     const rawIgnoredResearch = rawSettings["researchIgnore"];
     if (
       !Array.isArray(rawIgnoredResearch) ||
@@ -142,25 +135,28 @@ export function readTechConflictInput(
       if (value === undefined) return unavailable("invalid-settings", field);
     }
 
-    if (!isRecord(rawResources)) return unavailable("invalid-resource");
+    if (!isNonArrayRecord(rawResources)) return unavailable("invalid-resource");
     const soulGems = rawResources["Soul_Gem"];
     const knowledge = rawResources["Knowledge"];
     if (
-      !isRecord(soulGems) ||
-      !finiteNonNegative(soulGems["currentQuantity"])
+      !isNonArrayRecord(soulGems) ||
+      !isNonNegativeNumber(soulGems["currentQuantity"])
     ) {
       return unavailable("invalid-resource", "Soul_Gem.currentQuantity");
     }
-    if (!isRecord(knowledge) || !finiteNonNegative(knowledge["maxQuantity"])) {
+    if (
+      !isNonArrayRecord(knowledge) ||
+      !isNonNegativeNumber(knowledge["maxQuantity"])
+    ) {
       return unavailable("invalid-resource", "Knowledge.maxQuantity");
     }
 
-    if (!isRecord(rawState)) return unavailable("invalid-state");
+    if (!isNonArrayRecord(rawState)) return unavailable("invalid-state");
     const rawLastAtMs = rawState["whiteholeLastStabilise"];
     if (
       rawLastAtMs !== undefined &&
       rawLastAtMs !== 0 &&
-      !finiteNonNegative(rawLastAtMs)
+      !isNonNegativeNumber(rawLastAtMs)
     ) {
       return unavailable("invalid-state", "whiteholeLastStabilise");
     }
@@ -169,12 +165,12 @@ export function readTechConflictInput(
         ? null
         : (rawLastAtMs as number);
 
-    if (!isRecord(rawGame)) return unavailable("invalid-game-state");
+    if (!isNonArrayRecord(rawGame)) return unavailable("invalid-game-state");
     const global = rawGame["global"];
     const alevel = rawGame["alevel"];
-    const race = isRecord(global) ? global["race"] : undefined;
+    const race = isNonArrayRecord(global) ? global["race"] : undefined;
     if (
-      !isRecord(race) ||
+      !isNonArrayRecord(race) ||
       typeof race["species"] !== "string" ||
       typeof race["gods"] !== "string" ||
       typeof alevel !== "function"
@@ -182,12 +178,12 @@ export function readTechConflictInput(
       return unavailable("invalid-game-state");
     }
     const achievementLevel = alevel.call(rawGame);
-    if (!finiteNonNegative(achievementLevel)) {
+    if (!isNonNegativeNumber(achievementLevel)) {
       return unavailable("invalid-game-state", "alevel");
     }
     const nowMs =
       itemId === "tech-stabilize_blackhole" ? dependencies.clock.nowMs() : 0;
-    if (!finiteNonNegative(nowMs)) return unavailable("invalid-clock");
+    if (!isNonNegativeNumber(nowMs)) return unavailable("invalid-clock");
 
     let bananaRepublic = false;
     let cultOfPersonality = false;
@@ -253,7 +249,7 @@ export function readTechConflictInput(
         }
         for (const rawCombination of dependencies.fanatAchievements) {
           if (
-            !isRecord(rawCombination) ||
+            !isNonArrayRecord(rawCombination) ||
             typeof rawCombination["race"] !== "string" ||
             typeof rawCombination["god"] !== "string" ||
             typeof rawCombination["achieve"] !== "string"

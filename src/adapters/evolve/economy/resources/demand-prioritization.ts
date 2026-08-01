@@ -11,6 +11,7 @@ import type {
   DemandTech,
 } from "../../../../domain/economy/resources/demand-prioritization.ts";
 import {
+  callBoolean,
   requireBoolean,
   requireFunction,
   requireNumber,
@@ -56,16 +57,6 @@ function readCosts(value: unknown, path: string): DemandCost[] {
 /** Legacy reads `progress! < 99`, so an absent/non-finite progress must be null. */
 function readProgress(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-): boolean {
-  const method = requireFunction(record[name], `${path}.${name}`);
-  return Boolean(Reflect.apply(method, record, args));
 }
 
 function readTarget(

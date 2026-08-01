@@ -2,6 +2,7 @@ import type {
   EvolutionResultInput,
   EvolutionTraitView,
 } from "../../../../domain/progression/evolution/evolution-result.ts";
+import { isFiniteNumber, isNonArrayRecord } from "../../../validation.ts";
 
 type EvolutionReadReason =
   | "inaccessible-data"
@@ -19,14 +20,6 @@ type Unavailable = {
 export type EvolutionResultReadResult =
   | { readonly status: "ready"; readonly input: Readonly<EvolutionResultInput> }
   | Unavailable;
-
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isFinite(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
 
 function unavailable(reason: EvolutionReadReason, field?: string): Unavailable {
   return Object.freeze(
@@ -52,23 +45,24 @@ export function readEvolutionResultInput(
   rawTraitManager: unknown,
 ): EvolutionResultReadResult {
   try {
-    if (!isRecord(rawSettings)) return unavailable("invalid-settings");
+    if (!isNonArrayRecord(rawSettings)) return unavailable("invalid-settings");
     const userEvolutionTarget = rawSettings["userEvolutionTarget"];
     if (typeof userEvolutionTarget !== "string") {
       return unavailable("invalid-settings", "userEvolutionTarget");
     }
 
-    const global = isRecord(rawGame) ? rawGame["global"] : undefined;
-    const race = isRecord(global) ? global["race"] : undefined;
-    if (!isRecord(race)) return unavailable("invalid-game-state", "race");
+    const global = isNonArrayRecord(rawGame) ? rawGame["global"] : undefined;
+    const race = isNonArrayRecord(global) ? global["race"] : undefined;
+    if (!isNonArrayRecord(race))
+      return unavailable("invalid-game-state", "race");
     const species = race["species"];
     if (typeof species !== "string") {
       return unavailable("invalid-game-state", "race.species");
     }
 
-    if (!isRecord(rawRaces)) return unavailable("invalid-race-model");
+    if (!isNonArrayRecord(rawRaces)) return unavailable("invalid-race-model");
     const speciesRace = rawRaces[species];
-    if (!isRecord(speciesRace)) {
+    if (!isNonArrayRecord(speciesRace)) {
       return unavailable("invalid-race-model", species);
     }
     const speciesName = speciesRace["name"];
@@ -76,7 +70,7 @@ export function readEvolutionResultInput(
       return unavailable("invalid-race-model", `${species}.name`);
     }
     const speciesWeighting = callWeighting(speciesRace, false);
-    if (!isFinite(speciesWeighting)) {
+    if (!isFiniteNumber(speciesWeighting)) {
       return unavailable("invalid-race-model", `${species}.weighting`);
     }
     const rawGoals = callWeighting(speciesRace, true);
@@ -89,11 +83,11 @@ export function readEvolutionResultInput(
 
     let bestWeighting = Number.NEGATIVE_INFINITY;
     for (const [id, candidate] of Object.entries(rawRaces)) {
-      if (!isRecord(candidate)) {
+      if (!isNonArrayRecord(candidate)) {
         return unavailable("invalid-race-model", id);
       }
       const weighting = callWeighting(candidate, false);
-      if (!isFinite(weighting)) {
+      if (!isFiniteNumber(weighting)) {
         return unavailable("invalid-race-model", `${id}.weighting`);
       }
       bestWeighting = Math.max(bestWeighting, weighting);
@@ -102,7 +96,7 @@ export function readEvolutionResultInput(
     let targetHabitability: number | undefined;
     if (userEvolutionTarget !== "auto" && userEvolutionTarget !== species) {
       const targetRace = rawRaces[userEvolutionTarget];
-      const getHabitability = isRecord(targetRace)
+      const getHabitability = isNonArrayRecord(targetRace)
         ? targetRace["getHabitability"]
         : undefined;
       if (typeof getHabitability !== "function") {
@@ -112,7 +106,7 @@ export function readEvolutionResultInput(
         );
       }
       const habitability = getHabitability.call(targetRace);
-      if (!isFinite(habitability)) {
+      if (!isFiniteNumber(habitability)) {
         return unavailable(
           "invalid-race-model",
           `${userEvolutionTarget}.habitability`,
@@ -124,20 +118,26 @@ export function readEvolutionResultInput(
     const traits: EvolutionTraitView[] = [];
     const autoMutateTraits = Boolean(rawSettings["autoMutateTraits"]);
     if (autoMutateTraits) {
-      const gameRaces = isRecord(rawGame) ? rawGame["races"] : undefined;
-      const baseRace = isRecord(gameRaces) ? gameRaces[species] : undefined;
-      const baseTraits = isRecord(baseRace) ? baseRace["traits"] : undefined;
-      if (!isRecord(baseTraits)) {
+      const gameRaces = isNonArrayRecord(rawGame)
+        ? rawGame["races"]
+        : undefined;
+      const baseRace = isNonArrayRecord(gameRaces)
+        ? gameRaces[species]
+        : undefined;
+      const baseTraits = isNonArrayRecord(baseRace)
+        ? baseRace["traits"]
+        : undefined;
+      if (!isNonArrayRecord(baseTraits)) {
         return unavailable("invalid-game-state", "races.traits");
       }
-      const priorityList = isRecord(rawTraitManager)
+      const priorityList = isNonArrayRecord(rawTraitManager)
         ? rawTraitManager["priorityList"]
         : undefined;
       if (!Array.isArray(priorityList)) {
         return unavailable("invalid-trait", "priorityList");
       }
       for (const rawTrait of priorityList) {
-        if (!isRecord(rawTrait)) return unavailable("invalid-trait");
+        if (!isNonArrayRecord(rawTrait)) return unavailable("invalid-trait");
         const traitName = rawTrait["traitName"];
         const name = rawTrait["name"];
         if (typeof traitName !== "string" || typeof name !== "string") {

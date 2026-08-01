@@ -7,6 +7,8 @@ import type {
 import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -19,27 +21,6 @@ export interface AlchemyReaderDependencies {
   readonly getSettings: () => unknown;
   readonly getGame: () => unknown;
   readonly getAchievementStar: (id: string) => number;
-}
-
-function callNumber(
-  record: UnknownRecord,
-  name: string,
-  ...args: unknown[]
-): number {
-  const method = requireFunction(record[name], `AlchemyManager.${name}`);
-  return requireNumber(
-    Reflect.apply(method, record, args),
-    `AlchemyManager.${name}()`,
-  );
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-): boolean {
-  const method = requireFunction(record[name], `${path}.${name}`);
-  return Boolean(Reflect.apply(method, record, []));
 }
 
 interface SampledAlchemyResource {
@@ -106,6 +87,7 @@ function sampleFullmetalResources(
     resource.transmuteTier = callNumber(
       manager,
       "transmuteTier",
+      "AlchemyManager",
       resource.resource,
     );
     if (resource.transmuteTier <= 1) {

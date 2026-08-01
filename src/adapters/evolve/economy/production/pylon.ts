@@ -7,6 +7,7 @@ import type {
 import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -20,15 +21,6 @@ export interface PylonReaderDependencies {
   readonly getGame: () => unknown;
   readonly getJobs: () => unknown;
   readonly haveTech: (tech: string, level?: number) => boolean;
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-): boolean {
-  const method = requireFunction(record[name], `${path}.${name}`);
-  return Boolean(Reflect.apply(method, record, []));
 }
 
 function jobCount(jobs: UnknownRecord, id: string): number {

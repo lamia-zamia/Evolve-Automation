@@ -8,6 +8,8 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { FactoryReader } from "../../../../ports/factory.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -42,32 +44,6 @@ function requireId(value: unknown, path: string): string {
     throw new TypeError(`${path} must be a non-empty string`);
   }
   return value;
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-): boolean {
-  return Boolean(
-    Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, []),
-  );
-}
-
-function callNumber(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-): number {
-  return requireNumber(
-    Reflect.apply(
-      requireFunction(record[name], `${path}.${name}`),
-      record,
-      args,
-    ),
-    `${path}.${name}()`,
-  );
 }
 
 function requireCount(value: number, path: string): number {

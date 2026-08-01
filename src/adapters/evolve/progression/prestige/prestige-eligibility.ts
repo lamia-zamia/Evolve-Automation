@@ -6,6 +6,7 @@ import type {
   PrestigePermissionView,
   WitchAscensionEligibilityView,
 } from "../../../../domain/progression/prestige/prestige-eligibility.ts";
+import { isNonArrayRecord, isNonNegativeNumber } from "../../../validation.ts";
 
 type PrestigeEligibilityUnavailableReason =
   | "inaccessible-data"
@@ -64,14 +65,6 @@ export type GeckEligibilityReadResult =
 
 type ExternalQuery = (...args: unknown[]) => unknown;
 
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function finiteNonNegative(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
 function unavailable(
   reason: PrestigeEligibilityUnavailableReason,
   field?: string,
@@ -96,10 +89,10 @@ function readNumber(
   field: string,
 ): number | undefined {
   const value = record[field];
-  return finiteNonNegative(value) ? value : undefined;
+  return isNonNegativeNumber(value) ? value : undefined;
 }
 
-function callBoolean(
+function optionalBoolean(
   owner: Record<PropertyKey, unknown>,
   methodName: string,
   ...args: unknown[]
@@ -115,7 +108,7 @@ function readBuilding(
   id: string,
 ): Record<PropertyKey, unknown> | undefined {
   const building = buildings[id];
-  return isRecord(building) ? building : undefined;
+  return isNonArrayRecord(building) ? building : undefined;
 }
 
 function readTechState(
@@ -124,10 +117,10 @@ function readTechState(
   includeAffordable: boolean,
 ): { readonly unlocked: boolean; readonly affordable: boolean } | undefined {
   const rawTech = techIds[id];
-  if (!isRecord(rawTech)) return undefined;
-  const unlocked = callBoolean(rawTech, "isUnlocked");
+  if (!isNonArrayRecord(rawTech)) return undefined;
+  const unlocked = optionalBoolean(rawTech, "isUnlocked");
   const affordable = includeAffordable
-    ? callBoolean(rawTech, "isAffordable")
+    ? optionalBoolean(rawTech, "isAffordable")
     : false;
   return unlocked === undefined || affordable === undefined
     ? undefined
@@ -139,7 +132,7 @@ export function readPrestigePermissionView(
   rawGame: unknown,
 ): PrestigePermissionReadResult {
   try {
-    if (!isRecord(rawSettings)) return unavailable("invalid-settings");
+    if (!isNonArrayRecord(rawSettings)) return unavailable("invalid-settings");
     const autoPrestige = readBoolean(rawSettings, "autoPrestige");
     const waitForArpa = readBoolean(rawSettings, "prestigeWaitAT");
     const selectedType = rawSettings["prestigeType"];
@@ -150,10 +143,15 @@ export function readPrestigePermissionView(
     ) {
       return unavailable("invalid-settings");
     }
-    if (!isRecord(rawGame)) return unavailable("invalid-game-state");
+    if (!isNonArrayRecord(rawGame)) return unavailable("invalid-game-state");
     const global = rawGame["global"];
-    const gameSettings = isRecord(global) ? global["settings"] : undefined;
-    if (!isRecord(gameSettings) || !finiteNonNegative(gameSettings["at"])) {
+    const gameSettings = isNonArrayRecord(global)
+      ? global["settings"]
+      : undefined;
+    if (
+      !isNonArrayRecord(gameSettings) ||
+      !isNonNegativeNumber(gameSettings["at"])
+    ) {
       return unavailable("invalid-game-state", "settings.at");
     }
     return Object.freeze({
@@ -174,20 +172,20 @@ export function readPillarEligibilityView(
   rawResources: unknown,
 ): PillarEligibilityReadResult {
   try {
-    if (!isRecord(rawSettings)) return unavailable("invalid-settings");
+    if (!isNonArrayRecord(rawSettings)) return unavailable("invalid-settings");
     const requirePillar = readBoolean(rawSettings, "prestigeAscensionPillar");
     if (requirePillar === undefined) return unavailable("invalid-settings");
-    if (!isRecord(rawGame)) return unavailable("invalid-game-state");
+    if (!isNonArrayRecord(rawGame)) return unavailable("invalid-game-state");
     const global = rawGame["global"];
     const alevel = rawGame["alevel"];
-    if (!isRecord(global) || typeof alevel !== "function") {
+    if (!isNonArrayRecord(global) || typeof alevel !== "function") {
       return unavailable("invalid-game-state");
     }
     const race = global["race"];
     const pillars = global["pillars"];
     if (
-      !isRecord(race) ||
-      !isRecord(pillars) ||
+      !isNonArrayRecord(race) ||
+      !isNonArrayRecord(pillars) ||
       typeof race["species"] !== "string" ||
       typeof race["universe"] !== "string"
     ) {
@@ -196,14 +194,17 @@ export function readPillarEligibilityView(
     const ascensionLevel = alevel.call(rawGame);
     const rawPillarLevel = pillars[race["species"]];
     if (
-      !finiteNonNegative(ascensionLevel) ||
-      (rawPillarLevel !== undefined && !finiteNonNegative(rawPillarLevel))
+      !isNonNegativeNumber(ascensionLevel) ||
+      (rawPillarLevel !== undefined && !isNonNegativeNumber(rawPillarLevel))
     ) {
       return unavailable("invalid-game-state");
     }
-    if (!isRecord(rawResources)) return unavailable("invalid-resource");
+    if (!isNonArrayRecord(rawResources)) return unavailable("invalid-resource");
     const harmony = rawResources["Harmony"];
-    if (!isRecord(harmony) || !finiteNonNegative(harmony["currentQuantity"])) {
+    if (
+      !isNonArrayRecord(harmony) ||
+      !isNonNegativeNumber(harmony["currentQuantity"])
+    ) {
       return unavailable("invalid-resource", "Harmony");
     }
     const pillarLevel = rawPillarLevel as number | undefined;
@@ -239,12 +240,12 @@ export function readAscensionEligibilityView(
       rawResources,
     );
     if (pillar.status === "unavailable") return pillar;
-    if (!isRecord(rawBuildings)) return unavailable("invalid-building");
+    if (!isNonArrayRecord(rawBuildings)) return unavailable("invalid-building");
     const siriusAscend = readBuilding(rawBuildings, "SiriusAscend");
     if (siriusAscend === undefined) {
       return unavailable("invalid-building", "SiriusAscend");
     }
-    const siriusAscendUnlocked = callBoolean(siriusAscend, "isUnlocked");
+    const siriusAscendUnlocked = optionalBoolean(siriusAscend, "isUnlocked");
     if (siriusAscendUnlocked === undefined) {
       return unavailable("invalid-building", "SiriusAscend.isUnlocked");
     }
@@ -275,12 +276,13 @@ export function readWitchAscensionEligibilityView(
       rawResources,
     );
     if (pillar.status === "unavailable") return pillar;
-    if (!isRecord(rawGame)) return unavailable("invalid-game-state");
+    if (!isNonArrayRecord(rawGame)) return unavailable("invalid-game-state");
     const global = rawGame["global"];
-    const race = isRecord(global) ? global["race"] : undefined;
-    if (!isRecord(race)) return unavailable("invalid-game-state", "race");
+    const race = isNonArrayRecord(global) ? global["race"] : undefined;
+    if (!isNonArrayRecord(race))
+      return unavailable("invalid-game-state", "race");
 
-    if (!isRecord(rawBuildings)) return unavailable("invalid-building");
+    if (!isNonArrayRecord(rawBuildings)) return unavailable("invalid-building");
     const absorptionChamber = readBuilding(
       rawBuildings,
       "PitAbsorptionChamber",
@@ -289,13 +291,13 @@ export function readWitchAscensionEligibilityView(
     const capacitorInstance = soulCapacitor?.["instance"];
     if (
       absorptionChamber === undefined ||
-      !finiteNonNegative(absorptionChamber["count"])
+      !isNonNegativeNumber(absorptionChamber["count"])
     ) {
       return unavailable("invalid-building", "PitAbsorptionChamber.count");
     }
     if (
-      !isRecord(capacitorInstance) ||
-      !finiteNonNegative(capacitorInstance["energy"])
+      !isNonArrayRecord(capacitorInstance) ||
+      !isNonNegativeNumber(capacitorInstance["energy"])
     ) {
       return unavailable(
         "invalid-building",
@@ -338,12 +340,12 @@ export function readGeckEligibilityView(
   isAchievementUnlocked: ExternalQuery,
 ): GeckEligibilityReadResult {
   try {
-    if (!isRecord(rawSettings)) return unavailable("invalid-settings");
+    if (!isNonArrayRecord(rawSettings)) return unavailable("invalid-settings");
     const requiredGecks = readNumber(rawSettings, "prestigeGECK");
     if (requiredGecks === undefined) return unavailable("invalid-settings");
-    if (!isRecord(rawBuildings)) return unavailable("invalid-building");
+    if (!isNonArrayRecord(rawBuildings)) return unavailable("invalid-building");
     const geck = readBuilding(rawBuildings, "GasSpaceDockGECK");
-    if (geck === undefined || !finiteNonNegative(geck["count"])) {
+    if (geck === undefined || !isNonNegativeNumber(geck["count"])) {
       return unavailable("invalid-building", "GasSpaceDockGECK.count");
     }
     // Legacy used this achievement result truthily (`ach && ...`); coerce a
@@ -376,7 +378,7 @@ export function readPrestigeEligibilityView(
   isAchievementUnlocked: ExternalQuery,
 ): PrestigeEligibilityReadResult {
   try {
-    if (!isRecord(rawSettings)) return unavailable("invalid-settings");
+    if (!isNonArrayRecord(rawSettings)) return unavailable("invalid-settings");
     const settings = {
       autoPrestige: readBoolean(rawSettings, "autoPrestige"),
       waitForArpa: readBoolean(rawSettings, "prestigeWaitAT"),
@@ -396,21 +398,22 @@ export function readPrestigeEligibilityView(
       if (value === undefined) return unavailable("invalid-settings", field);
     }
 
-    if (!isRecord(rawGame)) return unavailable("invalid-game-state");
+    if (!isNonArrayRecord(rawGame)) return unavailable("invalid-game-state");
     const global = rawGame["global"];
-    if (!isRecord(global)) return unavailable("invalid-game-state", "global");
+    if (!isNonArrayRecord(global))
+      return unavailable("invalid-game-state", "global");
     const gameSettings = global["settings"];
     const race = global["race"];
     const pillars = global["pillars"];
     const interstellar = global["interstellar"];
     if (
-      !isRecord(gameSettings) ||
-      !isRecord(race) ||
-      !isRecord(pillars) ||
-      !isRecord(interstellar) ||
+      !isNonArrayRecord(gameSettings) ||
+      !isNonArrayRecord(race) ||
+      !isNonArrayRecord(pillars) ||
+      !isNonArrayRecord(interstellar) ||
       typeof race["species"] !== "string" ||
       typeof race["universe"] !== "string" ||
-      !finiteNonNegative(gameSettings["at"])
+      !isNonNegativeNumber(gameSettings["at"])
     ) {
       return unavailable("invalid-game-state");
     }
@@ -419,11 +422,11 @@ export function readPrestigeEligibilityView(
       return unavailable("invalid-game-state", "alevel");
     }
     const ascensionLevel = alevel.call(rawGame);
-    if (!finiteNonNegative(ascensionLevel)) {
+    if (!isNonNegativeNumber(ascensionLevel)) {
       return unavailable("invalid-game-state", "alevel");
     }
     const rawPillarLevel = pillars[race["species"]];
-    if (rawPillarLevel !== undefined && !finiteNonNegative(rawPillarLevel)) {
+    if (rawPillarLevel !== undefined && !isNonNegativeNumber(rawPillarLevel)) {
       return unavailable("invalid-game-state", "pillarLevel");
     }
     const pillarLevel = rawPillarLevel as number | undefined;
@@ -432,9 +435,9 @@ export function readPrestigeEligibilityView(
     let blackholeExotic = 0;
     if (rawEngine !== null && rawEngine !== undefined) {
       if (
-        !isRecord(rawEngine) ||
-        !finiteNonNegative(rawEngine["mass"]) ||
-        !finiteNonNegative(rawEngine["exotic"])
+        !isNonArrayRecord(rawEngine) ||
+        !isNonNegativeNumber(rawEngine["mass"]) ||
+        !isNonNegativeNumber(rawEngine["exotic"])
       ) {
         return unavailable("invalid-game-state", "stellar_engine");
       }
@@ -442,13 +445,16 @@ export function readPrestigeEligibilityView(
       blackholeExotic = rawEngine["exotic"];
     }
 
-    if (!isRecord(rawResources)) return unavailable("invalid-resource");
+    if (!isNonArrayRecord(rawResources)) return unavailable("invalid-resource");
     const harmony = rawResources["Harmony"];
-    if (!isRecord(harmony) || !finiteNonNegative(harmony["currentQuantity"])) {
+    if (
+      !isNonArrayRecord(harmony) ||
+      !isNonNegativeNumber(harmony["currentQuantity"])
+    ) {
       return unavailable("invalid-resource", "Harmony");
     }
 
-    if (!isRecord(rawBuildings)) return unavailable("invalid-building");
+    if (!isNonArrayRecord(rawBuildings)) return unavailable("invalid-building");
     const buildingIds = [
       "GasSpaceDock",
       "GasSpaceDockShipSegment",
@@ -474,11 +480,11 @@ export function readPrestigeEligibilityView(
       "SpireTower",
     ]) {
       const building = buildingRecords[id];
-      if (building === undefined || !finiteNonNegative(building["count"])) {
+      if (building === undefined || !isNonNegativeNumber(building["count"])) {
         return unavailable("invalid-building", `${id}.count`);
       }
     }
-    const siriusAscendUnlocked = callBoolean(
+    const siriusAscendUnlocked = optionalBoolean(
       buildingRecords["SiriusAscend"]!,
       "isUnlocked",
     );
@@ -497,12 +503,12 @@ export function readPrestigeEligibilityView(
     // into narrow per-type readers.
     const capacitorInstance = buildingRecords["PitSoulCapacitor"]!["instance"];
     const soulCapacitorEnergy =
-      isRecord(capacitorInstance) &&
-      finiteNonNegative(capacitorInstance["energy"])
+      isNonArrayRecord(capacitorInstance) &&
+      isNonNegativeNumber(capacitorInstance["energy"])
         ? capacitorInstance["energy"]
         : 0;
 
-    if (!isRecord(rawTechIds)) return unavailable("invalid-tech");
+    if (!isNonArrayRecord(rawTechIds)) return unavailable("invalid-tech");
     const techIds = [
       "tech-dial_it_to_11",
       "tech-exotic_infusion",
@@ -527,10 +533,14 @@ export function readPrestigeEligibilityView(
       techStates[id] = state;
     }
 
-    if (!isRecord(rawMechManager)) return unavailable("invalid-mech-state");
+    if (!isNonArrayRecord(rawMechManager))
+      return unavailable("invalid-mech-state");
     const mechActive = rawMechManager["isActive"];
     const mechPotential = rawMechManager["mechsPotential"];
-    if (typeof mechActive !== "boolean" || !finiteNonNegative(mechPotential)) {
+    if (
+      typeof mechActive !== "boolean" ||
+      !isNonNegativeNumber(mechPotential)
+    ) {
       return unavailable("invalid-mech-state");
     }
 

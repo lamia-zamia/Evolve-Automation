@@ -3,6 +3,7 @@ import type {
   RetirementPreparationInput,
   RetirementThresholds,
 } from "../../../../domain/progression/prestige/retirement-prep.ts";
+import { isNonArrayRecord, isNonNegativeNumber } from "../../../validation.ts";
 
 type RetirementReadReason =
   | "inaccessible-data"
@@ -32,14 +33,6 @@ export type RetirementPreparationReadResult =
     }
   | Unavailable;
 
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function finiteNonNegative(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
 function unavailable(
   reason: RetirementReadReason,
   field?: string,
@@ -57,17 +50,18 @@ export function readRetirementAssistInput(
   isolationResearched: boolean,
 ): RetirementAssistReadResult {
   try {
-    if (!isRecord(rawSettings)) return unavailable("invalid-settings");
+    if (!isNonArrayRecord(rawSettings)) return unavailable("invalid-settings");
     const assist = rawSettings["retirementChallengeAssist"];
     if (assist !== undefined && typeof assist !== "boolean") {
       return unavailable("invalid-settings", "retirementChallengeAssist");
     }
 
-    if (!isRecord(rawGame)) return unavailable("invalid-game-state");
+    if (!isNonArrayRecord(rawGame)) return unavailable("invalid-game-state");
     const global = rawGame["global"];
-    if (!isRecord(global)) return unavailable("invalid-game-state");
+    if (!isNonArrayRecord(global)) return unavailable("invalid-game-state");
     const race = global["race"];
-    if (!isRecord(race)) return unavailable("invalid-game-state", "race");
+    if (!isNonArrayRecord(race))
+      return unavailable("invalid-game-state", "race");
 
     return Object.freeze({
       status: "ready",
@@ -88,10 +82,10 @@ function readBuilding(
   id: string,
 ): { name: string; count: number } | undefined {
   const building = rawBuildings[id];
-  if (!isRecord(building)) return undefined;
+  if (!isNonArrayRecord(building)) return undefined;
   const name = building["name"];
   const count = building["count"];
-  if (typeof name !== "string" || !finiteNonNegative(count)) return undefined;
+  if (typeof name !== "string" || !isNonNegativeNumber(count)) return undefined;
   return { name, count };
 }
 
@@ -107,12 +101,12 @@ export function readRetirementPreparationInput(
       "scienceLabs",
       "graphene",
     ] as const) {
-      if (!finiteNonNegative(rawThresholds[key])) {
+      if (!isNonNegativeNumber(rawThresholds[key])) {
         return unavailable("invalid-thresholds", key);
       }
     }
 
-    if (!isRecord(rawBuildings)) return unavailable("invalid-building");
+    if (!isNonArrayRecord(rawBuildings)) return unavailable("invalid-building");
     const fusionGenerators = readBuilding(rawBuildings, "TauFusionGenerator");
     if (!fusionGenerators) {
       return unavailable("invalid-building", "TauFusionGenerator");
@@ -122,9 +116,9 @@ export function readRetirementPreparationInput(
     const scienceLabs = readBuilding(rawBuildings, "TauDiseaseLab");
     if (!scienceLabs) return unavailable("invalid-building", "TauDiseaseLab");
 
-    if (!isRecord(rawResources)) return unavailable("invalid-resource");
+    if (!isNonArrayRecord(rawResources)) return unavailable("invalid-resource");
     const rawGraphene = rawResources["Graphene"];
-    if (!isRecord(rawGraphene)) {
+    if (!isNonArrayRecord(rawGraphene)) {
       return unavailable("invalid-resource", "Graphene");
     }
     const grapheneName = rawGraphene["name"];
@@ -133,10 +127,10 @@ export function readRetirementPreparationInput(
     if (typeof grapheneName !== "string") {
       return unavailable("invalid-resource", "Graphene.name");
     }
-    if (!finiteNonNegative(currentQuantity)) {
+    if (!isNonNegativeNumber(currentQuantity)) {
       return unavailable("invalid-resource", "Graphene.currentQuantity");
     }
-    if (!finiteNonNegative(maxQuantity)) {
+    if (!isNonNegativeNumber(maxQuantity)) {
       return unavailable("invalid-resource", "Graphene.maxQuantity");
     }
 

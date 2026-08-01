@@ -4,6 +4,11 @@ import type {
   InflationSaveInput,
 } from "../../../../domain/economy/resources/inflation-assist.ts";
 import { isInflationAssistActive } from "../../../../domain/economy/resources/inflation-assist.ts";
+import {
+  isFiniteNumber,
+  isNonArrayRecord,
+  isNonNegativeNumber,
+} from "../../../validation.ts";
 
 type InflationReadReason =
   | "inaccessible-data"
@@ -33,18 +38,6 @@ export type InflationSaveReadResult =
   | { readonly status: "ready"; readonly input: Readonly<InflationSaveInput> }
   | Unavailable;
 
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function finite(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function finiteNonNegative(value: unknown): value is number {
-  return finite(value) && value >= 0;
-}
-
 function unavailable(reason: InflationReadReason, field?: string): Unavailable {
   return Object.freeze(
     field === undefined
@@ -59,17 +52,18 @@ export function readInflationAssistInput(
   rawWheelbarrowStar: unknown,
 ): InflationAssistReadResult {
   try {
-    if (!isRecord(rawSettings)) return unavailable("invalid-settings");
+    if (!isNonArrayRecord(rawSettings)) return unavailable("invalid-settings");
     const assist = rawSettings["inflationChallengeAssist"];
     if (assist !== undefined && typeof assist !== "boolean") {
       return unavailable("invalid-settings", "inflationChallengeAssist");
     }
 
-    if (!isRecord(rawGame)) return unavailable("invalid-game-state");
+    if (!isNonArrayRecord(rawGame)) return unavailable("invalid-game-state");
     const global = rawGame["global"];
-    if (!isRecord(global)) return unavailable("invalid-game-state");
+    if (!isNonArrayRecord(global)) return unavailable("invalid-game-state");
     const race = global["race"];
-    if (!isRecord(race)) return unavailable("invalid-game-state", "race");
+    if (!isNonArrayRecord(race))
+      return unavailable("invalid-game-state", "race");
     const inflationRun =
       Object.hasOwn(race, "inflation") && race["inflation"] !== false;
 
@@ -78,11 +72,11 @@ export function readInflationAssistInput(
       return unavailable("invalid-game-state", "alevel");
     }
     const achievementLevel = alevel.call(rawGame);
-    if (!finiteNonNegative(achievementLevel)) {
+    if (!isNonNegativeNumber(achievementLevel)) {
       return unavailable("invalid-game-state", "alevel");
     }
 
-    if (!finiteNonNegative(rawWheelbarrowStar)) {
+    if (!isNonNegativeNumber(rawWheelbarrowStar)) {
       return unavailable("invalid-achievement", "wheelbarrow");
     }
 
@@ -105,24 +99,25 @@ export function readInflationMoneyInput(
   rawTargetMoney: unknown,
 ): InflationMoneyReadResult {
   try {
-    if (!finiteNonNegative(rawTargetMoney)) {
+    if (!isNonNegativeNumber(rawTargetMoney)) {
       return unavailable("invalid-settings", "inflationChallengeMoney");
     }
-    if (!isRecord(rawResources)) return unavailable("invalid-resource");
+    if (!isNonArrayRecord(rawResources)) return unavailable("invalid-resource");
     const money = rawResources["Money"];
-    if (!isRecord(money)) return unavailable("invalid-resource", "Money");
+    if (!isNonArrayRecord(money))
+      return unavailable("invalid-resource", "Money");
 
     const currentMoney = money["currentQuantity"];
     const maxMoney = money["maxQuantity"];
     const moneyRate = money["rateOfChange"];
-    if (!finiteNonNegative(currentMoney)) {
+    if (!isNonNegativeNumber(currentMoney)) {
       return unavailable("invalid-resource", "Money.currentQuantity");
     }
-    if (!finiteNonNegative(maxMoney)) {
+    if (!isNonNegativeNumber(maxMoney)) {
       return unavailable("invalid-resource", "Money.maxQuantity");
     }
     // A deficit is valid, so the rate may be negative but must be finite.
-    if (!finite(moneyRate)) {
+    if (!isFiniteNumber(moneyRate)) {
       return unavailable("invalid-resource", "Money.rateOfChange");
     }
 
@@ -160,7 +155,7 @@ export function readInflationSaveInput(
   const saveMinutes = (rawSettings as Record<PropertyKey, unknown>)[
     "inflationChallengeSaveMinutes"
   ];
-  if (!finite(saveMinutes)) {
+  if (!isFiniteNumber(saveMinutes)) {
     return unavailable("invalid-settings", "inflationChallengeSaveMinutes");
   }
 

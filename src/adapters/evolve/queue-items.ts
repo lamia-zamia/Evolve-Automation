@@ -3,6 +3,7 @@ import {
   type CostAffordabilityInput,
   type CostRequirement,
 } from "../../domain/cost-affordability.ts";
+import { isFiniteNumber, isNonArrayRecord } from "../validation.ts";
 
 type QueueItemUnavailableReason =
   | "inaccessible-data"
@@ -53,14 +54,6 @@ interface QueueTargetAdapterDependencies {
   readonly arpaIds: unknown;
 }
 
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
 function unavailableCost(
   reason: QueueItemUnavailableReason,
   resourceId?: string,
@@ -86,8 +79,9 @@ export function readCostAffordabilityInput(
   capacity: "current" | "maximum",
 ): CostAffordabilityReadResult {
   try {
-    if (!isRecord(rawCost)) return unavailableCost("invalid-cost");
-    if (!isRecord(rawResources)) return unavailableCost("invalid-resource");
+    if (!isNonArrayRecord(rawCost)) return unavailableCost("invalid-cost");
+    if (!isNonArrayRecord(rawResources))
+      return unavailableCost("invalid-resource");
 
     const requirements: CostRequirement[] = [];
     for (const resourceId in rawCost) {
@@ -97,7 +91,7 @@ export function readCostAffordabilityInput(
       }
 
       const rawResource = rawResources[resourceId];
-      if (!isRecord(rawResource)) {
+      if (!isNonArrayRecord(rawResource)) {
         return unavailableCost("invalid-resource", resourceId);
       }
       const availableQuantity =
@@ -135,7 +129,8 @@ function validateCostMap(
       readonly cost: Readonly<Record<string, number>>;
     }
   | Extract<QueueTargetReadResult, { readonly status: "unavailable" }> {
-  if (!isRecord(rawCost)) return unavailableTarget("invalid-cost", { itemId });
+  if (!isNonArrayRecord(rawCost))
+    return unavailableTarget("invalid-cost", { itemId });
 
   const cost: Record<string, number> = {};
   for (const resourceId in rawCost) {
@@ -183,7 +178,7 @@ function readCatalogTarget(
     return Object.freeze({ status: "missing", itemId });
   }
   if (
-    !isRecord(rawTarget) ||
+    !isNonArrayRecord(rawTarget) ||
     typeof rawTarget["id"] !== "string" ||
     typeof rawTarget["title"] !== "string" ||
     typeof rawTarget["isAffordable"] !== "function"
@@ -213,7 +208,7 @@ export function readQueueTarget(
   dependencies: QueueTargetAdapterDependencies,
 ): QueueTargetReadResult {
   try {
-    if (!isRecord(rawItem) || typeof rawItem["id"] !== "string") {
+    if (!isNonArrayRecord(rawItem) || typeof rawItem["id"] !== "string") {
       return unavailableTarget("invalid-item");
     }
     const itemId = rawItem["id"];
@@ -222,7 +217,7 @@ export function readQueueTarget(
     if (action === "tp-ship") {
       if (
         typeof rawItem["label"] !== "string" ||
-        !isRecord(dependencies.poly)
+        !isNonArrayRecord(dependencies.poly)
       ) {
         return unavailableTarget("invalid-item", { itemId });
       }
@@ -241,7 +236,7 @@ export function readQueueTarget(
     if (action === "hell-mech") {
       if (
         typeof rawItem["label"] !== "string" ||
-        !isRecord(dependencies.mechManager)
+        !isNonArrayRecord(dependencies.mechManager)
       ) {
         return unavailableTarget("invalid-item", { itemId });
       }
@@ -265,8 +260,8 @@ export function readQueueTarget(
     }
 
     if (
-      !isRecord(dependencies.buildingIds) ||
-      !isRecord(dependencies.arpaIds)
+      !isNonArrayRecord(dependencies.buildingIds) ||
+      !isNonArrayRecord(dependencies.arpaIds)
     ) {
       return unavailableTarget("invalid-target", { itemId });
     }
@@ -275,7 +270,7 @@ export function readQueueTarget(
     return readCatalogTarget(itemId, rawTarget);
   } catch {
     const itemId =
-      isRecord(rawItem) && typeof rawItem["id"] === "string"
+      isNonArrayRecord(rawItem) && typeof rawItem["id"] === "string"
         ? rawItem["id"]
         : undefined;
     return unavailableTarget(

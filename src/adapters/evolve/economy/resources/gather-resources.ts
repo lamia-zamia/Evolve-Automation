@@ -10,6 +10,7 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { GatherResourcesReader } from "../../../../ports/gather-resources.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
   requireBoolean,
   requireFunction,
   requireNumber,
@@ -48,12 +49,6 @@ export interface GatherResourcesAdapterDependencies {
   readonly getResources: () => unknown;
   readonly getBuildings: () => unknown;
   readonly getResourcesPerClick: () => unknown;
-}
-
-function callBoolean(record: UnknownRecord, name: string, path: string) {
-  return Boolean(
-    Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, []),
-  );
 }
 
 function readTechnology(

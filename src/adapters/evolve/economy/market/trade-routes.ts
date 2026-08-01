@@ -5,6 +5,8 @@ import type {
   TradeRoutesSettings,
 } from "../../../../domain/economy/market/trade-routes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -18,15 +20,6 @@ export interface TradeRoutesReaderDependencies {
   readonly getMarketManager: () => unknown;
   readonly getGovernor: () => unknown;
   readonly shouldSaveInflationMoney: () => boolean;
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-): boolean {
-  const method = requireFunction(record[name], `${path}.${name}`);
-  return Boolean(Reflect.apply(method, record, []));
 }
 
 function readResourceView(value: unknown, index: number): TradeResourceView {
@@ -108,14 +101,6 @@ function readMaxTradeRoutes(manager: UnknownRecord): [number, number] {
   ];
 }
 
-function callNumber(manager: UnknownRecord, name: string): number {
-  const method = requireFunction(manager[name], `MarketManager.${name}`);
-  return requireNumber(
-    Reflect.apply(method, manager, []),
-    `MarketManager.${name}()`,
-  );
-}
-
 export function readTradeRoutesInput(
   dependencies: TradeRoutesReaderDependencies,
 ): TradeRoutesInput {
@@ -140,8 +125,8 @@ export function readTradeRoutesInput(
     settings: readSettings(dependencies.getSettings()),
     priorityList: Object.freeze(priorityListRaw.map(readResourceView)),
     money: readMoney(resources["Money"]),
-    importRouteCap: callNumber(manager, "getImportRouteCap"),
-    exportRouteCap: callNumber(manager, "getExportRouteCap"),
+    importRouteCap: callNumber(manager, "getImportRouteCap", "MarketManager"),
+    exportRouteCap: callNumber(manager, "getExportRouteCap", "MarketManager"),
     maxTradeRoutes,
     unmanagedTradeRoutes,
     isBanana: Boolean(race["banana"]),

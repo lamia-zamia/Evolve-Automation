@@ -6,6 +6,8 @@ import type { GrapheneFuelAdjustment } from "../../../../domain/economy/producti
 import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -16,28 +18,6 @@ export interface GrapheneReaderDependencies {
   readonly getGrapheneManager: () => unknown;
   readonly getResources: () => unknown;
   readonly consumptionBalanceMin: number;
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-): boolean {
-  const method = requireFunction(record[name], `${path}.${name}`);
-  return Boolean(Reflect.apply(method, record, []));
-}
-
-function callNumber(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-): number {
-  const method = requireFunction(record[name], `${path}.${name}`);
-  return requireNumber(
-    Reflect.apply(method, record, args),
-    `${path}.${name}()`,
-  );
 }
 
 interface RawFuel {

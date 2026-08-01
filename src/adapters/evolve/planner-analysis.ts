@@ -3,6 +3,7 @@ import type {
   PlannerRequirement,
   PlannerRun,
 } from "../../domain/planner-analysis.ts";
+import { isFiniteNumber, isNonArrayRecord } from "../validation.ts";
 
 type PlannerAnalysisUnavailableReason =
   | "inaccessible-data"
@@ -28,14 +29,6 @@ export type PlannerRunReadResult =
       readonly reason: "inaccessible-data" | "invalid-game-state";
     };
 
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
@@ -58,7 +51,7 @@ export function readPlannerLimitInput(
 ): PlannerLimitInputReadResult {
   try {
     if (
-      !isRecord(rawTarget) ||
+      !isNonArrayRecord(rawTarget) ||
       typeof rawTarget["isAffordable"] !== "function"
     ) {
       return unavailableLimit("invalid-target");
@@ -76,8 +69,9 @@ export function readPlannerLimitInput(
     }
 
     const rawCosts = rawTarget["cost"];
-    if (!isRecord(rawCosts)) return unavailableLimit("invalid-target");
-    if (!isRecord(rawResources)) return unavailableLimit("invalid-resource");
+    if (!isNonArrayRecord(rawCosts)) return unavailableLimit("invalid-target");
+    if (!isNonArrayRecord(rawResources))
+      return unavailableLimit("invalid-resource");
 
     const requirements: PlannerRequirement[] = [];
     for (const resourceId of Object.keys(rawCosts)) {
@@ -88,7 +82,7 @@ export function readPlannerLimitInput(
 
       const rawResource = rawResources[resourceId];
       if (
-        !isRecord(rawResource) ||
+        !isNonArrayRecord(rawResource) ||
         typeof rawResource["title"] !== "string" ||
         typeof rawResource["isUnlocked"] !== "function"
       ) {
@@ -137,15 +131,15 @@ export function readPlannerLimitInput(
 
 export function readPlannerRun(rawGame: unknown): PlannerRunReadResult {
   try {
-    if (!isRecord(rawGame)) {
+    if (!isNonArrayRecord(rawGame)) {
       return Object.freeze({
         status: "unavailable",
         reason: "invalid-game-state",
       });
     }
     const global = rawGame["global"];
-    const stats = isRecord(global) ? global["stats"] : undefined;
-    if (!isRecord(stats)) {
+    const stats = isNonArrayRecord(global) ? global["stats"] : undefined;
+    if (!isNonArrayRecord(stats)) {
       return Object.freeze({
         status: "unavailable",
         reason: "invalid-game-state",

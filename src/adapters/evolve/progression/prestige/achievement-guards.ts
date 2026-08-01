@@ -7,6 +7,7 @@ import {
   isAchievementGuardActive,
   isAchievementGuardName,
 } from "../../../../domain/progression/prestige/achievement-guards.ts";
+import { isNonArrayRecord, isNonNegativeNumber } from "../../../validation.ts";
 
 type AchievementReadReason =
   | "inaccessible-data"
@@ -47,14 +48,6 @@ export type AchievementGuardReadResult =
       readonly field?: string;
       readonly fallbackActive: boolean;
     };
-
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function finiteNonNegative(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
 
 function starUnavailable(
   reason: AchievementReadReason,
@@ -97,20 +90,20 @@ function readGameParts(rawGame: unknown):
       readonly stats: Record<PropertyKey, unknown>;
     }
   | undefined {
-  if (!isRecord(rawGame)) return undefined;
+  if (!isNonArrayRecord(rawGame)) return undefined;
   const global = rawGame["global"];
-  if (!isRecord(global)) return undefined;
+  if (!isNonArrayRecord(global)) return undefined;
   const stats = global["stats"];
-  if (!isRecord(stats)) return undefined;
+  if (!isNonArrayRecord(stats)) return undefined;
   return { game: rawGame, global, stats };
 }
 
 function readCurrentLevel(rawGame: unknown): number | undefined {
-  if (!isRecord(rawGame)) return undefined;
+  if (!isNonArrayRecord(rawGame)) return undefined;
   const alevel = rawGame["alevel"];
   if (typeof alevel !== "function") return undefined;
   const value = alevel.call(rawGame);
-  return finiteNonNegative(value) ? value : undefined;
+  return isNonNegativeNumber(value) ? value : undefined;
 }
 
 function readFeatStar(rawGame: unknown, id: string): AchievementStarReadResult {
@@ -120,13 +113,13 @@ function readFeatStar(rawGame: unknown, id: string): AchievementStarReadResult {
     const rawFeats = parts.stats["feat"];
     if (rawFeats === undefined)
       return Object.freeze({ status: "ready", star: 0 });
-    if (!isRecord(rawFeats))
+    if (!isNonArrayRecord(rawFeats))
       return starUnavailable("invalid-achievement", "feat");
     const value = rawFeats[id];
     if (value === undefined || value === null) {
       return Object.freeze({ status: "ready", star: 0 });
     }
-    return finiteNonNegative(value)
+    return isNonNegativeNumber(value)
       ? Object.freeze({ status: "ready", star: value })
       : starUnavailable("invalid-achievement", `feat.${id}`);
   } catch {
@@ -137,7 +130,8 @@ function readFeatStar(rawGame: unknown, id: string): AchievementStarReadResult {
 export function readAchievementStarLevelContext(
   rawContext: unknown,
 ): AchievementStarLevelReadResult {
-  if (!isRecord(rawContext)) return levelUnavailable("invalid-settings");
+  if (!isNonArrayRecord(rawContext))
+    return levelUnavailable("invalid-settings");
   const mapping = {
     challengePlasmid: "challenge_plasmid",
     challengeTrade: "challenge_trade",
@@ -172,7 +166,7 @@ export function readAchievementStar(
   try {
     const parts = readGameParts(rawGame);
     if (!parts) return starUnavailable("invalid-game-state");
-    if (!isRecord(rawPoly)) return starUnavailable("invalid-universe");
+    if (!isNonArrayRecord(rawPoly)) return starUnavailable("invalid-universe");
     const universeAffix = rawPoly["universeAffix"];
     if (typeof universeAffix !== "function") {
       return starUnavailable("invalid-universe");
@@ -181,21 +175,21 @@ export function readAchievementStar(
     if (typeof affix !== "string") return starUnavailable("invalid-universe");
 
     const rawAchievements = parts.stats["achieve"];
-    if (!isRecord(rawAchievements)) {
+    if (!isNonArrayRecord(rawAchievements)) {
       return starUnavailable("invalid-achievement", "achieve");
     }
     const rawAchievement = rawAchievements[id];
     if (rawAchievement === undefined || rawAchievement === null) {
       return Object.freeze({ status: "ready", star: 0 });
     }
-    if (!isRecord(rawAchievement)) {
+    if (!isNonArrayRecord(rawAchievement)) {
       return starUnavailable("invalid-achievement", `achieve.${id}`);
     }
     const value = rawAchievement[affix];
     if (value === undefined || value === null) {
       return Object.freeze({ status: "ready", star: 0 });
     }
-    return finiteNonNegative(value)
+    return isNonNegativeNumber(value)
       ? Object.freeze({ status: "ready", star: value })
       : starUnavailable("invalid-achievement", `achieve.${id}.${affix}`);
   } catch {
@@ -207,11 +201,11 @@ function readBuildingCount(
   rawBuildings: unknown,
   id: string,
 ): number | undefined {
-  if (!isRecord(rawBuildings)) return undefined;
+  if (!isNonArrayRecord(rawBuildings)) return undefined;
   const building = rawBuildings[id];
-  if (!isRecord(building)) return undefined;
+  if (!isNonArrayRecord(building)) return undefined;
   const count = building["count"];
-  return finiteNonNegative(count) ? count : undefined;
+  return isNonNegativeNumber(count) ? count : undefined;
 }
 
 function guardStarId(guard: AchievementGuardName): string {
@@ -234,7 +228,7 @@ function guardStarId(guard: AchievementGuardName): string {
 }
 
 function configuredFallback(rawSettings: unknown, guard: string): boolean {
-  if (!isRecord(rawSettings)) return true;
+  if (!isNonArrayRecord(rawSettings)) return true;
   return (
     rawSettings["achievementGuards"] !== false && rawSettings[guard] !== false
   );
@@ -253,7 +247,7 @@ export function readAchievementGuardInput(
   const fallback = configuredFallback(rawSettings, requestedGuard);
 
   try {
-    if (!isRecord(rawSettings)) {
+    if (!isNonArrayRecord(rawSettings)) {
       return guardUnavailable("invalid-settings", fallback);
     }
     const master = rawSettings["achievementGuards"];
@@ -326,7 +320,7 @@ export function readAchievementGuardInput(
     switch (requestedGuard) {
       case "guardPacifist": {
         const attacks = parts.stats["attacks"];
-        if (!finiteNonNegative(attacks)) {
+        if (!isNonNegativeNumber(attacks)) {
           return guardUnavailable(
             "invalid-game-state",
             fallback,
@@ -366,8 +360,10 @@ export function readAchievementGuardInput(
       case "guardAnarchist": {
         const prestigeType = rawSettings["prestigeType"];
         const civic = parts.global["civic"];
-        const govern = isRecord(civic) ? civic["govern"] : undefined;
-        const government = isRecord(govern) ? govern["type"] : undefined;
+        const govern = isNonArrayRecord(civic) ? civic["govern"] : undefined;
+        const government = isNonArrayRecord(govern)
+          ? govern["type"]
+          : undefined;
         if (typeof prestigeType !== "string") {
           return guardUnavailable("invalid-settings", fallback, "prestigeType");
         }
@@ -420,8 +416,8 @@ export function readAchievementGuardInput(
       }
       case "guardSecondEvolution": {
         const race = parts.global["race"];
-        const species = isRecord(race) ? race["species"] : undefined;
-        const gods = isRecord(race) ? race["gods"] : undefined;
+        const species = isNonArrayRecord(race) ? race["species"] : undefined;
+        const gods = isNonArrayRecord(race) ? race["gods"] : undefined;
         if (typeof species !== "string" || typeof gods !== "string") {
           return guardUnavailable("invalid-game-state", fallback, "race");
         }

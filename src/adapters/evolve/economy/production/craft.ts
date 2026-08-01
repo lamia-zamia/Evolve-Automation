@@ -8,6 +8,7 @@ import type { CraftReader } from "../../../../ports/craft.ts";
 import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -24,12 +25,6 @@ export interface CraftReaderDependencies {
 interface CraftSession {
   readonly resources: UnknownRecord;
   readonly foundryList: unknown[];
-}
-
-function callBoolean(record: UnknownRecord, name: string, path: string) {
-  return Boolean(
-    Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, []),
-  );
 }
 
 function readFoundryList(value: unknown): unknown[] {

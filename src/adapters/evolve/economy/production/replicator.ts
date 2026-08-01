@@ -13,6 +13,7 @@ import type {
 } from "../../../../ports/replicator.ts";
 import { stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -21,12 +22,6 @@ import {
 
 interface ReplicatorSession {
   readonly resourcesById: ReadonlyMap<string, UnknownRecord>;
-}
-
-function callBoolean(record: UnknownRecord, name: string, path: string) {
-  return Boolean(
-    Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, []),
-  );
 }
 
 function readProductionId(production: UnknownRecord, path: string): string {

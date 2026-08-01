@@ -9,6 +9,8 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { MarketReader } from "../../../../ports/market.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -27,37 +29,6 @@ interface MarketCandidate {
   readonly resourceId: string;
   readonly resource: UnknownRecord;
   readonly eligible: boolean;
-}
-
-function callBoolean(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-) {
-  return Boolean(
-    Reflect.apply(
-      requireFunction(record[name], `${path}.${name}`),
-      record,
-      args,
-    ),
-  );
-}
-
-function callNumber(
-  record: UnknownRecord,
-  name: string,
-  path: string,
-  ...args: unknown[]
-) {
-  return requireNumber(
-    Reflect.apply(
-      requireFunction(record[name], `${path}.${name}`),
-      record,
-      args,
-    ),
-    `${path}.${name}()`,
-  );
 }
 
 function readResourceId(resource: UnknownRecord, path: string): string {

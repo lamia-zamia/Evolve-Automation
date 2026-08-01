@@ -8,6 +8,7 @@ import {
   BANANA_OBJECTIVE_IDS,
   isBananaObjectiveId,
 } from "../../../domain/civic/banana-republic.ts";
+import { isNonArrayRecord, isNonNegativeNumber } from "../../validation.ts";
 
 type BananaRepublicUnavailableReason =
   | "inaccessible-data"
@@ -48,14 +49,6 @@ export type BananaGuardReadResult =
   | { readonly status: "inactive" }
   | (Unavailable & { readonly fallbackActive: boolean });
 
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function finiteNonNegative(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
 function unavailable(
   reason: BananaRepublicUnavailableReason,
   field?: string,
@@ -78,15 +71,15 @@ function guardUnavailable(
 function readGlobal(
   rawGame: unknown,
 ): Record<PropertyKey, unknown> | undefined {
-  if (!isRecord(rawGame)) return undefined;
+  if (!isNonArrayRecord(rawGame)) return undefined;
   const global = rawGame["global"];
-  return isRecord(global) ? global : undefined;
+  return isNonArrayRecord(global) ? global : undefined;
 }
 
 function readStats(rawGame: unknown): Record<PropertyKey, unknown> | undefined {
   const global = readGlobal(rawGame);
   const stats = global?.["stats"];
-  return isRecord(stats) ? stats : undefined;
+  return isNonArrayRecord(stats) ? stats : undefined;
 }
 
 function copyUnavailable(result: Unavailable): Unavailable {
@@ -104,7 +97,7 @@ export function readBananaRepublicObjective(
   try {
     const stats = readStats(rawGame);
     if (!stats) return unavailable("invalid-game-state");
-    if (!isRecord(rawPoly)) return unavailable("invalid-universe");
+    if (!isNonArrayRecord(rawPoly)) return unavailable("invalid-universe");
     const universeAffix = rawPoly["universeAffix"];
     if (typeof universeAffix !== "function") {
       return unavailable("invalid-universe");
@@ -113,11 +106,11 @@ export function readBananaRepublicObjective(
     if (typeof universe !== "string") return unavailable("invalid-universe");
 
     const rawBanana = stats["banana"];
-    if (!isRecord(rawBanana)) {
+    if (!isNonArrayRecord(rawBanana)) {
       return unavailable("invalid-achievement", "stats.banana");
     }
     const rawObjective = rawBanana[requestedObjective];
-    if (!isRecord(rawObjective)) {
+    if (!isNonArrayRecord(rawObjective)) {
       return unavailable(
         "invalid-achievement",
         `stats.banana.${requestedObjective}`,
@@ -146,12 +139,12 @@ export function readBananaRepublicSmoothieInput(
     let featStar = 0;
     const rawFeats = stats["feat"];
     if (rawFeats !== undefined) {
-      if (!isRecord(rawFeats)) {
+      if (!isNonArrayRecord(rawFeats)) {
         return unavailable("invalid-achievement", "stats.feat");
       }
       const rawStar = rawFeats["banana"];
       if (rawStar !== undefined && rawStar !== null) {
-        if (!finiteNonNegative(rawStar)) {
+        if (!isNonNegativeNumber(rawStar)) {
           return unavailable("invalid-achievement", "stats.feat.banana");
         }
         featStar = rawStar;
@@ -159,10 +152,11 @@ export function readBananaRepublicSmoothieInput(
     }
 
     const rawResources = global["resource"];
-    if (!isRecord(rawResources)) return unavailable("invalid-game-state");
+    if (!isNonArrayRecord(rawResources))
+      return unavailable("invalid-game-state");
     const tradeRoutes: number[] = [];
     for (const [id, rawResource] of Object.entries(rawResources)) {
-      if (!isRecord(rawResource)) {
+      if (!isNonArrayRecord(rawResource)) {
         return unavailable("invalid-game-state", `resource.${id}`);
       }
       if (!Object.hasOwn(rawResource, "trade")) continue;
@@ -212,11 +206,11 @@ export function readBananaRepublicGuardInput(
   rawPoly: unknown,
 ): BananaGuardReadResult {
   const fallbackConfigured =
-    !isRecord(rawSettings) ||
+    !isNonArrayRecord(rawSettings) ||
     (rawSettings["achievementGuards"] !== false &&
       rawSettings["guardBananaRepublic"] !== false);
   try {
-    if (!isRecord(rawSettings)) {
+    if (!isNonArrayRecord(rawSettings)) {
       return guardUnavailable("invalid-settings", fallbackConfigured);
     }
     const master = rawSettings["achievementGuards"];
@@ -230,7 +224,7 @@ export function readBananaRepublicGuardInput(
 
     const global = readGlobal(rawGame);
     const race = global?.["race"];
-    const bananaRace = isRecord(race) ? race["banana"] : undefined;
+    const bananaRace = isNonArrayRecord(race) ? race["banana"] : undefined;
     if (bananaRace === false || bananaRace === undefined) {
       return Object.freeze({ status: "inactive" });
     }

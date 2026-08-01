@@ -2,6 +2,7 @@ import type {
   TargetTimingInput,
   TargetTimingRequirement,
 } from "../../domain/target-timing.ts";
+import { isFiniteNumber, isRecord } from "../validation.ts";
 
 type TargetTimingUnavailableReason =
   | "inaccessible-data"
@@ -19,14 +20,6 @@ export type TargetTimingReadResult =
       readonly reason: TargetTimingUnavailableReason;
       readonly resourceId?: string;
     };
-
-function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
 
 function unavailable(
   reason: TargetTimingUnavailableReason,
