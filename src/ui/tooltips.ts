@@ -1,25 +1,125 @@
-type AnyRecord = Record<string, any>;
+import type { CostConflict } from "../domain/cost-conflicts.ts";
+
+/**
+ * The DOM surface the tooltips use, as narrow structural types.
+ *
+ * TRANSITIONAL: the implementation is the game's jQuery and MutationObserver today. Keeping the
+ * contract this small is what lets the DOM implementation be replaced without touching the notes.
+ */
+interface TooltipNode {
+  append(content: string): TooltipNode;
+  find(selector: string): TooltipNode;
+}
+
+/** The popper element the game inserts, which names the target it describes. */
+interface TooltipElement {
+  readonly id?: string;
+  readonly dataset: { readonly id: string };
+  querySelector(selector: string): unknown;
+}
+
+interface TooltipMutation {
+  readonly addedNodes: {
+    forEach(callback: (node: TooltipElement) => void): void;
+  };
+}
+
+type TooltipObserverConstructor = new (callback: () => void) => {
+  observe(target: TooltipElement, options: { childList: boolean }): void;
+  disconnect(): void;
+};
+
+/** What a note reads off whatever the tooltip describes: a building, a project, or a technology. */
+interface TooltipTarget {
+  readonly _tab?: string;
+  readonly extraDescription?: string;
+  isResearched?: () => boolean;
+}
+
+/** A building also carries the counters its derived notes are computed from. */
+interface TooltipBuilding extends TooltipTarget {
+  readonly title: string;
+  readonly count: number;
+  readonly stateOnCount: number;
+  readonly on?: number;
+}
+
+interface TooltipResource {
+  readonly title: string;
+  readonly currentQuantity: number;
+  readonly maxQuantity: number;
+  readonly atomicMass: number;
+}
+
+interface TooltipGame {
+  readonly global: {
+    readonly race: {
+      readonly [trait: string]: unknown;
+      readonly universe?: string;
+    };
+    readonly stats: {
+      readonly achieve: Readonly<
+        Record<string, { readonly l?: number } | undefined>
+      >;
+    };
+    readonly tech: Readonly<Record<string, number | undefined>>;
+    readonly interstellar: {
+      readonly stellar_engine: { readonly exotic: number };
+      readonly mass_ejector: Readonly<Record<string, number>>;
+    };
+    readonly tauceti: {
+      readonly womling_lab: {
+        readonly tech: number;
+        readonly scientist: number;
+      };
+    };
+  };
+}
+
+interface TooltipMechManager {
+  initLab(): boolean;
+  readonly mechsPotential: number;
+  readonly activeMechs: readonly {
+    readonly size: string;
+    readonly power: number;
+  }[];
+  readonly collectorValue: number;
+}
+
+/** The build reader answers with a conflict, or reports that it could not read one. */
+type TooltipCostConflict = CostConflict | { readonly status: "unavailable" };
 
 export interface TooltipUIDependencies {
-  getJQuery: () => any;
-  getDocument: () => any;
-  getMutationObserver: () => any;
-  getSettings: () => AnyRecord;
-  getState: () => AnyRecord;
-  getGame: () => AnyRecord;
-  getBuildings: () => AnyRecord;
-  getJobs: () => AnyRecord;
-  getResources: () => AnyRecord;
-  getTechIds: () => AnyRecord;
-  getBuildingIds: () => AnyRecord;
-  getArpaIds: () => AnyRecord;
-  getMechManager: () => AnyRecord;
-  getFleetManagerOuter: () => AnyRecord;
-  getPoly: () => AnyRecord;
+  getJQuery: () => (node: TooltipElement) => TooltipNode;
+  getDocument: () => { readonly hidden: boolean };
+  getMutationObserver: () => TooltipObserverConstructor;
+  getSettings: () => {
+    readonly autoARPA: boolean;
+    readonly autoBuild: boolean;
+    readonly autoFleet: boolean;
+    readonly masterScriptToggle: boolean;
+  };
+  getState: () => {
+    readonly queuedTargetsAll: readonly unknown[];
+    readonly triggerTargets: readonly unknown[];
+    readonly tooltips: Readonly<Record<string, string | undefined>>;
+  };
+  getGame: () => TooltipGame;
+  getBuildings: () => Readonly<Record<string, TooltipBuilding>>;
+  getJobs: () => Readonly<Record<string, { readonly count: number }>>;
+  getResources: () => Readonly<Record<string, TooltipResource>>;
+  getTechIds: () => Readonly<Record<string, TooltipTarget | undefined>>;
+  getBuildingIds: () => Readonly<Record<string, TooltipTarget | undefined>>;
+  getArpaIds: () => Readonly<Record<string, TooltipTarget | undefined>>;
+  getMechManager: () => TooltipMechManager;
+  getFleetManagerOuter: () => { readonly nextShipMsg?: string };
+  getPoly: () => { timeFormat(seconds: number): string };
   readCitadelConsumption: () => (count: number) => number;
   readNiceNumber: () => (value: number) => string;
-  readCostConflict: () => (target: AnyRecord) => AnyRecord | undefined;
-  readTechConflict: () => (target: AnyRecord) => string | undefined;
+  readCostConflict: () => (
+    target: TooltipTarget,
+  ) => TooltipCostConflict | null | undefined;
+  readTechConflict: () => (target: TooltipTarget) => string | undefined;
   readHaveTech: () => (id: string, level: number) => boolean;
   readHealingRate: () => () => number;
   readGrowthRate: () => () => number;
@@ -59,7 +159,7 @@ export function createTooltipUI({
   readTraitVal,
   isTechnology,
 }: TooltipUIDependencies) {
-  function getTooltipInfo(obj: AnyRecord) {
+  function getTooltipInfo(obj: TooltipTarget) {
     const settings = getSettings();
     const state = getState();
     const game = getGame();
@@ -68,28 +168,20 @@ export function createTooltipUI({
     const resources = getResources();
     const MechManager = getMechManager();
     const FleetManagerOuter = getFleetManagerOuter();
-    const getCitadelConsumptionValue = readCitadelConsumption();
-    const getNiceNumberValue = readNiceNumber();
-    const getCostConflictValue = readCostConflict();
-    const getTechConflictValue = readTechConflict();
+    const getCitadelConsumption = readCitadelConsumption();
+    const getNiceNumber = readNiceNumber();
+    const getCostConflict = readCostConflict();
+    const getTechConflict = readTechConflict();
     const haveTech = readHaveTech();
-    const getHealingRateValue = readHealingRate();
-    const getGrowthRateValue = readGrowthRate();
-    const getGovernorValue = readGovernor();
-    const traitValValue = readTraitVal();
-    const getCitadelConsumption = getCitadelConsumptionValue;
-    const getNiceNumber = getNiceNumberValue;
-    const getCostConflict = getCostConflictValue;
-    const getTechConflict = getTechConflictValue;
-    const getHealingRate = getHealingRateValue;
-    const getGrowthRate = getGrowthRateValue;
-    const getGovernor = getGovernorValue;
-    const traitVal = traitValValue;
+    const getHealingRate = readHealingRate();
+    const getGrowthRate = readGrowthRate();
+    const getGovernor = readGovernor();
+    const traitVal = readTraitVal();
     const notes = [];
     if (obj === buildings.NeutronCitadel) {
+      const citadels = buildings.NeutronCitadel.stateOnCount;
       const diff =
-        getCitadelConsumption(obj.stateOnCount + 1) -
-        getCitadelConsumption(obj.stateOnCount);
+        getCitadelConsumption(citadels + 1) - getCitadelConsumption(citadels);
       notes.push(
         `Next level will increase total consumption by ${getNiceNumber(
           diff,
@@ -101,10 +193,9 @@ export function createTooltipUI({
         `Current team potential: ${getNiceNumber(MechManager.mechsPotential)}`,
       );
       const supplyCollected = MechManager.activeMechs
-        .filter((mech: AnyRecord) => mech.size === "collector")
+        .filter((mech) => mech.size === "collector")
         .reduce(
-          (sum: number, mech: AnyRecord) =>
-            sum + mech.power * MechManager.collectorValue,
+          (sum, mech) => sum + mech.power * MechManager.collectorValue,
           0,
         );
       if (supplyCollected > 0) {
@@ -125,11 +216,11 @@ export function createTooltipUI({
           conflict.status === "unavailable"
             ? "Cost reservation data unavailable; action blocked for safety"
             : `Conflicts with ${conflict.targetNames
-                .map((action: string) => {
+                .map((action) => {
                   return `<span class="has-text-info">${action}</span>`;
                 })
                 .join(", ")} for ${conflict.resourceNames
-                .map((res: string) => {
+                .map((res) => {
                   return `<span class="has-text-info">${res}</span>`;
                 })
                 .join(", ")} (${conflict.targetCause})`,
@@ -151,7 +242,7 @@ export function createTooltipUI({
     }
 
     if (obj === buildings.GorddonFreighter && haveTech("banking", 13)) {
-      const count = obj.stateOnCount;
+      const count = buildings.GorddonFreighter.stateOnCount;
       const total = ((1 + (count + 1) * 0.03) / (1 + count * 0.03) - 1) * 100;
       const crew = total / 3;
       notes.push(
@@ -163,7 +254,7 @@ export function createTooltipUI({
       );
     }
     if (obj === buildings.Alien1SuperFreighter && haveTech("banking", 13)) {
-      const count = obj.stateOnCount;
+      const count = buildings.Alien1SuperFreighter.stateOnCount;
       const total = ((1 + (count + 1) * 0.08) / (1 + count * 0.08) - 1) * 100;
       const crew = total / 5;
       notes.push(
@@ -203,15 +294,17 @@ export function createTooltipUI({
       );
     }
     if (obj === buildings.PortalRepairDroid) {
-      const wallRepair = Math.round(200 * 0.95 ** obj.stateOnCount) / 4;
-      const carRepair = Math.round(180 * 0.92 ** obj.stateOnCount) / 4;
+      const droids = buildings.PortalRepairDroid.stateOnCount;
+      const wallRepair = Math.round(200 * 0.95 ** droids) / 4;
+      const carRepair = Math.round(180 * 0.92 ** droids) / 4;
       notes.push(`${getNiceNumber(wallRepair)} seconds to repair 1% of wall`);
       notes.push(`${getNiceNumber(carRepair)} seconds to repair car`);
     }
     if (obj === buildings.BadlandsAttractor) {
-      const influx = 5 * (1 + obj.stateOnCount * 0.22);
+      const attractors = buildings.BadlandsAttractor.stateOnCount;
+      const influx = 5 * (1 + attractors * 0.22);
       let gem_chance =
-        game.global.stats.achieve.technophobe?.l >= 5 ? 9000 : 10000;
+        (game.global.stats.achieve.technophobe?.l ?? 0) >= 5 ? 9000 : 10000;
       if (
         game.global.race.universe === "evil" &&
         resources.Dark.currentQuantity > 1
@@ -221,7 +314,7 @@ export function createTooltipUI({
           (1 + resources.Harmony.currentQuantity * 0.01);
         gem_chance -= Math.round(Math.log2(de) * 2);
       }
-      gem_chance = Math.round(gem_chance * 0.948 ** obj.stateOnCount);
+      gem_chance = Math.round(gem_chance * 0.948 ** attractors);
       gem_chance = Math.round(gem_chance * traitVal("ghostly", 2, "-"));
       gem_chance = Math.max(12, gem_chance);
       const drop = (1 / gem_chance) * 100;
@@ -235,7 +328,7 @@ export function createTooltipUI({
       );
     }
     if (obj === buildings.Smokehouse) {
-      const spoilage = 50 * 0.9 ** obj.count;
+      const spoilage = 50 * 0.9 ** buildings.Smokehouse.count;
       notes.push(
         `${getNiceNumber(spoilage)}% of stored ${
           resources.Food.title
@@ -268,7 +361,7 @@ export function createTooltipUI({
       if (
         game.global.race["warlord"] &&
         buildings.AsphodelCorruptor &&
-        game.global.tech?.asphodel >= 13
+        (game.global.tech.asphodel ?? 0) >= 13
       ) {
         const corruptors = buildings.AsphodelCorruptor.on;
         coefficient = 1 - (1 + (corruptors || 0) * 0.03) / 10;
@@ -293,7 +386,7 @@ export function createTooltipUI({
     return notes.join("<br>");
   }
 
-  function tooltipObserverCallback(mutations: AnyRecord[]) {
+  function tooltipObserverCallback(mutations: readonly TooltipMutation[]) {
     const settings = getSettings();
     const document = getDocument();
     const MutationObserver = getMutationObserver();
@@ -301,7 +394,7 @@ export function createTooltipUI({
       return;
     }
     mutations.forEach((mutation) =>
-      mutation.addedNodes.forEach((node: AnyRecord) => {
+      mutation.addedNodes.forEach((node) => {
         if (node.id === "popper") {
           const popperObserver = new MutationObserver(() => {
             if (!node.querySelector(".script-tooltip")) {
@@ -317,7 +410,7 @@ export function createTooltipUI({
     );
   }
 
-  const infusionStep: AnyRecord = {
+  const infusionStep: Readonly<Record<string, number | undefined>> = {
     "blood-lust": 15,
     "blood-illuminate": 12,
     "blood-greed": 16,
@@ -327,30 +420,17 @@ export function createTooltipUI({
     "blood-wrath": 2,
   };
 
-  function addTooltip(node: AnyRecord) {
-    const {
-      $,
-      state,
-      game,
-      buildings,
-      resources,
-      techIds,
-      buildingIds,
-      arpaIds,
-      poly,
-      getNiceNumber,
-    } = {
-      $: getJQuery(),
-      state: getState(),
-      game: getGame(),
-      buildings: getBuildings(),
-      resources: getResources(),
-      techIds: getTechIds(),
-      buildingIds: getBuildingIds(),
-      arpaIds: getArpaIds(),
-      poly: getPoly(),
-      getNiceNumber: readNiceNumber(),
-    };
+  function addTooltip(node: TooltipElement) {
+    const $ = getJQuery();
+    const state = getState();
+    const game = getGame();
+    const buildings = getBuildings();
+    const resources = getResources();
+    const techIds = getTechIds();
+    const buildingIds = getBuildingIds();
+    const arpaIds = getArpaIds();
+    const poly = getPoly();
+    const getNiceNumber = readNiceNumber();
     $(node).append(`<span class="script-tooltip" hidden></span>`);
     const dataId = node.dataset.id;
     if (dataId === "powerStatus") {
@@ -372,16 +452,14 @@ export function createTooltipUI({
       return;
     }
 
-    let match = null;
-    let obj = null;
-    if ((match = dataId.match(/^popArpa([a-z_-]+)\d*$/))) {
-      obj = arpaIds["arpa" + match[1]];
-    } else if ((match = dataId.match(/^q([A-Za-z_-]+)\d*$/))) {
-      obj = buildingIds[match[1]] || arpaIds[match[1]];
-    } else {
-      obj = buildingIds[dataId] || techIds[dataId];
-    }
-    if (!obj || (isTechnology(obj) && obj.isResearched())) {
+    const arpaMatch = dataId.match(/^popArpa([a-z_-]+)\d*$/);
+    const queuedMatch = dataId.match(/^q([A-Za-z_-]+)\d*$/);
+    const obj = arpaMatch
+      ? arpaIds[`arpa${arpaMatch[1]}`]
+      : queuedMatch
+        ? (buildingIds[queuedMatch[1]] ?? arpaIds[queuedMatch[1]])
+        : (buildingIds[dataId] ?? techIds[dataId]);
+    if (!obj || (isTechnology(obj) && obj.isResearched?.())) {
       return;
     }
 
@@ -405,9 +483,9 @@ export function createTooltipUI({
       );
     }
     if (obj === buildings.TauRedJeff && buildings.TauRedWomlingLab.count > 0) {
-      let expo = game.global.stats.achieve.overlord?.l >= 5 ? 4.9 : 5;
+      let expo = (game.global.stats.achieve.overlord?.l ?? 0) >= 5 ? 4.9 : 5;
       expo -= game.global.race["lone_survivor"] ? 0.1 : 0;
-      const nextTech = (game.global.tech.womling_tech + 2) ** expo;
+      const nextTech = ((game.global.tech.womling_tech ?? 0) + 2) ** expo;
       const curTech = game.global.tauceti.womling_lab.tech;
       const completion = Math.floor((curTech / nextTech) * 100);
       $(node).find("div:eq(1)>div:eq(5)").append(` (${completion}%)`);

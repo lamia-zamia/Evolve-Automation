@@ -51698,26 +51698,19 @@
       const resources = getResources();
       const MechManager = getMechManager();
       const FleetManagerOuter = getFleetManagerOuter();
-      const getCitadelConsumptionValue = readCitadelConsumption();
-      const getNiceNumberValue = readNiceNumber();
-      const getCostConflictValue = readCostConflict();
-      const getTechConflictValue = readTechConflict();
+      const getCitadelConsumption = readCitadelConsumption();
+      const getNiceNumber = readNiceNumber();
+      const getCostConflict = readCostConflict();
+      const getTechConflict = readTechConflict();
       const haveTech = readHaveTech();
-      const getHealingRateValue = readHealingRate();
-      const getGrowthRateValue = readGrowthRate();
-      const getGovernorValue = readGovernor();
-      const traitValValue = readTraitVal();
-      const getCitadelConsumption = getCitadelConsumptionValue;
-      const getNiceNumber = getNiceNumberValue;
-      const getCostConflict = getCostConflictValue;
-      const getTechConflict = getTechConflictValue;
-      const getHealingRate = getHealingRateValue;
-      const getGrowthRate = getGrowthRateValue;
-      const getGovernor = getGovernorValue;
-      const traitVal = traitValValue;
+      const getHealingRate = readHealingRate();
+      const getGrowthRate = readGrowthRate();
+      const getGovernor = readGovernor();
+      const traitVal = readTraitVal();
       const notes = [];
       if (obj === buildings.NeutronCitadel) {
-        const diff = getCitadelConsumption(obj.stateOnCount + 1) - getCitadelConsumption(obj.stateOnCount);
+        const citadels = buildings.NeutronCitadel.stateOnCount;
+        const diff = getCitadelConsumption(citadels + 1) - getCitadelConsumption(citadels);
         notes.push(
           `Next level will increase total consumption by ${getNiceNumber(
             diff
@@ -51761,7 +51754,7 @@
         }
       }
       if (obj === buildings.GorddonFreighter && haveTech("banking", 13)) {
-        const count2 = obj.stateOnCount;
+        const count2 = buildings.GorddonFreighter.stateOnCount;
         const total = ((1 + (count2 + 1) * 0.03) / (1 + count2 * 0.03) - 1) * 100;
         const crew = total / 3;
         notes.push(
@@ -51771,7 +51764,7 @@
         );
       }
       if (obj === buildings.Alien1SuperFreighter && haveTech("banking", 13)) {
-        const count2 = obj.stateOnCount;
+        const count2 = buildings.Alien1SuperFreighter.stateOnCount;
         const total = ((1 + (count2 + 1) * 0.08) / (1 + count2 * 0.08) - 1) * 100;
         const crew = total / 5;
         notes.push(
@@ -51805,19 +51798,21 @@
         );
       }
       if (obj === buildings.PortalRepairDroid) {
-        const wallRepair = Math.round(200 * 0.95 ** obj.stateOnCount) / 4;
-        const carRepair = Math.round(180 * 0.92 ** obj.stateOnCount) / 4;
+        const droids = buildings.PortalRepairDroid.stateOnCount;
+        const wallRepair = Math.round(200 * 0.95 ** droids) / 4;
+        const carRepair = Math.round(180 * 0.92 ** droids) / 4;
         notes.push(`${getNiceNumber(wallRepair)} seconds to repair 1% of wall`);
         notes.push(`${getNiceNumber(carRepair)} seconds to repair car`);
       }
       if (obj === buildings.BadlandsAttractor) {
-        const influx = 5 * (1 + obj.stateOnCount * 0.22);
-        let gem_chance = game.global.stats.achieve.technophobe?.l >= 5 ? 9e3 : 1e4;
+        const attractors = buildings.BadlandsAttractor.stateOnCount;
+        const influx = 5 * (1 + attractors * 0.22);
+        let gem_chance = (game.global.stats.achieve.technophobe?.l ?? 0) >= 5 ? 9e3 : 1e4;
         if (game.global.race.universe === "evil" && resources.Dark.currentQuantity > 1) {
           const de = resources.Dark.currentQuantity * (1 + resources.Harmony.currentQuantity * 0.01);
           gem_chance -= Math.round(Math.log2(de) * 2);
         }
-        gem_chance = Math.round(gem_chance * 0.948 ** obj.stateOnCount);
+        gem_chance = Math.round(gem_chance * 0.948 ** attractors);
         gem_chance = Math.round(gem_chance * traitVal("ghostly", 2, "-"));
         gem_chance = Math.max(12, gem_chance);
         const drop = 1 / gem_chance * 100;
@@ -51831,7 +51826,7 @@
         );
       }
       if (obj === buildings.Smokehouse) {
-        const spoilage = 50 * 0.9 ** obj.count;
+        const spoilage = 50 * 0.9 ** buildings.Smokehouse.count;
         notes.push(
           `${getNiceNumber(spoilage)}% of stored ${resources.Food.title} spoiled per second`
         );
@@ -51855,7 +51850,7 @@
       if (obj === buildings.IsleSpiritBattery) {
         const batteries = buildings.IsleSpiritBattery.stateOnCount;
         let coefficient = 0.9;
-        if (game.global.race["warlord"] && buildings.AsphodelCorruptor && game.global.tech?.asphodel >= 13) {
+        if (game.global.race["warlord"] && buildings.AsphodelCorruptor && (game.global.tech.asphodel ?? 0) >= 13) {
           const corruptors = buildings.AsphodelCorruptor.on;
           coefficient = 1 - (1 + (corruptors || 0) * 0.03) / 10;
         }
@@ -51906,29 +51901,16 @@
       "blood-wrath": 2
     };
     function addTooltip(node) {
-      const {
-        $,
-        state,
-        game,
-        buildings,
-        resources,
-        techIds,
-        buildingIds,
-        arpaIds,
-        poly,
-        getNiceNumber
-      } = {
-        $: getJQuery(),
-        state: getState(),
-        game: getGame(),
-        buildings: getBuildings(),
-        resources: getResources(),
-        techIds: getTechIds(),
-        buildingIds: getBuildingIds(),
-        arpaIds: getArpaIds(),
-        poly: getPoly(),
-        getNiceNumber: readNiceNumber()
-      };
+      const $ = getJQuery();
+      const state = getState();
+      const game = getGame();
+      const buildings = getBuildings();
+      const resources = getResources();
+      const techIds = getTechIds();
+      const buildingIds = getBuildingIds();
+      const arpaIds = getArpaIds();
+      const poly = getPoly();
+      const getNiceNumber = readNiceNumber();
       $(node).append(`<span class="script-tooltip" hidden></span>`);
       const dataId = node.dataset.id;
       if (dataId === "powerStatus") {
@@ -51947,16 +51929,10 @@
         );
         return;
       }
-      let match = null;
-      let obj = null;
-      if (match = dataId.match(/^popArpa([a-z_-]+)\d*$/)) {
-        obj = arpaIds["arpa" + match[1]];
-      } else if (match = dataId.match(/^q([A-Za-z_-]+)\d*$/)) {
-        obj = buildingIds[match[1]] || arpaIds[match[1]];
-      } else {
-        obj = buildingIds[dataId] || techIds[dataId];
-      }
-      if (!obj || isTechnology(obj) && obj.isResearched()) {
+      const arpaMatch = dataId.match(/^popArpa([a-z_-]+)\d*$/);
+      const queuedMatch = dataId.match(/^q([A-Za-z_-]+)\d*$/);
+      const obj = arpaMatch ? arpaIds[`arpa${arpaMatch[1]}`] : queuedMatch ? buildingIds[queuedMatch[1]] ?? arpaIds[queuedMatch[1]] : buildingIds[dataId] ?? techIds[dataId];
+      if (!obj || isTechnology(obj) && obj.isResearched?.()) {
         return;
       }
       if (obj === buildings.BlackholeStellarEngine && game.global.race.universe !== "magic" && buildings.BlackholeMassEjector.count > 0 && game.global.interstellar.stellar_engine.exotic < 0.025) {
@@ -51969,9 +51945,9 @@
         );
       }
       if (obj === buildings.TauRedJeff && buildings.TauRedWomlingLab.count > 0) {
-        let expo = game.global.stats.achieve.overlord?.l >= 5 ? 4.9 : 5;
+        let expo = (game.global.stats.achieve.overlord?.l ?? 0) >= 5 ? 4.9 : 5;
         expo -= game.global.race["lone_survivor"] ? 0.1 : 0;
-        const nextTech = (game.global.tech.womling_tech + 2) ** expo;
+        const nextTech = ((game.global.tech.womling_tech ?? 0) + 2) ** expo;
         const curTech = game.global.tauceti.womling_lab.tech;
         const completion = Math.floor(curTech / nextTech * 100);
         $(node).find("div:eq(1)>div:eq(5)").append(` (${completion}%)`);
