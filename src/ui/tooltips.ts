@@ -44,12 +44,56 @@ interface TooltipBuilding extends TooltipTarget {
   readonly on?: number;
 }
 
+/**
+ * The buildings whose wrappers a note reads. The script defines a wrapper for every building in the
+ * game, so a note can read one the player has not unlocked; `AsphodelCorruptor` stays optional
+ * because the spirit-battery note already checks for it before reading its power state.
+ */
+interface TooltipBuildings {
+  readonly Alien1SuperFreighter: TooltipBuilding;
+  readonly AlphaExchange: TooltipBuilding;
+  readonly AsphodelCorruptor?: TooltipBuilding;
+  readonly BadlandsAttractor: TooltipBuilding;
+  readonly BlackholeMassEjector: TooltipBuilding;
+  readonly BlackholeStellarEngine: TooltipBuilding;
+  readonly BootCamp: TooltipBuilding;
+  readonly DwarfShipyard: TooltipBuilding;
+  readonly EnceladusBase: TooltipBuilding;
+  readonly GorddonFreighter: TooltipBuilding;
+  readonly Hospital: TooltipBuilding;
+  readonly IsleSpiritBattery: TooltipBuilding;
+  readonly IsleSpiritVacuum: TooltipBuilding;
+  readonly LakeCoolingTower: TooltipBuilding;
+  readonly LakeHarbor: TooltipBuilding;
+  readonly NeutronCitadel: TooltipBuilding;
+  readonly PortalCarport: TooltipBuilding;
+  readonly PortalRepairDroid: TooltipBuilding;
+  readonly Smokehouse: TooltipBuilding;
+  readonly SpireMechBay: TooltipBuilding;
+  readonly TauRedJeff: TooltipBuilding;
+  readonly TauRedWomlingLab: TooltipBuilding;
+}
+
 interface TooltipResource {
   readonly title: string;
   readonly currentQuantity: number;
   readonly maxQuantity: number;
   readonly atomicMass: number;
 }
+
+/** The resources the notes name, for their title or their stored amount. */
+type TooltipResources = Readonly<
+  Record<
+    | "Dark"
+    | "Elerium"
+    | "Food"
+    | "Harmony"
+    | "Infernite"
+    | "Power"
+    | "Soul_Gem",
+    TooltipResource
+  >
+>;
 
 interface TooltipGame {
   readonly global: {
@@ -105,9 +149,9 @@ export interface TooltipUIDependencies {
     readonly tooltips: Readonly<Record<string, string | undefined>>;
   };
   getGame: () => TooltipGame;
-  getBuildings: () => Readonly<Record<string, TooltipBuilding>>;
-  getJobs: () => Readonly<Record<string, { readonly count: number }>>;
-  getResources: () => Readonly<Record<string, TooltipResource>>;
+  getBuildings: () => TooltipBuildings;
+  getJobs: () => { readonly HellSurveyor: { readonly count: number } };
+  getResources: () => TooltipResources;
   getTechIds: () => Readonly<Record<string, TooltipTarget | undefined>>;
   getBuildingIds: () => Readonly<Record<string, TooltipTarget | undefined>>;
   getArpaIds: () => Readonly<Record<string, TooltipTarget | undefined>>;
@@ -452,13 +496,14 @@ export function createTooltipUI({
       return;
     }
 
-    const arpaMatch = dataId.match(/^popArpa([a-z_-]+)\d*$/);
-    const queuedMatch = dataId.match(/^q([A-Za-z_-]+)\d*$/);
-    const obj = arpaMatch
-      ? arpaIds[`arpa${arpaMatch[1]}`]
-      : queuedMatch
-        ? (buildingIds[queuedMatch[1]] ?? arpaIds[queuedMatch[1]])
-        : (buildingIds[dataId] ?? techIds[dataId]);
+    const arpaId = dataId.match(/^popArpa([a-z_-]+)\d*$/)?.[1];
+    const queuedId = dataId.match(/^q([A-Za-z_-]+)\d*$/)?.[1];
+    const obj =
+      arpaId !== undefined
+        ? arpaIds[`arpa${arpaId}`]
+        : queuedId !== undefined
+          ? (buildingIds[queuedId] ?? arpaIds[queuedId])
+          : (buildingIds[dataId] ?? techIds[dataId]);
     if (!obj || (isTechnology(obj) && obj.isResearched?.())) {
       return;
     }
@@ -469,11 +514,10 @@ export function createTooltipUI({
       buildings.BlackholeMassEjector.count > 0 &&
       game.global.interstellar.stellar_engine.exotic < 0.025
     ) {
+      const ejected = game.global.interstellar.mass_ejector;
       const massPerSec =
-        resources.Elerium.atomicMass *
-          game.global.interstellar.mass_ejector.Elerium +
-          resources.Infernite.atomicMass *
-            game.global.interstellar.mass_ejector.Infernite || -1;
+        resources.Elerium.atomicMass * (ejected.Elerium ?? 0) +
+          resources.Infernite.atomicMass * (ejected.Infernite ?? 0) || -1;
       const missingExotics =
         (0.025 - game.global.interstellar.stellar_engine.exotic) * 1e10;
       $(node).append(

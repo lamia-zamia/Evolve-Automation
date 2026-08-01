@@ -16,6 +16,7 @@
     "src/formatting/**/*.ts",
     "src/observability/**/*.ts",
     "src/planning/**/*.ts",
+    "src/ui/**/*.ts",
     "src/utils/**/*.ts",
     "src/validation/**/*.ts",
     "src/config.ts",

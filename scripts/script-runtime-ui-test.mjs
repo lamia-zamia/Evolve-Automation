@@ -20,7 +20,7 @@ const document = {
     },
   }),
   createTextNode: (text) => ({ text }),
-  getElementsByTagName: () => [{ appendChild: () => trace.push("style") }],
+  head: { appendChild: () => trace.push("style") },
 };
 const nodes = [];
 function jquery(label) {

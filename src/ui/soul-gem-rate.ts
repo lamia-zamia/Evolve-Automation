@@ -41,21 +41,26 @@ export function createSoulGemRateDisplay({
         state.soulGemLast = soulGem.currentQuantity;
       }
       let gems = 0;
-      let i = state.soulGemIncomes.length;
-      while (--i >= 0) {
-        const income = state.soulGemIncomes[i];
+      let index = state.soulGemIncomes.length;
+      let oldest = state.soulGemIncomes[index - 1];
+      while (--index >= 0) {
+        const income = state.soulGemIncomes[index];
         // Get all gems gained in last hour, or at least 10 last gems in any time frame, if rate is low
-        if (currentSec - income.sec > 3600 && gems > 10) {
+        if (
+          income === undefined ||
+          (currentSec - income.sec > 3600 && gems > 10)
+        ) {
           break;
-        } else {
-          gems += income.gems;
         }
+        gems += income.gems;
+        oldest = income;
       }
       // If loop was broken prematurely - clean up old records which we don't need anymore
-      if (i >= 0) {
-        state.soulGemIncomes = state.soulGemIncomes.splice(i + 1);
+      if (index >= 0) {
+        state.soulGemIncomes = state.soulGemIncomes.slice(index + 1);
       }
-      const timePassed = currentSec - state.soulGemIncomes[0].sec;
+      // The state is seeded with a zero record, so the window always covers at least that one.
+      const timePassed = currentSec - (oldest?.sec ?? currentSec);
       let gph = (gems / timePassed) * 3600;
       state.soulGemPerHour = gph;
       if (gph >= 1000) {

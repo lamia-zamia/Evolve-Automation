@@ -41,4 +41,34 @@ label = "Replacement";
 stats.calculateMechStats();
 assert.match(output, /Replacement/);
 
+// A size the game does not rate for weapons is skipped, rather than filling its column with NaN.
+{
+  let unratedOutput = "";
+  createMechStats({
+    getDocument: () => ({ getElementById: (id) => inputs[id] }),
+    getJQuery: () => () => ({ html: (content) => (unratedOutput = content) }),
+    getMechManager: () => ({
+      SmallChassisMod: {},
+      LargeChassisMod: {},
+      Size: ["small", "large", "collector"],
+      SizeWeapons: { small: 1 },
+      StatusMod: { gravity: () => 1 },
+      getSizeMod: () => 1,
+      getMechCost: () => [1, 100_000, 1],
+      getMechRefund: () => [0, 0],
+    }),
+    getPoly: () => ({
+      monsters: {},
+      terrainRating: () => 1,
+      weaponPower: () => 1,
+    }),
+    getGame: () => ({ loc: (id) => id }),
+    average: (values) =>
+      values.reduce((sum, value) => sum + value, 0) / values.length,
+  }).calculateMechStats();
+  assert.match(unratedOutput, /portal_mech_size_small/);
+  assert.doesNotMatch(unratedOutput, /portal_mech_size_large/);
+  assert.doesNotMatch(unratedOutput, /NaN/);
+}
+
 console.log("Mech stats module tests passed");

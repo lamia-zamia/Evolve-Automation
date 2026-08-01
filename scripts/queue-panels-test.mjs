@@ -204,6 +204,23 @@ function widths(html) {
   assert.match(html, /data-queueid="ruins"/);
 }
 
+// A cost naming a resource the script has no wrapper for contributes no row.
+{
+  const { html } = renderOne(
+    {
+      kind: "building",
+      name: "Shrine",
+      id: "shrine",
+      _tab: "city",
+      cost: { Money: 10, Chrysotile: 5 },
+    },
+    "buildings",
+  );
+  assert.match(html, /Money</);
+  assert.doesNotMatch(html, /Chrysotile/);
+  assert.equal(widths(html).length, 1);
+}
+
 // A multi-segmented building scales its cost by the segments it still owes.
 {
   const { html } = renderOne(

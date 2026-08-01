@@ -31,9 +31,10 @@ export function createSortHelper({
     ) as SortNode;
     const cloneNode = clone[0];
     source.childNodes.forEach((element, index) => {
-      if (element.offsetWidth && element.offsetHeight) {
-        cloneNode.childNodes[index].style.width = `${element.offsetWidth}px`;
-        cloneNode.childNodes[index].style.height = `${element.offsetHeight}px`;
+      const clonedChild = cloneNode.childNodes[index];
+      if (clonedChild && element.offsetWidth && element.offsetHeight) {
+        clonedChild.style.width = `${element.offsetWidth}px`;
+        clonedChild.style.height = `${element.offsetHeight}px`;
       }
     });
     return cloneNode;

@@ -69,7 +69,11 @@ interface RaceModelDependencies {
     genus_traits: Record<string, Record<string, unknown> | undefined>;
     loc(id: string, vars?: unknown[]): string;
   };
-  getResources: () => Record<string, { name: string }>;
+  /** The four resources whose names the trait-effect text substitutes. */
+  getResources: () => Record<
+    "Lumber" | "Plywood" | "Furs" | "Soul_Gem",
+    { name: string }
+  >;
   getRaces: () => Record<string, { genus: string } | undefined>;
   genusOpposition: Record<string, string[] | undefined>;
 }
@@ -174,7 +178,8 @@ export function createCustomRaceModel({
     if (noVariableEffects.has(id)) vars = [];
     else if (id === "fibroblast") vars = [(vars[0] as number) * 5];
     else if (id === "hivemind" && game.global.race.high_pop) {
-      vars = [(vars[0] as number) * game.traits.high_pop!.vars!()[0]];
+      const [highPopFactor = 0] = game.traits.high_pop?.vars?.() ?? [];
+      vars = [(vars[0] as number) * highPopFactor];
     } else if (id === "imitation") {
       vars.push(
         game.races[(game.global.race.srace as string) || "protoplasm"]?.name ??

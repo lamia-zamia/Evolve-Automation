@@ -175,10 +175,14 @@ export function createQueuePanels({
         );
 
         if (isTechnology(target)) {
+          const knowledgeCost = target.cost.Knowledge;
+          const knowledgeCap = game.global.resource.Knowledge?.max;
           if ($.isEmptyObject(target.cost)) {
             targetTimeLeft = "Waiting on prerequisite";
           } else if (
-            target.cost.Knowledge > game.global.resource.Knowledge.max
+            knowledgeCost !== undefined &&
+            knowledgeCap !== undefined &&
+            knowledgeCost > knowledgeCap
           ) {
             targetTimeLeft = "Not enough Knowledge";
           }
@@ -189,13 +193,17 @@ export function createQueuePanels({
           targetTimeLeft = `${segmentedTimeLeft.timeLeft}</span> <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
         }
 
-        const costsHTML = Object.keys(costs)
-          .map((resource) => {
+        const costsHTML = Object.entries(costs)
+          .map(([resource, listedCost]) => {
             const res = resources[resource];
+            if (res === undefined) {
+              // A cost the script has no resource wrapper for has nothing to report.
+              return "";
+            }
             let className = "has-text-success",
               resourceTimeLeft = "";
 
-            const resourceCost = costs[resource] * costMultiplier;
+            const resourceCost = listedCost * costMultiplier;
 
             if (res.currentQuantity < resourceCost) {
               className = "has-text-danger";
@@ -312,8 +320,9 @@ export function createQueuePanels({
     if (typeof ResizeObserver === "function") {
       const resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
-          if (entry.borderBoxSize) {
-            const elementHeight = entry.borderBoxSize[0].blockSize;
+          const [borderBox] = entry.borderBoxSize ?? [];
+          if (borderBox) {
+            const elementHeight = borderBox.blockSize;
             const totalHeight = `${
               elementHeight + $("#buildQueue").outerHeight()
             }px`;

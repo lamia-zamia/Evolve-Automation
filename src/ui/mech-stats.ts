@@ -90,7 +90,8 @@ export function createMechStats({
           ),
         );
 
-    const rows: string[][] = [
+    // One row per statistic, so each row is addressed by name below rather than by a loose index.
+    const rows: [string[], string[], string[], string[], string[], string[]] = [
       [""],
       ["Damage Per Size"],
       ["Damage Per Supply (New)"],
@@ -98,11 +99,14 @@ export function createMechStats({
       ["Damage Per Supply (Rebuild)"],
       ["Damage Per Gems (Rebuild)"],
     ];
-    for (let i = 0; i < MechManager.Size.length - 1; i++) {
-      const mech = {
-        size: MechManager.Size[i],
-        equip: special ? ["special"] : [],
-      };
+    // The last size is the collector, which has no damage statistics.
+    for (const [i, size] of MechManager.Size.slice(0, -1).entries()) {
+      const sizeWeapons = MechManager.SizeWeapons[size];
+      if (sizeWeapons === undefined) {
+        // A size the game does not rate for weapons has no comparable damage figures.
+        continue;
+      }
+      const mech = { size, equip: special ? ["special"] : [] };
       const basePower = MechManager.getSizeMod(mech, false);
       const statusMod = gravity ? MechManager.StatusMod.gravity(mech) : 1;
       const terrainMod = poly.terrainRating(
@@ -111,9 +115,7 @@ export function createMechStats({
         gravity ? ["gravity"] : [],
         scouts,
       );
-      const weaponMod =
-        poly.weaponPower(mech, weaponFactor) *
-        MechManager.SizeWeapons[mech.size];
+      const weaponMod = poly.weaponPower(mech, weaponFactor) * sizeWeapons;
       const power = basePower * statusMod * terrainMod * weaponMod;
       const [gems, cost, space] = MechManager.getMechCost(mech, prepared);
       const [gemsRef, costRef] = MechManager.getMechRefund(mech, prepared);

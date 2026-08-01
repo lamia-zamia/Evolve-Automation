@@ -289,7 +289,18 @@ export function createCustomRaceUI({
       presetIndex = 0;
       settingsRaw.prestigeCustomRacePreset = "0";
     }
-    let preset = settingsRaw.prestigeCustomRacePresets[presetIndex];
+    const storedPreset = settingsRaw.prestigeCustomRacePresets[presetIndex];
+    // The index was clamped into a list that was just guaranteed non-empty, so the replacement only
+    // guards a stored list that changed underneath the clamp.
+    const preset: CustomRacePreset = storedPreset ?? {
+      name: "General",
+      json: "",
+    };
+    if (storedPreset === undefined) {
+      settingsRaw.prestigeCustomRacePresets = [preset];
+      settingsRaw.prestigeCustomRacePreset = "0";
+      presetIndex = 0;
+    }
     let draft = customRaceDraftFromPreset(preset);
 
     modal.append(
@@ -531,16 +542,16 @@ export function createCustomRaceUI({
       });
       rankDown.on("click", function () {
         if (!checkbox.prop("checked")) return;
-        let index = ranks.indexOf(currentRank);
-        if (index > 0) draft.ranks[id] = ranks[index - 1];
+        const lower = ranks[ranks.indexOf(currentRank) - 1];
+        if (lower !== undefined) draft.ranks[id] = lower;
         updateRank();
         saveDraft();
         updateSummary();
       });
       rankUp.on("click", function () {
         if (!checkbox.prop("checked")) return;
-        let index = ranks.indexOf(currentRank);
-        if (index < ranks.length - 1) draft.ranks[id] = ranks[index + 1];
+        const higher = ranks[ranks.indexOf(currentRank) + 1];
+        if (higher !== undefined) draft.ranks[id] = higher;
         updateRank();
         saveDraft();
         updateSummary();

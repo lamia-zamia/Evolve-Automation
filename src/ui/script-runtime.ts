@@ -22,7 +22,7 @@ interface StyleHost {
 interface ScriptRuntimeDocument {
   createElement(tagName: string): StyleHost;
   createTextNode(data: string): unknown;
-  getElementsByTagName(name: string): readonly StyleHost[];
+  readonly head: StyleHost;
 }
 
 interface ScriptRuntimeErrorEvent {
@@ -552,7 +552,7 @@ export function createScriptRuntimeUI({
     css.appendChild(getDocument().createTextNode(styles));
 
     // Append style to html head
-    getDocument().getElementsByTagName("head")[0].appendChild(css);
+    getDocument().head.appendChild(css);
   }
 
   // Known game errors, bugs, etc that we don't want to show to the user.

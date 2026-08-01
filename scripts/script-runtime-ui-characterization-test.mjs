@@ -49,9 +49,7 @@ const document = {
     },
   }),
   createTextNode: (text) => ({ textContent: text }),
-  getElementsByTagName: () => [
-    { appendChild: (node) => trace.push(`head:${node.tag}`) },
-  ],
+  head: { appendChild: (node) => trace.push(`head:${node.tag}`) },
 };
 const sandbox = {
   __EA_TEST_HOOKS__: hooks,

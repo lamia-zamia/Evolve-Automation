@@ -20,11 +20,24 @@ export interface TabRefreshMainVue {
   toggleTabLoad: () => void;
 }
 
+/** The three buildings whose count unlocks a tab or a tab's contents. */
+export interface TabRefreshBuildings {
+  RockQuarry: { count: number };
+  TitanQuarters: { count: number };
+  TauStarRingworld: { count: number };
+}
+
+/** The two storage resources whose unlock adds a row to the storage tab. */
+export interface TabRefreshResources {
+  Crates: { isUnlocked: () => boolean };
+  Containers: { isUnlocked: () => boolean };
+}
+
 export interface TabRefreshDependencies {
   getState: () => TabRefreshState;
   getGame: () => TabRefreshGame;
-  getBuildings: () => Record<string, { count: number }>;
-  getResources: () => Record<string, { isUnlocked: () => boolean }>;
+  getBuildings: () => TabRefreshBuildings;
+  getResources: () => TabRefreshResources;
   getHaveTech: () => (tech: string, level?: number) => boolean;
   getMainVue: () => TabRefreshMainVue;
 }
@@ -67,11 +80,11 @@ export function createTabRefresh({
       (game.global.tech.queue ? 1 : 0) + // Queue unlocked
       (game.global.tech.r_queue ? 1 : 0) + // Research queue unlocked
       (game.global.tech.govern ? 1 : 0) + // Government unlocked
-      (game.global.tech.spy >= 2 ? 1 : 0) + // SpyOp governor task
+      ((game.global.tech.spy ?? 0) >= 2 ? 1 : 0) + // SpyOp governor task
       (game.global.tech.trade ? 1 : 0) + // Trade Routes unlocked
       (resources.Crates.isUnlocked() ? 1 : 0) + // Crates in storage tab
       (resources.Containers.isUnlocked() ? 1 : 0) + // Containers in storage tab
-      (game.global.tech.m_smelting >= 2 ? 1 : 0) + // TP Iridium smelting
+      ((game.global.tech.m_smelting ?? 0) >= 2 ? 1 : 0) + // TP Iridium smelting
       (game.global.tech.irid_smelting ? 1 : 0) + // Iridium smelting
       (buildings.TitanQuarters.count > 0 ? 1 : 0) + // Titan Mine unlocked
       (game.global.race["orbit_decayed"] ? 1 : 0) + // City tab gone
@@ -80,16 +93,16 @@ export function createTabRefresh({
       (game.global.tech.isolation ? 1 : 0) + // Solar tabs gone
       (game.global.tech.m_ignite ? 1 : 0) + // Ignition Device built
       (buildings.TauStarRingworld.count >= 1000 ? 1 : 0) + // Ringworld built
-      (game.global.tech.tau_gas2 >= 5 ? 1 : 0) + // Alien Space Station built
+      ((game.global.tech.tau_gas2 ?? 0) >= 5 ? 1 : 0) + // Alien Space Station built
       (game.global.tech.replicator ? 1 : 0) + // Matter Replicator unlocked
       ((game.global.tauceti.tau_factory?.count ?? 0) > 0 ? 1 : 0) + // Factory built in lone survivor
       ((game.global.space.g_factory?.count ?? 0) > 0 ? 1 : 0) + // Graphene plant built in lone survivor
       ((game.global.tauceti.mining_ship?.count ?? 0) > 0 ? 1 : 0) + // Extractor ship built
       (game.global.tech.psychicthrall ?? 0) + // Psychic powers
       (game.global.tech.psychic ?? 0) + // Psychic powers
-      (game.global.tech.edenic >= 1 ? 1 : 0) + // Spire floor 50 Eden access
-      (game.global.tech.isle >= 3 ? 1 : 0) + // Edenic north/south piers -> spirit syphon tech
-      (game.global.tech.palace >= 4 ? 1 : 0); // Edenic sealed tomb -> energy drain tech
+      ((game.global.tech.edenic ?? 0) >= 1 ? 1 : 0) + // Spire floor 50 Eden access
+      ((game.global.tech.isle ?? 0) >= 3 ? 1 : 0) + // Edenic north/south piers -> spirit syphon tech
+      ((game.global.tech.palace ?? 0) >= 4 ? 1 : 0); // Edenic sealed tomb -> energy drain tech
 
     if (game.global.settings.showShipYard) {
       // TP Ship Yard

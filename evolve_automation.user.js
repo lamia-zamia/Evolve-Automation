@@ -7359,7 +7359,8 @@
       if (noVariableEffects.has(id)) vars = [];
       else if (id === "fibroblast") vars = [vars[0] * 5];
       else if (id === "hivemind" && game.global.race.high_pop) {
-        vars = [vars[0] * game.traits.high_pop.vars()[0]];
+        const [highPopFactor = 0] = game.traits.high_pop?.vars?.() ?? [];
+        vars = [vars[0] * highPopFactor];
       } else if (id === "imitation") {
         vars.push(
           game.races[game.global.race.srace || "protoplasm"]?.name ?? ""
@@ -17137,11 +17138,12 @@
         ["Damage Per Supply (Rebuild)"],
         ["Damage Per Gems (Rebuild)"]
       ];
-      for (let i = 0; i < MechManager.Size.length - 1; i++) {
-        const mech = {
-          size: MechManager.Size[i],
-          equip: special ? ["special"] : []
-        };
+      for (const [i, size] of MechManager.Size.slice(0, -1).entries()) {
+        const sizeWeapons = MechManager.SizeWeapons[size];
+        if (sizeWeapons === void 0) {
+          continue;
+        }
+        const mech = { size, equip: special ? ["special"] : [] };
         const basePower = MechManager.getSizeMod(mech, false);
         const statusMod = gravity ? MechManager.StatusMod.gravity(mech) : 1;
         const terrainMod = poly.terrainRating(
@@ -17150,7 +17152,7 @@
           gravity ? ["gravity"] : [],
           scouts
         );
-        const weaponMod = poly.weaponPower(mech, weaponFactor) * MechManager.SizeWeapons[mech.size];
+        const weaponMod = poly.weaponPower(mech, weaponFactor) * sizeWeapons;
         const power = basePower * statusMod * terrainMod * weaponMod;
         const [gems, cost, space] = MechManager.getMechCost(mech, prepared);
         const [gemsRef, costRef] = MechManager.getMechRefund(mech, prepared);
@@ -17180,9 +17182,10 @@
       const source = isHTMLElement(input) ? input : input[0];
       const cloneNode = clone[0];
       source.childNodes.forEach((element, index) => {
-        if (element.offsetWidth && element.offsetHeight) {
-          cloneNode.childNodes[index].style.width = `${element.offsetWidth}px`;
-          cloneNode.childNodes[index].style.height = `${element.offsetHeight}px`;
+        const clonedChild = cloneNode.childNodes[index];
+        if (clonedChild && element.offsetWidth && element.offsetHeight) {
+          clonedChild.style.width = `${element.offsetWidth}px`;
+          clonedChild.style.height = `${element.offsetHeight}px`;
         }
       });
       return cloneNode;
@@ -17218,11 +17221,11 @@
       (game.global.tech.queue ? 1 : 0) + // Queue unlocked
       (game.global.tech.r_queue ? 1 : 0) + // Research queue unlocked
       (game.global.tech.govern ? 1 : 0) + // Government unlocked
-      (game.global.tech.spy >= 2 ? 1 : 0) + // SpyOp governor task
+      ((game.global.tech.spy ?? 0) >= 2 ? 1 : 0) + // SpyOp governor task
       (game.global.tech.trade ? 1 : 0) + // Trade Routes unlocked
       (resources.Crates.isUnlocked() ? 1 : 0) + // Crates in storage tab
       (resources.Containers.isUnlocked() ? 1 : 0) + // Containers in storage tab
-      (game.global.tech.m_smelting >= 2 ? 1 : 0) + // TP Iridium smelting
+      ((game.global.tech.m_smelting ?? 0) >= 2 ? 1 : 0) + // TP Iridium smelting
       (game.global.tech.irid_smelting ? 1 : 0) + // Iridium smelting
       (buildings.TitanQuarters.count > 0 ? 1 : 0) + // Titan Mine unlocked
       (game.global.race["orbit_decayed"] ? 1 : 0) + // City tab gone
@@ -17231,16 +17234,16 @@
       (game.global.tech.isolation ? 1 : 0) + // Solar tabs gone
       (game.global.tech.m_ignite ? 1 : 0) + // Ignition Device built
       (buildings.TauStarRingworld.count >= 1e3 ? 1 : 0) + // Ringworld built
-      (game.global.tech.tau_gas2 >= 5 ? 1 : 0) + // Alien Space Station built
+      ((game.global.tech.tau_gas2 ?? 0) >= 5 ? 1 : 0) + // Alien Space Station built
       (game.global.tech.replicator ? 1 : 0) + // Matter Replicator unlocked
       ((game.global.tauceti.tau_factory?.count ?? 0) > 0 ? 1 : 0) + // Factory built in lone survivor
       ((game.global.space.g_factory?.count ?? 0) > 0 ? 1 : 0) + // Graphene plant built in lone survivor
       ((game.global.tauceti.mining_ship?.count ?? 0) > 0 ? 1 : 0) + // Extractor ship built
       (game.global.tech.psychicthrall ?? 0) + // Psychic powers
       (game.global.tech.psychic ?? 0) + // Psychic powers
-      (game.global.tech.edenic >= 1 ? 1 : 0) + // Spire floor 50 Eden access
-      (game.global.tech.isle >= 3 ? 1 : 0) + // Edenic north/south piers -> spirit syphon tech
-      (game.global.tech.palace >= 4 ? 1 : 0);
+      ((game.global.tech.edenic ?? 0) >= 1 ? 1 : 0) + // Spire floor 50 Eden access
+      ((game.global.tech.isle ?? 0) >= 3 ? 1 : 0) + // Edenic north/south piers -> spirit syphon tech
+      ((game.global.tech.palace ?? 0) >= 4 ? 1 : 0);
       if (game.global.settings.showShipYard) {
         state.tabHash += 1 + (game.global.tech.syard_class ?? 0) + // Tiers of unlocked components
         (game.global.tech.syard_power ?? 0) + (game.global.tech.syard_weapon ?? 0) + (game.global.tech.syard_armor ?? 0) + (game.global.tech.syard_engine ?? 0) + (game.global.tech.syard_sensor ?? 0) + (haveTech("titan", 3) && haveTech("enceladus", 2) ? 1 : 0) + // Enceladus syndicate
@@ -17293,19 +17296,20 @@
           state.soulGemLast = soulGem.currentQuantity;
         }
         let gems = 0;
-        let i = state.soulGemIncomes.length;
-        while (--i >= 0) {
-          const income = state.soulGemIncomes[i];
-          if (currentSec - income.sec > 3600 && gems > 10) {
+        let index = state.soulGemIncomes.length;
+        let oldest = state.soulGemIncomes[index - 1];
+        while (--index >= 0) {
+          const income = state.soulGemIncomes[index];
+          if (income === void 0 || currentSec - income.sec > 3600 && gems > 10) {
             break;
-          } else {
-            gems += income.gems;
           }
+          gems += income.gems;
+          oldest = income;
         }
-        if (i >= 0) {
-          state.soulGemIncomes = state.soulGemIncomes.splice(i + 1);
+        if (index >= 0) {
+          state.soulGemIncomes = state.soulGemIncomes.slice(index + 1);
         }
-        const timePassed = currentSec - state.soulGemIncomes[0].sec;
+        const timePassed = currentSec - (oldest?.sec ?? currentSec);
         let gph = gems / timePassed * 3600;
         state.soulGemPerHour = gph;
         if (gph >= 1e3) {
@@ -50996,9 +51000,11 @@
             isMultiSegmented
           );
           if (isTechnology(target)) {
+            const knowledgeCost = target.cost.Knowledge;
+            const knowledgeCap = game.global.resource.Knowledge?.max;
             if ($.isEmptyObject(target.cost)) {
               targetTimeLeft = "Waiting on prerequisite";
-            } else if (target.cost.Knowledge > game.global.resource.Knowledge.max) {
+            } else if (knowledgeCost !== void 0 && knowledgeCap !== void 0 && knowledgeCost > knowledgeCap) {
               targetTimeLeft = "Not enough Knowledge";
             }
           } else if (isArpaProject) {
@@ -51006,10 +51012,13 @@
             const segmentedTimeLeft = getMultiSegmentedTimeLeft(target);
             targetTimeLeft = `${segmentedTimeLeft.timeLeft}</span> <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
           }
-          const costsHTML = Object.keys(costs).map((resource2) => {
+          const costsHTML = Object.entries(costs).map(([resource2, listedCost]) => {
             const res = resources[resource2];
+            if (res === void 0) {
+              return "";
+            }
             let className = "has-text-success", resourceTimeLeft = "";
-            const resourceCost = costs[resource2] * costMultiplier;
+            const resourceCost = listedCost * costMultiplier;
             if (res.currentQuantity < resourceCost) {
               className = "has-text-danger";
               if (res.maxQuantity >= resourceCost && res.income > 0) {
@@ -51100,8 +51109,9 @@
       if (typeof ResizeObserver === "function") {
         const resizeObserver = new ResizeObserver((entries) => {
           for (const entry of entries) {
-            if (entry.borderBoxSize) {
-              const elementHeight = entry.borderBoxSize[0].blockSize;
+            const [borderBox] = entry.borderBoxSize ?? [];
+            if (borderBox) {
+              const elementHeight = borderBox.blockSize;
               const totalHeight = `${elementHeight + $("#buildQueue").outerHeight()}px`;
               $("#msgQueue").css(
                 "max-height",
@@ -51929,14 +51939,15 @@
         );
         return;
       }
-      const arpaMatch = dataId.match(/^popArpa([a-z_-]+)\d*$/);
-      const queuedMatch = dataId.match(/^q([A-Za-z_-]+)\d*$/);
-      const obj = arpaMatch ? arpaIds[`arpa${arpaMatch[1]}`] : queuedMatch ? buildingIds[queuedMatch[1]] ?? arpaIds[queuedMatch[1]] : buildingIds[dataId] ?? techIds[dataId];
+      const arpaId = dataId.match(/^popArpa([a-z_-]+)\d*$/)?.[1];
+      const queuedId = dataId.match(/^q([A-Za-z_-]+)\d*$/)?.[1];
+      const obj = arpaId !== void 0 ? arpaIds[`arpa${arpaId}`] : queuedId !== void 0 ? buildingIds[queuedId] ?? arpaIds[queuedId] : buildingIds[dataId] ?? techIds[dataId];
       if (!obj || isTechnology(obj) && obj.isResearched?.()) {
         return;
       }
       if (obj === buildings.BlackholeStellarEngine && game.global.race.universe !== "magic" && buildings.BlackholeMassEjector.count > 0 && game.global.interstellar.stellar_engine.exotic < 0.025) {
-        const massPerSec = resources.Elerium.atomicMass * game.global.interstellar.mass_ejector.Elerium + resources.Infernite.atomicMass * game.global.interstellar.mass_ejector.Infernite || -1;
+        const ejected = game.global.interstellar.mass_ejector;
+        const massPerSec = resources.Elerium.atomicMass * (ejected.Elerium ?? 0) + resources.Infernite.atomicMass * (ejected.Infernite ?? 0) || -1;
         const missingExotics = (0.025 - game.global.interstellar.stellar_engine.exotic) * 1e10;
         $(node).append(
           `<div id="popTimer" class="flair has-text-advanced">Contaminated in [${poly.timeFormat(
@@ -52100,7 +52111,16 @@
         presetIndex = 0;
         settingsRaw.prestigeCustomRacePreset = "0";
       }
-      let preset = settingsRaw.prestigeCustomRacePresets[presetIndex];
+      const storedPreset = settingsRaw.prestigeCustomRacePresets[presetIndex];
+      const preset = storedPreset ?? {
+        name: "General",
+        json: ""
+      };
+      if (storedPreset === void 0) {
+        settingsRaw.prestigeCustomRacePresets = [preset];
+        settingsRaw.prestigeCustomRacePreset = "0";
+        presetIndex = 0;
+      }
       let draft = customRaceDraftFromPreset(preset);
       modal.append(
         '<div><h3 class="has-text-danger">Custom Race Presets</h3> - <span class="has-text-warning">Automation Custom Lab</span></div>'
@@ -52297,16 +52317,16 @@
         });
         rankDown.on("click", function() {
           if (!checkbox.prop("checked")) return;
-          let index = ranks.indexOf(currentRank);
-          if (index > 0) draft.ranks[id] = ranks[index - 1];
+          const lower = ranks[ranks.indexOf(currentRank) - 1];
+          if (lower !== void 0) draft.ranks[id] = lower;
           updateRank();
           saveDraft();
           updateSummary();
         });
         rankUp.on("click", function() {
           if (!checkbox.prop("checked")) return;
-          let index = ranks.indexOf(currentRank);
-          if (index < ranks.length - 1) draft.ranks[id] = ranks[index + 1];
+          const higher = ranks[ranks.indexOf(currentRank) + 1];
+          if (higher !== void 0) draft.ranks[id] = higher;
           updateRank();
           saveDraft();
           updateSummary();
@@ -55097,7 +55117,7 @@
       var css = getDocument().createElement("style");
       css.type = "text/css";
       css.appendChild(getDocument().createTextNode(styles));
-      getDocument().getElementsByTagName("head")[0].appendChild(css);
+      getDocument().head.appendChild(css);
     }
     function checkIgnoredError(error) {
       const message = typeof error === "string" ? error : String(error);
