@@ -54,7 +54,7 @@ function readBaseResources(manager: UnknownRecord): SampledAlchemyResource[] {
     return {
       id,
       resource: res,
-      currentCount: callNumber(manager, "currentCount", id),
+      currentCount: callNumber(manager, "currentCount", "AlchemyManager", id),
       weighting: 0,
       isUseful: false,
       transmuteTier: 0,
@@ -68,7 +68,12 @@ function sampleActiveResources(
   resources: readonly SampledAlchemyResource[],
 ): void {
   for (const resource of resources) {
-    resource.weighting = callNumber(manager, "resWeighting", resource.id);
+    resource.weighting = callNumber(
+      manager,
+      "resWeighting",
+      "AlchemyManager",
+      resource.id,
+    );
     if (resource.weighting > 0) {
       resource.isUseful = callBoolean(
         resource.resource,

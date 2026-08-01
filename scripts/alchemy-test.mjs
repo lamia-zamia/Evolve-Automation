@@ -40,8 +40,10 @@ import {
           },
         },
       ],
-      currentCount: () => 0,
-      resWeighting: () => 1,
+      // Keyed by id: the live manager indexes its state by the resource id,
+      // so an adapter that drops the argument must fail here rather than in game.
+      currentCount: (id) => ({ Iron: 0 })[id],
+      resWeighting: (id) => ({ Iron: 1 })[id],
       transmuteTier: () => {
         throw new Error("tier must not be read when helper is disabled");
       },

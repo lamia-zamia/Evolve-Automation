@@ -29067,7 +29067,7 @@
       return {
         id,
         resource: res,
-        currentCount: callNumber(manager, "currentCount", id),
+        currentCount: callNumber(manager, "currentCount", "AlchemyManager", id),
         weighting: 0,
         isUseful: false,
         transmuteTier: 0,
@@ -29077,7 +29077,12 @@
   }
   function sampleActiveResources(manager, resources) {
     for (const resource2 of resources) {
-      resource2.weighting = callNumber(manager, "resWeighting", resource2.id);
+      resource2.weighting = callNumber(
+        manager,
+        "resWeighting",
+        "AlchemyManager",
+        resource2.id
+      );
       if (resource2.weighting > 0) {
         resource2.isUseful = callBoolean(
           resource2.resource,
