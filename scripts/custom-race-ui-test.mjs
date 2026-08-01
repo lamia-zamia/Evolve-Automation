@@ -120,7 +120,10 @@ assert.deepEqual(ui.getCustomRacePreset(), {
   name: "Imported",
   json: JSON.stringify(validTemplate),
 });
+const labRanks = lab.g.ranks;
 assert.equal(ui.importCustomRaceIntoLab(), true);
+// The lab keeps the rank object it made reactive; the import refills it in place.
+assert.equal(lab.g.ranks, labRanks);
 assert.equal(lab.g.name, "Automata");
 assert.equal(lab.g.desc, "A test race");
 assert.deepEqual(lab.g.traitlist, ["smart"]);
@@ -135,6 +138,29 @@ settingsRaw.prestigeCustomRacePresets[0].json = JSON.stringify({
 state.customRaceImportAttempt = null;
 assert.equal(ui.importCustomRaceIntoLab(), false);
 assert.match(statusMessages.at(-1), /duplicates/);
+
+for (const json of ["null", "5", '"text"', "[]"]) {
+  settingsRaw.prestigeCustomRacePresets[0].json = json;
+  state.customRaceImportAttempt = null;
+  assert.equal(ui.importCustomRaceIntoLab(), false, `${json} imported`);
+  assert.match(statusMessages.at(-1), /expected a game custom-race export/);
+}
+
+settingsRaw.prestigeCustomRacePresets[0].json = JSON.stringify({
+  ...validTemplate,
+  fanaticism: 7,
+});
+state.customRaceImportAttempt = null;
+assert.equal(ui.importCustomRaceIntoLab(), false);
+assert.match(statusMessages.at(-1), /Fanaticism trait 7 is not selected/);
+
+settingsRaw.prestigeCustomRacePresets[0].json = JSON.stringify({
+  ...validTemplate,
+  ranks: [],
+});
+state.customRaceImportAttempt = null;
+assert.equal(ui.importCustomRaceIntoLab(), false);
+assert.match(statusMessages.at(-1), /ranks must contain positive numeric/);
 
 settingsRaw.prestigeCustomRacePresets[0].json = JSON.stringify(validTemplate);
 state.customRaceImportAttempt = null;

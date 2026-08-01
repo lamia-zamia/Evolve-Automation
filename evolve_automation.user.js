@@ -51970,6 +51970,38 @@
   }
 
   // src/ui/custom-race-ui.ts
+  var requiredTextKeys = [
+    "name",
+    "desc",
+    "entity",
+    "home",
+    "red",
+    "hell",
+    "gas",
+    "gas_moon",
+    "dwarf"
+  ];
+  var requiredTextLimits = {
+    name: 20,
+    desc: 255,
+    entity: 40,
+    home: 20,
+    red: 20,
+    hell: 20,
+    gas: 20,
+    gas_moon: 20,
+    dwarf: 20
+  };
+  var outerTextKeys = ["titan", "enceladus", "triton", "eris"];
+  function isPlainRecord(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function messageOf(error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  function traitDescription(trait2) {
+    return typeof trait2.desc === "function" ? trait2.desc() : trait2.desc ?? "";
+  }
   function createCustomRaceUI({
     getJQuery,
     getDocument,
@@ -52187,10 +52219,11 @@
       const showTraitEffect = (id) => {
         activeTrait = id;
         let trait2 = game.traits[id];
+        if (!trait2) return;
         let rank = draft.ranks[id] ?? 1;
         effectPanel.empty();
         $("<strong class='has-text-warning'></strong>").text(`${trait2.name} · r${rank}`).appendTo(effectPanel);
-        $("<div class='desc'></div>").html(typeof trait2.desc === "function" ? trait2.desc() : trait2.desc).appendTo(effectPanel);
+        $("<div class='desc'></div>").html(traitDescription(trait2)).appendTo(effectPanel);
         $(
           `<div class="effect ${trait2.val >= 0 ? "has-text-success" : "has-text-danger"}"></div>`
         ).html(customRaceTraitEffect(id, rank)).appendTo(effectPanel);
@@ -52209,32 +52242,24 @@
         '<div class="lame trait_selection"><h4 class="has-text-danger">Negative traits</h4></div>'
       ).appendTo(traitsArea);
       let traitRows = [];
-      let lastCategory = {
-        positive: null,
-        negative: null
-      };
+      let lastCategory = /* @__PURE__ */ new Map();
       for (let [id, trait2] of customRaceEditorTraits(draft)) {
-        let side = trait2.val >= 0 ? "positive" : "negative";
+        const side = trait2.val >= 0 ? "positive" : "negative";
         let targetArea = trait2.val >= 0 ? positiveArea : negativeArea;
-        if (lastCategory[side] !== trait2.taxonomy) {
-          lastCategory[side] = trait2.taxonomy;
-          $("<h5 class='has-text-caution'></h5>").text(game.loc(`genelab_traits_${trait2.taxonomy}`) ?? trait2.taxonomy).appendTo(targetArea);
+        if (!lastCategory.has(side) || lastCategory.get(side) !== trait2.taxonomy) {
+          lastCategory.set(side, trait2.taxonomy);
+          $("<h5 class='has-text-caution'></h5>").text(game.loc(`genelab_traits_${trait2.taxonomy}`)).appendTo(targetArea);
         }
         let row = $(
           `<div class="script-custom-trait field t${id}" style="display:flex; align-items:center; gap:5px; padding:2px 0;"></div>`
         ).appendTo(targetArea);
-        row.attr(
-          "data-search",
-          `${trait2.name} ${id} ${trait2.taxonomy}`.toLowerCase()
-        );
+        let search = `${trait2.name} ${id} ${trait2.taxonomy}`.toLowerCase();
+        row.attr("data-search", search);
         row.on("mouseenter click", () => showTraitEffect(id));
         let checkbox = $('<input type="checkbox" />').prop("checked", draft.traitlist.includes(id)).appendTo(row);
         $(
           `<span class="${trait2.val >= 0 ? "has-text-success" : "has-text-danger"}" style="flex:1;"></span>`
-        ).text(`${trait2.name} [${trait2.val >= 0 ? "+" : ""}${trait2.val}]`).attr(
-          "title",
-          typeof trait2.desc === "function" ? trait2.desc() : trait2.desc
-        ).appendTo(row);
+        ).text(`${trait2.name} [${trait2.val >= 0 ? "+" : ""}${trait2.val}]`).attr("title", traitDescription(trait2)).appendTo(row);
         let ranks = customRaceRankOptions(id);
         let currentRank = draft.ranks[id] ?? 1;
         if (!ranks.includes(currentRank)) ranks.push(currentRank);
@@ -52287,12 +52312,12 @@
           updateSummary();
         });
         updateRank();
-        traitRows.push(row);
+        traitRows.push({ node: row, search });
       }
       filter.on("input", function() {
         let query = this.value.trim().toLowerCase();
         traitRows.forEach(
-          (row) => row.toggle(!query || row.attr("data-search").includes(query))
+          (row) => row.node.toggle(!query || row.search.includes(query))
         );
       });
       let advanced = $(
@@ -52326,7 +52351,9 @@
         draft.traitlist.forEach(
           (id) => $("<option></option>").val(id).text(game.traits[id]?.name ?? id).appendTo(fanaticSelect)
         );
-        fanaticSelect.val(draft.fanaticism || "");
+        fanaticSelect.val(
+          typeof draft.fanaticism === "string" ? draft.fanaticism : ""
+        );
       }
       fanaticSelect.on("change", function() {
         draft.fanaticism = this.value || false;
@@ -52396,7 +52423,7 @@
             traitlist: (savedRace.traits ?? []).slice(),
             traits: void 0
           },
-          (key, value) => value === void 0 ? void 0 : value,
+          null,
           2
         );
         buildCustomRacePresetEditor(modal);
@@ -52411,7 +52438,7 @@
           updateSettingsFromState();
           buildCustomRacePresetEditor(modal);
         } catch (error) {
-          rawStatus.addClass("has-text-danger").text(`Invalid JSON: ${error.message}`);
+          rawStatus.addClass("has-text-danger").text(`Invalid JSON: ${messageOf(error)}`);
         }
       });
       saveDraft();
@@ -52429,19 +52456,26 @@
         return false;
       }
       state.customRaceImportAttempt = attemptKey;
-      let template;
+      let parsed;
       try {
-        template = JSON.parse(preset.json);
+        parsed = JSON.parse(preset.json);
       } catch (error) {
         showCustomRaceImportStatus(
-          `Automatic custom-race import of “${preset.name}” paused: invalid JSON (${error.message}).`,
+          `Automatic custom-race import of “${preset.name}” paused: invalid JSON (${messageOf(error)}).`,
           true
         );
         return false;
       }
-      let lab = getVueById("celestialLab");
-      let traits = template.traitlist ?? template.traits;
-      if (!lab?.g || !Array.isArray(traits) || typeof template.genus !== "string") {
+      const lab = getVueById("celestialLab");
+      const design = lab?.g;
+      const template = isPlainRecord(parsed) ? parsed : {};
+      const templateText = (key) => {
+        const value = template[key];
+        return typeof value === "string" ? value : "";
+      };
+      const genus = template.genus;
+      const traits = template.traitlist ?? template.traits;
+      if (!lab || !design || !Array.isArray(traits) || typeof genus !== "string") {
         showCustomRaceImportStatus(
           "Automatic custom-race import paused: expected a game custom-race export with genus and traitlist.",
           true
@@ -52455,19 +52489,8 @@
         );
         return false;
       }
-      let requiredText = [
-        "name",
-        "desc",
-        "entity",
-        "home",
-        "red",
-        "hell",
-        "gas",
-        "gas_moon",
-        "dwarf"
-      ];
-      let missingText = requiredText.filter(
-        (key) => typeof template[key] !== "string" || template[key].length === 0
+      const missingText = requiredTextKeys.filter(
+        (key) => templateText(key).length === 0
       );
       if (missingText.length > 0) {
         showCustomRaceImportStatus(
@@ -52476,16 +52499,22 @@
         );
         return false;
       }
-      if (!game.global.stats.achieve[`genus_${template.genus}`]?.l && template.genus !== lab.g.genus) {
+      if (!game.global.stats.achieve[`genus_${genus}`]?.l && genus !== design.genus) {
         showCustomRaceImportStatus(
-          `Automatic custom-race import paused: ${template.genus} genus is not unlocked.`,
+          `Automatic custom-race import paused: ${genus} genus is not unlocked.`,
           true
         );
         return false;
       }
-      let unavailableTraits = traits.filter(
-        (trait2) => typeof trait2 !== "string" || !/^[a-z0-9_]+$/.test(trait2) || document.querySelector(`#celestialLab .t${trait2}`) === null
-      );
+      const traitIds = [];
+      const unavailableTraits = [];
+      for (const trait2 of traits) {
+        if (typeof trait2 === "string" && /^[a-z0-9_]+$/.test(trait2) && document.querySelector(`#celestialLab .t${trait2}`) !== null) {
+          traitIds.push(trait2);
+        } else {
+          unavailableTraits.push(trait2);
+        }
+      }
       if (unavailableTraits.length > 0) {
         showCustomRaceImportStatus(
           `Automatic custom-race import paused: unavailable traits ${unavailableTraits.join(", ")}.`,
@@ -52493,53 +52522,50 @@
         );
         return false;
       }
-      let ranks = template.ranks ?? {};
-      if (typeof ranks !== "object" || Array.isArray(ranks) || Object.entries(ranks).some(
-        ([trait2, rank]) => !traits.includes(trait2) || typeof rank !== "number" || !Number.isFinite(rank) || rank <= 0 || !customRaceRankOptions(trait2).includes(rank)
-      )) {
+      const storedRanks = template.ranks ?? {};
+      const ranks = {};
+      if (!isPlainRecord(storedRanks)) {
         showCustomRaceImportStatus(
           "Automatic custom-race import paused: ranks must contain positive numeric values for selected traits only.",
           true
         );
         return false;
       }
-      let fanaticism = template.fanaticism || false;
-      if (fanaticism && !traits.includes(fanaticism)) {
+      for (const [trait2, rank] of Object.entries(storedRanks)) {
+        if (!traitIds.includes(trait2) || typeof rank !== "number" || !Number.isFinite(rank) || rank <= 0 || !customRaceRankOptions(trait2).includes(rank)) {
+          showCustomRaceImportStatus(
+            "Automatic custom-race import paused: ranks must contain positive numeric values for selected traits only.",
+            true
+          );
+          return false;
+        }
+        ranks[trait2] = rank;
+      }
+      const fanaticism = template.fanaticism || false;
+      if (fanaticism && !(typeof fanaticism === "string" && traitIds.includes(fanaticism))) {
         showCustomRaceImportStatus(
-          `Automatic custom-race import paused: Fanaticism trait ${fanaticism} is not selected.`,
+          `Automatic custom-race import paused: Fanaticism trait ${String(fanaticism)} is not selected.`,
           true
         );
         return false;
       }
-      let textLimits = {
-        name: 20,
-        desc: 255,
-        entity: 40,
-        home: 20,
-        red: 20,
-        hell: 20,
-        gas: 20,
-        gas_moon: 20,
-        dwarf: 20
-      };
-      requiredText.forEach(
-        (key) => lab.g[key] = template[key].substring(0, textLimits[key])
-      );
-      ["titan", "enceladus", "triton", "eris"].forEach((key) => {
-        if (typeof template[key] === "string" && template[key].length > 0) {
-          lab.g[key] = template[key];
-        }
+      requiredTextKeys.forEach((key) => {
+        design[key] = templateText(key).substring(0, requiredTextLimits[key]);
       });
-      lab.g.genus = template.genus;
-      lab.g.traitlist = traits.slice();
-      lab.g.fanaticism = fanaticism;
-      lab.g.ranks ??= {};
-      Object.keys(lab.g.ranks).forEach((trait2) => delete lab.g.ranks[trait2]);
-      Object.assign(lab.g.ranks, ranks);
+      outerTextKeys.forEach((key) => {
+        const value = templateText(key);
+        if (value.length > 0) design[key] = value;
+      });
+      design.genus = genus;
+      design.traitlist = traitIds;
+      design.fanaticism = fanaticism;
+      const labRanks = design.ranks ??= {};
+      Object.keys(labRanks).forEach((trait2) => delete labRanks[trait2]);
+      Object.assign(labRanks, ranks);
       lab.geneEdit();
-      if (lab.g.genes < 0) {
+      if (design.genes < 0) {
         showCustomRaceImportStatus(
-          `Automatic custom-race import paused: template exceeds the live gene budget by ${Math.abs(lab.g.genes)}. Edit the lab or paste a cheaper export.`,
+          `Automatic custom-race import paused: template exceeds the live gene budget by ${Math.abs(design.genes)}. Edit the lab or paste a cheaper export.`,
           true
         );
         return false;

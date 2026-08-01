@@ -1,4 +1,4 @@
-interface TraitDefinition {
+export interface TraitDefinition {
   val: number;
   taxonomy?: string;
   origin: string;
@@ -42,7 +42,7 @@ interface CustomRaceGame {
   loc(id: string): string;
 }
 
-interface CustomRaceDraft {
+export interface CustomRaceDraft {
   name: string;
   desc: string;
   entity: string;
