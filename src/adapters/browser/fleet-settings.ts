@@ -3,12 +3,13 @@ import {
   type FleetSettingsReadModel,
 } from "../../domain/combat/fleet-settings.ts";
 import type { FleetSettingsIntentHandler } from "../../ports/fleet-settings.ts";
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -225,17 +226,18 @@ export function createFleetSettingsBrowserAdapter({
   }
   function updateFleetSettingsContent(secondaryPrefix: string): void {
     const model = reader.read();
-    const document = getDocument();
-    const scroll =
-      document.documentElement.scrollTop || document.body.scrollTop;
-    const node = getJQuery()(
-      `#script_${secondaryPrefix}${model.sectionId}Content`,
-    );
-    node.empty().off("*");
     const actions = getActions();
-    renderOuter(node, secondaryPrefix, model, actions);
-    renderAndromeda(node, secondaryPrefix, model, actions);
-    document.documentElement.scrollTop = document.body.scrollTop = scroll;
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: `${secondaryPrefix}${model.sectionId}`,
+      },
+      (node) => {
+        renderOuter(node, secondaryPrefix, model, actions);
+        renderAndromeda(node, secondaryPrefix, model, actions);
+      },
+    );
   }
   return Object.freeze({ buildFleetSettings, updateFleetSettingsContent });
 }

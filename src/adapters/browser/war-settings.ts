@@ -3,15 +3,12 @@ import type {
   WarSettingsReadModel,
 } from "../../domain/combat/war-settings.ts";
 import type { WarSettingsIntentHandler } from "../../ports/war-settings.ts";
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode as JQueryNode,
+} from "./settings-section.ts";
 
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-interface JQueryNode {
-  empty(): JQueryNode;
-  off(events: string): JQueryNode;
-}
 type JQuery = (selector: string) => JQueryNode;
 type Action = () => void;
 
@@ -117,16 +114,18 @@ export function createWarSettingsBrowserAdapter({
   }
   function updateWarSettingsContent(secondaryPrefix: string): void {
     const model = reader.read();
-    const document = getDocument();
-    const scroll =
-      document.documentElement.scrollTop || document.body.scrollTop;
-    const node = getJQuery()(
-      `#script_${secondaryPrefix}${model.sectionId}Content`,
-    );
-    node.empty().off("*");
     const actions = getActions();
-    for (const control of model.controls) renderControl(node, control, actions);
-    document.documentElement.scrollTop = document.body.scrollTop = scroll;
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: `${secondaryPrefix}${model.sectionId}`,
+      },
+      (node) => {
+        for (const control of model.controls)
+          renderControl(node, control, actions);
+      },
+    );
   }
   return Object.freeze({ buildWarSettings, updateWarSettingsContent });
 }

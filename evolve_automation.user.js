@@ -46843,15 +46843,18 @@
     }
     function updateWarSettingsContent(secondaryPrefix) {
       const model = reader.read();
-      const document = getDocument();
-      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
-      const node = getJQuery()(
-        `#script_${secondaryPrefix}${model.sectionId}Content`
-      );
-      node.empty().off("*");
       const actions = getActions();
-      for (const control of model.controls) renderControl2(node, control, actions);
-      document.documentElement.scrollTop = document.body.scrollTop = scroll;
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${secondaryPrefix}${model.sectionId}`
+        },
+        (node) => {
+          for (const control of model.controls)
+            renderControl2(node, control, actions);
+        }
+      );
     }
     return Object.freeze({ buildWarSettings, updateWarSettingsContent });
   }
@@ -47112,15 +47115,18 @@
     }
     function updateHellSettingsContent(secondaryPrefix) {
       const model = reader.read();
-      const document = getDocument();
-      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
-      const node = getJQuery()(
-        `#script_${secondaryPrefix}${model.sectionId}Content`
-      );
-      node.empty().off("*");
       const actions = getActions();
-      for (const control of model.controls) renderControl2(node, control, actions);
-      document.documentElement.scrollTop = document.body.scrollTop = scroll;
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${secondaryPrefix}${model.sectionId}`
+        },
+        (node) => {
+          for (const control of model.controls)
+            renderControl2(node, control, actions);
+        }
+      );
     }
     return Object.freeze({ buildHellSettings, updateHellSettingsContent });
   }
@@ -47319,11 +47325,19 @@
     }
     function updateMechSettingsContent() {
       const model = reader.read();
-      const document = getDocument();
-      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
       const actions = getActions();
-      const node = getJQuery()(`#script_${model.sectionId}Content`);
-      node.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: model.sectionId
+        },
+        (node) => {
+          renderMechContent(node, model, actions);
+        }
+      );
+    }
+    function renderMechContent(node, model, actions) {
       for (const control of model.controls) {
         renderControl2(node, control, actions);
         if (control.kind === "header") {
@@ -47353,7 +47367,6 @@
           actions.calculateMechStats();
         }
       }
-      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({ buildMechSettings, updateMechSettingsContent });
   }
@@ -47795,10 +47808,18 @@
     }
     function updateTriggerSettingsContent() {
       const model = reader.read();
-      const document = getDocument();
-      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
-      const node = getJQuery()(`#script_${model.sectionId}Content`);
-      node.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: model.sectionId
+        },
+        (node) => {
+          renderTriggerContent(node, model);
+        }
+      );
+    }
+    function renderTriggerContent(node, model) {
       node.append(
         '<div style="margin-top: 10px;"><button id="script_trigger_add" class="button">Add New Trigger</button></div>'
       );
@@ -47827,7 +47848,6 @@
             });
         }
       });
-      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({ buildTriggerSettings, updateTriggerSettingsContent });
   }
@@ -48121,16 +48141,18 @@
     }
     function updateFleetSettingsContent(secondaryPrefix) {
       const model = reader.read();
-      const document = getDocument();
-      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
-      const node = getJQuery()(
-        `#script_${secondaryPrefix}${model.sectionId}Content`
-      );
-      node.empty().off("*");
       const actions = getActions();
-      renderOuter(node, secondaryPrefix, model, actions);
-      renderAndromeda(node, secondaryPrefix, model, actions);
-      document.documentElement.scrollTop = document.body.scrollTop = scroll;
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${secondaryPrefix}${model.sectionId}`
+        },
+        (node) => {
+          renderOuter(node, secondaryPrefix, model, actions);
+          renderAndromeda(node, secondaryPrefix, model, actions);
+        }
+      );
     }
     return Object.freeze({ buildFleetSettings, updateFleetSettingsContent });
   }
@@ -48611,11 +48633,19 @@
     }
     function updatePrestigeSettingsContent(prefix) {
       const model = reader.read();
-      const document = getDocument();
-      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
       const actions = getActions();
-      const node = getJQuery()(`#script_${prefix}${model.sectionId}Content`);
-      node.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${prefix}${model.sectionId}`
+        },
+        (node) => {
+          renderPrestigeContent(node, model, actions);
+        }
+      );
+    }
+    function renderPrestigeContent(node, model, actions) {
       for (const control of model.controls) renderControl2(node, control, actions);
       const prestigeRow = node.find(".script_bg_prestigeType");
       prestigeRow.toggleClass("inactive-row", false).on(
@@ -48628,7 +48658,6 @@
         },
         actions.openOverrideModal
       );
-      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({
       buildPrestigeSettings,
@@ -48846,11 +48875,19 @@
     }
     function updateEvolutionSettingsContent() {
       const model = reader.read();
-      const document = getDocument();
-      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
       const actions = getActions();
-      const node = getJQuery()(`#script_${model.sectionId}Content`);
-      node.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: model.sectionId
+        },
+        (node) => {
+          renderEvolutionContent(node, model, actions);
+        }
+      );
+    }
+    function renderEvolutionContent(node, model, actions) {
       for (const control of model.controls) renderControl2(node, control, actions);
       node.append('<div><span id="script_race_warning"></span></div>');
       if (model.raceWarning)
@@ -48909,7 +48946,6 @@
             });
         }
       });
-      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({
       buildEvolutionSettings,

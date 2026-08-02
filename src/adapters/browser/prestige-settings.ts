@@ -3,11 +3,12 @@ import {
   type PrestigeSettingsReadModel,
 } from "../../domain/progression/prestige/prestige-settings.ts";
 import type { PrestigeSettingsIntentHandler } from "../../ports/prestige-settings.ts";
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-interface JQueryNode {
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -139,12 +140,24 @@ export function createPrestigeSettingsBrowserAdapter({
   }
   function updatePrestigeSettingsContent(prefix: string): void {
     const model = reader.read();
-    const document = getDocument();
-    const scroll =
-      document.documentElement.scrollTop || document.body.scrollTop;
     const actions = getActions();
-    const node = getJQuery()(`#script_${prefix}${model.sectionId}Content`);
-    node.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: `${prefix}${model.sectionId}`,
+      },
+      (node) => {
+        renderPrestigeContent(node, model, actions);
+      },
+    );
+  }
+
+  function renderPrestigeContent(
+    node: JQueryNode,
+    model: PrestigeSettingsReadModel,
+    actions: PrestigeSettingsBrowserActions,
+  ): void {
     for (const control of model.controls) renderControl(node, control, actions);
     const prestigeRow = node.find(".script_bg_prestigeType");
     prestigeRow.toggleClass("inactive-row", false).on(
@@ -157,7 +170,6 @@ export function createPrestigeSettingsBrowserAdapter({
       },
       actions.openOverrideModal,
     );
-    document.documentElement.scrollTop = document.body.scrollTop = scroll;
   }
   return Object.freeze({
     buildPrestigeSettings,

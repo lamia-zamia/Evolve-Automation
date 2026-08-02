@@ -8,12 +8,13 @@ import {
   type TriggerValue,
 } from "../../domain/progression/build/trigger-settings.ts";
 import type { TriggerSettingsIntentHandler } from "../../ports/trigger-settings.ts";
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -250,11 +251,22 @@ export function createTriggerSettingsBrowserAdapter({
 
   function updateTriggerSettingsContent(): void {
     const model = reader.read();
-    const document = getDocument();
-    const scroll =
-      document.documentElement.scrollTop || document.body.scrollTop;
-    const node = getJQuery()(`#script_${model.sectionId}Content`);
-    node.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: model.sectionId,
+      },
+      (node) => {
+        renderTriggerContent(node, model);
+      },
+    );
+  }
+
+  function renderTriggerContent(
+    node: JQueryNode,
+    model: TriggerSettingsReadModel,
+  ): void {
     node.append(
       '<div style="margin-top: 10px;"><button id="script_trigger_add" class="button">Add New Trigger</button></div>',
     );
@@ -285,7 +297,6 @@ export function createTriggerSettingsBrowserAdapter({
           });
       },
     });
-    document.documentElement.scrollTop = document.body.scrollTop = scroll;
   }
 
   return Object.freeze({ buildTriggerSettings, updateTriggerSettingsContent });

@@ -3,11 +3,12 @@ import {
   type EvolutionSettingsReadModel,
 } from "../../domain/progression/evolution/evolution-settings.ts";
 import type { EvolutionSettingsIntentHandler } from "../../ports/evolution-settings.ts";
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-interface JQueryNode {
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -109,12 +110,24 @@ export function createEvolutionSettingsBrowserAdapter({
   }
   function updateEvolutionSettingsContent(): void {
     const model = reader.read();
-    const document = getDocument();
-    const scroll =
-      document.documentElement.scrollTop || document.body.scrollTop;
     const actions = getActions();
-    const node = getJQuery()(`#script_${model.sectionId}Content`);
-    node.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: model.sectionId,
+      },
+      (node) => {
+        renderEvolutionContent(node, model, actions);
+      },
+    );
+  }
+
+  function renderEvolutionContent(
+    node: JQueryNode,
+    model: EvolutionSettingsReadModel,
+    actions: EvolutionSettingsBrowserActions,
+  ): void {
     for (const control of model.controls) renderControl(node, control, actions);
     node.append('<div><span id="script_race_warning"></span></div>');
     if (model.raceWarning)
@@ -177,7 +190,6 @@ export function createEvolutionSettingsBrowserAdapter({
           });
       },
     });
-    document.documentElement.scrollTop = document.body.scrollTop = scroll;
   }
   return Object.freeze({
     buildEvolutionSettings,

@@ -3,11 +3,12 @@ import type {
   MechSettingsReadModel,
 } from "../../domain/combat/mech-settings.ts";
 import type { MechSettingsIntentHandler } from "../../ports/mech-settings.ts";
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-interface JQueryNode {
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -109,12 +110,24 @@ export function createMechSettingsBrowserAdapter({
   }
   function updateMechSettingsContent(): void {
     const model = reader.read();
-    const document = getDocument();
-    const scroll =
-      document.documentElement.scrollTop || document.body.scrollTop;
     const actions = getActions();
-    const node = getJQuery()(`#script_${model.sectionId}Content`);
-    node.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: model.sectionId,
+      },
+      (node) => {
+        renderMechContent(node, model, actions);
+      },
+    );
+  }
+
+  function renderMechContent(
+    node: JQueryNode,
+    model: MechSettingsReadModel,
+    actions: MechSettingsBrowserActions,
+  ): void {
     for (const control of model.controls) {
       renderControl(node, control, actions);
       if (control.kind === "header") {
@@ -144,7 +157,6 @@ export function createMechSettingsBrowserAdapter({
         actions.calculateMechStats();
       }
     }
-    document.documentElement.scrollTop = document.body.scrollTop = scroll;
   }
   return Object.freeze({ buildMechSettings, updateMechSettingsContent });
 }
