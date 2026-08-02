@@ -11,13 +11,14 @@ import {
 
 const EMPTY_COST: Readonly<Record<string, number>> = Object.freeze({});
 
+/** As `callBoolean`, except the caller validates the answer it asked for. */
 const call = (
   record: UnknownRecord,
-  method: string,
+  name: string,
   path: string,
-  ...args: readonly unknown[]
+  ...args: unknown[]
 ): unknown =>
-  requireFunction(record[method], `${path}.${method}`).apply(record, [...args]);
+  Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, args);
 
 /**
  * The `name` of the resource a consumption answer named, or `null` when it

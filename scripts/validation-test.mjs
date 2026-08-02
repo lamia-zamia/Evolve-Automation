@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   callBoolean,
   callNumber,
+  callVoid,
   isFiniteNumber,
   isNonArrayRecord,
   isNonNegativeNumber,
@@ -177,6 +178,23 @@ assert.equal(
 assert.equal(
   messageOf(() => callNumber(manager, "fuel", "SmelterManager")),
   "SmelterManager.fuel must be a function, got number 3",
+);
+
+// A void call passes its arguments and receiver like the others and discards
+// whatever the method answered, including a value the others would reject.
+const effects = [];
+const controls = {
+  id: "bay",
+  drag(from, to) {
+    effects.push(`${this.id}:${from}->${to}`);
+    return Number.NaN;
+  },
+};
+assert.equal(callVoid(controls, "drag", "MechManager", 3, 1), undefined);
+assert.deepEqual(effects, ["bay:3->1"]);
+assert.equal(
+  messageOf(() => callVoid(controls, "scrap", "MechManager")),
+  "MechManager.scrap must be a function, got undefined",
 );
 
 // A non-empty string rejects the empty string that `requireString` accepts, because

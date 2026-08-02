@@ -152,6 +152,10 @@
       `${path}.${name}()`
     );
   }
+  function callVoid(record, name, path, ...args) {
+    const method = requireFunction(record[name], `${path}.${name}`);
+    Reflect.apply(method, record, args);
+  }
 
   // src/adapters/browser/diagnostics.ts
   function createBrowserDiagnostics(globalObject) {
@@ -25055,7 +25059,7 @@
 
   // src/adapters/evolve/progression/build/weighting-candidate.ts
   var EMPTY_COST = Object.freeze({});
-  var call = (record, method, path, ...args) => requireFunction(record[method], `${path}.${method}`).apply(record, [...args]);
+  var call = (record, name, path, ...args) => Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, args);
   var resourceName = (value, path) => value === null || value === void 0 ? null : requireString(requireRecord(value, path)["name"], `${path}.name`);
   var readCost = (record, path) => {
     const cost = requireRecord(record["cost"], `${path}.cost`);
@@ -26221,8 +26225,9 @@
     if (value === Number.POSITIVE_INFINITY) return Number.MAX_SAFE_INTEGER;
     return requireNumber(value, path);
   }
-  function call2(target, key, path, args = []) {
-    return Reflect.apply(requireFunction(target[key], path), target, args);
+  function call2(target, name, path, ...args) {
+    const method = requireFunction(target[name], `${path}.${name}`);
+    return Reflect.apply(method, target, args);
   }
   function unavailableInput() {
     return Object.freeze({
@@ -26534,8 +26539,8 @@
           call2(
             active.manager,
             "getSoldiersForAttackRating",
-            "WarManager.getSoldiersForAttackRating",
-            [request.garrisonRating]
+            "WarManager",
+            request.garrisonRating
           ),
           "Hell garrison soldier target"
         );
@@ -26543,8 +26548,8 @@
           call2(
             active.manager,
             "getSoldiersForAttackRating",
-            "WarManager.getSoldiersForAttackRating",
-            [request.patrolRating]
+            "WarManager",
+            request.patrolRating
           ),
           "Hell patrol soldier target"
         );
@@ -45385,8 +45390,9 @@
   }
 
   // src/adapters/evolve/combat/mech.ts
-  function call3(target, key, path, args = []) {
-    return Reflect.apply(requireFunction(target[key], path), target, args);
+  function call3(target, name, path, ...args) {
+    const method = requireFunction(target[name], `${path}.${name}`);
+    return Reflect.apply(method, target, args);
   }
   function readArray(value, path) {
     if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
@@ -45582,21 +45588,19 @@
         let forceBuild = false;
         if (active.cycleInput.buildMode === "random") {
           const preferred = readArray(
-            call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
+            call3(manager, "getPreferredSize", "MechManager"),
             "MechManager.getPreferredSize result"
           );
           const size = requireString(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
-            call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
+            call3(manager, "getRandomMech", "MechManager", size),
             "random mech"
           );
         } else {
           const blueprint = requireRecord(bay["blueprint"], "mechbay.blueprint");
           const statistics = requireRecord(
-            call3(manager, "getMechStats", "MechManager.getMechStats", [
-              blueprint
-            ]),
+            call3(manager, "getMechStats", "MechManager", blueprint),
             "blueprint mech statistics"
           );
           rawDesign = { ...blueprint, ...statistics };
@@ -45604,7 +45608,7 @@
         const design = readDesign(rawDesign, "primary", "selected mech");
         active.designs.set(design.token, rawDesign);
         const cost = readCost3(
-          call3(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
+          call3(manager, "getMechCost", "MechManager", rawDesign),
           "selected mech cost"
         );
         const fillBay = requireBoolean(
@@ -45642,9 +45646,7 @@
         if (saveSupplyRatio > 0 && !lastFloor && !forceBuild) {
           if (baySpace < cost.space) {
             titanSupplyRefund = readCostLikeRefund(
-              call3(manager, "getMechRefund", "MechManager.getMechRefund", [
-                { size: "titan" }
-              ]),
+              call3(manager, "getMechRefund", "MechManager", { size: "titan" }),
               "titan mech refund"
             ).supply;
           }
@@ -45792,9 +45794,7 @@
                 let space = 0;
                 if (!(summary.infernal && summary.size !== "collector" || summary.power >= bestPower)) {
                   const refund = readCostLikeRefund(
-                    call3(manager, "getMechRefund", "MechManager.getMechRefund", [
-                      raw
-                    ]),
+                    call3(manager, "getMechRefund", "MechManager", raw),
                     `${path} refund`
                   );
                   gemRefund = refund.gems;
@@ -45825,9 +45825,7 @@
           throw new Error("mech planning has not been sampled");
         }
         const cost = readCost3(
-          call3(active.manager, "getMechCost", "MechManager.getMechCost", [
-            { size }
-          ]),
+          call3(active.manager, "getMechCost", "MechManager", { size }),
           `mech cost for ${size}`
         );
         debug(
@@ -45841,9 +45839,7 @@
           throw new Error("mech planning has not been sampled");
         }
         const raw = requireRecord(
-          call3(active.manager, "getRandomMech", "MechManager.getRandomMech", [
-            size
-          ]),
+          call3(active.manager, "getRandomMech", "MechManager", size),
           `random ${size} mech`
         );
         const token = `smaller-${active.nextToken++}`;
@@ -45873,10 +45869,13 @@
         active.manager["isActive"] = false;
         active.manager["saveSupply"] = false;
         if (decision2.drag !== null) {
-          call3(active.manager, "dragMech", "MechManager.dragMech", [
+          callVoid(
+            active.manager,
+            "dragMech",
+            "MechManager",
             decision2.drag.oldId,
             decision2.drag.newId
-          ]);
+          );
         }
         return SUCCEEDED;
       },
@@ -45910,9 +45909,7 @@
           ]);
         } else if (rawMechs.length === 1) {
           const description = requireString(
-            call3(active.manager, "mechDesc", "MechManager.mechDesc", [
-              rawMechs[0]
-            ]),
+            call3(active.manager, "mechDesc", "MechManager", rawMechs[0]),
             "mech description"
           );
           Reflect.apply(logSuccess, log, [
@@ -45925,7 +45922,7 @@
           () => `scrap: ids=[${decision2.ids.join(",")}] gained={supply:${Math.round(decision2.supplyGained)},gems:${decision2.gemsGained},space:${decision2.spaceGained}}`
         );
         for (const mech of rawMechs) {
-          call3(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
+          callVoid(active.manager, "scrapMech", "MechManager", mech);
         }
         const supply = requireRecord(
           active.resources["Supply"],
@@ -45980,7 +45977,7 @@
         debug(
           () => `build: size=${String(rawDesign["size"])} cost={gems:${decision2.cost.gems},supply:${decision2.cost.supply}} restoring isActive=${String(decision2.prolongActive)}`
         );
-        call3(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
+        callVoid(active.manager, "buildMech", "MechManager", rawDesign);
         supply["currentQuantity"] = continuation.supplyCurrent - decision2.cost.supply;
         gems["currentQuantity"] = continuation.gemsCurrent - decision2.cost.gems;
         active.manager["isActive"] = decision2.prolongActive;
@@ -50811,9 +50808,6 @@
   }
 
   // src/adapters/evolve/combat/mech-info.ts
-  function call4(target, key, path, args = []) {
-    return Reflect.apply(requireFunction(target[key], path), target, args);
-  }
   function createMechInfoEvolveAdapter({
     getGame,
     getMechManager,
@@ -50852,8 +50846,12 @@
           `game.global.portal.mechbay.mechs[${index}]`
         );
         const size = requireString(mech["size"], `mechs[${index}].size`);
+        const getMechStats = requireFunction(
+          manager["getMechStats"],
+          "MechManager.getMechStats"
+        );
         const stats = requireRecord(
-          call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
+          Reflect.apply(getMechStats, manager, [mech]),
           `MechManager.getMechStats(${index})`
         );
         const best = requireRecord(
@@ -50892,23 +50890,23 @@
     const observer = Object.freeze({
       disconnect() {
         const target = getObserver();
-        call4(target, "disconnect", "MechManager.mechObserver.disconnect");
+        callVoid(target, "disconnect", "MechManager.mechObserver");
       },
       observe(target, options2) {
         const observerTarget = getObserver();
-        call4(observerTarget, "observe", "MechManager.mechObserver.observe", [
+        callVoid(
+          observerTarget,
+          "observe",
+          "MechManager.mechObserver",
           target,
           options2
-        ]);
+        );
       }
     });
     return Object.freeze({ reader, observer });
   }
 
   // src/adapters/browser/mech-info.ts
-  function call5(target, key, path, args = []) {
-    return Reflect.apply(requireFunction(target[key], path), target, args);
-  }
   function requireObjectLike(value, path) {
     if (value === null || typeof value !== "object" && typeof value !== "function") {
       throw new TypeError(`${path} must be an object`);
@@ -50923,11 +50921,11 @@
         return callBoolean(raw, "hasClass", path, className);
       },
       text(textValue) {
-        call5(raw, "text", `${path}.text`, [textValue]);
+        callVoid(raw, "text", path, textValue);
         return this;
       },
       remove() {
-        call5(raw, "remove", `${path}.remove`);
+        callVoid(raw, "remove", path);
         return this;
       }
     };
@@ -50948,7 +50946,7 @@
       childNodes,
       firstChild: raw["firstChild"],
       insertBefore(note, before) {
-        call5(raw, "insertBefore", `${path}.insertBefore`, [note, before]);
+        callVoid(raw, "insertBefore", path, note, before);
       }
     };
   }

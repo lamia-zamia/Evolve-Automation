@@ -5,6 +5,7 @@ import type {
 } from "../../ports/mech-info.ts";
 import {
   callBoolean,
+  callVoid,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -40,15 +41,6 @@ export interface MechInfoBrowserAdapter {
   removeMechInfo(): void;
 }
 
-function call(
-  target: Record<PropertyKey, unknown>,
-  key: string,
-  path: string,
-  args: readonly unknown[] = [],
-): unknown {
-  return Reflect.apply(requireFunction(target[key], path), target, args);
-}
-
 function requireObjectLike(
   value: unknown,
   path: string,
@@ -70,11 +62,11 @@ function readJQueryNode(value: unknown, path: string): JQueryNode {
       return callBoolean(raw, "hasClass", path, className);
     },
     text(textValue: string): JQueryNode {
-      call(raw, "text", `${path}.text`, [textValue]);
+      callVoid(raw, "text", path, textValue);
       return this;
     },
     remove(): JQueryNode {
-      call(raw, "remove", `${path}.remove`);
+      callVoid(raw, "remove", path);
       return this;
     },
   };
@@ -97,7 +89,7 @@ function readMechNode(value: unknown, path: string): MechNode {
     childNodes,
     firstChild: raw["firstChild"],
     insertBefore(note: unknown, before: unknown): void {
-      call(raw, "insertBefore", `${path}.insertBefore`, [note, before]);
+      callVoid(raw, "insertBefore", path, note, before);
     },
   };
 }

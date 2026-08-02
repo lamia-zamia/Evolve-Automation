@@ -20,6 +20,7 @@ import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
   callBoolean,
   callNumber,
+  callVoid,
   requireBoolean,
   requireFunction,
   requireNumber,
@@ -59,13 +60,15 @@ interface MechSession {
   nextToken: number;
 }
 
+/** As `callBoolean`, except the caller validates the answer it asked for. */
 function call(
   target: UnknownRecord,
-  key: string,
+  name: string,
   path: string,
-  args: readonly unknown[] = [],
+  ...args: unknown[]
 ): unknown {
-  return Reflect.apply(requireFunction(target[key], path), target, args);
+  const method = requireFunction(target[name], `${path}.${name}`);
+  return Reflect.apply(method, target, args);
 }
 
 function readArray(value: unknown, path: string): readonly unknown[] {
@@ -313,21 +316,19 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
       let forceBuild = false;
       if (active.cycleInput.buildMode === "random") {
         const preferred = readArray(
-          call(manager, "getPreferredSize", "MechManager.getPreferredSize"),
+          call(manager, "getPreferredSize", "MechManager"),
           "MechManager.getPreferredSize result",
         );
         const size = requireString(preferred[0], "preferred mech size");
         forceBuild = Boolean(preferred[1]);
         rawDesign = requireRecord(
-          call(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
+          call(manager, "getRandomMech", "MechManager", size),
           "random mech",
         );
       } else {
         const blueprint = requireRecord(bay["blueprint"], "mechbay.blueprint");
         const statistics = requireRecord(
-          call(manager, "getMechStats", "MechManager.getMechStats", [
-            blueprint,
-          ]),
+          call(manager, "getMechStats", "MechManager", blueprint),
           "blueprint mech statistics",
         );
         rawDesign = { ...blueprint, ...statistics };
@@ -335,7 +336,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
       const design = readDesign(rawDesign, "primary", "selected mech");
       active.designs.set(design.token, rawDesign);
       const cost = readCost(
-        call(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
+        call(manager, "getMechCost", "MechManager", rawDesign),
         "selected mech cost",
       );
       const fillBay = requireBoolean(
@@ -382,9 +383,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
       if (saveSupplyRatio > 0 && !lastFloor && !forceBuild) {
         if (baySpace < cost.space) {
           titanSupplyRefund = readCostLikeRefund(
-            call(manager, "getMechRefund", "MechManager.getMechRefund", [
-              { size: "titan" },
-            ]),
+            call(manager, "getMechRefund", "MechManager", { size: "titan" }),
             "titan mech refund",
           ).supply;
         }
@@ -558,9 +557,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
                 summary.power >= bestPower
               )) {
                 const refund = readCostLikeRefund(
-                  call(manager, "getMechRefund", "MechManager.getMechRefund", [
-                    raw,
-                  ]),
+                  call(manager, "getMechRefund", "MechManager", raw),
                   `${path} refund`,
                 );
                 gemRefund = refund.gems;
@@ -600,9 +597,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
         throw new Error("mech planning has not been sampled");
       }
       const cost = readCost(
-        call(active.manager, "getMechCost", "MechManager.getMechCost", [
-          { size },
-        ]),
+        call(active.manager, "getMechCost", "MechManager", { size }),
         `mech cost for ${size}`,
       );
       debug(
@@ -618,9 +613,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
         throw new Error("mech planning has not been sampled");
       }
       const raw = requireRecord(
-        call(active.manager, "getRandomMech", "MechManager.getRandomMech", [
-          size,
-        ]),
+        call(active.manager, "getRandomMech", "MechManager", size),
         `random ${size} mech`,
       );
       const token = `smaller-${active.nextToken++}`;
@@ -656,10 +649,13 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
       active.manager["isActive"] = false;
       active.manager["saveSupply"] = false;
       if (decision.drag !== null) {
-        call(active.manager, "dragMech", "MechManager.dragMech", [
+        callVoid(
+          active.manager,
+          "dragMech",
+          "MechManager",
           decision.drag.oldId,
           decision.drag.newId,
-        ]);
+        );
       }
       return SUCCEEDED;
     },
@@ -694,9 +690,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
         ]);
       } else if (rawMechs.length === 1) {
         const description = requireString(
-          call(active.manager, "mechDesc", "MechManager.mechDesc", [
-            rawMechs[0],
-          ]),
+          call(active.manager, "mechDesc", "MechManager", rawMechs[0]),
           "mech description",
         );
         Reflect.apply(logSuccess, log, [
@@ -710,7 +704,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
           `scrap: ids=[${decision.ids.join(",")}] gained={supply:${Math.round(decision.supplyGained)},gems:${decision.gemsGained},space:${decision.spaceGained}}`,
       );
       for (const mech of rawMechs) {
-        call(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
+        callVoid(active.manager, "scrapMech", "MechManager", mech);
       }
       const supply = requireRecord(
         active.resources["Supply"],
@@ -777,7 +771,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
           `build: size=${String(rawDesign["size"])} cost={gems:${decision.cost.gems},supply:${decision.cost.supply}}` +
           ` restoring isActive=${String(decision.prolongActive)}`,
       );
-      call(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
+      callVoid(active.manager, "buildMech", "MechManager", rawDesign);
       supply["currentQuantity"] =
         continuation.supplyCurrent - decision.cost.supply;
       gems["currentQuantity"] = continuation.gemsCurrent - decision.cost.gems;

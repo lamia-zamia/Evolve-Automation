@@ -8,6 +8,7 @@ import type {
 } from "../../../ports/mech-info.ts";
 import {
   callBoolean,
+  callVoid,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -18,15 +19,6 @@ export interface MechInfoEvolveDependencies {
   readonly getGame: () => unknown;
   readonly getMechManager: () => unknown;
   readonly getNiceNumber: (value: number) => string;
-}
-
-function call(
-  target: Record<PropertyKey, unknown>,
-  key: string,
-  path: string,
-  args: readonly unknown[] = [],
-): unknown {
-  return Reflect.apply(requireFunction(target[key], path), target, args);
 }
 
 /** Evolve adapter for Mech lab activation, stats, and observer ownership. */
@@ -73,8 +65,12 @@ export function createMechInfoEvolveAdapter({
         `game.global.portal.mechbay.mechs[${index}]`,
       );
       const size = requireString(mech["size"], `mechs[${index}].size`);
+      const getMechStats = requireFunction(
+        manager["getMechStats"],
+        "MechManager.getMechStats",
+      );
       const stats = requireRecord(
-        call(manager, "getMechStats", "MechManager.getMechStats", [mech]),
+        Reflect.apply(getMechStats, manager, [mech]),
         `MechManager.getMechStats(${index})`,
       );
       const best = requireRecord(
@@ -117,17 +113,20 @@ export function createMechInfoEvolveAdapter({
   const observer: MechInfoObserver = Object.freeze({
     disconnect(): void {
       const target = getObserver();
-      call(target, "disconnect", "MechManager.mechObserver.disconnect");
+      callVoid(target, "disconnect", "MechManager.mechObserver");
     },
     observe(
       target: unknown,
       options: Readonly<{ readonly childList: true }>,
     ): void {
       const observerTarget = getObserver();
-      call(observerTarget, "observe", "MechManager.mechObserver.observe", [
+      callVoid(
+        observerTarget,
+        "observe",
+        "MechManager.mechObserver",
         target,
         options,
-      ]);
+      );
     },
   });
 

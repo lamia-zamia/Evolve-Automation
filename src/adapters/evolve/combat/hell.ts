@@ -60,13 +60,15 @@ function requireSoldierTarget(value: unknown, path: string): number {
   return requireNumber(value, path);
 }
 
+/** As `callBoolean`, except the caller validates the answer it asked for. */
 function call(
   target: UnknownRecord,
-  key: string,
+  name: string,
   path: string,
-  args: readonly unknown[] = [],
+  ...args: unknown[]
 ): unknown {
-  return Reflect.apply(requireFunction(target[key], path), target, args);
+  const method = requireFunction(target[name], `${path}.${name}`);
+  return Reflect.apply(method, target, args);
 }
 
 function unavailableInput(): Readonly<HellCycleInput> {
@@ -413,8 +415,8 @@ export function createHellAdapter(dependencies: HellAdapterDependencies): {
         call(
           active.manager,
           "getSoldiersForAttackRating",
-          "WarManager.getSoldiersForAttackRating",
-          [request.garrisonRating],
+          "WarManager",
+          request.garrisonRating,
         ),
         "Hell garrison soldier target",
       );
@@ -425,8 +427,8 @@ export function createHellAdapter(dependencies: HellAdapterDependencies): {
               call(
                 active.manager,
                 "getSoldiersForAttackRating",
-                "WarManager.getSoldiersForAttackRating",
-                [request.patrolRating],
+                "WarManager",
+                request.patrolRating,
               ),
               "Hell patrol soldier target",
             );

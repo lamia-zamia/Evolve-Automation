@@ -206,3 +206,18 @@ export function callNumber(
     `${path}.${name}()`,
   );
 }
+
+/**
+ * As `callBoolean`, except the method is called for its effect and whatever it
+ * answers is discarded. Use this only where the result genuinely carries no
+ * information the caller acts on.
+ */
+export function callVoid(
+  record: UnknownRecord,
+  name: string,
+  path: string,
+  ...args: unknown[]
+): void {
+  const method = requireFunction(record[name], `${path}.${name}`);
+  Reflect.apply(method, record, args);
+}
