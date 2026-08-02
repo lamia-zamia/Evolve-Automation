@@ -11,6 +11,7 @@ import {
   type OverrideOperandProject,
   type OverrideOperandRace,
   type OverrideOperandResource,
+  type OverrideOperandVueBound,
 } from "./override-operand-inputs.ts";
 import {
   createOverrideOperandReaders,
@@ -53,7 +54,10 @@ interface OverrideCatalogDependencies {
     string,
     OverrideOperandResource & OverrideReadResource
   >;
-  readTechIds: () => Record<string, OverrideReadResearch>;
+  readTechIds: () => Record<
+    string,
+    OverrideOperandVueBound & OverrideReadResearch
+  >;
   readArpaIds: () => Record<
     string,
     OverrideOperandProject & OverrideReadProject

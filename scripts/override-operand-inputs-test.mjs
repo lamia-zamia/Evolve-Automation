@@ -2,9 +2,18 @@ import assert from "node:assert/strict";
 
 import { createOverrideOperandInputs } from "../src/settings/override-operand-inputs.ts";
 
+// The runtime keys this bag by `_vueBinding`, which is also the value a condition stores.
 const buildingIds = {
-  "city-farm": { name: "Farm", cost: { Money: 10, Lumber: 5 } },
-  "city-mine": { name: "Mine", cost: { Money: 20 } },
+  "city-farm": {
+    name: "Farm",
+    _vueBinding: "city-farm",
+    cost: { Money: 10, Lumber: 5 },
+  },
+  "city-mine": {
+    name: "Mine",
+    _vueBinding: "city-mine",
+    cost: { Money: 20 },
+  },
 };
 const techIds = { "tech-mad": { name: "MAD", _vueBinding: "tech-mad" } };
 const context = {
@@ -77,16 +86,11 @@ const inputs = createOverrideOperandInputs({
 for (const [id, input] of Object.entries(inputs)) {
   assert.equal(typeof input.def, "string", `${id}.def`);
   assert.ok(
-    ["list", "list_cb", "select_cb"].includes(input.arg),
+    ["list_cb", "select_cb"].includes(input.arg),
     `${id}.arg is ${input.arg}`,
   );
-  if (input.arg === "list") {
-    assert.equal(typeof input.options.list, "object", `${id}.options.list`);
-    assert.equal(typeof input.options.name, "string", `${id}.options.name`);
-    assert.equal(typeof input.options.id, "string", `${id}.options.id`);
-  } else {
-    assert.equal(typeof input.options, "function", `${id}.options`);
-  }
+  // Every input samples its options when the editor builds the control; none captures a bag.
+  assert.equal(typeof input.options, "function", `${id}.options`);
 }
 
 // One option per building/resource cost pair, labelled with both names.
@@ -97,12 +101,39 @@ assert.deepEqual(inputs.building_cost.options(), {
 });
 assert.equal(inputs.building_cost.def, "city-farm.Money");
 
-// TRANSITIONAL: `list` inputs capture the live catalog when the inputs are constructed, so a bag
-// that is replaced afterwards is not seen. Mutating the captured bag is.
-assert.equal(inputs.building.options.list, buildingIds);
-assert.equal(inputs.research.options.list, techIds);
+// The building and research lists are keyed and stored by the Vue binding, and both are read when
+// the option list is asked for rather than when the inputs were constructed.
+assert.deepEqual(inputs.building.options(), {
+  "city-farm": { name: "Farm", id: "city-farm" },
+  "city-mine": { name: "Mine", id: "city-mine" },
+});
+assert.deepEqual(inputs.research.options(), {
+  "tech-mad": { name: "MAD", id: "tech-mad" },
+});
+assert.equal(inputs.building.def, "city-farm");
+assert.equal(inputs.research.def, "tech-mad");
+
+// A bag replaced after construction — which the runtime does when a test context is installed — is
+// seen by the next render.
+context.buildingIds = {
+  ...buildingIds,
+  "space-test": { name: "Test", _vueBinding: "space-test", cost: {} },
+};
+assert.deepEqual(Object.keys(inputs.building.options()), [
+  "city-farm",
+  "city-mine",
+  "space-test",
+]);
+context.techIds = {
+  ...techIds,
+  "tech-wheel": { name: "Wheel", _vueBinding: "tech-wheel" },
+};
+assert.deepEqual(Object.keys(inputs.research.options()), [
+  "tech-mad",
+  "tech-wheel",
+]);
+
 context.buildingIds = { ...buildingIds };
-assert.equal(inputs.building.options.list, buildingIds);
 assert.deepEqual(Object.keys(inputs.building_cost.options()), [
   "city-farm.Money",
   "city-farm.Lumber",

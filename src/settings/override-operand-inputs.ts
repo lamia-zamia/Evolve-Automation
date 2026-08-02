@@ -6,12 +6,11 @@
  * mixes two unrelated concerns — what the automation reads, and what the editor shows — and only the
  * first of them is on the path to a pure evaluation input.
  *
- * TRANSITIONAL: the option callbacks still read live game bags, and `list` inputs still capture their
- * bag when the catalog is constructed. The override work package replaces both with one immutable
- * snapshot sampled per render.
+ * TRANSITIONAL: the option callbacks read live game bags when the editor builds a control. The
+ * override work package decides whether they should share one immutable snapshot per render.
  */
 
-/** One entry of a `list`/`list_cb` input, keyed by the value the condition stores. */
+/** One entry of a `list_cb` input, keyed by the value the condition stores. */
 export interface OverrideOperandListOption {
   readonly name: string;
   readonly id: string;
@@ -25,16 +24,6 @@ export interface OverrideOperandSelectOption {
 }
 
 export type OverrideOperandInput =
-  | {
-      readonly arg: "list";
-      readonly def: string;
-      /** The live catalog itself, plus the field names to read a label and a value from. */
-      readonly options: {
-        readonly list: Record<string, unknown>;
-        readonly name: string;
-        readonly id: string;
-      };
-    }
   | {
       readonly arg: "list_cb";
       readonly def: string;
@@ -50,13 +39,20 @@ export interface OverrideOperandNamed {
   readonly name: string;
 }
 
-export interface OverrideOperandBuilding extends OverrideOperandNamed {
+/**
+ * A game entry the editor offers by its Vue binding. `script-bootstrap.ts` keys the building and
+ * research bags by that same binding, so it is both the option's key and the value a condition
+ * stores.
+ */
+export interface OverrideOperandVueBound extends OverrideOperandNamed {
+  readonly _vueBinding: string;
+}
+
+export interface OverrideOperandBuilding extends OverrideOperandVueBound {
   readonly cost: Record<string, unknown>;
 }
 
-export interface OverrideOperandProject extends OverrideOperandNamed {
-  readonly _vueBinding: string;
-}
+export type OverrideOperandProject = OverrideOperandVueBound;
 
 export interface OverrideOperandJob {
   readonly _originalId: string;
@@ -92,7 +88,7 @@ export interface OverrideOperandInputDependencies {
   readonly readGame: () => OverrideOperandGame;
   readonly readBuildingIds: () => Record<string, OverrideOperandBuilding>;
   readonly readResources: () => Record<string, OverrideOperandResource>;
-  readonly readTechIds: () => Record<string, unknown>;
+  readonly readTechIds: () => Record<string, OverrideOperandVueBound>;
   readonly readArpaIds: () => Record<string, OverrideOperandProject>;
   readonly readJobIds: () => Record<string, OverrideOperandJob>;
   readonly readRaces: () => Record<string, OverrideOperandRace>;
@@ -106,6 +102,17 @@ export interface OverrideOperandInputDependencies {
   )[];
   readonly readBiomeList: () => readonly string[];
   readonly readTraitList: () => readonly string[];
+}
+
+/** A `list_cb` view of a bag whose entries the condition stores by their Vue binding. */
+function vueBoundOptions(
+  entries: Record<string, OverrideOperandVueBound>,
+): Record<string, OverrideOperandListOption> {
+  const options: Record<string, OverrideOperandListOption> = {};
+  for (const entry of Object.values(entries)) {
+    options[entry._vueBinding] = { name: entry.name, id: entry._vueBinding };
+  }
+  return options;
 }
 
 /** Distinct genus ids in catalog order, excluding the ones the editor never offers. */
@@ -160,13 +167,13 @@ export function createOverrideOperandInputs({
     },
     building: {
       def: "city-farm",
-      arg: "list",
-      options: { list: readBuildingIds(), name: "name", id: "_vueBinding" },
+      arg: "list_cb",
+      options: () => vueBoundOptions(readBuildingIds()),
     },
     research: {
       def: "tech-mad",
-      arg: "list",
-      options: { list: readTechIds(), name: "name", id: "_vueBinding" },
+      arg: "list_cb",
+      options: () => vueBoundOptions(readTechIds()),
     },
 
     trait: {

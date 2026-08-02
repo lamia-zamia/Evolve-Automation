@@ -53431,6 +53431,13 @@
   );
 
   // src/settings/override-operand-inputs.ts
+  function vueBoundOptions(entries) {
+    const options2 = {};
+    for (const entry of Object.values(entries)) {
+      options2[entry._vueBinding] = { name: entry.name, id: entry._vueBinding };
+    }
+    return options2;
+  }
   function listGenera(races, excluded) {
     const genera = [];
     for (const race2 of Object.values(races)) {
@@ -53476,13 +53483,13 @@
       },
       building: {
         def: "city-farm",
-        arg: "list",
-        options: { list: readBuildingIds(), name: "name", id: "_vueBinding" }
+        arg: "list_cb",
+        options: () => vueBoundOptions(readBuildingIds())
       },
       research: {
         def: "tech-mad",
-        arg: "list",
-        options: { list: readTechIds(), name: "name", id: "_vueBinding" }
+        arg: "list_cb",
+        options: () => vueBoundOptions(readTechIds())
       },
       trait: {
         def: "kindling_kindred",
