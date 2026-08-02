@@ -3,16 +3,12 @@ import {
   type GovernmentSettingsReadModel,
 } from "../../domain/civic/government-settings.ts";
 import type { GovernmentSettingsIntentHandler } from "../../ports/government-settings.ts";
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode as JQueryNode,
+} from "./settings-section.ts";
 
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-
-interface JQueryNode {
-  empty(): JQueryNode;
-  off(events: string): JQueryNode;
-}
 type Action = () => void;
 type JQuery = (selector: string) => JQueryNode;
 
@@ -110,20 +106,18 @@ export function createGovernmentSettingsBrowserAdapter({
   function updateGovernmentSettingsContent(secondaryPrefix: string): void {
     const readModel = getReadModel();
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
-    const currentNode = getJQuery()(
-      `#script_${secondaryPrefix}${readModel.sectionId}Content`,
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: `${secondaryPrefix}${readModel.sectionId}`,
+      },
+      (currentNode) => {
+        for (const control of readModel.controls) {
+          renderControl(currentNode, control, actions);
+        }
+      },
     );
-    currentNode.empty().off("*");
-
-    for (const control of readModel.controls) {
-      renderControl(currentNode, control, actions);
-    }
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   return Object.freeze({

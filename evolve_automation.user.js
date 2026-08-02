@@ -18963,12 +18963,18 @@
     function updateLoggingSettingsContent(secondaryPrefix) {
       const readModel = getReadModel();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(
-        `#script_${secondaryPrefix}${readModel.sectionId}Content`
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${secondaryPrefix}${readModel.sectionId}`
+        },
+        (currentNode) => {
+          renderLoggingContent(currentNode, readModel, actions);
+        }
       );
-      currentNode.empty().off("*");
+    }
+    function renderLoggingContent(currentNode, readModel, actions) {
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
@@ -18982,7 +18988,6 @@
         intents.handle({ type: "set-log-filter", value: this.value });
         this.value = getReadModel().logFilter;
       });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildLoggingSettings,
@@ -19169,16 +19174,18 @@
     function updateGovernmentSettingsContent(secondaryPrefix) {
       const readModel = getReadModel();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(
-        `#script_${secondaryPrefix}${readModel.sectionId}Content`
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${secondaryPrefix}${readModel.sectionId}`
+        },
+        (currentNode) => {
+          for (const control of readModel.controls) {
+            renderControl2(currentNode, control, actions);
+          }
+        }
       );
-      currentNode.empty().off("*");
-      for (const control of readModel.controls) {
-        renderControl2(currentNode, control, actions);
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildGovernmentSettings,
@@ -19348,10 +19355,18 @@
     function updatePlanetSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderPlanetContent(currentNode, readModel, actions);
+        }
+      );
+    }
+    function renderPlanetContent(currentNode, readModel, actions) {
       currentNode.append(`
           <span>Planet Weighting = Biome Weighting + Trait Weighting + (Extras Intensity * Extras Weightings)</span>
           <table style="width:100%">
@@ -19374,7 +19389,6 @@
       readModel.rows.forEach((row, index) => {
         renderRow(getJQuery()(`#script_planet_${index}`), row, actions);
       });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderRow(tableElement, row, actions) {
       tableElement = renderCell(tableElement, row.biome, actions, true);
@@ -19490,10 +19504,18 @@
     function updateProjectSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderProjectContent(currentNode, readModel, actions);
+        }
+      );
+    }
+    function renderProjectContent(currentNode, readModel, actions) {
       actions.addSettingsToggle(
         currentNode,
         "arpaScaleWeighting",
@@ -19542,7 +19564,6 @@
           intents.handle({ type: "reorder-projects", projectIds });
         }
       });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildProjectSettings,
@@ -20604,11 +20625,19 @@
     function updateWeightingSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const jquery = getJQuery();
-      const currentNode = jquery(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderWeightingContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderWeightingContent(currentNode, readModel, actions, jquery) {
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
@@ -20625,7 +20654,6 @@
       for (const rule of readModel.rules) {
         renderRule(tableBodyNode, rule, actions, jquery);
       }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       actions.addSettingsToggle(

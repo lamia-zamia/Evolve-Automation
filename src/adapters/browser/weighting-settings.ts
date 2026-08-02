@@ -5,13 +5,13 @@ import {
   type WeightingSettingsRule,
 } from "../../domain/economy/resources/weighting-settings.ts";
 import type { WeightingSettingsIntentHandler } from "../../ports/weighting-settings.ts";
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -71,13 +71,30 @@ export function createWeightingSettingsBrowserAdapter({
   function updateWeightingSettingsContent(): void {
     const readModel = getReadModel();
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
     const jquery = getJQuery();
-    const currentNode = jquery(`#script_${readModel.sectionId}Content`);
-    currentNode.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery,
+        sectionId: readModel.sectionId,
+      },
+      (currentNode) => {
+        renderWeightingContent(currentNode, readModel, actions, jquery);
+      },
+    );
+  }
 
+  /**
+   * Takes the jQuery function as an argument rather than through the render callback: the caller
+   * already holds the function it hands to the lifecycle, so naming it there keeps the shared
+   * contract at one node argument.
+   */
+  function renderWeightingContent(
+    currentNode: JQueryNode,
+    readModel: WeightingSettingsReadModel,
+    actions: WeightingSettingsBrowserActions,
+    jquery: JQuery,
+  ): void {
     for (const control of readModel.controls) {
       renderControl(currentNode, control, actions);
     }
@@ -96,9 +113,6 @@ export function createWeightingSettingsBrowserAdapter({
     for (const rule of readModel.rules) {
       renderRule(tableBodyNode, rule, actions, jquery);
     }
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   function renderControl(

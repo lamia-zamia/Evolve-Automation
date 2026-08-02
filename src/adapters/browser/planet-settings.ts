@@ -4,13 +4,13 @@ import {
   type PlanetSettingsRow,
 } from "../../domain/progression/evolution/planet-settings.ts";
 import type { PlanetSettingsIntentHandler } from "../../ports/planet-settings.ts";
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -82,12 +82,23 @@ export function createPlanetSettingsBrowserAdapter({
   function updatePlanetSettingsContent(): void {
     const readModel = getReadModel();
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
-    const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-    currentNode.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: readModel.sectionId,
+      },
+      (currentNode) => {
+        renderPlanetContent(currentNode, readModel, actions);
+      },
+    );
+  }
 
+  function renderPlanetContent(
+    currentNode: JQueryNode,
+    readModel: PlanetSettingsReadModel,
+    actions: PlanetSettingsBrowserActions,
+  ): void {
     currentNode.append(`
           <span>Planet Weighting = Biome Weighting + Trait Weighting + (Extras Intensity * Extras Weightings)</span>
           <table style="width:100%">
@@ -112,9 +123,6 @@ export function createPlanetSettingsBrowserAdapter({
     readModel.rows.forEach((row, index) => {
       renderRow(getJQuery()(`#script_planet_${index}`), row, actions);
     });
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   function renderRow(

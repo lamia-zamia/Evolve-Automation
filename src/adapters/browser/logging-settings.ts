@@ -3,17 +3,17 @@ import {
   type LoggingSettingsReadModel,
 } from "../../domain/logging-settings.ts";
 import type { LoggingSettingsIntentHandler } from "../../ports/logging-settings.ts";
-
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
 interface FilterInput {
   value: string;
 }
 
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: string): JQueryNode;
@@ -119,14 +119,23 @@ export function createLoggingSettingsBrowserAdapter({
   function updateLoggingSettingsContent(secondaryPrefix: string): void {
     const readModel = getReadModel();
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
-    const currentNode = getJQuery()(
-      `#script_${secondaryPrefix}${readModel.sectionId}Content`,
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: `${secondaryPrefix}${readModel.sectionId}`,
+      },
+      (currentNode) => {
+        renderLoggingContent(currentNode, readModel, actions);
+      },
     );
-    currentNode.empty().off("*");
+  }
 
+  function renderLoggingContent(
+    currentNode: JQueryNode,
+    readModel: LoggingSettingsReadModel,
+    actions: LoggingSettingsBrowserActions,
+  ): void {
     for (const control of readModel.controls) {
       renderControl(currentNode, control, actions);
     }
@@ -144,9 +153,6 @@ export function createLoggingSettingsBrowserAdapter({
       intents.handle({ type: "set-log-filter", value: this.value });
       this.value = getReadModel().logFilter;
     });
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   return Object.freeze({

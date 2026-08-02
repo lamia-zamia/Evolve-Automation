@@ -1,10 +1,10 @@
 import { type ProjectSettingsReadModel } from "../../domain/progression/research/project-settings.ts";
 import type { ProjectSettingsIntentHandler } from "../../ports/project-settings.ts";
-
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
 interface SortableOptions {
   readonly items: string;
@@ -12,7 +12,7 @@ interface SortableOptions {
   readonly update: () => void;
 }
 
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -86,12 +86,23 @@ export function createProjectSettingsBrowserAdapter({
   function updateProjectSettingsContent(): void {
     const readModel = getReadModel();
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
-    const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-    currentNode.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: readModel.sectionId,
+      },
+      (currentNode) => {
+        renderProjectContent(currentNode, readModel, actions);
+      },
+    );
+  }
 
+  function renderProjectContent(
+    currentNode: JQueryNode,
+    readModel: ProjectSettingsReadModel,
+    actions: ProjectSettingsBrowserActions,
+  ): void {
     actions.addSettingsToggle(
       currentNode,
       "arpaScaleWeighting",
@@ -147,9 +158,6 @@ export function createProjectSettingsBrowserAdapter({
         intents.handle({ type: "reorder-projects", projectIds });
       },
     });
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   return Object.freeze({
