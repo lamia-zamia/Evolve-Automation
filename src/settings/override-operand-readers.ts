@@ -4,11 +4,17 @@
  * editor renders for the operand's argument — and `override-catalog.ts` joins the two into the
  * `checkTypes` shape both consumers already use.
  *
- * TRANSITIONAL: every reader traverses a live game bag through its `read*` dependency. An override
- * pass reads each distinct operand once — `createOverrideEvaluationSource` samples the pass — but the
- * editor's effective-value display and the trigger requirements in `src/game/entities.ts` still read
- * per call. The interfaces below are the complete inventory of what a shared evaluation input would
- * have to supply to replace the live bags outright.
+ * Reads are deduplicated per consumer, not globally, and that is deliberate. The hot consumer is the
+ * override pass, which reads each distinct `(operandType, argument)` once because
+ * `createOverrideEvaluationSource` samples it. The other two consumers read one operand per call and
+ * are not hot: `TriggerManager.resetTargetTriggers` evaluates one requirement per configured trigger
+ * per tick, and the editor's `evaluateCheck` is not called in production at all. A shared evaluation
+ * input over all consumers would have to sample roughly 400 buildings and 80 resources to serve the
+ * handful of conditions a player configures, so it is not built.
+ *
+ * TRANSITIONAL: every reader still traverses a live game bag through its `read*` dependency, which is
+ * the Vue 2 mirror the isolation work replaces. The interfaces below are the typed contract those
+ * capability ports have to satisfy; they are already narrow enough that only the suppliers change.
  */
 
 /** One operand read. The argument is whatever the editor's input for that operand type stored. */
