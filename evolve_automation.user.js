@@ -17877,6 +17877,18 @@
     return stateLogSettingsReadModel;
   }
 
+  // src/adapters/browser/settings-section.ts
+  function renderSettingsSectionContent({ scrollDocument, jquery, sectionId }, render) {
+    const scrollPosition = scrollDocument.documentElement.scrollTop || scrollDocument.body.scrollTop;
+    try {
+      const contentNode = jquery(`#script_${sectionId}Content`);
+      contentNode.empty().off("*");
+      render(contentNode);
+    } finally {
+      scrollDocument.documentElement.scrollTop = scrollDocument.body.scrollTop = scrollPosition;
+    }
+  }
+
   // src/adapters/browser/state-log-settings.ts
   function createStateLogSettingsBrowserAdapter({
     getDocument,
@@ -17906,14 +17918,18 @@
       );
     }
     function updateStateLogSettingsContent() {
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
-      for (const control of readModel.controls) {
-        renderControl2(currentNode, control);
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (const control of readModel.controls) {
+            renderControl2(currentNode, control);
+          }
+        }
+      );
     }
     return Object.freeze({
       buildStateLogSettings,
@@ -18127,14 +18143,18 @@
     }
     function updateChallengeHelperSettingsContent() {
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
-      for (const control of readModel.controls) {
-        renderControl2(currentNode, control, actions);
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (const control of readModel.controls) {
+            renderControl2(currentNode, control, actions);
+          }
+        }
+      );
     }
     return Object.freeze({
       buildChallengeHelperSettings,
@@ -18272,14 +18292,18 @@
     }
     function updateAchievementGuardSettingsContent() {
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
-      for (const control of readModel.controls) {
-        renderControl2(currentNode, control, actions);
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (const control of readModel.controls) {
+            renderControl2(currentNode, control, actions);
+          }
+        }
+      );
     }
     return Object.freeze({
       buildAchievementGuardSettings,
@@ -18378,14 +18402,18 @@
     }
     function updateAuthoritySettingsContent() {
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
-      for (const control of readModel.controls) {
-        renderControl2(currentNode, control, actions);
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (const control of readModel.controls) {
+            renderControl2(currentNode, control, actions);
+          }
+        }
+      );
     }
     return Object.freeze({
       buildAuthoritySettings,

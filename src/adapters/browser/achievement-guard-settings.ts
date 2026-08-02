@@ -3,16 +3,11 @@ import {
   type AchievementGuardSettingsControl,
 } from "../../domain/progression/prestige/achievement-guard-settings.ts";
 import type { AchievementGuardSettingsIntentHandler } from "../../ports/achievement-guard-settings.ts";
-
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-
-interface JQueryNode {
-  empty(): JQueryNode;
-  off(events: string): JQueryNode;
-}
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode as JQueryNode,
+} from "./settings-section.ts";
 
 type JQuery = (selector: string) => JQueryNode;
 
@@ -78,18 +73,18 @@ export function createAchievementGuardSettingsBrowserAdapter({
 
   function updateAchievementGuardSettingsContent(): void {
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
-    const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-    currentNode.empty().off("*");
-
-    for (const control of readModel.controls) {
-      renderControl(currentNode, control, actions);
-    }
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: readModel.sectionId,
+      },
+      (currentNode) => {
+        for (const control of readModel.controls) {
+          renderControl(currentNode, control, actions);
+        }
+      },
+    );
   }
 
   return Object.freeze({
