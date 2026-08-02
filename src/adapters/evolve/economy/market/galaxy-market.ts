@@ -9,7 +9,9 @@ import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
   callBoolean,
   callNumber,
+  requireCount,
   requireFunction,
+  requireNonEmptyString,
   requireNumber,
   requireRecord,
   type UnknownRecord,
@@ -34,20 +36,6 @@ export interface GalaxyMarketAdapterDependencies {
   readonly getSettings: () => unknown;
 }
 
-function requireId(value: unknown, path: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new TypeError(`${path} must be a non-empty string`);
-  }
-  return value;
-}
-
-function requireCount(value: number, path: string): number {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new TypeError(`${path} must be a non-negative safe integer`);
-  }
-  return value;
-}
-
 function optionalWeighting(resource: UnknownRecord, path: string): number {
   const value = resource["galaxyMarketWeighting"];
   return value === undefined || value === null
@@ -60,8 +48,8 @@ function readOfferIdentity(value: unknown, path: string): OfferIdentity {
   const buy = requireRecord(offer["buy"], `${path}.buy`);
   const sell = requireRecord(offer["sell"], `${path}.sell`);
   return Object.freeze({
-    buyResourceId: requireId(buy["res"], `${path}.buy.res`),
-    sellResourceId: requireId(sell["res"], `${path}.sell.res`),
+    buyResourceId: requireNonEmptyString(buy["res"], `${path}.buy.res`),
+    sellResourceId: requireNonEmptyString(sell["res"], `${path}.sell.res`),
   });
 }
 
@@ -334,10 +322,7 @@ export function createGalaxyMarketAdapter(
           );
         }
         const actual = requireCount(
-          requireNumber(
-            Reflect.apply(currentProduction, manager, [index]),
-            `GalaxyTradeManager.currentProduction(${index})`,
-          ),
+          Reflect.apply(currentProduction, manager, [index]),
           `GalaxyTradeManager.currentProduction(${index})`,
         );
         if (actual !== adjustment.expectedCurrent) {

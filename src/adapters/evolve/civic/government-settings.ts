@@ -3,7 +3,7 @@ import {
   type GovernmentSettingsOption,
   type GovernmentSettingsReadModel,
 } from "../../../domain/civic/government-settings.ts";
-import { requireRecord, requireString } from "../../validation.ts";
+import { requireNonArrayRecord, requireString } from "../../validation.ts";
 
 interface GovernmentSettingsEvolveDependencies {
   readonly getGame: () => unknown;
@@ -13,13 +13,6 @@ interface GovernmentSettingsEvolveDependencies {
 
 export interface GovernmentSettingsEvolveAdapter {
   readGovernmentSettingsReadModel(): GovernmentSettingsReadModel;
-}
-
-function requireObjectRecord(value: unknown, path: string) {
-  if (Array.isArray(value)) {
-    throw new TypeError(`${path} must be an object`);
-  }
-  return requireRecord(value, path);
 }
 
 function readLocalizedOption(
@@ -47,18 +40,18 @@ export function createGovernmentSettingsEvolveAdapter({
   getGovernors,
 }: GovernmentSettingsEvolveDependencies): GovernmentSettingsEvolveAdapter {
   function readGovernmentSettingsReadModel(): GovernmentSettingsReadModel {
-    const game = requireObjectRecord(getGame(), "game");
+    const game = requireNonArrayRecord(getGame(), "game");
     const rawLocalize = game["loc"];
     if (typeof rawLocalize !== "function") {
       throw new TypeError("game.loc must be a function");
     }
     const localize = (key: string): unknown =>
       Reflect.apply(rawLocalize, game, [key]);
-    const manager = requireObjectRecord(
+    const manager = requireNonArrayRecord(
       getGovernmentManager(),
       "GovernmentManager",
     );
-    const rawTypes = requireObjectRecord(
+    const rawTypes = requireNonArrayRecord(
       manager["Types"],
       "GovernmentManager.Types",
     );
@@ -66,7 +59,7 @@ export function createGovernmentSettingsEvolveAdapter({
       { val: "none", label: "None", hint: "Do not select government" },
     ];
     for (const [key, rawType] of Object.entries(rawTypes)) {
-      const type = requireObjectRecord(
+      const type = requireNonArrayRecord(
         rawType,
         `GovernmentManager.Types.${key}`,
       );

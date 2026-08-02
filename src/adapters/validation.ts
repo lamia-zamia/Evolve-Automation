@@ -96,10 +96,53 @@ export function requireString(value: unknown, path: string): string {
   return value;
 }
 
+/**
+ * As `requireString`, for the game ids, keys and Vue bindings that an empty string cannot name.
+ * Every caller uses the result to look something up, so `""` is a defect rather than a value.
+ */
+export function requireNonEmptyString(value: unknown, path: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new TypeError(
+      `${path} must be a non-empty string, got ${describeValue(value)}`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Throwing counterpart of `isNonArrayRecord`, for game data that must be a keyed bag. `requireRecord`
+ * accepts an array, which would otherwise pass as a record whose keys are its indices.
+ */
+export function requireNonArrayRecord(
+  value: unknown,
+  path: string,
+): UnknownRecord {
+  if (Array.isArray(value)) {
+    throw new TypeError(
+      `${path} must be an object, got ${describeValue(value)}`,
+    );
+  }
+  return requireRecord(value, path);
+}
+
 export function requireNumber(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new TypeError(
       `${path} must be a finite number, got ${describeValue(value)}`,
+    );
+  }
+  return value;
+}
+
+/**
+ * As `requireNumber`, for the operating counts and production indices the game reports as whole
+ * numbers. A non-integer, a negative, or a magnitude past `Number.MAX_SAFE_INTEGER` is a defect in
+ * the read, not a count this script should act on.
+ */
+export function requireCount(value: unknown, path: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new TypeError(
+      `${path} must be a non-negative safe integer, got ${describeValue(value)}`,
     );
   }
   return value;

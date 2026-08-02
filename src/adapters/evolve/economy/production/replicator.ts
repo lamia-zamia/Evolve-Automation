@@ -15,6 +15,7 @@ import { stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
   callBoolean,
   requireFunction,
+  requireNonEmptyString,
   requireNumber,
   requireRecord,
   type UnknownRecord,
@@ -22,14 +23,6 @@ import {
 
 interface ReplicatorSession {
   readonly resourcesById: ReadonlyMap<string, UnknownRecord>;
-}
-
-function readProductionId(production: UnknownRecord, path: string): string {
-  const id = production["id"];
-  if (typeof id !== "string" || id.length === 0) {
-    throw new TypeError(`${path}.id must be a non-empty string`);
-  }
-  return id;
 }
 
 function readProductions(manager: UnknownRecord): {
@@ -45,7 +38,7 @@ function readProductions(manager: UnknownRecord): {
   for (const [key, value] of Object.entries(productions)) {
     const path = `ReplicatorManager.Productions.${key}`;
     const production = requireRecord(value, path);
-    const id = readProductionId(production, path);
+    const id = requireNonEmptyString(production["id"], `${path}.id`);
     if (byId.has(id)) {
       throw new TypeError(
         `ReplicatorManager.Productions has duplicate id ${id}`,
@@ -116,7 +109,7 @@ export function createReplicatorSelectionReader(
       const productions: ReplicatorProductionInput[] =
         rawProductions.values.map((production, index) => {
           const path = `ReplicatorManager.Productions[${index}]`;
-          const id = readProductionId(production, path);
+          const id = requireNonEmptyString(production["id"], `${path}.id`);
           const unlocked = Boolean(production["unlocked"]);
           const enabled = Boolean(production["enabled"]);
           if (!unlocked || !enabled) {

@@ -85,10 +85,34 @@
     }
     return value;
   }
+  function requireNonEmptyString(value, path) {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new TypeError(
+        `${path} must be a non-empty string, got ${describeValue(value)}`
+      );
+    }
+    return value;
+  }
+  function requireNonArrayRecord(value, path) {
+    if (Array.isArray(value)) {
+      throw new TypeError(
+        `${path} must be an object, got ${describeValue(value)}`
+      );
+    }
+    return requireRecord(value, path);
+  }
   function requireNumber(value, path) {
     if (typeof value !== "number" || !Number.isFinite(value)) {
       throw new TypeError(
         `${path} must be a finite number, got ${describeValue(value)}`
+      );
+    }
+    return value;
+  }
+  function requireCount(value, path) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+      throw new TypeError(
+        `${path} must be a non-negative safe integer, got ${describeValue(value)}`
       );
     }
     return value;
@@ -15657,7 +15681,7 @@
   }
   function readSettings(value) {
     const settings = requireRecord(value, "settings");
-    const string2 = (name) => {
+    const string = (name) => {
       const raw = settings[name];
       if (typeof raw !== "string") {
         throw new TypeError(`settings.${name} must be a string`);
@@ -15665,16 +15689,16 @@
       return raw;
     };
     return Object.freeze({
-      prioritizeQueue: string2("prioritizeQueue"),
-      prioritizeTriggers: string2("prioritizeTriggers"),
+      prioritizeQueue: string("prioritizeQueue"),
+      prioritizeTriggers: string("prioritizeTriggers"),
       missionRequest: Boolean(settings["missionRequest"]),
       prestigeBioseedConstruct: Boolean(settings["prestigeBioseedConstruct"]),
-      prestigeType: string2("prestigeType"),
+      prestigeType: string("prestigeType"),
       researchRequest: Boolean(settings["researchRequest"]),
       researchRequestSpace: Boolean(settings["researchRequestSpace"]),
-      prioritizeUnify: string2("prioritizeUnify"),
+      prioritizeUnify: string("prioritizeUnify"),
       autoFleet: Boolean(settings["autoFleet"]),
-      prioritizeOuterFleet: string2("prioritizeOuterFleet"),
+      prioritizeOuterFleet: string("prioritizeOuterFleet"),
       productionFactoryFocusMaterials: Boolean(
         settings["productionFactoryFocusMaterials"]
       ),
@@ -16938,15 +16962,15 @@
       const regexps = [];
       const validIds = [];
       const strings = settingsRaw.logFilter.split(/[^0-9a-z_%]/g).filter(Boolean);
-      for (const string2 of strings) {
-        const [id = "", ...rawParams] = string2.split("%");
+      for (const string of strings) {
+        const [id = "", ...rawParams] = string.split("%");
         const params = rawParams.map(poly.loc);
         const message = poly.loc(id, params.length ? params : void 0) + (id === "civics_garrison_gained" ? "%0" : "");
         if (message === id) continue;
         regexps.push(
           message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%\d/g, ".*")
         );
-        validIds.push(string2);
+        validIds.push(string);
       }
       if (regexps.length > 0) {
         state.filterRegExp = new RegExp(`^(${regexps.join("|")})$`);
@@ -18714,23 +18738,17 @@
   }
 
   // src/adapters/evolve/progression/research/research-settings.ts
-  function requireObjectRecord(value, path) {
-    if (Array.isArray(value)) {
-      throw new TypeError(`${path} must be an object`);
-    }
-    return requireRecord(value, path);
-  }
   function createResearchSettingsEvolveAdapter({
     getGame,
     getTechIds
   }) {
     function readResearchSettingsReadModel() {
-      const game = requireObjectRecord(getGame(), "game");
+      const game = requireNonArrayRecord(getGame(), "game");
       const localize2 = requireFunction(game["loc"], "game.loc");
-      const rawTechIds = requireObjectRecord(getTechIds(), "techIds");
+      const rawTechIds = requireNonArrayRecord(getTechIds(), "techIds");
       const technologies = {};
       for (const [key, rawTechnology] of Object.entries(rawTechIds)) {
-        const technology2 = requireObjectRecord(rawTechnology, `techIds.${key}`);
+        const technology2 = requireNonArrayRecord(rawTechnology, `techIds.${key}`);
         const binding = requireString(
           technology2["_vueBinding"],
           `techIds.${key}._vueBinding`
@@ -18911,21 +18929,15 @@
   }
 
   // src/adapters/evolve/logging-settings.ts
-  function requireObjectRecord2(value, path) {
-    if (Array.isArray(value)) {
-      throw new TypeError(`${path} must be an object`);
-    }
-    return requireRecord(value, path);
-  }
   function createLoggingSettingsEvolveAdapter({
     getGame,
     getGameLog,
     getSettingsRaw
   }) {
     function readLoggingSettingsReadModel() {
-      const game = requireObjectRecord2(getGame(), "game");
-      const global = requireObjectRecord2(game["global"], "game.global");
-      const gameSettings = requireObjectRecord2(
+      const game = requireNonArrayRecord(getGame(), "game");
+      const global = requireNonArrayRecord(game["global"], "game.global");
+      const gameSettings = requireNonArrayRecord(
         global["settings"],
         "game.global.settings"
       );
@@ -18933,8 +18945,8 @@
         gameSettings["locale"],
         "game.global.settings.locale"
       );
-      const gameLog = requireObjectRecord2(getGameLog(), "GameLog");
-      const rawTypes = requireObjectRecord2(gameLog["Types"], "GameLog.Types");
+      const gameLog = requireNonArrayRecord(getGameLog(), "GameLog");
+      const rawTypes = requireNonArrayRecord(gameLog["Types"], "GameLog.Types");
       const messageTypes = [];
       for (const [id, rawLabel] of Object.entries(rawTypes)) {
         messageTypes.push({
@@ -18942,7 +18954,7 @@
           label: requireString(rawLabel, `GameLog.Types.${id}`)
         });
       }
-      const settingsRaw = requireObjectRecord2(getSettingsRaw(), "settingsRaw");
+      const settingsRaw = requireNonArrayRecord(getSettingsRaw(), "settingsRaw");
       const logFilter = requireString(
         settingsRaw["logFilter"],
         "settingsRaw.logFilter"
@@ -19113,12 +19125,6 @@
   }
 
   // src/adapters/evolve/civic/government-settings.ts
-  function requireObjectRecord3(value, path) {
-    if (Array.isArray(value)) {
-      throw new TypeError(`${path} must be an object`);
-    }
-    return requireRecord(value, path);
-  }
   function readLocalizedOption(id, localize2, game) {
     return {
       val: id,
@@ -19138,17 +19144,17 @@
     getGovernors
   }) {
     function readGovernmentSettingsReadModel() {
-      const game = requireObjectRecord3(getGame(), "game");
+      const game = requireNonArrayRecord(getGame(), "game");
       const rawLocalize = game["loc"];
       if (typeof rawLocalize !== "function") {
         throw new TypeError("game.loc must be a function");
       }
       const localize2 = (key) => Reflect.apply(rawLocalize, game, [key]);
-      const manager = requireObjectRecord3(
+      const manager = requireNonArrayRecord(
         getGovernmentManager(),
         "GovernmentManager"
       );
-      const rawTypes = requireObjectRecord3(
+      const rawTypes = requireNonArrayRecord(
         manager["Types"],
         "GovernmentManager.Types"
       );
@@ -19156,7 +19162,7 @@
         { val: "none", label: "None", hint: "Do not select government" }
       ];
       for (const [key, rawType] of Object.entries(rawTypes)) {
-        const type = requireObjectRecord3(
+        const type = requireNonArrayRecord(
           rawType,
           `GovernmentManager.Types.${key}`
         );
@@ -30051,18 +30057,6 @@
   }
 
   // src/adapters/evolve/economy/production/factory.ts
-  function requireId(value, path) {
-    if (typeof value !== "string" || value.length === 0) {
-      throw new TypeError(`${path} must be a non-empty string`);
-    }
-    return value;
-  }
-  function requireCount(value, path) {
-    if (!Number.isSafeInteger(value) || value < 0) {
-      throw new TypeError(`${path} must be a non-negative safe integer`);
-    }
-    return value;
-  }
   function optionalWeighting(production, path) {
     const value = production["weighting"];
     return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.weighting`);
@@ -30077,9 +30071,12 @@
     for (const [key, raw] of Object.entries(productions)) {
       const path = `FactoryManager.Productions.${key}`;
       const value = requireRecord(raw, path);
-      const id = requireId(value["id"], `${path}.id`);
+      const id = requireNonEmptyString(value["id"], `${path}.id`);
       const resource2 = requireRecord(value["resource"], `${path}.resource`);
-      const outputResourceId = requireId(resource2["id"], `${path}.resource.id`);
+      const outputResourceId = requireNonEmptyString(
+        resource2["id"],
+        `${path}.resource.id`
+      );
       if (byId.has(id)) {
         throw new TypeError(`FactoryManager.Productions has duplicate id ${id}`);
       }
@@ -30110,7 +30107,10 @@
   function readMaterial(raw, path) {
     const cost = requireRecord(raw, path);
     const resource2 = requireRecord(cost["resource"], `${path}.resource`);
-    const resourceId3 = requireId(resource2["id"], `${path}.resource.id`);
+    const resourceId3 = requireNonEmptyString(
+      resource2["id"],
+      `${path}.resource.id`
+    );
     const unlocked2 = callBoolean(resource2, "isUnlocked", `${path}.resource`);
     if (!unlocked2) {
       return Object.freeze({
@@ -30407,10 +30407,7 @@
             );
           }
           const actual = requireCount(
-            requireNumber(
-              Reflect.apply(currentProduction2, manager, [identity2.value]),
-              `FactoryManager.currentProduction(${adjustment.productionId})`
-            ),
+            Reflect.apply(currentProduction2, manager, [identity2.value]),
             `FactoryManager.currentProduction(${adjustment.productionId})`
           );
           if (actual !== adjustment.expectedCurrent) {
@@ -30629,19 +30626,6 @@
   }
 
   // src/adapters/evolve/economy/production/mining-droid.ts
-  function readProductionId(production, path) {
-    const id = production["id"];
-    if (typeof id !== "string" || id.length === 0) {
-      throw new TypeError(`${path}.id must be a non-empty string`);
-    }
-    return id;
-  }
-  function requireCount2(value, path) {
-    if (!Number.isSafeInteger(value) || value < 0) {
-      throw new TypeError(`${path} must be a non-negative safe integer`);
-    }
-    return value;
-  }
   function readProductions(manager) {
     const productions = requireRecord(
       manager["Productions"],
@@ -30652,7 +30636,7 @@
     for (const [key, value] of Object.entries(productions)) {
       const path = `DroidManager.Productions.${key}`;
       const production = requireRecord(value, path);
-      const id = readProductionId(production, path);
+      const id = requireNonEmptyString(production["id"], `${path}.id`);
       if (byId.has(id)) {
         throw new TypeError(`DroidManager.Productions has duplicate id ${id}`);
       }
@@ -30681,7 +30665,7 @@
         });
         const partial = rawProductions.values.map((production, index) => {
           const path = `DroidManager.Productions[${index}]`;
-          const id = readProductionId(production, path);
+          const id = requireNonEmptyString(production["id"], `${path}.id`);
           const weighting = requireNumber(
             production["weighting"],
             `${path}.weighting`
@@ -30702,7 +30686,7 @@
             demanded: callBoolean(resource2, "isDemanded", `${path}.resource`)
           };
         });
-        const maximum = requireCount2(
+        const maximum = requireCount(
           callNumber(manager, "maxOperating", "DroidManager"),
           "DroidManager.maxOperating()"
         );
@@ -30751,7 +30735,7 @@
               `unknown mining-droid production id ${productionId}`
             );
           }
-          const count2 = requireCount2(
+          const count2 = requireCount(
             callNumber(
               activeSession.manager,
               "currentProduction",
@@ -30811,7 +30795,7 @@
               { productionId: adjustment.productionId }
             );
           }
-          const actual = requireCount2(
+          const actual = requireCount(
             requireNumber(
               Reflect.apply(currentProduction2, manager, [production]),
               `DroidManager.currentProduction(${adjustment.productionId})`
@@ -32395,12 +32379,6 @@
   }
 
   // src/adapters/evolve/traits/wish.ts
-  function requireSelection(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readTechnologyLevel(technology2) {
     const value = technology2["wish"];
     if (value === void 0 || value === null || value === 0) return 0;
@@ -32450,8 +32428,8 @@
           settings ??= requireRecord(dependencies.getSettings(), "settings");
           return settings;
         };
-        const minorSelection = minorRemaining === 0 ? requireSelection(getSettings()["wishMinor"], "settings.wishMinor") : "none";
-        const majorSelection = technologyLevel >= 2 && majorRemaining === 0 ? requireSelection(getSettings()["wishMajor"], "settings.wishMajor") : "none";
+        const minorSelection = minorRemaining === 0 ? requireString(getSettings()["wishMinor"], "settings.wishMinor") : "none";
+        const majorSelection = technologyLevel >= 2 && majorRemaining === 0 ? requireString(getSettings()["wishMajor"], "settings.wishMajor") : "none";
         return Object.freeze({
           unlocked: true,
           technologyLevel,
@@ -32631,11 +32609,6 @@
     if (value === void 0 || value === null || value === 0) return 0;
     return requireNumber(value, "game.global.tech.genetics");
   }
-  function requireMode(value, path) {
-    if (typeof value !== "string")
-      throw new TypeError(`${path} must be a string`);
-    return value;
-  }
   function emptyInput2(level) {
     return Object.freeze({
       available: false,
@@ -32749,7 +32722,7 @@
         }
         const sequence = requireRecord(rawSequence, "game.global.arpa.sequence");
         const settings = requireRecord(dependencies.getSettings(), "settings");
-        const sequenceMode = requireMode(
+        const sequenceMode = requireString(
           settings["geneticsSequence"],
           "settings.geneticsSequence"
         );
@@ -32765,9 +32738,9 @@
             "game.global.race.mutation"
           );
         }
-        const boostMode = level >= 5 ? requireMode(settings["geneticsBoost"], "settings.geneticsBoost") : "none";
+        const boostMode = level >= 5 ? requireString(settings["geneticsBoost"], "settings.geneticsBoost") : "none";
         const boostOn = level >= 5 ? requireBoolean(sequence["boost"], "game.global.arpa.sequence.boost") : false;
-        const assembleMode = level >= 6 ? requireMode(
+        const assembleMode = level >= 6 ? requireString(
           settings["geneticsAssemble"],
           "settings.geneticsAssemble"
         ) : "none";
@@ -33338,12 +33311,6 @@
   }
 
   // src/adapters/evolve/traits/psychic.ts
-  function requireMode2(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readGlobal3(gameValue) {
     const game = requireRecord(gameValue, "game");
     return requireRecord(game["global"], "game.global");
@@ -33396,7 +33363,7 @@
     const reader = Object.freeze({
       readGate() {
         const settings = requireRecord(dependencies.getSettings(), "settings");
-        const mode = requireMode2(
+        const mode = requireString(
           settings["psychicPower"],
           "settings.psychicPower"
         );
@@ -33429,7 +33396,7 @@
       },
       readPlan() {
         const settings = requireRecord(dependencies.getSettings(), "settings");
-        const mode = requireMode2(
+        const mode = requireString(
           settings["psychicPower"],
           "settings.psychicPower"
         );
@@ -33504,7 +33471,7 @@
         const boostCandidates = [];
         const boostResources = [];
         if ((mode === "auto" || mode === "boost") && !boostActive && energyCurrent >= (technologyLevel >= 5 ? 60 : 75)) {
-          boostResourceMode = requireMode2(
+          boostResourceMode = requireString(
             settings["psychicBoostRes"],
             "settings.psychicBoostRes"
           );
@@ -33787,12 +33754,6 @@
   function isUnlocked(race2) {
     return Boolean(race2["ocular_power"] && race2["ocularPowerConfig"]);
   }
-  function requireId2(value, path) {
-    if (typeof value !== "string" || value.length === 0) {
-      throw new TypeError(`${path} must be a non-empty string`);
-    }
-    return value;
-  }
   function readCatalog2(value) {
     if (!Array.isArray(value)) {
       throw new TypeError("ocularPowerData must be an array");
@@ -33803,8 +33764,8 @@
       value.map((raw, index) => {
         const path = `ocularPowerData[${index}]`;
         const power = requireRecord(raw, path);
-        const key = requireId2(power["key"], `${path}.key`);
-        const id = requireId2(power["id"], `${path}.id`);
+        const key = requireNonEmptyString(power["key"], `${path}.key`);
+        const id = requireNonEmptyString(power["id"], `${path}.id`);
         if (keys.has(key) || ids.has(id)) {
           throw new TypeError("ocularPowerData keys and ids must be unique");
         }
@@ -34843,13 +34804,6 @@
   }
 
   // src/adapters/evolve/economy/production/replicator.ts
-  function readProductionId2(production, path) {
-    const id = production["id"];
-    if (typeof id !== "string" || id.length === 0) {
-      throw new TypeError(`${path}.id must be a non-empty string`);
-    }
-    return id;
-  }
   function readProductions2(manager) {
     const productions = requireRecord(
       manager["Productions"],
@@ -34860,7 +34814,7 @@
     for (const [key, value] of Object.entries(productions)) {
       const path = `ReplicatorManager.Productions.${key}`;
       const production = requireRecord(value, path);
-      const id = readProductionId2(production, path);
+      const id = requireNonEmptyString(production["id"], `${path}.id`);
       if (byId.has(id)) {
         throw new TypeError(
           `ReplicatorManager.Productions has duplicate id ${id}`
@@ -34910,7 +34864,7 @@
         const resourcesById = /* @__PURE__ */ new Map();
         const productions = rawProductions.values.map((production, index) => {
           const path = `ReplicatorManager.Productions[${index}]`;
-          const id = readProductionId2(production, path);
+          const id = requireNonEmptyString(production["id"], `${path}.id`);
           const unlocked2 = Boolean(production["unlocked"]);
           const enabled = Boolean(production["enabled"]);
           if (!unlocked2 || !enabled) {
@@ -35850,18 +35804,6 @@
     const absolute = Number(trimmed);
     return Number.isFinite(absolute) ? absolute : 0;
   }
-  function readString2(value, path) {
-    if (typeof value !== "string" || value.length === 0) {
-      throw new TypeError(`${path} must be a non-empty string`);
-    }
-    return value;
-  }
-  function readOptionalString2(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function namedRecord(catalog, name, path) {
     return requireRecord(catalog[name], `${path}.${name}`);
   }
@@ -35878,13 +35820,13 @@
     return requireNumber(record[name], `${path}.${name}`);
   }
   function buildingId(building3, path) {
-    return readString2(building3["id"], `${path}.id`);
+    return requireNonEmptyString(building3["id"], `${path}.id`);
   }
   function buildingBinding(building3, path) {
-    return readString2(building3["_vueBinding"], `${path}._vueBinding`);
+    return requireNonEmptyString(building3["_vueBinding"], `${path}._vueBinding`);
   }
   function resourceId(resource2, path) {
-    return readString2(resource2["id"], `${path}.id`);
+    return requireNonEmptyString(resource2["id"], `${path}.id`);
   }
   function identity(catalog, name, value) {
     return catalog[name] === value;
@@ -36800,7 +36742,7 @@
                 building3
               ),
               skipGroup,
-              extraDescription: readOptionalString2(
+              extraDescription: requireString(
                 building3["extraDescription"],
                 `${path}.extraDescription`
               ),
@@ -36905,7 +36847,7 @@
             ),
             mechQueued: queued.includes(spireMech),
             purifierQueued: queued.includes(purifier),
-            purifierDescription: readOptionalString2(
+            purifierDescription: requireString(
               purifier["extraDescription"],
               "buildings.SpirePurifier.extraDescription"
             ),
@@ -37155,7 +37097,7 @@
             const building3 = active.buildings.get(operation2.buildingId);
             if (building3 === void 0)
               return `building ${operation2.buildingId} missing`;
-            const current = descriptions.get(operation2.buildingId) ?? readOptionalString2(
+            const current = descriptions.get(operation2.buildingId) ?? requireString(
               building3["extraDescription"],
               `building ${operation2.buildingId}.extraDescription`
             );
@@ -38242,14 +38184,8 @@
   }
 
   // src/adapters/evolve/economy/storage/storage-allocation.ts
-  function readString3(value, path) {
-    if (typeof value !== "string" || value.length === 0) {
-      throw new TypeError(`${path} must be a non-empty string`);
-    }
-    return value;
-  }
   function resourceId2(resource2, path) {
-    return readString3(resource2["id"], `${path}.id`);
+    return requireNonEmptyString(resource2["id"], `${path}.id`);
   }
   function finiteProperty2(record, name, path) {
     return requireNumber(record[name], `${path}.${name}`);
@@ -39195,18 +39131,6 @@
   }
 
   // src/adapters/evolve/economy/market/galaxy-market.ts
-  function requireId3(value, path) {
-    if (typeof value !== "string" || value.length === 0) {
-      throw new TypeError(`${path} must be a non-empty string`);
-    }
-    return value;
-  }
-  function requireCount3(value, path) {
-    if (!Number.isSafeInteger(value) || value < 0) {
-      throw new TypeError(`${path} must be a non-negative safe integer`);
-    }
-    return value;
-  }
   function optionalWeighting2(resource2, path) {
     const value = resource2["galaxyMarketWeighting"];
     return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.galaxyMarketWeighting`);
@@ -39216,8 +39140,8 @@
     const buy = requireRecord(offer["buy"], `${path}.buy`);
     const sell = requireRecord(offer["sell"], `${path}.sell`);
     return Object.freeze({
-      buyResourceId: requireId3(buy["res"], `${path}.buy.res`),
-      sellResourceId: requireId3(sell["res"], `${path}.sell.res`)
+      buyResourceId: requireNonEmptyString(buy["res"], `${path}.buy.res`),
+      sellResourceId: requireNonEmptyString(sell["res"], `${path}.sell.res`)
     });
   }
   function emptyInput5() {
@@ -39290,7 +39214,7 @@
             )
           };
         });
-        const maximum = requireCount3(
+        const maximum = requireCount(
           callNumber(manager, "maxOperating", "GalaxyTradeManager"),
           "GalaxyTradeManager.maxOperating()"
         );
@@ -39326,7 +39250,7 @@
               entry.sell["storageRatio"],
               `resources.${entry.identity.sellResourceId}.storageRatio`
             ) : 0,
-            current: requireCount3(
+            current: requireCount(
               callNumber(
                 manager,
                 "currentProduction",
@@ -39386,7 +39310,7 @@
             "Galaxy trade manager changed"
           );
         }
-        if (requireCount3(
+        if (requireCount(
           callNumber(manager, "maxOperating", "GalaxyTradeManager"),
           "GalaxyTradeManager.maxOperating()"
         ) !== decision2.expectedMaximum) {
@@ -39431,11 +39355,8 @@
               "Galaxy market offer order changed"
             );
           }
-          const actual = requireCount3(
-            requireNumber(
-              Reflect.apply(currentProduction2, manager, [index]),
-              `GalaxyTradeManager.currentProduction(${index})`
-            ),
+          const actual = requireCount(
+            Reflect.apply(currentProduction2, manager, [index]),
             `GalaxyTradeManager.currentProduction(${index})`
           );
           if (actual !== adjustment.expectedCurrent) {
@@ -43568,7 +43489,7 @@
     }
     return priorityList;
   }
-  function readString4(record, key, path) {
+  function readString2(record, key, path) {
     const value = record[key];
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -43596,8 +43517,8 @@
       canGain,
       canPurge,
       mutationCost,
-      traitName: readString4(trait2, "traitName", `${path}.traitName`),
-      displayName: readString4(trait2, "name", `${path}.name`)
+      traitName: readString2(trait2, "traitName", `${path}.traitName`),
+      displayName: readString2(trait2, "name", `${path}.name`)
     });
   }
   function createMutationReader(dependencies) {
@@ -48989,29 +48910,20 @@
   }
 
   // src/adapters/evolve/progression/evolution/evolution-settings.ts
-  function string(value, path) {
-    if (typeof value !== "string")
-      throw new TypeError(`${path} must be a string`);
-    return value;
-  }
-  function array(value, path) {
-    if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
-    return value;
-  }
   function loc(game, key) {
     const fn = game["loc"];
     if (typeof fn !== "function")
       throw new TypeError("game.loc must be a function");
-    return string(Reflect.apply(fn, game, [key]), `game.loc(${key})`);
+    return requireString(Reflect.apply(fn, game, [key]), `game.loc(${key})`);
   }
   function options(value, path) {
     return Object.freeze(
-      array(value, path).map((raw, index) => {
+      requireArray(value, path).map((raw, index) => {
         const item = requireRecord(raw, `${path}[${index}]`);
         return Object.freeze({
-          val: string(item["val"], `${path}[${index}].val`),
-          label: string(item["label"], `${path}[${index}].label`),
-          hint: string(item["hint"], `${path}[${index}].hint`)
+          val: requireString(item["val"], `${path}[${index}].val`),
+          label: requireString(item["label"], `${path}[${index}].label`),
+          hint: requireString(item["hint"], `${path}[${index}].hint`)
         });
       })
     );
@@ -49027,7 +48939,7 @@
       return { label: "Auto Achievements", className: "has-text-advanced" };
     if (typeof target !== "string")
       return { label: "Unrecognized race!", className: "has-text-danger" };
-    const name = string(race2["name"], "race.name");
+    const name = requireString(race2["name"], "race.name");
     const genus = item["userEvolutionGenus"];
     const genusText = typeof genus === "string" ? `, ${loc(game, `genelab_genus_${genus}`)}` : "";
     return { label: `${name}${genusText}`, className: raceColor(race2) };
@@ -49044,8 +48956,8 @@
         );
         const universeOptions = [
           { val: "none", label: "None", hint: "Wait for user selection" },
-          ...array(deps.getUniverses(), "universes").map((raw, index) => {
-            const id = string(raw, `universes[${index}]`);
+          ...requireArray(deps.getUniverses(), "universes").map((raw, index) => {
+            const id = requireString(raw, `universes[${index}]`);
             return {
               val: id,
               label: loc(game, `universe_${id}`),
@@ -49060,9 +48972,9 @@
             hint: "Picks race giving most achievements upon completing run. Tracks all achievements limited to specific races and resets. Races unique to current planet biome are prioritized, when available."
           },
           ...races.map((race2) => ({
-            val: string(race2["id"], "race.id"),
-            label: string(race2["name"], "race.name"),
-            hint: string(race2["desc"], "race.desc")
+            val: requireString(race2["id"], "race.id"),
+            label: requireString(race2["name"], "race.name"),
+            hint: requireString(race2["desc"], "race.desc")
           }))
         ];
         const gameRaces = requireRecord(game["races"], "game.races");
@@ -49081,25 +48993,25 @@
           label: loc(game, `genelab_genus_${id}`),
           hint: ""
         }));
-        const challengeSets = array(deps.getChallenges(), "challenges");
+        const challengeSets = requireArray(deps.getChallenges(), "challenges");
         const challengeControls = challengeSets.map(
           (raw, index) => {
-            const set = array(raw, `challenges[${index}]`);
+            const set = requireArray(raw, `challenges[${index}]`);
             const first = requireRecord(set[0], `challenges[${index}][0]`);
-            const id = string(first["id"], `challenges[${index}][0].id`);
+            const id = requireString(first["id"], `challenges[${index}][0].id`);
             return {
               kind: "toggle",
               settingName: `challenge_${id}`,
               label: set.map(
                 (item, itemIndex) => loc(
                   game,
-                  `evo_challenge_${string(requireRecord(item, `challenges[${index}][${itemIndex}]`)["id"], "challenge.id")}`
+                  `evo_challenge_${requireString(requireRecord(item, `challenges[${index}][${itemIndex}]`)["id"], "challenge.id")}`
                 )
               ).join(" | "),
               hint: set.map(
                 (item, itemIndex) => loc(
                   game,
-                  `evo_challenge_${string(requireRecord(item, `challenges[${index}][${itemIndex}]`)["id"], "challenge.id")}_effect`
+                  `evo_challenge_${requireString(requireRecord(item, `challenges[${index}][${itemIndex}]`)["id"], "challenge.id")}_effect`
                 )
               ).join("&#xA;")
             };
@@ -49179,11 +49091,13 @@
           }
         ];
         const prestigeOptions = options(deps.getPrestigeTypes(), "prestigeTypes");
-        const storeNames = array(
+        const storeNames = requireArray(
           deps.getSettingsToStore(),
           "evolutionSettingsToStore"
-        ).map((raw, index) => string(raw, `evolutionSettingsToStore[${index}]`));
-        const rawQueue = array(
+        ).map(
+          (raw, index) => requireString(raw, `evolutionSettingsToStore[${index}]`)
+        );
+        const rawQueue = requireArray(
           settingsRaw["evolutionQueue"],
           "settingsRaw.evolutionQueue"
         );
@@ -49217,7 +49131,7 @@
           const condition = selectedRace["getCondition"];
           const habitability = selectedRace["getHabitability"];
           if (typeof condition === "function" && typeof habitability === "function") {
-            const text = string(
+            const text = requireString(
               Reflect.apply(condition, selectedRace, []),
               "race condition"
             );

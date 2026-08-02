@@ -18,8 +18,10 @@ import {
   callBoolean,
   callNumber,
   requireFunction,
+  requireNonEmptyString,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../../validation.ts";
 
@@ -157,20 +159,6 @@ function resolveCrewReserve(raw: unknown, population: number): number {
   return Number.isFinite(absolute) ? absolute : 0;
 }
 
-function readString(value: unknown, path: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new TypeError(`${path} must be a non-empty string`);
-  }
-  return value;
-}
-
-function readOptionalString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
-}
-
 function namedRecord(
   catalog: UnknownRecord,
   name: string,
@@ -202,15 +190,15 @@ function finiteProperty(
 }
 
 function buildingId(building: UnknownRecord, path: string): string {
-  return readString(building["id"], `${path}.id`);
+  return requireNonEmptyString(building["id"], `${path}.id`);
 }
 
 function buildingBinding(building: UnknownRecord, path: string): string {
-  return readString(building["_vueBinding"], `${path}._vueBinding`);
+  return requireNonEmptyString(building["_vueBinding"], `${path}._vueBinding`);
 }
 
 function resourceId(resource: UnknownRecord, path: string): string {
-  return readString(resource["id"], `${path}.id`);
+  return requireNonEmptyString(resource["id"], `${path}.id`);
 }
 
 function identity(
@@ -1292,7 +1280,7 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
               building,
             ),
             skipGroup,
-            extraDescription: readOptionalString(
+            extraDescription: requireString(
               building["extraDescription"],
               `${path}.extraDescription`,
             ),
@@ -1404,7 +1392,7 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
           ),
           mechQueued: queued.includes(spireMech),
           purifierQueued: queued.includes(purifier),
-          purifierDescription: readOptionalString(
+          purifierDescription: requireString(
             purifier["extraDescription"],
             "buildings.SpirePurifier.extraDescription",
           ),
@@ -1721,7 +1709,7 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
             return `building ${operation.buildingId} missing`;
           const current =
             descriptions.get(operation.buildingId) ??
-            readOptionalString(
+            requireString(
               building["extraDescription"],
               `building ${operation.buildingId}.extraDescription`,
             );

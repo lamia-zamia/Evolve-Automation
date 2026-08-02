@@ -9,7 +9,10 @@ import {
   isRecord,
   requireArray,
   requireBoolean,
+  requireCount,
   requireFunction,
+  requireNonArrayRecord,
+  requireNonEmptyString,
   requireNumber,
   requireRecord,
   requireString,
@@ -175,5 +178,52 @@ assert.equal(
   messageOf(() => callNumber(manager, "fuel", "SmelterManager")),
   "SmelterManager.fuel must be a function, got number 3",
 );
+
+// A non-empty string rejects the empty string that `requireString` accepts, because
+// every caller uses the result to look something up.
+assert.equal(requireNonEmptyString("Iron", "resource.id"), "Iron");
+assert.equal(requireString("", "resource.id"), "");
+assert.equal(
+  messageOf(() => requireNonEmptyString("", "resource.id")),
+  'resource.id must be a non-empty string, got string ""',
+);
+assert.equal(
+  messageOf(() => requireNonEmptyString(undefined, "resource.id")),
+  "resource.id must be a non-empty string, got undefined",
+);
+assert.equal(
+  messageOf(() => requireNonEmptyString(5, "resource.id")),
+  "resource.id must be a non-empty string, got number 5",
+);
+
+// A keyed game bag rejects the array that `requireRecord` accepts, which would
+// otherwise pass as a record whose keys are its indices.
+const bag = { Types: 1 };
+assert.equal(requireNonArrayRecord(bag, "GameLog"), bag);
+assert.equal(
+  messageOf(() => requireNonArrayRecord([1, 2], "GameLog")),
+  "GameLog must be an object, got array(2)",
+);
+assert.equal(
+  messageOf(() => requireNonArrayRecord(null, "GameLog")),
+  "GameLog must be an object, got null",
+);
+
+// A count is a whole, non-negative, exactly representable number.
+assert.equal(requireCount(0, "Manager.maxOperating()"), 0);
+assert.equal(requireCount(7, "Manager.maxOperating()"), 7);
+for (const rejected of [
+  -1,
+  1.5,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.MAX_SAFE_INTEGER + 1,
+  "3",
+]) {
+  assert.match(
+    messageOf(() => requireCount(rejected, "Manager.maxOperating()")),
+    /^Manager\.maxOperating\(\) must be a non-negative safe integer, got /,
+  );
+}
 
 console.log("Adapter validation reporting tests passed");

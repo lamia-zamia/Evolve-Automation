@@ -11,6 +11,7 @@ import type {
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
   requireFunction,
+  requireNonEmptyString,
   requireNumber,
   requireRecord,
   type UnknownRecord,
@@ -43,13 +44,6 @@ function isUnlocked(race: UnknownRecord): boolean {
   return Boolean(race["ocular_power"] && race["ocularPowerConfig"]);
 }
 
-function requireId(value: unknown, path: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new TypeError(`${path} must be a non-empty string`);
-  }
-  return value;
-}
-
 function readCatalog(value: unknown): readonly OcularPowerIdentity[] {
   if (!Array.isArray(value)) {
     throw new TypeError("ocularPowerData must be an array");
@@ -60,8 +54,8 @@ function readCatalog(value: unknown): readonly OcularPowerIdentity[] {
     value.map((raw, index) => {
       const path = `ocularPowerData[${index}]`;
       const power = requireRecord(raw, path);
-      const key = requireId(power["key"], `${path}.key`);
-      const id = requireId(power["id"], `${path}.id`);
+      const key = requireNonEmptyString(power["key"], `${path}.key`);
+      const id = requireNonEmptyString(power["id"], `${path}.id`);
       if (keys.has(key) || ids.has(id)) {
         throw new TypeError("ocularPowerData keys and ids must be unique");
       }

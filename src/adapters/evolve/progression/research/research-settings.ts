@@ -5,7 +5,7 @@ import {
 } from "../../../../domain/progression/research/research-settings.ts";
 import {
   requireFunction,
-  requireRecord,
+  requireNonArrayRecord,
   requireString,
 } from "../../../validation.ts";
 
@@ -18,26 +18,19 @@ export interface ResearchSettingsEvolveAdapter {
   readResearchSettingsReadModel(): ResearchSettingsReadModel;
 }
 
-function requireObjectRecord(value: unknown, path: string) {
-  if (Array.isArray(value)) {
-    throw new TypeError(`${path} must be an object`);
-  }
-  return requireRecord(value, path);
-}
-
 /** Maps the volatile Evolve localization and technology catalog to a UI read model. */
 export function createResearchSettingsEvolveAdapter({
   getGame,
   getTechIds,
 }: ResearchSettingsEvolveDependencies): ResearchSettingsEvolveAdapter {
   function readResearchSettingsReadModel(): ResearchSettingsReadModel {
-    const game = requireObjectRecord(getGame(), "game");
+    const game = requireNonArrayRecord(getGame(), "game");
     const localize = requireFunction(game["loc"], "game.loc");
-    const rawTechIds = requireObjectRecord(getTechIds(), "techIds");
+    const rawTechIds = requireNonArrayRecord(getTechIds(), "techIds");
     const technologies: Record<string, ResearchSettingsTechnology> = {};
 
     for (const [key, rawTechnology] of Object.entries(rawTechIds)) {
-      const technology = requireObjectRecord(rawTechnology, `techIds.${key}`);
+      const technology = requireNonArrayRecord(rawTechnology, `techIds.${key}`);
       const binding = requireString(
         technology["_vueBinding"],
         `techIds.${key}._vueBinding`,

@@ -17,6 +17,7 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -45,12 +46,6 @@ function readTechnologyLevel(global: UnknownRecord): number {
   const value = tech["genetics"];
   if (value === undefined || value === null || value === 0) return 0;
   return requireNumber(value, "game.global.tech.genetics");
-}
-
-function requireMode(value: unknown, path: string): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${path} must be a string`);
-  return value;
 }
 
 function emptyInput(level: number): GeneticsInput {
@@ -179,7 +174,7 @@ export function createGeneticsAdapter(
       }
       const sequence = requireRecord(rawSequence, "game.global.arpa.sequence");
       const settings = requireRecord(dependencies.getSettings(), "settings");
-      const sequenceMode = requireMode(
+      const sequenceMode = requireString(
         settings["geneticsSequence"],
         "settings.geneticsSequence",
       );
@@ -197,7 +192,7 @@ export function createGeneticsAdapter(
       }
       const boostMode =
         level >= 5
-          ? requireMode(settings["geneticsBoost"], "settings.geneticsBoost")
+          ? requireString(settings["geneticsBoost"], "settings.geneticsBoost")
           : "none";
       const boostOn =
         level >= 5
@@ -205,7 +200,7 @@ export function createGeneticsAdapter(
           : false;
       const assembleMode =
         level >= 6
-          ? requireMode(
+          ? requireString(
               settings["geneticsAssemble"],
               "settings.geneticsAssemble",
             )

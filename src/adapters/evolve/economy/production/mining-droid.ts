@@ -10,7 +10,9 @@ import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
   callBoolean,
   callNumber,
+  requireCount,
   requireFunction,
+  requireNonEmptyString,
   requireNumber,
   requireRecord,
   type UnknownRecord,
@@ -19,21 +21,6 @@ import {
 interface MiningDroidSession {
   readonly manager: UnknownRecord;
   readonly productions: ReadonlyMap<string, UnknownRecord>;
-}
-
-function readProductionId(production: UnknownRecord, path: string): string {
-  const id = production["id"];
-  if (typeof id !== "string" || id.length === 0) {
-    throw new TypeError(`${path}.id must be a non-empty string`);
-  }
-  return id;
-}
-
-function requireCount(value: number, path: string): number {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new TypeError(`${path} must be a non-negative safe integer`);
-  }
-  return value;
 }
 
 function readProductions(manager: UnknownRecord): {
@@ -49,7 +36,7 @@ function readProductions(manager: UnknownRecord): {
   for (const [key, value] of Object.entries(productions)) {
     const path = `DroidManager.Productions.${key}`;
     const production = requireRecord(value, path);
-    const id = readProductionId(production, path);
+    const id = requireNonEmptyString(production["id"], `${path}.id`);
     if (byId.has(id)) {
       throw new TypeError(`DroidManager.Productions has duplicate id ${id}`);
     }
@@ -83,7 +70,7 @@ export function createMiningDroidReader(
       });
       const partial = rawProductions.values.map((production, index) => {
         const path = `DroidManager.Productions[${index}]`;
-        const id = readProductionId(production, path);
+        const id = requireNonEmptyString(production["id"], `${path}.id`);
         const weighting = requireNumber(
           production["weighting"],
           `${path}.weighting`,

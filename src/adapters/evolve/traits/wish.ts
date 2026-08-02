@@ -6,18 +6,15 @@ import type {
 import type { DecisionExecutor } from "../../../ports/decision-executor.ts";
 import type { WishControls, WishReader } from "../../../ports/wish.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
-import { requireNumber, requireRecord } from "../../validation.ts";
+import {
+  requireNumber,
+  requireRecord,
+  requireString,
+} from "../../validation.ts";
 
 export interface WishReaderDependencies {
   readonly getGame: () => unknown;
   readonly getSettings: () => unknown;
-}
-
-function requireSelection(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 function readTechnologyLevel(technology: Record<PropertyKey, unknown>): number {
@@ -82,11 +79,11 @@ export function createWishReader(
       };
       const minorSelection =
         minorRemaining === 0
-          ? requireSelection(getSettings()["wishMinor"], "settings.wishMinor")
+          ? requireString(getSettings()["wishMinor"], "settings.wishMinor")
           : "none";
       const majorSelection =
         technologyLevel >= 2 && majorRemaining === 0
-          ? requireSelection(getSettings()["wishMajor"], "settings.wishMajor")
+          ? requireString(getSettings()["wishMajor"], "settings.wishMajor")
           : "none";
       return Object.freeze({
         unlocked: true,

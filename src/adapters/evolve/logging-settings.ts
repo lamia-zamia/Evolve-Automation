@@ -3,7 +3,7 @@ import {
   type LoggingSettingsReadModel,
   type LoggingSettingsMessageType,
 } from "../../domain/logging-settings.ts";
-import { requireRecord, requireString } from "../validation.ts";
+import { requireNonArrayRecord, requireString } from "../validation.ts";
 
 interface LoggingSettingsEvolveDependencies {
   readonly getGame: () => unknown;
@@ -15,13 +15,6 @@ export interface LoggingSettingsEvolveAdapter {
   readLoggingSettingsReadModel(): LoggingSettingsReadModel;
 }
 
-function requireObjectRecord(value: unknown, path: string) {
-  if (Array.isArray(value)) {
-    throw new TypeError(`${path} must be an object`);
-  }
-  return requireRecord(value, path);
-}
-
 /** Maps volatile Evolve logger/game/settings values to a validated read model. */
 export function createLoggingSettingsEvolveAdapter({
   getGame,
@@ -29,9 +22,9 @@ export function createLoggingSettingsEvolveAdapter({
   getSettingsRaw,
 }: LoggingSettingsEvolveDependencies): LoggingSettingsEvolveAdapter {
   function readLoggingSettingsReadModel(): LoggingSettingsReadModel {
-    const game = requireObjectRecord(getGame(), "game");
-    const global = requireObjectRecord(game["global"], "game.global");
-    const gameSettings = requireObjectRecord(
+    const game = requireNonArrayRecord(getGame(), "game");
+    const global = requireNonArrayRecord(game["global"], "game.global");
+    const gameSettings = requireNonArrayRecord(
       global["settings"],
       "game.global.settings",
     );
@@ -39,8 +32,8 @@ export function createLoggingSettingsEvolveAdapter({
       gameSettings["locale"],
       "game.global.settings.locale",
     );
-    const gameLog = requireObjectRecord(getGameLog(), "GameLog");
-    const rawTypes = requireObjectRecord(gameLog["Types"], "GameLog.Types");
+    const gameLog = requireNonArrayRecord(getGameLog(), "GameLog");
+    const rawTypes = requireNonArrayRecord(gameLog["Types"], "GameLog.Types");
     const messageTypes: LoggingSettingsMessageType[] = [];
     for (const [id, rawLabel] of Object.entries(rawTypes)) {
       messageTypes.push({
@@ -48,7 +41,7 @@ export function createLoggingSettingsEvolveAdapter({
         label: requireString(rawLabel, `GameLog.Types.${id}`),
       });
     }
-    const settingsRaw = requireObjectRecord(getSettingsRaw(), "settingsRaw");
+    const settingsRaw = requireNonArrayRecord(getSettingsRaw(), "settingsRaw");
     const logFilter = requireString(
       settingsRaw["logFilter"],
       "settingsRaw.logFilter",

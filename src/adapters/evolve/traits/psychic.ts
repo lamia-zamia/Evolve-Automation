@@ -13,6 +13,7 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -42,13 +43,6 @@ export interface PsychicAdapterDependencies {
   readonly getSettings: () => unknown;
   readonly getResources: () => unknown;
   readonly controls: PsychicControls;
-}
-
-function requireMode(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 function readGlobal(gameValue: unknown): UnknownRecord {
@@ -133,7 +127,7 @@ export function createPsychicAdapter(
   const reader: PsychicReader = Object.freeze({
     readGate() {
       const settings = requireRecord(dependencies.getSettings(), "settings");
-      const mode = requireMode(
+      const mode = requireString(
         settings["psychicPower"],
         "settings.psychicPower",
       );
@@ -167,7 +161,7 @@ export function createPsychicAdapter(
 
     readPlan(): PsychicInput {
       const settings = requireRecord(dependencies.getSettings(), "settings");
-      const mode = requireMode(
+      const mode = requireString(
         settings["psychicPower"],
         "settings.psychicPower",
       );
@@ -264,7 +258,7 @@ export function createPsychicAdapter(
         !boostActive &&
         energyCurrent >= (technologyLevel >= 5 ? 60 : 75)
       ) {
-        boostResourceMode = requireMode(
+        boostResourceMode = requireString(
           settings["psychicBoostRes"],
           "settings.psychicBoostRes",
         );

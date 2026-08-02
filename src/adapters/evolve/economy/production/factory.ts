@@ -10,7 +10,9 @@ import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
   callBoolean,
   callNumber,
+  requireCount,
   requireFunction,
+  requireNonEmptyString,
   requireNumber,
   requireRecord,
   type UnknownRecord,
@@ -39,20 +41,6 @@ export interface FactoryAdapterDependencies {
   readonly consumptionBalanceMinimum: number;
 }
 
-function requireId(value: unknown, path: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new TypeError(`${path} must be a non-empty string`);
-  }
-  return value;
-}
-
-function requireCount(value: number, path: string): number {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new TypeError(`${path} must be a non-negative safe integer`);
-  }
-  return value;
-}
-
 function optionalWeighting(production: UnknownRecord, path: string): number {
   const value = production["weighting"];
   return value === undefined || value === null
@@ -74,9 +62,12 @@ function readCatalog(manager: UnknownRecord): {
   for (const [key, raw] of Object.entries(productions)) {
     const path = `FactoryManager.Productions.${key}`;
     const value = requireRecord(raw, path);
-    const id = requireId(value["id"], `${path}.id`);
+    const id = requireNonEmptyString(value["id"], `${path}.id`);
     const resource = requireRecord(value["resource"], `${path}.resource`);
-    const outputResourceId = requireId(resource["id"], `${path}.resource.id`);
+    const outputResourceId = requireNonEmptyString(
+      resource["id"],
+      `${path}.resource.id`,
+    );
     if (byId.has(id)) {
       throw new TypeError(`FactoryManager.Productions has duplicate id ${id}`);
     }
@@ -113,7 +104,10 @@ function readBuildingWeight(
 function readMaterial(raw: unknown, path: string): FactoryMaterialInput {
   const cost = requireRecord(raw, path);
   const resource = requireRecord(cost["resource"], `${path}.resource`);
-  const resourceId = requireId(resource["id"], `${path}.resource.id`);
+  const resourceId = requireNonEmptyString(
+    resource["id"],
+    `${path}.resource.id`,
+  );
   const unlocked = callBoolean(resource, "isUnlocked", `${path}.resource`);
   if (!unlocked) {
     return Object.freeze({
@@ -486,10 +480,7 @@ export function createFactoryAdapter(
           );
         }
         const actual = requireCount(
-          requireNumber(
-            Reflect.apply(currentProduction, manager, [identity.value]),
-            `FactoryManager.currentProduction(${adjustment.productionId})`,
-          ),
+          Reflect.apply(currentProduction, manager, [identity.value]),
           `FactoryManager.currentProduction(${adjustment.productionId})`,
         );
         if (actual !== adjustment.expectedCurrent) {

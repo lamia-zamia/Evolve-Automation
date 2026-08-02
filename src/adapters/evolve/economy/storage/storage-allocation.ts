@@ -12,6 +12,7 @@ import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
   callBoolean,
   requireFunction,
+  requireNonEmptyString,
   requireNumber,
   requireRecord,
   type UnknownRecord,
@@ -43,15 +44,8 @@ export interface StorageAllocationAdapterDependencies {
   readonly log: (message: string) => void;
 }
 
-function readString(value: unknown, path: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new TypeError(`${path} must be a non-empty string`);
-  }
-  return value;
-}
-
 function resourceId(resource: UnknownRecord, path: string): string {
-  return readString(resource["id"], `${path}.id`);
+  return requireNonEmptyString(resource["id"], `${path}.id`);
 }
 
 function finiteProperty(

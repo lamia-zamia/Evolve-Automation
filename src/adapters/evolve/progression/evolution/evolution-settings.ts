@@ -5,7 +5,11 @@ import {
   type EvolutionSettingsOption,
   type EvolutionSettingsReadModel,
 } from "../../../../domain/progression/evolution/evolution-settings.ts";
-import { requireRecord } from "../../../validation.ts";
+import {
+  requireArray,
+  requireRecord,
+  requireString,
+} from "../../../validation.ts";
 interface EvolutionSettingsEvolveDependencies {
   readonly getGame: () => unknown;
   readonly getRaces: () => unknown;
@@ -20,32 +24,23 @@ interface EvolutionSettingsEvolveDependencies {
 export interface EvolutionSettingsEvolveAdapter {
   read(): EvolutionSettingsReadModel;
 }
-function string(value: unknown, path: string): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${path} must be a string`);
-  return value;
-}
-function array(value: unknown, path: string): readonly unknown[] {
-  if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
-  return value;
-}
 function loc(game: Record<PropertyKey, unknown>, key: string): string {
   const fn = game["loc"];
   if (typeof fn !== "function")
     throw new TypeError("game.loc must be a function");
-  return string(Reflect.apply(fn, game, [key]), `game.loc(${key})`);
+  return requireString(Reflect.apply(fn, game, [key]), `game.loc(${key})`);
 }
 function options(
   value: unknown,
   path: string,
 ): readonly EvolutionSettingsOption[] {
   return Object.freeze(
-    array(value, path).map((raw, index) => {
+    requireArray(value, path).map((raw, index) => {
       const item = requireRecord(raw, `${path}[${index}]`);
       return Object.freeze({
-        val: string(item["val"], `${path}[${index}].val`),
-        label: string(item["label"], `${path}[${index}].label`),
-        hint: string(item["hint"], `${path}[${index}].hint`),
+        val: requireString(item["val"], `${path}[${index}].val`),
+        label: requireString(item["label"], `${path}[${index}].label`),
+        hint: requireString(item["hint"], `${path}[${index}].hint`),
       });
     }),
   );
@@ -69,7 +64,7 @@ function queueName(
     return { label: "Auto Achievements", className: "has-text-advanced" };
   if (typeof target !== "string")
     return { label: "Unrecognized race!", className: "has-text-danger" };
-  const name = string(race["name"], "race.name");
+  const name = requireString(race["name"], "race.name");
   const genus = item["userEvolutionGenus"];
   const genusText =
     typeof genus === "string" ? `, ${loc(game, `genelab_genus_${genus}`)}` : "";
@@ -89,8 +84,8 @@ export function createEvolutionSettingsEvolveAdapter(
       );
       const universeOptions: EvolutionSettingsOption[] = [
         { val: "none", label: "None", hint: "Wait for user selection" },
-        ...array(deps.getUniverses(), "universes").map((raw, index) => {
-          const id = string(raw, `universes[${index}]`);
+        ...requireArray(deps.getUniverses(), "universes").map((raw, index) => {
+          const id = requireString(raw, `universes[${index}]`);
           return {
             val: id,
             label: loc(game, `universe_${id}`),
@@ -105,9 +100,9 @@ export function createEvolutionSettingsEvolveAdapter(
           hint: "Picks race giving most achievements upon completing run. Tracks all achievements limited to specific races and resets. Races unique to current planet biome are prioritized, when available.",
         },
         ...races.map((race) => ({
-          val: string(race["id"], "race.id"),
-          label: string(race["name"], "race.name"),
-          hint: string(race["desc"], "race.desc"),
+          val: requireString(race["id"], "race.id"),
+          label: requireString(race["name"], "race.name"),
+          hint: requireString(race["desc"], "race.desc"),
         })),
       ];
       const gameRaces = requireRecord(game["races"], "game.races");
@@ -129,12 +124,12 @@ export function createEvolutionSettingsEvolveAdapter(
         label: loc(game, `genelab_genus_${id}`),
         hint: "",
       }));
-      const challengeSets = array(deps.getChallenges(), "challenges");
+      const challengeSets = requireArray(deps.getChallenges(), "challenges");
       const challengeControls: EvolutionSettingsControl[] = challengeSets.map(
         (raw, index) => {
-          const set = array(raw, `challenges[${index}]`);
+          const set = requireArray(raw, `challenges[${index}]`);
           const first = requireRecord(set[0], `challenges[${index}][0]`);
-          const id = string(first["id"], `challenges[${index}][0].id`);
+          const id = requireString(first["id"], `challenges[${index}][0].id`);
           return {
             kind: "toggle",
             settingName: `challenge_${id}`,
@@ -142,7 +137,7 @@ export function createEvolutionSettingsEvolveAdapter(
               .map((item, itemIndex) =>
                 loc(
                   game,
-                  `evo_challenge_${string(requireRecord(item, `challenges[${index}][${itemIndex}]`)["id"], "challenge.id")}`,
+                  `evo_challenge_${requireString(requireRecord(item, `challenges[${index}][${itemIndex}]`)["id"], "challenge.id")}`,
                 ),
               )
               .join(" | "),
@@ -150,7 +145,7 @@ export function createEvolutionSettingsEvolveAdapter(
               .map((item, itemIndex) =>
                 loc(
                   game,
-                  `evo_challenge_${string(requireRecord(item, `challenges[${index}][${itemIndex}]`)["id"], "challenge.id")}_effect`,
+                  `evo_challenge_${requireString(requireRecord(item, `challenges[${index}][${itemIndex}]`)["id"], "challenge.id")}_effect`,
                 ),
               )
               .join("&#xA;"),
@@ -231,11 +226,13 @@ export function createEvolutionSettingsEvolveAdapter(
         },
       ];
       const prestigeOptions = options(deps.getPrestigeTypes(), "prestigeTypes");
-      const storeNames = array(
+      const storeNames = requireArray(
         deps.getSettingsToStore(),
         "evolutionSettingsToStore",
-      ).map((raw, index) => string(raw, `evolutionSettingsToStore[${index}]`));
-      const rawQueue = array(
+      ).map((raw, index) =>
+        requireString(raw, `evolutionSettingsToStore[${index}]`),
+      );
+      const rawQueue = requireArray(
         settingsRaw["evolutionQueue"],
         "settingsRaw.evolutionQueue",
       );
@@ -278,7 +275,7 @@ export function createEvolutionSettingsEvolveAdapter(
           typeof condition === "function" &&
           typeof habitability === "function"
         ) {
-          const text = string(
+          const text = requireString(
             Reflect.apply(condition, selectedRace, []),
             "race condition",
           );
