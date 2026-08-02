@@ -88,4 +88,32 @@ context = {
 assert.equal(compatibility.crateValue(), 750);
 assert.equal(compatibility.containerValue(), 1000);
 
+// timeFormat picks one of five branches; each is exercised at its boundary.
+assert.deepEqual(compatibility.timeFormat(-1), ["time_never", undefined]);
+assert.equal(compatibility.timeFormat(5), "05s");
+assert.equal(compatibility.timeFormat(60), "60s");
+assert.equal(compatibility.timeFormat(61), "01m 01s");
+assert.equal(compatibility.timeFormat(3599), "59m 59s");
+assert.equal(compatibility.timeFormat(3661), "1h 01m");
+assert.equal(compatibility.timeFormat(86400), "24h 00m");
+assert.equal(compatibility.timeFormat(90061), "1d 1h");
+
+// mechCost reads blood.prepared only when the caller omits the override.
+assert.deepEqual(compatibility.mechCost("medium", false), { s: 4, c: 180000 });
+assert.deepEqual(compatibility.mechCost("titan", true), {
+  s: 1500,
+  c: 1500000,
+});
+assert.deepEqual(compatibility.mechCost("collector", false, 2), {
+  s: 1,
+  c: 8000,
+});
+assert.deepEqual(compatibility.mechCost("unknown", false), {
+  s: 9999,
+  c: 10000000,
+});
+
+context.game.global.civic.foreign.gov1 = { eco: 2, hstl: 50, unrest: 20 };
+assert.equal(compatibility.govPrice(1), 52613);
+
 console.log("Game compatibility module tests passed");

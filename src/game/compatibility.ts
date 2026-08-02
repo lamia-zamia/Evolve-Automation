@@ -117,12 +117,11 @@ export function createGameCompatibility({
     },
     // function govPrice(gov) from civics.js
     govPrice: function (e: any) {
-      let o = getGame().global.civic.foreign[`gov${e}`],
-        i = 15384 * o.eco;
-      return (
-        (i *= 1 + (1.6 * o.hstl) / 100),
-        +(i *= 1 - (0.25 * o.unrest) / 100).toFixed(0)
-      );
+      const o = getGame().global.civic.foreign[`gov${e}`];
+      let i = 15384 * o.eco;
+      i *= 1 + (1.6 * o.hstl) / 100;
+      i *= 1 - (0.25 * o.unrest) / 100;
+      return +i.toFixed(0);
     },
     // export const galaxyOffers from resources.js
     galaxyOffers: normalizeProperties([
@@ -1388,24 +1387,29 @@ export function createGameCompatibility({
       let l = 9999,
         r = 1e7;
       switch (e) {
-        case "small":
-          {
-            let e = (x ?? getGame().global.blood.prepared) >= 2 ? 5e4 : 75e3;
-            ((r = a ? 2.5 * e : e), (l = a ? 20 : 1));
-          }
+        case "small": {
+          const base = (x ?? getGame().global.blood.prepared) >= 2 ? 5e4 : 75e3;
+          r = a ? 2.5 * base : base;
+          l = a ? 20 : 1;
           break;
+        }
         case "medium":
-          ((r = a ? 45e4 : 18e4), (l = a ? 100 : 4));
+          r = a ? 45e4 : 18e4;
+          l = a ? 100 : 4;
           break;
         case "large":
-          ((r = a ? 925e3 : 375e3), (l = a ? 500 : 20));
+          r = a ? 925e3 : 375e3;
+          l = a ? 500 : 20;
           break;
         case "titan":
-          ((r = a ? 15e5 : 75e4), (l = a ? 1500 : 75));
+          r = a ? 15e5 : 75e4;
+          l = a ? 1500 : 75;
           break;
         case "collector": {
-          let e = (x ?? getGame().global.blood.prepared) >= 2 ? 8e3 : 1e4;
-          ((r = a ? 2.5 * e : e), (l = 1));
+          const base = (x ?? getGame().global.blood.prepared) >= 2 ? 8e3 : 1e4;
+          r = a ? 2.5 * base : base;
+          l = 1;
+          break;
         }
       }
       return { s: l, c: r };
@@ -1443,25 +1447,25 @@ export function createGameCompatibility({
     },
     // export function timeFormat(time) from functions.js
     timeFormat: function (e: any) {
-      let i;
-      if (e < 0) i = getGame().loc("time_never");
-      else if ((e = +e.toFixed(0)) > 60) {
-        let l: any = e % 60,
-          s: any = (e - l) / 60;
-        if (s >= 60) {
-          let e: any = s % 60,
-            l: any = (s - e) / 60;
-          if (l > 24) {
-            i = `${(l - (e = l % 24)) / 24}d ${e}h`;
-          } else i = `${l}h ${(e = ("0" + e).slice(-2))}m`;
-        } else
-          i = `${(s = ("0" + s).slice(-2))}m ${(l = ("0" + l).slice(-2))}s`;
-      } else i = `${(e = ("0" + e).slice(-2))}s`;
-      return i;
+      if (e < 0) return getGame().loc("time_never");
+      const total = +e.toFixed(0);
+      if (total <= 60) return `${("0" + total).slice(-2)}s`;
+      const seconds = total % 60;
+      const totalMinutes = (total - seconds) / 60;
+      if (totalMinutes < 60) {
+        return `${("0" + totalMinutes).slice(-2)}m ${("0" + seconds).slice(-2)}s`;
+      }
+      const minutes = totalMinutes % 60;
+      const totalHours = (totalMinutes - minutes) / 60;
+      if (totalHours > 24) {
+        const hours = totalHours % 24;
+        return `${(totalHours - hours) / 24}d ${hours}h`;
+      }
+      return `${totalHours}h ${("0" + minutes).slice(-2)}m`;
     },
     // export universeAffix(universe) from achieve.js
     universeAffix: function (e: any) {
-      switch ((e = e || getGame().global.race.universe)) {
+      switch (e || getGame().global.race.universe) {
         case "evil":
           return "e";
         case "antimatter":

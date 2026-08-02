@@ -4191,7 +4191,7 @@
           base /= 3;
         }
         if (state.astroSign === "scorpio") {
-          base * 0.88;
+          base *= 0.88;
         }
         return Math.round(base ** spyLevel) + 500;
       },
@@ -6481,16 +6481,9 @@
           return;
         }
         let trigger = this.priorityList[indexToEval];
-        let check = "";
-        switch (trigger.requirementType) {
-          case "Eval":
-            check = trigger.requirementId;
-            break;
-          default:
-            check = `_("${trigger.requirementType}",${JSON.stringify(
-              trigger.requirementId
-            )})`;
-        }
+        const check = trigger.requirementType === "Eval" ? trigger.requirementId : `_("${trigger.requirementType}",${JSON.stringify(
+          trigger.requirementId
+        )})`;
         getWindow().prompt("Eval of this condition:", check);
       },
       // This function only checks if two triggers use the same resource, it does not check storage
@@ -9657,8 +9650,11 @@
       },
       // function govPrice(gov) from civics.js
       govPrice: function(e) {
-        let o = getGame().global.civic.foreign[`gov${e}`], i = 15384 * o.eco;
-        return i *= 1 + 1.6 * o.hstl / 100, +(i *= 1 - 0.25 * o.unrest / 100).toFixed(0);
+        const o = getGame().global.civic.foreign[`gov${e}`];
+        let i = 15384 * o.eco;
+        i *= 1 + 1.6 * o.hstl / 100;
+        i *= 1 - 0.25 * o.unrest / 100;
+        return +i.toFixed(0);
       },
       // export const galaxyOffers from resources.js
       galaxyOffers: normalizeProperties([
@@ -10903,24 +10899,29 @@
       mechCost: function(e, a, x) {
         let l = 9999, r = 1e7;
         switch (e) {
-          case "small":
-            {
-              let e2 = (x ?? getGame().global.blood.prepared) >= 2 ? 5e4 : 75e3;
-              r = a ? 2.5 * e2 : e2, l = a ? 20 : 1;
-            }
+          case "small": {
+            const base = (x ?? getGame().global.blood.prepared) >= 2 ? 5e4 : 75e3;
+            r = a ? 2.5 * base : base;
+            l = a ? 20 : 1;
             break;
+          }
           case "medium":
-            r = a ? 45e4 : 18e4, l = a ? 100 : 4;
+            r = a ? 45e4 : 18e4;
+            l = a ? 100 : 4;
             break;
           case "large":
-            r = a ? 925e3 : 375e3, l = a ? 500 : 20;
+            r = a ? 925e3 : 375e3;
+            l = a ? 500 : 20;
             break;
           case "titan":
-            r = a ? 15e5 : 75e4, l = a ? 1500 : 75;
+            r = a ? 15e5 : 75e4;
+            l = a ? 1500 : 75;
             break;
           case "collector": {
-            let e2 = (x ?? getGame().global.blood.prepared) >= 2 ? 8e3 : 1e4;
-            r = a ? 2.5 * e2 : e2, l = 1;
+            const base = (x ?? getGame().global.blood.prepared) >= 2 ? 8e3 : 1e4;
+            r = a ? 2.5 * base : base;
+            l = 1;
+            break;
           }
         }
         return { s: l, c: r };
@@ -10935,23 +10936,25 @@
       },
       // export function timeFormat(time) from functions.js
       timeFormat: function(e) {
-        let i;
-        if (e < 0) i = getGame().loc("time_never");
-        else if ((e = +e.toFixed(0)) > 60) {
-          let l = e % 60, s = (e - l) / 60;
-          if (s >= 60) {
-            let e2 = s % 60, l2 = (s - e2) / 60;
-            if (l2 > 24) {
-              i = `${(l2 - (e2 = l2 % 24)) / 24}d ${e2}h`;
-            } else i = `${l2}h ${e2 = ("0" + e2).slice(-2)}m`;
-          } else
-            i = `${s = ("0" + s).slice(-2)}m ${l = ("0" + l).slice(-2)}s`;
-        } else i = `${e = ("0" + e).slice(-2)}s`;
-        return i;
+        if (e < 0) return getGame().loc("time_never");
+        const total = +e.toFixed(0);
+        if (total <= 60) return `${("0" + total).slice(-2)}s`;
+        const seconds = total % 60;
+        const totalMinutes = (total - seconds) / 60;
+        if (totalMinutes < 60) {
+          return `${("0" + totalMinutes).slice(-2)}m ${("0" + seconds).slice(-2)}s`;
+        }
+        const minutes = totalMinutes % 60;
+        const totalHours = (totalMinutes - minutes) / 60;
+        if (totalHours > 24) {
+          const hours = totalHours % 24;
+          return `${(totalHours - hours) / 24}d ${hours}h`;
+        }
+        return `${totalHours}h ${("0" + minutes).slice(-2)}m`;
       },
       // export universeAffix(universe) from achieve.js
       universeAffix: function(e) {
-        switch (e = e || getGame().global.race.universe) {
+        switch (e || getGame().global.race.universe) {
           case "evil":
             return "e";
           case "antimatter":

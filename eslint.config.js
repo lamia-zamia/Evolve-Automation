@@ -31,7 +31,7 @@ export default defineConfig(
       "no-prototype-builtins": "error",
       "no-unreachable": "warn",
       "no-unused-vars": "warn",
-      "no-useless-assignment": "warn",
+      "no-useless-assignment": "error",
       "prefer-const": "off",
     },
   },
@@ -56,11 +56,11 @@ export default defineConfig(
     },
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-unused-expressions": "warn",
+      "@typescript-eslint/no-unused-expressions": "error",
       "@typescript-eslint/no-unused-vars": "warn",
       "no-case-declarations": "warn",
       "no-prototype-builtins": "error",
-      "no-useless-assignment": "warn",
+      "no-useless-assignment": "error",
       "no-var": "off",
       "prefer-const": "off",
     },
@@ -85,7 +85,6 @@ export default defineConfig(
     ],
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
-      "@typescript-eslint/no-unused-expressions": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
         {

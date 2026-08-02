@@ -194,10 +194,11 @@ SpyManager.updateForeigns();
 assert.deepEqual(SpyManager.foreignActive, []);
 assert.equal(SpyManager.foreignTarget, null);
 
-// Infiltrator cost and the intentionally ineffective Scorpio expression.
+// Infiltrator divides the base cost, then Scorpio takes its 12% off that.
 game.global.race.infiltrator = true;
-state.astroSign = "scorpio";
 assert.equal(SpyManager.spyCost(0, 2), 778);
+state.astroSign = "scorpio";
+assert.equal(SpyManager.spyCost(0, 2), 715);
 
 selectors["#gov0 div span:nth-child(3)"] = { style: { display: "block" } };
 selectors["#gov0 div span:nth-child(3) button"] = {

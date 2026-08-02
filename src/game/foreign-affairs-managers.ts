@@ -85,7 +85,7 @@ export function createForeignAffairsManagers({
         base /= 3;
       }
       if (state.astroSign === "scorpio") {
-        base * 0.88;
+        base *= 0.88;
       }
       return Math.round(base ** spyLevel) + 500;
     },

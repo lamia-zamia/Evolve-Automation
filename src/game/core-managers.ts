@@ -431,16 +431,12 @@ export function createCoreManagers({
 
       let trigger = this.priorityList[indexToEval];
 
-      let check = "";
-      switch (trigger.requirementType) {
-        case "Eval":
-          check = trigger.requirementId;
-          break;
-        default:
-          check = `_("${trigger.requirementType}",${JSON.stringify(
-            trigger.requirementId,
-          )})`;
-      }
+      const check =
+        trigger.requirementType === "Eval"
+          ? trigger.requirementId
+          : `_("${trigger.requirementType}",${JSON.stringify(
+              trigger.requirementId,
+            )})`;
 
       getWindow().prompt("Eval of this condition:", check);
     },
