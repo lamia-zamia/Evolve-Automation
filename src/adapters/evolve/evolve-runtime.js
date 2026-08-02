@@ -5834,19 +5834,27 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const stateLogSettingsIntents = createStateLogSettingsIntentHandler({
-    resetToDefaults: () => resetStateLogSettings(true),
-    persist: () => updateSettingsFromState(),
+  let stateLogSettingsIntentHandler;
+  const stateLogSettingsBrowserAdapter = createStateLogSettingsBrowserAdapter({
+    getDocument: () => runtimeEnvironment.document,
+    getJQuery: () => $,
+    intents: {
+      handle: (intent) => stateLogSettingsIntentHandler.handle(intent),
+    },
+    buildSettingsSection,
+    addSettingsToggle,
+    addSettingsNumber,
+  });
+  stateLogSettingsIntentHandler = createStateLogSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () => resetStateLogSettings(true),
+      persist: () => updateSettingsFromState(),
+    },
+    renderSettingsContent: () =>
+      stateLogSettingsBrowserAdapter.updateStateLogSettingsContent(),
   });
   const { buildStateLogSettings, updateStateLogSettingsContent } =
-    createStateLogSettingsBrowserAdapter({
-      getDocument: () => runtimeEnvironment.document,
-      getJQuery: () => $,
-      intents: stateLogSettingsIntents,
-      buildSettingsSection,
-      addSettingsToggle,
-      addSettingsNumber,
-    });
+    stateLogSettingsBrowserAdapter;
 
   publishTestSurface({
     stateLogSettings: {

@@ -44,22 +44,11 @@ settings.buildStateLogSettings();
 assert.deepEqual(trace, ["section:stateLog:State Log"]);
 assert.equal(sectionRegistration[3], settings.updateStateLogSettingsContent);
 
+// The reset callback emits the intent and nothing else. Rendering the reset
+// settings is the application handler's job, as it is for every other section.
 trace = [];
 sectionRegistration[2]();
-assert.equal(trace[0], "intent:reset-state-log-settings");
-assert.deepEqual(
-  trace.slice(1).map((entry) => entry.split(":").slice(0, 2).join(":")),
-  [
-    "select:first",
-    "empty:first",
-    "off:*",
-    "toggle:stateLogEnabled",
-    "toggle:stateLogAutoDownload",
-    "number:stateLogInterval",
-  ],
-);
-assert.equal(document.documentElement.scrollTop, 14);
-assert.equal(document.body.scrollTop, 14);
+assert.deepEqual(trace, ["intent:reset-state-log-settings"]);
 
 document = {
   documentElement: { scrollTop: 31 },
@@ -68,6 +57,17 @@ document = {
 jqueryContext = "second";
 trace = [];
 settings.updateStateLogSettingsContent();
+assert.deepEqual(
+  trace.map((entry) => entry.split(":").slice(0, 2).join(":")),
+  [
+    "select:second",
+    "empty:second",
+    "off:*",
+    "toggle:stateLogEnabled",
+    "toggle:stateLogAutoDownload",
+    "number:stateLogInterval",
+  ],
+);
 assert.equal(trace[0], "select:second:#script_stateLogContent");
 assert.equal(document.documentElement.scrollTop, 31);
 assert.equal(document.body.scrollTop, 31);

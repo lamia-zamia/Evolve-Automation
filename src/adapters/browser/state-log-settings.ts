@@ -65,10 +65,7 @@ export function createStateLogSettingsBrowserAdapter({
     buildSettingsSection(
       readModel.sectionId,
       readModel.sectionName,
-      () => {
-        intents.handle({ type: "reset-state-log-settings" });
-        updateStateLogSettingsContent();
-      },
+      () => intents.handle({ type: "reset-state-log-settings" }),
       updateStateLogSettingsContent,
     );
   }

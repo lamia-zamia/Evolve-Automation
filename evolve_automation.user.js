@@ -17835,13 +17835,17 @@
   }
 
   // src/application/state-log-settings.ts
-  function createStateLogSettingsIntentHandler(writer) {
+  function createStateLogSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
     return Object.freeze({
       handle(intent) {
         switch (intent.type) {
           case "reset-state-log-settings":
             writer.resetToDefaults();
             writer.persist();
+            renderSettingsContent();
             return;
         }
       }
@@ -17910,10 +17914,7 @@
       buildSettingsSection(
         readModel.sectionId,
         readModel.sectionName,
-        () => {
-          intents.handle({ type: "reset-state-log-settings" });
-          updateStateLogSettingsContent();
-        },
+        () => intents.handle({ type: "reset-state-log-settings" }),
         updateStateLogSettingsContent
       );
     }
@@ -59722,18 +59723,25 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         interfaceSettingsTestActions = context.actions;
       }
     });
-    const stateLogSettingsIntents = createStateLogSettingsIntentHandler({
-      resetToDefaults: () => resetStateLogSettings(true),
-      persist: () => updateSettingsFromState()
-    });
-    const { buildStateLogSettings, updateStateLogSettingsContent } = createStateLogSettingsBrowserAdapter({
+    let stateLogSettingsIntentHandler;
+    const stateLogSettingsBrowserAdapter = createStateLogSettingsBrowserAdapter({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      intents: stateLogSettingsIntents,
+      intents: {
+        handle: (intent) => stateLogSettingsIntentHandler.handle(intent)
+      },
       buildSettingsSection,
       addSettingsToggle,
       addSettingsNumber
     });
+    stateLogSettingsIntentHandler = createStateLogSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => resetStateLogSettings(true),
+        persist: () => updateSettingsFromState()
+      },
+      renderSettingsContent: () => stateLogSettingsBrowserAdapter.updateStateLogSettingsContent()
+    });
+    const { buildStateLogSettings, updateStateLogSettingsContent } = stateLogSettingsBrowserAdapter;
     publishTestSurface({
       stateLogSettings: {
         buildStateLogSettings,
