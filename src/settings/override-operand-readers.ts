@@ -4,9 +4,11 @@
  * editor renders for the operand's argument — and `override-catalog.ts` joins the two into the
  * `checkTypes` shape both consumers already use.
  *
- * TRANSITIONAL: every reader still traverses a live game bag through its `read*` dependency, so each
- * condition read is a fresh game read. The interfaces below are the complete inventory of what the
- * override work package's evaluation input has to supply before that can change.
+ * TRANSITIONAL: every reader traverses a live game bag through its `read*` dependency. An override
+ * pass reads each distinct operand once — `createOverrideEvaluationSource` samples the pass — but the
+ * editor's effective-value display and the trigger requirements in `src/game/entities.ts` still read
+ * per call. The interfaces below are the complete inventory of what a shared evaluation input would
+ * have to supply to replace the live bags outright.
  */
 
 /** One operand read. The argument is whatever the editor's input for that operand type stored. */

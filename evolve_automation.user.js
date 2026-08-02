@@ -2273,6 +2273,7 @@
         const checkTypes = getCheckTypes();
         const checkCompare = getCheckCompare();
         const checkCustom = getCheckCustom();
+        const sampled = /* @__PURE__ */ new Map();
         return {
           hasOperandType: (operandType) => Boolean(checkTypes[operandType]),
           readOperand: (operandType, argument) => {
@@ -2280,7 +2281,24 @@
             if (!checkType) {
               throw new Error(`${operandType} variable not found`);
             }
-            return checkType.fn(argument);
+            let reads = sampled.get(operandType);
+            if (!reads) {
+              reads = /* @__PURE__ */ new Map();
+              sampled.set(operandType, reads);
+            }
+            let read = reads.get(argument);
+            if (!read) {
+              try {
+                read = { ok: true, value: checkType.fn(argument) };
+              } catch (error) {
+                read = { ok: false, error };
+              }
+              reads.set(argument, read);
+            }
+            if (!read.ok) {
+              throw read.error;
+            }
+            return read.value;
           },
           hasComparator: (comparator) => Boolean(checkCompare[comparator]),
           compare: (comparator, left, right) => {

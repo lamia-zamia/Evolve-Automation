@@ -6,6 +6,7 @@ import type {
 
 /** Everything the game contributes to one override pass, sampled once per pass. */
 export interface OverrideEvaluationSource {
+  /** The pass's sample: an operand named by the same argument twice reads the game once. */
   sampleEvaluator(): OverrideConditionEvaluator;
   readForcedTasks(): ForcedTaskState;
 }

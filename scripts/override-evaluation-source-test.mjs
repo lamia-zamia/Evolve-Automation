@@ -43,11 +43,62 @@ assert.throws(
   /^Error: < comparator not found$/,
 );
 
+// --- One sample reads each distinct operand once, however many conditions name it ---
+let counted = 0;
+const failure = new Error("resource nonesuch not found");
+const countingSource = createOverrideEvaluationSource({
+  getCheckTypes: () => ({
+    Value: {
+      fn: (arg) => {
+        counted += 1;
+        if (arg === "broken") {
+          throw failure;
+        }
+        return `read:${String(arg)}`;
+      },
+    },
+    Other: {
+      fn: (arg) => {
+        counted += 1;
+        return `other:${String(arg)}`;
+      },
+    },
+  }),
+  getCheckCompare: () => ({}),
+  getCheckCustom: () => ({}),
+  getHaveTask: () => () => false,
+});
+
+const pass = countingSource.sampleEvaluator();
+assert.equal(pass.readOperand("Value", "foo"), "read:foo");
+assert.equal(pass.readOperand("Value", "foo"), "read:foo");
+assert.equal(counted, 1);
+
+// A different argument, and the same argument under another operand type, are separate reads
+assert.equal(pass.readOperand("Value", "bar"), "read:bar");
+assert.equal(pass.readOperand("Other", "foo"), "other:foo");
+assert.equal(counted, 3);
+
+// Argument identity decides, so a numeric 0 and the string "0" are not the same read
+assert.equal(pass.readOperand("Value", 0), "read:0");
+assert.equal(pass.readOperand("Value", "0"), "read:0");
+assert.equal(counted, 5);
+
+// A read that throws is sampled too: the repeat reports the same failure without re-reading
+assert.throws(() => pass.readOperand("Value", "broken"), failure);
+assert.throws(() => pass.readOperand("Value", "broken"), failure);
+assert.equal(counted, 6);
+
+// The sample belongs to the pass, so the next pass reads the game again
+const nextPass = countingSource.sampleEvaluator();
+assert.equal(nextPass.readOperand("Value", "foo"), "read:foo");
+assert.equal(counted, 7);
+
 // --- The catalog is read at sample time, so a replaced bag is seen by the next pass ---
 checkTypes = { Value: { fn: () => "replaced" } };
 checkCompare = { "==": () => false };
 checkCustom = {};
-assert.equal(evaluator.readOperand("Value", "foo"), "read:foo");
+assert.equal(evaluator.readOperand("Value", "bar"), "read:bar");
 const resampled = source.sampleEvaluator();
 assert.equal(resampled.readOperand("Value", "foo"), "replaced");
 assert.equal(resampled.compare("==", 3, 3), false);
