@@ -9,6 +9,7 @@ import type {
   TickDiagnostics,
   TickReader,
 } from "../ports/tick.ts";
+import { createPhaseMeasure } from "../utils/performance.ts";
 
 export interface TickDependencies {
   readonly reader: TickReader;
@@ -48,17 +49,7 @@ export function runTick({
   const profiling =
     diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
   const workStartedAtMs = profiling?.nowMs();
-  const measure = <T>(phase: string, action: () => T): T => {
-    if (profiling === undefined) {
-      return action();
-    }
-    const startedAtMs = profiling.nowMs();
-    try {
-      return action();
-    } finally {
-      profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-    }
-  };
+  const measure = createPhaseMeasure(profiling);
   const finishProfile = () => {
     if (profiling !== undefined && workStartedAtMs !== undefined) {
       profiling.recordPerformance("tick", profiling.nowMs() - workStartedAtMs);

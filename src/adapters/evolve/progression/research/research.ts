@@ -14,6 +14,7 @@ import {
   requireRecord,
   type UnknownRecord,
 } from "../../../validation.ts";
+import { createPhaseMeasure } from "../../../../utils/performance.ts";
 
 export interface ResearchReaderDependencies {
   readonly getState: () => unknown;
@@ -96,21 +97,9 @@ function executionResult(
 export function createResearchCommandExecutor(
   dependencies: ResearchExecutorDependencies,
 ): ResearchCommandExecutor {
-  const profiling = dependencies.diagnostics;
-  const measure = <T>(phase: string, action: () => T): T => {
-    if (profiling === undefined || !profiling.readPerformanceEnabled()) {
-      return action();
-    }
-    const startedAtMs = profiling.nowMs();
-    try {
-      return action();
-    } finally {
-      profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-    }
-  };
-
   return Object.freeze({
     execute(decision: Readonly<ResearchDecision>) {
+      const measure = createPhaseMeasure(dependencies.diagnostics);
       if (!Number.isSafeInteger(decision.index) || decision.index < 0) {
         return executionResult(
           rejected(

@@ -11,6 +11,7 @@ import {
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import type { BuildExecutor, BuildReader } from "../ports/build.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+import { createPhaseMeasure } from "../utils/performance.ts";
 
 export interface BuildAutomationDependencies {
   readonly reader: BuildReader;
@@ -34,19 +35,7 @@ export function runBuildAutomation(
   dependencies: BuildAutomationDependencies,
 ): CommandExecutionOutcome {
   const { reader, executor, diagnostics } = dependencies;
-  const profiling =
-    diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
-  const measure = <T>(phase: string, action: () => T): T => {
-    if (profiling === undefined) {
-      return action();
-    }
-    const startedAtMs = profiling.nowMs();
-    try {
-      return action();
-    } finally {
-      profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-    }
-  };
+  const measure = createPhaseMeasure(diagnostics);
 
   const setup = measure("autoBuild.beginCycle", () => reader.beginCycle());
   let state = initialBuildLoopState();

@@ -6168,6 +6168,22 @@
     return { initialiseScript, mainAutoEvolveScript };
   }
 
+  // src/utils/performance.ts
+  var runUnmeasured = (_phase, action) => action();
+  function createPhaseMeasure(diagnostics) {
+    if (diagnostics === void 0 || !diagnostics.readPerformanceEnabled()) {
+      return runUnmeasured;
+    }
+    return (phase, action) => {
+      const startedAtMs = diagnostics.nowMs();
+      try {
+        return action();
+      } finally {
+        diagnostics.recordPerformance(phase, diagnostics.nowMs() - startedAtMs);
+      }
+    };
+  }
+
   // src/game/core-managers.ts
   function createCoreManagers({
     getGame,
@@ -6258,18 +6274,7 @@
         }
       },
       updateWeighting() {
-        const profiling = diagnostics;
-        const measure = (phase2, action) => {
-          if (profiling === void 0 || !profiling.readPerformanceEnabled()) {
-            return action();
-          }
-          const startedAtMs = profiling.nowMs();
-          try {
-            return action();
-          } finally {
-            profiling.recordPerformance(phase2, profiling.nowMs() - startedAtMs);
-          }
-        };
+        const measure = createPhaseMeasure(diagnostics);
         const snapshot = measure(
           "autoBuild.beginCycle.updateBuildingWeighting.readSnapshot",
           () => readWeightingSnapshot()
@@ -22188,17 +22193,7 @@
     }
     const profiling = diagnostics?.readPerformanceEnabled() === true ? diagnostics : void 0;
     const workStartedAtMs = profiling?.nowMs();
-    const measure = (phase, action) => {
-      if (profiling === void 0) {
-        return action();
-      }
-      const startedAtMs = profiling.nowMs();
-      try {
-        return action();
-      } finally {
-        profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-      }
-    };
+    const measure = createPhaseMeasure(profiling);
     const finishProfile = () => {
       if (profiling !== void 0 && workStartedAtMs !== void 0) {
         profiling.recordPerformance("tick", profiling.nowMs() - workStartedAtMs);
@@ -38205,20 +38200,9 @@
   });
   function createPowerAutomation(dependencies) {
     let state = EMPTY_POWER_AUTOMATION_STATE;
-    const profiling = dependencies.diagnostics;
-    const measure = (phase, action) => {
-      if (profiling === void 0 || !profiling.readPerformanceEnabled()) {
-        return action();
-      }
-      const startedAtMs = profiling.nowMs();
-      try {
-        return action();
-      } finally {
-        profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-      }
-    };
     return Object.freeze({
       run() {
+        const measure = createPhaseMeasure(dependencies.diagnostics);
         const cycle = measure(
           "autoPower.readCycle",
           () => dependencies.reader.readCycle()
@@ -42669,18 +42653,7 @@
     }
     const reader = Object.freeze({
       beginCycle() {
-        const profiling = dependencies.diagnostics?.readPerformanceEnabled() === true ? dependencies.diagnostics : void 0;
-        const measure = (phase, action) => {
-          if (profiling === void 0) {
-            return action();
-          }
-          const startedAtMs = profiling.nowMs();
-          try {
-            return action();
-          } finally {
-            profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-          }
-        };
+        const measure = createPhaseMeasure(dependencies.diagnostics);
         const buildingManager = requireRecord(
           dependencies.getBuildingManager(),
           "BuildingManager"
@@ -43213,18 +43186,7 @@
   var EMPTY_SAMPLE = Object.freeze({});
   function runBuildAutomation(dependencies) {
     const { reader, executor, diagnostics } = dependencies;
-    const profiling = diagnostics?.readPerformanceEnabled() === true ? diagnostics : void 0;
-    const measure = (phase, action) => {
-      if (profiling === void 0) {
-        return action();
-      }
-      const startedAtMs = profiling.nowMs();
-      try {
-        return action();
-      } finally {
-        profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-      }
-    };
+    const measure = createPhaseMeasure(diagnostics);
     const setup = measure("autoBuild.beginCycle", () => reader.beginCycle());
     let state = initialBuildLoopState();
     for (let index = 0; index < setup.candidates.length; index++) {
@@ -43381,20 +43343,9 @@
     return Object.freeze({ outcome, researched });
   }
   function createResearchCommandExecutor(dependencies) {
-    const profiling = dependencies.diagnostics;
-    const measure = (phase, action) => {
-      if (profiling === void 0 || !profiling.readPerformanceEnabled()) {
-        return action();
-      }
-      const startedAtMs = profiling.nowMs();
-      try {
-        return action();
-      } finally {
-        profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-      }
-    };
     return Object.freeze({
       execute(decision2) {
+        const measure = createPhaseMeasure(dependencies.diagnostics);
         if (!Number.isSafeInteger(decision2.index) || decision2.index < 0) {
           return executionResult2(
             rejected(
@@ -43470,18 +43421,7 @@
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
-    const profiling = dependencies.diagnostics;
-    const measure = (phase, action) => {
-      if (profiling === void 0 || !profiling.readPerformanceEnabled()) {
-        return action();
-      }
-      const startedAtMs = profiling.nowMs();
-      try {
-        return action();
-      } finally {
-        profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-      }
-    };
+    const measure = createPhaseMeasure(dependencies.diagnostics);
     let startIndex = 0;
     while (true) {
       const observation = measure(

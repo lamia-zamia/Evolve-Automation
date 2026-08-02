@@ -1,4 +1,5 @@
 import type { TickStartSnapshot } from "../domain/tick.ts";
+import type { PhaseTimingSink } from "../utils/performance.ts";
 
 /** Pre-refresh gating snapshot: read before updateOverrides can change the script settings. */
 export interface TickPreambleSnapshot extends TickStartSnapshot {
@@ -64,10 +65,7 @@ export interface TickReader {
 }
 
 /** Optional, explicitly enabled timing sink for live performance diagnosis. */
-export interface TickDiagnostics {
-  readPerformanceEnabled(): boolean;
-  nowMs(): number;
-  recordPerformance(phase: string, durationMs: number): void;
+export interface TickDiagnostics extends PhaseTimingSink {
   flushPerformance(): void;
 }
 

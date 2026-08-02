@@ -23,21 +23,28 @@ function findTypeScriptFiles(directory) {
   });
 }
 
-const newArchitectureDirectories = new Set([
+// This audit covers only the layers the runtime composes with a destructured dependency object.
+// The layered architecture folders are audited by scripts/architecture-boundaries-test.mjs
+// instead, and the dependency-free shared folders may not take a wired dependency at all, so a
+// `create*` export there is a plain helper factory rather than a composition seam.
+const auditedElsewhereDirectories = new Set([
   "adapters",
   "application",
   "bootstrap",
   "domain",
   "ports",
+  "formatting",
+  "utils",
+  "validation",
 ]);
-const legacyUtilityFiles = new Set(["config.ts", "collections.ts", "math.ts"]);
+const sharedRootFiles = new Set(["config.ts"]);
 const factoryFiles = findTypeScriptFiles(sourceDirectory).filter((file) => {
   const [topLevelDirectory] = path
     .relative(sourceDirectory, file)
     .split(path.sep);
   return (
-    !newArchitectureDirectories.has(topLevelDirectory) &&
-    !legacyUtilityFiles.has(path.basename(file)) &&
+    !auditedElsewhereDirectories.has(topLevelDirectory) &&
+    !sharedRootFiles.has(path.basename(file)) &&
     path.basename(file) !== "dependencies.ts" &&
     path.basename(file) !== "main.ts"
   );

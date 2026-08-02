@@ -18,6 +18,7 @@ import type {
   BuildReader,
 } from "../../../../ports/build.ts";
 import type { TickDiagnostics } from "../../../../ports/tick.ts";
+import { createPhaseMeasure } from "../../../../utils/performance.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
   requireArray,
@@ -109,21 +110,7 @@ export function createBuildAdapter(
 
   const reader: BuildReader = Object.freeze({
     beginCycle(): BuildCycleSetup {
-      const profiling =
-        dependencies.diagnostics?.readPerformanceEnabled() === true
-          ? dependencies.diagnostics
-          : undefined;
-      const measure = <T>(phase: string, action: () => T): T => {
-        if (profiling === undefined) {
-          return action();
-        }
-        const startedAtMs = profiling.nowMs();
-        try {
-          return action();
-        } finally {
-          profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-        }
-      };
+      const measure = createPhaseMeasure(dependencies.diagnostics);
       const buildingManager = requireRecord(
         dependencies.getBuildingManager(),
         "BuildingManager",

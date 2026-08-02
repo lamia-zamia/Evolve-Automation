@@ -5,6 +5,7 @@ import type {
   ResearchReader,
 } from "../ports/research.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+import { createPhaseMeasure } from "../utils/performance.ts";
 
 export interface ResearchAutomationDependencies {
   readonly reader: ResearchReader;
@@ -24,18 +25,7 @@ const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
 export function runResearchAutomation(
   dependencies: ResearchAutomationDependencies,
 ): CommandExecutionOutcome {
-  const profiling = dependencies.diagnostics;
-  const measure = <T>(phase: string, action: () => T): T => {
-    if (profiling === undefined || !profiling.readPerformanceEnabled()) {
-      return action();
-    }
-    const startedAtMs = profiling.nowMs();
-    try {
-      return action();
-    } finally {
-      profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-    }
-  };
+  const measure = createPhaseMeasure(dependencies.diagnostics);
   let startIndex = 0;
   while (true) {
     const observation = measure("autoResearch.read", () =>

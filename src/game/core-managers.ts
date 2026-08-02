@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { TickDiagnostics } from "../ports/tick.ts";
+import { createPhaseMeasure } from "../utils/performance.ts";
 import type {
   BuildingWeightingCandidate,
   BuildingWeightingDecider,
@@ -132,18 +133,7 @@ export function createCoreManagers({
     },
 
     updateWeighting() {
-      const profiling = diagnostics;
-      const measure = <T>(phase: string, action: () => T): T => {
-        if (profiling === undefined || !profiling.readPerformanceEnabled()) {
-          return action();
-        }
-        const startedAtMs = profiling.nowMs();
-        try {
-          return action();
-        } finally {
-          profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-        }
-      };
+      const measure = createPhaseMeasure(diagnostics);
       // One sample for the whole phase, so every rule sees the same state.
       const snapshot = measure(
         "autoBuild.beginCycle.updateBuildingWeighting.readSnapshot",

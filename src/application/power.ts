@@ -10,6 +10,7 @@ import {
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { PowerReader, PowerWarningSource } from "../ports/power.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+import { createPhaseMeasure } from "../utils/performance.ts";
 
 export interface PowerAutomationDependencies {
   readonly reader: PowerReader;
@@ -31,20 +32,9 @@ export function createPowerAutomation(
   dependencies: PowerAutomationDependencies,
 ): PowerAutomation {
   let state = EMPTY_POWER_AUTOMATION_STATE;
-  const profiling = dependencies.diagnostics;
-  const measure = <T>(phase: string, action: () => T): T => {
-    if (profiling === undefined || !profiling.readPerformanceEnabled()) {
-      return action();
-    }
-    const startedAtMs = profiling.nowMs();
-    try {
-      return action();
-    } finally {
-      profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
-    }
-  };
   return Object.freeze({
     run(): CommandExecutionOutcome {
+      const measure = createPhaseMeasure(dependencies.diagnostics);
       const cycle = measure("autoPower.readCycle", () =>
         dependencies.reader.readCycle(),
       );
