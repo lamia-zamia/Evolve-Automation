@@ -7,7 +7,11 @@ import type {
   PrestigeExecutor,
   PrestigeReader,
 } from "../../../../ports/prestige.ts";
-import { requireFunction, requireRecord } from "../../../validation.ts";
+import {
+  callBoolean,
+  requireFunction,
+  requireRecord,
+} from "../../../validation.ts";
 
 /**
  * Narrow gate over the already-migrated prestige-eligibility decision surface.
@@ -42,28 +46,19 @@ function toNumber(value: unknown): number {
   return Number(value);
 }
 
-function callBool(
-  owner: Record<PropertyKey, unknown>,
-  path: string,
-  method: string,
-): boolean {
-  const fn = requireFunction(owner[method], `${path}.${method}`);
-  return Boolean(fn.call(owner));
-}
-
 export function createPrestigeReader(
   dependencies: PrestigeReaderDependencies,
 ): PrestigeReader {
   const buildingBool = (id: string, method: string): boolean => {
     const buildings = requireRecord(dependencies.getBuildings(), "buildings");
     const building = requireRecord(buildings[id], `buildings.${id}`);
-    return callBool(building, `buildings.${id}`, method);
+    return callBoolean(building, method, `buildings.${id}`);
   };
 
   const techBool = (id: string, method: string): boolean => {
     const techIds = requireRecord(dependencies.getTechIds(), "techIds");
     const tech = requireRecord(techIds[id], `techIds.${id}`);
-    return callBool(tech, `techIds.${id}`, method);
+    return callBoolean(tech, method, `techIds.${id}`);
   };
 
   const race = (): Record<PropertyKey, unknown> =>

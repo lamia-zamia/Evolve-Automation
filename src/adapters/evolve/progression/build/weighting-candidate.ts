@@ -1,5 +1,6 @@
 import type { BuildingWeightingCandidate } from "../../../../domain/progression/build/building-weighting.ts";
 import {
+  callBoolean,
   requireBoolean,
   requireFunction,
   requireNumber,
@@ -80,7 +81,7 @@ export function readWeightingCandidate(
     // `isSmartManaged()` on two more settings, none of which exist until that
     // building's toggle is first written. Both keep the game's truthiness test.
     autoBuildEnabled: Boolean(record["autoBuildEnabled"]),
-    smartManaged: Boolean(call(record, "isSmartManaged", path)),
+    smartManaged: callBoolean(record, "isSmartManaged", path),
     count: requireNumber(record["count"], `${path}.count`),
     autoMax: requireNumber(record["autoMax"], `${path}.autoMax`),
     // `_weighting` forwards the building's own weight setting, which the
@@ -101,7 +102,7 @@ export function readWeightingCandidate(
         : requireString(record["resourceKey"], `${path}.resourceKey`),
     // `isAffordable()` forwards the game's own `checkAffordable`, which keeps
     // the game's truthiness test.
-    affordable: unlocked && Boolean(call(record, "isAffordable", path, true)),
+    affordable: unlocked && callBoolean(record, "isAffordable", path, true),
     powered: unlocked ? requireNumber(record["powered"], `${path}.powered`) : 0,
     cost: unlocked ? readCost(record, path) : EMPTY_COST,
     missingConsumption: unlocked

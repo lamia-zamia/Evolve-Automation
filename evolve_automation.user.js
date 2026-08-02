@@ -25088,7 +25088,7 @@
       // `isSmartManaged()` on two more settings, none of which exist until that
       // building's toggle is first written. Both keep the game's truthiness test.
       autoBuildEnabled: Boolean(record["autoBuildEnabled"]),
-      smartManaged: Boolean(call(record, "isSmartManaged", path)),
+      smartManaged: callBoolean(record, "isSmartManaged", path),
       count: requireNumber(record["count"], `${path}.count`),
       autoMax: requireNumber(record["autoMax"], `${path}.autoMax`),
       // `_weighting` forwards the building's own weight setting, which the
@@ -25106,7 +25106,7 @@
       producedResource: record["resourceKey"] === void 0 ? null : requireString(record["resourceKey"], `${path}.resourceKey`),
       // `isAffordable()` forwards the game's own `checkAffordable`, which keeps
       // the game's truthiness test.
-      affordable: unlocked2 && Boolean(call(record, "isAffordable", path, true)),
+      affordable: unlocked2 && callBoolean(record, "isAffordable", path, true),
       powered: unlocked2 ? requireNumber(record["powered"], `${path}.powered`) : 0,
       cost: unlocked2 ? readCost(record, path) : EMPTY_COST,
       missingConsumption: unlocked2 ? resourceName(
@@ -26277,9 +26277,6 @@
   function decisionsMatch(left, right) {
     return JSON.stringify(left) === JSON.stringify(right);
   }
-  function readUnlocked(building3, path) {
-    return Boolean(call2(building3, "isUnlocked", `${path}.isUnlocked`));
-  }
   function createHellAdapter(dependencies) {
     let session = null;
     const reader = Object.freeze({
@@ -26344,13 +26341,15 @@
           buildings["ElysiumFortress"],
           "buildings.ElysiumFortress"
         );
-        let elysiumUnlocked = readUnlocked(
+        let elysiumUnlocked = callBoolean(
           elysiumFortress,
+          "isUnlocked",
           "buildings.ElysiumFortress"
         );
         if (!elysiumUnlocked) {
-          elysiumUnlocked = readUnlocked(
+          elysiumUnlocked = callBoolean(
             requireRecord(buildings["ElysiumScout"], "buildings.ElysiumScout"),
+            "isUnlocked",
             "buildings.ElysiumScout"
           );
         }
@@ -26563,9 +26562,7 @@
             active.resources["Authority"],
             "resources.Authority"
           );
-          unlocked2 = Boolean(
-            call2(authority, "isUnlocked", "resources.Authority.isUnlocked")
-          );
+          unlocked2 = callBoolean(authority, "isUnlocked", "resources.Authority");
           if (unlocked2) {
             current = requireNumber(
               authority["currentQuantity"],
@@ -40732,20 +40729,16 @@
   function toNumber4(value) {
     return Number(value);
   }
-  function callBool(owner, path, method) {
-    const fn = requireFunction(owner[method], `${path}.${method}`);
-    return Boolean(fn.call(owner));
-  }
   function createPrestigeReader(dependencies) {
     const buildingBool = (id, method) => {
       const buildings = requireRecord(dependencies.getBuildings(), "buildings");
       const building3 = requireRecord(buildings[id], `buildings.${id}`);
-      return callBool(building3, `buildings.${id}`, method);
+      return callBoolean(building3, method, `buildings.${id}`);
     };
     const techBool = (id, method) => {
       const techIds = requireRecord(dependencies.getTechIds(), "techIds");
       const tech = requireRecord(techIds[id], `techIds.${id}`);
-      return callBool(tech, `techIds.${id}`, method);
+      return callBoolean(tech, method, `techIds.${id}`);
     };
     const race2 = () => requireRecord(
       requireRecord(
@@ -41474,9 +41467,6 @@
   function optionalNumber2(value, path, fallback = 0) {
     return value === void 0 ? fallback : requireNumber(value, path);
   }
-  function call3(target, key, path, args = []) {
-    return Reflect.apply(requireFunction(target[key], path), target, args);
-  }
   function booleanSetting2(settings, key) {
     return requireBoolean(settings[key], `settings.${key}`);
   }
@@ -41522,19 +41512,21 @@
       `resources.${name}.${key}`
     );
   }
-  function resourceFlag(resources, name, method, args = []) {
-    const value = resource(resources, name);
-    return Boolean(call3(value, method, `resources.${name}.${method}`, args));
+  function resourceFlag(resources, name, method, ...args) {
+    return callBoolean(
+      resource(resources, name),
+      method,
+      `resources.${name}`,
+      ...args
+    );
   }
   function busyWorkers(resources, name, source, count2) {
-    return requireNumber(
-      call3(
-        resource(resources, name),
-        "getBusyWorkers",
-        `resources.${name}.getBusyWorkers`,
-        [source, count2]
-      ),
-      `resources.${name} busy workers`
+    return callNumber(
+      resource(resources, name),
+      "getBusyWorkers",
+      `resources.${name}`,
+      source,
+      count2
     );
   }
   function identityKind(job, jobs) {
@@ -41615,14 +41607,11 @@
             maximum = 1;
           } else {
             const id = requireString(job["id"], "job.id");
-            const production = requireNumber(
-              call3(
-                resource(resources, "Food"),
-                "getProduction",
-                "resources.Food.getProduction",
-                [`job_${id}`]
-              ),
-              "food job production"
+            const production = callNumber(
+              resource(resources, "Food"),
+              "getProduction",
+              "resources.Food",
+              `job_${id}`
             );
             maximum = Math.max(
               1,
@@ -41904,10 +41893,13 @@
       readCycle(craftOnly) {
         session = null;
         const manager = requireRecord(dependencies.getJobManager(), "JobManager");
-        const listed = call3(
+        const listed = Reflect.apply(
+          requireFunction(
+            manager["managedPriorityList"],
+            "JobManager.managedPriorityList"
+          ),
           manager,
-          "managedPriorityList",
-          "JobManager.managedPriorityList"
+          []
         );
         if (!Array.isArray(listed))
           throw new TypeError("managedPriorityList must return an array");
@@ -41962,25 +41954,15 @@
             demonicLumber
           );
           const breakpoints = crafting ? [0, 0, 0] : [0, 1, 2].map(
-            (pass) => requireNumber(
-              call3(
-                job,
-                "breakpointEmployees",
-                `jobList[${token2}].breakpointEmployees`,
-                [pass]
-              ),
-              `jobList[${token2}] breakpoint ${pass}`
-            )
+            (pass) => callNumber(job, "breakpointEmployees", `jobList[${token2}]`, pass)
           );
           const uncappedBreakpoints = crafting ? [0, 0, 0] : [0, 1, 2].map(
-            (pass) => requireNumber(
-              call3(
-                job,
-                "breakpointEmployees",
-                `jobList[${token2}].breakpointEmployees`,
-                [pass, true]
-              ),
-              `jobList[${token2}] uncapped breakpoint ${pass}`
+            (pass) => callNumber(
+              job,
+              "breakpointEmployees",
+              `jobList[${token2}]`,
+              pass,
+              true
             )
           );
           return Object.freeze({
@@ -41994,19 +41976,13 @@
             ),
             count: jobCount2(job, `jobList[${token2}]`),
             maximum: requireNumber(job["max"], `jobList[${token2}].max`),
-            managed: Boolean(
-              call3(job, "isManaged", `jobList[${token2}].isManaged`)
-            ),
-            unlocked: Boolean(
-              call3(job, "isUnlocked", `jobList[${token2}].isUnlocked`)
-            ),
+            managed: callBoolean(job, "isManaged", `jobList[${token2}]`),
+            unlocked: callBoolean(job, "isUnlocked", `jobList[${token2}]`),
             smart,
             crafting,
             serves: Boolean(flags["serve"]),
             split: Boolean(flags["split"]),
-            isDefault: Boolean(
-              call3(job, "isDefault", `jobList[${token2}].isDefault`)
-            ),
+            isDefault: callBoolean(job, "isDefault", `jobList[${token2}]`),
             breakpoints: Object.freeze(breakpoints),
             uncappedBreakpoints: Object.freeze(uncappedBreakpoints),
             smartMaximum: smartMaximum.maximum,
@@ -42044,9 +42020,7 @@
               job["resource"],
               `craftingJobs[${index}].resource`
             );
-            const enabled = jobToken !== null && Boolean(
-              call3(job, "isManaged", `craftingJobs[${index}].isManaged`)
-            ) && requireBoolean(
+            const enabled = jobToken !== null && callBoolean(job, "isManaged", `craftingJobs[${index}]`) && requireBoolean(
               craftResource["autoCraftEnabled"],
               `craftingJobs[${index}].resource.autoCraftEnabled`
             );
@@ -42070,12 +42044,10 @@
             else if (job === crafter["Quantium"]) {
               craftBuilding = technology(dependencies, "isolation") ? building(buildings, "TauDiseaseLab") : building(buildings, "EnceladusZeroGLab");
             }
-            const demanded = Boolean(
-              call3(
-                craftResource,
-                "isDemanded",
-                `craftingJobs[${index}].resource.isDemanded`
-              )
+            const demanded = callBoolean(
+              craftResource,
+              "isDemanded",
+              `craftingJobs[${index}].resource`
             );
             let affordability = Number.MAX_SAFE_INTEGER;
             let exclusion = null;
@@ -42088,12 +42060,10 @@
                 resources[resourceId3],
                 `resources.${resourceId3}`
               );
-              if (!demanded && (!booleanSetting2(settings, "useDemanded") && Boolean(
-                call3(
-                  requiredResource,
-                  "isDemanded",
-                  `resources.${resourceId3}.isDemanded`
-                )
+              if (!demanded && (!booleanSetting2(settings, "useDemanded") && callBoolean(
+                requiredResource,
+                "isDemanded",
+                `resources.${resourceId3}`
               ) || requireNumber(
                 requiredResource["storageRatio"],
                 `resources.${resourceId3}.storageRatio`
@@ -42256,12 +42226,8 @@
               jobToken,
               allocationToken,
               requirement,
-              managed: Boolean(
-                call3(record, "isManaged", `jobs.${name}.isManaged`)
-              ),
-              unlocked: Boolean(
-                call3(record, "isUnlocked", `jobs.${name}.isUnlocked`)
-              )
+              managed: callBoolean(record, "isManaged", `jobs.${name}`),
+              unlocked: callBoolean(record, "isUnlocked", `jobs.${name}`)
             })
           );
         };
@@ -42339,19 +42305,13 @@
           if (weighting <= 0) return;
           const raw = requireRecord(jobs[name], `jobs.${name}`);
           const breakpoints = [0, 1, 2].map((pass) => {
-            const configured = requireNumber(
-              call3(raw, "getBreakpoint", `jobs.${name}.getBreakpoint`, [pass]),
-              `jobs.${name} configured breakpoint ${pass}`
+            const configured = callNumber(
+              raw,
+              "getBreakpoint",
+              `jobs.${name}`,
+              pass
             );
-            return configured > 0 ? requireNumber(
-              call3(
-                raw,
-                "breakpointEmployees",
-                `jobs.${name}.breakpointEmployees`,
-                [pass]
-              ),
-              `jobs.${name} breakpoint ${pass}`
-            ) : 0;
+            return configured > 0 ? callNumber(raw, "breakpointEmployees", `jobs.${name}`, pass) : 0;
           });
           splitEntries.push(
             Object.freeze({
@@ -42375,22 +42335,9 @@
           manageServants: booleanSetting2(settings, "jobManageServants"),
           setDefault,
           servantModifier,
-          servantsMaximum: booleanSetting2(settings, "jobManageServants") ? requireNumber(
-            call3(manager, "servantsMax", "JobManager.servantsMax"),
-            "servantsMax"
-          ) : 0,
-          skilledServantsMaximum: booleanSetting2(settings, "jobManageServants") ? requireNumber(
-            call3(
-              manager,
-              "skilledServantsMax",
-              "JobManager.skilledServantsMax"
-            ),
-            "skilledServantsMax"
-          ) : 0,
-          craftsmenMaximum: requireNumber(
-            call3(manager, "craftingMax", "JobManager.craftingMax"),
-            "craftingMax"
-          ),
+          servantsMaximum: booleanSetting2(settings, "jobManageServants") ? callNumber(manager, "servantsMax", "JobManager") : 0,
+          skilledServantsMaximum: booleanSetting2(settings, "jobManageServants") ? callNumber(manager, "skilledServantsMax", "JobManager") : 0,
+          craftsmenMaximum: callNumber(manager, "craftingMax", "JobManager"),
           minimumDefault: requireNumber(crew["max"], "crew.max") - requireNumber(crew["workers"], "crew.workers") > 0 ? requireNumber(crew["max"], "crew.max") - requireNumber(crew["workers"], "crew.workers") + 1 : 0,
           reserveMiner: (Boolean(race2["hooved"]) && resourceNumber(resources, "Horseshoe", "usefulRatio") < 1 || Boolean(race2["artifical"]) && !race2["deconstructor"] && resourceNumber(resources, "Population", "storageRatio") < 1) && !minersDisabled,
           defaultJobToken: currentDefault,
@@ -45438,7 +45385,7 @@
   }
 
   // src/adapters/evolve/combat/mech.ts
-  function call4(target, key, path, args = []) {
+  function call3(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
   function readArray(value, path) {
@@ -45530,7 +45477,7 @@
           debug(() => "cycle: unavailable (warlord race)");
           return unavailableCycle2();
         }
-        if (!call4(manager, "initLab", "MechManager.initLab")) {
+        if (!callBoolean(manager, "initLab", "MechManager")) {
           debug(
             () => "cycle: unavailable (initLab failed, mech lab Vue missing)"
           );
@@ -45635,19 +45582,19 @@
         let forceBuild = false;
         if (active.cycleInput.buildMode === "random") {
           const preferred = readArray(
-            call4(manager, "getPreferredSize", "MechManager.getPreferredSize"),
+            call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
           const size = requireString(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
-            call4(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
+            call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
             "random mech"
           );
         } else {
           const blueprint = requireRecord(bay["blueprint"], "mechbay.blueprint");
           const statistics = requireRecord(
-            call4(manager, "getMechStats", "MechManager.getMechStats", [
+            call3(manager, "getMechStats", "MechManager.getMechStats", [
               blueprint
             ]),
             "blueprint mech statistics"
@@ -45657,7 +45604,7 @@
         const design = readDesign(rawDesign, "primary", "selected mech");
         active.designs.set(design.token, rawDesign);
         const cost = readCost3(
-          call4(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
+          call3(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
           "selected mech cost"
         );
         const fillBay = requireBoolean(
@@ -45695,16 +45642,13 @@
         if (saveSupplyRatio > 0 && !lastFloor && !forceBuild) {
           if (baySpace < cost.space) {
             titanSupplyRefund = readCostLikeRefund(
-              call4(manager, "getMechRefund", "MechManager.getMechRefund", [
+              call3(manager, "getMechRefund", "MechManager.getMechRefund", [
                 { size: "titan" }
               ]),
               "titan mech refund"
             ).supply;
           }
-          saveTimeToClear = requireNumber(
-            call4(manager, "getTimeToClear", "MechManager.getTimeToClear"),
-            "MechManager.getTimeToClear result"
-          );
+          saveTimeToClear = callNumber(manager, "getTimeToClear", "MechManager");
         }
         if (shouldSaveMechSupply({
           saveSupplyRatio,
@@ -45740,27 +45684,20 @@
           "settings.mechBaysFirst"
         );
         let canExpandBay = false;
-        if (autoBuild && baysFirst && Boolean(
-          call4(
+        if (autoBuild && baysFirst && callBoolean(mechBayBuilding, "isAutoBuildable", "SpireMechBay")) {
+          canExpandBay = callBoolean(
             mechBayBuilding,
-            "isAutoBuildable",
-            "SpireMechBay.isAutoBuildable"
-          )
-        )) {
-          canExpandBay = Boolean(
-            call4(mechBayBuilding, "isAffordable", "SpireMechBay.isAffordable", [
-              true
-            ])
+            "isAffordable",
+            "SpireMechBay",
+            true
           );
           if (!canExpandBay) {
-            const purifierAuto = Boolean(
-              call4(purifier, "isAutoBuildable", "SpirePurifier.isAutoBuildable")
+            const purifierAuto = callBoolean(
+              purifier,
+              "isAutoBuildable",
+              "SpirePurifier"
             );
-            canExpandBay = purifierAuto && Boolean(
-              call4(purifier, "isAffordable", "SpirePurifier.isAffordable", [
-                true
-              ])
-            ) && requireNumber(
+            canExpandBay = purifierAuto && callBoolean(purifier, "isAffordable", "SpirePurifier", true) && requireNumber(
               purifier["stateOffCount"],
               "buildings.SpirePurifier.stateOffCount"
             ) === 0;
@@ -45789,10 +45726,7 @@
         let timeToClear = 0;
         const suppressMixed = canExpandBay && supply.input.current < supply.input.maximum && !decision2.prolongActive && supply.input.rate >= minimumSupplyRate;
         if (configuredScrapMode === "mixed" && !suppressMixed && waygateActiveCount !== 1) {
-          timeToClear = requireNumber(
-            call4(manager, "getTimeToClear", "MechManager.getTimeToClear"),
-            "MechManager.getTimeToClear result"
-          );
+          timeToClear = callNumber(manager, "getTimeToClear", "MechManager");
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
           (value, index) => requireString(value, `MechManager.Size[${index}]`)
@@ -45858,19 +45792,14 @@
                 let space = 0;
                 if (!(summary.infernal && summary.size !== "collector" || summary.power >= bestPower)) {
                   const refund = readCostLikeRefund(
-                    call4(manager, "getMechRefund", "MechManager.getMechRefund", [
+                    call3(manager, "getMechRefund", "MechManager.getMechRefund", [
                       raw
                     ]),
                     `${path} refund`
                   );
                   gemRefund = refund.gems;
                   supplyRefund = refund.supply;
-                  space = requireNumber(
-                    call4(manager, "getMechSpace", "MechManager.getMechSpace", [
-                      raw
-                    ]),
-                    `${path} space`
-                  );
+                  space = callNumber(manager, "getMechSpace", "MechManager", raw);
                 }
                 return Object.freeze({
                   ...summary,
@@ -45896,7 +45825,7 @@
           throw new Error("mech planning has not been sampled");
         }
         const cost = readCost3(
-          call4(active.manager, "getMechCost", "MechManager.getMechCost", [
+          call3(active.manager, "getMechCost", "MechManager.getMechCost", [
             { size }
           ]),
           `mech cost for ${size}`
@@ -45912,7 +45841,7 @@
           throw new Error("mech planning has not been sampled");
         }
         const raw = requireRecord(
-          call4(active.manager, "getRandomMech", "MechManager.getRandomMech", [
+          call3(active.manager, "getRandomMech", "MechManager.getRandomMech", [
             size
           ]),
           `random ${size} mech`
@@ -45944,7 +45873,7 @@
         active.manager["isActive"] = false;
         active.manager["saveSupply"] = false;
         if (decision2.drag !== null) {
-          call4(active.manager, "dragMech", "MechManager.dragMech", [
+          call3(active.manager, "dragMech", "MechManager.dragMech", [
             decision2.drag.oldId,
             decision2.drag.newId
           ]);
@@ -45981,7 +45910,7 @@
           ]);
         } else if (rawMechs.length === 1) {
           const description = requireString(
-            call4(active.manager, "mechDesc", "MechManager.mechDesc", [
+            call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
             "mech description"
@@ -45996,7 +45925,7 @@
           () => `scrap: ids=[${decision2.ids.join(",")}] gained={supply:${Math.round(decision2.supplyGained)},gems:${decision2.gemsGained},space:${decision2.spaceGained}}`
         );
         for (const mech of rawMechs) {
-          call4(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
+          call3(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
         }
         const supply = requireRecord(
           active.resources["Supply"],
@@ -46051,7 +45980,7 @@
         debug(
           () => `build: size=${String(rawDesign["size"])} cost={gems:${decision2.cost.gems},supply:${decision2.cost.supply}} restoring isActive=${String(decision2.prolongActive)}`
         );
-        call4(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
+        call3(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
         supply["currentQuantity"] = continuation.supplyCurrent - decision2.cost.supply;
         gems["currentQuantity"] = continuation.gemsCurrent - decision2.cost.gems;
         active.manager["isActive"] = decision2.prolongActive;
@@ -50882,7 +50811,7 @@
   }
 
   // src/adapters/evolve/combat/mech-info.ts
-  function call5(target, key, path, args = []) {
+  function call4(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
   function createMechInfoEvolveAdapter({
@@ -50896,7 +50825,7 @@
     function ensureLabActive() {
       const manager = readManager();
       if (manager["isActive"]) return true;
-      if (call5(manager, "initLab", "MechManager.initLab")) return true;
+      if (callBoolean(manager, "initLab", "MechManager")) return true;
       return false;
     }
     function readItems(count2) {
@@ -50924,7 +50853,7 @@
         );
         const size = requireString(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
-          call5(manager, "getMechStats", "MechManager.getMechStats", [mech]),
+          call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
         );
         const best = requireRecord(
@@ -50963,11 +50892,11 @@
     const observer = Object.freeze({
       disconnect() {
         const target = getObserver();
-        call5(target, "disconnect", "MechManager.mechObserver.disconnect");
+        call4(target, "disconnect", "MechManager.mechObserver.disconnect");
       },
       observe(target, options2) {
         const observerTarget = getObserver();
-        call5(observerTarget, "observe", "MechManager.mechObserver.observe", [
+        call4(observerTarget, "observe", "MechManager.mechObserver.observe", [
           target,
           options2
         ]);
@@ -50977,7 +50906,7 @@
   }
 
   // src/adapters/browser/mech-info.ts
-  function call6(target, key, path, args = []) {
+  function call5(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
   function requireObjectLike(value, path) {
@@ -50991,14 +50920,14 @@
     return {
       length: requireNumber(raw["length"], `${path}.length`),
       hasClass(className) {
-        return Boolean(call6(raw, "hasClass", `${path}.hasClass`, [className]));
+        return callBoolean(raw, "hasClass", path, className);
       },
       text(textValue) {
-        call6(raw, "text", `${path}.text`, [textValue]);
+        call5(raw, "text", `${path}.text`, [textValue]);
         return this;
       },
       remove() {
-        call6(raw, "remove", `${path}.remove`);
+        call5(raw, "remove", `${path}.remove`);
         return this;
       }
     };
@@ -51019,7 +50948,7 @@
       childNodes,
       firstChild: raw["firstChild"],
       insertBefore(note, before) {
-        call6(raw, "insertBefore", `${path}.insertBefore`, [note, before]);
+        call5(raw, "insertBefore", `${path}.insertBefore`, [note, before]);
       }
     };
   }

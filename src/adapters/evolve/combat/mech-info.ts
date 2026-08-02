@@ -7,6 +7,7 @@ import type {
   MechInfoReader,
 } from "../../../ports/mech-info.ts";
 import {
+  callBoolean,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -44,7 +45,7 @@ export function createMechInfoEvolveAdapter({
   function ensureLabActive(): boolean {
     const manager = readManager();
     if (manager["isActive"]) return true;
-    if (call(manager, "initLab", "MechManager.initLab")) return true;
+    if (callBoolean(manager, "initLab", "MechManager")) return true;
     return false;
   }
 

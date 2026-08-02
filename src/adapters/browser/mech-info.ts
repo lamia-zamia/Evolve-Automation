@@ -4,6 +4,7 @@ import type {
   MechInfoReader,
 } from "../../ports/mech-info.ts";
 import {
+  callBoolean,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -66,7 +67,7 @@ function readJQueryNode(value: unknown, path: string): JQueryNode {
   return {
     length: requireNumber(raw["length"], `${path}.length`),
     hasClass(className: string): boolean {
-      return Boolean(call(raw, "hasClass", `${path}.hasClass`, [className]));
+      return callBoolean(raw, "hasClass", path, className);
     },
     text(textValue: string): JQueryNode {
       call(raw, "text", `${path}.text`, [textValue]);

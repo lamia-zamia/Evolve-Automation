@@ -18,6 +18,8 @@ import {
 import type { MechExecutor, MechReader } from "../../../ports/mech.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireBoolean,
   requireFunction,
   requireNumber,
@@ -192,7 +194,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
         debug(() => "cycle: unavailable (warlord race)");
         return unavailableCycle();
       }
-      if (!call(manager, "initLab", "MechManager.initLab")) {
+      if (!callBoolean(manager, "initLab", "MechManager")) {
         debug(
           () => "cycle: unavailable (initLab failed, mech lab Vue missing)",
         );
@@ -386,10 +388,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
             "titan mech refund",
           ).supply;
         }
-        saveTimeToClear = requireNumber(
-          call(manager, "getTimeToClear", "MechManager.getTimeToClear"),
-          "MechManager.getTimeToClear result",
-        );
+        saveTimeToClear = callNumber(manager, "getTimeToClear", "MechManager");
       }
       if (
         shouldSaveMechSupply({
@@ -434,30 +433,23 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
       if (
         autoBuild &&
         baysFirst &&
-        Boolean(
-          call(
-            mechBayBuilding,
-            "isAutoBuildable",
-            "SpireMechBay.isAutoBuildable",
-          ),
-        )
+        callBoolean(mechBayBuilding, "isAutoBuildable", "SpireMechBay")
       ) {
-        canExpandBay = Boolean(
-          call(mechBayBuilding, "isAffordable", "SpireMechBay.isAffordable", [
-            true,
-          ]),
+        canExpandBay = callBoolean(
+          mechBayBuilding,
+          "isAffordable",
+          "SpireMechBay",
+          true,
         );
         if (!canExpandBay) {
-          const purifierAuto = Boolean(
-            call(purifier, "isAutoBuildable", "SpirePurifier.isAutoBuildable"),
+          const purifierAuto = callBoolean(
+            purifier,
+            "isAutoBuildable",
+            "SpirePurifier",
           );
           canExpandBay =
             purifierAuto &&
-            Boolean(
-              call(purifier, "isAffordable", "SpirePurifier.isAffordable", [
-                true,
-              ]),
-            ) &&
+            callBoolean(purifier, "isAffordable", "SpirePurifier", true) &&
             requireNumber(
               purifier["stateOffCount"],
               "buildings.SpirePurifier.stateOffCount",
@@ -495,10 +487,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
         !suppressMixed &&
         waygateActiveCount !== 1
       ) {
-        timeToClear = requireNumber(
-          call(manager, "getTimeToClear", "MechManager.getTimeToClear"),
-          "MechManager.getTimeToClear result",
-        );
+        timeToClear = callNumber(manager, "getTimeToClear", "MechManager");
       }
       const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
         (value, index) => requireString(value, `MechManager.Size[${index}]`),
@@ -576,12 +565,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
                 );
                 gemRefund = refund.gems;
                 supplyRefund = refund.supply;
-                space = requireNumber(
-                  call(manager, "getMechSpace", "MechManager.getMechSpace", [
-                    raw,
-                  ]),
-                  `${path} space`,
-                );
+                space = callNumber(manager, "getMechSpace", "MechManager", raw);
               }
               return Object.freeze({
                 ...summary,

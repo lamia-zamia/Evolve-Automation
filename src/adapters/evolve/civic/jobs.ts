@@ -17,6 +17,8 @@ import {
 import type { JobsExecutor, JobsReader } from "../../../ports/jobs.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
+  callBoolean,
+  callNumber,
   requireBoolean,
   requireFunction,
   requireNumber,
@@ -73,15 +75,6 @@ interface SmartMaximum {
 
 function optionalNumber(value: unknown, path: string, fallback = 0): number {
   return value === undefined ? fallback : requireNumber(value, path);
-}
-
-function call(
-  target: UnknownRecord,
-  key: string,
-  path: string,
-  args: readonly unknown[] = [],
-): unknown {
-  return Reflect.apply(requireFunction(target[key], path), target, args);
 }
 
 function booleanSetting(settings: UnknownRecord, key: string): boolean {
@@ -164,10 +157,14 @@ function resourceFlag(
   resources: UnknownRecord,
   name: string,
   method: string,
-  args: readonly unknown[] = [],
+  ...args: readonly unknown[]
 ): boolean {
-  const value = resource(resources, name);
-  return Boolean(call(value, method, `resources.${name}.${method}`, args));
+  return callBoolean(
+    resource(resources, name),
+    method,
+    `resources.${name}`,
+    ...args,
+  );
 }
 
 function busyWorkers(
@@ -176,14 +173,12 @@ function busyWorkers(
   source: string,
   count: number,
 ): number {
-  return requireNumber(
-    call(
-      resource(resources, name),
-      "getBusyWorkers",
-      `resources.${name}.getBusyWorkers`,
-      [source, count],
-    ),
-    `resources.${name} busy workers`,
+  return callNumber(
+    resource(resources, name),
+    "getBusyWorkers",
+    `resources.${name}`,
+    source,
+    count,
   );
 }
 
@@ -295,14 +290,11 @@ function jobSmartMaximum(
           maximum = 1;
         } else {
           const id = requireString(job["id"], "job.id");
-          const production = requireNumber(
-            call(
-              resource(resources, "Food"),
-              "getProduction",
-              "resources.Food.getProduction",
-              [`job_${id}`],
-            ),
-            "food job production",
+          const production = callNumber(
+            resource(resources, "Food"),
+            "getProduction",
+            "resources.Food",
+            `job_${id}`,
           );
           maximum = Math.max(
             1,
@@ -703,10 +695,13 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
     readCycle(craftOnly: boolean) {
       session = null;
       const manager = requireRecord(dependencies.getJobManager(), "JobManager");
-      const listed = call(
+      const listed = Reflect.apply(
+        requireFunction(
+          manager["managedPriorityList"],
+          "JobManager.managedPriorityList",
+        ),
         manager,
-        "managedPriorityList",
-        "JobManager.managedPriorityList",
+        [],
       );
       if (!Array.isArray(listed))
         throw new TypeError("managedPriorityList must return an array");
@@ -777,27 +772,17 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
         const breakpoints = crafting
           ? ([0, 0, 0] as [number, number, number])
           : ([0, 1, 2].map((pass) =>
-              requireNumber(
-                call(
-                  job,
-                  "breakpointEmployees",
-                  `jobList[${token}].breakpointEmployees`,
-                  [pass],
-                ),
-                `jobList[${token}] breakpoint ${pass}`,
-              ),
+              callNumber(job, "breakpointEmployees", `jobList[${token}]`, pass),
             ) as [number, number, number]);
         const uncappedBreakpoints = crafting
           ? ([0, 0, 0] as [number, number, number])
           : ([0, 1, 2].map((pass) =>
-              requireNumber(
-                call(
-                  job,
-                  "breakpointEmployees",
-                  `jobList[${token}].breakpointEmployees`,
-                  [pass, true],
-                ),
-                `jobList[${token}] uncapped breakpoint ${pass}`,
+              callNumber(
+                job,
+                "breakpointEmployees",
+                `jobList[${token}]`,
+                pass,
+                true,
               ),
             ) as [number, number, number]);
         return Object.freeze({
@@ -811,19 +796,13 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
           ),
           count: jobCount(job, `jobList[${token}]`),
           maximum: requireNumber(job["max"], `jobList[${token}].max`),
-          managed: Boolean(
-            call(job, "isManaged", `jobList[${token}].isManaged`),
-          ),
-          unlocked: Boolean(
-            call(job, "isUnlocked", `jobList[${token}].isUnlocked`),
-          ),
+          managed: callBoolean(job, "isManaged", `jobList[${token}]`),
+          unlocked: callBoolean(job, "isUnlocked", `jobList[${token}]`),
           smart,
           crafting,
           serves: Boolean(flags["serve"]),
           split: Boolean(flags["split"]),
-          isDefault: Boolean(
-            call(job, "isDefault", `jobList[${token}].isDefault`),
-          ),
+          isDefault: callBoolean(job, "isDefault", `jobList[${token}]`),
           breakpoints: Object.freeze(breakpoints),
           uncappedBreakpoints: Object.freeze(uncappedBreakpoints),
           smartMaximum: smartMaximum.maximum,
@@ -877,9 +856,7 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
           );
           const enabled =
             jobToken !== null &&
-            Boolean(
-              call(job, "isManaged", `craftingJobs[${index}].isManaged`),
-            ) &&
+            callBoolean(job, "isManaged", `craftingJobs[${index}]`) &&
             requireBoolean(
               craftResource["autoCraftEnabled"],
               `craftingJobs[${index}].resource.autoCraftEnabled`,
@@ -906,12 +883,10 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
               ? building(buildings, "TauDiseaseLab")
               : building(buildings, "EnceladusZeroGLab");
           }
-          const demanded = Boolean(
-            call(
-              craftResource,
-              "isDemanded",
-              `craftingJobs[${index}].resource.isDemanded`,
-            ),
+          const demanded = callBoolean(
+            craftResource,
+            "isDemanded",
+            `craftingJobs[${index}].resource`,
           );
           let affordability = Number.MAX_SAFE_INTEGER;
           let exclusion: string | null = null;
@@ -927,12 +902,10 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
             if (
               !demanded &&
               ((!booleanSetting(settings, "useDemanded") &&
-                Boolean(
-                  call(
-                    requiredResource,
-                    "isDemanded",
-                    `resources.${resourceId}.isDemanded`,
-                  ),
+                callBoolean(
+                  requiredResource,
+                  "isDemanded",
+                  `resources.${resourceId}`,
                 )) ||
                 requireNumber(
                   requiredResource["storageRatio"],
@@ -1161,12 +1134,8 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
             jobToken,
             allocationToken,
             requirement,
-            managed: Boolean(
-              call(record, "isManaged", `jobs.${name}.isManaged`),
-            ),
-            unlocked: Boolean(
-              call(record, "isUnlocked", `jobs.${name}.isUnlocked`),
-            ),
+            managed: callBoolean(record, "isManaged", `jobs.${name}`),
+            unlocked: callBoolean(record, "isUnlocked", `jobs.${name}`),
           }),
         );
       };
@@ -1262,20 +1231,14 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
         if (weighting <= 0) return;
         const raw = requireRecord(jobs[name], `jobs.${name}`);
         const breakpoints = [0, 1, 2].map((pass) => {
-          const configured = requireNumber(
-            call(raw, "getBreakpoint", `jobs.${name}.getBreakpoint`, [pass]),
-            `jobs.${name} configured breakpoint ${pass}`,
+          const configured = callNumber(
+            raw,
+            "getBreakpoint",
+            `jobs.${name}`,
+            pass,
           );
           return configured > 0
-            ? requireNumber(
-                call(
-                  raw,
-                  "breakpointEmployees",
-                  `jobs.${name}.breakpointEmployees`,
-                  [pass],
-                ),
-                `jobs.${name} breakpoint ${pass}`,
-              )
+            ? callNumber(raw, "breakpointEmployees", `jobs.${name}`, pass)
             : 0;
         }) as [number, number, number];
         splitEntries.push(
@@ -1303,25 +1266,12 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
         setDefault,
         servantModifier,
         servantsMaximum: booleanSetting(settings, "jobManageServants")
-          ? requireNumber(
-              call(manager, "servantsMax", "JobManager.servantsMax"),
-              "servantsMax",
-            )
+          ? callNumber(manager, "servantsMax", "JobManager")
           : 0,
         skilledServantsMaximum: booleanSetting(settings, "jobManageServants")
-          ? requireNumber(
-              call(
-                manager,
-                "skilledServantsMax",
-                "JobManager.skilledServantsMax",
-              ),
-              "skilledServantsMax",
-            )
+          ? callNumber(manager, "skilledServantsMax", "JobManager")
           : 0,
-        craftsmenMaximum: requireNumber(
-          call(manager, "craftingMax", "JobManager.craftingMax"),
-          "craftingMax",
-        ),
+        craftsmenMaximum: callNumber(manager, "craftingMax", "JobManager"),
         minimumDefault:
           requireNumber(crew["max"], "crew.max") -
             requireNumber(crew["workers"], "crew.workers") >

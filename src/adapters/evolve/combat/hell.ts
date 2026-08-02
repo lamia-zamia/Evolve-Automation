@@ -12,6 +12,7 @@ import {
 import type { HellExecutor, HellReader } from "../../../ports/hell.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
+  callBoolean,
   requireBoolean,
   requireFunction,
   requireNumber,
@@ -126,10 +127,6 @@ function decisionsMatch(
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function readUnlocked(building: UnknownRecord, path: string): boolean {
-  return Boolean(call(building, "isUnlocked", `${path}.isUnlocked`));
-}
-
 export function createHellAdapter(dependencies: HellAdapterDependencies): {
   readonly reader: HellReader;
   readonly executor: HellExecutor;
@@ -200,13 +197,15 @@ export function createHellAdapter(dependencies: HellAdapterDependencies): {
         buildings["ElysiumFortress"],
         "buildings.ElysiumFortress",
       );
-      let elysiumUnlocked = readUnlocked(
+      let elysiumUnlocked = callBoolean(
         elysiumFortress,
+        "isUnlocked",
         "buildings.ElysiumFortress",
       );
       if (!elysiumUnlocked) {
-        elysiumUnlocked = readUnlocked(
+        elysiumUnlocked = callBoolean(
           requireRecord(buildings["ElysiumScout"], "buildings.ElysiumScout"),
+          "isUnlocked",
           "buildings.ElysiumScout",
         );
       }
@@ -449,9 +448,7 @@ export function createHellAdapter(dependencies: HellAdapterDependencies): {
           active.resources["Authority"],
           "resources.Authority",
         );
-        unlocked = Boolean(
-          call(authority, "isUnlocked", "resources.Authority.isUnlocked"),
-        );
+        unlocked = callBoolean(authority, "isUnlocked", "resources.Authority");
         if (unlocked) {
           current = requireNumber(
             authority["currentQuantity"],
