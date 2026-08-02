@@ -9,6 +9,7 @@ import {
   isNonArrayRecord,
   isNonNegativeNumber,
   isRecord,
+  readProperty,
   requireArray,
   requireBoolean,
   requireCount,
@@ -260,5 +261,27 @@ for (const absent of [undefined, "x", {}, Number.NaN]) {
 // Both directions of a comparison fail, which is what makes a NaN hold an action back.
 assert.equal(coerceNumber(undefined) > 0, false);
 assert.equal(coerceNumber(undefined) <= 0, false);
+
+// `readProperty` is the lenient browser probe: an owner that cannot carry properties answers
+// undefined instead of throwing, so an absent owner and an absent property are one answer.
+assert.equal(readProperty({ __vue__: 7 }, "__vue__"), 7);
+assert.equal(readProperty({}, "__vue__"), undefined);
+const markedFunction = () => undefined;
+markedFunction.filters = "attached";
+assert.equal(readProperty(markedFunction, "filters"), "attached");
+const symbolKey = Symbol("marker");
+assert.equal(readProperty({ [symbolKey]: 1 }, symbolKey), 1);
+for (const absent of [undefined, null, 7, true]) {
+  assert.equal(readProperty(absent, "__vue__"), undefined);
+}
+// A primitive's own properties are deliberately out of reach: what this probes is an object, a
+// function, or missing.
+assert.equal(readProperty("window", "length"), undefined);
+// Chaining through a missing link stays undefined rather than throwing, which is why the Vue
+// marker walk can read app, instance and proxy in sequence without guarding each step.
+assert.equal(
+  readProperty(readProperty({}, "__vue_app__"), "_instance"),
+  undefined,
+);
 
 console.log("Adapter validation reporting tests passed");

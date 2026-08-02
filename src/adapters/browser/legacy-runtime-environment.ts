@@ -1,4 +1,5 @@
-type RuntimeRecord = Record<PropertyKey, unknown>;
+import { readProperty } from "../validation.ts";
+
 type RuntimeFunction = (...args: unknown[]) => unknown;
 
 export interface RuntimeUrlApi {
@@ -27,17 +28,6 @@ export interface LegacyRuntimeEnvironment {
   readonly confirm: RuntimeFunction;
   readonly log: RuntimeFunction;
   readonly error: RuntimeFunction;
-}
-
-function asRecord(value: unknown): RuntimeRecord | undefined {
-  return (typeof value === "object" && value !== null) ||
-    typeof value === "function"
-    ? (value as RuntimeRecord)
-    : undefined;
-}
-
-function readProperty(owner: unknown, key: PropertyKey): unknown {
-  return asRecord(owner)?.[key];
 }
 
 function bindFunction(

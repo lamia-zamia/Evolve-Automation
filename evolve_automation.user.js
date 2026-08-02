@@ -69,6 +69,9 @@
   function isNonNegativeNumber(value) {
     return isFiniteNumber(value) && value >= 0;
   }
+  function readProperty(owner, key) {
+    return typeof owner === "object" && owner !== null || typeof owner === "function" ? owner[key] : void 0;
+  }
   function requireRecord(value, path) {
     if (typeof value !== "object" || value === null) {
       throw new TypeError(
@@ -17001,12 +17004,6 @@
   }
 
   // src/adapters/browser/vue.ts
-  function asRecord(value) {
-    return typeof value === "object" && value !== null || typeof value === "function" ? value : void 0;
-  }
-  function readProperty(owner, key) {
-    return asRecord(owner)?.[key];
-  }
   function isPresent(value) {
     return value !== void 0 && value !== null;
   }
@@ -26777,13 +26774,6 @@
     );
     return Boolean(Reflect.apply(isUnlocked2, entry, []));
   }
-  function readString(record, key) {
-    const value = record[key];
-    if (typeof value !== "string") {
-      throw new TypeError(`settings.${key} must be a string`);
-    }
-    return value;
-  }
   function readCandidateBackgrounds(game) {
     const global = requireRecord(game["global"], "game.global");
     const race2 = requireRecord(global["race"], "game.global.race");
@@ -26815,10 +26805,16 @@
       manager["isEnabled"],
       "GovernmentManager.isEnabled"
     );
-    const govSpace = readString(settings, "govSpace");
-    const govFinal = readString(settings, "govFinal");
-    const govInterim = readString(settings, "govInterim");
-    const govGovernor = readString(settings, "govGovernor");
+    const govSpace = requireString(settings["govSpace"], "settings.govSpace");
+    const govFinal = requireString(settings["govFinal"], "settings.govFinal");
+    const govInterim = requireString(
+      settings["govInterim"],
+      "settings.govInterim"
+    );
+    const govGovernor = requireString(
+      settings["govGovernor"],
+      "settings.govGovernor"
+    );
     const enabled = Boolean(Reflect.apply(isEnabled, manager, []));
     let guardAnarchist = false;
     let tradeFederationReady = false;
@@ -43441,13 +43437,6 @@
     }
     return priorityList;
   }
-  function readString2(record, key, path) {
-    const value = record[key];
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readMutationCost(trait2, kind, path) {
     const mutationCost = requireFunction(
       trait2["mutationCost"],
@@ -43469,8 +43458,8 @@
       canGain,
       canPurge,
       mutationCost,
-      traitName: readString2(trait2, "traitName", `${path}.traitName`),
-      displayName: readString2(trait2, "name", `${path}.name`)
+      traitName: requireString(trait2["traitName"], `${path}.traitName`),
+      displayName: requireString(trait2["name"], `${path}.name`)
     });
   }
   function createMutationReader(dependencies) {
@@ -60099,14 +60088,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/adapters/browser/legacy-runtime-environment.ts
-  function asRecord2(value) {
-    return typeof value === "object" && value !== null || typeof value === "function" ? value : void 0;
-  }
-  function readProperty2(owner, key) {
-    return asRecord2(owner)?.[key];
-  }
   function bindFunction(owner, key, fallback) {
-    const candidate = readProperty2(owner, key);
+    const candidate = readProperty(owner, key);
     return typeof candidate === "function" ? (...args) => Reflect.apply(candidate, owner, args) : fallback;
   }
   var noOperation = () => void 0;
@@ -60123,9 +60106,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }
   };
   function readUrlApi(globalObject) {
-    const candidate = readProperty2(globalObject, "URL");
-    const createObjectURL = readProperty2(candidate, "createObjectURL");
-    const revokeObjectURL = readProperty2(candidate, "revokeObjectURL");
+    const candidate = readProperty(globalObject, "URL");
+    const createObjectURL = readProperty(candidate, "createObjectURL");
+    const revokeObjectURL = readProperty(candidate, "revokeObjectURL");
     if (typeof createObjectURL !== "function" || typeof revokeObjectURL !== "function") {
       return unavailableUrlApi;
     }
@@ -60137,28 +60120,28 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
   }
   function readBlobConstructor(globalObject) {
-    const candidate = readProperty2(globalObject, "Blob");
+    const candidate = readProperty(globalObject, "Blob");
     return typeof candidate === "function" ? candidate : UnavailableBlob;
   }
   function createLegacyRuntimeEnvironment(globalObject) {
-    const window = readProperty2(globalObject, "window") ?? globalObject;
-    const document = readProperty2(globalObject, "document");
-    const consoleObject = readProperty2(globalObject, "console");
+    const window = readProperty(globalObject, "window") ?? globalObject;
+    const document = readProperty(globalObject, "document");
+    const consoleObject = readProperty(globalObject, "console");
     return Object.freeze({
       document,
       window,
-      storage: readProperty2(globalObject, "localStorage"),
+      storage: readProperty(globalObject, "localStorage"),
       createDate: () => /* @__PURE__ */ new Date(),
       urlApi: readUrlApi(globalObject),
       BlobConstructor: readBlobConstructor(globalObject),
       schedule: bindFunction(globalObject, "setTimeout", noOperation),
       repeat: bindFunction(globalObject, "setInterval", noOperation),
-      MutationObserver: readProperty2(globalObject, "MutationObserver"),
-      ResizeObserver: readProperty2(globalObject, "ResizeObserver"),
-      HTMLElement: readProperty2(globalObject, "HTMLElement"),
-      KeyboardEvent: readProperty2(globalObject, "KeyboardEvent"),
-      Node: readProperty2(globalObject, "Node"),
-      Sortable: readProperty2(globalObject, "Sortable"),
+      MutationObserver: readProperty(globalObject, "MutationObserver"),
+      ResizeObserver: readProperty(globalObject, "ResizeObserver"),
+      HTMLElement: readProperty(globalObject, "HTMLElement"),
+      KeyboardEvent: readProperty(globalObject, "KeyboardEvent"),
+      Node: readProperty(globalObject, "Node"),
+      Sortable: readProperty(globalObject, "Sortable"),
       alert: bindFunction(globalObject, "alert", noOperation),
       confirm: bindFunction(globalObject, "confirm", confirmByDefault),
       log: bindFunction(consoleObject, "log", noOperation),

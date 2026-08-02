@@ -13,6 +13,7 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -67,18 +68,6 @@ function readPriorityList(manager: UnknownRecord): unknown[] {
   return priorityList;
 }
 
-function readString(
-  record: UnknownRecord,
-  key: PropertyKey,
-  path: string,
-): string {
-  const value = record[key];
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
-}
-
 function readMutationCost(
   trait: UnknownRecord,
   kind: MutationKind,
@@ -115,8 +104,8 @@ function actionableTrait(
     canGain,
     canPurge,
     mutationCost,
-    traitName: readString(trait, "traitName", `${path}.traitName`),
-    displayName: readString(trait, "name", `${path}.name`),
+    traitName: requireString(trait["traitName"], `${path}.traitName`),
+    displayName: requireString(trait["name"], `${path}.name`),
   });
 }
 

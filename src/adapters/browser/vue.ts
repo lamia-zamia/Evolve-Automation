@@ -2,7 +2,7 @@
 // compatibility markers in one browser adapter. Replace this bridge with explicit
 // game-facing ports when the upstream Vue 3 component contracts stabilize.
 
-type BrowserRecord = Record<PropertyKey, unknown>;
+import { readProperty } from "../validation.ts";
 
 export interface VueAdapterDependencies {
   readonly getWin: () => {
@@ -25,17 +25,6 @@ export type VueMethodResolver = (
   methodName: string,
   legacyFilterName?: string,
 ) => (...args: unknown[]) => unknown;
-
-function asRecord(value: unknown): BrowserRecord | undefined {
-  return (typeof value === "object" && value !== null) ||
-    typeof value === "function"
-    ? (value as BrowserRecord)
-    : undefined;
-}
-
-function readProperty(owner: unknown, key: PropertyKey): unknown {
-  return asRecord(owner)?.[key];
-}
 
 function isPresent(value: unknown): boolean {
   return value !== undefined && value !== null;

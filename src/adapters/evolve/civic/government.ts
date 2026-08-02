@@ -8,6 +8,7 @@ import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
   requireFunction,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -62,14 +63,6 @@ function governmentUnlocked(
   return Boolean(Reflect.apply(isUnlocked, entry, []));
 }
 
-function readString(record: Record<PropertyKey, unknown>, key: string): string {
-  const value = record[key];
-  if (typeof value !== "string") {
-    throw new TypeError(`settings.${key} must be a string`);
-  }
-  return value;
-}
-
 function readCandidateBackgrounds(
   game: Record<PropertyKey, unknown>,
 ): string[] {
@@ -108,10 +101,16 @@ export function readGovernmentInput(
     "GovernmentManager.isEnabled",
   );
 
-  const govSpace = readString(settings, "govSpace");
-  const govFinal = readString(settings, "govFinal");
-  const govInterim = readString(settings, "govInterim");
-  const govGovernor = readString(settings, "govGovernor");
+  const govSpace = requireString(settings["govSpace"], "settings.govSpace");
+  const govFinal = requireString(settings["govFinal"], "settings.govFinal");
+  const govInterim = requireString(
+    settings["govInterim"],
+    "settings.govInterim",
+  );
+  const govGovernor = requireString(
+    settings["govGovernor"],
+    "settings.govGovernor",
+  );
 
   const enabled = Boolean(Reflect.apply(isEnabled, manager, []));
   let guardAnarchist = false;

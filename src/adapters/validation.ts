@@ -78,6 +78,19 @@ export function isNonNegativeNumber(value: unknown): value is number {
   return isFiniteNumber(value) && value >= 0;
 }
 
+/**
+ * Reads one property from a value that may not carry any. Objects and functions do; everything
+ * else answers `undefined` instead of throwing. This is the lenient probe the browser adapters use
+ * against external objects — a DOM element that may not hold a Vue marker, a global that may not
+ * expose an API — where an absent owner and an absent property are the same answer.
+ */
+export function readProperty(owner: unknown, key: PropertyKey): unknown {
+  return (typeof owner === "object" && owner !== null) ||
+    typeof owner === "function"
+    ? (owner as UnknownRecord)[key]
+    : undefined;
+}
+
 export function requireRecord(value: unknown, path: string): UnknownRecord {
   if (typeof value !== "object" || value === null) {
     throw new TypeError(
