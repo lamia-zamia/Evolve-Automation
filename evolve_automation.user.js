@@ -2324,13 +2324,13 @@
 
   // src/adapters/evolve/override-failure-log.ts
   function createOverrideFailureReporter({
-    getWindowManager,
+    getGameModal,
     getGame,
     getGameLog
   }) {
     return {
       report(failures) {
-        if (failures.length === 0 || getWindowManager().isOpen()) {
+        if (failures.length === 0 || getGameModal().isOpen()) {
           return;
         }
         const gameLog = getGameLog();
@@ -2359,6 +2359,78 @@
         }
       }
     };
+  }
+
+  // src/adapters/browser/game-modal.ts
+  function createGameModal({
+    getDocument,
+    getMutationObserver
+  }) {
+    let awaitingScriptModal = false;
+    let requestedTitle = "";
+    let pendingAction = null;
+    function currentTitle() {
+      const text = getDocument().getElementById("modalBoxTitle")?.textContent;
+      if (typeof text !== "string") {
+        return "";
+      }
+      const separator = text.indexOf(" - ");
+      return separator === -1 ? text : text.substring(0, separator);
+    }
+    function isOpen() {
+      const document = getDocument();
+      return awaitingScriptModal || document.getElementById("modalBox") !== null || document.getElementById("scriptModal")?.style?.display === "block";
+    }
+    function checkCallbacks() {
+      const title = currentTitle();
+      if (awaitingScriptModal && title === "") {
+        return;
+      }
+      const document = getDocument();
+      if (awaitingScriptModal && pendingAction !== null && title === requestedTitle) {
+        pendingAction();
+        document.querySelector(".modal .modal-close")?.click?.();
+      } else {
+        const style = document.querySelector(".modal")?.style;
+        if (style !== void 0) {
+          style.display = "";
+        }
+      }
+      awaitingScriptModal = false;
+      requestedTitle = "";
+      pendingAction = null;
+    }
+    return Object.freeze({
+      isOpen,
+      canOpen(triggerSelector) {
+        const trigger = getDocument().querySelector(triggerSelector);
+        return trigger !== null && trigger.getAttribute?.("disabled") !== "disabled";
+      },
+      open({ triggerSelector, title, action }) {
+        if (isOpen()) {
+          return;
+        }
+        const trigger = getDocument().querySelector(triggerSelector);
+        if (typeof trigger?.click !== "function") {
+          return;
+        }
+        awaitingScriptModal = true;
+        requestedTitle = title;
+        pendingAction = action;
+        trigger.click();
+      },
+      isAwaitingScriptModal() {
+        return awaitingScriptModal;
+      },
+      captureScriptModal(element) {
+        element.style.display = "none";
+        const Observer = getMutationObserver();
+        new Observer(checkCallbacks).observe(element, {
+          childList: true,
+          subtree: true
+        });
+      }
+    });
   }
 
   // src/settings/queued-settings.ts
@@ -3739,6 +3811,7 @@
   }
 
   // src/game/economy-managers.ts
+  var GOVERNMENT_MODAL_TRIGGER = "#govType button";
   function applyDirectStorageAssignment(game, resource2, count2, unit, storageValue, direction) {
     if (!Number.isFinite(count2) || count2 <= 0) {
       return false;
@@ -3778,7 +3851,7 @@
     getDocument,
     getVueById,
     getKeyManager,
-    getWindowManager,
+    getGameModal,
     getGameLog,
     haveTech,
     traitVal
@@ -3857,33 +3930,34 @@
         return node !== null && node.style.display !== "none";
       },
       isEnabled() {
-        let node = getDocument().querySelector("#govType button");
-        return this.isUnlocked() && node !== null && node.getAttribute("disabled") !== "disabled";
+        return this.isUnlocked() && getGameModal().canOpen(GOVERNMENT_MODAL_TRIGGER);
       },
       currentGovernment() {
         return getGame().global.civic.govern?.type;
       },
       setGovernment(government) {
         const game = getGame();
-        const WindowManager = getWindowManager();
+        const gameModal = getGameModal();
         const GameLog = getGameLog();
         if (!game?.global?.civic?.govern) {
           return;
         }
-        if (this.currentGovernment() === government || WindowManager.isOpen()) {
+        if (this.currentGovernment() === government || gameModal.isOpen()) {
           return;
         }
-        let optionsNode = getDocument().querySelector("#govType button");
-        let title = game.loc("civics_government_type");
-        WindowManager.openModalWindowWithCallback(optionsNode, title, () => {
-          GameLog.logSuccess(
-            "special",
-            `Revolution! Government changed to ${game.loc(
-              "govern_" + government
-            )}.`,
-            ["events", "major_events"]
-          );
-          getVueById("govModal")?.setGov(government);
+        gameModal.open({
+          triggerSelector: GOVERNMENT_MODAL_TRIGGER,
+          title: game.loc("civics_government_type"),
+          action: () => {
+            GameLog.logSuccess(
+              "special",
+              `Revolution! Government changed to ${game.loc(
+                "govern_" + government
+              )}.`,
+              ["events", "major_events"]
+            );
+            getVueById("govModal")?.setGov(government);
+          }
         });
       }
     };
@@ -4140,6 +4214,9 @@
   }
 
   // src/game/foreign-affairs-managers.ts
+  function espionageModalTrigger(govIndex) {
+    return `#gov${govIndex} div span:nth-child(3) button`;
+  }
   function createForeignAffairsManagers({
     getGame,
     getSettings,
@@ -4150,7 +4227,7 @@
     getPoly,
     getVueById,
     callVueMethod,
-    getWindowManager,
+    getGameModal,
     getGameLog,
     getKeyManager,
     getHaveTech,
@@ -4278,12 +4355,12 @@
       },
       performEspionage(govIndex, espionageId, influenceAllowed) {
         const document = getDocument();
-        const WindowManager = getWindowManager();
+        const gameModal = getGameModal();
         const resources = getResources();
         const poly = getPoly();
         const game = getGame();
         const GameLog = getGameLog();
-        if (WindowManager.isOpen()) {
+        if (gameModal.isOpen()) {
           return;
         }
         let optionsSpan = document.querySelector(
@@ -4292,10 +4369,7 @@
         if (optionsSpan.style.display === "none") {
           return;
         }
-        let optionsNode = document.querySelector(
-          `#gov${govIndex} div span:nth-child(3) button`
-        );
-        if (optionsNode === null || optionsNode.getAttribute("disabled") === "disabled") {
+        if (!gameModal.canOpen(espionageModalTrigger(govIndex))) {
           return;
         }
         let espionageToPerform = null;
@@ -4314,16 +4388,19 @@
           if (espionageToPerform === this.Types.Purchase.id) {
             resources.Money.currentQuantity -= poly.govPrice(govIndex);
           }
-          let title = game.loc("civics_espionage_actions");
-          WindowManager.openModalWindowWithCallback(optionsNode, title, () => {
-            GameLog.logSuccess(
-              "spying",
-              `Performing "${game.loc(
-                "civics_spy_" + espionageToPerform
-              )}" covert operation against ${getGovName(govIndex)}.`,
-              ["spy"]
-            );
-            getVueById("espModal")?.[espionageToPerform]?.(govIndex);
+          gameModal.open({
+            triggerSelector: espionageModalTrigger(govIndex),
+            title: game.loc("civics_espionage_actions"),
+            action: () => {
+              GameLog.logSuccess(
+                "spying",
+                `Performing "${game.loc(
+                  "civics_spy_" + espionageToPerform
+                )}" covert operation against ${getGovName(govIndex)}.`,
+                ["spy"]
+              );
+              getVueById("espModal")?.[espionageToPerform]?.(govIndex);
+            }
           });
         }
       },
@@ -5653,55 +5730,6 @@
       needSandboxBypass = getNeedSandboxBypass();
       KeyboardEvent = getKeyboardEvent();
     }
-    const WindowManager = {
-      openedByScript: false,
-      _callbackWindowTitle: "",
-      _callbackFunction: null,
-      currentModalWindowTitle() {
-        let modalTitleNode = document.getElementById("modalBoxTitle");
-        if (modalTitleNode === null) {
-          return "";
-        }
-        let indexOfDash = modalTitleNode.textContent.indexOf(" - ");
-        if (indexOfDash === -1) {
-          return modalTitleNode.textContent;
-        } else {
-          return modalTitleNode.textContent.substring(0, indexOfDash);
-        }
-      },
-      openModalWindowWithCallback(elementToClick, callbackWindowTitle, callbackFunction) {
-        if (this.isOpen()) {
-          return;
-        }
-        this.openedByScript = true;
-        this._callbackWindowTitle = callbackWindowTitle;
-        this._callbackFunction = callbackFunction;
-        elementToClick.click();
-      },
-      isOpen() {
-        return this.openedByScript || document.getElementById("modalBox") !== null || document.getElementById("scriptModal")?.style.display === "block";
-      },
-      checkCallbacks() {
-        if (WindowManager.openedByScript && WindowManager.currentModalWindowTitle() === "") {
-          return;
-        }
-        if (WindowManager.currentModalWindowTitle() === WindowManager._callbackWindowTitle && WindowManager.openedByScript && WindowManager._callbackFunction) {
-          WindowManager._callbackFunction();
-          let modalCloseBtn = document.querySelector(".modal .modal-close");
-          if (modalCloseBtn !== null) {
-            modalCloseBtn.click();
-          }
-        } else {
-          let modal = document.querySelector(".modal");
-          if (modal !== null) {
-            modal.style.display = "";
-          }
-        }
-        WindowManager.openedByScript = false;
-        WindowManager._callbackWindowTitle = "";
-        WindowManager._callbackFunction = null;
-      }
-    };
     const KeyManager = {
       _setFn: null,
       _unsetFn: null,
@@ -5870,7 +5898,7 @@
         poly.messageQueue(text, "danger", false, tags);
       }
     };
-    for (const manager of [WindowManager, KeyManager, GameLog]) {
+    for (const manager of [KeyManager, GameLog]) {
       for (const key of Reflect.ownKeys(manager)) {
         const descriptor = Object.getOwnPropertyDescriptor(manager, key);
         if (!descriptor || typeof descriptor.value !== "function") {
@@ -5886,7 +5914,7 @@
         });
       }
     }
-    return { WindowManager, KeyManager, GameLog };
+    return { KeyManager, GameLog };
   }
 
   // src/game/script-bootstrap.ts
@@ -5907,7 +5935,7 @@
     getMutationObserver,
     getDocument,
     getNode,
-    getWindowManager,
+    getGameModal,
     getJQuery,
     getWindow,
     getUserscriptEnvironment,
@@ -5937,7 +5965,7 @@
     let MutationObserver;
     let document;
     let Node;
-    let WindowManager;
+    let gameModal;
     let $;
     let window;
     let userscriptEnvironment;
@@ -5964,7 +5992,7 @@
       MutationObserver = getMutationObserver();
       document = getDocument();
       Node = getNode();
-      WindowManager = getWindowManager();
+      gameModal = getGameModal();
       $ = getJQuery();
       window = getWindow();
       userscriptEnvironment = getUserscriptEnvironment();
@@ -6036,12 +6064,8 @@
         (bodyMutations) => bodyMutations.forEach(
           (bodyMutation) => bodyMutation.addedNodes.forEach((node) => {
             if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("modal")) {
-              if (WindowManager.openedByScript) {
-                node.style.display = "none";
-                new MutationObserver(WindowManager.checkCallbacks).observe(node, {
-                  childList: true,
-                  subtree: true
-                });
+              if (gameModal.isAwaitingScriptModal()) {
+                gameModal.captureScriptModal(node);
               } else {
                 new MutationObserver(actions.tooltipObserverCallback).observe(
                   node,
@@ -7666,7 +7690,7 @@
     readTraitVal,
     readTriggerManager,
     readWarManager,
-    readWindowManager
+    readGameModal
   }) {
     const $ = (...args) => readJQuery()(...args);
     const checkAffordableCustom = (...args) => readCheckAffordableCustom()(...args);
@@ -8718,23 +8742,21 @@
         return true;
       }
       cacheOptions() {
-        if (this.count < 1 || readWindowManager().isOpen()) {
+        const gameModal = readGameModal();
+        if (this.count < 1 || gameModal.isOpen()) {
           return false;
         }
-        let optionsNode = readDocument().querySelector(
-          "#space-star_dock .special"
-        );
-        readWindowManager().openModalWindowWithCallback(
-          optionsNode,
-          this.title,
-          () => {
+        gameModal.open({
+          triggerSelector: "#space-star_dock .special",
+          title: this.title,
+          action: () => {
             readBuildings().GasSpaceDockProbe.cacheOptions();
             readBuildings().GasSpaceDockGECK.cacheOptions();
             readBuildings().GasSpaceDockShipSegment.cacheOptions();
             readBuildings().GasSpaceDockPrepForLaunch.cacheOptions();
             readBuildings().GasSpaceDockLaunch.cacheOptions();
           }
-        );
+        });
         return true;
       }
     }
@@ -9389,7 +9411,7 @@
           } catch (error) {
             let displayName = `${this.requirementType} ${this.requirementId} x${this.requirementCount} => ${this.actionType}: ${this.actionId} x${this.actionCount}`;
             let msg = `Trigger ${this.seq} [${displayName}] requirement is invalid! Fix or remove it. (${error})`;
-            if (!readWindowManager().isOpen() && !Object.values(readGame().global.lastMsg.all).find(
+            if (!readGameModal().isOpen() && !Object.values(readGame().global.lastMsg.all).find(
               (log) => log.m === msg
             )) {
               readGameLog().logDanger("special", msg, ["events", "major_events"]);
@@ -55036,6 +55058,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
     const browserClock = createBrowserClock();
     const randomSource = createBrowserRandomSource();
+    let gameModal = createGameModal({
+      getDocument: () => runtimeEnvironment.document,
+      getMutationObserver: () => runtimeEnvironment.MutationObserver
+    });
     const settingsStore = createSettingsStore(runtimeEnvironment.storage);
     var settingsRaw = settingsStore.load();
     var settings = {};
@@ -55069,7 +55095,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         MechManager,
         TriggerManager,
         GameLog,
-        WindowManager,
+        gameModal,
         getGovernor,
         haveTech,
         isAchievementUnlocked: isAchievementUnlocked2
@@ -56779,7 +56805,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readTraitVal: () => traitVal,
       readTriggerManager: () => TriggerManager,
       readWarManager: () => WarManager,
-      readWindowManager: () => WindowManager
+      readGameModal: () => gameModal
     });
     if (characterizationSurface)
       characterizationSurface.entityClasses = {
@@ -57255,7 +57281,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getDocument: () => runtimeEnvironment.document,
       getVueById: (id) => getVueById(id),
       getKeyManager: () => KeyManager,
-      getWindowManager: () => WindowManager,
+      getGameModal: () => gameModal,
       getGameLog: () => GameLog,
       haveTech,
       traitVal
@@ -57271,7 +57297,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getPoly: () => poly,
       getVueById: (id) => getVueById(id),
       callVueMethod,
-      getWindowManager: () => WindowManager,
+      getGameModal: () => gameModal,
       getGameLog: () => GameLog,
       getKeyManager: () => KeyManager,
       getHaveTech: () => haveTech,
@@ -57297,7 +57323,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         if ("buildings" in context) buildings = context.buildings;
         if ("poly" in context) poly = context.poly;
         if ("win" in context) win = context.win;
-        if ("WindowManager" in context) WindowManager = context.WindowManager;
+        if ("gameModal" in context) gameModal = context.gameModal;
         if ("GameLog" in context) GameLog = context.GameLog;
         if ("KeyManager" in context) KeyManager = context.KeyManager;
         if ("haveTech" in context) haveTech = context.haveTech;
@@ -57462,8 +57488,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getWindow: () => win,
       diagnostics
     }));
-    let WindowManager, KeyManager, GameLog;
-    ({ WindowManager, KeyManager, GameLog } = createInfrastructureManagers({
+    let KeyManager, GameLog;
+    ({ KeyManager, GameLog } = createInfrastructureManagers({
       getDocument: () => runtimeEnvironment.document,
       getGame: () => game,
       getSettings: () => settings,
@@ -57474,7 +57500,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value)
     }));
     publishTestSurface({
-      infrastructureManagers: { WindowManager, KeyManager, GameLog },
+      gameModal,
+      infrastructureManagers: { KeyManager, GameLog },
       setInfrastructureManagersTestContext(context) {
         if ("game" in context) game = context.game;
         if ("settings" in context) settings = context.settings;
@@ -59152,7 +59179,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getMutationObserver: () => runtimeEnvironment.MutationObserver,
       getDocument: () => runtimeEnvironment.document,
       getNode: () => runtimeEnvironment.Node,
-      getWindowManager: () => WindowManager,
+      getGameModal: () => gameModal,
       getJQuery: () => $,
       getWindow: () => runtimeEnvironment.window,
       getUserscriptEnvironment: () => userscriptEnvironment,
@@ -59187,7 +59214,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         if ("jobs" in context) jobs = context.jobs;
         if ("crafter" in context) crafter = context.crafter;
         if ("TriggerManager" in context) TriggerManager = context.TriggerManager;
-        if ("WindowManager" in context) WindowManager = context.WindowManager;
+        if ("gameModal" in context) gameModal = context.gameModal;
         if ("KeyManager" in context) KeyManager = context.KeyManager;
         if ("poly" in context) poly = context.poly;
         if ("win" in context) win = context.win;
@@ -59266,7 +59293,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getHaveTask: () => haveTask
       }),
       reporter: createOverrideFailureReporter({
-        getWindowManager: () => WindowManager,
+        getGameModal: () => gameModal,
         getGame: () => game,
         getGameLog: () => GameLog
       }),

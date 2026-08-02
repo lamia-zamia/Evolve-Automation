@@ -38,11 +38,12 @@ const { SpyManager, WarManager } = createForeignAffairsManagers({
     }
     throw new TypeError(`${methodName} must be a function`);
   },
-  getWindowManager: () => ({
+  getGameModal: () => ({
     isOpen: () => false,
-    openModalWindowWithCallback: (_node, title, callback) => {
-      trace.push(["modal", title]);
-      callback();
+    canOpen: () => true,
+    open: ({ triggerSelector, title, action }) => {
+      trace.push(["modal", triggerSelector, title]);
+      action();
     },
   }),
   getGameLog: () => ({
@@ -210,7 +211,7 @@ vueById.espModal = {
 resources.Morale.currentQuantity = 300;
 SpyManager.performEspionage(0, SpyManager.Types.Annex.id, false);
 assert.deepEqual(trace.slice(0, 3), [
-  ["modal", "civics_espionage_actions"],
+  ["modal", "#gov0 div span:nth-child(3) button", "civics_espionage_actions"],
   [
     "log",
     "spying",

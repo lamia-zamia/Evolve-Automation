@@ -1,5 +1,12 @@
+import type { GameModalPort } from "../ports/game-modal.ts";
+
 type AnyFunction = (...args: any[]) => any;
 type AnyRecord = Record<string, any>;
+
+/** The control that opens a foreign power's espionage modal. */
+function espionageModalTrigger(govIndex: number): string {
+  return `#gov${govIndex} div span:nth-child(3) button`;
+}
 
 type ForeignAffairsManagerDependencies = {
   getGame: () => AnyRecord;
@@ -16,7 +23,7 @@ type ForeignAffairsManagerDependencies = {
     args: readonly unknown[],
     legacyFilterName?: string,
   ) => unknown;
-  getWindowManager: () => AnyRecord;
+  getGameModal: () => GameModalPort;
   getGameLog: () => AnyRecord;
   getKeyManager: () => AnyRecord;
   getHaveTech: () => AnyFunction;
@@ -39,7 +46,7 @@ export function createForeignAffairsManagers({
   getPoly,
   getVueById,
   callVueMethod,
-  getWindowManager,
+  getGameModal,
   getGameLog,
   getKeyManager,
   getHaveTech,
@@ -264,12 +271,12 @@ export function createForeignAffairsManagers({
       influenceAllowed: boolean,
     ) {
       const document = getDocument();
-      const WindowManager = getWindowManager();
+      const gameModal = getGameModal();
       const resources = getResources();
       const poly = getPoly();
       const game = getGame();
       const GameLog = getGameLog();
-      if (WindowManager.isOpen()) {
+      if (gameModal.isOpen()) {
         return;
       } // Don't try anything if a window is already open
 
@@ -280,13 +287,7 @@ export function createForeignAffairsManagers({
         return;
       }
 
-      let optionsNode = document.querySelector(
-        `#gov${govIndex} div span:nth-child(3) button`,
-      );
-      if (
-        optionsNode === null ||
-        optionsNode.getAttribute("disabled") === "disabled"
-      ) {
+      if (!gameModal.canOpen(espionageModalTrigger(govIndex))) {
         return;
       }
 
@@ -318,16 +319,19 @@ export function createForeignAffairsManagers({
         if (espionageToPerform === this.Types.Purchase.id) {
           resources.Money.currentQuantity -= poly.govPrice(govIndex);
         }
-        let title = game.loc("civics_espionage_actions");
-        WindowManager.openModalWindowWithCallback(optionsNode, title, () => {
-          GameLog.logSuccess(
-            "spying",
-            `Performing "${game.loc(
-              "civics_spy_" + espionageToPerform,
-            )}" covert operation against ${getGovName(govIndex)}.`,
-            ["spy"],
-          );
-          getVueById("espModal")?.[espionageToPerform]?.(govIndex);
+        gameModal.open({
+          triggerSelector: espionageModalTrigger(govIndex),
+          title: game.loc("civics_espionage_actions"),
+          action: () => {
+            GameLog.logSuccess(
+              "spying",
+              `Performing "${game.loc(
+                "civics_spy_" + espionageToPerform,
+              )}" covert operation against ${getGovName(govIndex)}.`,
+              ["spy"],
+            );
+            getVueById("espModal")?.[espionageToPerform]?.(govIndex);
+          },
         });
       }
     },

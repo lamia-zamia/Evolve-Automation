@@ -7,6 +7,7 @@ const hooks = {};
 const trace = [];
 const elements = {};
 const selectors = {};
+const observers = [];
 const documentStub = {
   getElementById: (id) => elements[id] ?? null,
   querySelector: (selector) => selectors[selector] ?? null,
@@ -24,7 +25,14 @@ const sandbox = {
   },
   localStorage: { getItem: () => null },
   MutationObserver: class {
-    observe() {}
+    constructor(callback) {
+      this.callback = callback;
+      observers.push(this);
+    }
+    observe(target, options) {
+      this.target = target;
+      this.options = options;
+    }
     disconnect() {}
   },
   navigator: { platform: "Win32" },
@@ -42,7 +50,8 @@ vm.runInNewContext(source, sandbox, {
   timeout: 10_000,
 });
 
-const { WindowManager, KeyManager, GameLog } = hooks.infrastructureManagers;
+const { KeyManager, GameLog } = hooks.infrastructureManagers;
+const gameModal = hooks.gameModal;
 const keyEvents = {
   keydown: [{ handler: (event) => trace.push(["down", event.key]) }],
   keyup: [{ handler: (event) => trace.push(["up", event.key]) }],
@@ -75,24 +84,41 @@ hooks.setInfrastructureManagersTestContext({
   needSandboxBypass: false,
 });
 
-elements.modalBoxTitle = { textContent: "Factory - 10/20" };
-assert.equal(WindowManager.currentModalWindowTitle(), "Factory");
-delete elements.modalBoxTitle;
-assert.equal(WindowManager.currentModalWindowTitle(), "");
-const opener = { click: () => trace.push(["open-click"]) };
+// The bundled modal adapter drives one whole open/act/close cycle off the page.
+selectors["#factory .special"] = { click: () => trace.push(["open-click"]) };
+selectors[".modal .modal-close"] = { click: () => trace.push(["close-click"]) };
+assert.equal(gameModal.canOpen("#factory .special"), true);
+assert.equal(gameModal.isOpen(), false);
 let callbackCount = 0;
-WindowManager.openModalWindowWithCallback(opener, "Factory", () => {
-  callbackCount++;
-  trace.push(["callback"]);
+gameModal.open({
+  triggerSelector: "#factory .special",
+  title: "Factory",
+  action: () => {
+    callbackCount++;
+    trace.push(["callback"]);
+  },
 });
-assert.equal(WindowManager.isOpen(), true);
+assert.equal(gameModal.isOpen(), true);
+assert.equal(gameModal.isAwaitingScriptModal(), true);
+
+const modalElement = { style: { display: "" } };
+gameModal.captureScriptModal(modalElement);
+assert.equal(modalElement.style.display, "none");
+assert.equal(observers.at(-1).target, modalElement);
+assert.equal(observers.at(-1).options.childList, true);
+assert.equal(observers.at(-1).options.subtree, true);
+
+// Vue mounts the shell before its title, so the first mutation must not consume
+// the pending action.
+observers.at(-1).callback();
+assert.equal(callbackCount, 0);
+assert.equal(gameModal.isAwaitingScriptModal(), true);
+
 elements.modalBoxTitle = { textContent: "Factory - 10/20" };
-selectors[".modal .modal-close"] = {
-  click: () => trace.push(["close-click"]),
-};
-WindowManager.checkCallbacks();
+observers.at(-1).callback();
 assert.equal(callbackCount, 1);
-assert.equal(WindowManager.openedByScript, false);
+assert.equal(gameModal.isAwaitingScriptModal(), false);
+delete elements.modalBoxTitle;
 
 KeyManager.init();
 KeyManager.reset();

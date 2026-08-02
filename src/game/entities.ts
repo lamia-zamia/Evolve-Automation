@@ -1,6 +1,8 @@
 // TRANSITIONAL: Evolve entity constructors and methods still mirror the game's dynamic
 // JavaScript classes. Keep the untyped surface contained here until the game adapter slice
 // replaces these compatibility classes with validated snapshots and commands.
+import type { GameModalPort } from "../ports/game-modal.ts";
+
 type Loose = any;
 type LooseRecord = Record<PropertyKey, Loose>;
 type LooseFunction = (...args: Loose[]) => Loose;
@@ -46,7 +48,7 @@ interface EntityClassesDependencies {
   readTraitVal: () => LooseFunction;
   readTriggerManager: () => LooseRecord;
   readWarManager: () => LooseRecord;
-  readWindowManager: () => LooseRecord;
+  readGameModal: () => GameModalPort;
 }
 
 export function createEntityClasses({
@@ -90,7 +92,7 @@ export function createEntityClasses({
   readTraitVal,
   readTriggerManager,
   readWarManager,
-  readWindowManager,
+  readGameModal,
 }: EntityClassesDependencies) {
   const $: LooseFunction = (...args) => readJQuery()(...args);
   const checkAffordableCustom: LooseFunction = (...args) =>
@@ -1621,24 +1623,22 @@ export function createEntityClasses({
     }
 
     cacheOptions() {
-      if (this.count < 1 || readWindowManager().isOpen()) {
+      const gameModal = readGameModal();
+      if (this.count < 1 || gameModal.isOpen()) {
         return false;
       }
 
-      let optionsNode = readDocument().querySelector(
-        "#space-star_dock .special",
-      );
-      readWindowManager().openModalWindowWithCallback(
-        optionsNode,
-        this.title,
-        () => {
+      gameModal.open({
+        triggerSelector: "#space-star_dock .special",
+        title: this.title,
+        action: () => {
           readBuildings().GasSpaceDockProbe.cacheOptions();
           readBuildings().GasSpaceDockGECK.cacheOptions();
           readBuildings().GasSpaceDockShipSegment.cacheOptions();
           readBuildings().GasSpaceDockPrepForLaunch.cacheOptions();
           readBuildings().GasSpaceDockLaunch.cacheOptions();
         },
-      );
+      });
       return true;
     }
   }
@@ -2584,7 +2584,7 @@ export function createEntityClasses({
           let displayName = `${this.requirementType} ${this.requirementId} x${this.requirementCount} => ${this.actionType}: ${this.actionId} x${this.actionCount}`;
           let msg = `Trigger ${this.seq} [${displayName}] requirement is invalid! Fix or remove it. (${error})`;
           if (
-            !readWindowManager().isOpen() &&
+            !readGameModal().isOpen() &&
             !(Object.values(readGame().global.lastMsg.all) as Loose[]).find(
               (log) => log.m === msg,
             )

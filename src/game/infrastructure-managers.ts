@@ -39,94 +39,6 @@ export function createInfrastructureManagers({
     KeyboardEvent = getKeyboardEvent();
   }
 
-  const WindowManager: AnyRecord = {
-    openedByScript: false,
-    _callbackWindowTitle: "",
-    _callbackFunction: null,
-
-    currentModalWindowTitle() {
-      let modalTitleNode = document.getElementById("modalBoxTitle");
-      if (modalTitleNode === null) {
-        return "";
-      }
-
-      // Modal title will either be a single name or a combination of resource and storage
-      // eg. single name "Smelter" or "Factory"
-      // eg. combination "Iridium - 26.4K/279.9K"
-      let indexOfDash = modalTitleNode.textContent.indexOf(" - ");
-      if (indexOfDash === -1) {
-        return modalTitleNode.textContent;
-      } else {
-        return modalTitleNode.textContent.substring(0, indexOfDash);
-      }
-    },
-
-    openModalWindowWithCallback(
-      elementToClick: any,
-      callbackWindowTitle: any,
-      callbackFunction: any,
-    ) {
-      if (this.isOpen()) {
-        return;
-      }
-
-      this.openedByScript = true;
-      this._callbackWindowTitle = callbackWindowTitle;
-      this._callbackFunction = callbackFunction;
-      elementToClick.click();
-    },
-
-    isOpen() {
-      // Checks both the game modal window and our script modal window
-      // game = modalBox
-      // script = scriptModal
-      return (
-        this.openedByScript ||
-        document.getElementById("modalBox") !== null ||
-        document.getElementById("scriptModal")?.style.display === "block"
-      );
-    },
-
-    checkCallbacks() {
-      // Vue can create the modal shell before rendering its content. Keep the
-      // script-owned callback alive until the title identifies the requested
-      // window; otherwise an empty intermediate mutation exposes the modal and
-      // leaves the Space Dock actions uncached.
-      if (
-        WindowManager.openedByScript &&
-        WindowManager.currentModalWindowTitle() === ""
-      ) {
-        return;
-      }
-
-      // We only care if the script itself opened the modal. If the user did it then ignore it.
-      // There must be a call back function otherwise there is nothing to do.
-      if (
-        WindowManager.currentModalWindowTitle() ===
-          WindowManager._callbackWindowTitle &&
-        WindowManager.openedByScript &&
-        WindowManager._callbackFunction
-      ) {
-        WindowManager._callbackFunction();
-
-        let modalCloseBtn = document.querySelector(".modal .modal-close");
-        if (modalCloseBtn !== null) {
-          modalCloseBtn.click();
-        }
-      } else {
-        // If we hid users's modal - show it back
-        let modal = document.querySelector(".modal");
-        if (modal !== null) {
-          modal.style.display = "";
-        }
-      }
-
-      WindowManager.openedByScript = false;
-      WindowManager._callbackWindowTitle = "";
-      WindowManager._callbackFunction = null;
-    },
-  };
-
   const KeyManager: AnyRecord = {
     _setFn: null,
     _unsetFn: null,
@@ -321,7 +233,7 @@ export function createInfrastructureManagers({
     },
   };
 
-  for (const manager of [WindowManager, KeyManager, GameLog]) {
+  for (const manager of [KeyManager, GameLog]) {
     for (const key of Reflect.ownKeys(manager)) {
       const descriptor = Object.getOwnPropertyDescriptor(manager, key);
       if (!descriptor || typeof descriptor.value !== "function") {
@@ -338,5 +250,5 @@ export function createInfrastructureManagers({
     }
   }
 
-  return { WindowManager, KeyManager, GameLog };
+  return { KeyManager, GameLog };
 }

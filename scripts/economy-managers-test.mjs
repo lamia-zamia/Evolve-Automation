@@ -17,11 +17,15 @@ const documentStub = {
   querySelector: (sel) => domNodes[sel] ?? null,
 };
 
-const WindowManager = {
+const gameModal = {
   isOpen: () => modalOpen,
-  openModalWindowWithCallback: (node, title, cb) => {
-    modalCalls.push({ node, title });
-    cb(); // run the callback immediately to exercise it
+  canOpen: (triggerSelector) => {
+    const node = domNodes[triggerSelector];
+    return node != null && node.getAttribute("disabled") !== "disabled";
+  },
+  open: ({ triggerSelector, title, action }) => {
+    modalCalls.push({ triggerSelector, title });
+    action(); // run the callback immediately to exercise it
   },
 };
 const GameLog = {
@@ -38,7 +42,7 @@ const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
     getKeyManager: () => ({
       click: (count) => Array.from({ length: count }, (_, i) => i),
     }),
-    getWindowManager: () => WindowManager,
+    getGameModal: () => gameModal,
     getGameLog: () => GameLog,
     haveTech: (_tech, level) => (level === undefined ? techOk : techOk),
     traitVal: () => 1,
@@ -106,7 +110,9 @@ vueMap.govModal = { setGov: (g) => clicks.push(["setGov", g]) };
 logs.length = 0;
 clicks.length = 0;
 GovernmentManager.setGovernment("oligarchy");
-assert.equal(modalCalls.length, 1);
+assert.deepEqual(modalCalls, [
+  { triggerSelector: "#govType button", title: "civics_government_type" },
+]);
 assert.equal(logs.length, 1);
 assert.deepEqual(clicks, [["setGov", "oligarchy"]]);
 

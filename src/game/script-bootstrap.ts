@@ -1,3 +1,5 @@
+import type { GameModalPort } from "../ports/game-modal.ts";
+
 type AnyFunction = (...args: any[]) => any;
 type AnyRecord = Record<string, any>;
 
@@ -18,7 +20,7 @@ type ScriptBootstrapDependencies = {
   getMutationObserver: () => any;
   getDocument: () => AnyRecord;
   getNode: () => AnyRecord;
-  getWindowManager: () => AnyRecord;
+  getGameModal: () => GameModalPort;
   getJQuery: () => AnyFunction & AnyRecord;
   getWindow: () => AnyRecord;
   getUserscriptEnvironment: () => AnyRecord;
@@ -50,7 +52,7 @@ export function createScriptBootstrap({
   getMutationObserver,
   getDocument,
   getNode,
-  getWindowManager,
+  getGameModal,
   getJQuery,
   getWindow,
   getUserscriptEnvironment,
@@ -80,7 +82,7 @@ export function createScriptBootstrap({
   let MutationObserver: any;
   let document: AnyRecord;
   let Node: AnyRecord;
-  let WindowManager: AnyRecord;
+  let gameModal: GameModalPort;
   let $: AnyFunction & AnyRecord;
   let window: AnyRecord;
   let userscriptEnvironment: AnyRecord;
@@ -109,7 +111,7 @@ export function createScriptBootstrap({
     MutationObserver = getMutationObserver();
     document = getDocument();
     Node = getNode();
-    WindowManager = getWindowManager();
+    gameModal = getGameModal();
     $ = getJQuery();
     window = getWindow();
     userscriptEnvironment = getUserscriptEnvironment();
@@ -204,15 +206,8 @@ export function createScriptBootstrap({
             node.nodeType === Node.ELEMENT_NODE &&
             node.classList.contains("modal")
           ) {
-            if (WindowManager.openedByScript) {
-              node.style.display = "none"; // Hide splash
-              // TRANSITIONAL: the current Vue 2 modal mounts #modalBox after
-              // the shell; observe the shell subtree until the Vue 3 update
-              // provides a stable modal-content lifecycle hook.
-              new MutationObserver(WindowManager.checkCallbacks).observe(node, {
-                childList: true,
-                subtree: true,
-              });
+            if (gameModal.isAwaitingScriptModal()) {
+              gameModal.captureScriptModal(node);
             } else {
               new MutationObserver(actions.tooltipObserverCallback).observe(
                 node,

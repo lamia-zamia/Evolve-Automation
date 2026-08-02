@@ -133,7 +133,7 @@ const context = {
   jobs,
   crafter,
   TriggerManager: { priorityList: triggers },
-  WindowManager: { openedByScript: false, checkCallbacks() {} },
+  gameModal: { isAwaitingScriptModal: () => false, captureScriptModal() {} },
   KeyManager: {},
   poly: {
     messageQueue: (...args) => trace.push(["message", ...args]),

@@ -57,6 +57,7 @@ import { createOverrideEditor } from "../../application/override-editing.ts";
 import { createOverrideEvaluationSource } from "./override-evaluation.ts";
 import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
+import { createGameModal } from "../browser/game-modal.ts";
 import { createQueuedSettings } from "../../settings/queued-settings.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
 import { createRuntimeQueries } from "../../game/runtime-queries.ts";
@@ -404,6 +405,10 @@ function startEvolveRuntimeComposition(
     createNumberFormatting({ numberSuffix });
   const browserClock = createBrowserClock();
   const randomSource = createBrowserRandomSource();
+  let gameModal = createGameModal({
+    getDocument: () => runtimeEnvironment.document,
+    getMutationObserver: () => runtimeEnvironment.MutationObserver,
+  });
   const settingsStore = createSettingsStore(runtimeEnvironment.storage);
   var settingsRaw = settingsStore.load();
   var settings = {};
@@ -438,7 +443,7 @@ function startEvolveRuntimeComposition(
         MechManager,
         TriggerManager,
         GameLog,
-        WindowManager,
+        gameModal,
         getGovernor,
         haveTech,
         isAchievementUnlocked,
@@ -2612,7 +2617,7 @@ function startEvolveRuntimeComposition(
     readTraitVal: () => traitVal,
     readTriggerManager: () => TriggerManager,
     readWarManager: () => WarManager,
-    readWindowManager: () => WindowManager,
+    readGameModal: () => gameModal,
   });
 
   if (characterizationSurface)
@@ -3129,7 +3134,7 @@ function startEvolveRuntimeComposition(
       getDocument: () => runtimeEnvironment.document,
       getVueById: (id) => getVueById(id),
       getKeyManager: () => KeyManager,
-      getWindowManager: () => WindowManager,
+      getGameModal: () => gameModal,
       getGameLog: () => GameLog,
       haveTech,
       traitVal,
@@ -3146,7 +3151,7 @@ function startEvolveRuntimeComposition(
     getPoly: () => poly,
     getVueById: (id) => getVueById(id),
     callVueMethod,
-    getWindowManager: () => WindowManager,
+    getGameModal: () => gameModal,
     getGameLog: () => GameLog,
     getKeyManager: () => KeyManager,
     getHaveTech: () => haveTech,
@@ -3175,7 +3180,7 @@ function startEvolveRuntimeComposition(
       if ("buildings" in context) buildings = context.buildings;
       if ("poly" in context) poly = context.poly;
       if ("win" in context) win = context.win;
-      if ("WindowManager" in context) WindowManager = context.WindowManager;
+      if ("gameModal" in context) gameModal = context.gameModal;
       if ("GameLog" in context) GameLog = context.GameLog;
       if ("KeyManager" in context) KeyManager = context.KeyManager;
       if ("haveTech" in context) haveTech = context.haveTech;
@@ -3361,8 +3366,8 @@ function startEvolveRuntimeComposition(
       diagnostics,
     }));
 
-  let WindowManager, KeyManager, GameLog;
-  ({ WindowManager, KeyManager, GameLog } = createInfrastructureManagers({
+  let KeyManager, GameLog;
+  ({ KeyManager, GameLog } = createInfrastructureManagers({
     getDocument: () => runtimeEnvironment.document,
     getGame: () => game,
     getSettings: () => settings,
@@ -3374,7 +3379,8 @@ function startEvolveRuntimeComposition(
   }));
 
   publishTestSurface({
-    infrastructureManagers: { WindowManager, KeyManager, GameLog },
+    gameModal,
+    infrastructureManagers: { KeyManager, GameLog },
     setInfrastructureManagersTestContext(context) {
       if ("game" in context) game = context.game;
       if ("settings" in context) settings = context.settings;
@@ -5265,7 +5271,7 @@ function startEvolveRuntimeComposition(
     getMutationObserver: () => runtimeEnvironment.MutationObserver,
     getDocument: () => runtimeEnvironment.document,
     getNode: () => runtimeEnvironment.Node,
-    getWindowManager: () => WindowManager,
+    getGameModal: () => gameModal,
     getJQuery: () => $,
     getWindow: () => runtimeEnvironment.window,
     getUserscriptEnvironment: () => userscriptEnvironment,
@@ -5301,7 +5307,7 @@ function startEvolveRuntimeComposition(
       if ("jobs" in context) jobs = context.jobs;
       if ("crafter" in context) crafter = context.crafter;
       if ("TriggerManager" in context) TriggerManager = context.TriggerManager;
-      if ("WindowManager" in context) WindowManager = context.WindowManager;
+      if ("gameModal" in context) gameModal = context.gameModal;
       if ("KeyManager" in context) KeyManager = context.KeyManager;
       if ("poly" in context) poly = context.poly;
       if ("win" in context) win = context.win;
@@ -5386,7 +5392,7 @@ function startEvolveRuntimeComposition(
       getHaveTask: () => haveTask,
     }),
     reporter: createOverrideFailureReporter({
-      getWindowManager: () => WindowManager,
+      getGameModal: () => gameModal,
       getGame: () => game,
       getGameLog: () => GameLog,
     }),

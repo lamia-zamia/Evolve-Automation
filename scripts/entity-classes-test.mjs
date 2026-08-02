@@ -42,7 +42,7 @@ const dependencyNames = [
   "traitVal",
   "TriggerManager",
   "WarManager",
-  "WindowManager",
+  "gameModal",
 ];
 
 const context = Object.fromEntries(dependencyNames.map((name) => [name, {}]));
@@ -111,7 +111,7 @@ const classes = createEntityClasses({
   readTraitVal: () => context.traitVal,
   readTriggerManager: () => context.TriggerManager,
   readWarManager: () => context.WarManager,
-  readWindowManager: () => context.WindowManager,
+  readGameModal: () => context.gameModal,
 });
 
 assert.equal(Object.keys(classes).length, 32);

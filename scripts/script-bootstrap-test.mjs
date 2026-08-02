@@ -53,7 +53,16 @@ const context = {
   MutationObserver: Observer,
   document: documentStub,
   Node: { ELEMENT_NODE: 1 },
-  WindowManager: { openedByScript: false, checkCallbacks() {} },
+  gameModal: {
+    awaiting: false,
+    captured: [],
+    isAwaitingScriptModal() {
+      return this.awaiting;
+    },
+    captureScriptModal(element) {
+      this.captured.push(element);
+    },
+  },
   $: jquery,
   window: { $: jquery, document: documentStub },
   userscriptEnvironment: {
@@ -125,7 +134,7 @@ const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
   getMutationObserver: () => context.MutationObserver,
   getDocument: () => context.document,
   getNode: () => context.Node,
-  getWindowManager: () => context.WindowManager,
+  getGameModal: () => context.gameModal,
   getJQuery: () => context.$,
   getWindow: () => context.window,
   getUserscriptEnvironment: () => context.userscriptEnvironment,
@@ -155,18 +164,17 @@ const scriptModal = {
   style: {},
 };
 delete elements.modalBox;
-context.WindowManager.openedByScript = true;
+context.gameModal.awaiting = true;
 bodyObserver.callback([{ addedNodes: [scriptModal] }]);
-assert.equal(scriptModal.style.display, "none");
-assert.equal(observers.at(-1).target, scriptModal);
-assert.equal(observers.at(-1).options.subtree, true);
-assert.equal(observers.at(-1).callback, context.WindowManager.checkCallbacks);
+// The shell hands a script-opened modal to the adapter and observes nothing itself.
+assert.deepEqual(context.gameModal.captured, [scriptModal]);
+assert.notEqual(observers.at(-1).target, scriptModal);
 const userModal = {
   nodeType: 1,
   classList: { contains: () => true },
   style: {},
 };
-context.WindowManager.openedByScript = false;
+context.gameModal.awaiting = false;
 bodyObserver.callback([{ addedNodes: [userModal] }]);
 assert.equal(observers.at(-1).callback, tooltip);
 

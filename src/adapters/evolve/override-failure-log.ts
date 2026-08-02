@@ -2,11 +2,8 @@ import {
   describeOverrideFailure,
   type OverrideConditionFailure,
 } from "../../domain/override-resolution.ts";
+import type { GameModalStateReader } from "../../ports/game-modal.ts";
 import type { OverrideFailureReporter } from "../../ports/override-settings.ts";
-
-interface WindowManagerContract {
-  isOpen: () => boolean;
-}
 
 interface GameLogContract {
   logDanger: (kind: string, message: string, categories: string[]) => void;
@@ -18,19 +15,19 @@ interface RecentMessagesContract {
 }
 
 export interface OverrideFailureReporterDependencies {
-  getWindowManager: () => WindowManagerContract;
+  getGameModal: () => GameModalStateReader;
   getGame: () => RecentMessagesContract;
   getGameLog: () => GameLogContract;
 }
 
 export function createOverrideFailureReporter({
-  getWindowManager,
+  getGameModal,
   getGame,
   getGameLog,
 }: OverrideFailureReporterDependencies): OverrideFailureReporter {
   return {
     report(failures: readonly OverrideConditionFailure[]): void {
-      if (failures.length === 0 || getWindowManager().isOpen()) {
+      if (failures.length === 0 || getGameModal().isOpen()) {
         return;
       }
       const gameLog = getGameLog();

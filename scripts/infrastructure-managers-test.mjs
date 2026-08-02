@@ -6,12 +6,8 @@ let settings;
 let poly;
 let win;
 let needSandboxBypass = false;
-const elements = {};
-const selectors = {};
 const trace = [];
 const documentStub = {
-  getElementById: (id) => elements[id] ?? null,
-  querySelector: (selector) => selectors[selector] ?? null,
   dispatchEvent: (event) => trace.push(["dispatch", event.type, event.key]),
 };
 class KeyboardEventStub {
@@ -21,7 +17,7 @@ class KeyboardEventStub {
   }
 }
 
-const { WindowManager, KeyManager, GameLog } = createInfrastructureManagers({
+const { KeyManager, GameLog } = createInfrastructureManagers({
   getDocument: () => documentStub,
   getGame: () => game,
   getSettings: () => settings,
@@ -46,37 +42,6 @@ game = {
 settings = { logEnabled: false, log_special: true };
 poly = { messageQueue: (...args) => trace.push(["message", ...args]) };
 win = { document: documentStub, $: { _data: () => ({ events: {} }) } };
-
-// Keep a script-owned callback pending while Vue has created the modal shell
-// but has not rendered its title yet.
-let callbackRan = false;
-WindowManager.openedByScript = true;
-WindowManager._callbackWindowTitle = "Gas Space Dock";
-WindowManager._callbackFunction = () => {
-  callbackRan = true;
-};
-delete elements.modalBoxTitle;
-WindowManager.checkCallbacks();
-assert.equal(callbackRan, false);
-assert.equal(WindowManager.openedByScript, true);
-
-// Modal mismatch restores the user modal and clears script state.
-selectors[".modal"] = { style: { display: "none" } };
-WindowManager.openedByScript = true;
-WindowManager._callbackWindowTitle = "Expected";
-elements.modalBoxTitle = { textContent: "Different" };
-WindowManager.checkCallbacks();
-assert.equal(selectors[".modal"].style.display, "");
-assert.equal(WindowManager.openedByScript, false);
-elements.modalBox = {};
-let clicked = false;
-WindowManager.openModalWindowWithCallback(
-  { click: () => (clicked = true) },
-  "Blocked",
-  () => {},
-);
-assert.equal(clicked, false);
-delete elements.modalBox;
 
 // No jQuery handlers uses synthetic keyboard events and mKeys=false selects none.
 KeyManager.init();

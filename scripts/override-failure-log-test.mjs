@@ -7,7 +7,7 @@ const logged = [];
 const lastMsgAll = {};
 
 const reporter = createOverrideFailureReporter({
-  getWindowManager: () => ({ isOpen: () => windowOpen }),
+  getGameModal: () => ({ isOpen: () => windowOpen }),
   getGame: () => ({ global: { lastMsg: { all: lastMsgAll } } }),
   getGameLog: () => ({
     logDanger: (kind, message, categories) => {

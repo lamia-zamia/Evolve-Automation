@@ -128,11 +128,12 @@ hooks.setForeignAffairsManagersTestContext({
     loc: (key) => key,
   },
   win: { document: documentStub },
-  WindowManager: {
+  gameModal: {
     isOpen: () => false,
-    openModalWindowWithCallback: (_node, title, callback) => {
-      trace.push(["modal", title]);
-      callback();
+    canOpen: () => true,
+    open: ({ triggerSelector, title, action }) => {
+      trace.push(["modal", triggerSelector, title]);
+      action();
     },
   },
   GameLog: {
@@ -215,7 +216,7 @@ assert.equal(WarManager.attackEnemyFortress(0), true);
 assert.equal(WarManager.attackEnemyFortress(1), false);
 
 assert.deepEqual(JSON.parse(JSON.stringify(trace)), [
-  ["modal", "civics_espionage_actions"],
+  ["modal", "#gov0 div span:nth-child(3) button", "civics_espionage_actions"],
   [
     "log",
     "spying",

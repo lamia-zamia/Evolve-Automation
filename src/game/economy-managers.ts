@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { GameModalPort } from "../ports/game-modal.ts";
+
 interface KeyManagerContract {
   click: (count: number) => Iterable<unknown>;
 }
+
+/** The control that opens the government selection modal. */
+const GOVERNMENT_MODAL_TRIGGER = "#govType button";
 
 interface EconomyManagersDependencies {
   getGame: () => any;
@@ -10,7 +15,7 @@ interface EconomyManagersDependencies {
   getDocument: () => Document;
   getVueById: (id: string) => any;
   getKeyManager: () => KeyManagerContract;
-  getWindowManager: () => any;
+  getGameModal: () => GameModalPort;
   getGameLog: () => any;
   haveTech: (tech: string, level?: number) => boolean;
   traitVal: (trait: string, index: number, sign?: string) => number;
@@ -90,7 +95,7 @@ export function createEconomyManagers({
   getDocument,
   getVueById,
   getKeyManager,
-  getWindowManager,
+  getGameModal,
   getGameLog,
   haveTech,
   traitVal,
@@ -187,11 +192,8 @@ export function createEconomyManagers({
     },
 
     isEnabled() {
-      let node = getDocument().querySelector("#govType button");
       return (
-        this.isUnlocked() &&
-        node !== null &&
-        node.getAttribute("disabled") !== "disabled"
+        this.isUnlocked() && getGameModal().canOpen(GOVERNMENT_MODAL_TRIGGER)
       );
     },
 
@@ -203,27 +205,29 @@ export function createEconomyManagers({
 
     setGovernment(government: string) {
       const game = getGame();
-      const WindowManager = getWindowManager();
+      const gameModal = getGameModal();
       const GameLog = getGameLog();
       if (!game?.global?.civic?.govern) {
         return;
       }
       // Don't try anything if chosen government already set, or modal window is already open
-      if (this.currentGovernment() === government || WindowManager.isOpen()) {
+      if (this.currentGovernment() === government || gameModal.isOpen()) {
         return;
       }
 
-      let optionsNode = getDocument().querySelector("#govType button");
-      let title = game.loc("civics_government_type");
-      WindowManager.openModalWindowWithCallback(optionsNode, title, () => {
-        GameLog.logSuccess(
-          "special",
-          `Revolution! Government changed to ${game.loc(
-            "govern_" + government,
-          )}.`,
-          ["events", "major_events"],
-        );
-        getVueById("govModal")?.setGov(government);
+      gameModal.open({
+        triggerSelector: GOVERNMENT_MODAL_TRIGGER,
+        title: game.loc("civics_government_type"),
+        action: () => {
+          GameLog.logSuccess(
+            "special",
+            `Revolution! Government changed to ${game.loc(
+              "govern_" + government,
+            )}.`,
+            ["events", "major_events"],
+          );
+          getVueById("govModal")?.setGov(government);
+        },
       });
     },
   };
