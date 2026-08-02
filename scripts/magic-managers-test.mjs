@@ -54,6 +54,8 @@ assert.equal(
 );
 // In tradeRatio, no trade -> tier 2.
 assert.equal(AlchemyManager.transmuteTier({ id: "Steel", instance: {} }), 2);
+// A resource the game has not instantiated yet is tier 2, not a crash.
+assert.equal(AlchemyManager.transmuteTier({ id: "Steel" }), 2);
 
 // --- Alchemy: managedPriorityList filters by enabled + unlocked + tier ---
 settings = {

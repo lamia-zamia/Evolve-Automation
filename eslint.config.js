@@ -28,7 +28,7 @@ export default defineConfig(
     rules: {
       "no-empty": ["warn", { allowEmptyCatch: true }],
       "no-fallthrough": "warn",
-      "no-prototype-builtins": "warn",
+      "no-prototype-builtins": "error",
       "no-unreachable": "warn",
       "no-unused-vars": "warn",
       "no-useless-assignment": "warn",
@@ -59,7 +59,7 @@ export default defineConfig(
       "@typescript-eslint/no-unused-expressions": "warn",
       "@typescript-eslint/no-unused-vars": "warn",
       "no-case-declarations": "warn",
-      "no-prototype-builtins": "warn",
+      "no-prototype-builtins": "error",
       "no-useless-assignment": "warn",
       "no-var": "off",
       "prefer-const": "off",

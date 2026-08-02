@@ -170,7 +170,7 @@ export function createFleetManagers({
       const game = getGame();
       if (
         !game.global.tech.syndicate ||
-        !game.global.space.shipyard?.hasOwnProperty("blueprint")
+        !Object.hasOwn(game.global.space.shipyard ?? {}, "blueprint")
       ) {
         return false;
       }
@@ -316,7 +316,7 @@ export function createFleetManagers({
       if (
         !game.global.tech["syndicate"] ||
         !game.global.race["truepath"] ||
-        !game.global.space.syndicate?.hasOwnProperty(region)
+        !Object.hasOwn(game.global.space.syndicate ?? {}, region)
       ) {
         return extra ? { p: 1, r: 0, s: 0 } : 1;
       }
@@ -357,7 +357,7 @@ export function createFleetManagers({
       let piracy = game.global.space.syndicate[region];
       let patrol = 0;
       let sensor = 0;
-      if (game.global.space.shipyard?.hasOwnProperty("ships")) {
+      if (Object.hasOwn(game.global.space.shipyard ?? {}, "ships")) {
         for (let ship of game.global.space.shipyard.ships) {
           if (
             ship.location === region &&

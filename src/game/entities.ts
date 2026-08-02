@@ -669,7 +669,7 @@ export function createEntityClasses({
     }
 
     isCraftable() {
-      return readGame().craftCost.hasOwnProperty(this.id);
+      return Object.hasOwn(readGame().craftCost, this.id);
     }
 
     hasStorage() {
@@ -783,7 +783,7 @@ export function createEntityClasses({
     }
 
     isUnlocked() {
-      return readGame().global.portal.hasOwnProperty("purifier");
+      return Object.hasOwn(readGame().global.portal, "purifier");
     }
   }
 
@@ -1119,13 +1119,13 @@ export function createEntityClasses({
 
     isSwitchable() {
       return (
-        this.definition.hasOwnProperty("powered") ||
-        this.definition.hasOwnProperty("switchable")
+        Object.hasOwn(this.definition, "powered") ||
+        Object.hasOwn(this.definition, "switchable")
       );
     }
 
     isMission() {
-      return this.definition.hasOwnProperty("grant");
+      return Object.hasOwn(this.definition, "grant");
     }
 
     isComplete() {
@@ -1168,7 +1168,7 @@ export function createEntityClasses({
       }
 
       if (
-        !this.definition.hasOwnProperty("powered") ||
+        !Object.hasOwn(this.definition, "powered") ||
         !this.checkPowerRequirements()
       ) {
         return 0;
@@ -2754,7 +2754,7 @@ export function createEntityClasses({
           this.traitName === "ooze"
         ) &&
         !readGame().global.race.ss_traits?.includes(this.traitName) &&
-        !readGame().global.race.iTraits?.hasOwnProperty(this.traitName)
+        !Object.hasOwn(readGame().global.race.iTraits ?? {}, this.traitName)
       );
     }
 

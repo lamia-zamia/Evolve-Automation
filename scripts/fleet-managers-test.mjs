@@ -119,4 +119,18 @@ assert.deepEqual(trace.slice(-3), [
   ["sub", "spc_titan", "cruiser"],
 ]);
 
+// Piracy tolerates the lazily absent space bags. `syndicate` and `shipyard`
+// only exist once the matching Truepath content has unlocked.
+delete game.global.space.syndicate;
+assert.equal(FleetManagerOuter.syndicate("spc_titan", false, false), 1);
+
+game.global.space.syndicate = { spc_titan: 600 };
+delete game.global.space.shipyard;
+// No shipyard means no patrol and no sensors, so the full piracy rating stands.
+assert.deepEqual(FleetManagerOuter.syndicate("spc_titan", true, false), {
+  p: 0.5,
+  r: 600,
+  s: 0,
+});
+
 console.log("Fleet manager tests passed");

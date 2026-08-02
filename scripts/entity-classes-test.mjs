@@ -231,4 +231,28 @@ context.game.global.stats.achieve = {};
 assert.equal(nephilim.getHabitability(), 0);
 assert.equal(beholder.getHabitability(), 0);
 
+// Purge gating tolerates the lazily absent race bags. `iTraits` and `ss_traits`
+// only exist once the game has granted an inherited or subspecies trait.
+context.game = {
+  global: { race: { species: "human", hardy: 1 } },
+  traits: { hardy: { val: 1 } },
+  races: { human: { type: "humanoid" } },
+};
+context.settings = { mutableTrait_purge_hardy: true };
+context.resources = { Plasmid: { currentQuantity: 100 } };
+context.MutableTraitManager = { minimumPlasmidsToPreserve: 0 };
+context.mutationCostMultipliers = {};
+context.mutationCostMultipliersGenus = {};
+
+const hardy = new classes.MutableTrait("hardy");
+assert.equal(hardy.canPurge(), true);
+
+// An inherited trait of the same name blocks the purge; another one does not.
+context.game.global.race.iTraits = { hardy: 1 };
+assert.equal(hardy.canPurge(), false);
+context.game.global.race.iTraits = { rugged: 1 };
+assert.equal(hardy.canPurge(), true);
+context.game.global.race.ss_traits = ["hardy"];
+assert.equal(hardy.canPurge(), false);
+
 console.log("Entity classes module tests passed");

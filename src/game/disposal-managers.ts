@@ -194,7 +194,7 @@ export function createDisposalManagers({
     },
 
     isConsumable(res: any) {
-      return getPoly().supplyValue.hasOwnProperty(res.id);
+      return Object.hasOwn(getPoly().supplyValue, res.id);
     },
 
     updateResources() {
@@ -318,7 +318,7 @@ export function createDisposalManagers({
     },
 
     isConsumable(res: any) {
-      return getGame().atomic_mass.hasOwnProperty(res.id);
+      return Object.hasOwn(getGame().atomic_mass, res.id);
     },
 
     updateResources() {

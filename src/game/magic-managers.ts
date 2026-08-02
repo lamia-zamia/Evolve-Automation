@@ -61,10 +61,10 @@ export function createMagicManagers({
     transmuteTier(res: any) {
       const game = getGame();
       const resources = getResources();
-      return !game.tradeRatio.hasOwnProperty(res.id) ||
+      return !Object.hasOwn(game.tradeRatio, res.id) ||
         res === resources.Crystal
         ? 0
-        : res.instance?.hasOwnProperty("trade")
+        : Object.hasOwn(res.instance ?? {}, "trade")
           ? 1
           : 2;
     },

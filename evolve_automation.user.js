@@ -2736,7 +2736,7 @@
       transmuteTier(res) {
         const game = getGame();
         const resources = getResources();
-        return !game.tradeRatio.hasOwnProperty(res.id) || res === resources.Crystal ? 0 : res.instance?.hasOwnProperty("trade") ? 1 : 2;
+        return !Object.hasOwn(game.tradeRatio, res.id) || res === resources.Crystal ? 0 : Object.hasOwn(res.instance ?? {}, "trade") ? 1 : 2;
       },
       currentCount(id) {
         const game = getGame();
@@ -2998,7 +2998,7 @@
         return this.isUnlocked();
       },
       isConsumable(res) {
-        return getPoly().supplyValue.hasOwnProperty(res.id);
+        return Object.hasOwn(getPoly().supplyValue, res.id);
       },
       updateResources() {
         if (!this.isUnlocked() || !getSettings().autoSupply) {
@@ -3098,7 +3098,7 @@
         return this.isUnlocked();
       },
       isConsumable(res) {
-        return getGame().atomic_mass.hasOwnProperty(res.id);
+        return Object.hasOwn(getGame().atomic_mass, res.id);
       },
       updateResources() {
         if (!this.isUnlocked() || !getSettings().autoEject && !haveTask("trash")) {
@@ -4853,7 +4853,7 @@
       },
       initFleet() {
         const game = getGame();
-        if (!game.global.tech.syndicate || !game.global.space.shipyard?.hasOwnProperty("blueprint")) {
+        if (!game.global.tech.syndicate || !Object.hasOwn(game.global.space.shipyard ?? {}, "blueprint")) {
           return false;
         }
         this._fleetVue = getVueById(this._fleetVueBinding);
@@ -4958,7 +4958,7 @@
       syndicate(region, extra, all) {
         const game = getGame();
         const buildings = getBuildings();
-        if (!game.global.tech["syndicate"] || !game.global.race["truepath"] || !game.global.space.syndicate?.hasOwnProperty(region)) {
+        if (!game.global.tech["syndicate"] || !game.global.race["truepath"] || !Object.hasOwn(game.global.space.syndicate ?? {}, region)) {
           return extra ? { p: 1, r: 0, s: 0 } : 1;
         }
         let rivalRel = game.global.civic.foreign.gov3.hstl;
@@ -4989,7 +4989,7 @@
         let piracy = game.global.space.syndicate[region];
         let patrol = 0;
         let sensor = 0;
-        if (game.global.space.shipyard?.hasOwnProperty("ships")) {
+        if (Object.hasOwn(game.global.space.shipyard ?? {}, "ships")) {
           for (let ship of game.global.space.shipyard.ships) {
             if (ship.location === region && (ship.transit === 0 && ship.fueled || all)) {
               let rating = this.getShipAttackPower(ship);
@@ -8101,7 +8101,7 @@
         return newWorkers;
       }
       isCraftable() {
-        return readGame().craftCost.hasOwnProperty(this.id);
+        return Object.hasOwn(readGame().craftCost, this.id);
       }
       hasStorage() {
         return this.instance?.stackable ?? false;
@@ -8185,7 +8185,7 @@
         this.rateOfChange = readGame().global.portal.purifier.diff;
       }
       isUnlocked() {
-        return readGame().global.portal.hasOwnProperty("purifier");
+        return Object.hasOwn(readGame().global.portal, "purifier");
       }
     }
     class Power extends Resource {
@@ -8412,10 +8412,10 @@
         return this.vue !== void 0;
       }
       isSwitchable() {
-        return this.definition.hasOwnProperty("powered") || this.definition.hasOwnProperty("switchable");
+        return Object.hasOwn(this.definition, "powered") || Object.hasOwn(this.definition, "switchable");
       }
       isMission() {
-        return this.definition.hasOwnProperty("grant");
+        return Object.hasOwn(this.definition, "grant");
       }
       isComplete() {
         return haveTech(this.definition.grant[0], this.definition.grant[1]);
@@ -8441,7 +8441,7 @@
         if (this.overridePowered !== void 0) {
           return this.overridePowered;
         }
-        if (!this.definition.hasOwnProperty("powered") || !this.checkPowerRequirements()) {
+        if (!Object.hasOwn(this.definition, "powered") || !this.checkPowerRequirements()) {
           return 0;
         }
         return this.definition.powered();
@@ -9506,7 +9506,7 @@
         );
       }
       canPurge() {
-        return this.purgeEnabled && !this.gainEnabled && this.canMutate("purge") && readGame().global.race[this.traitName] !== void 0 && !((readGame().global.race.species === "sludge" || readGame().global.race.species === "ultra_sludge") && this.traitName === "ooze") && !readGame().global.race.ss_traits?.includes(this.traitName) && !readGame().global.race.iTraits?.hasOwnProperty(this.traitName);
+        return this.purgeEnabled && !this.gainEnabled && this.canMutate("purge") && readGame().global.race[this.traitName] !== void 0 && !((readGame().global.race.species === "sludge" || readGame().global.race.species === "ultra_sludge") && this.traitName === "ooze") && !readGame().global.race.ss_traits?.includes(this.traitName) && !Object.hasOwn(readGame().global.race.iTraits ?? {}, this.traitName);
       }
       canMutate(action) {
         let currentPlasmids = readResources2()[readGame().global.race.universe === "antimatter" ? "AntiPlasmid" : "Plasmid"].currentQuantity;
