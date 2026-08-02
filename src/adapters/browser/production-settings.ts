@@ -3,13 +3,13 @@ import {
   type ProductionSettingsReadModel,
 } from "../../domain/economy/production/production-settings.ts";
 import type { ProductionSettingsIntentHandler } from "../../ports/production-settings.ts";
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(value: unknown): JQueryNode;
@@ -94,13 +94,22 @@ export function createProductionSettingsBrowserAdapter({
 
   function updateProductionSettingsContent(): void {
     const readModel = getReadModel();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: readModel.sectionId,
+      },
+      (currentNode) => {
+        renderProductionContent(currentNode, readModel);
+      },
+    );
+  }
 
-    const currentNode = getJQuery()("#script_productionContent");
-    currentNode.empty().off("*");
-
+  function renderProductionContent(
+    currentNode: JQueryNode,
+    readModel: ProductionSettingsReadModel,
+  ): void {
     const tableControlNames = new Set([
       "productionSmelting",
       "productionSmeltingIridium",
@@ -122,9 +131,6 @@ export function createProductionSettingsBrowserAdapter({
     updateProductionTableFactory(currentNode);
     updateProductionTableMiningDrone(currentNode);
     updateProductionTableReplicator(currentNode);
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   function renderControl(

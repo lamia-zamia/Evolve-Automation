@@ -3,13 +3,13 @@ import type {
   EjectorSettingsReadModel,
 } from "../../domain/economy/resources/ejector-settings.ts";
 import type { EjectorSettingsIntentHandler } from "../../ports/ejector-settings.ts";
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -87,13 +87,25 @@ export function createEjectorSettingsBrowserAdapter({
   function updateEjectorSettingsContent(): void {
     const readModel = reader.read();
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
     const jquery = getJQuery();
-    const currentNode = jquery(`#script_${readModel.sectionId}Content`);
-    currentNode.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery,
+        sectionId: readModel.sectionId,
+      },
+      (currentNode) => {
+        renderEjectorContent(currentNode, readModel, actions, jquery);
+      },
+    );
+  }
 
+  function renderEjectorContent(
+    currentNode: JQueryNode,
+    readModel: EjectorSettingsReadModel,
+    actions: EjectorSettingsBrowserActions,
+    jquery: JQuery,
+  ): void {
     for (const control of readModel.controls) {
       renderControl(currentNode, control, actions);
     }
@@ -140,9 +152,6 @@ export function createEjectorSettingsBrowserAdapter({
         actions.addTableToggle(cell, row.supplySettingName);
       }
     }
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   function renderControl(

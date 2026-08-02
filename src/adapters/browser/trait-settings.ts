@@ -1,9 +1,14 @@
 import { type TraitSettingsReadModel } from "../../domain/traits/trait-settings.ts";
 import type { TraitSettingsIntentHandler } from "../../ports/trait-settings.ts";
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
 interface TraitSettingsDependencies {
   getReadModel: () => TraitSettingsReadModel;
-  getDocument: () => TraitSettingsDocument;
+  getDocument: () => ScrollDocument;
   getJQuery: () => JQuery;
   intents: TraitSettingsIntentHandler;
   getSorterHelper: () => unknown;
@@ -38,12 +43,7 @@ interface TraitSettingsDependencies {
   buildTableLabel: (note: string, hint?: string, color?: string) => unknown;
 }
 
-interface TraitSettingsDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(value: unknown): JQueryNode;
@@ -130,15 +130,24 @@ export function createTraitSettingsBrowserAdapter({
 
   function updateTraitSettingsContent(): void {
     const readModel = getReadModel();
-    const document = getDocument();
     const $ = getJQuery();
-    let currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: $,
+        sectionId: readModel.sectionId,
+      },
+      (contentNode) => {
+        renderTraitContent(contentNode, readModel, $);
+      },
+    );
+  }
 
-    let currentNode = $("#script_traitContent");
-
-    currentNode.empty().off("*");
-
+  function renderTraitContent(
+    currentNode: JQueryNode,
+    readModel: TraitSettingsReadModel,
+    $: JQuery,
+  ): void {
     addStandardHeading(currentNode, "Major Traits");
     addSettingsSelect(
       currentNode,
@@ -444,9 +453,6 @@ export function createTraitSettingsBrowserAdapter({
         });
       },
     });
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   function makeToggleSwitchesMutuallyExclusive(

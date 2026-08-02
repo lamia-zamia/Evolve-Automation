@@ -4,11 +4,11 @@ import type {
   MarketSettingsRow,
 } from "../../domain/economy/market/market-settings.ts";
 import type { MarketSettingsIntentHandler } from "../../ports/market-settings.ts";
-
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
 interface SortableOptions {
   readonly items: string;
@@ -16,7 +16,7 @@ interface SortableOptions {
   readonly update: () => void;
 }
 
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -95,13 +95,25 @@ export function createMarketSettingsBrowserAdapter({
   function updateMarketSettingsContent(): void {
     const readModel = reader.read();
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
     const jquery = getJQuery();
-    const currentNode = jquery(`#script_${readModel.sectionId}Content`);
-    currentNode.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery,
+        sectionId: readModel.sectionId,
+      },
+      (currentNode) => {
+        renderMarketContent(currentNode, readModel, actions, jquery);
+      },
+    );
+  }
 
+  function renderMarketContent(
+    currentNode: JQueryNode,
+    readModel: MarketSettingsReadModel,
+    actions: MarketSettingsBrowserActions,
+    jquery: JQuery,
+  ): void {
     for (const control of readModel.controls) {
       if (control.kind === "heading") break;
       renderControl(currentNode, control, actions);
@@ -118,9 +130,6 @@ export function createMarketSettingsBrowserAdapter({
       renderControl(currentNode, galaxyControl, actions);
     }
     renderGalaxyTable(currentNode, readModel, actions, jquery);
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   function renderControl(

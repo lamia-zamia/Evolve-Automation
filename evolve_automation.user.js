@@ -19919,11 +19919,19 @@
     function updateMagicSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
       const jquery = getJQuery();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderMagicContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderMagicContent(currentNode, readModel, actions, jquery) {
       for (const control of readModel.alchemyControls) {
         renderControl2(currentNode, control, actions);
       }
@@ -19932,7 +19940,6 @@
         renderControl2(currentNode, control, actions);
       }
       renderPylon(currentNode, readModel.pylonRows, actions, jquery);
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       switch (control.kind) {
@@ -20215,11 +20222,19 @@
     function updateJobSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const jquery = getJQuery();
-      const currentNode = jquery("#script_jobContent");
-      currentNode.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderJobContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderJobContent(currentNode, readModel, actions, jquery) {
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
@@ -20270,7 +20285,6 @@
           intents.handle({ type: "reorder-jobs", jobIds: sortedIds });
         }
       });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       if (control.kind === "number") {
@@ -20828,11 +20842,19 @@
     function updateBuildingSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const jquery = getJQuery();
-      const currentNode = jquery(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderBuildingContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderBuildingContent(currentNode, readModel, actions, jquery) {
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
@@ -20893,7 +20915,6 @@
           intents.handle({ type: "reorder-buildings", buildingIds: sortedIds });
         }
       });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function filterBuildingSettingsTable() {
       const document = getDocument();
@@ -46168,11 +46189,19 @@
     function updateEjectorSettingsContent() {
       const readModel = reader.read();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const jquery = getJQuery();
-      const currentNode = jquery(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderEjectorContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderEjectorContent(currentNode, readModel, actions, jquery) {
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
@@ -46216,7 +46245,6 @@
           actions.addTableToggle(cell, row.supplySettingName);
         }
       }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       if (control.kind === "select") {
@@ -46472,11 +46500,19 @@
     function updateMarketSettingsContent() {
       const readModel = reader.read();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const jquery = getJQuery();
-      const currentNode = jquery(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderMarketContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderMarketContent(currentNode, readModel, actions, jquery) {
       for (const control of readModel.controls) {
         if (control.kind === "heading") break;
         renderControl2(currentNode, control, actions);
@@ -46493,7 +46529,6 @@
         renderControl2(currentNode, galaxyControl, actions);
       }
       renderGalaxyTable(currentNode, readModel, actions, jquery);
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       if (control.kind === "number") {
@@ -49475,10 +49510,18 @@
     }
     function updateProductionSettingsContent() {
       const readModel = getReadModel();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()("#script_productionContent");
-      currentNode.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderProductionContent(currentNode, readModel);
+        }
+      );
+    }
+    function renderProductionContent(currentNode, readModel) {
       const tableControlNames = /* @__PURE__ */ new Set([
         "productionSmelting",
         "productionSmeltingIridium",
@@ -49499,7 +49542,6 @@
       updateProductionTableFactory(currentNode);
       updateProductionTableMiningDrone(currentNode);
       updateProductionTableReplicator(currentNode);
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control) {
       if (control.kind === "number") {
@@ -49946,11 +49988,19 @@
     }
     function updateTraitSettingsContent() {
       const readModel = getReadModel();
-      const document = getDocument();
       const $ = getJQuery();
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_traitContent");
-      currentNode.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: $,
+          sectionId: readModel.sectionId
+        },
+        (contentNode) => {
+          renderTraitContent(contentNode, readModel, $);
+        }
+      );
+    }
+    function renderTraitContent(currentNode, readModel, $) {
       addStandardHeading(currentNode, "Major Traits");
       addSettingsSelect(
         currentNode,
@@ -50214,7 +50264,6 @@
           });
         }
       });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function makeToggleSwitchesMutuallyExclusive(switch1, settingsKey1, switch2, settingsKey2) {
       switch1.on("change", function() {

@@ -4,6 +4,11 @@ import {
   type BuildingSettingsRow,
 } from "../../domain/progression/build/building-settings.ts";
 import type { BuildingSettingsIntentHandler } from "../../ports/building-settings.ts";
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
 interface BuildingElement {
   id: string;
@@ -13,9 +18,7 @@ interface BuildingElement {
   getElementsByTagName(name: string): ArrayLike<BuildingElement>;
 }
 
-interface BuildingDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
+interface BuildingDocument extends ScrollDocument {
   getElementById(id: string): BuildingElement | null;
 }
 
@@ -29,7 +32,7 @@ interface JQueryInput {
   checked: boolean;
 }
 
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -139,13 +142,25 @@ export function createBuildingSettingsBrowserAdapter({
   function updateBuildingSettingsContent(): void {
     const readModel = getReadModel();
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
     const jquery = getJQuery();
-    const currentNode = jquery(`#script_${readModel.sectionId}Content`);
-    currentNode.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery,
+        sectionId: readModel.sectionId,
+      },
+      (currentNode) => {
+        renderBuildingContent(currentNode, readModel, actions, jquery);
+      },
+    );
+  }
 
+  function renderBuildingContent(
+    currentNode: JQueryNode,
+    readModel: BuildingSettingsReadModel,
+    actions: BuildingSettingsBrowserActions,
+    jquery: JQuery,
+  ): void {
     for (const control of readModel.controls) {
       renderControl(currentNode, control, actions);
     }
@@ -215,9 +230,6 @@ export function createBuildingSettingsBrowserAdapter({
         intents.handle({ type: "reorder-buildings", buildingIds: sortedIds });
       },
     });
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   function filterBuildingSettingsTable(): void {
