@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameFeatureVisibility } from "../src/adapters/browser/game-feature-visibility.ts";
 import { createForeignAffairsManagers } from "../src/game/foreign-affairs-managers.ts";
 
 let game;
@@ -22,9 +23,6 @@ const { SpyManager, WarManager } = createForeignAffairsManagers({
   getState: () => state,
   getResources: () => resources,
   getBuildings: () => buildings,
-  getDocument: () => ({
-    querySelector: (selector) => selectors[selector] ?? null,
-  }),
   getPoly: () => poly,
   getVueById: (id) => vueById[id],
   callVueMethod: (view, methodName, args, legacyFilterName = methodName) => {
@@ -38,6 +36,12 @@ const { SpyManager, WarManager } = createForeignAffairsManagers({
     }
     throw new TypeError(`${methodName} must be a function`);
   },
+  getFeatureVisibility: () =>
+    createGameFeatureVisibility({
+      getDocument: () => ({
+        querySelector: (selector) => selectors[selector] ?? null,
+      }),
+    }),
   getGameModal: () => ({
     isOpen: () => false,
     canOpen: () => true,
@@ -201,7 +205,6 @@ assert.equal(SpyManager.spyCost(0, 2), 778);
 state.astroSign = "scorpio";
 assert.equal(SpyManager.spyCost(0, 2), 715);
 
-selectors["#gov0 div span:nth-child(3)"] = { style: { display: "block" } };
 selectors["#gov0 div span:nth-child(3) button"] = {
   getAttribute: () => null,
 };
@@ -209,6 +212,18 @@ vueById.espModal = {
   annex: (index) => trace.push(["annex", index]),
 };
 resources.Morale.currentQuantity = 300;
+
+// The game has not rendered the espionage options for this power, so nothing
+// is attempted. An absent panel is the pre-spy-tech state, not an error.
+SpyManager.performEspionage(0, SpyManager.Types.Annex.id, false);
+assert.deepEqual(trace, []);
+
+// The panel exists but `v-show` is hiding it — still nothing to do.
+selectors["#gov0 div span:nth-child(3)"] = { style: { display: "none" } };
+SpyManager.performEspionage(0, SpyManager.Types.Annex.id, false);
+assert.deepEqual(trace, []);
+
+selectors["#gov0 div span:nth-child(3)"] = { style: { display: "block" } };
 SpyManager.performEspionage(0, SpyManager.Types.Annex.id, false);
 assert.deepEqual(trace.slice(0, 3), [
   ["modal", "#gov0 div span:nth-child(3) button", "civics_espionage_actions"],

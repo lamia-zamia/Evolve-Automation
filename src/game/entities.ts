@@ -1,6 +1,7 @@
 // TRANSITIONAL: Evolve entity constructors and methods still mirror the game's dynamic
 // JavaScript classes. Keep the untyped surface contained here until the game adapter slice
 // replaces these compatibility classes with validated snapshots and commands.
+import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
 
 type Loose = any;
@@ -48,6 +49,7 @@ interface EntityClassesDependencies {
   readTraitVal: () => LooseFunction;
   readTriggerManager: () => LooseRecord;
   readWarManager: () => LooseRecord;
+  readFeatureVisibility: () => GameFeatureVisibilityPort;
   readGameModal: () => GameModalPort;
 }
 
@@ -92,6 +94,7 @@ export function createEntityClasses({
   readTraitVal,
   readTriggerManager,
   readWarManager,
+  readFeatureVisibility,
   readGameModal,
 }: EntityClassesDependencies) {
   const $: LooseFunction = (...args) => readJQuery()(...args);
@@ -1591,8 +1594,7 @@ export function createEntityClasses({
     }
 
     isUnlocked() {
-      let node = readDocument().getElementById(this._vueBinding);
-      return node !== null && !node.classList.contains("is-hidden");
+      return readFeatureVisibility().isVisible("#" + this._vueBinding);
     }
   }
 

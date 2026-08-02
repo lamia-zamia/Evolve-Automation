@@ -57,6 +57,7 @@ import { createOverrideEditor } from "../../application/override-editing.ts";
 import { createOverrideEvaluationSource } from "./override-evaluation.ts";
 import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
+import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createQueuedSettings } from "../../settings/queued-settings.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
@@ -408,6 +409,9 @@ function startEvolveRuntimeComposition(
   let gameModal = createGameModal({
     getDocument: () => runtimeEnvironment.document,
     getMutationObserver: () => runtimeEnvironment.MutationObserver,
+  });
+  const featureVisibility = createGameFeatureVisibility({
+    getDocument: () => runtimeEnvironment.document,
   });
   const settingsStore = createSettingsStore(runtimeEnvironment.storage);
   var settingsRaw = settingsStore.load();
@@ -2617,6 +2621,7 @@ function startEvolveRuntimeComposition(
     readTraitVal: () => traitVal,
     readTriggerManager: () => TriggerManager,
     readWarManager: () => WarManager,
+    readFeatureVisibility: () => featureVisibility,
     readGameModal: () => gameModal,
   });
 
@@ -3131,9 +3136,9 @@ function startEvolveRuntimeComposition(
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getDocument: () => runtimeEnvironment.document,
       getVueById: (id) => getVueById(id),
       getKeyManager: () => KeyManager,
+      getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,
       getGameLog: () => GameLog,
       haveTech,
@@ -3147,10 +3152,10 @@ function startEvolveRuntimeComposition(
     getState: () => state,
     getResources: () => resources,
     getBuildings: () => buildings,
-    getDocument: () => runtimeEnvironment.document,
     getPoly: () => poly,
     getVueById: (id) => getVueById(id),
     callVueMethod,
+    getFeatureVisibility: () => featureVisibility,
     getGameModal: () => gameModal,
     getGameLog: () => GameLog,
     getKeyManager: () => KeyManager,

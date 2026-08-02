@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameFeatureVisibility } from "../src/adapters/browser/game-feature-visibility.ts";
 import { createEconomyManagers } from "../src/game/economy-managers.ts";
 
 let game;
@@ -37,11 +38,12 @@ const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
     getGame: () => game,
     getResources: () => resources,
     getBuildings: () => buildings,
-    getDocument: () => documentStub,
     getVueById: (id) => vueMap[id],
     getKeyManager: () => ({
       click: (count) => Array.from({ length: count }, (_, i) => i),
     }),
+    getFeatureVisibility: () =>
+      createGameFeatureVisibility({ getDocument: () => documentStub }),
     getGameModal: () => gameModal,
     getGameLog: () => GameLog,
     haveTech: (_tech, level) => (level === undefined ? techOk : techOk),
@@ -128,6 +130,12 @@ assert.equal(MarketManager.isUnlocked(), true);
 game = { global: { city: { market: { qty: 250 } } } };
 MarketManager.updateData();
 assert.equal(MarketManager.multiplier, 250);
+
+// Buy/sell is unlocked per resource by the game rendering the order controls.
+assert.equal(MarketManager.isBuySellUnlocked({ id: "Iron" }), false);
+domNodes["#market-Iron .order"] = {};
+assert.equal(MarketManager.isBuySellUnlocked({ id: "Iron" }), true);
+assert.equal(MarketManager.isBuySellUnlocked({ id: "Copper" }), false);
 
 // Priority sort.
 MarketManager.priorityList = [

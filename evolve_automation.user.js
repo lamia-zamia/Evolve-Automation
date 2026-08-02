@@ -2361,6 +2361,21 @@
     };
   }
 
+  // src/adapters/browser/game-feature-visibility.ts
+  function createGameFeatureVisibility({
+    getDocument
+  }) {
+    return Object.freeze({
+      isVisible(selector) {
+        const element = getDocument().querySelector(selector);
+        if (element === null || element === void 0) {
+          return false;
+        }
+        return element.style?.display !== "none" && element.classList?.contains("is-hidden") !== true;
+      }
+    });
+  }
+
   // src/adapters/browser/game-modal.ts
   function createGameModal({
     getDocument,
@@ -3811,7 +3826,11 @@
   }
 
   // src/game/economy-managers.ts
-  var GOVERNMENT_MODAL_TRIGGER = "#govType button";
+  var GOVERNMENT_PANEL = "#govType";
+  var GOVERNMENT_MODAL_TRIGGER = `${GOVERNMENT_PANEL} button`;
+  function marketOrderControls(resourceId3) {
+    return `#market-${resourceId3} .order`;
+  }
   function applyDirectStorageAssignment(game, resource2, count2, unit, storageValue, direction) {
     if (!Number.isFinite(count2) || count2 <= 0) {
       return false;
@@ -3848,9 +3867,9 @@
     getGame,
     getResources,
     getBuildings,
-    getDocument,
     getVueById,
     getKeyManager,
+    getFeatureVisibility,
     getGameModal,
     getGameLog,
     haveTech,
@@ -3926,8 +3945,7 @@
         magocracy: { id: "magocracy", isUnlocked: () => haveTech("gov_mage") }
       },
       isUnlocked() {
-        let node = getDocument().getElementById("govType");
-        return node !== null && node.style.display !== "none";
+        return getFeatureVisibility().isVisible(GOVERNMENT_PANEL);
       },
       isEnabled() {
         return this.isUnlocked() && getGameModal().canOpen(GOVERNMENT_MODAL_TRIGGER);
@@ -3977,7 +3995,7 @@
         this.priorityList.sort((a, b) => a.marketPriority - b.marketPriority);
       },
       isBuySellUnlocked(resource2) {
-        return getDocument().querySelector("#market-" + resource2.id + " .order") !== null;
+        return getFeatureVisibility().isVisible(marketOrderControls(resource2.id));
       },
       setMultiplier(multiplier) {
         this.multiplier = Math.min(
@@ -4214,8 +4232,11 @@
   }
 
   // src/game/foreign-affairs-managers.ts
+  function espionageOptions(govIndex) {
+    return `#gov${govIndex} div span:nth-child(3)`;
+  }
   function espionageModalTrigger(govIndex) {
-    return `#gov${govIndex} div span:nth-child(3) button`;
+    return `${espionageOptions(govIndex)} button`;
   }
   function createForeignAffairsManagers({
     getGame,
@@ -4223,10 +4244,10 @@
     getState,
     getResources,
     getBuildings,
-    getDocument,
     getPoly,
     getVueById,
     callVueMethod,
+    getFeatureVisibility,
     getGameModal,
     getGameLog,
     getKeyManager,
@@ -4354,7 +4375,6 @@
         }
       },
       performEspionage(govIndex, espionageId, influenceAllowed) {
-        const document = getDocument();
         const gameModal = getGameModal();
         const resources = getResources();
         const poly = getPoly();
@@ -4363,10 +4383,7 @@
         if (gameModal.isOpen()) {
           return;
         }
-        let optionsSpan = document.querySelector(
-          `#gov${govIndex} div span:nth-child(3)`
-        );
-        if (optionsSpan.style.display === "none") {
+        if (!getFeatureVisibility().isVisible(espionageOptions(govIndex))) {
           return;
         }
         if (!gameModal.canOpen(espionageModalTrigger(govIndex))) {
@@ -7690,6 +7707,7 @@
     readTraitVal,
     readTriggerManager,
     readWarManager,
+    readFeatureVisibility,
     readGameModal
   }) {
     const $ = (...args) => readJQuery()(...args);
@@ -8727,8 +8745,7 @@
         super("", "evolution", id, "");
       }
       isUnlocked() {
-        let node = readDocument().getElementById(this._vueBinding);
-        return node !== null && !node.classList.contains("is-hidden");
+        return readFeatureVisibility().isVisible("#" + this._vueBinding);
       }
     }
     class SpaceDock extends Action {
@@ -55062,6 +55079,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getDocument: () => runtimeEnvironment.document,
       getMutationObserver: () => runtimeEnvironment.MutationObserver
     });
+    const featureVisibility = createGameFeatureVisibility({
+      getDocument: () => runtimeEnvironment.document
+    });
     const settingsStore = createSettingsStore(runtimeEnvironment.storage);
     var settingsRaw = settingsStore.load();
     var settings = {};
@@ -56805,6 +56825,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readTraitVal: () => traitVal,
       readTriggerManager: () => TriggerManager,
       readWarManager: () => WarManager,
+      readFeatureVisibility: () => featureVisibility,
       readGameModal: () => gameModal
     });
     if (characterizationSurface)
@@ -57278,9 +57299,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getDocument: () => runtimeEnvironment.document,
       getVueById: (id) => getVueById(id),
       getKeyManager: () => KeyManager,
+      getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,
       getGameLog: () => GameLog,
       haveTech,
@@ -57293,10 +57314,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getState: () => state,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getDocument: () => runtimeEnvironment.document,
       getPoly: () => poly,
       getVueById: (id) => getVueById(id),
       callVueMethod,
+      getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,
       getGameLog: () => GameLog,
       getKeyManager: () => KeyManager,

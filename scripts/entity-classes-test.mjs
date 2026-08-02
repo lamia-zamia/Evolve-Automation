@@ -42,6 +42,7 @@ const dependencyNames = [
   "traitVal",
   "TriggerManager",
   "WarManager",
+  "featureVisibility",
   "gameModal",
 ];
 
@@ -111,6 +112,7 @@ const classes = createEntityClasses({
   readTraitVal: () => context.traitVal,
   readTriggerManager: () => context.TriggerManager,
   readWarManager: () => context.WarManager,
+  readFeatureVisibility: () => context.featureVisibility,
   readGameModal: () => context.gameModal,
 });
 
@@ -118,6 +120,16 @@ assert.equal(Object.keys(classes).length, 32);
 assert.equal(classes.BasicJob.prototype instanceof classes.Job, true);
 assert.equal(classes.SoulGem.prototype instanceof classes.Resource, true);
 assert.equal(classes.CityAction.prototype instanceof classes.Action, true);
+
+// An evolution action is offered whenever the page shows its own element.
+const visibleEvolutionSelectors = new Set();
+context.featureVisibility = {
+  isVisible: (selector) => visibleEvolutionSelectors.has(selector),
+};
+const bilateralSymmetry = new classes.EvolutionAction("bilateral_symmetry");
+assert.equal(bilateralSymmetry.isUnlocked(), false);
+visibleEvolutionSelectors.add("#evolution-bilateral_symmetry");
+assert.equal(bilateralSymmetry.isUnlocked(), true);
 
 const technologyActions = [];
 const observedTabLoads = [];

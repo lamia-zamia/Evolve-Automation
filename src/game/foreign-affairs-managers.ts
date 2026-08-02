@@ -1,11 +1,17 @@
+import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
 
 type AnyFunction = (...args: any[]) => any;
 type AnyRecord = Record<string, any>;
 
+/** The panel that offers a foreign power's espionage options. */
+function espionageOptions(govIndex: number): string {
+  return `#gov${govIndex} div span:nth-child(3)`;
+}
+
 /** The control that opens a foreign power's espionage modal. */
 function espionageModalTrigger(govIndex: number): string {
-  return `#gov${govIndex} div span:nth-child(3) button`;
+  return `${espionageOptions(govIndex)} button`;
 }
 
 type ForeignAffairsManagerDependencies = {
@@ -14,7 +20,6 @@ type ForeignAffairsManagerDependencies = {
   getState: () => AnyRecord;
   getResources: () => AnyRecord;
   getBuildings: () => AnyRecord;
-  getDocument: () => AnyRecord;
   getPoly: () => AnyRecord;
   getVueById: (id: string) => any;
   callVueMethod: (
@@ -23,6 +28,7 @@ type ForeignAffairsManagerDependencies = {
     args: readonly unknown[],
     legacyFilterName?: string,
   ) => unknown;
+  getFeatureVisibility: () => GameFeatureVisibilityPort;
   getGameModal: () => GameModalPort;
   getGameLog: () => AnyRecord;
   getKeyManager: () => AnyRecord;
@@ -42,10 +48,10 @@ export function createForeignAffairsManagers({
   getState,
   getResources,
   getBuildings,
-  getDocument,
   getPoly,
   getVueById,
   callVueMethod,
+  getFeatureVisibility,
   getGameModal,
   getGameLog,
   getKeyManager,
@@ -270,7 +276,6 @@ export function createForeignAffairsManagers({
       espionageId: string,
       influenceAllowed: boolean,
     ) {
-      const document = getDocument();
       const gameModal = getGameModal();
       const resources = getResources();
       const poly = getPoly();
@@ -280,10 +285,7 @@ export function createForeignAffairsManagers({
         return;
       } // Don't try anything if a window is already open
 
-      let optionsSpan = document.querySelector(
-        `#gov${govIndex} div span:nth-child(3)`,
-      );
-      if (optionsSpan.style.display === "none") {
+      if (!getFeatureVisibility().isVisible(espionageOptions(govIndex))) {
         return;
       }
 

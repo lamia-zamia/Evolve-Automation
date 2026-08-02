@@ -1,20 +1,29 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
 
 interface KeyManagerContract {
   click: (count: number) => Iterable<unknown>;
 }
 
+/** The panel that shows the current government and offers to change it. */
+const GOVERNMENT_PANEL = "#govType";
+
 /** The control that opens the government selection modal. */
-const GOVERNMENT_MODAL_TRIGGER = "#govType button";
+const GOVERNMENT_MODAL_TRIGGER = `${GOVERNMENT_PANEL} button`;
+
+/** The buy and sell controls on one resource's market row. */
+function marketOrderControls(resourceId: string): string {
+  return `#market-${resourceId} .order`;
+}
 
 interface EconomyManagersDependencies {
   getGame: () => any;
   getResources: () => Record<string, any>;
   getBuildings: () => Record<string, any>;
-  getDocument: () => Document;
   getVueById: (id: string) => any;
   getKeyManager: () => KeyManagerContract;
+  getFeatureVisibility: () => GameFeatureVisibilityPort;
   getGameModal: () => GameModalPort;
   getGameLog: () => any;
   haveTech: (tech: string, level?: number) => boolean;
@@ -92,9 +101,9 @@ export function createEconomyManagers({
   getGame,
   getResources,
   getBuildings,
-  getDocument,
   getVueById,
   getKeyManager,
+  getFeatureVisibility,
   getGameModal,
   getGameLog,
   haveTech,
@@ -187,8 +196,7 @@ export function createEconomyManagers({
     },
 
     isUnlocked() {
-      let node = getDocument().getElementById("govType");
-      return node !== null && node.style.display !== "none";
+      return getFeatureVisibility().isVisible(GOVERNMENT_PANEL);
     },
 
     isEnabled() {
@@ -252,10 +260,7 @@ export function createEconomyManagers({
     },
 
     isBuySellUnlocked(resource: any) {
-      return (
-        getDocument().querySelector("#market-" + resource.id + " .order") !==
-        null
-      );
+      return getFeatureVisibility().isVisible(marketOrderControls(resource.id));
     },
 
     setMultiplier(multiplier: number) {
