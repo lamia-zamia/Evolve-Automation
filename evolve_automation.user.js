@@ -109,6 +109,9 @@
     }
     return value;
   }
+  function coerceNumber(value) {
+    return Number(value);
+  }
   function requireCount(value, path) {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
       throw new TypeError(
@@ -21879,9 +21882,6 @@
   }
 
   // src/adapters/evolve/tick.ts
-  function toNumber(value) {
-    return Number(value);
-  }
   function createTickReader(dependencies) {
     return Object.freeze({
       samplePreamble() {
@@ -21898,8 +21898,9 @@
           goal: typeof goal === "string" ? goal : "",
           forcedUpdate: Boolean(state["forcedUpdate"]),
           gameTicked: Boolean(state["gameTicked"]),
-          scriptTick: toNumber(state["scriptTick"]),
-          tickRate: toNumber(settings["tickRate"]),
+          // The script owns and initializes its own tick counter; combat/hell.ts requires it too.
+          scriptTick: requireNumber(state["scriptTick"], "state.scriptTick"),
+          tickRate: coerceNumber(settings["tickRate"]),
           accelerated: Boolean(gameSettings["at"])
         };
       },
@@ -21952,9 +21953,9 @@
           autoPower: flag("autoPower"),
           autoMutateTraits: flag("autoMutateTraits"),
           stateLogEnabled: flag("stateLogEnabled"),
-          stateLogInterval: toNumber(settings["stateLogInterval"]),
-          // Legacy defaulted an absent counter to 0 (`state.stateLogTick ?? 0`).
-          stateLogTick: stateLogTick == null ? 0 : toNumber(stateLogTick)
+          stateLogInterval: coerceNumber(settings["stateLogInterval"]),
+          // `stateLogTick` is written only once the first log runs, so an absent counter is 0.
+          stateLogTick: stateLogTick == null ? 0 : coerceNumber(stateLogTick)
         };
       }
     });
@@ -22373,9 +22374,6 @@
   }
 
   // src/adapters/evolve/state-update.ts
-  function toNumber2(value) {
-    return Number(value);
-  }
   function createStateUpdateReader(dependencies) {
     return Object.freeze({
       sampleGoalTransition() {
@@ -22410,7 +22408,7 @@
         const resources = requireRecord(dependencies.getResources(), "resources");
         const money = requireRecord(resources["Money"], "resources.Money");
         const rawIncomes = state["moneyIncomes"];
-        const moneyIncomes = Array.isArray(rawIncomes) ? rawIncomes.map(toNumber2) : [];
+        const moneyIncomes = Array.isArray(rawIncomes) ? rawIncomes.map(coerceNumber) : [];
         let pillars;
         if (Object.prototype.hasOwnProperty.call(global, "pillars")) {
           const rawPillars = requireRecord(
@@ -22419,7 +22417,7 @@
           );
           pillars = {};
           for (const key in rawPillars) {
-            pillars[key] = toNumber2(rawPillars[key]);
+            pillars[key] = coerceNumber(rawPillars[key]);
           }
         }
         const interstellar = global["interstellar"];
@@ -22432,10 +22430,11 @@
         }
         return {
           moneyIncomes,
-          moneyRate: toNumber2(money["rateOfChange"]),
+          moneyRate: coerceNumber(money["rateOfChange"]),
           pillars,
-          currentExotic: toNumber2(exotic ?? 0),
-          lastExoticMass: toNumber2(state["whiteholeLastExoticMass"])
+          currentExotic: coerceNumber(exotic ?? 0),
+          // Written back from `currentExotic` each refresh, so it carries that coercion forward.
+          lastExoticMass: coerceNumber(state["whiteholeLastExoticMass"])
         };
       }
     });
@@ -31390,9 +31389,6 @@
       "game.global.stats"
     );
   }
-  function toNumber3(value) {
-    return Number(value);
-  }
   function raceObjects(getRaces) {
     const races = requireRecord(getRaces(), "races");
     return Object.values(races).map(
@@ -31465,8 +31461,8 @@
       const resources = requireRecord(dependencies.getResources(), "resources");
       const resource2 = requireRecord(resources[id], `resources.${id}`);
       return {
-        current: toNumber3(resource2["currentQuantity"]),
-        max: toNumber3(resource2["maxQuantity"])
+        current: coerceNumber(resource2["currentQuantity"]),
+        max: coerceNumber(resource2["maxQuantity"])
       };
     };
     return Object.freeze({
@@ -31507,8 +31503,8 @@
         const races = raceObjects(dependencies.getRaces).map(
           (r) => Object.freeze({
             id: r.id,
-            weighting: toNumber3(r.getWeighting()),
-            habitability: toNumber3(r.getHabitability()),
+            weighting: coerceNumber(r.getWeighting()),
+            habitability: coerceNumber(r.getHabitability()),
             genus: String(r.genus),
             name: String(r.name)
           })
@@ -31522,7 +31518,11 @@
           queueEnabled: Boolean(settings["evolutionQueueEnabled"]),
           queueLength: Array.isArray(queue) ? queue.length : 0,
           queueRepeat: Boolean(settings["evolutionQueueRepeat"]),
-          evolutionAttempts: toNumber3(state["evolutionAttempts"])
+          // The script owns and increments this counter; nothing coerced is ever written to it.
+          evolutionAttempts: requireNumber(
+            state["evolutionAttempts"],
+            "state.evolutionAttempts"
+          )
         });
       },
       sampleRaceTrait(trait2) {
@@ -31596,7 +31596,7 @@
           if (action === void 0) {
             throw new TypeError(`evolutions.${id} is missing`);
           }
-          return toNumber3(action.count);
+          return coerceNumber(action.count);
         };
         return Object.freeze({
           mitochondriaCount: countOf("mitochondria"),
@@ -40731,9 +40731,6 @@
   }
 
   // src/adapters/evolve/progression/prestige/prestige.ts
-  function toNumber4(value) {
-    return Number(value);
-  }
   function createPrestigeReader(dependencies) {
     const buildingBool = (id, method) => {
       const buildings = requireRecord(dependencies.getBuildings(), "buildings");
@@ -40767,11 +40764,14 @@
         eligible,
         armed,
         waitForPopulation: Boolean(settings["prestigeMADWait"]),
-        currentSoldiers: toNumber4(war["currentSoldiers"]),
-        maxSoldiers: toNumber4(war["maxSoldiers"]),
-        currentPopulation: toNumber4(population["currentQuantity"]),
-        maxPopulation: toNumber4(population["maxQuantity"]),
-        requiredPopulation: toNumber4(settings["prestigeMADPopulation"])
+        // The soldier counts are WarManager getters over live worker/crew fields, and the population
+        // quantities come from the resource wrapper. A NaN fails every `>=` in the wait check, so it
+        // holds MAD back rather than arming it.
+        currentSoldiers: coerceNumber(war["currentSoldiers"]),
+        maxSoldiers: coerceNumber(war["maxSoldiers"]),
+        currentPopulation: coerceNumber(population["currentQuantity"]),
+        maxPopulation: coerceNumber(population["maxQuantity"]),
+        requiredPopulation: coerceNumber(settings["prestigeMADPopulation"])
       };
     };
     return Object.freeze({

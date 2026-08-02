@@ -602,4 +602,38 @@ assert.throws(
   "missing building is rejected",
 );
 
+// An uninitialized WarManager, Population wrapper, and MAD population setting all read leniently:
+// the sample answers NaN instead of throwing, and every `>=` in the wait check then fails.
+{
+  const branch = contractReader({
+    getSettings: () => ({ prestigeType: "mad", prestigeMADWait: true }),
+    getHaveTech: () => (id) => id === "mad",
+    getVueById: (id) => (id === "mad" ? { display: true, armed: false } : null),
+  }).samplePrestige().branch;
+  assert.equal(branch.type, "mad");
+  assert.equal(branch.eligible, true);
+  for (const field of [
+    "currentSoldiers",
+    "maxSoldiers",
+    "currentPopulation",
+    "maxPopulation",
+    "requiredPopulation",
+  ]) {
+    assert.ok(Number.isNaN(branch[field]), `${field} coerces to NaN`);
+  }
+  assert.deepEqual(planPrestige({ goal: "Reset", branch }), []);
+  assert.deepEqual(
+    planPrestige({
+      goal: "Reset",
+      branch: { ...branch, waitForPopulation: false },
+    }),
+    [
+      { kind: "set-goal", goal: "GameOverMan" },
+      { kind: "log-prestige" },
+      { kind: "launch-mad" },
+    ],
+    "only the wait check holds the eligible MAD branch back",
+  );
+}
+
 console.log("Prestige adapter contract tests passed");

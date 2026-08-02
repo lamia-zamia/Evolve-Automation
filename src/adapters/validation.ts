@@ -135,6 +135,21 @@ export function requireNumber(value: unknown, path: string): number {
 }
 
 /**
+ * The deliberate lenient counterpart of `requireNumber`, for the three kinds of numeric field the
+ * game does not guarantee: script settings restored from storage or an imported file, live game
+ * bags whose entry may not exist yet, and wrapper getters that compute from either. An absent or
+ * unparseable value becomes `NaN` and poisons the comparison it feeds, which is what the script has
+ * always done here and is safer mid-tick than throwing out of a sample.
+ *
+ * Use `requireNumber` instead for anything the script itself owns and initializes. Note that a
+ * value coerced here can be written back into script state, so a field that merely looks
+ * script-owned may still be carrying a `NaN` from one of these sources.
+ */
+export function coerceNumber(value: unknown): number {
+  return Number(value);
+}
+
+/**
  * As `requireNumber`, for the operating counts and production indices the game reports as whole
  * numbers. A non-integer, a negative, or a magnitude past `Number.MAX_SAFE_INTEGER` is a defect in
  * the read, not a count this script should act on.

@@ -9,6 +9,7 @@ import type {
 } from "../../../../ports/prestige.ts";
 import {
   callBoolean,
+  coerceNumber,
   requireFunction,
   requireRecord,
 } from "../../../validation.ts";
@@ -39,11 +40,6 @@ export interface PrestigeReaderDependencies {
   readonly getHaveTech: () => (id: string, level?: number) => unknown;
   readonly getVueById: (id: string) => unknown;
   readonly eligibility: PrestigeEligibilityGate;
-}
-
-/** Plain coercion preserves the NaN-safe comparisons legacy MAD math relied on. */
-function toNumber(value: unknown): number {
-  return Number(value);
 }
 
 export function createPrestigeReader(
@@ -95,11 +91,14 @@ export function createPrestigeReader(
       eligible,
       armed,
       waitForPopulation: Boolean(settings["prestigeMADWait"]),
-      currentSoldiers: toNumber(war["currentSoldiers"]),
-      maxSoldiers: toNumber(war["maxSoldiers"]),
-      currentPopulation: toNumber(population["currentQuantity"]),
-      maxPopulation: toNumber(population["maxQuantity"]),
-      requiredPopulation: toNumber(settings["prestigeMADPopulation"]),
+      // The soldier counts are WarManager getters over live worker/crew fields, and the population
+      // quantities come from the resource wrapper. A NaN fails every `>=` in the wait check, so it
+      // holds MAD back rather than arming it.
+      currentSoldiers: coerceNumber(war["currentSoldiers"]),
+      maxSoldiers: coerceNumber(war["maxSoldiers"]),
+      currentPopulation: coerceNumber(population["currentQuantity"]),
+      maxPopulation: coerceNumber(population["maxQuantity"]),
+      requiredPopulation: coerceNumber(settings["prestigeMADPopulation"]),
     };
   };
 

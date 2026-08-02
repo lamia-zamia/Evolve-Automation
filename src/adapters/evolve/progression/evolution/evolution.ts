@@ -13,7 +13,12 @@ import type {
   EvolutionReader,
   ResourceAccumulationCommand,
 } from "../../../../ports/evolution.ts";
-import { requireFunction, requireRecord } from "../../../validation.ts";
+import {
+  coerceNumber,
+  requireFunction,
+  requireNumber,
+  requireRecord,
+} from "../../../validation.ts";
 
 /**
  * Loose views of the live game objects the evolution slice drives. The real
@@ -51,11 +56,6 @@ function globalStats(game: unknown): Record<string, unknown> {
     ],
     "game.global.stats",
   );
-}
-
-/** Plain coercion preserves the NaN poisoning legacy arithmetic relied on. */
-function toNumber(value: unknown): number {
-  return Number(value);
 }
 
 function raceObjects(getRaces: () => unknown): RaceObject[] {
@@ -189,8 +189,8 @@ export function createEvolutionReader(
     const resources = requireRecord(dependencies.getResources(), "resources");
     const resource = requireRecord(resources[id], `resources.${id}`);
     return {
-      current: toNumber(resource["currentQuantity"]),
-      max: toNumber(resource["maxQuantity"]),
+      current: coerceNumber(resource["currentQuantity"]),
+      max: coerceNumber(resource["maxQuantity"]),
     };
   };
 
@@ -237,8 +237,8 @@ export function createEvolutionReader(
       const races: RaceView[] = raceObjects(dependencies.getRaces).map((r) =>
         Object.freeze({
           id: r.id,
-          weighting: toNumber(r.getWeighting()),
-          habitability: toNumber(r.getHabitability()),
+          weighting: coerceNumber(r.getWeighting()),
+          habitability: coerceNumber(r.getHabitability()),
           genus: String(r.genus),
           name: String(r.name),
         }),
@@ -253,7 +253,11 @@ export function createEvolutionReader(
         queueEnabled: Boolean(settings["evolutionQueueEnabled"]),
         queueLength: Array.isArray(queue) ? queue.length : 0,
         queueRepeat: Boolean(settings["evolutionQueueRepeat"]),
-        evolutionAttempts: toNumber(state["evolutionAttempts"]),
+        // The script owns and increments this counter; nothing coerced is ever written to it.
+        evolutionAttempts: requireNumber(
+          state["evolutionAttempts"],
+          "state.evolutionAttempts",
+        ),
       });
     },
 
@@ -332,7 +336,7 @@ export function createEvolutionReader(
         if (action === undefined) {
           throw new TypeError(`evolutions.${id} is missing`);
         }
-        return toNumber(action.count);
+        return coerceNumber(action.count);
       };
       return Object.freeze({
         mitochondriaCount: countOf("mitochondria"),

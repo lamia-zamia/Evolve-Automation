@@ -8,7 +8,10 @@ import {
   planImitation,
   planResourceAccumulation,
 } from "../src/domain/progression/evolution/evolution.ts";
-import { selectUsableHybridBranch } from "../src/adapters/evolve/progression/evolution/evolution.ts";
+import {
+  createEvolutionReader,
+  selectUsableHybridBranch,
+} from "../src/adapters/evolve/progression/evolution/evolution.ts";
 
 const CHALLENGES = [
   [
@@ -174,6 +177,83 @@ assert.equal(
     ],
   }),
   null,
+);
+
+// --- Reader coercion contract --------------------------------------------------------------------
+
+function makeEvolutionReader(overrides = {}) {
+  return createEvolutionReader({
+    getGame: () => ({
+      global: { race: {}, stats: { achieve: {} } },
+    }),
+    getSettings: () => ({ userEvolutionTarget: "auto" }),
+    getSettingsRaw: () => ({ evolutionQueue: [] }),
+    getState: () => overrides.state ?? { evolutionAttempts: 3 },
+    getRaces: () =>
+      overrides.races ?? {
+        human: {
+          id: "human",
+          genus: "humanoid",
+          name: "Human",
+          getWeighting: () => 5,
+          getHabitability: () => 1,
+        },
+      },
+    getEvolutions: () =>
+      overrides.evolutions ?? {
+        mitochondria: { count: 1 },
+        eukaryotic_cell: { count: 2 },
+        nucleus: { count: 3 },
+        organelles: { count: 4 },
+      },
+    getResources: () => overrides.resources ?? { RNA: {}, DNA: {} },
+    getPoly: () => ({}),
+    challengeGroups: [],
+  });
+}
+
+// The script owns and increments the attempt counter, so a missing one is a defect.
+assert.equal(
+  makeEvolutionReader().sampleTargetSelection().evolutionAttempts,
+  3,
+);
+assert.throws(
+  () => makeEvolutionReader({ state: {} }).sampleTargetSelection(),
+  /state\.evolutionAttempts must be a finite number, got undefined/,
+);
+
+// Race weighting getters compute from the live game model, so they stay leniently coerced.
+const looseRace = makeEvolutionReader({
+  races: {
+    sludge: {
+      id: "sludge",
+      genus: "fungi",
+      name: "Sludge",
+      getWeighting: () => undefined,
+      getHabitability: () => "2",
+    },
+  },
+}).sampleTargetSelection();
+assert.ok(Number.isNaN(looseRace.races[0].weighting));
+assert.equal(looseRace.races[0].habitability, 2);
+
+// A resource wrapper that has not run its first update yet reads NaN rather than throwing.
+const cells = makeEvolutionReader().sampleCells();
+assert.ok(Number.isNaN(cells.rnaMax));
+assert.ok(Number.isNaN(cells.dnaMax));
+assert.equal(cells.nucleusCount, 3);
+assert.ok(
+  Number.isNaN(
+    makeEvolutionReader({
+      evolutions: {
+        mitochondria: {},
+        eukaryotic_cell: { count: 2 },
+        nucleus: { count: 3 },
+        organelles: { count: 4 },
+      },
+    }).sampleCells().mitochondriaCount,
+  ),
+  "an evolution action with no count yet coerces to NaN",
 );
 
 console.log("evolution planner unit checks passed");

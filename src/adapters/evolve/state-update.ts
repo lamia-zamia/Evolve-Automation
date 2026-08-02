@@ -4,12 +4,7 @@ import type {
   StateUpdateReader,
   StateUpdateRefreshSnapshot,
 } from "../../ports/state-update.ts";
-import { requireRecord } from "../validation.ts";
-
-/** Legacy read these game fields directly; coerce leniently so absent/odd values behave as they did. */
-function toNumber(value: unknown): number {
-  return Number(value);
-}
+import { coerceNumber, requireRecord } from "../validation.ts";
 
 export interface StateUpdateReaderDependencies {
   readonly getGame: () => unknown;
@@ -55,9 +50,11 @@ export function createStateUpdateReader(
       const resources = requireRecord(dependencies.getResources(), "resources");
       const money = requireRecord(resources["Money"], "resources.Money");
 
+      // The script owns this window, but computeMoneyWindow refills it from the coerced money rate
+      // below, so a sample can legitimately be the NaN that an absent `rateOfChange` produced.
       const rawIncomes = state["moneyIncomes"];
       const moneyIncomes = Array.isArray(rawIncomes)
-        ? rawIncomes.map(toNumber)
+        ? rawIncomes.map(coerceNumber)
         : [];
 
       // Legacy guarded pillars with hasOwnProperty and iterated only when present.
@@ -69,7 +66,7 @@ export function createStateUpdateReader(
         );
         pillars = {};
         for (const key in rawPillars) {
-          pillars[key] = toNumber(rawPillars[key]);
+          pillars[key] = coerceNumber(rawPillars[key]);
         }
       }
 
@@ -87,10 +84,11 @@ export function createStateUpdateReader(
 
       return {
         moneyIncomes,
-        moneyRate: toNumber(money["rateOfChange"]),
+        moneyRate: coerceNumber(money["rateOfChange"]),
         pillars,
-        currentExotic: toNumber(exotic ?? 0),
-        lastExoticMass: toNumber(state["whiteholeLastExoticMass"]),
+        currentExotic: coerceNumber(exotic ?? 0),
+        // Written back from `currentExotic` each refresh, so it carries that coercion forward.
+        lastExoticMass: coerceNumber(state["whiteholeLastExoticMass"]),
       };
     },
   });

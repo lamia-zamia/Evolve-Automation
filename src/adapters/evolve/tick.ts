@@ -4,12 +4,7 @@ import type {
   TickPreambleSnapshot,
   TickReader,
 } from "../../ports/tick.ts";
-import { requireRecord } from "../validation.ts";
-
-/** Legacy read these settings/state/game fields directly; coerce the same way it did. */
-function toNumber(value: unknown): number {
-  return Number(value);
-}
+import { coerceNumber, requireNumber, requireRecord } from "../validation.ts";
 
 export interface TickReaderDependencies {
   readonly getSettings: () => unknown;
@@ -35,8 +30,9 @@ export function createTickReader(
         goal: typeof goal === "string" ? goal : "",
         forcedUpdate: Boolean(state["forcedUpdate"]),
         gameTicked: Boolean(state["gameTicked"]),
-        scriptTick: toNumber(state["scriptTick"]),
-        tickRate: toNumber(settings["tickRate"]),
+        // The script owns and initializes its own tick counter; combat/hell.ts requires it too.
+        scriptTick: requireNumber(state["scriptTick"], "state.scriptTick"),
+        tickRate: coerceNumber(settings["tickRate"]),
         accelerated: Boolean(gameSettings["at"]),
       };
     },
@@ -90,9 +86,9 @@ export function createTickReader(
         autoPower: flag("autoPower"),
         autoMutateTraits: flag("autoMutateTraits"),
         stateLogEnabled: flag("stateLogEnabled"),
-        stateLogInterval: toNumber(settings["stateLogInterval"]),
-        // Legacy defaulted an absent counter to 0 (`state.stateLogTick ?? 0`).
-        stateLogTick: stateLogTick == null ? 0 : toNumber(stateLogTick),
+        stateLogInterval: coerceNumber(settings["stateLogInterval"]),
+        // `stateLogTick` is written only once the first log runs, so an absent counter is 0.
+        stateLogTick: stateLogTick == null ? 0 : coerceNumber(stateLogTick),
       };
     },
   });

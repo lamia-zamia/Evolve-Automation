@@ -4,6 +4,7 @@ import {
   callBoolean,
   callNumber,
   callVoid,
+  coerceNumber,
   isFiniteNumber,
   isNonArrayRecord,
   isNonNegativeNumber,
@@ -243,5 +244,21 @@ for (const rejected of [
     /^Manager\.maxOperating\(\) must be a non-negative safe integer, got /,
   );
 }
+
+// The lenient counterpart never throws: an unreadable field answers NaN and poisons its comparison.
+assert.equal(coerceNumber(7), 7);
+assert.equal(coerceNumber("3"), 3);
+assert.equal(coerceNumber(""), 0);
+assert.equal(coerceNumber(null), 0);
+assert.equal(coerceNumber(true), 1);
+for (const absent of [undefined, "x", {}, Number.NaN]) {
+  assert.ok(
+    Number.isNaN(coerceNumber(absent)),
+    `coerceNumber(${String(absent)}) should be NaN`,
+  );
+}
+// Both directions of a comparison fail, which is what makes a NaN hold an action back.
+assert.equal(coerceNumber(undefined) > 0, false);
+assert.equal(coerceNumber(undefined) <= 0, false);
 
 console.log("Adapter validation reporting tests passed");

@@ -67,7 +67,7 @@ assert.equal(preamble.accelerated, false);
 
 // Lenient coercions: non-string goal -> "", truthy accelerated flag, boolean gating fields.
 const odd = makeReader({
-  state: { goal: 7, scriptTick: "9", gameTicked: 1, forcedUpdate: 0 },
+  state: { goal: 7, scriptTick: 9, gameTicked: 1, forcedUpdate: 0 },
   game: { global: { race: {}, settings: { at: "yes" } } },
 }).samplePreamble();
 assert.equal(odd.goal, "");
@@ -75,6 +75,29 @@ assert.equal(odd.scriptTick, 9);
 assert.equal(odd.gameTicked, true);
 assert.equal(odd.forcedUpdate, false);
 assert.equal(odd.accelerated, true);
+
+// The script owns its tick counter and initializes it, so a non-number is a defect, not a value.
+assert.throws(
+  () => makeReader({ state: { goal: "Standard" } }).samplePreamble(),
+  /state\.scriptTick must be a finite number, got undefined/,
+);
+assert.throws(
+  () =>
+    makeReader({
+      state: { goal: "Standard", scriptTick: "9" },
+    }).samplePreamble(),
+  /state\.scriptTick must be a finite number, got string "9"/,
+);
+
+// Settings restored from storage or an imported file stay lenient: a numeric string still reads.
+assert.equal(
+  makeReader({ settings: { tickRate: "2" } }).samplePreamble().tickRate,
+  2,
+);
+assert.ok(
+  Number.isNaN(makeReader({ settings: {} }).samplePreamble().tickRate),
+  "an absent tickRate coerces to NaN instead of throwing",
+);
 
 const automation = makeReader({
   settings: {
