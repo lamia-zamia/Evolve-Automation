@@ -4,16 +4,11 @@ import {
   type ResearchSettingsTechnologyCatalog,
 } from "../../domain/progression/research/research-settings.ts";
 import type { ResearchSettingsIntentHandler } from "../../ports/research-settings.ts";
-
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
-
-interface JQueryNode {
-  empty(): JQueryNode;
-  off(events: string): JQueryNode;
-}
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode as JQueryNode,
+} from "./settings-section.ts";
 
 type JQuery = (selector: string) => JQueryNode;
 type Action = () => void;
@@ -101,18 +96,18 @@ export function createResearchSettingsBrowserAdapter({
   function updateResearchSettingsContent(): void {
     const readModel = getReadModel();
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
-    const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-    currentNode.empty().off("*");
-
-    for (const control of readModel.controls) {
-      renderControl(currentNode, control, actions);
-    }
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: readModel.sectionId,
+      },
+      (currentNode) => {
+        for (const control of readModel.controls) {
+          renderControl(currentNode, control, actions);
+        }
+      },
+    );
   }
 
   return Object.freeze({

@@ -18043,14 +18043,18 @@
     }
     function updateInterfaceSettingsContent() {
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
-      for (const control of readModel.controls) {
-        renderControl2(currentNode, control, actions);
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (const control of readModel.controls) {
+            renderControl2(currentNode, control, actions);
+          }
+        }
+      );
     }
     return Object.freeze({
       buildInterfaceSettings,
@@ -18616,14 +18620,18 @@
     }
     function updateGeneralSettingsContent() {
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
-      for (const control of readModel.controls) {
-        renderControl2(currentNode, control, actions);
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (const control of readModel.controls) {
+            renderControl2(currentNode, control, actions);
+          }
+        }
+      );
     }
     return Object.freeze({
       buildGeneralSettings,
@@ -18772,14 +18780,18 @@
     function updateResearchSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
-      for (const control of readModel.controls) {
-        renderControl2(currentNode, control, actions);
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (const control of readModel.controls) {
+            renderControl2(currentNode, control, actions);
+          }
+        }
+      );
     }
     return Object.freeze({
       buildResearchSettings,
@@ -19670,10 +19682,18 @@
     function updateStorageSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document = getDocument();
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-      currentNode.empty().off("*");
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderStorageContent(currentNode, readModel, actions);
+        }
+      );
+    }
+    function renderStorageContent(currentNode, readModel, actions) {
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
@@ -19717,7 +19737,6 @@
           intents.handle({ type: "reorder-storage-resources", resourceIds });
         }
       });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       actions.addSettingsToggle(

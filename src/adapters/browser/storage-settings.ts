@@ -3,11 +3,11 @@ import {
   type StorageSettingsReadModel,
 } from "../../domain/economy/storage/storage-settings.ts";
 import type { StorageSettingsIntentHandler } from "../../ports/storage-settings.ts";
-
-interface ScrollDocument {
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-}
+import {
+  renderSettingsSectionContent,
+  type ScrollDocument,
+  type SettingsContentNode,
+} from "./settings-section.ts";
 
 interface SortableOptions {
   readonly items: string;
@@ -15,7 +15,7 @@ interface SortableOptions {
   readonly update: () => void;
 }
 
-interface JQueryNode {
+interface JQueryNode extends SettingsContentNode {
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -83,12 +83,23 @@ export function createStorageSettingsBrowserAdapter({
   function updateStorageSettingsContent(): void {
     const readModel = getReadModel();
     const actions = getActions();
-    const document = getDocument();
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
-    const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
-    currentNode.empty().off("*");
+    renderSettingsSectionContent(
+      {
+        scrollDocument: getDocument(),
+        jquery: getJQuery(),
+        sectionId: readModel.sectionId,
+      },
+      (currentNode) => {
+        renderStorageContent(currentNode, readModel, actions);
+      },
+    );
+  }
 
+  function renderStorageContent(
+    currentNode: JQueryNode,
+    readModel: StorageSettingsReadModel,
+    actions: StorageSettingsBrowserActions,
+  ): void {
     for (const control of readModel.controls) {
       renderControl(currentNode, control, actions);
     }
@@ -140,9 +151,6 @@ export function createStorageSettingsBrowserAdapter({
         intents.handle({ type: "reorder-storage-resources", resourceIds });
       },
     });
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
   }
 
   function renderControl(
