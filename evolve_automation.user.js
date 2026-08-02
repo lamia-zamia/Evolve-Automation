@@ -8127,18 +8127,15 @@
         if (this.incomeAdusted) {
           return workersCount;
         }
-        let newWorkers = 0;
         if (workersCount > 0) {
           let totalIncome = this.getProduction(workersSource, locArg);
           let resPerWorker = totalIncome / workersCount;
-          let usedIncome = totalIncome - this.income;
-          if (usedIncome > 0) {
-            newWorkers = Math.ceil(usedIncome / resPerWorker);
+          if (resPerWorker > 0) {
+            let usedIncome = totalIncome - this.income;
+            return usedIncome > 0 ? Math.ceil(usedIncome / resPerWorker) : 0;
           }
-        } else if (this.income < 0) {
-          newWorkers = 1;
         }
-        return newWorkers;
+        return this.income < 0 ? 1 : 0;
       }
       isCraftable() {
         return Object.hasOwn(readGame().craftCost, this.id);

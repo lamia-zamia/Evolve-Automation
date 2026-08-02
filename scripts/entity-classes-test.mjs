@@ -267,4 +267,27 @@ assert.equal(hardy.canPurge(), true);
 context.game.global.race.ss_traits = ["hardy"];
 assert.equal(hardy.canPurge(), false);
 
+// Busy-worker accounting for a draining resource. Regression: when the production
+// breakdown listed nothing for the worker source, the per-worker rate was zero and the
+// count came back Infinity, which the jobs adapter rejects as a non-finite number.
+context.state = { globalProductionModifier: 1 };
+context.poly = { loc: (source) => source };
+context.game = { global: {}, breakdown: { p: { Aluminium: {} } } };
+
+const aluminium = new classes.Resource("Aluminium", "Aluminium");
+aluminium.calculateRateOfChange = () => -5;
+assert.equal(aluminium.getBusyWorkers("job_miner", 4), 1);
+assert.equal(aluminium.getBusyWorkers("job_miner", 0), 1);
+
+// A source that does produce reports the workers covering production plus the deficit:
+// four workers at 2/s each, 8 produced and 5 consumed beyond that, so ceil(13 / 2).
+context.game.breakdown.p.Aluminium = { job_miner: "8" };
+assert.equal(aluminium.getBusyWorkers("job_miner", 4), 7);
+
+// Nothing is busy while the resource is accumulating, with or without a breakdown entry.
+aluminium.calculateRateOfChange = () => 8;
+assert.equal(aluminium.getBusyWorkers("job_miner", 4), 0);
+context.game.breakdown.p.Aluminium = {};
+assert.equal(aluminium.getBusyWorkers("job_miner", 4), 0);
+
 console.log("Entity classes module tests passed");

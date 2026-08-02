@@ -658,19 +658,20 @@ export function createEntityClasses({
         return workersCount;
       }
 
-      let newWorkers = 0;
       if (workersCount > 0) {
         let totalIncome = this.getProduction(workersSource, locArg);
         let resPerWorker = totalIncome / workersCount;
-        let usedIncome = totalIncome - this.income;
-        if (usedIncome > 0) {
-          newWorkers = Math.ceil(usedIncome / resPerWorker);
+        if (resPerWorker > 0) {
+          let usedIncome = totalIncome - this.income;
+          return usedIncome > 0 ? Math.ceil(usedIncome / resPerWorker) : 0;
         }
-      } else if (this.income < 0) {
-        newWorkers = 1;
       }
 
-      return newWorkers;
+      // Either there are no workers yet, or the breakdown reports no production from this
+      // source, so the consumption cannot be attributed to a per-worker rate. Keeping one
+      // worker while the resource drains is the same probe either way; dividing by the zero
+      // rate instead returned Infinity and the jobs adapter rejected it as non-finite.
+      return this.income < 0 ? 1 : 0;
     }
 
     isCraftable() {
