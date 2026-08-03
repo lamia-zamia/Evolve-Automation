@@ -2,6 +2,7 @@
 // JavaScript classes. Keep the untyped surface contained here until the game adapter slice
 // replaces these compatibility classes with validated snapshots and commands.
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
+import type { GameJobControlsPort } from "../ports/game-job-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
 import type { GameProjectControlsPort } from "../ports/game-project-controls.ts";
 import type { GameResearchControlsPort } from "../ports/game-research-controls.ts";
@@ -50,6 +51,7 @@ interface EntityClassesDependencies {
   readTriggerManager: () => LooseRecord;
   readWarManager: () => LooseRecord;
   readFeatureVisibility: () => GameFeatureVisibilityPort;
+  readJobControls: () => GameJobControlsPort;
   readGameModal: () => GameModalPort;
   readProjectControls: () => GameProjectControlsPort;
   readResearchControls: () => GameResearchControlsPort;
@@ -95,6 +97,7 @@ export function createEntityClasses({
   readTriggerManager,
   readWarManager,
   readFeatureVisibility,
+  readJobControls,
   readGameModal,
   readProjectControls,
   readResearchControls,
@@ -201,40 +204,32 @@ export function createEntityClasses({
         : Math.min(breakpointActual, this.max);
     }
 
-    addWorkers(count: Loose) {
+    addWorkers(count: Loose): boolean {
       if (this.isDefault()) {
         return false;
       }
       if (count < 0) {
-        this.removeWorkers(-1 * count);
+        return this.removeWorkers(-1 * count);
       }
 
-      let vue = getVueById(this._workerBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      for (let m of readKeyManager().click(count)) {
-        vue.add();
-      }
+      return readJobControls().assign({
+        elementId: this._workerBinding,
+        count,
+      });
     }
 
-    removeWorkers(count: Loose) {
+    removeWorkers(count: Loose): boolean {
       if (this.isDefault()) {
         return false;
       }
       if (count < 0) {
-        this.addWorkers(-1 * count);
+        return this.addWorkers(-1 * count);
       }
 
-      let vue = getVueById(this._workerBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      for (let m of readKeyManager().click(count)) {
-        vue.sub();
-      }
+      return readJobControls().unassign({
+        elementId: this._workerBinding,
+        count,
+      });
     }
 
     isDefault() {
@@ -257,42 +252,37 @@ export function createEntityClasses({
       return Number.MAX_SAFE_INTEGER;
     }
 
-    addServants(count: Loose) {
+    addServants(count: Loose): boolean {
       if (count < 0) {
-        this.removeServants(-1 * count);
+        return this.removeServants(-1 * count);
       }
 
-      let vue = getVueById(this._servantBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      for (let m of readKeyManager().click(count)) {
-        vue.add();
-      }
+      return readJobControls().assign({
+        elementId: this._servantBinding,
+        count,
+      });
     }
 
-    removeServants(count: Loose) {
+    removeServants(count: Loose): boolean {
       if (count < 0) {
-        this.addServants(-1 * count);
+        return this.addServants(-1 * count);
       }
 
-      let vue = getVueById(this._servantBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      for (let m of readKeyManager().click(count)) {
-        vue.sub();
-      }
+      return readJobControls().unassign({
+        elementId: this._servantBinding,
+        count,
+      });
     }
 
     isDefault() {
       return readGame().global.civic.d_job === this.id;
     }
 
-    setAsDefault() {
-      getVueById(this._workerBinding)?.setDefault(this.id);
+    setAsDefault(): boolean {
+      return readJobControls().setDefault({
+        elementId: this._workerBinding,
+        jobId: this.id,
+      });
     }
   }
 
@@ -329,70 +319,58 @@ export function createEntityClasses({
       return readGame().global.civic.craftsman.max;
     }
 
-    addWorkers(count: Loose) {
+    addWorkers(count: Loose): boolean {
       if (!this.isUnlocked()) {
         return false;
       }
       if (count < 0) {
-        this.removeWorkers(-1 * count);
+        return this.removeWorkers(-1 * count);
       }
 
-      let vue = getVueById(this._crafterBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      for (let m of readKeyManager().click(count)) {
-        vue.add(this._originalId);
-      }
+      return readJobControls().assign({
+        elementId: this._crafterBinding,
+        count,
+        craftedResourceId: this._originalId,
+      });
     }
 
-    removeWorkers(count: Loose) {
+    removeWorkers(count: Loose): boolean {
       if (!this.isUnlocked()) {
         return false;
       }
       if (count < 0) {
-        this.addWorkers(-1 * count);
+        return this.addWorkers(-1 * count);
       }
 
-      let vue = getVueById(this._crafterBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      for (let m of readKeyManager().click(count)) {
-        vue.sub(this._originalId);
-      }
+      return readJobControls().unassign({
+        elementId: this._crafterBinding,
+        count,
+        craftedResourceId: this._originalId,
+      });
     }
 
-    addServants(count: Loose) {
+    addServants(count: Loose): boolean {
       if (count < 0) {
-        this.removeServants(-1 * count);
+        return this.removeServants(-1 * count);
       }
 
-      let vue = getVueById(this._servantBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      for (let m of readKeyManager().click(count)) {
-        vue.add(this._originalId);
-      }
+      return readJobControls().assign({
+        elementId: this._servantBinding,
+        count,
+        craftedResourceId: this._originalId,
+      });
     }
 
-    removeServants(count: Loose) {
+    removeServants(count: Loose): boolean {
       if (count < 0) {
-        this.addServants(-1 * count);
+        return this.addServants(-1 * count);
       }
 
-      let vue = getVueById(this._servantBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      for (let m of readKeyManager().click(count)) {
-        vue.sub(this._originalId);
-      }
+      return readJobControls().unassign({
+        elementId: this._servantBinding,
+        count,
+        craftedResourceId: this._originalId,
+      });
     }
   }
 

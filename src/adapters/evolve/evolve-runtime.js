@@ -58,6 +58,7 @@ import { createOverrideEvaluationSource } from "./override-evaluation.ts";
 import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
+import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
 import { createGameResearchControls } from "../browser/game-research-controls.ts";
@@ -2556,6 +2557,10 @@ function startEvolveRuntimeComposition(
     getDocument: () => runtimeEnvironment.document,
     getVueById: (id) => getVueById(id),
   });
+  const jobControls = createGameJobControls({
+    getVueById: (id) => getVueById(id),
+    clickSteps: (count) => KeyManager.click(count),
+  });
 
   // Class definitions
   const {
@@ -2631,6 +2636,7 @@ function startEvolveRuntimeComposition(
     readTriggerManager: () => TriggerManager,
     readWarManager: () => WarManager,
     readFeatureVisibility: () => featureVisibility,
+    readJobControls: () => jobControls,
     readGameModal: () => gameModal,
     readProjectControls: () => projectControls,
     readResearchControls: () => researchControls,

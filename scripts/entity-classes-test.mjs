@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameJobControls } from "../src/adapters/browser/game-job-controls.ts";
 import { createGameResearchControls } from "../src/adapters/browser/game-research-controls.ts";
 import { createEntityClasses } from "../src/game/entities.ts";
 
@@ -42,6 +43,7 @@ const dependencyNames = [
   "TriggerManager",
   "WarManager",
   "featureVisibility",
+  "jobControls",
   "gameModal",
   "projectControls",
   "researchControls",
@@ -112,6 +114,7 @@ const classes = createEntityClasses({
   readTriggerManager: () => context.TriggerManager,
   readWarManager: () => context.WarManager,
   readFeatureVisibility: () => context.featureVisibility,
+  readJobControls: () => context.jobControls,
   readGameModal: () => context.gameModal,
   readProjectControls: () => context.projectControls,
   readResearchControls: () => context.researchControls,
@@ -229,6 +232,108 @@ context.game = {
   },
 };
 assert.equal(job.name, "Live Farmer");
+
+// Job assignment goes through the job controls port, over the real adapter.
+const jobCalls = [];
+const jobSteps = [];
+const jobViews = {};
+for (const elementId of [
+  "civ-farmer",
+  "servant-farmer",
+  "foundry",
+  "skilledServants",
+]) {
+  jobViews[elementId] = {
+    add: (...args) => jobCalls.push({ elementId, method: "add", args }),
+    sub: (...args) => jobCalls.push({ elementId, method: "sub", args }),
+    setDefault: (...args) =>
+      jobCalls.push({ elementId, method: "setDefault", args }),
+  };
+}
+context.jobControls = createGameJobControls({
+  getVueById: (elementId) => jobViews[elementId],
+  clickSteps: (count) => {
+    jobSteps.push(count);
+    return count > 0 ? [count] : [];
+  },
+});
+context.game.global.civic.craftsman = { max: 10 };
+context.game.global.race = {};
+context.game.global.resource = { Iron: { display: true } };
+
+assert.equal(job.addWorkers(2), true);
+assert.equal(job.removeWorkers(3), true);
+assert.deepEqual(jobCalls, [
+  { elementId: "civ-farmer", method: "add", args: [] },
+  { elementId: "civ-farmer", method: "sub", args: [] },
+]);
+assert.deepEqual(jobSteps, [2, 3]);
+
+// A negative count is the opposite request, and does not also reach its own
+// control with a count that would move nobody.
+jobCalls.length = 0;
+jobSteps.length = 0;
+assert.equal(job.addWorkers(-4), true);
+assert.deepEqual(jobCalls, [
+  { elementId: "civ-farmer", method: "sub", args: [] },
+]);
+assert.deepEqual(jobSteps, [4]);
+
+// A basic job has its own servant control, and is made default through the
+// worker control. The game refuses to staff the default job by hand.
+jobCalls.length = 0;
+const farmer = new classes.BasicJob("farmer", "fallback", { basic: true });
+assert.equal(farmer.addServants(1), true);
+assert.equal(farmer.setAsDefault(), true);
+assert.deepEqual(jobCalls, [
+  { elementId: "servant-farmer", method: "add", args: [] },
+  { elementId: "civ-farmer", method: "setDefault", args: ["farmer"] },
+]);
+
+jobCalls.length = 0;
+context.game.global.civic.d_job = "farmer";
+assert.equal(farmer.addWorkers(1), false);
+assert.equal(farmer.removeWorkers(1), false);
+assert.deepEqual(jobCalls, []);
+delete context.game.global.civic.d_job;
+
+// Crafting jobs share one control per kind, so the crafted resource travels
+// with the request.
+const craftsman = new classes.CraftingJob("Iron", "Iron", { id: "Iron" });
+assert.equal(craftsman.addWorkers(1), true);
+assert.equal(craftsman.removeWorkers(1), true);
+assert.equal(craftsman.addServants(1), true);
+assert.equal(craftsman.removeServants(1), true);
+assert.deepEqual(jobCalls, [
+  { elementId: "foundry", method: "add", args: ["Iron"] },
+  { elementId: "foundry", method: "sub", args: ["Iron"] },
+  { elementId: "skilledServants", method: "add", args: ["Iron"] },
+  { elementId: "skilledServants", method: "sub", args: ["Iron"] },
+]);
+
+// A crafted resource the game is not showing has no control to reach.
+jobCalls.length = 0;
+context.game.global.resource.Iron.display = false;
+assert.equal(craftsman.addWorkers(1), false);
+assert.equal(craftsman.removeWorkers(1), false);
+assert.deepEqual(jobCalls, []);
+context.game.global.resource.Iron.display = true;
+
+// An unmounted control reports the refusal rather than throwing.
+jobCalls.length = 0;
+delete jobViews["civ-farmer"];
+assert.equal(job.addWorkers(1), false);
+assert.equal(farmer.setAsDefault(), false);
+assert.deepEqual(jobCalls, []);
+
+context.game = {
+  global: {
+    civic: {
+      farmer: { job: "farmer", name: "Live Farmer", display: true },
+    },
+    resource: { Iron: {} },
+  },
+};
 
 const resource = new classes.Resource("Iron", "Iron", { tradable: true });
 assert.equal(resource.autoCraftEnabled, true);
