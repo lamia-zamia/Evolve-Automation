@@ -60,6 +60,7 @@ import { createOverrideEffectiveValueDisplay } from "../browser/override-display
 import { createGameActionControls } from "../browser/game-action-controls.ts";
 import { createGameCraftingControls } from "../browser/game-crafting-controls.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
+import { createGameIndustryControls } from "../browser/game-industry-controls.ts";
 import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
@@ -2572,6 +2573,10 @@ function startEvolveRuntimeComposition(
     getVueById: (id) => getVueById(id),
     clearClickMultipliers: () => KeyManager.set(false, false, false),
   });
+  const industryControls = createGameIndustryControls({
+    getVueById: (id) => getVueById(id),
+    clickSteps: (count) => KeyManager.click(count),
+  });
 
   // Class definitions
   const {
@@ -3102,8 +3107,7 @@ function startEvolveRuntimeComposition(
     createIndustryManagers({
       getGame: () => game,
       getBuildings: () => buildings,
-      getVueById: (id) => getVueById(id),
-      getKeyManager: () => KeyManager,
+      industryControls,
       haveTech,
     });
 
