@@ -59,6 +59,7 @@ import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
 import { createGameModal } from "../browser/game-modal.ts";
+import { createGameProjectControls } from "../browser/game-project-controls.ts";
 import { createGameResearchControls } from "../browser/game-research-controls.ts";
 import { createQueuedSettings } from "../../settings/queued-settings.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
@@ -2547,6 +2548,10 @@ function startEvolveRuntimeComposition(
       .toLowerCase()
       .indexOf("safemode") !== -1;
 
+  const projectControls = createGameProjectControls({
+    getVueById: (id) => getVueById(id),
+    getMainVue: () => getMainVue(),
+  });
   const researchControls = createGameResearchControls({
     getDocument: () => runtimeEnvironment.document,
     getVueById: (id) => getVueById(id),
@@ -2608,7 +2613,6 @@ function startEvolveRuntimeComposition(
     readKeyManager: () => KeyManager,
     readLogIgnore: () => logIgnore,
     readLogPrestige: () => logPrestige,
-    readMainVue: () => getMainVue(),
     readMutableTraitManager: () => MutableTraitManager,
     readMutationCostMultipliers: () => mutationCostMultipliers,
     readMutationCostMultipliersGenus: () => mutationCostMultipliersGenus,
@@ -2628,6 +2632,7 @@ function startEvolveRuntimeComposition(
     readWarManager: () => WarManager,
     readFeatureVisibility: () => featureVisibility,
     readGameModal: () => gameModal,
+    readProjectControls: () => projectControls,
     readResearchControls: () => researchControls,
   });
 

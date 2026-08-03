@@ -2448,6 +2448,52 @@
     });
   }
 
+  // src/adapters/browser/game-project-controls.ts
+  function createGameProjectControls({
+    getVueById,
+    getMainVue
+  }) {
+    function readTabPreferences() {
+      const mainView = getMainVue();
+      if (!isRecord(mainView)) {
+        return void 0;
+      }
+      const preferences = mainView["s"];
+      return isRecord(preferences) ? preferences : void 0;
+    }
+    return Object.freeze({
+      build({
+        elementId,
+        projectId,
+        steps,
+        skipTabRedraw
+      }) {
+        const view = getVueById(elementId);
+        if (!isRecord(view) || typeof view["build"] !== "function") {
+          return false;
+        }
+        const buildProject = requireFunction(
+          view["build"],
+          `${elementId} Vue view.build`
+        );
+        const purchase = () => Reflect.apply(buildProject, view, [projectId, steps]);
+        const preferences = skipTabRedraw ? readTabPreferences() : void 0;
+        if (preferences === void 0) {
+          purchase();
+          return true;
+        }
+        const restore = preferences["tabLoad"];
+        try {
+          preferences["tabLoad"] = false;
+          purchase();
+        } finally {
+          preferences["tabLoad"] = restore;
+        }
+        return true;
+      }
+    });
+  }
+
   // src/adapters/browser/game-research-controls.ts
   function buyControl(elementId) {
     return `#${elementId} > .button:not(.precog)`;
@@ -7725,7 +7771,6 @@
     readKeyManager,
     readLogIgnore,
     readLogPrestige,
-    readMainVue,
     readMutableTraitManager,
     readMutationCostMultipliers,
     readMutationCostMultipliersGenus,
@@ -7745,6 +7790,7 @@
     readWarManager,
     readFeatureVisibility,
     readGameModal,
+    readProjectControls,
     readResearchControls
   }) {
     const $ = (...args) => readJQuery()(...args);
@@ -8899,14 +8945,26 @@
         if (!this.isClickable()) {
           return false;
         }
+        let rank = this.count;
+        let reachedPercent = this.progress + this.currentStep;
+        readKeyManager().set(false, false, false);
+        let skipTabRedraw = readSettings3().performanceHackAvoidDrawTech && rank >= 10 && !(this.id === "syphon" && rank >= 79);
+        if (!readProjectControls().build({
+          elementId: this._vueBinding,
+          projectId: this.id,
+          steps: this.currentStep,
+          skipTabRedraw
+        })) {
+          return false;
+        }
         for (let res in this.cost) {
           readResources2()[res].currentQuantity -= this.cost[res];
         }
-        if (this.progress + this.currentStep < 100) {
+        if (reachedPercent < 100) {
           readGameLog().logSuccess(
             "arpa",
             readPoly().loc("build_success", [
-              `${this.title} (${this.progress + this.currentStep}%)`
+              `${this.title} (${reachedPercent}%)`
             ]),
             ["queue", "building_queue"]
           );
@@ -8916,27 +8974,10 @@
             readPoly().loc("build_success", [this.title]),
             ["queue", "building_queue"]
           );
-          if (this.id === "syphon" && this.count == 79) {
+          if (this.id === "syphon" && rank == 79) {
             logPrestige();
           }
         }
-        readKeyManager().set(false, false, false);
-        if (readSettings3().performanceHackAvoidDrawTech && this.count >= 10 && !(this.id === "syphon" && this.count >= 79)) {
-          let mainVue = readMainVue();
-          if (mainVue) {
-            let oldTabLoad = mainVue.s.tabLoad;
-            try {
-              mainVue.s.tabLoad = false;
-              getVueById(this._vueBinding).build(this.id, this.currentStep);
-            } finally {
-              mainVue.s.tabLoad = oldTabLoad;
-            }
-          } else {
-            getVueById(this._vueBinding).build(this.id, this.currentStep);
-          }
-          return true;
-        }
-        getVueById(this._vueBinding).build(this.id, this.currentStep);
         return true;
       }
     }
@@ -56785,6 +56826,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }
     var checkActions = false;
     let safeMode = String(runtimeEnvironment.window.location).toLowerCase().indexOf("safemode") !== -1;
+    const projectControls = createGameProjectControls({
+      getVueById: (id) => getVueById(id),
+      getMainVue: () => getMainVue()
+    });
     const researchControls = createGameResearchControls({
       getDocument: () => runtimeEnvironment.document,
       getVueById: (id) => getVueById(id)
@@ -56844,7 +56889,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readKeyManager: () => KeyManager,
       readLogIgnore: () => logIgnore,
       readLogPrestige: () => logPrestige,
-      readMainVue: () => getMainVue(),
       readMutableTraitManager: () => MutableTraitManager,
       readMutationCostMultipliers: () => mutationCostMultipliers,
       readMutationCostMultipliersGenus: () => mutationCostMultipliersGenus,
@@ -56864,6 +56908,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readWarManager: () => WarManager,
       readFeatureVisibility: () => featureVisibility,
       readGameModal: () => gameModal,
+      readProjectControls: () => projectControls,
       readResearchControls: () => researchControls
     });
     if (characterizationSurface)

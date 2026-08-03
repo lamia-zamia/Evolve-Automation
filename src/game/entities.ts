@@ -3,6 +3,7 @@
 // replaces these compatibility classes with validated snapshots and commands.
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
+import type { GameProjectControlsPort } from "../ports/game-project-controls.ts";
 import type { GameResearchControlsPort } from "../ports/game-research-controls.ts";
 
 type Loose = any;
@@ -31,7 +32,6 @@ interface EntityClassesDependencies {
   readKeyManager: () => LooseRecord;
   readLogIgnore: () => Loose[];
   readLogPrestige: () => LooseFunction;
-  readMainVue: () => Loose;
   readMutableTraitManager: () => LooseRecord;
   readMutationCostMultipliers: () => LooseRecord;
   readMutationCostMultipliersGenus: () => LooseRecord;
@@ -51,6 +51,7 @@ interface EntityClassesDependencies {
   readWarManager: () => LooseRecord;
   readFeatureVisibility: () => GameFeatureVisibilityPort;
   readGameModal: () => GameModalPort;
+  readProjectControls: () => GameProjectControlsPort;
   readResearchControls: () => GameResearchControlsPort;
 }
 
@@ -76,7 +77,6 @@ export function createEntityClasses({
   readKeyManager,
   readLogIgnore,
   readLogPrestige,
-  readMainVue,
   readMutableTraitManager,
   readMutationCostMultipliers,
   readMutationCostMultipliersGenus,
@@ -96,6 +96,7 @@ export function createEntityClasses({
   readWarManager,
   readFeatureVisibility,
   readGameModal,
+  readProjectControls,
   readResearchControls,
 }: EntityClassesDependencies) {
   const $: LooseFunction = (...args) => readJQuery()(...args);
@@ -1759,15 +1760,41 @@ export function createEntityClasses({
         return false;
       }
 
+      // The purchase advances both of these, so they are read once, before it.
+      let rank = this.count;
+      let reachedPercent = this.progress + this.currentStep;
+
+      readKeyManager().set(false, false, false);
+
+      // This is a really bad lag hack. ARPAs make a very expensive drawTech() call on every build.
+      // After 10 ARPAs, this will never actually accomplish anything; AFAIK nothing needs more than 10 ARPAs.
+      // Luckily, drawTech() doesn't draw anything if preload tab content is off and we're not on research.
+      // So if we can, we briefly hack that off while buying an ARPA that won't change anything.
+      let skipTabRedraw =
+        readSettings().performanceHackAvoidDrawTech &&
+        rank >= 10 &&
+        !(this.id === "syphon" && rank >= 79);
+
+      if (
+        !readProjectControls().build({
+          elementId: this._vueBinding,
+          projectId: this.id,
+          steps: this.currentStep,
+          skipTabRedraw,
+        })
+      ) {
+        return false;
+      }
+
       for (let res in this.cost) {
         readResources()[res].currentQuantity -= this.cost[res];
       }
 
-      if (this.progress + this.currentStep < 100) {
+      if (reachedPercent < 100) {
         readGameLog().logSuccess(
           "arpa",
           readPoly().loc("build_success", [
-            `${this.title} (${this.progress + this.currentStep}%)`,
+            `${this.title} (${reachedPercent}%)`,
           ]),
           ["queue", "building_queue"],
         );
@@ -1777,37 +1804,11 @@ export function createEntityClasses({
           readPoly().loc("build_success", [this.title]),
           ["queue", "building_queue"],
         );
-        if (this.id === "syphon" && this.count == 79) {
+        if (this.id === "syphon" && rank == 79) {
           logPrestige();
         }
       }
 
-      readKeyManager().set(false, false, false);
-      // This is a really bad lag hack. ARPAs make a very expensive drawTech() call on every build.
-      // After 10 ARPAs, this will never actually accomplish anything; AFAIK nothing needs more than 10 ARPAs.
-      // Luckily, drawTech() doesn't draw anything if preload tab content is off and we're not on research.
-      // So if we can, we briefly hack that off while buying an ARPA that won't change anything.
-      if (
-        readSettings().performanceHackAvoidDrawTech &&
-        this.count >= 10 &&
-        !(this.id === "syphon" && this.count >= 79)
-      ) {
-        let mainVue = readMainVue();
-        if (mainVue) {
-          let oldTabLoad = mainVue.s.tabLoad;
-          try {
-            mainVue.s.tabLoad = false;
-            getVueById(this._vueBinding).build(this.id, this.currentStep);
-          } finally {
-            mainVue.s.tabLoad = oldTabLoad;
-          }
-        } else {
-          getVueById(this._vueBinding).build(this.id, this.currentStep);
-        }
-
-        return true;
-      }
-      getVueById(this._vueBinding).build(this.id, this.currentStep);
       return true;
     }
   }

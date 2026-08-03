@@ -24,7 +24,6 @@ const dependencyNames = [
   "KeyManager",
   "logIgnore",
   "logPrestige",
-  "mainVue",
   "MutableTraitManager",
   "mutationCostMultipliers",
   "mutationCostMultipliersGenus",
@@ -44,6 +43,7 @@ const dependencyNames = [
   "WarManager",
   "featureVisibility",
   "gameModal",
+  "projectControls",
   "researchControls",
 ];
 
@@ -94,7 +94,6 @@ const classes = createEntityClasses({
   readKeyManager: () => context.KeyManager,
   readLogIgnore: () => context.logIgnore,
   readLogPrestige: () => context.logPrestige,
-  readMainVue: () => context.mainVue,
   readMutableTraitManager: () => context.MutableTraitManager,
   readMutationCostMultipliers: () => context.mutationCostMultipliers,
   readMutationCostMultipliersGenus: () => context.mutationCostMultipliersGenus,
@@ -114,6 +113,7 @@ const classes = createEntityClasses({
   readWarManager: () => context.WarManager,
   readFeatureVisibility: () => context.featureVisibility,
   readGameModal: () => context.gameModal,
+  readProjectControls: () => context.projectControls,
   readResearchControls: () => context.researchControls,
 });
 
@@ -326,5 +326,65 @@ aluminium.calculateRateOfChange = () => 8;
 assert.equal(aluminium.getBusyWorkers("job_miner", 4), 0);
 context.game.breakdown.p.Aluminium = {};
 assert.equal(aluminium.getBusyWorkers("job_miner", 4), 0);
+
+// A project is bought in steps, and the purchase advances both its rank and its
+// completion percentage, so the log has to be written from values read before it.
+const projectPurchases = [];
+let projectAvailable = true;
+context.projectControls = {
+  build: (request) => {
+    if (!projectAvailable) return false;
+    projectPurchases.push(request);
+    context.game.global.arpa.lhc.rank += 1;
+    context.game.global.arpa.lhc.complete = 0;
+    return true;
+  },
+};
+const projectLogs = [];
+context.GameLog = {
+  logSuccess: (kind, message) => projectLogs.push([kind, message]),
+};
+context.poly = { loc: (_key, [subject]) => subject };
+context.featureVisibility = { isVisible: () => true };
+context.KeyManager = { set: () => {} };
+context.checkAffordableCustom = () => true;
+context.settings = { performanceHackAvoidDrawTech: true };
+context.game = {
+  global: { arpa: { lhc: { rank: 4, complete: 90 } } },
+  actions: { arpa: { lhc: { title: "Launch Facility" } } },
+};
+context.resources = { Money: { currentQuantity: 500 } };
+// Action.isUnlocked still asks for the mounted component; only the purchase moved.
+context.getVueById = (id) => (id === "arpalhc" ? {} : undefined);
+
+const project = new classes.Project("Launch Facility", "lhc");
+project.currentStep = 5;
+project.cost = { Money: 120 };
+assert.equal(project.click(), true);
+assert.deepEqual(projectPurchases, [
+  { elementId: "arpalhc", projectId: "lhc", steps: 5, skipTabRedraw: false },
+]);
+assert.equal(context.resources.Money.currentQuantity, 380);
+assert.deepEqual(
+  projectLogs,
+  [["arpa", "Launch Facility (95%)"]],
+  "the percentage is the one the purchase reached, not the one it left behind",
+);
+
+// The redraw suppression is asked for once the project is past its tenth rank,
+// and a purchase that finishes the project logs the completion instead.
+context.game.global.arpa.lhc.rank = 10;
+context.game.global.arpa.lhc.complete = 96;
+projectLogs.length = 0;
+assert.equal(project.click(), true);
+assert.equal(projectPurchases.at(-1).skipTabRedraw, true);
+assert.deepEqual(projectLogs, [["construction", "Launch Facility"]]);
+
+// A control the game withdrew spends nothing and logs nothing.
+projectAvailable = false;
+projectLogs.length = 0;
+assert.equal(project.click(), false);
+assert.equal(context.resources.Money.currentQuantity, 260);
+assert.deepEqual(projectLogs, []);
 
 console.log("Entity classes module tests passed");
