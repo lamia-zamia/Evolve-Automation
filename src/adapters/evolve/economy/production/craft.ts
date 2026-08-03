@@ -252,9 +252,11 @@ export function createCraftReader(
 }
 
 export interface CraftExecutorDependencies {
-  // TRANSITIONAL: Resource.tryCraftX remains the narrow bridge to the current
-  // Vue manual-crafting control. The Milestone 5 game/bootstrap adapter should
-  // replace it without changing the pure craft policy or application phases.
+  // TRANSITIONAL: the executor reaches manual crafting through the live foundry
+  // list's `Resource.tryCraftX`, which now delegates to the crafting-controls
+  // port. Hand this executor that port directly once the foundry list is no
+  // longer the addressing scheme; neither the pure craft policy nor the
+  // application phases change with it.
   readonly getResources: () => unknown;
   readonly getFoundryList: () => unknown;
 }

@@ -58,6 +58,7 @@ import { createOverrideEvaluationSource } from "./override-evaluation.ts";
 import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
 import { createGameActionControls } from "../browser/game-action-controls.ts";
+import { createGameCraftingControls } from "../browser/game-crafting-controls.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
 import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
@@ -2567,6 +2568,10 @@ function startEvolveRuntimeComposition(
     selectTooltip: () => $("#popper"),
     clickSteps: (count) => KeyManager.click(count),
   });
+  const craftingControls = createGameCraftingControls({
+    getVueById: (id) => getVueById(id),
+    clearClickMultipliers: () => KeyManager.set(false, false, false),
+  });
 
   // Class definitions
   const {
@@ -2616,7 +2621,6 @@ function startEvolveRuntimeComposition(
     readAchievementStar: () => getAchievementStar,
     readCitadelConsumption: () => getCitadelConsumption,
     readStarLevel: () => getStarLevel,
-    readVueById: () => getVueById,
     readHaveTask: () => haveTask,
     readHaveTech: () => haveTech,
     readJobs: () => jobs,
@@ -2641,6 +2645,7 @@ function startEvolveRuntimeComposition(
     readTriggerManager: () => TriggerManager,
     readWarManager: () => WarManager,
     readActionControls: () => actionControls,
+    readCraftingControls: () => craftingControls,
     readFeatureVisibility: () => featureVisibility,
     readJobControls: () => jobControls,
     readGameModal: () => gameModal,

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createGameActionControls } from "../src/adapters/browser/game-action-controls.ts";
+import { createGameCraftingControls } from "../src/adapters/browser/game-crafting-controls.ts";
 import { createGameJobControls } from "../src/adapters/browser/game-job-controls.ts";
 import { createGameResearchControls } from "../src/adapters/browser/game-research-controls.ts";
 import { createEntityClasses } from "../src/game/entities.ts";
@@ -18,7 +19,6 @@ const dependencyNames = [
   "getAchievementStar",
   "getCitadelConsumption",
   "getStarLevel",
-  "getVueById",
   "haveTask",
   "haveTech",
   "jobs",
@@ -43,6 +43,7 @@ const dependencyNames = [
   "TriggerManager",
   "WarManager",
   "actionControls",
+  "craftingControls",
   "featureVisibility",
   "jobControls",
   "gameModal",
@@ -88,7 +89,6 @@ const classes = createEntityClasses({
   readAchievementStar: () => context.getAchievementStar,
   readCitadelConsumption: () => context.getCitadelConsumption,
   readStarLevel: () => context.getStarLevel,
-  readVueById: () => context.getVueById,
   readHaveTask: () => context.haveTask,
   readHaveTech: () => context.haveTech,
   readJobs: () => context.jobs,
@@ -113,6 +113,7 @@ const classes = createEntityClasses({
   readTriggerManager: () => context.TriggerManager,
   readWarManager: () => context.WarManager,
   readActionControls: () => context.actionControls,
+  readCraftingControls: () => context.craftingControls,
   readFeatureVisibility: () => context.featureVisibility,
   readJobControls: () => context.jobControls,
   readGameModal: () => context.gameModal,
@@ -355,6 +356,44 @@ const resource = new classes.Resource("Iron", "Iron", { tradable: true });
 assert.equal(resource.autoCraftEnabled, true);
 context.settings = { craftIron: false };
 assert.equal(resource.autoCraftEnabled, false);
+
+// Manual crafting goes through the real adapter over stubbed rows.
+const craftViews = {};
+const craftCalls = [];
+let craftMultipliersCleared = 0;
+context.craftingControls = createGameCraftingControls({
+  getVueById: (elementId) => craftViews[elementId],
+  clearClickMultipliers: () => (craftMultipliersCleared += 1),
+});
+
+// The row the resource names is "res" plus its id, and the count reaches the
+// game unscaled.
+craftViews["resIron"] = {
+  craft: (...args) => craftCalls.push(args),
+};
+assert.equal(resource.tryCraftX(12), true);
+assert.deepEqual(craftCalls, [["Iron", 12]]);
+assert.equal(craftMultipliersCleared, 1);
+
+// A resource whose id is not the one its row is named after — the population
+// node renames itself to the species — crafts under both.
+context.game.global.race = { species: "human" };
+const population = new classes.Population("Population", "Population");
+craftViews["resPopulation"] = {
+  craft: (...args) => craftCalls.push(args),
+};
+craftCalls.length = 0;
+assert.equal(population.tryCraftX(1), true);
+assert.deepEqual(craftCalls, [["human", 1]]);
+
+// An unrendered row refuses rather than throwing, and leaves the click
+// multipliers alone.
+delete craftViews["resIron"];
+craftCalls.length = 0;
+craftMultipliersCleared = 0;
+assert.equal(resource.tryCraftX(12), false);
+assert.deepEqual(craftCalls, []);
+assert.equal(craftMultipliersCleared, 0);
 
 context.normalizeProperties = (flags) => ({ wrapped: flags });
 const nextJob = new classes.Job("farmer", "fallback", { basic: true });

@@ -2452,6 +2452,28 @@
     });
   }
 
+  // src/adapters/browser/game-crafting-controls.ts
+  function createGameCraftingControls({
+    getVueById,
+    clearClickMultipliers
+  }) {
+    return Object.freeze({
+      craft({ elementId, resourceId: resourceId3, count: count2 }) {
+        const view = getVueById(elementId);
+        if (!isRecord(view) || typeof view["craft"] !== "function") {
+          return false;
+        }
+        const call4 = requireFunction(
+          view["craft"],
+          `${elementId} Vue view.craft`
+        );
+        clearClickMultipliers();
+        Reflect.apply(call4, view, [resourceId3, count2]);
+        return true;
+      }
+    });
+  }
+
   // src/adapters/browser/game-feature-visibility.ts
   function createGameFeatureVisibility({
     getDocument
@@ -7896,7 +7918,6 @@
     readAchievementStar: readAchievementStar2,
     readCitadelConsumption,
     readStarLevel,
-    readVueById,
     readHaveTask,
     readHaveTech,
     readJobs,
@@ -7921,6 +7942,7 @@
     readTriggerManager,
     readWarManager,
     readActionControls,
+    readCraftingControls,
     readFeatureVisibility,
     readJobControls,
     readGameModal,
@@ -7932,7 +7954,6 @@
     const getAchievementStar = (...args) => readAchievementStar2()(...args);
     const getCitadelConsumption = (...args) => readCitadelConsumption()(...args);
     const getStarLevel = (...args) => readStarLevel()(...args);
-    const getVueById = (...args) => readVueById()(...args);
     const haveTask = (...args) => readHaveTask()(...args);
     const haveTech = (...args) => readHaveTech()(...args);
     const logPrestige = (...args) => readLogPrestige()(...args);
@@ -8378,12 +8399,11 @@
         return (Math.min(this.maxQuantity, this.storageRequired) - this.currentQuantity) / totalRateOfCharge;
       }
       tryCraftX(count2) {
-        let vue = getVueById(this._vueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        readKeyManager().set(false, false, false);
-        vue.craft(this.id, count2);
+        return readCraftingControls().craft({
+          elementId: this._vueBinding,
+          resourceId: this.id,
+          count: count2
+        });
       }
       requestQuantity(req) {
         if (this.requestedQuantity < req) {
@@ -56933,6 +56953,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       selectTooltip: () => $("#popper"),
       clickSteps: (count2) => KeyManager.click(count2)
     });
+    const craftingControls = createGameCraftingControls({
+      getVueById: (id) => getVueById(id),
+      clearClickMultipliers: () => KeyManager.set(false, false, false)
+    });
     const {
       Job,
       BasicJob,
@@ -56980,7 +57004,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readAchievementStar: () => getAchievementStar,
       readCitadelConsumption: () => getCitadelConsumption,
       readStarLevel: () => getStarLevel,
-      readVueById: () => getVueById,
       readHaveTask: () => haveTask,
       readHaveTech: () => haveTech,
       readJobs: () => jobs,
@@ -57005,6 +57028,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readTriggerManager: () => TriggerManager,
       readWarManager: () => WarManager,
       readActionControls: () => actionControls,
+      readCraftingControls: () => craftingControls,
       readFeatureVisibility: () => featureVisibility,
       readJobControls: () => jobControls,
       readGameModal: () => gameModal,

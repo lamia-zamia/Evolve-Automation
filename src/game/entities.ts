@@ -2,6 +2,7 @@
 // JavaScript classes. Keep the untyped surface contained here until the game adapter slice
 // replaces these compatibility classes with validated snapshots and commands.
 import type { GameActionControlsPort } from "../ports/game-action-controls.ts";
+import type { GameCraftingControlsPort } from "../ports/game-crafting-controls.ts";
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameJobControlsPort } from "../ports/game-job-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
@@ -26,7 +27,6 @@ interface EntityClassesDependencies {
   readAchievementStar: () => LooseFunction;
   readCitadelConsumption: () => LooseFunction;
   readStarLevel: () => LooseFunction;
-  readVueById: () => LooseFunction;
   readHaveTask: () => LooseFunction;
   readHaveTech: () => LooseFunction;
   readJobs: () => LooseRecord;
@@ -51,6 +51,7 @@ interface EntityClassesDependencies {
   readTriggerManager: () => LooseRecord;
   readWarManager: () => LooseRecord;
   readActionControls: () => GameActionControlsPort;
+  readCraftingControls: () => GameCraftingControlsPort;
   readFeatureVisibility: () => GameFeatureVisibilityPort;
   readJobControls: () => GameJobControlsPort;
   readGameModal: () => GameModalPort;
@@ -72,7 +73,6 @@ export function createEntityClasses({
   readAchievementStar,
   readCitadelConsumption,
   readStarLevel,
-  readVueById,
   readHaveTask,
   readHaveTech,
   readJobs,
@@ -97,6 +97,7 @@ export function createEntityClasses({
   readTriggerManager,
   readWarManager,
   readActionControls,
+  readCraftingControls,
   readFeatureVisibility,
   readJobControls,
   readGameModal,
@@ -111,7 +112,6 @@ export function createEntityClasses({
   const getCitadelConsumption: LooseFunction = (...args) =>
     readCitadelConsumption()(...args);
   const getStarLevel: LooseFunction = (...args) => readStarLevel()(...args);
-  const getVueById: LooseFunction = (...args) => readVueById()(...args);
   const haveTask: LooseFunction = (...args) => readHaveTask()(...args);
   const haveTech: LooseFunction = (...args) => readHaveTech()(...args);
   const logPrestige: LooseFunction = (...args) => readLogPrestige()(...args);
@@ -714,13 +714,11 @@ export function createEntityClasses({
     }
 
     tryCraftX(count: Loose) {
-      let vue = getVueById(this._vueBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      readKeyManager().set(false, false, false);
-      vue.craft(this.id, count);
+      return readCraftingControls().craft({
+        elementId: this._vueBinding,
+        resourceId: this.id,
+        count,
+      });
     }
 
     requestQuantity(req: Loose) {
