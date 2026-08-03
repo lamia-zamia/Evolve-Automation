@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameResearchControls } from "../src/adapters/browser/game-research-controls.ts";
 import { createEntityClasses } from "../src/game/entities.ts";
 
 const dependencyNames = [
@@ -9,7 +10,6 @@ const dependencyNames = [
   "checkAffordableCustom",
   "checkTypes",
   "conflictingTraits",
-  "document",
   "fanatAchievements",
   "Fibonacci",
   "game",
@@ -44,6 +44,7 @@ const dependencyNames = [
   "WarManager",
   "featureVisibility",
   "gameModal",
+  "researchControls",
 ];
 
 const context = Object.fromEntries(dependencyNames.map((name) => [name, {}]));
@@ -79,7 +80,6 @@ const classes = createEntityClasses({
   readCheckAffordableCustom: () => context.checkAffordableCustom,
   readCheckTypes: () => context.checkTypes,
   readConflictingTraits: () => context.conflictingTraits,
-  readDocument: () => context.document,
   readFanatAchievements: () => context.fanatAchievements,
   readFibonacci: () => context.Fibonacci,
   readGame: () => context.game,
@@ -114,6 +114,7 @@ const classes = createEntityClasses({
   readWarManager: () => context.WarManager,
   readFeatureVisibility: () => context.featureVisibility,
   readGameModal: () => context.gameModal,
+  readResearchControls: () => context.researchControls,
 });
 
 assert.equal(Object.keys(classes).length, 32);
@@ -133,11 +134,25 @@ assert.equal(bilateralSymmetry.isUnlocked(), true);
 
 const technologyActions = [];
 const observedTabLoads = [];
-context.document = { querySelector: () => ({}) };
-context.getVueById = () => ({
+const researchElements = { "#tech-mad > .button:not(.precog)": {} };
+const researchView = {
   action: () => {
     technologyActions.push("action");
     observedTabLoads.push(context.mainVue.s.tabLoad);
+  },
+};
+const researchViews = { "tech-mad": researchView };
+// Set to let the entry answer the availability check and then disappear.
+let vanishAfterCheck = false;
+let checksSinceVanish = 0;
+context.researchControls = createGameResearchControls({
+  getDocument: () => ({
+    querySelector: (selector) => researchElements[selector] ?? null,
+  }),
+  getVueById: (elementId) => {
+    if (!vanishAfterCheck) return researchViews[elementId];
+    checksSinceVanish += 1;
+    return checksSinceVanish > 1 ? undefined : researchViews[elementId];
   },
 });
 context.game = {
@@ -169,6 +184,28 @@ assert.equal(context.mainVue.s.tabLoad, true);
 context.mainVue.s.civTabs = 3;
 assert.equal(technology.click(), true);
 assert.deepEqual(observedTabLoads, [true, true]);
+assert.equal(context.resources.Knowledge.currentQuantity, 98);
+
+// A researched entry stays mounted and is recognized by its `.oldTech` marker.
+assert.equal(technology.isResearched(), false);
+researchElements["#tech-mad .oldTech"] = {};
+assert.equal(technology.isResearched(), true);
+delete researchElements["#tech-mad .oldTech"];
+
+// The game withdrew the entry between the availability check and the click:
+// nothing is spent and nothing is logged as researched.
+vanishAfterCheck = true;
+assert.equal(technology.click(), false);
+assert.deepEqual(technologyActions, ["action", "action"]);
+assert.equal(context.resources.Knowledge.currentQuantity, 98);
+vanishAfterCheck = false;
+
+// An entry the game has not rendered a buy control for is not unlocked.
+delete researchElements["#tech-mad > .button:not(.precog)"];
+assert.equal(technology.isUnlocked(), false);
+assert.equal(technology.click(), false);
+researchElements["#tech-mad > .button:not(.precog)"] = {};
+assert.equal(technology.isUnlocked(), true);
 
 context.game = {
   global: {

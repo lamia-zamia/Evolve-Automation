@@ -3,6 +3,7 @@
 // replaces these compatibility classes with validated snapshots and commands.
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
+import type { GameResearchControlsPort } from "../ports/game-research-controls.ts";
 
 type Loose = any;
 type LooseRecord = Record<PropertyKey, Loose>;
@@ -16,7 +17,6 @@ interface EntityClassesDependencies {
   readCheckAffordableCustom: () => LooseFunction;
   readCheckTypes: () => LooseRecord;
   readConflictingTraits: () => Loose[];
-  readDocument: () => LooseRecord;
   readFanatAchievements: () => Loose[];
   readFibonacci: () => LooseFunction;
   readGame: () => LooseRecord;
@@ -51,6 +51,7 @@ interface EntityClassesDependencies {
   readWarManager: () => LooseRecord;
   readFeatureVisibility: () => GameFeatureVisibilityPort;
   readGameModal: () => GameModalPort;
+  readResearchControls: () => GameResearchControlsPort;
 }
 
 export function createEntityClasses({
@@ -61,7 +62,6 @@ export function createEntityClasses({
   readCheckAffordableCustom,
   readCheckTypes,
   readConflictingTraits,
-  readDocument,
   readFanatAchievements,
   readFibonacci,
   readGame,
@@ -96,6 +96,7 @@ export function createEntityClasses({
   readWarManager,
   readFeatureVisibility,
   readGameModal,
+  readResearchControls,
 }: EntityClassesDependencies) {
   const $: LooseFunction = (...args) => readJQuery()(...args);
   const checkAffordableCustom: LooseFunction = (...args) =>
@@ -1859,12 +1860,7 @@ export function createEntityClasses({
     }
 
     isUnlocked() {
-      // vue of researched techs still can be found in #oldTech
-      return (
-        readDocument().querySelector(
-          "#" + this._vueBinding + " > .button:not(.precog)",
-        ) !== null && getVueById(this._vueBinding) !== undefined
-      );
+      return readResearchControls().isOffered(this._vueBinding);
     }
 
     get definition() {
@@ -1900,15 +1896,17 @@ export function createEntityClasses({
         return false;
       }
 
-      for (let res in this.cost) {
-        readResources()[res].currentQuantity -= this.cost[res];
-      }
-
       // Research automation depends on the preloaded off-tab Vue bindings.
       // Keep the game's preload flag enabled here: its post-research drawTech
       // call removes the completed target and exposes the next one even when
       // the research tab is not active.
-      getVueById(this._vueBinding).action();
+      if (!readResearchControls().start(this._vueBinding)) {
+        return false;
+      }
+
+      for (let res in this.cost) {
+        readResources()[res].currentQuantity -= this.cost[res];
+      }
 
       let def = this.definition;
       let title = typeof def.title === "function" ? def.title() : def.title;
@@ -1921,9 +1919,7 @@ export function createEntityClasses({
     }
 
     isResearched() {
-      return (
-        readDocument().querySelector("#tech-" + this.id + " .oldTech") !== null
-      );
+      return readResearchControls().isCompleted(this._vueBinding);
     }
 
     updateResourceRequirements() {

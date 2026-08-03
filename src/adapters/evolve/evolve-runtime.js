@@ -59,6 +59,7 @@ import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
 import { createGameModal } from "../browser/game-modal.ts";
+import { createGameResearchControls } from "../browser/game-research-controls.ts";
 import { createQueuedSettings } from "../../settings/queued-settings.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
 import { createRuntimeQueries } from "../../game/runtime-queries.ts";
@@ -2546,6 +2547,11 @@ function startEvolveRuntimeComposition(
       .toLowerCase()
       .indexOf("safemode") !== -1;
 
+  const researchControls = createGameResearchControls({
+    getDocument: () => runtimeEnvironment.document,
+    getVueById: (id) => getVueById(id),
+  });
+
   // Class definitions
   const {
     Job,
@@ -2588,7 +2594,6 @@ function startEvolveRuntimeComposition(
     readCheckAffordableCustom: () => checkAffordableCustom,
     readCheckTypes: () => checkTypes,
     readConflictingTraits: () => conflictingTraits,
-    readDocument: () => runtimeEnvironment.document,
     readFanatAchievements: () => fanatAchievements,
     readFibonacci: () => Fibonacci,
     readGame: () => game,
@@ -2623,6 +2628,7 @@ function startEvolveRuntimeComposition(
     readWarManager: () => WarManager,
     readFeatureVisibility: () => featureVisibility,
     readGameModal: () => gameModal,
+    readResearchControls: () => researchControls,
   });
 
   if (characterizationSurface)

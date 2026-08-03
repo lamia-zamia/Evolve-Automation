@@ -2448,6 +2448,43 @@
     });
   }
 
+  // src/adapters/browser/game-research-controls.ts
+  function buyControl(elementId) {
+    return `#${elementId} > .button:not(.precog)`;
+  }
+  function completedMarker(elementId) {
+    return `#${elementId} .oldTech`;
+  }
+  function createGameResearchControls({
+    getDocument,
+    getVueById
+  }) {
+    function hasChild(selector) {
+      const element = getDocument().querySelector(selector);
+      return element !== null && element !== void 0;
+    }
+    return Object.freeze({
+      isOffered(elementId) {
+        return hasChild(buyControl(elementId)) && isRecord(getVueById(elementId));
+      },
+      isCompleted(elementId) {
+        return hasChild(completedMarker(elementId));
+      },
+      start(elementId) {
+        const view = getVueById(elementId);
+        if (!isRecord(view) || typeof view["action"] !== "function") {
+          return false;
+        }
+        const action = requireFunction(
+          view["action"],
+          `${elementId} Vue view.action`
+        );
+        Reflect.apply(action, view, []);
+        return true;
+      }
+    });
+  }
+
   // src/settings/queued-settings.ts
   function createQueuedSettings({
     getSettings,
@@ -7674,7 +7711,6 @@
     readCheckAffordableCustom,
     readCheckTypes,
     readConflictingTraits,
-    readDocument,
     readFanatAchievements,
     readFibonacci,
     readGame,
@@ -7708,7 +7744,8 @@
     readTriggerManager,
     readWarManager,
     readFeatureVisibility,
-    readGameModal
+    readGameModal,
+    readResearchControls
   }) {
     const $ = (...args) => readJQuery()(...args);
     const checkAffordableCustom = (...args) => readCheckAffordableCustom()(...args);
@@ -8944,9 +8981,7 @@
         return this._id;
       }
       isUnlocked() {
-        return readDocument().querySelector(
-          "#" + this._vueBinding + " > .button:not(.precog)"
-        ) !== null && getVueById(this._vueBinding) !== void 0;
+        return readResearchControls().isOffered(this._vueBinding);
       }
       get definition() {
         return readGame().actions.tech[this._id];
@@ -8975,10 +9010,12 @@
         if (!this.isClickable()) {
           return false;
         }
+        if (!readResearchControls().start(this._vueBinding)) {
+          return false;
+        }
         for (let res in this.cost) {
           readResources2()[res].currentQuantity -= this.cost[res];
         }
-        getVueById(this._vueBinding).action();
         let def = this.definition;
         let title = typeof def.title === "function" ? def.title() : def.title;
         readGameLog().logSuccess(
@@ -8989,7 +9026,7 @@
         return true;
       }
       isResearched() {
-        return readDocument().querySelector("#tech-" + this.id + " .oldTech") !== null;
+        return readResearchControls().isCompleted(this._vueBinding);
       }
       updateResourceRequirements() {
         if (!this.isUnlocked()) {
@@ -56748,6 +56785,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }
     var checkActions = false;
     let safeMode = String(runtimeEnvironment.window.location).toLowerCase().indexOf("safemode") !== -1;
+    const researchControls = createGameResearchControls({
+      getDocument: () => runtimeEnvironment.document,
+      getVueById: (id) => getVueById(id)
+    });
     const {
       Job,
       BasicJob,
@@ -56789,7 +56830,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readCheckAffordableCustom: () => checkAffordableCustom,
       readCheckTypes: () => checkTypes,
       readConflictingTraits: () => conflictingTraits,
-      readDocument: () => runtimeEnvironment.document,
       readFanatAchievements: () => fanatAchievements,
       readFibonacci: () => Fibonacci,
       readGame: () => game,
@@ -56823,7 +56863,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readTriggerManager: () => TriggerManager,
       readWarManager: () => WarManager,
       readFeatureVisibility: () => featureVisibility,
-      readGameModal: () => gameModal
+      readGameModal: () => gameModal,
+      readResearchControls: () => researchControls
     });
     if (characterizationSurface)
       characterizationSurface.entityClasses = {
