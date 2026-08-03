@@ -1,6 +1,7 @@
 // TRANSITIONAL: Evolve entity constructors and methods still mirror the game's dynamic
 // JavaScript classes. Keep the untyped surface contained here until the game adapter slice
 // replaces these compatibility classes with validated snapshots and commands.
+import type { GameActionControlsPort } from "../ports/game-action-controls.ts";
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameJobControlsPort } from "../ports/game-job-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
@@ -12,7 +13,6 @@ type LooseRecord = Record<PropertyKey, Loose>;
 type LooseFunction = (...args: Loose[]) => Loose;
 
 interface EntityClassesDependencies {
-  readJQuery: () => LooseFunction;
   readArpaIds: () => LooseRecord;
   readBuildingIds: () => LooseRecord;
   readBuildings: () => LooseRecord;
@@ -50,6 +50,7 @@ interface EntityClassesDependencies {
   readTraitVal: () => LooseFunction;
   readTriggerManager: () => LooseRecord;
   readWarManager: () => LooseRecord;
+  readActionControls: () => GameActionControlsPort;
   readFeatureVisibility: () => GameFeatureVisibilityPort;
   readJobControls: () => GameJobControlsPort;
   readGameModal: () => GameModalPort;
@@ -58,7 +59,6 @@ interface EntityClassesDependencies {
 }
 
 export function createEntityClasses({
-  readJQuery,
   readArpaIds,
   readBuildingIds,
   readBuildings,
@@ -96,13 +96,13 @@ export function createEntityClasses({
   readTraitVal,
   readTriggerManager,
   readWarManager,
+  readActionControls,
   readFeatureVisibility,
   readJobControls,
   readGameModal,
   readProjectControls,
   readResearchControls,
 }: EntityClassesDependencies) {
-  const $: LooseFunction = (...args) => readJQuery()(...args);
   const checkAffordableCustom: LooseFunction = (...args) =>
     readCheckAffordableCustom()(...args);
   const Fibonacci: LooseFunction = (...args) => readFibonacci()(...args);
@@ -1068,8 +1068,9 @@ export function createEntityClasses({
         : this.name;
     }
 
-    get vue() {
-      return getVueById(this._vueBinding);
+    /** Runs the game's own control without the clickability guards of click(). */
+    activate() {
+      return readActionControls().activate(this._vueBinding);
     }
 
     /* That's a right(ish) way to do, but compared to hardcoded numbers it's a performance tax for... nothing really, as i'll still need to manually declare a lot of things for each new building, and it's already declared for all existing ones. I'll put it on hold for now.
@@ -1100,7 +1101,7 @@ export function createEntityClasses({
       ) {
         return false;
       }
-      return this.vue !== undefined;
+      return readActionControls().isRendered(this._vueBinding);
     }
 
     isSwitchable() {
@@ -1204,9 +1205,12 @@ export function createEntityClasses({
 
       let doMultiClick =
         this.is.multiSegmented && readSettings().buildingsUseMultiClick;
+      // Building advances the live count, and both the deduction and the log
+      // below describe the purchase made from the count it started at.
+      const countBeforeClick = this.count;
       let amountToBuild = 1;
       if (doMultiClick) {
-        amountToBuild = this.gameMax - this.count;
+        amountToBuild = this.gameMax - countBeforeClick;
         for (let res in this.cost) {
           amountToBuild = Math.min(
             amountToBuild,
@@ -1217,6 +1221,36 @@ export function createEntityClasses({
           // Game allow to spend more resources than available, going negative. If we're here - building is clickable, and we can afford at least one thing for sure.
           amountToBuild = 1;
         }
+      }
+
+      readKeyManager().set(doMultiClick, doMultiClick, doMultiClick);
+
+      if (this.is.prestige) {
+        logPrestige();
+      }
+
+      const actionControls = readActionControls();
+
+      // Try skipping game's laggy postBuild hook by invoking the action() directly, instead of going through the
+      // vue action() => game runAction() => game shed.action() => game postBuild() hook.
+      // This will greatly reduce the amount of page redraws.
+      // refresh is really only needed for first building as there are no buildings where building a second unlocks more stuff.
+      // Keep this narrowly guarded: postBuild also handles grants, post hooks, queues, poppers, and Inflation.
+      if (
+        readSettings().performanceHackAvoidDrawTech &&
+        this.definition.refresh &&
+        countBeforeClick > 0 &&
+        !this.definition.grant &&
+        !this.definition.post &&
+        !this.definition.queue_complete &&
+        !this.is.prestige &&
+        !readGame().global.race.inflation &&
+        !actionControls.isTooltipShown()
+      ) {
+        this.definition.action();
+      } else if (!actionControls.activate(this._vueBinding)) {
+        // The game withdrew the control after the clickability check.
+        return false;
       }
 
       for (let res in this.cost) {
@@ -1230,12 +1264,12 @@ export function createEntityClasses({
       ) {
         if (
           this.gameMax < Number.MAX_SAFE_INTEGER &&
-          this.count + amountToBuild < this.gameMax
+          countBeforeClick + amountToBuild < this.gameMax
         ) {
           readGameLog().logSuccess(
             "multi_construction",
             readPoly().loc("build_success", [
-              `${this.title} (${this.count + amountToBuild})`,
+              `${this.title} (${countBeforeClick + amountToBuild})`,
             ]),
             ["queue", "building_queue"],
           );
@@ -1246,52 +1280,6 @@ export function createEntityClasses({
             ["queue", "building_queue"],
           );
         }
-      }
-
-      readKeyManager().set(doMultiClick, doMultiClick, doMultiClick);
-
-      if (this.is.prestige) {
-        logPrestige();
-      }
-
-      let popper = $("#popper");
-
-      // Try skipping game's laggy postBuild hook by invoking the action() directly, instead of going through the
-      // vue action() => game runAction() => game shed.action() => game postBuild() hook.
-      // This will greatly reduce the amount of page redraws.
-      // refresh is really only needed for first building as there are no buildings where building a second unlocks more stuff.
-      // Keep this narrowly guarded: postBuild also handles grants, post hooks, queues, poppers, and Inflation.
-      if (
-        readSettings().performanceHackAvoidDrawTech &&
-        this.definition.refresh &&
-        this.count > 0 &&
-        !this.definition.grant &&
-        !this.definition.post &&
-        !this.definition.queue_complete &&
-        !this.is.prestige &&
-        !readGame().global.race.inflation &&
-        (popper.length === 0 || !popper.is(":visible"))
-      ) {
-        this.definition.action();
-        return true;
-      }
-
-      // Hide active popper from action, so it won't rewrite it
-      if (
-        popper.length > 0 &&
-        popper.data("id").indexOf(this._vueBinding) === -1
-      ) {
-        popper.attr("id", "TotallyNotAPopper");
-
-        // Game bugs in .action() can cause an error to be thrown. We can't really handle it in any good way,
-        // but we need to revert the id or a tooltip might get stuck at the bottom of the page.
-        try {
-          this.vue.action();
-        } finally {
-          popper.attr("id", "popper");
-        }
-      } else {
-        this.vue.action();
       }
 
       if (this.is.prestige) {
@@ -1503,20 +1491,13 @@ export function createEntityClasses({
         return false;
       }
 
-      let vue = this.vue;
-
-      if (adjustCount > 0) {
-        for (let m of readKeyManager().click(adjustCount)) {
-          vue.power_on();
-        }
-        return true;
-      }
-      if (adjustCount < 0) {
-        for (let m of readKeyManager().click(adjustCount * -1)) {
-          vue.power_off();
-        }
-        return true;
-      }
+      const request = {
+        elementId: this._vueBinding,
+        count: Math.abs(adjustCount),
+      };
+      return adjustCount > 0
+        ? readActionControls().powerOn(request)
+        : readActionControls().powerOff(request);
     }
   }
 
@@ -1627,22 +1608,12 @@ export function createEntityClasses({
   }
 
   class ModalAction extends Action {
-    constructor(...args: [Loose, Loose, Loose, Loose, Loose?]) {
-      super(...args);
-
-      this._vue = undefined;
-    }
-
-    get vue() {
-      return this._vue;
-    }
-
     isOptionsCached() {
-      return this._vue !== undefined;
+      return readActionControls().isCaptured(this._vueBinding);
     }
 
     cacheOptions() {
-      this._vue = getVueById(this._vueBinding);
+      readActionControls().capture(this._vueBinding);
     }
 
     isUnlocked() {
@@ -1651,7 +1622,7 @@ export function createEntityClasses({
         return false;
       }
       // We have to override this as there won't be an element unless the modal window is open
-      return this._vue !== undefined;
+      return this.isOptionsCached();
     }
   }
 

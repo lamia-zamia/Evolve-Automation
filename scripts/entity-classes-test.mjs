@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
+import { createGameActionControls } from "../src/adapters/browser/game-action-controls.ts";
 import { createGameJobControls } from "../src/adapters/browser/game-job-controls.ts";
 import { createGameResearchControls } from "../src/adapters/browser/game-research-controls.ts";
 import { createEntityClasses } from "../src/game/entities.ts";
 
 const dependencyNames = [
-  "$",
   "arpaIds",
   "buildingIds",
   "buildings",
@@ -42,6 +42,7 @@ const dependencyNames = [
   "traitVal",
   "TriggerManager",
   "WarManager",
+  "actionControls",
   "featureVisibility",
   "jobControls",
   "gameModal",
@@ -51,7 +52,6 @@ const dependencyNames = [
 
 const context = Object.fromEntries(dependencyNames.map((name) => [name, {}]));
 Object.assign(context, {
-  $: () => ({}),
   checkAffordableCustom: () => true,
   Fibonacci: (value) => value,
   getAchievementStar: () => 0,
@@ -75,7 +75,6 @@ Object.assign(context, {
 });
 
 const classes = createEntityClasses({
-  readJQuery: () => context.$,
   readArpaIds: () => context.arpaIds,
   readBuildingIds: () => context.buildingIds,
   readBuildings: () => context.buildings,
@@ -113,11 +112,28 @@ const classes = createEntityClasses({
   readTraitVal: () => context.traitVal,
   readTriggerManager: () => context.TriggerManager,
   readWarManager: () => context.WarManager,
+  readActionControls: () => context.actionControls,
   readFeatureVisibility: () => context.featureVisibility,
   readJobControls: () => context.jobControls,
   readGameModal: () => context.gameModal,
   readProjectControls: () => context.projectControls,
   readResearchControls: () => context.researchControls,
+});
+
+// Action controls go through the port, over the real adapter, so every building
+// read and click below exercises it end to end.
+const noTooltip = {
+  length: 0,
+  is: () => false,
+  data: () => undefined,
+  attr: () => {},
+};
+let actionTooltip = noTooltip;
+context.actionControls = createGameActionControls({
+  getVueById: (elementId) => context.getVueById(elementId),
+  selectTooltip: () => actionTooltip,
+  clickSteps: (count) =>
+    Array.from({ length: count }, (_value, index) => index),
 });
 
 assert.equal(Object.keys(classes).length, 32);
@@ -491,5 +507,113 @@ projectLogs.length = 0;
 assert.equal(project.click(), false);
 assert.equal(context.resources.Money.currentQuantity, 260);
 assert.deepEqual(projectLogs, []);
+
+// A building action runs the game's own control, and spends and logs only once
+// the control has actually run.
+const actionCalls = [];
+const powerCalls = [];
+let mineView = {
+  action: () => actionCalls.push("action"),
+  power_on: () => powerCalls.push("on"),
+  power_off: () => powerCalls.push("off"),
+};
+const definitionCalls = [];
+const mineDefinition = {
+  title: "Mine",
+  switchable: () => true,
+  action: () => definitionCalls.push("definition"),
+};
+const actionLogs = [];
+context.GameLog = {
+  logSuccess: (kind, message) => actionLogs.push([kind, message]),
+};
+context.buildings = {};
+context.logIgnore = [];
+context.settings = { performanceHackAvoidDrawTech: false };
+context.resources = { Money: { currentQuantity: 500 } };
+context.game = {
+  global: {
+    race: { species: "human" },
+    settings: { showCity: true, showSpace: true },
+    city: { mine: { count: 2, on: 1 } },
+  },
+  actions: { city: { mine: mineDefinition } },
+  checkAffordable: () => true,
+};
+context.getVueById = (id) => (id === "city-mine" ? mineView : undefined);
+
+const mine = new classes.Action("Mine", "city", "mine", "");
+mine.cost = { Money: 120 };
+assert.equal(mine.isUnlocked(), true);
+assert.equal(mine.click(), true);
+assert.deepEqual(actionCalls, ["action"]);
+assert.equal(context.resources.Money.currentQuantity, 380);
+assert.deepEqual(actionLogs, [["construction", "Mine"]]);
+
+// The game withdrew the control between the clickability check and the click:
+// nothing is spent and nothing is logged as built.
+mineView = {};
+actionLogs.length = 0;
+assert.equal(mine.click(), false);
+assert.equal(context.resources.Money.currentQuantity, 380);
+assert.deepEqual(actionLogs, []);
+
+// The redraw-skipping shortcut calls the game's own definition action rather
+// than the control, and gives up on it while a tooltip is on screen because the
+// skipped postBuild hook is what would have redrawn it.
+mineView = { action: () => actionCalls.push("action") };
+mineDefinition.refresh = true;
+context.settings.performanceHackAvoidDrawTech = true;
+actionCalls.length = 0;
+assert.equal(mine.click(), true);
+assert.deepEqual(definitionCalls, ["definition"]);
+assert.deepEqual(actionCalls, []);
+
+actionTooltip = {
+  length: 1,
+  is: (selector) => selector === ":visible",
+  data: () => "popper-city-farm",
+  attr: () => {},
+};
+definitionCalls.length = 0;
+assert.equal(mine.click(), true);
+assert.deepEqual(definitionCalls, []);
+assert.deepEqual(actionCalls, ["action"]);
+actionTooltip = noTooltip;
+
+// Switching power is one request per direction, carrying the count as a
+// magnitude, and a request for no change never reaches the control.
+mineView = {
+  power_on: () => powerCalls.push("on"),
+  power_off: () => powerCalls.push("off"),
+};
+assert.equal(mine.tryAdjustState(0), false);
+assert.deepEqual(powerCalls, []);
+assert.equal(mine.tryAdjustState(2), true);
+assert.deepEqual(powerCalls, ["on", "on"]);
+assert.equal(mine.tryAdjustState(-1), true);
+assert.deepEqual(powerCalls, ["on", "on", "off"]);
+
+// A control that only exists while its modal is open is captured while it is
+// rendered, and keeps working once the modal has closed.
+const probeCalls = [];
+let probeView = undefined;
+context.getVueById = (id) => (id === "starDock-probes" ? probeView : undefined);
+
+const probes = new classes.ModalAction("Probes", "starDock", "probes", "");
+assert.equal(probes.isOptionsCached(), false);
+assert.equal(probes.isUnlocked(), false);
+probes.cacheOptions();
+assert.equal(probes.isOptionsCached(), false, "there was nothing to capture");
+
+probeView = { action: () => probeCalls.push("action") };
+probes.cacheOptions();
+assert.equal(probes.isOptionsCached(), true);
+assert.equal(probes.isUnlocked(), true);
+
+probeView = undefined;
+assert.equal(probes.isUnlocked(), true, "the modal closed, the capture holds");
+assert.equal(probes.activate(), true);
+assert.deepEqual(probeCalls, ["action"]);
 
 console.log("Entity classes module tests passed");

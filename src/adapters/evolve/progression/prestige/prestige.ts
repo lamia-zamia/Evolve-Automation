@@ -284,14 +284,10 @@ export function createPrestigeCommandExecutor(
             buildings["PitAbsorptionChamber"],
             "buildings.PitAbsorptionChamber",
           );
-          const vue = requireRecord(
-            chamber["vue"],
-            "buildings.PitAbsorptionChamber.vue",
-          );
           requireFunction(
-            vue["action"],
-            "buildings.PitAbsorptionChamber.vue.action",
-          ).call(vue);
+            chamber["activate"],
+            "buildings.PitAbsorptionChamber.activate",
+          ).call(chamber);
           return;
         }
         case "load-queued-settings":

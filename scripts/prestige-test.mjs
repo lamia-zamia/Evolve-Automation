@@ -79,7 +79,7 @@ function buildFixture(scenario) {
       cacheOptions: () => trace.push(["cacheOptions", "GasSpaceDock"]),
     },
     SiriusAscend: { click: () => trace.push(["click", "SiriusAscend"]) },
-    PitAbsorptionChamber: { vue: { action: () => trace.push(["absorption"]) } },
+    PitAbsorptionChamber: { activate: () => trace.push(["absorption"]) },
     RedTerraform: clickBuilding("RedTerraform"),
     TauStarBluePill: clickBuilding("TauStarBluePill"),
     PalaceApotheosis: clickBuilding("PalaceApotheosis"),

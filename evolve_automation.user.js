@@ -2361,6 +2361,97 @@
     };
   }
 
+  // src/adapters/browser/game-action-controls.ts
+  var TOOLTIP_ID = "popper";
+  var PARKED_TOOLTIP_ID = "TotallyNotAPopper";
+  function createGameActionControls({
+    getVueById,
+    selectTooltip,
+    clickSteps
+  }) {
+    const captured = /* @__PURE__ */ new Map();
+    function controlOf(elementId) {
+      const held = captured.get(elementId);
+      if (held !== void 0) {
+        return held;
+      }
+      const view = getVueById(elementId);
+      return isRecord(view) ? view : void 0;
+    }
+    function methodOf(elementId, method) {
+      const view = controlOf(elementId);
+      if (view === void 0 || typeof view[method] !== "function") {
+        return void 0;
+      }
+      return {
+        view,
+        call: requireFunction(view[method], `${elementId} Vue view.${method}`)
+      };
+    }
+    function click(method, { elementId, count: count2 }) {
+      const target = methodOf(elementId, method);
+      if (target === void 0) {
+        return false;
+      }
+      for (const _step of clickSteps(count2)) {
+        Reflect.apply(target.call, target.view, []);
+      }
+      return true;
+    }
+    function isForeignTooltip(tooltip, elementId) {
+      if (tooltip.length === 0) {
+        return false;
+      }
+      const owner = tooltip.data("id");
+      return typeof owner !== "string" || !owner.includes(elementId);
+    }
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      activate(elementId) {
+        const target = methodOf(elementId, "action");
+        if (target === void 0) {
+          return false;
+        }
+        const tooltip = selectTooltip();
+        const parked = isForeignTooltip(tooltip, elementId);
+        if (parked) {
+          tooltip.attr("id", PARKED_TOOLTIP_ID);
+        }
+        try {
+          Reflect.apply(target.call, target.view, []);
+        } finally {
+          if (parked) {
+            tooltip.attr("id", TOOLTIP_ID);
+          }
+        }
+        return true;
+      },
+      isTooltipShown() {
+        const tooltip = selectTooltip();
+        return tooltip.length > 0 && tooltip.is(":visible");
+      },
+      powerOn(request) {
+        return click("power_on", request);
+      },
+      powerOff(request) {
+        return click("power_off", request);
+      },
+      capture(elementId) {
+        const view = getVueById(elementId);
+        if (!isRecord(view)) {
+          return false;
+        }
+        captured.set(elementId, view);
+        return true;
+      },
+      isCaptured(elementId) {
+        return captured.has(elementId);
+      }
+    });
+  }
+
   // src/adapters/browser/game-feature-visibility.ts
   function createGameFeatureVisibility({
     getDocument
@@ -7792,7 +7883,6 @@
 
   // src/game/entities.ts
   function createEntityClasses({
-    readJQuery,
     readArpaIds,
     readBuildingIds,
     readBuildings,
@@ -7830,13 +7920,13 @@
     readTraitVal,
     readTriggerManager,
     readWarManager,
+    readActionControls,
     readFeatureVisibility,
     readJobControls,
     readGameModal,
     readProjectControls,
     readResearchControls
   }) {
-    const $ = (...args) => readJQuery()(...args);
     const checkAffordableCustom = (...args) => readCheckAffordableCustom()(...args);
     const Fibonacci2 = (...args) => readFibonacci()(...args);
     const getAchievementStar = (...args) => readAchievementStar2()(...args);
@@ -8540,8 +8630,9 @@
         let def = this.definition;
         return def ? typeof def.desc === "function" ? def.desc() : def.desc : this.name;
       }
-      get vue() {
-        return getVueById(this._vueBinding);
+      /** Runs the game's own control without the clickability guards of click(). */
+      activate() {
+        return readActionControls().activate(this._vueBinding);
       }
       /* That's a right(ish) way to do, but compared to hardcoded numbers it's a performance tax for... nothing really, as i'll still need to manually declare a lot of things for each new building, and it's already declared for all existing ones. I'll put it on hold for now.
           get gameMax() {
@@ -8555,7 +8646,7 @@
         if (this._tab === "city" && !readGame().global.settings.showCity || this._tab === "space" && !readGame().global.settings.showSpace && !readGame().global.settings.showOuter || this._tab === "interstellar" && !readGame().global.settings.showDeep || this._tab === "portal" && !readGame().global.settings.showPortal || this._tab === "galaxy" && !readGame().global.settings.showGalactic || this._tab === "tauceti" && !readGame().global.settings.showTau || this._tab === "eden" && !readGame().global.settings.showEden) {
           return false;
         }
-        return this.vue !== void 0;
+        return readActionControls().isRendered(this._vueBinding);
       }
       isSwitchable() {
         return Object.hasOwn(this.definition, "powered") || Object.hasOwn(this.definition, "switchable");
@@ -8624,9 +8715,10 @@
           return false;
         }
         let doMultiClick = this.is.multiSegmented && readSettings3().buildingsUseMultiClick;
+        const countBeforeClick = this.count;
         let amountToBuild = 1;
         if (doMultiClick) {
-          amountToBuild = this.gameMax - this.count;
+          amountToBuild = this.gameMax - countBeforeClick;
           for (let res in this.cost) {
             amountToBuild = Math.min(
               amountToBuild,
@@ -8637,15 +8729,25 @@
             amountToBuild = 1;
           }
         }
+        readKeyManager().set(doMultiClick, doMultiClick, doMultiClick);
+        if (this.is.prestige) {
+          logPrestige();
+        }
+        const actionControls = readActionControls();
+        if (readSettings3().performanceHackAvoidDrawTech && this.definition.refresh && countBeforeClick > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !readGame().global.race.inflation && !actionControls.isTooltipShown()) {
+          this.definition.action();
+        } else if (!actionControls.activate(this._vueBinding)) {
+          return false;
+        }
         for (let res in this.cost) {
           readResources2()[res].currentQuantity -= this.cost[res] * amountToBuild;
         }
         if (readGame().global.race.species !== "protoplasm" && !readLogIgnore().includes(this.id)) {
-          if (this.gameMax < Number.MAX_SAFE_INTEGER && this.count + amountToBuild < this.gameMax) {
+          if (this.gameMax < Number.MAX_SAFE_INTEGER && countBeforeClick + amountToBuild < this.gameMax) {
             readGameLog().logSuccess(
               "multi_construction",
               readPoly().loc("build_success", [
-                `${this.title} (${this.count + amountToBuild})`
+                `${this.title} (${countBeforeClick + amountToBuild})`
               ]),
               ["queue", "building_queue"]
             );
@@ -8656,25 +8758,6 @@
               ["queue", "building_queue"]
             );
           }
-        }
-        readKeyManager().set(doMultiClick, doMultiClick, doMultiClick);
-        if (this.is.prestige) {
-          logPrestige();
-        }
-        let popper = $("#popper");
-        if (readSettings3().performanceHackAvoidDrawTech && this.definition.refresh && this.count > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !readGame().global.race.inflation && (popper.length === 0 || !popper.is(":visible"))) {
-          this.definition.action();
-          return true;
-        }
-        if (popper.length > 0 && popper.data("id").indexOf(this._vueBinding) === -1) {
-          popper.attr("id", "TotallyNotAPopper");
-          try {
-            this.vue.action();
-          } finally {
-            popper.attr("id", "popper");
-          }
-        } else {
-          this.vue.action();
         }
         if (this.is.prestige) {
           readState().goal = "GameOverMan";
@@ -8802,19 +8885,11 @@
         if (adjustCount === 0 || !this.hasState()) {
           return false;
         }
-        let vue = this.vue;
-        if (adjustCount > 0) {
-          for (let m of readKeyManager().click(adjustCount)) {
-            vue.power_on();
-          }
-          return true;
-        }
-        if (adjustCount < 0) {
-          for (let m of readKeyManager().click(adjustCount * -1)) {
-            vue.power_off();
-          }
-          return true;
-        }
+        const request = {
+          elementId: this._vueBinding,
+          count: Math.abs(adjustCount)
+        };
+        return adjustCount > 0 ? readActionControls().powerOn(request) : readActionControls().powerOff(request);
       }
     }
     class CityAction extends Action {
@@ -8884,24 +8959,17 @@
       }
     }
     class ModalAction extends Action {
-      constructor(...args) {
-        super(...args);
-        this._vue = void 0;
-      }
-      get vue() {
-        return this._vue;
-      }
       isOptionsCached() {
-        return this._vue !== void 0;
+        return readActionControls().isCaptured(this._vueBinding);
       }
       cacheOptions() {
-        this._vue = getVueById(this._vueBinding);
+        readActionControls().capture(this._vueBinding);
       }
       isUnlocked() {
         if (!readGame().global.settings.showSpace) {
           return false;
         }
-        return this._vue !== void 0;
+        return this.isOptionsCached();
       }
     }
     class Project extends Action {
@@ -41169,14 +41237,10 @@
               buildings["PitAbsorptionChamber"],
               "buildings.PitAbsorptionChamber"
             );
-            const vue = requireRecord(
-              chamber["vue"],
-              "buildings.PitAbsorptionChamber.vue"
-            );
             requireFunction(
-              vue["action"],
-              "buildings.PitAbsorptionChamber.vue.action"
-            ).call(vue);
+              chamber["activate"],
+              "buildings.PitAbsorptionChamber.activate"
+            ).call(chamber);
             return;
           }
           case "load-queued-settings":
@@ -56864,6 +56928,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => KeyManager.click(count2)
     });
+    const actionControls = createGameActionControls({
+      getVueById: (id) => getVueById(id),
+      selectTooltip: () => $("#popper"),
+      clickSteps: (count2) => KeyManager.click(count2)
+    });
     const {
       Job,
       BasicJob,
@@ -56898,7 +56967,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       MajorTrait,
       GenusTrait
     } = createEntityClasses({
-      readJQuery: () => $,
       readArpaIds: () => arpaIds,
       readBuildingIds: () => buildingIds,
       readBuildings: () => buildings,
@@ -56936,6 +57004,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readTraitVal: () => traitVal,
       readTriggerManager: () => TriggerManager,
       readWarManager: () => WarManager,
+      readActionControls: () => actionControls,
       readFeatureVisibility: () => featureVisibility,
       readJobControls: () => jobControls,
       readGameModal: () => gameModal,

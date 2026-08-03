@@ -57,6 +57,7 @@ import { createOverrideEditor } from "../../application/override-editing.ts";
 import { createOverrideEvaluationSource } from "./override-evaluation.ts";
 import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
+import { createGameActionControls } from "../browser/game-action-controls.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
 import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
@@ -2561,6 +2562,11 @@ function startEvolveRuntimeComposition(
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => KeyManager.click(count),
   });
+  const actionControls = createGameActionControls({
+    getVueById: (id) => getVueById(id),
+    selectTooltip: () => $("#popper"),
+    clickSteps: (count) => KeyManager.click(count),
+  });
 
   // Class definitions
   const {
@@ -2597,7 +2603,6 @@ function startEvolveRuntimeComposition(
     MajorTrait,
     GenusTrait,
   } = createEntityClasses({
-    readJQuery: () => $,
     readArpaIds: () => arpaIds,
     readBuildingIds: () => buildingIds,
     readBuildings: () => buildings,
@@ -2635,6 +2640,7 @@ function startEvolveRuntimeComposition(
     readTraitVal: () => traitVal,
     readTriggerManager: () => TriggerManager,
     readWarManager: () => WarManager,
+    readActionControls: () => actionControls,
     readFeatureVisibility: () => featureVisibility,
     readJobControls: () => jobControls,
     readGameModal: () => gameModal,

@@ -111,7 +111,7 @@ assert.deepEqual(
 );
 assert.equal(
   catalogHash,
-  "8dc61ff661ba311032115b97d1c97347d06e00316ba19ae55e94cc5d4d359852",
+  "ed1e9f9a256bbdf7425d9e6968b95cc623e079384206b8728bdb00b57fcffb7c",
 );
 // Every building is stamped with the catalog key it is filed under, and every
 // ResourceAction with the resource key it was constructed from. Typed policies
