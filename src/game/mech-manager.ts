@@ -1,10 +1,12 @@
 import type { GameMechControlsPort } from "../ports/game-mech-controls.ts";
+import type { GameMechListControlsPort } from "../ports/game-mech-list-controls.ts";
 import type { RandomSource } from "../ports/randomness.ts";
 
 type AnyFunction = (...args: any[]) => any;
 type AnyRecord = Record<string, any>;
 
 const assemblyElementId = "mechAssembly";
+const mechListElementId = "mechList";
 
 type MechManagerDependencies = {
   getGame: () => AnyRecord;
@@ -13,16 +15,11 @@ type MechManagerDependencies = {
   getBuildings: () => AnyRecord;
   getPoly: () => AnyRecord;
   getGameLog: () => AnyRecord;
-  getNeedSandboxBypass: () => boolean;
-  getWin: () => AnyRecord;
-  getSortable: () => AnyRecord;
   getUpdateDebugData: () => AnyFunction;
   getCreateMechInfo: () => AnyFunction;
   getMechControls: () => GameMechControlsPort;
-  getVueById: (id: string) => any;
-  getVueElement: (view: unknown) => unknown;
+  getMechListControls: () => GameMechListControlsPort;
   kCombinations: (values: any[], size: number) => any[][];
-  cloneIntoPage: (value: unknown, options?: AnyRecord) => any;
   createMutationObserver: (callback: (...args: any[]) => void) => unknown;
   randomSource: RandomSource;
 };
@@ -34,16 +31,11 @@ export function createMechManager({
   getBuildings,
   getPoly,
   getGameLog,
-  getNeedSandboxBypass,
-  getWin,
-  getSortable,
   getUpdateDebugData,
   getCreateMechInfo,
   getMechControls,
-  getVueById,
-  getVueElement,
+  getMechListControls,
   kCombinations,
-  cloneIntoPage,
   createMutationObserver,
   randomSource,
 }: MechManagerDependencies) {
@@ -53,9 +45,6 @@ export function createMechManager({
   let buildings: AnyRecord;
   let poly: AnyRecord;
   let GameLog: AnyRecord;
-  let needSandboxBypass: boolean;
-  let win: AnyRecord;
-  let Sortable: AnyRecord;
 
   const k_combinations = kCombinations;
   const updateDebugData = (...args: any[]) => getUpdateDebugData()(...args);
@@ -68,15 +57,9 @@ export function createMechManager({
     buildings = getBuildings();
     poly = getPoly();
     GameLog = getGameLog();
-    needSandboxBypass = getNeedSandboxBypass();
-    win = getWin();
-    Sortable = getSortable();
   }
 
   const MechManager: AnyRecord = {
-    _listVueBinding: "mechList",
-    _listVue: undefined,
-
     activeMechs: [],
     inactiveMechs: [],
     mechsPower: 0,
@@ -357,8 +340,7 @@ export function createMechManager({
       if (buildings.SpireMechBay.count < 1) {
         return false;
       }
-      this._listVue = getVueById(this._listVueBinding);
-      if (this._listVue === undefined) {
+      if (!getMechListControls().isRendered(mechListElementId)) {
         return false;
       }
       if (!getMechControls().isRendered(assemblyElementId)) {
@@ -697,24 +679,18 @@ export function createMechManager({
     },
 
     scrapMech(mech: any) {
-      this._listVue.scrap(mech.id);
+      return getMechListControls().scrapMech({
+        elementId: mechListElementId,
+        mechId: mech.id,
+      });
     },
 
     dragMech(oldId: any, newId: any) {
-      let sortObj = {
-        oldDraggableIndex: oldId,
-        newDraggableIndex: newId,
-        from: { querySelectorAll: () => [], insertBefore: () => false },
-      };
-      const listElement = getVueElement(this._listVue);
-      if (needSandboxBypass) {
-        // Yet another FF fix
-        win.Sortable.get(listElement).options.onEnd(
-          cloneIntoPage(sortObj, { cloneFunctions: true }),
-        );
-      } else {
-        Sortable.get(listElement).options.onEnd(sortObj);
-      }
+      return getMechListControls().dragMech({
+        elementId: mechListElementId,
+        oldIndex: oldId,
+        newIndex: newId,
+      });
     },
   };
 

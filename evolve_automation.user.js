@@ -2877,6 +2877,62 @@
     });
   }
 
+  // src/adapters/browser/game-mech-list-controls.ts
+  function hasScrapMethod(view) {
+    return isRecord(view) && typeof view["scrap"] === "function";
+  }
+  function createGameMechListControls({
+    getVueById,
+    getSortable,
+    getPageSortable,
+    isSandboxBypass,
+    cloneIntoPage
+  }) {
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      scrapMech(request) {
+        const view = getVueById(request.elementId);
+        if (!hasScrapMethod(view)) {
+          return false;
+        }
+        Reflect.apply(view["scrap"], view, [request.mechId]);
+        return true;
+      },
+      dragMech(request) {
+        const view = getVueById(request.elementId);
+        if (!isRecord(view)) {
+          return false;
+        }
+        const element = readProperty(view, "$el");
+        if (typeof element !== "object" || element === null) {
+          return false;
+        }
+        const sortable = isSandboxBypass() ? getPageSortable() : getSortable();
+        if (!isRecord(sortable) || typeof sortable["get"] !== "function") {
+          return false;
+        }
+        const instance = Reflect.apply(sortable["get"], sortable, [element]);
+        if (!isRecord(instance)) {
+          return false;
+        }
+        const options2 = instance["options"];
+        if (!isRecord(options2) || typeof options2["onEnd"] !== "function") {
+          return false;
+        }
+        const event = {
+          oldDraggableIndex: request.oldIndex,
+          newDraggableIndex: request.newIndex,
+          from: { querySelectorAll: () => [], insertBefore: () => false }
+        };
+        const payload = isSandboxBypass() ? cloneIntoPage(event, { cloneFunctions: true }) : event;
+        Reflect.apply(options2["onEnd"], options2, [payload]);
+        return true;
+      }
+    });
+  }
+
   // src/adapters/browser/game-job-controls.ts
   function createGameJobControls({
     getVueById,
@@ -5717,6 +5773,7 @@
 
   // src/game/mech-manager.ts
   var assemblyElementId = "mechAssembly";
+  var mechListElementId = "mechList";
   function createMechManager({
     getGame,
     getSettings,
@@ -5724,16 +5781,11 @@
     getBuildings,
     getPoly,
     getGameLog,
-    getNeedSandboxBypass,
-    getWin,
-    getSortable,
     getUpdateDebugData,
     getCreateMechInfo,
     getMechControls,
-    getVueById,
-    getVueElement,
+    getMechListControls,
     kCombinations,
-    cloneIntoPage,
     createMutationObserver,
     randomSource
   }) {
@@ -5743,9 +5795,6 @@
     let buildings;
     let poly;
     let GameLog;
-    let needSandboxBypass;
-    let win;
-    let Sortable;
     const k_combinations2 = kCombinations;
     const updateDebugData = (...args) => getUpdateDebugData()(...args);
     const createMechInfo = (...args) => getCreateMechInfo()(...args);
@@ -5756,13 +5805,8 @@
       buildings = getBuildings();
       poly = getPoly();
       GameLog = getGameLog();
-      needSandboxBypass = getNeedSandboxBypass();
-      win = getWin();
-      Sortable = getSortable();
     }
     const MechManager = {
-      _listVueBinding: "mechList",
-      _listVue: void 0,
       activeMechs: [],
       inactiveMechs: [],
       mechsPower: 0,
@@ -5995,8 +6039,7 @@
         if (buildings.SpireMechBay.count < 1) {
           return false;
         }
-        this._listVue = getVueById(this._listVueBinding);
-        if (this._listVue === void 0) {
+        if (!getMechListControls().isRendered(mechListElementId)) {
           return false;
         }
         if (!getMechControls().isRendered(assemblyElementId)) {
@@ -6239,22 +6282,17 @@
         }
       },
       scrapMech(mech) {
-        this._listVue.scrap(mech.id);
+        return getMechListControls().scrapMech({
+          elementId: mechListElementId,
+          mechId: mech.id
+        });
       },
       dragMech(oldId, newId) {
-        let sortObj = {
-          oldDraggableIndex: oldId,
-          newDraggableIndex: newId,
-          from: { querySelectorAll: () => [], insertBefore: () => false }
-        };
-        const listElement = getVueElement(this._listVue);
-        if (needSandboxBypass) {
-          win.Sortable.get(listElement).options.onEnd(
-            cloneIntoPage(sortObj, { cloneFunctions: true })
-          );
-        } else {
-          Sortable.get(listElement).options.onEnd(sortObj);
-        }
+        return getMechListControls().dragMech({
+          elementId: mechListElementId,
+          oldIndex: oldId,
+          newIndex: newId
+        });
       }
     };
     for (const key of Reflect.ownKeys(MechManager)) {
@@ -57304,6 +57342,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const mechControls = createGameMechControls({
       getVueById: (id) => getVueById(id)
     });
+    const mechListControls = createGameMechListControls({
+      getVueById: (id) => getVueById(id),
+      getSortable: () => runtimeEnvironment.Sortable,
+      getPageSortable: () => win.Sortable,
+      isSandboxBypass: () => needSandboxBypass,
+      cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2)
+    });
     const {
       Job,
       BasicJob,
@@ -57933,16 +57978,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBuildings: () => buildings,
       getPoly: () => poly,
       getGameLog: () => GameLog,
-      getNeedSandboxBypass: () => needSandboxBypass,
-      getWin: () => win,
-      getSortable: () => runtimeEnvironment.Sortable,
       getUpdateDebugData: () => updateDebugData,
       getCreateMechInfo: () => createMechInfo,
       getMechControls: () => mechControls,
-      getVueById: (id) => getVueById(id),
-      getVueElement,
+      getMechListControls: () => mechListControls,
       kCombinations: k_combinations,
-      cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback),
       randomSource
     });

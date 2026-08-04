@@ -182,7 +182,7 @@ vueById.mechAssembly = {
   setEquip: (...args) => trace.push(["equip", ...args]),
   build: () => trace.push(["build"]),
 };
-MechManager._listVue = {
+vueById.mechList = {
   $el: {},
   scrap: (id) => trace.push(["scrap", id]),
 };

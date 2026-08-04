@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createMechManager } from "../src/game/mech-manager.ts";
 import { createGameMechControls } from "../src/adapters/browser/game-mech-controls.ts";
+import { createGameMechListControls } from "../src/adapters/browser/game-mech-list-controls.ts";
 
 let game;
 let settings;
@@ -22,25 +23,27 @@ const { MechManager } = createMechManager({
   getBuildings: () => buildings,
   getPoly: () => poly,
   getGameLog: () => GameLog,
-  getNeedSandboxBypass: () => needSandboxBypass,
-  getWin: () => win,
-  getSortable: () => Sortable,
   getUpdateDebugData: () => () => trace.push(["debug"]),
   getCreateMechInfo: () => () => trace.push(["info"]),
   getMechControls: () =>
     createGameMechControls({
       getVueById: (id) => vueById[id],
     }),
-  getVueById: (id) => vueById[id],
-  getVueElement: (view) => view?.$el,
+  getMechListControls: () =>
+    createGameMechListControls({
+      getVueById: (id) => vueById[id],
+      getSortable: () => Sortable,
+      getPageSortable: () => win.Sortable,
+      isSandboxBypass: () => needSandboxBypass,
+      cloneIntoPage: (value, options) => {
+        trace.push(["clone", options.cloneFunctions]);
+        return value;
+      },
+    }),
   kCombinations: (values, size) => {
     if (size === 0) return [[]];
     if (size === 1) return values.map((value) => [value]);
     return [];
-  },
-  cloneIntoPage: (value, options) => {
-    trace.push(["clone", options.cloneFunctions]);
-    return value;
   },
   createMutationObserver: (callback) => {
     observerCallback = callback;
@@ -182,7 +185,6 @@ assert.deepEqual(MechManager.getMechRefund({ size: "small" }), [4, 5]);
 // Firefox sandbox drag path clones the synthetic Sortable event.
 needSandboxBypass = true;
 win = { Sortable };
-MechManager._listVue = { $el: {} };
 MechManager.dragMech(4, 2);
 assert.deepEqual(trace, [
   ["clone", true],

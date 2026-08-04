@@ -64,6 +64,7 @@ import { createGameIndustryControls } from "../browser/game-industry-controls.ts
 import { createGameFleetControls } from "../browser/game-fleet-controls.ts";
 import { createGameGarrisonControls } from "../browser/game-garrison-controls.ts";
 import { createGameMechControls } from "../browser/game-mech-controls.ts";
+import { createGameMechListControls } from "../browser/game-mech-list-controls.ts";
 import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
@@ -2596,6 +2597,14 @@ function startEvolveRuntimeComposition(
   const mechControls = createGameMechControls({
     getVueById: (id) => getVueById(id),
   });
+  const mechListControls = createGameMechListControls({
+    getVueById: (id) => getVueById(id),
+    getSortable: () => runtimeEnvironment.Sortable,
+    getPageSortable: () => win.Sortable,
+    isSandboxBypass: () => needSandboxBypass,
+    cloneIntoPage: (value, options) =>
+      userscriptEnvironment.cloneIntoPage(value, options),
+  });
 
   // Class definitions
   const {
@@ -3275,17 +3284,11 @@ function startEvolveRuntimeComposition(
     getBuildings: () => buildings,
     getPoly: () => poly,
     getGameLog: () => GameLog,
-    getNeedSandboxBypass: () => needSandboxBypass,
-    getWin: () => win,
-    getSortable: () => runtimeEnvironment.Sortable,
     getUpdateDebugData: () => updateDebugData,
     getCreateMechInfo: () => createMechInfo,
     getMechControls: () => mechControls,
-    getVueById: (id) => getVueById(id),
-    getVueElement,
+    getMechListControls: () => mechListControls,
     kCombinations: k_combinations,
-    cloneIntoPage: (value, options) =>
-      userscriptEnvironment.cloneIntoPage(value, options),
     createMutationObserver: (callback) =>
       new runtimeEnvironment.MutationObserver(callback),
     randomSource,
