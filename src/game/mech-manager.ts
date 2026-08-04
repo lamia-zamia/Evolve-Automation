@@ -1,7 +1,10 @@
+import type { GameMechControlsPort } from "../ports/game-mech-controls.ts";
 import type { RandomSource } from "../ports/randomness.ts";
 
 type AnyFunction = (...args: any[]) => any;
 type AnyRecord = Record<string, any>;
+
+const assemblyElementId = "mechAssembly";
 
 type MechManagerDependencies = {
   getGame: () => AnyRecord;
@@ -15,6 +18,7 @@ type MechManagerDependencies = {
   getSortable: () => AnyRecord;
   getUpdateDebugData: () => AnyFunction;
   getCreateMechInfo: () => AnyFunction;
+  getMechControls: () => GameMechControlsPort;
   getVueById: (id: string) => any;
   getVueElement: (view: unknown) => unknown;
   kCombinations: (values: any[], size: number) => any[][];
@@ -35,6 +39,7 @@ export function createMechManager({
   getSortable,
   getUpdateDebugData,
   getCreateMechInfo,
+  getMechControls,
   getVueById,
   getVueElement,
   kCombinations,
@@ -69,8 +74,6 @@ export function createMechManager({
   }
 
   const MechManager: AnyRecord = {
-    _assemblyVueBinding: "mechAssembly",
-    _assemblyVue: undefined,
     _listVueBinding: "mechList",
     _listVue: undefined,
 
@@ -354,12 +357,11 @@ export function createMechManager({
       if (buildings.SpireMechBay.count < 1) {
         return false;
       }
-      this._assemblyVue = getVueById(this._assemblyVueBinding);
-      if (this._assemblyVue === undefined) {
-        return false;
-      }
       this._listVue = getVueById(this._listVueBinding);
       if (this._listVue === undefined) {
+        return false;
+      }
+      if (!getMechControls().isRendered(assemblyElementId)) {
         return false;
       }
 
@@ -676,21 +678,22 @@ export function createMechManager({
     },
 
     buildMech(mech: any) {
-      this._assemblyVue.b.infernal = mech.infernal;
-      this._assemblyVue.setSize(mech.size);
-      this._assemblyVue.setType(mech.chassis);
-      for (let i = 0; i < mech.hardpoint.length; i++) {
-        this._assemblyVue.setWep(mech.hardpoint[i], i);
+      if (
+        getMechControls().assembleMech({
+          elementId: assemblyElementId,
+          size: mech.size,
+          chassis: mech.chassis,
+          hardpoints: mech.hardpoint,
+          equips: mech.equip,
+          infernal: mech.infernal,
+        })
+      ) {
+        GameLog.logSuccess(
+          "mech_build",
+          `${this.mechDesc(mech)} mech has been assembled.`,
+          ["hell"],
+        );
       }
-      for (let i = 0; i < mech.equip.length; i++) {
-        this._assemblyVue.setEquip(mech.equip[i], i);
-      }
-      this._assemblyVue.build();
-      GameLog.logSuccess(
-        "mech_build",
-        `${this.mechDesc(mech)} mech has been assembled.`,
-        ["hell"],
-      );
     },
 
     scrapMech(mech: any) {

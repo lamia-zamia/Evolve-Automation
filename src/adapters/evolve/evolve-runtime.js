@@ -63,6 +63,7 @@ import { createGameFeatureVisibility } from "../browser/game-feature-visibility.
 import { createGameIndustryControls } from "../browser/game-industry-controls.ts";
 import { createGameFleetControls } from "../browser/game-fleet-controls.ts";
 import { createGameGarrisonControls } from "../browser/game-garrison-controls.ts";
+import { createGameMechControls } from "../browser/game-mech-controls.ts";
 import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
@@ -2592,6 +2593,9 @@ function startEvolveRuntimeComposition(
     clearClickMultipliers: () => KeyManager.set(false, false, false),
     callVueMethod,
   });
+  const mechControls = createGameMechControls({
+    getVueById: (id) => getVueById(id),
+  });
 
   // Class definitions
   const {
@@ -3276,6 +3280,7 @@ function startEvolveRuntimeComposition(
     getSortable: () => runtimeEnvironment.Sortable,
     getUpdateDebugData: () => updateDebugData,
     getCreateMechInfo: () => createMechInfo,
+    getMechControls: () => mechControls,
     getVueById: (id) => getVueById(id),
     getVueElement,
     kCombinations: k_combinations,

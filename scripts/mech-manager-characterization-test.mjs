@@ -5,9 +5,17 @@ import vm from "node:vm";
 const source = await readFile("evolve_automation.user.js", "utf8");
 const hooks = {};
 const trace = [];
+const vueById = {};
 const sandbox = {
   __EA_TEST_HOOKS__: hooks,
   console,
+  document: {
+    body: { appendChild() {} },
+    createElement: () => ({}),
+    getElementById: (id) =>
+      vueById[id] === undefined ? null : { __vue__: vueById[id] },
+    querySelector: () => null,
+  },
   localStorage: { getItem: () => null },
   MutationObserver: class {
     constructor(callback) {
@@ -166,7 +174,7 @@ MechManager.mechsPower = 2;
 assert.ok(Math.abs(MechManager.getTimeToClear() - 35.714285714285715) < 1e-12);
 
 MechManager.bestMech.small = { power: stats.power };
-MechManager._assemblyVue = {
+vueById.mechAssembly = {
   b: {},
   setSize: (value) => trace.push(["size", value]),
   setType: (value) => trace.push(["type", value]),

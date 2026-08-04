@@ -2834,6 +2834,49 @@
     });
   }
 
+  // src/adapters/browser/game-mech-controls.ts
+  function hasAssemblyMethods(view) {
+    if (!isRecord(view)) {
+      return false;
+    }
+    return typeof view["setSize"] === "function" && typeof view["setType"] === "function" && typeof view["setWep"] === "function" && typeof view["setEquip"] === "function" && typeof view["build"] === "function";
+  }
+  function createGameMechControls({
+    getVueById
+  }) {
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      assembleMech(request) {
+        const view = getVueById(request.elementId);
+        if (!hasAssemblyMethods(view)) {
+          return false;
+        }
+        const b = view["b"];
+        if (isRecord(b)) {
+          b["infernal"] = request.infernal;
+        }
+        const method = (name) => requireFunction(view[name], `${request.elementId} Vue view.${name}`);
+        const setSize = method("setSize");
+        const setType = method("setType");
+        const setWep = method("setWep");
+        const setEquip = method("setEquip");
+        const build = method("build");
+        Reflect.apply(setSize, view, [request.size]);
+        Reflect.apply(setType, view, [request.chassis]);
+        for (let slot = 0; slot < request.hardpoints.length; slot++) {
+          Reflect.apply(setWep, view, [request.hardpoints[slot], slot]);
+        }
+        for (let slot = 0; slot < request.equips.length; slot++) {
+          Reflect.apply(setEquip, view, [request.equips[slot], slot]);
+        }
+        Reflect.apply(build, view, []);
+        return true;
+      }
+    });
+  }
+
   // src/adapters/browser/game-job-controls.ts
   function createGameJobControls({
     getVueById,
@@ -5673,6 +5716,7 @@
   }
 
   // src/game/mech-manager.ts
+  var assemblyElementId = "mechAssembly";
   function createMechManager({
     getGame,
     getSettings,
@@ -5685,6 +5729,7 @@
     getSortable,
     getUpdateDebugData,
     getCreateMechInfo,
+    getMechControls,
     getVueById,
     getVueElement,
     kCombinations,
@@ -5716,8 +5761,6 @@
       Sortable = getSortable();
     }
     const MechManager = {
-      _assemblyVueBinding: "mechAssembly",
-      _assemblyVue: void 0,
       _listVueBinding: "mechList",
       _listVue: void 0,
       activeMechs: [],
@@ -5952,12 +5995,11 @@
         if (buildings.SpireMechBay.count < 1) {
           return false;
         }
-        this._assemblyVue = getVueById(this._assemblyVueBinding);
-        if (this._assemblyVue === void 0) {
-          return false;
-        }
         this._listVue = getVueById(this._listVueBinding);
         if (this._listVue === void 0) {
+          return false;
+        }
+        if (!getMechControls().isRendered(assemblyElementId)) {
           return false;
         }
         this.activeMechs = [];
@@ -6181,21 +6223,20 @@
         )} (${Math.round(rating * 100)}%)`;
       },
       buildMech(mech) {
-        this._assemblyVue.b.infernal = mech.infernal;
-        this._assemblyVue.setSize(mech.size);
-        this._assemblyVue.setType(mech.chassis);
-        for (let i = 0; i < mech.hardpoint.length; i++) {
-          this._assemblyVue.setWep(mech.hardpoint[i], i);
+        if (getMechControls().assembleMech({
+          elementId: assemblyElementId,
+          size: mech.size,
+          chassis: mech.chassis,
+          hardpoints: mech.hardpoint,
+          equips: mech.equip,
+          infernal: mech.infernal
+        })) {
+          GameLog.logSuccess(
+            "mech_build",
+            `${this.mechDesc(mech)} mech has been assembled.`,
+            ["hell"]
+          );
         }
-        for (let i = 0; i < mech.equip.length; i++) {
-          this._assemblyVue.setEquip(mech.equip[i], i);
-        }
-        this._assemblyVue.build();
-        GameLog.logSuccess(
-          "mech_build",
-          `${this.mechDesc(mech)} mech has been assembled.`,
-          ["hell"]
-        );
       },
       scrapMech(mech) {
         this._listVue.scrap(mech.id);
@@ -57260,6 +57301,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       clearClickMultipliers: () => KeyManager.set(false, false, false),
       callVueMethod
     });
+    const mechControls = createGameMechControls({
+      getVueById: (id) => getVueById(id)
+    });
     const {
       Job,
       BasicJob,
@@ -57894,6 +57938,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSortable: () => runtimeEnvironment.Sortable,
       getUpdateDebugData: () => updateDebugData,
       getCreateMechInfo: () => createMechInfo,
+      getMechControls: () => mechControls,
       getVueById: (id) => getVueById(id),
       getVueElement,
       kCombinations: k_combinations,

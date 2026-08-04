@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createMechManager } from "../src/game/mech-manager.ts";
+import { createGameMechControls } from "../src/adapters/browser/game-mech-controls.ts";
 
 let game;
 let settings;
@@ -26,6 +27,10 @@ const { MechManager } = createMechManager({
   getSortable: () => Sortable,
   getUpdateDebugData: () => () => trace.push(["debug"]),
   getCreateMechInfo: () => () => trace.push(["info"]),
+  getMechControls: () =>
+    createGameMechControls({
+      getVueById: (id) => vueById[id],
+    }),
   getVueById: (id) => vueById[id],
   getVueElement: (view) => view?.$el,
   kCombinations: (values, size) => {
