@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameFleetControls } from "../src/adapters/browser/game-fleet-controls.ts";
 import { createFleetManagers } from "../src/game/fleet-managers.ts";
 
 let game;
@@ -10,22 +11,25 @@ let haveTech = () => false;
 let vueById = {};
 const trace = [];
 
+const fleetControls = createGameFleetControls({
+  getVueById: (id) => vueById[id],
+  clickSteps: (count) => Array.from({ length: Math.max(0, count) }),
+  getGame: () => game,
+  getJQuery: () => (selector) => ({
+    eq: (index) => ({
+      click: () => trace.push(["jquery", selector, index]),
+    }),
+  }),
+});
+
 const { FleetManagerOuter, FleetManager } = createFleetManagers({
   getGame: () => game,
   getSettings: () => settings,
   getResources: () => resources,
   getBuildings: () => buildings,
   getPoly: () => poly,
-  getVueById: (id) => vueById[id],
-  getKeyManager: () => ({
-    click: (count) => Array.from({ length: Math.max(0, count) }),
-  }),
   getHaveTech: () => haveTech,
-  getJQuery: () => (selector) => ({
-    eq: (index) => ({
-      click: () => trace.push(["jquery", selector, index]),
-    }),
-  }),
+  fleetControls,
 });
 
 game = {
@@ -69,41 +73,98 @@ const explorer = {
 game.global.space.shipyard = { blueprint: { ...explorer }, ships: [] };
 game.global.tech.syndicate = 1;
 vueById.shipPlans = {
-  avail: () => true,
+  avail: (...args) => {
+    trace.push(["avail", ...args]);
+    return true;
+  },
   setVal: (...args) => trace.push(["set", ...args]),
   powerText: () => "has-text-danger",
   build: () => trace.push(["build"]),
 };
 assert.equal(FleetManagerOuter.initFleet(), true);
+
+// The explorer design rule is the manager's own: a weapon or sensor the preset
+// would not allow is refused before any panel question.
 assert.equal(FleetManagerOuter.avail(explorer), false);
-const fighter = { ...explorer, class: "corvette", weapon: "railgun" };
+
+// A differing part is asked of the panel with its option index from the
+// catalog, and a part the panel refuses fails the whole design.
+const fighter = {
+  ...explorer,
+  class: "corvette",
+  weapon: "railgun",
+};
+assert.equal(FleetManagerOuter.avail(fighter), true);
+assert.deepEqual(trace, [
+  ["avail", "class", 0, "corvette"],
+  ["avail", "weapon", 0, "railgun"],
+]);
+trace.length = 0;
+vueById.shipPlans.avail = (...args) => args[0] !== "weapon";
+assert.equal(FleetManagerOuter.avail(fighter), false);
+
+// A blueprint that cannot be powered refuses the build before any resource is
+// deducted, after the differing parts have been configured.
+trace.length = 0;
+vueById.shipPlans.avail = () => true;
+game.global.space.shipyard.blueprint = {
+  ...fighter,
+  class: "frigate",
+  weapon: "laser",
+};
 assert.equal(FleetManagerOuter.build(fighter, "spc_red"), false);
 assert.equal(resources.Alloy.currentQuantity, 10);
+assert.deepEqual(trace, [
+  ["set", "class", "corvette"],
+  ["set", "weapon", "railgun"],
+]);
 
-// Fallbacks and live haveTech selection in the Titan/Enceladus divisor branch.
-assert.deepEqual(FleetManagerOuter.syndicate("spc_red", true, false), {
-  p: 1,
-  r: 0,
-  s: 0,
-});
-game.global.race.truepath = true;
-game.global.space.syndicate = { spc_titan: 600 };
-game.global.space.shipyard.ships = [];
-game.actions.space.spc_titan = {
-  info: { syndicate_cap: () => 1_200, syndicate: () => true },
+// With power in order the build lands with the sort checkbox toggled around it
+// and the built ship parked at the end of the list.
+vueById.shipPlans.powerText = () => "has-text-success";
+vueById.shipReg0 = {
+  setLoc: (...args) => trace.push(["location", ...args]),
 };
-buildings.TitanSAM.stateOnCount = 4;
-const noTriton = FleetManagerOuter.syndicate("spc_titan", true, false);
-assert.equal(noTriton.r, 580);
-assert.equal(noTriton.s, 0);
-assert.ok(Math.abs(noTriton.p - 0.0333) < 1e-12);
-haveTech = () => true;
-const withTriton = FleetManagerOuter.syndicate("spc_titan", true, false);
-assert.equal(withTriton.r, 580);
-assert.equal(withTriton.s, 0);
-assert.ok(Math.abs(withTriton.p - 0.5167) < 1e-12);
+game.global.space.shipyard.sort = true;
+game.global.space.shipyard.ships = [
+  { ...fighter, name: "A", location: "spc_red" },
+];
+resources.Alloy.currentQuantity = 10;
+trace.length = 0;
+assert.equal(FleetManagerOuter.build(fighter, "spc_red"), true);
+assert.equal(resources.Alloy.currentQuantity, -15);
+assert.deepEqual(trace, [
+  ["set", "class", "corvette"],
+  ["set", "weapon", "railgun"],
+  ["jquery", "#shipPlans .b-checkbox", 1],
+  ["build"],
+  ["location", "spc_red", 1],
+  ["jquery", "#shipPlans .b-checkbox", 1],
+]);
 
-// Inner fleet keeps its technology/Vue gating and click counts.
+// A yard that sorts nothing needs no toggle, and a yard with no ship list yet
+// still builds without a parking read.
+game.global.space.shipyard.sort = false;
+resources.Alloy.currentQuantity = 10;
+trace.length = 0;
+assert.equal(FleetManagerOuter.build(fighter, "spc_red"), true);
+assert.deepEqual(trace, [
+  ["set", "class", "corvette"],
+  ["set", "weapon", "railgun"],
+  ["build"],
+  ["location", "spc_red", 1],
+]);
+game.global.space.shipyard.ships = undefined;
+trace.length = 0;
+assert.equal(FleetManagerOuter.build(fighter, "spc_red"), true);
+assert.deepEqual(trace, [
+  ["set", "class", "corvette"],
+  ["set", "weapon", "railgun"],
+  ["build"],
+]);
+
+// The piracy panel keeps its technology gate, and moves one ship per click
+// step through the real adapter.
 game.global.tech.piracy = 1;
 assert.equal(FleetManager.initFleet(), false);
 vueById.fleet = {
@@ -118,6 +179,41 @@ assert.deepEqual(trace.slice(-3), [
   ["add", "spc_titan", "cruiser"],
   ["sub", "spc_titan", "cruiser"],
 ]);
+
+// A withdrawn panel refuses both directions instead of throwing, and a count
+// that resolves to no steps is still accepted by an actionable panel.
+delete vueById.fleet;
+assert.equal(FleetManager.addShip("spc_titan", "cruiser", 2), false);
+assert.equal(FleetManager.subShip("spc_titan", "cruiser", 1), false);
+vueById.fleet = {
+  add: () => trace.push(["add"]),
+  sub: () => trace.push(["sub"]),
+};
+assert.equal(FleetManager.addShip("spc_titan", "cruiser", 0), true);
+assert.equal(FleetManager.subShip("spc_titan", "cruiser", 0), true);
+
+// Fallbacks and live haveTech selection in the Titan/Enceladus divisor branch.
+assert.deepEqual(FleetManagerOuter.syndicate("spc_red", true, false), {
+  p: 1,
+  r: 0,
+  s: 0,
+});
+game.global.race.truepath = true;
+game.global.space.syndicate = { spc_titan: 600 };
+game.global.space.shipyard = { blueprint: { ...explorer }, ships: [] };
+game.actions.space.spc_titan = {
+  info: { syndicate_cap: () => 1_200, syndicate: () => true },
+};
+buildings.TitanSAM.stateOnCount = 4;
+const noTriton = FleetManagerOuter.syndicate("spc_titan", true, false);
+assert.equal(noTriton.r, 580);
+assert.equal(noTriton.s, 0);
+assert.ok(Math.abs(noTriton.p - 0.0333) < 1e-12);
+haveTech = () => true;
+const withTriton = FleetManagerOuter.syndicate("spc_titan", true, false);
+assert.equal(withTriton.r, 580);
+assert.equal(withTriton.s, 0);
+assert.ok(Math.abs(withTriton.p - 0.5167) < 1e-12);
 
 // Piracy tolerates the lazily absent space bags. `syndicate` and `shipyard`
 // only exist once the matching Truepath content has unlocked.

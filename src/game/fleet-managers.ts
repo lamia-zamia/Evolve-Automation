@@ -1,3 +1,5 @@
+import type { GameFleetControlsPort } from "../ports/game-fleet-controls.ts";
+
 type AnyFunction = (...args: any[]) => any;
 type AnyRecord = Record<string, any>;
 
@@ -7,10 +9,8 @@ type FleetManagerDependencies = {
   getResources: () => AnyRecord;
   getBuildings: () => AnyRecord;
   getPoly: () => AnyRecord;
-  getVueById: (id: string) => any;
-  getKeyManager: () => AnyRecord;
   getHaveTech: () => AnyFunction;
-  getJQuery: () => AnyFunction;
+  fleetControls: GameFleetControlsPort;
 };
 
 export function createFleetManagers({
@@ -19,16 +19,13 @@ export function createFleetManagers({
   getResources,
   getBuildings,
   getPoly,
-  getVueById,
-  getKeyManager,
   getHaveTech,
-  getJQuery,
+  fleetControls,
 }: FleetManagerDependencies) {
   const haveTech = (...args: any[]) => getHaveTech()(...args);
 
   const FleetManagerOuter: AnyRecord = {
-    _fleetVueBinding: "shipPlans",
-    _fleetVue: undefined,
+    _fleetElementId: "shipPlans",
     _explorerBlueprint: {
       class: "explorer",
       armor: "neutronium",
@@ -175,12 +172,7 @@ export function createFleetManagers({
         return false;
       }
 
-      this._fleetVue = getVueById(this._fleetVueBinding);
-      if (this._fleetVue === undefined) {
-        return false;
-      }
-
-      return true;
+      return fleetControls.isRendered(this._fleetElementId);
     },
 
     getFighterBlueprint() {
@@ -234,11 +226,12 @@ export function createFleetManagers({
           )
         ) {
           if (
-            !this._fleetVue.avail(
+            !fleetControls.isPartAvailable({
+              elementId: this._fleetElementId,
               type,
-              this.ShipConfig[type].indexOf(part),
               part,
-            )
+              index: this.ShipConfig[type].indexOf(part),
+            })
           ) {
             return false;
           }
@@ -251,7 +244,6 @@ export function createFleetManagers({
       const game = getGame();
       const poly = getPoly();
       const resources = getResources();
-      const $ = getJQuery();
       let yard = game.global.space.shipyard;
       for (let [type, part] of Object.entries(ship)) {
         if (
@@ -260,10 +252,14 @@ export function createFleetManagers({
             ship.class === "explorer" ||
             yard.blueprint.class === "explorer")
         ) {
-          this._fleetVue.setVal(type, part);
+          fleetControls.setPart({
+            elementId: this._fleetElementId,
+            type,
+            part,
+          });
         }
       }
-      if (this._fleetVue.powerText().includes("danger")) {
+      if (!fleetControls.hasShipPower(this._fleetElementId)) {
         return false;
       }
 
@@ -272,16 +268,10 @@ export function createFleetManagers({
         resources[res].currentQuantity -= cost[res];
       }
 
-      if (yard.sort) {
-        $("#shipPlans .b-checkbox").eq(1).click();
-        this._fleetVue.build();
-        getVueById("shipReg0")?.setLoc(region, yard.ships.length);
-        $("#shipPlans .b-checkbox").eq(1).click();
-      } else {
-        this._fleetVue.build();
-        getVueById("shipReg0")?.setLoc(region, yard.ships.length);
-      }
-      return true;
+      return fleetControls.buildShip({
+        elementId: this._fleetElementId,
+        region,
+      });
     },
 
     getShipAttackPower(ship: AnyRecord) {
@@ -405,8 +395,7 @@ export function createFleetManagers({
   };
 
   const FleetManager: AnyRecord = {
-    _fleetVueBinding: "fleet",
-    _fleetVue: undefined,
+    _fleetElementId: "fleet",
     neededShips: null, // Per-ship on-counts needed for full piracy coverage, set by autoFleet when crew reclaim is active
 
     initFleet() {
@@ -415,26 +404,25 @@ export function createFleetManagers({
         return false;
       }
 
-      this._fleetVue = getVueById(this._fleetVueBinding);
-      if (this._fleetVue === undefined) {
-        return false;
-      }
-
-      return true;
+      return fleetControls.isRendered(this._fleetElementId);
     },
 
     addShip(region: string, ship: string, count: number) {
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._fleetVue.add(region, ship);
-      }
+      return fleetControls.addShips({
+        elementId: this._fleetElementId,
+        region,
+        ship,
+        count,
+      });
     },
 
     subShip(region: string, ship: string, count: number) {
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._fleetVue.sub(region, ship);
-      }
+      return fleetControls.subShips({
+        elementId: this._fleetElementId,
+        region,
+        ship,
+        count,
+      });
     },
   };
 

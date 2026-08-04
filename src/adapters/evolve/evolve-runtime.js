@@ -61,6 +61,7 @@ import { createGameActionControls } from "../browser/game-action-controls.ts";
 import { createGameCraftingControls } from "../browser/game-crafting-controls.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
 import { createGameIndustryControls } from "../browser/game-industry-controls.ts";
+import { createGameFleetControls } from "../browser/game-fleet-controls.ts";
 import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
@@ -2577,6 +2578,12 @@ function startEvolveRuntimeComposition(
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => KeyManager.click(count),
   });
+  const fleetControls = createGameFleetControls({
+    getVueById: (id) => getVueById(id),
+    clickSteps: (count) => KeyManager.click(count),
+    getGame: () => game,
+    getJQuery: () => $,
+  });
 
   // Class definitions
   const {
@@ -3233,10 +3240,8 @@ function startEvolveRuntimeComposition(
     getResources: () => resources,
     getBuildings: () => buildings,
     getPoly: () => poly,
-    getVueById: (id) => getVueById(id),
-    getKeyManager: () => KeyManager,
     getHaveTech: () => haveTech,
-    getJQuery: () => $,
+    fleetControls,
   }));
 
   publishTestSurface({

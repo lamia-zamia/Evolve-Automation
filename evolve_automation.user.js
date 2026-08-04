@@ -2586,6 +2586,126 @@
     });
   }
 
+  // src/adapters/browser/game-fleet-controls.ts
+  function readShipyard(getGame) {
+    const game = getGame();
+    const global = isRecord(game) ? game["global"] : void 0;
+    const space = isRecord(global) ? global["space"] : void 0;
+    const yard = isRecord(space) ? space["shipyard"] : void 0;
+    if (!isRecord(yard)) {
+      return null;
+    }
+    const ships = yard["ships"];
+    if (!Array.isArray(ships)) {
+      return null;
+    }
+    return { sort: yard["sort"] === true, ships };
+  }
+  function createGameFleetControls({
+    getVueById,
+    clickSteps,
+    getGame,
+    getJQuery
+  }) {
+    function step(elementId, method, args, count2) {
+      const view = getVueById(elementId);
+      if (!isRecord(view) || typeof view[method] !== "function") {
+        return false;
+      }
+      const call4 = requireFunction(
+        view[method],
+        `${elementId} Vue view.${method}`
+      );
+      for (const _step of clickSteps(count2)) {
+        Reflect.apply(call4, view, args);
+      }
+      return true;
+    }
+    function stepShip(request, method) {
+      return step(
+        request.elementId,
+        method,
+        [request.region, request.ship],
+        request.count
+      );
+    }
+    function toggleSort(elementId) {
+      getJQuery()(`#${elementId} .b-checkbox`).eq(1).click();
+    }
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      isPartAvailable(request) {
+        if (request.index === void 0) {
+          return false;
+        }
+        const view = getVueById(request.elementId);
+        if (!isRecord(view) || typeof view.avail !== "function") {
+          return false;
+        }
+        const avail = requireFunction(
+          view.avail,
+          `${request.elementId} Vue view.avail`
+        );
+        return Boolean(
+          Reflect.apply(avail, view, [request.type, request.index, request.part])
+        );
+      },
+      setPart(request) {
+        return step(request.elementId, "setVal", [request.type, request.part], 1);
+      },
+      hasShipPower(elementId) {
+        const view = getVueById(elementId);
+        if (!isRecord(view) || typeof view.powerText !== "function") {
+          return false;
+        }
+        const powerText = requireFunction(
+          view.powerText,
+          `${elementId} Vue view.powerText`
+        );
+        const text = Reflect.apply(powerText, view, []);
+        return typeof text === "string" && !text.includes("danger");
+      },
+      buildShip(request) {
+        const view = getVueById(request.elementId);
+        if (!isRecord(view) || typeof view.build !== "function") {
+          return false;
+        }
+        const build = requireFunction(
+          view.build,
+          `${request.elementId} Vue view.build`
+        );
+        const yard = readShipyard(getGame);
+        const sort = yard !== null && yard.sort;
+        if (sort) {
+          toggleSort(request.elementId);
+        }
+        Reflect.apply(build, view, []);
+        if (yard !== null) {
+          const shipRow = getVueById("shipReg0");
+          if (isRecord(shipRow) && typeof shipRow.setLoc === "function") {
+            const setLoc = requireFunction(
+              shipRow.setLoc,
+              "shipReg0 Vue view.setLoc"
+            );
+            Reflect.apply(setLoc, shipRow, [request.region, yard.ships.length]);
+          }
+        }
+        if (sort) {
+          toggleSort(request.elementId);
+        }
+        return true;
+      },
+      addShips(request) {
+        return stepShip(request, "add");
+      },
+      subShips(request) {
+        return stepShip(request, "sub");
+      }
+    });
+  }
+
   // src/adapters/browser/game-job-controls.ts
   function createGameJobControls({
     getVueById,
@@ -5105,15 +5225,12 @@
     getResources,
     getBuildings,
     getPoly,
-    getVueById,
-    getKeyManager,
     getHaveTech,
-    getJQuery
+    fleetControls
   }) {
     const haveTech = (...args) => getHaveTech()(...args);
     const FleetManagerOuter = {
-      _fleetVueBinding: "shipPlans",
-      _fleetVue: void 0,
+      _fleetElementId: "shipPlans",
       _explorerBlueprint: {
         class: "explorer",
         armor: "neutronium",
@@ -5239,11 +5356,7 @@
         if (!game.global.tech.syndicate || !Object.hasOwn(game.global.space.shipyard ?? {}, "blueprint")) {
           return false;
         }
-        this._fleetVue = getVueById(this._fleetVueBinding);
-        if (this._fleetVue === void 0) {
-          return false;
-        }
-        return true;
+        return fleetControls.isRendered(this._fleetElementId);
       },
       getFighterBlueprint() {
         const settings = getSettings();
@@ -5282,11 +5395,12 @@
         }
         for (let [type, part] of Object.entries(ship)) {
           if (type !== "name" && yard.blueprint[type] !== part && !(ship.class === "explorer" && (part === "weapon" || part === "sensor"))) {
-            if (!this._fleetVue.avail(
+            if (!fleetControls.isPartAvailable({
+              elementId: this._fleetElementId,
               type,
-              this.ShipConfig[type].indexOf(part),
-              part
-            )) {
+              part,
+              index: this.ShipConfig[type].indexOf(part)
+            })) {
               return false;
             }
           }
@@ -5297,30 +5411,27 @@
         const game = getGame();
         const poly = getPoly();
         const resources = getResources();
-        const $ = getJQuery();
         let yard = game.global.space.shipyard;
         for (let [type, part] of Object.entries(ship)) {
           if (type !== "name" && (yard.blueprint[type] !== part || ship.class === "explorer" || yard.blueprint.class === "explorer")) {
-            this._fleetVue.setVal(type, part);
+            fleetControls.setPart({
+              elementId: this._fleetElementId,
+              type,
+              part
+            });
           }
         }
-        if (this._fleetVue.powerText().includes("danger")) {
+        if (!fleetControls.hasShipPower(this._fleetElementId)) {
           return false;
         }
         let cost = poly.shipCosts(ship);
         for (let res in cost) {
           resources[res].currentQuantity -= cost[res];
         }
-        if (yard.sort) {
-          $("#shipPlans .b-checkbox").eq(1).click();
-          this._fleetVue.build();
-          getVueById("shipReg0")?.setLoc(region, yard.ships.length);
-          $("#shipPlans .b-checkbox").eq(1).click();
-        } else {
-          this._fleetVue.build();
-          getVueById("shipReg0")?.setLoc(region, yard.ships.length);
-        }
-        return true;
+        return fleetControls.buildShip({
+          elementId: this._fleetElementId,
+          region
+        });
       },
       getShipAttackPower(ship) {
         return Math.round(
@@ -5406,8 +5517,7 @@
       }
     };
     const FleetManager = {
-      _fleetVueBinding: "fleet",
-      _fleetVue: void 0,
+      _fleetElementId: "fleet",
       neededShips: null,
       // Per-ship on-counts needed for full piracy coverage, set by autoFleet when crew reclaim is active
       initFleet() {
@@ -5415,23 +5525,23 @@
         if (!game.global.tech.piracy) {
           return false;
         }
-        this._fleetVue = getVueById(this._fleetVueBinding);
-        if (this._fleetVue === void 0) {
-          return false;
-        }
-        return true;
+        return fleetControls.isRendered(this._fleetElementId);
       },
       addShip(region, ship, count2) {
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._fleetVue.add(region, ship);
-        }
+        return fleetControls.addShips({
+          elementId: this._fleetElementId,
+          region,
+          ship,
+          count: count2
+        });
       },
       subShip(region, ship, count2) {
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._fleetVue.sub(region, ship);
-        }
+        return fleetControls.subShips({
+          elementId: this._fleetElementId,
+          region,
+          ship,
+          count: count2
+        });
       }
     };
     return { FleetManagerOuter, FleetManager };
@@ -57012,6 +57122,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => KeyManager.click(count2)
     });
+    const fleetControls = createGameFleetControls({
+      getVueById: (id) => getVueById(id),
+      clickSteps: (count2) => KeyManager.click(count2),
+      getGame: () => game,
+      getJQuery: () => $
+    });
     const {
       Job,
       BasicJob,
@@ -57620,10 +57736,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getResources: () => resources,
       getBuildings: () => buildings,
       getPoly: () => poly,
-      getVueById: (id) => getVueById(id),
-      getKeyManager: () => KeyManager,
       getHaveTech: () => haveTech,
-      getJQuery: () => $
+      fleetControls
     }));
     publishTestSurface({
       fleetManagers: { FleetManagerOuter, FleetManager },
