@@ -1,20 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-interface SpellVue {
-  addSpell: (id: string) => void;
-  subSpell: (id: string) => void;
-}
-
-interface KeyManagerContract {
-  click: (count: number) => Iterable<unknown>;
-}
+import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
 
 interface MagicManagersDependencies {
   getGame: () => any;
   getSettings: () => Record<string, any>;
   getResources: () => Record<string, any>;
   getBuildings: () => Record<string, { count: number }>;
-  getVueById: (id: string) => SpellVue | undefined;
-  getKeyManager: () => KeyManagerContract;
   haveTech: (tech: string, level?: number) => boolean;
   isLumberRace: () => boolean;
   addProps: (
@@ -22,6 +13,7 @@ interface MagicManagersDependencies {
     idFn: (item: any) => string,
     specs: { s: string; p: string }[],
   ) => any;
+  industryControls: GameIndustryControlsPort;
 }
 
 export function createMagicManagers({
@@ -29,11 +21,10 @@ export function createMagicManagers({
   getSettings,
   getResources,
   getBuildings,
-  getVueById,
-  getKeyManager,
   haveTech,
   isLumberRace,
   addProps,
+  industryControls,
 }: MagicManagersDependencies) {
   const AlchemyManager = {
     _alchemyVuePrefix: "alchemy",
@@ -76,40 +67,41 @@ export function createMagicManagers({
 
     transmuteMore(id: string, count: number) {
       const resources = getResources();
-      let vue = getVueById(this._alchemyVuePrefix + id);
-      if (vue === undefined) {
+      if (
+        !industryControls.increaseSpell({
+          elementId: this._alchemyVuePrefix + id,
+          id,
+          count,
+        })
+      ) {
         return false;
       }
 
       resources.Mana.rateOfChange -= count * 1;
       resources.Crystal.rateOfChange -= count * 0.5;
-
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        vue.addSpell(id);
-      }
+      return true;
     },
 
     transmuteLess(id: string, count: number) {
       const resources = getResources();
-      let vue = getVueById(this._alchemyVuePrefix + id);
-      if (vue === undefined) {
+      if (
+        !industryControls.decreaseSpell({
+          elementId: this._alchemyVuePrefix + id,
+          id,
+          count,
+        })
+      ) {
         return false;
       }
 
       resources.Mana.rateOfChange += count * 1;
       resources.Crystal.rateOfChange += count * 0.5;
-
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        vue.subSpell(id);
-      }
+      return true;
     },
   };
 
   const RitualManager = {
-    _industryVueBinding: "iPylon",
-    _industryVue: undefined as SpellVue | undefined,
+    _industryElementId: "iPylon",
 
     Productions: addProps(
       {
@@ -157,12 +149,7 @@ export function createMagicManagers({
         return false;
       }
 
-      this._industryVue = getVueById(this._industryVueBinding);
-      if (this._industryVue === undefined) {
-        return false;
-      }
-
-      return true;
+      return industryControls.isRendered(this._industryElementId);
     },
 
     currentSpells(spell: any) {
@@ -195,10 +182,11 @@ export function createMagicManagers({
         return this.decreaseRitual(spell, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue!.addSpell(spell.id);
-      }
+      return industryControls.increaseSpell({
+        elementId: this._industryElementId,
+        id: spell.id,
+        count,
+      });
     },
 
     decreaseRitual(spell: any, count: number): any {
@@ -212,10 +200,11 @@ export function createMagicManagers({
         return this.increaseRitual(count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue!.subSpell(spell.id);
-      }
+      return industryControls.decreaseSpell({
+        elementId: this._industryElementId,
+        id: spell.id,
+        count,
+      });
     },
   };
 

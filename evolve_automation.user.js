@@ -2576,6 +2576,12 @@
       decreaseTrade(request) {
         return step(request, "less", request.id !== void 0);
       },
+      increaseSpell(request) {
+        return step(request, "addSpell", true);
+      },
+      decreaseSpell(request) {
+        return step(request, "subSpell", true);
+      },
       increaseFuel(request) {
         return fuelStep(request, "add");
       },
@@ -3240,11 +3246,10 @@
     getSettings,
     getResources,
     getBuildings,
-    getVueById,
-    getKeyManager,
     haveTech,
     isLumberRace,
-    addProps
+    addProps,
+    industryControls
   }) {
     const AlchemyManager = {
       _alchemyVuePrefix: "alchemy",
@@ -3272,34 +3277,33 @@
       },
       transmuteMore(id, count2) {
         const resources = getResources();
-        let vue = getVueById(this._alchemyVuePrefix + id);
-        if (vue === void 0) {
+        if (!industryControls.increaseSpell({
+          elementId: this._alchemyVuePrefix + id,
+          id,
+          count: count2
+        })) {
           return false;
         }
         resources.Mana.rateOfChange -= count2 * 1;
         resources.Crystal.rateOfChange -= count2 * 0.5;
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          vue.addSpell(id);
-        }
+        return true;
       },
       transmuteLess(id, count2) {
         const resources = getResources();
-        let vue = getVueById(this._alchemyVuePrefix + id);
-        if (vue === void 0) {
+        if (!industryControls.decreaseSpell({
+          elementId: this._alchemyVuePrefix + id,
+          id,
+          count: count2
+        })) {
           return false;
         }
         resources.Mana.rateOfChange += count2 * 1;
         resources.Crystal.rateOfChange += count2 * 0.5;
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          vue.subSpell(id);
-        }
+        return true;
       }
     };
     const RitualManager = {
-      _industryVueBinding: "iPylon",
-      _industryVue: void 0,
+      _industryElementId: "iPylon",
       Productions: addProps(
         {
           Farmer: {
@@ -3329,11 +3333,7 @@
         if (buildings.Pylon.count < 1 && buildings.RedPylon.count < 1 && buildings.TauPylon.count < 1 || !game.global.race["casting"]) {
           return false;
         }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
+        return industryControls.isRendered(this._industryElementId);
       },
       currentSpells(spell) {
         const game = getGame();
@@ -3360,10 +3360,11 @@
         if (count2 < 0) {
           return this.decreaseRitual(spell, count2 * -1);
         }
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._industryVue.addSpell(spell.id);
-        }
+        return industryControls.increaseSpell({
+          elementId: this._industryElementId,
+          id: spell.id,
+          count: count2
+        });
       },
       decreaseRitual(spell, count2) {
         if (count2 === 0 || !spell.isUnlocked()) {
@@ -3372,10 +3373,11 @@
         if (count2 < 0) {
           return this.increaseRitual(count2 * -1);
         }
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._industryVue.subSpell(spell.id);
-        }
+        return industryControls.decreaseSpell({
+          elementId: this._industryElementId,
+          id: spell.id,
+          count: count2
+        });
       }
     };
     return { AlchemyManager, RitualManager };
@@ -57645,11 +57647,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSettings: () => settings,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getVueById: (id) => getVueById(id),
-      getKeyManager: () => KeyManager,
       haveTech,
       isLumberRace,
-      addProps
+      addProps,
+      industryControls
     }));
     let SmelterManager, FactoryManager, ReplicatorManager, DroidManager, GrapheneManager;
     ({

@@ -2,11 +2,12 @@
  * The game's own industry panel controls.
  *
  * An industry panel splits one facility's output between competing items, and
- * automation moves that split a number of steps in either direction. Callers
- * above this port name the control by the element id the game gives it, and
- * name the item for the panels that weigh several items from a single element.
- * How many component calls a count takes, and which method performs them, is
- * this port's business.
+ * automation moves that split a number of steps in either direction. The spell
+ * panels are the same shape: the pylon (`iPylon`) and each alchemy transmute
+ * panel move one spell's count up or down. Callers above this port name the
+ * control by the element id the game gives it, and name the item for the panels
+ * that weigh several items from a single element. How many component calls a
+ * count takes, and which method performs them, is this port's business.
  */
 export interface GameIndustryStepRequest {
   /** The element the game gives this industry panel's control. */
@@ -69,6 +70,12 @@ export interface GameIndustryControlsPort {
 
   /** Removes weight from a galaxy trade route. */
   decreaseTrade(request: GameIndustryStepRequest): boolean;
+
+  /** Casts more of a spell on the pylon or alchemy panel. */
+  increaseSpell(request: GameIndustryStepRequest): boolean;
+
+  /** Casts less of a spell on the pylon or alchemy panel. */
+  decreaseSpell(request: GameIndustryStepRequest): boolean;
 
   /**
    * Selects an item on the panel. False means the panel did not accept the

@@ -3137,11 +3137,10 @@ function startEvolveRuntimeComposition(
     getSettings: () => settings,
     getResources: () => resources,
     getBuildings: () => buildings,
-    getVueById: (id) => getVueById(id),
-    getKeyManager: () => KeyManager,
     haveTech,
     isLumberRace,
     addProps,
+    industryControls,
   }));
 
   let SmelterManager,

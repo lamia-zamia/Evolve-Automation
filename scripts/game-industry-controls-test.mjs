@@ -248,6 +248,57 @@ assert.deepEqual(calls, [
   { method: "sub", args: ["common"] },
 ]);
 
+// The pylon and alchemy spell panels answer to addSpell/subSpell with the spell
+// id, one call per click step.
+calls.length = 0;
+views["iPylon"] = {
+  addSpell(...args) {
+    calls.push({
+      method: "addSpell",
+      args,
+      receiver: this === views["iPylon"],
+    });
+  },
+  subSpell(...args) {
+    calls.push({
+      method: "subSpell",
+      args,
+      receiver: this === views["iPylon"],
+    });
+  },
+};
+stepsPerRequest = 2;
+assert.equal(
+  controls.increaseSpell({ elementId: "iPylon", id: "farmer", count: 5 }),
+  true,
+);
+assert.deepEqual(calls, [
+  { method: "addSpell", args: ["farmer"], receiver: true },
+  { method: "addSpell", args: ["farmer"], receiver: true },
+]);
+stepsPerRequest = 1;
+calls.length = 0;
+assert.equal(
+  controls.decreaseSpell({ elementId: "iPylon", id: "science", count: 1 }),
+  true,
+);
+assert.deepEqual(calls, [
+  { method: "subSpell", args: ["science"], receiver: true },
+]);
+// A spell request the panel does not offer refuses without clicking.
+calls.length = 0;
+requestedSteps.length = 0;
+views["iPylon"] = { add: "not a spell" };
+assert.equal(
+  controls.increaseSpell({ elementId: "iPylon", id: "farmer", count: 5 }),
+  false,
+);
+assert.deepEqual(requestedSteps, []);
+views["iPylon"] = {
+  addSpell: () => calls.push({ method: "addSpell", args: [] }),
+  subSpell: () => calls.push({ method: "subSpell", args: [] }),
+};
+
 // A count the click sequence resolves to no steps is accepted by an actionable
 // control and moves nothing.
 calls.length = 0;

@@ -2,7 +2,8 @@
 // element whose component exposes one named pair of methods: the weighting
 // panels `add()`/`sub()`, the factory-style panels `addItem()`/`subItem()`, the
 // smelter `addFuel()`/`subFuel()` and `addMetal()`/`subMetal()`, the galaxy
-// trade routes `more()`/`less()`, and the graphene plant one pair per fuel
+// trade routes `more()`/`less()`, the pylon and alchemy spell panels
+// `addSpell()`/`subSpell()`, and the graphene plant one pair per fuel
 // (`addWood()`/`subWood()`, ...). One call moves one click's worth, so the
 // game's own click-multiplier keys decide how far a call moves the split and
 // the caller-supplied step sequence paces them. Replace all of it when the Vue 3
@@ -151,6 +152,14 @@ export function createGameIndustryControls({
 
     decreaseTrade(request: GameIndustryStepRequest): boolean {
       return step(request, "less", request.id !== undefined);
+    },
+
+    increaseSpell(request: GameIndustryStepRequest): boolean {
+      return step(request, "addSpell", true);
+    },
+
+    decreaseSpell(request: GameIndustryStepRequest): boolean {
+      return step(request, "subSpell", true);
     },
 
     increaseFuel(request: GameIndustryStepRequest): boolean {

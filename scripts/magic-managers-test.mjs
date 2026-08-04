@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameIndustryControls } from "../src/adapters/browser/game-industry-controls.ts";
 import { createMagicManagers } from "../src/game/magic-managers.ts";
 
 let game;
@@ -8,26 +9,32 @@ let buildings;
 let techOk = true;
 let lumber = false;
 const vueCalls = [];
+const requestedViews = [];
 
 const vue = {
   addSpell: (id) => vueCalls.push(["add", id]),
   subSpell: (id) => vueCalls.push(["sub", id]),
 };
-let vueLookup = () => vue;
+let vueById = { iPylon: vue };
+
+const industryControls = createGameIndustryControls({
+  getVueById: (id) => {
+    requestedViews.push(id);
+    return vueById[id];
+  },
+  clickSteps: (count) => Array.from({ length: count }, (_, i) => i),
+});
 
 const { AlchemyManager, RitualManager } = createMagicManagers({
   getGame: () => game,
   getSettings: () => settings,
   getResources: () => resources,
   getBuildings: () => buildings,
-  getVueById: (id) => vueLookup(id),
-  getKeyManager: () => ({
-    click: (count) => Array.from({ length: count }, (_, i) => i),
-  }),
   haveTech: () => techOk,
   isLumberRace: () => lumber,
   // Faithful-enough stub: keeps id/isUnlocked, ignores weighting props.
   addProps: (target) => target,
+  industryControls,
 });
 
 // --- Alchemy: settings-backed enable/weighting + unlock ---
@@ -82,8 +89,10 @@ game = { global: { race: { alchemy: { Iron: 12 } } } };
 assert.equal(AlchemyManager.currentCount("Iron"), 12);
 
 resources = { Mana: { rateOfChange: 100 }, Crystal: { rateOfChange: 50 } };
+vueById.alchemyIron = vue;
 vueCalls.length = 0;
-AlchemyManager.transmuteMore("Iron", 4);
+requestedViews.length = 0;
+assert.equal(AlchemyManager.transmuteMore("Iron", 4), true);
 assert.equal(resources.Mana.rateOfChange, 96); // -4 * 1
 assert.equal(resources.Crystal.rateOfChange, 48); // -4 * 0.5
 assert.deepEqual(vueCalls, [
@@ -92,8 +101,10 @@ assert.deepEqual(vueCalls, [
   ["add", "Iron"],
   ["add", "Iron"],
 ]);
+// The transmute panel is named by the game's `alchemy` prefix plus the id.
+assert.deepEqual(requestedViews, ["alchemyIron"]);
 vueCalls.length = 0;
-AlchemyManager.transmuteLess("Iron", 2);
+assert.equal(AlchemyManager.transmuteLess("Iron", 2), true);
 assert.equal(resources.Mana.rateOfChange, 98); // +2 * 1
 assert.equal(resources.Crystal.rateOfChange, 49); // +2 * 0.5
 assert.deepEqual(vueCalls, [
@@ -101,12 +112,11 @@ assert.deepEqual(vueCalls, [
   ["sub", "Iron"],
 ]);
 
-// Missing Vue short-circuits before touching resources.
-vueLookup = () => undefined;
+// A withdrawn transmute panel short-circuits before touching the rates.
+delete vueById.alchemyIron;
 resources = { Mana: { rateOfChange: 5 }, Crystal: { rateOfChange: 5 } };
 assert.equal(AlchemyManager.transmuteMore("Iron", 3), false);
 assert.equal(resources.Mana.rateOfChange, 5);
-vueLookup = () => vue;
 
 // --- Ritual: production unlock closures ---
 game = { global: { race: {} } };
@@ -119,6 +129,7 @@ techOk = true;
 assert.equal(RitualManager.Productions.Crafting.isUnlocked(), true);
 
 // --- Ritual: initIndustry gating ---
+vueById.iPylon = vue;
 game = { global: { race: { casting: true } } };
 buildings = {
   Pylon: { count: 0 },
@@ -137,21 +148,25 @@ assert.equal(RitualManager.costStep(0), 0.0025);
 game = { global: { race: { casting: { farmer: 3 } } } };
 assert.equal(RitualManager.currentSpells({ id: "farmer" }), 3);
 
-// --- Ritual: increase/decrease clicks with unlock gate ---
-game = { global: { race: { casting: true } } };
+// --- Ritual: increase/decrease resolve to the iPylon panel ---
 vueCalls.length = 0;
+requestedViews.length = 0;
 const spell = { id: "science", isUnlocked: () => true };
-RitualManager._industryVue = vue;
-RitualManager.increaseRitual(spell, 2);
+assert.equal(RitualManager.increaseRitual(spell, 2), true);
 assert.deepEqual(vueCalls, [
   ["add", "science"],
   ["add", "science"],
 ]);
+assert.deepEqual(requestedViews, ["iPylon"]);
 vueCalls.length = 0;
-RitualManager.decreaseRitual(spell, 1);
+assert.equal(RitualManager.decreaseRitual(spell, 1), true);
 assert.deepEqual(vueCalls, [["sub", "science"]]);
-// Locked spell is a no-op.
+// A withdrawn pylon refuses instead of throwing.
+delete vueById.iPylon;
 vueCalls.length = 0;
+assert.equal(RitualManager.increaseRitual(spell, 1), false);
+assert.equal(vueCalls.length, 0);
+// Locked spell is a no-op.
 assert.equal(
   RitualManager.increaseRitual({ id: "x", isUnlocked: () => false }, 3),
   false,
