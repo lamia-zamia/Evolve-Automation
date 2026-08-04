@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createGameFeatureVisibility } from "../src/adapters/browser/game-feature-visibility.ts";
+import { createGameIndustryControls } from "../src/adapters/browser/game-industry-controls.ts";
 import { createEconomyManagers } from "../src/game/economy-managers.ts";
 
 let game;
@@ -33,6 +34,11 @@ const GameLog = {
   logSuccess: (kind, msg) => logs.push(msg),
 };
 
+const industryControls = createGameIndustryControls({
+  getVueById: (id) => vueMap[id],
+  clickSteps: (count) => Array.from({ length: count }, (_, i) => i),
+});
+
 const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
   createEconomyManagers({
     getGame: () => game,
@@ -48,6 +54,7 @@ const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
     getGameLog: () => GameLog,
     haveTech: (_tech, level) => (level === undefined ? techOk : techOk),
     traitVal: () => 1,
+    industryControls,
   });
 
 // ---------- GalaxyTrade ----------
@@ -56,7 +63,6 @@ buildings = {
   Alien1SuperFreighter: { count: 0 },
 };
 vueMap.galaxyTrade = {
-  zero: (p) => clicks.push(["zero", p]),
   more: (p) => clicks.push(["more", p]),
   less: (p) => clicks.push(["less", p]),
 };
@@ -67,7 +73,6 @@ game = { global: { galaxy: { trade: { cur: 5, max: 12, fHelium: 4 } } } };
 assert.equal(GalaxyTradeManager.currentOperating(), 5);
 assert.equal(GalaxyTradeManager.maxOperating(), 12);
 assert.equal(GalaxyTradeManager.currentProduction("Helium"), 4);
-GalaxyTradeManager._industryVue = vueMap.galaxyTrade;
 clicks.length = 0;
 GalaxyTradeManager.increaseProduction("Helium", 2);
 GalaxyTradeManager.decreaseProduction("Helium", -1); // delegates to increase

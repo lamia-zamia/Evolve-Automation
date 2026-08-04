@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameIndustryControls } from "../src/adapters/browser/game-industry-controls.ts";
 import { createDisposalManagers } from "../src/game/disposal-managers.ts";
 
 let game;
@@ -18,6 +19,11 @@ let vueLookup = (id) => ({
   _id: id,
 });
 
+const industryControls = createGameIndustryControls({
+  getVueById: (id) => vueLookup(id),
+  clickSteps: (count) => Array.from({ length: count }, (_, i) => i),
+});
+
 const { NaniteManager, SupplyManager, EjectManager } = createDisposalManagers({
   getGame: () => game,
   getSettings: () => settings,
@@ -29,6 +35,7 @@ const { NaniteManager, SupplyManager, EjectManager } = createDisposalManagers({
     click: (count) => Array.from({ length: count }, (_, i) => i),
   }),
   haveTask: (t) => tasks.has(t),
+  industryControls,
 });
 
 // ---------- Nanite ----------
@@ -62,7 +69,6 @@ assert.deepEqual(NaniteManager.useRatio(), [0.965, -1]);
 settings = { naniteMode: "bogus" };
 assert.deepEqual(NaniteManager.useRatio(), []);
 
-NaniteManager._industryVue = vueLookup("iNFactory");
 resources = { Iron: { rateMods: { nanite: 0 } } };
 vueCalls.length = 0;
 NaniteManager.consumeMore("Iron", 2);

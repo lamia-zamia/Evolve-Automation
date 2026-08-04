@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
+import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
 
 interface KeyManagerContract {
@@ -28,6 +29,7 @@ interface EconomyManagersDependencies {
   getGameLog: () => any;
   haveTech: (tech: string, level?: number) => boolean;
   traitVal: (trait: string, index: number, sign?: string) => number;
+  industryControls: GameIndustryControlsPort;
 }
 
 interface StorageModelResource {
@@ -108,10 +110,10 @@ export function createEconomyManagers({
   getGameLog,
   haveTech,
   traitVal,
+  industryControls,
 }: EconomyManagersDependencies) {
   const GalaxyTradeManager = {
-    _industryVueBinding: "galaxyTrade",
-    _industryVue: undefined as any,
+    _industryElementId: "galaxyTrade",
 
     initIndustry() {
       const buildings = getBuildings();
@@ -123,12 +125,7 @@ export function createEconomyManagers({
         return false;
       }
 
-      this._industryVue = getVueById(this._industryVueBinding);
-      if (this._industryVue === undefined) {
-        return false;
-      }
-
-      return true;
+      return industryControls.isRendered(this._industryElementId);
     },
 
     currentOperating() {
@@ -143,11 +140,7 @@ export function createEconomyManagers({
       return getGame().global.galaxy.trade["f" + production];
     },
 
-    zeroProduction(production: string) {
-      this._industryVue.zero(production);
-    },
-
-    increaseProduction(production: string, count: number): any {
+    increaseProduction(production: string, count: number): boolean {
       if (count === 0) {
         return false;
       }
@@ -155,13 +148,14 @@ export function createEconomyManagers({
         return this.decreaseProduction(production, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.more(production);
-      }
+      return industryControls.increaseTrade({
+        elementId: this._industryElementId,
+        id: production,
+        count,
+      });
     },
 
-    decreaseProduction(production: string, count: number): any {
+    decreaseProduction(production: string, count: number): boolean {
       if (count === 0) {
         return false;
       }
@@ -169,10 +163,11 @@ export function createEconomyManagers({
         return this.increaseProduction(production, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.less(production);
-      }
+      return industryControls.decreaseTrade({
+        elementId: this._industryElementId,
+        id: production,
+        count,
+      });
     },
   };
 

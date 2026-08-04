@@ -1,20 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-interface KeyManagerContract {
-  click: (count: number) => Iterable<unknown>;
-}
+import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
 
 interface ProductionManagersDependencies {
   getGame: () => any;
   getResources: () => Record<string, any>;
   getBuildings: () => Record<string, any>;
-  getVueById: (id: string) => any;
-  callVueMethod: (
-    view: unknown,
-    methodName: string,
-    args: readonly unknown[],
-    legacyFilterName?: string,
-  ) => unknown;
-  getKeyManager: () => KeyManagerContract;
+  industryControls: GameIndustryControlsPort;
   haveTech: (tech: string, level?: number) => boolean;
   isLumberRace: () => boolean;
   addProps: (
@@ -31,9 +22,7 @@ export function createProductionManagers({
   getGame,
   getResources,
   getBuildings,
-  getVueById,
-  callVueMethod,
-  getKeyManager,
+  industryControls,
   haveTech,
   isLumberRace,
   addProps,
@@ -46,8 +35,7 @@ export function createProductionManagers({
   const resources = getResources();
 
   const SmelterManager = {
-    _industryVueBinding: "iSmelter",
-    _industryVue: undefined as any,
+    _industryElementId: "iSmelter",
 
     Productions: normalizeProperties(
       {
@@ -150,12 +138,7 @@ export function createProductionManagers({
         return false;
       }
 
-      this._industryVue = getVueById(this._industryVueBinding);
-      if (this._industryVue === undefined) {
-        return false;
-      }
-
-      return true;
+      return industryControls.isRendered(this._industryElementId);
     },
 
     managedFuelPriorityList() {
@@ -180,7 +163,7 @@ export function createProductionManagers({
       return getGame().global.city.smelter[production.id];
     },
 
-    increaseFuel(fuel: any, count: number): any {
+    increaseFuel(fuel: any, count: number): boolean {
       if (count === 0 || !fuel.unlocked) {
         return false;
       }
@@ -188,13 +171,14 @@ export function createProductionManagers({
         return this.decreaseFuel(fuel, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.addFuel(fuel.id);
-      }
+      return industryControls.increaseFuel({
+        elementId: this._industryElementId,
+        id: fuel.id,
+        count,
+      });
     },
 
-    decreaseFuel(fuel: any, count: number): any {
+    decreaseFuel(fuel: any, count: number): boolean {
       if (count === 0 || !fuel.unlocked) {
         return false;
       }
@@ -202,13 +186,14 @@ export function createProductionManagers({
         return this.increaseFuel(fuel, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.subFuel(fuel.id);
-      }
+      return industryControls.decreaseFuel({
+        elementId: this._industryElementId,
+        id: fuel.id,
+        count,
+      });
     },
 
-    increaseSmelting(id: string, count: number): any {
+    increaseSmelting(id: string, count: number): boolean {
       if (count === 0 || !this.Productions[id].unlocked) {
         return false;
       }
@@ -216,13 +201,14 @@ export function createProductionManagers({
         return this.decreaseSmelting(id, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.addMetal(id);
-      }
+      return industryControls.increaseMetal({
+        elementId: this._industryElementId,
+        id,
+        count,
+      });
     },
 
-    decreaseSmelting(id: string, count: number): any {
+    decreaseSmelting(id: string, count: number): boolean {
       if (count === 0 || !this.Productions[id].unlocked) {
         return false;
       }
@@ -230,10 +216,11 @@ export function createProductionManagers({
         return this.increaseSmelting(id, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.subMetal(id);
-      }
+      return industryControls.decreaseMetal({
+        elementId: this._industryElementId,
+        id,
+        count,
+      });
     },
 
     maxOperating() {
@@ -244,15 +231,10 @@ export function createProductionManagers({
     extraOperating() {
       return getGame().global.city.smelter.Star;
     },
-
-    currentFueled() {
-      return callVueMethod(this._industryVue, "on_f", [], "on") as number;
-    },
   };
 
   const FactoryManager = {
-    _industryVueBinding: "iFactory",
-    _industryVue: undefined as any,
+    _industryElementId: "iFactory",
 
     Productions: addProps(
       normalizeProperties(
@@ -386,11 +368,7 @@ export function createProductionManagers({
         return false;
       }
 
-      this._industryVue = getVueById(this._industryVueBinding);
-      if (this._industryVue === undefined) {
-        return false;
-      }
-      return true;
+      return industryControls.isRendered(this._industryElementId);
     },
 
     f_rate(production: string, resource: string) {
@@ -437,7 +415,7 @@ export function createProductionManagers({
       return production.unlocked ? game.global.city.factory[production.id] : 0;
     },
 
-    increaseProduction(production: any, count: number): any {
+    increaseProduction(production: any, count: number): boolean {
       if (count === 0 || !production.unlocked) {
         return false;
       }
@@ -445,13 +423,14 @@ export function createProductionManagers({
         return this.decreaseProduction(production, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.addItem(production.id);
-      }
+      return industryControls.increaseItem({
+        elementId: this._industryElementId,
+        id: production.id,
+        count,
+      });
     },
 
-    decreaseProduction(production: any, count: number): any {
+    decreaseProduction(production: any, count: number): boolean {
       if (count === 0 || !production.unlocked) {
         return false;
       }
@@ -459,16 +438,16 @@ export function createProductionManagers({
         return this.increaseProduction(production, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.subItem(production.id);
-      }
+      return industryControls.decreaseItem({
+        elementId: this._industryElementId,
+        id: production.id,
+        count,
+      });
     },
   };
 
   const ReplicatorManager = {
-    _industryVueBinding: "iReplicator",
-    _industryVue: undefined as any,
+    _industryElementId: "iReplicator",
 
     Productions: addProps(
       normalizeProperties(
@@ -500,23 +479,19 @@ export function createProductionManagers({
         return false;
       }
 
-      this._industryVue = getVueById(this._industryVueBinding);
-      if (this._industryVue === undefined) {
-        return false;
-      }
-      return true;
+      return industryControls.isRendered(this._industryElementId);
     },
 
-    setResource(res: any) {
-      if (this._industryVue.avail(res)) {
-        this._industryVue.setVal(res);
-      }
+    setResource(res: any): boolean {
+      return industryControls.select({
+        elementId: this._industryElementId,
+        id: res,
+      });
     },
   };
 
   const DroidManager = {
-    _industryVueBinding: "iDroid",
-    _industryVue: undefined as any,
+    _industryElementId: "iDroid",
 
     Productions: addProps(
       {
@@ -538,12 +513,7 @@ export function createProductionManagers({
         return false;
       }
 
-      this._industryVue = getVueById(this._industryVueBinding);
-      if (this._industryVue === undefined) {
-        return false;
-      }
-
-      return true;
+      return industryControls.isRendered(this._industryElementId);
     },
 
     currentOperating() {
@@ -564,7 +534,7 @@ export function createProductionManagers({
       return getGame().global.interstellar.mining_droid[production.id];
     },
 
-    increaseProduction(production: any, count: number): any {
+    increaseProduction(production: any, count: number): boolean {
       if (count === 0) {
         return false;
       }
@@ -572,13 +542,14 @@ export function createProductionManagers({
         return this.decreaseProduction(production, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.addItem(production.id);
-      }
+      return industryControls.increaseItem({
+        elementId: this._industryElementId,
+        id: production.id,
+        count,
+      });
     },
 
-    decreaseProduction(production: any, count: number): any {
+    decreaseProduction(production: any, count: number): boolean {
       if (count === 0) {
         return false;
       }
@@ -586,36 +557,30 @@ export function createProductionManagers({
         return this.increaseProduction(production, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.subItem(production.id);
-      }
+      return industryControls.decreaseItem({
+        elementId: this._industryElementId,
+        id: production.id,
+        count,
+      });
     },
   };
 
   const GrapheneManager = {
-    _industryVueBinding: "iGraphene",
-    _industryVue: undefined as any,
+    _industryElementId: "iGraphene",
     _graphPlant: null as any,
 
     Fuels: {
       Lumber: {
         id: "Lumber",
         cost: new ResourceProductionCost(resources.Lumber, 350, 100),
-        add: "addWood",
-        sub: "subWood",
       },
       Coal: {
         id: "Coal",
         cost: new ResourceProductionCost(resources.Coal, 25, 10),
-        add: "addCoal",
-        sub: "subCoal",
       },
       Oil: {
         id: "Oil",
         cost: new ResourceProductionCost(resources.Oil, 15, 10),
-        add: "addOil",
-        sub: "subOil",
       },
     },
 
@@ -631,12 +596,7 @@ export function createProductionManagers({
         return false;
       }
 
-      this._industryVue = getVueById(this._industryVueBinding);
-      if (this._industryVue === undefined) {
-        return false;
-      }
-
-      return true;
+      return industryControls.isRendered(this._industryElementId);
     },
 
     maxOperating() {
@@ -647,7 +607,7 @@ export function createProductionManagers({
       return this._graphPlant.instance[fuel.id];
     },
 
-    increaseFuel(fuel: any, count: number): any {
+    increaseFuel(fuel: any, count: number): boolean {
       if (count === 0 || !fuel.cost.resource.isUnlocked()) {
         return false;
       }
@@ -655,13 +615,14 @@ export function createProductionManagers({
         return this.decreaseFuel(fuel, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue[fuel.add]();
-      }
+      return industryControls.increaseFuel({
+        elementId: this._industryElementId,
+        id: fuel.id,
+        count,
+      });
     },
 
-    decreaseFuel(fuel: any, count: number): any {
+    decreaseFuel(fuel: any, count: number): boolean {
       if (count === 0 || !fuel.cost.resource.isUnlocked()) {
         return false;
       }
@@ -669,10 +630,11 @@ export function createProductionManagers({
         return this.increaseFuel(fuel, count * -1);
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue[fuel.sub]();
-      }
+      return industryControls.decreaseFuel({
+        elementId: this._industryElementId,
+        id: fuel.id,
+        count,
+      });
     },
   };
 

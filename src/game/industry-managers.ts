@@ -135,7 +135,7 @@ export function createIndustryManagers({
       return industryControls.increase({
         elementId: this._industryElementId,
         count,
-        productionId: production,
+        id: production,
       });
     },
 
@@ -150,7 +150,7 @@ export function createIndustryManagers({
       return industryControls.decrease({
         elementId: this._industryElementId,
         count,
-        productionId: production,
+        id: production,
       });
     },
   };

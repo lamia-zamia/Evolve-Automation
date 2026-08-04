@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameIndustryControls } from "../src/adapters/browser/game-industry-controls.ts";
 import { createProductionManagers } from "../src/game/production-managers.ts";
 
 let game;
@@ -60,15 +61,25 @@ const resources = Object.fromEntries(
 );
 const replicableResources = ["Lumber", "Coal"];
 
+// Every panel resolves to the same control stub, which offers every method pair
+// so each manager's calls are exercised over the real adapter end to end.
 const industryVue = {
   avail: (r) => r !== "locked",
   setVal: (r) => clicks.push(["setVal", r]),
   addItem: (r) => clicks.push(["addItem", r]),
   subItem: (r) => clicks.push(["subItem", r]),
+  addMetal: (r) => clicks.push(["addMetal", r]),
+  subMetal: (r) => clicks.push(["subMetal", r]),
+  addFuel: (r) => clicks.push(["addFuel", r]),
+  subFuel: (r) => clicks.push(["subFuel", r]),
   addWood: () => clicks.push(["addWood"]),
   subWood: () => clicks.push(["subWood"]),
 };
-let vueLookup = () => industryVue;
+
+const industryControls = createGameIndustryControls({
+  getVueById: () => industryVue,
+  clickSteps: (count) => Array.from({ length: count }, (_, i) => i),
+});
 
 const {
   SmelterManager,
@@ -80,11 +91,7 @@ const {
   getGame: () => game,
   getResources: () => resources,
   getBuildings: () => buildings,
-  getVueById: (id) => vueLookup(id),
-  callVueMethod: () => 0,
-  getKeyManager: () => ({
-    click: (count) => Array.from({ length: count }, (_, i) => i),
-  }),
+  industryControls,
   haveTech: () => techOk,
   isLumberRace: () => lumber,
   addProps,
@@ -175,7 +182,6 @@ assert.equal(GrapheneManager.maxOperating(), 3);
 assert.equal(GrapheneManager.fueledCount({ id: "Lumber" }), 5);
 
 // Fuel clicks gated on resource unlock.
-GrapheneManager._industryVue = industryVue;
 clicks.length = 0;
 GrapheneManager.increaseFuel(GrapheneManager.Fuels.Lumber, 2);
 assert.deepEqual(clicks, [["addWood"], ["addWood"]]);
@@ -219,12 +225,6 @@ assert.equal(SmelterManager.fueledCount({ id: "Oil", unlocked: false }), 0);
 assert.equal(SmelterManager.smeltingCount({ id: "Iron", unlocked: true }), 8);
 
 // Fuel/metal clicks (Productions[id].unlocked getter gates smelting).
-SmelterManager._industryVue = {
-  addFuel: (id) => clicks.push(["addFuel", id]),
-  subFuel: (id) => clicks.push(["subFuel", id]),
-  addMetal: (id) => clicks.push(["addMetal", id]),
-  subMetal: (id) => clicks.push(["subMetal", id]),
-};
 clicks.length = 0;
 SmelterManager.increaseFuel({ id: "Oil", unlocked: true }, 2);
 assert.deepEqual(clicks, [
@@ -282,10 +282,6 @@ assert.equal(
 );
 
 // increase/decrease clicks gated on production.unlocked.
-FactoryManager._industryVue = {
-  addItem: (id) => clicks.push(["addItem", id]),
-  subItem: (id) => clicks.push(["subItem", id]),
-};
 clicks.length = 0;
 FactoryManager.increaseProduction({ id: "Lux", unlocked: true }, 2);
 assert.deepEqual(clicks, [

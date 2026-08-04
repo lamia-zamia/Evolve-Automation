@@ -3121,6 +3121,7 @@ function startEvolveRuntimeComposition(
     getVueById: (id) => getVueById(id),
     getKeyManager: () => KeyManager,
     haveTask,
+    industryControls,
   }));
 
   let AlchemyManager, RitualManager;
@@ -3151,9 +3152,7 @@ function startEvolveRuntimeComposition(
     getGame: () => game,
     getResources: () => resources,
     getBuildings: () => buildings,
-    getVueById: (id) => getVueById(id),
-    callVueMethod,
-    getKeyManager: () => KeyManager,
+    industryControls,
     haveTech,
     isLumberRace,
     addProps,
@@ -3175,6 +3174,7 @@ function startEvolveRuntimeComposition(
       getGameLog: () => GameLog,
       haveTech,
       traitVal,
+      industryControls,
     }));
 
   let SpyManager, WarManager;

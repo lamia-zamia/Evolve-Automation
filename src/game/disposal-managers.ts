@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
+
 interface KeyManagerContract {
   click: (count: number) => Iterable<unknown>;
 }
@@ -12,6 +14,7 @@ interface DisposalManagersDependencies {
   getVueById: (id: string) => any;
   getKeyManager: () => KeyManagerContract;
   haveTask: (task: string) => boolean;
+  industryControls: GameIndustryControlsPort;
 }
 
 export function createDisposalManagers({
@@ -23,10 +26,10 @@ export function createDisposalManagers({
   getVueById,
   getKeyManager,
   haveTask,
+  industryControls,
 }: DisposalManagersDependencies) {
   const NaniteManager = {
-    _industryVueBinding: "iNFactory",
-    _industryVue: undefined as any,
+    _industryElementId: "iNFactory",
     storageShift: 1.005,
     priorityList: [] as any[],
 
@@ -80,12 +83,7 @@ export function createDisposalManagers({
         return false;
       }
 
-      this._industryVue = getVueById(this._industryVueBinding);
-      if (this._industryVue === undefined) {
-        return false;
-      }
-
-      return true;
+      return industryControls.isRendered(this._industryElementId);
     },
 
     isConsumable(res: any) {
@@ -151,20 +149,22 @@ export function createDisposalManagers({
       const resources = getResources();
       resources[id].rateMods["nanite"] += count;
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.addItem(id);
-      }
+      return industryControls.increaseItem({
+        elementId: this._industryElementId,
+        id,
+        count,
+      });
     },
 
     consumeLess(id: string, count: number) {
       const resources = getResources();
       resources[id].rateMods["nanite"] -= count;
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._industryVue.subItem(id);
-      }
+      return industryControls.decreaseItem({
+        elementId: this._industryElementId,
+        id,
+        count,
+      });
     },
   };
 
