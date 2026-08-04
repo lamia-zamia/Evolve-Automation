@@ -33,8 +33,8 @@ vm.runInNewContext(source, sandbox, {
 
 assert.equal(typeof hooks.autoHell, "function");
 const WarManager = {
-  _garrisonVue: {},
-  _hellVue: {},
+  isGarrisonVisible: true,
+  isHellVisible: true,
   maxSoldiers: 200,
   currentSoldiers: 200,
   currentCityGarrison: 80,

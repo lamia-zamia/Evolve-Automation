@@ -105,7 +105,7 @@ export function createMercenaryAdapter(
       session = null;
       lastState = null;
       const manager = requireRecord(dependencies.getWarManager(), "WarManager");
-      if (!manager["_garrisonVue"]) return unavailableInput();
+      if (manager["isGarrisonVisible"] !== true) return unavailableInput();
       const isUnlocked = requireFunction(
         manager["isMercenaryUnlocked"],
         "WarManager.isMercenaryUnlocked",

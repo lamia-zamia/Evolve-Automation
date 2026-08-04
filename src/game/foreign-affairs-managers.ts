@@ -1,4 +1,5 @@
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
+import type { GameGarrisonControlsPort } from "../ports/game-garrison-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
 
 type AnyFunction = (...args: any[]) => any;
@@ -22,16 +23,10 @@ type ForeignAffairsManagerDependencies = {
   getBuildings: () => AnyRecord;
   getPoly: () => AnyRecord;
   getVueById: (id: string) => any;
-  callVueMethod: (
-    view: unknown,
-    methodName: string,
-    args: readonly unknown[],
-    legacyFilterName?: string,
-  ) => unknown;
+  getGarrisonControls: () => GameGarrisonControlsPort;
   getFeatureVisibility: () => GameFeatureVisibilityPort;
   getGameModal: () => GameModalPort;
   getGameLog: () => AnyRecord;
-  getKeyManager: () => AnyRecord;
   getHaveTech: () => AnyFunction;
   getGuardActive: () => AnyFunction;
   getForeignAchievementGoal: () => "world-domination" | "syndicate" | null;
@@ -50,11 +45,10 @@ export function createForeignAffairsManagers({
   getBuildings,
   getPoly,
   getVueById,
-  callVueMethod,
+  getGarrisonControls,
   getFeatureVisibility,
   getGameModal,
   getGameLog,
-  getKeyManager,
   getHaveTech,
   getGuardActive,
   getForeignAchievementGoal,
@@ -67,6 +61,7 @@ export function createForeignAffairsManagers({
   const haveTech = (...args: any[]) => getHaveTech()(...args);
   const guardActive = (...args: any[]) => getGuardActive()(...args);
   const traitVal = (...args: any[]) => getTraitVal()(...args);
+  const garrisonControls = getGarrisonControls();
 
   const SpyManager: AnyRecord = {
     _foreignVue: undefined,
@@ -369,8 +364,8 @@ export function createForeignAffairsManagers({
   };
 
   const WarManager: AnyRecord = {
-    _garrisonVue: undefined,
-    _hellVue: undefined,
+    isGarrisonVisible: false,
+    isHellVisible: false,
 
     workers: 0,
     wounded: 0,
@@ -398,9 +393,9 @@ export function createForeignAffairsManagers({
         this.max = garrison.max;
         this.m_use = garrison.m_use;
         this.crew = garrison.crew;
-        this._garrisonVue = getVueById("garrison");
+        this.isGarrisonVisible = garrisonControls.isRendered("garrison");
       } else {
-        this._garrisonVue = undefined;
+        this.isGarrisonVisible = false;
       }
     },
 
@@ -413,11 +408,11 @@ export function createForeignAffairsManagers({
         this.hellPatrolSize = fortress.patrol_size;
         this.hellAssigned = fortress.assigned;
         this.hellReservedSoldiers = this.getHellReservedSoldiers();
-        this._hellVue = getVueById("fort");
+        this.isHellVisible = garrisonControls.isRendered("fort");
         this.minions = game.global.portal.minions?.spawns;
         this.enemies = game.global.portal.throne?.enemy?.length;
       } else {
-        this._hellVue = undefined;
+        this.isHellVisible = false;
       }
     },
 
@@ -462,7 +457,10 @@ export function createForeignAffairsManagers({
     },
 
     launchCampaign(govIndex: number) {
-      this._garrisonVue.campaign(govIndex);
+      return garrisonControls.launchCampaign({
+        elementId: "garrison",
+        govIndex,
+      });
     },
 
     release(govIndex: number) {
@@ -472,7 +470,10 @@ export function createForeignAffairsManagers({
         this.workers += occSoldiers;
         this.max += occSoldiers;
       }
-      this._garrisonVue.campaign(govIndex);
+      return garrisonControls.launchCampaign({
+        elementId: "garrison",
+        govIndex,
+      });
     },
 
     isMercenaryUnlocked() {
@@ -500,14 +501,14 @@ export function createForeignAffairsManagers({
 
     hireMercenary() {
       const resources = getResources();
-      const KeyManager = getKeyManager();
       let cost = this.mercenaryCost;
       if (this.workers >= this.max || resources.Money.currentQuantity < cost) {
         return false;
       }
 
-      KeyManager.set(false, false, false);
-      this._garrisonVue.hire();
+      if (!garrisonControls.hire("garrison")) {
+        return false;
+      }
 
       resources.Money.currentQuantity -= cost;
       this.workers++;
@@ -574,33 +575,40 @@ export function createForeignAffairsManagers({
     },
 
     setTactic(newTactic: number) {
-      const game = getGame();
-      let currentTactic = game.global.civic.garrison.tactic;
-      for (let i = currentTactic; i < newTactic; i++) {
-        this._garrisonVue.next();
-      }
-      for (let i = currentTactic; i > newTactic; i--) {
-        this._garrisonVue.last();
-      }
+      return garrisonControls.setTactic({
+        elementId: "garrison",
+        tactic: newTactic,
+      });
     },
 
     getCampaignTitle(tactic: number) {
-      return callVueMethod(this._garrisonVue, "tactics", [tactic]) as string;
+      return garrisonControls.campaignTitle({
+        elementId: "garrison",
+        tactic,
+      });
     },
 
     addBattalion(count: number) {
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._garrisonVue.aNext();
+      if (
+        !garrisonControls.addBattalions({
+          elementId: "garrison",
+          count,
+        })
+      ) {
+        return;
       }
 
       this.raid = Math.min(this.raid + count, this.currentCityGarrison);
     },
 
     removeBattalion(count: number) {
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._garrisonVue.aLast();
+      if (
+        !garrisonControls.removeBattalions({
+          elementId: "garrison",
+          count,
+        })
+      ) {
+        return;
       }
 
       this.raid = Math.max(this.raid - count, 0);
@@ -670,9 +678,8 @@ export function createForeignAffairsManagers({
     },
 
     addHellGarrison(count: number) {
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._hellVue.aNext();
+      if (!garrisonControls.addHellSoldiers({ elementId: "fort", count })) {
+        return;
       }
 
       this.hellSoldiers = Math.min(this.hellSoldiers + count, this.workers);
@@ -680,9 +687,8 @@ export function createForeignAffairsManagers({
     },
 
     removeHellGarrison(count: number) {
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._hellVue.aLast();
+      if (!garrisonControls.removeHellSoldiers({ elementId: "fort", count })) {
+        return;
       }
 
       let min =
@@ -692,9 +698,8 @@ export function createForeignAffairsManagers({
     },
 
     addHellPatrol(count: number) {
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._hellVue.patInc();
+      if (!garrisonControls.addHellPatrols({ elementId: "fort", count })) {
+        return;
       }
 
       if (this.hellPatrols * this.hellPatrolSize < this.hellSoldiers) {
@@ -708,18 +713,16 @@ export function createForeignAffairsManagers({
     },
 
     removeHellPatrol(count: number) {
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._hellVue.patDec();
+      if (!garrisonControls.removeHellPatrols({ elementId: "fort", count })) {
+        return;
       }
 
       this.hellPatrols = Math.max(this.hellPatrols - count, 0);
     },
 
     addHellPatrolSize(count: number) {
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._hellVue.patSizeInc();
+      if (!garrisonControls.addHellPatrolSize({ elementId: "fort", count })) {
+        return;
       }
 
       if (this.hellPatrolSize < this.hellSoldiers) {
@@ -733,9 +736,10 @@ export function createForeignAffairsManagers({
     },
 
     removeHellPatrolSize(count: number) {
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        this._hellVue.patSizeDec();
+      if (
+        !garrisonControls.removeHellPatrolSize({ elementId: "fort", count })
+      ) {
+        return;
       }
 
       this.hellPatrolSize = Math.max(this.hellPatrolSize - count, 1);
@@ -751,16 +755,12 @@ export function createForeignAffairsManagers({
         return false;
       }
 
-      // Get the Vue instance for the enemy fortress
-      let fortVue = getVueById("fort");
-      if (!fortVue) {
-        return false;
-      }
-
-      // Call the attack method with the enemy index
+      // Call the attack method on the fortress panel
       try {
-        fortVue.attack(enemyIndex);
-        return true;
+        return garrisonControls.attackFortress({
+          elementId: "fort",
+          enemyIndex,
+        });
       } catch (error) {
         logError("Failed to attack enemy fortress:", error);
         return false;

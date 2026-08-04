@@ -62,6 +62,7 @@ import { createGameCraftingControls } from "../browser/game-crafting-controls.ts
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
 import { createGameIndustryControls } from "../browser/game-industry-controls.ts";
 import { createGameFleetControls } from "../browser/game-fleet-controls.ts";
+import { createGameGarrisonControls } from "../browser/game-garrison-controls.ts";
 import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
@@ -2584,6 +2585,13 @@ function startEvolveRuntimeComposition(
     getGame: () => game,
     getJQuery: () => $,
   });
+  const garrisonControls = createGameGarrisonControls({
+    getVueById: (id) => getVueById(id),
+    clickSteps: (count) => KeyManager.click(count),
+    getGame: () => game,
+    clearClickMultipliers: () => KeyManager.set(false, false, false),
+    callVueMethod,
+  });
 
   // Class definitions
   const {
@@ -3192,11 +3200,10 @@ function startEvolveRuntimeComposition(
     getBuildings: () => buildings,
     getPoly: () => poly,
     getVueById: (id) => getVueById(id),
-    callVueMethod,
+    getGarrisonControls: () => garrisonControls,
     getFeatureVisibility: () => featureVisibility,
     getGameModal: () => gameModal,
     getGameLog: () => GameLog,
-    getKeyManager: () => KeyManager,
     getHaveTech: () => haveTech,
     getGuardActive: () => guardActive,
     getForeignAchievementGoal: () =>

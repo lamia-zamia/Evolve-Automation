@@ -148,7 +148,10 @@ export function createHellAdapter(dependencies: HellAdapterDependencies): {
         dependencies.getDebugWindow(),
         "debug window",
       );
-      if (!manager["_garrisonVue"] || !manager["_hellVue"]) {
+      if (
+        manager["isGarrisonVisible"] !== true ||
+        manager["isHellVisible"] !== true
+      ) {
         return unavailableInput();
       }
 

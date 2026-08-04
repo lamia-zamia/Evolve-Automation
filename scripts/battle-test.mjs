@@ -28,8 +28,8 @@ function createFixture(scenario = {}) {
       : createForeign(scenario.target ?? { policy: "Raid" }, 0);
   let hellGarrison = scenario.hellGarrison ?? 0;
   const manager = {
-    _garrisonVue: scenario.garrisonView === false ? undefined : {},
-    _hellVue: scenario.hellView ? {} : undefined,
+    isGarrisonVisible: scenario.garrisonView !== false,
+    isHellVisible: scenario.hellView === true,
     maxCityGarrison: scenario.maxCityGarrison ?? 10,
     maxSoldiers: scenario.maxSoldiers ?? 10,
     currentCityGarrison: scenario.currentCityGarrison ?? 10,

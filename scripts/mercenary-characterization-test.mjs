@@ -53,7 +53,7 @@ hooks.automationResources.Money = {
 
 let soldiers = 0;
 const WarManager = {
-  _garrisonVue: {},
+  isGarrisonVisible: true,
   isMercenaryUnlocked: () => true,
   maxCityGarrison: 2,
   maxSoldiers: 2,

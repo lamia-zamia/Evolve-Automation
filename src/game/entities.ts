@@ -751,7 +751,7 @@ export function createEntityClasses({
     }
 
     isUnlocked() {
-      return readWarManager()._garrisonVue !== undefined;
+      return readWarManager().isGarrisonVisible === true;
     }
   }
 

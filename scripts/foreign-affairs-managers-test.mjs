@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createGameFeatureVisibility } from "../src/adapters/browser/game-feature-visibility.ts";
+import { createGameGarrisonControls } from "../src/adapters/browser/game-garrison-controls.ts";
 import { createForeignAffairsManagers } from "../src/game/foreign-affairs-managers.ts";
 
 let game;
@@ -17,14 +18,11 @@ const selectors = {};
 const trace = [];
 const errors = [];
 
-const { SpyManager, WarManager } = createForeignAffairsManagers({
-  getGame: () => game,
-  getSettings: () => settings,
-  getState: () => state,
-  getResources: () => resources,
-  getBuildings: () => buildings,
-  getPoly: () => poly,
+const garrisonControls = createGameGarrisonControls({
   getVueById: (id) => vueById[id],
+  clickSteps: (count) => Array.from({ length: Math.max(0, count) }),
+  getGame: () => game,
+  clearClickMultipliers: () => trace.push(["clear"]),
   callVueMethod: (view, methodName, args, legacyFilterName = methodName) => {
     const method = view[methodName];
     if (typeof method === "function") {
@@ -36,6 +34,17 @@ const { SpyManager, WarManager } = createForeignAffairsManagers({
     }
     throw new TypeError(`${methodName} must be a function`);
   },
+});
+
+const { SpyManager, WarManager } = createForeignAffairsManagers({
+  getGame: () => game,
+  getSettings: () => settings,
+  getState: () => state,
+  getResources: () => resources,
+  getBuildings: () => buildings,
+  getPoly: () => poly,
+  getVueById: (id) => vueById[id],
+  getGarrisonControls: () => garrisonControls,
   getFeatureVisibility: () =>
     createGameFeatureVisibility({
       getDocument: () => ({
@@ -52,10 +61,6 @@ const { SpyManager, WarManager } = createForeignAffairsManagers({
   }),
   getGameLog: () => ({
     logSuccess: (...args) => trace.push(["log", ...args]),
-  }),
-  getKeyManager: () => ({
-    set: (...args) => trace.push(["keys", ...args]),
-    click: (count) => Array.from({ length: Math.max(0, count) }),
   }),
   getHaveTech: () => haveTech,
   getGuardActive: () => guardActive,
@@ -264,6 +269,59 @@ WarManager.release(0);
 assert.equal(WarManager.workers, 16);
 assert.equal(WarManager.max, 24);
 
+// This port's availability is sampled into typed flags by the update.
+assert.equal(WarManager.isGarrisonVisible, true);
+assert.equal(WarManager.isHellVisible, true);
+
+// Tactic navigation delegates the next/last pair to the garrison panel.
+trace.length = 0;
+WarManager.setTactic(4);
+assert.deepEqual(trace, [["next"], ["next"]]);
+
+// The campaign title is the panel's tactics name, read through the port.
+assert.equal(WarManager.getCampaignTitle(1), "tactic-1");
+
+// Battalion and hell steps delegate the paced method pairs and mirror the
+// adjusted counts when the panel answered.
+trace.length = 0;
+WarManager.addBattalion(3);
+WarManager.removeBattalion(1);
+assert.deepEqual(trace, [["aNext"], ["aNext"], ["aNext"], ["aLast"]]);
+assert.equal(WarManager.raid, 2);
+trace.length = 0;
+WarManager.addHellGarrison(2);
+WarManager.removeHellGarrison(1);
+WarManager.addHellPatrol(1);
+WarManager.removeHellPatrol(1);
+WarManager.addHellPatrolSize(1);
+WarManager.removeHellPatrolSize(1);
+assert.deepEqual(trace, [
+  ["hellNext"],
+  ["hellNext"],
+  ["hellLast"],
+  ["patInc"],
+  ["patDec"],
+  ["patSizeInc"],
+  ["patSizeDec"],
+]);
+
+// Hired mercenaries clear the click multipliers first, then hire and deduct.
+trace.length = 0;
+const hired = WarManager.hireMercenary();
+assert.equal(hired, true);
+assert.deepEqual(trace.slice(0, 2), [["clear"], ["hire"]]);
+assert.equal(WarManager.workers, 17);
+assert.equal(WarManager.m_use, 1);
+
+// Withdrawn panels bail out without mutating the mirrored counts.
+delete vueById.garrison;
+WarManager.updateGarrison();
+assert.equal(WarManager.isGarrisonVisible, false);
+const raidBefore = WarManager.raid;
+WarManager.addBattalion(5);
+assert.equal(WarManager.raid, raidBefore);
+assert.equal(WarManager.hireMercenary(), false);
+
 // Reserve calculations include assault forge, soul forge, emplacement, and guardpost.
 settings.autoBuild = true;
 settings.hellAssaultReserve = true;
@@ -281,6 +339,7 @@ assert.equal(WarManager.getSoldiersForAttackRating(35), 4);
 
 // Fortress validation and caught failures.
 assert.equal(WarManager.attackEnemyFortress(-1), false);
+assert.equal(WarManager.attackEnemyFortress(0), true);
 vueById.fort.attack = () => {
   throw new Error("boom");
 };

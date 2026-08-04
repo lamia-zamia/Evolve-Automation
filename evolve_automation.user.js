@@ -2712,6 +2712,128 @@
     });
   }
 
+  // src/adapters/browser/game-garrison-controls.ts
+  function currentGarrisonTactic(getGame) {
+    const game = getGame();
+    const global = isRecord(game) ? game["global"] : void 0;
+    const civic = isRecord(global) ? global["civic"] : void 0;
+    const garrison = isRecord(civic) ? civic["garrison"] : void 0;
+    const tactic = isRecord(garrison) ? garrison["tactic"] : void 0;
+    return typeof tactic === "number" && Number.isFinite(tactic) ? tactic : null;
+  }
+  function createGameGarrisonControls({
+    getVueById,
+    clickSteps,
+    getGame,
+    clearClickMultipliers,
+    callVueMethod
+  }) {
+    function single(elementId, method, args) {
+      const view = getVueById(elementId);
+      if (!isRecord(view) || typeof view[method] !== "function") {
+        return false;
+      }
+      const call4 = requireFunction(
+        view[method],
+        `${elementId} Vue view.${method}`
+      );
+      Reflect.apply(call4, view, args);
+      return true;
+    }
+    function step(elementId, method, count2) {
+      const view = getVueById(elementId);
+      if (!isRecord(view) || typeof view[method] !== "function") {
+        return false;
+      }
+      const call4 = requireFunction(
+        view[method],
+        `${elementId} Vue view.${method}`
+      );
+      for (const _step of clickSteps(count2)) {
+        Reflect.apply(call4, view, []);
+      }
+      return true;
+    }
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      launchCampaign(request) {
+        return single(request.elementId, "campaign", [request.govIndex]);
+      },
+      hire(elementId) {
+        const view = getVueById(elementId);
+        if (!isRecord(view) || typeof view.hire !== "function") {
+          return false;
+        }
+        clearClickMultipliers();
+        const hire = requireFunction(view.hire, `${elementId} Vue view.hire`);
+        Reflect.apply(hire, view, []);
+        return true;
+      },
+      setTactic(request) {
+        const view = getVueById(request.elementId);
+        if (!isRecord(view) || typeof view.next !== "function" || typeof view.last !== "function") {
+          return false;
+        }
+        const next = requireFunction(
+          view.next,
+          `${request.elementId} Vue view.next`
+        );
+        const last = requireFunction(
+          view.last,
+          `${request.elementId} Vue view.last`
+        );
+        const current = currentGarrisonTactic(getGame);
+        if (current === null) {
+          return false;
+        }
+        for (let tactic = current; tactic < request.tactic; tactic++) {
+          Reflect.apply(next, view, []);
+        }
+        for (let tactic = current; tactic > request.tactic; tactic--) {
+          Reflect.apply(last, view, []);
+        }
+        return true;
+      },
+      campaignTitle(request) {
+        const view = getVueById(request.elementId);
+        if (!isRecord(view)) {
+          return null;
+        }
+        const result2 = callVueMethod(view, "tactics", [request.tactic]);
+        return typeof result2 === "string" ? result2 : null;
+      },
+      addBattalions(request) {
+        return step(request.elementId, "aNext", request.count);
+      },
+      removeBattalions(request) {
+        return step(request.elementId, "aLast", request.count);
+      },
+      addHellSoldiers(request) {
+        return step(request.elementId, "aNext", request.count);
+      },
+      removeHellSoldiers(request) {
+        return step(request.elementId, "aLast", request.count);
+      },
+      addHellPatrols(request) {
+        return step(request.elementId, "patInc", request.count);
+      },
+      removeHellPatrols(request) {
+        return step(request.elementId, "patDec", request.count);
+      },
+      addHellPatrolSize(request) {
+        return step(request.elementId, "patSizeInc", request.count);
+      },
+      removeHellPatrolSize(request) {
+        return step(request.elementId, "patSizeDec", request.count);
+      },
+      attackFortress(request) {
+        return single(request.elementId, "attack", [request.enemyIndex]);
+      }
+    });
+  }
+
   // src/adapters/browser/game-job-controls.ts
   function createGameJobControls({
     getVueById,
@@ -4657,11 +4779,10 @@
     getBuildings,
     getPoly,
     getVueById,
-    callVueMethod,
+    getGarrisonControls,
     getFeatureVisibility,
     getGameModal,
     getGameLog,
-    getKeyManager,
     getHaveTech,
     getGuardActive,
     getForeignAchievementGoal,
@@ -4674,6 +4795,7 @@
     const haveTech = (...args) => getHaveTech()(...args);
     const guardActive = (...args) => getGuardActive()(...args);
     const traitVal = (...args) => getTraitVal()(...args);
+    const garrisonControls = getGarrisonControls();
     const SpyManager = {
       _foreignVue: void 0,
       purchaseMoney: 0,
@@ -4853,8 +4975,8 @@
       }
     };
     const WarManager = {
-      _garrisonVue: void 0,
-      _hellVue: void 0,
+      isGarrisonVisible: false,
+      isHellVisible: false,
       workers: 0,
       wounded: 0,
       raid: 0,
@@ -4879,9 +5001,9 @@
           this.max = garrison.max;
           this.m_use = garrison.m_use;
           this.crew = garrison.crew;
-          this._garrisonVue = getVueById("garrison");
+          this.isGarrisonVisible = garrisonControls.isRendered("garrison");
         } else {
-          this._garrisonVue = void 0;
+          this.isGarrisonVisible = false;
         }
       },
       updateHell() {
@@ -4893,11 +5015,11 @@
           this.hellPatrolSize = fortress.patrol_size;
           this.hellAssigned = fortress.assigned;
           this.hellReservedSoldiers = this.getHellReservedSoldiers();
-          this._hellVue = getVueById("fort");
+          this.isHellVisible = garrisonControls.isRendered("fort");
           this.minions = game.global.portal.minions?.spawns;
           this.enemies = game.global.portal.throne?.enemy?.length;
         } else {
-          this._hellVue = void 0;
+          this.isHellVisible = false;
         }
       },
       get currentSoldiers() {
@@ -4924,7 +5046,10 @@
         return this.hellSoldiers - this.hellPatrolSize * this.hellPatrols - this.hellReservedSoldiers;
       },
       launchCampaign(govIndex) {
-        this._garrisonVue.campaign(govIndex);
+        return garrisonControls.launchCampaign({
+          elementId: "garrison",
+          govIndex
+        });
       },
       release(govIndex) {
         const game = getGame();
@@ -4933,7 +5058,10 @@
           this.workers += occSoldiers;
           this.max += occSoldiers;
         }
-        this._garrisonVue.campaign(govIndex);
+        return garrisonControls.launchCampaign({
+          elementId: "garrison",
+          govIndex
+        });
       },
       isMercenaryUnlocked() {
         const game = getGame();
@@ -4958,13 +5086,13 @@
       },
       hireMercenary() {
         const resources = getResources();
-        const KeyManager = getKeyManager();
         let cost = this.mercenaryCost;
         if (this.workers >= this.max || resources.Money.currentQuantity < cost) {
           return false;
         }
-        KeyManager.set(false, false, false);
-        this._garrisonVue.hire();
+        if (!garrisonControls.hire("garrison")) {
+          return false;
+        }
         resources.Money.currentQuantity -= cost;
         this.workers++;
         this.m_use++;
@@ -5001,29 +5129,32 @@
         return soldiers;
       },
       setTactic(newTactic) {
-        const game = getGame();
-        let currentTactic = game.global.civic.garrison.tactic;
-        for (let i = currentTactic; i < newTactic; i++) {
-          this._garrisonVue.next();
-        }
-        for (let i = currentTactic; i > newTactic; i--) {
-          this._garrisonVue.last();
-        }
+        return garrisonControls.setTactic({
+          elementId: "garrison",
+          tactic: newTactic
+        });
       },
       getCampaignTitle(tactic) {
-        return callVueMethod(this._garrisonVue, "tactics", [tactic]);
+        return garrisonControls.campaignTitle({
+          elementId: "garrison",
+          tactic
+        });
       },
       addBattalion(count2) {
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._garrisonVue.aNext();
+        if (!garrisonControls.addBattalions({
+          elementId: "garrison",
+          count: count2
+        })) {
+          return;
         }
         this.raid = Math.min(this.raid + count2, this.currentCityGarrison);
       },
       removeBattalion(count2) {
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._garrisonVue.aLast();
+        if (!garrisonControls.removeBattalions({
+          elementId: "garrison",
+          count: count2
+        })) {
+          return;
         }
         this.raid = Math.max(this.raid - count2, 0);
       },
@@ -5070,26 +5201,23 @@
         return maxSoldiers;
       },
       addHellGarrison(count2) {
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._hellVue.aNext();
+        if (!garrisonControls.addHellSoldiers({ elementId: "fort", count: count2 })) {
+          return;
         }
         this.hellSoldiers = Math.min(this.hellSoldiers + count2, this.workers);
         this.hellAssigned = this.hellSoldiers;
       },
       removeHellGarrison(count2) {
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._hellVue.aLast();
+        if (!garrisonControls.removeHellSoldiers({ elementId: "fort", count: count2 })) {
+          return;
         }
         let min = this.hellPatrols * this.hellPatrolSize + this.hellReservedSoldiers;
         this.hellSoldiers = Math.max(this.hellSoldiers - count2, min);
         this.hellAssigned = this.hellSoldiers;
       },
       addHellPatrol(count2) {
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._hellVue.patInc();
+        if (!garrisonControls.addHellPatrols({ elementId: "fort", count: count2 })) {
+          return;
         }
         if (this.hellPatrols * this.hellPatrolSize < this.hellSoldiers) {
           this.hellPatrols += count2;
@@ -5101,16 +5229,14 @@
         }
       },
       removeHellPatrol(count2) {
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._hellVue.patDec();
+        if (!garrisonControls.removeHellPatrols({ elementId: "fort", count: count2 })) {
+          return;
         }
         this.hellPatrols = Math.max(this.hellPatrols - count2, 0);
       },
       addHellPatrolSize(count2) {
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._hellVue.patSizeInc();
+        if (!garrisonControls.addHellPatrolSize({ elementId: "fort", count: count2 })) {
+          return;
         }
         if (this.hellPatrolSize < this.hellSoldiers) {
           this.hellPatrolSize += count2;
@@ -5122,9 +5248,8 @@
         }
       },
       removeHellPatrolSize(count2) {
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          this._hellVue.patSizeDec();
+        if (!garrisonControls.removeHellPatrolSize({ elementId: "fort", count: count2 })) {
+          return;
         }
         this.hellPatrolSize = Math.max(this.hellPatrolSize - count2, 1);
       },
@@ -5133,13 +5258,11 @@
         if (enemyIndex < 0 || enemyIndex >= game.global.portal.throne.enemy.length) {
           return false;
         }
-        let fortVue = getVueById("fort");
-        if (!fortVue) {
-          return false;
-        }
         try {
-          fortVue.attack(enemyIndex);
-          return true;
+          return garrisonControls.attackFortress({
+            elementId: "fort",
+            enemyIndex
+          });
         } catch (error) {
           logError("Failed to attack enemy fortress:", error);
           return false;
@@ -8591,7 +8714,7 @@
         this.rateOfChange = 0;
       }
       isUnlocked() {
-        return readWarManager()._garrisonVue !== void 0;
+        return readWarManager().isGarrisonVisible === true;
       }
     }
     class Supply extends Resource {
@@ -26797,7 +26920,7 @@
           dependencies.getDebugWindow(),
           "debug window"
         );
-        if (!manager["_garrisonVue"] || !manager["_hellVue"]) {
+        if (manager["isGarrisonVisible"] !== true || manager["isHellVisible"] !== true) {
           return unavailableInput();
         }
         const global = requireRecord(game["global"], "game.global");
@@ -27755,7 +27878,7 @@
           unificationEnabled: false,
           occupyLast: false
         });
-        if (!manager["_garrisonVue"] || !spyManager["_foreignVue"]) {
+        if (manager["isGarrisonVisible"] !== true || !spyManager["_foreignVue"]) {
           return unavailable10;
         }
         const maxCityGarrison = requireNumber(
@@ -27788,7 +27911,7 @@
           settings["autoHell"],
           "settings.autoHell"
         );
-        const hellAvailable = Boolean(manager["_hellVue"]);
+        const hellAvailable = manager["isHellVisible"] === true;
         const readHell = autoHell && hellAvailable;
         const protectMode = requireString(
           settings["foreignProtect"],
@@ -33510,7 +33633,7 @@
         session = null;
         lastState = null;
         const manager = requireRecord(dependencies.getWarManager(), "WarManager");
-        if (!manager["_garrisonVue"]) return unavailableInput2();
+        if (manager["isGarrisonVisible"] !== true) return unavailableInput2();
         const isUnlocked2 = requireFunction(
           manager["isMercenaryUnlocked"],
           "WarManager.isMercenaryUnlocked"
@@ -57130,6 +57253,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getJQuery: () => $
     });
+    const garrisonControls = createGameGarrisonControls({
+      getVueById: (id) => getVueById(id),
+      clickSteps: (count2) => KeyManager.click(count2),
+      getGame: () => game,
+      clearClickMultipliers: () => KeyManager.set(false, false, false),
+      callVueMethod
+    });
     const {
       Job,
       BasicJob,
@@ -57694,11 +57824,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBuildings: () => buildings,
       getPoly: () => poly,
       getVueById: (id) => getVueById(id),
-      callVueMethod,
+      getGarrisonControls: () => garrisonControls,
       getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,
       getGameLog: () => GameLog,
-      getKeyManager: () => KeyManager,
       getHaveTech: () => haveTech,
       getGuardActive: () => guardActive,
       getForeignAchievementGoal: () => readForeignAchievementGoal({

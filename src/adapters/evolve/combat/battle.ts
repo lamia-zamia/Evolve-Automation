@@ -200,7 +200,7 @@ export function createBattleAdapter(dependencies: BattleAdapterDependencies): {
         occupyLast: false,
       });
 
-      if (!manager["_garrisonVue"] || !spyManager["_foreignVue"]) {
+      if (manager["isGarrisonVisible"] !== true || !spyManager["_foreignVue"]) {
         return unavailable;
       }
       const maxCityGarrison = requireNumber(
@@ -239,7 +239,7 @@ export function createBattleAdapter(dependencies: BattleAdapterDependencies): {
         settings["autoHell"],
         "settings.autoHell",
       );
-      const hellAvailable = Boolean(manager["_hellVue"]);
+      const hellAvailable = manager["isHellVisible"] === true;
       const readHell = autoHell && hellAvailable;
       const protectMode = requireString(
         settings["foreignProtect"],

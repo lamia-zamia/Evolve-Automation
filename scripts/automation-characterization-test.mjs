@@ -250,7 +250,7 @@ hooks.automationResources.Population = { currentQuantity: 1 };
 hooks.automationResources.Thrall = { rateOfChange: 0, storageRatio: 0 };
 let soldierCount = 0;
 const testWarManager = {
-  _garrisonVue: {},
+  isGarrisonVisible: true,
   isMercenaryUnlocked: () => true,
   maxCityGarrison: 1,
   maxSoldiers: 1,

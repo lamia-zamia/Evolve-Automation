@@ -14,8 +14,8 @@ function createFixture(scenario = {}) {
     "hellAssigned" in scenario ? scenario.hellAssigned : hellSoldiers;
   const reserved = scenario.hellReservedSoldiers ?? 0;
   const manager = {
-    _garrisonVue: scenario.garrisonAvailable === false ? null : {},
-    _hellVue: scenario.hellAvailable === false ? null : {},
+    isGarrisonVisible: scenario.garrisonAvailable !== false,
+    isHellVisible: scenario.hellAvailable !== false,
     maxSoldiers: scenario.maximumSoldiers ?? 200,
     currentSoldiers: scenario.currentSoldiers ?? 200,
     currentCityGarrison: scenario.currentCityGarrison ?? 100,

@@ -43,8 +43,8 @@ const SpyManager = {
   foreignActive: [],
 };
 const WarManager = {
-  _garrisonVue: {},
-  _hellVue: undefined,
+  isGarrisonVisible: true,
+  isHellVisible: false,
   maxCityGarrison: 30,
   maxSoldiers: 30,
   currentCityGarrison: 30,

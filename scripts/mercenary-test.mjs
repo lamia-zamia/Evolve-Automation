@@ -34,7 +34,7 @@ function createFixture(scenario) {
     },
   };
   const WarManager = {
-    _garrisonVue: scenario.garrisonView === false ? undefined : {},
+    isGarrisonVisible: scenario.garrisonView !== false,
     isMercenaryUnlocked: () => scenario.unlocked ?? true,
     maxCityGarrison: scenario.maxCityGarrison ?? 2,
     maxSoldiers: scenario.maxSoldiers ?? 2,
