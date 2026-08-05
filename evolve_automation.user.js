@@ -2574,6 +2574,27 @@
     });
   }
 
+  // src/adapters/browser/game-government-selection.ts
+  var GOVERNMENT_MODAL = "govModal";
+  function createGameGovernmentSelection({
+    getVueById
+  }) {
+    return Object.freeze({
+      selectGovernment(government) {
+        const view = getVueById(GOVERNMENT_MODAL);
+        if (!isRecord(view) || typeof view["setGov"] !== "function") {
+          return false;
+        }
+        const setGov = requireFunction(
+          view["setGov"],
+          `${GOVERNMENT_MODAL} Vue view.setGov`
+        );
+        Reflect.apply(setGov, view, [government]);
+        return true;
+      }
+    });
+  }
+
   // src/adapters/browser/game-industry-controls.ts
   var GRAPHENE_FUEL_METHODS = {
     Lumber: { add: "addWood", sub: "subWood" },
@@ -4769,8 +4790,8 @@
     getGame,
     getResources,
     getBuildings,
-    getVueById,
     clickMultipliers,
+    governmentSelection,
     marketControls,
     storageControls,
     getFeatureVisibility,
@@ -4873,7 +4894,7 @@
               )}.`,
               ["events", "major_events"]
             );
-            getVueById("govModal")?.setGov(government);
+            governmentSelection.selectGovernment(government);
           }
         });
       }
@@ -57508,6 +57529,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => clickMultipliers.steps(count2)
     });
+    const governmentSelection = createGameGovernmentSelection({
+      getVueById: (id) => getVueById(id)
+    });
     const marketControls = createGameMarketControls({
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => clickMultipliers.steps(count2)
@@ -58087,8 +58111,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getVueById: (id) => getVueById(id),
       clickMultipliers,
+      governmentSelection,
       marketControls,
       storageControls,
       getFeatureVisibility: () => featureVisibility,

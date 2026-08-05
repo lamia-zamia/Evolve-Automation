@@ -62,6 +62,7 @@ import { createGameCraftingControls } from "../browser/game-crafting-controls.ts
 import { createGameClickMultipliers } from "../browser/game-click-multipliers.ts";
 import { createGameDisposalControls } from "../browser/game-disposal-controls.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
+import { createGameGovernmentSelection } from "../browser/game-government-selection.ts";
 import { createGameIndustryControls } from "../browser/game-industry-controls.ts";
 import { createGameFleetControls } from "../browser/game-fleet-controls.ts";
 import { createGameGarrisonControls } from "../browser/game-garrison-controls.ts";
@@ -2592,6 +2593,9 @@ function startEvolveRuntimeComposition(
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => clickMultipliers.steps(count),
   });
+  const governmentSelection = createGameGovernmentSelection({
+    getVueById: (id) => getVueById(id),
+  });
   const marketControls = createGameMarketControls({
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => clickMultipliers.steps(count),
@@ -3215,8 +3219,8 @@ function startEvolveRuntimeComposition(
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getVueById: (id) => getVueById(id),
       clickMultipliers,
+      governmentSelection,
       marketControls,
       storageControls,
       getFeatureVisibility: () => featureVisibility,

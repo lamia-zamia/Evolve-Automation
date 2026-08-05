@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { GameClickMultipliersPort } from "../ports/game-click-multipliers.ts";
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
+import type { GameGovernmentSelectionPort } from "../ports/game-government-selection.ts";
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
 import type { GameMarketControlsPort } from "../ports/game-market-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
@@ -26,8 +27,8 @@ interface EconomyManagersDependencies {
   getGame: () => any;
   getResources: () => Record<string, any>;
   getBuildings: () => Record<string, any>;
-  getVueById: (id: string) => any;
   clickMultipliers: GameClickMultipliersPort;
+  governmentSelection: GameGovernmentSelectionPort;
   marketControls: GameMarketControlsPort;
   storageControls: GameStorageControlsPort;
   getFeatureVisibility: () => GameFeatureVisibilityPort;
@@ -109,8 +110,8 @@ export function createEconomyManagers({
   getGame,
   getResources,
   getBuildings,
-  getVueById,
   clickMultipliers,
+  governmentSelection,
   marketControls,
   storageControls,
   getFeatureVisibility,
@@ -237,7 +238,7 @@ export function createEconomyManagers({
             )}.`,
             ["events", "major_events"],
           );
-          getVueById("govModal")?.setGov(government);
+          governmentSelection.selectGovernment(government);
         },
       });
     },

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createGameFeatureVisibility } from "../src/adapters/browser/game-feature-visibility.ts";
+import { createGameGovernmentSelection } from "../src/adapters/browser/game-government-selection.ts";
 import { createGameIndustryControls } from "../src/adapters/browser/game-industry-controls.ts";
 import { createGameMarketControls } from "../src/adapters/browser/game-market-controls.ts";
 import { createGameStorageControls } from "../src/adapters/browser/game-storage-controls.ts";
@@ -57,10 +58,12 @@ const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
     getGame: () => game,
     getResources: () => resources,
     getBuildings: () => buildings,
-    getVueById: (id) => vueMap[id],
     clickMultipliers: {
       steps: (count) => Array.from({ length: count }, (_, i) => i),
     },
+    governmentSelection: createGameGovernmentSelection({
+      getVueById: (id) => vueMap[id],
+    }),
     marketControls,
     storageControls,
     getFeatureVisibility: () =>
