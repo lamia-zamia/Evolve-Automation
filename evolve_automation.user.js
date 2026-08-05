@@ -3212,6 +3212,36 @@
     });
   }
 
+  // src/adapters/browser/game-trait-controls.ts
+  var TRAIT_PANEL = "geneticBreakdown";
+  function createGameTraitControls({
+    getVueById
+  }) {
+    function spend(methodName, traitName) {
+      const view = getVueById(TRAIT_PANEL);
+      if (!isRecord(view) || typeof view[methodName] !== "function") {
+        return false;
+      }
+      const method = requireFunction(
+        view[methodName],
+        `${TRAIT_PANEL} Vue view.${methodName}`
+      );
+      Reflect.apply(method, view, [traitName]);
+      return true;
+    }
+    return Object.freeze({
+      buyMinorTrait(traitName) {
+        return spend("gene", traitName);
+      },
+      gainTrait(traitName) {
+        return spend("gain", traitName);
+      },
+      purgeTrait(traitName) {
+        return spend("purge", traitName);
+      }
+    });
+  }
+
   // src/settings/queued-settings.ts
   function createQueuedSettings({
     getSettings,
@@ -3367,12 +3397,10 @@
     getGame,
     getSettings,
     getResources,
-    getVueById,
     haveTech
   }) {
     const MinorTraitManager = {
       priorityList: [],
-      _traitVueBinding: "geneticBreakdown",
       isUnlocked() {
         return haveTech("genetics", 3);
       },
@@ -3383,25 +3411,15 @@
         return this.priorityList.filter(
           (trait2) => trait2.enabled && trait2.isUnlocked()
         );
-      },
-      buyTrait(traitName) {
-        getVueById(this._traitVueBinding)?.gene(traitName);
       }
     };
     const MutableTraitManager = {
       priorityList: [],
-      _traitVueBinding: "geneticBreakdown",
       isUnlocked() {
         return haveTech("genetics", 3) && getGame().global.genes["mutation"];
       },
       sortByPriority() {
         this.priorityList.sort((a, b) => a.priority - b.priority);
-      },
-      gainTrait(traitName) {
-        getVueById(this._traitVueBinding)?.gain(traitName);
-      },
-      purgeTrait(traitName) {
-        getVueById(this._traitVueBinding)?.purge(traitName);
       },
       get minimumPlasmidsToPreserve() {
         const settings = getSettings();
@@ -34784,15 +34802,11 @@
             actual: actualGenes
           });
         }
-        const manager = requireRecord(
-          dependencies.getMinorTraitManager(),
-          "MinorTraitManager"
-        );
-        const buyTrait = requireFunction(
-          manager["buyTrait"],
-          "MinorTraitManager.buyTrait"
-        );
-        Reflect.apply(buyTrait, manager, [decision2.traitName]);
+        if (!dependencies.traitControls.buyMinorTrait(decision2.traitName)) {
+          return stale("stale-minor-trait-panel", "trait panel is not offered", {
+            traitName: decision2.traitName
+          });
+        }
         genes["currentQuantity"] = actualGenes - decision2.geneCost;
         return SUCCEEDED;
       }
@@ -44257,17 +44271,18 @@
             actualTraitName
           });
         }
-        const methodName = decision2.kind === "gain" ? "gainTrait" : "purgeTrait";
-        const mutate = requireFunction(
-          manager[methodName],
-          `MutableTraitManager.${methodName}`
-        );
         const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
         const logSuccess = requireFunction(
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        Reflect.apply(mutate, manager, [decision2.traitName]);
+        const mutated = decision2.kind === "gain" ? dependencies.traitControls.gainTrait(decision2.traitName) : dependencies.traitControls.purgeTrait(decision2.traitName);
+        if (!mutated) {
+          return stale("stale-mutation-panel", "trait panel is not offered", {
+            traitName: decision2.traitName,
+            kind: decision2.kind
+          });
+        }
         Reflect.apply(logSuccess, gameLog, [
           "mutation",
           `Mutating ${decision2.kind === "gain" ? "in" : "out"} ${decision2.displayName} for ${decision2.mutationCost} ${decision2.currencyName}`,
@@ -57346,6 +57361,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const clickMultipliers = createGameClickMultipliers({
       getKeyManager: () => KeyManager
     });
+    const traitControls = createGameTraitControls({
+      getVueById: (id) => getVueById(id)
+    });
     const jobControls = createGameJobControls({
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => clickMultipliers.steps(count2)
@@ -57880,7 +57898,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getSettings: () => settings,
       getResources: () => resources,
-      getVueById: (id) => getVueById(id),
       haveTech
     }));
     const { QuarryManager, MineManager, ExtractorManager } = createIndustryManagers({
@@ -59250,7 +59267,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getResources: () => resources
       },
       executor: {
-        getMinorTraitManager: () => MinorTraitManager,
+        traitControls,
         getResources: () => resources
       }
     });
@@ -59268,6 +59285,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getMutableTraitManager: () => MutableTraitManager,
         getGame: () => game,
         getResources: () => resources,
+        traitControls,
         getGameLog: () => GameLog
       }
     });

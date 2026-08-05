@@ -5,19 +5,11 @@ let game;
 let settings;
 let resources;
 let techLevel;
-const vueCalls = [];
-
-const vue = {
-  gene: (name) => vueCalls.push(["gene", name]),
-  gain: (name) => vueCalls.push(["gain", name]),
-  purge: (name) => vueCalls.push(["purge", name]),
-};
 
 const { MinorTraitManager, MutableTraitManager } = createTraitManagers({
   getGame: () => game,
   getSettings: () => settings,
   getResources: () => resources,
-  getVueById: () => vue,
   haveTech: (_tech, level) => techLevel >= level,
 });
 
@@ -44,26 +36,12 @@ assert.deepEqual(
   ["b"],
 );
 
-// --- Minor: buyTrait dispatches gene() ---
-vueCalls.length = 0;
-MinorTraitManager.buyTrait("smart");
-assert.deepEqual(vueCalls, [["gene", "smart"]]);
-
 // --- Mutable: unlock requires tech AND mutation gene ---
 techLevel = 3;
 game = { global: { genes: {} } };
 assert.ok(!MutableTraitManager.isUnlocked());
 game = { global: { genes: { mutation: 1 } } };
 assert.ok(MutableTraitManager.isUnlocked());
-
-// --- Mutable: gain/purge dispatch ---
-vueCalls.length = 0;
-MutableTraitManager.gainTrait("dumb");
-MutableTraitManager.purgeTrait("dumb");
-assert.deepEqual(vueCalls, [
-  ["gain", "dumb"],
-  ["purge", "dumb"],
-]);
 
 // --- Mutable: minimumPlasmidsToPreserve ---
 resources = { Phage: { currentQuantity: 100 } };

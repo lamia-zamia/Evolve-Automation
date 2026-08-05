@@ -7,6 +7,7 @@ import type {
   MutationTraitView,
 } from "../../../domain/traits/mutation.ts";
 import type { DecisionExecutor } from "../../../ports/decision-executor.ts";
+import type { GameTraitControlsPort } from "../../../ports/game-trait-controls.ts";
 import type { MutationReader } from "../../../ports/mutation.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
@@ -27,6 +28,7 @@ export interface MutationReaderDependencies {
 }
 
 export interface MutationExecutorDependencies extends MutationReaderDependencies {
+  readonly traitControls: GameTraitControlsPort;
   readonly getGameLog: () => unknown;
 }
 
@@ -247,18 +249,24 @@ export function createMutationCommandExecutor(
         });
       }
 
-      const methodName = decision.kind === "gain" ? "gainTrait" : "purgeTrait";
-      const mutate = requireFunction(
-        manager[methodName],
-        `MutableTraitManager.${methodName}`,
-      );
+      // Resolve the log surface before the mutation so a malformed GameLog
+      // cannot leave a spent mutation unlogged.
       const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
       const logSuccess = requireFunction(
         gameLog["logSuccess"],
         "GameLog.logSuccess",
       );
 
-      Reflect.apply(mutate, manager, [decision.traitName]);
+      const mutated =
+        decision.kind === "gain"
+          ? dependencies.traitControls.gainTrait(decision.traitName)
+          : dependencies.traitControls.purgeTrait(decision.traitName);
+      if (!mutated) {
+        return stale("stale-mutation-panel", "trait panel is not offered", {
+          traitName: decision.traitName,
+          kind: decision.kind,
+        });
+      }
       Reflect.apply(logSuccess, gameLog, [
         "mutation",
         `Mutating ${decision.kind === "gain" ? "in" : "out"} ${decision.displayName} for ${decision.mutationCost} ${decision.currencyName}`,

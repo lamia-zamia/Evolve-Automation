@@ -5,6 +5,7 @@ import type {
   MinorTraitSummaryView,
 } from "../../../domain/traits/minor-trait.ts";
 import type { DecisionExecutor } from "../../../ports/decision-executor.ts";
+import type { GameTraitControlsPort } from "../../../ports/game-trait-controls.ts";
 import type { MinorTraitReader } from "../../../ports/minor-trait.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
@@ -123,7 +124,7 @@ export function createMinorTraitReader(
 }
 
 export function createMinorTraitCommandExecutor(dependencies: {
-  readonly getMinorTraitManager: () => unknown;
+  readonly traitControls: GameTraitControlsPort;
   readonly getResources: () => unknown;
 }): DecisionExecutor<MinorTraitPurchaseDecision> {
   return Object.freeze({
@@ -149,15 +150,11 @@ export function createMinorTraitCommandExecutor(dependencies: {
         });
       }
 
-      const manager = requireRecord(
-        dependencies.getMinorTraitManager(),
-        "MinorTraitManager",
-      );
-      const buyTrait = requireFunction(
-        manager["buyTrait"],
-        "MinorTraitManager.buyTrait",
-      );
-      Reflect.apply(buyTrait, manager, [decision.traitName]);
+      if (!dependencies.traitControls.buyMinorTrait(decision.traitName)) {
+        return stale("stale-minor-trait-panel", "trait panel is not offered", {
+          traitName: decision.traitName,
+        });
+      }
       genes["currentQuantity"] = actualGenes - decision.geneCost;
       return SUCCEEDED;
     },

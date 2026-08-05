@@ -132,26 +132,33 @@ assert.equal(reorderedBuys, 0, "changed candidate order performs no purchase");
 const staleResources = { Genes: { currentQuantity: 4 } };
 let staleBuys = 0;
 const staleOutcome = createMinorTraitCommandExecutor({
-  getMinorTraitManager: () => ({ buyTrait: () => staleBuys++ }),
+  traitControls: { buyMinorTrait: () => (staleBuys++, true) },
   getResources: () => staleResources,
 }).execute({ traitName: "smart", geneCost: 3, expectedGenes: 5 });
 assert.equal(staleOutcome.status, "stale");
 assert.equal(staleBuys, 0);
 assert.equal(staleResources.Genes.currentQuantity, 4);
 
-const malformedResources = { Genes: { currentQuantity: 5 } };
-assert.throws(
-  () =>
-    createMinorTraitCommandExecutor({
-      getMinorTraitManager: () => ({}),
-      getResources: () => malformedResources,
-    }).execute({ traitName: "smart", geneCost: 3, expectedGenes: 5 }),
-  /MinorTraitManager\.buyTrait must be a function/,
-);
-assert.equal(
-  malformedResources.Genes.currentQuantity,
-  5,
-  "manager contract is validated before the Genes model write",
-);
+// An unoffered panel spends nothing, so the Genes model must stay untouched.
+const unofferedResources = { Genes: { currentQuantity: 5 } };
+const unofferedOutcome = createMinorTraitCommandExecutor({
+  traitControls: { buyMinorTrait: () => false },
+  getResources: () => unofferedResources,
+}).execute({ traitName: "smart", geneCost: 3, expectedGenes: 5 });
+assert.equal(unofferedOutcome.status, "stale");
+assert.equal(unofferedOutcome.failure.code, "stale-minor-trait-panel");
+assert.equal(unofferedResources.Genes.currentQuantity, 5);
+
+const boughtResources = { Genes: { currentQuantity: 5 } };
+const bought = [];
+const boughtOutcome = createMinorTraitCommandExecutor({
+  traitControls: {
+    buyMinorTrait: (traitName) => (bought.push(traitName), true),
+  },
+  getResources: () => boughtResources,
+}).execute({ traitName: "smart", geneCost: 3, expectedGenes: 5 });
+assert.equal(boughtOutcome.status, "succeeded");
+assert.deepEqual(bought, ["smart"]);
+assert.equal(boughtResources.Genes.currentQuantity, 2);
 
 console.log("Minor-trait automation adapter and regression tests passed");

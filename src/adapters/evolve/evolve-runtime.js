@@ -71,6 +71,7 @@ import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
 import { createGameResearchControls } from "../browser/game-research-controls.ts";
+import { createGameTraitControls } from "../browser/game-trait-controls.ts";
 import { createQueuedSettings } from "../../settings/queued-settings.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
 import { createRuntimeQueries } from "../../game/runtime-queries.ts";
@@ -2569,6 +2570,9 @@ function startEvolveRuntimeComposition(
   const clickMultipliers = createGameClickMultipliers({
     getKeyManager: () => KeyManager,
   });
+  const traitControls = createGameTraitControls({
+    getVueById: (id) => getVueById(id),
+  });
   const jobControls = createGameJobControls({
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => clickMultipliers.steps(count),
@@ -3136,7 +3140,6 @@ function startEvolveRuntimeComposition(
     getGame: () => game,
     getSettings: () => settings,
     getResources: () => resources,
-    getVueById: (id) => getVueById(id),
     haveTech,
   }));
 
@@ -4685,7 +4688,7 @@ function startEvolveRuntimeComposition(
       getResources: () => resources,
     },
     executor: {
-      getMinorTraitManager: () => MinorTraitManager,
+      traitControls,
       getResources: () => resources,
     },
   });
@@ -4705,6 +4708,7 @@ function startEvolveRuntimeComposition(
       getMutableTraitManager: () => MutableTraitManager,
       getGame: () => game,
       getResources: () => resources,
+      traitControls,
       getGameLog: () => GameLog,
     },
   });

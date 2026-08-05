@@ -196,6 +196,14 @@ const waveVues = {
 for (const id of Object.keys(waveVues)) {
   documentElements[id] = { __vue__: waveVues[id] };
 }
+// The one panel that spends on traits: minor levels in wave 1, mutations in wave 4.
+documentElements.geneticBreakdown = {
+  __vue__: {
+    gene: (name) => waveActions.push(["trait", name]),
+    gain: (name) => wave4Actions.push(["mutate", name]),
+    purge: (name) => wave4Actions.push(["mutate-out", name]),
+  },
+};
 documentElements.oculardisintegration = {
   querySelector: () => ({ click: () => waveActions.push(["ocular", "d"]) }),
 };
@@ -272,7 +280,6 @@ const testMinorTraitManager = {
   managedPriorityList: () => [
     { traitName: "smart", weighting: 1, geneCost: () => 5 },
   ],
-  buyTrait: (name) => waveActions.push(["trait", name]),
 };
 hooks.setWave1TestManagers({
   WarManager: testWarManager,
@@ -668,7 +675,6 @@ const mutationTrait = {
 const testMutableTraitManager = {
   isUnlocked: () => true,
   priorityList: [mutationTrait],
-  gainTrait: (name) => wave4Actions.push(["mutate", name]),
 };
 const makeWave4Job = (id, workers, breakpoint) => ({
   id,

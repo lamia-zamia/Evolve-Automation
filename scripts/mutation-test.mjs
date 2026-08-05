@@ -120,8 +120,10 @@ function executorFixture(overrides = {}) {
     },
     manager: {
       priorityList: [{ traitName: "strong" }],
-      gainTrait: (name) => actions.push(["gain", name]),
-      purgeTrait: (name) => actions.push(["purge", name]),
+    },
+    traitControls: {
+      gainTrait: (name) => (actions.push(["gain", name]), true),
+      purgeTrait: (name) => (actions.push(["purge", name]), true),
     },
     GameLog: {
       logSuccess: (...args) => actions.push(["log", ...args]),
@@ -135,6 +137,10 @@ function executorFixture(overrides = {}) {
       getMutableTraitManager: () => state.manager,
       getGame: () => state.game,
       getResources: () => state.resources,
+      traitControls: {
+        gainTrait: (name) => state.traitControls.gainTrait(name),
+        purgeTrait: (name) => state.traitControls.purgeTrait(name),
+      },
       getGameLog: () => state.GameLog,
     }),
   };
@@ -156,8 +162,8 @@ assert.equal(staleCurrencyOutcome.status, "stale");
 assert.deepEqual(staleCurrency.actions, []);
 
 const staleTrait = executorFixture({
-  manager: {
-    priorityList: [{ traitName: "replacement" }],
+  manager: { priorityList: [{ traitName: "replacement" }] },
+  traitControls: {
     gainTrait: () => {
       throw new Error("stale mutation executed");
     },
@@ -197,5 +203,61 @@ assert.deepEqual(
   "logger is validated before mutation",
 );
 assert.equal(malformedLogger.state.resources.Plasmid.currentQuantity, 10);
+
+// An unoffered trait panel spends nothing, so neither the log nor the currency
+// model may record a mutation that never happened.
+const unoffered = executorFixture({
+  traitControls: { gainTrait: () => false },
+});
+const unofferedOutcome = unoffered.executor.execute({
+  kind: "gain",
+  index: 0,
+  traitName: "strong",
+  displayName: "Strong",
+  mutationCost: 5,
+  currencyId: "Plasmid",
+  currencyName: "Plasmid",
+  expectedCurrencyQuantity: 10,
+});
+assert.equal(unofferedOutcome.status, "stale");
+assert.equal(unofferedOutcome.failure.code, "stale-mutation-panel");
+assert.deepEqual(unoffered.actions, []);
+assert.equal(unoffered.state.resources.Plasmid.currentQuantity, 10);
+
+const gained = executorFixture();
+const gainedOutcome = gained.executor.execute({
+  kind: "gain",
+  index: 0,
+  traitName: "strong",
+  displayName: "Strong",
+  mutationCost: 5,
+  currencyId: "Plasmid",
+  currencyName: "Plasmid",
+  expectedCurrencyQuantity: 10,
+});
+assert.equal(gainedOutcome.status, "succeeded");
+assert.deepEqual(gained.actions, [
+  ["gain", "strong"],
+  ["log", "mutation", "Mutating in Strong for 5 Plasmid", ["progress"]],
+]);
+assert.equal(gained.state.resources.Plasmid.currentQuantity, 5);
+
+const purged = executorFixture();
+const purgedOutcome = purged.executor.execute({
+  kind: "purge",
+  index: 0,
+  traitName: "strong",
+  displayName: "Strong",
+  mutationCost: 4,
+  currencyId: "Plasmid",
+  currencyName: "Plasmid",
+  expectedCurrencyQuantity: 10,
+});
+assert.equal(purgedOutcome.status, "succeeded");
+assert.deepEqual(purged.actions, [
+  ["purge", "strong"],
+  ["log", "mutation", "Mutating out Strong for 4 Plasmid", ["progress"]],
+]);
+assert.equal(purged.state.resources.Plasmid.currentQuantity, 6);
 
 console.log("Mutation automation adapter and regression tests passed");
