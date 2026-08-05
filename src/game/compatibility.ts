@@ -9,7 +9,6 @@ type GameCompatibilityDependencies = {
   getTraitVal: () => LooseFunction;
   getHaveTech: () => LooseFunction;
   getGovernor: () => string;
-  getVueById: LooseFunction;
   storageControls: GameStorageControlsPort;
   normalizeProperties: LooseFunction;
   cloneIntoPage: (value: unknown, options?: LooseObject) => any;
@@ -22,7 +21,6 @@ export function createGameCompatibility({
   getTraitVal,
   getHaveTech,
   getGovernor,
-  getVueById,
   storageControls,
   normalizeProperties,
   cloneIntoPage,

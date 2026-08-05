@@ -6523,7 +6523,6 @@ function startEvolveRuntimeComposition(
     getTraitVal: () => traitVal,
     getHaveTech: () => haveTech,
     getGovernor: () => getGovernor(),
-    getVueById: (...args) => getVueById(...args),
     storageControls,
     normalizeProperties,
     cloneIntoPage: (value, options) =>

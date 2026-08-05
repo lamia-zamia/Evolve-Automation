@@ -43,7 +43,6 @@ const compatibility = createGameCompatibility({
   getTraitVal: () => context.traitVal,
   getHaveTech: () => context.haveTech,
   getGovernor: () => context.governor,
-  getVueById: (...args) => context.getVueById(...args),
   storageControls: createGameStorageControls({
     getVueById: (...args) => context.getVueById(...args),
     clickSteps: () => [],
