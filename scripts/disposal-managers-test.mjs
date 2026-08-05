@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameDisposalControls } from "../src/adapters/browser/game-disposal-controls.ts";
 import { createGameIndustryControls } from "../src/adapters/browser/game-industry-controls.ts";
 import { createDisposalManagers } from "../src/game/disposal-managers.ts";
 
@@ -24,18 +25,20 @@ const industryControls = createGameIndustryControls({
   clickSteps: (count) => Array.from({ length: count }, (_, i) => i),
 });
 
+const disposalControls = createGameDisposalControls({
+  getVueById: (id) => vueLookup(id),
+  clickSteps: (count) => Array.from({ length: count }, (_, i) => i),
+});
+
 const { NaniteManager, SupplyManager, EjectManager } = createDisposalManagers({
   getGame: () => game,
   getSettings: () => settings,
   getResources: () => resources,
   getBuildings: () => buildings,
   getPoly: () => poly,
-  getVueById: (id) => vueLookup(id),
-  getKeyManager: () => ({
-    click: (count) => Array.from({ length: count }, (_, i) => i),
-  }),
   haveTask: (t) => tasks.has(t),
   industryControls,
+  disposalControls,
 });
 
 // ---------- Nanite ----------
@@ -129,7 +132,7 @@ assert.deepEqual(SupplyManager.useRatio(), [0.975, -1, 0.045]);
 
 resources = { Iron: { rateMods: { supply: 0 } } };
 vueCalls.length = 0;
-SupplyManager.consumeMore("Iron", 2); // out=7 -> +14
+assert.equal(SupplyManager.consumeMore("Iron", 2), true); // out=7 -> +14
 assert.equal(resources.Iron.rateMods.supply, 14);
 assert.deepEqual(vueCalls, [
   ["supplyMore", "Iron"],

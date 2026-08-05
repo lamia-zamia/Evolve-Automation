@@ -1,9 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { GameDisposalControlsPort } from "../ports/game-disposal-controls.ts";
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
-
-interface KeyManagerContract {
-  click: (count: number) => Iterable<unknown>;
-}
 
 interface DisposalManagersDependencies {
   getGame: () => any;
@@ -11,10 +8,9 @@ interface DisposalManagersDependencies {
   getResources: () => Record<string, any>;
   getBuildings: () => Record<string, any>;
   getPoly: () => any;
-  getVueById: (id: string) => any;
-  getKeyManager: () => KeyManagerContract;
   haveTask: (task: string) => boolean;
   industryControls: GameIndustryControlsPort;
+  disposalControls: GameDisposalControlsPort;
 }
 
 export function createDisposalManagers({
@@ -23,10 +19,9 @@ export function createDisposalManagers({
   getResources,
   getBuildings,
   getPoly,
-  getVueById,
-  getKeyManager,
   haveTask,
   industryControls,
+  disposalControls,
 }: DisposalManagersDependencies) {
   const NaniteManager = {
     _industryElementId: "iNFactory",
@@ -169,7 +164,7 @@ export function createDisposalManagers({
   };
 
   const SupplyManager = {
-    _supplyVuePrefix: "supply",
+    _supplyElementPrefix: "supply",
     storageShift: 1.01,
     priorityList: [] as any[],
 
@@ -268,38 +263,38 @@ export function createDisposalManagers({
     },
 
     consumeMore(id: string, count: number) {
-      const resources = getResources();
-      let vue = getVueById(this._supplyVuePrefix + id);
-      if (vue === undefined) {
+      if (
+        !disposalControls.increaseSupply({
+          elementId: this._supplyElementPrefix + id,
+          id,
+          count,
+        })
+      ) {
         return false;
       }
 
-      resources[id].rateMods["supply"] += count * this.supplyOut(id);
-
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        vue.supplyMore(id);
-      }
+      getResources()[id].rateMods["supply"] += count * this.supplyOut(id);
+      return true;
     },
 
     consumeLess(id: string, count: number) {
-      const resources = getResources();
-      let vue = getVueById(this._supplyVuePrefix + id);
-      if (vue === undefined) {
+      if (
+        !disposalControls.decreaseSupply({
+          elementId: this._supplyElementPrefix + id,
+          id,
+          count,
+        })
+      ) {
         return false;
       }
 
-      resources[id].rateMods["supply"] -= count * this.supplyOut(id);
-
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        vue.supplyLess(id);
-      }
+      getResources()[id].rateMods["supply"] -= count * this.supplyOut(id);
+      return true;
     },
   };
 
   const EjectManager = {
-    _ejectVuePrefix: "eject",
+    _ejectElementPrefix: "eject",
     storageShift: 1.015,
     priorityList: [] as any[],
 
@@ -392,33 +387,33 @@ export function createDisposalManagers({
     },
 
     consumeMore(id: string, count: number) {
-      const resources = getResources();
-      let vue = getVueById(this._ejectVuePrefix + id);
-      if (vue === undefined) {
+      if (
+        !disposalControls.increaseEject({
+          elementId: this._ejectElementPrefix + id,
+          id,
+          count,
+        })
+      ) {
         return false;
       }
 
-      resources[id].rateMods["eject"] += count;
-
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        vue.ejectMore(id);
-      }
+      getResources()[id].rateMods["eject"] += count;
+      return true;
     },
 
     consumeLess(id: string, count: number) {
-      const resources = getResources();
-      let vue = getVueById(this._ejectVuePrefix + id);
-      if (vue === undefined) {
+      if (
+        !disposalControls.decreaseEject({
+          elementId: this._ejectElementPrefix + id,
+          id,
+          count,
+        })
+      ) {
         return false;
       }
 
-      resources[id].rateMods["eject"] -= count;
-
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
-        vue.ejectLess(id);
-      }
+      getResources()[id].rateMods["eject"] -= count;
+      return true;
     },
   };
 

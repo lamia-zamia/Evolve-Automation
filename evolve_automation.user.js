@@ -2474,6 +2474,44 @@
     });
   }
 
+  // src/adapters/browser/game-disposal-controls.ts
+  function createGameDisposalControls({
+    getVueById,
+    clickSteps
+  }) {
+    function step(request, method) {
+      const view = getVueById(request.elementId);
+      if (!isRecord(view) || typeof view[method] !== "function") {
+        return false;
+      }
+      const call4 = requireFunction(
+        view[method],
+        `${request.elementId} Vue view.${method}`
+      );
+      for (const _step of clickSteps(request.count)) {
+        Reflect.apply(call4, view, [request.id]);
+      }
+      return true;
+    }
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      increaseSupply(request) {
+        return step(request, "supplyMore");
+      },
+      decreaseSupply(request) {
+        return step(request, "supplyLess");
+      },
+      increaseEject(request) {
+        return step(request, "ejectMore");
+      },
+      decreaseEject(request) {
+        return step(request, "ejectLess");
+      }
+    });
+  }
+
   // src/adapters/browser/game-feature-visibility.ts
   function createGameFeatureVisibility({
     getDocument
@@ -3611,10 +3649,9 @@
     getResources,
     getBuildings,
     getPoly,
-    getVueById,
-    getKeyManager,
     haveTask,
-    industryControls
+    industryControls,
+    disposalControls
   }) {
     const NaniteManager = {
       _industryElementId: "iNFactory",
@@ -3731,7 +3768,7 @@
       }
     };
     const SupplyManager = {
-      _supplyVuePrefix: "supply",
+      _supplyElementPrefix: "supply",
       storageShift: 1.01,
       priorityList: [],
       resEnabled: (id) => getSettings()["res_supply" + id],
@@ -3808,32 +3845,30 @@
         return Math.max(extraIncome, extraStore) / this.supplyOut(resource2.id);
       },
       consumeMore(id, count2) {
-        const resources = getResources();
-        let vue = getVueById(this._supplyVuePrefix + id);
-        if (vue === void 0) {
+        if (!disposalControls.increaseSupply({
+          elementId: this._supplyElementPrefix + id,
+          id,
+          count: count2
+        })) {
           return false;
         }
-        resources[id].rateMods["supply"] += count2 * this.supplyOut(id);
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          vue.supplyMore(id);
-        }
+        getResources()[id].rateMods["supply"] += count2 * this.supplyOut(id);
+        return true;
       },
       consumeLess(id, count2) {
-        const resources = getResources();
-        let vue = getVueById(this._supplyVuePrefix + id);
-        if (vue === void 0) {
+        if (!disposalControls.decreaseSupply({
+          elementId: this._supplyElementPrefix + id,
+          id,
+          count: count2
+        })) {
           return false;
         }
-        resources[id].rateMods["supply"] -= count2 * this.supplyOut(id);
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          vue.supplyLess(id);
-        }
+        getResources()[id].rateMods["supply"] -= count2 * this.supplyOut(id);
+        return true;
       }
     };
     const EjectManager = {
-      _ejectVuePrefix: "eject",
+      _ejectElementPrefix: "eject",
       storageShift: 1.015,
       priorityList: [],
       resEnabled: (id) => getSettings()["res_eject" + id],
@@ -3906,28 +3941,26 @@
         return Math.max(extraIncome, extraStore);
       },
       consumeMore(id, count2) {
-        const resources = getResources();
-        let vue = getVueById(this._ejectVuePrefix + id);
-        if (vue === void 0) {
+        if (!disposalControls.increaseEject({
+          elementId: this._ejectElementPrefix + id,
+          id,
+          count: count2
+        })) {
           return false;
         }
-        resources[id].rateMods["eject"] += count2;
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          vue.ejectMore(id);
-        }
+        getResources()[id].rateMods["eject"] += count2;
+        return true;
       },
       consumeLess(id, count2) {
-        const resources = getResources();
-        let vue = getVueById(this._ejectVuePrefix + id);
-        if (vue === void 0) {
+        if (!disposalControls.decreaseEject({
+          elementId: this._ejectElementPrefix + id,
+          id,
+          count: count2
+        })) {
           return false;
         }
-        resources[id].rateMods["eject"] -= count2;
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
-          vue.ejectLess(id);
-        }
+        getResources()[id].rateMods["eject"] -= count2;
+        return true;
       }
     };
     return { NaniteManager, SupplyManager, EjectManager };
@@ -57326,6 +57359,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => KeyManager.click(count2)
     });
+    const disposalControls = createGameDisposalControls({
+      getVueById: (id) => getVueById(id),
+      clickSteps: (count2) => KeyManager.click(count2)
+    });
     const fleetControls = createGameFleetControls({
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => KeyManager.click(count2),
@@ -57855,10 +57892,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getResources: () => resources,
       getBuildings: () => buildings,
       getPoly: () => poly,
-      getVueById: (id) => getVueById(id),
-      getKeyManager: () => KeyManager,
       haveTask,
-      industryControls
+      industryControls,
+      disposalControls
     }));
     let AlchemyManager, RitualManager;
     ({ AlchemyManager, RitualManager } = createMagicManagers({

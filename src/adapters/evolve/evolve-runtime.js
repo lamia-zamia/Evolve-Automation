@@ -59,6 +59,7 @@ import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
 import { createGameActionControls } from "../browser/game-action-controls.ts";
 import { createGameCraftingControls } from "../browser/game-crafting-controls.ts";
+import { createGameDisposalControls } from "../browser/game-disposal-controls.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
 import { createGameIndustryControls } from "../browser/game-industry-controls.ts";
 import { createGameFleetControls } from "../browser/game-fleet-controls.ts";
@@ -2581,6 +2582,10 @@ function startEvolveRuntimeComposition(
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => KeyManager.click(count),
   });
+  const disposalControls = createGameDisposalControls({
+    getVueById: (id) => getVueById(id),
+    clickSteps: (count) => KeyManager.click(count),
+  });
   const fleetControls = createGameFleetControls({
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => KeyManager.click(count),
@@ -3146,10 +3151,9 @@ function startEvolveRuntimeComposition(
     getResources: () => resources,
     getBuildings: () => buildings,
     getPoly: () => poly,
-    getVueById: (id) => getVueById(id),
-    getKeyManager: () => KeyManager,
     haveTask,
     industryControls,
+    disposalControls,
   }));
 
   let AlchemyManager, RitualManager;
