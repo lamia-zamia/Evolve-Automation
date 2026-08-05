@@ -2,6 +2,7 @@
 import type { GameClickMultipliersPort } from "../ports/game-click-multipliers.ts";
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
+import type { GameMarketControlsPort } from "../ports/game-market-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
 
 /** The panel that shows the current government and offers to change it. */
@@ -15,12 +16,18 @@ function marketOrderControls(resourceId: string): string {
   return `#market-${resourceId} .order`;
 }
 
+/** Names a resource's market row the way the market controls port expects. */
+function marketRow(resource: any) {
+  return { elementId: resource._marketVueBinding, id: resource.id };
+}
+
 interface EconomyManagersDependencies {
   getGame: () => any;
   getResources: () => Record<string, any>;
   getBuildings: () => Record<string, any>;
   getVueById: (id: string) => any;
   clickMultipliers: GameClickMultipliersPort;
+  marketControls: GameMarketControlsPort;
   getFeatureVisibility: () => GameFeatureVisibilityPort;
   getGameModal: () => GameModalPort;
   getGameLog: () => any;
@@ -102,6 +109,7 @@ export function createEconomyManagers({
   getBuildings,
   getVueById,
   clickMultipliers,
+  marketControls,
   getFeatureVisibility,
   getGameModal,
   getGameLog,
@@ -261,11 +269,11 @@ export function createEconomyManagers({
         this.getMaxMultiplier(),
       );
 
-      getVueById("market-qty").qty = this.multiplier;
+      marketControls.setMultiplier(this.multiplier);
     },
 
     getMaxMultiplier() {
-      return getVueById("market-qty")?.limit() ?? 1;
+      return marketControls.maxMultiplier();
     },
 
     getUnitBuyPrice(resource: any) {
@@ -293,8 +301,7 @@ export function createEconomyManagers({
 
     buy(resource: any) {
       const resources = getResources();
-      let vue = getVueById(resource._marketVueBinding);
-      if (vue === undefined) {
+      if (!marketControls.isRowRendered(resource._marketVueBinding)) {
         return false;
       }
 
@@ -307,13 +314,12 @@ export function createEconomyManagers({
         this.multiplier * this.getUnitBuyPrice(resource);
       resource.currentQuantity += this.multiplier;
 
-      vue.purchase(resource.id);
+      marketControls.buy(marketRow(resource));
     },
 
     sell(resource: any) {
       const resources = getResources();
-      let vue = getVueById(resource._marketVueBinding);
-      if (vue === undefined) {
+      if (!marketControls.isRowRendered(resource._marketVueBinding)) {
         return false;
       }
 
@@ -325,7 +331,7 @@ export function createEconomyManagers({
         this.multiplier * this.getUnitSellPrice(resource);
       resource.currentQuantity -= this.multiplier;
 
-      vue.sell(resource.id);
+      marketControls.sell(marketRow(resource));
     },
 
     getImportRouteCap() {
@@ -363,7 +369,7 @@ export function createEconomyManagers({
     },
 
     zeroTradeRoutes(resource: any) {
-      getVueById(resource._marketVueBinding)?.zero(resource.id);
+      marketControls.clearTradeRoutes(marketRow(resource));
     },
 
     addTradeRoutes(resource: any, count: number) {
@@ -371,14 +377,7 @@ export function createEconomyManagers({
         return false;
       }
 
-      let vue = getVueById(resource._marketVueBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      for (let m of clickMultipliers.steps(count)) {
-        vue.autoBuy(resource.id);
-      }
+      marketControls.addTradeRoutes({ ...marketRow(resource), count });
     },
 
     removeTradeRoutes(resource: any, count: number) {
@@ -386,14 +385,7 @@ export function createEconomyManagers({
         return false;
       }
 
-      let vue = getVueById(resource._marketVueBinding);
-      if (vue === undefined) {
-        return false;
-      }
-
-      for (let m of clickMultipliers.steps(count)) {
-        vue.autoSell(resource.id);
-      }
+      marketControls.removeTradeRoutes({ ...marketRow(resource), count });
     },
   };
 

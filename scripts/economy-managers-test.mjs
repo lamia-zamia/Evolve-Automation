@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createGameFeatureVisibility } from "../src/adapters/browser/game-feature-visibility.ts";
 import { createGameIndustryControls } from "../src/adapters/browser/game-industry-controls.ts";
+import { createGameMarketControls } from "../src/adapters/browser/game-market-controls.ts";
 import { createEconomyManagers } from "../src/game/economy-managers.ts";
 
 let game;
@@ -39,6 +40,11 @@ const industryControls = createGameIndustryControls({
   clickSteps: (count) => Array.from({ length: count }, (_, i) => i),
 });
 
+const marketControls = createGameMarketControls({
+  getVueById: (id) => vueMap[id],
+  clickSteps: (count) => Array.from({ length: count }, (_, i) => i),
+});
+
 const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
   createEconomyManagers({
     getGame: () => game,
@@ -48,6 +54,7 @@ const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
     clickMultipliers: {
       steps: (count) => Array.from({ length: count }, (_, i) => i),
     },
+    marketControls,
     getFeatureVisibility: () =>
       createGameFeatureVisibility({ getDocument: () => documentStub }),
     getGameModal: () => gameModal,
@@ -190,6 +197,26 @@ MarketManager.buy(iron);
 assert.equal(resources.Money.currentQuantity, 120); // 200 - 2*40
 assert.equal(iron.currentQuantity, 2);
 assert.deepEqual(clicks, [["purchase", "Iron"]]);
+
+// A resource whose market row the game has not rendered is not bought, and no
+// Money is recorded as spent.
+const offscreen = {
+  id: "Copper",
+  _marketVueBinding: "copperMarket",
+  currentQuantity: 0,
+};
+clicks.length = 0;
+assert.equal(MarketManager.buy(offscreen), false);
+assert.equal(MarketManager.sell(offscreen), false);
+assert.equal(resources.Money.currentQuantity, 120);
+assert.equal(offscreen.currentQuantity, 0);
+assert.deepEqual(clicks, []);
+
+// Zeroing a rendered row's routes clears them; an unrendered one is a no-op.
+vueMap.ironMarket = { zero: (id) => clicks.push(["zero", id]) };
+MarketManager.zeroTradeRoutes(iron);
+MarketManager.zeroTradeRoutes(offscreen);
+assert.deepEqual(clicks, [["zero", "Iron"]]);
 
 // getMaxTradeRoutes subtracts unmanaged routes.
 game = { global: { city: { market: { mtrade: 10 } } } };

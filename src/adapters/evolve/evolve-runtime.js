@@ -68,6 +68,7 @@ import { createGameGarrisonControls } from "../browser/game-garrison-controls.ts
 import { createGameMechControls } from "../browser/game-mech-controls.ts";
 import { createGameMechListControls } from "../browser/game-mech-list-controls.ts";
 import { createGameJobControls } from "../browser/game-job-controls.ts";
+import { createGameMarketControls } from "../browser/game-market-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
 import { createGameResearchControls } from "../browser/game-research-controls.ts";
@@ -2590,6 +2591,10 @@ function startEvolveRuntimeComposition(
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => clickMultipliers.steps(count),
   });
+  const marketControls = createGameMarketControls({
+    getVueById: (id) => getVueById(id),
+    clickSteps: (count) => clickMultipliers.steps(count),
+  });
   const disposalControls = createGameDisposalControls({
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => clickMultipliers.steps(count),
@@ -3207,6 +3212,7 @@ function startEvolveRuntimeComposition(
       getBuildings: () => buildings,
       getVueById: (id) => getVueById(id),
       clickMultipliers,
+      marketControls,
       getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,
       getGameLog: () => GameLog,

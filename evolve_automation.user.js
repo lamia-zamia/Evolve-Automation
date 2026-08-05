@@ -3060,6 +3060,86 @@
     });
   }
 
+  // src/adapters/browser/game-market-controls.ts
+  var QUANTITY_PANEL = "market-qty";
+  var MINIMUM_MULTIPLIER = 1;
+  function createGameMarketControls({
+    getVueById,
+    clickSteps
+  }) {
+    function rowMethod(row, method) {
+      const view = getVueById(row.elementId);
+      if (!isRecord(view) || typeof view[method] !== "function") {
+        return void 0;
+      }
+      return {
+        view,
+        call: requireFunction(
+          view[method],
+          `${row.elementId} Vue view.${method}`
+        )
+      };
+    }
+    function trade(row, method) {
+      const target = rowMethod(row, method);
+      if (target === void 0) {
+        return false;
+      }
+      Reflect.apply(target.call, target.view, [row.id]);
+      return true;
+    }
+    function moveRoutes(request, method) {
+      const target = rowMethod(request, method);
+      if (target === void 0) {
+        return false;
+      }
+      for (const _step of clickSteps(request.count)) {
+        Reflect.apply(target.call, target.view, [request.id]);
+      }
+      return true;
+    }
+    return Object.freeze({
+      isRowRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      maxMultiplier() {
+        const view = getVueById(QUANTITY_PANEL);
+        if (!isRecord(view) || typeof view["limit"] !== "function") {
+          return MINIMUM_MULTIPLIER;
+        }
+        const limit = requireFunction(
+          view["limit"],
+          `${QUANTITY_PANEL} Vue view.limit`
+        );
+        const value = Reflect.apply(limit, view, []);
+        return typeof value === "number" && Number.isFinite(value) ? value : MINIMUM_MULTIPLIER;
+      },
+      setMultiplier(multiplier) {
+        const view = getVueById(QUANTITY_PANEL);
+        if (!isRecord(view)) {
+          return false;
+        }
+        view["qty"] = multiplier;
+        return true;
+      },
+      buy(row) {
+        return trade(row, "purchase");
+      },
+      sell(row) {
+        return trade(row, "sell");
+      },
+      clearTradeRoutes(row) {
+        return trade(row, "zero");
+      },
+      addTradeRoutes(request) {
+        return moveRoutes(request, "autoBuy");
+      },
+      removeTradeRoutes(request) {
+        return moveRoutes(request, "autoSell");
+      }
+    });
+  }
+
   // src/adapters/browser/game-modal.ts
   function createGameModal({
     getDocument,
@@ -4566,6 +4646,9 @@
   function marketOrderControls(resourceId3) {
     return `#market-${resourceId3} .order`;
   }
+  function marketRow(resource2) {
+    return { elementId: resource2._marketVueBinding, id: resource2.id };
+  }
   function applyDirectStorageAssignment(game, resource2, count2, unit, storageValue, direction) {
     if (!Number.isFinite(count2) || count2 <= 0) {
       return false;
@@ -4604,6 +4687,7 @@
     getBuildings,
     getVueById,
     clickMultipliers,
+    marketControls,
     getFeatureVisibility,
     getGameModal,
     getGameLog,
@@ -4732,10 +4816,10 @@
           Math.max(1, multiplier),
           this.getMaxMultiplier()
         );
-        getVueById("market-qty").qty = this.multiplier;
+        marketControls.setMultiplier(this.multiplier);
       },
       getMaxMultiplier() {
-        return getVueById("market-qty")?.limit() ?? 1;
+        return marketControls.maxMultiplier();
       },
       getUnitBuyPrice(resource2) {
         const game = getGame();
@@ -4754,8 +4838,7 @@
       },
       buy(resource2) {
         const resources = getResources();
-        let vue = getVueById(resource2._marketVueBinding);
-        if (vue === void 0) {
+        if (!marketControls.isRowRendered(resource2._marketVueBinding)) {
           return false;
         }
         let price = this.getUnitBuyPrice(resource2) * this.multiplier;
@@ -4764,12 +4847,11 @@
         }
         resources.Money.currentQuantity -= this.multiplier * this.getUnitBuyPrice(resource2);
         resource2.currentQuantity += this.multiplier;
-        vue.purchase(resource2.id);
+        marketControls.buy(marketRow(resource2));
       },
       sell(resource2) {
         const resources = getResources();
-        let vue = getVueById(resource2._marketVueBinding);
-        if (vue === void 0) {
+        if (!marketControls.isRowRendered(resource2._marketVueBinding)) {
           return false;
         }
         if (resource2.currentQuantity < this.multiplier) {
@@ -4777,7 +4859,7 @@
         }
         resources.Money.currentQuantity += this.multiplier * this.getUnitSellPrice(resource2);
         resource2.currentQuantity -= this.multiplier;
-        vue.sell(resource2.id);
+        marketControls.sell(marketRow(resource2));
       },
       getImportRouteCap() {
         if (haveTech("currency", 6)) {
@@ -4811,31 +4893,19 @@
         return [max, unmanaged];
       },
       zeroTradeRoutes(resource2) {
-        getVueById(resource2._marketVueBinding)?.zero(resource2.id);
+        marketControls.clearTradeRoutes(marketRow(resource2));
       },
       addTradeRoutes(resource2, count2) {
         if (!resource2.isUnlocked()) {
           return false;
         }
-        let vue = getVueById(resource2._marketVueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of clickMultipliers.steps(count2)) {
-          vue.autoBuy(resource2.id);
-        }
+        marketControls.addTradeRoutes({ ...marketRow(resource2), count: count2 });
       },
       removeTradeRoutes(resource2, count2) {
         if (!resource2.isUnlocked()) {
           return false;
         }
-        let vue = getVueById(resource2._marketVueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of clickMultipliers.steps(count2)) {
-          vue.autoSell(resource2.id);
-        }
+        marketControls.removeTradeRoutes({ ...marketRow(resource2), count: count2 });
       }
     };
     const StorageManager = {
@@ -51904,11 +51974,11 @@
     return createMarketToggleMarkup(title, settingKey, enabled);
   }
   function createMarketRow(view, item, jquery, addToggleCallbacks) {
-    const marketRow = jquery(
+    const marketRow2 = jquery(
       '<span class="ea-market-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>'
     );
     if (!view.noTrade) {
-      marketRow.append(
+      marketRow2.append(
         addToggleCallbacks(
           jquery(
             createMarketToggleMarkup(
@@ -51931,7 +52001,7 @@
         )
       );
     }
-    marketRow.append(
+    marketRow2.append(
       addToggleCallbacks(
         jquery(
           createMarketToggleMarkup(
@@ -51953,7 +52023,7 @@
         item.tradeSellKey
       )
     );
-    return marketRow;
+    return marketRow2;
   }
   function createStorageRow(item, jquery, addToggleCallbacks) {
     return jquery(
@@ -57389,6 +57459,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => clickMultipliers.steps(count2)
     });
+    const marketControls = createGameMarketControls({
+      getVueById: (id) => getVueById(id),
+      clickSteps: (count2) => clickMultipliers.steps(count2)
+    });
     const disposalControls = createGameDisposalControls({
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => clickMultipliers.steps(count2)
@@ -57962,6 +58036,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBuildings: () => buildings,
       getVueById: (id) => getVueById(id),
       clickMultipliers,
+      marketControls,
       getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,
       getGameLog: () => GameLog,
