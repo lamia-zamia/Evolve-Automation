@@ -2512,6 +2512,9 @@
           yield result2["value"];
         }
       },
+      holdMaximum() {
+        callKeyManager("set", [true, true, true]);
+      },
       clear() {
         callKeyManager("set", [false, false, false]);
       }
@@ -8373,7 +8376,6 @@
     readHaveTask,
     readHaveTech,
     readJobs,
-    readKeyManager,
     readLogIgnore,
     readLogPrestige,
     readMutableTraitManager,
@@ -8394,6 +8396,7 @@
     readTriggerManager,
     readWarManager,
     readActionControls,
+    readClickMultipliers,
     readCraftingControls,
     readFeatureVisibility,
     readJobControls,
@@ -9201,7 +9204,12 @@
             amountToBuild = 1;
           }
         }
-        readKeyManager().set(doMultiClick, doMultiClick, doMultiClick);
+        const clickMultipliers = readClickMultipliers();
+        if (doMultiClick) {
+          clickMultipliers.holdMaximum();
+        } else {
+          clickMultipliers.clear();
+        }
         if (this.is.prestige) {
           logPrestige();
         }
@@ -9513,7 +9521,7 @@
         }
         let rank = this.count;
         let reachedPercent = this.progress + this.currentStep;
-        readKeyManager().set(false, false, false);
+        readClickMultipliers().clear();
         let skipTabRedraw = readSettings3().performanceHackAvoidDrawTech && rank >= 10 && !(this.id === "syphon" && rank >= 79);
         if (!readProjectControls().build({
           elementId: this._vueBinding,
@@ -57458,7 +57466,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readHaveTask: () => haveTask,
       readHaveTech: () => haveTech,
       readJobs: () => jobs,
-      readKeyManager: () => KeyManager,
       readLogIgnore: () => logIgnore,
       readLogPrestige: () => logPrestige,
       readMutableTraitManager: () => MutableTraitManager,
@@ -57479,6 +57486,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readTriggerManager: () => TriggerManager,
       readWarManager: () => WarManager,
       readActionControls: () => actionControls,
+      readClickMultipliers: () => clickMultipliers,
       readCraftingControls: () => craftingControls,
       readFeatureVisibility: () => featureVisibility,
       readJobControls: () => jobControls,

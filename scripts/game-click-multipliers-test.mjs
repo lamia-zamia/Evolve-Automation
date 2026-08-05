@@ -33,6 +33,15 @@ function recordingKeyManager(calls) {
   ]);
 }
 
+// Holding the maximum presses all three modifiers at once, which is the single
+// call the game expands into the largest multiple it can afford.
+{
+  const calls = [];
+  keyManager = recordingKeyManager(calls);
+  multipliers.holdMaximum();
+  assert.deepEqual(calls, [["set", [true, true, true], true]]);
+}
+
 // Nothing is pressed until the caller starts iterating: a sequence the caller
 // abandons before its first step leaves the modifier keys alone.
 {
@@ -76,8 +85,17 @@ function recordingKeyManager(calls) {
     /KeyManager must be an object/,
   );
 
+  assert.throws(
+    () => multipliers.holdMaximum(),
+    /KeyManager must be an object/,
+  );
+
   keyManager = { click: 4, set: 4 };
   assert.throws(() => multipliers.clear(), /KeyManager.set must be a function/);
+  assert.throws(
+    () => multipliers.holdMaximum(),
+    /KeyManager.set must be a function/,
+  );
   assert.throws(
     () => [...multipliers.steps(1)],
     /KeyManager.click must be a function/,

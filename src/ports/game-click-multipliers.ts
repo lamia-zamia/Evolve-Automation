@@ -17,6 +17,14 @@ export interface GameClickMultipliersPort {
    */
   steps(count: number): Iterable<unknown>;
 
+  /**
+   * Holds every modifier key at once, so the single component call that follows
+   * buys the largest multiple the game offers instead of one unit. Unlike
+   * `steps`, the caller makes exactly one call and the game decides how much of
+   * the held multiple it can afford.
+   */
+  holdMaximum(): void;
+
   /** Releases every modifier key the port is holding. */
   clear(): void;
 }

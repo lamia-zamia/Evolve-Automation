@@ -22,7 +22,6 @@ const dependencyNames = [
   "haveTask",
   "haveTech",
   "jobs",
-  "KeyManager",
   "logIgnore",
   "logPrestige",
   "MutableTraitManager",
@@ -43,6 +42,7 @@ const dependencyNames = [
   "TriggerManager",
   "WarManager",
   "actionControls",
+  "clickMultipliers",
   "craftingControls",
   "featureVisibility",
   "jobControls",
@@ -92,7 +92,6 @@ const classes = createEntityClasses({
   readHaveTask: () => context.haveTask,
   readHaveTech: () => context.haveTech,
   readJobs: () => context.jobs,
-  readKeyManager: () => context.KeyManager,
   readLogIgnore: () => context.logIgnore,
   readLogPrestige: () => context.logPrestige,
   readMutableTraitManager: () => context.MutableTraitManager,
@@ -113,6 +112,7 @@ const classes = createEntityClasses({
   readTriggerManager: () => context.TriggerManager,
   readWarManager: () => context.WarManager,
   readActionControls: () => context.actionControls,
+  readClickMultipliers: () => context.clickMultipliers,
   readCraftingControls: () => context.craftingControls,
   readFeatureVisibility: () => context.featureVisibility,
   readJobControls: () => context.jobControls,
@@ -506,7 +506,11 @@ context.GameLog = {
 };
 context.poly = { loc: (_key, [subject]) => subject };
 context.featureVisibility = { isVisible: () => true };
-context.KeyManager = { set: () => {} };
+const multiplierCalls = [];
+context.clickMultipliers = {
+  holdMaximum: () => multiplierCalls.push("hold"),
+  clear: () => multiplierCalls.push("clear"),
+};
 context.checkAffordableCustom = () => true;
 context.settings = { performanceHackAvoidDrawTech: true };
 context.game = {
@@ -525,6 +529,11 @@ assert.deepEqual(projectPurchases, [
   { elementId: "arpalhc", projectId: "lhc", steps: 5, skipTabRedraw: false },
 ]);
 assert.equal(context.resources.Money.currentQuantity, 380);
+assert.deepEqual(
+  multiplierCalls,
+  ["clear"],
+  "a project buys its own steps, so no multiplier key may be left held",
+);
 assert.deepEqual(
   projectLogs,
   [["arpa", "Launch Facility (95%)"]],
@@ -619,6 +628,44 @@ assert.equal(mine.click(), true);
 assert.deepEqual(definitionCalls, []);
 assert.deepEqual(actionCalls, ["action"]);
 actionTooltip = noTooltip;
+
+// A multi-segmented building holds every multiplier key for its one click, so
+// the game itself covers as many segments as the click can afford. Every other
+// building releases them, and the setting alone decides which happens.
+mineView = { action: () => actionCalls.push("action") };
+mineDefinition.refresh = false;
+context.settings.performanceHackAvoidDrawTech = false;
+context.normalizeProperties = (flags) => flags;
+const terraformer = new classes.Action(
+  "Terraformer",
+  "space",
+  "terraformer",
+  "",
+  {
+    multiSegmented: true,
+  },
+);
+terraformer.cost = { Money: 120 };
+context.game.global.space = { terraformer: { count: 2, on: 1 } };
+context.game.actions.space = { terraformer: mineDefinition };
+context.getVueById = (id) =>
+  id === "space-terraformer" ? mineView : undefined;
+
+multiplierCalls.length = 0;
+context.settings.buildingsUseMultiClick = true;
+assert.equal(terraformer.click(), true);
+assert.deepEqual(multiplierCalls, ["hold"]);
+
+multiplierCalls.length = 0;
+context.settings.buildingsUseMultiClick = false;
+assert.equal(terraformer.click(), true);
+assert.deepEqual(multiplierCalls, ["clear"]);
+
+multiplierCalls.length = 0;
+context.getVueById = (id) => (id === "city-mine" ? mineView : undefined);
+context.settings.buildingsUseMultiClick = true;
+assert.equal(mine.click(), true);
+assert.deepEqual(multiplierCalls, ["clear"]);
 
 // Switching power is one request per direction, carrying the count as a
 // magnitude, and a request for no change never reaches the control.

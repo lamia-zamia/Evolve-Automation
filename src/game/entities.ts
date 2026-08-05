@@ -2,6 +2,7 @@
 // JavaScript classes. Keep the untyped surface contained here until the game adapter slice
 // replaces these compatibility classes with validated snapshots and commands.
 import type { GameActionControlsPort } from "../ports/game-action-controls.ts";
+import type { GameClickMultipliersPort } from "../ports/game-click-multipliers.ts";
 import type { GameCraftingControlsPort } from "../ports/game-crafting-controls.ts";
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameJobControlsPort } from "../ports/game-job-controls.ts";
@@ -30,7 +31,6 @@ interface EntityClassesDependencies {
   readHaveTask: () => LooseFunction;
   readHaveTech: () => LooseFunction;
   readJobs: () => LooseRecord;
-  readKeyManager: () => LooseRecord;
   readLogIgnore: () => Loose[];
   readLogPrestige: () => LooseFunction;
   readMutableTraitManager: () => LooseRecord;
@@ -51,6 +51,7 @@ interface EntityClassesDependencies {
   readTriggerManager: () => LooseRecord;
   readWarManager: () => LooseRecord;
   readActionControls: () => GameActionControlsPort;
+  readClickMultipliers: () => GameClickMultipliersPort;
   readCraftingControls: () => GameCraftingControlsPort;
   readFeatureVisibility: () => GameFeatureVisibilityPort;
   readJobControls: () => GameJobControlsPort;
@@ -76,7 +77,6 @@ export function createEntityClasses({
   readHaveTask,
   readHaveTech,
   readJobs,
-  readKeyManager,
   readLogIgnore,
   readLogPrestige,
   readMutableTraitManager,
@@ -97,6 +97,7 @@ export function createEntityClasses({
   readTriggerManager,
   readWarManager,
   readActionControls,
+  readClickMultipliers,
   readCraftingControls,
   readFeatureVisibility,
   readJobControls,
@@ -1221,7 +1222,12 @@ export function createEntityClasses({
         }
       }
 
-      readKeyManager().set(doMultiClick, doMultiClick, doMultiClick);
+      const clickMultipliers = readClickMultipliers();
+      if (doMultiClick) {
+        clickMultipliers.holdMaximum();
+      } else {
+        clickMultipliers.clear();
+      }
 
       if (this.is.prestige) {
         logPrestige();
@@ -1711,7 +1717,7 @@ export function createEntityClasses({
       let rank = this.count;
       let reachedPercent = this.progress + this.currentStep;
 
-      readKeyManager().set(false, false, false);
+      readClickMultipliers().clear();
 
       // This is a really bad lag hack. ARPAs make a very expensive drawTech() call on every build.
       // After 10 ARPAs, this will never actually accomplish anything; AFAIK nothing needs more than 10 ARPAs.

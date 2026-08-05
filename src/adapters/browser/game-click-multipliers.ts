@@ -52,6 +52,10 @@ export function createGameClickMultipliers({
       }
     },
 
+    holdMaximum(): void {
+      callKeyManager("set", [true, true, true]);
+    },
+
     clear(): void {
       callKeyManager("set", [false, false, false]);
     },
