@@ -5,6 +5,7 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 build_inputs="src scripts .github build.mjs eslint.config.js package.json package-lock.json README.md tsconfig.json .prettierrc.json .prettierignore"
+build_outputs="evolve_automation.user.js evolve_automation.meta.js"
 
 if ! git diff --quiet -- $build_inputs; then
   echo "Build/check inputs contain unstaged changes. Stage them before committing." >&2
@@ -18,6 +19,50 @@ if [ -n "$untracked" ]; then
   exit 1
 fi
 
+# Fingerprint the staged (index) content of a set of paths: mode + blob id + path.
+staged_fingerprint() {
+  git ls-files -s -- "$@" |
+    awk -F'\t' '{ split($1, f, " "); print f[1] " " f[2] "\t" $2 }' |
+    LC_ALL=C sort |
+    git hash-object --stdin
+}
+
+# The same fingerprint, but for the content already committed at HEAD.
+head_fingerprint() {
+  git ls-tree -r HEAD -- "$@" |
+    awk -F'\t' '{ split($1, f, " "); print f[1] " " f[3] "\t" $2 }' |
+    LC_ALL=C sort |
+    git hash-object --stdin
+}
+
+cache_file="$(git rev-parse --git-dir)/evolve-automation-verified"
+
+staged_inputs=$(staged_fingerprint $build_inputs)
+staged_key="$staged_inputs $(staged_fingerprint $build_outputs)"
+
+skip_reason=""
+
+if [ "${EVOLVE_SKIP_VERIFY:-}" = "1" ]; then
+  skip_reason="EVOLVE_SKIP_VERIFY=1"
+elif git rev-parse --verify --quiet HEAD >/dev/null &&
+  [ "$staged_key" = "$(head_fingerprint $build_inputs) $(head_fingerprint $build_outputs)" ]; then
+  skip_reason="no build-relevant changes since HEAD"
+elif [ -f "$cache_file" ] && grep -qxF "$staged_key" "$cache_file"; then
+  skip_reason="this tree was already built and checked"
+fi
+
+if [ -n "$skip_reason" ]; then
+  echo "pre-commit: skipping build/check ($skip_reason)."
+  exit 0
+fi
+
 npm run build
 npm run check
-git add -- evolve_automation.user.js evolve_automation.meta.js
+git add -- $build_outputs
+
+# Remember this tree so an identical one (amend, rebase, reordered commits) skips the work.
+{
+  printf '%s %s\n' "$staged_inputs" "$(staged_fingerprint $build_outputs)"
+  if [ -f "$cache_file" ]; then cat "$cache_file"; fi
+} | head -n 50 >"$cache_file.tmp"
+mv -f "$cache_file.tmp" "$cache_file"
