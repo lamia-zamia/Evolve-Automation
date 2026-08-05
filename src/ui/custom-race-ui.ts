@@ -1,15 +1,16 @@
 /**
  * The custom-race preset editor and the lab automation that submits a preset.
  *
- * TRANSITIONAL: the node, document, and lab surfaces below are the game's jQuery, DOM, and Vue 2
- * celestial-lab component today. They are declared as narrow structural types so replacing that
- * surface is a local change.
+ * TRANSITIONAL: the node and document surfaces below are the game's jQuery and DOM today. They are
+ * declared as narrow structural types so replacing that surface is a local change. The lab itself
+ * is reached through a port.
  */
 
 import type {
   CustomRaceDraft,
   TraitDefinition,
 } from "../game/custom-race-model.ts";
+import type { GameCustomRaceLabPort } from "../ports/game-custom-race-lab.ts";
 import type { EditableInput } from "./jquery.ts";
 
 /** The raw element `each` hands its callback. This module only re-wraps it with `$`. */
@@ -99,16 +100,6 @@ interface CustomRaceUIPoly {
   genus_traits: Record<string, Record<string, unknown> | undefined>;
 }
 
-/** The celestial lab's live design object: a draft whose rank map may not exist yet. */
-type CelestialLabDesign = Omit<CustomRaceDraft, "ranks"> & {
-  ranks?: Record<string, number>;
-};
-
-interface CelestialLabVue {
-  g?: CelestialLabDesign;
-  geneEdit(): void;
-}
-
 /** The identity fields a preset must carry, and the length the lab stores each one at. */
 const requiredTextKeys = [
   "name",
@@ -168,7 +159,7 @@ interface CustomRaceUIDependencies {
   getCustomRaceGeneBalance: (draft: CustomRaceDraft) => number;
   getUpdateSettingsFromState: () => () => void;
   getUpdateOverrides: () => () => void;
-  getVueById: (id: string) => CelestialLabVue | undefined;
+  customRaceLab: GameCustomRaceLabPort;
   getAlert: () => (message: string) => void;
 }
 
@@ -187,7 +178,7 @@ export function createCustomRaceUI({
   getCustomRaceGeneBalance,
   getUpdateSettingsFromState,
   getUpdateOverrides,
-  getVueById,
+  customRaceLab,
   getAlert,
 }: CustomRaceUIDependencies) {
   function showCustomRaceImportStatus(message: string, danger = false) {
@@ -709,7 +700,6 @@ export function createCustomRaceUI({
     const settings = getSettings();
     const state = getState();
     const game = getGame();
-    const document = getDocument();
     const customRaceRankOptions = getCustomRaceRankOptions;
     let preset = getCustomRacePreset();
     let attemptKey = `${settings.prestigeCustomRacePreset}:${preset.json}`;
@@ -729,8 +719,7 @@ export function createCustomRaceUI({
       return false;
     }
 
-    const lab = getVueById("celestialLab");
-    const design = lab?.g;
+    const labGenus = customRaceLab.currentGenus();
     const template = isPlainRecord(parsed) ? parsed : {};
     const templateText = (key: string) => {
       const value = template[key];
@@ -739,8 +728,7 @@ export function createCustomRaceUI({
     const genus = template.genus;
     const traits = template.traitlist ?? template.traits;
     if (
-      !lab ||
-      !design ||
+      labGenus === null ||
       !Array.isArray(traits) ||
       typeof genus !== "string"
     ) {
@@ -769,10 +757,7 @@ export function createCustomRaceUI({
       return false;
     }
 
-    if (
-      !game.global.stats.achieve[`genus_${genus}`]?.l &&
-      genus !== design.genus
-    ) {
+    if (!game.global.stats.achieve[`genus_${genus}`]?.l && genus !== labGenus) {
       showCustomRaceImportStatus(
         `Automatic custom-race import paused: ${genus} genus is not unlocked.`,
         true,
@@ -783,11 +768,7 @@ export function createCustomRaceUI({
     const traitIds: string[] = [];
     const unavailableTraits: unknown[] = [];
     for (const trait of traits) {
-      if (
-        typeof trait === "string" &&
-        /^[a-z0-9_]+$/.test(trait) &&
-        document.querySelector(`#celestialLab .t${trait}`) !== null
-      ) {
+      if (typeof trait === "string" && customRaceLab.offersTrait(trait)) {
         traitIds.push(trait);
       } else {
         unavailableTraits.push(trait);
@@ -839,26 +820,33 @@ export function createCustomRaceUI({
       return false;
     }
 
+    const text: Record<string, string> = {};
     requiredTextKeys.forEach((key) => {
-      design[key] = templateText(key).substring(0, requiredTextLimits[key]);
+      text[key] = templateText(key).substring(0, requiredTextLimits[key]);
     });
     outerTextKeys.forEach((key) => {
       const value = templateText(key);
-      if (value.length > 0) design[key] = value;
+      if (value.length > 0) text[key] = value;
     });
-    design.genus = genus;
-    design.traitlist = traitIds;
-    design.fanaticism = fanaticism;
-    // The lab's own rank map is kept and refilled, not replaced, so the component keeps the
-    // object it made reactive.
-    const labRanks = (design.ranks ??= {});
-    Object.keys(labRanks).forEach((trait) => delete labRanks[trait]);
-    Object.assign(labRanks, ranks);
-    lab.geneEdit();
 
-    if (design.genes < 0) {
+    const genes = customRaceLab.applyDesign({
+      text,
+      genus,
+      traits: traitIds,
+      ranks,
+      fanaticism,
+    });
+    if (genes === null) {
       showCustomRaceImportStatus(
-        `Automatic custom-race import paused: template exceeds the live gene budget by ${Math.abs(design.genes)}. Edit the lab or paste a cheaper export.`,
+        "Automatic custom-race import paused: expected a game custom-race export with genus and traitlist.",
+        true,
+      );
+      return false;
+    }
+
+    if (genes < 0) {
+      showCustomRaceImportStatus(
+        `Automatic custom-race import paused: template exceeds the live gene budget by ${Math.abs(genes)}. Edit the lab or paste a cheaper export.`,
         true,
       );
       return false;

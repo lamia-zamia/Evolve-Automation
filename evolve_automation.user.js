@@ -2559,6 +2559,56 @@
     });
   }
 
+  // src/adapters/browser/game-custom-race-lab.ts
+  var LAB_PANEL = "celestialLab";
+  var TRAIT_ID = /^[a-z0-9_]+$/;
+  function createGameCustomRaceLab({
+    getVueById,
+    getDocument
+  }) {
+    function design() {
+      const view = getVueById(LAB_PANEL);
+      if (!isRecord(view)) {
+        return void 0;
+      }
+      const held = view["g"];
+      return isRecord(held) ? held : void 0;
+    }
+    return Object.freeze({
+      currentGenus() {
+        const genus = design()?.["genus"];
+        return typeof genus === "string" ? genus : null;
+      },
+      offersTrait(traitId) {
+        if (!TRAIT_ID.test(traitId)) {
+          return false;
+        }
+        return getDocument().querySelector(`#${LAB_PANEL} .t${traitId}`) != null;
+      },
+      applyDesign(wanted) {
+        const view = getVueById(LAB_PANEL);
+        const held = design();
+        if (!isRecord(view) || held === void 0) {
+          return null;
+        }
+        for (const [key, value] of Object.entries(wanted.text)) {
+          held[key] = value;
+        }
+        held["genus"] = wanted.genus;
+        held["traitlist"] = [...wanted.traits];
+        held["fanaticism"] = wanted.fanaticism;
+        held["ranks"] ??= {};
+        const ranks = requireRecord(held["ranks"], `${LAB_PANEL} design.ranks`);
+        for (const trait2 of Object.keys(ranks)) {
+          delete ranks[trait2];
+        }
+        Object.assign(ranks, wanted.ranks);
+        callVoid(view, "geneEdit", `${LAB_PANEL} Vue view`);
+        return coerceNumber(held["genes"]);
+      }
+    });
+  }
+
   // src/adapters/browser/game-espionage-controls.ts
   var ESPIONAGE_MODAL = "espModal";
   function createGameEspionageControls({
@@ -52573,7 +52623,7 @@
     getCustomRaceGeneBalance,
     getUpdateSettingsFromState,
     getUpdateOverrides,
-    getVueById,
+    customRaceLab,
     getAlert
   }) {
     function showCustomRaceImportStatus(message, danger = false) {
@@ -53013,7 +53063,6 @@
       const settings = getSettings();
       const state = getState();
       const game = getGame();
-      const document = getDocument();
       const customRaceRankOptions = getCustomRaceRankOptions;
       let preset = getCustomRacePreset();
       let attemptKey = `${settings.prestigeCustomRacePreset}:${preset.json}`;
@@ -53031,8 +53080,7 @@
         );
         return false;
       }
-      const lab = getVueById("celestialLab");
-      const design = lab?.g;
+      const labGenus = customRaceLab.currentGenus();
       const template = isPlainRecord(parsed) ? parsed : {};
       const templateText = (key) => {
         const value = template[key];
@@ -53040,7 +53088,7 @@
       };
       const genus = template.genus;
       const traits = template.traitlist ?? template.traits;
-      if (!lab || !design || !Array.isArray(traits) || typeof genus !== "string") {
+      if (labGenus === null || !Array.isArray(traits) || typeof genus !== "string") {
         showCustomRaceImportStatus(
           "Automatic custom-race import paused: expected a game custom-race export with genus and traitlist.",
           true
@@ -53064,7 +53112,7 @@
         );
         return false;
       }
-      if (!game.global.stats.achieve[`genus_${genus}`]?.l && genus !== design.genus) {
+      if (!game.global.stats.achieve[`genus_${genus}`]?.l && genus !== labGenus) {
         showCustomRaceImportStatus(
           `Automatic custom-race import paused: ${genus} genus is not unlocked.`,
           true
@@ -53074,7 +53122,7 @@
       const traitIds = [];
       const unavailableTraits = [];
       for (const trait2 of traits) {
-        if (typeof trait2 === "string" && /^[a-z0-9_]+$/.test(trait2) && document.querySelector(`#celestialLab .t${trait2}`) !== null) {
+        if (typeof trait2 === "string" && customRaceLab.offersTrait(trait2)) {
           traitIds.push(trait2);
         } else {
           unavailableTraits.push(trait2);
@@ -53114,23 +53162,31 @@
         );
         return false;
       }
+      const text = {};
       requiredTextKeys.forEach((key) => {
-        design[key] = templateText(key).substring(0, requiredTextLimits[key]);
+        text[key] = templateText(key).substring(0, requiredTextLimits[key]);
       });
       outerTextKeys.forEach((key) => {
         const value = templateText(key);
-        if (value.length > 0) design[key] = value;
+        if (value.length > 0) text[key] = value;
       });
-      design.genus = genus;
-      design.traitlist = traitIds;
-      design.fanaticism = fanaticism;
-      const labRanks = design.ranks ??= {};
-      Object.keys(labRanks).forEach((trait2) => delete labRanks[trait2]);
-      Object.assign(labRanks, ranks);
-      lab.geneEdit();
-      if (design.genes < 0) {
+      const genes = customRaceLab.applyDesign({
+        text,
+        genus,
+        traits: traitIds,
+        ranks,
+        fanaticism
+      });
+      if (genes === null) {
         showCustomRaceImportStatus(
-          `Automatic custom-race import paused: template exceeds the live gene budget by ${Math.abs(design.genes)}. Edit the lab or paste a cheaper export.`,
+          "Automatic custom-race import paused: expected a game custom-race export with genus and traitlist.",
+          true
+        );
+        return false;
+      }
+      if (genes < 0) {
+        showCustomRaceImportStatus(
+          `Automatic custom-race import paused: template exceeds the live gene budget by ${Math.abs(genes)}. Edit the lab or paste a cheaper export.`,
           true
         );
         return false;
@@ -60230,7 +60286,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getCustomRaceGeneBalance: customRaceGeneBalance,
       getUpdateSettingsFromState: () => updateSettingsFromState,
       getUpdateOverrides: () => updateOverrides,
-      getVueById,
+      customRaceLab: createGameCustomRaceLab({
+        getVueById: (id) => getVueById(id),
+        getDocument: () => runtimeEnvironment.document
+      }),
       getAlert: () => (message) => runtimeEnvironment.alert(message)
     });
     publishTestSurface({

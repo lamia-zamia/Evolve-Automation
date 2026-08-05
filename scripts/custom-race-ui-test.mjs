@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { createGameCustomRaceLab } from "../src/adapters/browser/game-custom-race-lab.ts";
 import { createCustomRaceUI } from "../src/ui/custom-race-ui.ts";
 
 const trace = [];
@@ -112,7 +113,10 @@ const ui = createCustomRaceUI({
   getCustomRaceGeneBalance: () => 0,
   getUpdateSettingsFromState: () => () => trace.push("persist"),
   getUpdateOverrides: () => () => trace.push("overrides"),
-  getVueById: () => lab,
+  customRaceLab: createGameCustomRaceLab({
+    getVueById: () => lab,
+    getDocument: () => document,
+  }),
   getAlert: () => (message) => trace.push(`alert:${message}`),
 });
 

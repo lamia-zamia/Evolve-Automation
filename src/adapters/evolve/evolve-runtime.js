@@ -61,6 +61,7 @@ import { createGameActionControls } from "../browser/game-action-controls.ts";
 import { createGameCraftingControls } from "../browser/game-crafting-controls.ts";
 import { createGameClickMultipliers } from "../browser/game-click-multipliers.ts";
 import { createGameDisposalControls } from "../browser/game-disposal-controls.ts";
+import { createGameCustomRaceLab } from "../browser/game-custom-race-lab.ts";
 import { createGameEspionageControls } from "../browser/game-espionage-controls.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
 import { createGameGovernmentSelection } from "../browser/game-government-selection.ts";
@@ -5567,7 +5568,10 @@ function startEvolveRuntimeComposition(
     getCustomRaceGeneBalance: customRaceGeneBalance,
     getUpdateSettingsFromState: () => updateSettingsFromState,
     getUpdateOverrides: () => updateOverrides,
-    getVueById,
+    customRaceLab: createGameCustomRaceLab({
+      getVueById: (id) => getVueById(id),
+      getDocument: () => runtimeEnvironment.document,
+    }),
     getAlert: () => (message) => runtimeEnvironment.alert(message),
   });
 
