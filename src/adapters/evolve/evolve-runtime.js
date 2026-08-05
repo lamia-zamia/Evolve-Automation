@@ -59,6 +59,7 @@ import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
 import { createGameActionControls } from "../browser/game-action-controls.ts";
 import { createGameCraftingControls } from "../browser/game-crafting-controls.ts";
+import { createGameClickMultipliers } from "../browser/game-click-multipliers.ts";
 import { createGameDisposalControls } from "../browser/game-disposal-controls.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
 import { createGameIndustryControls } from "../browser/game-industry-controls.ts";
@@ -2565,38 +2566,41 @@ function startEvolveRuntimeComposition(
     getDocument: () => runtimeEnvironment.document,
     getVueById: (id) => getVueById(id),
   });
+  const clickMultipliers = createGameClickMultipliers({
+    getKeyManager: () => KeyManager,
+  });
   const jobControls = createGameJobControls({
     getVueById: (id) => getVueById(id),
-    clickSteps: (count) => KeyManager.click(count),
+    clickSteps: (count) => clickMultipliers.steps(count),
   });
   const actionControls = createGameActionControls({
     getVueById: (id) => getVueById(id),
     selectTooltip: () => $("#popper"),
-    clickSteps: (count) => KeyManager.click(count),
+    clickSteps: (count) => clickMultipliers.steps(count),
   });
   const craftingControls = createGameCraftingControls({
     getVueById: (id) => getVueById(id),
-    clearClickMultipliers: () => KeyManager.set(false, false, false),
+    clearClickMultipliers: () => clickMultipliers.clear(),
   });
   const industryControls = createGameIndustryControls({
     getVueById: (id) => getVueById(id),
-    clickSteps: (count) => KeyManager.click(count),
+    clickSteps: (count) => clickMultipliers.steps(count),
   });
   const disposalControls = createGameDisposalControls({
     getVueById: (id) => getVueById(id),
-    clickSteps: (count) => KeyManager.click(count),
+    clickSteps: (count) => clickMultipliers.steps(count),
   });
   const fleetControls = createGameFleetControls({
     getVueById: (id) => getVueById(id),
-    clickSteps: (count) => KeyManager.click(count),
+    clickSteps: (count) => clickMultipliers.steps(count),
     getGame: () => game,
     getJQuery: () => $,
   });
   const garrisonControls = createGameGarrisonControls({
     getVueById: (id) => getVueById(id),
-    clickSteps: (count) => KeyManager.click(count),
+    clickSteps: (count) => clickMultipliers.steps(count),
     getGame: () => game,
-    clearClickMultipliers: () => KeyManager.set(false, false, false),
+    clearClickMultipliers: () => clickMultipliers.clear(),
     callVueMethod,
   });
   const mechControls = createGameMechControls({
@@ -3199,7 +3203,7 @@ function startEvolveRuntimeComposition(
       getResources: () => resources,
       getBuildings: () => buildings,
       getVueById: (id) => getVueById(id),
-      getKeyManager: () => KeyManager,
+      clickMultipliers,
       getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,
       getGameLog: () => GameLog,
@@ -4054,7 +4058,7 @@ function startEvolveRuntimeComposition(
     commandExecutor: {
       getGame: () => game,
       getResources: () => resources,
-      resetKeyModifiers: () => KeyManager.set(false, false, false),
+      resetKeyModifiers: () => clickMultipliers.clear(),
     },
   });
 
@@ -4304,7 +4308,7 @@ function startEvolveRuntimeComposition(
       getBuildings: () => buildings,
       getTechIds: () => techIds,
       getVueById,
-      getKeyManager: () => KeyManager,
+      clickMultipliers,
       logPrestige,
       loadQueuedSettings,
     },
@@ -4436,7 +4440,7 @@ function startEvolveRuntimeComposition(
   const { autoGenetics } = createGeneticsControl({
     controls: {
       getVueById,
-      getKeyManager: () => KeyManager,
+      clickMultipliers,
     },
     adapter: {
       getGame: () => game,

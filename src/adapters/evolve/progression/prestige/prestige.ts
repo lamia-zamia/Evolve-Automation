@@ -3,6 +3,7 @@ import type {
   PrestigeCommand,
   PrestigeInput,
 } from "../../../../domain/progression/prestige/prestige.ts";
+import type { GameClickMultipliersPort } from "../../../../ports/game-click-multipliers.ts";
 import type {
   PrestigeExecutor,
   PrestigeReader,
@@ -209,7 +210,7 @@ export interface PrestigeExecutorDependencies {
   readonly getBuildings: () => unknown;
   readonly getTechIds: () => unknown;
   readonly getVueById: (id: string) => unknown;
-  readonly getKeyManager: () => unknown;
+  readonly clickMultipliers: GameClickMultipliersPort;
   readonly logPrestige: () => void;
   readonly loadQueuedSettings: () => void;
 }
@@ -262,19 +263,9 @@ export function createPrestigeCommandExecutor(
         case "click-tech":
           clickTech(command.id);
           return;
-        case "reset-modifier-keys": {
-          const keyManager = requireRecord(
-            dependencies.getKeyManager(),
-            "KeyManager",
-          );
-          requireFunction(keyManager["set"], "KeyManager.set").call(
-            keyManager,
-            false,
-            false,
-            false,
-          );
+        case "reset-modifier-keys":
+          dependencies.clickMultipliers.clear();
           return;
-        }
         case "absorption-chamber-action": {
           const buildings = requireRecord(
             dependencies.getBuildings(),

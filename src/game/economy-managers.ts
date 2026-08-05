@@ -1,11 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { GameClickMultipliersPort } from "../ports/game-click-multipliers.ts";
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
-
-interface KeyManagerContract {
-  click: (count: number) => Iterable<unknown>;
-}
 
 /** The panel that shows the current government and offers to change it. */
 const GOVERNMENT_PANEL = "#govType";
@@ -23,7 +20,7 @@ interface EconomyManagersDependencies {
   getResources: () => Record<string, any>;
   getBuildings: () => Record<string, any>;
   getVueById: (id: string) => any;
-  getKeyManager: () => KeyManagerContract;
+  clickMultipliers: GameClickMultipliersPort;
   getFeatureVisibility: () => GameFeatureVisibilityPort;
   getGameModal: () => GameModalPort;
   getGameLog: () => any;
@@ -104,7 +101,7 @@ export function createEconomyManagers({
   getResources,
   getBuildings,
   getVueById,
-  getKeyManager,
+  clickMultipliers,
   getFeatureVisibility,
   getGameModal,
   getGameLog,
@@ -379,8 +376,7 @@ export function createEconomyManagers({
         return false;
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
+      for (let m of clickMultipliers.steps(count)) {
         vue.autoBuy(resource.id);
       }
     },
@@ -395,8 +391,7 @@ export function createEconomyManagers({
         return false;
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
+      for (let m of clickMultipliers.steps(count)) {
         vue.autoSell(resource.id);
       }
     },
@@ -436,8 +431,7 @@ export function createEconomyManagers({
       if (count <= 0) {
         return;
       }
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
+      for (let m of clickMultipliers.steps(count)) {
         this._storageVue.crate();
       }
     },
@@ -446,8 +440,7 @@ export function createEconomyManagers({
       if (count <= 0) {
         return;
       }
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
+      for (let m of clickMultipliers.steps(count)) {
         this._storageVue.container();
       }
     },
@@ -468,8 +461,7 @@ export function createEconomyManagers({
         );
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
+      for (let m of clickMultipliers.steps(count)) {
         vue.addCrate(resource.id);
       }
     },
@@ -487,8 +479,7 @@ export function createEconomyManagers({
         );
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
+      for (let m of clickMultipliers.steps(count)) {
         vue.subCrate(resource.id);
       }
     },
@@ -506,8 +497,7 @@ export function createEconomyManagers({
         );
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
+      for (let m of clickMultipliers.steps(count)) {
         vue.addCon(resource.id);
       }
     },
@@ -525,8 +515,7 @@ export function createEconomyManagers({
         );
       }
 
-      const KeyManager = getKeyManager();
-      for (let m of KeyManager.click(count)) {
+      for (let m of clickMultipliers.steps(count)) {
         vue.subCon(resource.id);
       }
     },

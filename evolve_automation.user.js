@@ -2474,6 +2474,50 @@
     });
   }
 
+  // src/adapters/browser/game-click-multipliers.ts
+  function createGameClickMultipliers({
+    getKeyManager
+  }) {
+    function callKeyManager(name, args) {
+      const keyManager = requireRecord(getKeyManager(), "KeyManager");
+      const method = requireFunction(keyManager[name], `KeyManager.${name}`);
+      return Reflect.apply(method, keyManager, args);
+    }
+    return Object.freeze({
+      *steps(count2) {
+        const sequence = requireRecord(
+          callKeyManager("click", [count2]),
+          "KeyManager.click() result"
+        );
+        const iterate = requireFunction(
+          sequence[Symbol.iterator],
+          "KeyManager.click() result[Symbol.iterator]"
+        );
+        const iterator = requireRecord(
+          Reflect.apply(iterate, sequence, []),
+          "KeyManager.click() iterator"
+        );
+        const next = requireFunction(
+          iterator["next"],
+          "KeyManager.click() iterator.next"
+        );
+        while (true) {
+          const result2 = requireRecord(
+            Reflect.apply(next, iterator, []),
+            "KeyManager.click() iterator result"
+          );
+          if (result2["done"]) {
+            return;
+          }
+          yield result2["value"];
+        }
+      },
+      clear() {
+        callKeyManager("set", [false, false, false]);
+      }
+    });
+  }
+
   // src/adapters/browser/game-disposal-controls.ts
   function createGameDisposalControls({
     getVueById,
@@ -4538,7 +4582,7 @@
     getResources,
     getBuildings,
     getVueById,
-    getKeyManager,
+    clickMultipliers,
     getFeatureVisibility,
     getGameModal,
     getGameLog,
@@ -4756,8 +4800,7 @@
         if (vue === void 0) {
           return false;
         }
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
+        for (let m of clickMultipliers.steps(count2)) {
           vue.autoBuy(resource2.id);
         }
       },
@@ -4769,8 +4812,7 @@
         if (vue === void 0) {
           return false;
         }
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
+        for (let m of clickMultipliers.steps(count2)) {
           vue.autoSell(resource2.id);
         }
       }
@@ -4805,8 +4847,7 @@
         if (count2 <= 0) {
           return;
         }
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
+        for (let m of clickMultipliers.steps(count2)) {
           this._storageVue.crate();
         }
       },
@@ -4814,8 +4855,7 @@
         if (count2 <= 0) {
           return;
         }
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
+        for (let m of clickMultipliers.steps(count2)) {
           this._storageVue.container();
         }
       },
@@ -4831,8 +4871,7 @@
             1
           );
         }
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
+        for (let m of clickMultipliers.steps(count2)) {
           vue.addCrate(resource2.id);
         }
       },
@@ -4848,8 +4887,7 @@
             -1
           );
         }
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
+        for (let m of clickMultipliers.steps(count2)) {
           vue.subCrate(resource2.id);
         }
       },
@@ -4865,8 +4903,7 @@
             1
           );
         }
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
+        for (let m of clickMultipliers.steps(count2)) {
           vue.addCon(resource2.id);
         }
       },
@@ -4882,8 +4919,7 @@
             -1
           );
         }
-        const KeyManager = getKeyManager();
-        for (let m of KeyManager.click(count2)) {
+        for (let m of clickMultipliers.steps(count2)) {
           vue.subCon(resource2.id);
         }
       }
@@ -33302,32 +33338,7 @@
         if (view === null) return false;
         if (typeof view["novo"] !== "function") return false;
         const novo = requireFunction(view["novo"], "arpaSequence Vue view.novo");
-        const keyManager = requireRecord(
-          dependencies.getKeyManager(),
-          "KeyManager"
-        );
-        const click = requireFunction(keyManager["click"], "KeyManager.click");
-        const rawIterable = Reflect.apply(click, keyManager, [count2]);
-        const iterable = requireRecord(rawIterable, "KeyManager.click() result");
-        const iterator = requireFunction(
-          iterable[Symbol.iterator],
-          "KeyManager.click() result[Symbol.iterator]"
-        );
-        const iteratorValue = Reflect.apply(iterator, iterable, []);
-        const iteratorRecord = requireRecord(
-          iteratorValue,
-          "KeyManager.click() iterator"
-        );
-        const next = requireFunction(
-          iteratorRecord["next"],
-          "KeyManager.click() iterator.next"
-        );
-        while (true) {
-          const result2 = requireRecord(
-            Reflect.apply(next, iteratorRecord, []),
-            "KeyManager.click() iterator result"
-          );
-          if (result2["done"]) break;
+        for (const _step of dependencies.clickMultipliers.steps(count2)) {
           Reflect.apply(novo, view, []);
         }
         return true;
@@ -41633,19 +41644,9 @@
           case "click-tech":
             clickTech(command.id);
             return;
-          case "reset-modifier-keys": {
-            const keyManager = requireRecord(
-              dependencies.getKeyManager(),
-              "KeyManager"
-            );
-            requireFunction(keyManager["set"], "KeyManager.set").call(
-              keyManager,
-              false,
-              false,
-              false
-            );
+          case "reset-modifier-keys":
+            dependencies.clickMultipliers.clear();
             return;
-          }
           case "absorption-chamber-action": {
             const buildings = requireRecord(
               dependencies.getBuildings(),
@@ -57342,38 +57343,41 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getDocument: () => runtimeEnvironment.document,
       getVueById: (id) => getVueById(id)
     });
+    const clickMultipliers = createGameClickMultipliers({
+      getKeyManager: () => KeyManager
+    });
     const jobControls = createGameJobControls({
       getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => KeyManager.click(count2)
+      clickSteps: (count2) => clickMultipliers.steps(count2)
     });
     const actionControls = createGameActionControls({
       getVueById: (id) => getVueById(id),
       selectTooltip: () => $("#popper"),
-      clickSteps: (count2) => KeyManager.click(count2)
+      clickSteps: (count2) => clickMultipliers.steps(count2)
     });
     const craftingControls = createGameCraftingControls({
       getVueById: (id) => getVueById(id),
-      clearClickMultipliers: () => KeyManager.set(false, false, false)
+      clearClickMultipliers: () => clickMultipliers.clear()
     });
     const industryControls = createGameIndustryControls({
       getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => KeyManager.click(count2)
+      clickSteps: (count2) => clickMultipliers.steps(count2)
     });
     const disposalControls = createGameDisposalControls({
       getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => KeyManager.click(count2)
+      clickSteps: (count2) => clickMultipliers.steps(count2)
     });
     const fleetControls = createGameFleetControls({
       getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => KeyManager.click(count2),
+      clickSteps: (count2) => clickMultipliers.steps(count2),
       getGame: () => game,
       getJQuery: () => $
     });
     const garrisonControls = createGameGarrisonControls({
       getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => KeyManager.click(count2),
+      clickSteps: (count2) => clickMultipliers.steps(count2),
       getGame: () => game,
-      clearClickMultipliers: () => KeyManager.set(false, false, false),
+      clearClickMultipliers: () => clickMultipliers.clear(),
       callVueMethod
     });
     const mechControls = createGameMechControls({
@@ -57932,7 +57936,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getResources: () => resources,
       getBuildings: () => buildings,
       getVueById: (id) => getVueById(id),
-      getKeyManager: () => KeyManager,
+      clickMultipliers,
       getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,
       getGameLog: () => GameLog,
@@ -58680,7 +58684,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       commandExecutor: {
         getGame: () => game,
         getResources: () => resources,
-        resetKeyModifiers: () => KeyManager.set(false, false, false)
+        resetKeyModifiers: () => clickMultipliers.clear()
       }
     });
     publishTestSurface({
@@ -58895,7 +58899,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getBuildings: () => buildings,
         getTechIds: () => techIds,
         getVueById,
-        getKeyManager: () => KeyManager,
+        clickMultipliers,
         logPrestige,
         loadQueuedSettings
       }
@@ -59019,7 +59023,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const { autoGenetics } = createGeneticsControl({
       controls: {
         getVueById,
-        getKeyManager: () => KeyManager
+        clickMultipliers
       },
       adapter: {
         getGame: () => game,

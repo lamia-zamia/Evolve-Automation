@@ -1,4 +1,5 @@
 import type { GeneticsToggle } from "../../domain/traits/genetics.ts";
+import type { GameClickMultipliersPort } from "../../ports/game-click-multipliers.ts";
 import type { GeneticsControls } from "../../ports/genetics.ts";
 import {
   requireFunction,
@@ -7,11 +8,12 @@ import {
 } from "../validation.ts";
 
 export interface GeneticsControlsDependencies {
-  // TRANSITIONAL: Genetics commands currently call a Vue 2 view directly and
-  // use the legacy key-modifier manager for bulk Novo clicks. Replace both in
-  // the Vue 3/browser adapter slice.
+  // TRANSITIONAL: Genetics commands currently call a Vue 2 view directly.
+  // Replace that in the Vue 3/browser adapter slice.
   readonly getVueById: (id: string) => unknown;
-  readonly getKeyManager: () => unknown;
+
+  /** Bulk Novo assembly buys several sequences per component call. */
+  readonly clickMultipliers: GameClickMultipliersPort;
 }
 
 const METHOD_BY_TOGGLE: Readonly<Record<GeneticsToggle, string>> =
@@ -52,32 +54,7 @@ export function createGeneticsControls(
       if (view === null) return false;
       if (typeof view["novo"] !== "function") return false;
       const novo = requireFunction(view["novo"], "arpaSequence Vue view.novo");
-      const keyManager = requireRecord(
-        dependencies.getKeyManager(),
-        "KeyManager",
-      );
-      const click = requireFunction(keyManager["click"], "KeyManager.click");
-      const rawIterable = Reflect.apply(click, keyManager, [count]);
-      const iterable = requireRecord(rawIterable, "KeyManager.click() result");
-      const iterator = requireFunction(
-        iterable[Symbol.iterator],
-        "KeyManager.click() result[Symbol.iterator]",
-      );
-      const iteratorValue = Reflect.apply(iterator, iterable, []);
-      const iteratorRecord = requireRecord(
-        iteratorValue,
-        "KeyManager.click() iterator",
-      );
-      const next = requireFunction(
-        iteratorRecord["next"],
-        "KeyManager.click() iterator.next",
-      );
-      while (true) {
-        const result = requireRecord(
-          Reflect.apply(next, iteratorRecord, []),
-          "KeyManager.click() iterator result",
-        );
-        if (result["done"]) break;
+      for (const _step of dependencies.clickMultipliers.steps(count)) {
         Reflect.apply(novo, view, []);
       }
       return true;

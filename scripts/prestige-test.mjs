@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { createGameClickMultipliers } from "../src/adapters/browser/game-click-multipliers.ts";
 import {
   createPrestigeCommandExecutor,
   createPrestigeReader,
@@ -158,7 +159,9 @@ function runModern(scenario) {
       getBuildings: () => f.buildings,
       getTechIds: () => f.techIds,
       getVueById: f.getVueById,
-      getKeyManager: () => f.KeyManager,
+      clickMultipliers: createGameClickMultipliers({
+        getKeyManager: () => f.KeyManager,
+      }),
       logPrestige: f.logPrestige,
       loadQueuedSettings: f.loadQueuedSettings,
     }),
@@ -567,8 +570,10 @@ const contractExecutor = (overrides = {}) => {
         "tech-protocol66": { click: () => calls.push("protocol66") },
       },
     getVueById: () => overrides.madVue ?? { arm: () => calls.push("arm") },
-    getKeyManager: () =>
-      overrides.keyManager ?? { set: (...a) => calls.push(["set", ...a]) },
+    clickMultipliers: createGameClickMultipliers({
+      getKeyManager: () =>
+        overrides.keyManager ?? { set: (...a) => calls.push(["set", ...a]) },
+    }),
     logPrestige: () => calls.push("log"),
     loadQueuedSettings: () => calls.push("loadQueued"),
   });

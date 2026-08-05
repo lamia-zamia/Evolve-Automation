@@ -45,9 +45,9 @@ const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
     getResources: () => resources,
     getBuildings: () => buildings,
     getVueById: (id) => vueMap[id],
-    getKeyManager: () => ({
-      click: (count) => Array.from({ length: count }, (_, i) => i),
-    }),
+    clickMultipliers: {
+      steps: (count) => Array.from({ length: count }, (_, i) => i),
+    },
     getFeatureVisibility: () =>
       createGameFeatureVisibility({ getDocument: () => documentStub }),
     getGameModal: () => gameModal,

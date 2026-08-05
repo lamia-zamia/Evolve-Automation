@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { createGameClickMultipliers } from "../src/adapters/browser/game-click-multipliers.ts";
 import { createGeneticsControls } from "../src/adapters/browser/genetics-controls.ts";
 import { createGeneticsAdapter } from "../src/adapters/evolve/traits/genetics.ts";
 import { runGeneticsAutomation } from "../src/application/genetics.ts";
@@ -113,7 +114,9 @@ function createFixture(scenario) {
 function createAutomation(fixture, overrides = {}) {
   const controls = createGeneticsControls({
     getVueById: fixture.getVueById,
-    getKeyManager: () => fixture.KeyManager,
+    clickMultipliers: createGameClickMultipliers({
+      getKeyManager: () => fixture.KeyManager,
+    }),
   });
   const adapter = createGeneticsAdapter({
     getGame: () => fixture.game,
