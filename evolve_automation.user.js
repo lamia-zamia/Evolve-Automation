@@ -2559,6 +2559,27 @@
     });
   }
 
+  // src/adapters/browser/game-espionage-controls.ts
+  var ESPIONAGE_MODAL = "espModal";
+  function createGameEspionageControls({
+    getVueById
+  }) {
+    return Object.freeze({
+      performEspionage(operation2, govIndex) {
+        const view = getVueById(ESPIONAGE_MODAL);
+        if (!isRecord(view) || typeof view[operation2] !== "function") {
+          return false;
+        }
+        const method = requireFunction(
+          view[operation2],
+          `${ESPIONAGE_MODAL} Vue view.${operation2}`
+        );
+        Reflect.apply(method, view, [govIndex]);
+        return true;
+      }
+    });
+  }
+
   // src/adapters/browser/game-feature-visibility.ts
   function createGameFeatureVisibility({
     getDocument
@@ -5111,6 +5132,7 @@
     getBuildings,
     getPoly,
     getVueById,
+    espionageControls,
     getGarrisonControls,
     getFeatureVisibility,
     getGameModal,
@@ -5281,7 +5303,7 @@
                 )}" covert operation against ${getGovName(govIndex)}.`,
                 ["spy"]
               );
-              getVueById("espModal")?.[espionageToPerform]?.(govIndex);
+              espionageControls.performEspionage(espionageToPerform, govIndex);
             }
           });
         }
@@ -57529,6 +57551,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => clickMultipliers.steps(count2)
     });
+    const espionageControls = createGameEspionageControls({
+      getVueById: (id) => getVueById(id)
+    });
     const governmentSelection = createGameGovernmentSelection({
       getVueById: (id) => getVueById(id)
     });
@@ -58131,6 +58156,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBuildings: () => buildings,
       getPoly: () => poly,
       getVueById: (id) => getVueById(id),
+      espionageControls,
       getGarrisonControls: () => garrisonControls,
       getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,

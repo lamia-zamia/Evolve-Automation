@@ -1,3 +1,4 @@
+import type { GameEspionageControlsPort } from "../ports/game-espionage-controls.ts";
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameGarrisonControlsPort } from "../ports/game-garrison-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
@@ -23,6 +24,7 @@ type ForeignAffairsManagerDependencies = {
   getBuildings: () => AnyRecord;
   getPoly: () => AnyRecord;
   getVueById: (id: string) => any;
+  espionageControls: GameEspionageControlsPort;
   getGarrisonControls: () => GameGarrisonControlsPort;
   getFeatureVisibility: () => GameFeatureVisibilityPort;
   getGameModal: () => GameModalPort;
@@ -45,6 +47,7 @@ export function createForeignAffairsManagers({
   getBuildings,
   getPoly,
   getVueById,
+  espionageControls,
   getGarrisonControls,
   getFeatureVisibility,
   getGameModal,
@@ -327,7 +330,7 @@ export function createForeignAffairsManagers({
               )}" covert operation against ${getGovName(govIndex)}.`,
               ["spy"],
             );
-            getVueById("espModal")?.[espionageToPerform]?.(govIndex);
+            espionageControls.performEspionage(espionageToPerform, govIndex);
           },
         });
       }

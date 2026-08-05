@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameEspionageControls } from "../src/adapters/browser/game-espionage-controls.ts";
 import { createGameFeatureVisibility } from "../src/adapters/browser/game-feature-visibility.ts";
 import { createGameGarrisonControls } from "../src/adapters/browser/game-garrison-controls.ts";
 import { createForeignAffairsManagers } from "../src/game/foreign-affairs-managers.ts";
@@ -44,6 +45,9 @@ const { SpyManager, WarManager } = createForeignAffairsManagers({
   getBuildings: () => buildings,
   getPoly: () => poly,
   getVueById: (id) => vueById[id],
+  espionageControls: createGameEspionageControls({
+    getVueById: (id) => vueById[id],
+  }),
   getGarrisonControls: () => garrisonControls,
   getFeatureVisibility: () =>
     createGameFeatureVisibility({
