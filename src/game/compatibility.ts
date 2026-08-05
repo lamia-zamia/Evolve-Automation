@@ -1,3 +1,5 @@
+import type { GameStorageControlsPort } from "../ports/game-storage-controls.ts";
+
 type LooseFunction = (...args: any[]) => any;
 type LooseObject = Record<PropertyKey, any>;
 
@@ -8,6 +10,7 @@ type GameCompatibilityDependencies = {
   getHaveTech: () => LooseFunction;
   getGovernor: () => string;
   getVueById: LooseFunction;
+  storageControls: GameStorageControlsPort;
   normalizeProperties: LooseFunction;
   cloneIntoPage: (value: unknown, options?: LooseObject) => any;
   getDate: () => { getMonth: () => number; getDate: () => number };
@@ -20,6 +23,7 @@ export function createGameCompatibility({
   getHaveTech,
   getGovernor,
   getVueById,
+  storageControls,
   normalizeProperties,
   cloneIntoPage,
   getDate,
@@ -1539,15 +1543,9 @@ export function createGameCompatibility({
 
     // Reimplemented:
     // export function crateValue() from resources.js
-    crateValue: () =>
-      Number(
-        getVueById("createHead")?.buildCrateDesc().match(/(\d+)/g)[1] ?? 0,
-      ),
+    crateValue: () => storageControls.crateCapacity(),
     // export function containerValue() from resources.js
-    containerValue: () =>
-      Number(
-        getVueById("createHead")?.buildContainerDesc().match(/(\d+)/g)[1] ?? 0,
-      ),
+    containerValue: () => storageControls.containerCapacity(),
 
     // Firefox compatibility:
     adjustCosts: (c_action: any, wiki?: any) =>

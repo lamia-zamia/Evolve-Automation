@@ -3258,6 +3258,90 @@
     });
   }
 
+  // src/adapters/browser/game-storage-controls.ts
+  var CONSTRUCTION_PANEL = "createHead";
+  var CAPACITY_INDEX = 1;
+  function createGameStorageControls({
+    getVueById,
+    clickSteps
+  }) {
+    function method(elementId, name) {
+      const view = getVueById(elementId);
+      if (!isRecord(view) || typeof view[name] !== "function") {
+        return void 0;
+      }
+      return {
+        view,
+        call: requireFunction(view[name], `${elementId} Vue view.${name}`)
+      };
+    }
+    function capacity(describe) {
+      const target = method(CONSTRUCTION_PANEL, describe);
+      if (target === void 0) {
+        return 0;
+      }
+      const sentence = Reflect.apply(target.call, target.view, []);
+      if (typeof sentence !== "string") {
+        return 0;
+      }
+      const numbers = sentence.match(/\d+/g);
+      const stated = numbers?.[CAPACITY_INDEX];
+      return stated === void 0 ? 0 : Number(stated);
+    }
+    function build(count2, name) {
+      const target = method(CONSTRUCTION_PANEL, name);
+      if (target === void 0) {
+        return false;
+      }
+      for (const _step of clickSteps(count2)) {
+        Reflect.apply(target.call, target.view, []);
+      }
+      return true;
+    }
+    function stack(request, name) {
+      const target = method(request.elementId, name);
+      if (target === void 0) {
+        return false;
+      }
+      for (const _step of clickSteps(request.count)) {
+        Reflect.apply(target.call, target.view, [request.id]);
+      }
+      return true;
+    }
+    return Object.freeze({
+      isConstructionRendered() {
+        return isRecord(getVueById(CONSTRUCTION_PANEL));
+      },
+      crateCapacity() {
+        return capacity("buildCrateDesc");
+      },
+      containerCapacity() {
+        return capacity("buildContainerDesc");
+      },
+      constructCrates(count2) {
+        return build(count2, "crate");
+      },
+      constructContainers(count2) {
+        return build(count2, "container");
+      },
+      isStackRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      assignCrates(request) {
+        return stack(request, "addCrate");
+      },
+      unassignCrates(request) {
+        return stack(request, "subCrate");
+      },
+      assignContainers(request) {
+        return stack(request, "addCon");
+      },
+      unassignContainers(request) {
+        return stack(request, "subCon");
+      }
+    });
+  }
+
   // src/adapters/browser/game-research-controls.ts
   function buyControl(elementId) {
     return `#${elementId} > .button:not(.precog)`;
@@ -4688,6 +4772,7 @@
     getVueById,
     clickMultipliers,
     marketControls,
+    storageControls,
     getFeatureVisibility,
     getGameModal,
     getGameLog,
@@ -4912,8 +4997,6 @@
       priorityList: [],
       crateValue: 0,
       containerValue: 0,
-      _storageVueBinding: "createHead",
-      _storageVue: void 0,
       _crateDebounce: {},
       // { resourceId: { dir, ticks, prev, locked } }
       _containerDebounce: {},
@@ -4922,11 +5005,7 @@
         if (!this.isUnlocked) {
           return false;
         }
-        this._storageVue = getVueById(this._storageVueBinding);
-        if (this._storageVue === void 0) {
-          return false;
-        }
-        return true;
+        return storageControls.isConstructionRendered();
       },
       isUnlocked() {
         return haveTech("container");
@@ -4935,84 +5014,57 @@
         this.priorityList.sort((a, b) => a.storagePriority - b.storagePriority);
       },
       constructCrate(count2) {
-        if (count2 <= 0) {
-          return;
-        }
-        for (let m of clickMultipliers.steps(count2)) {
-          this._storageVue.crate();
-        }
+        storageControls.constructCrates(count2);
       },
       constructContainer(count2) {
-        if (count2 <= 0) {
-          return;
+        storageControls.constructContainers(count2);
+      },
+      /**
+       * Moves storage units of one unit onto or off a resource. The game only
+       * mounts a resource's stack row while its storage tab is on screen, so an
+       * off-screen row falls back to the same narrow model change the row would
+       * have made, and reports whether the whole count was applied.
+       */
+      _moveStack(resource2, count2, unit, direction) {
+        const request = {
+          elementId: resource2._stackVueBinding,
+          id: resource2.id,
+          count: count2
+        };
+        const storageValue = unit === "crate" ? this.crateValue : this.containerValue;
+        if (!storageControls.isStackRendered(request.elementId)) {
+          return applyDirectStorageAssignment(
+            getGame(),
+            resource2,
+            count2,
+            unit,
+            storageValue,
+            direction
+          );
         }
-        for (let m of clickMultipliers.steps(count2)) {
-          this._storageVue.container();
+        if (unit === "crate") {
+          if (direction > 0) {
+            storageControls.assignCrates(request);
+          } else {
+            storageControls.unassignCrates(request);
+          }
+        } else if (direction > 0) {
+          storageControls.assignContainers(request);
+        } else {
+          storageControls.unassignContainers(request);
         }
       },
       assignCrate(resource2, count2) {
-        let vue = getVueById(resource2._stackVueBinding);
-        if (vue === void 0) {
-          return applyDirectStorageAssignment(
-            getGame(),
-            resource2,
-            count2,
-            "crate",
-            this.crateValue,
-            1
-          );
-        }
-        for (let m of clickMultipliers.steps(count2)) {
-          vue.addCrate(resource2.id);
-        }
+        return this._moveStack(resource2, count2, "crate", 1);
       },
       unassignCrate(resource2, count2) {
-        let vue = getVueById(resource2._stackVueBinding);
-        if (vue === void 0) {
-          return applyDirectStorageAssignment(
-            getGame(),
-            resource2,
-            count2,
-            "crate",
-            this.crateValue,
-            -1
-          );
-        }
-        for (let m of clickMultipliers.steps(count2)) {
-          vue.subCrate(resource2.id);
-        }
+        return this._moveStack(resource2, count2, "crate", -1);
       },
       assignContainer(resource2, count2) {
-        let vue = getVueById(resource2._stackVueBinding);
-        if (vue === void 0) {
-          return applyDirectStorageAssignment(
-            getGame(),
-            resource2,
-            count2,
-            "container",
-            this.containerValue,
-            1
-          );
-        }
-        for (let m of clickMultipliers.steps(count2)) {
-          vue.addCon(resource2.id);
-        }
+        return this._moveStack(resource2, count2, "container", 1);
       },
       unassignContainer(resource2, count2) {
-        let vue = getVueById(resource2._stackVueBinding);
-        if (vue === void 0) {
-          return applyDirectStorageAssignment(
-            getGame(),
-            resource2,
-            count2,
-            "container",
-            this.containerValue,
-            -1
-          );
-        }
-        for (let m of clickMultipliers.steps(count2)) {
-          vue.subCon(resource2.id);
-        }
+        return this._moveStack(resource2, count2, "container", -1);
       }
     };
     return {
@@ -10359,6 +10411,7 @@
     getHaveTech,
     getGovernor,
     getVueById,
+    storageControls,
     normalizeProperties,
     cloneIntoPage,
     getDate
@@ -11790,13 +11843,9 @@
       ],
       // Reimplemented:
       // export function crateValue() from resources.js
-      crateValue: () => Number(
-        getVueById("createHead")?.buildCrateDesc().match(/(\d+)/g)[1] ?? 0
-      ),
+      crateValue: () => storageControls.crateCapacity(),
       // export function containerValue() from resources.js
-      containerValue: () => Number(
-        getVueById("createHead")?.buildContainerDesc().match(/(\d+)/g)[1] ?? 0
-      ),
+      containerValue: () => storageControls.containerCapacity(),
       // Firefox compatibility:
       adjustCosts: (c_action, wiki) => getGame().adjustCosts(
         cloneIntoPage(c_action, { cloneFunctions: true }),
@@ -57463,6 +57512,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => clickMultipliers.steps(count2)
     });
+    const storageControls = createGameStorageControls({
+      getVueById: (id) => getVueById(id),
+      clickSteps: (count2) => clickMultipliers.steps(count2)
+    });
     const disposalControls = createGameDisposalControls({
       getVueById: (id) => getVueById(id),
       clickSteps: (count2) => clickMultipliers.steps(count2)
@@ -58037,6 +58090,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (id) => getVueById(id),
       clickMultipliers,
       marketControls,
+      storageControls,
       getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,
       getGameLog: () => GameLog,
@@ -60983,6 +61037,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       getGovernor: () => getGovernor(),
       getVueById: (...args) => getVueById(...args),
+      storageControls,
       normalizeProperties,
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       getDate: () => runtimeEnvironment.createDate()

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createGameCompatibility } from "../src/game/compatibility.ts";
+import { createGameStorageControls } from "../src/adapters/browser/game-storage-controls.ts";
 
 const trace = [];
 let context = {
@@ -43,6 +44,10 @@ const compatibility = createGameCompatibility({
   getHaveTech: () => context.haveTech,
   getGovernor: () => context.governor,
   getVueById: (...args) => context.getVueById(...args),
+  storageControls: createGameStorageControls({
+    getVueById: (...args) => context.getVueById(...args),
+    clickSteps: () => [],
+  }),
   normalizeProperties: (value) => value,
   cloneIntoPage: (value, options) => {
     trace.push(["cloneIntoPage", value, options]);

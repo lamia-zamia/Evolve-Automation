@@ -71,6 +71,7 @@ import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameMarketControls } from "../browser/game-market-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
+import { createGameStorageControls } from "../browser/game-storage-controls.ts";
 import { createGameResearchControls } from "../browser/game-research-controls.ts";
 import { createGameTraitControls } from "../browser/game-trait-controls.ts";
 import { createQueuedSettings } from "../../settings/queued-settings.ts";
@@ -2595,6 +2596,10 @@ function startEvolveRuntimeComposition(
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => clickMultipliers.steps(count),
   });
+  const storageControls = createGameStorageControls({
+    getVueById: (id) => getVueById(id),
+    clickSteps: (count) => clickMultipliers.steps(count),
+  });
   const disposalControls = createGameDisposalControls({
     getVueById: (id) => getVueById(id),
     clickSteps: (count) => clickMultipliers.steps(count),
@@ -3213,6 +3218,7 @@ function startEvolveRuntimeComposition(
       getVueById: (id) => getVueById(id),
       clickMultipliers,
       marketControls,
+      storageControls,
       getFeatureVisibility: () => featureVisibility,
       getGameModal: () => gameModal,
       getGameLog: () => GameLog,
@@ -6509,6 +6515,7 @@ function startEvolveRuntimeComposition(
     getHaveTech: () => haveTech,
     getGovernor: () => getGovernor(),
     getVueById: (...args) => getVueById(...args),
+    storageControls,
     normalizeProperties,
     cloneIntoPage: (value, options) =>
       userscriptEnvironment.cloneIntoPage(value, options),

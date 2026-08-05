@@ -4,6 +4,7 @@ import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
 import type { GameMarketControlsPort } from "../ports/game-market-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
+import type { GameStorageControlsPort } from "../ports/game-storage-controls.ts";
 
 /** The panel that shows the current government and offers to change it. */
 const GOVERNMENT_PANEL = "#govType";
@@ -28,6 +29,7 @@ interface EconomyManagersDependencies {
   getVueById: (id: string) => any;
   clickMultipliers: GameClickMultipliersPort;
   marketControls: GameMarketControlsPort;
+  storageControls: GameStorageControlsPort;
   getFeatureVisibility: () => GameFeatureVisibilityPort;
   getGameModal: () => GameModalPort;
   getGameLog: () => any;
@@ -110,6 +112,7 @@ export function createEconomyManagers({
   getVueById,
   clickMultipliers,
   marketControls,
+  storageControls,
   getFeatureVisibility,
   getGameModal,
   getGameLog,
@@ -393,8 +396,6 @@ export function createEconomyManagers({
     priorityList: [] as any[],
     crateValue: 0,
     containerValue: 0,
-    _storageVueBinding: "createHead",
-    _storageVue: undefined as any,
     _crateDebounce: {} as any, // { resourceId: { dir, ticks, prev, locked } }
     _containerDebounce: {} as any, // same
 
@@ -403,12 +404,7 @@ export function createEconomyManagers({
         return false;
       }
 
-      this._storageVue = getVueById(this._storageVueBinding);
-      if (this._storageVue === undefined) {
-        return false;
-      }
-
-      return true;
+      return storageControls.isConstructionRendered();
     },
 
     isUnlocked() {
@@ -420,96 +416,71 @@ export function createEconomyManagers({
     },
 
     constructCrate(count: number) {
-      if (count <= 0) {
-        return;
-      }
-      for (let m of clickMultipliers.steps(count)) {
-        this._storageVue.crate();
-      }
+      storageControls.constructCrates(count);
     },
 
     constructContainer(count: number) {
-      if (count <= 0) {
-        return;
+      storageControls.constructContainers(count);
+    },
+
+    /**
+     * Moves storage units of one unit onto or off a resource. The game only
+     * mounts a resource's stack row while its storage tab is on screen, so an
+     * off-screen row falls back to the same narrow model change the row would
+     * have made, and reports whether the whole count was applied.
+     */
+    _moveStack(
+      resource: any,
+      count: number,
+      unit: "crate" | "container",
+      direction: 1 | -1,
+    ) {
+      const request = {
+        elementId: resource._stackVueBinding,
+        id: resource.id,
+        count,
+      };
+      const storageValue =
+        unit === "crate" ? this.crateValue : this.containerValue;
+
+      if (!storageControls.isStackRendered(request.elementId)) {
+        return applyDirectStorageAssignment(
+          getGame(),
+          resource,
+          count,
+          unit,
+          storageValue,
+          direction,
+        );
       }
-      for (let m of clickMultipliers.steps(count)) {
-        this._storageVue.container();
+
+      if (unit === "crate") {
+        if (direction > 0) {
+          storageControls.assignCrates(request);
+        } else {
+          storageControls.unassignCrates(request);
+        }
+      } else if (direction > 0) {
+        storageControls.assignContainers(request);
+      } else {
+        storageControls.unassignContainers(request);
       }
     },
 
     assignCrate(resource: any, count: number) {
-      let vue = getVueById(resource._stackVueBinding);
-      if (vue === undefined) {
-        // TRANSITIONAL: The current game only mounts stack-row Vue controls
-        // for the visible storage tab. Keep automation working when a row is
-        // off-screen by applying the same narrow model change directly.
-        return applyDirectStorageAssignment(
-          getGame(),
-          resource,
-          count,
-          "crate",
-          this.crateValue,
-          1,
-        );
-      }
-
-      for (let m of clickMultipliers.steps(count)) {
-        vue.addCrate(resource.id);
-      }
+      return this._moveStack(resource, count, "crate", 1);
     },
 
     unassignCrate(resource: any, count: number) {
-      let vue = getVueById(resource._stackVueBinding);
-      if (vue === undefined) {
-        return applyDirectStorageAssignment(
-          getGame(),
-          resource,
-          count,
-          "crate",
-          this.crateValue,
-          -1,
-        );
-      }
-
-      for (let m of clickMultipliers.steps(count)) {
-        vue.subCrate(resource.id);
-      }
+      return this._moveStack(resource, count, "crate", -1);
     },
 
     assignContainer(resource: any, count: number) {
-      let vue = getVueById(resource._stackVueBinding);
-      if (vue === undefined) {
-        return applyDirectStorageAssignment(
-          getGame(),
-          resource,
-          count,
-          "container",
-          this.containerValue,
-          1,
-        );
-      }
-
-      for (let m of clickMultipliers.steps(count)) {
-        vue.addCon(resource.id);
-      }
+      return this._moveStack(resource, count, "container", 1);
     },
 
     unassignContainer(resource: any, count: number) {
-      let vue = getVueById(resource._stackVueBinding);
-      if (vue === undefined) {
-        return applyDirectStorageAssignment(
-          getGame(),
-          resource,
-          count,
-          "container",
-          this.containerValue,
-          -1,
-        );
-      }
-
-      for (let m of clickMultipliers.steps(count)) {
-        vue.subCon(resource.id);
-      }
+      return this._moveStack(resource, count, "container", -1);
     },
   };
 

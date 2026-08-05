@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createGameFeatureVisibility } from "../src/adapters/browser/game-feature-visibility.ts";
 import { createGameIndustryControls } from "../src/adapters/browser/game-industry-controls.ts";
 import { createGameMarketControls } from "../src/adapters/browser/game-market-controls.ts";
+import { createGameStorageControls } from "../src/adapters/browser/game-storage-controls.ts";
 import { createEconomyManagers } from "../src/game/economy-managers.ts";
 
 let game;
@@ -45,6 +46,12 @@ const marketControls = createGameMarketControls({
   clickSteps: (count) => Array.from({ length: count }, (_, i) => i),
 });
 
+const storageControls = createGameStorageControls({
+  getVueById: (id) => vueMap[id],
+  clickSteps: (count) =>
+    Array.from({ length: Math.max(count, 0) }, (_, i) => i),
+});
+
 const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
   createEconomyManagers({
     getGame: () => game,
@@ -55,6 +62,7 @@ const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
       steps: (count) => Array.from({ length: count }, (_, i) => i),
     },
     marketControls,
+    storageControls,
     getFeatureVisibility: () =>
       createGameFeatureVisibility({ getDocument: () => documentStub }),
     getGameModal: () => gameModal,
@@ -252,14 +260,25 @@ assert.deepEqual(clicks, [
 // ---------- Storage ----------
 techOk = true;
 assert.equal(StorageManager.isUnlocked(), true);
-StorageManager._storageVue = {
+
+// Without the construction panel there is nothing to initialize and nothing
+// to build.
+delete vueMap.createHead;
+clicks.length = 0;
+assert.equal(StorageManager.initStorage(), false);
+StorageManager.constructCrate(2);
+assert.deepEqual(clicks, []);
+
+vueMap.createHead = {
   crate: () => clicks.push(["crate"]),
   container: () => clicks.push(["container"]),
 };
+assert.equal(StorageManager.initStorage(), true);
 clicks.length = 0;
 StorageManager.constructCrate(0); // guard
 StorageManager.constructCrate(2);
-assert.deepEqual(clicks, [["crate"], ["crate"]]);
+StorageManager.constructContainer(1);
+assert.deepEqual(clicks, [["crate"], ["crate"], ["container"]]);
 
 vueMap.ironStack = {
   addCrate: (id) => clicks.push(["addCrate", id]),
