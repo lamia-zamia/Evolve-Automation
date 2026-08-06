@@ -76,6 +76,7 @@ import { createGameKeyboardHandlers } from "../browser/game-keyboard-handlers.ts
 import { createGameMarketControls } from "../browser/game-market-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGamePageShell } from "../browser/game-page-shell.ts";
+import { createGameUiSurface } from "../browser/game-ui-surface.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
 import { createGameStorageControls } from "../browser/game-storage-controls.ts";
 import { createGameResearchControls } from "../browser/game-research-controls.ts";
@@ -3488,6 +3489,10 @@ function startEvolveRuntimeComposition(
     getJQuery: () => $,
   });
 
+  const gameUiSurface = createGameUiSurface({
+    getDocument: () => runtimeEnvironment.document,
+  });
+
   publishTestSurface({
     gameModal,
     infrastructureManagers: { KeyManager, GameLog },
@@ -5456,7 +5461,7 @@ function startEvolveRuntimeComposition(
   const { getTooltipInfo, tooltipObserverCallback, addTooltip } =
     createTooltipUI({
       getJQuery: () => $,
-      getDocument: () => runtimeEnvironment.document,
+      getUiSurface: () => gameUiSurface,
       getMutationObserver: () => runtimeEnvironment.MutationObserver,
       getSettings: () => settings,
       getState: () => state,
@@ -5584,7 +5589,7 @@ function startEvolveRuntimeComposition(
     automateLab,
   } = createCustomRaceUI({
     getJQuery: () => $,
-    getDocument: () => runtimeEnvironment.document,
+    getUiSurface: () => gameUiSurface,
     getSettingsRaw: () => settingsRaw,
     getSettings: () => settings,
     getState: () => state,
@@ -5995,7 +6000,7 @@ function startEvolveRuntimeComposition(
   });
 
   const { calculateMechStats } = createMechStats({
-    getDocument: () => runtimeEnvironment.document,
+    getUiSurface: () => gameUiSurface,
     getJQuery: () => $,
     getMechManager: () => MechManager,
     getPoly: () => poly,
@@ -6310,7 +6315,7 @@ function startEvolveRuntimeComposition(
   });
 
   const { updateUI } = createUIRefresh({
-    getDocument: () => runtimeEnvironment.document,
+    getUiSurface: () => gameUiSurface,
     getActions: () => uiRefreshTestActions ?? uiRefreshActions,
     getPhases: () => ({
       ensureAutomationContainer,

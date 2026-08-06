@@ -11,6 +11,7 @@ import type {
   TraitDefinition,
 } from "../game/custom-race-model.ts";
 import type { GameCustomRaceLabPort } from "../ports/game-custom-race-lab.ts";
+import type { GameUiSurfacePort } from "../ports/game-ui-surface.ts";
 import type { EditableInput } from "./jquery.ts";
 
 /** The raw element `each` hands its callback. This module only re-wraps it with `$`. */
@@ -42,15 +43,6 @@ interface RaceNode {
 }
 
 type RaceJQuery = (target: string | RaceElement) => RaceNode;
-
-/** The one element operation the lab automation performs. */
-interface LabButton {
-  click(): void;
-}
-
-interface RaceDocument {
-  querySelector(selector: string): LabButton | null;
-}
 
 interface CustomRacePreset {
   name: string;
@@ -144,7 +136,7 @@ function traitDescription(trait: TraitDefinition) {
 
 interface CustomRaceUIDependencies {
   getJQuery: () => RaceJQuery;
-  getDocument: () => RaceDocument;
+  getUiSurface: () => GameUiSurfacePort;
   getSettingsRaw: () => CustomRacePresetSettings;
   getSettings: () => CustomRaceAutomationSettings;
   getState: () => CustomRaceUIState;
@@ -165,7 +157,7 @@ interface CustomRaceUIDependencies {
 
 export function createCustomRaceUI({
   getJQuery,
-  getDocument,
+  getUiSurface,
   getSettingsRaw,
   getSettings,
   getState,
@@ -855,13 +847,11 @@ export function createCustomRaceUI({
   }
 
   function automateLab() {
-    const document = getDocument();
     const settings = getSettings();
     const state = getState();
     const game = getGame();
     const updateOverrides = getUpdateOverrides();
-    let createCustom = document.querySelector("#celestialLab .create button");
-    if (createCustom) {
+    if (getUiSurface().isLabCreateAvailable()) {
       updateOverrides(); // Game doesn't tick in lab. Update settings here.
       if (
         settings.masterScriptToggle &&
@@ -894,7 +884,7 @@ export function createCustomRaceUI({
           return;
         }
         state.goal = "GameOverMan";
-        createCustom.click();
+        getUiSurface().clickLabCreate();
         return;
       }
     }

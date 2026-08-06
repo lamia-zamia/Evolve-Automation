@@ -1,8 +1,4 @@
-type UIRefreshDocument = {
-  hidden: boolean;
-  documentElement: { scrollTop: number };
-  body: { scrollTop: number };
-};
+import type { GameUiSurfacePort } from "../ports/game-ui-surface.ts";
 
 type UIRefreshActions = {
   createOptionsModal: () => void;
@@ -19,20 +15,20 @@ type UIRefreshPhases = {
 };
 
 type UIRefreshDependencies = {
-  getDocument: () => UIRefreshDocument;
+  getUiSurface: () => GameUiSurfacePort;
   getActions: () => UIRefreshActions;
   getPhases: () => UIRefreshPhases;
 };
 
 export function createUIRefresh({
-  getDocument,
+  getUiSurface,
   getActions,
   getPhases,
 }: UIRefreshDependencies) {
   function updateUI() {
-    const document = getDocument();
+    const uiSurface = getUiSurface();
     // Don't touch DOM when the tab is in the background
-    if (document.hidden) {
+    if (!uiSurface.isPageVisible()) {
       return;
     }
 
@@ -50,8 +46,7 @@ export function createUIRefresh({
     } = getPhases();
 
     let resetScrollPositionRequired = false;
-    const currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
+    const currentScrollPosition = uiSurface.readScrollTop();
 
     createOptionsModal();
     updateOptionsUI();
@@ -70,8 +65,7 @@ export function createUIRefresh({
 
     if (resetScrollPositionRequired) {
       // Leave the scroll position where it was before all our updates to the UI above
-      document.documentElement.scrollTop = document.body.scrollTop =
-        currentScrollPosition;
+      uiSurface.resetScrollTop(currentScrollPosition);
     }
 
     updateTotalDaysInTopBar();

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { createGameUiSurface } from "../src/adapters/browser/game-ui-surface.ts";
 import { createMechStats } from "../src/ui/mech-stats.ts";
 
 const inputs = {
@@ -9,10 +10,13 @@ const inputs = {
   script_mechStatsScouts: { checked: false, value: "0" },
   script_mechStatsCompact: { checked: false, value: "" },
 };
+const uiSurface = createGameUiSurface({
+  getDocument: () => ({ getElementById: (id) => inputs[id] }),
+});
 let label = "First";
 let output = "";
 const stats = createMechStats({
-  getDocument: () => ({ getElementById: (id) => inputs[id] }),
+  getUiSurface: () => uiSurface,
   getJQuery: () => () => ({ html: (content) => (output = content) }),
   getMechManager: () => ({
     SmallChassisMod: {},
@@ -45,7 +49,7 @@ assert.match(output, /Replacement/);
 {
   let unratedOutput = "";
   createMechStats({
-    getDocument: () => ({ getElementById: (id) => inputs[id] }),
+    getUiSurface: () => uiSurface,
     getJQuery: () => () => ({ html: (content) => (unratedOutput = content) }),
     getMechManager: () => ({
       SmallChassisMod: {},

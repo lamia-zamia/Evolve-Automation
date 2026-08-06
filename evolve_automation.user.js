@@ -3518,6 +3518,90 @@
     });
   }
 
+  // src/adapters/browser/game-ui-surface.ts
+  var MECH_CHECKBOX_IDS = [
+    "script_mechStatsSpecial",
+    "script_mechStatsGravity",
+    "script_mechStatsEfficient",
+    "script_mechStatsCompact"
+  ];
+  var MECH_STATS_SCOUTS_ID = "script_mechStatsScouts";
+  var LAB_CREATE_BUTTON = "#celestialLab .create button";
+  function createGameUiSurface({
+    getDocument
+  }) {
+    function documentSurface() {
+      return requireRecord(getDocument(), "document");
+    }
+    function byId(id) {
+      const doc = documentSurface();
+      const getElementById = readProperty(doc, "getElementById");
+      return typeof getElementById === "function" ? Reflect.apply(getElementById, doc, [id]) : null;
+    }
+    function readChecked(id) {
+      const element = byId(id);
+      return isRecord(element) && readProperty(element, "checked") === true;
+    }
+    function scrollElement(property) {
+      return readProperty(documentSurface(), property);
+    }
+    function queryLabButton() {
+      const doc = documentSurface();
+      const querySelector = readProperty(doc, "querySelector");
+      if (typeof querySelector !== "function") {
+        return null;
+      }
+      return Reflect.apply(querySelector, doc, [LAB_CREATE_BUTTON]);
+    }
+    return Object.freeze({
+      isPageVisible() {
+        return readProperty(documentSurface(), "hidden") !== true;
+      },
+      readScrollTop() {
+        const documentElement = scrollElement("documentElement");
+        const body = scrollElement("body");
+        const fromDocumentElement = isRecord(documentElement) ? readProperty(documentElement, "scrollTop") : void 0;
+        const fromBody = isRecord(body) ? readProperty(body, "scrollTop") : void 0;
+        const value = fromDocumentElement || fromBody;
+        return typeof value === "number" ? value : 0;
+      },
+      resetScrollTop(value) {
+        const documentElement = scrollElement("documentElement");
+        const body = scrollElement("body");
+        if (isRecord(documentElement)) {
+          documentElement["scrollTop"] = value;
+        }
+        if (isRecord(body)) {
+          body["scrollTop"] = value;
+        }
+      },
+      readMechStatsInputs() {
+        const scoutsElement = byId(MECH_STATS_SCOUTS_ID);
+        const scouts = isRecord(scoutsElement) && typeof scoutsElement.value === "string" ? scoutsElement.value : "";
+        return {
+          special: readChecked(MECH_CHECKBOX_IDS[0]),
+          gravity: readChecked(MECH_CHECKBOX_IDS[1]),
+          efficient: readChecked(MECH_CHECKBOX_IDS[2]),
+          compact: readChecked(MECH_CHECKBOX_IDS[3]),
+          scouts
+        };
+      },
+      isLabCreateAvailable() {
+        return isRecord(queryLabButton());
+      },
+      clickLabCreate() {
+        const button = queryLabButton();
+        if (!isRecord(button)) {
+          return;
+        }
+        const click = readProperty(button, "click");
+        if (typeof click === "function") {
+          Reflect.apply(click, button, []);
+        }
+      }
+    });
+  }
+
   // src/adapters/browser/game-project-controls.ts
   function createGameProjectControls({
     getVueById,
@@ -18180,7 +18264,7 @@
 
   // src/ui/mech-stats.ts
   function createMechStats({
-    getDocument,
+    getUiSurface,
     getJQuery,
     getMechManager,
     getPoly,
@@ -18193,17 +18277,12 @@
       const cellAdv = '<td><span class="has-text-advanced">';
       const cellEnd = "</span></td>";
       let content = "";
-      const document = getDocument();
       const MechManager = getMechManager();
       const poly = getPoly();
       const game = getGame();
-      const special = document.getElementById("script_mechStatsSpecial").checked;
-      const gravity = document.getElementById("script_mechStatsGravity").checked;
-      const efficient = document.getElementById(
-        "script_mechStatsEfficient"
-      ).checked;
-      const scouts = parseInt(document.getElementById("script_mechStatsScouts").value) || 0;
-      const prepared = document.getElementById("script_mechStatsCompact").checked ? 2 : 0;
+      const { special, gravity, efficient, compact, scouts } = getUiSurface().readMechStatsInputs();
+      const prepared = compact ? 2 : 0;
+      const scoutCount = parseInt(scouts) || 0;
       const smallFactor = efficient ? 1 : average2(
         Object.values(MechManager.SmallChassisMod).reduce(
           (list, mod) => list.concat(Object.values(mod)),
@@ -18242,7 +18321,7 @@
           mech,
           i < 2 ? smallFactor : largeFactor,
           gravity ? ["gravity"] : [],
-          scouts
+          scoutCount
         );
         const weaponMod = poly.weaponPower(mech, weaponFactor) * sizeWeapons;
         const power = basePower * statusMod * terrainMod * weaponMod;
@@ -18825,13 +18904,13 @@
 
   // src/ui/ui-refresh.ts
   function createUIRefresh({
-    getDocument,
+    getUiSurface,
     getActions,
     getPhases
   }) {
     function updateUI() {
-      const document = getDocument();
-      if (document.hidden) {
+      const uiSurface = getUiSurface();
+      if (!uiSurface.isPageVisible()) {
         return;
       }
       const {
@@ -18847,7 +18926,7 @@
         renderPreviousGameStats
       } = getPhases();
       let resetScrollPositionRequired = false;
-      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
+      const currentScrollPosition = uiSurface.readScrollTop();
       createOptionsModal();
       updateOptionsUI();
       updatePrestigeInTopBar();
@@ -18861,7 +18940,7 @@
       updateSoulGemRate();
       renderPreviousGameStats();
       if (resetScrollPositionRequired) {
-        document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
+        uiSurface.resetScrollTop(currentScrollPosition);
       }
       updateTotalDaysInTopBar();
     }
@@ -52418,7 +52497,7 @@
   // src/ui/tooltips.ts
   function createTooltipUI({
     getJQuery,
-    getDocument,
+    getUiSurface,
     getMutationObserver,
     getSettings,
     getState,
@@ -52624,9 +52703,8 @@
     }
     function tooltipObserverCallback(mutations) {
       const settings = getSettings();
-      const document = getDocument();
       const MutationObserver = getMutationObserver();
-      if (!settings.masterScriptToggle || document.hidden) {
+      if (!settings.masterScriptToggle || !getUiSurface().isPageVisible()) {
         return;
       }
       mutations.forEach(
@@ -52759,7 +52837,7 @@
   }
   function createCustomRaceUI({
     getJQuery,
-    getDocument,
+    getUiSurface,
     getSettingsRaw,
     getSettings,
     getState,
@@ -53343,13 +53421,11 @@
       return true;
     }
     function automateLab() {
-      const document = getDocument();
       const settings = getSettings();
       const state = getState();
       const game = getGame();
       const updateOverrides = getUpdateOverrides();
-      let createCustom = document.querySelector("#celestialLab .create button");
-      if (createCustom) {
+      if (getUiSurface().isLabCreateAvailable()) {
         updateOverrides();
         if (settings.masterScriptToggle && settings.autoPrestige && ["ascension", "terraform", "apotheosis"].includes(settings.prestigeType)) {
           let customMode = ["reuse", "pause", "import"].includes(
@@ -53374,7 +53450,7 @@
             return;
           }
           state.goal = "GameOverMan";
-          createCustom.click();
+          getUiSurface().clickLabCreate();
           return;
         }
       }
@@ -58574,6 +58650,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getModal: () => gameModal,
       getJQuery: () => $
     });
+    const gameUiSurface = createGameUiSurface({
+      getDocument: () => runtimeEnvironment.document
+    });
     publishTestSurface({
       gameModal,
       infrastructureManagers: { KeyManager, GameLog },
@@ -60324,7 +60403,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     const { getTooltipInfo, tooltipObserverCallback, addTooltip } = createTooltipUI({
       getJQuery: () => $,
-      getDocument: () => runtimeEnvironment.document,
+      getUiSurface: () => gameUiSurface,
       getMutationObserver: () => runtimeEnvironment.MutationObserver,
       getSettings: () => settings,
       getState: () => state,
@@ -60446,7 +60525,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       automateLab
     } = createCustomRaceUI({
       getJQuery: () => $,
-      getDocument: () => runtimeEnvironment.document,
+      getUiSurface: () => gameUiSurface,
       getSettingsRaw: () => settingsRaw,
       getSettings: () => settings,
       getState: () => state,
@@ -60809,7 +60888,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const { calculateMechStats } = createMechStats({
-      getDocument: () => runtimeEnvironment.document,
+      getUiSurface: () => gameUiSurface,
       getJQuery: () => $,
       getMechManager: () => MechManager,
       getPoly: () => poly,
@@ -61093,7 +61172,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getActions: () => uiRefreshTestActions ?? uiRefreshActions
     });
     const { updateUI } = createUIRefresh({
-      getDocument: () => runtimeEnvironment.document,
+      getUiSurface: () => gameUiSurface,
       getActions: () => uiRefreshTestActions ?? uiRefreshActions,
       getPhases: () => ({
         ensureAutomationContainer,

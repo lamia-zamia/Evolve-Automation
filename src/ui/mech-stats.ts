@@ -1,12 +1,12 @@
+import type { GameUiSurfacePort } from "../ports/game-ui-surface.ts";
+
 interface MechBlueprint {
   size: string;
   equip: string[];
 }
 
 interface MechStatsDependencies {
-  getDocument: () => {
-    getElementById(id: string): { checked: boolean; value: string };
-  };
+  getUiSurface: () => GameUiSurfacePort;
   getJQuery: () => (selector: string) => { html(content: string): void };
   getMechManager: () => {
     SmallChassisMod: Record<string, Record<string, number>>;
@@ -36,7 +36,7 @@ interface MechStatsDependencies {
 }
 
 export function createMechStats({
-  getDocument,
+  getUiSurface,
   getJQuery,
   getMechManager,
   getPoly,
@@ -49,21 +49,13 @@ export function createMechStats({
     const cellAdv = '<td><span class="has-text-advanced">';
     const cellEnd = "</span></td>";
     let content = "";
-    const document = getDocument();
     const MechManager = getMechManager();
     const poly = getPoly();
     const game = getGame();
-
-    const special = document.getElementById("script_mechStatsSpecial").checked;
-    const gravity = document.getElementById("script_mechStatsGravity").checked;
-    const efficient = document.getElementById(
-      "script_mechStatsEfficient",
-    ).checked;
-    const scouts =
-      parseInt(document.getElementById("script_mechStatsScouts").value) || 0;
-    const prepared = document.getElementById("script_mechStatsCompact").checked
-      ? 2
-      : 0;
+    const { special, gravity, efficient, compact, scouts } =
+      getUiSurface().readMechStatsInputs();
+    const prepared = compact ? 2 : 0;
+    const scoutCount = parseInt(scouts) || 0;
 
     const smallFactor = efficient
       ? 1
@@ -113,7 +105,7 @@ export function createMechStats({
         mech,
         i < 2 ? smallFactor : largeFactor,
         gravity ? ["gravity"] : [],
-        scouts,
+        scoutCount,
       );
       const weaponMod = poly.weaponPower(mech, weaponFactor) * sizeWeapons;
       const power = basePower * statusMod * terrainMod * weaponMod;

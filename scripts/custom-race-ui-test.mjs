@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createGameCustomRaceLab } from "../src/adapters/browser/game-custom-race-lab.ts";
+import { createGameUiSurface } from "../src/adapters/browser/game-ui-surface.ts";
 import { createCustomRaceUI } from "../src/ui/custom-race-ui.ts";
 
 const trace = [];
@@ -100,7 +101,7 @@ const document = {
 
 const ui = createCustomRaceUI({
   getJQuery: () => jquery,
-  getDocument: () => document,
+  getUiSurface: () => createGameUiSurface({ getDocument: () => document }),
   getSettingsRaw: () => settingsRaw,
   getSettings: () => settings,
   getState: () => state,

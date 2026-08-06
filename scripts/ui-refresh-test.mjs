@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { createGameUiSurface } from "../src/adapters/browser/game-ui-surface.ts";
 import { createUIRefresh } from "../src/ui/ui-refresh.ts";
 
 function makeContext({
@@ -40,7 +41,8 @@ function makeContext({
 
 let context = makeContext({ hidden: true });
 const { updateUI } = createUIRefresh({
-  getDocument: () => context.document,
+  getUiSurface: () =>
+    createGameUiSurface({ getDocument: () => context.document }),
   getActions: () => context.actions,
   getPhases: () => context.phases,
 });

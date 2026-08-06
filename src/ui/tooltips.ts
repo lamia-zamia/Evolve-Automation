@@ -1,4 +1,5 @@
 import type { CostConflict } from "../domain/cost-conflicts.ts";
+import type { GameUiSurfacePort } from "../ports/game-ui-surface.ts";
 
 /**
  * The DOM surface the tooltips use, as narrow structural types.
@@ -135,7 +136,7 @@ type TooltipCostConflict = CostConflict | { readonly status: "unavailable" };
 
 export interface TooltipUIDependencies {
   getJQuery: () => (node: TooltipElement) => TooltipNode;
-  getDocument: () => { readonly hidden: boolean };
+  getUiSurface: () => GameUiSurfacePort;
   getMutationObserver: () => TooltipObserverConstructor;
   getSettings: () => {
     readonly autoARPA: boolean;
@@ -178,7 +179,7 @@ export interface TooltipUIDependencies {
 
 export function createTooltipUI({
   getJQuery,
-  getDocument,
+  getUiSurface,
   getMutationObserver,
   getSettings,
   getState,
@@ -432,9 +433,8 @@ export function createTooltipUI({
 
   function tooltipObserverCallback(mutations: readonly TooltipMutation[]) {
     const settings = getSettings();
-    const document = getDocument();
     const MutationObserver = getMutationObserver();
-    if (!settings.masterScriptToggle || document.hidden) {
+    if (!settings.masterScriptToggle || !getUiSurface().isPageVisible()) {
       return;
     }
     mutations.forEach((mutation) =>

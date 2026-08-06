@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { createGameUiSurface } from "../src/adapters/browser/game-ui-surface.ts";
 import { createTooltipUI } from "../src/ui/tooltips.ts";
 
 const appended = [];
@@ -64,7 +65,8 @@ const context = {
 
 const tooltips = createTooltipUI({
   getJQuery: () => context.$,
-  getDocument: () => context.document,
+  getUiSurface: () =>
+    createGameUiSurface({ getDocument: () => context.document }),
   getMutationObserver: () => context.MutationObserver,
   getSettings: () => settings,
   getState: () => context.state,
