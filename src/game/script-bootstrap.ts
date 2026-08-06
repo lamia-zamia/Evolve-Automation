@@ -1,3 +1,4 @@
+import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
 
 type AnyFunction = (...args: any[]) => any;
@@ -25,6 +26,7 @@ type ScriptBootstrapDependencies = {
   getWindow: () => AnyRecord;
   getUserscriptEnvironment: () => AnyRecord;
   getWin: () => AnyRecord;
+  getGameKeyboardHandlers: () => GameKeyboardHandlersPort;
   getNeedSandboxBypass: () => boolean;
   getPoly: () => AnyRecord;
   getSettings: () => AnyRecord;
@@ -57,6 +59,7 @@ export function createScriptBootstrap({
   getWindow,
   getUserscriptEnvironment,
   getWin,
+  getGameKeyboardHandlers,
   getNeedSandboxBypass,
   getPoly,
   getSettings,
@@ -243,9 +246,10 @@ export function createScriptBootstrap({
       win = userscriptEnvironment.pageWindow;
     } else {
       win = window;
-      // Chrome overrides original JQuery with one required by script, we need to restore it to get $._data with events handlers
-      // I'd get rid of this JQuery copy altogether, that's a right way to do it. No duplicate - no conflicts... But that breaks that damn FF.
-      if (!win.$._data(win.document).events?.["keydown"]) {
+      // Commit the resolved window so the keyboard-handler port reads the page's
+      // jQuery rather than the sandbox's original copy.
+      commitContext();
+      if (!getGameKeyboardHandlers().hasKeydownBinding()) {
         $.noConflict();
       }
     }

@@ -72,6 +72,7 @@ import { createGameGarrisonControls } from "../browser/game-garrison-controls.ts
 import { createGameMechControls } from "../browser/game-mech-controls.ts";
 import { createGameMechListControls } from "../browser/game-mech-list-controls.ts";
 import { createGameJobControls } from "../browser/game-job-controls.ts";
+import { createGameKeyboardHandlers } from "../browser/game-keyboard-handlers.ts";
 import { createGameMarketControls } from "../browser/game-market-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
@@ -3462,15 +3463,18 @@ function startEvolveRuntimeComposition(
     }));
 
   let KeyManager, GameLog;
-  ({ KeyManager, GameLog } = createInfrastructureManagers({
+  const gameKeyboardHandlers = createGameKeyboardHandlers({
+    getWin: () => win,
     getDocument: () => runtimeEnvironment.document,
+    getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
+    getNeedSandboxBypass: () => needSandboxBypass,
+    cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value),
+  });
+  ({ KeyManager, GameLog } = createInfrastructureManagers({
     getGame: () => game,
     getSettings: () => settings,
     getPoly: () => poly,
-    getWin: () => win,
-    getNeedSandboxBypass: () => needSandboxBypass,
-    getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
-    cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value),
+    getKeyboardHandlers: () => gameKeyboardHandlers,
   }));
 
   publishTestSurface({
@@ -5381,6 +5385,7 @@ function startEvolveRuntimeComposition(
     getWindow: () => runtimeEnvironment.window,
     getUserscriptEnvironment: () => userscriptEnvironment,
     getWin: () => win,
+    getGameKeyboardHandlers: () => gameKeyboardHandlers,
     getNeedSandboxBypass: () => needSandboxBypass,
     getPoly: () => poly,
     getSettings: () => settings,

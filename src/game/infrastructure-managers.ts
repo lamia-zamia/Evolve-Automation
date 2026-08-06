@@ -1,42 +1,28 @@
+import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
+
 type AnyRecord = Record<string, any>;
 
 type InfrastructureManagerDependencies = {
-  getDocument: () => AnyRecord;
   getGame: () => AnyRecord;
   getSettings: () => AnyRecord;
   getPoly: () => AnyRecord;
-  getWin: () => AnyRecord;
-  getNeedSandboxBypass: () => boolean;
-  getKeyboardEvent: () => new (type: string, init: AnyRecord) => unknown;
-  cloneIntoPage: (value: unknown) => any;
+  getKeyboardHandlers: () => GameKeyboardHandlersPort;
 };
 
 export function createInfrastructureManagers({
-  getDocument,
   getGame,
   getSettings,
   getPoly,
-  getWin,
-  getNeedSandboxBypass,
-  getKeyboardEvent,
-  cloneIntoPage,
+  getKeyboardHandlers,
 }: InfrastructureManagerDependencies) {
-  let document: AnyRecord;
   let game: AnyRecord;
   let settings: AnyRecord;
   let poly: AnyRecord;
-  let win: AnyRecord;
-  let needSandboxBypass: boolean;
-  let KeyboardEvent: new (type: string, init: AnyRecord) => unknown;
 
   function refreshContext() {
-    document = getDocument();
     game = getGame();
     settings = getSettings();
     poly = getPoly();
-    win = getWin();
-    needSandboxBypass = getNeedSandboxBypass();
-    KeyboardEvent = getKeyboardEvent();
   }
 
   const KeyManager: AnyRecord = {
@@ -53,28 +39,10 @@ export function createInfrastructureManagers({
     _mode: "none",
 
     init() {
-      let events = win.$._data(win.document).events;
-      let set = events?.keydown?.[0]?.handler ?? null;
-      let unset = events?.keyup?.[0]?.handler ?? null;
-      let all = events?.mousemove?.[0]?.handler ?? null;
-
-      if (!all && (!set || !unset)) {
-        // Fallback, if there's no handlers in JQuery data
-        this._setFn = (e: any) =>
-          document.dispatchEvent(new KeyboardEvent("keydown", e));
-        this._unsetFn = (e: any) =>
-          document.dispatchEvent(new KeyboardEvent("keyup", e));
-        this._allFn = null;
-      } else if (needSandboxBypass) {
-        // FF fix
-        this._setFn = (e: any) => set(cloneIntoPage(e));
-        this._unsetFn = (e: any) => unset(cloneIntoPage(e));
-        this._allFn = (e: any) => all(cloneIntoPage(e));
-      } else {
-        this._setFn = set;
-        this._unsetFn = unset;
-        this._allFn = all;
-      }
+      const handlers = getKeyboardHandlers().readGameKeyboardHandlers();
+      this._setFn = handlers.keyDown;
+      this._unsetFn = handlers.keyUp;
+      this._allFn = handlers.moveAll;
     },
 
     reset() {

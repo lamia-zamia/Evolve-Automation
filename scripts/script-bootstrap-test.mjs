@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameKeyboardHandlers } from "../src/adapters/browser/game-keyboard-handlers.ts";
 import { createScriptBootstrap } from "../src/game/script-bootstrap.ts";
 
 const trace = [];
@@ -27,6 +28,12 @@ const jquery = () => ({});
 jquery.ui = {};
 jquery._data = () => ({ events: { keydown: [{}] } });
 jquery.noConflict = () => trace.push(["no-conflict"]);
+class KeyboardEventStub {
+  constructor(type, init) {
+    this.type = type;
+    Object.assign(this, init);
+  }
+}
 
 const context = {
   game: null,
@@ -117,6 +124,13 @@ const actions = {
   triggerFileDownload() {},
   displayScriptWarningNode() {},
 };
+const gameKeyboardHandlers = createGameKeyboardHandlers({
+  getWin: () => context.win,
+  getDocument: () => context.document,
+  getKeyboardEvent: () => KeyboardEventStub,
+  getNeedSandboxBypass: () => context.needSandboxBypass,
+  cloneIntoPage: (value) => value,
+});
 const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
   getGame: () => context.game,
   getTechIds: () => context.techIds,
@@ -139,6 +153,7 @@ const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
   getWindow: () => context.window,
   getUserscriptEnvironment: () => context.userscriptEnvironment,
   getWin: () => context.win,
+  getGameKeyboardHandlers: () => gameKeyboardHandlers,
   getNeedSandboxBypass: () => context.needSandboxBypass,
   getPoly: () => context.poly,
   getSettings: () => context.settings,

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createGameKeyboardHandlers } from "../src/adapters/browser/game-keyboard-handlers.ts";
 import { createInfrastructureManagers } from "../src/game/infrastructure-managers.ts";
 
 let game;
@@ -17,18 +18,22 @@ class KeyboardEventStub {
   }
 }
 
-const { KeyManager, GameLog } = createInfrastructureManagers({
-  getDocument: () => documentStub,
-  getGame: () => game,
-  getSettings: () => settings,
-  getPoly: () => poly,
+const gameKeyboardHandlers = createGameKeyboardHandlers({
   getWin: () => win,
-  getNeedSandboxBypass: () => needSandboxBypass,
+  getDocument: () => documentStub,
   getKeyboardEvent: () => KeyboardEventStub,
+  getNeedSandboxBypass: () => needSandboxBypass,
   cloneIntoPage: (value) => {
     trace.push(["clone", value.key ?? "all"]);
     return value;
   },
+});
+
+const { KeyManager, GameLog } = createInfrastructureManagers({
+  getGame: () => game,
+  getSettings: () => settings,
+  getPoly: () => poly,
+  getKeyboardHandlers: () => gameKeyboardHandlers,
 });
 
 game = {

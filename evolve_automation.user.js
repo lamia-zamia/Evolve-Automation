@@ -3189,6 +3189,84 @@
     });
   }
 
+  // src/adapters/browser/game-keyboard-handlers.ts
+  function readEventBinding(events, type) {
+    const bindings = readProperty(events, type);
+    if (!Array.isArray(bindings)) {
+      return null;
+    }
+    const handler = isRecord(bindings[0]) ? readProperty(bindings[0], "handler") : void 0;
+    if (typeof handler !== "function") {
+      return null;
+    }
+    return (event) => Reflect.apply(handler, null, [event]);
+  }
+  function createGameKeyboardHandlers(dependencies) {
+    const {
+      getWin,
+      getDocument,
+      getKeyboardEvent,
+      getNeedSandboxBypass,
+      cloneIntoPage
+    } = dependencies;
+    function readJQueryEventCache() {
+      const win = requireRecord(getWin(), "window");
+      const jquery = readProperty(win, "$");
+      if (typeof readProperty(jquery, "_data") !== "function") {
+        return void 0;
+      }
+      const cache = Reflect.apply(
+        readProperty(jquery, "_data"),
+        jquery,
+        [getDocument()]
+      );
+      return readProperty(cache, "events");
+    }
+    function synthesizeKeyEvent(type) {
+      return (event) => {
+        const documentValue = requireRecord(getDocument(), "document");
+        const dispatch = readProperty(documentValue, "dispatchEvent");
+        if (typeof dispatch !== "function") {
+          return;
+        }
+        const KeyboardEventConstructor = getKeyboardEvent();
+        if (typeof KeyboardEventConstructor !== "function") {
+          return;
+        }
+        const keyboardEvent = new KeyboardEventConstructor(type, event);
+        Reflect.apply(dispatch, documentValue, [keyboardEvent]);
+      };
+    }
+    return Object.freeze({
+      hasKeydownBinding() {
+        const bindings = readProperty(readJQueryEventCache(), "keydown");
+        return Array.isArray(bindings) && bindings.length > 0;
+      },
+      readGameKeyboardHandlers() {
+        const events = readJQueryEventCache();
+        const keyDown = readEventBinding(events, "keydown");
+        const keyUp = readEventBinding(events, "keyup");
+        const moveAll = readEventBinding(events, "mousemove");
+        if (!moveAll && (!keyDown || !keyUp)) {
+          return {
+            keyDown: synthesizeKeyEvent("keydown"),
+            keyUp: synthesizeKeyEvent("keyup"),
+            moveAll: null
+          };
+        }
+        if (!getNeedSandboxBypass()) {
+          return { keyDown, keyUp, moveAll };
+        }
+        const throughPage = (handler) => handler === null ? null : (event) => handler(cloneIntoPage(event));
+        return {
+          keyDown: throughPage(keyDown),
+          keyUp: throughPage(keyUp),
+          moveAll: throughPage(moveAll)
+        };
+      }
+    });
+  }
+
   // src/adapters/browser/game-market-controls.ts
   var QUANTITY_PANEL = "market-qty";
   var MINIMUM_MULTIPLIER = 1;
@@ -6665,30 +6743,18 @@
 
   // src/game/infrastructure-managers.ts
   function createInfrastructureManagers({
-    getDocument,
     getGame,
     getSettings,
     getPoly,
-    getWin,
-    getNeedSandboxBypass,
-    getKeyboardEvent,
-    cloneIntoPage
+    getKeyboardHandlers
   }) {
-    let document;
     let game;
     let settings;
     let poly;
-    let win;
-    let needSandboxBypass;
-    let KeyboardEvent;
     function refreshContext() {
-      document = getDocument();
       game = getGame();
       settings = getSettings();
       poly = getPoly();
-      win = getWin();
-      needSandboxBypass = getNeedSandboxBypass();
-      KeyboardEvent = getKeyboardEvent();
     }
     const KeyManager = {
       _setFn: null,
@@ -6703,23 +6769,10 @@
       _state: { x100: void 0, x25: void 0, x10: void 0 },
       _mode: "none",
       init() {
-        let events = win.$._data(win.document).events;
-        let set = events?.keydown?.[0]?.handler ?? null;
-        let unset = events?.keyup?.[0]?.handler ?? null;
-        let all = events?.mousemove?.[0]?.handler ?? null;
-        if (!all && (!set || !unset)) {
-          this._setFn = (e) => document.dispatchEvent(new KeyboardEvent("keydown", e));
-          this._unsetFn = (e) => document.dispatchEvent(new KeyboardEvent("keyup", e));
-          this._allFn = null;
-        } else if (needSandboxBypass) {
-          this._setFn = (e) => set(cloneIntoPage(e));
-          this._unsetFn = (e) => unset(cloneIntoPage(e));
-          this._allFn = (e) => all(cloneIntoPage(e));
-        } else {
-          this._setFn = set;
-          this._unsetFn = unset;
-          this._allFn = all;
-        }
+        const handlers = getKeyboardHandlers().readGameKeyboardHandlers();
+        this._setFn = handlers.keyDown;
+        this._unsetFn = handlers.keyUp;
+        this._allFn = handlers.moveAll;
       },
       reset() {
         this._state.x100 = void 0;
@@ -6900,6 +6953,7 @@
     getWindow,
     getUserscriptEnvironment,
     getWin,
+    getGameKeyboardHandlers,
     getNeedSandboxBypass,
     getPoly,
     getSettings,
@@ -7054,7 +7108,8 @@
         win = userscriptEnvironment.pageWindow;
       } else {
         win = window;
-        if (!win.$._data(win.document).events?.["keydown"]) {
+        commitContext();
+        if (!getGameKeyboardHandlers().hasKeydownBinding()) {
           $.noConflict();
         }
       }
@@ -58432,15 +58487,18 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       diagnostics
     }));
     let KeyManager, GameLog;
-    ({ KeyManager, GameLog } = createInfrastructureManagers({
+    const gameKeyboardHandlers = createGameKeyboardHandlers({
+      getWin: () => win,
       getDocument: () => runtimeEnvironment.document,
+      getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
+      getNeedSandboxBypass: () => needSandboxBypass,
+      cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value)
+    });
+    ({ KeyManager, GameLog } = createInfrastructureManagers({
       getGame: () => game,
       getSettings: () => settings,
       getPoly: () => poly,
-      getWin: () => win,
-      getNeedSandboxBypass: () => needSandboxBypass,
-      getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
-      cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value)
+      getKeyboardHandlers: () => gameKeyboardHandlers
     }));
     publishTestSurface({
       gameModal,
@@ -60137,6 +60195,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getWindow: () => runtimeEnvironment.window,
       getUserscriptEnvironment: () => userscriptEnvironment,
       getWin: () => win,
+      getGameKeyboardHandlers: () => gameKeyboardHandlers,
       getNeedSandboxBypass: () => needSandboxBypass,
       getPoly: () => poly,
       getSettings: () => settings,
