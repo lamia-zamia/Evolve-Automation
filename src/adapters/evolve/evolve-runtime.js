@@ -75,6 +75,7 @@ import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameKeyboardHandlers } from "../browser/game-keyboard-handlers.ts";
 import { createGameMarketControls } from "../browser/game-market-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
+import { createGamePageShell } from "../browser/game-page-shell.ts";
 import { createGameProjectControls } from "../browser/game-project-controls.ts";
 import { createGameStorageControls } from "../browser/game-storage-controls.ts";
 import { createGameResearchControls } from "../browser/game-research-controls.ts";
@@ -3477,6 +3478,16 @@ function startEvolveRuntimeComposition(
     getKeyboardHandlers: () => gameKeyboardHandlers,
   }));
 
+  const gamePageShell = createGamePageShell({
+    getDocument: () => runtimeEnvironment.document,
+    getMutationObserver: () => runtimeEnvironment.MutationObserver,
+    getNode: () => runtimeEnvironment.Node,
+    getTooltipObserver: () => tooltipObserverCallback,
+    getLogFilter: () => filterLog,
+    getModal: () => gameModal,
+    getJQuery: () => $,
+  });
+
   publishTestSurface({
     gameModal,
     infrastructureManagers: { KeyManager, GameLog },
@@ -5377,15 +5388,13 @@ function startEvolveRuntimeComposition(
     getCrafter: () => crafter,
     getTriggerManager: () => TriggerManager,
     getCheckActions: () => checkActions,
-    getMutationObserver: () => runtimeEnvironment.MutationObserver,
-    getDocument: () => runtimeEnvironment.document,
-    getNode: () => runtimeEnvironment.Node,
     getGameModal: () => gameModal,
     getJQuery: () => $,
     getWindow: () => runtimeEnvironment.window,
     getUserscriptEnvironment: () => userscriptEnvironment,
     getWin: () => win,
     getGameKeyboardHandlers: () => gameKeyboardHandlers,
+    getPageShell: () => gamePageShell,
     getNeedSandboxBypass: () => needSandboxBypass,
     getPoly: () => poly,
     getSettings: () => settings,

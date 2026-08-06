@@ -3419,6 +3419,105 @@
     });
   }
 
+  // src/adapters/browser/game-page-shell.ts
+  function createGamePageShell({
+    getDocument,
+    getMutationObserver,
+    getNode,
+    getTooltipObserver,
+    getLogFilter,
+    getModal,
+    getJQuery
+  }) {
+    function byId(id) {
+      const documentValue = requireRecord(getDocument(), "document");
+      const getElementById = readProperty(documentValue, "getElementById");
+      return typeof getElementById === "function" ? Reflect.apply(getElementById, documentValue, [id]) : null;
+    }
+    function bySelector(selector) {
+      const documentValue = requireRecord(getDocument(), "document");
+      const querySelector = readProperty(documentValue, "querySelector");
+      return typeof querySelector === "function" ? Reflect.apply(querySelector, documentValue, [selector]) : null;
+    }
+    function observeNode(target, callback) {
+      if (!isRecord(target)) {
+        return;
+      }
+      const Observer = getMutationObserver();
+      if (typeof Observer !== "function") {
+        return;
+      }
+      const observer = new Observer(callback);
+      const observe = readProperty(observer, "observe");
+      if (typeof observe === "function") {
+        Reflect.apply(observe, observer, [target, { childList: true }]);
+      }
+    }
+    function isModalElement(node) {
+      if (readProperty(node, "nodeType") !== readProperty(getNode(), "ELEMENT_NODE")) {
+        return false;
+      }
+      const classList = readProperty(node, "classList");
+      const contains = isRecord(classList) ? readProperty(classList, "contains") : void 0;
+      return typeof contains === "function" && Boolean(Reflect.apply(contains, classList, ["modal"]));
+    }
+    return Object.freeze({
+      mountObservers() {
+        observeNode(byId("main"), getTooltipObserver());
+        observeNode(bySelector("body"), (bodyMutations) => {
+          if (!Array.isArray(bodyMutations)) {
+            return;
+          }
+          for (const bodyMutation of bodyMutations) {
+            const addedNodes = readProperty(bodyMutation, "addedNodes");
+            if (!Array.isArray(addedNodes)) {
+              continue;
+            }
+            for (const node of addedNodes) {
+              if (!isModalElement(node)) {
+                continue;
+              }
+              const modal = getModal();
+              if (modal.isAwaitingScriptModal()) {
+                modal.captureScriptModal(node);
+              } else {
+                observeNode(node, getTooltipObserver());
+              }
+            }
+          }
+        });
+        observeNode(byId("msgQueueLog"), getLogFilter());
+      },
+      isPageReady() {
+        return byId("queueColumn") !== null;
+      },
+      needsJQueryUi() {
+        const jquery = getJQuery();
+        return !readProperty(jquery, "ui");
+      },
+      loadJQueryUi(handlers) {
+        const { onLoaded, onFailed } = handlers;
+        const documentValue = requireRecord(getDocument(), "document");
+        const createElement = readProperty(documentValue, "createElement");
+        const body = readProperty(documentValue, "body");
+        const appendChild = isRecord(body) ? readProperty(body, "appendChild") : void 0;
+        if (typeof createElement !== "function" || typeof appendChild !== "function") {
+          onFailed();
+          return;
+        }
+        const script = Reflect.apply(createElement, documentValue, ["script"]);
+        if (!isRecord(script)) {
+          onFailed();
+          return;
+        }
+        script["src"] = "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js";
+        script["onload"] = onLoaded;
+        script["onerror"] = onFailed;
+        Reflect.apply(appendChild, body, [script]);
+      }
+    });
+  }
+
   // src/adapters/browser/game-project-controls.ts
   function createGameProjectControls({
     getVueById,
@@ -6945,15 +7044,13 @@
     getCrafter,
     getTriggerManager,
     getCheckActions,
-    getMutationObserver,
-    getDocument,
-    getNode,
     getGameModal,
     getJQuery,
     getWindow,
     getUserscriptEnvironment,
     getWin,
     getGameKeyboardHandlers,
+    getPageShell,
     getNeedSandboxBypass,
     getPoly,
     getSettings,
@@ -6976,9 +7073,6 @@
     let crafter;
     let TriggerManager;
     let checkActions;
-    let MutationObserver;
-    let document;
-    let Node;
     let gameModal;
     let $;
     let window;
@@ -7003,9 +7097,6 @@
       crafter = getCrafter();
       TriggerManager = getTriggerManager();
       checkActions = getCheckActions();
-      MutationObserver = getMutationObserver();
-      document = getDocument();
-      Node = getNode();
       gameModal = getGameModal();
       $ = getJQuery();
       window = getWindow();
@@ -7070,37 +7161,12 @@
       if (checkActions) {
         actions.verifyGameActions();
       }
-      new MutationObserver(actions.tooltipObserverCallback).observe(
-        document.getElementById("main"),
-        { childList: true }
-      );
-      new MutationObserver(
-        (bodyMutations) => bodyMutations.forEach(
-          (bodyMutation) => bodyMutation.addedNodes.forEach((node) => {
-            if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("modal")) {
-              if (gameModal.isAwaitingScriptModal()) {
-                gameModal.captureScriptModal(node);
-              } else {
-                new MutationObserver(actions.tooltipObserverCallback).observe(
-                  node,
-                  {
-                    childList: true
-                  }
-                );
-              }
-            }
-          })
-        )
-      ).observe(document.querySelector("body"), { childList: true });
       actions.buildFilterRegExp();
-      new MutationObserver(actions.filterLog).observe(
-        document.getElementById("msgQueueLog"),
-        { childList: true }
-      );
+      getPageShell().mountObservers();
     }
     function mainAutoEvolveScriptImpl() {
       const actions = getScriptBootstrapActions();
-      if (document.getElementById("queueColumn") === null) {
+      if (!getPageShell().isPageReady()) {
         actions.schedule(mainAutoEvolveScript, 100);
         return;
       }
@@ -7139,14 +7205,13 @@
         actions.schedule(mainAutoEvolveScript, 100);
         return;
       }
-      if (!$.ui) {
-        let el = document.createElement("script");
-        el.src = "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js";
-        el.onload = mainAutoEvolveScript;
-        el.onerror = () => actions.alert(
-          "Can't load jQuery UI. Check browser console for details."
-        );
-        document.body.appendChild(el);
+      if (getPageShell().needsJQueryUi()) {
+        getPageShell().loadJQueryUi({
+          onLoaded: mainAutoEvolveScript,
+          onFailed: () => actions.alert(
+            "Can't load jQuery UI. Check browser console for details."
+          )
+        });
         return;
       }
       needSandboxBypass = userscriptEnvironment.capabilities.needsSandboxBridge;
@@ -58500,6 +58565,15 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getPoly: () => poly,
       getKeyboardHandlers: () => gameKeyboardHandlers
     }));
+    const gamePageShell = createGamePageShell({
+      getDocument: () => runtimeEnvironment.document,
+      getMutationObserver: () => runtimeEnvironment.MutationObserver,
+      getNode: () => runtimeEnvironment.Node,
+      getTooltipObserver: () => tooltipObserverCallback,
+      getLogFilter: () => filterLog,
+      getModal: () => gameModal,
+      getJQuery: () => $
+    });
     publishTestSurface({
       gameModal,
       infrastructureManagers: { KeyManager, GameLog },
@@ -60187,15 +60261,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getCrafter: () => crafter,
       getTriggerManager: () => TriggerManager,
       getCheckActions: () => checkActions,
-      getMutationObserver: () => runtimeEnvironment.MutationObserver,
-      getDocument: () => runtimeEnvironment.document,
-      getNode: () => runtimeEnvironment.Node,
       getGameModal: () => gameModal,
       getJQuery: () => $,
       getWindow: () => runtimeEnvironment.window,
       getUserscriptEnvironment: () => userscriptEnvironment,
       getWin: () => win,
       getGameKeyboardHandlers: () => gameKeyboardHandlers,
+      getPageShell: () => gamePageShell,
       getNeedSandboxBypass: () => needSandboxBypass,
       getPoly: () => poly,
       getSettings: () => settings,

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createGameKeyboardHandlers } from "../src/adapters/browser/game-keyboard-handlers.ts";
+import { createGamePageShell } from "../src/adapters/browser/game-page-shell.ts";
 import { createScriptBootstrap } from "../src/game/script-bootstrap.ts";
 
 const trace = [];
@@ -131,6 +132,15 @@ const gameKeyboardHandlers = createGameKeyboardHandlers({
   getNeedSandboxBypass: () => context.needSandboxBypass,
   cloneIntoPage: (value) => value,
 });
+const gamePageShell = createGamePageShell({
+  getDocument: () => context.document,
+  getMutationObserver: () => context.MutationObserver,
+  getNode: () => context.Node,
+  getTooltipObserver: () => tooltip,
+  getLogFilter: () => filterLog,
+  getModal: () => context.gameModal,
+  getJQuery: () => context.$,
+});
 const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
   getGame: () => context.game,
   getTechIds: () => context.techIds,
@@ -145,15 +155,13 @@ const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
   getCrafter: () => context.crafter,
   getTriggerManager: () => context.TriggerManager,
   getCheckActions: () => context.checkActions,
-  getMutationObserver: () => context.MutationObserver,
-  getDocument: () => context.document,
-  getNode: () => context.Node,
   getGameModal: () => context.gameModal,
   getJQuery: () => context.$,
   getWindow: () => context.window,
   getUserscriptEnvironment: () => context.userscriptEnvironment,
   getWin: () => context.win,
   getGameKeyboardHandlers: () => gameKeyboardHandlers,
+  getPageShell: () => gamePageShell,
   getNeedSandboxBypass: () => context.needSandboxBypass,
   getPoly: () => context.poly,
   getSettings: () => context.settings,

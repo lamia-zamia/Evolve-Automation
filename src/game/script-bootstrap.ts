@@ -1,5 +1,6 @@
 import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
+import type { GamePageShellPort } from "../ports/game-page-shell.ts";
 
 type AnyFunction = (...args: any[]) => any;
 type AnyRecord = Record<string, any>;
@@ -18,15 +19,13 @@ type ScriptBootstrapDependencies = {
   getCrafter: () => AnyRecord;
   getTriggerManager: () => AnyRecord;
   getCheckActions: () => boolean;
-  getMutationObserver: () => any;
-  getDocument: () => AnyRecord;
-  getNode: () => AnyRecord;
   getGameModal: () => GameModalPort;
   getJQuery: () => AnyFunction & AnyRecord;
   getWindow: () => AnyRecord;
   getUserscriptEnvironment: () => AnyRecord;
   getWin: () => AnyRecord;
   getGameKeyboardHandlers: () => GameKeyboardHandlersPort;
+  getPageShell: () => GamePageShellPort;
   getNeedSandboxBypass: () => boolean;
   getPoly: () => AnyRecord;
   getSettings: () => AnyRecord;
@@ -51,15 +50,13 @@ export function createScriptBootstrap({
   getCrafter,
   getTriggerManager,
   getCheckActions,
-  getMutationObserver,
-  getDocument,
-  getNode,
   getGameModal,
   getJQuery,
   getWindow,
   getUserscriptEnvironment,
   getWin,
   getGameKeyboardHandlers,
+  getPageShell,
   getNeedSandboxBypass,
   getPoly,
   getSettings,
@@ -82,9 +79,6 @@ export function createScriptBootstrap({
   let crafter: AnyRecord;
   let TriggerManager: AnyRecord;
   let checkActions: boolean;
-  let MutationObserver: any;
-  let document: AnyRecord;
-  let Node: AnyRecord;
   let gameModal: GameModalPort;
   let $: AnyFunction & AnyRecord;
   let window: AnyRecord;
@@ -111,9 +105,6 @@ export function createScriptBootstrap({
     crafter = getCrafter();
     TriggerManager = getTriggerManager();
     checkActions = getCheckActions();
-    MutationObserver = getMutationObserver();
-    document = getDocument();
-    Node = getNode();
     gameModal = getGameModal();
     $ = getJQuery();
     window = getWindow();
@@ -195,48 +186,22 @@ export function createScriptBootstrap({
       actions.verifyGameActions();
     }
 
-    // Normal popups
-    new MutationObserver(actions.tooltipObserverCallback).observe(
-      document.getElementById("main"),
-      { childList: true },
-    );
-
-    // Modals; check script callbacks and add Space Dock tooltips
-    new MutationObserver((bodyMutations: any) =>
-      bodyMutations.forEach((bodyMutation: any) =>
-        bodyMutation.addedNodes.forEach((node: any) => {
-          if (
-            node.nodeType === Node.ELEMENT_NODE &&
-            node.classList.contains("modal")
-          ) {
-            if (gameModal.isAwaitingScriptModal()) {
-              gameModal.captureScriptModal(node);
-            } else {
-              new MutationObserver(actions.tooltipObserverCallback).observe(
-                node,
-                {
-                  childList: true,
-                },
-              );
-            }
-          }
-        }),
-      ),
-    ).observe(document.querySelector("body"), { childList: true });
-
-    // Log filtering
+    // Log filtering regex
     actions.buildFilterRegExp();
-    new MutationObserver(actions.filterLog).observe(
-      document.getElementById("msgQueueLog"),
-      { childList: true },
-    );
+
+    // Normal popups, modals, and log filtering. The page shell owns the
+    // observer mounts: on main content (tooltips), on the body (modals
+    // puncturing through the modal port, or tooltips on any other modal), and
+    // on the message queue (log filtering).
+    getPageShell().mountObservers();
   }
 
   function mainAutoEvolveScriptImpl() {
     const actions = getScriptBootstrapActions();
-    // This is a hack to check that the entire page has actually loaded. The queueColumn is one of the last bits of the DOM
-    // so if it is there then we are good to go. Otherwise, wait a little longer for the page to load.
-    if (document.getElementById("queueColumn") === null) {
+    // This is a hack to check that the entire page has actually loaded. The
+    // queueColumn is one of the last bits of the DOM, so the page shell treats
+    // its arrival as the readiness marker. Otherwise, wait a little longer.
+    if (!getPageShell().isPageReady()) {
       actions.schedule(mainAutoEvolveScript, 100);
       return;
     }
@@ -287,15 +252,14 @@ export function createScriptBootstrap({
     }
 
     // Make sure we have jQuery UI even if script was injected without *monkey
-    if (!$.ui) {
-      let el = document.createElement("script");
-      el.src = "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js";
-      el.onload = mainAutoEvolveScript;
-      el.onerror = () =>
-        actions.alert(
-          "Can't load jQuery UI. Check browser console for details.",
-        );
-      document.body.appendChild(el);
+    if (getPageShell().needsJQueryUi()) {
+      getPageShell().loadJQueryUi({
+        onLoaded: mainAutoEvolveScript,
+        onFailed: () =>
+          actions.alert(
+            "Can't load jQuery UI. Check browser console for details.",
+          ),
+      });
       return;
     }
 
