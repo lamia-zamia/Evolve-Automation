@@ -38,7 +38,7 @@ const target = {
   gov: { spy: 2, anx: false, buy: false, occ: false },
 };
 const SpyManager = {
-  _foreignVue: {},
+  isForeignUnlocked: true,
   foreignTarget: target,
   foreignActive: [],
 };

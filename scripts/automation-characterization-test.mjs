@@ -541,10 +541,7 @@ const foreign = {
   gov: { spy: 0, sab: 0, occ: false, anx: false, buy: false },
 };
 const testSpyManager = {
-  _foreignVue: {
-    spy_disabled: () => false,
-    spy: (id) => wave3Actions.push(["trainSpy", id]),
-  },
+  isForeignUnlocked: true,
   foreignActive: [foreign],
   foreignTarget: foreign,
   purchaseMoney: 0,
@@ -566,6 +563,11 @@ hooks.setWave3TestContext({
   haveTask: () => false,
   haveTech: (id, level) => id === "spy" && (level ?? 1) <= 2,
   isBioseederPrestigeAvailable: () => true,
+  foreignView: {
+    vis: () => true,
+    spy_disabled: () => false,
+    spy: (id) => wave3Actions.push(["trainSpy", id]),
+  },
 });
 Object.assign(hooks.automationSettings, {
   foreignTrainSpy: true,

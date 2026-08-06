@@ -115,7 +115,7 @@ function createFixture(scenario = {}) {
     },
   };
   const spyManager = {
-    _foreignVue: scenario.foreignView === false ? undefined : {},
+    isForeignUnlocked: scenario.foreignView === false ? false : true,
     foreignTarget: target,
     foreignActive: foreigns,
   };

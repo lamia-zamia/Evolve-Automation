@@ -45,10 +45,7 @@ const foreign = {
   },
 };
 const SpyManager = {
-  _foreignVue: {
-    spy_disabled: () => false,
-    spy: (governmentId) => actions.push(["train", governmentId]),
-  },
+  isForeignUnlocked: true,
   foreignActive: [foreign],
   foreignTarget: foreign,
   purchaseMoney: 0,
@@ -70,6 +67,11 @@ hooks.setWave3TestContext({
   haveTask: () => false,
   haveTech: (technology, level = 1) => technology === "spy" && level <= 2,
   isBioseederPrestigeAvailable: () => false,
+  foreignView: {
+    vis: () => true,
+    spy_disabled: () => false,
+    spy: (governmentId) => actions.push(["train", governmentId]),
+  },
 });
 hooks.setAutomationTestContext({
   game: {

@@ -2645,6 +2645,43 @@
     });
   }
 
+  // src/adapters/browser/game-foreign-controls.ts
+  var FOREIGN_PANEL = "foreign";
+  function createGameForeignControls({
+    getVueById
+  }) {
+    return Object.freeze({
+      isUnlocked() {
+        const view = getVueById(FOREIGN_PANEL);
+        if (!isRecord(view) || typeof view.vis !== "function") {
+          return false;
+        }
+        const vis = requireFunction(view.vis, `${FOREIGN_PANEL} Vue view.vis`);
+        return Reflect.apply(vis, view, []) === true;
+      },
+      isSpyDisabled(governmentId) {
+        const view = getVueById(FOREIGN_PANEL);
+        if (!isRecord(view) || typeof view.spy_disabled !== "function") {
+          return false;
+        }
+        const spyDisabled = requireFunction(
+          view.spy_disabled,
+          `${FOREIGN_PANEL} Vue view.spy_disabled`
+        );
+        return Reflect.apply(spyDisabled, view, [governmentId]) === true;
+      },
+      trainSpy(governmentId) {
+        const view = getVueById(FOREIGN_PANEL);
+        if (!isRecord(view) || typeof view.spy !== "function") {
+          return false;
+        }
+        const spy = requireFunction(view.spy, `${FOREIGN_PANEL} Vue view.spy`);
+        Reflect.apply(spy, view, [governmentId]);
+        return true;
+      }
+    });
+  }
+
   // src/adapters/browser/game-government-selection.ts
   var GOVERNMENT_MODAL = "govModal";
   function createGameGovernmentSelection({
@@ -5181,7 +5218,7 @@
     getResources,
     getBuildings,
     getPoly,
-    getVueById,
+    getForeignControls,
     espionageControls,
     getGarrisonControls,
     getFeatureVisibility,
@@ -5201,7 +5238,7 @@
     const traitVal = (...args) => getTraitVal()(...args);
     const garrisonControls = getGarrisonControls();
     const SpyManager = {
-      _foreignVue: void 0,
+      isForeignUnlocked: false,
       purchaseMoney: 0,
       purchaseForeigngs: [],
       foreignActive: [],
@@ -5237,9 +5274,9 @@
         const poly = getPoly();
         this.purchaseMoney = 0;
         this.purchaseForeigngs = [];
-        this._foreignVue = getVueById("foreign");
-        let foreignUnlocked = this._foreignVue?.vis();
-        if (foreignUnlocked) {
+        const foreignControls = getForeignControls();
+        this.isForeignUnlocked = foreignControls.isUnlocked();
+        if (this.isForeignUnlocked) {
           const achievementGoal = getForeignAchievementGoal();
           const achievementPolicy = achievementGoal === "world-domination" ? "Occupy" : achievementGoal === "syndicate" ? "Purchase" : null;
           const unificationRequested = settings.foreignUnification || achievementGoal !== null;
@@ -5307,8 +5344,6 @@
           }
           this.foreignTarget = currentTarget;
           this.foreignActive = activeForeigns;
-        } else {
-          this._foreignVue = void 0;
         }
       },
       performEspionage(govIndex, espionageId, influenceAllowed) {
@@ -28263,7 +28298,7 @@
           unificationEnabled: false,
           occupyLast: false
         });
-        if (manager["isGarrisonVisible"] !== true || !spyManager["_foreignVue"]) {
+        if (manager["isGarrisonVisible"] !== true || spyManager["isForeignUnlocked"] !== true) {
           return unavailable10;
         }
         const maxCityGarrison = requireNumber(
@@ -41409,9 +41444,7 @@
         session = null;
         sample = null;
         const manager = requireRecord(dependencies.getSpyManager(), "SpyManager");
-        const rawView = manager["_foreignVue"];
-        if (!rawView) return unavailableCycle();
-        const view = requireRecord(rawView, "SpyManager._foreignVue");
+        if (manager["isForeignUnlocked"] !== true) return unavailableCycle();
         const haveTask = requireFunction(dependencies.getHaveTask(), "haveTask");
         if (Reflect.apply(haveTask, void 0, ["combo_spy"]) || Reflect.apply(haveTask, void 0, ["spyop"])) {
           return unavailableCycle();
@@ -41449,7 +41482,7 @@
         const missionIds = advancedEspionage ? readMissionIds(manager) : Object.freeze({});
         session = Object.freeze({
           manager,
-          view,
+          foreignUnlocked: manager["isForeignUnlocked"] === true,
           foreigns: rawForeigns,
           spyMaximumSetting,
           missionIds
@@ -41476,10 +41509,7 @@
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
-        const spyDisabled = requireFunction(
-          active.view["spy_disabled"],
-          "SpyManager._foreignVue.spy_disabled"
-        );
+        const spyDisabled = dependencies.getForeignControls().isSpyDisabled(governmentId);
         const purchasePrice = policy === "Purchase" ? readGovernmentPrice(dependencies, governmentId) : null;
         let moneyMaximum = 0;
         if (purchasePrice !== null) {
@@ -41501,9 +41531,7 @@
           foreignIndex,
           governmentId,
           governmentName,
-          disabled: Boolean(
-            Reflect.apply(spyDisabled, active.view, [governmentId])
-          ),
+          disabled: spyDisabled,
           occupied: Boolean(government["occ"]),
           annexed: Boolean(government["anx"]),
           purchased: Boolean(government["buy"]),
@@ -41598,7 +41626,7 @@
         if (active === null || sampled === null) {
           return stale("spy-session-missing", "spy session is missing");
         }
-        if (dependencies.getSpyManager() !== active.manager || active.manager["foreignActive"] !== active.foreigns || active.manager["_foreignVue"] !== active.view) {
+        if (dependencies.getSpyManager() !== active.manager || active.manager["foreignActive"] !== active.foreigns || active.manager["isForeignUnlocked"] === true !== active.foreignUnlocked) {
           return stale("spy-manager-changed", "spy manager state changed");
         }
         const expected = sampled.kind === "training" ? planSpyTraining(sampled.input) : planSpyEspionage(sampled.input);
@@ -41621,16 +41649,17 @@
             gameLog["logSuccess"],
             "GameLog.logSuccess"
           );
-          const train = requireFunction(
-            active.view["spy"],
-            "SpyManager._foreignVue.spy"
-          );
           Reflect.apply(logSuccess, gameLog, [
             "spying",
             `Training a spy to send against ${decision2.governmentName}.`,
             ["spy"]
           ]);
-          Reflect.apply(train, active.view, [decision2.governmentId]);
+          if (!dependencies.getForeignControls().trainSpy(decision2.governmentId)) {
+            return stale(
+              "spy-panel-withdrawn",
+              "spy training panel is no longer available"
+            );
+          }
           return SUCCEEDED;
         }
         if (sampled.kind !== "espionage") {
@@ -57609,6 +57638,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const espionageControls = createGameEspionageControls({
       getVueById: (id) => getVueById(id)
     });
+    let foreignControlsTestContext;
+    const foreignControls = createGameForeignControls({
+      getVueById: (id) => foreignControlsTestContext?.getVueById?.(id) ?? getVueById(id)
+    });
     const governmentSelection = createGameGovernmentSelection({
       getVueById: (id) => getVueById(id)
     });
@@ -58210,7 +58243,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getResources: () => resources,
       getBuildings: () => buildings,
       getPoly: () => poly,
-      getVueById: (id) => getVueById(id),
+      getForeignControls: () => foreignControls,
       espionageControls,
       getGarrisonControls: () => garrisonControls,
       getFeatureVisibility: () => featureVisibility,
@@ -58875,6 +58908,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const { autoSpy } = createSpyControl({
       getSpyManager: () => SpyManager,
       getWarManager: () => WarManager,
+      getForeignControls: () => foreignControls,
       getHaveTask: () => haveTask,
       getHaveTech: () => haveTech,
       shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
@@ -59177,6 +59211,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         haveTask = context.haveTask;
         haveTech = context.haveTech;
         isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
+        if ("foreignView" in context) {
+          foreignControlsTestContext = {
+            getVueById: () => context.foreignView
+          };
+        }
+      },
+      setForeignControlsTestContext(context) {
+        foreignControlsTestContext = context;
       }
     });
     publishTestSurface({

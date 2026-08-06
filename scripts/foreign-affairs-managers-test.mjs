@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createGameEspionageControls } from "../src/adapters/browser/game-espionage-controls.ts";
 import { createGameFeatureVisibility } from "../src/adapters/browser/game-feature-visibility.ts";
+import { createGameForeignControls } from "../src/adapters/browser/game-foreign-controls.ts";
 import { createGameGarrisonControls } from "../src/adapters/browser/game-garrison-controls.ts";
 import { createForeignAffairsManagers } from "../src/game/foreign-affairs-managers.ts";
 
@@ -44,7 +45,10 @@ const { SpyManager, WarManager } = createForeignAffairsManagers({
   getResources: () => resources,
   getBuildings: () => buildings,
   getPoly: () => poly,
-  getVueById: (id) => vueById[id],
+  getForeignControls: () =>
+    createGameForeignControls({
+      getVueById: (id) => vueById[id],
+    }),
   espionageControls: createGameEspionageControls({
     getVueById: (id) => vueById[id],
   }),
@@ -149,6 +153,8 @@ poly = { govPrice: (index) => 1_000 + index * 100 };
 vueById.foreign = { vis: () => true };
 
 SpyManager.updateForeigns();
+// This port's availability is sampled into the unlock mirror by the update.
+assert.equal(SpyManager.isForeignUnlocked, true);
 assert.deepEqual(
   SpyManager.foreignActive.map(({ id, policy }) => ({ id, policy })),
   [
@@ -207,6 +213,15 @@ guardActive = () => true;
 SpyManager.updateForeigns();
 assert.deepEqual(SpyManager.foreignActive, []);
 assert.equal(SpyManager.foreignTarget, null);
+
+// The unlock mirror follows the foreign panel's availability.
+vueById.foreign.vis = () => false;
+SpyManager.updateForeigns();
+assert.equal(SpyManager.isForeignUnlocked, false);
+assert.equal(SpyManager.foreignTarget, null);
+
+// Restore the unlocked panel for the espionage flow below.
+vueById.foreign.vis = () => true;
 
 // Infiltrator divides the base cost, then Scorpio takes its 12% off that.
 game.global.race.infiltrator = true;

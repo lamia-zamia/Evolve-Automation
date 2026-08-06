@@ -1,5 +1,6 @@
 import type { GameEspionageControlsPort } from "../ports/game-espionage-controls.ts";
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
+import type { GameForeignControlsPort } from "../ports/game-foreign-controls.ts";
 import type { GameGarrisonControlsPort } from "../ports/game-garrison-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
 
@@ -23,7 +24,7 @@ type ForeignAffairsManagerDependencies = {
   getResources: () => AnyRecord;
   getBuildings: () => AnyRecord;
   getPoly: () => AnyRecord;
-  getVueById: (id: string) => any;
+  getForeignControls: () => GameForeignControlsPort;
   espionageControls: GameEspionageControlsPort;
   getGarrisonControls: () => GameGarrisonControlsPort;
   getFeatureVisibility: () => GameFeatureVisibilityPort;
@@ -46,7 +47,7 @@ export function createForeignAffairsManagers({
   getResources,
   getBuildings,
   getPoly,
-  getVueById,
+  getForeignControls,
   espionageControls,
   getGarrisonControls,
   getFeatureVisibility,
@@ -67,7 +68,7 @@ export function createForeignAffairsManagers({
   const garrisonControls = getGarrisonControls();
 
   const SpyManager: AnyRecord = {
-    _foreignVue: undefined,
+    isForeignUnlocked: false,
 
     purchaseMoney: 0,
     purchaseForeigngs: [],
@@ -108,9 +109,9 @@ export function createForeignAffairsManagers({
       const poly = getPoly();
       this.purchaseMoney = 0;
       this.purchaseForeigngs = [];
-      this._foreignVue = getVueById("foreign");
-      let foreignUnlocked = this._foreignVue?.vis();
-      if (foreignUnlocked) {
+      const foreignControls = getForeignControls();
+      this.isForeignUnlocked = foreignControls.isUnlocked();
+      if (this.isForeignUnlocked) {
         const achievementGoal = getForeignAchievementGoal();
         const achievementPolicy =
           achievementGoal === "world-domination"
@@ -264,8 +265,6 @@ export function createForeignAffairsManagers({
 
         this.foreignTarget = currentTarget;
         this.foreignActive = activeForeigns;
-      } else {
-        this._foreignVue = undefined;
       }
     },
 

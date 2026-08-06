@@ -6,6 +6,7 @@ import {
   type SpyEspionageInput,
   type SpyTrainingInput,
 } from "../../../domain/combat/spy.ts";
+import type { GameForeignControlsPort } from "../../../ports/game-foreign-controls.ts";
 import type { SpyExecutor, SpyReader } from "../../../ports/spy.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
@@ -19,7 +20,7 @@ import {
 
 interface SpySession {
   readonly manager: UnknownRecord;
-  readonly view: UnknownRecord;
+  readonly foreignUnlocked: boolean;
   readonly foreigns: unknown[];
   readonly spyMaximumSetting: number;
   readonly missionIds: Readonly<Record<string, string>>;
@@ -47,6 +48,7 @@ export interface SpyAdapterDependencies {
   // Evolve/browser adapters when the remaining combat slices remove them.
   readonly getSpyManager: () => unknown;
   readonly getWarManager: () => unknown;
+  readonly getForeignControls: () => GameForeignControlsPort;
   readonly getHaveTask: () => unknown;
   readonly getHaveTech: () => unknown;
   readonly shouldSaveInflationMoney: () => unknown;
@@ -181,9 +183,7 @@ export function createSpyAdapter(dependencies: SpyAdapterDependencies): {
       session = null;
       sample = null;
       const manager = requireRecord(dependencies.getSpyManager(), "SpyManager");
-      const rawView = manager["_foreignVue"];
-      if (!rawView) return unavailableCycle();
-      const view = requireRecord(rawView, "SpyManager._foreignVue");
+      if (manager["isForeignUnlocked"] !== true) return unavailableCycle();
 
       const haveTask = requireFunction(dependencies.getHaveTask(), "haveTask");
       if (
@@ -231,7 +231,7 @@ export function createSpyAdapter(dependencies: SpyAdapterDependencies): {
         : Object.freeze({});
       session = Object.freeze({
         manager,
-        view,
+        foreignUnlocked: manager["isForeignUnlocked"] === true,
         foreigns: rawForeigns,
         spyMaximumSetting,
         missionIds,
@@ -259,10 +259,9 @@ export function createSpyAdapter(dependencies: SpyAdapterDependencies): {
         foreign["policy"],
         `SpyManager.foreignActive[${foreignIndex}].policy`,
       );
-      const spyDisabled = requireFunction(
-        active.view["spy_disabled"],
-        "SpyManager._foreignVue.spy_disabled",
-      );
+      const spyDisabled = dependencies
+        .getForeignControls()
+        .isSpyDisabled(governmentId);
       const purchasePrice =
         policy === "Purchase"
           ? readGovernmentPrice(dependencies, governmentId)
@@ -287,9 +286,7 @@ export function createSpyAdapter(dependencies: SpyAdapterDependencies): {
         foreignIndex,
         governmentId,
         governmentName,
-        disabled: Boolean(
-          Reflect.apply(spyDisabled, active.view, [governmentId]),
-        ),
+        disabled: spyDisabled,
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
         purchased: Boolean(government["buy"]),
@@ -402,7 +399,8 @@ export function createSpyAdapter(dependencies: SpyAdapterDependencies): {
       if (
         dependencies.getSpyManager() !== active.manager ||
         active.manager["foreignActive"] !== active.foreigns ||
-        active.manager["_foreignVue"] !== active.view
+        (active.manager["isForeignUnlocked"] === true) !==
+          active.foreignUnlocked
       ) {
         return stale("spy-manager-changed", "spy manager state changed");
       }
@@ -434,16 +432,19 @@ export function createSpyAdapter(dependencies: SpyAdapterDependencies): {
           gameLog["logSuccess"],
           "GameLog.logSuccess",
         );
-        const train = requireFunction(
-          active.view["spy"],
-          "SpyManager._foreignVue.spy",
-        );
         Reflect.apply(logSuccess, gameLog, [
           "spying",
           `Training a spy to send against ${decision.governmentName}.`,
           ["spy"],
         ]);
-        Reflect.apply(train, active.view, [decision.governmentId]);
+        if (
+          !dependencies.getForeignControls().trainSpy(decision.governmentId)
+        ) {
+          return stale(
+            "spy-panel-withdrawn",
+            "spy training panel is no longer available",
+          );
+        }
         return SUCCEEDED;
       }
 

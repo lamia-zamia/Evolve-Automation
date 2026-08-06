@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { createGameForeignControls } from "../src/adapters/browser/game-foreign-controls.ts";
 import { createSpyAdapter } from "../src/adapters/evolve/combat/spy.ts";
 import { runSpyAutomation } from "../src/application/spy.ts";
 import {
@@ -77,7 +78,7 @@ function createFixture(scenario) {
     },
   };
   const SpyManager = {
-    _foreignVue: scenario.foreignView === false ? undefined : foreignView,
+    isForeignUnlocked: scenario.foreignView === false ? false : true,
     foreignActive: foreigns,
     foreignTarget: foreigns[scenario.primaryIndex ?? 0] ?? null,
     purchaseMoney: scenario.purchaseMoney ?? 0,
@@ -140,6 +141,9 @@ function createFixture(scenario) {
     foreigns,
     SpyManager,
     WarManager,
+    foreignControls: createGameForeignControls({
+      getVueById: (id) => (id === "foreign" ? foreignView : undefined),
+    }),
     settings,
     resources,
     poly,
@@ -156,6 +160,8 @@ function createAutomation(fixture, overrides = {}) {
   return createSpyAdapter({
     getSpyManager: overrides.getSpyManager ?? (() => fixture.SpyManager),
     getWarManager: overrides.getWarManager ?? (() => fixture.WarManager),
+    getForeignControls:
+      overrides.getForeignControls ?? (() => fixture.foreignControls),
     getHaveTask: overrides.getHaveTask ?? (() => fixture.haveTask),
     getHaveTech: overrides.getHaveTech ?? (() => fixture.haveTech),
     shouldSaveInflationMoney:

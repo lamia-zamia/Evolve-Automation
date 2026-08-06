@@ -64,6 +64,7 @@ import { createGameDisposalControls } from "../browser/game-disposal-controls.ts
 import { createGameCustomRaceLab } from "../browser/game-custom-race-lab.ts";
 import { createGameEspionageControls } from "../browser/game-espionage-controls.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
+import { createGameForeignControls } from "../browser/game-foreign-controls.ts";
 import { createGameGovernmentSelection } from "../browser/game-government-selection.ts";
 import { createGameIndustryControls } from "../browser/game-industry-controls.ts";
 import { createGameFleetControls } from "../browser/game-fleet-controls.ts";
@@ -2598,6 +2599,11 @@ function startEvolveRuntimeComposition(
   const espionageControls = createGameEspionageControls({
     getVueById: (id) => getVueById(id),
   });
+  let foreignControlsTestContext;
+  const foreignControls = createGameForeignControls({
+    getVueById: (id) =>
+      foreignControlsTestContext?.getVueById?.(id) ?? getVueById(id),
+  });
   const governmentSelection = createGameGovernmentSelection({
     getVueById: (id) => getVueById(id),
   });
@@ -3244,7 +3250,7 @@ function startEvolveRuntimeComposition(
     getResources: () => resources,
     getBuildings: () => buildings,
     getPoly: () => poly,
-    getVueById: (id) => getVueById(id),
+    getForeignControls: () => foreignControls,
     espionageControls,
     getGarrisonControls: () => garrisonControls,
     getFeatureVisibility: () => featureVisibility,
@@ -4010,6 +4016,7 @@ function startEvolveRuntimeComposition(
   const { autoSpy } = createSpyControl({
     getSpyManager: () => SpyManager,
     getWarManager: () => WarManager,
+    getForeignControls: () => foreignControls,
     getHaveTask: () => haveTask,
     getHaveTech: () => haveTech,
     shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
@@ -4353,6 +4360,14 @@ function startEvolveRuntimeComposition(
       haveTask = context.haveTask;
       haveTech = context.haveTech;
       isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
+      if ("foreignView" in context) {
+        foreignControlsTestContext = {
+          getVueById: () => context.foreignView,
+        };
+      }
+    },
+    setForeignControlsTestContext(context) {
+      foreignControlsTestContext = context;
     },
   });
 

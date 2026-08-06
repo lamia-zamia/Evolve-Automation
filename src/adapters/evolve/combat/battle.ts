@@ -200,7 +200,10 @@ export function createBattleAdapter(dependencies: BattleAdapterDependencies): {
         occupyLast: false,
       });
 
-      if (manager["isGarrisonVisible"] !== true || !spyManager["_foreignVue"]) {
+      if (
+        manager["isGarrisonVisible"] !== true ||
+        spyManager["isForeignUnlocked"] !== true
+      ) {
         return unavailable;
       }
       const maxCityGarrison = requireNumber(
