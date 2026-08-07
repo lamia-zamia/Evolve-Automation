@@ -59,12 +59,11 @@ type JQuery = (selector: unknown) => JQueryNode;
 type Action = () => void;
 type OptionsBuilder = (node: JQueryNode, prefix: string) => void;
 
-export interface OptionsModalBrowserBuilders {
-  readonly government: OptionsBuilder;
-  readonly war: OptionsBuilder;
-  readonly hell: OptionsBuilder;
-  readonly fleet: OptionsBuilder;
-}
+/** Builders for every secondary-option button, keyed by the domain builder key. */
+export type OptionsModalBrowserBuilders = Record<
+  OptionsModalBuilderKey,
+  OptionsBuilder
+>;
 
 interface OptionsModalBrowserDependencies {
   readonly getDocument: () => ModalDocument;

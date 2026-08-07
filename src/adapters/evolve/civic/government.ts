@@ -1,9 +1,7 @@
-import type {
-  GovernmentDecision,
-  GovernmentInput,
-} from "../../../domain/civic/government.ts";
+import type { GovernmentDecision } from "../../../domain/civic/government.ts";
 import type { DecisionExecutor } from "../../../ports/decision-executor.ts";
 import type { GovernmentControls } from "../../../ports/government-controls.ts";
+import type { GovernmentReader } from "../../../ports/government.ts";
 import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
   requireFunction,
@@ -88,7 +86,7 @@ function readCandidateBackgrounds(
 
 export function readGovernmentInput(
   dependencies: GovernmentReaderDependencies,
-): GovernmentInput {
+): ReturnType<GovernmentReader["read"]> {
   const manager = requireRecord(
     dependencies.getGovernmentManager(),
     "GovernmentManager",
