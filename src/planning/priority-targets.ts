@@ -1,3 +1,5 @@
+import type { GamePriorityTargetsPort } from "../ports/game-priority-targets.ts";
+
 type Cost = Record<string, number>;
 
 type PriorityTarget = {
@@ -52,54 +54,20 @@ type QueuedTargetReadResult =
       resourceId?: string;
     };
 
-type PriorityTargetsGame = {
-  global: {
-    queue: { display: boolean; queue: QueuedItem[] };
-    r_queue: { display: boolean; queue: QueuedItem[] };
-    settings: Record<string, unknown>;
-    portal: { mechbay: MechBay };
-    [key: string]: unknown;
-  };
-};
-
-type MechBay = {
-  max: number;
-  bay: number;
-  blueprint: { size: string };
-};
-
 type PriorityTargetsBuilding = PriorityTarget & {
   count: number;
   isAutoBuildable(): boolean;
 };
 
 type PriorityTargetsDependencies = {
+  gamePriorityTargets: GamePriorityTargetsPort;
   getSettings: () => PriorityTargetsSettings;
   getState: () => PriorityTargetsState;
-  getGame: () => PriorityTargetsGame;
   getResources: () => Record<string, { maxQuantity: number }>;
   getBuildings: () => Record<string, PriorityTargetsBuilding>;
   getTechIds: () => Record<string, PriorityTarget>;
   getBuildingIds: () => Record<string, PriorityTarget>;
   getArpaIds: () => Record<string, PriorityTarget>;
-  getSpyManager: () => { purchaseMoney: number };
-  getFleetManagerOuter: () => {
-    nextShipAffordable: boolean;
-    nextShipName: string;
-    nextShipCost: Cost;
-  };
-  getMechManager: () => {
-    initLab(): boolean;
-    getPreferredSize(): string[];
-    getMechCost(blueprint: { size: string }): [number, number, number];
-  };
-  getTriggerManager: () => {
-    targetTriggers: { actionId: string }[];
-    resetTargetTriggers(): void;
-  };
-  getJQuery: () => (selector: string) => {
-    each(callback: (this: { id: string }) => void): unknown;
-  };
   readQueuedTarget: (item: QueuedItem) => QueuedTargetReadResult;
   getTechConflict: (tech: PriorityTarget) => string | false;
   isPrestigeAllowed: (type?: string) => boolean;
@@ -109,19 +77,14 @@ type PriorityTargetsDependencies = {
 };
 
 export function createPriorityTargets({
+  gamePriorityTargets,
   getSettings,
   getState,
-  getGame,
   getResources,
   getBuildings,
   getTechIds,
   getBuildingIds,
   getArpaIds,
-  getSpyManager,
-  getFleetManagerOuter,
-  getMechManager,
-  getTriggerManager,
-  getJQuery,
   readQueuedTarget,
   getTechConflict,
   isPrestigeAllowed,
@@ -132,7 +95,6 @@ export function createPriorityTargets({
   function updatePriorityTargets() {
     const settings = getSettings();
     const state = getState();
-    const game = getGame();
     const resources = getResources();
     const buildings = getBuildings();
     const techIds = getTechIds();
@@ -149,22 +111,15 @@ export function createPriorityTargets({
 
     // Building and research queues
     const queueSave = settings.prioritizeQueue.includes("save");
-    (
-      [
-        { type: "queue", noorder: "qAny" },
-        { type: "r_queue", noorder: "qAny_res" },
-      ] as const
-    ).forEach((queue) => {
-      const queueState = game.global[queue.type] as {
-        display: boolean;
-        queue: QueuedItem[];
-      };
+    (["queue", "r_queue"] as const).forEach((kind) => {
+      const queueState = gamePriorityTargets.readQueue(kind);
       if (queueState.display) {
-        for (const item of queueState.queue) {
+        for (const item of queueState.items) {
+          const queuedItem = item as QueuedItem;
           let obj: PriorityTarget | undefined;
           let maximumAffordable = false;
-          if (queue.type === "queue") {
-            const result = readQueuedTarget(item);
+          if (kind === "queue") {
+            const result = readQueuedTarget(queuedItem);
             if (result.status === "ready") {
               obj = result.target;
               maximumAffordable = result.maximumAffordable;
@@ -183,7 +138,7 @@ export function createPriorityTargets({
               });
             }
           } else {
-            obj = techIds[item.id];
+            obj = techIds[queuedItem.id];
             maximumAffordable = obj?.isAffordable(true) ?? false;
           }
           if (obj) {
@@ -200,24 +155,24 @@ export function createPriorityTargets({
               }
             }
           }
-          if (!game.global.settings[queue.noorder]) {
+          if (!queueState.noorder) {
             break;
           }
         }
       }
     });
 
-    const SpyManager = getSpyManager();
+    const spyPurchaseMoney = gamePriorityTargets.readSpyPurchaseMoney();
     const unification = techIds["tech-unification"];
     if (
-      SpyManager.purchaseMoney &&
+      spyPurchaseMoney &&
       settings.prioritizeUnify.includes("save") &&
       unification !== undefined
     ) {
       state.conflictTargets.push({
         name: unification.title,
         cause: "Purchase",
-        cost: { Money: SpyManager.purchaseMoney },
+        cost: { Money: spyPurchaseMoney },
       });
     }
 
@@ -229,27 +184,26 @@ export function createPriorityTargets({
       });
     }
 
-    const FleetManagerOuter = getFleetManagerOuter();
+    const nextShip = gamePriorityTargets.readOuterFleetNextShip();
     if (
       settings.autoFleet &&
-      FleetManagerOuter.nextShipAffordable &&
+      nextShip.affordable &&
       settings.prioritizeOuterFleet.includes("save")
     ) {
       state.conflictTargets.push({
-        name: FleetManagerOuter.nextShipName,
+        name: nextShip.name,
         cause: "Ship",
-        cost: FleetManagerOuter.nextShipCost,
+        cost: { ...nextShip.cost },
       });
     }
 
     // Reserve gems for mechs
-    const MechManager = getMechManager();
     if (
       settings.autoMech &&
-      MechManager.initLab() &&
+      gamePriorityTargets.readMechLabReady() &&
       (buildings.AsphodelEncampment?.count ?? 0) === 0
     ) {
-      const mechBay = game.global.portal.mechbay;
+      const mechBay = gamePriorityTargets.readMechBay();
       const baySpace = mechBay.max - mechBay.bay;
 
       // only reserve gems if we have bay space
@@ -257,9 +211,10 @@ export function createPriorityTargets({
         const newSize = haveTask("mech")
           ? "titan"
           : settings.mechBuild === "random"
-            ? (MechManager.getPreferredSize()[0] ?? mechBay.blueprint.size)
-            : mechBay.blueprint.size;
-        const [newGems] = MechManager.getMechCost({ size: newSize });
+            ? (gamePriorityTargets.readMechPreferredSize() ??
+              mechBay.blueprintSize)
+            : mechBay.blueprintSize;
+        const newGems = gamePriorityTargets.readMechCost(newSize);
 
         if (newGems > 0) {
           state.conflictTargets.push({
@@ -272,14 +227,13 @@ export function createPriorityTargets({
     }
 
     if (settings.autoTrigger) {
-      const TriggerManager = getTriggerManager();
       const buildingIds = getBuildingIds();
       const arpaIds = getArpaIds();
-      TriggerManager.resetTargetTriggers();
+      gamePriorityTargets.resetTargetTriggers();
       const triggerSave = settings.prioritizeTriggers.includes("save");
 
       // Active triggers
-      for (const trigger of TriggerManager.targetTriggers) {
+      for (const trigger of gamePriorityTargets.readTriggerTargets()) {
         const id = trigger.actionId;
         const obj = arpaIds[id] || buildingIds[id] || techIds[id];
         if (obj) {
@@ -345,10 +299,10 @@ export function createPriorityTargets({
       }
     }
 
-    getJQuery()("#tech .action").each(function (this: { id: string }) {
-      const tech = techIds[this.id];
+    for (const id of gamePriorityTargets.readTechActionIds()) {
+      const tech = techIds[id];
       if (tech === undefined) {
-        return;
+        continue;
       }
       tech.updateResourceRequirements();
       if (
@@ -358,7 +312,7 @@ export function createPriorityTargets({
       ) {
         state.unlockedTechs.push(tech);
       }
-    });
+    }
   }
 
   return { updatePriorityTargets };

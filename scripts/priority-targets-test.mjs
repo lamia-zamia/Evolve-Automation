@@ -57,6 +57,21 @@ function makeContext(overrides = {}) {
     techIds: { "tech-unification": makeTarget("tech-unification") },
     buildingIds: { "city-mine": makeTarget("city-mine", { Lumber: 10 }) },
     arpaIds: {},
+    spyManager: { purchaseMoney: 0 },
+    fleetManagerOuter: {
+      nextShipAffordable: false,
+      nextShipName: "",
+      nextShipCost: {},
+    },
+    mechManager: {
+      initLab: () => true,
+      getPreferredSize: () => ["collector"],
+      getMechCost: () => [7, 3, 1],
+    },
+    triggerManager: {
+      targetTriggers: [],
+      resetTargetTriggers() {},
+    },
     ...rest,
   };
 }
@@ -68,31 +83,61 @@ let saveMoney = false;
 let mechTask = false;
 const techSweep = [];
 
+const gamePriorityTargets = {
+  readQueue(kind) {
+    const queueState = context.game.global[kind];
+    if (!queueState) return { display: false, items: [], noorder: false };
+    return {
+      display: queueState.display,
+      items: queueState.queue,
+      noorder: Boolean(
+        context.game.global.settings[kind === "r_queue" ? "qAny_res" : "qAny"],
+      ),
+    };
+  },
+  readSpyPurchaseMoney() {
+    return context.spyManager.purchaseMoney;
+  },
+  readOuterFleetNextShip() {
+    return context.fleetManagerOuter;
+  },
+  readMechBay() {
+    const mechbay = context.game.global.portal.mechbay;
+    return {
+      max: mechbay.max,
+      bay: mechbay.bay,
+      blueprintSize: mechbay.blueprint.size,
+    };
+  },
+  readMechLabReady() {
+    return context.mechManager.initLab();
+  },
+  readMechPreferredSize() {
+    return context.mechManager.getPreferredSize()[0];
+  },
+  readMechCost(size) {
+    return context.mechManager.getMechCost({ size })[0];
+  },
+  readTriggerTargets() {
+    return context.triggerManager.targetTriggers;
+  },
+  resetTargetTriggers() {
+    context.triggerManager.resetTargetTriggers();
+  },
+  readTechActionIds() {
+    return techSweep.map((element) => element.id);
+  },
+};
+
 const { updatePriorityTargets } = createPriorityTargets({
+  gamePriorityTargets,
   getSettings: () => context.settings,
   getState: () => context.state,
-  getGame: () => context.game,
   getResources: () => context.resources,
   getBuildings: () => context.buildings,
   getTechIds: () => context.techIds,
   getBuildingIds: () => context.buildingIds,
   getArpaIds: () => context.arpaIds,
-  getSpyManager: () => ({ purchaseMoney: 0 }),
-  getFleetManagerOuter: () => ({ nextShipAffordable: false }),
-  getMechManager: () => ({
-    initLab: () => true,
-    getPreferredSize: () => ["collector"],
-    getMechCost: () => [7, 3, 1],
-  }),
-  getTriggerManager: () => ({
-    targetTriggers: [],
-    resetTargetTriggers() {},
-  }),
-  getJQuery: () => () => ({
-    each(callback) {
-      techSweep.forEach((element) => callback.call(element));
-    },
-  }),
   readQueuedTarget: (item) => {
     if (context.queueUnavailable) {
       return {
@@ -116,6 +161,11 @@ const { updatePriorityTargets } = createPriorityTargets({
   inflationChallengeShouldSaveMoney: () => saveMoney,
   inflationChallengeMoney: 25e10,
 });
+
+// A single mutable context is swapped wholesale between scenarios, and the
+// manager slots travel with it, proving the planner resolves the port reads
+// through live values rather than captured ones.
+context = makeContext();
 
 // Baseline: the queued building is the only conflict source.
 updatePriorityTargets();

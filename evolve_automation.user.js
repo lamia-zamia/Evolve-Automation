@@ -17083,19 +17083,14 @@
 
   // src/planning/priority-targets.ts
   function createPriorityTargets({
+    gamePriorityTargets,
     getSettings,
     getState,
-    getGame,
     getResources,
     getBuildings,
     getTechIds,
     getBuildingIds,
     getArpaIds,
-    getSpyManager,
-    getFleetManagerOuter,
-    getMechManager,
-    getTriggerManager,
-    getJQuery,
     readQueuedTarget,
     getTechConflict,
     isPrestigeAllowed: isPrestigeAllowed2,
@@ -17106,7 +17101,6 @@
     function updatePriorityTargets() {
       const settings = getSettings();
       const state = getState();
-      const game = getGame();
       const resources = getResources();
       const buildings = getBuildings();
       const techIds = getTechIds();
@@ -17120,17 +17114,15 @@
       const queuedTargetsAll = /* @__PURE__ */ new Set();
       const triggerTargets = /* @__PURE__ */ new Set();
       const queueSave = settings.prioritizeQueue.includes("save");
-      [
-        { type: "queue", noorder: "qAny" },
-        { type: "r_queue", noorder: "qAny_res" }
-      ].forEach((queue) => {
-        const queueState = game.global[queue.type];
+      ["queue", "r_queue"].forEach((kind) => {
+        const queueState = gamePriorityTargets.readQueue(kind);
         if (queueState.display) {
-          for (const item of queueState.queue) {
+          for (const item of queueState.items) {
+            const queuedItem = item;
             let obj;
             let maximumAffordable = false;
-            if (queue.type === "queue") {
-              const result2 = readQueuedTarget(item);
+            if (kind === "queue") {
+              const result2 = readQueuedTarget(queuedItem);
               if (result2.status === "ready") {
                 obj = result2.target;
                 maximumAffordable = result2.maximumAffordable;
@@ -17143,7 +17135,7 @@
                 });
               }
             } else {
-              obj = techIds[item.id];
+              obj = techIds[queuedItem.id];
               maximumAffordable = obj?.isAffordable(true) ?? false;
             }
             if (obj) {
@@ -17160,19 +17152,19 @@
                 }
               }
             }
-            if (!game.global.settings[queue.noorder]) {
+            if (!queueState.noorder) {
               break;
             }
           }
         }
       });
-      const SpyManager = getSpyManager();
+      const spyPurchaseMoney = gamePriorityTargets.readSpyPurchaseMoney();
       const unification = techIds["tech-unification"];
-      if (SpyManager.purchaseMoney && settings.prioritizeUnify.includes("save") && unification !== void 0) {
+      if (spyPurchaseMoney && settings.prioritizeUnify.includes("save") && unification !== void 0) {
         state.conflictTargets.push({
           name: unification.title,
           cause: "Purchase",
-          cost: { Money: SpyManager.purchaseMoney }
+          cost: { Money: spyPurchaseMoney }
         });
       }
       if (inflationChallengeShouldSaveMoney()) {
@@ -17182,21 +17174,20 @@
           cost: { Money: inflationChallengeMoney }
         });
       }
-      const FleetManagerOuter = getFleetManagerOuter();
-      if (settings.autoFleet && FleetManagerOuter.nextShipAffordable && settings.prioritizeOuterFleet.includes("save")) {
+      const nextShip = gamePriorityTargets.readOuterFleetNextShip();
+      if (settings.autoFleet && nextShip.affordable && settings.prioritizeOuterFleet.includes("save")) {
         state.conflictTargets.push({
-          name: FleetManagerOuter.nextShipName,
+          name: nextShip.name,
           cause: "Ship",
-          cost: FleetManagerOuter.nextShipCost
+          cost: { ...nextShip.cost }
         });
       }
-      const MechManager = getMechManager();
-      if (settings.autoMech && MechManager.initLab() && (buildings.AsphodelEncampment?.count ?? 0) === 0) {
-        const mechBay = game.global.portal.mechbay;
+      if (settings.autoMech && gamePriorityTargets.readMechLabReady() && (buildings.AsphodelEncampment?.count ?? 0) === 0) {
+        const mechBay = gamePriorityTargets.readMechBay();
         const baySpace = mechBay.max - mechBay.bay;
         if (baySpace > 0) {
-          const newSize = haveTask("mech") ? "titan" : settings.mechBuild === "random" ? MechManager.getPreferredSize()[0] ?? mechBay.blueprint.size : mechBay.blueprint.size;
-          const [newGems] = MechManager.getMechCost({ size: newSize });
+          const newSize = haveTask("mech") ? "titan" : settings.mechBuild === "random" ? gamePriorityTargets.readMechPreferredSize() ?? mechBay.blueprintSize : mechBay.blueprintSize;
+          const newGems = gamePriorityTargets.readMechCost(newSize);
           if (newGems > 0) {
             state.conflictTargets.push({
               name: `Next mech (${newSize})`,
@@ -17207,12 +17198,11 @@
         }
       }
       if (settings.autoTrigger) {
-        const TriggerManager = getTriggerManager();
         const buildingIds = getBuildingIds();
         const arpaIds = getArpaIds();
-        TriggerManager.resetTargetTriggers();
+        gamePriorityTargets.resetTargetTriggers();
         const triggerSave = settings.prioritizeTriggers.includes("save");
-        for (const trigger of TriggerManager.targetTriggers) {
+        for (const trigger of gamePriorityTargets.readTriggerTargets()) {
           const id = trigger.actionId;
           const obj = arpaIds[id] || buildingIds[id] || techIds[id];
           if (obj) {
@@ -17259,16 +17249,16 @@
           });
         }
       }
-      getJQuery()("#tech .action").each(function() {
-        const tech = techIds[this.id];
+      for (const id of gamePriorityTargets.readTechActionIds()) {
+        const tech = techIds[id];
         if (tech === void 0) {
-          return;
+          continue;
         }
         tech.updateResourceRequirements();
         if (!getTechConflict(tech) || triggerTargets.has(tech) || queuedTargetsAll.has(tech)) {
           state.unlockedTechs.push(tech);
         }
-      });
+      }
     }
     return { updatePriorityTargets };
   }
@@ -22672,6 +22662,176 @@
     });
   }
 
+  // src/adapters/evolve/game-priority-targets.ts
+  var NOORDER_SETTING = {
+    queue: "qAny",
+    r_queue: "qAny_res"
+  };
+  function readGlobal(dependencies) {
+    const game = requireRecord(dependencies.getGame(), "game");
+    return readProperty(game, "global");
+  }
+  function readQueue(kind, dependencies) {
+    const rawGlobal = readGlobal(dependencies);
+    if (!isNonArrayRecord(rawGlobal)) {
+      return Object.freeze({ display: false, items: [], noorder: false });
+    }
+    const rawQueue = rawGlobal[kind];
+    const display = isNonArrayRecord(rawQueue) && Boolean(rawQueue["display"]);
+    const rawItems = isNonArrayRecord(rawQueue) ? rawQueue["queue"] : [];
+    const items = Array.isArray(rawItems) ? rawItems : [];
+    const rawSettings = rawGlobal["settings"];
+    const noorder = isNonArrayRecord(rawSettings) && Boolean(rawSettings[NOORDER_SETTING[kind]]);
+    return Object.freeze({ display, items, noorder });
+  }
+  function readCostMap(rawCost) {
+    if (!isNonArrayRecord(rawCost)) {
+      return Object.freeze({});
+    }
+    const cost = {};
+    for (const key of Object.keys(rawCost)) {
+      const value = rawCost[key];
+      if (isFiniteNumber(value)) {
+        cost[key] = value;
+      }
+    }
+    return Object.freeze(cost);
+  }
+  function readOuterFleetNextShip(dependencies) {
+    const outer = requireRecord(
+      dependencies.getFleetManagerOuter(),
+      "FleetManagerOuter"
+    );
+    return Object.freeze({
+      affordable: Boolean(outer["nextShipAffordable"]),
+      name: typeof outer["nextShipName"] === "string" ? outer["nextShipName"] : "",
+      cost: readCostMap(outer["nextShipCost"])
+    });
+  }
+  function readMechBay(dependencies) {
+    const global = readGlobal(dependencies);
+    const portal = isNonArrayRecord(global) ? global["portal"] : void 0;
+    const mechbay = isNonArrayRecord(portal) ? portal["mechbay"] : void 0;
+    if (!isNonArrayRecord(mechbay)) {
+      return Object.freeze({ max: 0, bay: 0, blueprintSize: "small" });
+    }
+    const blueprint = mechbay["blueprint"];
+    const max = isFiniteNumber(mechbay["max"]) ? mechbay["max"] : 0;
+    const bay = isFiniteNumber(mechbay["bay"]) ? mechbay["bay"] : 0;
+    const blueprintSize = isNonArrayRecord(blueprint) && typeof blueprint["size"] === "string" ? blueprint["size"] : "small";
+    return Object.freeze({ max, bay, blueprintSize });
+  }
+  function readMechLabReady(dependencies) {
+    return callBoolean(
+      requireRecord(dependencies.getMechManager(), "MechManager"),
+      "initLab",
+      "MechManager"
+    );
+  }
+  function readMechPreferredSize(dependencies) {
+    const mechManager = requireRecord(
+      dependencies.getMechManager(),
+      "MechManager"
+    );
+    const getPreferredSize = requireFunction(
+      mechManager["getPreferredSize"],
+      "MechManager.getPreferredSize"
+    );
+    const preferredList = getPreferredSize();
+    return Array.isArray(preferredList) && typeof preferredList[0] === "string" ? preferredList[0] : void 0;
+  }
+  function readMechCost(size, dependencies) {
+    const mechManager = requireRecord(
+      dependencies.getMechManager(),
+      "MechManager"
+    );
+    const getMechCost = requireFunction(
+      mechManager["getMechCost"],
+      "MechManager.getMechCost"
+    );
+    const cost = getMechCost(Object.freeze({ size }));
+    return Array.isArray(cost) && isFiniteNumber(cost[0]) ? cost[0] : 0;
+  }
+  function readTriggerTargets(dependencies) {
+    const triggerManager = requireRecord(
+      dependencies.getTriggerManager(),
+      "TriggerManager"
+    );
+    const rawTriggers = triggerManager["targetTriggers"];
+    if (!Array.isArray(rawTriggers)) {
+      return Object.freeze([]);
+    }
+    const triggers = [];
+    for (const raw of rawTriggers) {
+      if (!isNonArrayRecord(raw)) continue;
+      const actionId = raw["actionId"];
+      if (typeof actionId === "string") {
+        triggers.push(Object.freeze({ actionId }));
+      }
+    }
+    return Object.freeze(triggers);
+  }
+  function resetTargetTriggers(dependencies) {
+    callVoid(
+      requireRecord(dependencies.getTriggerManager(), "TriggerManager"),
+      "resetTargetTriggers",
+      "TriggerManager"
+    );
+  }
+  function readTechActionIds(dependencies) {
+    const jquery = dependencies.getJQuery();
+    const ids = [];
+    if (typeof jquery !== "function") {
+      return Object.freeze(ids);
+    }
+    const collection = jquery("#tech .action");
+    if (collection === null || collection === void 0 || typeof collection !== "object" || typeof collection["each"] !== "function") {
+      return Object.freeze(ids);
+    }
+    collection["each"].call(collection, function() {
+      const id = readProperty(this, "id");
+      if (typeof id === "string") {
+        ids.push(id);
+      }
+    });
+    return Object.freeze(ids);
+  }
+  function createGamePriorityTargetsEvolveAdapter(dependencies) {
+    return Object.freeze({
+      readQueue(kind) {
+        return readQueue(kind, dependencies);
+      },
+      readSpyPurchaseMoney() {
+        const spy = requireRecord(dependencies.getSpyManager(), "SpyManager");
+        return coerceNumber(spy["purchaseMoney"]);
+      },
+      readOuterFleetNextShip() {
+        return readOuterFleetNextShip(dependencies);
+      },
+      readMechBay() {
+        return readMechBay(dependencies);
+      },
+      readMechLabReady() {
+        return readMechLabReady(dependencies);
+      },
+      readMechPreferredSize() {
+        return readMechPreferredSize(dependencies);
+      },
+      readMechCost(size) {
+        return readMechCost(size, dependencies);
+      },
+      readTriggerTargets() {
+        return readTriggerTargets(dependencies);
+      },
+      resetTargetTriggers() {
+        resetTargetTriggers(dependencies);
+      },
+      readTechActionIds() {
+        return readTechActionIds(dependencies);
+      }
+    });
+  }
+
   // src/domain/progression/prestige/prestige-top-bar.ts
   function selectPrestigeTopBarType(options2, selectedValue) {
     const selected = options2.find((option3) => option3.value === selectedValue);
@@ -24344,13 +24504,13 @@
   function guardUnavailable2(reason, fallbackActive, field) {
     return Object.freeze({ ...unavailable6(reason, field), fallbackActive });
   }
-  function readGlobal(rawGame) {
+  function readGlobal2(rawGame) {
     if (!isNonArrayRecord(rawGame)) return void 0;
     const global = rawGame["global"];
     return isNonArrayRecord(global) ? global : void 0;
   }
   function readStats(rawGame) {
-    const global = readGlobal(rawGame);
+    const global = readGlobal2(rawGame);
     const stats = global?.["stats"];
     return isNonArrayRecord(stats) ? stats : void 0;
   }
@@ -24393,7 +24553,7 @@
   }
   function readBananaRepublicSmoothieInput(rawGame) {
     try {
-      const global = readGlobal(rawGame);
+      const global = readGlobal2(rawGame);
       const stats = readStats(rawGame);
       if (!global || !stats) return unavailable6("invalid-game-state");
       let featStar = 0;
@@ -24467,7 +24627,7 @@
       if (typeof master !== "boolean" || typeof selected !== "boolean") {
         return guardUnavailable2("invalid-settings", fallbackConfigured);
       }
-      const global = readGlobal(rawGame);
+      const global = readGlobal2(rawGame);
       const race2 = global?.["race"];
       const bananaRace = isNonArrayRecord(race2) ? race2["banana"] : void 0;
       if (bananaRace === false || bananaRace === void 0) {
@@ -33818,7 +33978,7 @@
   }
 
   // src/adapters/evolve/traits/genetics.ts
-  function readGlobal2(gameValue) {
+  function readGlobal3(gameValue) {
     const game = requireRecord(gameValue, "game");
     return requireRecord(game["global"], "game.global");
   }
@@ -33922,12 +34082,12 @@
     let session = null;
     const reader = Object.freeze({
       readGate() {
-        const level = readTechnologyLevel2(readGlobal2(dependencies.getGame()));
+        const level = readTechnologyLevel2(readGlobal3(dependencies.getGame()));
         if (level === 0) session = null;
         return Object.freeze({ unlocked: level !== 0 });
       },
       readPlan() {
-        const global = readGlobal2(dependencies.getGame());
+        const global = readGlobal3(dependencies.getGame());
         const level = readTechnologyLevel2(global);
         if (level === 0) {
           session = null;
@@ -34051,7 +34211,7 @@
         if (active === null) {
           return stale("genetics-session-missing", "genetics session is missing");
         }
-        const global = readGlobal2(dependencies.getGame());
+        const global = readGlobal3(dependencies.getGame());
         if (readTechnologyLevel2(global) === 0) {
           return stale("genetics-locked", "genetics became unavailable");
         }
@@ -34530,7 +34690,7 @@
   }
 
   // src/adapters/evolve/traits/psychic.ts
-  function readGlobal3(gameValue) {
+  function readGlobal4(gameValue) {
     const game = requireRecord(gameValue, "game");
     return requireRecord(game["global"], "game.global");
   }
@@ -34590,7 +34750,7 @@
           session = null;
           return Object.freeze({ unlocked: false });
         }
-        const global = readGlobal3(dependencies.getGame());
+        const global = readGlobal4(dependencies.getGame());
         const race2 = requireRecord(global["race"], "game.global.race");
         if (!race2["psychic"]) {
           session = null;
@@ -34623,7 +34783,7 @@
           session = null;
           return emptyInput3();
         }
-        const global = readGlobal3(dependencies.getGame());
+        const global = readGlobal4(dependencies.getGame());
         const race2 = requireRecord(global["race"], "game.global.race");
         const tech = requireRecord(global["tech"], "game.global.tech");
         const technologyLevel = readTechnologyLevel3(tech, "psychic");
@@ -34753,7 +34913,7 @@
       }
     });
     function validateLiveState(active, decision2) {
-      const global = readGlobal3(dependencies.getGame());
+      const global = readGlobal4(dependencies.getGame());
       const race2 = requireRecord(global["race"], "game.global.race");
       const tech = requireRecord(global["tech"], "game.global.tech");
       const technologyLevel = readTechnologyLevel3(tech, "psychic");
@@ -35352,7 +35512,7 @@
   }
 
   // src/adapters/evolve/progression/build/trigger.ts
-  function readTriggerTargets(getState) {
+  function readTriggerTargets2(getState) {
     const state = requireRecord(getState(), "state");
     const targets = state["triggerTargets"];
     if (!Array.isArray(targets)) {
@@ -35385,7 +35545,7 @@
         if (!Number.isSafeInteger(index) || index < 0) {
           throw new TypeError("trigger index must be a non-negative integer");
         }
-        const targets = readTriggerTargets(dependencies.getState);
+        const targets = readTriggerTargets2(dependencies.getState);
         if (index >= targets.length) {
           return Object.freeze({ target: null });
         }
@@ -35417,7 +35577,7 @@
             false
           );
         }
-        const targets = readTriggerTargets(dependencies.getState);
+        const targets = readTriggerTargets2(dependencies.getState);
         const value = targets[decision2.index];
         const target = typeof value === "object" && value !== null ? value : null;
         const actualId = target !== null && typeof target["id"] === "string" ? target["id"] : null;
@@ -59992,20 +60152,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       buildingIds,
       arpaIds
     });
+    const gamePriorityTargets = createGamePriorityTargetsEvolveAdapter({
+      getGame: () => game,
+      getSpyManager: () => SpyManager,
+      getFleetManagerOuter: () => FleetManagerOuter,
+      getMechManager: () => MechManager,
+      getTriggerManager: () => TriggerManager,
+      getJQuery: () => $
+    });
     const { updatePriorityTargets } = createPriorityTargets({
+      gamePriorityTargets,
       getSettings: () => settings,
       getState: () => state,
-      getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
       getTechIds: () => techIds,
       getBuildingIds: () => buildingIds,
       getArpaIds: () => arpaIds,
-      getSpyManager: () => SpyManager,
-      getFleetManagerOuter: () => FleetManagerOuter,
-      getMechManager: () => MechManager,
-      getTriggerManager: () => TriggerManager,
-      getJQuery: () => $,
       readQueuedTarget,
       getTechConflict,
       isPrestigeAllowed: isPrestigeAllowed2,

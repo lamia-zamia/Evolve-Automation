@@ -213,6 +213,7 @@ import { createBuildingSettingsEvolveAdapter } from "./progression/build/buildin
 import { createOptionsModalBrowserAdapter } from "../browser/options-modal.ts";
 import { createTotalDaysTopBarBrowserAdapter } from "../browser/total-days-top-bar.ts";
 import { createTotalDaysTopBarEvolveAdapter } from "./total-days-top-bar.ts";
+import { createGamePriorityTargetsEvolveAdapter } from "./game-priority-targets.ts";
 import { createPrestigeTopBarBrowserAdapter } from "../browser/prestige-top-bar.ts";
 import { createPrestigeTopBarEvolveAdapter } from "./progression/prestige/prestige-top-bar.ts";
 import { createEjectToggleBrowserAdapter } from "../browser/eject-toggles.ts";
@@ -4997,20 +4998,24 @@ function startEvolveRuntimeComposition(
       arpaIds,
     });
 
-  const { updatePriorityTargets } = createPriorityTargets({
-    getSettings: () => settings,
-    getState: () => state,
+  const gamePriorityTargets = createGamePriorityTargetsEvolveAdapter({
     getGame: () => game,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getTechIds: () => techIds,
-    getBuildingIds: () => buildingIds,
-    getArpaIds: () => arpaIds,
     getSpyManager: () => SpyManager,
     getFleetManagerOuter: () => FleetManagerOuter,
     getMechManager: () => MechManager,
     getTriggerManager: () => TriggerManager,
     getJQuery: () => $,
+  });
+
+  const { updatePriorityTargets } = createPriorityTargets({
+    gamePriorityTargets,
+    getSettings: () => settings,
+    getState: () => state,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    getTechIds: () => techIds,
+    getBuildingIds: () => buildingIds,
+    getArpaIds: () => arpaIds,
     readQueuedTarget,
     getTechConflict,
     isPrestigeAllowed,
