@@ -131,7 +131,9 @@ function readMechPreferredSize(
     mechManager["getPreferredSize"],
     "MechManager.getPreferredSize",
   );
-  const preferredList = getPreferredSize();
+  // The manager's preferred-size scan reads `this` (active mechs, `size`
+  // bag), so the method must run bound to the manager record.
+  const preferredList = Reflect.apply(getPreferredSize, mechManager, []);
   return Array.isArray(preferredList) && typeof preferredList[0] === "string"
     ? preferredList[0]
     : undefined;
@@ -149,7 +151,11 @@ function readMechCost(
     mechManager["getMechCost"],
     "MechManager.getMechCost",
   );
-  const cost = getMechCost(Object.freeze({ size }));
+  // Mech costs are derived from the manager's own design data (`this`),
+  // so the method must run bound to the manager record.
+  const cost = Reflect.apply(getMechCost, mechManager, [
+    Object.freeze({ size }),
+  ]);
   return Array.isArray(cost) && isFiniteNumber(cost[0]) ? cost[0] : 0;
 }
 

@@ -21,9 +21,22 @@ function makeAdapterState(overrides = {}) {
       nextShipCost: { Money: 777, Alloy: 10 },
     },
     mechManager: {
-      initLab: () => true,
-      getPreferredSize: () => ["collector", "small"],
-      getMechCost: ({ size }) => (size === "titan" ? [10, 5, 2] : [7, 3, 1]),
+      Size: ["collector", "small", "titan"],
+      initLab() {
+        return true;
+      },
+      getPreferredSize() {
+        return this.Size.includes("collector")
+          ? ["collector", "small"]
+          : ["small"];
+      },
+      getMechCost({ size }) {
+        return this.Size.includes(size)
+          ? size === "titan"
+            ? [10, 5, 2]
+            : [7, 3, 1]
+          : [0, 0, 0];
+      },
     },
     triggerManager: {
       targetTriggers: [{ actionId: "tech-construct" }, { nope: true }, "junk"],

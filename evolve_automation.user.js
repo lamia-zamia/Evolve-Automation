@@ -22737,7 +22737,7 @@
       mechManager["getPreferredSize"],
       "MechManager.getPreferredSize"
     );
-    const preferredList = getPreferredSize();
+    const preferredList = Reflect.apply(getPreferredSize, mechManager, []);
     return Array.isArray(preferredList) && typeof preferredList[0] === "string" ? preferredList[0] : void 0;
   }
   function readMechCost(size, dependencies) {
@@ -22749,7 +22749,9 @@
       mechManager["getMechCost"],
       "MechManager.getMechCost"
     );
-    const cost = getMechCost(Object.freeze({ size }));
+    const cost = Reflect.apply(getMechCost, mechManager, [
+      Object.freeze({ size })
+    ]);
     return Array.isArray(cost) && isFiniteNumber(cost[0]) ? cost[0] : 0;
   }
   function readTriggerTargets(dependencies) {
