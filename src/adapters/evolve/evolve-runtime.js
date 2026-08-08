@@ -127,6 +127,7 @@ import { createSettingsStore } from "../storage/settings-store.ts";
 import { createStateLogStore } from "../storage/state-log-store.ts";
 import { createPlannerStatsLifecycle } from "../../application/planner-stats.ts";
 import { createBuildPlanner } from "../../planning/build-planner.ts";
+import { createGameBuildPlannerEvolveAdapter } from "./game-build-planner.ts";
 import {
   readStorageRequirementsInput,
   readFuelDepotDemandInput,
@@ -5233,15 +5234,18 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const { updateBuildPlanner } = createBuildPlanner({
-    getSettings: () => settings,
-    getSettingsRaw: () => settingsRaw,
-    getState: () => state,
+  const gameBuildPlanner = createGameBuildPlannerEvolveAdapter({
     getGame: () => game,
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getPoly: () => poly,
     getNiceNumber,
+  });
+  const { updateBuildPlanner } = createBuildPlanner({
+    gameBuildPlanner,
+    getSettings: () => settings,
+    getSettingsRaw: () => settingsRaw,
+    getState: () => state,
     plannerLimitingResource,
     loadPlannerStats,
     savePlannerStats,

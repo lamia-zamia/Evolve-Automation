@@ -48,14 +48,20 @@ let saveCalls = 0;
 let savedStats = null;
 let limitCalls = [];
 const { updateBuildPlanner } = createBuildPlanner({
+  gameBuildPlanner: {
+    isPageHidden: () => context.document.hidden,
+    readDay: () => context.game.global.stats.days,
+    plannerListPresent: () => context.jquery("#script_planner-list").length > 0,
+    writePlannerList: (value) =>
+      context.jquery("#script_planner-list").html(value),
+    writePlannerStats: (value) =>
+      context.jquery("#script_planner-stats-text").html(value),
+    formatPlannerTime: (seconds) => context.poly.timeFormat(seconds),
+    formatPlannerNumber: (value) => value / 2,
+  },
   getSettings: () => context.settings,
   getSettingsRaw: () => context.settingsRaw,
   getState: () => context.state,
-  getGame: () => context.game,
-  getDocument: () => context.document,
-  getJQuery: () => context.jquery,
-  getPoly: () => context.poly,
-  getNiceNumber: (value) => value / 2,
   plannerLimitingResource: (item) => {
     limitCalls.push(item.title);
     return item.limit ?? null;

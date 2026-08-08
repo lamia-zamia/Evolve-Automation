@@ -16272,11 +16272,7 @@
     getSettings,
     getSettingsRaw,
     getState,
-    getGame,
-    getDocument,
-    getJQuery,
-    getPoly,
-    getNiceNumber,
+    gameBuildPlanner,
     plannerLimitingResource,
     loadPlannerStats,
     savePlannerStats
@@ -16287,8 +16283,9 @@
         return;
       }
       const state = getState();
-      const shouldSample = !getDocument().hidden || settings.stateLogEnabled;
-      const shouldDraw = !getDocument().hidden;
+      const pageHidden = gameBuildPlanner.isPageHidden();
+      const shouldSample = !pageHidden || settings.stateLogEnabled;
+      const shouldDraw = !pageHidden;
       const buildRan = state.plannerFreshTick === state.scriptTick;
       const targets = state.unlockedBuildings ?? [];
       const topTarget = targets[0];
@@ -16301,7 +16298,7 @@
           const updated = recordPlannerSample(
             stats2,
             bucket,
-            getGame().global.stats.days
+            gameBuildPlanner.readDay()
           );
           state.plannerStats = updated;
           if (updated.total % 25 === 0) {
@@ -16312,78 +16309,146 @@
       if (!shouldDraw || getSettingsRaw().buildPlannerCollapsed) {
         return;
       }
-      const jquery = getJQuery();
-      const list = jquery("#script_planner-list");
-      if (list.length === 0) {
+      if (!gameBuildPlanner.plannerListPresent()) {
         return;
       }
-      if (!settings.autoBuild && !settings.autoARPA) {
-        list.html('<li class="planner-note">autoBuild / autoARPA disabled</li>');
-      } else {
-        const rows = targets.slice(0, 8).map((target) => {
-          const limit = plannerLimitingResource(target);
-          let status2;
-          let statusClass;
-          if (!limit) {
-            status2 = "ready";
-            statusClass = "has-text-success";
-          } else if ("status" in limit) {
-            status2 = "planner data unavailable";
-            statusClass = "has-text-danger";
-          } else if (limit.blocker === "storage") {
-            status2 = `${limit.resourceTitle} (storage)`;
-            statusClass = "has-text-danger";
-          } else if (limit.blocker === "stalled") {
-            status2 = `${limit.resourceTitle} (no income)`;
-            statusClass = "has-text-danger";
-          } else if (limit.blocker === "locked") {
-            status2 = `${limit.resourceTitle} (locked)`;
-            statusClass = "has-text-danger";
-          } else {
-            status2 = `${getPoly().timeFormat(limit.time)} (${limit.resourceTitle})`;
-            statusClass = "has-text-warning";
-          }
-          let name = target.title;
-          if (target.count && !target.is?.multiSegmented) {
-            name += ` #${target.count + 1}`;
-          }
-          if (state.queuedTargets.includes(target)) {
-            name += ' <span class="has-text-special">(queued)</span>';
-          } else if (state.triggerTargets.includes(target)) {
-            name += ' <span class="has-text-special">(trigger)</span>';
-          }
-          const note = target.extraDescription.replace(/^Auto(Build|ARPA) weighting:[^<]*<br>/, "").split("<br>").filter(Boolean).join(" · ");
-          return `<li>
-            <div class="planner-row">
-                <span class="planner-name">${name}</span>
-                <span class="planner-weight has-text-advanced">${getNiceNumber(
-            target.weighting
-          )}</span>
-                <span class="planner-time ${statusClass}">${status2}</span>
-            </div>
-            ${note ? `<div class="planner-note">${note}</div>` : ""}
-        </li>`;
-        });
-        if (!buildRan) {
-          rows.unshift(
-            '<li class="planner-note">autoBuild idle (triggers or queue processing) — list from last update</li>'
-          );
-        } else if (rows.length === 0) {
-          rows.push('<li class="planner-note">Nothing to build</li>');
-        }
-        list.html(rows.join(""));
-      }
+      const listHtml = buildListHtml(settings, state, buildRan, targets);
+      gameBuildPlanner.writePlannerList(listHtml);
       const stats = state.plannerStats;
       if (stats !== null && stats !== void 0 && stats.total > 0) {
         const shares = Object.entries(stats.samples).sort((a, b) => b[1] - a[1]).slice(0, 5).map(
           ([resource2, samples]) => `${resource2} ${Math.round(samples / stats.total * 100)}%`
         ).join(" · ");
-        jquery("#script_planner-stats-text").html(
+        gameBuildPlanner.writePlannerStats(
           `${shares}<div class="planner-note">Top target blocked by, since day ${stats.startDay} (${stats.total} samples)</div>`
         );
       }
     }
+    function buildListHtml(settings, state, buildRan, targets) {
+      if (!settings.autoBuild && !settings.autoARPA) {
+        return '<li class="planner-note">autoBuild / autoARPA disabled</li>';
+      }
+      const rows = targets.slice(0, 8).map((target) => {
+        const limit = plannerLimitingResource(target);
+        let status2;
+        let statusClass;
+        if (!limit) {
+          status2 = "ready";
+          statusClass = "has-text-success";
+        } else if ("status" in limit) {
+          status2 = "planner data unavailable";
+          statusClass = "has-text-danger";
+        } else if (limit.blocker === "storage") {
+          status2 = `${limit.resourceTitle} (storage)`;
+          statusClass = "has-text-danger";
+        } else if (limit.blocker === "stalled") {
+          status2 = `${limit.resourceTitle} (no income)`;
+          statusClass = "has-text-danger";
+        } else if (limit.blocker === "locked") {
+          status2 = `${limit.resourceTitle} (locked)`;
+          statusClass = "has-text-danger";
+        } else {
+          status2 = `${gameBuildPlanner.formatPlannerTime(limit.time)} (${limit.resourceTitle})`;
+          statusClass = "has-text-warning";
+        }
+        let name = target.title;
+        if (target.count && !target.is?.multiSegmented) {
+          name += ` #${target.count + 1}`;
+        }
+        if (state.queuedTargets.includes(target)) {
+          name += ' <span class="has-text-special">(queued)</span>';
+        } else if (state.triggerTargets.includes(target)) {
+          name += ' <span class="has-text-special">(trigger)</span>';
+        }
+        const note = target.extraDescription.replace(/^Auto(Build|ARPA) weighting:[^<]*<br>/, "").split("<br>").filter(Boolean).join(" · ");
+        return `<li>
+            <div class="planner-row">
+                <span class="planner-name">${name}</span>
+                <span class="planner-weight has-text-advanced">${gameBuildPlanner.formatPlannerNumber(
+          target.weighting
+        )}</span>
+                <span class="planner-time ${statusClass}">${status2}</span>
+            </div>
+            ${note ? `<div class="planner-note">${note}</div>` : ""}
+        </li>`;
+      });
+      if (!buildRan) {
+        rows.unshift(
+          '<li class="planner-note">autoBuild idle (triggers or queue processing) — list from last update</li>'
+        );
+      } else if (rows.length === 0) {
+        rows.push('<li class="planner-note">Nothing to build</li>');
+      }
+      return rows.join("");
+    }
     return { updateBuildPlanner };
+  }
+
+  // src/adapters/evolve/game-build-planner.ts
+  function readDays(dependencies) {
+    const run = readPlannerRun(dependencies.getGame());
+    return run.status === "ready" ? run.run.day : 0;
+  }
+  function isPageHidden(dependencies) {
+    const document = dependencies.getDocument();
+    return (typeof document === "object" && document !== null && document["hidden"]) === true;
+  }
+  function readCollection(dependencies, selector) {
+    const jquery = dependencies.getJQuery();
+    if (typeof jquery !== "function") {
+      return null;
+    }
+    const collection = jquery(selector);
+    if (collection === null || collection === void 0 || typeof collection !== "object") {
+      return null;
+    }
+    const record = collection;
+    return Object.freeze({
+      ...record,
+      length: Number(record["length"] ?? 0)
+    });
+  }
+  function writeCollectionHtml(dependencies, selector, html) {
+    const collection = readCollection(dependencies, selector);
+    if (collection === null || collection["length"] === 0) {
+      return;
+    }
+    const render = requireFunction(collection["html"], `${selector}.html`);
+    Reflect.apply(render, collection, [html]);
+  }
+  function formatPlannerTime(seconds, dependencies) {
+    if (!isFiniteNumber(seconds)) {
+      return "";
+    }
+    const poly = requireRecord(dependencies.getPoly(), "game compatibility");
+    const timeFormat = requireFunction(poly["timeFormat"], "poly.timeFormat");
+    const formatted = Reflect.apply(timeFormat, poly, [seconds]);
+    return typeof formatted === "string" ? formatted : "";
+  }
+  function createGameBuildPlannerEvolveAdapter(dependencies) {
+    return Object.freeze({
+      isPageHidden() {
+        return isPageHidden(dependencies);
+      },
+      readDay() {
+        return readDays(dependencies);
+      },
+      plannerListPresent() {
+        return (readCollection(dependencies, "#script_planner-list")?.["length"] ?? 0) > 0;
+      },
+      writePlannerList(html) {
+        writeCollectionHtml(dependencies, "#script_planner-list", html);
+      },
+      writePlannerStats(html) {
+        writeCollectionHtml(dependencies, "#script_planner-stats-text", html);
+      },
+      formatPlannerTime(seconds) {
+        return formatPlannerTime(seconds, dependencies);
+      },
+      formatPlannerNumber(value) {
+        return dependencies.getNiceNumber(value);
+      }
+    });
   }
 
   // src/adapters/evolve/economy/storage/storage-requirements.ts
@@ -60362,15 +60427,18 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         state = context.state;
       }
     });
-    const { updateBuildPlanner } = createBuildPlanner({
-      getSettings: () => settings,
-      getSettingsRaw: () => settingsRaw,
-      getState: () => state,
+    const gameBuildPlanner = createGameBuildPlannerEvolveAdapter({
       getGame: () => game,
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getPoly: () => poly,
-      getNiceNumber,
+      getNiceNumber
+    });
+    const { updateBuildPlanner } = createBuildPlanner({
+      gameBuildPlanner,
+      getSettings: () => settings,
+      getSettingsRaw: () => settingsRaw,
+      getState: () => state,
       plannerLimitingResource,
       loadPlannerStats,
       savePlannerStats

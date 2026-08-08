@@ -3,6 +3,7 @@ import {
   type PlannerLimit,
   type PlannerStats,
 } from "../domain/planner-analysis.ts";
+import type { GameBuildPlannerPort } from "../ports/game-build-planner.ts";
 
 type BuildPlannerSettings = {
   buildPlannerUI: boolean;
@@ -34,20 +35,11 @@ type PlannerLimitUnavailable = {
   readonly resourceId?: string;
 };
 
-type JQueryResult = {
-  length: number;
-  html: (value: string) => unknown;
-};
-
 type BuildPlannerDependencies = {
+  gameBuildPlanner: GameBuildPlannerPort;
   getSettings: () => BuildPlannerSettings;
   getSettingsRaw: () => { buildPlannerCollapsed: boolean };
   getState: () => BuildPlannerState;
-  getGame: () => { global: { stats: { days: number } } };
-  getDocument: () => { hidden: boolean };
-  getJQuery: () => (selector: string) => JQueryResult;
-  getPoly: () => { timeFormat: (seconds: number) => string };
-  getNiceNumber: (value: number) => number;
   plannerLimitingResource: (
     target: BuildPlannerTarget,
   ) => Readonly<PlannerLimit> | PlannerLimitUnavailable | null;
@@ -59,11 +51,7 @@ export function createBuildPlanner({
   getSettings,
   getSettingsRaw,
   getState,
-  getGame,
-  getDocument,
-  getJQuery,
-  getPoly,
-  getNiceNumber,
+  gameBuildPlanner,
   plannerLimitingResource,
   loadPlannerStats,
   savePlannerStats,
@@ -74,8 +62,9 @@ export function createBuildPlanner({
       return;
     }
     const state = getState();
-    const shouldSample = !getDocument().hidden || settings.stateLogEnabled;
-    const shouldDraw = !getDocument().hidden;
+    const pageHidden = gameBuildPlanner.isPageHidden();
+    const shouldSample = !pageHidden || settings.stateLogEnabled;
+    const shouldDraw = !pageHidden;
     const buildRan = state.plannerFreshTick === state.scriptTick;
     const targets = state.unlockedBuildings ?? [];
 
@@ -95,7 +84,7 @@ export function createBuildPlanner({
         const updated = recordPlannerSample(
           stats,
           bucket,
-          getGame().global.stats.days,
+          gameBuildPlanner.readDay(),
         );
         state.plannerStats = updated;
         if (updated.total % 25 === 0) {
@@ -107,72 +96,11 @@ export function createBuildPlanner({
     if (!shouldDraw || getSettingsRaw().buildPlannerCollapsed) {
       return;
     }
-    const jquery = getJQuery();
-    const list = jquery("#script_planner-list");
-    if (list.length === 0) {
+    if (!gameBuildPlanner.plannerListPresent()) {
       return;
     }
-
-    if (!settings.autoBuild && !settings.autoARPA) {
-      list.html('<li class="planner-note">autoBuild / autoARPA disabled</li>');
-    } else {
-      const rows = targets.slice(0, 8).map((target) => {
-        const limit = plannerLimitingResource(target);
-        let status: string;
-        let statusClass: string;
-        if (!limit) {
-          status = "ready";
-          statusClass = "has-text-success";
-        } else if ("status" in limit) {
-          status = "planner data unavailable";
-          statusClass = "has-text-danger";
-        } else if (limit.blocker === "storage") {
-          status = `${limit.resourceTitle} (storage)`;
-          statusClass = "has-text-danger";
-        } else if (limit.blocker === "stalled") {
-          status = `${limit.resourceTitle} (no income)`;
-          statusClass = "has-text-danger";
-        } else if (limit.blocker === "locked") {
-          status = `${limit.resourceTitle} (locked)`;
-          statusClass = "has-text-danger";
-        } else {
-          status = `${getPoly().timeFormat(limit.time)} (${limit.resourceTitle})`;
-          statusClass = "has-text-warning";
-        }
-        let name = target.title;
-        if (target.count && !target.is?.multiSegmented) {
-          name += ` #${target.count + 1}`;
-        }
-        if (state.queuedTargets.includes(target)) {
-          name += ' <span class="has-text-special">(queued)</span>';
-        } else if (state.triggerTargets.includes(target)) {
-          name += ' <span class="has-text-special">(trigger)</span>';
-        }
-        const note = target.extraDescription
-          .replace(/^Auto(Build|ARPA) weighting:[^<]*<br>/, "")
-          .split("<br>")
-          .filter(Boolean)
-          .join(" · ");
-        return `<li>
-            <div class="planner-row">
-                <span class="planner-name">${name}</span>
-                <span class="planner-weight has-text-advanced">${getNiceNumber(
-                  target.weighting,
-                )}</span>
-                <span class="planner-time ${statusClass}">${status}</span>
-            </div>
-            ${note ? `<div class="planner-note">${note}</div>` : ""}
-        </li>`;
-      });
-      if (!buildRan) {
-        rows.unshift(
-          '<li class="planner-note">autoBuild idle (triggers or queue processing) — list from last update</li>',
-        );
-      } else if (rows.length === 0) {
-        rows.push('<li class="planner-note">Nothing to build</li>');
-      }
-      list.html(rows.join(""));
-    }
+    const listHtml = buildListHtml(settings, state, buildRan, targets);
+    gameBuildPlanner.writePlannerList(listHtml);
 
     const stats = state.plannerStats;
     if (stats !== null && stats !== undefined && stats.total > 0) {
@@ -184,10 +112,77 @@ export function createBuildPlanner({
             `${resource} ${Math.round((samples / stats.total) * 100)}%`,
         )
         .join(" · ");
-      jquery("#script_planner-stats-text").html(
+      gameBuildPlanner.writePlannerStats(
         `${shares}<div class="planner-note">Top target blocked by, since day ${stats.startDay} (${stats.total} samples)</div>`,
       );
     }
+  }
+
+  function buildListHtml(
+    settings: BuildPlannerSettings,
+    state: BuildPlannerState,
+    buildRan: boolean,
+    targets: BuildPlannerTarget[],
+  ) {
+    if (!settings.autoBuild && !settings.autoARPA) {
+      return '<li class="planner-note">autoBuild / autoARPA disabled</li>';
+    }
+    const rows = targets.slice(0, 8).map((target) => {
+      const limit = plannerLimitingResource(target);
+      let status: string;
+      let statusClass: string;
+      if (!limit) {
+        status = "ready";
+        statusClass = "has-text-success";
+      } else if ("status" in limit) {
+        status = "planner data unavailable";
+        statusClass = "has-text-danger";
+      } else if (limit.blocker === "storage") {
+        status = `${limit.resourceTitle} (storage)`;
+        statusClass = "has-text-danger";
+      } else if (limit.blocker === "stalled") {
+        status = `${limit.resourceTitle} (no income)`;
+        statusClass = "has-text-danger";
+      } else if (limit.blocker === "locked") {
+        status = `${limit.resourceTitle} (locked)`;
+        statusClass = "has-text-danger";
+      } else {
+        status = `${gameBuildPlanner.formatPlannerTime(limit.time)} (${limit.resourceTitle})`;
+        statusClass = "has-text-warning";
+      }
+      let name = target.title;
+      if (target.count && !target.is?.multiSegmented) {
+        name += ` #${target.count + 1}`;
+      }
+      if (state.queuedTargets.includes(target)) {
+        name += ' <span class="has-text-special">(queued)</span>';
+      } else if (state.triggerTargets.includes(target)) {
+        name += ' <span class="has-text-special">(trigger)</span>';
+      }
+      const note = target.extraDescription
+        .replace(/^Auto(Build|ARPA) weighting:[^<]*<br>/, "")
+        .split("<br>")
+        .filter(Boolean)
+        .join(" · ");
+      return `<li>
+            <div class="planner-row">
+                <span class="planner-name">${name}</span>
+                <span class="planner-weight has-text-advanced">${gameBuildPlanner.formatPlannerNumber(
+                  target.weighting,
+                )}</span>
+                <span class="planner-time ${statusClass}">${status}</span>
+            </div>
+            ${note ? `<div class="planner-note">${note}</div>` : ""}
+        </li>`;
+    });
+    if (!buildRan) {
+      rows.unshift(
+        '<li class="planner-note">autoBuild idle (triggers or queue processing) — list from last update</li>',
+      );
+    } else if (rows.length === 0) {
+      rows.push('<li class="planner-note">Nothing to build</li>');
+    }
+    return rows.join("");
   }
 
   return { updateBuildPlanner };
