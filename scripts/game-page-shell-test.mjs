@@ -58,7 +58,7 @@ const bodyObserver = observers.find(
   ({ target }) => target === documentStub.body,
 );
 assert.ok(bodyObserver);
-assert.deepEqual(bodyObserver.options, { childList: true });
+assert.deepEqual(bodyObserver.options, { childList: true, subtree: true });
 assert.deepEqual(
   observers.map(({ callback }) => callback),
   [tooltip, bodyObserver.callback, filterLog],
@@ -85,6 +85,16 @@ const userModal = {
 bodyObserver.callback([{ addedNodes: [userModal] }]);
 assert.equal(observers.at(-1).target, userModal);
 assert.equal(observers.at(-1).callback, tooltip);
+
+// Real MutationRecords carry a NodeList in addedNodes, which is not an Array.
+// The observer must still hand such modals to the capture port.
+const nodeList = (nodes) => ({ forEach: (visit) => nodes.forEach(visit) });
+modal.captured = [];
+modal.awaiting = true;
+bodyObserver.callback([{ addedNodes: nodeList([scriptModal]) }]);
+assert.deepEqual(modal.captured, [scriptModal]);
+assert.equal(observers.length, 4);
+modal.awaiting = false;
 
 // Non-element additions and non-modal elements are ignored.
 bodyObserver.callback([{ addedNodes: [documentStub.body] }]);

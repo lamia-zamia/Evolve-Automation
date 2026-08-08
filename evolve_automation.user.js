@@ -3439,7 +3439,7 @@
       const querySelector = readProperty(documentValue, "querySelector");
       return typeof querySelector === "function" ? Reflect.apply(querySelector, documentValue, [selector]) : null;
     }
-    function observeNode(target, callback) {
+    function observeNode(target, callback, options2 = {}) {
       if (!isRecord(target)) {
         return;
       }
@@ -3450,7 +3450,17 @@
       const observer = new Observer(callback);
       const observe = readProperty(observer, "observe");
       if (typeof observe === "function") {
-        Reflect.apply(observe, observer, [target, { childList: true }]);
+        Reflect.apply(observe, observer, [
+          target,
+          { childList: true, subtree: options2.subtree ?? false }
+        ]);
+      }
+    }
+    function forEachAddedNode(bodyMutation, visit) {
+      const addedNodes = readProperty(bodyMutation, "addedNodes");
+      const forEach = readProperty(addedNodes, "forEach");
+      if (typeof forEach === "function" && isRecord(addedNodes)) {
+        Reflect.apply(forEach, addedNodes, [visit]);
       }
     }
     function isModalElement(node) {
@@ -3464,28 +3474,28 @@
     return Object.freeze({
       mountObservers() {
         observeNode(byId("main"), getTooltipObserver());
-        observeNode(bySelector("body"), (bodyMutations) => {
-          if (!Array.isArray(bodyMutations)) {
-            return;
-          }
-          for (const bodyMutation of bodyMutations) {
-            const addedNodes = readProperty(bodyMutation, "addedNodes");
-            if (!Array.isArray(addedNodes)) {
-              continue;
+        observeNode(
+          bySelector("body"),
+          (bodyMutations) => {
+            if (!Array.isArray(bodyMutations)) {
+              return;
             }
-            for (const node of addedNodes) {
-              if (!isModalElement(node)) {
-                continue;
-              }
-              const modal = getModal();
-              if (modal.isAwaitingScriptModal()) {
-                modal.captureScriptModal(node);
-              } else {
-                observeNode(node, getTooltipObserver());
-              }
+            for (const bodyMutation of bodyMutations) {
+              forEachAddedNode(bodyMutation, (node) => {
+                if (!isModalElement(node)) {
+                  return;
+                }
+                const modal = getModal();
+                if (modal.isAwaitingScriptModal()) {
+                  modal.captureScriptModal(node);
+                } else {
+                  observeNode(node, getTooltipObserver());
+                }
+              });
             }
-          }
-        });
+          },
+          { subtree: true }
+        );
         observeNode(byId("msgQueueLog"), getLogFilter());
       },
       isPageReady() {

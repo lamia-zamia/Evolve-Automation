@@ -57,10 +57,16 @@ export function createGamePageShell({
       : null;
   }
 
-  /** Mounts one childList observer over a target when both exist. */
+  /**
+   * Mounts one childList observer over a target when both exist. The target for
+   * modal capture is the page body, but Buefy mounts programmatic modals inside
+   * the Vue app container rather than as direct body children, so the body
+   * observer must also watch the subtree.
+   */
   function observeNode(
     target: unknown,
     callback: (mutations: unknown) => void,
+    options: { subtree?: boolean } = {},
   ): void {
     if (!isRecord(target)) {
       return;
@@ -74,12 +80,33 @@ export function createGamePageShell({
     )(callback);
     const observe = readProperty(observer, "observe");
     if (typeof observe === "function") {
-      Reflect.apply(observe, observer, [target, { childList: true }]);
+      Reflect.apply(observe, observer, [
+        target,
+        { childList: true, subtree: options.subtree ?? false },
+      ]);
+    }
+  }
+
+  /**
+   * Walks the added nodes of one mutation record. Real MutationRecords carry a
+   * NodeList in `addedNodes`, which is not an Array; iterate through the generic
+   * `forEach` both Array and NodeList expose, matching the tooltip filter.
+   */
+  function forEachAddedNode(
+    bodyMutation: unknown,
+    visit: (node: unknown) => void,
+  ): void {
+    const addedNodes = readProperty(bodyMutation, "addedNodes");
+    const forEach = readProperty(addedNodes, "forEach");
+    if (typeof forEach === "function" && isRecord(addedNodes)) {
+      Reflect.apply(forEach, addedNodes, [visit]);
     }
   }
 
   /** Whether a newly added node is an element carrying the modal class. */
-  function isModalElement(node: unknown): boolean {
+  function isModalElement(node: unknown): node is {
+    readonly style: { display: string };
+  } {
     if (
       readProperty(node, "nodeType") !== readProperty(getNode(), "ELEMENT_NODE")
     ) {
@@ -98,28 +125,31 @@ export function createGamePageShell({
   return Object.freeze({
     mountObservers(): void {
       observeNode(byId("main"), getTooltipObserver());
-      observeNode(bySelector("body"), (bodyMutations) => {
-        if (!Array.isArray(bodyMutations)) {
-          return;
-        }
-        for (const bodyMutation of bodyMutations) {
-          const addedNodes = readProperty(bodyMutation, "addedNodes");
-          if (!Array.isArray(addedNodes)) {
-            continue;
+      // The Vue 2 shell mounts modals inside the app container, so the body
+      // observer needs the subtree to catch them. Keep the other mounts on
+      // direct children where the tooltips and log rows are added.
+      observeNode(
+        bySelector("body"),
+        (bodyMutations) => {
+          if (!Array.isArray(bodyMutations)) {
+            return;
           }
-          for (const node of addedNodes) {
-            if (!isModalElement(node)) {
-              continue;
-            }
-            const modal = getModal();
-            if (modal.isAwaitingScriptModal()) {
-              modal.captureScriptModal(node);
-            } else {
-              observeNode(node, getTooltipObserver());
-            }
+          for (const bodyMutation of bodyMutations) {
+            forEachAddedNode(bodyMutation, (node) => {
+              if (!isModalElement(node)) {
+                return;
+              }
+              const modal = getModal();
+              if (modal.isAwaitingScriptModal()) {
+                modal.captureScriptModal(node);
+              } else {
+                observeNode(node, getTooltipObserver());
+              }
+            });
           }
-        }
-      });
+        },
+        { subtree: true },
+      );
       observeNode(byId("msgQueueLog"), getLogFilter());
     },
 
