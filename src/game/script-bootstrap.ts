@@ -1,5 +1,4 @@
 import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
-import type { GameModalPort } from "../ports/game-modal.ts";
 import type { GamePageShellPort } from "../ports/game-page-shell.ts";
 
 type AnyFunction = (...args: any[]) => any;
@@ -19,7 +18,6 @@ type ScriptBootstrapDependencies = {
   getCrafter: () => AnyRecord;
   getTriggerManager: () => AnyRecord;
   getCheckActions: () => boolean;
-  getGameModal: () => GameModalPort;
   getJQuery: () => AnyFunction & AnyRecord;
   getWindow: () => AnyRecord;
   getUserscriptEnvironment: () => AnyRecord;
@@ -50,7 +48,6 @@ export function createScriptBootstrap({
   getCrafter,
   getTriggerManager,
   getCheckActions,
-  getGameModal,
   getJQuery,
   getWindow,
   getUserscriptEnvironment,
@@ -79,7 +76,6 @@ export function createScriptBootstrap({
   let crafter: AnyRecord;
   let TriggerManager: AnyRecord;
   let checkActions: boolean;
-  let gameModal: GameModalPort;
   let $: AnyFunction & AnyRecord;
   let window: AnyRecord;
   let userscriptEnvironment: AnyRecord;
@@ -105,7 +101,6 @@ export function createScriptBootstrap({
     crafter = getCrafter();
     TriggerManager = getTriggerManager();
     checkActions = getCheckActions();
-    gameModal = getGameModal();
     $ = getJQuery();
     window = getWindow();
     userscriptEnvironment = getUserscriptEnvironment();

@@ -155,7 +155,6 @@ const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
   getCrafter: () => context.crafter,
   getTriggerManager: () => context.TriggerManager,
   getCheckActions: () => context.checkActions,
-  getGameModal: () => context.gameModal,
   getJQuery: () => context.$,
   getWindow: () => context.window,
   getUserscriptEnvironment: () => context.userscriptEnvironment,

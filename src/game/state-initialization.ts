@@ -644,7 +644,7 @@ export function createStateInitialization({
     // Better back compatibility, to run beta version's script on stable game build without commenting out new buildings
     setBuildings(
       Object.fromEntries(
-        Object.entries(getBuildings()).filter(([id, b]) =>
+        Object.entries(getBuildings()).filter(([, b]) =>
           b.definition ? true : log(`${b.name} action not found.`),
         ),
       ),

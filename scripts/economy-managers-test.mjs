@@ -58,9 +58,6 @@ const { GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
     getGame: () => game,
     getResources: () => resources,
     getBuildings: () => buildings,
-    clickMultipliers: {
-      steps: (count) => Array.from({ length: count }, (_, i) => i),
-    },
     governmentSelection: createGameGovernmentSelection({
       getVueById: (id) => vueMap[id],
     }),

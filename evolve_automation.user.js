@@ -5169,7 +5169,6 @@
     getGame,
     getResources,
     getBuildings,
-    clickMultipliers,
     governmentSelection,
     marketControls,
     storageControls,
@@ -5816,9 +5815,9 @@
         let soldiers = 0;
         const soldierRating = game.armyRating(1, "hellArmy");
         if (settings.autoBuild && buildings.PitAssaultForge.isAutoBuildable() && soldierRating > 0) {
-          if (settings.hellAssaultReserve || !Object.entries(buildings.PitAssaultForge.cost).find(
-            ([id, amount]) => resources[id].currentQuantity < amount
-          )) {
+          if (settings.hellAssaultReserve || !Object.entries(
+            buildings.PitAssaultForge.cost
+          ).find(([id, amount]) => resources[id].currentQuantity < amount)) {
             soldiers = Math.round(650 / soldierRating);
           }
         }
@@ -7138,7 +7137,6 @@
     getCrafter,
     getTriggerManager,
     getCheckActions,
-    getGameModal,
     getJQuery,
     getWindow,
     getUserscriptEnvironment,
@@ -7167,7 +7165,6 @@
     let crafter;
     let TriggerManager;
     let checkActions;
-    let gameModal;
     let $;
     let window;
     let userscriptEnvironment;
@@ -7191,7 +7188,6 @@
       crafter = getCrafter();
       TriggerManager = getTriggerManager();
       checkActions = getCheckActions();
-      gameModal = getGameModal();
       $ = getJQuery();
       window = getWindow();
       userscriptEnvironment = getUserscriptEnvironment();
@@ -10678,7 +10674,7 @@
         this.source = ownerRace.id ?? readSpecialRaceTraits()[traitName] ?? "";
         this.racesThatCanGain = Object.entries(readGame().races).filter(
           ([id, race2]) => id == ownerRace.id || (race2?.type == "hybrid" ? race2?.hybrid?.includes(ownerRace.genus) : race2?.type === ownerRace.genus)
-        ).map(([id, race2]) => id).flat();
+        ).map(([id]) => id).flat();
         this.genus = this.source === "reindeer" ? "herbivore" : ownerRace.genus;
       }
       isGainable() {
@@ -10695,7 +10691,7 @@
       constructor(traitName) {
         super(traitName);
         this.type = "genus";
-        let genus = Object.entries(readPoly().genus_traits).filter(([, traits]) => traits[traitName] !== void 0).map(([id, traits]) => id);
+        let genus = Object.entries(readPoly().genus_traits).filter(([, traits]) => traits[traitName] !== void 0).map(([id]) => id);
         this.source = genus[0] ?? readSpecialRaceTraits()[traitName] ?? "";
         this.genus = this.source;
       }
@@ -15291,7 +15287,6 @@
           continue;
         }
         currentRaces[id] = new CurrentRace(id);
-        let evolutionPath;
         if (id === "hellspawn") {
           currentRaces[id].evolutionTree[currentRaces[id].genus] = [
             e.bunker,
@@ -15848,7 +15843,7 @@
       setBuildings(
         Object.fromEntries(
           Object.entries(getBuildings()).filter(
-            ([id, b]) => b.definition ? true : log(`${b.name} action not found.`)
+            ([, b]) => b.definition ? true : log(`${b.name} action not found.`)
           )
         )
       );
@@ -58658,7 +58653,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
-      clickMultipliers,
       governmentSelection,
       marketControls,
       storageControls,
@@ -60584,7 +60578,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getCrafter: () => crafter,
       getTriggerManager: () => TriggerManager,
       getCheckActions: () => checkActions,
-      getGameModal: () => gameModal,
       getJQuery: () => $,
       getWindow: () => runtimeEnvironment.window,
       getUserscriptEnvironment: () => userscriptEnvironment,

@@ -2766,7 +2766,7 @@ export function createEntityClasses({
               ? race?.hybrid?.includes(ownerRace.genus)
               : race?.type === ownerRace.genus),
         )
-        .map(([id, race]) => id)
+        .map(([id]) => id)
         .flat();
 
       this.genus = this.source === "reindeer" ? "herbivore" : ownerRace.genus;
@@ -2795,7 +2795,7 @@ export function createEntityClasses({
       this.type = "genus";
       let genus = (Object.entries(readPoly().genus_traits) as [string, Loose][])
         .filter(([, traits]) => traits[traitName] !== undefined)
-        .map(([id, traits]) => id);
+        .map(([id]) => id);
       this.source = genus[0] ?? readSpecialRaceTraits()[traitName] ?? "";
       this.genus = this.source;
     }

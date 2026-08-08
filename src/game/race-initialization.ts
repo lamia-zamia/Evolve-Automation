@@ -83,7 +83,6 @@ export function createRaceInitialization({
       }
 
       currentRaces[id] = new CurrentRace(id);
-      let evolutionPath;
       if (id === "hellspawn") {
         currentRaces[id].evolutionTree[currentRaces[id].genus] = [
           e.bunker,

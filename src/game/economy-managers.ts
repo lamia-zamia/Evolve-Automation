@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { GameClickMultipliersPort } from "../ports/game-click-multipliers.ts";
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameGovernmentSelectionPort } from "../ports/game-government-selection.ts";
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
@@ -27,7 +26,6 @@ interface EconomyManagersDependencies {
   getGame: () => any;
   getResources: () => Record<string, any>;
   getBuildings: () => Record<string, any>;
-  clickMultipliers: GameClickMultipliersPort;
   governmentSelection: GameGovernmentSelectionPort;
   marketControls: GameMarketControlsPort;
   storageControls: GameStorageControlsPort;
@@ -110,7 +108,6 @@ export function createEconomyManagers({
   getGame,
   getResources,
   getBuildings,
-  clickMultipliers,
   governmentSelection,
   marketControls,
   storageControls,

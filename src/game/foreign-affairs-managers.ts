@@ -536,10 +536,9 @@ export function createForeignAffairsManagers({
       ) {
         if (
           settings.hellAssaultReserve ||
-          !Object.entries(buildings.PitAssaultForge.cost).find(
-            ([id, amount]: [string, any]) =>
-              resources[id].currentQuantity < amount,
-          )
+          !Object.entries(
+            buildings.PitAssaultForge.cost as Record<string, number>,
+          ).find(([id, amount]) => resources[id].currentQuantity < amount)
         ) {
           soldiers = Math.round(650 / soldierRating);
         }
