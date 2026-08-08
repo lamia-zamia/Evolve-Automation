@@ -33,10 +33,19 @@ function isPageHidden(
   );
 }
 
+/**
+ * A jQuery selection, keeping the live instance so prototype methods like
+ * `html` stay reachable. The array-like `length` is copied for stable reads.
+ */
+type JQueryCollection = {
+  readonly length?: unknown;
+  readonly [key: string]: unknown;
+};
+
 function readCollection(
   dependencies: GameBuildPlannerEvolveDependencies,
   selector: string,
-): { length: number; [key: string]: unknown } | null {
+): { length: number; collection: JQueryCollection } | null {
   const jquery = dependencies.getJQuery();
   if (typeof jquery !== "function") {
     return null;
@@ -49,10 +58,10 @@ function readCollection(
   ) {
     return null;
   }
-  const record = collection as { length?: unknown; [key: string]: unknown };
+  const record = collection as JQueryCollection;
   return Object.freeze({
-    ...record,
     length: Number(record["length"] ?? 0),
+    collection: record,
   });
 }
 
@@ -61,13 +70,15 @@ function writeCollectionHtml(
   selector: string,
   html: string,
 ): void {
-  const collection = readCollection(dependencies, selector);
-  if (collection === null || collection["length"] === 0) {
+  const read = readCollection(dependencies, selector);
+  if (read === null || read["length"] === 0) {
     return;
   }
+  const collection = read["collection"];
   const render = requireFunction(collection["html"], `${selector}.html`);
-  // jQuery's html() needs the collection as `this`; the planner writes into
-  // whichever element the selector resolves, so bind the call to the element.
+  // jQuery's html() needs the live collection as `this` so it can walk the
+  // matched elements; the planner writes into whichever element the selector
+  // resolves.
   Reflect.apply(render, collection, [html]);
 }
 
@@ -97,8 +108,7 @@ export function createGameBuildPlannerEvolveAdapter(
     },
     plannerListPresent(): boolean {
       return (
-        (readCollection(dependencies, "#script_planner-list")?.["length"] ??
-          0) > 0
+        (readCollection(dependencies, "#script_planner-list")?.length ?? 0) > 0
       );
     },
     writePlannerList(html: string): void {

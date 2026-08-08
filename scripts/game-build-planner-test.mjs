@@ -2,6 +2,30 @@ import assert from "node:assert/strict";
 
 import { createGameBuildPlannerEvolveAdapter } from "../src/adapters/evolve/game-build-planner.ts";
 
+// Collected from an imported jQuery the way a jQuery selection draws: the
+// collection exposes its index and length as own properties and every method
+// (html, ...) lives on the prototype chain, exactly as `$(selector)` does.
+function makeJQueryMock(htmlWrites) {
+  const collectionMethod = {
+    html(value) {
+      htmlWrites.push([this.innerSelector, value]);
+    },
+  };
+  function jquery(selector) {
+    const collection = Object.create(collectionMethod);
+    collection.length =
+      selector === "#script_planner-list" ||
+      selector === "#script_planner-stats-text"
+        ? 1
+        : 0;
+    if (collection.length > 0) {
+      collection.innerSelector = selector;
+    }
+    return collection;
+  }
+  return jquery;
+}
+
 function makeAdapterState(overrides = {}) {
   const htmlWrites = [];
   const dependencies = {
@@ -9,20 +33,7 @@ function makeAdapterState(overrides = {}) {
     document: { hidden: false },
     poly: { timeFormat: (seconds) => `T${seconds}` },
     niceNumber: (value) => value / 2,
-    jquery(selector) {
-      if (
-        selector === "#script_planner-list" ||
-        selector === "#script_planner-stats-text"
-      ) {
-        return {
-          length: 1,
-          html(value) {
-            htmlWrites.push([selector, value]);
-          },
-        };
-      }
-      return { length: 0, html() {} };
-    },
+    jquery: makeJQueryMock(htmlWrites),
     ...overrides,
     htmlWrites,
   };

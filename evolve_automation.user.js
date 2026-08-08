@@ -16414,15 +16414,16 @@
     }
     const record = collection;
     return Object.freeze({
-      ...record,
-      length: Number(record["length"] ?? 0)
+      length: Number(record["length"] ?? 0),
+      collection: record
     });
   }
   function writeCollectionHtml(dependencies, selector, html) {
-    const collection = readCollection(dependencies, selector);
-    if (collection === null || collection["length"] === 0) {
+    const read = readCollection(dependencies, selector);
+    if (read === null || read["length"] === 0) {
       return;
     }
+    const collection = read["collection"];
     const render = requireFunction(collection["html"], `${selector}.html`);
     Reflect.apply(render, collection, [html]);
   }
@@ -16444,7 +16445,7 @@
         return readDays(dependencies);
       },
       plannerListPresent() {
-        return (readCollection(dependencies, "#script_planner-list")?.["length"] ?? 0) > 0;
+        return (readCollection(dependencies, "#script_planner-list")?.length ?? 0) > 0;
       },
       writePlannerList(html) {
         writeCollectionHtml(dependencies, "#script_planner-list", html);
