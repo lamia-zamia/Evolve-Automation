@@ -1,11 +1,56 @@
 import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
 
-type AnyRecord = Record<string, any>;
+type XKey = "x100" | "x25" | "x10";
+type KeyMode = "none" | "unset" | "all" | "each";
+type ModifierEvent = Record<string, boolean>;
+
+type GameSurface = {
+  global: {
+    settings: {
+      keyMap: Record<string, string>;
+      mKeys: boolean;
+    };
+  };
+};
+
+type SettingsSurface = { logEnabled: boolean } & Record<string, unknown>;
+
+type PolySurface = {
+  messageQueue: (
+    text: string,
+    level: string,
+    always: boolean,
+    tags: string[],
+  ) => void;
+};
+
+type KeyManagerShape = {
+  _setFn: ((event: unknown) => void) | null;
+  _unsetFn: ((event: unknown) => void) | null;
+  _allFn: ((event: ModifierEvent) => void) | null;
+  _eventProp: Record<string, string>;
+  _state: Record<XKey, boolean | undefined>;
+  _mode: KeyMode;
+  init(): void;
+  reset(): void;
+  finish(): void;
+  setKey(key: XKey, pressed: boolean): void;
+  set(x100: boolean, x25: boolean, x10: boolean): void;
+  click(amount: number): Generator<number, void, number>;
+};
+
+type GameLogShape = {
+  Types: Record<string, string>;
+  logInfo(loggingType: string, text: string, tags: string[]): void;
+  logSuccess(loggingType: string, text: string, tags: string[]): void;
+  logWarning(loggingType: string, text: string, tags: string[]): void;
+  logDanger(loggingType: string, text: string, tags: string[]): void;
+};
 
 type InfrastructureManagerDependencies = {
-  getGame: () => AnyRecord;
-  getSettings: () => AnyRecord;
-  getPoly: () => AnyRecord;
+  getGame: () => GameSurface;
+  getSettings: () => SettingsSurface;
+  getPoly: () => PolySurface;
   getKeyboardHandlers: () => GameKeyboardHandlersPort;
 };
 
@@ -15,9 +60,9 @@ export function createInfrastructureManagers({
   getPoly,
   getKeyboardHandlers,
 }: InfrastructureManagerDependencies) {
-  let game: AnyRecord;
-  let settings: AnyRecord;
-  let poly: AnyRecord;
+  let game: GameSurface;
+  let settings: SettingsSurface;
+  let poly: PolySurface;
 
   function refreshContext() {
     game = getGame();
@@ -25,7 +70,7 @@ export function createInfrastructureManagers({
     poly = getPoly();
   }
 
-  const KeyManager: AnyRecord = {
+  const KeyManager: KeyManagerShape = {
     _setFn: null,
     _unsetFn: null,
     _allFn: null,
@@ -52,7 +97,7 @@ export function createInfrastructureManagers({
 
       let map = game.global.settings.keyMap;
       let keys = Object.values(map);
-      let uniq = ["x100", "x25", "x10"].every(
+      let uniq = (["x100", "x25", "x10"] as XKey[]).every(
         (key) => keys.indexOf(map[key]) === keys.lastIndexOf(map[key]),
       );
 
@@ -62,10 +107,8 @@ export function createInfrastructureManagers({
         this._mode = "unset";
       } else if (
         this._allFn &&
-        ["x100", "x25", "x10"].every((key) =>
-          ["Shift", "Control", "Alt", "Meta"].includes(
-            game.global.settings.keyMap[key],
-          ),
+        (["x100", "x25", "x10"] as XKey[]).every((key) =>
+          ["Shift", "Control", "Alt", "Meta"].includes(map[key]),
         )
       ) {
         this._mode = "all";
@@ -80,20 +123,20 @@ export function createInfrastructureManagers({
       }
     },
 
-    setKey(key: any, pressed: any) {
+    setKey(key: XKey, pressed: boolean) {
       if (this._state[key] === pressed) {
         return;
       }
       let fakeEvent = { key: game.global.settings.keyMap[key] };
       if (pressed) {
-        this._setFn(fakeEvent);
+        this._setFn?.(fakeEvent);
       } else {
-        this._unsetFn(fakeEvent);
+        this._unsetFn?.(fakeEvent);
       }
       this._state[key] = pressed;
     },
 
-    set(x100: any, x25: any, x10: any) {
+    set(x100: boolean, x25: boolean, x10: boolean) {
       if (this._mode === "all") {
         let map = game.global.settings.keyMap;
         let fakeEvent = {
@@ -101,7 +144,9 @@ export function createInfrastructureManagers({
           [this._eventProp[map.x25]]: (this._state.x25 = x25),
           [this._eventProp[map.x10]]: (this._state.x10 = x10),
         };
-        this._allFn(fakeEvent);
+        if (this._allFn) {
+          this._allFn(fakeEvent);
+        }
       } else if (this._mode === "each" || this._mode === "unset") {
         this.setKey("x100", x100);
         this.setKey("x25", x25);
@@ -109,7 +154,7 @@ export function createInfrastructureManagers({
       }
     },
 
-    *click(amount: any) {
+    *click(amount: number) {
       if (this._mode === "none") {
         while (amount > 0) {
           yield (amount -= 1);
@@ -151,7 +196,7 @@ export function createInfrastructureManagers({
     },
   };
 
-  const GameLog: AnyRecord = {
+  const GameLog: GameLogShape = {
     Types: {
       special: "Specials",
       construction: "Construction",
@@ -168,7 +213,7 @@ export function createInfrastructureManagers({
       prestige: "Prestige",
     },
 
-    logInfo(loggingType: any, text: any, tags: any) {
+    logInfo(loggingType, text, tags) {
       if (!settings.logEnabled || !settings["log_" + loggingType]) {
         return;
       }
@@ -176,7 +221,7 @@ export function createInfrastructureManagers({
       poly.messageQueue(text, "info", false, tags);
     },
 
-    logSuccess(loggingType: any, text: any, tags: any) {
+    logSuccess(loggingType, text, tags) {
       if (!settings.logEnabled || !settings["log_" + loggingType]) {
         return;
       }
@@ -184,7 +229,7 @@ export function createInfrastructureManagers({
       poly.messageQueue(text, "success", false, tags);
     },
 
-    logWarning(loggingType: any, text: any, tags: any) {
+    logWarning(loggingType, text, tags) {
       if (!settings.logEnabled || !settings["log_" + loggingType]) {
         return;
       }
@@ -192,7 +237,7 @@ export function createInfrastructureManagers({
       poly.messageQueue(text, "warning", false, tags);
     },
 
-    logDanger(loggingType: any, text: any, tags: any) {
+    logDanger(loggingType, text, tags) {
       if (!settings.logEnabled || !settings["log_" + loggingType]) {
         return;
       }
@@ -210,7 +255,7 @@ export function createInfrastructureManagers({
       const method = descriptor.value;
       Object.defineProperty(manager, key, {
         ...descriptor,
-        value: function (this: AnyRecord, ...args: any[]) {
+        value: function (this: unknown, ...args: unknown[]): unknown {
           refreshContext();
           return method.apply(this, args);
         },

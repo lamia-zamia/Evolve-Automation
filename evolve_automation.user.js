@@ -6980,9 +6980,7 @@
         } else if (!uniq) {
           this._mode = "unset";
         } else if (this._allFn && ["x100", "x25", "x10"].every(
-          (key) => ["Shift", "Control", "Alt", "Meta"].includes(
-            game.global.settings.keyMap[key]
-          )
+          (key) => ["Shift", "Control", "Alt", "Meta"].includes(map[key])
         )) {
           this._mode = "all";
         } else {
@@ -7000,9 +6998,9 @@
         }
         let fakeEvent = { key: game.global.settings.keyMap[key] };
         if (pressed) {
-          this._setFn(fakeEvent);
+          this._setFn?.(fakeEvent);
         } else {
-          this._unsetFn(fakeEvent);
+          this._unsetFn?.(fakeEvent);
         }
         this._state[key] = pressed;
       },
@@ -7014,7 +7012,9 @@
             [this._eventProp[map.x25]]: this._state.x25 = x25,
             [this._eventProp[map.x10]]: this._state.x10 = x10
           };
-          this._allFn(fakeEvent);
+          if (this._allFn) {
+            this._allFn(fakeEvent);
+          }
         } else if (this._mode === "each" || this._mode === "unset") {
           this.setKey("x100", x100);
           this.setKey("x25", x25);
