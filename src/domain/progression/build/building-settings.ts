@@ -105,6 +105,18 @@ const buildingSettingsControls: readonly BuildingSettingsControl[] =
       hint: "With this option enabled, the script will build as many segments as are affordable at once, instead of one per tick.",
     }),
     Object.freeze({
+      kind: "toggle",
+      settingName: "buildingsBulkBuild",
+      label: "Bulk build other buildings",
+      hint: "With this option enabled, AutoBuild will buy several of the same building in one tick instead of one per tick. Weightings are only recalculated once per tick, so the extra buildings are bought at the priority and the price of the first one; the limit below bounds how far that can go. Never exceeds Max Build or the spare support of the buildings it needs to operate.",
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "buildingsBulkBuildMax",
+      label: "Bulk build limit per tick",
+      hint: "Most buildings get more expensive with every copy, so this caps how many of one building a single tick may buy.",
+    }),
+    Object.freeze({
       kind: "number",
       settingName: "buildingTowerSuppression",
       label: "Minimum suppression for Towers",

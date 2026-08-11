@@ -1259,6 +1259,8 @@
       buildingsTransportGem: false,
       buildingsBestFreighter: false,
       buildingsUseMultiClick: false,
+      buildingsBulkBuild: false,
+      buildingsBulkBuildMax: 10,
       buildingEnabledAll: true,
       buildingStateAll: true
     };
@@ -9643,27 +9645,50 @@
       isClickable() {
         return this.isUnlocked() && this.isAffordable() && this.count < this.gameMax;
       }
+      // How many of this building one bulk purchase may cover. The game charges a
+      // rising price per unit, so this caps the request instead of predicting it.
+      bulkBuildLimit(configuredMax) {
+        const limit = Math.min(
+          Math.floor(configuredMax),
+          this.autoMax - this.count,
+          this.gameMax - this.count,
+          this.supportHeadroom()
+        );
+        return limit > 1 ? limit : 1;
+      }
+      // One press of the game's own build control.
+      runBuildClick() {
+        const actionControls = readActionControls();
+        if (readSettings3().performanceHackAvoidDrawTech && this.definition.refresh && this.count > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !readGame().global.race.inflation && !actionControls.isTooltipShown()) {
+          this.definition.action();
+          return true;
+        }
+        return actionControls.activate(this._vueBinding);
+      }
+      // Charges a completed purchase against the sampled resource quantities.
+      spendBuildCost(amountBuilt) {
+        for (let res in this.cost) {
+          const resource2 = readResources2()[res];
+          const liveQuantity = resource2.instance?.amount;
+          if (amountBuilt > 1 && typeof liveQuantity === "number") {
+            resource2.currentQuantity = liveQuantity;
+          } else {
+            resource2.currentQuantity -= this.cost[res] * amountBuilt;
+          }
+        }
+      }
       // This is a "safe" click. It will only click if the container is currently clickable.
       // ie. it won't bypass the interface and click the node if it isn't clickable in the UI.
-      click() {
+      // allowBulk lets autoBuild cover several of the same building in one tick;
+      // callers that want exactly one building leave it off.
+      click(allowBulk = false) {
         if (!this.isClickable()) {
           return false;
         }
-        let doMultiClick = this.is.multiSegmented && readSettings3().buildingsUseMultiClick;
+        const settings = readSettings3();
+        let doMultiClick = this.is.multiSegmented && settings.buildingsUseMultiClick;
+        const bulkLimit = allowBulk && settings.buildingsBulkBuild && !this.is.multiSegmented && !this.is.prestige && !this.isMission() ? this.bulkBuildLimit(settings.buildingsBulkBuildMax) : 1;
         const countBeforeClick = this.count;
-        let amountToBuild = 1;
-        if (doMultiClick) {
-          amountToBuild = this.gameMax - countBeforeClick;
-          for (let res in this.cost) {
-            amountToBuild = Math.min(
-              amountToBuild,
-              Math.floor(readResources2()[res].currentQuantity / this.cost[res])
-            );
-          }
-          if (amountToBuild < 1) {
-            amountToBuild = 1;
-          }
-        }
         const clickMultipliers = readClickMultipliers();
         if (doMultiClick) {
           clickMultipliers.holdMaximum();
@@ -9673,21 +9698,22 @@
         if (this.is.prestige) {
           logPrestige();
         }
-        const actionControls = readActionControls();
-        if (readSettings3().performanceHackAvoidDrawTech && this.definition.refresh && countBeforeClick > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !readGame().global.race.inflation && !actionControls.isTooltipShown()) {
-          this.definition.action();
-        } else if (!actionControls.activate(this._vueBinding)) {
+        if (!this.runBuildClick()) {
           return false;
         }
-        for (let res in this.cost) {
-          readResources2()[res].currentQuantity -= this.cost[res] * amountToBuild;
+        for (let repeat = 1; repeat < bulkLimit; repeat++) {
+          if (!this.isClickable() || !this.runBuildClick()) {
+            break;
+          }
         }
+        const amountBuilt = Math.max(1, this.count - countBeforeClick);
+        this.spendBuildCost(amountBuilt);
         if (readGame().global.race.species !== "protoplasm" && !readLogIgnore().includes(this.id)) {
-          if (this.gameMax < Number.MAX_SAFE_INTEGER && countBeforeClick + amountToBuild < this.gameMax) {
+          if (amountBuilt > 1 || this.gameMax < Number.MAX_SAFE_INTEGER && countBeforeClick + amountBuilt < this.gameMax) {
             readGameLog().logSuccess(
               "multi_construction",
               readPoly().loc("build_success", [
-                `${this.title} (${countBeforeClick + amountToBuild})`
+                `${this.title} (${countBeforeClick + amountBuilt})`
               ]),
               ["queue", "building_queue"]
             );
@@ -9746,10 +9772,13 @@
         }
         return null;
       }
-      getMissingSupport() {
+      // Support consumed by this building that the script won't knowingly
+      // overuse. The exceptions below are supports it deliberately overuses.
+      requiredSupport() {
         if (readGame().global.race["fasting"] && this === readBuildings().AlphaMiningDroid && this.count < 1) {
-          return null;
+          return [];
         }
+        let required = [];
         for (let j = 0; j < this.consumption.length; j++) {
           let resource2 = this.consumption[j].resource;
           if (resource2 === readResources2().Spire_Support && this.autoStateSmart) {
@@ -9765,11 +9794,26 @@
           if (!(resource2 instanceof Support) || rate <= 0) {
             continue;
           }
+          required.push({ resource: resource2, rate });
+        }
+        return required;
+      }
+      getMissingSupport() {
+        for (let { resource: resource2, rate } of this.requiredSupport()) {
           if (resource2.rateOfChange < rate) {
             return resource2;
           }
         }
         return null;
+      }
+      // Support resources carry their spare capacity as the rate of change, so
+      // this is how many more of this building the current supports can operate.
+      supportHeadroom() {
+        let headroom = Number.MAX_SAFE_INTEGER;
+        for (let { resource: resource2, rate } of this.requiredSupport()) {
+          headroom = Math.min(headroom, Math.floor(resource2.rateOfChange / rate));
+        }
+        return headroom;
       }
       getUselessSupport() {
         if (this === readBuildings().GatewayStarbase || this === readBuildings().AlphaHabitat || this === readBuildings().SpaceNavBeacon && readGame().global.race["orbit_decayed"]) {
@@ -21975,6 +22019,18 @@
       settingName: "buildingsUseMultiClick",
       label: "Bulk build multi-segmented buildings",
       hint: "With this option enabled, the script will build as many segments as are affordable at once, instead of one per tick."
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "buildingsBulkBuild",
+      label: "Bulk build other buildings",
+      hint: "With this option enabled, AutoBuild will buy several of the same building in one tick instead of one per tick. Weightings are only recalculated once per tick, so the extra buildings are bought at the priority and the price of the first one; the limit below bounds how far that can go. Never exceeds Max Build or the spare support of the buildings it needs to operate."
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "buildingsBulkBuildMax",
+      label: "Bulk build limit per tick",
+      hint: "Most buildings get more expensive with every copy, so this caps how many of one building a single tick may buy."
     }),
     Object.freeze({
       kind: "number",
@@ -43926,8 +43982,12 @@
   }
 
   // src/adapters/evolve/progression/build/build.ts
-  function callMethod(target, name, path) {
-    return requireFunction(target[name], `${path}.${name}`).call(target);
+  function callMethod(target, name, path, args = []) {
+    return Reflect.apply(
+      requireFunction(target[name], `${path}.${name}`),
+      target,
+      args
+    );
   }
   var UNAVAILABLE_CONFLICT = Object.freeze({
     unavailable: true,
@@ -44215,7 +44275,7 @@
           });
         }
         const path = `buildList[${decision2.index}]`;
-        const clicked = Boolean(callMethod(entity, "click", path));
+        const clicked = Boolean(callMethod(entity, "click", path, [true]));
         if (!clicked) {
           return Object.freeze({
             outcome: SUCCEEDED,

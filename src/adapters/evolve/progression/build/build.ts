@@ -53,8 +53,13 @@ function callMethod(
   target: UnknownRecord,
   name: string,
   path: string,
+  args: readonly unknown[] = [],
 ): unknown {
-  return requireFunction(target[name], `${path}.${name}`).call(target);
+  return Reflect.apply(
+    requireFunction(target[name], `${path}.${name}`),
+    target,
+    args,
+  );
 }
 
 const UNAVAILABLE_CONFLICT: BuildConflictView = Object.freeze({
@@ -401,7 +406,9 @@ export function createBuildAdapter(
         });
       }
       const path = `buildList[${decision.index}]`;
-      const clicked = Boolean(callMethod(entity, "click", path));
+      // autoBuild is the one caller that may cover several of the same
+      // building in a tick; the entity decides whether the setting allows it.
+      const clicked = Boolean(callMethod(entity, "click", path, [true]));
       if (!clicked) {
         return Object.freeze({
           outcome: SUCCEEDED,

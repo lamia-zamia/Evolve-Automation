@@ -152,6 +152,8 @@ assert.deepEqual(
     "control:toggle:buildingsTransportGem",
     "control:toggle:buildingsBestFreighter",
     "control:toggle:buildingsUseMultiClick",
+    "control:toggle:buildingsBulkBuild",
+    "control:number:buildingsBulkBuildMax",
     "control:number:buildingTowerSuppression",
     "control:select:buildingConsumptionCheck:3",
     "label:City:has-text-info",

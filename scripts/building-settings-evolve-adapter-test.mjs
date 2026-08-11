@@ -82,7 +82,7 @@ const adapter = createBuildingSettingsEvolveAdapter({
 });
 
 const model = adapter.readBuildingSettingsReadModel();
-assert.equal(model.controls.length, 7);
+assert.equal(model.controls.length, 9);
 assert.equal(model.rows.length, 4);
 assert.deepEqual(
   model.rows.map((row) => [row.id, row.color]),

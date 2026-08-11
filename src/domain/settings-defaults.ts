@@ -760,6 +760,8 @@ export function computeBuildingDefaults(
     buildingsTransportGem: false,
     buildingsBestFreighter: false,
     buildingsUseMultiClick: false,
+    buildingsBulkBuild: false,
+    buildingsBulkBuildMax: 10,
     buildingEnabledAll: true,
     buildingStateAll: true,
   };

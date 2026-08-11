@@ -667,6 +667,61 @@ context.settings.buildingsUseMultiClick = true;
 assert.equal(mine.click(), true);
 assert.deepEqual(multiplierCalls, ["clear"]);
 
+// Bulk building repeats the plain click up to its cap, and reads back what the
+// game actually charged rather than predicting a price that rises per unit.
+const bulkMoney = { currentQuantity: 1000, instance: { amount: 1000 } };
+context.resources = { Money: bulkMoney };
+context.settings.buildingsBulkBuild = true;
+context.settings.buildingsBulkBuildMax = 4;
+context.game.global.city.mine = { count: 2, on: 1 };
+mineView = {
+  action: () => {
+    context.game.global.city.mine.count += 1;
+    bulkMoney.instance.amount -= 130;
+  },
+};
+context.getVueById = (id) => (id === "city-mine" ? mineView : undefined);
+actionLogs.length = 0;
+assert.equal(mine.click(true), true);
+assert.equal(context.game.global.city.mine.count, 6);
+assert.equal(bulkMoney.currentQuantity, 480, "charged 4 x 130, not 4 x 120");
+assert.deepEqual(actionLogs, [["multi_construction", "Mine (6)"]]);
+
+// A caller that wants exactly one building still gets exactly one.
+context.game.global.city.mine.count = 2;
+bulkMoney.currentQuantity = 1000;
+bulkMoney.instance.amount = 1000;
+actionLogs.length = 0;
+assert.equal(mine.click(), true);
+assert.equal(context.game.global.city.mine.count, 3);
+assert.equal(
+  bulkMoney.currentQuantity,
+  880,
+  "one building at the sampled cost",
+);
+assert.deepEqual(actionLogs, [["construction", "Mine"]]);
+
+// Max Build bounds the purchase.
+context.settings["bld_m_city-mine"] = 5;
+context.game.global.city.mine.count = 4;
+assert.equal(mine.click(true), true);
+assert.equal(context.game.global.city.mine.count, 5, "stopped at Max Build");
+delete context.settings["bld_m_city-mine"];
+
+// So does the spare support of everything the building needs to operate.
+const sunSupport = new classes.Support(
+  "Sun Support",
+  "Sun_Support",
+  "space",
+  "swarm_control",
+);
+sunSupport.rateOfChange = 2;
+mine.consumption = [{ resource: sunSupport, rate: 1 }];
+context.game.global.city.mine.count = 2;
+assert.equal(mine.click(true), true);
+assert.equal(context.game.global.city.mine.count, 4, "two spare support slots");
+mine.consumption = [];
+
 // Switching power is one request per direction, carrying the count as a
 // magnitude, and a request for no change never reaches the control.
 mineView = {

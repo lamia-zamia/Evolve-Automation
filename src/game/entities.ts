@@ -1195,32 +1195,89 @@ export function createEntityClasses({
       );
     }
 
+    // How many of this building one bulk purchase may cover. The game charges a
+    // rising price per unit, so this caps the request instead of predicting it.
+    bulkBuildLimit(configuredMax: Loose) {
+      const limit = Math.min(
+        Math.floor(configuredMax),
+        this.autoMax - this.count,
+        this.gameMax - this.count,
+        this.supportHeadroom(),
+      );
+      return limit > 1 ? limit : 1;
+    }
+
+    // One press of the game's own build control.
+    runBuildClick() {
+      const actionControls = readActionControls();
+
+      // Try skipping game's laggy postBuild hook by invoking the action() directly, instead of going through the
+      // vue action() => game runAction() => game shed.action() => game postBuild() hook.
+      // This will greatly reduce the amount of page redraws.
+      // refresh is really only needed for first building as there are no buildings where building a second unlocks more stuff.
+      // Keep this narrowly guarded: postBuild also handles grants, post hooks, queues, poppers, and Inflation.
+      if (
+        readSettings().performanceHackAvoidDrawTech &&
+        this.definition.refresh &&
+        this.count > 0 &&
+        !this.definition.grant &&
+        !this.definition.post &&
+        !this.definition.queue_complete &&
+        !this.is.prestige &&
+        !readGame().global.race.inflation &&
+        !actionControls.isTooltipShown()
+      ) {
+        this.definition.action();
+        return true;
+      }
+      // False means the game withdrew the control after the clickability check.
+      return actionControls.activate(this._vueBinding);
+    }
+
+    // Charges a completed purchase against the sampled resource quantities.
+    spendBuildCost(amountBuilt: Loose) {
+      for (let res in this.cost) {
+        const resource = readResources()[res];
+        const liveQuantity = resource.instance?.amount;
+        if (amountBuilt > 1 && typeof liveQuantity === "number") {
+          // Per-unit costs rise as the count does, so what a bulk purchase
+          // actually charged can only be read back from the game. Supports and
+          // other synthetic resources have no live amount and keep the
+          // first-unit estimate.
+          resource.currentQuantity = liveQuantity;
+        } else {
+          resource.currentQuantity -= this.cost[res] * amountBuilt;
+        }
+      }
+    }
+
     // This is a "safe" click. It will only click if the container is currently clickable.
     // ie. it won't bypass the interface and click the node if it isn't clickable in the UI.
-    click() {
+    // allowBulk lets autoBuild cover several of the same building in one tick;
+    // callers that want exactly one building leave it off.
+    click(allowBulk = false) {
       if (!this.isClickable()) {
         return false;
       }
 
+      const settings = readSettings();
+      // Segments cost the same every time, so the game itself can be asked for
+      // as many as one click affords.
       let doMultiClick =
-        this.is.multiSegmented && readSettings().buildingsUseMultiClick;
+        this.is.multiSegmented && settings.buildingsUseMultiClick;
+      // Everything else repeats the plain click under an explicit cap, because
+      // its price rises with every unit built.
+      const bulkLimit =
+        allowBulk &&
+        settings.buildingsBulkBuild &&
+        !this.is.multiSegmented &&
+        !this.is.prestige &&
+        !this.isMission()
+          ? this.bulkBuildLimit(settings.buildingsBulkBuildMax)
+          : 1;
       // Building advances the live count, and both the deduction and the log
       // below describe the purchase made from the count it started at.
       const countBeforeClick = this.count;
-      let amountToBuild = 1;
-      if (doMultiClick) {
-        amountToBuild = this.gameMax - countBeforeClick;
-        for (let res in this.cost) {
-          amountToBuild = Math.min(
-            amountToBuild,
-            Math.floor(readResources()[res].currentQuantity / this.cost[res]),
-          );
-        }
-        if (amountToBuild < 1) {
-          // Game allow to spend more resources than available, going negative. If we're here - building is clickable, and we can afford at least one thing for sure.
-          amountToBuild = 1;
-        }
-      }
 
       const clickMultipliers = readClickMultipliers();
       if (doMultiClick) {
@@ -1233,33 +1290,20 @@ export function createEntityClasses({
         logPrestige();
       }
 
-      const actionControls = readActionControls();
-
-      // Try skipping game's laggy postBuild hook by invoking the action() directly, instead of going through the
-      // vue action() => game runAction() => game shed.action() => game postBuild() hook.
-      // This will greatly reduce the amount of page redraws.
-      // refresh is really only needed for first building as there are no buildings where building a second unlocks more stuff.
-      // Keep this narrowly guarded: postBuild also handles grants, post hooks, queues, poppers, and Inflation.
-      if (
-        readSettings().performanceHackAvoidDrawTech &&
-        this.definition.refresh &&
-        countBeforeClick > 0 &&
-        !this.definition.grant &&
-        !this.definition.post &&
-        !this.definition.queue_complete &&
-        !this.is.prestige &&
-        !readGame().global.race.inflation &&
-        !actionControls.isTooltipShown()
-      ) {
-        this.definition.action();
-      } else if (!actionControls.activate(this._vueBinding)) {
-        // The game withdrew the control after the clickability check.
+      if (!this.runBuildClick()) {
         return false;
       }
-
-      for (let res in this.cost) {
-        readResources()[res].currentQuantity -= this.cost[res] * amountToBuild;
+      // Each repeat re-checks the live game, so running out of resources or
+      // hitting the game's own limit simply ends the purchase.
+      for (let repeat = 1; repeat < bulkLimit; repeat++) {
+        if (!this.isClickable() || !this.runBuildClick()) {
+          break;
+        }
       }
+
+      // The live count is the only honest record of what a bulk purchase built.
+      const amountBuilt = Math.max(1, this.count - countBeforeClick);
+      this.spendBuildCost(amountBuilt);
 
       // Don't log evolution actions and gathering actions
       if (
@@ -1267,13 +1311,14 @@ export function createEntityClasses({
         !readLogIgnore().includes(this.id)
       ) {
         if (
-          this.gameMax < Number.MAX_SAFE_INTEGER &&
-          countBeforeClick + amountToBuild < this.gameMax
+          amountBuilt > 1 ||
+          (this.gameMax < Number.MAX_SAFE_INTEGER &&
+            countBeforeClick + amountBuilt < this.gameMax)
         ) {
           readGameLog().logSuccess(
             "multi_construction",
             readPoly().loc("build_success", [
-              `${this.title} (${countBeforeClick + amountToBuild})`,
+              `${this.title} (${countBeforeClick + amountBuilt})`,
             ]),
             ["queue", "building_queue"],
           );
@@ -1364,16 +1409,19 @@ export function createEntityClasses({
       return null;
     }
 
-    getMissingSupport() {
+    // Support consumed by this building that the script won't knowingly
+    // overuse. The exceptions below are supports it deliberately overuses.
+    requiredSupport() {
       // In fasting we need to build mining droid first to unlock habitats
       if (
         readGame().global.race["fasting"] &&
         this === readBuildings().AlphaMiningDroid &&
         this.count < 1
       ) {
-        return null;
+        return [];
       }
 
+      let required = [];
       for (let j = 0; j < this.consumption.length; j++) {
         let resource = this.consumption[j].resource;
 
@@ -1398,12 +1446,29 @@ export function createEntityClasses({
           continue;
         }
 
+        required.push({ resource, rate });
+      }
+      return required;
+    }
+
+    getMissingSupport() {
+      for (let { resource, rate } of this.requiredSupport()) {
         // We don't have spare support for this
         if (resource.rateOfChange < rate) {
           return resource;
         }
       }
       return null;
+    }
+
+    // Support resources carry their spare capacity as the rate of change, so
+    // this is how many more of this building the current supports can operate.
+    supportHeadroom() {
+      let headroom = Number.MAX_SAFE_INTEGER;
+      for (let { resource, rate } of this.requiredSupport()) {
+        headroom = Math.min(headroom, Math.floor(resource.rateOfChange / rate));
+      }
+      return headroom;
     }
 
     getUselessSupport() {
