@@ -6226,6 +6226,9 @@
       avail(ship) {
         const game = getGame();
         let yard = game.global.space.shipyard;
+        if (!yard) {
+          return false;
+        }
         if (ship.class === "explorer" && (ship.weapon !== "railgun" || ship.sensor !== "quantum")) {
           return false;
         }
@@ -6248,6 +6251,9 @@
         const poly = getPoly();
         const resources = getResources();
         let yard = game.global.space.shipyard;
+        if (!yard) {
+          return false;
+        }
         for (let [type, part] of Object.entries(ship)) {
           if (type !== "name" && (yard.blueprint[type] !== part || ship.class === "explorer" || yard.blueprint.class === "explorer")) {
             fleetControls.setPart({
@@ -6277,7 +6283,7 @@
       shipCount(loc2, template) {
         const game = getGame();
         let count2 = 0;
-        for (let ship of game.global.space.shipyard.ships) {
+        for (let ship of game.global.space.shipyard?.ships ?? []) {
           if (ship.location === loc2 && ship.class === template.class && ship.power === template.power && ship.weapon === template.weapon && ship.armor === template.armor && ship.engine === template.engine && ship.sensor === template.sensor) {
             count2++;
           }
@@ -6316,11 +6322,12 @@
             divisor = game.actions.space[region].info.syndicate_cap();
             break;
         }
-        let piracy = game.global.space.syndicate[region];
+        let piracy = game.global.space.syndicate?.[region] ?? 0;
         let patrol = 0;
         let sensor = 0;
-        if (Object.hasOwn(game.global.space.shipyard ?? {}, "ships")) {
-          for (let ship of game.global.space.shipyard.ships) {
+        const ships = game.global.space.shipyard?.ships;
+        if (ships) {
+          for (let ship of ships) {
             if (ship.location === region && (ship.transit === 0 && ship.fueled || all)) {
               let rating = this.getShipAttackPower(ship);
               patrol += ship.damage > 0 ? Math.round(rating * (100 - ship.damage) / 100) : rating;
@@ -6355,7 +6362,6 @@
     const FleetManager = {
       _fleetElementId: "fleet",
       neededShips: null,
-      // Per-ship on-counts needed for full piracy coverage, set by autoFleet when crew reclaim is active
       initFleet() {
         const game = getGame();
         if (!game.global.tech.piracy) {

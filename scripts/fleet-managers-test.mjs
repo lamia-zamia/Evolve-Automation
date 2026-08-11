@@ -229,4 +229,11 @@ assert.deepEqual(FleetManagerOuter.syndicate("spc_titan", true, false), {
   s: 0,
 });
 
+// The design questions answer for a missing shipyard instead of throwing: no
+// yard means no design is available, nothing can be built, and no ship of a
+// template is parked anywhere.
+assert.equal(FleetManagerOuter.avail(fighter), false);
+assert.equal(FleetManagerOuter.build(fighter, "spc_red"), false);
+assert.equal(FleetManagerOuter.shipCount("spc_red", fighter), 0);
+
 console.log("Fleet manager tests passed");

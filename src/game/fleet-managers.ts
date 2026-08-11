@@ -1,15 +1,136 @@
 import type { GameFleetControlsPort } from "../ports/game-fleet-controls.ts";
 
-type AnyFunction = (...args: any[]) => any;
-type AnyRecord = Record<string, any>;
+/** A ship design: one part per blueprint dimension, plus the game's own name. */
+type ShipBlueprint = Record<string, string>;
+
+/** The blueprint dimensions every configured or built ship carries. */
+type ShipParts = {
+  class: string;
+  power: string;
+  weapon: string;
+  armor: string;
+  engine: string;
+  sensor: string;
+};
+
+/** A ship the game has built and parked. */
+type Ship = ShipParts & {
+  location: string;
+  transit: number;
+  fueled: boolean;
+  damage: number;
+};
+
+type Shipyard = {
+  blueprint: ShipBlueprint;
+  /** The game adds the list with the first built ship. */
+  ships?: Ship[];
+};
+
+type SpaceActionInfo = {
+  name: string | (() => string);
+  /** Only regions that can be raided define it. */
+  syndicate?: () => boolean;
+  /**
+   * Only the outer regions whose piracy cap scales define it, and the divisor
+   * switch below reaches the call for exactly those regions.
+   */
+  syndicate_cap: () => number;
+};
+
+type GameSurface = {
+  global: {
+    tech: Record<string, number>;
+    race: Record<string, unknown>;
+    civic: { foreign: { gov3: { hstl: number } } };
+    space: {
+      // Evolve creates both bags lazily with the Truepath content that unlocks
+      // them. Every read below guards for their absence.
+      shipyard?: Shipyard;
+      syndicate?: Record<string, number>;
+    };
+  };
+  actions: { space: Record<string, { info: SpaceActionInfo }> };
+  loc(key: string): string;
+};
+
+type SettingsSurface = Record<string, unknown>;
+
+type ResourcesSurface = Record<
+  string,
+  {
+    currentQuantity: number;
+    maxQuantity: number;
+    hasStorage(): boolean;
+  }
+>;
+
+type BuildingsSurface = Record<string, { stateOnCount: number }>;
+
+type PolySurface = {
+  shipCosts(ship: ShipBlueprint): Record<string, number>;
+};
+
+type HaveTech = (id: string, level?: number) => unknown;
+
+/** The piracy rating of one region, broken down. */
+type SyndicateRating = { p: number; r: number; s: number };
+
+type FleetManagerOuterShape = {
+  _fleetElementId: string;
+  _explorerBlueprint: ShipBlueprint;
+
+  nextShipName: string | null;
+  nextShipCost: Record<string, number> | null;
+  nextShipAffordable: boolean | null;
+  nextShipExpandable: boolean | null;
+  nextShipMsg: string | null;
+
+  WeaponPower: Record<string, number>;
+  SensorRange: Record<string, number>;
+  ClassPower: Record<string, number>;
+  ClassCrew: Record<string, number>;
+  Regions: string[];
+  ShipConfig: Record<string, string[]>;
+
+  getWeighting(id: string): unknown;
+  getMaxDefense(id: string): unknown;
+  getMaxScouts(id: string): unknown;
+  getShipName(ship: ShipBlueprint): string;
+  getLocName(loc: string): string;
+  isUnlocked(id: string): boolean;
+  updateNextShip(ship: ShipBlueprint | null): void;
+  initFleet(): boolean;
+  getFighterBlueprint(): Record<string, unknown>;
+  getScoutBlueprint(): Record<string, unknown>;
+  getMissingResource(ship: ShipBlueprint): string | null;
+  avail(ship: ShipBlueprint): boolean;
+  build(ship: ShipBlueprint, region: string): boolean;
+  getShipAttackPower(ship: ShipParts): number;
+  shipCount(loc: string, template: ShipParts): number;
+  syndicate(
+    region: string,
+    extra: boolean,
+    all: boolean,
+  ): SyndicateRating | number;
+};
+
+type FleetManagerShape = {
+  _fleetElementId: string;
+  /** Per-ship on-counts needed for full piracy coverage, set by autoFleet when crew reclaim is active. */
+  neededShips: Record<string, number> | null;
+  initFleet(): boolean;
+  addShip(region: string, ship: string, count: number): boolean;
+  subShip(region: string, ship: string, count: number): boolean;
+};
 
 type FleetManagerDependencies = {
-  getGame: () => AnyRecord;
-  getSettings: () => AnyRecord;
-  getResources: () => AnyRecord;
-  getBuildings: () => AnyRecord;
-  getPoly: () => AnyRecord;
-  getHaveTech: () => AnyFunction;
+  getGame: () => GameSurface;
+  getSettings: () => SettingsSurface;
+  getResources: () => ResourcesSurface;
+  getBuildings: () => BuildingsSurface;
+  getPoly: () => PolySurface;
+  getHaveTech: () => HaveTech;
   fleetControls: GameFleetControlsPort;
 };
 
@@ -22,9 +143,9 @@ export function createFleetManagers({
   getHaveTech,
   fleetControls,
 }: FleetManagerDependencies) {
-  const haveTech = (...args: any[]) => getHaveTech()(...args);
+  const haveTech: HaveTech = (...args) => getHaveTech()(...args);
 
-  const FleetManagerOuter: AnyRecord = {
+  const FleetManagerOuter: FleetManagerOuterShape = {
     _fleetElementId: "shipPlans",
     _explorerBlueprint: {
       class: "explorer",
@@ -100,27 +221,27 @@ export function createFleetManagers({
       sensor: ["visual", "radar", "lidar", "quantum"],
     },
 
-    getWeighting(id: string) {
+    getWeighting(id) {
       const settings = getSettings();
       return settings["fleet_outer_pr_" + id];
     },
 
-    getMaxDefense(id: string) {
+    getMaxDefense(id) {
       const settings = getSettings();
       return settings["fleet_outer_def_" + id];
     },
 
-    getMaxScouts(id: string) {
+    getMaxScouts(id) {
       const settings = getSettings();
       return settings["fleet_outer_sc_" + id];
     },
 
-    getShipName(ship: AnyRecord) {
+    getShipName(ship) {
       const game = getGame();
       return game.loc(`outer_shipyard_class_${ship.class}`);
     },
 
-    getLocName(loc: string) {
+    getLocName(loc) {
       const game = getGame();
       let locRef =
         loc === "tauceti"
@@ -129,14 +250,14 @@ export function createFleetManagers({
       return typeof locRef === "function" ? locRef() : locRef;
     },
 
-    isUnlocked(id: string) {
+    isUnlocked(id) {
       const game = getGame();
       return id === "spc_moon" && game.global.race["orbit_decayed"]
         ? false
         : (game.actions.space[id].info.syndicate?.() ?? false);
     },
 
-    updateNextShip(ship: AnyRecord | null) {
+    updateNextShip(ship) {
       if (ship) {
         const poly = getPoly();
         const resources = getResources();
@@ -195,7 +316,7 @@ export function createFleetManagers({
       );
     },
 
-    getMissingResource(ship: AnyRecord) {
+    getMissingResource(ship) {
       const poly = getPoly();
       const resources = getResources();
       let cost = poly.shipCosts(ship);
@@ -207,9 +328,12 @@ export function createFleetManagers({
       return null;
     },
 
-    avail(ship: AnyRecord) {
+    avail(ship) {
       const game = getGame();
       let yard = game.global.space.shipyard;
+      if (!yard) {
+        return false;
+      }
       if (
         ship.class === "explorer" &&
         (ship.weapon !== "railgun" || ship.sensor !== "quantum")
@@ -240,11 +364,14 @@ export function createFleetManagers({
       return true;
     },
 
-    build(ship: AnyRecord, region: string) {
+    build(ship, region) {
       const game = getGame();
       const poly = getPoly();
       const resources = getResources();
       let yard = game.global.space.shipyard;
+      if (!yard) {
+        return false;
+      }
       for (let [type, part] of Object.entries(ship)) {
         if (
           type !== "name" &&
@@ -274,16 +401,16 @@ export function createFleetManagers({
       });
     },
 
-    getShipAttackPower(ship: AnyRecord) {
+    getShipAttackPower(ship) {
       return Math.round(
         this.WeaponPower[ship.weapon] * this.ClassPower[ship.class],
       );
     },
 
-    shipCount(loc: string, template: AnyRecord) {
+    shipCount(loc, template) {
       const game = getGame();
       let count = 0;
-      for (let ship of game.global.space.shipyard.ships) {
+      for (let ship of game.global.space.shipyard?.ships ?? []) {
         if (
           ship.location === loc &&
           ship.class === template.class &&
@@ -300,7 +427,7 @@ export function createFleetManagers({
     },
 
     // export function syndicate(region,extra) from truepath.js with added "all" argument
-    syndicate(region: string, extra: boolean, all: boolean) {
+    syndicate(region, extra, all) {
       const game = getGame();
       const buildings = getBuildings();
       if (
@@ -344,11 +471,12 @@ export function createFleetManagers({
           break;
       }
 
-      let piracy = game.global.space.syndicate[region];
+      let piracy = game.global.space.syndicate?.[region] ?? 0;
       let patrol = 0;
       let sensor = 0;
-      if (Object.hasOwn(game.global.space.shipyard ?? {}, "ships")) {
-        for (let ship of game.global.space.shipyard.ships) {
+      const ships = game.global.space.shipyard?.ships;
+      if (ships) {
+        for (let ship of ships) {
           if (
             ship.location === region &&
             ((ship.transit === 0 && ship.fueled) || all)
@@ -394,9 +522,9 @@ export function createFleetManagers({
     },
   };
 
-  const FleetManager: AnyRecord = {
+  const FleetManager: FleetManagerShape = {
     _fleetElementId: "fleet",
-    neededShips: null, // Per-ship on-counts needed for full piracy coverage, set by autoFleet when crew reclaim is active
+    neededShips: null,
 
     initFleet() {
       const game = getGame();
@@ -407,7 +535,7 @@ export function createFleetManagers({
       return fleetControls.isRendered(this._fleetElementId);
     },
 
-    addShip(region: string, ship: string, count: number) {
+    addShip(region, ship, count) {
       return fleetControls.addShips({
         elementId: this._fleetElementId,
         region,
@@ -416,7 +544,7 @@ export function createFleetManagers({
       });
     },
 
-    subShip(region: string, ship: string, count: number) {
+    subShip(region, ship, count) {
       return fleetControls.subShips({
         elementId: this._fleetElementId,
         region,
