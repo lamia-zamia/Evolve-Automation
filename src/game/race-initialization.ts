@@ -1,13 +1,27 @@
-type LooseObject = Record<PropertyKey, any>;
-type LooseConstructor = new (...args: any[]) => any;
+/**
+ * One evolution step, as the script's own action entity. This module only
+ * collects them into per-genus trees, so their identity is all it needs.
+ */
+type EvolutionAction = object;
+
+type RaceEntity = {
+  genus: string;
+  evolutionTree: Record<string, EvolutionAction[]>;
+};
+
+type GameSurface = {
+  actions: { evolution: Record<string, unknown> };
+  // Only hybrid races carry `hybrid`, and only the hybrid branch reads it.
+  races: Record<string, { type: string; hybrid?: string[] }>;
+};
 
 type RaceInitializationDependencies = {
-  getGame: () => LooseObject;
-  getEvolutions: () => LooseObject;
-  getRaces: () => LooseObject;
-  getImitations: () => LooseObject;
-  getEvolutionAction: () => LooseConstructor;
-  getRace: () => LooseConstructor;
+  getGame: () => GameSurface;
+  getEvolutions: () => Record<string, EvolutionAction>;
+  getRaces: () => Record<string, RaceEntity>;
+  getImitations: () => Record<string, EvolutionAction>;
+  getEvolutionAction: () => new (id: string) => EvolutionAction;
+  getRace: () => new (id: string) => RaceEntity;
 };
 
 export function createRaceInitialization({
@@ -39,7 +53,7 @@ export function createRaceInitialization({
     ];
     let mammals = [e.mammals, ...bilateralSymmetry];
 
-    let genusEvolution: LooseObject = {
+    let genusEvolution: Record<string, EvolutionAction[]> = {
       eldritch: [e.sentience, e.eldritch, ...bilateralSymmetry],
       aquatic: [e.sentience, e.aquatic, ...bilateralSymmetry],
       insectoid: [e.sentience, e.athropods, ...bilateralSymmetry],
@@ -98,17 +112,13 @@ export function createRaceInitialization({
           ];
         }
       } else if (currentGame.races[id].type === "hybrid") {
-        let hybridGenus = currentGame.races[id].hybrid;
-        currentRaces[id].evolutionTree[hybridGenus[0]] = [
-          e.bunker,
-          e[id],
-          ...(genusEvolution[hybridGenus[0]] ?? []),
-        ];
-        currentRaces[id].evolutionTree[hybridGenus[1]] = [
-          e.bunker,
-          e[id],
-          ...(genusEvolution[hybridGenus[1]] ?? []),
-        ];
+        for (let genus of currentGame.races[id].hybrid ?? []) {
+          currentRaces[id].evolutionTree[genus] = [
+            e.bunker,
+            e[id],
+            ...(genusEvolution[genus] ?? []),
+          ];
+        }
       } else {
         currentRaces[id].evolutionTree[currentRaces[id].genus] = [
           e.bunker,

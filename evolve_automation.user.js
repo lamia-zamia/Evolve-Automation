@@ -15355,17 +15355,13 @@
             ];
           }
         } else if (currentGame.races[id].type === "hybrid") {
-          let hybridGenus = currentGame.races[id].hybrid;
-          currentRaces[id].evolutionTree[hybridGenus[0]] = [
-            e.bunker,
-            e[id],
-            ...genusEvolution[hybridGenus[0]] ?? []
-          ];
-          currentRaces[id].evolutionTree[hybridGenus[1]] = [
-            e.bunker,
-            e[id],
-            ...genusEvolution[hybridGenus[1]] ?? []
-          ];
+          for (let genus of currentGame.races[id].hybrid ?? []) {
+            currentRaces[id].evolutionTree[genus] = [
+              e.bunker,
+              e[id],
+              ...genusEvolution[genus] ?? []
+            ];
+          }
         } else {
           currentRaces[id].evolutionTree[currentRaces[id].genus] = [
             e.bunker,
