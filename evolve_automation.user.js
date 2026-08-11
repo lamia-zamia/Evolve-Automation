@@ -15391,10 +15391,10 @@
     getHaveTech,
     log
   }) {
-    const updateCraftCost = (...args) => getUpdateCraftCost()(...args);
-    const updateTabs = (...args) => getUpdateTabs()(...args);
-    const isLumberRace = (...args) => getIsLumberRace()(...args);
-    const haveTech = (...args) => getHaveTech()(...args);
+    const updateCraftCost = () => getUpdateCraftCost()();
+    const updateTabs = (redraw) => getUpdateTabs()(redraw);
+    const isLumberRace = () => getIsLumberRace()();
+    const haveTech = (id, level) => getHaveTech()(id, level);
     function initialiseState() {
       const JobManager = getJobManager();
       const crafter = getCrafter();

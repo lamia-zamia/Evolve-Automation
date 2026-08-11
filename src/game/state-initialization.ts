@@ -1,18 +1,57 @@
-type LooseFunction = (...args: any[]) => any;
-type LooseObject = Record<PropertyKey, any>;
+/**
+ * A resource entity. This module routes them into building consumption and
+ * support, and writes the crate and container cost bags.
+ */
+type ResourceEntity = { cost: Record<string, number> };
+
+/** A crafting job entity. Only collected into the job manager's list here. */
+type JobEntity = object;
+
+type BuildingEntity = {
+  id: string;
+  name: string;
+  /** The game action behind the building, absent when this build does not ship it. */
+  definition: unknown;
+  gameMax: number;
+  powered: number;
+  overridePowered: number;
+  produces: ResourceEntity[];
+  autoStateSmart: boolean;
+  _tab: string;
+  _location: string;
+  addSupport(resource: ResourceEntity): void;
+  addResourceConsumption(
+    resource: ResourceEntity | (() => ResourceEntity),
+    rate: number | (() => number),
+  ): void;
+};
+
+/** An ARPA project. Only its build ceiling is set here. */
+type ProjectEntity = { gameMax: number };
+
+type JobManagerShape = { craftingJobs: JobEntity[] };
+
+type GameSurface = {
+  global: {
+    race: Record<string, unknown> & { universe?: string };
+    stats: { achieve: Record<string, { l: number } | undefined> };
+    /** Ids of the buildings the game's own power calculation covers. */
+    power: string[];
+  };
+};
 
 type StateInitializationDependencies = {
-  getGame: () => LooseObject;
-  getResources: () => LooseObject;
-  getJobManager: () => LooseObject;
-  getCrafter: () => LooseObject;
-  getBuildings: () => LooseObject;
-  setBuildings: (buildings: LooseObject) => void;
-  getProjects: () => LooseObject;
-  getUpdateCraftCost: () => LooseFunction;
-  getUpdateTabs: () => LooseFunction;
-  getIsLumberRace: () => LooseFunction;
-  getHaveTech: () => LooseFunction;
+  getGame: () => GameSurface;
+  getResources: () => Record<string, ResourceEntity>;
+  getJobManager: () => JobManagerShape;
+  getCrafter: () => Record<string, JobEntity>;
+  getBuildings: () => Record<string, BuildingEntity>;
+  setBuildings: (buildings: Record<string, BuildingEntity>) => void;
+  getProjects: () => Record<string, ProjectEntity>;
+  getUpdateCraftCost: () => () => void;
+  getUpdateTabs: () => (redraw: boolean) => void;
+  getIsLumberRace: () => () => unknown;
+  getHaveTech: () => (id: string, level?: number) => unknown;
   log: (message: string) => void;
 };
 
@@ -30,11 +69,10 @@ export function createStateInitialization({
   getHaveTech,
   log,
 }: StateInitializationDependencies) {
-  const updateCraftCost: LooseFunction = (...args) =>
-    getUpdateCraftCost()(...args);
-  const updateTabs: LooseFunction = (...args) => getUpdateTabs()(...args);
-  const isLumberRace: LooseFunction = (...args) => getIsLumberRace()(...args);
-  const haveTech: LooseFunction = (...args) => getHaveTech()(...args);
+  const updateCraftCost = () => getUpdateCraftCost()();
+  const updateTabs = (redraw: boolean) => getUpdateTabs()(redraw);
+  const isLumberRace = () => getIsLumberRace()();
+  const haveTech = (id: string, level?: number) => getHaveTech()(id, level);
 
   function initialiseState() {
     const JobManager = getJobManager();
