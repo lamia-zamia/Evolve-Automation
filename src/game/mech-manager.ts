@@ -2,25 +2,166 @@ import type { GameMechControlsPort } from "../ports/game-mech-controls.ts";
 import type { GameMechListControlsPort } from "../ports/game-mech-list-controls.ts";
 import type { RandomSource } from "../ports/randomness.ts";
 
-type AnyFunction = (...args: any[]) => any;
-type AnyRecord = Record<string, any>;
+type MechBody = {
+  size: string;
+  chassis: string;
+  equip: string[];
+};
+
+type MechBlueprint = MechBody & {
+  hardpoint: string[];
+  infernal?: boolean;
+};
+
+type MechStats = {
+  power: number;
+  efficiency: number;
+  gems_eff: number;
+  supply_eff: number;
+};
+
+type Mech = MechBlueprint & MechStats & { id?: number };
+
+/** A best-body candidate: a chassis/equip combination with an optional infernal flag. */
+type MechDesign = MechBody & { infernal?: boolean };
+
+type GameSurface = {
+  global: {
+    portal: {
+      spire: {
+        count: number;
+        type: string;
+        progress: number;
+        status: Record<string, boolean>;
+        boss: string;
+      };
+      mechbay: {
+        scouts: number;
+        max: number;
+        active: number;
+        bay: number;
+        mechs: MechBlueprint[];
+      };
+    };
+    blood: {
+      prepared: number;
+      wrath: number;
+    };
+    race: Record<string, boolean>;
+    stats: {
+      achieve: {
+        gladiator?: { l: number };
+      };
+    };
+  };
+  loc(id: string): string;
+};
+
+type SettingsSurface = {
+  mechCollectorValue: number;
+  mechSpecial: "always" | "never" | "prefered";
+  mechInfernalCollector: boolean;
+  mechFillBay: boolean;
+  mechMinSupply: number;
+  mechMaxCollectors: number;
+  mechScouts: number;
+  mechSize: string;
+  mechSizeGravity: string;
+};
+
+type ResourcesSurface = {
+  Supply: {
+    storageRatio: number;
+    rateOfChange: number;
+    maxQuantity: number;
+  };
+  Soul_Gem: {
+    spareQuantity: number;
+    maxQuantity: number;
+  };
+};
+
+type BuildingsSurface = {
+  SpireMechBay: { count: number };
+};
+
+type PolySurface = {
+  terrainRating(mech: MechBody, factor: number, statuses: string[]): number;
+  weaponPower(mech: MechBody, factor: number): number;
+  mechCost(
+    size: string,
+    infernal?: boolean,
+    prep?: number,
+  ): { s: number; c: number };
+  monsters: Record<string, { weapon: Record<string, number> }>;
+};
+
+type GameLogSurface = {
+  logSuccess(loggingType: string, text: string, tags: string[]): void;
+};
+
+type MechManagerShape = {
+  activeMechs: Mech[];
+  inactiveMechs: Mech[];
+  mechsPower: number;
+  mechsPotential: number;
+  isActive: boolean;
+  saveSupply: boolean;
+  stateHash: number;
+  bestSize: string[];
+  bestGems: string[];
+  bestSupply: string[];
+  bestMech: Record<string, Mech>;
+  bestBody: Record<string, MechDesign[]>;
+  bestWeapon: string[];
+  Size: string[];
+  Chassis: string[];
+  Weapon: string[];
+  Equip: string[];
+  SizeSlots: Record<string, number>;
+  SizeWeapons: Record<string, number>;
+  SmallChassisMod: Record<string, Record<string, number>>;
+  LargeChassisMod: Record<string, Record<string, number>>;
+  StatusMod: Record<string, (mech: MechBody) => number>;
+  readonly collectorValue: number;
+  mechObserver: unknown;
+  updateSpire(): boolean;
+  initLab(): boolean;
+  getBodyMod(mech: MechBody): number;
+  getWeaponMod(mech: MechBlueprint): number;
+  getSizeMod(mech: MechBody, concrete?: boolean): number;
+  getProgressMod(): number;
+  getPreferredSize(): [string, boolean];
+  getMechStats(mech: MechBlueprint): MechStats;
+  getTimeToClear(): number;
+  updateBestBody(size: string): void;
+  updateBestWeapon(): void;
+  getRandomMech(size: string): Mech;
+  getMechSpace(mech: MechBody, prep?: number): number;
+  getMechCost(mech: MechDesign, prep?: number): [number, number, number];
+  getMechRefund(mech: MechDesign, prep?: number): [number, number];
+  mechDesc(mech: Mech): string;
+  buildMech(mech: Mech & { infernal: boolean }): void;
+  scrapMech(mech: { id: number }): boolean;
+  dragMech(oldId: number, newId: number): boolean;
+};
 
 const assemblyElementId = "mechAssembly";
 const mechListElementId = "mechList";
 
 type MechManagerDependencies = {
-  getGame: () => AnyRecord;
-  getSettings: () => AnyRecord;
-  getResources: () => AnyRecord;
-  getBuildings: () => AnyRecord;
-  getPoly: () => AnyRecord;
-  getGameLog: () => AnyRecord;
-  getUpdateDebugData: () => AnyFunction;
-  getCreateMechInfo: () => AnyFunction;
+  getGame: () => GameSurface;
+  getSettings: () => SettingsSurface;
+  getResources: () => ResourcesSurface;
+  getBuildings: () => BuildingsSurface;
+  getPoly: () => PolySurface;
+  getGameLog: () => GameLogSurface;
+  getUpdateDebugData: () => (...args: unknown[]) => void;
+  getCreateMechInfo: () => (...args: unknown[]) => void;
   getMechControls: () => GameMechControlsPort;
   getMechListControls: () => GameMechListControlsPort;
-  kCombinations: (values: any[], size: number) => any[][];
-  createMutationObserver: (callback: (...args: any[]) => void) => unknown;
+  kCombinations: (values: string[], size: number) => string[][];
+  createMutationObserver: (callback: () => void) => unknown;
   randomSource: RandomSource;
 };
 
@@ -39,16 +180,16 @@ export function createMechManager({
   createMutationObserver,
   randomSource,
 }: MechManagerDependencies) {
-  let game: AnyRecord;
-  let settings: AnyRecord;
-  let resources: AnyRecord;
-  let buildings: AnyRecord;
-  let poly: AnyRecord;
-  let GameLog: AnyRecord;
+  let game: GameSurface;
+  let settings: SettingsSurface;
+  let resources: ResourcesSurface;
+  let buildings: BuildingsSurface;
+  let poly: PolySurface;
+  let GameLog: GameLogSurface;
 
   const k_combinations = kCombinations;
-  const updateDebugData = (...args: any[]) => getUpdateDebugData()(...args);
-  const createMechInfo = (...args: any[]) => getCreateMechInfo()(...args);
+  const updateDebugData = (...args: unknown[]) => getUpdateDebugData()(...args);
+  const createMechInfo = (...args: unknown[]) => getCreateMechInfo()(...args);
 
   function refreshContext() {
     game = getGame();
@@ -59,7 +200,7 @@ export function createMechManager({
     GameLog = getGameLog();
   }
 
-  const MechManager: AnyRecord = {
+  const MechManager: MechManagerShape = {
     activeMechs: [],
     inactiveMechs: [],
     mechsPower: 0,
@@ -252,49 +393,49 @@ export function createMechManager({
       },
     },
     StatusMod: {
-      freeze: (mech: any) => (!mech.equip.includes("radiator") ? 0.25 : 1),
-      hot: (mech: any) => (!mech.equip.includes("coolant") ? 0.25 : 1),
-      corrosive: (mech: any) =>
+      freeze: (mech) => (!mech.equip.includes("radiator") ? 0.25 : 1),
+      hot: (mech) => (!mech.equip.includes("coolant") ? 0.25 : 1),
+      corrosive: (mech) =>
         !mech.equip.includes("ablative")
           ? mech.equip.includes("shields")
             ? 0.75
             : 0.25
           : 1,
-      humid: (mech: any) => (!mech.equip.includes("seals") ? 0.75 : 1),
-      windy: (mech: any) => (mech.chassis === "hover" ? 0.5 : 1),
-      hilly: (mech: any) => (mech.chassis !== "spider" ? 0.75 : 1),
-      mountain: (mech: any) =>
+      humid: (mech) => (!mech.equip.includes("seals") ? 0.75 : 1),
+      windy: (mech) => (mech.chassis === "hover" ? 0.5 : 1),
+      hilly: (mech) => (mech.chassis !== "spider" ? 0.75 : 1),
+      mountain: (mech) =>
         mech.chassis !== "spider" && !mech.equip.includes("grapple")
           ? mech.equip.includes("flare")
             ? 0.75
             : 0.5
           : 1,
-      radioactive: (mech: any) => (!mech.equip.includes("shields") ? 0.5 : 1),
-      quake: (mech: any) => (!mech.equip.includes("stabilizer") ? 0.25 : 1),
-      dust: (mech: any) => (!mech.equip.includes("seals") ? 0.5 : 1),
-      river: (mech: any) => (mech.chassis !== "hover" ? 0.65 : 1),
-      tar: (mech: any) =>
+      radioactive: (mech) => (!mech.equip.includes("shields") ? 0.5 : 1),
+      quake: (mech) => (!mech.equip.includes("stabilizer") ? 0.25 : 1),
+      dust: (mech) => (!mech.equip.includes("seals") ? 0.5 : 1),
+      river: (mech) => (mech.chassis !== "hover" ? 0.65 : 1),
+      tar: (mech) =>
         mech.chassis !== "quad"
           ? mech.chassis === "tread" || mech.chassis === "wheel"
             ? 0.5
             : 0.75
           : 1,
-      steam: (mech: any) => (!mech.equip.includes("shields") ? 0.75 : 1),
-      flooded: (mech: any) => (mech.chassis !== "hover" ? 0.35 : 1),
-      fog: (mech: any) => (!mech.equip.includes("sonar") ? 0.2 : 1),
-      rain: (mech: any) => (!mech.equip.includes("seals") ? 0.75 : 1),
-      hail: (mech: any) =>
+      steam: (mech) => (!mech.equip.includes("shields") ? 0.75 : 1),
+      flooded: (mech) => (mech.chassis !== "hover" ? 0.35 : 1),
+      fog: (mech) => (!mech.equip.includes("sonar") ? 0.2 : 1),
+      rain: (mech) => (!mech.equip.includes("seals") ? 0.75 : 1),
+      hail: (mech) =>
         !mech.equip.includes("ablative") && !mech.equip.includes("shields")
           ? 0.75
           : 1,
-      chasm: (mech: any) => (!mech.equip.includes("grapple") ? 0.1 : 1),
-      dark: (mech: any) =>
+      chasm: (mech) => (!mech.equip.includes("grapple") ? 0.1 : 1),
+      dark: (mech) =>
         !mech.equip.includes("infrared")
           ? mech.equip.includes("flare")
             ? 0.25
             : 0.1
           : 1,
-      gravity: (mech: any) =>
+      gravity: (mech) =>
         mech.size === "titan"
           ? 0.25
           : mech.size === "large"
@@ -372,12 +513,12 @@ export function createMechManager({
         this.isActive = true;
 
         this.updateBestWeapon();
-        this.Size.forEach((size: any) => {
+        this.Size.forEach((size) => {
           this.updateBestBody(size);
           this.bestMech[size] = this.getRandomMech(size);
         });
-        let sortBy = (prop: any) =>
-          (Object.values(this.bestMech) as AnyRecord[])
+        let sortBy = (prop: keyof MechStats) =>
+          Object.values(this.bestMech)
             .filter((m) => m.size !== "collector")
             .sort((a, b) => b[prop] - a[prop])
             .map((m) => m.size);
@@ -399,7 +540,7 @@ export function createMechManager({
       return true;
     },
 
-    getBodyMod(mech: any) {
+    getBodyMod(mech) {
       let floor = game.global.portal.spire;
       let terrainFactor =
         mech.size === "small" || mech.size === "medium"
@@ -417,7 +558,7 @@ export function createMechManager({
       return rating;
     },
 
-    getWeaponMod(mech: any) {
+    getWeaponMod(mech) {
       let weapons = poly.monsters[game.global.portal.spire.boss].weapon;
       let rating = 0;
       for (let i = 0; i < mech.hardpoint.length; i++) {
@@ -426,7 +567,7 @@ export function createMechManager({
       return rating;
     },
 
-    getSizeMod(mech: any, concrete: any) {
+    getSizeMod(mech, concrete) {
       let isConcrete = concrete ?? game.global.portal.spire.type === "concrete";
       switch (mech.size) {
         case "small":
@@ -445,8 +586,9 @@ export function createMechManager({
 
     getProgressMod() {
       let mod = 1;
-      if (game.global.stats.achieve.gladiator?.l > 0) {
-        mod *= 1 + game.global.stats.achieve.gladiator.l * 0.2;
+      const gladiatorLevel = game.global.stats.achieve.gladiator?.l ?? 0;
+      if (gladiatorLevel > 0) {
+        mod *= 1 + gladiatorLevel * 0.2;
       }
       if (game.global.blood["wrath"]) {
         mod *= 1 + game.global.blood.wrath / 20;
@@ -473,7 +615,7 @@ export function createMechManager({
         resources.Supply.rateOfChange < settings.mechMinSupply
       ) {
         let collectorsCount = this.activeMechs.filter(
-          (mech: any) => mech.size === "collector",
+          (mech) => mech.size === "collector",
         ).length;
         if (collectorsCount / mechBay.max < settings.mechMaxCollectors) {
           return ["collector", true]; // Bootstrap income
@@ -515,7 +657,7 @@ export function createMechManager({
       return ["titan", false]; // Just a stub, if auto size couldn't pick anything
     },
 
-    getMechStats(mech: any) {
+    getMechStats(mech) {
       let rating = this.getBodyMod(mech);
       if (mech.size !== "collector") {
         // Collectors doesn't have weapons
@@ -539,9 +681,9 @@ export function createMechManager({
         : Number.MAX_SAFE_INTEGER;
     },
 
-    updateBestBody(size: any) {
+    updateBestBody(size) {
       let currentBestBodyMod = 0;
-      let currentBestBodyList: any[] = [];
+      let currentBestBodyList: MechDesign[] = [];
 
       let equipmentSlots =
         this.SizeSlots[size] +
@@ -557,7 +699,7 @@ export function createMechManager({
         game.global.blood.prepared >= 3;
 
       k_combinations(equipOptions, equipmentSlots).forEach((equip) => {
-        this.Chassis.forEach((chassis: any) => {
+        this.Chassis.forEach((chassis) => {
           let mech = {
             size: size,
             chassis: chassis,
@@ -608,7 +750,7 @@ export function createMechManager({
       }
     },
 
-    getRandomMech(size: any) {
+    getRandomMech(size) {
       let randomBody =
         this.bestBody[size][
           Math.floor(randomSource.nextUnit() * this.bestBody[size].length)
@@ -625,7 +767,7 @@ export function createMechManager({
       return { ...mech, ...this.getMechStats(mech) };
     },
 
-    getMechSpace(mech: any, prep: any) {
+    getMechSpace(mech, prep) {
       switch (mech.size) {
         case "small":
           return 2;
@@ -641,17 +783,17 @@ export function createMechManager({
       return Number.MAX_SAFE_INTEGER;
     },
 
-    getMechCost(mech: any, prep: any) {
+    getMechCost(mech, prep) {
       let { s, c } = poly.mechCost(mech.size, mech.infernal, prep);
       return [s, c, this.getMechSpace(mech, prep)];
     },
 
-    getMechRefund(mech: any, prep: any) {
+    getMechRefund(mech, prep) {
       let { s, c } = poly.mechCost(mech.size, mech.infernal, prep);
       return [Math.floor(s / 2), Math.floor(c / 3)];
     },
 
-    mechDesc(mech: any) {
+    mechDesc(mech) {
       // (${mech.hardpoint.map(id => game.loc("portal_mech_weapon_" + id)).join(", ")}) [${mech.equip.map(id => game.loc("portal_mech_equip_" + id)).join(", ")}]
       let rating = mech.power / this.bestMech[mech.size].power;
       return `${game.loc("portal_mech_size_" + mech.size)} ${game.loc(
@@ -659,7 +801,7 @@ export function createMechManager({
       )} (${Math.round(rating * 100)}%)`;
     },
 
-    buildMech(mech: any) {
+    buildMech(mech) {
       if (
         getMechControls().assembleMech({
           elementId: assemblyElementId,
@@ -678,14 +820,14 @@ export function createMechManager({
       }
     },
 
-    scrapMech(mech: any) {
+    scrapMech(mech) {
       return getMechListControls().scrapMech({
         elementId: mechListElementId,
         mechId: mech.id,
       });
     },
 
-    dragMech(oldId: any, newId: any) {
+    dragMech(oldId, newId) {
       return getMechListControls().dragMech({
         elementId: mechListElementId,
         oldIndex: oldId,
@@ -703,7 +845,7 @@ export function createMechManager({
       const method = descriptor.value;
       Object.defineProperty(MechManager, key, {
         ...descriptor,
-        value: function (this: AnyRecord, ...args: any[]) {
+        value: function (this: MechManagerShape, ...args: unknown[]) {
           refreshContext();
           return method.apply(this, args);
         },
@@ -712,7 +854,7 @@ export function createMechManager({
       const getter = descriptor.get;
       Object.defineProperty(MechManager, key, {
         ...descriptor,
-        get: function (this: AnyRecord) {
+        get: function (this: MechManagerShape) {
           refreshContext();
           return getter.call(this);
         },

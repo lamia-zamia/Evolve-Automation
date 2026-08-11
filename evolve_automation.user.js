@@ -6732,8 +6732,9 @@
       },
       getProgressMod() {
         let mod = 1;
-        if (game.global.stats.achieve.gladiator?.l > 0) {
-          mod *= 1 + game.global.stats.achieve.gladiator.l * 0.2;
+        const gladiatorLevel = game.global.stats.achieve.gladiator?.l ?? 0;
+        if (gladiatorLevel > 0) {
+          mod *= 1 + gladiatorLevel * 0.2;
         }
         if (game.global.blood["wrath"]) {
           mod *= 1 + game.global.blood.wrath / 20;
