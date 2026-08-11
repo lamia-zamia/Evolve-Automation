@@ -15264,9 +15264,10 @@
       priorityList.push(buildings.GasMining);
       priorityList.push(buildings.Mine);
       priorityList.push(buildings.CoalMine);
-      BuildingManager.priorityList = priorityList.filter((b) => b);
-      BuildingManager.statePriorityList = priorityList.filter(
-        (b) => b && b.isSwitchable()
+      const available = priorityList.filter((b) => b !== void 0);
+      BuildingManager.priorityList = available;
+      BuildingManager.statePriorityList = available.filter(
+        (b) => b.isSwitchable()
       );
     }
     return { initBuildingState };

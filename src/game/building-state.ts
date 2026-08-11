@@ -1,8 +1,16 @@
-type LooseObject = Record<PropertyKey, any>;
+/** A building in the priority list. Only its switchability is read here. */
+type BuildingEntity = { isSwitchable(): boolean };
+
+type BuildingManagerShape = {
+  priorityList: BuildingEntity[];
+  statePriorityList: BuildingEntity[];
+};
 
 type BuildingStateInitializationDependencies = {
-  getBuildings: () => LooseObject;
-  getBuildingManager: () => LooseObject;
+  // Not every id in the list below exists in every game version, and a missing
+  // one is dropped from the built lists rather than treated as an error.
+  getBuildings: () => Record<string, BuildingEntity | undefined>;
+  getBuildingManager: () => BuildingManagerShape;
 };
 
 export function createBuildingStateInitialization({
@@ -13,7 +21,7 @@ export function createBuildingStateInitialization({
     const buildings = getBuildings();
     const BuildingManager = getBuildingManager();
 
-    let priorityList = [];
+    let priorityList: (BuildingEntity | undefined)[] = [];
 
     priorityList.push(buildings.Windmill);
     priorityList.push(buildings.Mill);
@@ -480,9 +488,10 @@ export function createBuildingStateInitialization({
     priorityList.push(buildings.Mine);
     priorityList.push(buildings.CoalMine);
 
-    BuildingManager.priorityList = priorityList.filter((b) => b);
-    BuildingManager.statePriorityList = priorityList.filter(
-      (b) => b && b.isSwitchable(),
+    const available = priorityList.filter((b) => b !== undefined);
+    BuildingManager.priorityList = available;
+    BuildingManager.statePriorityList = available.filter((b) =>
+      b.isSwitchable(),
     );
   }
 
