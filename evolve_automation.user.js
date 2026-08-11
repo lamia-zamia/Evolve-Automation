@@ -5561,13 +5561,15 @@
           if (haveTech("rival")) {
             unlockedForeigns.push(3);
           }
-          let activeForeigns = unlockedForeigns.map((i) => ({
-            id: i,
-            gov: game.global.civic.foreign[`gov${i}`]
-          }));
-          for (let foreign of activeForeigns) {
-            let rank = foreign.id === 3 ? "Rival" : getGovPower(foreign.id) <= settings.foreignPowerRequired ? "Inferior" : "Superior";
-            foreign.policy = foreign.id < 3 && achievementPolicy !== null ? achievementPolicy : settings[`foreignPolicy${rank}`];
+          const activeForeigns = [];
+          for (let id of unlockedForeigns) {
+            let rank = id === 3 ? "Rival" : getGovPower(id) <= settings.foreignPowerRequired ? "Inferior" : "Superior";
+            const foreign = {
+              id,
+              gov: game.global.civic.foreign[`gov${id}`],
+              policy: id < 3 && achievementPolicy !== null ? achievementPolicy : settings[`foreignPolicy${rank}`]
+            };
+            activeForeigns.push(foreign);
             if (foreign.gov.anx && foreign.policy === "Annex" || foreign.gov.buy && foreign.policy === "Purchase" || foreign.gov.occ && foreign.policy === "Occupy") {
               controlledForeigns++;
             }
@@ -5727,8 +5729,8 @@
           this.hellAssigned = fortress.assigned;
           this.hellReservedSoldiers = this.getHellReservedSoldiers();
           this.isHellVisible = garrisonControls.isRendered("fort");
-          this.minions = game.global.portal.minions?.spawns;
-          this.enemies = game.global.portal.throne?.enemy?.length;
+          this.minions = game.global.portal.minions?.spawns ?? 0;
+          this.enemies = game.global.portal.throne?.enemy?.length ?? 0;
         } else {
           this.isHellVisible = false;
         }
@@ -5776,7 +5778,7 @@
       },
       isMercenaryUnlocked() {
         const game = getGame();
-        return game.global.civic.garrison.mercs;
+        return game.global.civic.garrison?.mercs ?? false;
       },
       // function mercCost from civics.js
       get mercenaryCost() {
@@ -5966,7 +5968,7 @@
       },
       attackEnemyFortress(enemyIndex) {
         const game = getGame();
-        if (enemyIndex < 0 || enemyIndex >= game.global.portal.throne.enemy.length) {
+        if (enemyIndex < 0 || enemyIndex >= (game.global.portal.throne?.enemy?.length ?? 0)) {
           return false;
         }
         try {

@@ -365,4 +365,16 @@ vueById.fort.attack = () => {
 assert.equal(WarManager.attackEnemyFortress(0), false);
 assert.equal(errors.length, 1);
 
+// The bags the game only creates for the matching content answer instead of
+// throwing: a run with no throne has no fortress to attack, a run with no
+// minions mirrors zero of them, and a garrison the game has not made yet
+// offers no mercenaries.
+delete game.global.portal.throne;
+assert.equal(WarManager.attackEnemyFortress(0), false);
+WarManager.updateHell();
+assert.equal(WarManager.minions, 0);
+assert.equal(WarManager.enemies, 0);
+delete game.global.civic.garrison;
+assert.equal(WarManager.isMercenaryUnlocked(), false);
+
 console.log("Foreign-affairs manager tests passed");

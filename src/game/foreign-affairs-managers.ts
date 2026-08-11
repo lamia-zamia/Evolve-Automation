@@ -4,8 +4,176 @@ import type { GameForeignControlsPort } from "../ports/game-foreign-controls.ts"
 import type { GameGarrisonControlsPort } from "../ports/game-garrison-controls.ts";
 import type { GameModalPort } from "../ports/game-modal.ts";
 
-type AnyFunction = (...args: any[]) => any;
-type AnyRecord = Record<string, any>;
+/** One foreign power's diplomatic state. */
+type Gov = {
+  spy: number;
+  mil: number;
+  hstl: number;
+  unrest: number;
+  anx: boolean;
+  buy: boolean;
+  occ: boolean;
+  act: string;
+};
+
+/** How a foreign power ranks against us, which selects the policy setting. */
+type ForeignRank = "Rival" | "Inferior" | "Superior";
+
+/** A foreign power this cycle acts on, with the policy chosen for it. */
+type ActiveForeign = {
+  id: number;
+  gov: Gov;
+  policy: string;
+};
+
+type GameSurface = {
+  global: {
+    // Race flags and trait levels. Evolve stores them as numbers, and an
+    // absent one reads as undefined, which every use below treats as zero.
+    race: Record<string, number>;
+    tech: Record<string, number>;
+    city: { biome: string };
+    civic: {
+      foreign: Record<string, Gov>;
+      // The game creates the garrison with the first soldier.
+      garrison?: {
+        workers: number;
+        wounded: number;
+        raid: number;
+        max: number;
+        m_use: number;
+        crew: number;
+        mercs?: boolean;
+      };
+    };
+    space: { fob?: { troops: number } };
+    portal: {
+      fortress?: {
+        garrison: number;
+        patrols: number;
+        patrol_size: number;
+        assigned: number;
+      };
+      minions?: { spawns: number };
+      throne?: { enemy?: unknown[] };
+    };
+  };
+  loc(key: string): string;
+  armyRating(soldiers: number, type: string, wounded?: number): number;
+};
+
+type StateSurface = { astroSign: string };
+
+type SettingsSurface = {
+  autoBuild: boolean;
+  autoFight: boolean;
+  foreignUnification: boolean;
+  foreignPacifist: boolean;
+  foreignForceSabotage: boolean;
+  foreignOccupyLast: boolean;
+  foreignPowerRequired: number;
+  hellAssaultReserve: boolean;
+} & Record<`foreignPolicy${ForeignRank}`, string>;
+
+type ResourcesSurface = Record<
+  string,
+  { currentQuantity: number; maxQuantity: number }
+>;
+
+type BuildingsSurface = Record<
+  string,
+  {
+    count: number;
+    stateOnCount: number;
+    autoStateEnabled: boolean;
+    cost: Record<string, number>;
+    isAutoBuildable(): boolean;
+  }
+>;
+
+type PolySurface = { govPrice(govIndex: number): number };
+
+type GameLogSurface = {
+  logSuccess(loggingType: string, text: string, tags: string[]): void;
+};
+
+type HaveTech = (id: string, level?: number) => unknown;
+type GuardActive = (guard: string) => unknown;
+type TraitVal = (
+  trait: string,
+  level?: number,
+  mode?: string | number,
+) => number;
+
+type SpyManagerShape = {
+  isForeignUnlocked: boolean;
+  purchaseMoney: number;
+  purchaseForeigngs: number[];
+  foreignActive: ActiveForeign[];
+  foreignTarget: ActiveForeign | null;
+  Types: Record<string, { id: string }>;
+  spyCost(govIndex: number, spy?: number): number;
+  updateForeigns(): void;
+  performEspionage(
+    govIndex: number,
+    espionageId: string,
+    influenceAllowed: boolean,
+  ): void;
+  isEspionageUseful(govIndex: number, espionageId: string): boolean;
+};
+
+type WarManagerShape = {
+  isGarrisonVisible: boolean;
+  isHellVisible: boolean;
+  workers: number;
+  wounded: number;
+  raid: number;
+  max: number;
+  m_use: number;
+  crew: number;
+  hellSoldiers: number;
+  hellPatrols: number;
+  hellPatrolSize: number;
+  hellAssigned: number;
+  hellReservedSoldiers: number;
+  minions: number;
+  enemies: number;
+  updateGarrison(): void;
+  updateHell(): void;
+  readonly currentSoldiers: number;
+  readonly maxSoldiers: number;
+  readonly deadSoldiers: number;
+  readonly currentCityGarrison: number;
+  readonly maxCityGarrison: number;
+  readonly availableGarrison: number;
+  readonly hellGarrison: number;
+  readonly mercenaryCost: number;
+  launchCampaign(govIndex: number): boolean;
+  release(govIndex: number): boolean;
+  isMercenaryUnlocked(): boolean;
+  hireMercenary(): boolean;
+  getHellReservedSoldiers(): number;
+  setTactic(newTactic: number): boolean;
+  getCampaignTitle(tactic: number): string | null;
+  addBattalion(count: number): void;
+  removeBattalion(count: number): void;
+  getGovArmy(tactic: number, govIndex: number): number;
+  getAdvantage(army: number, tactic: number, govIndex: number): number;
+  getRatingForAdvantage(adv: number, tactic: number, govIndex: number): number;
+  getSoldiersForAdvantage(
+    advantage: number,
+    tactic: number,
+    govIndex: number,
+  ): number;
+  getSoldiersForAttackRating(targetRating: number): number;
+  addHellGarrison(count: number): void;
+  removeHellGarrison(count: number): void;
+  addHellPatrol(count: number): void;
+  removeHellPatrol(count: number): void;
+  addHellPatrolSize(count: number): void;
+  removeHellPatrolSize(count: number): void;
+  attackEnemyFortress(enemyIndex: number): boolean;
+};
 
 /** The panel that offers a foreign power's espionage options. */
 function espionageOptions(govIndex: number): string {
@@ -18,26 +186,26 @@ function espionageModalTrigger(govIndex: number): string {
 }
 
 type ForeignAffairsManagerDependencies = {
-  getGame: () => AnyRecord;
-  getSettings: () => AnyRecord;
-  getState: () => AnyRecord;
-  getResources: () => AnyRecord;
-  getBuildings: () => AnyRecord;
-  getPoly: () => AnyRecord;
+  getGame: () => GameSurface;
+  getSettings: () => SettingsSurface;
+  getState: () => StateSurface;
+  getResources: () => ResourcesSurface;
+  getBuildings: () => BuildingsSurface;
+  getPoly: () => PolySurface;
   getForeignControls: () => GameForeignControlsPort;
   espionageControls: GameEspionageControlsPort;
   getGarrisonControls: () => GameGarrisonControlsPort;
   getFeatureVisibility: () => GameFeatureVisibilityPort;
   getGameModal: () => GameModalPort;
-  getGameLog: () => AnyRecord;
-  getHaveTech: () => AnyFunction;
-  getGuardActive: () => AnyFunction;
+  getGameLog: () => GameLogSurface;
+  getHaveTech: () => HaveTech;
+  getGuardActive: () => GuardActive;
   getForeignAchievementGoal: () => "world-domination" | "syndicate" | null;
-  getTraitVal: () => AnyFunction;
+  getTraitVal: () => TraitVal;
   getGovPower: (govIndex: number) => number;
   getGovName: (govIndex: number) => string;
   getOccCosts: () => number;
-  logError: (...args: any[]) => void;
+  logError: (...args: unknown[]) => void;
 };
 
 export function createForeignAffairsManagers({
@@ -62,12 +230,12 @@ export function createForeignAffairsManagers({
   getOccCosts,
   logError,
 }: ForeignAffairsManagerDependencies) {
-  const haveTech = (...args: any[]) => getHaveTech()(...args);
-  const guardActive = (...args: any[]) => getGuardActive()(...args);
-  const traitVal = (...args: any[]) => getTraitVal()(...args);
+  const haveTech: HaveTech = (...args) => getHaveTech()(...args);
+  const guardActive: GuardActive = (...args) => getGuardActive()(...args);
+  const traitVal: TraitVal = (...args) => getTraitVal()(...args);
   const garrisonControls = getGarrisonControls();
 
-  const SpyManager: AnyRecord = {
+  const SpyManager: SpyManagerShape = {
     isForeignUnlocked: false,
 
     purchaseMoney: 0,
@@ -83,7 +251,7 @@ export function createForeignAffairsManagers({
       Purchase: { id: "purchase" },
     },
 
-    spyCost(govIndex: number, spy?: number) {
+    spyCost(govIndex, spy) {
       const game = getGame();
       const state = getState();
       let gov = game.global.civic.foreign[`gov${govIndex}`];
@@ -121,7 +289,7 @@ export function createForeignAffairsManagers({
               : null;
         const unificationRequested =
           settings.foreignUnification || achievementGoal !== null;
-        let currentTarget = null;
+        let currentTarget: ActiveForeign | null = null;
         let controlledForeigns = 0;
 
         let unlockedForeigns = [];
@@ -132,24 +300,25 @@ export function createForeignAffairsManagers({
           unlockedForeigns.push(3);
         }
 
-        let activeForeigns: AnyRecord[] = unlockedForeigns.map((i) => ({
-          id: i,
-          gov: game.global.civic.foreign[`gov${i}`],
-        }));
-
         // Init foreigns
-        for (let foreign of activeForeigns) {
-          let rank =
-            foreign.id === 3
+        const activeForeigns: ActiveForeign[] = [];
+        for (let id of unlockedForeigns) {
+          let rank: ForeignRank =
+            id === 3
               ? "Rival"
-              : getGovPower(foreign.id) <= settings.foreignPowerRequired
+              : getGovPower(id) <= settings.foreignPowerRequired
                 ? "Inferior"
                 : "Superior";
 
-          foreign.policy =
-            foreign.id < 3 && achievementPolicy !== null
-              ? achievementPolicy
-              : settings[`foreignPolicy${rank}`];
+          const foreign: ActiveForeign = {
+            id,
+            gov: game.global.civic.foreign[`gov${id}`],
+            policy:
+              id < 3 && achievementPolicy !== null
+                ? achievementPolicy
+                : settings[`foreignPolicy${rank}`],
+          };
+          activeForeigns.push(foreign);
 
           if (
             (foreign.gov.anx && foreign.policy === "Annex") ||
@@ -268,11 +437,7 @@ export function createForeignAffairsManagers({
       }
     },
 
-    performEspionage(
-      govIndex: number,
-      espionageId: string,
-      influenceAllowed: boolean,
-    ) {
+    performEspionage(govIndex, espionageId, influenceAllowed) {
       const gameModal = getGameModal();
       const resources = getResources();
       const poly = getPoly();
@@ -335,7 +500,7 @@ export function createForeignAffairsManagers({
       }
     },
 
-    isEspionageUseful(govIndex: number, espionageId: string) {
+    isEspionageUseful(govIndex, espionageId) {
       const game = getGame();
       const resources = getResources();
       const poly = getPoly();
@@ -365,7 +530,7 @@ export function createForeignAffairsManagers({
     },
   };
 
-  const WarManager: AnyRecord = {
+  const WarManager: WarManagerShape = {
     isGarrisonVisible: false,
     isHellVisible: false,
 
@@ -411,8 +576,10 @@ export function createForeignAffairsManagers({
         this.hellAssigned = fortress.assigned;
         this.hellReservedSoldiers = this.getHellReservedSoldiers();
         this.isHellVisible = garrisonControls.isRendered("fort");
-        this.minions = game.global.portal.minions?.spawns;
-        this.enemies = game.global.portal.throne?.enemy?.length;
+        // Only a warlord run has minions and a throne, and only that run reads
+        // these two, so a missing bag mirrors as zero rather than undefined.
+        this.minions = game.global.portal.minions?.spawns ?? 0;
+        this.enemies = game.global.portal.throne?.enemy?.length ?? 0;
       } else {
         this.isHellVisible = false;
       }
@@ -458,14 +625,14 @@ export function createForeignAffairsManagers({
       );
     },
 
-    launchCampaign(govIndex: number) {
+    launchCampaign(govIndex) {
       return garrisonControls.launchCampaign({
         elementId: "garrison",
         govIndex,
       });
     },
 
-    release(govIndex: number) {
+    release(govIndex) {
       const game = getGame();
       if (game.global.civic.foreign["gov" + govIndex].occ) {
         let occSoldiers = getOccCosts();
@@ -480,7 +647,7 @@ export function createForeignAffairsManagers({
 
     isMercenaryUnlocked() {
       const game = getGame();
-      return game.global.civic.garrison.mercs;
+      return game.global.civic.garrison?.mercs ?? false;
     },
 
     // function mercCost from civics.js
@@ -575,21 +742,21 @@ export function createForeignAffairsManagers({
       return soldiers;
     },
 
-    setTactic(newTactic: number) {
+    setTactic(newTactic) {
       return garrisonControls.setTactic({
         elementId: "garrison",
         tactic: newTactic,
       });
     },
 
-    getCampaignTitle(tactic: number) {
+    getCampaignTitle(tactic) {
       return garrisonControls.campaignTitle({
         elementId: "garrison",
         tactic,
       });
     },
 
-    addBattalion(count: number) {
+    addBattalion(count) {
       if (
         !garrisonControls.addBattalions({
           elementId: "garrison",
@@ -602,7 +769,7 @@ export function createForeignAffairsManagers({
       this.raid = Math.min(this.raid + count, this.currentCityGarrison);
     },
 
-    removeBattalion(count: number) {
+    removeBattalion(count) {
       if (
         !garrisonControls.removeBattalions({
           elementId: "garrison",
@@ -615,7 +782,7 @@ export function createForeignAffairsManagers({
       this.raid = Math.max(this.raid - count, 0);
     },
 
-    getGovArmy(tactic: number, govIndex: number) {
+    getGovArmy(tactic, govIndex) {
       const game = getGame();
       // function battleAssessment(gov)
       let enemy = [5, 27.5, 62.5, 125, 300][tactic];
@@ -628,26 +795,22 @@ export function createForeignAffairsManagers({
       return (enemy * getGovPower(govIndex)) / 100;
     },
 
-    getAdvantage(army: number, tactic: number, govIndex: number) {
+    getAdvantage(army, tactic, govIndex) {
       return (1 - this.getGovArmy(tactic, govIndex) / army) * 100;
     },
 
-    getRatingForAdvantage(adv: number, tactic: number, govIndex: number) {
+    getRatingForAdvantage(adv, tactic, govIndex) {
       return this.getGovArmy(tactic, govIndex) / (1 - adv / 100);
     },
 
-    getSoldiersForAdvantage(
-      advantage: number,
-      tactic: number,
-      govIndex: number,
-    ) {
+    getSoldiersForAdvantage(advantage, tactic, govIndex) {
       return this.getSoldiersForAttackRating(
         this.getRatingForAdvantage(advantage, tactic, govIndex),
       );
     },
 
     // Calculates the required soldiers to reach the given attack rating, assuming everyone is healthy.
-    getSoldiersForAttackRating(targetRating: number) {
+    getSoldiersForAttackRating(targetRating) {
       const game = getGame();
       if (!targetRating || targetRating <= 0) {
         return 0;
@@ -678,7 +841,7 @@ export function createForeignAffairsManagers({
       return maxSoldiers;
     },
 
-    addHellGarrison(count: number) {
+    addHellGarrison(count) {
       if (!garrisonControls.addHellSoldiers({ elementId: "fort", count })) {
         return;
       }
@@ -687,7 +850,7 @@ export function createForeignAffairsManagers({
       this.hellAssigned = this.hellSoldiers;
     },
 
-    removeHellGarrison(count: number) {
+    removeHellGarrison(count) {
       if (!garrisonControls.removeHellSoldiers({ elementId: "fort", count })) {
         return;
       }
@@ -698,7 +861,7 @@ export function createForeignAffairsManagers({
       this.hellAssigned = this.hellSoldiers;
     },
 
-    addHellPatrol(count: number) {
+    addHellPatrol(count) {
       if (!garrisonControls.addHellPatrols({ elementId: "fort", count })) {
         return;
       }
@@ -713,7 +876,7 @@ export function createForeignAffairsManagers({
       }
     },
 
-    removeHellPatrol(count: number) {
+    removeHellPatrol(count) {
       if (!garrisonControls.removeHellPatrols({ elementId: "fort", count })) {
         return;
       }
@@ -721,7 +884,7 @@ export function createForeignAffairsManagers({
       this.hellPatrols = Math.max(this.hellPatrols - count, 0);
     },
 
-    addHellPatrolSize(count: number) {
+    addHellPatrolSize(count) {
       if (!garrisonControls.addHellPatrolSize({ elementId: "fort", count })) {
         return;
       }
@@ -736,7 +899,7 @@ export function createForeignAffairsManagers({
       }
     },
 
-    removeHellPatrolSize(count: number) {
+    removeHellPatrolSize(count) {
       if (
         !garrisonControls.removeHellPatrolSize({ elementId: "fort", count })
       ) {
@@ -746,12 +909,12 @@ export function createForeignAffairsManagers({
       this.hellPatrolSize = Math.max(this.hellPatrolSize - count, 1);
     },
 
-    attackEnemyFortress(enemyIndex: number) {
+    attackEnemyFortress(enemyIndex) {
       const game = getGame();
-      // Validate the enemy index
+      // Validate the enemy index. No throne means no enemy to attack.
       if (
         enemyIndex < 0 ||
-        enemyIndex >= game.global.portal.throne.enemy.length
+        enemyIndex >= (game.global.portal.throne?.enemy?.length ?? 0)
       ) {
         return false;
       }
