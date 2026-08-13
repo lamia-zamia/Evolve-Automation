@@ -27,6 +27,7 @@
     "src/game/trait-value.ts",
     "src/game/planet-generation.ts",
     "src/game/foreign-government.ts",
+    "src/game/infrastructure-managers.ts",
     "src/config.ts",
     "src/main.ts"
   ]

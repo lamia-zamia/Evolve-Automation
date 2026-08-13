@@ -2,12 +2,13 @@ import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.t
 
 type XKey = "x100" | "x25" | "x10";
 type KeyMode = "none" | "unset" | "all" | "each";
+type ModifierKey = "Shift" | "Control" | "Alt" | "Meta";
 type ModifierEvent = Record<string, boolean>;
 
 type GameSurface = {
   global: {
     settings: {
-      keyMap: Record<string, string>;
+      keyMap: Record<XKey, ModifierKey>;
       mKeys: boolean;
     };
   };
@@ -28,7 +29,7 @@ type KeyManagerShape = {
   _setFn: ((event: unknown) => void) | null;
   _unsetFn: ((event: unknown) => void) | null;
   _allFn: ((event: ModifierEvent) => void) | null;
-  _eventProp: Record<string, string>;
+  _eventProp: Record<ModifierKey, string>;
   _state: Record<XKey, boolean | undefined>;
   _mode: KeyMode;
   init(): void;
