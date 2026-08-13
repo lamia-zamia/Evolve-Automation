@@ -41879,6 +41879,83 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
   }
 
+  // src/bootstrap/settings/fleet-settings-control.ts
+  function readRecord9(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue9(context, property, fallback) {
+    let value = readRecord9(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function readContextActions9(context, fallback) {
+    let record = readRecord9(context);
+    return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
+  }
+  function getTestContextReader9(testSurface) {
+    return () => {
+    };
+  }
+  function createFleetSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getFleetManagerOuter,
+    getGalaxyRegions,
+    getGame,
+    getSettingsRaw,
+    resetFleetSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader9(testSurface), context = () => getTestContext("fleetSettings"), reader = createFleetSettingsEvolveAdapter({
+      getFleetManagerOuter: () => readContextValue9(context(), "FleetManagerOuter", getFleetManagerOuter()),
+      getGalaxyRegions: () => readContextValue9(context(), "galaxyRegions", getGalaxyRegions()),
+      getGame: () => readContextValue9(context(), "game", getGame()),
+      getSettingsRaw: () => readContextValue9(context(), "settingsRaw", getSettingsRaw())
+    }), intentHandler, browserAdapter = createFleetSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      reader,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions9(context(), actions)
+    });
+    return intentHandler = createFleetSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue9(
+          context(),
+          "resetFleetSettings",
+          resetFleetSettings
+        )(!0),
+        reorderAndromeda: (regionIds) => {
+          let target = readContextValue9(
+            context(),
+            "settingsRaw",
+            getSettingsRaw()
+          );
+          regionIds.forEach((regionId, index) => {
+            target[`fleet_pr_${regionId}`] = index;
+          });
+        },
+        persist: () => readContextValue9(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      render: (secondaryPrefix) => browserAdapter.updateFleetSettingsContent(secondaryPrefix),
+      effects: {
+        resetCheckbox: () => readContextValue9(
+          context(),
+          "resetCheckbox",
+          resetCheckbox
+        )("autoFleet")
+      }
+    }), browserAdapter;
+  }
+
   // src/application/prestige-settings.ts
   function createPrestigeSettingsIntentHandler({
     writer,
@@ -42606,18 +42683,18 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/evolution-settings-control.ts
-  function readRecord9(value) {
+  function readRecord10(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue9(context, property, fallback) {
-    let value = readRecord9(context)?.[property];
+  function readContextValue10(context, property, fallback) {
+    let value = readRecord10(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function readContextActions9(context, fallback) {
-    let record = readRecord9(context);
+  function readContextActions10(context, fallback) {
+    let record = readRecord10(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader9(testSurface) {
+  function getTestContextReader10(testSurface) {
     return () => {
     };
   }
@@ -42640,20 +42717,20 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader9(testSurface), context = () => getTestContext("evolutionSettings"), reader = createEvolutionSettingsEvolveAdapter({
-      getGame: () => readContextValue9(context(), "game", getGame()),
-      getRaces: () => readContextValue9(context(), "races", getRaces()),
-      getChallenges: () => readContextValue9(context(), "challenges", getChallenges()),
-      getUniverses: () => readContextValue9(context(), "universes", getUniverses()),
-      getSettingsRaw: () => readContextValue9(context(), "settingsRaw", getSettingsRaw()),
-      getSettings: () => readContextValue9(context(), "settings", getSettings()),
-      getSettingsToStore: () => readContextValue9(
+    let getTestContext = getTestContextReader10(testSurface), context = () => getTestContext("evolutionSettings"), reader = createEvolutionSettingsEvolveAdapter({
+      getGame: () => readContextValue10(context(), "game", getGame()),
+      getRaces: () => readContextValue10(context(), "races", getRaces()),
+      getChallenges: () => readContextValue10(context(), "challenges", getChallenges()),
+      getUniverses: () => readContextValue10(context(), "universes", getUniverses()),
+      getSettingsRaw: () => readContextValue10(context(), "settingsRaw", getSettingsRaw()),
+      getSettings: () => readContextValue10(context(), "settings", getSettings()),
+      getSettingsToStore: () => readContextValue10(
         context(),
         "evolutionSettingsToStore",
         getSettingsToStore()
       ),
-      getPrestigeTypes: () => readContextValue9(context(), "prestigeTypes", getPrestigeTypes()),
-      getStarLevel: (queueItem) => readContextValue9(context(), "getStarLevel", getStarLevel)(queueItem)
+      getPrestigeTypes: () => readContextValue10(context(), "prestigeTypes", getPrestigeTypes()),
+      getStarLevel: (queueItem) => readContextValue10(context(), "getStarLevel", getStarLevel)(queueItem)
     }), intentHandler, browserAdapter = createEvolutionSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -42661,37 +42738,37 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextActions9(context(), actions)
+      getActions: () => readContextActions10(context(), actions)
     });
     return intentHandler = createEvolutionSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue9(
+        resetToDefaults: () => readContextValue10(
           context(),
           "resetEvolutionSettings",
           resetEvolutionSettings
         )(!0),
         setTarget: (value) => {
-          let target = readContextValue9(
+          let target = readContextValue10(
             context(),
             "settingsRaw",
             getSettingsRaw()
           );
-          target.userEvolutionTarget = value, readContextValue9(
+          target.userEvolutionTarget = value, readContextValue10(
             context(),
             "state",
             getState()
           ).evolutionTarget = null;
         },
         addCurrent: (prestigeType) => {
-          let target = readContextValue9(
+          let target = readContextValue10(
             context(),
             "settingsRaw",
             getSettingsRaw()
-          ), currentSettings = readContextValue9(
+          ), currentSettings = readContextValue10(
             context(),
             "settings",
             getSettings()
-          ), names = readContextValue9(
+          ), names = readContextValue10(
             context(),
             "evolutionSettingsToStore",
             getSettingsToStore()
@@ -42701,7 +42778,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           prestigeType !== "auto" && (queued.prestigeType = prestigeType), target.evolutionQueue.push(queued);
         },
         remove: (index) => {
-          readContextValue9(
+          readContextValue10(
             context(),
             "settingsRaw",
             getSettingsRaw()
@@ -42710,7 +42787,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         edit: (index, json) => {
           try {
             let value = JSON.parse(json);
-            value && typeof value == "object" && !Array.isArray(value) && (readContextValue9(
+            value && typeof value == "object" && !Array.isArray(value) && (readContextValue10(
               context(),
               "settingsRaw",
               getSettingsRaw()
@@ -42720,7 +42797,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           }
         },
         reorder: (indexes) => {
-          let target = readContextValue9(
+          let target = readContextValue10(
             context(),
             "settingsRaw",
             getSettingsRaw()
@@ -42729,7 +42806,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
             (index) => target.evolutionQueue[index]
           );
         },
-        persist: () => readContextValue9(
+        persist: () => readContextValue10(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -42737,7 +42814,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       render: () => browserAdapter.updateEvolutionSettingsContent(),
       effects: {
-        resetCheckbox: () => readContextValue9(
+        resetCheckbox: () => readContextValue10(
           context(),
           "resetCheckbox",
           resetCheckbox
@@ -43288,14 +43365,14 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/production-settings-control.ts
-  function readRecord10(value) {
+  function readRecord11(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue10(context, property, fallback) {
-    let value = readRecord10(context)?.[property];
+  function readContextValue11(context, property, fallback) {
+    let value = readRecord11(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function getTestContextReader10(testSurface) {
+  function getTestContextReader11(testSurface) {
     return () => {
     };
   }
@@ -43317,14 +43394,14 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     setSettingsRaw,
     testSurface
   }) {
-    let getTestContext = getTestContextReader10(testSurface), context = () => getTestContext("productionSettings"), evolveAdapter = createProductionSettingsEvolveAdapter({
-      getResources: () => readContextValue10(context(), "resources", getResources()),
-      getCraftablesList: () => readContextValue10(context(), "craftablesList", getCraftablesList()),
-      getSmelterManager: () => readContextValue10(context(), "SmelterManager", getSmelterManager()),
-      getFactoryManager: () => readContextValue10(context(), "FactoryManager", getFactoryManager()),
-      getDroidManager: () => readContextValue10(context(), "DroidManager", getDroidManager()),
-      getReplicatorManager: () => readContextValue10(context(), "ReplicatorManager", getReplicatorManager()),
-      getSettingsRaw: () => readContextValue10(context(), "settingsRaw", getSettingsRaw()),
+    let getTestContext = getTestContextReader11(testSurface), context = () => getTestContext("productionSettings"), evolveAdapter = createProductionSettingsEvolveAdapter({
+      getResources: () => readContextValue11(context(), "resources", getResources()),
+      getCraftablesList: () => readContextValue11(context(), "craftablesList", getCraftablesList()),
+      getSmelterManager: () => readContextValue11(context(), "SmelterManager", getSmelterManager()),
+      getFactoryManager: () => readContextValue11(context(), "FactoryManager", getFactoryManager()),
+      getDroidManager: () => readContextValue11(context(), "DroidManager", getDroidManager()),
+      getReplicatorManager: () => readContextValue11(context(), "ReplicatorManager", getReplicatorManager()),
+      getSettingsRaw: () => readContextValue11(context(), "settingsRaw", getSettingsRaw()),
       consumptionBalanceTarget: 120
     }), intentHandler, browserAdapter = createProductionSettingsBrowserAdapter({
       getDocument,
@@ -43337,12 +43414,12 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
     return intentHandler = createProductionSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue10(
+        resetToDefaults: () => readContextValue11(
           context(),
           "resetProductionSettings",
           resetProductionSettings
         )(!0),
-        persist: () => readContextValue10(
+        persist: () => readContextValue11(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -43351,7 +43428,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       renderSettingsContent: () => browserAdapter.updateProductionSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue10(context(), "resetCheckbox", resetCheckbox)(
+        resetCheckboxes: () => readContextValue11(context(), "resetCheckbox", resetCheckbox)(
           "autoQuarry",
           "autoMine",
           "autoExtractor",
@@ -43362,7 +43439,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           "autoMiningDroid",
           "autoReplicator"
         ),
-        removeCraftToggles: () => readContextValue10(context(), "removeCraftToggles", removeCraftToggles)()
+        removeCraftToggles: () => readContextValue11(context(), "removeCraftToggles", removeCraftToggles)()
       }
     }), browserAdapter;
   }
@@ -48480,19 +48557,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       persistSettings: () => updateSettingsFromState(),
       resetCheckbox: (...args) => resetCheckbox(...args),
       testSurface
-    }), { buildHellSettings, updateHellSettingsContent } = hellSettingsBrowserAdapter, fleetSettingsReader = createFleetSettingsEvolveAdapter({
-      getFleetManagerOuter: () => getTestContext("fleetSettings")?.FleetManagerOuter ?? FleetManagerOuter,
-      getGalaxyRegions: () => getTestContext("fleetSettings")?.galaxyRegions ?? galaxyRegions,
-      getGame: () => getTestContext("fleetSettings")?.game ?? game,
-      getSettingsRaw: () => getTestContext("fleetSettings")?.settingsRaw ?? settingsRaw
-    }), fleetSettingsIntentHandler, fleetSettingsBrowserAdapter = createFleetSettingsBrowserAdapter({
+    }), { buildHellSettings, updateHellSettingsContent } = hellSettingsBrowserAdapter, fleetSettingsBrowserAdapter = createFleetSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      reader: fleetSettingsReader,
-      intents: {
-        handle: (intent) => fleetSettingsIntentHandler.handle(intent)
-      },
-      getActions: () => getTestContext("fleetSettings")?.actions ?? {
+      actions: {
         buildSettingsSection2,
         addSettingsHeader1,
         addSettingsNumber,
@@ -48502,28 +48570,19 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         addTableInput,
         buildTableLabel,
         openOverrideModal,
-        sorterHelper
-      }
-    });
-    fleetSettingsIntentHandler = createFleetSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("fleetSettings")?.resetFleetSettings ?? resetFleetSettings)(!0),
-        reorderAndromeda: (regionIds) => {
-          let target = getTestContext("fleetSettings")?.settingsRaw ?? settingsRaw;
-          regionIds.forEach((regionId, index) => {
-            target[`fleet_pr_${regionId}`] = index;
-          });
-        },
-        persist: () => (getTestContext("fleetSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
+        get sorterHelper() {
+          return sorterHelper;
+        }
       },
-      render: (secondaryPrefix) => fleetSettingsBrowserAdapter.updateFleetSettingsContent(secondaryPrefix),
-      effects: {
-        resetCheckbox: () => (getTestContext("fleetSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoFleet"
-        )
-      }
-    });
-    let { buildFleetSettings } = fleetSettingsBrowserAdapter, mechSettingsReader = createMechSettingsEvolveAdapter({
+      getFleetManagerOuter: () => FleetManagerOuter,
+      getGalaxyRegions: () => galaxyRegions,
+      getGame: () => game,
+      getSettingsRaw: () => settingsRaw,
+      resetFleetSettings: (...args) => resetFleetSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface
+    }), { buildFleetSettings } = fleetSettingsBrowserAdapter, mechSettingsReader = createMechSettingsEvolveAdapter({
       getMechManager: () => getTestContext("mechSettings")?.MechManager ?? MechManager,
       getGame: () => getTestContext("mechSettings")?.game ?? game
     }), mechSettingsActions = {

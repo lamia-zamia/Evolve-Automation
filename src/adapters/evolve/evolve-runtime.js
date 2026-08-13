@@ -266,9 +266,7 @@ import { createMechSettingsIntentHandler } from "../../application/mech-settings
 import { createMechSettingsBrowserAdapter } from "../browser/mech-settings.ts";
 import { createMechSettingsEvolveAdapter } from "./combat/mech-settings.ts";
 import { createTriggerSettingsControl } from "../../bootstrap/settings/trigger-settings-control.ts";
-import { createFleetSettingsIntentHandler } from "../../application/fleet-settings.ts";
-import { createFleetSettingsBrowserAdapter } from "../browser/fleet-settings.ts";
-import { createFleetSettingsEvolveAdapter } from "./combat/fleet-settings.ts";
+import { createFleetSettingsControl } from "../../bootstrap/settings/fleet-settings-control.ts";
 import { createPrestigeSettingsIntentHandler } from "../../application/prestige-settings.ts";
 import { createPrestigeSettingsBrowserAdapter } from "../browser/prestige-settings.ts";
 import { createPrestigeSettingsEvolveAdapter } from "./progression/prestige/prestige-settings.ts";
@@ -1266,65 +1264,31 @@ export function startEvolveRuntimeComposition(
   });
   const { buildHellSettings, updateHellSettingsContent } =
     hellSettingsBrowserAdapter;
-  const fleetSettingsReader = createFleetSettingsEvolveAdapter({
-    getFleetManagerOuter: () =>
-      getTestContext("fleetSettings")?.FleetManagerOuter ?? FleetManagerOuter,
-    getGalaxyRegions: () =>
-      getTestContext("fleetSettings")?.galaxyRegions ?? galaxyRegions,
-    getGame: () => getTestContext("fleetSettings")?.game ?? game,
-    getSettingsRaw: () =>
-      getTestContext("fleetSettings")?.settingsRaw ?? settingsRaw,
-  });
-  let fleetSettingsIntentHandler;
-  const fleetSettingsBrowserAdapter = createFleetSettingsBrowserAdapter({
+  const fleetSettingsBrowserAdapter = createFleetSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    reader: fleetSettingsReader,
-    intents: {
-      handle: (intent) => fleetSettingsIntentHandler.handle(intent),
-    },
-    getActions: () =>
-      getTestContext("fleetSettings")?.actions ?? {
-        buildSettingsSection2,
-        addSettingsHeader1,
-        addSettingsNumber,
-        addSettingsSelect,
-        addSettingsToggle,
-        addStandardHeading,
-        addTableInput,
-        buildTableLabel,
-        openOverrideModal,
-        sorterHelper,
+    actions: {
+      buildSettingsSection2,
+      addSettingsHeader1,
+      addSettingsNumber,
+      addSettingsSelect,
+      addSettingsToggle,
+      addStandardHeading,
+      addTableInput,
+      buildTableLabel,
+      openOverrideModal,
+      get sorterHelper() {
+        return sorterHelper;
       },
-  });
-  fleetSettingsIntentHandler = createFleetSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("fleetSettings")?.resetFleetSettings ??
-          resetFleetSettings
-        )(true),
-      reorderAndromeda: (regionIds) => {
-        const target =
-          getTestContext("fleetSettings")?.settingsRaw ?? settingsRaw;
-        regionIds.forEach((regionId, index) => {
-          target[`fleet_pr_${regionId}`] = index;
-        });
-      },
-      persist: () =>
-        (
-          getTestContext("fleetSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
     },
-    render: (secondaryPrefix) =>
-      fleetSettingsBrowserAdapter.updateFleetSettingsContent(secondaryPrefix),
-    effects: {
-      resetCheckbox: () =>
-        (getTestContext("fleetSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoFleet",
-        ),
-    },
+    getFleetManagerOuter: () => FleetManagerOuter,
+    getGalaxyRegions: () => galaxyRegions,
+    getGame: () => game,
+    getSettingsRaw: () => settingsRaw,
+    resetFleetSettings: (...args) => resetFleetSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
   const { buildFleetSettings } = fleetSettingsBrowserAdapter;
   const mechSettingsReader = createMechSettingsEvolveAdapter({
@@ -4967,10 +4931,6 @@ export function startEvolveRuntimeComposition(
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("prestigeSettings", {
       prestigeSettings: prestigeSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("fleetSettings", {
-      fleetSettings: fleetSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("ejectorSettings", {
