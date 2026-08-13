@@ -44994,6 +44994,11 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     };
   }
 
+  // src/bootstrap/queue-panels-control.ts
+  function createQueuePanelsControl(dependencies) {
+    return createQueuePanels(dependencies);
+  }
+
   // src/domain/combat/mech-info.ts
   function formatMechInfo(input, formatNumber) {
     let rating = input.power / input.bestPower, ratingText = `${Math.round(rating * 100)}%`;
@@ -50901,7 +50906,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       removeActiveTargetsUI,
       buildBuildPlannerUI,
       removeBuildPlannerUI
-    } = createQueuePanels({
+    } = createQueuePanelsControl({
       getJQuery: () => $,
       getGame: () => game,
       getResources: () => resources,

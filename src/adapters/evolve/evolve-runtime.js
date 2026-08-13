@@ -260,7 +260,7 @@ import { createPrestigeSettingsControl } from "../../bootstrap/settings/prestige
 import { createEvolutionSettingsControl } from "../../bootstrap/settings/evolution-settings-control.ts";
 import { createProductionSettingsControl } from "../../bootstrap/settings/production-settings-control.ts";
 import { createTraitSettingsControl } from "../../bootstrap/settings/trait-settings-control.ts";
-import { createQueuePanels } from "../../ui/queue-panels.ts";
+import { createQueuePanelsControl } from "../../bootstrap/queue-panels-control.ts";
 import { createMechInfoEvolveAdapter } from "./combat/mech-info.ts";
 import { createMechInfoBrowserAdapter } from "../browser/mech-info.ts";
 import { createResourceToggleEvolveAdapter } from "./economy/resources/resource-toggles.ts";
@@ -3895,7 +3895,7 @@ export function startEvolveRuntimeComposition(
     removeActiveTargetsUI,
     buildBuildPlannerUI,
     removeBuildPlannerUI,
-  } = createQueuePanels({
+  } = createQueuePanelsControl({
     getJQuery: () => $,
     getGame: () => game,
     getResources: () => resources,
