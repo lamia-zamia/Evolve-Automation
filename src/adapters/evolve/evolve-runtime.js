@@ -218,13 +218,11 @@ import { createHellControl } from "../../bootstrap/hell-control.ts";
 import { createGovernmentControl } from "../../bootstrap/government-control.ts";
 import { createBattleControl } from "../../bootstrap/battle-control.ts";
 import { createUserscriptEnvironment } from "../userscript/environment.ts";
-import { createSmelterControl } from "../../bootstrap/smelter-control.ts";
 import { createTaxControl } from "../../bootstrap/tax-control.ts";
 import { createStorageExpansionControl } from "../../bootstrap/storage-expansion-control.ts";
 import { createAlchemyControl } from "../../bootstrap/alchemy-control.ts";
 import { createPylonControl } from "../../bootstrap/pylon-control.ts";
-import { createResourceRatioControls } from "../../bootstrap/resource-ratio-controls.ts";
-import { createFactoryControl } from "../../bootstrap/factory-control.ts";
+import { createIndustryAutomationControls } from "../../bootstrap/industry-automation-controls.ts";
 import { createMiningDroidControl } from "../../bootstrap/mining-droid-control.ts";
 import { createGrapheneControl } from "../../bootstrap/graphene-control.ts";
 import { createShapeshiftControl } from "../../bootstrap/shapeshift-control.ts";
@@ -3008,52 +3006,49 @@ export function startEvolveRuntimeComposition(
     haveTech,
   });
 
-  const { autoQuarry, autoMine, autoExtractor } = createResourceRatioControls({
-    getQuarryManager: () => QuarryManager,
-    getMineManager: () => MineManager,
-    getExtractorManager: () => ExtractorManager,
-    getResources: () => resources,
-    getSettings: () => settings,
-    getBuildings: () => buildings,
-    haveTech,
-  });
-
-  const { autoSmelter } = createSmelterControl({
-    reader: {
-      getSmelterManager: () => SmelterManager,
-      getGame: () => game,
-      getResources: () => resources,
-      getSettings: () => settings,
-      getJobs: () => jobs,
-      getBuildings: () => buildings,
-      haveTech,
-      consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
-    },
-    publishTooltips: (tooltips) => {
-      for (const tooltip of tooltips) {
-        state.tooltips[tooltip.key] = tooltip.value;
-      }
-    },
-  });
-
-  const { autoFactory } = createFactoryControl({
-    adapter: {
-      getManager: () => FactoryManager,
-      getState: () => state,
-      getSettings: () => settings,
-      getGame: () => game,
-      getResources: () => resources,
-      consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
-    },
-    getState: () => state,
-  });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      autoFactory,
-      FactoryManager,
-      factorySettings: settings,
-      factoryState: state,
+  const { autoQuarry, autoMine, autoExtractor, autoSmelter, autoFactory } =
+    createIndustryAutomationControls({
+      resourceRatio: {
+        getQuarryManager: () => QuarryManager,
+        getMineManager: () => MineManager,
+        getExtractorManager: () => ExtractorManager,
+        getResources: () => resources,
+        getSettings: () => settings,
+        getBuildings: () => buildings,
+        haveTech,
+      },
+      smelter: {
+        reader: {
+          getSmelterManager: () => SmelterManager,
+          getGame: () => game,
+          getResources: () => resources,
+          getSettings: () => settings,
+          getJobs: () => jobs,
+          getBuildings: () => buildings,
+          haveTech,
+          consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
+        },
+        publishTooltips: (tooltips) => {
+          for (const tooltip of tooltips) {
+            state.tooltips[tooltip.key] = tooltip.value;
+          }
+        },
+      },
+      factory: {
+        adapter: {
+          getManager: () => FactoryManager,
+          getState: () => state,
+          getSettings: () => settings,
+          getGame: () => game,
+          getResources: () => resources,
+          consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+        },
+        getState: () => state,
+      },
+      getFactoryManager: () => FactoryManager,
+      getFactorySettings: () => settings,
+      getFactoryState: () => state,
+      testSurface,
     });
 
   const { autoMiningDroid } = createMiningDroidControl(() => DroidManager);

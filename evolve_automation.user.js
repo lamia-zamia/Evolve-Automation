@@ -25203,391 +25203,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
-  // src/adapters/evolve/economy/production/smelter.ts
-  function readCost2(value, path) {
-    let cost = requireRecord(value, path), resource2 = requireRecord(cost.resource, `${path}.resource`), name = resource2.name;
-    if (typeof name != "string")
-      throw new TypeError(`${path}.resource.name must be a string`);
-    return Object.freeze({
-      resourceName: name,
-      currentQuantity: requireNumber(
-        resource2.currentQuantity,
-        `${path}.resource.currentQuantity`
-      ),
-      rateOfChange: requireNumber(
-        resource2.rateOfChange,
-        `${path}.resource.rateOfChange`
-      ),
-      isDemanded: callBoolean(resource2, "isDemanded", `${path}.resource`),
-      quantity: requireNumber(cost.quantity, `${path}.quantity`),
-      minRateOfChange: requireNumber(
-        cost.minRateOfChange,
-        `${path}.minRateOfChange`
-      )
-    });
-  }
-  function readCostList(value, path) {
-    if (!Array.isArray(value))
-      throw new TypeError(`${path} must be an array`);
-    return value.map((entry, index) => readCost2(entry, `${path}[${index}]`));
-  }
-  function readFuels(manager) {
-    let priorityList = Reflect.apply(
-      requireFunction(
-        manager.managedFuelPriorityList,
-        "SmelterManager.managedFuelPriorityList"
-      ),
-      manager,
-      []
-    );
-    if (!Array.isArray(priorityList))
-      throw new TypeError(
-        "SmelterManager.managedFuelPriorityList() must return an array"
-      );
-    let fuels = requireRecord(manager.Fuels, "SmelterManager.Fuels"), inferno = fuels.Inferno, oil = fuels.Oil;
-    return priorityList.map((entry, index) => {
-      let path = `SmelterManager.Fuels[${index}]`, fuel = requireRecord(entry, path), id = fuel.id;
-      if (typeof id != "string")
-        throw new TypeError(`${path}.id must be a string`);
-      let unlocked2 = !!fuel.unlocked, isInfernoBeforeOil = fuel === inferno && priorityList[index + 1] === oil;
-      return Object.freeze(unlocked2 ? {
-        id,
-        unlocked: !0,
-        isInfernoBeforeOil,
-        currentFuelCount: callNumber(
-          manager,
-          "fueledCount",
-          "SmelterManager",
-          fuel
-        ),
-        cost: Object.freeze(readCostList(fuel.cost, `${path}.cost`))
-      } : {
-        id,
-        unlocked: !1,
-        isInfernoBeforeOil,
-        currentFuelCount: 0,
-        cost: Object.freeze([])
-      });
-    });
-  }
-  function readSmelterInput(dependencies) {
-    let manager = requireRecord(
-      dependencies.getSmelterManager(),
-      "SmelterManager"
-    );
-    if (!callBoolean(manager, "initIndustry", "SmelterManager"))
-      return Object.freeze({
-        initialised: !1,
-        hasForge: !1,
-        totalSmelters: 0,
-        extraOperating: 0,
-        consumptionBalanceMin: dependencies.consumptionBalanceMin,
-        fuels: Object.freeze([]),
-        ironCount: 0,
-        steelCount: 0,
-        iridiumCount: 0,
-        iridiumUnlocked: !1,
-        iridiumCapped: !1,
-        productionSmeltingIridium: 0,
-        productionSmelting: "",
-        steelCost: Object.freeze([]),
-        ironTimeToFull: 0,
-        ironTimeToRequired: 0,
-        ironDemanded: !1,
-        steelTimeToFull: 0,
-        steelTimeToRequired: 0,
-        steelDemanded: !1,
-        minerCount: 0,
-        beltIronShipStateOnCount: 0,
-        titaniumStorageRatio: 0,
-        haveTitaniumTech: !1
-      });
-    let game = requireRecord(dependencies.getGame(), "game"), global = requireRecord(game.global, "game.global"), hasForge = !!requireRecord(global.race, "game.global.race").forge, totalSmelters = callNumber(manager, "maxOperating", "SmelterManager"), fuels = hasForge ? [] : readFuels(manager), extraOperating = callNumber(
-      manager,
-      "extraOperating",
-      "SmelterManager"
-    ), productions = requireRecord(
-      manager.Productions,
-      "SmelterManager.Productions"
-    ), ironProduction = requireRecord(
-      productions.Iron,
-      "SmelterManager.Productions.Iron"
-    ), steelProduction = requireRecord(
-      productions.Steel,
-      "SmelterManager.Productions.Steel"
-    ), iridiumProduction = requireRecord(
-      productions.Iridium,
-      "SmelterManager.Productions.Iridium"
-    ), ironCount = callNumber(
-      manager,
-      "smeltingCount",
-      "SmelterManager",
-      ironProduction
-    ), steelCount = callNumber(
-      manager,
-      "smeltingCount",
-      "SmelterManager",
-      steelProduction
-    ), iridiumCount = callNumber(
-      manager,
-      "smeltingCount",
-      "SmelterManager",
-      iridiumProduction
-    ), resources = requireRecord(dependencies.getResources(), "resources"), iron = requireRecord(resources.Iron, "resources.Iron"), steel = requireRecord(resources.Steel, "resources.Steel"), iridium = requireRecord(resources.Iridium, "resources.Iridium"), titanium = requireRecord(resources.Titanium, "resources.Titanium"), iridiumUnlocked = !!iridiumProduction.unlocked, iridiumCapped = iridiumUnlocked ? callBoolean(iridium, "isCapped", "resources.Iridium") : !1, settings = requireRecord(dependencies.getSettings(), "settings"), productionSmeltingIridium = requireNumber(
-      settings.productionSmeltingIridium,
-      "settings.productionSmeltingIridium"
-    ), productionSmeltingValue = settings.productionSmelting, productionSmelting = typeof productionSmeltingValue == "string" ? productionSmeltingValue : "", jobs = requireRecord(dependencies.getJobs(), "jobs"), miner = requireRecord(jobs.Miner, "jobs.Miner"), buildings = requireRecord(dependencies.getBuildings(), "buildings"), beltIronShip = requireRecord(
-      buildings.BeltIronShip,
-      "buildings.BeltIronShip"
-    );
-    return Object.freeze({
-      initialised: !0,
-      hasForge,
-      totalSmelters,
-      extraOperating,
-      consumptionBalanceMin: dependencies.consumptionBalanceMin,
-      fuels: Object.freeze(fuels),
-      ironCount,
-      steelCount,
-      iridiumCount,
-      iridiumUnlocked,
-      iridiumCapped,
-      productionSmeltingIridium,
-      productionSmelting,
-      steelCost: Object.freeze(
-        readCostList(
-          steelProduction.cost,
-          "SmelterManager.Productions.Steel.cost"
-        )
-      ),
-      ironTimeToFull: requireNumber(
-        iron.timeToFull,
-        "resources.Iron.timeToFull"
-      ),
-      ironTimeToRequired: requireNumber(
-        iron.timeToRequired,
-        "resources.Iron.timeToRequired"
-      ),
-      ironDemanded: callBoolean(iron, "isDemanded", "resources.Iron"),
-      steelTimeToFull: requireNumber(
-        steel.timeToFull,
-        "resources.Steel.timeToFull"
-      ),
-      steelTimeToRequired: requireNumber(
-        steel.timeToRequired,
-        "resources.Steel.timeToRequired"
-      ),
-      steelDemanded: callBoolean(steel, "isDemanded", "resources.Steel"),
-      minerCount: requireNumber(miner.count, "jobs.Miner.count"),
-      beltIronShipStateOnCount: requireNumber(
-        beltIronShip.stateOnCount,
-        "buildings.BeltIronShip.stateOnCount"
-      ),
-      titaniumStorageRatio: requireNumber(
-        titanium.storageRatio,
-        "resources.Titanium.storageRatio"
-      ),
-      haveTitaniumTech: dependencies.haveTech("titanium")
-    });
-  }
-  function createSmelterCommandExecutor(getSmelterManager) {
-    function execute2(decision2) {
-      if (decision2.fuelAdjustments.length === 0 && decision2.smeltAdjustments.length === 0)
-        return SUCCEEDED;
-      let manager = requireRecord(getSmelterManager(), "SmelterManager"), fuels = requireRecord(manager.Fuels, "SmelterManager.Fuels"), productions = requireRecord(
-        manager.Productions,
-        "SmelterManager.Productions"
-      ), fueledCount = requireFunction(
-        manager.fueledCount,
-        "SmelterManager.fueledCount"
-      ), smeltingCount = requireFunction(
-        manager.smeltingCount,
-        "SmelterManager.smeltingCount"
-      ), decreaseFuel = requireFunction(
-        manager.decreaseFuel,
-        "SmelterManager.decreaseFuel"
-      ), increaseFuel = requireFunction(
-        manager.increaseFuel,
-        "SmelterManager.increaseFuel"
-      ), decreaseSmelting = requireFunction(
-        manager.decreaseSmelting,
-        "SmelterManager.decreaseSmelting"
-      ), increaseSmelting = requireFunction(
-        manager.increaseSmelting,
-        "SmelterManager.increaseSmelting"
-      ), resolvedFuels = [];
-      for (let adjustment of decision2.fuelAdjustments) {
-        if (!Number.isSafeInteger(adjustment.delta))
-          return rejected(
-            "invalid-smelter-fuel-adjustment",
-            "smelter fuel adjustment must be a safe integer"
-          );
-        let fuel = requireRecord(
-          fuels[adjustment.fuelId],
-          `SmelterManager.Fuels.${adjustment.fuelId}`
-        ), actual = requireNumber(
-          Reflect.apply(fueledCount, manager, [fuel]),
-          `SmelterManager.fueledCount(${adjustment.fuelId})`
-        );
-        if (actual !== adjustment.expectedCurrentFuelCount)
-          return stale("stale-smelter-fuel", "smelter fuel count changed", {
-            fuelId: adjustment.fuelId,
-            expected: adjustment.expectedCurrentFuelCount,
-            actual
-          });
-        resolvedFuels.push({ fuel, delta: adjustment.delta });
-      }
-      let resolvedSmelt = [];
-      for (let adjustment of decision2.smeltAdjustments) {
-        if (!Number.isSafeInteger(adjustment.delta))
-          return rejected(
-            "invalid-smelter-smelt-adjustment",
-            "smelter smelting adjustment must be a safe integer"
-          );
-        let production = requireRecord(
-          productions[adjustment.productionId],
-          `SmelterManager.Productions.${adjustment.productionId}`
-        ), actual = requireNumber(
-          Reflect.apply(smeltingCount, manager, [production]),
-          `SmelterManager.smeltingCount(${adjustment.productionId})`
-        );
-        if (actual !== adjustment.expectedCurrentCount)
-          return stale(
-            "stale-smelter-smelting",
-            "smelter smelting count changed",
-            {
-              productionId: adjustment.productionId,
-              expected: adjustment.expectedCurrentCount,
-              actual
-            }
-          );
-        resolvedSmelt.push({
-          productionId: adjustment.productionId,
-          delta: adjustment.delta
-        });
-      }
-      for (let { fuel, delta } of resolvedFuels)
-        delta < 0 && Reflect.apply(decreaseFuel, manager, [fuel, delta * -1]);
-      for (let { fuel, delta } of resolvedFuels)
-        delta > 0 && Reflect.apply(increaseFuel, manager, [fuel, delta]);
-      for (let { productionId, delta } of resolvedSmelt)
-        delta < 0 && Reflect.apply(decreaseSmelting, manager, [productionId, delta * -1]);
-      for (let { productionId, delta } of resolvedSmelt)
-        delta > 0 && Reflect.apply(increaseSmelting, manager, [productionId, delta]);
-      return SUCCEEDED;
-    }
-    return Object.freeze({ execute: execute2 });
-  }
-
-  // src/domain/economy/production/smelter.ts
-  var EMPTY_DECISION = Object.freeze({
-    fuelAdjustments: Object.freeze([]),
-    smeltAdjustments: Object.freeze([]),
-    tooltips: Object.freeze([])
-  });
-  function costLimitsUnits(cost, units, consumptionBalanceMin) {
-    return cost.currentQuantity < units * cost.quantity * consumptionBalanceMin + cost.minRateOfChange || cost.isDemanded;
-  }
-  function affordableUnits(cost, currentFuelCount) {
-    let remainingRateOfChange = cost.rateOfChange + currentFuelCount * cost.quantity - cost.minRateOfChange;
-    return Math.max(0, Math.floor(remainingRateOfChange / cost.quantity));
-  }
-  function planSmelter(input) {
-    if (!input.initialised)
-      return EMPTY_DECISION;
-    let tooltips = [], fuelAdjustments = [], totalSmelters = input.totalSmelters, fuelRemoved = 0;
-    if (!input.hasForge) {
-      let remainingSmelters = totalSmelters;
-      for (let fuel of input.fuels) {
-        if (!fuel.unlocked)
-          continue;
-        let maxAllowedUnits = remainingSmelters;
-        fuel.isInfernoBeforeOil && remainingSmelters > 75 && (maxAllowedUnits = Math.floor(0.5 * remainingSmelters + 37.5));
-        for (let cost of fuel.cost)
-          if (costLimitsUnits(cost, maxAllowedUnits, input.consumptionBalanceMin)) {
-            let affordable2 = affordableUnits(cost, fuel.currentFuelCount);
-            affordable2 < maxAllowedUnits && tooltips.push({
-              key: "smelterFuels" + fuel.id.toLowerCase(),
-              value: `Too low ${cost.resourceName} income<br>`
-            }), maxAllowedUnits = Math.min(maxAllowedUnits, affordable2);
-          }
-        remainingSmelters -= maxAllowedUnits;
-        let delta = maxAllowedUnits - fuel.currentFuelCount;
-        delta !== 0 && fuelAdjustments.push(
-          Object.freeze({
-            fuelId: fuel.id,
-            expectedCurrentFuelCount: fuel.currentFuelCount,
-            delta
-          })
-        ), delta < 0 && (fuelRemoved += -delta);
-      }
-      totalSmelters -= remainingSmelters;
-    }
-    totalSmelters += input.extraOperating;
-    let smelterIronCount = input.ironCount, smelterSteelCount = input.steelCount, smelterIridiumCount = input.iridiumCount, maxAllowedIridium = input.iridiumUnlocked && !input.iridiumCapped ? Math.floor(input.productionSmeltingIridium * totalSmelters) : 0, maxAllowedSteel = totalSmelters - smelterIridiumCount, smeltAdjust = {
-      Iridium: maxAllowedIridium - smelterIridiumCount,
-      Steel: smelterIridiumCount - maxAllowedIridium,
-      Iron: 0
-    };
-    if (fuelRemoved > smelterIronCount) {
-      let steelRemoved = fuelRemoved - smelterIronCount;
-      steelRemoved <= smelterSteelCount ? smeltAdjust.Steel += steelRemoved : (smeltAdjust.Steel += smelterSteelCount, smeltAdjust.Iridium += steelRemoved - smelterSteelCount);
-    }
-    for (let cost of input.steelCost)
-      if (costLimitsUnits(cost, smelterSteelCount, input.consumptionBalanceMin)) {
-        let affordable2 = affordableUnits(cost, smelterSteelCount);
-        affordable2 < maxAllowedSteel && tooltips.push({
-          key: "smelterMatssteel",
-          value: `Too low ${cost.resourceName} income<br>`
-        }), maxAllowedSteel = Math.min(maxAllowedSteel, affordable2);
-      }
-    let ironWeighting = 0, steelWeighting = 0;
-    switch (input.productionSmelting) {
-      case "iron":
-        ironWeighting = input.ironTimeToFull, ironWeighting || (steelWeighting = input.steelTimeToFull);
-        break;
-      case "steel":
-        steelWeighting = input.steelTimeToFull, steelWeighting || (ironWeighting = input.ironTimeToFull);
-        break;
-      case "storage":
-        ironWeighting = input.ironTimeToFull, steelWeighting = input.steelTimeToFull;
-        break;
-      case "required":
-        ironWeighting = input.ironTimeToRequired, steelWeighting = input.steelTimeToRequired;
-        break;
-    }
-    input.ironDemanded && (ironWeighting = Number.MAX_SAFE_INTEGER), input.steelDemanded && (steelWeighting = Number.MAX_SAFE_INTEGER), input.minerCount === 0 && input.beltIronShipStateOnCount === 0 && (ironWeighting = 0, steelWeighting = 1, maxAllowedSteel = totalSmelters - smelterIridiumCount), (smelterSteelCount > maxAllowedSteel || smelterSteelCount > 0 && ironWeighting > steelWeighting) && smeltAdjust.Steel--, smelterSteelCount < maxAllowedSteel && smelterIronCount > 0 && (steelWeighting > ironWeighting || steelWeighting <= 0 && ironWeighting <= 0 && input.titaniumStorageRatio < 0.99 && input.haveTitaniumTech) && smeltAdjust.Steel++, smeltAdjust.Iron = totalSmelters - (smelterIronCount + smelterSteelCount + smeltAdjust.Steel + smelterIridiumCount + smeltAdjust.Iridium);
-    let expectedByProduction = {
-      Iron: smelterIronCount,
-      Steel: smelterSteelCount,
-      Iridium: smelterIridiumCount
-    }, smeltAdjustments = Object.entries(smeltAdjust).map(
-      ([productionId, delta]) => Object.freeze({
-        productionId,
-        expectedCurrentCount: expectedByProduction[productionId],
-        delta
-      })
-    );
-    return Object.freeze({
-      fuelAdjustments: Object.freeze(fuelAdjustments),
-      smeltAdjustments: Object.freeze(smeltAdjustments),
-      tooltips: Object.freeze(tooltips)
-    });
-  }
-
-  // src/bootstrap/smelter-control.ts
-  function createSmelterControl(dependencies) {
-    let executor = createSmelterCommandExecutor(
-      dependencies.reader.getSmelterManager
-    );
-    return Object.freeze({
-      autoSmelter: () => {
-        let decision2 = planSmelter(readSmelterInput(dependencies.reader));
-        dependencies.publishTooltips(decision2.tooltips), executor.execute(decision2);
-      }
-    });
-  }
-
   // src/adapters/browser/tax-controls.ts
   function createBrowserTaxControls(getVueById) {
     function getControls() {
@@ -26175,7 +25790,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/domain/economy/storage/storage-expansion.ts
-  function affordableUnits2(view) {
+  function affordableUnits(view) {
     let cap = view.maxQuantity - view.currentQuantity;
     for (let cost of view.costs)
       cap = Math.min(cap, cost.available / cost.costPerUnit);
@@ -26198,7 +25813,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
   function planStorageExpansion(snapshot, settings) {
-    let missing = snapshot.storageToBuild, crateCap = affordableUnits2(snapshot.crates), containerCap = affordableUnits2(snapshot.containers);
+    let missing = snapshot.storageToBuild, crateCap = affordableUnits(snapshot.crates), containerCap = affordableUnits(snapshot.containers);
     settings.storageLimitPreMad && snapshot.isEarlyGame && (snapshot.steel.storageRatio < 0.8 && (containerCap = 0), snapshot.isLumberRace && snapshot.library.count < 20 && snapshot.library.plywoodCost !== null && snapshot.library.plywoodCost > snapshot.plywoodAvailable && snapshot.steel.maxQuantity >= snapshot.steel.storageRequired && (crateCap = 0));
     let commands = [], preferContainers = !settings.storageLimitPreMad && snapshot.isEarlyGame;
     if (preferContainers && missing > 0) {
@@ -26795,6 +26410,391 @@ If script is allowed to reassign non-empty storage it might waste time producing
     );
     return Object.freeze({
       autoPylon: () => executor.execute(planPylon(readPylonInput(dependencies)))
+    });
+  }
+
+  // src/adapters/evolve/economy/production/smelter.ts
+  function readCost2(value, path) {
+    let cost = requireRecord(value, path), resource2 = requireRecord(cost.resource, `${path}.resource`), name = resource2.name;
+    if (typeof name != "string")
+      throw new TypeError(`${path}.resource.name must be a string`);
+    return Object.freeze({
+      resourceName: name,
+      currentQuantity: requireNumber(
+        resource2.currentQuantity,
+        `${path}.resource.currentQuantity`
+      ),
+      rateOfChange: requireNumber(
+        resource2.rateOfChange,
+        `${path}.resource.rateOfChange`
+      ),
+      isDemanded: callBoolean(resource2, "isDemanded", `${path}.resource`),
+      quantity: requireNumber(cost.quantity, `${path}.quantity`),
+      minRateOfChange: requireNumber(
+        cost.minRateOfChange,
+        `${path}.minRateOfChange`
+      )
+    });
+  }
+  function readCostList(value, path) {
+    if (!Array.isArray(value))
+      throw new TypeError(`${path} must be an array`);
+    return value.map((entry, index) => readCost2(entry, `${path}[${index}]`));
+  }
+  function readFuels(manager) {
+    let priorityList = Reflect.apply(
+      requireFunction(
+        manager.managedFuelPriorityList,
+        "SmelterManager.managedFuelPriorityList"
+      ),
+      manager,
+      []
+    );
+    if (!Array.isArray(priorityList))
+      throw new TypeError(
+        "SmelterManager.managedFuelPriorityList() must return an array"
+      );
+    let fuels = requireRecord(manager.Fuels, "SmelterManager.Fuels"), inferno = fuels.Inferno, oil = fuels.Oil;
+    return priorityList.map((entry, index) => {
+      let path = `SmelterManager.Fuels[${index}]`, fuel = requireRecord(entry, path), id = fuel.id;
+      if (typeof id != "string")
+        throw new TypeError(`${path}.id must be a string`);
+      let unlocked2 = !!fuel.unlocked, isInfernoBeforeOil = fuel === inferno && priorityList[index + 1] === oil;
+      return Object.freeze(unlocked2 ? {
+        id,
+        unlocked: !0,
+        isInfernoBeforeOil,
+        currentFuelCount: callNumber(
+          manager,
+          "fueledCount",
+          "SmelterManager",
+          fuel
+        ),
+        cost: Object.freeze(readCostList(fuel.cost, `${path}.cost`))
+      } : {
+        id,
+        unlocked: !1,
+        isInfernoBeforeOil,
+        currentFuelCount: 0,
+        cost: Object.freeze([])
+      });
+    });
+  }
+  function readSmelterInput(dependencies) {
+    let manager = requireRecord(
+      dependencies.getSmelterManager(),
+      "SmelterManager"
+    );
+    if (!callBoolean(manager, "initIndustry", "SmelterManager"))
+      return Object.freeze({
+        initialised: !1,
+        hasForge: !1,
+        totalSmelters: 0,
+        extraOperating: 0,
+        consumptionBalanceMin: dependencies.consumptionBalanceMin,
+        fuels: Object.freeze([]),
+        ironCount: 0,
+        steelCount: 0,
+        iridiumCount: 0,
+        iridiumUnlocked: !1,
+        iridiumCapped: !1,
+        productionSmeltingIridium: 0,
+        productionSmelting: "",
+        steelCost: Object.freeze([]),
+        ironTimeToFull: 0,
+        ironTimeToRequired: 0,
+        ironDemanded: !1,
+        steelTimeToFull: 0,
+        steelTimeToRequired: 0,
+        steelDemanded: !1,
+        minerCount: 0,
+        beltIronShipStateOnCount: 0,
+        titaniumStorageRatio: 0,
+        haveTitaniumTech: !1
+      });
+    let game = requireRecord(dependencies.getGame(), "game"), global = requireRecord(game.global, "game.global"), hasForge = !!requireRecord(global.race, "game.global.race").forge, totalSmelters = callNumber(manager, "maxOperating", "SmelterManager"), fuels = hasForge ? [] : readFuels(manager), extraOperating = callNumber(
+      manager,
+      "extraOperating",
+      "SmelterManager"
+    ), productions = requireRecord(
+      manager.Productions,
+      "SmelterManager.Productions"
+    ), ironProduction = requireRecord(
+      productions.Iron,
+      "SmelterManager.Productions.Iron"
+    ), steelProduction = requireRecord(
+      productions.Steel,
+      "SmelterManager.Productions.Steel"
+    ), iridiumProduction = requireRecord(
+      productions.Iridium,
+      "SmelterManager.Productions.Iridium"
+    ), ironCount = callNumber(
+      manager,
+      "smeltingCount",
+      "SmelterManager",
+      ironProduction
+    ), steelCount = callNumber(
+      manager,
+      "smeltingCount",
+      "SmelterManager",
+      steelProduction
+    ), iridiumCount = callNumber(
+      manager,
+      "smeltingCount",
+      "SmelterManager",
+      iridiumProduction
+    ), resources = requireRecord(dependencies.getResources(), "resources"), iron = requireRecord(resources.Iron, "resources.Iron"), steel = requireRecord(resources.Steel, "resources.Steel"), iridium = requireRecord(resources.Iridium, "resources.Iridium"), titanium = requireRecord(resources.Titanium, "resources.Titanium"), iridiumUnlocked = !!iridiumProduction.unlocked, iridiumCapped = iridiumUnlocked ? callBoolean(iridium, "isCapped", "resources.Iridium") : !1, settings = requireRecord(dependencies.getSettings(), "settings"), productionSmeltingIridium = requireNumber(
+      settings.productionSmeltingIridium,
+      "settings.productionSmeltingIridium"
+    ), productionSmeltingValue = settings.productionSmelting, productionSmelting = typeof productionSmeltingValue == "string" ? productionSmeltingValue : "", jobs = requireRecord(dependencies.getJobs(), "jobs"), miner = requireRecord(jobs.Miner, "jobs.Miner"), buildings = requireRecord(dependencies.getBuildings(), "buildings"), beltIronShip = requireRecord(
+      buildings.BeltIronShip,
+      "buildings.BeltIronShip"
+    );
+    return Object.freeze({
+      initialised: !0,
+      hasForge,
+      totalSmelters,
+      extraOperating,
+      consumptionBalanceMin: dependencies.consumptionBalanceMin,
+      fuels: Object.freeze(fuels),
+      ironCount,
+      steelCount,
+      iridiumCount,
+      iridiumUnlocked,
+      iridiumCapped,
+      productionSmeltingIridium,
+      productionSmelting,
+      steelCost: Object.freeze(
+        readCostList(
+          steelProduction.cost,
+          "SmelterManager.Productions.Steel.cost"
+        )
+      ),
+      ironTimeToFull: requireNumber(
+        iron.timeToFull,
+        "resources.Iron.timeToFull"
+      ),
+      ironTimeToRequired: requireNumber(
+        iron.timeToRequired,
+        "resources.Iron.timeToRequired"
+      ),
+      ironDemanded: callBoolean(iron, "isDemanded", "resources.Iron"),
+      steelTimeToFull: requireNumber(
+        steel.timeToFull,
+        "resources.Steel.timeToFull"
+      ),
+      steelTimeToRequired: requireNumber(
+        steel.timeToRequired,
+        "resources.Steel.timeToRequired"
+      ),
+      steelDemanded: callBoolean(steel, "isDemanded", "resources.Steel"),
+      minerCount: requireNumber(miner.count, "jobs.Miner.count"),
+      beltIronShipStateOnCount: requireNumber(
+        beltIronShip.stateOnCount,
+        "buildings.BeltIronShip.stateOnCount"
+      ),
+      titaniumStorageRatio: requireNumber(
+        titanium.storageRatio,
+        "resources.Titanium.storageRatio"
+      ),
+      haveTitaniumTech: dependencies.haveTech("titanium")
+    });
+  }
+  function createSmelterCommandExecutor(getSmelterManager) {
+    function execute2(decision2) {
+      if (decision2.fuelAdjustments.length === 0 && decision2.smeltAdjustments.length === 0)
+        return SUCCEEDED;
+      let manager = requireRecord(getSmelterManager(), "SmelterManager"), fuels = requireRecord(manager.Fuels, "SmelterManager.Fuels"), productions = requireRecord(
+        manager.Productions,
+        "SmelterManager.Productions"
+      ), fueledCount = requireFunction(
+        manager.fueledCount,
+        "SmelterManager.fueledCount"
+      ), smeltingCount = requireFunction(
+        manager.smeltingCount,
+        "SmelterManager.smeltingCount"
+      ), decreaseFuel = requireFunction(
+        manager.decreaseFuel,
+        "SmelterManager.decreaseFuel"
+      ), increaseFuel = requireFunction(
+        manager.increaseFuel,
+        "SmelterManager.increaseFuel"
+      ), decreaseSmelting = requireFunction(
+        manager.decreaseSmelting,
+        "SmelterManager.decreaseSmelting"
+      ), increaseSmelting = requireFunction(
+        manager.increaseSmelting,
+        "SmelterManager.increaseSmelting"
+      ), resolvedFuels = [];
+      for (let adjustment of decision2.fuelAdjustments) {
+        if (!Number.isSafeInteger(adjustment.delta))
+          return rejected(
+            "invalid-smelter-fuel-adjustment",
+            "smelter fuel adjustment must be a safe integer"
+          );
+        let fuel = requireRecord(
+          fuels[adjustment.fuelId],
+          `SmelterManager.Fuels.${adjustment.fuelId}`
+        ), actual = requireNumber(
+          Reflect.apply(fueledCount, manager, [fuel]),
+          `SmelterManager.fueledCount(${adjustment.fuelId})`
+        );
+        if (actual !== adjustment.expectedCurrentFuelCount)
+          return stale("stale-smelter-fuel", "smelter fuel count changed", {
+            fuelId: adjustment.fuelId,
+            expected: adjustment.expectedCurrentFuelCount,
+            actual
+          });
+        resolvedFuels.push({ fuel, delta: adjustment.delta });
+      }
+      let resolvedSmelt = [];
+      for (let adjustment of decision2.smeltAdjustments) {
+        if (!Number.isSafeInteger(adjustment.delta))
+          return rejected(
+            "invalid-smelter-smelt-adjustment",
+            "smelter smelting adjustment must be a safe integer"
+          );
+        let production = requireRecord(
+          productions[adjustment.productionId],
+          `SmelterManager.Productions.${adjustment.productionId}`
+        ), actual = requireNumber(
+          Reflect.apply(smeltingCount, manager, [production]),
+          `SmelterManager.smeltingCount(${adjustment.productionId})`
+        );
+        if (actual !== adjustment.expectedCurrentCount)
+          return stale(
+            "stale-smelter-smelting",
+            "smelter smelting count changed",
+            {
+              productionId: adjustment.productionId,
+              expected: adjustment.expectedCurrentCount,
+              actual
+            }
+          );
+        resolvedSmelt.push({
+          productionId: adjustment.productionId,
+          delta: adjustment.delta
+        });
+      }
+      for (let { fuel, delta } of resolvedFuels)
+        delta < 0 && Reflect.apply(decreaseFuel, manager, [fuel, delta * -1]);
+      for (let { fuel, delta } of resolvedFuels)
+        delta > 0 && Reflect.apply(increaseFuel, manager, [fuel, delta]);
+      for (let { productionId, delta } of resolvedSmelt)
+        delta < 0 && Reflect.apply(decreaseSmelting, manager, [productionId, delta * -1]);
+      for (let { productionId, delta } of resolvedSmelt)
+        delta > 0 && Reflect.apply(increaseSmelting, manager, [productionId, delta]);
+      return SUCCEEDED;
+    }
+    return Object.freeze({ execute: execute2 });
+  }
+
+  // src/domain/economy/production/smelter.ts
+  var EMPTY_DECISION = Object.freeze({
+    fuelAdjustments: Object.freeze([]),
+    smeltAdjustments: Object.freeze([]),
+    tooltips: Object.freeze([])
+  });
+  function costLimitsUnits(cost, units, consumptionBalanceMin) {
+    return cost.currentQuantity < units * cost.quantity * consumptionBalanceMin + cost.minRateOfChange || cost.isDemanded;
+  }
+  function affordableUnits2(cost, currentFuelCount) {
+    let remainingRateOfChange = cost.rateOfChange + currentFuelCount * cost.quantity - cost.minRateOfChange;
+    return Math.max(0, Math.floor(remainingRateOfChange / cost.quantity));
+  }
+  function planSmelter(input) {
+    if (!input.initialised)
+      return EMPTY_DECISION;
+    let tooltips = [], fuelAdjustments = [], totalSmelters = input.totalSmelters, fuelRemoved = 0;
+    if (!input.hasForge) {
+      let remainingSmelters = totalSmelters;
+      for (let fuel of input.fuels) {
+        if (!fuel.unlocked)
+          continue;
+        let maxAllowedUnits = remainingSmelters;
+        fuel.isInfernoBeforeOil && remainingSmelters > 75 && (maxAllowedUnits = Math.floor(0.5 * remainingSmelters + 37.5));
+        for (let cost of fuel.cost)
+          if (costLimitsUnits(cost, maxAllowedUnits, input.consumptionBalanceMin)) {
+            let affordable2 = affordableUnits2(cost, fuel.currentFuelCount);
+            affordable2 < maxAllowedUnits && tooltips.push({
+              key: "smelterFuels" + fuel.id.toLowerCase(),
+              value: `Too low ${cost.resourceName} income<br>`
+            }), maxAllowedUnits = Math.min(maxAllowedUnits, affordable2);
+          }
+        remainingSmelters -= maxAllowedUnits;
+        let delta = maxAllowedUnits - fuel.currentFuelCount;
+        delta !== 0 && fuelAdjustments.push(
+          Object.freeze({
+            fuelId: fuel.id,
+            expectedCurrentFuelCount: fuel.currentFuelCount,
+            delta
+          })
+        ), delta < 0 && (fuelRemoved += -delta);
+      }
+      totalSmelters -= remainingSmelters;
+    }
+    totalSmelters += input.extraOperating;
+    let smelterIronCount = input.ironCount, smelterSteelCount = input.steelCount, smelterIridiumCount = input.iridiumCount, maxAllowedIridium = input.iridiumUnlocked && !input.iridiumCapped ? Math.floor(input.productionSmeltingIridium * totalSmelters) : 0, maxAllowedSteel = totalSmelters - smelterIridiumCount, smeltAdjust = {
+      Iridium: maxAllowedIridium - smelterIridiumCount,
+      Steel: smelterIridiumCount - maxAllowedIridium,
+      Iron: 0
+    };
+    if (fuelRemoved > smelterIronCount) {
+      let steelRemoved = fuelRemoved - smelterIronCount;
+      steelRemoved <= smelterSteelCount ? smeltAdjust.Steel += steelRemoved : (smeltAdjust.Steel += smelterSteelCount, smeltAdjust.Iridium += steelRemoved - smelterSteelCount);
+    }
+    for (let cost of input.steelCost)
+      if (costLimitsUnits(cost, smelterSteelCount, input.consumptionBalanceMin)) {
+        let affordable2 = affordableUnits2(cost, smelterSteelCount);
+        affordable2 < maxAllowedSteel && tooltips.push({
+          key: "smelterMatssteel",
+          value: `Too low ${cost.resourceName} income<br>`
+        }), maxAllowedSteel = Math.min(maxAllowedSteel, affordable2);
+      }
+    let ironWeighting = 0, steelWeighting = 0;
+    switch (input.productionSmelting) {
+      case "iron":
+        ironWeighting = input.ironTimeToFull, ironWeighting || (steelWeighting = input.steelTimeToFull);
+        break;
+      case "steel":
+        steelWeighting = input.steelTimeToFull, steelWeighting || (ironWeighting = input.ironTimeToFull);
+        break;
+      case "storage":
+        ironWeighting = input.ironTimeToFull, steelWeighting = input.steelTimeToFull;
+        break;
+      case "required":
+        ironWeighting = input.ironTimeToRequired, steelWeighting = input.steelTimeToRequired;
+        break;
+    }
+    input.ironDemanded && (ironWeighting = Number.MAX_SAFE_INTEGER), input.steelDemanded && (steelWeighting = Number.MAX_SAFE_INTEGER), input.minerCount === 0 && input.beltIronShipStateOnCount === 0 && (ironWeighting = 0, steelWeighting = 1, maxAllowedSteel = totalSmelters - smelterIridiumCount), (smelterSteelCount > maxAllowedSteel || smelterSteelCount > 0 && ironWeighting > steelWeighting) && smeltAdjust.Steel--, smelterSteelCount < maxAllowedSteel && smelterIronCount > 0 && (steelWeighting > ironWeighting || steelWeighting <= 0 && ironWeighting <= 0 && input.titaniumStorageRatio < 0.99 && input.haveTitaniumTech) && smeltAdjust.Steel++, smeltAdjust.Iron = totalSmelters - (smelterIronCount + smelterSteelCount + smeltAdjust.Steel + smelterIridiumCount + smeltAdjust.Iridium);
+    let expectedByProduction = {
+      Iron: smelterIronCount,
+      Steel: smelterSteelCount,
+      Iridium: smelterIridiumCount
+    }, smeltAdjustments = Object.entries(smeltAdjust).map(
+      ([productionId, delta]) => Object.freeze({
+        productionId,
+        expectedCurrentCount: expectedByProduction[productionId],
+        delta
+      })
+    );
+    return Object.freeze({
+      fuelAdjustments: Object.freeze(fuelAdjustments),
+      smeltAdjustments: Object.freeze(smeltAdjustments),
+      tooltips: Object.freeze(tooltips)
+    });
+  }
+
+  // src/bootstrap/smelter-control.ts
+  function createSmelterControl(dependencies) {
+    let executor = createSmelterCommandExecutor(
+      dependencies.reader.getSmelterManager
+    );
+    return Object.freeze({
+      autoSmelter: () => {
+        let decision2 = planSmelter(readSmelterInput(dependencies.reader));
+        dependencies.publishTooltips(decision2.tooltips), executor.execute(decision2);
+      }
     });
   }
 
@@ -27553,6 +27553,24 @@ If script is allowed to reassign non-empty storage it might waste time producing
         executor: adapter.executor,
         tooltips
       })
+    });
+  }
+
+  // src/bootstrap/industry-automation-controls.ts
+  function createIndustryAutomationControls({
+    resourceRatio,
+    smelter,
+    factory,
+    getFactoryManager,
+    getFactorySettings,
+    getFactoryState,
+    testSurface
+  }) {
+    let ratios = createResourceRatioControls(resourceRatio), smelterControl = createSmelterControl(smelter), factoryControl = createFactoryControl(factory);
+    return Object.freeze({
+      ...ratios,
+      ...smelterControl,
+      ...factoryControl
     });
   }
 
@@ -50514,39 +50532,47 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getJobs: () => jobs,
       haveTech
-    }), { autoQuarry, autoMine, autoExtractor } = createResourceRatioControls({
-      getQuarryManager: () => QuarryManager,
-      getMineManager: () => MineManager,
-      getExtractorManager: () => ExtractorManager,
-      getResources: () => resources,
-      getSettings: () => settings,
-      getBuildings: () => buildings,
-      haveTech
-    }), { autoSmelter } = createSmelterControl({
-      reader: {
-        getSmelterManager: () => SmelterManager,
-        getGame: () => game,
+    }), { autoQuarry, autoMine, autoExtractor, autoSmelter, autoFactory } = createIndustryAutomationControls({
+      resourceRatio: {
+        getQuarryManager: () => QuarryManager,
+        getMineManager: () => MineManager,
+        getExtractorManager: () => ExtractorManager,
         getResources: () => resources,
         getSettings: () => settings,
-        getJobs: () => jobs,
         getBuildings: () => buildings,
-        haveTech,
-        consumptionBalanceMin: 60
+        haveTech
       },
-      publishTooltips: (tooltips) => {
-        for (let tooltip of tooltips)
-          state.tooltips[tooltip.key] = tooltip.value;
-      }
-    }), { autoFactory } = createFactoryControl({
-      adapter: {
-        getManager: () => FactoryManager,
-        getState: () => state,
-        getSettings: () => settings,
-        getGame: () => game,
-        getResources: () => resources,
-        consumptionBalanceMinimum: 60
+      smelter: {
+        reader: {
+          getSmelterManager: () => SmelterManager,
+          getGame: () => game,
+          getResources: () => resources,
+          getSettings: () => settings,
+          getJobs: () => jobs,
+          getBuildings: () => buildings,
+          haveTech,
+          consumptionBalanceMin: 60
+        },
+        publishTooltips: (tooltips) => {
+          for (let tooltip of tooltips)
+            state.tooltips[tooltip.key] = tooltip.value;
+        }
       },
-      getState: () => state
+      factory: {
+        adapter: {
+          getManager: () => FactoryManager,
+          getState: () => state,
+          getSettings: () => settings,
+          getGame: () => game,
+          getResources: () => resources,
+          consumptionBalanceMinimum: 60
+        },
+        getState: () => state
+      },
+      getFactoryManager: () => FactoryManager,
+      getFactorySettings: () => settings,
+      getFactoryState: () => state,
+      testSurface
     }), { autoMiningDroid } = createMiningDroidControl(() => DroidManager), { autoGraphenePlant } = createGrapheneControl({
       getGrapheneManager: () => GrapheneManager,
       getResources: () => resources,
