@@ -16199,6 +16199,25 @@ Only continue if you trust the source. Injected code:
     };
   }
 
+  // src/bootstrap/state-log-control.ts
+  function createStateLogControl({
+    getGame,
+    getResources,
+    getState,
+    plannerLimitingResource,
+    stateLogStore,
+    testSurface,
+    setTestContext
+  }) {
+    return createStateLogLifecycle({
+      getGame,
+      getResources,
+      getState,
+      plannerLimitingResource,
+      stateLogStore
+    });
+  }
+
   // src/observability/prestige-log.ts
   function createPrestigeLog({
     getSettings,
@@ -49219,12 +49238,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       stateLogDiff,
       stateLogBlocker,
       recordStateSnapshot
-    } = createStateLogLifecycle({
+    } = createStateLogControl({
       getGame: () => game,
       getResources: () => resources,
       getState: () => state,
       plannerLimitingResource,
-      stateLogStore: createStateLogStore(runtimeEnvironment.storage)
+      stateLogStore: createStateLogStore(runtimeEnvironment.storage),
+      testSurface,
+      setTestContext(context) {
+        game = context.game, resources = context.resources, state = context.state;
+      }
     }), { verifyGameActions, verifyGameActionsExist, verifyGameActionExists } = createGameActionVerification({
       getGame: () => game,
       getBuildings: () => buildings,

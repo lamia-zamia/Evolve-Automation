@@ -145,7 +145,7 @@ import { createQueueQueries } from "./queue-queries.ts";
 import { createTargetTimingDisplay } from "./target-timing-display.ts";
 import { findRequiredResourceWeight as findRequiredResourceWeightPolicy } from "../../domain/economy/resources/resource-weighting.ts";
 import { createGameActionVerification } from "../../validation/game-actions.ts";
-import { createStateLogLifecycle } from "../../observability/state-log.ts";
+import { createStateLogControl } from "../../bootstrap/state-log-control.ts";
 import { createPrestigeLog } from "../../observability/prestige-log.ts";
 import { createLogFilter } from "../../observability/log-filter.ts";
 import { createBrowserRuntime } from "../browser/runtime.ts";
@@ -1406,12 +1406,18 @@ export function startEvolveRuntimeComposition(
     stateLogDiff,
     stateLogBlocker,
     recordStateSnapshot,
-  } = createStateLogLifecycle({
+  } = createStateLogControl({
     getGame: () => game,
     getResources: () => resources,
     getState: () => state,
     plannerLimitingResource,
     stateLogStore: createStateLogStore(runtimeEnvironment.storage),
+    testSurface,
+    setTestContext(context) {
+      game = context.game;
+      resources = context.resources;
+      state = context.state;
+    },
   });
   const { verifyGameActions, verifyGameActionsExist, verifyGameActionExists } =
     createGameActionVerification({
@@ -3926,23 +3932,6 @@ export function startEvolveRuntimeComposition(
         savePlannerStats: () => savePlannerStats(state.plannerStats),
       },
       setPlannerAnalysisTestContext(context) {
-        game = context.game;
-        resources = context.resources;
-        state = context.state;
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      stateLogLifecycle: {
-        makeStateLog,
-        loadStateLog,
-        saveStateLog,
-        stateLogDiff,
-        stateLogBlocker,
-        recordStateSnapshot,
-      },
-      setStateLogTestContext(context) {
         game = context.game;
         resources = context.resources;
         state = context.state;
