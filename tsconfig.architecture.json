@@ -35,6 +35,9 @@
     "src/game/mech-manager.ts",
     "src/game/fleet-managers.ts",
     "src/game/race-initialization.ts",
+    "src/game/building-state.ts",
+    "src/game/runtime-queries.ts",
+    "src/game/rates.ts",
     "src/config.ts",
     "src/main.ts"
   ]
