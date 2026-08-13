@@ -169,14 +169,9 @@ import { createAchievementGuardSettingsIntentHandler } from "../../application/a
 import { createAchievementGuardSettingsBrowserAdapter } from "../browser/achievement-guard-settings.ts";
 import { createAuthoritySettingsIntentHandler } from "../../application/authority-settings.ts";
 import { createAuthoritySettingsBrowserAdapter } from "../browser/authority-settings.ts";
-import { createGeneralSettingsIntentHandler } from "../../application/general-settings.ts";
-import { createGeneralSettingsBrowserAdapter } from "../browser/general-settings.ts";
 import { createResearchSettingsIntentHandler } from "../../application/research-settings.ts";
 import { createResearchSettingsBrowserAdapter } from "../browser/research-settings.ts";
 import { createResearchSettingsEvolveAdapter } from "./progression/research/research-settings.ts";
-import { createLoggingSettingsIntentHandler } from "../../application/logging-settings.ts";
-import { createLoggingSettingsBrowserAdapter } from "../browser/logging-settings.ts";
-import { createLoggingSettingsEvolveAdapter } from "./logging-settings.ts";
 import { createGovernmentSettingsIntentHandler } from "../../application/government-settings.ts";
 import { createGovernmentSettingsBrowserAdapter } from "../browser/government-settings.ts";
 import { createGovernmentSettingsEvolveAdapter } from "./civic/government-settings.ts";
@@ -184,13 +179,14 @@ import { createPlanetSettingsIntentHandler } from "../../application/planet-sett
 import { createPlanetSettingsBrowserAdapter } from "../browser/planet-settings.ts";
 import { createPlanetSettingsEvolveAdapter } from "./progression/evolution/planet-settings.ts";
 import {
+  createGeneralSettingsControl,
   createJobSettingsControl,
+  createLoggingSettingsControl,
   createMagicSettingsControl,
   createProjectSettingsControl,
   createStorageSettingsControl,
+  createWeightingSettingsControl,
 } from "../../bootstrap/settings/core-settings-controls.ts";
-import { createWeightingSettingsIntentHandler } from "../../application/weighting-settings.ts";
-import { createWeightingSettingsBrowserAdapter } from "../browser/weighting-settings.ts";
 import { createBuildingSettingsIntentHandler } from "../../application/building-settings.ts";
 import { createBuildingSettingsBrowserAdapter } from "../browser/building-settings.ts";
 import { createBuildingSettingsEvolveAdapter } from "./progression/build/building-settings.ts";
@@ -803,34 +799,13 @@ export function startEvolveRuntimeComposition(
     addSettingsToggle,
     addTableInput,
   };
-  let weightingSettingsIntentHandler;
-  const weightingSettingsBrowserAdapter = createWeightingSettingsBrowserAdapter(
-    {
-      getDocument: () => runtimeEnvironment.document,
-      getJQuery: () => $,
-      intents: {
-        handle: (intent) => weightingSettingsIntentHandler.handle(intent),
-      },
-      getActions: () =>
-        getTestContext("weightingSettings")?.actions ??
-        weightingSettingsActions,
-    },
-  );
-  weightingSettingsIntentHandler = createWeightingSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("weightingSettings")?.resetWeightingSettings ??
-          resetWeightingSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("weightingSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: () =>
-      weightingSettingsBrowserAdapter.updateWeightingSettingsContent(),
+  const weightingSettingsBrowserAdapter = createWeightingSettingsControl({
+    getDocument: () => runtimeEnvironment.document,
+    getJQuery: () => $,
+    actions: weightingSettingsActions,
+    resetWeightingSettings: (...args) => resetWeightingSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    testSurface,
   });
   const { buildWeightingSettings } = weightingSettingsBrowserAdapter;
   const buildingSettingsActions = {
@@ -946,53 +921,17 @@ export function startEvolveRuntimeComposition(
     addSettingsString,
     addSettingsToggle,
   };
-  const loggingSettingsEvolveAdapter = createLoggingSettingsEvolveAdapter({
-    getGame: () => getTestContext("loggingSettings")?.game ?? game,
-    getGameLog: () => getTestContext("loggingSettings")?.GameLog ?? GameLog,
-    getSettingsRaw: () =>
-      getTestContext("loggingSettings")?.settingsRaw ?? settingsRaw,
-  });
-  let loggingSettingsIntentHandler;
-  const loggingSettingsBrowserAdapter = createLoggingSettingsBrowserAdapter({
+  const loggingSettingsBrowserAdapter = createLoggingSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getReadModel: () =>
-      loggingSettingsEvolveAdapter.readLoggingSettingsReadModel(),
-    intents: {
-      handle: (intent) => loggingSettingsIntentHandler.handle(intent),
-    },
-    getActions: () =>
-      getTestContext("loggingSettings")?.actions ?? loggingSettingsActions,
-  });
-  loggingSettingsIntentHandler = createLoggingSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("loggingSettings")?.resetLoggingSettings ??
-          resetLoggingSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("loggingSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-      setLogFilter: (value) => {
-        const target =
-          getTestContext("loggingSettings")?.settingsRaw ?? settingsRaw;
-        target.logFilter = value;
-      },
-    },
-    renderSettingsContent: (secondaryPrefix) =>
-      loggingSettingsBrowserAdapter.updateLoggingSettingsContent(
-        secondaryPrefix,
-      ),
-    effects: {
-      buildFilterRegExp: () =>
-        (
-          getTestContext("loggingSettings")?.buildFilterRegExp ??
-          buildFilterRegExp
-        )(),
-    },
+    actions: loggingSettingsActions,
+    getGame: () => game,
+    getGameLog: () => GameLog,
+    getSettingsRaw: () => settingsRaw,
+    resetLoggingSettings: (...args) => resetLoggingSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    buildFilterRegExp: () => buildFilterRegExp(),
+    testSurface,
   });
   const { buildLoggingSettings } = loggingSettingsBrowserAdapter;
   const optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
@@ -1163,39 +1102,14 @@ export function startEvolveRuntimeComposition(
     addSettingsString,
     addSettingsToggle,
   };
-  let generalSettingsIntentHandler;
-  const generalSettingsBrowserAdapter = createGeneralSettingsBrowserAdapter({
+  const generalSettingsBrowserAdapter = createGeneralSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    intents: {
-      handle: (intent) => generalSettingsIntentHandler.handle(intent),
-    },
-    getActions: () =>
-      getTestContext("generalSettings") ?? generalSettingsActions,
-  });
-  generalSettingsIntentHandler = createGeneralSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("generalSettings")?.resetGeneralSettings ??
-          resetGeneralSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("generalSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: () =>
-      generalSettingsBrowserAdapter.updateGeneralSettingsContent(),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("generalSettings")?.resetCheckbox ?? resetCheckbox)(
-          "masterScriptToggle",
-          "showSettings",
-          "autoPrestige",
-        ),
-    },
+    actions: generalSettingsActions,
+    resetGeneralSettings: (...args) => resetGeneralSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
   const { buildGeneralSettings } = generalSettingsBrowserAdapter;
 
@@ -5625,10 +5539,6 @@ export function startEvolveRuntimeComposition(
       planetSettings: planetSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("weightingSettings", {
-      weightingSettings: weightingSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("buildingSettings", {
       buildingSettings: buildingSettingsBrowserAdapter,
     });
@@ -5643,10 +5553,6 @@ export function startEvolveRuntimeComposition(
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("authoritySettings", {
       authoritySettings: authoritySettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("generalSettings", {
-      generalSettings: generalSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("researchSettings", {
@@ -5879,11 +5785,6 @@ export function startEvolveRuntimeComposition(
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("mechInfo", {
       mechInfo: mechInfoBrowserAdapter,
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("loggingSettings", {
-      loggingSettings: loggingSettingsBrowserAdapter,
     });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)

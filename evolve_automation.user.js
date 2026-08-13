@@ -17132,213 +17132,6 @@ Only continue if you trust the source. Injected code:
     });
   }
 
-  // src/application/general-settings.ts
-  function createGeneralSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        if (intent.type === "reset-general-settings") {
-          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
-          return;
-        }
-      }
-    });
-  }
-
-  // src/domain/general-settings.ts
-  var priorityOptions = Object.freeze([
-    Object.freeze({ val: "ignore", label: "Ignore", hint: "Does nothing" }),
-    Object.freeze({
-      val: "save",
-      label: "Save",
-      hint: "Missing resources preserved from using."
-    }),
-    Object.freeze({
-      val: "req",
-      label: "Request",
-      hint: "Production and buying of missing resources will be prioritized."
-    }),
-    Object.freeze({
-      val: "savereq",
-      label: "Request & Save",
-      hint: "Missing resources will be prioritized, and preserved from using."
-    })
-  ]), generalSettingsReadModel = Object.freeze({
-    sectionId: "general",
-    sectionName: "General",
-    controls: Object.freeze([
-      Object.freeze({
-        kind: "number",
-        settingName: "tickRate",
-        label: "Script tick rate",
-        hint: "Script runs once per this amount of game ticks. Game tick every 250ms, thus with rate 4 script will run once per second. You can set it lower to make script act faster, or increase it if you have performance issues. Tick rate should be a positive integer."
-      }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "tickSchedule",
-        label: "Schedule script ticks",
-        hint: "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently."
-      }),
-      Object.freeze({ kind: "header", label: "Prioritization" }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "useDemanded",
-        label: "Allow using prioritized resources for crafting",
-        hint: "When disabled script won't make craftables out of prioritized resources in foundry and factory."
-      }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "researchRequest",
-        label: "Prioritize resources for Pre-MAD researches",
-        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "researchRequestSpace",
-        label: "Prioritize resources for Space+ researches",
-        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "missionRequest",
-        label: "Prioritize resources for missions",
-        hint: "Readjust trade routes and production to resources required for unlocked and affordable missions. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      }),
-      Object.freeze({
-        kind: "select",
-        settingName: "prioritizeQueue",
-        label: "Queue",
-        hint: "Alter script behaviour to speed up queued items, prioritizing missing resources.",
-        options: priorityOptions
-      }),
-      Object.freeze({
-        kind: "select",
-        settingName: "prioritizeTriggers",
-        label: "Triggers",
-        hint: "Alter script behaviour to speed up triggers, prioritizing missing resources.",
-        options: priorityOptions
-      }),
-      Object.freeze({
-        kind: "select",
-        settingName: "prioritizeUnify",
-        label: "Unification",
-        hint: "Alter script behaviour to speed up unification, prioritizing money required to purchase foreign cities.",
-        options: priorityOptions
-      }),
-      Object.freeze({
-        kind: "select",
-        settingName: "prioritizeOuterFleet",
-        label: "Ship Yard Blueprint (The True Path)",
-        hint: "Alter script behaviour to assist fleet building, prioritizing resources required for current design of ship.",
-        options: priorityOptions
-      }),
-      Object.freeze({ kind: "header", label: "Auto clicker" }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "buildingAlwaysClick",
-        label: "Always autoclick resources",
-        hint: "By default script will click only during early stage of autoBuild, to bootstrap production. With this toggled on it will continue clicking forever"
-      }),
-      Object.freeze({
-        kind: "number",
-        settingName: "buildingClickPerTick",
-        label: "Maximum clicks per tick",
-        hint: "Number of clicks performed at once, each script tick. Will not ever click more than needed to fill storage."
-      }),
-      Object.freeze({ kind: "header", label: "Misc" }),
-      Object.freeze({
-        kind: "string",
-        settingName: "scriptSettingsExportFilename",
-        label: "Export Filename",
-        hint: "Configures the filename used when using the 'Script Settings as File' button. This is useful if you keep multiple different profiles around."
-      })
-    ])
-  });
-  function getGeneralSettingsReadModel() {
-    return generalSettingsReadModel;
-  }
-
-  // src/adapters/browser/general-settings.ts
-  function createGeneralSettingsBrowserAdapter({
-    getDocument,
-    getJQuery,
-    intents,
-    getActions
-  }) {
-    let readModel = getGeneralSettingsReadModel();
-    function renderControl2(node, control, actions) {
-      switch (control.kind) {
-        case "header":
-          actions.addSettingsHeader1(node, control.label);
-          return;
-        case "number":
-          actions.addSettingsNumber(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-        case "select":
-          actions.addSettingsSelect(
-            node,
-            control.settingName,
-            control.label,
-            control.hint,
-            control.options
-          );
-          return;
-        case "string":
-          actions.addSettingsString(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-        case "toggle":
-          actions.addSettingsToggle(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-      }
-    }
-    function buildGeneralSettings() {
-      getActions().buildSettingsSection(
-        readModel.sectionId,
-        readModel.sectionName,
-        () => {
-          intents.handle({ type: "reset-general-settings" });
-        },
-        updateGeneralSettingsContent
-      );
-    }
-    function updateGeneralSettingsContent() {
-      let actions = getActions();
-      renderSettingsSectionContent(
-        {
-          scrollDocument: getDocument(),
-          jquery: getJQuery(),
-          sectionId: readModel.sectionId
-        },
-        (currentNode) => {
-          for (let control of readModel.controls)
-            renderControl2(currentNode, control, actions);
-        }
-      );
-    }
-    return Object.freeze({
-      buildGeneralSettings,
-      updateGeneralSettingsContent
-    });
-  }
-
   // src/application/research-settings.ts
   function createResearchSettingsIntentHandler({
     writer,
@@ -17517,186 +17310,6 @@ Only continue if you trust the source. Injected code:
       });
     }
     return Object.freeze({ readResearchSettingsReadModel });
-  }
-
-  // src/application/logging-settings.ts
-  function createLoggingSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        switch (intent.type) {
-          case "reset-logging-settings":
-            writer.resetToDefaults(), writer.persist(), renderSettingsContent(intent.secondaryPrefix), effects.buildFilterRegExp();
-            return;
-          case "set-log-filter":
-            writer.setLogFilter(intent.value), effects.buildFilterRegExp(), writer.persist();
-            return;
-        }
-      }
-    });
-  }
-
-  // src/domain/logging-settings.ts
-  function freezeMessageType(messageType) {
-    return Object.freeze({ ...messageType });
-  }
-  function createLoggingSettingsReadModel({
-    messageTypes,
-    locale,
-    logFilter
-  }) {
-    let frozenMessageTypes = Object.freeze(messageTypes.map(freezeMessageType)), controls4 = [
-      Object.freeze({ kind: "header", label: "Script Messages" }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "logEnabled",
-        label: "Enable logging",
-        hint: "Master switch to enable logging of script actions in the game message queue"
-      })
-    ];
-    for (let { id, label } of frozenMessageTypes)
-      controls4.push(
-        Object.freeze({
-          kind: "toggle",
-          settingName: "log_" + id,
-          label,
-          hint: `If logging is enabled then logs ${label} actions`
-        })
-      );
-    return controls4.push(
-      Object.freeze({
-        kind: "string",
-        settingName: "log_prestige_format",
-        label: "Prestige Log Format",
-        hint: "Available placeholders: {resetType}, {species}, {timestamp} (in game days). Use {eval: XXX } to log custom information"
-      }),
-      Object.freeze({ kind: "header", label: "Game Messages" }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "hellTurnOffLogMessages",
-        label: "Turn off patrol and surveyor log messages",
-        hint: "Automatically turns off the hell patrol and surveyor log messages"
-      })
-    ), Object.freeze({
-      sectionId: "logging",
-      sectionName: "Logging",
-      locale,
-      logFilter,
-      controls: Object.freeze(controls4)
-    });
-  }
-
-  // src/adapters/browser/logging-settings.ts
-  function createLoggingSettingsBrowserAdapter({
-    getDocument,
-    getJQuery,
-    getReadModel,
-    intents,
-    getActions
-  }) {
-    function renderControl2(node, control, actions) {
-      switch (control.kind) {
-        case "header":
-          actions.addSettingsHeader1(node, control.label);
-          return;
-        case "string":
-          actions.addSettingsString(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-        case "toggle":
-          actions.addSettingsToggle(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-      }
-    }
-    function buildLoggingSettings(parentNode, secondaryPrefix) {
-      let readModel = getReadModel();
-      getActions().buildSettingsSection2(
-        parentNode,
-        secondaryPrefix,
-        readModel.sectionId,
-        readModel.sectionName,
-        () => {
-          intents.handle({
-            type: "reset-logging-settings",
-            secondaryPrefix
-          });
-        },
-        updateLoggingSettingsContent
-      );
-    }
-    function updateLoggingSettingsContent(secondaryPrefix) {
-      let readModel = getReadModel(), actions = getActions();
-      renderSettingsSectionContent(
-        {
-          scrollDocument: getDocument(),
-          jquery: getJQuery(),
-          sectionId: `${secondaryPrefix}${readModel.sectionId}`
-        },
-        (currentNode) => {
-          renderLoggingContent(currentNode, readModel, actions);
-        }
-      );
-    }
-    function renderLoggingContent(currentNode, readModel, actions) {
-      for (let control of readModel.controls)
-        renderControl2(currentNode, control, actions);
-      let stringsUrl = `strings/strings${readModel.locale === "en-US" ? "" : "." + readModel.locale}.json`;
-      currentNode.append(`
-          <div>
-            <span>List of message IDs to filter, all game messages can be found <a href="${stringsUrl}" target="_blank">here</a>.</span><br>
-            <textarea id="script_logFilter" class="textarea" style="margin-top: 4px;">${readModel.logFilter}</textarea>
-          </div>`), getJQuery()("#script_logFilter").on("change", function() {
-        intents.handle({ type: "set-log-filter", value: this.value }), this.value = getReadModel().logFilter;
-      });
-    }
-    return Object.freeze({
-      buildLoggingSettings,
-      updateLoggingSettingsContent
-    });
-  }
-
-  // src/adapters/evolve/logging-settings.ts
-  function createLoggingSettingsEvolveAdapter({
-    getGame,
-    getGameLog,
-    getSettingsRaw
-  }) {
-    function readLoggingSettingsReadModel() {
-      let game = requireNonArrayRecord(getGame(), "game"), global = requireNonArrayRecord(game.global, "game.global"), gameSettings = requireNonArrayRecord(
-        global.settings,
-        "game.global.settings"
-      ), locale = requireString(
-        gameSettings.locale,
-        "game.global.settings.locale"
-      ), gameLog = requireNonArrayRecord(getGameLog(), "GameLog"), rawTypes = requireNonArrayRecord(gameLog.Types, "GameLog.Types"), messageTypes = [];
-      for (let [id, rawLabel] of Object.entries(rawTypes))
-        messageTypes.push({
-          id,
-          label: requireString(rawLabel, `GameLog.Types.${id}`)
-        });
-      let settingsRaw = requireNonArrayRecord(getSettingsRaw(), "settingsRaw"), logFilter = requireString(
-        settingsRaw.logFilter,
-        "settingsRaw.logFilter"
-      );
-      return createLoggingSettingsReadModel({
-        messageTypes,
-        locale,
-        logFilter
-      });
-    }
-    return Object.freeze({ readLoggingSettingsReadModel });
   }
 
   // src/application/government-settings.ts
@@ -18140,6 +17753,57 @@ Only continue if you trust the source. Injected code:
             return;
           case "reorder-jobs":
             writer.reorderJobs(intent.jobIds), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/application/weighting-settings.ts
+  function createWeightingSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-weighting-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/general-settings.ts
+  function createGeneralSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-general-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/logging-settings.ts
+  function createLoggingSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-logging-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(intent.secondaryPrefix), effects.buildFilterRegExp();
+            return;
+          case "set-log-filter":
+            writer.setLogFilter(intent.value), effects.buildFilterRegExp(), writer.persist();
             return;
         }
       }
@@ -18704,6 +18368,553 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return Object.freeze({ buildJobSettings, updateJobSettingsContent });
   }
 
+  // src/domain/economy/resources/weighting-settings.ts
+  var weightingSettingsReadModel = Object.freeze({
+    sectionId: "weighting",
+    sectionName: "AutoBuild Weighting",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildingBuildIfStorageFull",
+        label: "Ignore weighting and build if any storage is full",
+        hint: "Ignore weighting and immediately construct building if it uses any capped resource, preventing wasting them by overflowing. Weight still need to be positive(above zero) for this to happen."
+      })
+    ]),
+    rules: Object.freeze([
+      Object.freeze({
+        target: "Any",
+        condition: "New building",
+        settingName: "buildingWeightingNew"
+      }),
+      Object.freeze({
+        target: "Powered building",
+        condition: "Low available energy",
+        settingName: "buildingWeightingUnderpowered"
+      }),
+      Object.freeze({
+        target: "Power plant",
+        condition: "Low available energy",
+        settingName: "buildingWeightingNeedfulPowerPlant"
+      }),
+      Object.freeze({
+        target: "Power plant",
+        condition: "Producing more energy than required",
+        settingName: "buildingWeightingUselessPowerPlant"
+      }),
+      Object.freeze({
+        target: "Knowledge storage",
+        condition: "Have unaffordable researches or build targets",
+        settingName: "buildingWeightingNeedfulKnowledge"
+      }),
+      Object.freeze({
+        target: "Knowledge storage",
+        condition: "All researches and build targets already affordable",
+        settingName: "buildingWeightingUselessKnowledge"
+      }),
+      Object.freeze({
+        target: "Building with state (city)",
+        condition: "Some instances of this building are not working",
+        settingName: "buildingWeightingNonOperatingCity"
+      }),
+      Object.freeze({
+        target: "Building with state (space)",
+        condition: "Some instances of this building are not working",
+        settingName: "buildingWeightingNonOperating"
+      }),
+      Object.freeze({
+        target: "Building with consumption",
+        condition: "Missing consumables to operate",
+        settingName: "buildingWeightingMissingSupply"
+      }),
+      Object.freeze({
+        target: "Support consumer",
+        condition: "Missing support to operate",
+        settingName: "buildingWeightingMissingSupport"
+      }),
+      Object.freeze({
+        target: "Support provider",
+        condition: "Provided support not currently needed",
+        settingName: "buildingWeightingUselessSupport"
+      }),
+      Object.freeze({
+        target: "All fuel depots",
+        condition: "Missing Oil or Helium for techs and missions",
+        settingName: "buildingWeightingMissingFuel"
+      }),
+      Object.freeze({
+        target: "Not housing, barrack, oil derrick, or knowledge building",
+        condition: "MAD prestige enabled, and affordable",
+        settingName: "buildingWeightingMADUseless"
+      }),
+      Object.freeze({
+        target: "Mass Ejector",
+        condition: "Existed ejectors not fully utilized",
+        settingName: "buildingWeightingUnusedEjectors"
+      }),
+      Object.freeze({
+        target: "Freight Yard, Container Port, Munitions Depot",
+        condition: "Have unused crates or containers",
+        settingName: "buildingWeightingCrateUseless"
+      }),
+      Object.freeze({
+        target: "Horseshoes",
+        condition: "No more Horseshoes needed",
+        settingName: "buildingWeightingHorseshoeUseless"
+      }),
+      Object.freeze({
+        target: "Meditation Chamber",
+        condition: "No more Meditation Space needed",
+        settingName: "buildingWeightingZenUseless"
+      }),
+      Object.freeze({
+        target: "Gate Turret",
+        condition: "Gate demons fully supressed",
+        settingName: "buildingWeightingGateTurret"
+      }),
+      Object.freeze({
+        target: "Warehouses, Garage, Cargo Yard, Storehouse",
+        condition: "Need more storage",
+        settingName: "buildingWeightingNeedStorage"
+      }),
+      Object.freeze({
+        target: "Housing",
+        condition: "Less than 90% of houses are used",
+        settingName: "buildingWeightingUselessHousing"
+      }),
+      Object.freeze({
+        target: "Orbital Decay",
+        condition: "City and Moon buildings",
+        settingName: "buildingWeightingTemporal"
+      }),
+      Object.freeze({
+        target: "The True Path",
+        condition: "Solar buildings after reaching Tau Ceti",
+        settingName: "buildingWeightingSolar"
+      }),
+      Object.freeze({
+        target: "Mana Pylons and Mana Syphon",
+        condition: "Vacuum Collapse",
+        settingName: "buildingWeightingVacuumCollapse"
+      }),
+      Object.freeze({
+        target: "Eris Control Relays, Tanks, and Android Troopers",
+        condition: "The True Path Digsite is not yet secured",
+        settingName: "buildingWeightingTruepathDigsite"
+      }),
+      Object.freeze({
+        target: "Womlings Missions",
+        condition: "Womlings unlock actions conflicting with Overlord",
+        settingName: "buildingWeightingOverlord"
+      }),
+      Object.freeze({
+        target: "Banana Republic objectives",
+        condition: "World Collider and Monuments while their objectives are unfinished",
+        settingName: "buildingWeightingBananaObjective"
+      }),
+      Object.freeze({
+        target: "Inflation Money helpers",
+        condition: "Money storage until $250B cap is reachable, then Money income",
+        settingName: "buildingWeightingInflationMoney"
+      }),
+      Object.freeze({
+        target: "Retirement preparation",
+        condition: "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
+        settingName: "buildingWeightingRetirementPrep"
+      })
+    ])
+  });
+  function getWeightingSettingsReadModel() {
+    return weightingSettingsReadModel;
+  }
+
+  // src/adapters/browser/weighting-settings.ts
+  function createWeightingSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions,
+    getReadModel = getWeightingSettingsReadModel
+  }) {
+    function buildWeightingSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-weighting-settings" }),
+        updateWeightingSettingsContent
+      );
+    }
+    function updateWeightingSettingsContent() {
+      let readModel = getReadModel(), actions = getActions(), jquery = getJQuery();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderWeightingContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderWeightingContent(currentNode, readModel, actions, jquery) {
+      for (let control of readModel.controls)
+        renderControl2(currentNode, control, actions);
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:30%">Target</th>
+              <th class="has-text-warning" style="width:60%">Condition</th>
+              <th class="has-text-warning" style="width:10%">Multiplier</th>
+            </tr>
+            <tbody id="script_weightingTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = jquery("#script_weightingTableBody");
+      for (let rule of readModel.rules)
+        renderRule(tableBodyNode, rule, actions, jquery);
+    }
+    function renderControl2(node, control, actions) {
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function renderRule(table, rule, actions, jquery) {
+      let ruleNode = jquery(`
+          <tr>
+            <td style="width:30%"><span class="has-text-info">${rule.target}</span></td>
+            <td style="width:60%"><span class="has-text-info">${rule.condition}</span></td>
+            <td style="width:10%"></td>
+          </tr>`);
+      actions.addTableInput(ruleNode.find("td:eq(2)"), rule.settingName), table.append(ruleNode);
+    }
+    return Object.freeze({
+      buildWeightingSettings,
+      updateWeightingSettingsContent
+    });
+  }
+
+  // src/domain/general-settings.ts
+  var priorityOptions = Object.freeze([
+    Object.freeze({ val: "ignore", label: "Ignore", hint: "Does nothing" }),
+    Object.freeze({
+      val: "save",
+      label: "Save",
+      hint: "Missing resources preserved from using."
+    }),
+    Object.freeze({
+      val: "req",
+      label: "Request",
+      hint: "Production and buying of missing resources will be prioritized."
+    }),
+    Object.freeze({
+      val: "savereq",
+      label: "Request & Save",
+      hint: "Missing resources will be prioritized, and preserved from using."
+    })
+  ]), generalSettingsReadModel = Object.freeze({
+    sectionId: "general",
+    sectionName: "General",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "number",
+        settingName: "tickRate",
+        label: "Script tick rate",
+        hint: "Script runs once per this amount of game ticks. Game tick every 250ms, thus with rate 4 script will run once per second. You can set it lower to make script act faster, or increase it if you have performance issues. Tick rate should be a positive integer."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "tickSchedule",
+        label: "Schedule script ticks",
+        hint: "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently."
+      }),
+      Object.freeze({ kind: "header", label: "Prioritization" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "useDemanded",
+        label: "Allow using prioritized resources for crafting",
+        hint: "When disabled script won't make craftables out of prioritized resources in foundry and factory."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "researchRequest",
+        label: "Prioritize resources for Pre-MAD researches",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "researchRequestSpace",
+        label: "Prioritize resources for Space+ researches",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "missionRequest",
+        label: "Prioritize resources for missions",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable missions. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeQueue",
+        label: "Queue",
+        hint: "Alter script behaviour to speed up queued items, prioritizing missing resources.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeTriggers",
+        label: "Triggers",
+        hint: "Alter script behaviour to speed up triggers, prioritizing missing resources.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeUnify",
+        label: "Unification",
+        hint: "Alter script behaviour to speed up unification, prioritizing money required to purchase foreign cities.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeOuterFleet",
+        label: "Ship Yard Blueprint (The True Path)",
+        hint: "Alter script behaviour to assist fleet building, prioritizing resources required for current design of ship.",
+        options: priorityOptions
+      }),
+      Object.freeze({ kind: "header", label: "Auto clicker" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildingAlwaysClick",
+        label: "Always autoclick resources",
+        hint: "By default script will click only during early stage of autoBuild, to bootstrap production. With this toggled on it will continue clicking forever"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "buildingClickPerTick",
+        label: "Maximum clicks per tick",
+        hint: "Number of clicks performed at once, each script tick. Will not ever click more than needed to fill storage."
+      }),
+      Object.freeze({ kind: "header", label: "Misc" }),
+      Object.freeze({
+        kind: "string",
+        settingName: "scriptSettingsExportFilename",
+        label: "Export Filename",
+        hint: "Configures the filename used when using the 'Script Settings as File' button. This is useful if you keep multiple different profiles around."
+      })
+    ])
+  });
+  function getGeneralSettingsReadModel() {
+    return generalSettingsReadModel;
+  }
+
+  // src/adapters/browser/general-settings.ts
+  function createGeneralSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    let readModel = getGeneralSettingsReadModel();
+    function renderControl2(node, control, actions) {
+      switch (control.kind) {
+        case "header":
+          actions.addSettingsHeader1(node, control.label);
+          return;
+        case "number":
+          actions.addSettingsNumber(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "select":
+          actions.addSettingsSelect(
+            node,
+            control.settingName,
+            control.label,
+            control.hint,
+            control.options
+          );
+          return;
+        case "string":
+          actions.addSettingsString(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "toggle":
+          actions.addSettingsToggle(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+      }
+    }
+    function buildGeneralSettings() {
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-general-settings" });
+        },
+        updateGeneralSettingsContent
+      );
+    }
+    function updateGeneralSettingsContent() {
+      let actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (let control of readModel.controls)
+            renderControl2(currentNode, control, actions);
+        }
+      );
+    }
+    return Object.freeze({
+      buildGeneralSettings,
+      updateGeneralSettingsContent
+    });
+  }
+
+  // src/domain/logging-settings.ts
+  function freezeMessageType(messageType) {
+    return Object.freeze({ ...messageType });
+  }
+  function createLoggingSettingsReadModel({
+    messageTypes,
+    locale,
+    logFilter
+  }) {
+    let frozenMessageTypes = Object.freeze(messageTypes.map(freezeMessageType)), controls4 = [
+      Object.freeze({ kind: "header", label: "Script Messages" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "logEnabled",
+        label: "Enable logging",
+        hint: "Master switch to enable logging of script actions in the game message queue"
+      })
+    ];
+    for (let { id, label } of frozenMessageTypes)
+      controls4.push(
+        Object.freeze({
+          kind: "toggle",
+          settingName: "log_" + id,
+          label,
+          hint: `If logging is enabled then logs ${label} actions`
+        })
+      );
+    return controls4.push(
+      Object.freeze({
+        kind: "string",
+        settingName: "log_prestige_format",
+        label: "Prestige Log Format",
+        hint: "Available placeholders: {resetType}, {species}, {timestamp} (in game days). Use {eval: XXX } to log custom information"
+      }),
+      Object.freeze({ kind: "header", label: "Game Messages" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "hellTurnOffLogMessages",
+        label: "Turn off patrol and surveyor log messages",
+        hint: "Automatically turns off the hell patrol and surveyor log messages"
+      })
+    ), Object.freeze({
+      sectionId: "logging",
+      sectionName: "Logging",
+      locale,
+      logFilter,
+      controls: Object.freeze(controls4)
+    });
+  }
+
+  // src/adapters/browser/logging-settings.ts
+  function createLoggingSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function renderControl2(node, control, actions) {
+      switch (control.kind) {
+        case "header":
+          actions.addSettingsHeader1(node, control.label);
+          return;
+        case "string":
+          actions.addSettingsString(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "toggle":
+          actions.addSettingsToggle(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+      }
+    }
+    function buildLoggingSettings(parentNode, secondaryPrefix) {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection2(
+        parentNode,
+        secondaryPrefix,
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({
+            type: "reset-logging-settings",
+            secondaryPrefix
+          });
+        },
+        updateLoggingSettingsContent
+      );
+    }
+    function updateLoggingSettingsContent(secondaryPrefix) {
+      let readModel = getReadModel(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${secondaryPrefix}${readModel.sectionId}`
+        },
+        (currentNode) => {
+          renderLoggingContent(currentNode, readModel, actions);
+        }
+      );
+    }
+    function renderLoggingContent(currentNode, readModel, actions) {
+      for (let control of readModel.controls)
+        renderControl2(currentNode, control, actions);
+      let stringsUrl = `strings/strings${readModel.locale === "en-US" ? "" : "." + readModel.locale}.json`;
+      currentNode.append(`
+          <div>
+            <span>List of message IDs to filter, all game messages can be found <a href="${stringsUrl}" target="_blank">here</a>.</span><br>
+            <textarea id="script_logFilter" class="textarea" style="margin-top: 4px;">${readModel.logFilter}</textarea>
+          </div>`), getJQuery()("#script_logFilter").on("change", function() {
+        intents.handle({ type: "set-log-filter", value: this.value }), this.value = getReadModel().logFilter;
+      });
+    }
+    return Object.freeze({
+      buildLoggingSettings,
+      updateLoggingSettingsContent
+    });
+  }
+
   // src/adapters/evolve/progression/research/project-settings.ts
   function readPriorityList(manager) {
     let priorityList = manager.priorityList;
@@ -18939,6 +19150,38 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/adapters/evolve/logging-settings.ts
+  function createLoggingSettingsEvolveAdapter({
+    getGame,
+    getGameLog,
+    getSettingsRaw
+  }) {
+    function readLoggingSettingsReadModel() {
+      let game = requireNonArrayRecord(getGame(), "game"), global = requireNonArrayRecord(game.global, "game.global"), gameSettings = requireNonArrayRecord(
+        global.settings,
+        "game.global.settings"
+      ), locale = requireString(
+        gameSettings.locale,
+        "game.global.settings.locale"
+      ), gameLog = requireNonArrayRecord(getGameLog(), "GameLog"), rawTypes = requireNonArrayRecord(gameLog.Types, "GameLog.Types"), messageTypes = [];
+      for (let [id, rawLabel] of Object.entries(rawTypes))
+        messageTypes.push({
+          id,
+          label: requireString(rawLabel, `GameLog.Types.${id}`)
+        });
+      let settingsRaw = requireNonArrayRecord(getSettingsRaw(), "settingsRaw"), logFilter = requireString(
+        settingsRaw.logFilter,
+        "settingsRaw.logFilter"
+      );
+      return createLoggingSettingsReadModel({
+        messageTypes,
+        locale,
+        logFilter
+      });
+    }
+    return Object.freeze({ readLoggingSettingsReadModel });
+  }
+
   // src/bootstrap/settings/core-settings-controls.ts
   function readRecord(value) {
     return typeof value == "object" && value !== null ? value : void 0;
@@ -18950,6 +19193,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
   function getTestContextReader(testSurface) {
     return () => {
     };
+  }
+  function readContextActions(context, fallback) {
+    let record = readRecord(context);
+    return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
   function createStorageSettingsControl({
     getDocument,
@@ -19145,248 +19392,129 @@ If script is allowed to reassign non-empty storage it might waste time producing
       }
     }), browserAdapter;
   }
-
-  // src/application/weighting-settings.ts
-  function createWeightingSettingsIntentHandler({
-    writer,
-    renderSettingsContent
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        if (intent.type === "reset-weighting-settings") {
-          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
-          return;
-        }
-      }
-    });
-  }
-
-  // src/domain/economy/resources/weighting-settings.ts
-  var weightingSettingsReadModel = Object.freeze({
-    sectionId: "weighting",
-    sectionName: "AutoBuild Weighting",
-    controls: Object.freeze([
-      Object.freeze({
-        kind: "toggle",
-        settingName: "buildingBuildIfStorageFull",
-        label: "Ignore weighting and build if any storage is full",
-        hint: "Ignore weighting and immediately construct building if it uses any capped resource, preventing wasting them by overflowing. Weight still need to be positive(above zero) for this to happen."
-      })
-    ]),
-    rules: Object.freeze([
-      Object.freeze({
-        target: "Any",
-        condition: "New building",
-        settingName: "buildingWeightingNew"
-      }),
-      Object.freeze({
-        target: "Powered building",
-        condition: "Low available energy",
-        settingName: "buildingWeightingUnderpowered"
-      }),
-      Object.freeze({
-        target: "Power plant",
-        condition: "Low available energy",
-        settingName: "buildingWeightingNeedfulPowerPlant"
-      }),
-      Object.freeze({
-        target: "Power plant",
-        condition: "Producing more energy than required",
-        settingName: "buildingWeightingUselessPowerPlant"
-      }),
-      Object.freeze({
-        target: "Knowledge storage",
-        condition: "Have unaffordable researches or build targets",
-        settingName: "buildingWeightingNeedfulKnowledge"
-      }),
-      Object.freeze({
-        target: "Knowledge storage",
-        condition: "All researches and build targets already affordable",
-        settingName: "buildingWeightingUselessKnowledge"
-      }),
-      Object.freeze({
-        target: "Building with state (city)",
-        condition: "Some instances of this building are not working",
-        settingName: "buildingWeightingNonOperatingCity"
-      }),
-      Object.freeze({
-        target: "Building with state (space)",
-        condition: "Some instances of this building are not working",
-        settingName: "buildingWeightingNonOperating"
-      }),
-      Object.freeze({
-        target: "Building with consumption",
-        condition: "Missing consumables to operate",
-        settingName: "buildingWeightingMissingSupply"
-      }),
-      Object.freeze({
-        target: "Support consumer",
-        condition: "Missing support to operate",
-        settingName: "buildingWeightingMissingSupport"
-      }),
-      Object.freeze({
-        target: "Support provider",
-        condition: "Provided support not currently needed",
-        settingName: "buildingWeightingUselessSupport"
-      }),
-      Object.freeze({
-        target: "All fuel depots",
-        condition: "Missing Oil or Helium for techs and missions",
-        settingName: "buildingWeightingMissingFuel"
-      }),
-      Object.freeze({
-        target: "Not housing, barrack, oil derrick, or knowledge building",
-        condition: "MAD prestige enabled, and affordable",
-        settingName: "buildingWeightingMADUseless"
-      }),
-      Object.freeze({
-        target: "Mass Ejector",
-        condition: "Existed ejectors not fully utilized",
-        settingName: "buildingWeightingUnusedEjectors"
-      }),
-      Object.freeze({
-        target: "Freight Yard, Container Port, Munitions Depot",
-        condition: "Have unused crates or containers",
-        settingName: "buildingWeightingCrateUseless"
-      }),
-      Object.freeze({
-        target: "Horseshoes",
-        condition: "No more Horseshoes needed",
-        settingName: "buildingWeightingHorseshoeUseless"
-      }),
-      Object.freeze({
-        target: "Meditation Chamber",
-        condition: "No more Meditation Space needed",
-        settingName: "buildingWeightingZenUseless"
-      }),
-      Object.freeze({
-        target: "Gate Turret",
-        condition: "Gate demons fully supressed",
-        settingName: "buildingWeightingGateTurret"
-      }),
-      Object.freeze({
-        target: "Warehouses, Garage, Cargo Yard, Storehouse",
-        condition: "Need more storage",
-        settingName: "buildingWeightingNeedStorage"
-      }),
-      Object.freeze({
-        target: "Housing",
-        condition: "Less than 90% of houses are used",
-        settingName: "buildingWeightingUselessHousing"
-      }),
-      Object.freeze({
-        target: "Orbital Decay",
-        condition: "City and Moon buildings",
-        settingName: "buildingWeightingTemporal"
-      }),
-      Object.freeze({
-        target: "The True Path",
-        condition: "Solar buildings after reaching Tau Ceti",
-        settingName: "buildingWeightingSolar"
-      }),
-      Object.freeze({
-        target: "Mana Pylons and Mana Syphon",
-        condition: "Vacuum Collapse",
-        settingName: "buildingWeightingVacuumCollapse"
-      }),
-      Object.freeze({
-        target: "Eris Control Relays, Tanks, and Android Troopers",
-        condition: "The True Path Digsite is not yet secured",
-        settingName: "buildingWeightingTruepathDigsite"
-      }),
-      Object.freeze({
-        target: "Womlings Missions",
-        condition: "Womlings unlock actions conflicting with Overlord",
-        settingName: "buildingWeightingOverlord"
-      }),
-      Object.freeze({
-        target: "Banana Republic objectives",
-        condition: "World Collider and Monuments while their objectives are unfinished",
-        settingName: "buildingWeightingBananaObjective"
-      }),
-      Object.freeze({
-        target: "Inflation Money helpers",
-        condition: "Money storage until $250B cap is reachable, then Money income",
-        settingName: "buildingWeightingInflationMoney"
-      }),
-      Object.freeze({
-        target: "Retirement preparation",
-        condition: "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
-        settingName: "buildingWeightingRetirementPrep"
-      })
-    ])
-  });
-  function getWeightingSettingsReadModel() {
-    return weightingSettingsReadModel;
-  }
-
-  // src/adapters/browser/weighting-settings.ts
-  function createWeightingSettingsBrowserAdapter({
+  function createWeightingSettingsControl({
     getDocument,
     getJQuery,
-    intents,
-    getActions,
-    getReadModel = getWeightingSettingsReadModel
+    actions,
+    resetWeightingSettings,
+    persistSettings,
+    testSurface
   }) {
-    function buildWeightingSettings() {
-      let readModel = getReadModel();
-      getActions().buildSettingsSection(
-        readModel.sectionId,
-        readModel.sectionName,
-        () => intents.handle({ type: "reset-weighting-settings" }),
-        updateWeightingSettingsContent
-      );
-    }
-    function updateWeightingSettingsContent() {
-      let readModel = getReadModel(), actions = getActions(), jquery = getJQuery();
-      renderSettingsSectionContent(
-        {
-          scrollDocument: getDocument(),
-          jquery,
-          sectionId: readModel.sectionId
-        },
-        (currentNode) => {
-          renderWeightingContent(currentNode, readModel, actions, jquery);
-        }
-      );
-    }
-    function renderWeightingContent(currentNode, readModel, actions, jquery) {
-      for (let control of readModel.controls)
-        renderControl2(currentNode, control, actions);
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:30%">Target</th>
-              <th class="has-text-warning" style="width:60%">Condition</th>
-              <th class="has-text-warning" style="width:10%">Multiplier</th>
-            </tr>
-            <tbody id="script_weightingTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = jquery("#script_weightingTableBody");
-      for (let rule of readModel.rules)
-        renderRule(tableBodyNode, rule, actions, jquery);
-    }
-    function renderControl2(node, control, actions) {
-      actions.addSettingsToggle(
-        node,
-        control.settingName,
-        control.label,
-        control.hint
-      );
-    }
-    function renderRule(table, rule, actions, jquery) {
-      let ruleNode = jquery(`
-          <tr>
-            <td style="width:30%"><span class="has-text-info">${rule.target}</span></td>
-            <td style="width:60%"><span class="has-text-info">${rule.condition}</span></td>
-            <td style="width:10%"></td>
-          </tr>`);
-      actions.addTableInput(ruleNode.find("td:eq(2)"), rule.settingName), table.append(ruleNode);
-    }
-    return Object.freeze({
-      buildWeightingSettings,
-      updateWeightingSettingsContent
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("weightingSettings"), intentHandler, browserAdapter = createWeightingSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
     });
+    return intentHandler = createWeightingSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetWeightingSettings",
+          resetWeightingSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updateWeightingSettingsContent()
+    }), browserAdapter;
+  }
+  function createGeneralSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    resetGeneralSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("generalSettings"), intentHandler, browserAdapter = createGeneralSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions(context(), actions)
+    });
+    return intentHandler = createGeneralSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetGeneralSettings",
+          resetGeneralSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updateGeneralSettingsContent(),
+      effects: {
+        resetCheckboxes: () => readContextValue(context(), "resetCheckbox", resetCheckbox)(
+          "masterScriptToggle",
+          "showSettings",
+          "autoPrestige"
+        )
+      }
+    }), browserAdapter;
+  }
+  function createLoggingSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getGame,
+    getGameLog,
+    getSettingsRaw,
+    resetLoggingSettings,
+    persistSettings,
+    buildFilterRegExp,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("loggingSettings"), evolveAdapter = createLoggingSettingsEvolveAdapter({
+      getGame: () => readContextValue(context(), "game", getGame()),
+      getGameLog: () => readContextValue(context(), "GameLog", getGameLog()),
+      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    }), intentHandler, browserAdapter = createLoggingSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readLoggingSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createLoggingSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetLoggingSettings",
+          resetLoggingSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )(),
+        setLogFilter: (value) => {
+          let target = readRecord(
+            readContextValue(context(), "settingsRaw", getSettingsRaw())
+          );
+          if (target === void 0)
+            throw new TypeError("settingsRaw must be an object");
+          target.logFilter = value;
+        }
+      },
+      renderSettingsContent: (secondaryPrefix) => browserAdapter.updateLoggingSettingsContent(secondaryPrefix),
+      effects: {
+        buildFilterRegExp: () => readContextValue(context(), "buildFilterRegExp", buildFilterRegExp)()
+      }
+    }), browserAdapter;
   }
 
   // src/application/building-settings.ts
@@ -47108,28 +47236,18 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       persistSettings: () => updateSettingsFromState(),
       resetCheckbox: (...args) => resetCheckbox(...args),
       testSurface
-    }), { buildJobSettings } = jobSettingsBrowserAdapter, weightingSettingsActions = {
-      buildSettingsSection,
-      addSettingsToggle,
-      addTableInput
-    }, weightingSettingsIntentHandler, weightingSettingsBrowserAdapter = createWeightingSettingsBrowserAdapter(
-      {
-        getDocument: () => runtimeEnvironment.document,
-        getJQuery: () => $,
-        intents: {
-          handle: (intent) => weightingSettingsIntentHandler.handle(intent)
-        },
-        getActions: () => getTestContext("weightingSettings")?.actions ?? weightingSettingsActions
-      }
-    );
-    weightingSettingsIntentHandler = createWeightingSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("weightingSettings")?.resetWeightingSettings ?? resetWeightingSettings)(!0),
-        persist: () => (getTestContext("weightingSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
+    }), { buildJobSettings } = jobSettingsBrowserAdapter, weightingSettingsBrowserAdapter = createWeightingSettingsControl({
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addSettingsToggle,
+        addTableInput
       },
-      renderSettingsContent: () => weightingSettingsBrowserAdapter.updateWeightingSettingsContent()
-    });
-    let { buildWeightingSettings } = weightingSettingsBrowserAdapter, buildingSettingsActions = {
+      resetWeightingSettings: (...args) => resetWeightingSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      testSurface
+    }), { buildWeightingSettings } = weightingSettingsBrowserAdapter, buildingSettingsActions = {
       buildSettingsSection,
       addSettingsNumber,
       addSettingsSelect,
@@ -47197,41 +47315,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       persistSettings: () => updateSettingsFromState(),
       resetCheckbox: (...args) => resetCheckbox(...args),
       testSurface
-    }), { buildProjectSettings } = projectSettingsBrowserAdapter, loggingSettingsActions = {
-      buildSettingsSection2,
-      addSettingsHeader1,
-      addSettingsString,
-      addSettingsToggle
-    }, loggingSettingsEvolveAdapter = createLoggingSettingsEvolveAdapter({
-      getGame: () => getTestContext("loggingSettings")?.game ?? game,
-      getGameLog: () => getTestContext("loggingSettings")?.GameLog ?? GameLog,
-      getSettingsRaw: () => getTestContext("loggingSettings")?.settingsRaw ?? settingsRaw
-    }), loggingSettingsIntentHandler, loggingSettingsBrowserAdapter = createLoggingSettingsBrowserAdapter({
+    }), { buildProjectSettings } = projectSettingsBrowserAdapter, loggingSettingsBrowserAdapter = createLoggingSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      getReadModel: () => loggingSettingsEvolveAdapter.readLoggingSettingsReadModel(),
-      intents: {
-        handle: (intent) => loggingSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection2,
+        addSettingsHeader1,
+        addSettingsString,
+        addSettingsToggle
       },
-      getActions: () => getTestContext("loggingSettings")?.actions ?? loggingSettingsActions
-    });
-    loggingSettingsIntentHandler = createLoggingSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("loggingSettings")?.resetLoggingSettings ?? resetLoggingSettings)(!0),
-        persist: () => (getTestContext("loggingSettings")?.updateSettingsFromState ?? updateSettingsFromState)(),
-        setLogFilter: (value) => {
-          let target = getTestContext("loggingSettings")?.settingsRaw ?? settingsRaw;
-          target.logFilter = value;
-        }
-      },
-      renderSettingsContent: (secondaryPrefix) => loggingSettingsBrowserAdapter.updateLoggingSettingsContent(
-        secondaryPrefix
-      ),
-      effects: {
-        buildFilterRegExp: () => (getTestContext("loggingSettings")?.buildFilterRegExp ?? buildFilterRegExp)()
-      }
-    });
-    let { buildLoggingSettings } = loggingSettingsBrowserAdapter, optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
+      getGame: () => game,
+      getGameLog: () => GameLog,
+      getSettingsRaw: () => settingsRaw,
+      resetLoggingSettings: (...args) => resetLoggingSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      buildFilterRegExp: () => buildFilterRegExp(),
+      testSurface
+    }), { buildLoggingSettings } = loggingSettingsBrowserAdapter, optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getWindow: () => runtimeEnvironment.window,
@@ -47327,36 +47427,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getJQuery: () => $,
       reader: supplyToggleReader,
       addToggleCallbacks: (...args) => (getTestContext("supplyToggles")?.addToggleCallbacks ?? addToggleCallbacks)(...args)
-    }), { createSupplyToggles, removeSupplyToggles } = supplyToggleBrowserAdapter, generalSettingsActions = {
-      buildSettingsSection,
-      addSettingsHeader1,
-      addSettingsNumber,
-      addSettingsSelect,
-      addSettingsString,
-      addSettingsToggle
-    }, generalSettingsIntentHandler, generalSettingsBrowserAdapter = createGeneralSettingsBrowserAdapter({
+    }), { createSupplyToggles, removeSupplyToggles } = supplyToggleBrowserAdapter, generalSettingsBrowserAdapter = createGeneralSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      intents: {
-        handle: (intent) => generalSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection,
+        addSettingsHeader1,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsString,
+        addSettingsToggle
       },
-      getActions: () => getTestContext("generalSettings") ?? generalSettingsActions
-    });
-    generalSettingsIntentHandler = createGeneralSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("generalSettings")?.resetGeneralSettings ?? resetGeneralSettings)(!0),
-        persist: () => (getTestContext("generalSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
-      },
-      renderSettingsContent: () => generalSettingsBrowserAdapter.updateGeneralSettingsContent(),
-      effects: {
-        resetCheckboxes: () => (getTestContext("generalSettings")?.resetCheckbox ?? resetCheckbox)(
-          "masterScriptToggle",
-          "showSettings",
-          "autoPrestige"
-        )
-      }
-    });
-    let { buildGeneralSettings } = generalSettingsBrowserAdapter, achievementGuardSettingsActions = {
+      resetGeneralSettings: (...args) => resetGeneralSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface
+    }), { buildGeneralSettings } = generalSettingsBrowserAdapter, achievementGuardSettingsActions = {
       buildSettingsSection,
       addSettingsToggle
     }, achievementGuardSettingsIntentHandler, achievementGuardSettingsBrowserAdapter = createAchievementGuardSettingsBrowserAdapter({

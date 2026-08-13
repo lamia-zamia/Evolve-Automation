@@ -2,6 +2,9 @@ import { createProjectSettingsIntentHandler } from "../../application/project-se
 import { createStorageSettingsIntentHandler } from "../../application/storage-settings.ts";
 import { createMagicSettingsIntentHandler } from "../../application/magic-settings.ts";
 import { createJobSettingsIntentHandler } from "../../application/job-settings.ts";
+import { createWeightingSettingsIntentHandler } from "../../application/weighting-settings.ts";
+import { createGeneralSettingsIntentHandler } from "../../application/general-settings.ts";
+import { createLoggingSettingsIntentHandler } from "../../application/logging-settings.ts";
 import {
   createProjectSettingsBrowserAdapter,
   type ProjectSettingsBrowserActions,
@@ -18,10 +21,23 @@ import {
   createJobSettingsBrowserAdapter,
   type JobSettingsBrowserActions,
 } from "../../adapters/browser/job-settings.ts";
+import {
+  createWeightingSettingsBrowserAdapter,
+  type WeightingSettingsBrowserActions,
+} from "../../adapters/browser/weighting-settings.ts";
+import {
+  createGeneralSettingsBrowserAdapter,
+  type GeneralSettingsBrowserActions,
+} from "../../adapters/browser/general-settings.ts";
+import {
+  createLoggingSettingsBrowserAdapter,
+  type LoggingSettingsBrowserActions,
+} from "../../adapters/browser/logging-settings.ts";
 import { createProjectSettingsEvolveAdapter } from "../../adapters/evolve/progression/research/project-settings.ts";
 import { createStorageSettingsEvolveAdapter } from "../../adapters/evolve/economy/storage/storage-settings.ts";
 import { createMagicSettingsEvolveAdapter } from "../../adapters/evolve/economy/production/magic-settings.ts";
 import { createJobSettingsEvolveAdapter } from "../../adapters/evolve/civic/job-settings.ts";
+import { createLoggingSettingsEvolveAdapter } from "../../adapters/evolve/logging-settings.ts";
 import type { StorageSettingsIntentHandler } from "../../ports/storage-settings.ts";
 import type { ProjectSettingsIntentHandler } from "../../ports/project-settings.ts";
 import type { MagicSettingsIntentHandler } from "../../ports/magic-settings.ts";
@@ -52,6 +68,15 @@ type MagicBrowserDependencies = Parameters<
 type JobBrowserDependencies = Parameters<
   typeof createJobSettingsBrowserAdapter
 >[0];
+type WeightingBrowserDependencies = Parameters<
+  typeof createWeightingSettingsBrowserAdapter
+>[0];
+type GeneralBrowserDependencies = Parameters<
+  typeof createGeneralSettingsBrowserAdapter
+>[0];
+type LoggingBrowserDependencies = Parameters<
+  typeof createLoggingSettingsBrowserAdapter
+>[0];
 type RuntimeFunction = (...args: unknown[]) => unknown;
 
 function readRecord(value: unknown): Record<string, unknown> | undefined {
@@ -72,6 +97,14 @@ function readContextValue<T>(
 function getTestContextReader(testSurface: RuntimeTestSurface | undefined) {
   if (!globalThis.__EA_TEST_SURFACE_ENABLED__) return () => undefined;
   return (name: string): unknown => testSurface?.getContext(name);
+}
+
+function readContextActions<T>(context: unknown, fallback: T): T {
+  const record = readRecord(context);
+  if (record === undefined) return fallback;
+  return record["actions"] === undefined
+    ? (context as T)
+    : (record["actions"] as T);
 }
 
 interface StorageSettingsControlDependencies {
@@ -381,6 +414,201 @@ export function createJobSettingsControl({
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("jobSettings", {
       jobSettings: browserAdapter,
+    });
+  return browserAdapter;
+}
+
+interface WeightingSettingsControlDependencies {
+  readonly getDocument: WeightingBrowserDependencies["getDocument"];
+  readonly getJQuery: WeightingBrowserDependencies["getJQuery"];
+  readonly actions: WeightingSettingsBrowserActions;
+  readonly resetWeightingSettings: RuntimeFunction;
+  readonly persistSettings: RuntimeFunction;
+  readonly testSurface: RuntimeTestSurface | undefined;
+}
+
+export function createWeightingSettingsControl({
+  getDocument,
+  getJQuery,
+  actions,
+  resetWeightingSettings,
+  persistSettings,
+  testSurface,
+}: WeightingSettingsControlDependencies) {
+  const getTestContext = getTestContextReader(testSurface);
+  const context = () => getTestContext("weightingSettings");
+  let intentHandler: ReturnType<typeof createWeightingSettingsIntentHandler>;
+  const browserAdapter = createWeightingSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents: {
+      handle: (intent) => intentHandler.handle(intent),
+    },
+    getActions: () => readContextValue(context(), "actions", actions),
+  });
+  intentHandler = createWeightingSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        readContextValue(
+          context(),
+          "resetWeightingSettings",
+          resetWeightingSettings,
+        )(true),
+      persist: () =>
+        readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings,
+        )(),
+    },
+    renderSettingsContent: () =>
+      browserAdapter.updateWeightingSettingsContent(),
+  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("weightingSettings", {
+      weightingSettings: browserAdapter,
+    });
+  return browserAdapter;
+}
+
+interface GeneralSettingsControlDependencies {
+  readonly getDocument: GeneralBrowserDependencies["getDocument"];
+  readonly getJQuery: GeneralBrowserDependencies["getJQuery"];
+  readonly actions: GeneralSettingsBrowserActions;
+  readonly resetGeneralSettings: RuntimeFunction;
+  readonly persistSettings: RuntimeFunction;
+  readonly resetCheckbox: (...keys: string[]) => unknown;
+  readonly testSurface: RuntimeTestSurface | undefined;
+}
+
+export function createGeneralSettingsControl({
+  getDocument,
+  getJQuery,
+  actions,
+  resetGeneralSettings,
+  persistSettings,
+  resetCheckbox,
+  testSurface,
+}: GeneralSettingsControlDependencies) {
+  const getTestContext = getTestContextReader(testSurface);
+  const context = () => getTestContext("generalSettings");
+  let intentHandler: ReturnType<typeof createGeneralSettingsIntentHandler>;
+  const browserAdapter = createGeneralSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents: {
+      handle: (intent) => intentHandler.handle(intent),
+    },
+    getActions: () => readContextActions(context(), actions),
+  });
+  intentHandler = createGeneralSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        readContextValue(
+          context(),
+          "resetGeneralSettings",
+          resetGeneralSettings,
+        )(true),
+      persist: () =>
+        readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings,
+        )(),
+    },
+    renderSettingsContent: () => browserAdapter.updateGeneralSettingsContent(),
+    effects: {
+      resetCheckboxes: () =>
+        readContextValue(context(), "resetCheckbox", resetCheckbox)(
+          "masterScriptToggle",
+          "showSettings",
+          "autoPrestige",
+        ),
+    },
+  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("generalSettings", {
+      generalSettings: browserAdapter,
+    });
+  return browserAdapter;
+}
+
+interface LoggingSettingsControlDependencies {
+  readonly getDocument: LoggingBrowserDependencies["getDocument"];
+  readonly getJQuery: LoggingBrowserDependencies["getJQuery"];
+  readonly actions: LoggingSettingsBrowserActions;
+  readonly getGame: () => unknown;
+  readonly getGameLog: () => unknown;
+  readonly getSettingsRaw: () => unknown;
+  readonly resetLoggingSettings: RuntimeFunction;
+  readonly persistSettings: RuntimeFunction;
+  readonly buildFilterRegExp: RuntimeFunction;
+  readonly testSurface: RuntimeTestSurface | undefined;
+}
+
+export function createLoggingSettingsControl({
+  getDocument,
+  getJQuery,
+  actions,
+  getGame,
+  getGameLog,
+  getSettingsRaw,
+  resetLoggingSettings,
+  persistSettings,
+  buildFilterRegExp,
+  testSurface,
+}: LoggingSettingsControlDependencies) {
+  const getTestContext = getTestContextReader(testSurface);
+  const context = () => getTestContext("loggingSettings");
+  const evolveAdapter = createLoggingSettingsEvolveAdapter({
+    getGame: () => readContextValue(context(), "game", getGame()),
+    getGameLog: () => readContextValue(context(), "GameLog", getGameLog()),
+    getSettingsRaw: () =>
+      readContextValue(context(), "settingsRaw", getSettingsRaw()),
+  });
+  let intentHandler: ReturnType<typeof createLoggingSettingsIntentHandler>;
+  const browserAdapter = createLoggingSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel: () => evolveAdapter.readLoggingSettingsReadModel(),
+    intents: {
+      handle: (intent) => intentHandler.handle(intent),
+    },
+    getActions: () => readContextValue(context(), "actions", actions),
+  });
+  intentHandler = createLoggingSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        readContextValue(
+          context(),
+          "resetLoggingSettings",
+          resetLoggingSettings,
+        )(true),
+      persist: () =>
+        readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings,
+        )(),
+      setLogFilter: (value) => {
+        const target = readRecord(
+          readContextValue(context(), "settingsRaw", getSettingsRaw()),
+        );
+        if (target === undefined)
+          throw new TypeError("settingsRaw must be an object");
+        target["logFilter"] = value;
+      },
+    },
+    renderSettingsContent: (secondaryPrefix) =>
+      browserAdapter.updateLoggingSettingsContent(secondaryPrefix),
+    effects: {
+      buildFilterRegExp: () =>
+        readContextValue(context(), "buildFilterRegExp", buildFilterRegExp)(),
+    },
+  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("loggingSettings", {
+      loggingSettings: browserAdapter,
     });
   return browserAdapter;
 }
