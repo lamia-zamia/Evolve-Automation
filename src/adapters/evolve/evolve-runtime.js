@@ -150,7 +150,7 @@ import { createTargetTimingDisplay } from "./target-timing-display.ts";
 import { findRequiredResourceWeight as findRequiredResourceWeightPolicy } from "../../domain/economy/resources/resource-weighting.ts";
 import { createGameActionVerification } from "../../validation/game-actions.ts";
 import { createStateLogControl } from "../../bootstrap/state-log-control.ts";
-import { createPrestigeLog } from "../../observability/prestige-log.ts";
+import { createPrestigeAutomationControls } from "../../bootstrap/prestige-automation-controls.ts";
 import { createLogFilterControl } from "../../bootstrap/log-filter-control.ts";
 import { createBrowserRuntime } from "../browser/runtime.ts";
 import { createMechStats } from "../../ui/mech-stats.ts";
@@ -230,7 +230,6 @@ import { createPowerStorageControls } from "../../bootstrap/power-storage-contro
 import { createMarketAutomationControls } from "../../bootstrap/market-automation-controls.ts";
 import { createCraftJobsControls } from "../../bootstrap/craft-jobs-controls.ts";
 import { createEspionageControls } from "../../bootstrap/espionage-controls.ts";
-import { createPrestigeControl } from "../../bootstrap/prestige-control.ts";
 import { createProgressionAutomationControls } from "../../bootstrap/progression-automation-controls.ts";
 import { createFleetMechControls } from "../../bootstrap/fleet-mech-controls.ts";
 import { createEjectorSettingsControl } from "../../bootstrap/settings/ejector-settings-control.ts";
@@ -3064,19 +3063,54 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { formatLogString, logPrestige } = createPrestigeLog({
-    getSettings: () => settings,
-    getGame: () => game,
-    getState: () => state,
-    getPrestigeTypes: () => prestigeTypes,
-    getGameLog: () => GameLog,
-    getFastEval: () => fastEval,
-    getSaveStateLog: () =>
-      getTestContext("prestigeLog")?.actions?.saveStateLog ?? saveStateLog,
-    getTriggerFileDownload: () =>
-      getTestContext("prestigeLog")?.actions?.triggerFileDownload ??
-      triggerFileDownload,
-  });
+  const { formatLogString, logPrestige, autoPrestige } =
+    createPrestigeAutomationControls({
+      log: {
+        getSettings: () => settings,
+        getGame: () => game,
+        getState: () => state,
+        getPrestigeTypes: () => prestigeTypes,
+        getGameLog: () => GameLog,
+        getFastEval: () => fastEval,
+        getSaveStateLog: () =>
+          getTestContext("prestigeLog")?.actions?.saveStateLog ?? saveStateLog,
+        getTriggerFileDownload: () =>
+          getTestContext("prestigeLog")?.actions?.triggerFileDownload ??
+          triggerFileDownload,
+      },
+      prestige: {
+        reader: {
+          getState: () => state,
+          getSettings: () => settings,
+          getGame: () => game,
+          getResources: () => resources,
+          getBuildings: () => buildings,
+          getTechIds: () => techIds,
+          getWarManager: () => WarManager,
+          getHaveTech: () => haveTech,
+          getVueById,
+          eligibility: {
+            isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable(),
+            isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable(),
+            isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable(),
+            isApocalypsePrestigeAvailable: () =>
+              isApocalypsePrestigeAvailable(),
+            isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable(),
+            isWitchAscensionPrestigeAvailable: (demonic) =>
+              isWitchAscensionPrestigeAvailable(demonic),
+            isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable(),
+          },
+        },
+        executor: {
+          getState: () => state,
+          getBuildings: () => buildings,
+          getTechIds: () => techIds,
+          getVueById,
+          clickMultipliers,
+          loadQueuedSettings,
+        },
+      },
+    });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.add({
@@ -3121,39 +3155,6 @@ export function startEvolveRuntimeComposition(
       MechManager = context.MechManager;
       haveTech = context.haveTech;
       isAchievementUnlocked = context.isAchievementUnlocked;
-    },
-  });
-
-  const { autoPrestige } = createPrestigeControl({
-    reader: {
-      getState: () => state,
-      getSettings: () => settings,
-      getGame: () => game,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getTechIds: () => techIds,
-      getWarManager: () => WarManager,
-      getHaveTech: () => haveTech,
-      getVueById,
-      eligibility: {
-        isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable(),
-        isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable(),
-        isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable(),
-        isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable(),
-        isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable(),
-        isWitchAscensionPrestigeAvailable: (demonic) =>
-          isWitchAscensionPrestigeAvailable(demonic),
-        isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable(),
-      },
-    },
-    executor: {
-      getState: () => state,
-      getBuildings: () => buildings,
-      getTechIds: () => techIds,
-      getVueById,
-      clickMultipliers,
-      logPrestige,
-      loadQueuedSettings,
     },
   });
 

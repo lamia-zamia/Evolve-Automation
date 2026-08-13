@@ -16324,6 +16324,297 @@ Only continue if you trust the source. Injected code:
     return { formatLogString, logPrestige };
   }
 
+  // src/adapters/evolve/progression/prestige/prestige.ts
+  function createPrestigeReader(dependencies) {
+    let buildingBool = (id, method) => {
+      let buildings = requireRecord(dependencies.getBuildings(), "buildings"), building3 = requireRecord(buildings[id], `buildings.${id}`);
+      return callBoolean(building3, method, `buildings.${id}`);
+    }, techBool = (id, method) => {
+      let techIds = requireRecord(dependencies.getTechIds(), "techIds"), tech = requireRecord(techIds[id], `techIds.${id}`);
+      return callBoolean(tech, method, `techIds.${id}`);
+    }, race2 = () => requireRecord(
+      requireRecord(
+        requireRecord(dependencies.getGame(), "game").global,
+        "game.global"
+      ).race,
+      "game.global.race"
+    ), madBranch = (settings) => {
+      let madVue = dependencies.getVueById("mad"), display = typeof madVue == "object" && madVue !== null ? !!madVue.display : !1, armed = typeof madVue == "object" && madVue !== null ? !!madVue.armed : !1, eligible = display && !!dependencies.getHaveTech()("mad"), war = requireRecord(dependencies.getWarManager(), "WarManager"), population = requireRecord(
+        requireRecord(dependencies.getResources(), "resources").Population,
+        "resources.Population"
+      );
+      return {
+        type: "mad",
+        eligible,
+        armed,
+        waitForPopulation: !!settings.prestigeMADWait,
+        // The soldier counts are WarManager getters over live worker/crew fields, and the population
+        // quantities come from the resource wrapper. A NaN fails every `>=` in the wait check, so it
+        // holds MAD back rather than arming it.
+        currentSoldiers: coerceNumber(war.currentSoldiers),
+        maxSoldiers: coerceNumber(war.maxSoldiers),
+        currentPopulation: coerceNumber(population.currentQuantity),
+        maxPopulation: coerceNumber(population.maxQuantity),
+        requiredPopulation: coerceNumber(settings.prestigeMADPopulation)
+      };
+    };
+    return Object.freeze({
+      samplePrestige() {
+        let rawGoal = requireRecord(dependencies.getState(), "state").goal, goal = typeof rawGoal == "string" ? rawGoal : "", settings = requireRecord(dependencies.getSettings(), "settings"), { eligibility } = dependencies, branch;
+        switch (settings.prestigeType) {
+          case "mad":
+            branch = madBranch(settings);
+            break;
+          case "bioseed":
+            branch = {
+              type: "bioseed",
+              eligible: eligibility.isBioseederPrestigeAvailable(),
+              launchUnlocked: buildingBool("GasSpaceDockLaunch", "isUnlocked"),
+              prepUnlocked: buildingBool(
+                "GasSpaceDockPrepForLaunch",
+                "isUnlocked"
+              )
+            };
+            break;
+          case "cataclysm":
+            branch = {
+              type: "cataclysm",
+              eligible: eligibility.isCataclysmPrestigeAvailable(),
+              loadQueuedSettings: !!settings.autoEvolution,
+              dialClickable: techBool("tech-dial_it_to_11", "isClickable")
+            };
+            break;
+          case "whitehole":
+            branch = {
+              type: "whitehole",
+              eligible: eligibility.isWhiteholePrestigeAvailable(),
+              exoticInfusionReady: techBool("tech-exotic_infusion", "isUnlocked") && techBool("tech-exotic_infusion", "isAffordable")
+            };
+            break;
+          case "apocalypse":
+            branch = {
+              type: "apocalypse",
+              eligible: eligibility.isApocalypsePrestigeAvailable()
+            };
+            break;
+          case "ascension": {
+            let witchHunter = !!race2().witch_hunter;
+            branch = {
+              type: "ascension",
+              witchHunter,
+              eligible: witchHunter ? eligibility.isWitchAscensionPrestigeAvailable(!1) : eligibility.isAscensionPrestigeAvailable()
+            };
+            break;
+          }
+          case "demonic": {
+            let current = race2(), witchHunter = !!current.witch_hunter;
+            branch = {
+              type: "demonic",
+              witchHunter,
+              fasting: !!current.fasting,
+              eligible: witchHunter ? eligibility.isWitchAscensionPrestigeAvailable(!0) : eligibility.isDemonicPrestigeAvailable()
+            };
+            break;
+          }
+          case "terraform":
+            branch = {
+              type: "building-reset",
+              building: "RedTerraform",
+              unlocked: buildingBool("RedTerraform", "isUnlocked")
+            };
+            break;
+          case "matrix":
+            branch = {
+              type: "building-reset",
+              building: "TauStarBluePill",
+              unlocked: buildingBool("TauStarBluePill", "isUnlocked")
+            };
+            break;
+          case "apotheosis":
+            branch = {
+              type: "building-reset",
+              building: "PalaceApotheosis",
+              unlocked: buildingBool("PalaceApotheosis", "isUnlocked")
+            };
+            break;
+          default:
+            branch = { type: "noop" };
+        }
+        return Object.freeze({ goal, branch: Object.freeze(branch) });
+      }
+    });
+  }
+  function createPrestigeCommandExecutor(dependencies) {
+    let callBuilding = (id, method) => {
+      let buildings = requireRecord(dependencies.getBuildings(), "buildings"), building3 = requireRecord(buildings[id], `buildings.${id}`);
+      requireFunction(building3[method], `buildings.${id}.${method}`).call(
+        building3
+      );
+    }, clickTech = (id) => {
+      let techIds = requireRecord(dependencies.getTechIds(), "techIds"), tech = requireRecord(techIds[id], `techIds.${id}`);
+      requireFunction(tech.click, `techIds.${id}.click`).call(tech);
+    }, callMad = (method) => {
+      let madVue = requireRecord(dependencies.getVueById("mad"), "vue.mad");
+      requireFunction(madVue[method], `vue.mad.${method}`).call(madVue);
+    };
+    return Object.freeze({
+      execute(command) {
+        switch (command.kind) {
+          case "set-goal": {
+            let state = requireRecord(dependencies.getState(), "state");
+            state.goal = command.goal;
+            return;
+          }
+          case "log-prestige":
+            dependencies.logPrestige();
+            return;
+          case "arm-mad":
+            callMad("arm");
+            return;
+          case "launch-mad":
+            callMad("launch");
+            return;
+          case "click-building":
+            callBuilding(command.id, "click");
+            return;
+          case "cache-building-options":
+            callBuilding(command.id, "cacheOptions");
+            return;
+          case "click-tech":
+            clickTech(command.id);
+            return;
+          case "reset-modifier-keys":
+            dependencies.clickMultipliers.clear();
+            return;
+          case "absorption-chamber-action": {
+            let buildings = requireRecord(
+              dependencies.getBuildings(),
+              "buildings"
+            ), chamber = requireRecord(
+              buildings.PitAbsorptionChamber,
+              "buildings.PitAbsorptionChamber"
+            );
+            requireFunction(
+              chamber.activate,
+              "buildings.PitAbsorptionChamber.activate"
+            ).call(chamber);
+            return;
+          }
+          case "load-queued-settings":
+            dependencies.loadQueuedSettings();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/progression/prestige/prestige.ts
+  var WITCH_ASCENSION_ACT = [
+    { kind: "reset-modifier-keys" },
+    { kind: "log-prestige" },
+    { kind: "absorption-chamber-action" },
+    { kind: "set-goal", goal: "GameOverMan" }
+  ];
+  function tryReset(goal, check, act) {
+    return check ? goal !== "Reset" ? [{ kind: "set-goal", goal: "Reset" }] : act : [];
+  }
+  function planPrestige(input) {
+    let { goal, branch } = input;
+    switch (branch.type) {
+      case "noop":
+        return [];
+      case "mad": {
+        let act = [];
+        return branch.armed && act.push({ kind: "arm-mad" }), (!branch.waitForPopulation || branch.currentSoldiers >= branch.maxSoldiers && branch.currentPopulation >= branch.maxPopulation && branch.currentSoldiers + branch.currentPopulation >= branch.requiredPopulation) && act.push(
+          { kind: "set-goal", goal: "GameOverMan" },
+          { kind: "log-prestige" },
+          { kind: "launch-mad" }
+        ), tryReset(goal, branch.eligible, act);
+      }
+      case "bioseed": {
+        let act = branch.launchUnlocked ? [{ kind: "click-building", id: "GasSpaceDockLaunch" }] : branch.prepUnlocked ? [{ kind: "click-building", id: "GasSpaceDockPrepForLaunch" }] : [{ kind: "cache-building-options", id: "GasSpaceDock" }];
+        return tryReset(goal, branch.eligible, act);
+      }
+      case "cataclysm": {
+        let act = [];
+        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push(
+          { kind: "log-prestige" },
+          { kind: "click-tech", id: "tech-dial_it_to_11" }
+        ), tryReset(goal, branch.eligible, act);
+      }
+      case "whitehole": {
+        let act = [];
+        branch.exoticInfusionReady && act.push({ kind: "log-prestige" });
+        for (let id of [
+          "tech-infusion_confirm",
+          "tech-infusion_check",
+          "tech-exotic_infusion"
+        ])
+          act.push({ kind: "click-tech", id });
+        return tryReset(goal, branch.eligible, act);
+      }
+      case "apocalypse":
+        return tryReset(goal, branch.eligible, [
+          { kind: "log-prestige" },
+          { kind: "click-tech", id: "tech-protocol66" },
+          { kind: "click-tech", id: "tech-protocol66a" }
+        ]);
+      case "ascension":
+        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
+          { kind: "reset-modifier-keys" },
+          { kind: "click-building", id: "SiriusAscend" }
+        ]);
+      case "demonic":
+        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
+          { kind: "log-prestige" },
+          {
+            kind: "click-tech",
+            id: branch.fasting ? "tech-final_ingredient" : "tech-demonic_infusion"
+          }
+        ]);
+      case "building-reset":
+        return tryReset(goal, branch.unlocked, [
+          { kind: "reset-modifier-keys" },
+          { kind: "click-building", id: branch.building }
+        ]);
+    }
+  }
+
+  // src/application/prestige.ts
+  function runPrestige({
+    reader,
+    executor
+  }) {
+    for (let command of planPrestige(reader.samplePrestige()))
+      executor.execute(command);
+  }
+
+  // src/bootstrap/prestige-control.ts
+  function createPrestigeControl(dependencies) {
+    let reader = createPrestigeReader(dependencies.reader), executor = createPrestigeCommandExecutor(dependencies.executor);
+    return Object.freeze({
+      autoPrestige: () => runPrestige({ reader, executor })
+    });
+  }
+
+  // src/bootstrap/prestige-automation-controls.ts
+  function createPrestigeAutomationControls({
+    log,
+    prestige
+  }) {
+    let prestigeLog = createPrestigeLog(log), prestigeControl = createPrestigeControl({
+      reader: prestige.reader,
+      executor: {
+        ...prestige.executor,
+        logPrestige: prestigeLog.logPrestige
+      }
+    });
+    return Object.freeze({
+      ...prestigeLog,
+      ...prestigeControl
+    });
+  }
+
   // src/observability/log-filter.ts
   function createLogFilter({
     getSettingsRaw,
@@ -37125,279 +37416,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
-  // src/adapters/evolve/progression/prestige/prestige.ts
-  function createPrestigeReader(dependencies) {
-    let buildingBool = (id, method) => {
-      let buildings = requireRecord(dependencies.getBuildings(), "buildings"), building3 = requireRecord(buildings[id], `buildings.${id}`);
-      return callBoolean(building3, method, `buildings.${id}`);
-    }, techBool = (id, method) => {
-      let techIds = requireRecord(dependencies.getTechIds(), "techIds"), tech = requireRecord(techIds[id], `techIds.${id}`);
-      return callBoolean(tech, method, `techIds.${id}`);
-    }, race2 = () => requireRecord(
-      requireRecord(
-        requireRecord(dependencies.getGame(), "game").global,
-        "game.global"
-      ).race,
-      "game.global.race"
-    ), madBranch = (settings) => {
-      let madVue = dependencies.getVueById("mad"), display = typeof madVue == "object" && madVue !== null ? !!madVue.display : !1, armed = typeof madVue == "object" && madVue !== null ? !!madVue.armed : !1, eligible = display && !!dependencies.getHaveTech()("mad"), war = requireRecord(dependencies.getWarManager(), "WarManager"), population = requireRecord(
-        requireRecord(dependencies.getResources(), "resources").Population,
-        "resources.Population"
-      );
-      return {
-        type: "mad",
-        eligible,
-        armed,
-        waitForPopulation: !!settings.prestigeMADWait,
-        // The soldier counts are WarManager getters over live worker/crew fields, and the population
-        // quantities come from the resource wrapper. A NaN fails every `>=` in the wait check, so it
-        // holds MAD back rather than arming it.
-        currentSoldiers: coerceNumber(war.currentSoldiers),
-        maxSoldiers: coerceNumber(war.maxSoldiers),
-        currentPopulation: coerceNumber(population.currentQuantity),
-        maxPopulation: coerceNumber(population.maxQuantity),
-        requiredPopulation: coerceNumber(settings.prestigeMADPopulation)
-      };
-    };
-    return Object.freeze({
-      samplePrestige() {
-        let rawGoal = requireRecord(dependencies.getState(), "state").goal, goal = typeof rawGoal == "string" ? rawGoal : "", settings = requireRecord(dependencies.getSettings(), "settings"), { eligibility } = dependencies, branch;
-        switch (settings.prestigeType) {
-          case "mad":
-            branch = madBranch(settings);
-            break;
-          case "bioseed":
-            branch = {
-              type: "bioseed",
-              eligible: eligibility.isBioseederPrestigeAvailable(),
-              launchUnlocked: buildingBool("GasSpaceDockLaunch", "isUnlocked"),
-              prepUnlocked: buildingBool(
-                "GasSpaceDockPrepForLaunch",
-                "isUnlocked"
-              )
-            };
-            break;
-          case "cataclysm":
-            branch = {
-              type: "cataclysm",
-              eligible: eligibility.isCataclysmPrestigeAvailable(),
-              loadQueuedSettings: !!settings.autoEvolution,
-              dialClickable: techBool("tech-dial_it_to_11", "isClickable")
-            };
-            break;
-          case "whitehole":
-            branch = {
-              type: "whitehole",
-              eligible: eligibility.isWhiteholePrestigeAvailable(),
-              exoticInfusionReady: techBool("tech-exotic_infusion", "isUnlocked") && techBool("tech-exotic_infusion", "isAffordable")
-            };
-            break;
-          case "apocalypse":
-            branch = {
-              type: "apocalypse",
-              eligible: eligibility.isApocalypsePrestigeAvailable()
-            };
-            break;
-          case "ascension": {
-            let witchHunter = !!race2().witch_hunter;
-            branch = {
-              type: "ascension",
-              witchHunter,
-              eligible: witchHunter ? eligibility.isWitchAscensionPrestigeAvailable(!1) : eligibility.isAscensionPrestigeAvailable()
-            };
-            break;
-          }
-          case "demonic": {
-            let current = race2(), witchHunter = !!current.witch_hunter;
-            branch = {
-              type: "demonic",
-              witchHunter,
-              fasting: !!current.fasting,
-              eligible: witchHunter ? eligibility.isWitchAscensionPrestigeAvailable(!0) : eligibility.isDemonicPrestigeAvailable()
-            };
-            break;
-          }
-          case "terraform":
-            branch = {
-              type: "building-reset",
-              building: "RedTerraform",
-              unlocked: buildingBool("RedTerraform", "isUnlocked")
-            };
-            break;
-          case "matrix":
-            branch = {
-              type: "building-reset",
-              building: "TauStarBluePill",
-              unlocked: buildingBool("TauStarBluePill", "isUnlocked")
-            };
-            break;
-          case "apotheosis":
-            branch = {
-              type: "building-reset",
-              building: "PalaceApotheosis",
-              unlocked: buildingBool("PalaceApotheosis", "isUnlocked")
-            };
-            break;
-          default:
-            branch = { type: "noop" };
-        }
-        return Object.freeze({ goal, branch: Object.freeze(branch) });
-      }
-    });
-  }
-  function createPrestigeCommandExecutor(dependencies) {
-    let callBuilding = (id, method) => {
-      let buildings = requireRecord(dependencies.getBuildings(), "buildings"), building3 = requireRecord(buildings[id], `buildings.${id}`);
-      requireFunction(building3[method], `buildings.${id}.${method}`).call(
-        building3
-      );
-    }, clickTech = (id) => {
-      let techIds = requireRecord(dependencies.getTechIds(), "techIds"), tech = requireRecord(techIds[id], `techIds.${id}`);
-      requireFunction(tech.click, `techIds.${id}.click`).call(tech);
-    }, callMad = (method) => {
-      let madVue = requireRecord(dependencies.getVueById("mad"), "vue.mad");
-      requireFunction(madVue[method], `vue.mad.${method}`).call(madVue);
-    };
-    return Object.freeze({
-      execute(command) {
-        switch (command.kind) {
-          case "set-goal": {
-            let state = requireRecord(dependencies.getState(), "state");
-            state.goal = command.goal;
-            return;
-          }
-          case "log-prestige":
-            dependencies.logPrestige();
-            return;
-          case "arm-mad":
-            callMad("arm");
-            return;
-          case "launch-mad":
-            callMad("launch");
-            return;
-          case "click-building":
-            callBuilding(command.id, "click");
-            return;
-          case "cache-building-options":
-            callBuilding(command.id, "cacheOptions");
-            return;
-          case "click-tech":
-            clickTech(command.id);
-            return;
-          case "reset-modifier-keys":
-            dependencies.clickMultipliers.clear();
-            return;
-          case "absorption-chamber-action": {
-            let buildings = requireRecord(
-              dependencies.getBuildings(),
-              "buildings"
-            ), chamber = requireRecord(
-              buildings.PitAbsorptionChamber,
-              "buildings.PitAbsorptionChamber"
-            );
-            requireFunction(
-              chamber.activate,
-              "buildings.PitAbsorptionChamber.activate"
-            ).call(chamber);
-            return;
-          }
-          case "load-queued-settings":
-            dependencies.loadQueuedSettings();
-            return;
-        }
-      }
-    });
-  }
-
-  // src/domain/progression/prestige/prestige.ts
-  var WITCH_ASCENSION_ACT = [
-    { kind: "reset-modifier-keys" },
-    { kind: "log-prestige" },
-    { kind: "absorption-chamber-action" },
-    { kind: "set-goal", goal: "GameOverMan" }
-  ];
-  function tryReset(goal, check, act) {
-    return check ? goal !== "Reset" ? [{ kind: "set-goal", goal: "Reset" }] : act : [];
-  }
-  function planPrestige(input) {
-    let { goal, branch } = input;
-    switch (branch.type) {
-      case "noop":
-        return [];
-      case "mad": {
-        let act = [];
-        return branch.armed && act.push({ kind: "arm-mad" }), (!branch.waitForPopulation || branch.currentSoldiers >= branch.maxSoldiers && branch.currentPopulation >= branch.maxPopulation && branch.currentSoldiers + branch.currentPopulation >= branch.requiredPopulation) && act.push(
-          { kind: "set-goal", goal: "GameOverMan" },
-          { kind: "log-prestige" },
-          { kind: "launch-mad" }
-        ), tryReset(goal, branch.eligible, act);
-      }
-      case "bioseed": {
-        let act = branch.launchUnlocked ? [{ kind: "click-building", id: "GasSpaceDockLaunch" }] : branch.prepUnlocked ? [{ kind: "click-building", id: "GasSpaceDockPrepForLaunch" }] : [{ kind: "cache-building-options", id: "GasSpaceDock" }];
-        return tryReset(goal, branch.eligible, act);
-      }
-      case "cataclysm": {
-        let act = [];
-        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push(
-          { kind: "log-prestige" },
-          { kind: "click-tech", id: "tech-dial_it_to_11" }
-        ), tryReset(goal, branch.eligible, act);
-      }
-      case "whitehole": {
-        let act = [];
-        branch.exoticInfusionReady && act.push({ kind: "log-prestige" });
-        for (let id of [
-          "tech-infusion_confirm",
-          "tech-infusion_check",
-          "tech-exotic_infusion"
-        ])
-          act.push({ kind: "click-tech", id });
-        return tryReset(goal, branch.eligible, act);
-      }
-      case "apocalypse":
-        return tryReset(goal, branch.eligible, [
-          { kind: "log-prestige" },
-          { kind: "click-tech", id: "tech-protocol66" },
-          { kind: "click-tech", id: "tech-protocol66a" }
-        ]);
-      case "ascension":
-        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
-          { kind: "reset-modifier-keys" },
-          { kind: "click-building", id: "SiriusAscend" }
-        ]);
-      case "demonic":
-        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
-          { kind: "log-prestige" },
-          {
-            kind: "click-tech",
-            id: branch.fasting ? "tech-final_ingredient" : "tech-demonic_infusion"
-          }
-        ]);
-      case "building-reset":
-        return tryReset(goal, branch.unlocked, [
-          { kind: "reset-modifier-keys" },
-          { kind: "click-building", id: branch.building }
-        ]);
-    }
-  }
-
-  // src/application/prestige.ts
-  function runPrestige({
-    reader,
-    executor
-  }) {
-    for (let command of planPrestige(reader.samplePrestige()))
-      executor.execute(command);
-  }
-
-  // src/bootstrap/prestige-control.ts
-  function createPrestigeControl(dependencies) {
-    let reader = createPrestigeReader(dependencies.reader), executor = createPrestigeCommandExecutor(dependencies.executor);
-    return Object.freeze({
-      autoPrestige: () => runPrestige({ reader, executor })
-    });
-  }
-
   // src/adapters/evolve/progression/build/build.ts
   function callMethod(target, name, path, args = []) {
     return Reflect.apply(
@@ -50754,15 +50772,47 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getGovernorOffice: () => getVueById("govOffice"),
         resolveVueMethod
       }
-    }), { formatLogString, logPrestige } = createPrestigeLog({
-      getSettings: () => settings,
-      getGame: () => game,
-      getState: () => state,
-      getPrestigeTypes: () => prestigeTypes,
-      getGameLog: () => GameLog,
-      getFastEval: () => fastEval,
-      getSaveStateLog: () => getTestContext("prestigeLog")?.actions?.saveStateLog ?? saveStateLog,
-      getTriggerFileDownload: () => getTestContext("prestigeLog")?.actions?.triggerFileDownload ?? triggerFileDownload
+    }), { formatLogString, logPrestige, autoPrestige } = createPrestigeAutomationControls({
+      log: {
+        getSettings: () => settings,
+        getGame: () => game,
+        getState: () => state,
+        getPrestigeTypes: () => prestigeTypes,
+        getGameLog: () => GameLog,
+        getFastEval: () => fastEval,
+        getSaveStateLog: () => getTestContext("prestigeLog")?.actions?.saveStateLog ?? saveStateLog,
+        getTriggerFileDownload: () => getTestContext("prestigeLog")?.actions?.triggerFileDownload ?? triggerFileDownload
+      },
+      prestige: {
+        reader: {
+          getState: () => state,
+          getSettings: () => settings,
+          getGame: () => game,
+          getResources: () => resources,
+          getBuildings: () => buildings,
+          getTechIds: () => techIds,
+          getWarManager: () => WarManager,
+          getHaveTech: () => haveTech,
+          getVueById,
+          eligibility: {
+            isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable(),
+            isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable2(),
+            isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable2(),
+            isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable2(),
+            isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable2(),
+            isWitchAscensionPrestigeAvailable: (demonic) => isWitchAscensionPrestigeAvailable2(demonic),
+            isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable2()
+          }
+        },
+        executor: {
+          getState: () => state,
+          getBuildings: () => buildings,
+          getTechIds: () => techIds,
+          getVueById,
+          clickMultipliers,
+          loadQueuedSettings
+        }
+      }
     }), {
       isPrestigeAllowed: isPrestigeAllowed2,
       isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable2,
@@ -50787,36 +50837,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       testSurface,
       setTestContext(context) {
         settings = context.settings, game = context.game, resources = context.resources, buildings = context.buildings, techIds = context.techIds, MechManager = context.MechManager, haveTech = context.haveTech, isAchievementUnlocked2 = context.isAchievementUnlocked;
-      }
-    }), { autoPrestige } = createPrestigeControl({
-      reader: {
-        getState: () => state,
-        getSettings: () => settings,
-        getGame: () => game,
-        getResources: () => resources,
-        getBuildings: () => buildings,
-        getTechIds: () => techIds,
-        getWarManager: () => WarManager,
-        getHaveTech: () => haveTech,
-        getVueById,
-        eligibility: {
-          isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable(),
-          isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable2(),
-          isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable2(),
-          isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable2(),
-          isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable2(),
-          isWitchAscensionPrestigeAvailable: (demonic) => isWitchAscensionPrestigeAvailable2(demonic),
-          isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable2()
-        }
-      },
-      executor: {
-        getState: () => state,
-        getBuildings: () => buildings,
-        getTechIds: () => techIds,
-        getVueById,
-        clickMultipliers,
-        logPrestige,
-        loadQueuedSettings
       }
     }), ocularPowerData = [
       { key: "d", id: "disintegration", locParam: ["X"] },
