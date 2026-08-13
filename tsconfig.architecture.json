@@ -23,6 +23,7 @@
     "src/validation/**/*.ts",
     "src/game/compatibility.ts",
     "src/game/entity-catalogs.ts",
+    "src/game/script-bootstrap.ts",
     "src/config.ts",
     "src/main.ts"
   ]
