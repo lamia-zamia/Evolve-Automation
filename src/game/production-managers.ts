@@ -1,21 +1,128 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
 
+interface ProductionResource {
+  id: string;
+  isUnlocked: () => boolean;
+}
+
+interface ProductionResources extends Record<string, ProductionResource> {
+  Adamantite: ProductionResource;
+  Aluminium: ProductionResource;
+  Alloy: ProductionResource;
+  Coal: ProductionResource;
+  Copper: ProductionResource;
+  Food: ProductionResource;
+  Furs: ProductionResource;
+  Infernite: ProductionResource;
+  Iridium: ProductionResource;
+  Iron: ProductionResource;
+  Lumber: ProductionResource;
+  Money: ProductionResource;
+  Nano_Tube: ProductionResource;
+  Neutronium: ProductionResource;
+  Oil: ProductionResource;
+  Polymer: ProductionResource;
+  Stanene: ProductionResource;
+  Steel: ProductionResource;
+  Uranium: ProductionResource;
+}
+
+interface ProductionCost {
+  resource: ProductionResource;
+}
+
+type ProductionCostInput = number | (() => number | ProductionResource);
+
+interface ProductionDefinition {
+  id: string;
+  resource?: ProductionResource;
+  unlocked?: boolean | (() => boolean);
+  enabled?: boolean;
+  weighting?: number;
+  priority?: number;
+  cost?: ProductionCost[] | (() => ProductionCost[]);
+  cost_kk?: ProductionCost[];
+  cost_normal?: ProductionCost[];
+}
+
+interface ManagedProduction extends ProductionDefinition {
+  priority: number;
+  weighting: number;
+  enabled: boolean;
+}
+
+interface ProductionBuilding {
+  count: number;
+  stateOnCount: number;
+  instance?: {
+    count: number;
+    on: number;
+    [key: string]: number;
+  };
+}
+
+interface ProductionBuildings extends Record<string, ProductionBuilding> {
+  AlphaGraphenePlant: ProductionBuilding;
+  AlphaMegaFactory: ProductionBuilding;
+  AlphaMiningDroid: ProductionBuilding;
+  Factory: ProductionBuilding;
+  RedFactory: ProductionBuilding;
+  Smelter: ProductionBuilding;
+  TauFactory: ProductionBuilding;
+  TitanGraphene: ProductionBuilding;
+  WastelandHellFactory: ProductionBuilding;
+  WastelandTwistedLab: ProductionBuilding;
+}
+
+interface ProductionRace {
+  species: string;
+  [key: string]: boolean | string;
+}
+
+interface ProductionGame {
+  global: {
+    resource: Record<string, { display: boolean }>;
+    race: ProductionRace;
+    tech: Record<string, number>;
+    city: {
+      smelter: Record<string, number> & { Star: number; cap: number };
+      factory?: Record<string, number>;
+    };
+    portal?: { hell_factory?: { rank?: number } };
+    interstellar: {
+      mining_droid: Record<string, number> & { on: number };
+    };
+  };
+  f_rate: Record<string, Record<string, Record<number, number>>>;
+}
+
+interface GrapheneFuel {
+  id: string;
+  cost: ProductionCost;
+}
+
 interface ProductionManagersDependencies {
-  getGame: () => any;
-  getResources: () => Record<string, any>;
-  getBuildings: () => Record<string, any>;
+  getGame: () => ProductionGame;
+  getResources: () => ProductionResources;
+  getBuildings: () => ProductionBuildings;
   industryControls: GameIndustryControlsPort;
   haveTech: (tech: string, level?: number) => boolean;
   isLumberRace: () => boolean;
   addProps: (
-    target: any,
-    idFn: (item: any) => string,
+    target: Record<string, ProductionDefinition>,
+    idFn: (item: ProductionDefinition) => string,
     specs: { s: string; p: string }[],
-  ) => any;
-  normalizeProperties: (target: any, classes?: any[]) => any;
+  ) => Record<string, ManagedProduction>;
+  normalizeProperties: (
+    target: Record<string, ProductionDefinition>,
+    classes?: unknown[],
+  ) => Record<string, ProductionDefinition>;
   replicableResources: string[];
-  ResourceProductionCost: new (resource: any, a: any, b: any) => any;
+  ResourceProductionCost: new (
+    resource: ProductionResource | (() => ProductionResource),
+    a: ProductionCostInput,
+    b: number,
+  ) => ProductionCost;
 }
 
 export function createProductionManagers({
@@ -88,7 +195,8 @@ export function createProductionManagers({
           },
           Wood: {
             id: "Wood",
-            unlocked: () => isLumberRace() || getGame().global.race["evil"],
+            unlocked: () =>
+              isLumberRace() || Boolean(getGame().global.race["evil"]),
             cost: [
               new ResourceProductionCost(
                 () =>
@@ -143,11 +251,11 @@ export function createProductionManagers({
 
     managedFuelPriorityList() {
       return Object.values(this.Fuels).sort(
-        (a: any, b: any) => a.priority - b.priority,
+        (a: ManagedProduction, b: ManagedProduction) => a.priority - b.priority,
       );
     },
 
-    fueledCount(fuel: any) {
+    fueledCount(fuel: ManagedProduction) {
       if (!fuel.unlocked) {
         return 0;
       }
@@ -155,7 +263,7 @@ export function createProductionManagers({
       return getGame().global.city.smelter[fuel.id];
     },
 
-    smeltingCount(production: any) {
+    smeltingCount(production: ManagedProduction) {
       if (!production.unlocked) {
         return 0;
       }
@@ -163,7 +271,7 @@ export function createProductionManagers({
       return getGame().global.city.smelter[production.id];
     },
 
-    increaseFuel(fuel: any, count: number): boolean {
+    increaseFuel(fuel: ManagedProduction, count: number): boolean {
       if (count === 0 || !fuel.unlocked) {
         return false;
       }
@@ -178,7 +286,7 @@ export function createProductionManagers({
       });
     },
 
-    decreaseFuel(fuel: any, count: number): boolean {
+    decreaseFuel(fuel: ManagedProduction, count: number): boolean {
       if (count === 0 || !fuel.unlocked) {
         return false;
       }
@@ -233,6 +341,11 @@ export function createProductionManagers({
     },
   };
 
+  const factoryRate = (production: string, resource: string) => {
+    const game = getGame();
+    return game.f_rate[production][resource][game.global.tech["factory"] || 0];
+  };
+
   const FactoryManager = {
     _industryElementId: "iFactory",
 
@@ -246,7 +359,7 @@ export function createProductionManagers({
             cost: [
               new ResourceProductionCost(
                 resources.Furs,
-                () => FactoryManager.f_rate("Lux", "fur"),
+                () => factoryRate("Lux", "fur"),
                 5,
               ),
             ],
@@ -258,12 +371,12 @@ export function createProductionManagers({
             cost: [
               new ResourceProductionCost(
                 resources.Money,
-                () => FactoryManager.f_rate("Furs", "money"),
+                () => factoryRate("Furs", "money"),
                 1000,
               ),
               new ResourceProductionCost(
                 resources.Polymer,
-                () => FactoryManager.f_rate("Furs", "polymer"),
+                () => factoryRate("Furs", "polymer"),
                 10,
               ),
             ],
@@ -275,12 +388,12 @@ export function createProductionManagers({
             cost: [
               new ResourceProductionCost(
                 resources.Copper,
-                () => FactoryManager.f_rate("Alloy", "copper"),
+                () => factoryRate("Alloy", "copper"),
                 5,
               ),
               new ResourceProductionCost(
                 resources.Aluminium,
-                () => FactoryManager.f_rate("Alloy", "aluminium"),
+                () => factoryRate("Alloy", "aluminium"),
                 5,
               ),
             ],
@@ -290,24 +403,26 @@ export function createProductionManagers({
             resource: resources.Polymer,
             unlocked: () => haveTech("polymer"),
             cost: function () {
-              return !isLumberRace() ? this.cost_kk : this.cost_normal;
+              return !isLumberRace()
+                ? (this.cost_kk ?? [])
+                : (this.cost_normal ?? []);
             },
             cost_kk: [
               new ResourceProductionCost(
                 resources.Oil,
-                () => FactoryManager.f_rate("Polymer", "oil_kk"),
+                () => factoryRate("Polymer", "oil_kk"),
                 2,
               ),
             ],
             cost_normal: [
               new ResourceProductionCost(
                 resources.Oil,
-                () => FactoryManager.f_rate("Polymer", "oil"),
+                () => factoryRate("Polymer", "oil"),
                 2,
               ),
               new ResourceProductionCost(
                 resources.Lumber,
-                () => FactoryManager.f_rate("Polymer", "lumber"),
+                () => factoryRate("Polymer", "lumber"),
                 50,
               ),
             ],
@@ -319,12 +434,12 @@ export function createProductionManagers({
             cost: [
               new ResourceProductionCost(
                 resources.Coal,
-                () => FactoryManager.f_rate("Nano_Tube", "coal"),
+                () => factoryRate("Nano_Tube", "coal"),
                 15,
               ),
               new ResourceProductionCost(
                 resources.Neutronium,
-                () => FactoryManager.f_rate("Nano_Tube", "neutronium"),
+                () => factoryRate("Nano_Tube", "neutronium"),
                 0.2,
               ),
             ],
@@ -336,12 +451,12 @@ export function createProductionManagers({
             cost: [
               new ResourceProductionCost(
                 resources.Aluminium,
-                () => FactoryManager.f_rate("Stanene", "aluminium"),
+                () => factoryRate("Stanene", "aluminium"),
                 50,
               ),
               new ResourceProductionCost(
                 resources.Nano_Tube,
-                () => FactoryManager.f_rate("Stanene", "nano"),
+                () => factoryRate("Stanene", "nano"),
                 5,
               ),
             ],
@@ -349,7 +464,7 @@ export function createProductionManagers({
         },
         [ResourceProductionCost],
       ),
-      (p) => p.resource.id,
+      (p) => p.resource!.id,
       [
         { s: "production_", p: "enabled" },
         { s: "production_w_", p: "weighting" },
@@ -372,10 +487,7 @@ export function createProductionManagers({
     },
 
     f_rate(production: string, resource: string) {
-      const game = getGame();
-      return game.f_rate[production][resource][
-        game.global.tech["factory"] || 0
-      ];
+      return factoryRate(production, resource);
     },
 
     currentOperating() {
@@ -383,7 +495,7 @@ export function createProductionManagers({
       let total = 0;
       for (let key in this.Productions) {
         let production = this.Productions[key];
-        total += game.global.city.factory[production.id];
+        total += game.global.city.factory![production.id]!;
       }
       return total;
     },
@@ -404,18 +516,20 @@ export function createProductionManagers({
       for (let key in this.Productions) {
         let production = this.Productions[key];
         if (production.unlocked && !production.enabled) {
-          max -= game.global.city.factory[production.id];
+          max -= game.global.city.factory[production.id]!;
         }
       }
       return max;
     },
 
-    currentProduction(production: any) {
+    currentProduction(production: ManagedProduction) {
       const game = getGame();
-      return production.unlocked ? game.global.city.factory[production.id] : 0;
+      return production.unlocked
+        ? game.global.city.factory![production.id]!
+        : 0;
     },
 
-    increaseProduction(production: any, count: number): boolean {
+    increaseProduction(production: ManagedProduction, count: number): boolean {
       if (count === 0 || !production.unlocked) {
         return false;
       }
@@ -430,7 +544,7 @@ export function createProductionManagers({
       });
     },
 
-    decreaseProduction(production: any, count: number): boolean {
+    decreaseProduction(production: ManagedProduction, count: number): boolean {
       if (count === 0 || !production.unlocked) {
         return false;
       }
@@ -463,10 +577,10 @@ export function createProductionManagers({
                 cost: [],
               },
             }),
-            {},
+            {} as Record<string, ProductionDefinition>,
           ),
       ),
-      (p) => p.resource.id,
+      (p) => p.resource!.id,
       [
         { s: "replicator_", p: "enabled" },
         { s: "replicator_w_", p: "weighting" },
@@ -482,7 +596,7 @@ export function createProductionManagers({
       return industryControls.isRendered(this._industryElementId);
     },
 
-    setResource(res: any): boolean {
+    setResource(res: string): boolean {
       return industryControls.select({
         elementId: this._industryElementId,
         id: res,
@@ -500,7 +614,7 @@ export function createProductionManagers({
         Coal: { id: "coal", resource: resources.Coal },
         Aluminium: { id: "alum", resource: resources.Aluminium },
       },
-      (p) => p.resource.id,
+      (p) => p.resource!.id,
       [
         { s: "droid_w_", p: "weighting" },
         { s: "droid_pr_", p: "priority" },
@@ -530,11 +644,11 @@ export function createProductionManagers({
       return getGame().global.interstellar.mining_droid.on;
     },
 
-    currentProduction(production: any) {
+    currentProduction(production: ManagedProduction) {
       return getGame().global.interstellar.mining_droid[production.id];
     },
 
-    increaseProduction(production: any, count: number): boolean {
+    increaseProduction(production: ManagedProduction, count: number): boolean {
       if (count === 0) {
         return false;
       }
@@ -549,7 +663,7 @@ export function createProductionManagers({
       });
     },
 
-    decreaseProduction(production: any, count: number): boolean {
+    decreaseProduction(production: ManagedProduction, count: number): boolean {
       if (count === 0) {
         return false;
       }
@@ -567,7 +681,7 @@ export function createProductionManagers({
 
   const GrapheneManager = {
     _industryElementId: "iGraphene",
-    _graphPlant: null as any,
+    _graphPlant: null as ProductionBuilding | null,
 
     Fuels: {
       Lumber: {
@@ -600,14 +714,14 @@ export function createProductionManagers({
     },
 
     maxOperating() {
-      return this._graphPlant.instance.on;
+      return this._graphPlant!.instance!.on;
     },
 
-    fueledCount(fuel: any) {
-      return this._graphPlant.instance[fuel.id];
+    fueledCount(fuel: GrapheneFuel) {
+      return this._graphPlant!.instance![fuel.id]!;
     },
 
-    increaseFuel(fuel: any, count: number): boolean {
+    increaseFuel(fuel: GrapheneFuel, count: number): boolean {
       if (count === 0 || !fuel.cost.resource.isUnlocked()) {
         return false;
       }
@@ -622,7 +736,7 @@ export function createProductionManagers({
       });
     },
 
-    decreaseFuel(fuel: any, count: number): boolean {
+    decreaseFuel(fuel: GrapheneFuel, count: number): boolean {
       if (count === 0 || !fuel.cost.resource.isUnlocked()) {
         return false;
       }

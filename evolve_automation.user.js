@@ -3759,7 +3759,7 @@ Only continue if you trust the source. Injected code:
             },
             Wood: {
               id: "Wood",
-              unlocked: () => isLumberRace() || getGame().global.race.evil,
+              unlocked: () => isLumberRace() || !!getGame().global.race.evil,
               cost: [
                 new ResourceProductionCost(
                   () => getGame().global.race.evil ? getGame().global.race.soul_eater && getGame().global.race.species !== "wendigo" ? resources.Food : resources.Furs : resources.Lumber,
@@ -3833,6 +3833,9 @@ Only continue if you trust the source. Injected code:
       extraOperating() {
         return getGame().global.city.smelter.Star;
       }
+    }, factoryRate = (production, resource2) => {
+      let game = getGame();
+      return game.f_rate[production][resource2][game.global.tech.factory || 0];
     }, FactoryManager = {
       _industryElementId: "iFactory",
       Productions: addProps(
@@ -3845,7 +3848,7 @@ Only continue if you trust the source. Injected code:
               cost: [
                 new ResourceProductionCost(
                   resources.Furs,
-                  () => FactoryManager.f_rate("Lux", "fur"),
+                  () => factoryRate("Lux", "fur"),
                   5
                 )
               ]
@@ -3857,12 +3860,12 @@ Only continue if you trust the source. Injected code:
               cost: [
                 new ResourceProductionCost(
                   resources.Money,
-                  () => FactoryManager.f_rate("Furs", "money"),
+                  () => factoryRate("Furs", "money"),
                   1e3
                 ),
                 new ResourceProductionCost(
                   resources.Polymer,
-                  () => FactoryManager.f_rate("Furs", "polymer"),
+                  () => factoryRate("Furs", "polymer"),
                   10
                 )
               ]
@@ -3874,12 +3877,12 @@ Only continue if you trust the source. Injected code:
               cost: [
                 new ResourceProductionCost(
                   resources.Copper,
-                  () => FactoryManager.f_rate("Alloy", "copper"),
+                  () => factoryRate("Alloy", "copper"),
                   5
                 ),
                 new ResourceProductionCost(
                   resources.Aluminium,
-                  () => FactoryManager.f_rate("Alloy", "aluminium"),
+                  () => factoryRate("Alloy", "aluminium"),
                   5
                 )
               ]
@@ -3889,24 +3892,24 @@ Only continue if you trust the source. Injected code:
               resource: resources.Polymer,
               unlocked: () => haveTech("polymer"),
               cost: function() {
-                return isLumberRace() ? this.cost_normal : this.cost_kk;
+                return isLumberRace() ? this.cost_normal ?? [] : this.cost_kk ?? [];
               },
               cost_kk: [
                 new ResourceProductionCost(
                   resources.Oil,
-                  () => FactoryManager.f_rate("Polymer", "oil_kk"),
+                  () => factoryRate("Polymer", "oil_kk"),
                   2
                 )
               ],
               cost_normal: [
                 new ResourceProductionCost(
                   resources.Oil,
-                  () => FactoryManager.f_rate("Polymer", "oil"),
+                  () => factoryRate("Polymer", "oil"),
                   2
                 ),
                 new ResourceProductionCost(
                   resources.Lumber,
-                  () => FactoryManager.f_rate("Polymer", "lumber"),
+                  () => factoryRate("Polymer", "lumber"),
                   50
                 )
               ]
@@ -3918,12 +3921,12 @@ Only continue if you trust the source. Injected code:
               cost: [
                 new ResourceProductionCost(
                   resources.Coal,
-                  () => FactoryManager.f_rate("Nano_Tube", "coal"),
+                  () => factoryRate("Nano_Tube", "coal"),
                   15
                 ),
                 new ResourceProductionCost(
                   resources.Neutronium,
-                  () => FactoryManager.f_rate("Nano_Tube", "neutronium"),
+                  () => factoryRate("Nano_Tube", "neutronium"),
                   0.2
                 )
               ]
@@ -3935,12 +3938,12 @@ Only continue if you trust the source. Injected code:
               cost: [
                 new ResourceProductionCost(
                   resources.Aluminium,
-                  () => FactoryManager.f_rate("Stanene", "aluminium"),
+                  () => factoryRate("Stanene", "aluminium"),
                   50
                 ),
                 new ResourceProductionCost(
                   resources.Nano_Tube,
-                  () => FactoryManager.f_rate("Stanene", "nano"),
+                  () => factoryRate("Stanene", "nano"),
                   5
                 )
               ]
@@ -3960,8 +3963,7 @@ Only continue if you trust the source. Injected code:
         return buildings.Factory.count < 1 && buildings.RedFactory.count < 1 && buildings.TauFactory.count < 1 && buildings.WastelandHellFactory.count < 1 ? !1 : industryControls.isRendered(this._industryElementId);
       },
       f_rate(production, resource2) {
-        let game = getGame();
-        return game.f_rate[production][resource2][game.global.tech.factory || 0];
+        return factoryRate(production, resource2);
       },
       currentOperating() {
         let game = getGame(), total = 0;
