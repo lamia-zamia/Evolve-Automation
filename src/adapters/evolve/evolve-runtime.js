@@ -175,9 +175,7 @@ import {
   createStorageSettingsControl,
   createWeightingSettingsControl,
 } from "../../bootstrap/settings/core-settings-controls.ts";
-import { createResearchSettingsIntentHandler } from "../../application/research-settings.ts";
-import { createResearchSettingsBrowserAdapter } from "../browser/research-settings.ts";
-import { createResearchSettingsEvolveAdapter } from "./progression/research/research-settings.ts";
+import { createResearchSettingsControl } from "../../bootstrap/settings/research-settings-control.ts";
 import {
   createGovernmentSettingsControl,
   createPlanetSettingsControl,
@@ -271,18 +269,14 @@ import { getHellSettingsReadModel } from "../../domain/combat/hell-settings.ts";
 import { createMechSettingsIntentHandler } from "../../application/mech-settings.ts";
 import { createMechSettingsBrowserAdapter } from "../browser/mech-settings.ts";
 import { createMechSettingsEvolveAdapter } from "./combat/mech-settings.ts";
-import { createTriggerSettingsIntentHandler } from "../../application/trigger-settings.ts";
-import { createTriggerSettingsBrowserAdapter } from "../browser/trigger-settings.ts";
-import { createTriggerSettingsEvolveAdapter } from "./progression/build/trigger-settings.ts";
+import { createTriggerSettingsControl } from "../../bootstrap/settings/trigger-settings-control.ts";
 import { createFleetSettingsIntentHandler } from "../../application/fleet-settings.ts";
 import { createFleetSettingsBrowserAdapter } from "../browser/fleet-settings.ts";
 import { createFleetSettingsEvolveAdapter } from "./combat/fleet-settings.ts";
 import { createPrestigeSettingsIntentHandler } from "../../application/prestige-settings.ts";
 import { createPrestigeSettingsBrowserAdapter } from "../browser/prestige-settings.ts";
 import { createPrestigeSettingsEvolveAdapter } from "./progression/prestige/prestige-settings.ts";
-import { createEvolutionSettingsIntentHandler } from "../../application/evolution-settings.ts";
-import { createEvolutionSettingsBrowserAdapter } from "../browser/evolution-settings.ts";
-import { createEvolutionSettingsEvolveAdapter } from "./progression/evolution/evolution-settings.ts";
+import { createEvolutionSettingsControl } from "../../bootstrap/settings/evolution-settings-control.ts";
 import { createProductionSettingsControl } from "../../bootstrap/settings/production-settings-control.ts";
 import { createTraitSettingsIntentHandler } from "../../application/trait-settings.ts";
 import { createTraitSettingsBrowserAdapter } from "../browser/trait-settings.ts";
@@ -1153,120 +1147,38 @@ export function startEvolveRuntimeComposition(
     testSurface,
   });
   const { buildAuthoritySettings } = authoritySettingsBrowserAdapter;
-  const evolutionSettingsReader = createEvolutionSettingsEvolveAdapter({
-    getGame: () => getTestContext("evolutionSettings")?.game ?? game,
-    getRaces: () => getTestContext("evolutionSettings")?.races ?? races,
-    getChallenges: () =>
-      getTestContext("evolutionSettings")?.challenges ?? challenges,
-    getUniverses: () =>
-      getTestContext("evolutionSettings")?.universes ?? universes,
-    getSettingsRaw: () =>
-      getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw,
-    getSettings: () =>
-      getTestContext("evolutionSettings")?.settings ?? settings,
-    getSettingsToStore: () =>
-      getTestContext("evolutionSettings")?.evolutionSettingsToStore ??
-      evolutionSettingsToStore,
-    getPrestigeTypes: () =>
-      getTestContext("evolutionSettings")?.prestigeTypes ?? prestigeTypes,
-    getStarLevel: (queueItem) =>
-      (getTestContext("evolutionSettings")?.getStarLevel ?? getStarLevel)(
-        queueItem,
-      ),
+  const evolutionSettingsControl = createEvolutionSettingsControl({
+    getDocument: () => runtimeEnvironment.document,
+    getJQuery: () => $,
+    actions: {
+      buildSettingsSection,
+      addStandardHeading,
+      addSettingsSelect,
+      addSettingsToggle,
+      get sorterHelper() {
+        return sorterHelper;
+      },
+    },
+    getGame: () => game,
+    getRaces: () => races,
+    getChallenges: () => challenges,
+    getUniverses: () => universes,
+    getSettingsRaw: () => settingsRaw,
+    getSettings: () => settings,
+    getSettingsToStore: () => evolutionSettingsToStore,
+    getPrestigeTypes: () => prestigeTypes,
+    getStarLevel: (queueItem) => getStarLevel(queueItem),
+    getState: () => state,
+    resetEvolutionSettings: (...args) => resetEvolutionSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
-  let evolutionSettingsIntentHandler;
-  const evolutionSettingsBrowserAdapter = createEvolutionSettingsBrowserAdapter(
-    {
-      getDocument: () => runtimeEnvironment.document,
-      getJQuery: () => $,
-      reader: evolutionSettingsReader,
-      intents: {
-        handle: (intent) => evolutionSettingsIntentHandler.handle(intent),
-      },
-      getActions: () =>
-        getTestContext("evolutionSettings")?.actions ?? {
-          buildSettingsSection,
-          addStandardHeading,
-          addSettingsSelect,
-          addSettingsToggle,
-          sorterHelper,
-        },
-    },
-  );
-  evolutionSettingsIntentHandler = createEvolutionSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("evolutionSettings")?.resetEvolutionSettings ??
-          resetEvolutionSettings
-        )(true),
-      setTarget: (value) => {
-        const target =
-          getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
-        target.userEvolutionTarget = value;
-        const currentState =
-          getTestContext("evolutionSettings")?.state ?? state;
-        currentState.evolutionTarget = null;
-      },
-      addCurrent: (prestigeType) => {
-        const target =
-          getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
-        const currentSettings =
-          getTestContext("evolutionSettings")?.settings ?? settings;
-        const names =
-          getTestContext("evolutionSettings")?.evolutionSettingsToStore ??
-          evolutionSettingsToStore;
-        const queued = {};
-        for (const name of names)
-          queued[name] = target[name] ?? currentSettings[name];
-        if (prestigeType !== "auto") queued.prestigeType = prestigeType;
-        target.evolutionQueue.push(queued);
-      },
-      remove: (index) => {
-        const target =
-          getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
-        target.evolutionQueue.splice(index, 1);
-      },
-      edit: (index, json) => {
-        try {
-          const value = JSON.parse(json);
-          if (value && typeof value === "object" && !Array.isArray(value)) {
-            const target =
-              getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
-            target.evolutionQueue[index] = value;
-          }
-        } catch {
-          return;
-        }
-      },
-      reorder: (indexes) => {
-        const target =
-          getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
-        target.evolutionQueue = indexes.map(
-          (index) => target.evolutionQueue[index],
-        );
-      },
-      persist: () =>
-        (
-          getTestContext("evolutionSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    render: () =>
-      evolutionSettingsBrowserAdapter.updateEvolutionSettingsContent(),
-    effects: {
-      resetCheckbox: () =>
-        (getTestContext("evolutionSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoEvolution",
-        ),
-    },
-  });
-  const addEvolutionSetting = () =>
-    evolutionSettingsIntentHandler.handle({
-      type: "add-evolution",
-      prestigeType: "auto",
-    });
-  const { buildEvolutionSettings } = evolutionSettingsBrowserAdapter;
+  const {
+    addEvolutionSetting,
+    buildEvolutionSettings,
+    updateEvolutionSettingsContent,
+  } = evolutionSettingsControl;
   const planetSettingsActions = {
     buildSettingsSection,
     addTableInput,
@@ -1285,141 +1197,42 @@ export function startEvolveRuntimeComposition(
     testSurface,
   });
   const { buildPlanetSettings } = planetSettingsBrowserAdapter;
-  const triggerSettingsReader = createTriggerSettingsEvolveAdapter({
-    getTriggerManager: () =>
-      getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager,
-    getCheckTypes: () =>
-      getTestContext("triggerSettings")?.checkTypes ?? checkTypes,
-    getActionInputs: () =>
-      getTestContext("triggerSettings")?.argType ?? argType,
-    getBooleanResultChecks: () =>
-      getTestContext("triggerSettings")?.retBools ?? retBools,
-    getOverrideOnlyChecks: () =>
-      getTestContext("triggerSettings")?.overrideOnlyChecks ??
-      overrideOnlyChecks,
-  });
-  let triggerSettingsIntentHandler;
-  const triggerSettingsBrowserAdapter = createTriggerSettingsBrowserAdapter({
+  const triggerSettingsBrowserAdapter = createTriggerSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    reader: triggerSettingsReader,
-    intents: {
-      handle: (intent) => triggerSettingsIntentHandler.handle(intent),
+    actions: {
+      buildSettingsSection,
+      buildInputNode,
+      get sorterHelper() {
+        return sorterHelper;
+      },
     },
-    getActions: () =>
-      getTestContext("triggerSettings")?.actions ?? {
-        buildSettingsSection,
-        buildInputNode,
-        sorterHelper,
-      },
-  });
-  triggerSettingsIntentHandler = createTriggerSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("triggerSettings")?.resetTriggerSettings ??
-          resetTriggerSettings
-        )(true),
-      addDefault: () => {
-        const manager =
-          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager;
-        manager.AddTrigger("Boolean", false, 1, "research", "tech-club", 0);
-      },
-      update: (seq, field, value) => {
-        const manager =
-          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager;
-        const trigger = manager.getTrigger(seq);
-        if (!trigger) return;
-        trigger[field] = value;
-        trigger.complete = false;
-        if (field === "requirementType") {
-          trigger.requirementId = false;
-          trigger.requirementCount = 1;
-        }
-        if (field === "actionType") {
-          trigger.actionId = "";
-          trigger.actionCount = 0;
-        }
-      },
-      remove: (seq) =>
-        (
-          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager
-        ).RemoveTrigger(seq),
-      duplicate: (seq) =>
-        (
-          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager
-        ).DuplicateTrigger(seq),
-      evalize: (seq) =>
-        (
-          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager
-        ).EvalizeTrigger(seq),
-      reorder: (seqs) => {
-        const manager =
-          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager;
-        seqs.forEach((seq, index) => {
-          const trigger = manager.getTrigger(seq);
-          if (trigger) trigger.priority = index;
-        });
-        manager.sortByPriority();
-      },
-      persist: () =>
-        (
-          getTestContext("triggerSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    render: () => triggerSettingsBrowserAdapter.updateTriggerSettingsContent(),
-    effects: {
-      resetCheckbox: () =>
-        (getTestContext("triggerSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoTrigger",
-        ),
-    },
+    getTriggerManager: () => TriggerManager,
+    getCheckTypes: () => checkTypes,
+    getActionInputs: () => argType,
+    getBooleanResultChecks: () => retBools,
+    getOverrideOnlyChecks: () => overrideOnlyChecks,
+    resetTriggerSettings: (...args) => resetTriggerSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
   const { buildTriggerSettings, updateTriggerSettingsContent } =
     triggerSettingsBrowserAdapter;
-  const researchSettingsActions = {
-    buildSettingsSection,
-    addSettingsList,
-    addSettingsSelect,
-  };
-  const researchSettingsEvolveAdapter = createResearchSettingsEvolveAdapter({
-    getGame: () => getTestContext("researchSettings")?.game ?? game,
-    getTechIds: () => getTestContext("researchSettings")?.techIds ?? techIds,
-  });
-  let researchSettingsIntentHandler;
-  const researchSettingsBrowserAdapter = createResearchSettingsBrowserAdapter({
+  const researchSettingsBrowserAdapter = createResearchSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getReadModel: () =>
-      researchSettingsEvolveAdapter.readResearchSettingsReadModel(),
-    intents: {
-      handle: (intent) => researchSettingsIntentHandler.handle(intent),
+    actions: {
+      buildSettingsSection,
+      addSettingsList,
+      addSettingsSelect,
     },
-    getActions: () =>
-      getTestContext("researchSettings")?.actions ?? researchSettingsActions,
-  });
-  researchSettingsIntentHandler = createResearchSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("researchSettings")?.resetResearchSettings ??
-          resetResearchSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("researchSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: () =>
-      researchSettingsBrowserAdapter.updateResearchSettingsContent(),
-    effects: {
-      resetCheckbox: () =>
-        (getTestContext("researchSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoResearch",
-        ),
-    },
+    getGame: () => game,
+    getTechIds: () => techIds,
+    resetResearchSettings: (...args) => resetResearchSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
   const { buildResearchSettings } = researchSettingsBrowserAdapter;
   const warSettingsReader = createWarSettingsEvolveAdapter({
@@ -5202,16 +5015,8 @@ export function startEvolveRuntimeComposition(
     });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("evolutionSettings", {
-      evolutionSettings: evolutionSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("prestigeSettings", {
       prestigeSettings: prestigeSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("triggerSettings", {
-      triggerSettings: triggerSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("fleetSettings", {
@@ -5236,10 +5041,6 @@ export function startEvolveRuntimeComposition(
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("optionsModal", {
       optionsModal: optionsModalBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("researchSettings", {
-      researchSettings: researchSettingsBrowserAdapter,
     });
   const traitSettingsEvolveAdapter = createTraitSettingsEvolveAdapter({
     getSettingsRaw: () =>

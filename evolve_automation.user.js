@@ -19245,6 +19245,69 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return Object.freeze({ readResearchSettingsReadModel });
   }
 
+  // src/bootstrap/settings/research-settings-control.ts
+  function readRecord2(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue2(context, property, fallback) {
+    let value = readRecord2(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function readContextActions2(context, fallback) {
+    let record = readRecord2(context);
+    return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
+  }
+  function getTestContextReader2(testSurface) {
+    return () => {
+    };
+  }
+  function createResearchSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getGame,
+    getTechIds,
+    resetResearchSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("researchSettings"), evolveAdapter = createResearchSettingsEvolveAdapter({
+      getGame: () => readContextValue2(context(), "game", getGame()),
+      getTechIds: () => readContextValue2(context(), "techIds", getTechIds())
+    }), intentHandler, browserAdapter = createResearchSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readResearchSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions2(context(), actions)
+    });
+    return intentHandler = createResearchSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue2(
+          context(),
+          "resetResearchSettings",
+          resetResearchSettings
+        )(!0),
+        persist: () => readContextValue2(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updateResearchSettingsContent(),
+      effects: {
+        resetCheckbox: () => readContextValue2(
+          context(),
+          "resetCheckbox",
+          resetCheckbox
+        )("autoResearch")
+      }
+    }), browserAdapter;
+  }
+
   // src/application/government-settings.ts
   function createGovernmentSettingsIntentHandler({
     writer,
@@ -19614,18 +19677,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/government-planet-settings-controls.ts
-  function readRecord2(value) {
+  function readRecord3(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue2(context, property, fallback) {
-    let value = readRecord2(context)?.[property];
+  function readContextValue3(context, property, fallback) {
+    let value = readRecord3(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function readContextActions2(context, fallback) {
-    let record = readRecord2(context);
+  function readContextActions3(context, fallback) {
+    let record = readRecord3(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader2(testSurface) {
+  function getTestContextReader3(testSurface) {
     return () => {
     };
   }
@@ -19641,10 +19704,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("governmentSettings"), evolveAdapter = createGovernmentSettingsEvolveAdapter({
-      getGame: () => readContextValue2(context(), "game", getGame()),
-      getGovernmentManager: () => readContextValue2(context(), "GovernmentManager", getGovernmentManager()),
-      getGovernors: () => readContextValue2(context(), "governors", getGovernors())
+    let getTestContext = getTestContextReader3(testSurface), context = () => getTestContext("governmentSettings"), evolveAdapter = createGovernmentSettingsEvolveAdapter({
+      getGame: () => readContextValue3(context(), "game", getGame()),
+      getGovernmentManager: () => readContextValue3(context(), "GovernmentManager", getGovernmentManager()),
+      getGovernors: () => readContextValue3(context(), "governors", getGovernors())
     }), intentHandler, browserAdapter = createGovernmentSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -19652,16 +19715,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextActions2(context(), actions)
+      getActions: () => readContextActions3(context(), actions)
     });
     return intentHandler = createGovernmentSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue2(
+        resetToDefaults: () => readContextValue3(
           context(),
           "resetGovernmentSettings",
           resetGovernmentSettings
         )(!0),
-        persist: () => readContextValue2(
+        persist: () => readContextValue3(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -19669,7 +19732,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: (secondaryPrefix) => browserAdapter.updateGovernmentSettingsContent(secondaryPrefix),
       effects: {
-        resetCheckboxes: () => readContextValue2(
+        resetCheckboxes: () => readContextValue3(
           context(),
           "resetCheckbox",
           resetCheckbox
@@ -19689,11 +19752,11 @@ If script is allowed to reassign non-empty storage it might waste time producing
     persistSettings,
     testSurface
   }) {
-    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("planetSettings"), evolveAdapter = createPlanetSettingsEvolveAdapter({
-      getGame: () => readContextValue2(context(), "game", getGame()),
-      getBiomeList: () => readContextValue2(context(), "biomeList", getBiomeList()),
-      getTraitList: () => readContextValue2(context(), "traitList", getTraitList()),
-      getExtraList: () => readContextValue2(context(), "extraList", getExtraList())
+    let getTestContext = getTestContextReader3(testSurface), context = () => getTestContext("planetSettings"), evolveAdapter = createPlanetSettingsEvolveAdapter({
+      getGame: () => readContextValue3(context(), "game", getGame()),
+      getBiomeList: () => readContextValue3(context(), "biomeList", getBiomeList()),
+      getTraitList: () => readContextValue3(context(), "traitList", getTraitList()),
+      getExtraList: () => readContextValue3(context(), "extraList", getExtraList())
     }), intentHandler, browserAdapter = createPlanetSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -19701,16 +19764,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextActions2(context(), actions)
+      getActions: () => readContextActions3(context(), actions)
     });
     return intentHandler = createPlanetSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue2(
+        resetToDefaults: () => readContextValue3(
           context(),
           "resetPlanetSettings",
           resetPlanetSettings
         )(!0),
-        persist: () => readContextValue2(
+        persist: () => readContextValue3(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -20243,18 +20306,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/building-settings-control.ts
-  function readRecord3(value) {
+  function readRecord4(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue3(context, property, fallback) {
-    let value = readRecord3(context)?.[property];
+  function readContextValue4(context, property, fallback) {
+    let value = readRecord4(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function readContextActions3(context, fallback) {
-    let record = readRecord3(context);
+  function readContextActions4(context, fallback) {
+    let record = readRecord4(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader3(testSurface) {
+  function getTestContextReader4(testSurface) {
     return () => {
     };
   }
@@ -20277,16 +20340,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
     removeBuildingToggles,
     testSurface
   }) {
-    let getTestContext = getTestContextReader3(testSurface), context = () => getTestContext("buildingSettings"), evolveAdapter = createBuildingSettingsEvolveAdapter({
-      getBuildingManager: () => readContextValue3(context(), "BuildingManager", getBuildingManager()),
-      getBuildingIds: () => readContextValue3(context(), "buildingIds", getBuildingIds()),
-      getResources: () => readContextValue3(context(), "resources", getResources()),
-      getLinkedBuildings: () => readContextValue3(context(), "linkedBuildings", getLinkedBuildings()),
-      getCheckCompare: () => readContextValue3(context(), "checkCompare", getCheckCompare()),
-      getOverrideKey: () => readContextValue3(context(), "overrideKey", getOverrideKey()),
-      getRealNumber: () => readContextValue3(context(), "getRealNumber", getRealNumber()),
-      getInitBuildingState: () => readContextValue3(context(), "initBuildingState", getInitBuildingState()),
-      getSettingsRaw: () => readContextValue3(context(), "settingsRaw", getSettingsRaw())
+    let getTestContext = getTestContextReader4(testSurface), context = () => getTestContext("buildingSettings"), evolveAdapter = createBuildingSettingsEvolveAdapter({
+      getBuildingManager: () => readContextValue4(context(), "BuildingManager", getBuildingManager()),
+      getBuildingIds: () => readContextValue4(context(), "buildingIds", getBuildingIds()),
+      getResources: () => readContextValue4(context(), "resources", getResources()),
+      getLinkedBuildings: () => readContextValue4(context(), "linkedBuildings", getLinkedBuildings()),
+      getCheckCompare: () => readContextValue4(context(), "checkCompare", getCheckCompare()),
+      getOverrideKey: () => readContextValue4(context(), "overrideKey", getOverrideKey()),
+      getRealNumber: () => readContextValue4(context(), "getRealNumber", getRealNumber()),
+      getInitBuildingState: () => readContextValue4(context(), "initBuildingState", getInitBuildingState()),
+      getSettingsRaw: () => readContextValue4(context(), "settingsRaw", getSettingsRaw())
     }), intentHandler, browserAdapter = createBuildingSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -20295,16 +20358,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextActions3(context(), actions)
+      getActions: () => readContextActions4(context(), actions)
     });
     return intentHandler = createBuildingSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue3(
+        resetToDefaults: () => readContextValue4(
           context(),
           "resetBuildingSettings",
           resetBuildingSettings
         )(!0),
-        persist: () => readContextValue3(
+        persist: () => readContextValue4(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -20317,12 +20380,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateBuildingSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue3(
+        resetCheckboxes: () => readContextValue4(
           context(),
           "resetCheckbox",
           resetCheckbox
         )("autoBuild", "autoPower"),
-        removeBuildingToggles: () => readContextValue3(
+        removeBuildingToggles: () => readContextValue4(
           context(),
           "removeBuildingToggles",
           removeBuildingToggles
@@ -40029,18 +40092,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/market-settings-control.ts
-  function readRecord4(value) {
+  function readRecord5(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue4(context, property, fallback) {
-    let value = readRecord4(context)?.[property];
+  function readContextValue5(context, property, fallback) {
+    let value = readRecord5(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function readContextActions4(context, fallback) {
-    let record = readRecord4(context);
+  function readContextActions5(context, fallback) {
+    let record = readRecord5(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader4(testSurface) {
+  function getTestContextReader5(testSurface) {
     return () => {
     };
   }
@@ -40058,21 +40121,21 @@ If script is allowed to reassign non-empty storage it might waste time producing
     removeMarketToggles,
     testSurface
   }) {
-    let getTestContext = getTestContextReader4(testSurface), context = () => getTestContext("marketSettings"), reader = createMarketSettingsEvolveAdapter({
-      getMarketManager: () => readContextValue4(context(), "MarketManager", getMarketManager()),
-      getResources: () => readContextValue4(context(), "resources", getResources()),
-      getPoly: () => readContextValue4(context(), "poly", getPoly())
+    let getTestContext = getTestContextReader5(testSurface), context = () => getTestContext("marketSettings"), reader = createMarketSettingsEvolveAdapter({
+      getMarketManager: () => readContextValue5(context(), "MarketManager", getMarketManager()),
+      getResources: () => readContextValue5(context(), "resources", getResources()),
+      getPoly: () => readContextValue5(context(), "poly", getPoly())
     }), reorderer = createMarketSettingsWriter({
-      getMarketManager: () => readContextValue4(context(), "MarketManager", getMarketManager()),
-      getSettingsRaw: () => readContextValue4(context(), "settingsRaw", getSettingsRaw())
+      getMarketManager: () => readContextValue5(context(), "MarketManager", getMarketManager()),
+      getSettingsRaw: () => readContextValue5(context(), "settingsRaw", getSettingsRaw())
     }), intentHandler = createMarketSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue4(
+        resetToDefaults: () => readContextValue5(
           context(),
           "resetMarketSettings",
           resetMarketSettings
         )(!0),
-        persist: () => readContextValue4(
+        persist: () => readContextValue5(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -40081,12 +40144,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateMarketSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue4(
+        resetCheckboxes: () => readContextValue5(
           context(),
           "resetCheckbox",
           resetCheckbox
         )("autoMarket", "autoGalaxyMarket"),
-        removeMarketToggles: () => readContextValue4(
+        removeMarketToggles: () => readContextValue5(
           context(),
           "removeMarketToggles",
           removeMarketToggles
@@ -40097,7 +40160,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       getJQuery,
       reader,
       intents: intentHandler,
-      getActions: () => readContextActions4(context(), actions)
+      getActions: () => readContextActions5(context(), actions)
     });
     return browserAdapter;
   }
@@ -41193,6 +41256,120 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         });
       }
     });
+  }
+
+  // src/bootstrap/settings/trigger-settings-control.ts
+  function readRecord6(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue6(context, property, fallback) {
+    let value = readRecord6(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function readContextActions6(context, fallback) {
+    let record = readRecord6(context);
+    return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
+  }
+  function getTestContextReader6(testSurface) {
+    return () => {
+    };
+  }
+  function createTriggerSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getTriggerManager,
+    getCheckTypes,
+    getActionInputs,
+    getBooleanResultChecks,
+    getOverrideOnlyChecks,
+    resetTriggerSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader6(testSurface), context = () => getTestContext("triggerSettings"), reader = createTriggerSettingsEvolveAdapter({
+      getTriggerManager: () => readContextValue6(context(), "TriggerManager", getTriggerManager()),
+      getCheckTypes: () => readContextValue6(context(), "checkTypes", getCheckTypes()),
+      getActionInputs: () => readContextValue6(context(), "argType", getActionInputs()),
+      getBooleanResultChecks: () => readContextValue6(context(), "retBools", getBooleanResultChecks()),
+      getOverrideOnlyChecks: () => readContextValue6(
+        context(),
+        "overrideOnlyChecks",
+        getOverrideOnlyChecks()
+      )
+    }), intentHandler, browserAdapter = createTriggerSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      reader,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions6(context(), actions)
+    });
+    return intentHandler = createTriggerSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue6(
+          context(),
+          "resetTriggerSettings",
+          resetTriggerSettings
+        )(!0),
+        addDefault: () => {
+          readContextValue6(
+            context(),
+            "TriggerManager",
+            getTriggerManager()
+          ).AddTrigger("Boolean", !1, 1, "research", "tech-club", 0);
+        },
+        update: (seq, field, value) => {
+          let trigger = readContextValue6(
+            context(),
+            "TriggerManager",
+            getTriggerManager()
+          ).getTrigger(seq);
+          trigger && (trigger[field] = value, trigger.complete = !1, field === "requirementType" && (trigger.requirementId = !1, trigger.requirementCount = 1), field === "actionType" && (trigger.actionId = "", trigger.actionCount = 0));
+        },
+        remove: (seq) => readContextValue6(
+          context(),
+          "TriggerManager",
+          getTriggerManager()
+        ).RemoveTrigger(seq),
+        duplicate: (seq) => readContextValue6(
+          context(),
+          "TriggerManager",
+          getTriggerManager()
+        ).DuplicateTrigger(seq),
+        evalize: (seq) => readContextValue6(
+          context(),
+          "TriggerManager",
+          getTriggerManager()
+        ).EvalizeTrigger(seq),
+        reorder: (seqs) => {
+          let manager = readContextValue6(
+            context(),
+            "TriggerManager",
+            getTriggerManager()
+          );
+          seqs.forEach((seq, index) => {
+            let trigger = manager.getTrigger(seq);
+            trigger && (trigger.priority = index);
+          }), manager.sortByPriority();
+        },
+        persist: () => readContextValue6(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      render: () => browserAdapter.updateTriggerSettingsContent(),
+      effects: {
+        resetCheckbox: () => readContextValue6(
+          context(),
+          "resetCheckbox",
+          resetCheckbox
+        )("autoTrigger")
+      }
+    }), browserAdapter;
   }
 
   // src/application/fleet-settings.ts
@@ -42319,6 +42496,150 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
   }
 
+  // src/bootstrap/settings/evolution-settings-control.ts
+  function readRecord7(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue7(context, property, fallback) {
+    let value = readRecord7(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function readContextActions7(context, fallback) {
+    let record = readRecord7(context);
+    return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
+  }
+  function getTestContextReader7(testSurface) {
+    return () => {
+    };
+  }
+  function createEvolutionSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getGame,
+    getRaces,
+    getChallenges,
+    getUniverses,
+    getSettingsRaw,
+    getSettings,
+    getSettingsToStore,
+    getPrestigeTypes,
+    getStarLevel,
+    getState,
+    resetEvolutionSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader7(testSurface), context = () => getTestContext("evolutionSettings"), reader = createEvolutionSettingsEvolveAdapter({
+      getGame: () => readContextValue7(context(), "game", getGame()),
+      getRaces: () => readContextValue7(context(), "races", getRaces()),
+      getChallenges: () => readContextValue7(context(), "challenges", getChallenges()),
+      getUniverses: () => readContextValue7(context(), "universes", getUniverses()),
+      getSettingsRaw: () => readContextValue7(context(), "settingsRaw", getSettingsRaw()),
+      getSettings: () => readContextValue7(context(), "settings", getSettings()),
+      getSettingsToStore: () => readContextValue7(
+        context(),
+        "evolutionSettingsToStore",
+        getSettingsToStore()
+      ),
+      getPrestigeTypes: () => readContextValue7(context(), "prestigeTypes", getPrestigeTypes()),
+      getStarLevel: (queueItem) => readContextValue7(context(), "getStarLevel", getStarLevel)(queueItem)
+    }), intentHandler, browserAdapter = createEvolutionSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      reader,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions7(context(), actions)
+    });
+    return intentHandler = createEvolutionSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue7(
+          context(),
+          "resetEvolutionSettings",
+          resetEvolutionSettings
+        )(!0),
+        setTarget: (value) => {
+          let target = readContextValue7(
+            context(),
+            "settingsRaw",
+            getSettingsRaw()
+          );
+          target.userEvolutionTarget = value, readContextValue7(
+            context(),
+            "state",
+            getState()
+          ).evolutionTarget = null;
+        },
+        addCurrent: (prestigeType) => {
+          let target = readContextValue7(
+            context(),
+            "settingsRaw",
+            getSettingsRaw()
+          ), currentSettings = readContextValue7(
+            context(),
+            "settings",
+            getSettings()
+          ), names = readContextValue7(
+            context(),
+            "evolutionSettingsToStore",
+            getSettingsToStore()
+          ), queued = {};
+          for (let name of names)
+            queued[name] = target[name] ?? currentSettings[name];
+          prestigeType !== "auto" && (queued.prestigeType = prestigeType), target.evolutionQueue.push(queued);
+        },
+        remove: (index) => {
+          readContextValue7(
+            context(),
+            "settingsRaw",
+            getSettingsRaw()
+          ).evolutionQueue.splice(index, 1);
+        },
+        edit: (index, json) => {
+          try {
+            let value = JSON.parse(json);
+            value && typeof value == "object" && !Array.isArray(value) && (readContextValue7(
+              context(),
+              "settingsRaw",
+              getSettingsRaw()
+            ).evolutionQueue[index] = value);
+          } catch {
+            return;
+          }
+        },
+        reorder: (indexes) => {
+          let target = readContextValue7(
+            context(),
+            "settingsRaw",
+            getSettingsRaw()
+          );
+          target.evolutionQueue = indexes.map(
+            (index) => target.evolutionQueue[index]
+          );
+        },
+        persist: () => readContextValue7(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      render: () => browserAdapter.updateEvolutionSettingsContent(),
+      effects: {
+        resetCheckbox: () => readContextValue7(
+          context(),
+          "resetCheckbox",
+          resetCheckbox
+        )("autoEvolution")
+      }
+    }), {
+      ...browserAdapter,
+      addEvolutionSetting: () => intentHandler.handle({ type: "add-evolution", prestigeType: "auto" })
+    };
+  }
+
   // src/application/production-settings.ts
   function createProductionSettingsIntentHandler({
     writer,
@@ -42858,14 +43179,14 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/production-settings-control.ts
-  function readRecord5(value) {
+  function readRecord8(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue5(context, property, fallback) {
-    let value = readRecord5(context)?.[property];
+  function readContextValue8(context, property, fallback) {
+    let value = readRecord8(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function getTestContextReader5(testSurface) {
+  function getTestContextReader8(testSurface) {
     return () => {
     };
   }
@@ -42887,14 +43208,14 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     setSettingsRaw,
     testSurface
   }) {
-    let getTestContext = getTestContextReader5(testSurface), context = () => getTestContext("productionSettings"), evolveAdapter = createProductionSettingsEvolveAdapter({
-      getResources: () => readContextValue5(context(), "resources", getResources()),
-      getCraftablesList: () => readContextValue5(context(), "craftablesList", getCraftablesList()),
-      getSmelterManager: () => readContextValue5(context(), "SmelterManager", getSmelterManager()),
-      getFactoryManager: () => readContextValue5(context(), "FactoryManager", getFactoryManager()),
-      getDroidManager: () => readContextValue5(context(), "DroidManager", getDroidManager()),
-      getReplicatorManager: () => readContextValue5(context(), "ReplicatorManager", getReplicatorManager()),
-      getSettingsRaw: () => readContextValue5(context(), "settingsRaw", getSettingsRaw()),
+    let getTestContext = getTestContextReader8(testSurface), context = () => getTestContext("productionSettings"), evolveAdapter = createProductionSettingsEvolveAdapter({
+      getResources: () => readContextValue8(context(), "resources", getResources()),
+      getCraftablesList: () => readContextValue8(context(), "craftablesList", getCraftablesList()),
+      getSmelterManager: () => readContextValue8(context(), "SmelterManager", getSmelterManager()),
+      getFactoryManager: () => readContextValue8(context(), "FactoryManager", getFactoryManager()),
+      getDroidManager: () => readContextValue8(context(), "DroidManager", getDroidManager()),
+      getReplicatorManager: () => readContextValue8(context(), "ReplicatorManager", getReplicatorManager()),
+      getSettingsRaw: () => readContextValue8(context(), "settingsRaw", getSettingsRaw()),
       consumptionBalanceTarget: 120
     }), intentHandler, browserAdapter = createProductionSettingsBrowserAdapter({
       getDocument,
@@ -42907,12 +43228,12 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
     return intentHandler = createProductionSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue5(
+        resetToDefaults: () => readContextValue8(
           context(),
           "resetProductionSettings",
           resetProductionSettings
         )(!0),
-        persist: () => readContextValue5(
+        persist: () => readContextValue8(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -42921,7 +43242,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       renderSettingsContent: () => browserAdapter.updateProductionSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue5(context(), "resetCheckbox", resetCheckbox)(
+        resetCheckboxes: () => readContextValue8(context(), "resetCheckbox", resetCheckbox)(
           "autoQuarry",
           "autoMine",
           "autoExtractor",
@@ -42932,7 +43253,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           "autoMiningDroid",
           "autoReplicator"
         ),
-        removeCraftToggles: () => readContextValue5(context(), "removeCraftToggles", removeCraftToggles)()
+        removeCraftToggles: () => readContextValue8(context(), "removeCraftToggles", removeCraftToggles)()
       }
     }), browserAdapter;
   }
@@ -47943,83 +48264,37 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       resetAuthoritySettings: (...args) => resetAuthoritySettings(...args),
       persistSettings: () => updateSettingsFromState(),
       testSurface
-    }), { buildAuthoritySettings } = authoritySettingsBrowserAdapter, evolutionSettingsReader = createEvolutionSettingsEvolveAdapter({
-      getGame: () => getTestContext("evolutionSettings")?.game ?? game,
-      getRaces: () => getTestContext("evolutionSettings")?.races ?? races,
-      getChallenges: () => getTestContext("evolutionSettings")?.challenges ?? challenges,
-      getUniverses: () => getTestContext("evolutionSettings")?.universes ?? universes,
-      getSettingsRaw: () => getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw,
-      getSettings: () => getTestContext("evolutionSettings")?.settings ?? settings,
-      getSettingsToStore: () => getTestContext("evolutionSettings")?.evolutionSettingsToStore ?? evolutionSettingsToStore,
-      getPrestigeTypes: () => getTestContext("evolutionSettings")?.prestigeTypes ?? prestigeTypes,
-      getStarLevel: (queueItem) => (getTestContext("evolutionSettings")?.getStarLevel ?? getStarLevel)(
-        queueItem
-      )
-    }), evolutionSettingsIntentHandler, evolutionSettingsBrowserAdapter = createEvolutionSettingsBrowserAdapter(
-      {
-        getDocument: () => runtimeEnvironment.document,
-        getJQuery: () => $,
-        reader: evolutionSettingsReader,
-        intents: {
-          handle: (intent) => evolutionSettingsIntentHandler.handle(intent)
-        },
-        getActions: () => getTestContext("evolutionSettings")?.actions ?? {
-          buildSettingsSection,
-          addStandardHeading,
-          addSettingsSelect,
-          addSettingsToggle,
-          sorterHelper
+    }), { buildAuthoritySettings } = authoritySettingsBrowserAdapter, evolutionSettingsControl = createEvolutionSettingsControl({
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addStandardHeading,
+        addSettingsSelect,
+        addSettingsToggle,
+        get sorterHelper() {
+          return sorterHelper;
         }
-      }
-    );
-    evolutionSettingsIntentHandler = createEvolutionSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("evolutionSettings")?.resetEvolutionSettings ?? resetEvolutionSettings)(!0),
-        setTarget: (value) => {
-          let target = getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
-          target.userEvolutionTarget = value;
-          let currentState = getTestContext("evolutionSettings")?.state ?? state;
-          currentState.evolutionTarget = null;
-        },
-        addCurrent: (prestigeType) => {
-          let target = getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw, currentSettings = getTestContext("evolutionSettings")?.settings ?? settings, names = getTestContext("evolutionSettings")?.evolutionSettingsToStore ?? evolutionSettingsToStore, queued = {};
-          for (let name of names)
-            queued[name] = target[name] ?? currentSettings[name];
-          prestigeType !== "auto" && (queued.prestigeType = prestigeType), target.evolutionQueue.push(queued);
-        },
-        remove: (index) => {
-          (getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw).evolutionQueue.splice(index, 1);
-        },
-        edit: (index, json) => {
-          try {
-            let value = JSON.parse(json);
-            if (value && typeof value == "object" && !Array.isArray(value)) {
-              let target = getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
-              target.evolutionQueue[index] = value;
-            }
-          } catch {
-            return;
-          }
-        },
-        reorder: (indexes) => {
-          let target = getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
-          target.evolutionQueue = indexes.map(
-            (index) => target.evolutionQueue[index]
-          );
-        },
-        persist: () => (getTestContext("evolutionSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
       },
-      render: () => evolutionSettingsBrowserAdapter.updateEvolutionSettingsContent(),
-      effects: {
-        resetCheckbox: () => (getTestContext("evolutionSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoEvolution"
-        )
-      }
-    });
-    let addEvolutionSetting = () => evolutionSettingsIntentHandler.handle({
-      type: "add-evolution",
-      prestigeType: "auto"
-    }), { buildEvolutionSettings } = evolutionSettingsBrowserAdapter, planetSettingsBrowserAdapter = createPlanetSettingsControl({
+      getGame: () => game,
+      getRaces: () => races,
+      getChallenges: () => challenges,
+      getUniverses: () => universes,
+      getSettingsRaw: () => settingsRaw,
+      getSettings: () => settings,
+      getSettingsToStore: () => evolutionSettingsToStore,
+      getPrestigeTypes: () => prestigeTypes,
+      getStarLevel: (queueItem) => getStarLevel(queueItem),
+      getState: () => state,
+      resetEvolutionSettings: (...args) => resetEvolutionSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface
+    }), {
+      addEvolutionSetting,
+      buildEvolutionSettings,
+      updateEvolutionSettingsContent
+    } = evolutionSettingsControl, planetSettingsBrowserAdapter = createPlanetSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       actions: {
@@ -48034,83 +48309,40 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       resetPlanetSettings: (...args) => resetPlanetSettings(...args),
       persistSettings: () => updateSettingsFromState(),
       testSurface
-    }), { buildPlanetSettings } = planetSettingsBrowserAdapter, triggerSettingsReader = createTriggerSettingsEvolveAdapter({
-      getTriggerManager: () => getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager,
-      getCheckTypes: () => getTestContext("triggerSettings")?.checkTypes ?? checkTypes,
-      getActionInputs: () => getTestContext("triggerSettings")?.argType ?? argType,
-      getBooleanResultChecks: () => getTestContext("triggerSettings")?.retBools ?? retBools,
-      getOverrideOnlyChecks: () => getTestContext("triggerSettings")?.overrideOnlyChecks ?? overrideOnlyChecks
-    }), triggerSettingsIntentHandler, triggerSettingsBrowserAdapter = createTriggerSettingsBrowserAdapter({
+    }), { buildPlanetSettings } = planetSettingsBrowserAdapter, triggerSettingsBrowserAdapter = createTriggerSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      reader: triggerSettingsReader,
-      intents: {
-        handle: (intent) => triggerSettingsIntentHandler.handle(intent)
-      },
-      getActions: () => getTestContext("triggerSettings")?.actions ?? {
+      actions: {
         buildSettingsSection,
         buildInputNode,
-        sorterHelper
-      }
-    });
-    triggerSettingsIntentHandler = createTriggerSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("triggerSettings")?.resetTriggerSettings ?? resetTriggerSettings)(!0),
-        addDefault: () => {
-          (getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager).AddTrigger("Boolean", !1, 1, "research", "tech-club", 0);
-        },
-        update: (seq, field, value) => {
-          let trigger = (getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager).getTrigger(seq);
-          trigger && (trigger[field] = value, trigger.complete = !1, field === "requirementType" && (trigger.requirementId = !1, trigger.requirementCount = 1), field === "actionType" && (trigger.actionId = "", trigger.actionCount = 0));
-        },
-        remove: (seq) => (getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager).RemoveTrigger(seq),
-        duplicate: (seq) => (getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager).DuplicateTrigger(seq),
-        evalize: (seq) => (getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager).EvalizeTrigger(seq),
-        reorder: (seqs) => {
-          let manager = getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager;
-          seqs.forEach((seq, index) => {
-            let trigger = manager.getTrigger(seq);
-            trigger && (trigger.priority = index);
-          }), manager.sortByPriority();
-        },
-        persist: () => (getTestContext("triggerSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
+        get sorterHelper() {
+          return sorterHelper;
+        }
       },
-      render: () => triggerSettingsBrowserAdapter.updateTriggerSettingsContent(),
-      effects: {
-        resetCheckbox: () => (getTestContext("triggerSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoTrigger"
-        )
-      }
-    });
-    let { buildTriggerSettings, updateTriggerSettingsContent } = triggerSettingsBrowserAdapter, researchSettingsActions = {
-      buildSettingsSection,
-      addSettingsList,
-      addSettingsSelect
-    }, researchSettingsEvolveAdapter = createResearchSettingsEvolveAdapter({
-      getGame: () => getTestContext("researchSettings")?.game ?? game,
-      getTechIds: () => getTestContext("researchSettings")?.techIds ?? techIds
-    }), researchSettingsIntentHandler, researchSettingsBrowserAdapter = createResearchSettingsBrowserAdapter({
+      getTriggerManager: () => TriggerManager,
+      getCheckTypes: () => checkTypes,
+      getActionInputs: () => argType,
+      getBooleanResultChecks: () => retBools,
+      getOverrideOnlyChecks: () => overrideOnlyChecks,
+      resetTriggerSettings: (...args) => resetTriggerSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface
+    }), { buildTriggerSettings, updateTriggerSettingsContent } = triggerSettingsBrowserAdapter, researchSettingsBrowserAdapter = createResearchSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      getReadModel: () => researchSettingsEvolveAdapter.readResearchSettingsReadModel(),
-      intents: {
-        handle: (intent) => researchSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection,
+        addSettingsList,
+        addSettingsSelect
       },
-      getActions: () => getTestContext("researchSettings")?.actions ?? researchSettingsActions
-    });
-    researchSettingsIntentHandler = createResearchSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("researchSettings")?.resetResearchSettings ?? resetResearchSettings)(!0),
-        persist: () => (getTestContext("researchSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
-      },
-      renderSettingsContent: () => researchSettingsBrowserAdapter.updateResearchSettingsContent(),
-      effects: {
-        resetCheckbox: () => (getTestContext("researchSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoResearch"
-        )
-      }
-    });
-    let { buildResearchSettings } = researchSettingsBrowserAdapter, warSettingsReader = createWarSettingsEvolveAdapter({
+      getGame: () => game,
+      getTechIds: () => techIds,
+      resetResearchSettings: (...args) => resetResearchSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface
+    }), { buildResearchSettings } = researchSettingsBrowserAdapter, warSettingsReader = createWarSettingsEvolveAdapter({
       getSpyManager: () => getTestContext("warSettings")?.SpyManager ?? SpyManager,
       getGame: () => getTestContext("warSettings")?.game ?? game
     }), warSettingsActions = {
