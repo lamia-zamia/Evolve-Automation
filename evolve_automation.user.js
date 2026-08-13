@@ -925,12 +925,12 @@
     return context.gameLogTypeIds.forEach((id) => def["log_" + id] = !0), def.log_mercenary = !1, def.log_multi_construction = !1, def.log_prestige = !1, def.log_prestige_format = "Reset: {resetType}, Species: {species}, Duration: {timeStamp} days", { def };
   }
   function computePlanetDefaults(context) {
-    let { biomeList, planetBiomes, traitList, planetTraits, extraList } = context, def = {};
-    return biomeList.forEach(
-      (biome) => def["biome_w_" + biome] = (planetBiomes.length - planetBiomes.indexOf(biome)) * 10
-    ), traitList.forEach(
-      (trait2) => def["trait_w_" + trait2] = (planetTraits.length - planetTraits.indexOf(trait2)) * 10
-    ), extraList.forEach((extra) => def["extra_w_" + extra] = 0), def.extra_w_Achievement = 1e3, { def };
+    let { biomeList: biomeList2, planetBiomes: planetBiomes2, traitList: traitList2, planetTraits: planetTraits2, extraList: extraList2 } = context, def = {};
+    return biomeList2.forEach(
+      (biome) => def["biome_w_" + biome] = (planetBiomes2.length - planetBiomes2.indexOf(biome)) * 10
+    ), traitList2.forEach(
+      (trait2) => def["trait_w_" + trait2] = (planetTraits2.length - planetTraits2.indexOf(trait2)) * 10
+    ), extraList2.forEach((extra) => def["extra_w_" + extra] = 0), def.extra_w_Achievement = 1e3, { def };
   }
   function computeMarketDefaults(context) {
     let priorityIds = [...context.tradableResourceIds].reverse(), def = {
@@ -1392,7 +1392,7 @@
   }
   function migrateSettingsRecord(settingsRaw, context) {
     let {
-      settingsSections,
+      settingsSections: settingsSections2,
       defaultResets,
       prestigeAscensionSkipCustom,
       techIds,
@@ -1406,7 +1406,7 @@
       overrides: {},
       triggers: []
     };
-    settingsSections.forEach((id) => def[id + "SettingsCollapsed"] = !0), applySettings(settingsRaw, def, !1), has(settingsRaw, "masterScriptToggle") && (has(settingsRaw, "autoPrestige") || (settingsRaw.autoPrestige = !0, [
+    settingsSections2.forEach((id) => def[id + "SettingsCollapsed"] = !0), applySettings(settingsRaw, def, !1), has(settingsRaw, "masterScriptToggle") && (has(settingsRaw, "autoPrestige") || (settingsRaw.autoPrestige = !0, [
       "job_b1_farmer",
       "job_b2_farmer",
       "job_b3_farmer",
@@ -3738,7 +3738,7 @@ Only continue if you trust the source. Injected code:
     isLumberRace,
     addProps,
     normalizeProperties,
-    replicableResources,
+    replicableResources: replicableResources2,
     ResourceProductionCost
   }) {
     let resources = getResources(), SmelterManager = {
@@ -4038,7 +4038,7 @@ Only continue if you trust the source. Injected code:
       _industryElementId: "iReplicator",
       Productions: addProps(
         normalizeProperties(
-          replicableResources.map((resId) => resources[resId]).reduce(
+          replicableResources2.map((resId) => resources[resId]).reduce(
             (a, res) => res ? {
               ...a,
               [res.id]: {
@@ -22487,7 +22487,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     retirementChallengeAssistActive,
     retirementPreparationMissing,
     isAchievementUnlocked: isAchievementUnlocked2,
-    fanatAchievements,
+    fanatAchievements: fanatAchievements2,
     formatTechConflict: formatTechConflict2,
     getNumberString
   }) {
@@ -22505,7 +22505,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           retirementChallengeAssistActive,
           retirementPreparationMissing,
           isAchievementUnlocked: isAchievementUnlocked2,
-          fanatAchievements
+          fanatAchievements: fanatAchievements2
         }
       );
       if (readResult.status === "unavailable")
@@ -24136,6 +24136,232 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return { adjustTradeRoutes };
   }
 
+  // src/adapters/evolve/runtime-catalogs.ts
+  var biomeList = [
+    "grassland",
+    "oceanic",
+    "forest",
+    "desert",
+    "volcanic",
+    "tundra",
+    "savanna",
+    "swamp",
+    "taiga",
+    "ashland",
+    "hellscape",
+    "eden"
+  ], traitList = [
+    "none",
+    "toxic",
+    "mellow",
+    "rage",
+    "stormy",
+    "ozone",
+    "magnetic",
+    "trashed",
+    "elliptical",
+    "flare",
+    "dense",
+    "unstable",
+    "permafrost",
+    "retrograde",
+    "kamikaze"
+  ], extraList = [
+    "Achievement",
+    "Orbit",
+    "Copper",
+    "Iron",
+    "Aluminium",
+    "Coal",
+    "Oil",
+    "Titanium",
+    "Uranium",
+    "Iridium"
+  ], planetBiomes = [
+    "eden",
+    "ashland",
+    "volcanic",
+    "taiga",
+    "tundra",
+    "swamp",
+    "oceanic",
+    "forest",
+    "savanna",
+    "grassland",
+    "desert",
+    "hellscape"
+  ], planetTraits = [
+    "elliptical",
+    "magnetic",
+    "permafrost",
+    "rage",
+    "retrograde",
+    "none",
+    "stormy",
+    "toxic",
+    "trashed",
+    "dense",
+    "unstable",
+    "ozone",
+    "mellow",
+    "flare",
+    "kamikaze"
+  ], planetBiomeGenus = {
+    hellscape: "demonic",
+    eden: "angelic",
+    oceanic: "aquatic",
+    forest: "fey",
+    desert: "sand",
+    volcanic: "heat",
+    tundra: "polar"
+  }, fanatAchievements = [
+    { god: "sharkin", race: "entish", achieve: "madagascar_tree" },
+    { god: "sporgar", race: "human", achieve: "infested" },
+    { god: "shroomi", race: "troll", achieve: "godwin" }
+  ], challenges = [
+    [
+      { id: "plasmid", trait: "no_plasmid" },
+      { id: "mastery", trait: "weak_mastery" },
+      { id: "nerfed", trait: "nerfed" }
+    ],
+    [
+      { id: "crispr", trait: "no_crispr" },
+      { id: "badgenes", trait: "badgenes" }
+    ],
+    [{ id: "trade", trait: "no_trade" }],
+    [{ id: "craft", trait: "no_craft" }],
+    [{ id: "joyless", trait: "joyless" }],
+    [{ id: "steelen", trait: "steelen" }],
+    [{ id: "decay", trait: "decay" }],
+    [{ id: "emfield", trait: "emfield" }],
+    [{ id: "inflation", trait: "inflation" }],
+    [{ id: "sludge", trait: "sludge" }],
+    [{ id: "ultra_sludge", trait: "ultra_sludge" }],
+    [{ id: "orbit_decay", trait: "orbit_decay" }],
+    [
+      { id: "gravity_well", trait: "gravity_well" },
+      { id: "witch_hunter", trait: "witch_hunter" },
+      { id: "warlord", trait: "warlord" }
+    ],
+    [{ id: "junker", trait: "junker" }],
+    [{ id: "cataclysm", trait: "cataclysm" }],
+    [{ id: "banana", trait: "banana" }],
+    [{ id: "truepath", trait: "truepath" }],
+    [{ id: "lone_survivor", trait: "lone_survivor" }],
+    [{ id: "fasting", trait: "fasting" }]
+  ], governors = [
+    "soldier",
+    "criminal",
+    "entrepreneur",
+    "educator",
+    "spiritual",
+    "bluecollar",
+    "noble",
+    "media",
+    "sports",
+    "bureaucrat"
+  ], evolutionSettingsToStore = [
+    "userEvolutionTarget",
+    "userEvolutionGenus",
+    "prestigeType",
+    ...challenges.map((c) => "challenge_" + c[0].id)
+  ], logIgnore = [
+    "food",
+    "lumber",
+    "stone",
+    "chrysotile",
+    "slaughter",
+    "s_alter",
+    "slave_market",
+    "horseshoe",
+    "assembly",
+    "cloning_facility",
+    "ambush_patrol",
+    "raid_supplies",
+    "siege_fortress"
+  ], galaxyRegions = [
+    "gxy_stargate",
+    "gxy_gateway",
+    "gxy_gorddon",
+    "gxy_alien1",
+    "gxy_alien2",
+    "gxy_chthonian"
+  ], settingsSections = [
+    "toggle",
+    "general",
+    "prestige",
+    "evolution",
+    "research",
+    "market",
+    "storage",
+    "production",
+    "war",
+    "hell",
+    "fleet",
+    "job",
+    "building",
+    "project",
+    "government",
+    "authority",
+    "logging",
+    "trait",
+    "weighting",
+    "ejector",
+    "planet",
+    "mech",
+    "magic",
+    "trigger"
+  ], mutationCostMultipliers = {
+    sludge: { gain: 10, purge: 10 },
+    ultra_sludge: { gain: 10, purge: 10 },
+    custom: { gain: 10, purge: 10 }
+  }, mutationCostMultipliersGenus = { hybrid: { gain: 2, purge: 2 } }, specialRaceTraits = {
+    beast_of_burden: "reindeer",
+    photosynth: "plant"
+  }, conflictingTraits = [["dumb", "smart"]], replicableResources = [
+    "Food",
+    "Lumber",
+    "Chrysotile",
+    "Stone",
+    "Crystal",
+    "Furs",
+    "Copper",
+    "Iron",
+    "Aluminium",
+    "Cement",
+    "Coal",
+    "Oil",
+    "Uranium",
+    "Steel",
+    "Titanium",
+    "Alloy",
+    "Polymer",
+    "Iridium",
+    "Helium_3",
+    "Deuterium",
+    "Neutronium",
+    "Adamantite",
+    "Infernite",
+    "Elerium",
+    "Nano_Tube",
+    "Graphene",
+    "Stanene",
+    "Bolognium",
+    "Unobtainium",
+    "Vitreloy",
+    "Orichalcum",
+    "Water",
+    "Plywood",
+    "Brick",
+    "Wrought_Iron",
+    "Sheet_Metal",
+    "Mythril",
+    "Aerogel",
+    "Nanoweave",
+    "Scarletite",
+    "Quantium"
+  ];
+
   // src/adapters/browser/government-controls.ts
   function createGovernmentControls(getVueById) {
     function candidateView() {
@@ -24568,8 +24794,8 @@ If script is allowed to reassign non-empty storage it might waste time producing
         let global = requireRecord(game.global, "game.global"), civic = requireRecord(global.civic, "game.global.civic"), garrison = requireRecord(
           civic.garrison,
           "game.global.civic.garrison"
-        ), tech = requireRecord(global.tech, "game.global.tech"), planetTraits = requireRecord(global.city, "game.global.city").ptrait;
-        if (!Array.isArray(planetTraits))
+        ), tech = requireRecord(global.tech, "game.global.tech"), planetTraits2 = requireRecord(global.city, "game.global.city").ptrait;
+        if (!Array.isArray(planetTraits2))
           throw new TypeError("game.global.city.ptrait must be an array");
         let gameSettings = requireRecord(
           global.settings,
@@ -24632,7 +24858,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           armoredDivisor: mayProtect ? readTrait(dependencies, "armored", 0, "-") : 1,
           frailPenalty: mayProtect ? readTrait(dependencies, "frail", 0) : 0,
           highPopulationMultiplier: mayProtect ? readTrait(dependencies, "high_pop", 0, 1) : 1,
-          ragePlanet: planetTraits.includes("rage"),
+          ragePlanet: planetTraits2.includes("rage"),
           autoHell,
           hellAvailable,
           maximumSoldiers: readHell ? requireNumber(manager.maxSoldiers, "WarManager.maxSoldiers") : 0,
@@ -42471,7 +42697,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         ).map((id) => ({
           id,
           label: readName(game, "space", id)
-        })), galaxyRegions = requireArray(
+        })), galaxyRegions2 = requireArray(
           getGalaxyRegions(),
           "galaxyRegions"
         ).map(
@@ -42479,7 +42705,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         ), settings = requireRecord(getSettingsRaw(), "settingsRaw"), overrides = requireRecord(
           settings.overrides,
           "settingsRaw.overrides"
-        ), andromedaRegions = galaxyRegions.map((id) => ({
+        ), andromedaRegions = galaxyRegions2.map((id) => ({
           id,
           label: id === "gxy_alien1" ? "Alien 1 System" : id === "gxy_alien2" ? "Alien 2 System" : readName(game, "galaxy", id),
           settingName: `fleet_pr_${id}`
@@ -49821,232 +50047,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readGameModal: () => gameModal,
       readProjectControls: () => projectControls,
       readResearchControls: () => researchControls
-    }), biomeList = [
-      "grassland",
-      "oceanic",
-      "forest",
-      "desert",
-      "volcanic",
-      "tundra",
-      "savanna",
-      "swamp",
-      "taiga",
-      "ashland",
-      "hellscape",
-      "eden"
-    ], traitList = [
-      "none",
-      "toxic",
-      "mellow",
-      "rage",
-      "stormy",
-      "ozone",
-      "magnetic",
-      "trashed",
-      "elliptical",
-      "flare",
-      "dense",
-      "unstable",
-      "permafrost",
-      "retrograde",
-      "kamikaze"
-    ], extraList = [
-      "Achievement",
-      "Orbit",
-      "Copper",
-      "Iron",
-      "Aluminium",
-      "Coal",
-      "Oil",
-      "Titanium",
-      "Uranium",
-      "Iridium"
-    ], planetBiomes = [
-      "eden",
-      "ashland",
-      "volcanic",
-      "taiga",
-      "tundra",
-      "swamp",
-      "oceanic",
-      "forest",
-      "savanna",
-      "grassland",
-      "desert",
-      "hellscape"
-    ], planetTraits = [
-      "elliptical",
-      "magnetic",
-      "permafrost",
-      "rage",
-      "retrograde",
-      "none",
-      "stormy",
-      "toxic",
-      "trashed",
-      "dense",
-      "unstable",
-      "ozone",
-      "mellow",
-      "flare",
-      "kamikaze"
-    ], planetBiomeGenus = {
-      hellscape: "demonic",
-      eden: "angelic",
-      oceanic: "aquatic",
-      forest: "fey",
-      desert: "sand",
-      volcanic: "heat",
-      tundra: "polar"
-    }, fanatAchievements = [
-      { god: "sharkin", race: "entish", achieve: "madagascar_tree" },
-      { god: "sporgar", race: "human", achieve: "infested" },
-      { god: "shroomi", race: "troll", achieve: "godwin" }
-    ], challenges = [
-      [
-        { id: "plasmid", trait: "no_plasmid" },
-        { id: "mastery", trait: "weak_mastery" },
-        { id: "nerfed", trait: "nerfed" }
-      ],
-      [
-        { id: "crispr", trait: "no_crispr" },
-        { id: "badgenes", trait: "badgenes" }
-      ],
-      [{ id: "trade", trait: "no_trade" }],
-      [{ id: "craft", trait: "no_craft" }],
-      [{ id: "joyless", trait: "joyless" }],
-      [{ id: "steelen", trait: "steelen" }],
-      [{ id: "decay", trait: "decay" }],
-      [{ id: "emfield", trait: "emfield" }],
-      [{ id: "inflation", trait: "inflation" }],
-      [{ id: "sludge", trait: "sludge" }],
-      [{ id: "ultra_sludge", trait: "ultra_sludge" }],
-      [{ id: "orbit_decay", trait: "orbit_decay" }],
-      //[{id:"nonstandard", trait:"nonstandard"}],
-      [
-        { id: "gravity_well", trait: "gravity_well" },
-        { id: "witch_hunter", trait: "witch_hunter" },
-        { id: "warlord", trait: "warlord" }
-      ],
-      //[{id:"storage_wars", trait:"storage_wars"}],
-      [{ id: "junker", trait: "junker" }],
-      [{ id: "cataclysm", trait: "cataclysm" }],
-      [{ id: "banana", trait: "banana" }],
-      [{ id: "truepath", trait: "truepath" }],
-      [{ id: "lone_survivor", trait: "lone_survivor" }],
-      [{ id: "fasting", trait: "fasting" }]
-    ], governors = [
-      "soldier",
-      "criminal",
-      "entrepreneur",
-      "educator",
-      "spiritual",
-      "bluecollar",
-      "noble",
-      "media",
-      "sports",
-      "bureaucrat"
-    ], evolutionSettingsToStore = [
-      "userEvolutionTarget",
-      "userEvolutionGenus",
-      "prestigeType",
-      ...challenges.map((c) => "challenge_" + c[0].id)
-    ], logIgnore = [
-      "food",
-      "lumber",
-      "stone",
-      "chrysotile",
-      "slaughter",
-      "s_alter",
-      "slave_market",
-      "horseshoe",
-      "assembly",
-      "cloning_facility",
-      "ambush_patrol",
-      "raid_supplies",
-      "siege_fortress"
-    ], galaxyRegions = [
-      "gxy_stargate",
-      "gxy_gateway",
-      "gxy_gorddon",
-      "gxy_alien1",
-      "gxy_alien2",
-      "gxy_chthonian"
-    ], settingsSections = [
-      "toggle",
-      "general",
-      "prestige",
-      "evolution",
-      "research",
-      "market",
-      "storage",
-      "production",
-      "war",
-      "hell",
-      "fleet",
-      "job",
-      "building",
-      "project",
-      "government",
-      "authority",
-      "logging",
-      "trait",
-      "weighting",
-      "ejector",
-      "planet",
-      "mech",
-      "magic",
-      "trigger"
-    ], mutationCostMultipliers = {
-      sludge: { gain: 10, purge: 10 },
-      ultra_sludge: { gain: 10, purge: 10 },
-      custom: { gain: 10, purge: 10 }
-    }, mutationCostMultipliersGenus = { hybrid: { gain: 2, purge: 2 } }, specialRaceTraits = {
-      beast_of_burden: "reindeer",
-      photosynth: "plant"
-    }, conflictingTraits = [["dumb", "smart"]], replicableResources = [
-      "Food",
-      "Lumber",
-      "Chrysotile",
-      "Stone",
-      "Crystal",
-      "Furs",
-      "Copper",
-      "Iron",
-      "Aluminium",
-      "Cement",
-      "Coal",
-      "Oil",
-      "Uranium",
-      "Steel",
-      "Titanium",
-      "Alloy",
-      "Polymer",
-      "Iridium",
-      "Helium_3",
-      "Deuterium",
-      "Neutronium",
-      "Adamantite",
-      "Infernite",
-      "Elerium",
-      "Nano_Tube",
-      "Graphene",
-      "Stanene",
-      "Bolognium",
-      "Unobtainium",
-      "Vitreloy",
-      "Orichalcum",
-      "Water",
-      "Plywood",
-      "Brick",
-      "Wrought_Iron",
-      "Sheet_Metal",
-      "Mythril",
-      "Aerogel",
-      "Nanoweave",
-      "Scarletite",
-      "Quantium"
-    ], techIds = {}, buildingIds = {}, arpaIds = {}, jobIds = {}, evolutions = {}, imitations = {}, races = {}, craftablesList = [], foundryList = [], state = {
+    }), techIds = {}, buildingIds = {}, arpaIds = {}, jobIds = {}, evolutions = {}, imitations = {}, races = {}, craftablesList = [], foundryList = [], state = {
       forcedUpdate: !1,
       gameTicked: !1,
       scriptTick: 1,
