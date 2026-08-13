@@ -124,6 +124,8 @@ import {
 } from "../../game/state-demand.ts";
 import { createPlannerState } from "../../game/planner-state.ts";
 import { createAuthorityPolicy } from "../../game/authority-policy.ts";
+import { createRunGuards } from "./run-guards.ts";
+import { formatRetirementShortfalls } from "../../application/retirement-prep.ts";
 import { findCostConflict } from "../../domain/cost-conflicts.ts";
 import { readCostConflictInput } from "./cost-conflicts.ts";
 import { findPlannerLimit } from "../../domain/planner-analysis.ts";
@@ -234,50 +236,9 @@ import {
 } from "./state-update.ts";
 import { createActiveTargetsControls } from "../browser/active-targets.ts";
 import {
-  assessRetirementPreparation as assessRetirementPreparationPolicy,
-  isRetirementAssistActive as isRetirementAssistActivePolicy,
-} from "../../domain/progression/prestige/retirement-prep.ts";
-import {
-  readRetirementAssistInput,
-  readRetirementPreparationInput,
-} from "./progression/prestige/retirement-prep.ts";
-import { formatRetirementShortfalls } from "../../application/retirement-prep.ts";
-import {
-  calculateAchievementStarLevel,
-  isAchievementGuardActive,
-  isAchievementUnlocked as isAchievementUnlockedPolicy,
-} from "../../domain/progression/prestige/achievement-guards.ts";
-import {
-  readAchievementGuardInput,
-  readAchievementStar,
-  readAchievementStarLevelContext,
-} from "./progression/prestige/achievement-guards.ts";
-import {
-  isBananaRepublicGuardActive as isBananaRepublicGuardActivePolicy,
-  isBananaRepublicReadyForUnification as isBananaRepublicReadyForUnificationPolicy,
-  isBananaRepublicSmoothieComplete as isBananaRepublicSmoothieCompletePolicy,
-} from "../../domain/civic/banana-republic.ts";
-import {
   DEFAULT_VACUUM_MANA_REQUIREMENT,
   isVacuumCollapseManaStageReady,
 } from "../../domain/progression/prestige/vacuum.ts";
-import {
-  readBananaRepublicGuardInput,
-  readBananaRepublicObjective,
-  readBananaRepublicProgress,
-  readBananaRepublicSmoothieInput,
-} from "./civic/banana-republic.ts";
-import {
-  inflationSecondsToFinish as inflationSecondsToFinishPolicy,
-  isInflationAssistActive as isInflationAssistActivePolicy,
-  isInflationMoneyReachable as isInflationMoneyReachablePolicy,
-  shouldSaveInflationMoney as shouldSaveInflationMoneyPolicy,
-} from "../../domain/economy/resources/inflation-assist.ts";
-import {
-  readInflationAssistInput,
-  readInflationMoneyInput,
-  readInflationSaveInput,
-} from "./economy/resources/inflation-assist.ts";
 import {
   getBlackholeMass as getBlackholeMassPolicy,
   isApocalypsePrestigeAvailable as isApocalypsePrestigeAvailablePolicy,
@@ -3675,130 +3636,33 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  let getStarLevel = (context) => {
-    const result = readAchievementStarLevelContext(context);
-    return result.status === "ready"
-      ? calculateAchievementStarLevel(result.context)
-      : 1;
-  };
-  let getAchievementStar = (id, universe) => {
-    const result = readAchievementStar(game, poly, id, universe);
-    return result.status === "ready" ? result.star : 0;
-  };
-  let isAchievementUnlocked = (id, level, universe) => {
-    if (typeof level !== "number" || !Number.isFinite(level) || level < 0) {
-      return false;
-    }
-    const result = readAchievementStar(game, poly, id, universe);
-    return (
-      result.status === "ready" &&
-      isAchievementUnlockedPolicy(result.star, level)
-    );
-  };
-  let guardActive = (setting) => {
-    const result = readAchievementGuardInput(
-      settings,
-      game,
-      poly,
-      buildings,
-      setting,
-    );
-    if (result.status === "ready") {
-      return isAchievementGuardActive(result.input);
-    }
-    return result.status === "unavailable" ? result.fallbackActive : false;
-  };
-  let bananaRepublicObjectiveComplete = (objective) => {
-    const result = readBananaRepublicObjective(game, poly, objective);
-    return result.status === "ready" ? result.complete : false;
-  };
-  let bananaRepublicSmoothieComplete = () => {
-    const result = readBananaRepublicSmoothieInput(game);
-    return result.status === "ready"
-      ? isBananaRepublicSmoothieCompletePolicy(result.input)
-      : false;
-  };
-  let bananaRepublicReadyForUnification = () => {
-    const result = readBananaRepublicProgress(game, poly);
-    return result.status === "ready"
-      ? isBananaRepublicReadyForUnificationPolicy(result.progress)
-      : false;
-  };
-  let guardBananaRepublicActive = () => {
-    const result = readBananaRepublicGuardInput(settings, game, poly);
-    if (result.status === "ready") {
-      return isBananaRepublicGuardActivePolicy(result.input);
-    }
-    return result.status === "unavailable" ? result.fallbackActive : false;
-  };
-
-  let inflationChallengeAssistActive = () => {
-    const result = readInflationAssistInput(
-      settings,
-      game,
-      getAchievementStar("wheelbarrow"),
-    );
-    return result.status === "ready"
-      ? isInflationAssistActivePolicy(result.input)
-      : false;
-  };
-  let inflationChallengeMoneyReachable = () => {
-    const result = readInflationMoneyInput(
-      resources,
-      INFLATION_CHALLENGE_MONEY,
-    );
-    return result.status === "ready"
-      ? isInflationMoneyReachablePolicy(result.input)
-      : false;
-  };
-  let inflationChallengeSecondsToFinish = () => {
-    const result = readInflationMoneyInput(
-      resources,
-      INFLATION_CHALLENGE_MONEY,
-    );
-    return result.status === "ready"
-      ? inflationSecondsToFinishPolicy(result.input)
-      : Number.POSITIVE_INFINITY;
-  };
-  let inflationChallengeShouldSaveMoney = () => {
-    const result = readInflationSaveInput(
-      settings,
-      game,
-      resources,
-      getAchievementStar("wheelbarrow"),
-      INFLATION_CHALLENGE_MONEY,
-    );
-    return result.status === "ready"
-      ? shouldSaveInflationMoneyPolicy(result.input)
-      : false;
-  };
-
-  let retirementChallengeAssistActive = () => {
-    const result = readRetirementAssistInput(
-      settings,
-      game,
-      haveTech("isolation"),
-    );
-    return result.status === "ready"
-      ? isRetirementAssistActivePolicy(result.input)
-      : false;
-  };
-  let retirementPreparationMissing = () => {
-    if (!retirementChallengeAssistActive()) {
-      return [];
-    }
-    const result = readRetirementPreparationInput(
-      buildings,
-      resources,
-      RETIREMENT_PREP,
-    );
-    return result.status === "ready"
-      ? formatRetirementShortfalls(
-          assessRetirementPreparationPolicy(result.input),
-          getNumberString,
-        )
-      : [];
-  };
+  let {
+    getStarLevel,
+    getAchievementStar,
+    isAchievementUnlocked,
+    guardActive,
+    bananaRepublicObjectiveComplete,
+    bananaRepublicSmoothieComplete,
+    bananaRepublicReadyForUnification,
+    guardBananaRepublicActive,
+    inflationChallengeAssistActive,
+    inflationChallengeMoneyReachable,
+    inflationChallengeSecondsToFinish,
+    inflationChallengeShouldSaveMoney,
+    retirementChallengeAssistActive,
+    retirementPreparationMissing,
+  } = createRunGuards({
+    getSettings: () => settings,
+    getGame: () => game,
+    getPoly: () => poly,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    haveTech,
+    getNumberString,
+    formatRetirementShortfalls,
+    inflationChallengeMoney: INFLATION_CHALLENGE_MONEY,
+    retirementPreparation: RETIREMENT_PREP,
+  });
 
   publishTestSurface({
     runGuards: {
