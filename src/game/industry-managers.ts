@@ -1,8 +1,22 @@
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
 
+interface IndustryGame {
+  global: {
+    race: Record<string, boolean>;
+    city: {
+      rock_quarry: { asbestos: number };
+    };
+    space: {
+      titan_mine: { ratio: number };
+    };
+    tauceti: {
+      mining_ship: Record<string, number>;
+    };
+  };
+}
+
 interface IndustryManagersDependencies {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the live game model is untyped
-  getGame: () => any;
+  getGame: () => IndustryGame;
   getBuildings: () => Record<string, { count: number }>;
   industryControls: GameIndustryControlsPort;
   haveTech: (tech: string, level?: number) => boolean;
