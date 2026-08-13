@@ -1707,6 +1707,53 @@
     return { updateStandAloneSettings };
   }
 
+  // src/settings/queued-settings.ts
+  function createQueuedSettings({
+    getSettings,
+    getSettingsRaw,
+    getState,
+    getGameLog,
+    getUpdateOverrides,
+    getUpdateStandAloneSettings,
+    getUpdateStateFromSettings,
+    getUpdateSettingsFromState,
+    getRemoveScriptSettings,
+    getBuildScriptSettings
+  }) {
+    function loadQueuedSettings() {
+      let settings = getSettings(), settingsRaw = getSettingsRaw();
+      if (settings.evolutionQueueEnabled && settingsRaw.evolutionQueue.length > 0) {
+        getState().evolutionAttempts++;
+        let queuedEvolution = settingsRaw.evolutionQueue.shift();
+        for (let [settingName, settingValue] of Object.entries(
+          queuedEvolution
+        ))
+          typeof settingsRaw[settingName] == typeof settingValue ? settingsRaw[settingName] = settingValue : getGameLog().logDanger(
+            "special",
+            `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof settingsRaw[settingName]}, value: ${settingsRaw[settingName]}; queuedEvolution.${settingName} type: ${typeof settingValue}, value: ${settingValue};`,
+            ["events", "major_events"]
+          );
+        getUpdateOverrides()(), settings.evolutionQueueRepeat && settingsRaw.evolutionQueue.push(queuedEvolution), getUpdateStandAloneSettings()(), getUpdateStateFromSettings()(), getUpdateSettingsFromState()(), settings.showSettings && (getRemoveScriptSettings()(), getBuildScriptSettings()());
+      }
+    }
+    return { loadQueuedSettings };
+  }
+
+  // src/bootstrap/settings-lifecycle-controls.ts
+  function createSettingsMigrationControl({
+    testSurface,
+    ...dependencies
+  }) {
+    return createSettingsMigrationRunner(dependencies);
+  }
+  function createQueuedSettingsControl({
+    testSurface,
+    setTestContext,
+    ...dependencies
+  }) {
+    return createQueuedSettings(dependencies);
+  }
+
   // src/application/override-settings.ts
   function createOverrideSettings({
     getSafeMode,
@@ -3103,38 +3150,6 @@
         return spend("purge", traitName);
       }
     });
-  }
-
-  // src/settings/queued-settings.ts
-  function createQueuedSettings({
-    getSettings,
-    getSettingsRaw,
-    getState,
-    getGameLog,
-    getUpdateOverrides,
-    getUpdateStandAloneSettings,
-    getUpdateStateFromSettings,
-    getUpdateSettingsFromState,
-    getRemoveScriptSettings,
-    getBuildScriptSettings
-  }) {
-    function loadQueuedSettings() {
-      let settings = getSettings(), settingsRaw = getSettingsRaw();
-      if (settings.evolutionQueueEnabled && settingsRaw.evolutionQueue.length > 0) {
-        getState().evolutionAttempts++;
-        let queuedEvolution = settingsRaw.evolutionQueue.shift();
-        for (let [settingName, settingValue] of Object.entries(
-          queuedEvolution
-        ))
-          typeof settingsRaw[settingName] == typeof settingValue ? settingsRaw[settingName] = settingValue : getGameLog().logDanger(
-            "special",
-            `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof settingsRaw[settingName]}, value: ${settingsRaw[settingName]}; queuedEvolution.${settingName} type: ${typeof settingValue}, value: ${settingValue};`,
-            ["events", "major_events"]
-          );
-        getUpdateOverrides()(), settings.evolutionQueueRepeat && settingsRaw.evolutionQueue.push(queuedEvolution), getUpdateStandAloneSettings()(), getUpdateStateFromSettings()(), getUpdateSettingsFromState()(), settings.showSettings && (getRemoveScriptSettings()(), getBuildScriptSettings()());
-      }
-    }
-    return { loadQueuedSettings };
   }
 
   // src/settings/transfer.ts
@@ -50241,7 +50256,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       newSetting,
       mapCb,
       keepOldValue
-    ), { updateStandAloneSettings } = createSettingsMigrationRunner({
+    ), { updateStandAloneSettings } = createSettingsMigrationControl({
       getSettingsRaw: () => settingsRaw,
       getSettings: () => settings,
       getSettingsSections: () => settingsSections,
@@ -50284,7 +50299,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         switchable: building3.isSwitchable()
       })),
       getCrafterOriginalIds: () => Object.values(crafter).map((job) => job._originalId),
-      getGameLog: () => GameLog
+      getGameLog: () => GameLog,
+      testSurface
     }), {
       getStarLevel,
       getAchievementStar,
@@ -50311,7 +50327,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       formatRetirementShortfalls,
       inflationChallengeMoney: INFLATION_CHALLENGE_MONEY2,
       retirementPreparation: RETIREMENT_PREP2
-    }), { loadQueuedSettings } = createQueuedSettings({
+    }), { loadQueuedSettings } = createQueuedSettingsControl({
       getSettings: () => settings,
       getSettingsRaw: () => settingsRaw,
       getState: () => state,
@@ -50321,7 +50337,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getUpdateStateFromSettings: () => getTestContext("queuedSettings")?.actions?.updateStateFromSettings ?? updateStateFromSettings,
       getUpdateSettingsFromState: () => getTestContext("queuedSettings")?.actions?.updateSettingsFromState ?? updateSettingsFromState,
       getRemoveScriptSettings: () => getTestContext("queuedSettings")?.actions?.removeScriptSettings ?? removeScriptSettings,
-      getBuildScriptSettings: () => getTestContext("queuedSettings")?.actions?.buildScriptSettings ?? buildScriptSettings
+      getBuildScriptSettings: () => getTestContext("queuedSettings")?.actions?.buildScriptSettings ?? buildScriptSettings,
+      testSurface,
+      setTestContext(context) {
+        settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, GameLog = context.GameLog, setTestContext("queuedSettings", context);
+      }
     }), findRequiredResourceWeight2 = (resource2) => findRequiredResourceWeight(state.unlockedBuildings, resource2), challengeGroups = challenges.map((members) => ({ members })), { generatePlanets } = createPlanetGeneration({
       getGame: () => game,
       getPoly: () => poly,

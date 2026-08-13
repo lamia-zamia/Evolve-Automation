@@ -50,7 +50,10 @@ import {
   applySettings as applySettingsRecord,
   migrateSetting as migrateSettingRecord,
 } from "../../domain/settings-migration.ts";
-import { createSettingsMigrationRunner } from "./settings-migration-runner.ts";
+import {
+  createSettingsMigrationControl,
+  createQueuedSettingsControl,
+} from "../../bootstrap/settings-lifecycle-controls.ts";
 import { createOverrideSettings } from "../../application/override-settings.ts";
 import { createOverrideEditor } from "../../application/override-editing.ts";
 import { createOverrideEvaluationSource } from "./override-evaluation.ts";
@@ -80,7 +83,6 @@ import { createGameProjectControls } from "../browser/game-project-controls.ts";
 import { createGameStorageControls } from "../browser/game-storage-controls.ts";
 import { createGameResearchControls } from "../browser/game-research-controls.ts";
 import { createGameTraitControls } from "../browser/game-trait-controls.ts";
-import { createQueuedSettings } from "../../settings/queued-settings.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
 import { createRuntimeQueries } from "../../game/runtime-queries.ts";
 import { createTraitManagers } from "../../game/trait-managers.ts";
@@ -2588,7 +2590,7 @@ export function startEvolveRuntimeComposition(
       keepOldValue,
     );
 
-  const { updateStandAloneSettings } = createSettingsMigrationRunner({
+  const { updateStandAloneSettings } = createSettingsMigrationControl({
     getSettingsRaw: () => settingsRaw,
     getSettings: () => settings,
     getSettingsSections: () => settingsSections,
@@ -2634,12 +2636,8 @@ export function startEvolveRuntimeComposition(
     getCrafterOriginalIds: () =>
       Object.values(crafter).map((job) => job._originalId),
     getGameLog: () => GameLog,
+    testSurface,
   });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      settingsMigration: { updateStandAloneSettings },
-    });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.add({
@@ -2740,7 +2738,7 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { loadQueuedSettings } = createQueuedSettings({
+  const { loadQueuedSettings } = createQueuedSettingsControl({
     getSettings: () => settings,
     getSettingsRaw: () => settingsRaw,
     getState: () => state,
@@ -2763,19 +2761,15 @@ export function startEvolveRuntimeComposition(
     getBuildScriptSettings: () =>
       getTestContext("queuedSettings")?.actions?.buildScriptSettings ??
       buildScriptSettings,
+    testSurface,
+    setTestContext(context) {
+      settings = context.settings;
+      settingsRaw = context.settingsRaw;
+      state = context.state;
+      GameLog = context.GameLog;
+      setTestContext("queuedSettings", context);
+    },
   });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      loadQueuedSettings,
-      setQueuedSettingsTestContext(context) {
-        settings = context.settings;
-        settingsRaw = context.settingsRaw;
-        state = context.state;
-        GameLog = context.GameLog;
-        setTestContext("queuedSettings", context);
-      },
-    });
 
   const findRequiredResourceWeight = (resource) =>
     findRequiredResourceWeightPolicy(state.unlockedBuildings, resource);
