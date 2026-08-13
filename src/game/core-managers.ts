@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { TickDiagnostics } from "../ports/tick.ts";
 import { createPhaseMeasure } from "../utils/performance.ts";
 import type {
@@ -8,12 +7,134 @@ import type {
   BuildingWeightingSnapshot,
 } from "../domain/progression/build/building-weighting.ts";
 
+type TriggerValue = string | number | boolean;
+
+interface CoreSettings {
+  autoARPA: boolean;
+  autoCraftsmen: boolean;
+  autoJobs: boolean;
+  prestigeMADIgnoreArpa: boolean;
+  prestigeBioseedConstruct: boolean;
+  prestigeType: string;
+  buildingWeightingVacuumCollapse: number;
+  achievementGuards: boolean;
+  guardBananaRepublic: boolean;
+  buildingWeightingBananaObjective: number;
+  buildingWeightingInflationMoney: number;
+  arpaScaleWeighting: boolean;
+  [key: string]: boolean | number | string | undefined;
+}
+
+interface CoreServants {
+  max: number;
+  smax: number;
+}
+
+interface CoreGame {
+  global: {
+    race: {
+      servants?: CoreServants;
+      [key: string]: boolean | CoreServants | undefined;
+    };
+    city: { foundry?: Record<string, number> };
+    civic: { craftsman: { max: number } };
+  };
+}
+
+interface CoreState {
+  queuedTargets: CoreProject[];
+  triggerTargets: CoreProject[];
+}
+
+interface CoreJob {
+  priority: number;
+  servants: number;
+  count: number;
+  is: { serve?: boolean };
+  isManaged: () => boolean;
+}
+
+interface CoreBuilding {
+  priority: number;
+  weighting: number;
+  count: number;
+  autoStateEnabled: boolean;
+  extraDescription: string;
+  updateResourceRequirements: () => void;
+  hasState: () => boolean;
+}
+
+interface CoreProject {
+  priority: number;
+  weighting: number;
+  _weighting: number;
+  currentStep: number;
+  progress: number;
+  count: number;
+  autoMax: number;
+  autoBuildEnabled: boolean;
+  extraDescription: string;
+  isUnlocked: () => boolean;
+  isAffordable: (includeStorage: boolean) => boolean;
+  updateResourceRequirements: () => void;
+}
+
+interface CoreProjects extends Record<string, CoreProject> {
+  ManaSyphon: CoreProject;
+  Monument: CoreProject;
+  StockExchange: CoreProject;
+}
+
+interface CoreTrigger {
+  seq: number;
+  priority: number;
+  requirementType: TriggerValue;
+  requirementId: TriggerValue;
+  requirementCount: number;
+  actionType: TriggerValue;
+  actionId: TriggerValue;
+  actionCount: number;
+  complete: boolean;
+  updateComplete: () => void;
+  areRequirementsMet: () => boolean;
+  isActionPossible: () => boolean;
+  cost: () => Record<string, unknown>;
+}
+
+interface TriggerConstructor {
+  new (
+    seq: number,
+    priority: number,
+    requirementType: TriggerValue,
+    requirementId: TriggerValue,
+    requirementCount: number,
+    actionType: TriggerValue,
+    actionId: TriggerValue,
+    actionCount: number,
+  ): CoreTrigger;
+}
+
+interface TriggerSetting {
+  seq: number;
+  priority: number;
+  requirementType: TriggerValue;
+  requirementId: TriggerValue;
+  requirementCount: number;
+  actionType: TriggerValue;
+  actionId: TriggerValue;
+  actionCount: number;
+}
+
+interface CoreWindow {
+  prompt: (message: string, defaultValue: TriggerValue) => unknown;
+}
+
 interface CoreManagersDependencies {
-  getGame: () => any;
-  getSettings: () => Record<string, any>;
-  getState: () => any;
-  getBuildings: () => Record<string, any>;
-  getProjects: () => Record<string, any>;
+  getGame: () => CoreGame;
+  getSettings: () => CoreSettings;
+  getState: () => CoreState;
+  getBuildings: () => Record<string, CoreBuilding>;
+  getProjects: () => CoreProjects;
   isVacuumSyphonStage: () => boolean;
   getNiceNumber: (value: number) => string;
   weightingDecider: BuildingWeightingDecider;
@@ -27,8 +148,8 @@ interface CoreManagersDependencies {
   getIsPrestigeAllowed: () => (prestige: string) => boolean;
   getBananaRepublicObjectiveComplete: () => (objective: string) => boolean;
   getInflationChallengeAssistActive: () => () => boolean;
-  Trigger: any;
-  getWindow: () => any;
+  Trigger: TriggerConstructor;
+  getWindow: () => CoreWindow;
   diagnostics?: TickDiagnostics | undefined;
 }
 
@@ -53,8 +174,8 @@ export function createCoreManagers({
   diagnostics,
 }: CoreManagersDependencies) {
   const JobManager = {
-    priorityList: [] as any[],
-    craftingJobs: [] as any[],
+    priorityList: [] as CoreJob[],
+    craftingJobs: [] as CoreJob[],
 
     sortByPriority() {
       this.priorityList.sort((a, b) => a.priority - b.priority);
@@ -62,7 +183,7 @@ export function createCoreManagers({
 
     managedPriorityList() {
       const settings = getSettings();
-      let ret: any[] = [];
+      let ret: CoreJob[] = [];
       if (settings.autoJobs) {
         ret = this.priorityList.filter((job) => job.isManaged());
       }
@@ -121,8 +242,8 @@ export function createCoreManagers({
   };
 
   const BuildingManager = {
-    priorityList: [] as any[],
-    statePriorityList: [] as any[],
+    priorityList: [] as CoreBuilding[],
+    statePriorityList: [] as CoreBuilding[],
 
     updateBuildings() {
       const buildings = getBuildings();
@@ -181,7 +302,7 @@ export function createCoreManagers({
   };
 
   const ProjectManager = {
-    priorityList: [] as any[],
+    priorityList: [] as CoreProject[],
 
     updateProjects() {
       for (let project of this.priorityList) {
@@ -296,8 +417,8 @@ export function createCoreManagers({
   };
 
   const TriggerManager = {
-    priorityList: [] as any[],
-    targetTriggers: [] as any[],
+    priorityList: [] as CoreTrigger[],
+    targetTriggers: [] as CoreTrigger[],
 
     resetTargetTriggers() {
       this.targetTriggers = [];
@@ -323,12 +444,12 @@ export function createCoreManagers({
     },
 
     AddTrigger(
-      requirementType: any,
-      requirementId: any,
-      requirementCount: any,
-      actionType: any,
-      actionId: any,
-      actionCount: any,
+      requirementType: TriggerValue,
+      requirementId: TriggerValue,
+      requirementCount: number,
+      actionType: TriggerValue,
+      actionId: TriggerValue,
+      actionCount: number,
     ) {
       let trigger = new Trigger(
         this.priorityList.length,
@@ -344,7 +465,7 @@ export function createCoreManagers({
       return trigger;
     },
 
-    AddTriggerFromSetting(raw: any) {
+    AddTriggerFromSetting(raw: TriggerSetting) {
       let existingSequence = this.priorityList.some(
         (trigger) => trigger.seq === raw.seq,
       );
@@ -432,7 +553,7 @@ export function createCoreManagers({
     },
 
     // This function only checks if two triggers use the same resource, it does not check storage
-    actionConflicts(trigger: any) {
+    actionConflicts(trigger: CoreTrigger) {
       for (let targetTrigger of this.targetTriggers) {
         if (
           Object.keys(targetTrigger.cost()).some((cost) =>
