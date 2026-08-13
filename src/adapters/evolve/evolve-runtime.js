@@ -196,12 +196,7 @@ import { createArpaToggleEvolveAdapter } from "./progression/research/arpa-toggl
 import { createBuildingToggleBrowserAdapter } from "../browser/building-toggles.ts";
 import { createBuildingToggleEvolveAdapter } from "./progression/build/building-toggles.ts";
 import { createTickRunner } from "../../bootstrap/tick-runner.ts";
-import { runStateUpdate } from "../../application/state-update.ts";
-import {
-  createStateUpdateReader,
-  createStateUpdateControls,
-} from "./state-update.ts";
-import { createActiveTargetsControls } from "../browser/active-targets.ts";
+import { createStateUpdateControl } from "../../bootstrap/state-update-control.ts";
 import {
   DEFAULT_VACUUM_MANA_REQUIREMENT,
   isVacuumCollapseManaStageReady,
@@ -3957,90 +3952,47 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  let stateUpdateTestHelpers;
-  const stateUpdateHelpers = {
-    checkEvolutionResult,
-    updateTriggerSettingsContent,
-    updatePriorityTargets,
-    calculateRequiredStorages,
-    prioritizeDemandedResources,
-    updateActiveTargetsUI,
-  };
-
-  // Helpers are resolved through this getter so the state-update test hook can swap them wholesale.
-  const stateUpdateActiveHelpers = () =>
-    stateUpdateTestHelpers ?? stateUpdateHelpers;
-
-  const stateUpdateReader = createStateUpdateReader({
+  const { updateState } = createStateUpdateControl({
+    getJQuery: () => $,
     getGame: () => game,
     getState: () => state,
+    getActiveState: () => state,
     getSettingsRaw: () => settingsRaw,
-    getResources: () => resources,
-  });
-
-  const activeTargetsControls = createActiveTargetsControls({
-    getJQuery: () => $,
     getSettings: () => settings,
-    getState: () => state,
-    getTriggerManager: () => TriggerManager,
-    updateActiveTargetsUI: (targets, type) =>
-      stateUpdateActiveHelpers().updateActiveTargetsUI(targets, type),
-    isTechnology: (target) => target instanceof Technology,
-    isProject: (target) => target instanceof Project,
-  });
-
-  const stateUpdateControls = createStateUpdateControls({
-    getState: () => state,
     getResources: () => resources,
     getBuildings: () => buildings,
     getStorageManager: () => StorageManager,
+    getTriggerManager: () => TriggerManager,
     getPoly: () => poly,
-    checkEvolutionResult: () =>
-      stateUpdateActiveHelpers().checkEvolutionResult(),
-    updateTriggerSettingsContent: () =>
-      stateUpdateActiveHelpers().updateTriggerSettingsContent(),
-    updatePriorityTargets: () =>
-      stateUpdateActiveHelpers().updatePriorityTargets(),
+    checkEvolutionResult,
+    updateTriggerSettingsContent,
+    updatePriorityTargets,
     updateProjects: () => ProjectManager.updateProjects(),
-    calculateRequiredStorages: () =>
-      stateUpdateActiveHelpers().calculateRequiredStorages(),
-    prioritizeDemandedResources: () =>
-      stateUpdateActiveHelpers().prioritizeDemandedResources(),
-    updateActiveTargets: () => activeTargetsControls.updateActiveTargets(),
+    calculateRequiredStorages,
+    prioritizeDemandedResources,
+    updateActiveTargetsUI,
+    isTechnology: (target) => target instanceof Technology,
+    isProject: (target) => target instanceof Project,
+    clock: browserClock,
+    testSurface,
+    makeStateUpdateTargets: () => ({
+      technology: Object.create(Technology.prototype),
+      project: Object.create(Project.prototype),
+      building: {},
+    }),
+    setTestContext(context) {
+      settings = context.settings;
+      settingsRaw = context.settingsRaw;
+      state = context.state;
+      game = context.game;
+      resources = context.resources;
+      buildings = context.buildings;
+      StorageManager = context.StorageManager;
+      ProjectManager = context.ProjectManager;
+      TriggerManager = context.TriggerManager;
+      poly = context.poly;
+    },
   });
-
-  const updateState = () =>
-    runStateUpdate({
-      reader: stateUpdateReader,
-      controls: stateUpdateControls,
-      clock: browserClock,
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      updateState: () => updateState(),
-      // Real prototypes, so the instanceof classification of queued targets is exercised for real.
-      makeStateUpdateTargets() {
-        return {
-          technology: Object.create(Technology.prototype),
-          project: Object.create(Project.prototype),
-          building: {},
-        };
-      },
-      setStateUpdateTestContext(context) {
-        settings = context.settings;
-        settingsRaw = context.settingsRaw;
-        state = context.state;
-        game = context.game;
-        resources = context.resources;
-        buildings = context.buildings;
-        StorageManager = context.StorageManager;
-        ProjectManager = context.ProjectManager;
-        TriggerManager = context.TriggerManager;
-        poly = context.poly;
-        stateUpdateTestHelpers = context.helpers;
-      },
-    });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.add({

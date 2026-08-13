@@ -21736,6 +21736,70 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/bootstrap/state-update-control.ts
+  function createStateUpdateControl({
+    getGame,
+    getJQuery,
+    getState,
+    getActiveState,
+    getSettingsRaw,
+    getSettings,
+    getResources,
+    getBuildings,
+    getStorageManager,
+    getTriggerManager,
+    getPoly,
+    checkEvolutionResult,
+    updateTriggerSettingsContent,
+    updatePriorityTargets,
+    updateProjects,
+    calculateRequiredStorages,
+    prioritizeDemandedResources,
+    updateActiveTargetsUI,
+    isTechnology,
+    isProject,
+    clock,
+    testSurface,
+    setTestContext,
+    makeStateUpdateTargets
+  }) {
+    let testHelpers, activeHelpers = () => testHelpers ?? {
+      checkEvolutionResult,
+      updateTriggerSettingsContent,
+      updatePriorityTargets,
+      calculateRequiredStorages,
+      prioritizeDemandedResources,
+      updateActiveTargetsUI
+    }, reader = createStateUpdateReader({
+      getGame,
+      getState,
+      getSettingsRaw,
+      getResources
+    }), activeTargets = createActiveTargetsControls({
+      getJQuery,
+      getSettings,
+      getState: getActiveState,
+      getTriggerManager,
+      updateActiveTargetsUI: (targets, type) => activeHelpers().updateActiveTargetsUI(targets, type),
+      isTechnology,
+      isProject
+    }), controls4 = createStateUpdateControls({
+      getState,
+      getResources,
+      getBuildings,
+      getStorageManager,
+      getPoly,
+      checkEvolutionResult: () => activeHelpers().checkEvolutionResult(),
+      updateTriggerSettingsContent: () => activeHelpers().updateTriggerSettingsContent(),
+      updatePriorityTargets: () => activeHelpers().updatePriorityTargets(),
+      updateProjects,
+      calculateRequiredStorages: () => activeHelpers().calculateRequiredStorages(),
+      prioritizeDemandedResources: () => activeHelpers().prioritizeDemandedResources(),
+      updateActiveTargets: () => activeTargets.updateActiveTargets()
+    });
+    return { updateState: () => runStateUpdate({ reader, controls: controls4, clock }) };
+  }
+
   // src/application/tech-conflicts.ts
   function formatTechConflict(conflict2, formatNumber) {
     switch (conflict2.code) {
@@ -50831,43 +50895,37 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setTestContext(context) {
         settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, game = context.game, resources = context.resources, poly = context.poly;
       }
-    }), stateUpdateTestHelpers, stateUpdateHelpers = {
-      checkEvolutionResult,
-      updateTriggerSettingsContent,
-      updatePriorityTargets,
-      calculateRequiredStorages,
-      prioritizeDemandedResources,
-      updateActiveTargetsUI
-    }, stateUpdateActiveHelpers = () => stateUpdateTestHelpers ?? stateUpdateHelpers, stateUpdateReader = createStateUpdateReader({
+    }), { updateState } = createStateUpdateControl({
+      getJQuery: () => $,
       getGame: () => game,
       getState: () => state,
+      getActiveState: () => state,
       getSettingsRaw: () => settingsRaw,
-      getResources: () => resources
-    }), activeTargetsControls = createActiveTargetsControls({
-      getJQuery: () => $,
       getSettings: () => settings,
-      getState: () => state,
-      getTriggerManager: () => TriggerManager,
-      updateActiveTargetsUI: (targets, type) => stateUpdateActiveHelpers().updateActiveTargetsUI(targets, type),
-      isTechnology: (target) => target instanceof Technology,
-      isProject: (target) => target instanceof Project
-    }), stateUpdateControls = createStateUpdateControls({
-      getState: () => state,
       getResources: () => resources,
       getBuildings: () => buildings,
       getStorageManager: () => StorageManager,
+      getTriggerManager: () => TriggerManager,
       getPoly: () => poly,
-      checkEvolutionResult: () => stateUpdateActiveHelpers().checkEvolutionResult(),
-      updateTriggerSettingsContent: () => stateUpdateActiveHelpers().updateTriggerSettingsContent(),
-      updatePriorityTargets: () => stateUpdateActiveHelpers().updatePriorityTargets(),
+      checkEvolutionResult,
+      updateTriggerSettingsContent,
+      updatePriorityTargets,
       updateProjects: () => ProjectManager.updateProjects(),
-      calculateRequiredStorages: () => stateUpdateActiveHelpers().calculateRequiredStorages(),
-      prioritizeDemandedResources: () => stateUpdateActiveHelpers().prioritizeDemandedResources(),
-      updateActiveTargets: () => activeTargetsControls.updateActiveTargets()
-    }), updateState = () => runStateUpdate({
-      reader: stateUpdateReader,
-      controls: stateUpdateControls,
-      clock: browserClock
+      calculateRequiredStorages,
+      prioritizeDemandedResources,
+      updateActiveTargetsUI,
+      isTechnology: (target) => target instanceof Technology,
+      isProject: (target) => target instanceof Project,
+      clock: browserClock,
+      testSurface,
+      makeStateUpdateTargets: () => ({
+        technology: Object.create(Technology.prototype),
+        project: Object.create(Project.prototype),
+        building: {}
+      }),
+      setTestContext(context) {
+        settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, game = context.game, resources = context.resources, buildings = context.buildings, StorageManager = context.StorageManager, ProjectManager = context.ProjectManager, TriggerManager = context.TriggerManager, poly = context.poly;
+      }
     }), getScriptBootstrapActions = () => getTestContext("scriptBootstrap")?.actions ?? {
       updateStandAloneSettings,
       updateStateFromSettings,
