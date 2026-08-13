@@ -1955,177 +1955,6 @@
     };
   }
 
-  // src/adapters/browser/game-action-controls.ts
-  var TOOLTIP_ID = "popper", PARKED_TOOLTIP_ID = "TotallyNotAPopper";
-  function createGameActionControls({
-    getVueById,
-    selectTooltip,
-    clickSteps
-  }) {
-    let captured = /* @__PURE__ */ new Map();
-    function controlOf(elementId) {
-      let held = captured.get(elementId);
-      if (held !== void 0)
-        return held;
-      let view = getVueById(elementId);
-      return isRecord(view) ? view : void 0;
-    }
-    function methodOf(elementId, method) {
-      let view = controlOf(elementId);
-      if (!(view === void 0 || typeof view[method] != "function"))
-        return {
-          view,
-          call: requireFunction(view[method], `${elementId} Vue view.${method}`)
-        };
-    }
-    function click(method, { elementId, count: count2 }) {
-      let target = methodOf(elementId, method);
-      if (target === void 0)
-        return !1;
-      for (let _step of clickSteps(count2))
-        Reflect.apply(target.call, target.view, []);
-      return !0;
-    }
-    function isForeignTooltip(tooltip, elementId) {
-      if (tooltip.length === 0)
-        return !1;
-      let owner = tooltip.data("id");
-      return typeof owner != "string" || !owner.includes(elementId);
-    }
-    return Object.freeze({
-      isRendered(elementId) {
-        return isRecord(getVueById(elementId));
-      },
-      activate(elementId) {
-        let target = methodOf(elementId, "action");
-        if (target === void 0)
-          return !1;
-        let tooltip = selectTooltip(), parked = isForeignTooltip(tooltip, elementId);
-        parked && tooltip.attr("id", PARKED_TOOLTIP_ID);
-        try {
-          Reflect.apply(target.call, target.view, []);
-        } finally {
-          parked && tooltip.attr("id", TOOLTIP_ID);
-        }
-        return !0;
-      },
-      isTooltipShown() {
-        let tooltip = selectTooltip();
-        return tooltip.length > 0 && tooltip.is(":visible");
-      },
-      powerOn(request) {
-        return click("power_on", request);
-      },
-      powerOff(request) {
-        return click("power_off", request);
-      },
-      capture(elementId) {
-        let view = getVueById(elementId);
-        return isRecord(view) ? (captured.set(elementId, view), !0) : !1;
-      },
-      isCaptured(elementId) {
-        return captured.has(elementId);
-      }
-    });
-  }
-
-  // src/adapters/browser/game-crafting-controls.ts
-  function createGameCraftingControls({
-    getVueById,
-    clearClickMultipliers
-  }) {
-    return Object.freeze({
-      craft({ elementId, resourceId: resourceId3, count: count2 }) {
-        let view = getVueById(elementId);
-        if (!isRecord(view) || typeof view.craft != "function")
-          return !1;
-        let call4 = requireFunction(
-          view.craft,
-          `${elementId} Vue view.craft`
-        );
-        return clearClickMultipliers(), Reflect.apply(call4, view, [resourceId3, count2]), !0;
-      }
-    });
-  }
-
-  // src/adapters/browser/game-click-multipliers.ts
-  function createGameClickMultipliers({
-    getKeyManager
-  }) {
-    function callKeyManager(name, args) {
-      let keyManager = requireRecord(getKeyManager(), "KeyManager"), method = requireFunction(keyManager[name], `KeyManager.${name}`);
-      return Reflect.apply(method, keyManager, args);
-    }
-    return Object.freeze({
-      *steps(count2) {
-        let sequence = requireRecord(
-          callKeyManager("click", [count2]),
-          "KeyManager.click() result"
-        ), iterate = requireFunction(
-          sequence[Symbol.iterator],
-          "KeyManager.click() result[Symbol.iterator]"
-        ), iterator = requireRecord(
-          Reflect.apply(iterate, sequence, []),
-          "KeyManager.click() iterator"
-        ), next = requireFunction(
-          iterator.next,
-          "KeyManager.click() iterator.next"
-        );
-        for (; ; ) {
-          let result2 = requireRecord(
-            Reflect.apply(next, iterator, []),
-            "KeyManager.click() iterator result"
-          );
-          if (result2.done)
-            return;
-          yield result2.value;
-        }
-      },
-      holdMaximum() {
-        callKeyManager("set", [!0, !0, !0]);
-      },
-      clear() {
-        callKeyManager("set", [!1, !1, !1]);
-      }
-    });
-  }
-
-  // src/adapters/browser/game-disposal-controls.ts
-  function createGameDisposalControls({
-    getVueById,
-    clickSteps
-  }) {
-    function step(request, method) {
-      let view = getVueById(request.elementId);
-      if (!isRecord(view) || typeof view[method] != "function")
-        return !1;
-      let call4 = requireFunction(
-        view[method],
-        `${request.elementId} Vue view.${method}`
-      );
-      for (let _step of clickSteps(request.count))
-        Reflect.apply(call4, view, [request.id]);
-      return !0;
-    }
-    return Object.freeze({
-      isRendered(elementId) {
-        return isRecord(getVueById(elementId));
-      },
-      increaseSupply(request) {
-        return step(request, "supplyMore");
-      },
-      decreaseSupply(request) {
-        return step(request, "supplyLess");
-      },
-      increaseEject(request) {
-        return step(request, "ejectMore");
-      },
-      decreaseEject(request) {
-        return step(request, "ejectLess");
-      }
-    });
-  }
-
   // src/adapters/browser/game-custom-race-lab.ts
   var LAB_PANEL = "celestialLab", TRAIT_ID = /^[a-z0-9_]+$/;
   function createGameCustomRaceLab({
@@ -2162,25 +1991,6 @@
     });
   }
 
-  // src/adapters/browser/game-espionage-controls.ts
-  var ESPIONAGE_MODAL = "espModal";
-  function createGameEspionageControls({
-    getVueById
-  }) {
-    return Object.freeze({
-      performEspionage(operation2, govIndex) {
-        let view = getVueById(ESPIONAGE_MODAL);
-        if (!isRecord(view) || typeof view[operation2] != "function")
-          return !1;
-        let method = requireFunction(
-          view[operation2],
-          `${ESPIONAGE_MODAL} Vue view.${operation2}`
-        );
-        return Reflect.apply(method, view, [govIndex]), !0;
-      }
-    });
-  }
-
   // src/adapters/browser/game-feature-visibility.ts
   function createGameFeatureVisibility({
     getDocument
@@ -2189,461 +1999,6 @@
       isVisible(selector) {
         let element = getDocument().querySelector(selector);
         return element == null ? !1 : element.style?.display !== "none" && element.classList?.contains("is-hidden") !== !0;
-      }
-    });
-  }
-
-  // src/adapters/browser/game-foreign-controls.ts
-  var FOREIGN_PANEL = "foreign";
-  function createGameForeignControls({
-    getVueById
-  }) {
-    return Object.freeze({
-      isUnlocked() {
-        let view = getVueById(FOREIGN_PANEL);
-        if (!isRecord(view) || typeof view.vis != "function")
-          return !1;
-        let vis = requireFunction(view.vis, `${FOREIGN_PANEL} Vue view.vis`);
-        return Reflect.apply(vis, view, []) === !0;
-      },
-      isSpyDisabled(governmentId) {
-        let view = getVueById(FOREIGN_PANEL);
-        if (!isRecord(view) || typeof view.spy_disabled != "function")
-          return !1;
-        let spyDisabled = requireFunction(
-          view.spy_disabled,
-          `${FOREIGN_PANEL} Vue view.spy_disabled`
-        );
-        return Reflect.apply(spyDisabled, view, [governmentId]) === !0;
-      },
-      trainSpy(governmentId) {
-        let view = getVueById(FOREIGN_PANEL);
-        if (!isRecord(view) || typeof view.spy != "function")
-          return !1;
-        let spy = requireFunction(view.spy, `${FOREIGN_PANEL} Vue view.spy`);
-        return Reflect.apply(spy, view, [governmentId]), !0;
-      }
-    });
-  }
-
-  // src/adapters/browser/game-government-selection.ts
-  var GOVERNMENT_MODAL = "govModal";
-  function createGameGovernmentSelection({
-    getVueById
-  }) {
-    return Object.freeze({
-      selectGovernment(government) {
-        let view = getVueById(GOVERNMENT_MODAL);
-        if (!isRecord(view) || typeof view.setGov != "function")
-          return !1;
-        let setGov = requireFunction(
-          view.setGov,
-          `${GOVERNMENT_MODAL} Vue view.setGov`
-        );
-        return Reflect.apply(setGov, view, [government]), !0;
-      }
-    });
-  }
-
-  // src/adapters/browser/game-industry-controls.ts
-  var GRAPHENE_FUEL_METHODS = {
-    Lumber: { add: "addWood", sub: "subWood" },
-    Coal: { add: "addCoal", sub: "subCoal" },
-    Oil: { add: "addOil", sub: "subOil" }
-  };
-  function createGameIndustryControls({
-    getVueById,
-    clickSteps
-  }) {
-    function step(request, method, takesId) {
-      let view = getVueById(request.elementId);
-      if (!isRecord(view) || typeof view[method] != "function")
-        return !1;
-      let call4 = requireFunction(
-        view[method],
-        `${request.elementId} Vue view.${method}`
-      ), arg = takesId ? request.id : void 0, args = arg === void 0 ? [] : [arg];
-      for (let _step of clickSteps(request.count))
-        Reflect.apply(call4, view, args);
-      return !0;
-    }
-    function fuelMethod(elementId, fuelId, direction) {
-      if (elementId === "iGraphene") {
-        let pair = fuelId === void 0 ? void 0 : GRAPHENE_FUEL_METHODS[fuelId];
-        return pair === void 0 ? null : { method: pair[direction], takesId: !1 };
-      }
-      return {
-        method: direction === "add" ? "addFuel" : "subFuel",
-        takesId: !0
-      };
-    }
-    function fuelStep(request, direction) {
-      let pair = fuelMethod(request.elementId, request.id, direction);
-      return pair === null ? !1 : step(request, pair.method, pair.takesId);
-    }
-    function select(request) {
-      let view = getVueById(request.elementId);
-      if (!isRecord(view) || typeof view.avail != "function" || typeof view.setVal != "function")
-        return !1;
-      let avail = requireFunction(
-        view.avail,
-        `${request.elementId} Vue view.avail`
-      ), setVal = requireFunction(
-        view.setVal,
-        `${request.elementId} Vue view.setVal`
-      );
-      return Reflect.apply(avail, view, [request.id]) !== !0 ? !1 : (Reflect.apply(setVal, view, [request.id]), !0);
-    }
-    return Object.freeze({
-      isRendered(elementId) {
-        return isRecord(getVueById(elementId));
-      },
-      increase(request) {
-        return step(request, "add", request.id !== void 0);
-      },
-      decrease(request) {
-        return step(request, "sub", request.id !== void 0);
-      },
-      increaseItem(request) {
-        return step(request, "addItem", request.id !== void 0);
-      },
-      decreaseItem(request) {
-        return step(request, "subItem", request.id !== void 0);
-      },
-      increaseMetal(request) {
-        return step(request, "addMetal", request.id !== void 0);
-      },
-      decreaseMetal(request) {
-        return step(request, "subMetal", request.id !== void 0);
-      },
-      increaseTrade(request) {
-        return step(request, "more", request.id !== void 0);
-      },
-      decreaseTrade(request) {
-        return step(request, "less", request.id !== void 0);
-      },
-      increaseSpell(request) {
-        return step(request, "addSpell", !0);
-      },
-      decreaseSpell(request) {
-        return step(request, "subSpell", !0);
-      },
-      increaseFuel(request) {
-        return fuelStep(request, "add");
-      },
-      decreaseFuel(request) {
-        return fuelStep(request, "sub");
-      },
-      select
-    });
-  }
-
-  // src/adapters/browser/game-fleet-controls.ts
-  function readShipyard(getGame) {
-    let game = getGame(), global = isRecord(game) ? game.global : void 0, space = isRecord(global) ? global.space : void 0, yard = isRecord(space) ? space.shipyard : void 0;
-    if (!isRecord(yard))
-      return null;
-    let ships = yard.ships;
-    return Array.isArray(ships) ? { sort: yard.sort === !0, ships } : null;
-  }
-  function createGameFleetControls({
-    getVueById,
-    clickSteps,
-    getGame,
-    getJQuery
-  }) {
-    function step(elementId, method, args, count2) {
-      let view = getVueById(elementId);
-      if (!isRecord(view) || typeof view[method] != "function")
-        return !1;
-      let call4 = requireFunction(
-        view[method],
-        `${elementId} Vue view.${method}`
-      );
-      for (let _step of clickSteps(count2))
-        Reflect.apply(call4, view, args);
-      return !0;
-    }
-    function stepShip(request, method) {
-      return step(
-        request.elementId,
-        method,
-        [request.region, request.ship],
-        request.count
-      );
-    }
-    function toggleSort(elementId) {
-      getJQuery()(`#${elementId} .b-checkbox`).eq(1).click();
-    }
-    return Object.freeze({
-      isRendered(elementId) {
-        return isRecord(getVueById(elementId));
-      },
-      isPartAvailable(request) {
-        if (request.index === void 0)
-          return !1;
-        let view = getVueById(request.elementId);
-        if (!isRecord(view) || typeof view.avail != "function")
-          return !1;
-        let avail = requireFunction(
-          view.avail,
-          `${request.elementId} Vue view.avail`
-        );
-        return !!Reflect.apply(avail, view, [request.type, request.index, request.part]);
-      },
-      setPart(request) {
-        return step(request.elementId, "setVal", [request.type, request.part], 1);
-      },
-      hasShipPower(elementId) {
-        let view = getVueById(elementId);
-        if (!isRecord(view) || typeof view.powerText != "function")
-          return !1;
-        let powerText = requireFunction(
-          view.powerText,
-          `${elementId} Vue view.powerText`
-        ), text = Reflect.apply(powerText, view, []);
-        return typeof text == "string" && !text.includes("danger");
-      },
-      buildShip(request) {
-        let view = getVueById(request.elementId);
-        if (!isRecord(view) || typeof view.build != "function")
-          return !1;
-        let build = requireFunction(
-          view.build,
-          `${request.elementId} Vue view.build`
-        ), yard = readShipyard(getGame), sort = yard !== null && yard.sort;
-        if (sort && toggleSort(request.elementId), Reflect.apply(build, view, []), yard !== null) {
-          let shipRow = getVueById("shipReg0");
-          if (isRecord(shipRow) && typeof shipRow.setLoc == "function") {
-            let setLoc = requireFunction(
-              shipRow.setLoc,
-              "shipReg0 Vue view.setLoc"
-            );
-            Reflect.apply(setLoc, shipRow, [request.region, yard.ships.length]);
-          }
-        }
-        return sort && toggleSort(request.elementId), !0;
-      },
-      addShips(request) {
-        return stepShip(request, "add");
-      },
-      subShips(request) {
-        return stepShip(request, "sub");
-      }
-    });
-  }
-
-  // src/adapters/browser/game-garrison-controls.ts
-  function currentGarrisonTactic(getGame) {
-    let game = getGame(), global = isRecord(game) ? game.global : void 0, civic = isRecord(global) ? global.civic : void 0, garrison = isRecord(civic) ? civic.garrison : void 0, tactic = isRecord(garrison) ? garrison.tactic : void 0;
-    return typeof tactic == "number" && Number.isFinite(tactic) ? tactic : null;
-  }
-  function createGameGarrisonControls({
-    getVueById,
-    clickSteps,
-    getGame,
-    clearClickMultipliers,
-    callVueMethod
-  }) {
-    function single(elementId, method, args) {
-      let view = getVueById(elementId);
-      if (!isRecord(view) || typeof view[method] != "function")
-        return !1;
-      let call4 = requireFunction(
-        view[method],
-        `${elementId} Vue view.${method}`
-      );
-      return Reflect.apply(call4, view, args), !0;
-    }
-    function step(elementId, method, count2) {
-      let view = getVueById(elementId);
-      if (!isRecord(view) || typeof view[method] != "function")
-        return !1;
-      let call4 = requireFunction(
-        view[method],
-        `${elementId} Vue view.${method}`
-      );
-      for (let _step of clickSteps(count2))
-        Reflect.apply(call4, view, []);
-      return !0;
-    }
-    return Object.freeze({
-      isRendered(elementId) {
-        return isRecord(getVueById(elementId));
-      },
-      launchCampaign(request) {
-        return single(request.elementId, "campaign", [request.govIndex]);
-      },
-      hire(elementId) {
-        let view = getVueById(elementId);
-        if (!isRecord(view) || typeof view.hire != "function")
-          return !1;
-        clearClickMultipliers();
-        let hire = requireFunction(view.hire, `${elementId} Vue view.hire`);
-        return Reflect.apply(hire, view, []), !0;
-      },
-      setTactic(request) {
-        let view = getVueById(request.elementId);
-        if (!isRecord(view) || typeof view.next != "function" || typeof view.last != "function")
-          return !1;
-        let next = requireFunction(
-          view.next,
-          `${request.elementId} Vue view.next`
-        ), last = requireFunction(
-          view.last,
-          `${request.elementId} Vue view.last`
-        ), current = currentGarrisonTactic(getGame);
-        if (current === null)
-          return !1;
-        for (let tactic = current; tactic < request.tactic; tactic++)
-          Reflect.apply(next, view, []);
-        for (let tactic = current; tactic > request.tactic; tactic--)
-          Reflect.apply(last, view, []);
-        return !0;
-      },
-      campaignTitle(request) {
-        let view = getVueById(request.elementId);
-        if (!isRecord(view))
-          return null;
-        let result2 = callVueMethod(view, "tactics", [request.tactic]);
-        return typeof result2 == "string" ? result2 : null;
-      },
-      addBattalions(request) {
-        return step(request.elementId, "aNext", request.count);
-      },
-      removeBattalions(request) {
-        return step(request.elementId, "aLast", request.count);
-      },
-      addHellSoldiers(request) {
-        return step(request.elementId, "aNext", request.count);
-      },
-      removeHellSoldiers(request) {
-        return step(request.elementId, "aLast", request.count);
-      },
-      addHellPatrols(request) {
-        return step(request.elementId, "patInc", request.count);
-      },
-      removeHellPatrols(request) {
-        return step(request.elementId, "patDec", request.count);
-      },
-      addHellPatrolSize(request) {
-        return step(request.elementId, "patSizeInc", request.count);
-      },
-      removeHellPatrolSize(request) {
-        return step(request.elementId, "patSizeDec", request.count);
-      },
-      attackFortress(request) {
-        return single(request.elementId, "attack", [request.enemyIndex]);
-      }
-    });
-  }
-
-  // src/adapters/browser/game-mech-controls.ts
-  function hasAssemblyMethods(view) {
-    return isRecord(view) ? typeof view.setSize == "function" && typeof view.setType == "function" && typeof view.setWep == "function" && typeof view.setEquip == "function" && typeof view.build == "function" : !1;
-  }
-  function createGameMechControls({
-    getVueById
-  }) {
-    return Object.freeze({
-      isRendered(elementId) {
-        return isRecord(getVueById(elementId));
-      },
-      assembleMech(request) {
-        let view = getVueById(request.elementId);
-        if (!hasAssemblyMethods(view))
-          return !1;
-        let b = view.b;
-        isRecord(b) && (b.infernal = request.infernal);
-        let method = (name) => requireFunction(view[name], `${request.elementId} Vue view.${name}`), setSize = method("setSize"), setType = method("setType"), setWep = method("setWep"), setEquip = method("setEquip"), build = method("build");
-        Reflect.apply(setSize, view, [request.size]), Reflect.apply(setType, view, [request.chassis]);
-        for (let slot = 0; slot < request.hardpoints.length; slot++)
-          Reflect.apply(setWep, view, [request.hardpoints[slot], slot]);
-        for (let slot = 0; slot < request.equips.length; slot++)
-          Reflect.apply(setEquip, view, [request.equips[slot], slot]);
-        return Reflect.apply(build, view, []), !0;
-      }
-    });
-  }
-
-  // src/adapters/browser/game-mech-list-controls.ts
-  function hasScrapMethod(view) {
-    return isRecord(view) && typeof view.scrap == "function";
-  }
-  function createGameMechListControls({
-    getVueById,
-    getSortable,
-    getPageSortable,
-    isSandboxBypass,
-    cloneIntoPage
-  }) {
-    return Object.freeze({
-      isRendered(elementId) {
-        return isRecord(getVueById(elementId));
-      },
-      scrapMech(request) {
-        let view = getVueById(request.elementId);
-        return hasScrapMethod(view) ? (Reflect.apply(view.scrap, view, [request.mechId]), !0) : !1;
-      },
-      dragMech(request) {
-        let view = getVueById(request.elementId);
-        if (!isRecord(view))
-          return !1;
-        let element = readProperty(view, "$el");
-        if (typeof element != "object" || element === null)
-          return !1;
-        let sortable = isSandboxBypass() ? getPageSortable() : getSortable();
-        if (!isRecord(sortable) || typeof sortable.get != "function")
-          return !1;
-        let instance = Reflect.apply(sortable.get, sortable, [element]);
-        if (!isRecord(instance))
-          return !1;
-        let options2 = instance.options;
-        if (!isRecord(options2) || typeof options2.onEnd != "function")
-          return !1;
-        let event = {
-          oldDraggableIndex: request.oldIndex,
-          newDraggableIndex: request.newIndex,
-          from: { querySelectorAll: () => [], insertBefore: () => !1 }
-        }, payload = isSandboxBypass() ? cloneIntoPage(event, { cloneFunctions: !0 }) : event;
-        return Reflect.apply(options2.onEnd, options2, [payload]), !0;
-      }
-    });
-  }
-
-  // src/adapters/browser/game-job-controls.ts
-  function createGameJobControls({
-    getVueById,
-    clickSteps
-  }) {
-    function click(method, { elementId, count: count2, craftedResourceId }) {
-      let view = getVueById(elementId);
-      if (!isRecord(view) || typeof view[method] != "function")
-        return !1;
-      let call4 = requireFunction(
-        view[method],
-        `${elementId} Vue view.${method}`
-      ), args = craftedResourceId === void 0 ? [] : [craftedResourceId];
-      for (let _step of clickSteps(count2))
-        Reflect.apply(call4, view, args);
-      return !0;
-    }
-    return Object.freeze({
-      assign(request) {
-        return click("add", request);
-      },
-      unassign(request) {
-        return click("sub", request);
-      },
-      setDefault({ elementId, jobId }) {
-        let view = getVueById(elementId);
-        if (!isRecord(view) || typeof view.setDefault != "function")
-          return !1;
-        let setDefault = requireFunction(
-          view.setDefault,
-          `${elementId} Vue view.setDefault`
-        );
-        return Reflect.apply(setDefault, view, [jobId]), !0;
       }
     });
   }
@@ -2708,71 +2063,6 @@
           keyUp: throughPage(keyUp),
           moveAll: throughPage(moveAll)
         };
-      }
-    });
-  }
-
-  // src/adapters/browser/game-market-controls.ts
-  var QUANTITY_PANEL = "market-qty", MINIMUM_MULTIPLIER = 1;
-  function createGameMarketControls({
-    getVueById,
-    clickSteps
-  }) {
-    function rowMethod(row, method) {
-      let view = getVueById(row.elementId);
-      if (!(!isRecord(view) || typeof view[method] != "function"))
-        return {
-          view,
-          call: requireFunction(
-            view[method],
-            `${row.elementId} Vue view.${method}`
-          )
-        };
-    }
-    function trade(row, method) {
-      let target = rowMethod(row, method);
-      return target === void 0 ? !1 : (Reflect.apply(target.call, target.view, [row.id]), !0);
-    }
-    function moveRoutes(request, method) {
-      let target = rowMethod(request, method);
-      if (target === void 0)
-        return !1;
-      for (let _step of clickSteps(request.count))
-        Reflect.apply(target.call, target.view, [request.id]);
-      return !0;
-    }
-    return Object.freeze({
-      isRowRendered(elementId) {
-        return isRecord(getVueById(elementId));
-      },
-      maxMultiplier() {
-        let view = getVueById(QUANTITY_PANEL);
-        if (!isRecord(view) || typeof view.limit != "function")
-          return MINIMUM_MULTIPLIER;
-        let limit = requireFunction(
-          view.limit,
-          `${QUANTITY_PANEL} Vue view.limit`
-        ), value = Reflect.apply(limit, view, []);
-        return typeof value == "number" && Number.isFinite(value) ? value : MINIMUM_MULTIPLIER;
-      },
-      setMultiplier(multiplier) {
-        let view = getVueById(QUANTITY_PANEL);
-        return isRecord(view) ? (view.qty = multiplier, !0) : !1;
-      },
-      buy(row) {
-        return trade(row, "purchase");
-      },
-      sell(row) {
-        return trade(row, "sell");
-      },
-      clearTradeRoutes(row) {
-        return trade(row, "zero");
-      },
-      addTradeRoutes(request) {
-        return moveRoutes(request, "autoBuy");
-      },
-      removeTradeRoutes(request) {
-        return moveRoutes(request, "autoSell");
       }
     });
   }
@@ -2972,182 +2262,6 @@
           return;
         let click = readProperty(button, "click");
         typeof click == "function" && Reflect.apply(click, button, []);
-      }
-    });
-  }
-
-  // src/adapters/browser/game-project-controls.ts
-  function createGameProjectControls({
-    getVueById,
-    getMainVue
-  }) {
-    function readTabPreferences() {
-      let mainView = getMainVue();
-      if (!isRecord(mainView))
-        return;
-      let preferences = mainView.s;
-      return isRecord(preferences) ? preferences : void 0;
-    }
-    return Object.freeze({
-      build({
-        elementId,
-        projectId,
-        steps,
-        skipTabRedraw
-      }) {
-        let view = getVueById(elementId);
-        if (!isRecord(view) || typeof view.build != "function")
-          return !1;
-        let buildProject = requireFunction(
-          view.build,
-          `${elementId} Vue view.build`
-        ), purchase = () => Reflect.apply(buildProject, view, [projectId, steps]), preferences = skipTabRedraw ? readTabPreferences() : void 0;
-        if (preferences === void 0)
-          return purchase(), !0;
-        let restore = preferences.tabLoad;
-        try {
-          preferences.tabLoad = !1, purchase();
-        } finally {
-          preferences.tabLoad = restore;
-        }
-        return !0;
-      }
-    });
-  }
-
-  // src/adapters/browser/game-storage-controls.ts
-  var CONSTRUCTION_PANEL = "createHead", CAPACITY_INDEX = 1;
-  function createGameStorageControls({
-    getVueById,
-    clickSteps
-  }) {
-    function method(elementId, name) {
-      let view = getVueById(elementId);
-      if (!(!isRecord(view) || typeof view[name] != "function"))
-        return {
-          view,
-          call: requireFunction(view[name], `${elementId} Vue view.${name}`)
-        };
-    }
-    function capacity(describe) {
-      let target = method(CONSTRUCTION_PANEL, describe);
-      if (target === void 0)
-        return 0;
-      let sentence = Reflect.apply(target.call, target.view, []);
-      if (typeof sentence != "string")
-        return 0;
-      let stated = sentence.match(/\d+/g)?.[CAPACITY_INDEX];
-      return stated === void 0 ? 0 : Number(stated);
-    }
-    function build(count2, name) {
-      let target = method(CONSTRUCTION_PANEL, name);
-      if (target === void 0)
-        return !1;
-      for (let _step of clickSteps(count2))
-        Reflect.apply(target.call, target.view, []);
-      return !0;
-    }
-    function stack(request, name) {
-      let target = method(request.elementId, name);
-      if (target === void 0)
-        return !1;
-      for (let _step of clickSteps(request.count))
-        Reflect.apply(target.call, target.view, [request.id]);
-      return !0;
-    }
-    return Object.freeze({
-      isConstructionRendered() {
-        return isRecord(getVueById(CONSTRUCTION_PANEL));
-      },
-      crateCapacity() {
-        return capacity("buildCrateDesc");
-      },
-      containerCapacity() {
-        return capacity("buildContainerDesc");
-      },
-      constructCrates(count2) {
-        return build(count2, "crate");
-      },
-      constructContainers(count2) {
-        return build(count2, "container");
-      },
-      isStackRendered(elementId) {
-        return isRecord(getVueById(elementId));
-      },
-      assignCrates(request) {
-        return stack(request, "addCrate");
-      },
-      unassignCrates(request) {
-        return stack(request, "subCrate");
-      },
-      assignContainers(request) {
-        return stack(request, "addCon");
-      },
-      unassignContainers(request) {
-        return stack(request, "subCon");
-      }
-    });
-  }
-
-  // src/adapters/browser/game-research-controls.ts
-  function buyControl(elementId) {
-    return `#${elementId} > .button:not(.precog)`;
-  }
-  function completedMarker(elementId) {
-    return `#${elementId} .oldTech`;
-  }
-  function createGameResearchControls({
-    getDocument,
-    getVueById
-  }) {
-    function hasChild(selector) {
-      let element = getDocument().querySelector(selector);
-      return element != null;
-    }
-    return Object.freeze({
-      isOffered(elementId) {
-        return hasChild(buyControl(elementId)) && isRecord(getVueById(elementId));
-      },
-      isCompleted(elementId) {
-        return hasChild(completedMarker(elementId));
-      },
-      start(elementId) {
-        let view = getVueById(elementId);
-        if (!isRecord(view) || typeof view.action != "function")
-          return !1;
-        let action = requireFunction(
-          view.action,
-          `${elementId} Vue view.action`
-        );
-        return Reflect.apply(action, view, []), !0;
-      }
-    });
-  }
-
-  // src/adapters/browser/game-trait-controls.ts
-  var TRAIT_PANEL = "geneticBreakdown";
-  function createGameTraitControls({
-    getVueById
-  }) {
-    function spend(methodName, traitName) {
-      let view = getVueById(TRAIT_PANEL);
-      if (!isRecord(view) || typeof view[methodName] != "function")
-        return !1;
-      let method = requireFunction(
-        view[methodName],
-        `${TRAIT_PANEL} Vue view.${methodName}`
-      );
-      return Reflect.apply(method, view, [traitName]), !0;
-    }
-    return Object.freeze({
-      buyMinorTrait(traitName) {
-        return spend("gene", traitName);
-      },
-      gainTrait(traitName) {
-        return spend("gain", traitName);
-      },
-      purgeTrait(traitName) {
-        return spend("purge", traitName);
       }
     });
   }
@@ -6014,6 +5128,966 @@ Only continue if you trust the source. Injected code:
   // src/bootstrap/core-manager-control.ts
   function createCoreManagerControl(dependencies) {
     return createCoreManagers(dependencies);
+  }
+
+  // src/adapters/browser/game-action-controls.ts
+  var TOOLTIP_ID = "popper", PARKED_TOOLTIP_ID = "TotallyNotAPopper";
+  function createGameActionControls({
+    getVueById,
+    selectTooltip,
+    clickSteps
+  }) {
+    let captured = /* @__PURE__ */ new Map();
+    function controlOf(elementId) {
+      let held = captured.get(elementId);
+      if (held !== void 0)
+        return held;
+      let view = getVueById(elementId);
+      return isRecord(view) ? view : void 0;
+    }
+    function methodOf(elementId, method) {
+      let view = controlOf(elementId);
+      if (!(view === void 0 || typeof view[method] != "function"))
+        return {
+          view,
+          call: requireFunction(view[method], `${elementId} Vue view.${method}`)
+        };
+    }
+    function click(method, { elementId, count: count2 }) {
+      let target = methodOf(elementId, method);
+      if (target === void 0)
+        return !1;
+      for (let _step of clickSteps(count2))
+        Reflect.apply(target.call, target.view, []);
+      return !0;
+    }
+    function isForeignTooltip(tooltip, elementId) {
+      if (tooltip.length === 0)
+        return !1;
+      let owner = tooltip.data("id");
+      return typeof owner != "string" || !owner.includes(elementId);
+    }
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      activate(elementId) {
+        let target = methodOf(elementId, "action");
+        if (target === void 0)
+          return !1;
+        let tooltip = selectTooltip(), parked = isForeignTooltip(tooltip, elementId);
+        parked && tooltip.attr("id", PARKED_TOOLTIP_ID);
+        try {
+          Reflect.apply(target.call, target.view, []);
+        } finally {
+          parked && tooltip.attr("id", TOOLTIP_ID);
+        }
+        return !0;
+      },
+      isTooltipShown() {
+        let tooltip = selectTooltip();
+        return tooltip.length > 0 && tooltip.is(":visible");
+      },
+      powerOn(request) {
+        return click("power_on", request);
+      },
+      powerOff(request) {
+        return click("power_off", request);
+      },
+      capture(elementId) {
+        let view = getVueById(elementId);
+        return isRecord(view) ? (captured.set(elementId, view), !0) : !1;
+      },
+      isCaptured(elementId) {
+        return captured.has(elementId);
+      }
+    });
+  }
+
+  // src/adapters/browser/game-crafting-controls.ts
+  function createGameCraftingControls({
+    getVueById,
+    clearClickMultipliers
+  }) {
+    return Object.freeze({
+      craft({ elementId, resourceId: resourceId3, count: count2 }) {
+        let view = getVueById(elementId);
+        if (!isRecord(view) || typeof view.craft != "function")
+          return !1;
+        let call4 = requireFunction(
+          view.craft,
+          `${elementId} Vue view.craft`
+        );
+        return clearClickMultipliers(), Reflect.apply(call4, view, [resourceId3, count2]), !0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-click-multipliers.ts
+  function createGameClickMultipliers({
+    getKeyManager
+  }) {
+    function callKeyManager(name, args) {
+      let keyManager = requireRecord(getKeyManager(), "KeyManager"), method = requireFunction(keyManager[name], `KeyManager.${name}`);
+      return Reflect.apply(method, keyManager, args);
+    }
+    return Object.freeze({
+      *steps(count2) {
+        let sequence = requireRecord(
+          callKeyManager("click", [count2]),
+          "KeyManager.click() result"
+        ), iterate = requireFunction(
+          sequence[Symbol.iterator],
+          "KeyManager.click() result[Symbol.iterator]"
+        ), iterator = requireRecord(
+          Reflect.apply(iterate, sequence, []),
+          "KeyManager.click() iterator"
+        ), next = requireFunction(
+          iterator.next,
+          "KeyManager.click() iterator.next"
+        );
+        for (; ; ) {
+          let result2 = requireRecord(
+            Reflect.apply(next, iterator, []),
+            "KeyManager.click() iterator result"
+          );
+          if (result2.done)
+            return;
+          yield result2.value;
+        }
+      },
+      holdMaximum() {
+        callKeyManager("set", [!0, !0, !0]);
+      },
+      clear() {
+        callKeyManager("set", [!1, !1, !1]);
+      }
+    });
+  }
+
+  // src/adapters/browser/game-disposal-controls.ts
+  function createGameDisposalControls({
+    getVueById,
+    clickSteps
+  }) {
+    function step(request, method) {
+      let view = getVueById(request.elementId);
+      if (!isRecord(view) || typeof view[method] != "function")
+        return !1;
+      let call4 = requireFunction(
+        view[method],
+        `${request.elementId} Vue view.${method}`
+      );
+      for (let _step of clickSteps(request.count))
+        Reflect.apply(call4, view, [request.id]);
+      return !0;
+    }
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      increaseSupply(request) {
+        return step(request, "supplyMore");
+      },
+      decreaseSupply(request) {
+        return step(request, "supplyLess");
+      },
+      increaseEject(request) {
+        return step(request, "ejectMore");
+      },
+      decreaseEject(request) {
+        return step(request, "ejectLess");
+      }
+    });
+  }
+
+  // src/adapters/browser/game-espionage-controls.ts
+  var ESPIONAGE_MODAL = "espModal";
+  function createGameEspionageControls({
+    getVueById
+  }) {
+    return Object.freeze({
+      performEspionage(operation2, govIndex) {
+        let view = getVueById(ESPIONAGE_MODAL);
+        if (!isRecord(view) || typeof view[operation2] != "function")
+          return !1;
+        let method = requireFunction(
+          view[operation2],
+          `${ESPIONAGE_MODAL} Vue view.${operation2}`
+        );
+        return Reflect.apply(method, view, [govIndex]), !0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-foreign-controls.ts
+  var FOREIGN_PANEL = "foreign";
+  function createGameForeignControls({
+    getVueById
+  }) {
+    return Object.freeze({
+      isUnlocked() {
+        let view = getVueById(FOREIGN_PANEL);
+        if (!isRecord(view) || typeof view.vis != "function")
+          return !1;
+        let vis = requireFunction(view.vis, `${FOREIGN_PANEL} Vue view.vis`);
+        return Reflect.apply(vis, view, []) === !0;
+      },
+      isSpyDisabled(governmentId) {
+        let view = getVueById(FOREIGN_PANEL);
+        if (!isRecord(view) || typeof view.spy_disabled != "function")
+          return !1;
+        let spyDisabled = requireFunction(
+          view.spy_disabled,
+          `${FOREIGN_PANEL} Vue view.spy_disabled`
+        );
+        return Reflect.apply(spyDisabled, view, [governmentId]) === !0;
+      },
+      trainSpy(governmentId) {
+        let view = getVueById(FOREIGN_PANEL);
+        if (!isRecord(view) || typeof view.spy != "function")
+          return !1;
+        let spy = requireFunction(view.spy, `${FOREIGN_PANEL} Vue view.spy`);
+        return Reflect.apply(spy, view, [governmentId]), !0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-government-selection.ts
+  var GOVERNMENT_MODAL = "govModal";
+  function createGameGovernmentSelection({
+    getVueById
+  }) {
+    return Object.freeze({
+      selectGovernment(government) {
+        let view = getVueById(GOVERNMENT_MODAL);
+        if (!isRecord(view) || typeof view.setGov != "function")
+          return !1;
+        let setGov = requireFunction(
+          view.setGov,
+          `${GOVERNMENT_MODAL} Vue view.setGov`
+        );
+        return Reflect.apply(setGov, view, [government]), !0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-industry-controls.ts
+  var GRAPHENE_FUEL_METHODS = {
+    Lumber: { add: "addWood", sub: "subWood" },
+    Coal: { add: "addCoal", sub: "subCoal" },
+    Oil: { add: "addOil", sub: "subOil" }
+  };
+  function createGameIndustryControls({
+    getVueById,
+    clickSteps
+  }) {
+    function step(request, method, takesId) {
+      let view = getVueById(request.elementId);
+      if (!isRecord(view) || typeof view[method] != "function")
+        return !1;
+      let call4 = requireFunction(
+        view[method],
+        `${request.elementId} Vue view.${method}`
+      ), arg = takesId ? request.id : void 0, args = arg === void 0 ? [] : [arg];
+      for (let _step of clickSteps(request.count))
+        Reflect.apply(call4, view, args);
+      return !0;
+    }
+    function fuelMethod(elementId, fuelId, direction) {
+      if (elementId === "iGraphene") {
+        let pair = fuelId === void 0 ? void 0 : GRAPHENE_FUEL_METHODS[fuelId];
+        return pair === void 0 ? null : { method: pair[direction], takesId: !1 };
+      }
+      return {
+        method: direction === "add" ? "addFuel" : "subFuel",
+        takesId: !0
+      };
+    }
+    function fuelStep(request, direction) {
+      let pair = fuelMethod(request.elementId, request.id, direction);
+      return pair === null ? !1 : step(request, pair.method, pair.takesId);
+    }
+    function select(request) {
+      let view = getVueById(request.elementId);
+      if (!isRecord(view) || typeof view.avail != "function" || typeof view.setVal != "function")
+        return !1;
+      let avail = requireFunction(
+        view.avail,
+        `${request.elementId} Vue view.avail`
+      ), setVal = requireFunction(
+        view.setVal,
+        `${request.elementId} Vue view.setVal`
+      );
+      return Reflect.apply(avail, view, [request.id]) !== !0 ? !1 : (Reflect.apply(setVal, view, [request.id]), !0);
+    }
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      increase(request) {
+        return step(request, "add", request.id !== void 0);
+      },
+      decrease(request) {
+        return step(request, "sub", request.id !== void 0);
+      },
+      increaseItem(request) {
+        return step(request, "addItem", request.id !== void 0);
+      },
+      decreaseItem(request) {
+        return step(request, "subItem", request.id !== void 0);
+      },
+      increaseMetal(request) {
+        return step(request, "addMetal", request.id !== void 0);
+      },
+      decreaseMetal(request) {
+        return step(request, "subMetal", request.id !== void 0);
+      },
+      increaseTrade(request) {
+        return step(request, "more", request.id !== void 0);
+      },
+      decreaseTrade(request) {
+        return step(request, "less", request.id !== void 0);
+      },
+      increaseSpell(request) {
+        return step(request, "addSpell", !0);
+      },
+      decreaseSpell(request) {
+        return step(request, "subSpell", !0);
+      },
+      increaseFuel(request) {
+        return fuelStep(request, "add");
+      },
+      decreaseFuel(request) {
+        return fuelStep(request, "sub");
+      },
+      select
+    });
+  }
+
+  // src/adapters/browser/game-fleet-controls.ts
+  function readShipyard(getGame) {
+    let game = getGame(), global = isRecord(game) ? game.global : void 0, space = isRecord(global) ? global.space : void 0, yard = isRecord(space) ? space.shipyard : void 0;
+    if (!isRecord(yard))
+      return null;
+    let ships = yard.ships;
+    return Array.isArray(ships) ? { sort: yard.sort === !0, ships } : null;
+  }
+  function createGameFleetControls({
+    getVueById,
+    clickSteps,
+    getGame,
+    getJQuery
+  }) {
+    function step(elementId, method, args, count2) {
+      let view = getVueById(elementId);
+      if (!isRecord(view) || typeof view[method] != "function")
+        return !1;
+      let call4 = requireFunction(
+        view[method],
+        `${elementId} Vue view.${method}`
+      );
+      for (let _step of clickSteps(count2))
+        Reflect.apply(call4, view, args);
+      return !0;
+    }
+    function stepShip(request, method) {
+      return step(
+        request.elementId,
+        method,
+        [request.region, request.ship],
+        request.count
+      );
+    }
+    function toggleSort(elementId) {
+      getJQuery()(`#${elementId} .b-checkbox`).eq(1).click();
+    }
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      isPartAvailable(request) {
+        if (request.index === void 0)
+          return !1;
+        let view = getVueById(request.elementId);
+        if (!isRecord(view) || typeof view.avail != "function")
+          return !1;
+        let avail = requireFunction(
+          view.avail,
+          `${request.elementId} Vue view.avail`
+        );
+        return !!Reflect.apply(avail, view, [request.type, request.index, request.part]);
+      },
+      setPart(request) {
+        return step(request.elementId, "setVal", [request.type, request.part], 1);
+      },
+      hasShipPower(elementId) {
+        let view = getVueById(elementId);
+        if (!isRecord(view) || typeof view.powerText != "function")
+          return !1;
+        let powerText = requireFunction(
+          view.powerText,
+          `${elementId} Vue view.powerText`
+        ), text = Reflect.apply(powerText, view, []);
+        return typeof text == "string" && !text.includes("danger");
+      },
+      buildShip(request) {
+        let view = getVueById(request.elementId);
+        if (!isRecord(view) || typeof view.build != "function")
+          return !1;
+        let build = requireFunction(
+          view.build,
+          `${request.elementId} Vue view.build`
+        ), yard = readShipyard(getGame), sort = yard !== null && yard.sort;
+        if (sort && toggleSort(request.elementId), Reflect.apply(build, view, []), yard !== null) {
+          let shipRow = getVueById("shipReg0");
+          if (isRecord(shipRow) && typeof shipRow.setLoc == "function") {
+            let setLoc = requireFunction(
+              shipRow.setLoc,
+              "shipReg0 Vue view.setLoc"
+            );
+            Reflect.apply(setLoc, shipRow, [request.region, yard.ships.length]);
+          }
+        }
+        return sort && toggleSort(request.elementId), !0;
+      },
+      addShips(request) {
+        return stepShip(request, "add");
+      },
+      subShips(request) {
+        return stepShip(request, "sub");
+      }
+    });
+  }
+
+  // src/adapters/browser/game-garrison-controls.ts
+  function currentGarrisonTactic(getGame) {
+    let game = getGame(), global = isRecord(game) ? game.global : void 0, civic = isRecord(global) ? global.civic : void 0, garrison = isRecord(civic) ? civic.garrison : void 0, tactic = isRecord(garrison) ? garrison.tactic : void 0;
+    return typeof tactic == "number" && Number.isFinite(tactic) ? tactic : null;
+  }
+  function createGameGarrisonControls({
+    getVueById,
+    clickSteps,
+    getGame,
+    clearClickMultipliers,
+    callVueMethod
+  }) {
+    function single(elementId, method, args) {
+      let view = getVueById(elementId);
+      if (!isRecord(view) || typeof view[method] != "function")
+        return !1;
+      let call4 = requireFunction(
+        view[method],
+        `${elementId} Vue view.${method}`
+      );
+      return Reflect.apply(call4, view, args), !0;
+    }
+    function step(elementId, method, count2) {
+      let view = getVueById(elementId);
+      if (!isRecord(view) || typeof view[method] != "function")
+        return !1;
+      let call4 = requireFunction(
+        view[method],
+        `${elementId} Vue view.${method}`
+      );
+      for (let _step of clickSteps(count2))
+        Reflect.apply(call4, view, []);
+      return !0;
+    }
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      launchCampaign(request) {
+        return single(request.elementId, "campaign", [request.govIndex]);
+      },
+      hire(elementId) {
+        let view = getVueById(elementId);
+        if (!isRecord(view) || typeof view.hire != "function")
+          return !1;
+        clearClickMultipliers();
+        let hire = requireFunction(view.hire, `${elementId} Vue view.hire`);
+        return Reflect.apply(hire, view, []), !0;
+      },
+      setTactic(request) {
+        let view = getVueById(request.elementId);
+        if (!isRecord(view) || typeof view.next != "function" || typeof view.last != "function")
+          return !1;
+        let next = requireFunction(
+          view.next,
+          `${request.elementId} Vue view.next`
+        ), last = requireFunction(
+          view.last,
+          `${request.elementId} Vue view.last`
+        ), current = currentGarrisonTactic(getGame);
+        if (current === null)
+          return !1;
+        for (let tactic = current; tactic < request.tactic; tactic++)
+          Reflect.apply(next, view, []);
+        for (let tactic = current; tactic > request.tactic; tactic--)
+          Reflect.apply(last, view, []);
+        return !0;
+      },
+      campaignTitle(request) {
+        let view = getVueById(request.elementId);
+        if (!isRecord(view))
+          return null;
+        let result2 = callVueMethod(view, "tactics", [request.tactic]);
+        return typeof result2 == "string" ? result2 : null;
+      },
+      addBattalions(request) {
+        return step(request.elementId, "aNext", request.count);
+      },
+      removeBattalions(request) {
+        return step(request.elementId, "aLast", request.count);
+      },
+      addHellSoldiers(request) {
+        return step(request.elementId, "aNext", request.count);
+      },
+      removeHellSoldiers(request) {
+        return step(request.elementId, "aLast", request.count);
+      },
+      addHellPatrols(request) {
+        return step(request.elementId, "patInc", request.count);
+      },
+      removeHellPatrols(request) {
+        return step(request.elementId, "patDec", request.count);
+      },
+      addHellPatrolSize(request) {
+        return step(request.elementId, "patSizeInc", request.count);
+      },
+      removeHellPatrolSize(request) {
+        return step(request.elementId, "patSizeDec", request.count);
+      },
+      attackFortress(request) {
+        return single(request.elementId, "attack", [request.enemyIndex]);
+      }
+    });
+  }
+
+  // src/adapters/browser/game-mech-controls.ts
+  function hasAssemblyMethods(view) {
+    return isRecord(view) ? typeof view.setSize == "function" && typeof view.setType == "function" && typeof view.setWep == "function" && typeof view.setEquip == "function" && typeof view.build == "function" : !1;
+  }
+  function createGameMechControls({
+    getVueById
+  }) {
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      assembleMech(request) {
+        let view = getVueById(request.elementId);
+        if (!hasAssemblyMethods(view))
+          return !1;
+        let b = view.b;
+        isRecord(b) && (b.infernal = request.infernal);
+        let method = (name) => requireFunction(view[name], `${request.elementId} Vue view.${name}`), setSize = method("setSize"), setType = method("setType"), setWep = method("setWep"), setEquip = method("setEquip"), build = method("build");
+        Reflect.apply(setSize, view, [request.size]), Reflect.apply(setType, view, [request.chassis]);
+        for (let slot = 0; slot < request.hardpoints.length; slot++)
+          Reflect.apply(setWep, view, [request.hardpoints[slot], slot]);
+        for (let slot = 0; slot < request.equips.length; slot++)
+          Reflect.apply(setEquip, view, [request.equips[slot], slot]);
+        return Reflect.apply(build, view, []), !0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-mech-list-controls.ts
+  function hasScrapMethod(view) {
+    return isRecord(view) && typeof view.scrap == "function";
+  }
+  function createGameMechListControls({
+    getVueById,
+    getSortable,
+    getPageSortable,
+    isSandboxBypass,
+    cloneIntoPage
+  }) {
+    return Object.freeze({
+      isRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      scrapMech(request) {
+        let view = getVueById(request.elementId);
+        return hasScrapMethod(view) ? (Reflect.apply(view.scrap, view, [request.mechId]), !0) : !1;
+      },
+      dragMech(request) {
+        let view = getVueById(request.elementId);
+        if (!isRecord(view))
+          return !1;
+        let element = readProperty(view, "$el");
+        if (typeof element != "object" || element === null)
+          return !1;
+        let sortable = isSandboxBypass() ? getPageSortable() : getSortable();
+        if (!isRecord(sortable) || typeof sortable.get != "function")
+          return !1;
+        let instance = Reflect.apply(sortable.get, sortable, [element]);
+        if (!isRecord(instance))
+          return !1;
+        let options2 = instance.options;
+        if (!isRecord(options2) || typeof options2.onEnd != "function")
+          return !1;
+        let event = {
+          oldDraggableIndex: request.oldIndex,
+          newDraggableIndex: request.newIndex,
+          from: { querySelectorAll: () => [], insertBefore: () => !1 }
+        }, payload = isSandboxBypass() ? cloneIntoPage(event, { cloneFunctions: !0 }) : event;
+        return Reflect.apply(options2.onEnd, options2, [payload]), !0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-job-controls.ts
+  function createGameJobControls({
+    getVueById,
+    clickSteps
+  }) {
+    function click(method, { elementId, count: count2, craftedResourceId }) {
+      let view = getVueById(elementId);
+      if (!isRecord(view) || typeof view[method] != "function")
+        return !1;
+      let call4 = requireFunction(
+        view[method],
+        `${elementId} Vue view.${method}`
+      ), args = craftedResourceId === void 0 ? [] : [craftedResourceId];
+      for (let _step of clickSteps(count2))
+        Reflect.apply(call4, view, args);
+      return !0;
+    }
+    return Object.freeze({
+      assign(request) {
+        return click("add", request);
+      },
+      unassign(request) {
+        return click("sub", request);
+      },
+      setDefault({ elementId, jobId }) {
+        let view = getVueById(elementId);
+        if (!isRecord(view) || typeof view.setDefault != "function")
+          return !1;
+        let setDefault = requireFunction(
+          view.setDefault,
+          `${elementId} Vue view.setDefault`
+        );
+        return Reflect.apply(setDefault, view, [jobId]), !0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-market-controls.ts
+  var QUANTITY_PANEL = "market-qty", MINIMUM_MULTIPLIER = 1;
+  function createGameMarketControls({
+    getVueById,
+    clickSteps
+  }) {
+    function rowMethod(row, method) {
+      let view = getVueById(row.elementId);
+      if (!(!isRecord(view) || typeof view[method] != "function"))
+        return {
+          view,
+          call: requireFunction(
+            view[method],
+            `${row.elementId} Vue view.${method}`
+          )
+        };
+    }
+    function trade(row, method) {
+      let target = rowMethod(row, method);
+      return target === void 0 ? !1 : (Reflect.apply(target.call, target.view, [row.id]), !0);
+    }
+    function moveRoutes(request, method) {
+      let target = rowMethod(request, method);
+      if (target === void 0)
+        return !1;
+      for (let _step of clickSteps(request.count))
+        Reflect.apply(target.call, target.view, [request.id]);
+      return !0;
+    }
+    return Object.freeze({
+      isRowRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      maxMultiplier() {
+        let view = getVueById(QUANTITY_PANEL);
+        if (!isRecord(view) || typeof view.limit != "function")
+          return MINIMUM_MULTIPLIER;
+        let limit = requireFunction(
+          view.limit,
+          `${QUANTITY_PANEL} Vue view.limit`
+        ), value = Reflect.apply(limit, view, []);
+        return typeof value == "number" && Number.isFinite(value) ? value : MINIMUM_MULTIPLIER;
+      },
+      setMultiplier(multiplier) {
+        let view = getVueById(QUANTITY_PANEL);
+        return isRecord(view) ? (view.qty = multiplier, !0) : !1;
+      },
+      buy(row) {
+        return trade(row, "purchase");
+      },
+      sell(row) {
+        return trade(row, "sell");
+      },
+      clearTradeRoutes(row) {
+        return trade(row, "zero");
+      },
+      addTradeRoutes(request) {
+        return moveRoutes(request, "autoBuy");
+      },
+      removeTradeRoutes(request) {
+        return moveRoutes(request, "autoSell");
+      }
+    });
+  }
+
+  // src/adapters/browser/game-project-controls.ts
+  function createGameProjectControls({
+    getVueById,
+    getMainVue
+  }) {
+    function readTabPreferences() {
+      let mainView = getMainVue();
+      if (!isRecord(mainView))
+        return;
+      let preferences = mainView.s;
+      return isRecord(preferences) ? preferences : void 0;
+    }
+    return Object.freeze({
+      build({
+        elementId,
+        projectId,
+        steps,
+        skipTabRedraw
+      }) {
+        let view = getVueById(elementId);
+        if (!isRecord(view) || typeof view.build != "function")
+          return !1;
+        let buildProject = requireFunction(
+          view.build,
+          `${elementId} Vue view.build`
+        ), purchase = () => Reflect.apply(buildProject, view, [projectId, steps]), preferences = skipTabRedraw ? readTabPreferences() : void 0;
+        if (preferences === void 0)
+          return purchase(), !0;
+        let restore = preferences.tabLoad;
+        try {
+          preferences.tabLoad = !1, purchase();
+        } finally {
+          preferences.tabLoad = restore;
+        }
+        return !0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-research-controls.ts
+  function buyControl(elementId) {
+    return `#${elementId} > .button:not(.precog)`;
+  }
+  function completedMarker(elementId) {
+    return `#${elementId} .oldTech`;
+  }
+  function createGameResearchControls({
+    getDocument,
+    getVueById
+  }) {
+    function hasChild(selector) {
+      let element = getDocument().querySelector(selector);
+      return element != null;
+    }
+    return Object.freeze({
+      isOffered(elementId) {
+        return hasChild(buyControl(elementId)) && isRecord(getVueById(elementId));
+      },
+      isCompleted(elementId) {
+        return hasChild(completedMarker(elementId));
+      },
+      start(elementId) {
+        let view = getVueById(elementId);
+        if (!isRecord(view) || typeof view.action != "function")
+          return !1;
+        let action = requireFunction(
+          view.action,
+          `${elementId} Vue view.action`
+        );
+        return Reflect.apply(action, view, []), !0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-storage-controls.ts
+  var CONSTRUCTION_PANEL = "createHead", CAPACITY_INDEX = 1;
+  function createGameStorageControls({
+    getVueById,
+    clickSteps
+  }) {
+    function method(elementId, name) {
+      let view = getVueById(elementId);
+      if (!(!isRecord(view) || typeof view[name] != "function"))
+        return {
+          view,
+          call: requireFunction(view[name], `${elementId} Vue view.${name}`)
+        };
+    }
+    function capacity(describe) {
+      let target = method(CONSTRUCTION_PANEL, describe);
+      if (target === void 0)
+        return 0;
+      let sentence = Reflect.apply(target.call, target.view, []);
+      if (typeof sentence != "string")
+        return 0;
+      let stated = sentence.match(/\d+/g)?.[CAPACITY_INDEX];
+      return stated === void 0 ? 0 : Number(stated);
+    }
+    function build(count2, name) {
+      let target = method(CONSTRUCTION_PANEL, name);
+      if (target === void 0)
+        return !1;
+      for (let _step of clickSteps(count2))
+        Reflect.apply(target.call, target.view, []);
+      return !0;
+    }
+    function stack(request, name) {
+      let target = method(request.elementId, name);
+      if (target === void 0)
+        return !1;
+      for (let _step of clickSteps(request.count))
+        Reflect.apply(target.call, target.view, [request.id]);
+      return !0;
+    }
+    return Object.freeze({
+      isConstructionRendered() {
+        return isRecord(getVueById(CONSTRUCTION_PANEL));
+      },
+      crateCapacity() {
+        return capacity("buildCrateDesc");
+      },
+      containerCapacity() {
+        return capacity("buildContainerDesc");
+      },
+      constructCrates(count2) {
+        return build(count2, "crate");
+      },
+      constructContainers(count2) {
+        return build(count2, "container");
+      },
+      isStackRendered(elementId) {
+        return isRecord(getVueById(elementId));
+      },
+      assignCrates(request) {
+        return stack(request, "addCrate");
+      },
+      unassignCrates(request) {
+        return stack(request, "subCrate");
+      },
+      assignContainers(request) {
+        return stack(request, "addCon");
+      },
+      unassignContainers(request) {
+        return stack(request, "subCon");
+      }
+    });
+  }
+
+  // src/adapters/browser/game-trait-controls.ts
+  var TRAIT_PANEL = "geneticBreakdown";
+  function createGameTraitControls({
+    getVueById
+  }) {
+    function spend(methodName, traitName) {
+      let view = getVueById(TRAIT_PANEL);
+      if (!isRecord(view) || typeof view[methodName] != "function")
+        return !1;
+      let method = requireFunction(
+        view[methodName],
+        `${TRAIT_PANEL} Vue view.${methodName}`
+      );
+      return Reflect.apply(method, view, [traitName]), !0;
+    }
+    return Object.freeze({
+      buyMinorTrait(traitName) {
+        return spend("gene", traitName);
+      },
+      gainTrait(traitName) {
+        return spend("gain", traitName);
+      },
+      purgeTrait(traitName) {
+        return spend("purge", traitName);
+      }
+    });
+  }
+
+  // src/bootstrap/game-control-set.ts
+  function createGameControlSet({
+    getVueById,
+    getForeignVueById,
+    getMainVue,
+    getDocument,
+    getKeyManager,
+    selectTooltip,
+    getGame,
+    getJQuery,
+    callVueMethod,
+    getSortable,
+    getPageSortable,
+    isSandboxBypass,
+    cloneIntoPage
+  }) {
+    let clickMultipliers = createGameClickMultipliers({ getKeyManager }), clickSteps = (count2) => clickMultipliers.steps(count2), clearClicks = () => clickMultipliers.clear(), projectControls = createGameProjectControls({ getVueById, getMainVue }), researchControls = createGameResearchControls({
+      getDocument,
+      getVueById
+    }), traitControls = createGameTraitControls({ getVueById }), jobControls = createGameJobControls({ getVueById, clickSteps }), actionControls = createGameActionControls({
+      getVueById,
+      selectTooltip,
+      clickSteps
+    }), craftingControls = createGameCraftingControls({
+      getVueById,
+      clearClickMultipliers: clearClicks
+    }), industryControls = createGameIndustryControls({
+      getVueById,
+      clickSteps
+    }), espionageControls = createGameEspionageControls({ getVueById }), foreignControls = createGameForeignControls({
+      getVueById: getForeignVueById
+    }), governmentSelection = createGameGovernmentSelection({ getVueById }), marketControls = createGameMarketControls({ getVueById, clickSteps }), storageControls = createGameStorageControls({ getVueById, clickSteps }), disposalControls = createGameDisposalControls({
+      getVueById,
+      clickSteps
+    }), fleetControls = createGameFleetControls({
+      getVueById,
+      clickSteps,
+      getGame,
+      getJQuery
+    }), garrisonControls = createGameGarrisonControls({
+      getVueById,
+      clickSteps,
+      getGame,
+      clearClickMultipliers: clearClicks,
+      callVueMethod
+    }), mechControls = createGameMechControls({ getVueById }), mechListControls = createGameMechListControls({
+      getVueById,
+      getSortable,
+      getPageSortable,
+      isSandboxBypass,
+      cloneIntoPage
+    });
+    return Object.freeze({
+      projectControls,
+      researchControls,
+      clickMultipliers,
+      traitControls,
+      jobControls,
+      actionControls,
+      craftingControls,
+      industryControls,
+      espionageControls,
+      foreignControls,
+      governmentSelection,
+      marketControls,
+      storageControls,
+      disposalControls,
+      fleetControls,
+      garrisonControls,
+      mechControls,
+      mechListControls
+    });
   }
 
   // src/game/race-profile.ts
@@ -50023,59 +50097,35 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       schedule: (callback, delay) => runtimeEnvironment.schedule(callback, delay)
     }), needSandboxBypass = !1, overrideKey = "ctrlKey", overrideKeyLabel = "Ctrl";
     runtimeEnvironment.window.navigator.platform.indexOf("Mac") === 0 && (overrideKey = "altKey", overrideKeyLabel = "Alt");
-    let checkActions = !1, safeMode = String(runtimeEnvironment.window.location).toLowerCase().indexOf("safemode") !== -1, projectControls = createGameProjectControls({
+    let checkActions = !1, safeMode = String(runtimeEnvironment.window.location).toLowerCase().indexOf("safemode") !== -1, {
+      projectControls,
+      researchControls,
+      clickMultipliers,
+      traitControls,
+      jobControls,
+      actionControls,
+      craftingControls,
+      industryControls,
+      espionageControls,
+      foreignControls,
+      governmentSelection,
+      marketControls,
+      storageControls,
+      disposalControls,
+      fleetControls,
+      garrisonControls,
+      mechControls,
+      mechListControls
+    } = createGameControlSet({
       getVueById: (id) => getVueById(id),
-      getMainVue: () => getMainVue()
-    }), researchControls = createGameResearchControls({
+      getForeignVueById: (id) => getTestContext("foreignControls")?.getVueById?.(id) ?? getVueById(id),
+      getMainVue: () => getMainVue(),
       getDocument: () => runtimeEnvironment.document,
-      getVueById: (id) => getVueById(id)
-    }), clickMultipliers = createGameClickMultipliers({
-      getKeyManager: () => KeyManager
-    }), traitControls = createGameTraitControls({
-      getVueById: (id) => getVueById(id)
-    }), jobControls = createGameJobControls({
-      getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => clickMultipliers.steps(count2)
-    }), actionControls = createGameActionControls({
-      getVueById: (id) => getVueById(id),
+      getKeyManager: () => KeyManager,
       selectTooltip: () => $("#popper"),
-      clickSteps: (count2) => clickMultipliers.steps(count2)
-    }), craftingControls = createGameCraftingControls({
-      getVueById: (id) => getVueById(id),
-      clearClickMultipliers: () => clickMultipliers.clear()
-    }), industryControls = createGameIndustryControls({
-      getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => clickMultipliers.steps(count2)
-    }), espionageControls = createGameEspionageControls({
-      getVueById: (id) => getVueById(id)
-    }), foreignControls = createGameForeignControls({
-      getVueById: (id) => getTestContext("foreignControls")?.getVueById?.(id) ?? getVueById(id)
-    }), governmentSelection = createGameGovernmentSelection({
-      getVueById: (id) => getVueById(id)
-    }), marketControls = createGameMarketControls({
-      getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => clickMultipliers.steps(count2)
-    }), storageControls = createGameStorageControls({
-      getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => clickMultipliers.steps(count2)
-    }), disposalControls = createGameDisposalControls({
-      getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => clickMultipliers.steps(count2)
-    }), fleetControls = createGameFleetControls({
-      getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => clickMultipliers.steps(count2),
       getGame: () => game,
-      getJQuery: () => $
-    }), garrisonControls = createGameGarrisonControls({
-      getVueById: (id) => getVueById(id),
-      clickSteps: (count2) => clickMultipliers.steps(count2),
-      getGame: () => game,
-      clearClickMultipliers: () => clickMultipliers.clear(),
-      callVueMethod
-    }), mechControls = createGameMechControls({
-      getVueById: (id) => getVueById(id)
-    }), mechListControls = createGameMechListControls({
-      getVueById: (id) => getVueById(id),
+      getJQuery: () => $,
+      callVueMethod,
       getSortable: () => runtimeEnvironment.Sortable,
       getPageSortable: () => win.Sortable,
       isSandboxBypass: () => needSandboxBypass,

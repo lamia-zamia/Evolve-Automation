@@ -59,30 +59,12 @@ import { createOverrideEditor } from "../../application/override-editing.ts";
 import { createOverrideEvaluationSource } from "./override-evaluation.ts";
 import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
-import { createGameActionControls } from "../browser/game-action-controls.ts";
-import { createGameCraftingControls } from "../browser/game-crafting-controls.ts";
-import { createGameClickMultipliers } from "../browser/game-click-multipliers.ts";
-import { createGameDisposalControls } from "../browser/game-disposal-controls.ts";
 import { createGameCustomRaceLab } from "../browser/game-custom-race-lab.ts";
-import { createGameEspionageControls } from "../browser/game-espionage-controls.ts";
 import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
-import { createGameForeignControls } from "../browser/game-foreign-controls.ts";
-import { createGameGovernmentSelection } from "../browser/game-government-selection.ts";
-import { createGameIndustryControls } from "../browser/game-industry-controls.ts";
-import { createGameFleetControls } from "../browser/game-fleet-controls.ts";
-import { createGameGarrisonControls } from "../browser/game-garrison-controls.ts";
-import { createGameMechControls } from "../browser/game-mech-controls.ts";
-import { createGameMechListControls } from "../browser/game-mech-list-controls.ts";
-import { createGameJobControls } from "../browser/game-job-controls.ts";
 import { createGameKeyboardHandlers } from "../browser/game-keyboard-handlers.ts";
-import { createGameMarketControls } from "../browser/game-market-controls.ts";
 import { createGameModal } from "../browser/game-modal.ts";
 import { createGamePageShell } from "../browser/game-page-shell.ts";
 import { createGameUiSurface } from "../browser/game-ui-surface.ts";
-import { createGameProjectControls } from "../browser/game-project-controls.ts";
-import { createGameStorageControls } from "../browser/game-storage-controls.ts";
-import { createGameResearchControls } from "../browser/game-research-controls.ts";
-import { createGameTraitControls } from "../browser/game-trait-controls.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
 import { createRuntimeQueries } from "../../game/runtime-queries.ts";
 import { createIndustryManagerControls } from "../../bootstrap/industry-manager-controls.ts";
@@ -93,6 +75,7 @@ import { createFleetMechManagerControl } from "../../bootstrap/fleet-mech-manage
 import { createInfrastructureManagerControl } from "../../bootstrap/infrastructure-manager-control.ts";
 import { createScriptBootstrapControl } from "../../bootstrap/script-bootstrap-control.ts";
 import { createCoreManagerControl } from "../../bootstrap/core-manager-control.ts";
+import { createGameControlSet } from "../../bootstrap/game-control-set.ts";
 import { createRaceProfile } from "../../game/race-profile.ts";
 import { createForeignGovernment } from "../../game/foreign-government.ts";
 import { createGalaxyIntelligence } from "../../game/galaxy-intelligence.ts";
@@ -1539,77 +1522,36 @@ export function startEvolveRuntimeComposition(
       .toLowerCase()
       .indexOf("safemode") !== -1;
 
-  const projectControls = createGameProjectControls({
+  const {
+    projectControls,
+    researchControls,
+    clickMultipliers,
+    traitControls,
+    jobControls,
+    actionControls,
+    craftingControls,
+    industryControls,
+    espionageControls,
+    foreignControls,
+    governmentSelection,
+    marketControls,
+    storageControls,
+    disposalControls,
+    fleetControls,
+    garrisonControls,
+    mechControls,
+    mechListControls,
+  } = createGameControlSet({
     getVueById: (id) => getVueById(id),
-    getMainVue: () => getMainVue(),
-  });
-  const researchControls = createGameResearchControls({
-    getDocument: () => runtimeEnvironment.document,
-    getVueById: (id) => getVueById(id),
-  });
-  const clickMultipliers = createGameClickMultipliers({
-    getKeyManager: () => KeyManager,
-  });
-  const traitControls = createGameTraitControls({
-    getVueById: (id) => getVueById(id),
-  });
-  const jobControls = createGameJobControls({
-    getVueById: (id) => getVueById(id),
-    clickSteps: (count) => clickMultipliers.steps(count),
-  });
-  const actionControls = createGameActionControls({
-    getVueById: (id) => getVueById(id),
-    selectTooltip: () => $("#popper"),
-    clickSteps: (count) => clickMultipliers.steps(count),
-  });
-  const craftingControls = createGameCraftingControls({
-    getVueById: (id) => getVueById(id),
-    clearClickMultipliers: () => clickMultipliers.clear(),
-  });
-  const industryControls = createGameIndustryControls({
-    getVueById: (id) => getVueById(id),
-    clickSteps: (count) => clickMultipliers.steps(count),
-  });
-  const espionageControls = createGameEspionageControls({
-    getVueById: (id) => getVueById(id),
-  });
-  const foreignControls = createGameForeignControls({
-    getVueById: (id) =>
+    getForeignVueById: (id) =>
       getTestContext("foreignControls")?.getVueById?.(id) ?? getVueById(id),
-  });
-  const governmentSelection = createGameGovernmentSelection({
-    getVueById: (id) => getVueById(id),
-  });
-  const marketControls = createGameMarketControls({
-    getVueById: (id) => getVueById(id),
-    clickSteps: (count) => clickMultipliers.steps(count),
-  });
-  const storageControls = createGameStorageControls({
-    getVueById: (id) => getVueById(id),
-    clickSteps: (count) => clickMultipliers.steps(count),
-  });
-  const disposalControls = createGameDisposalControls({
-    getVueById: (id) => getVueById(id),
-    clickSteps: (count) => clickMultipliers.steps(count),
-  });
-  const fleetControls = createGameFleetControls({
-    getVueById: (id) => getVueById(id),
-    clickSteps: (count) => clickMultipliers.steps(count),
+    getMainVue: () => getMainVue(),
+    getDocument: () => runtimeEnvironment.document,
+    getKeyManager: () => KeyManager,
+    selectTooltip: () => $("#popper"),
     getGame: () => game,
     getJQuery: () => $,
-  });
-  const garrisonControls = createGameGarrisonControls({
-    getVueById: (id) => getVueById(id),
-    clickSteps: (count) => clickMultipliers.steps(count),
-    getGame: () => game,
-    clearClickMultipliers: () => clickMultipliers.clear(),
     callVueMethod,
-  });
-  const mechControls = createGameMechControls({
-    getVueById: (id) => getVueById(id),
-  });
-  const mechListControls = createGameMechListControls({
-    getVueById: (id) => getVueById(id),
     getSortable: () => runtimeEnvironment.Sortable,
     getPageSortable: () => win.Sortable,
     isSandboxBypass: () => needSandboxBypass,
