@@ -229,10 +229,9 @@ import { createTriggerControl } from "../../bootstrap/trigger-control.ts";
 import { createEconomyAutomationControls } from "../../bootstrap/economy-automation-controls.ts";
 import { createPowerStorageControls } from "../../bootstrap/power-storage-controls.ts";
 import { createMarketAutomationControls } from "../../bootstrap/market-automation-controls.ts";
-import { createCraftControl } from "../../bootstrap/craft-control.ts";
+import { createCraftJobsControls } from "../../bootstrap/craft-jobs-controls.ts";
 import { createSpyControl } from "../../bootstrap/spy-control.ts";
 import { createPrestigeControl } from "../../bootstrap/prestige-control.ts";
-import { createJobsControl } from "../../bootstrap/jobs-control.ts";
 import { createProgressionAutomationControls } from "../../bootstrap/progression-automation-controls.ts";
 import { createFleetMechControls } from "../../bootstrap/fleet-mech-controls.ts";
 import { createEjectorSettingsControl } from "../../bootstrap/settings/ejector-settings-control.ts";
@@ -2838,16 +2837,40 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { autoCraft } = createCraftControl({
-    reader: {
-      getResources: () => resources,
-      getGame: () => game,
-      getFoundryList: () => foundryList,
-      ticksPerSecond,
+  const { autoCraft, autoJobs } = createCraftJobsControls({
+    craft: {
+      reader: {
+        getResources: () => resources,
+        getGame: () => game,
+        getFoundryList: () => foundryList,
+        ticksPerSecond,
+      },
+      executor: {
+        getResources: () => resources,
+        getFoundryList: () => foundryList,
+      },
     },
-    executor: {
+    jobs: {
+      getJobManager: () => JobManager,
+      getGame: () => game,
+      getJobs: () => jobs,
+      getCrafter: () => crafter,
+      getSettings: () => settings,
+      getBuildings: () => buildings,
       getResources: () => resources,
-      getFoundryList: () => foundryList,
+      getState: () => state,
+      getDebugWindow: () => runtimeEnvironment.window,
+      isDemonRace,
+      isLumberRace,
+      traitValue: traitVal,
+      haveTech,
+      haveTask,
+      ticksPerSecond,
+      findRequiredResourceWeight,
+      taxCap: (minimum) => poly.taxCap(minimum),
+      isCraftingJob: (job) => job instanceof CraftingJob,
+      getFoodConsume,
+      log: (message) => runtimeEnvironment.log(message),
     },
   });
 
@@ -2920,29 +2943,6 @@ export function startEvolveRuntimeComposition(
   });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__) testSurface?.add({ autoHell });
-
-  const { autoJobs } = createJobsControl({
-    getJobManager: () => JobManager,
-    getGame: () => game,
-    getJobs: () => jobs,
-    getCrafter: () => crafter,
-    getSettings: () => settings,
-    getBuildings: () => buildings,
-    getResources: () => resources,
-    getState: () => state,
-    getDebugWindow: () => runtimeEnvironment.window,
-    isDemonRace,
-    isLumberRace,
-    traitValue: traitVal,
-    haveTech,
-    haveTask,
-    ticksPerSecond,
-    findRequiredResourceWeight,
-    taxCap: (minimum) => poly.taxCap(minimum),
-    isCraftingJob: (job) => job instanceof CraftingJob,
-    getFoodConsume,
-    log: (message) => runtimeEnvironment.log(message),
-  });
 
   const { autoTax } = createTaxControl({
     nowMs: () => browserClock.nowMs(),

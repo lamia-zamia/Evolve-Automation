@@ -35699,610 +35699,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
-  // src/domain/combat/spy.ts
-  function planSpyCycle(input) {
-    return input.available ? Object.freeze({
-      trainEnabled: input.trainEnabled,
-      espionageEnabled: input.advancedEspionage,
-      foreignCount: input.foreignCount
-    }) : null;
-  }
-  function planSpyTraining(input) {
-    if (input.disabled || input.occupied || input.annexed || input.purchased)
-      return null;
-    let spiesRequired = input.spyMaximumSetting >= 0 ? input.spyMaximumSetting : Number.MAX_SAFE_INTEGER;
-    return spiesRequired < 1 && input.policy !== "Occupy" && input.policy !== "Ignore" && (spiesRequired = 1), spiesRequired < 3 && input.policy === "Purchase" && input.purchasePrice !== null && input.moneyMaximum >= input.purchasePrice && (spiesRequired = 3), input.spyCount >= spiesRequired || input.purchaseMoney > 0 && input.policy !== "Purchase" && input.spyCount > 0 ? null : Object.freeze({
-      kind: "train-spy",
-      foreignIndex: input.foreignIndex,
-      governmentId: input.governmentId,
-      governmentName: input.governmentName
-    });
-  }
-  function selectMission(input) {
-    return input.policy === "Betrayal" ? input.military <= 75 || input.hostility <= 0 ? input.missionIds.Sabotage ?? null : input.missionIds.Influence ?? null : input.policy === "Occupy" ? input.missionIds.Sabotage ?? null : input.missionIds[input.policy] ?? null;
-  }
-  function planSpyEspionage(input) {
-    if (input.spyCount < 1 || input.sabotageProgress !== 0 || input.policy === "None")
-      return null;
-    let missionId = selectMission(input);
-    return missionId === null || input.purchaseMoney > 0 && input.purchaseForeign && missionId === input.missionIds.Purchase && input.spyCount < 3 && !input.elusive ? null : input.annexed && input.policy !== "Annex" || input.purchased && input.policy !== "Purchase" || input.occupied && input.policy !== "Occupy" ? Object.freeze({
-      kind: "release-foreign",
-      foreignIndex: input.foreignIndex,
-      governmentId: input.governmentId,
-      expectedPolicy: input.policy
-    }) : !input.annexed && !input.purchased && !input.occupied ? Object.freeze({
-      kind: "perform-espionage",
-      foreignIndex: input.foreignIndex,
-      governmentId: input.governmentId,
-      missionId,
-      secondaryTarget: !input.isPrimaryTarget
-    }) : null;
-  }
-
-  // src/adapters/evolve/combat/spy.ts
-  function unavailableCycle() {
-    return Object.freeze({
-      available: !1,
-      trainEnabled: !1,
-      advancedEspionage: !1,
-      foreignCount: 0
-    });
-  }
-  function readForeign(foreigns, index) {
-    if (!Number.isSafeInteger(index) || index < 0 || index >= foreigns.length)
-      throw new RangeError(`foreign index ${index} is out of range`);
-    let foreign = requireRecord(
-      foreigns[index],
-      `SpyManager.foreignActive[${index}]`
-    ), government = requireRecord(
-      foreign.gov,
-      `SpyManager.foreignActive[${index}].gov`
-    );
-    return { foreign, government };
-  }
-  function readMissionIds(manager) {
-    let types = requireRecord(manager.Types, "SpyManager.Types"), ids = {};
-    for (let [name, rawType] of Object.entries(types)) {
-      let type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString(type.id, `SpyManager.Types.${name}.id`);
-    }
-    return Object.freeze(ids);
-  }
-  function readGameRace(getGame) {
-    let game = requireRecord(getGame(), "game"), global = requireRecord(game.global, "game.global");
-    return requireRecord(global.race, "game.global.race");
-  }
-  function readGovernmentPrice(dependencies, governmentId) {
-    let poly = requireRecord(dependencies.getPoly(), "poly"), govPrice = requireFunction(poly.govPrice, "poly.govPrice");
-    return requireNumber(
-      Reflect.apply(govPrice, poly, [governmentId]),
-      `poly.govPrice(${governmentId})`
-    );
-  }
-  function decisionMatches(expected, actual) {
-    return expected.kind !== actual.kind || expected.foreignIndex !== actual.foreignIndex || expected.governmentId !== actual.governmentId ? !1 : expected.kind === "train-spy" && actual.kind === "train-spy" ? expected.governmentName === actual.governmentName : expected.kind === "release-foreign" && actual.kind === "release-foreign" ? expected.expectedPolicy === actual.expectedPolicy : expected.kind === "perform-espionage" && actual.kind === "perform-espionage" && expected.missionId === actual.missionId && expected.secondaryTarget === actual.secondaryTarget;
-  }
-  function governmentMatchesTraining(sample) {
-    let input = sample.input;
-    return sample.foreign.policy === input.policy && sample.government.spy === input.spyCount && !!sample.government.occ === input.occupied && !!sample.government.anx === input.annexed && !!sample.government.buy === input.purchased;
-  }
-  function governmentMatchesEspionage(sample) {
-    let input = sample.input;
-    return sample.foreign.policy === input.policy && sample.government.spy === input.spyCount && sample.government.sab === input.sabotageProgress && (input.policy !== "Betrayal" || sample.government.mil === input.military && sample.government.hstl === input.hostility) && !!sample.government.occ === input.occupied && !!sample.government.anx === input.annexed && !!sample.government.buy === input.purchased;
-  }
-  function createSpyAdapter(dependencies) {
-    let session = null, sample = null, reader = Object.freeze({
-      readCycle() {
-        session = null, sample = null;
-        let manager = requireRecord(dependencies.getSpyManager(), "SpyManager");
-        if (manager.isForeignUnlocked !== !0) return unavailableCycle();
-        let haveTask = requireFunction(dependencies.getHaveTask(), "haveTask");
-        if (Reflect.apply(haveTask, void 0, ["combo_spy"]) || Reflect.apply(haveTask, void 0, ["spyop"]))
-          return unavailableCycle();
-        let haveTech = requireFunction(dependencies.getHaveTech(), "haveTech");
-        if (!Reflect.apply(haveTech, void 0, ["spy"]) || dependencies.shouldSaveInflationMoney()) return unavailableCycle();
-        let advancedEspionage = !!Reflect.apply(haveTech, void 0, ["spy", 2]);
-        if (!advancedEspionage) {
-          let resources = requireRecord(
-            dependencies.getResources(),
-            "resources"
-          ), money = requireRecord(resources.Money, "resources.Money");
-          if (requireNumber(
-            money.storageRatio,
-            "resources.Money.storageRatio"
-          ) < 0.9) return unavailableCycle();
-        }
-        let settings = requireRecord(dependencies.getSettings(), "settings"), trainEnabled = requireBoolean(
-          settings.foreignTrainSpy,
-          "settings.foreignTrainSpy"
-        ), spyMaximumSetting = trainEnabled ? requireNumber(settings.foreignSpyMax, "settings.foreignSpyMax") : 0, rawForeigns = manager.foreignActive;
-        if (!Array.isArray(rawForeigns))
-          throw new TypeError("SpyManager.foreignActive must be an array");
-        let missionIds = advancedEspionage ? readMissionIds(manager) : Object.freeze({});
-        return session = Object.freeze({
-          manager,
-          foreignUnlocked: manager.isForeignUnlocked === !0,
-          foreigns: rawForeigns,
-          spyMaximumSetting,
-          missionIds
-        }), Object.freeze({
-          available: !0,
-          trainEnabled,
-          advancedEspionage,
-          foreignCount: rawForeigns.length
-        });
-      },
-      readTraining(foreignIndex) {
-        let active = session;
-        if (active === null) throw new Error("spy cycle has not been sampled");
-        let { foreign, government } = readForeign(
-          active.foreigns,
-          foreignIndex
-        ), governmentId = requireNumber(
-          foreign.id,
-          `SpyManager.foreignActive[${foreignIndex}].id`
-        ), policy = requireString(
-          foreign.policy,
-          `SpyManager.foreignActive[${foreignIndex}].policy`
-        ), spyDisabled = dependencies.getForeignControls().isSpyDisabled(governmentId), purchasePrice = policy === "Purchase" ? readGovernmentPrice(dependencies, governmentId) : null, moneyMaximum = 0;
-        if (purchasePrice !== null) {
-          let resources = requireRecord(
-            dependencies.getResources(),
-            "resources"
-          ), money = requireRecord(resources.Money, "resources.Money");
-          moneyMaximum = requireNumber(
-            money.maxQuantity,
-            "resources.Money.maxQuantity"
-          );
-        }
-        let governmentName = requireString(
-          dependencies.getGovName(governmentId),
-          `government name ${governmentId}`
-        ), input = Object.freeze({
-          foreignIndex,
-          governmentId,
-          governmentName,
-          disabled: spyDisabled,
-          occupied: !!government.occ,
-          annexed: !!government.anx,
-          purchased: !!government.buy,
-          policy,
-          spyCount: requireNumber(
-            government.spy,
-            `SpyManager.foreignActive[${foreignIndex}].gov.spy`
-          ),
-          spyMaximumSetting: active.spyMaximumSetting,
-          purchaseMoney: requireNumber(
-            active.manager.purchaseMoney,
-            "SpyManager.purchaseMoney"
-          ),
-          moneyMaximum,
-          purchasePrice
-        });
-        return sample = Object.freeze({
-          kind: "training",
-          input,
-          foreign,
-          government
-        }), input;
-      },
-      readEspionage(foreignIndex) {
-        let active = session;
-        if (active === null) throw new Error("spy cycle has not been sampled");
-        let { foreign, government } = readForeign(
-          active.foreigns,
-          foreignIndex
-        ), governmentId = requireNumber(
-          foreign.id,
-          `SpyManager.foreignActive[${foreignIndex}].id`
-        ), policy = requireString(
-          foreign.policy,
-          `SpyManager.foreignActive[${foreignIndex}].policy`
-        ), spyCount = requireNumber(
-          government.spy,
-          `SpyManager.foreignActive[${foreignIndex}].gov.spy`
-        ), sabotageProgress = requireNumber(
-          government.sab,
-          `SpyManager.foreignActive[${foreignIndex}].gov.sab`
-        ), actionable = spyCount >= 1 && sabotageProgress === 0 && policy !== "None", purchaseForeigns = actionable ? active.manager.purchaseForeigngs : [];
-        if (!Array.isArray(purchaseForeigns))
-          throw new TypeError("SpyManager.purchaseForeigngs must be an array");
-        let input = Object.freeze({
-          foreignIndex,
-          governmentId,
-          policy,
-          spyCount,
-          sabotageProgress,
-          military: actionable && policy === "Betrayal" ? requireNumber(
-            government.mil,
-            `SpyManager.foreignActive[${foreignIndex}].gov.mil`
-          ) : 0,
-          hostility: actionable && policy === "Betrayal" ? requireNumber(
-            government.hstl,
-            `SpyManager.foreignActive[${foreignIndex}].gov.hstl`
-          ) : 0,
-          occupied: !!government.occ,
-          annexed: !!government.anx,
-          purchased: !!government.buy,
-          purchaseMoney: actionable ? requireNumber(
-            active.manager.purchaseMoney,
-            "SpyManager.purchaseMoney"
-          ) : 0,
-          purchaseForeign: purchaseForeigns.includes(governmentId),
-          elusive: actionable ? !!readGameRace(dependencies.getGame).elusive : !1,
-          isPrimaryTarget: foreign === active.manager.foreignTarget,
-          missionIds: active.missionIds
-        });
-        return sample = Object.freeze({
-          kind: "espionage",
-          input,
-          foreign,
-          government
-        }), input;
-      }
-    }), executor = Object.freeze({
-      execute(decision2) {
-        let active = session, sampled = sample;
-        if (active === null || sampled === null)
-          return stale("spy-session-missing", "spy session is missing");
-        if (dependencies.getSpyManager() !== active.manager || active.manager.foreignActive !== active.foreigns || active.manager.isForeignUnlocked === !0 !== active.foreignUnlocked)
-          return stale("spy-manager-changed", "spy manager state changed");
-        let expected = sampled.kind === "training" ? planSpyTraining(sampled.input) : planSpyEspionage(sampled.input);
-        if (expected === null || !decisionMatches(expected, decision2))
-          return rejected(
-            "invalid-spy-decision",
-            "spy decision does not match the sampled plan"
-          );
-        if (sampled.kind === "training" && !governmentMatchesTraining(sampled) || sampled.kind === "espionage" && !governmentMatchesEspionage(sampled))
-          return stale("spy-foreign-changed", "foreign government state changed");
-        if (sample = null, decision2.kind === "train-spy") {
-          if (sampled.kind !== "training")
-            return rejected("invalid-spy-phase", "spy training phase changed");
-          let gameLog = requireRecord(dependencies.getGameLog(), "GameLog"), logSuccess = requireFunction(
-            gameLog.logSuccess,
-            "GameLog.logSuccess"
-          );
-          return Reflect.apply(logSuccess, gameLog, [
-            "spying",
-            `Training a spy to send against ${decision2.governmentName}.`,
-            ["spy"]
-          ]), dependencies.getForeignControls().trainSpy(decision2.governmentId) ? SUCCEEDED : stale(
-            "spy-panel-withdrawn",
-            "spy training panel is no longer available"
-          );
-        }
-        if (sampled.kind !== "espionage")
-          return rejected("invalid-spy-phase", "spy espionage phase changed");
-        if (decision2.kind === "release-foreign") {
-          let warManager = requireRecord(
-            dependencies.getWarManager(),
-            "WarManager"
-          ), release = requireFunction(
-            warManager.release,
-            "WarManager.release"
-          );
-          return Reflect.apply(release, warManager, [decision2.governmentId]), sampled.foreign.released = !0, SUCCEEDED;
-        }
-        if (decision2.kind === "perform-espionage") {
-          let performEspionage = requireFunction(
-            active.manager.performEspionage,
-            "SpyManager.performEspionage"
-          );
-          return Reflect.apply(performEspionage, active.manager, [
-            decision2.governmentId,
-            decision2.missionId,
-            decision2.secondaryTarget
-          ]), SUCCEEDED;
-        }
-        return rejected("invalid-spy-decision", "spy decision is invalid");
-      }
-    });
-    return Object.freeze({ reader, executor });
-  }
-
-  // src/application/spy.ts
-  var SUCCEEDED21 = Object.freeze({
-    status: "succeeded"
-  });
-  function runSpyAutomation(dependencies) {
-    let cycle = planSpyCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED21;
-    if (cycle.trainEnabled)
-      for (let index = 0; index < cycle.foreignCount; index++) {
-        let decision2 = planSpyTraining(dependencies.reader.readTraining(index));
-        if (decision2 === null) continue;
-        let outcome = dependencies.executor.execute(decision2);
-        if (outcome.status !== "succeeded") return outcome;
-      }
-    if (!cycle.espionageEnabled) return SUCCEEDED21;
-    for (let index = 0; index < cycle.foreignCount; index++) {
-      let decision2 = planSpyEspionage(dependencies.reader.readEspionage(index));
-      if (decision2 === null) continue;
-      let outcome = dependencies.executor.execute(decision2);
-      if (outcome.status !== "succeeded") return outcome;
-    }
-    return SUCCEEDED21;
-  }
-
-  // src/bootstrap/spy-control.ts
-  function createSpyControl(dependencies) {
-    let adapter = createSpyAdapter(dependencies);
-    return Object.freeze({ autoSpy: () => runSpyAutomation(adapter) });
-  }
-
-  // src/adapters/evolve/progression/prestige/prestige.ts
-  function createPrestigeReader(dependencies) {
-    let buildingBool = (id, method) => {
-      let buildings = requireRecord(dependencies.getBuildings(), "buildings"), building3 = requireRecord(buildings[id], `buildings.${id}`);
-      return callBoolean(building3, method, `buildings.${id}`);
-    }, techBool = (id, method) => {
-      let techIds = requireRecord(dependencies.getTechIds(), "techIds"), tech = requireRecord(techIds[id], `techIds.${id}`);
-      return callBoolean(tech, method, `techIds.${id}`);
-    }, race2 = () => requireRecord(
-      requireRecord(
-        requireRecord(dependencies.getGame(), "game").global,
-        "game.global"
-      ).race,
-      "game.global.race"
-    ), madBranch = (settings) => {
-      let madVue = dependencies.getVueById("mad"), display = typeof madVue == "object" && madVue !== null ? !!madVue.display : !1, armed = typeof madVue == "object" && madVue !== null ? !!madVue.armed : !1, eligible = display && !!dependencies.getHaveTech()("mad"), war = requireRecord(dependencies.getWarManager(), "WarManager"), population = requireRecord(
-        requireRecord(dependencies.getResources(), "resources").Population,
-        "resources.Population"
-      );
-      return {
-        type: "mad",
-        eligible,
-        armed,
-        waitForPopulation: !!settings.prestigeMADWait,
-        // The soldier counts are WarManager getters over live worker/crew fields, and the population
-        // quantities come from the resource wrapper. A NaN fails every `>=` in the wait check, so it
-        // holds MAD back rather than arming it.
-        currentSoldiers: coerceNumber(war.currentSoldiers),
-        maxSoldiers: coerceNumber(war.maxSoldiers),
-        currentPopulation: coerceNumber(population.currentQuantity),
-        maxPopulation: coerceNumber(population.maxQuantity),
-        requiredPopulation: coerceNumber(settings.prestigeMADPopulation)
-      };
-    };
-    return Object.freeze({
-      samplePrestige() {
-        let rawGoal = requireRecord(dependencies.getState(), "state").goal, goal = typeof rawGoal == "string" ? rawGoal : "", settings = requireRecord(dependencies.getSettings(), "settings"), { eligibility } = dependencies, branch;
-        switch (settings.prestigeType) {
-          case "mad":
-            branch = madBranch(settings);
-            break;
-          case "bioseed":
-            branch = {
-              type: "bioseed",
-              eligible: eligibility.isBioseederPrestigeAvailable(),
-              launchUnlocked: buildingBool("GasSpaceDockLaunch", "isUnlocked"),
-              prepUnlocked: buildingBool(
-                "GasSpaceDockPrepForLaunch",
-                "isUnlocked"
-              )
-            };
-            break;
-          case "cataclysm":
-            branch = {
-              type: "cataclysm",
-              eligible: eligibility.isCataclysmPrestigeAvailable(),
-              loadQueuedSettings: !!settings.autoEvolution,
-              dialClickable: techBool("tech-dial_it_to_11", "isClickable")
-            };
-            break;
-          case "whitehole":
-            branch = {
-              type: "whitehole",
-              eligible: eligibility.isWhiteholePrestigeAvailable(),
-              exoticInfusionReady: techBool("tech-exotic_infusion", "isUnlocked") && techBool("tech-exotic_infusion", "isAffordable")
-            };
-            break;
-          case "apocalypse":
-            branch = {
-              type: "apocalypse",
-              eligible: eligibility.isApocalypsePrestigeAvailable()
-            };
-            break;
-          case "ascension": {
-            let witchHunter = !!race2().witch_hunter;
-            branch = {
-              type: "ascension",
-              witchHunter,
-              eligible: witchHunter ? eligibility.isWitchAscensionPrestigeAvailable(!1) : eligibility.isAscensionPrestigeAvailable()
-            };
-            break;
-          }
-          case "demonic": {
-            let current = race2(), witchHunter = !!current.witch_hunter;
-            branch = {
-              type: "demonic",
-              witchHunter,
-              fasting: !!current.fasting,
-              eligible: witchHunter ? eligibility.isWitchAscensionPrestigeAvailable(!0) : eligibility.isDemonicPrestigeAvailable()
-            };
-            break;
-          }
-          case "terraform":
-            branch = {
-              type: "building-reset",
-              building: "RedTerraform",
-              unlocked: buildingBool("RedTerraform", "isUnlocked")
-            };
-            break;
-          case "matrix":
-            branch = {
-              type: "building-reset",
-              building: "TauStarBluePill",
-              unlocked: buildingBool("TauStarBluePill", "isUnlocked")
-            };
-            break;
-          case "apotheosis":
-            branch = {
-              type: "building-reset",
-              building: "PalaceApotheosis",
-              unlocked: buildingBool("PalaceApotheosis", "isUnlocked")
-            };
-            break;
-          default:
-            branch = { type: "noop" };
-        }
-        return Object.freeze({ goal, branch: Object.freeze(branch) });
-      }
-    });
-  }
-  function createPrestigeCommandExecutor(dependencies) {
-    let callBuilding = (id, method) => {
-      let buildings = requireRecord(dependencies.getBuildings(), "buildings"), building3 = requireRecord(buildings[id], `buildings.${id}`);
-      requireFunction(building3[method], `buildings.${id}.${method}`).call(
-        building3
-      );
-    }, clickTech = (id) => {
-      let techIds = requireRecord(dependencies.getTechIds(), "techIds"), tech = requireRecord(techIds[id], `techIds.${id}`);
-      requireFunction(tech.click, `techIds.${id}.click`).call(tech);
-    }, callMad = (method) => {
-      let madVue = requireRecord(dependencies.getVueById("mad"), "vue.mad");
-      requireFunction(madVue[method], `vue.mad.${method}`).call(madVue);
-    };
-    return Object.freeze({
-      execute(command) {
-        switch (command.kind) {
-          case "set-goal": {
-            let state = requireRecord(dependencies.getState(), "state");
-            state.goal = command.goal;
-            return;
-          }
-          case "log-prestige":
-            dependencies.logPrestige();
-            return;
-          case "arm-mad":
-            callMad("arm");
-            return;
-          case "launch-mad":
-            callMad("launch");
-            return;
-          case "click-building":
-            callBuilding(command.id, "click");
-            return;
-          case "cache-building-options":
-            callBuilding(command.id, "cacheOptions");
-            return;
-          case "click-tech":
-            clickTech(command.id);
-            return;
-          case "reset-modifier-keys":
-            dependencies.clickMultipliers.clear();
-            return;
-          case "absorption-chamber-action": {
-            let buildings = requireRecord(
-              dependencies.getBuildings(),
-              "buildings"
-            ), chamber = requireRecord(
-              buildings.PitAbsorptionChamber,
-              "buildings.PitAbsorptionChamber"
-            );
-            requireFunction(
-              chamber.activate,
-              "buildings.PitAbsorptionChamber.activate"
-            ).call(chamber);
-            return;
-          }
-          case "load-queued-settings":
-            dependencies.loadQueuedSettings();
-            return;
-        }
-      }
-    });
-  }
-
-  // src/domain/progression/prestige/prestige.ts
-  var WITCH_ASCENSION_ACT = [
-    { kind: "reset-modifier-keys" },
-    { kind: "log-prestige" },
-    { kind: "absorption-chamber-action" },
-    { kind: "set-goal", goal: "GameOverMan" }
-  ];
-  function tryReset(goal, check, act) {
-    return check ? goal !== "Reset" ? [{ kind: "set-goal", goal: "Reset" }] : act : [];
-  }
-  function planPrestige(input) {
-    let { goal, branch } = input;
-    switch (branch.type) {
-      case "noop":
-        return [];
-      case "mad": {
-        let act = [];
-        return branch.armed && act.push({ kind: "arm-mad" }), (!branch.waitForPopulation || branch.currentSoldiers >= branch.maxSoldiers && branch.currentPopulation >= branch.maxPopulation && branch.currentSoldiers + branch.currentPopulation >= branch.requiredPopulation) && act.push(
-          { kind: "set-goal", goal: "GameOverMan" },
-          { kind: "log-prestige" },
-          { kind: "launch-mad" }
-        ), tryReset(goal, branch.eligible, act);
-      }
-      case "bioseed": {
-        let act = branch.launchUnlocked ? [{ kind: "click-building", id: "GasSpaceDockLaunch" }] : branch.prepUnlocked ? [{ kind: "click-building", id: "GasSpaceDockPrepForLaunch" }] : [{ kind: "cache-building-options", id: "GasSpaceDock" }];
-        return tryReset(goal, branch.eligible, act);
-      }
-      case "cataclysm": {
-        let act = [];
-        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push(
-          { kind: "log-prestige" },
-          { kind: "click-tech", id: "tech-dial_it_to_11" }
-        ), tryReset(goal, branch.eligible, act);
-      }
-      case "whitehole": {
-        let act = [];
-        branch.exoticInfusionReady && act.push({ kind: "log-prestige" });
-        for (let id of [
-          "tech-infusion_confirm",
-          "tech-infusion_check",
-          "tech-exotic_infusion"
-        ])
-          act.push({ kind: "click-tech", id });
-        return tryReset(goal, branch.eligible, act);
-      }
-      case "apocalypse":
-        return tryReset(goal, branch.eligible, [
-          { kind: "log-prestige" },
-          { kind: "click-tech", id: "tech-protocol66" },
-          { kind: "click-tech", id: "tech-protocol66a" }
-        ]);
-      case "ascension":
-        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
-          { kind: "reset-modifier-keys" },
-          { kind: "click-building", id: "SiriusAscend" }
-        ]);
-      case "demonic":
-        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
-          { kind: "log-prestige" },
-          {
-            kind: "click-tech",
-            id: branch.fasting ? "tech-final_ingredient" : "tech-demonic_infusion"
-          }
-        ]);
-      case "building-reset":
-        return tryReset(goal, branch.unlocked, [
-          { kind: "reset-modifier-keys" },
-          { kind: "click-building", id: branch.building }
-        ]);
-    }
-  }
-
-  // src/application/prestige.ts
-  function runPrestige({
-    reader,
-    executor
-  }) {
-    for (let command of planPrestige(reader.samplePrestige()))
-      executor.execute(command);
-  }
-
-  // src/bootstrap/prestige-control.ts
-  function createPrestigeControl(dependencies) {
-    let reader = createPrestigeReader(dependencies.reader), executor = createPrestigeCommandExecutor(dependencies.executor);
-    return Object.freeze({
-      autoPrestige: () => runPrestige({ reader, executor })
-    });
-  }
-
   // src/domain/civic/jobs.ts
   function focusCrystalMinerWeighting(configuredWeighting, competingWeightings, vacuumSyphonStage) {
     if (!vacuumSyphonStage)
@@ -37358,12 +36754,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/jobs.ts
-  var SUCCEEDED22 = Object.freeze({
+  var SUCCEEDED21 = Object.freeze({
     status: "succeeded"
   });
   function runJobsAutomation(dependencies, craftOnly = !1) {
     let decision2 = planJobs(dependencies.reader.readCycle(craftOnly));
-    return decision2 === null ? SUCCEEDED22 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED21 : dependencies.executor.execute(decision2);
   }
 
   // src/bootstrap/jobs-control.ts
@@ -37371,6 +36767,622 @@ If script is allowed to reassign non-empty storage it might waste time producing
     let adapter = createJobsAdapter(dependencies);
     return Object.freeze({
       autoJobs: (craftOnly = !1) => runJobsAutomation(adapter, craftOnly)
+    });
+  }
+
+  // src/bootstrap/craft-jobs-controls.ts
+  function createCraftJobsControls({
+    craft,
+    jobs
+  }) {
+    let craftControl = createCraftControl(craft), jobsControl = createJobsControl(jobs);
+    return Object.freeze({
+      ...craftControl,
+      ...jobsControl
+    });
+  }
+
+  // src/domain/combat/spy.ts
+  function planSpyCycle(input) {
+    return input.available ? Object.freeze({
+      trainEnabled: input.trainEnabled,
+      espionageEnabled: input.advancedEspionage,
+      foreignCount: input.foreignCount
+    }) : null;
+  }
+  function planSpyTraining(input) {
+    if (input.disabled || input.occupied || input.annexed || input.purchased)
+      return null;
+    let spiesRequired = input.spyMaximumSetting >= 0 ? input.spyMaximumSetting : Number.MAX_SAFE_INTEGER;
+    return spiesRequired < 1 && input.policy !== "Occupy" && input.policy !== "Ignore" && (spiesRequired = 1), spiesRequired < 3 && input.policy === "Purchase" && input.purchasePrice !== null && input.moneyMaximum >= input.purchasePrice && (spiesRequired = 3), input.spyCount >= spiesRequired || input.purchaseMoney > 0 && input.policy !== "Purchase" && input.spyCount > 0 ? null : Object.freeze({
+      kind: "train-spy",
+      foreignIndex: input.foreignIndex,
+      governmentId: input.governmentId,
+      governmentName: input.governmentName
+    });
+  }
+  function selectMission(input) {
+    return input.policy === "Betrayal" ? input.military <= 75 || input.hostility <= 0 ? input.missionIds.Sabotage ?? null : input.missionIds.Influence ?? null : input.policy === "Occupy" ? input.missionIds.Sabotage ?? null : input.missionIds[input.policy] ?? null;
+  }
+  function planSpyEspionage(input) {
+    if (input.spyCount < 1 || input.sabotageProgress !== 0 || input.policy === "None")
+      return null;
+    let missionId = selectMission(input);
+    return missionId === null || input.purchaseMoney > 0 && input.purchaseForeign && missionId === input.missionIds.Purchase && input.spyCount < 3 && !input.elusive ? null : input.annexed && input.policy !== "Annex" || input.purchased && input.policy !== "Purchase" || input.occupied && input.policy !== "Occupy" ? Object.freeze({
+      kind: "release-foreign",
+      foreignIndex: input.foreignIndex,
+      governmentId: input.governmentId,
+      expectedPolicy: input.policy
+    }) : !input.annexed && !input.purchased && !input.occupied ? Object.freeze({
+      kind: "perform-espionage",
+      foreignIndex: input.foreignIndex,
+      governmentId: input.governmentId,
+      missionId,
+      secondaryTarget: !input.isPrimaryTarget
+    }) : null;
+  }
+
+  // src/adapters/evolve/combat/spy.ts
+  function unavailableCycle() {
+    return Object.freeze({
+      available: !1,
+      trainEnabled: !1,
+      advancedEspionage: !1,
+      foreignCount: 0
+    });
+  }
+  function readForeign(foreigns, index) {
+    if (!Number.isSafeInteger(index) || index < 0 || index >= foreigns.length)
+      throw new RangeError(`foreign index ${index} is out of range`);
+    let foreign = requireRecord(
+      foreigns[index],
+      `SpyManager.foreignActive[${index}]`
+    ), government = requireRecord(
+      foreign.gov,
+      `SpyManager.foreignActive[${index}].gov`
+    );
+    return { foreign, government };
+  }
+  function readMissionIds(manager) {
+    let types = requireRecord(manager.Types, "SpyManager.Types"), ids = {};
+    for (let [name, rawType] of Object.entries(types)) {
+      let type = requireRecord(rawType, `SpyManager.Types.${name}`);
+      ids[name] = requireString(type.id, `SpyManager.Types.${name}.id`);
+    }
+    return Object.freeze(ids);
+  }
+  function readGameRace(getGame) {
+    let game = requireRecord(getGame(), "game"), global = requireRecord(game.global, "game.global");
+    return requireRecord(global.race, "game.global.race");
+  }
+  function readGovernmentPrice(dependencies, governmentId) {
+    let poly = requireRecord(dependencies.getPoly(), "poly"), govPrice = requireFunction(poly.govPrice, "poly.govPrice");
+    return requireNumber(
+      Reflect.apply(govPrice, poly, [governmentId]),
+      `poly.govPrice(${governmentId})`
+    );
+  }
+  function decisionMatches(expected, actual) {
+    return expected.kind !== actual.kind || expected.foreignIndex !== actual.foreignIndex || expected.governmentId !== actual.governmentId ? !1 : expected.kind === "train-spy" && actual.kind === "train-spy" ? expected.governmentName === actual.governmentName : expected.kind === "release-foreign" && actual.kind === "release-foreign" ? expected.expectedPolicy === actual.expectedPolicy : expected.kind === "perform-espionage" && actual.kind === "perform-espionage" && expected.missionId === actual.missionId && expected.secondaryTarget === actual.secondaryTarget;
+  }
+  function governmentMatchesTraining(sample) {
+    let input = sample.input;
+    return sample.foreign.policy === input.policy && sample.government.spy === input.spyCount && !!sample.government.occ === input.occupied && !!sample.government.anx === input.annexed && !!sample.government.buy === input.purchased;
+  }
+  function governmentMatchesEspionage(sample) {
+    let input = sample.input;
+    return sample.foreign.policy === input.policy && sample.government.spy === input.spyCount && sample.government.sab === input.sabotageProgress && (input.policy !== "Betrayal" || sample.government.mil === input.military && sample.government.hstl === input.hostility) && !!sample.government.occ === input.occupied && !!sample.government.anx === input.annexed && !!sample.government.buy === input.purchased;
+  }
+  function createSpyAdapter(dependencies) {
+    let session = null, sample = null, reader = Object.freeze({
+      readCycle() {
+        session = null, sample = null;
+        let manager = requireRecord(dependencies.getSpyManager(), "SpyManager");
+        if (manager.isForeignUnlocked !== !0) return unavailableCycle();
+        let haveTask = requireFunction(dependencies.getHaveTask(), "haveTask");
+        if (Reflect.apply(haveTask, void 0, ["combo_spy"]) || Reflect.apply(haveTask, void 0, ["spyop"]))
+          return unavailableCycle();
+        let haveTech = requireFunction(dependencies.getHaveTech(), "haveTech");
+        if (!Reflect.apply(haveTech, void 0, ["spy"]) || dependencies.shouldSaveInflationMoney()) return unavailableCycle();
+        let advancedEspionage = !!Reflect.apply(haveTech, void 0, ["spy", 2]);
+        if (!advancedEspionage) {
+          let resources = requireRecord(
+            dependencies.getResources(),
+            "resources"
+          ), money = requireRecord(resources.Money, "resources.Money");
+          if (requireNumber(
+            money.storageRatio,
+            "resources.Money.storageRatio"
+          ) < 0.9) return unavailableCycle();
+        }
+        let settings = requireRecord(dependencies.getSettings(), "settings"), trainEnabled = requireBoolean(
+          settings.foreignTrainSpy,
+          "settings.foreignTrainSpy"
+        ), spyMaximumSetting = trainEnabled ? requireNumber(settings.foreignSpyMax, "settings.foreignSpyMax") : 0, rawForeigns = manager.foreignActive;
+        if (!Array.isArray(rawForeigns))
+          throw new TypeError("SpyManager.foreignActive must be an array");
+        let missionIds = advancedEspionage ? readMissionIds(manager) : Object.freeze({});
+        return session = Object.freeze({
+          manager,
+          foreignUnlocked: manager.isForeignUnlocked === !0,
+          foreigns: rawForeigns,
+          spyMaximumSetting,
+          missionIds
+        }), Object.freeze({
+          available: !0,
+          trainEnabled,
+          advancedEspionage,
+          foreignCount: rawForeigns.length
+        });
+      },
+      readTraining(foreignIndex) {
+        let active = session;
+        if (active === null) throw new Error("spy cycle has not been sampled");
+        let { foreign, government } = readForeign(
+          active.foreigns,
+          foreignIndex
+        ), governmentId = requireNumber(
+          foreign.id,
+          `SpyManager.foreignActive[${foreignIndex}].id`
+        ), policy = requireString(
+          foreign.policy,
+          `SpyManager.foreignActive[${foreignIndex}].policy`
+        ), spyDisabled = dependencies.getForeignControls().isSpyDisabled(governmentId), purchasePrice = policy === "Purchase" ? readGovernmentPrice(dependencies, governmentId) : null, moneyMaximum = 0;
+        if (purchasePrice !== null) {
+          let resources = requireRecord(
+            dependencies.getResources(),
+            "resources"
+          ), money = requireRecord(resources.Money, "resources.Money");
+          moneyMaximum = requireNumber(
+            money.maxQuantity,
+            "resources.Money.maxQuantity"
+          );
+        }
+        let governmentName = requireString(
+          dependencies.getGovName(governmentId),
+          `government name ${governmentId}`
+        ), input = Object.freeze({
+          foreignIndex,
+          governmentId,
+          governmentName,
+          disabled: spyDisabled,
+          occupied: !!government.occ,
+          annexed: !!government.anx,
+          purchased: !!government.buy,
+          policy,
+          spyCount: requireNumber(
+            government.spy,
+            `SpyManager.foreignActive[${foreignIndex}].gov.spy`
+          ),
+          spyMaximumSetting: active.spyMaximumSetting,
+          purchaseMoney: requireNumber(
+            active.manager.purchaseMoney,
+            "SpyManager.purchaseMoney"
+          ),
+          moneyMaximum,
+          purchasePrice
+        });
+        return sample = Object.freeze({
+          kind: "training",
+          input,
+          foreign,
+          government
+        }), input;
+      },
+      readEspionage(foreignIndex) {
+        let active = session;
+        if (active === null) throw new Error("spy cycle has not been sampled");
+        let { foreign, government } = readForeign(
+          active.foreigns,
+          foreignIndex
+        ), governmentId = requireNumber(
+          foreign.id,
+          `SpyManager.foreignActive[${foreignIndex}].id`
+        ), policy = requireString(
+          foreign.policy,
+          `SpyManager.foreignActive[${foreignIndex}].policy`
+        ), spyCount = requireNumber(
+          government.spy,
+          `SpyManager.foreignActive[${foreignIndex}].gov.spy`
+        ), sabotageProgress = requireNumber(
+          government.sab,
+          `SpyManager.foreignActive[${foreignIndex}].gov.sab`
+        ), actionable = spyCount >= 1 && sabotageProgress === 0 && policy !== "None", purchaseForeigns = actionable ? active.manager.purchaseForeigngs : [];
+        if (!Array.isArray(purchaseForeigns))
+          throw new TypeError("SpyManager.purchaseForeigngs must be an array");
+        let input = Object.freeze({
+          foreignIndex,
+          governmentId,
+          policy,
+          spyCount,
+          sabotageProgress,
+          military: actionable && policy === "Betrayal" ? requireNumber(
+            government.mil,
+            `SpyManager.foreignActive[${foreignIndex}].gov.mil`
+          ) : 0,
+          hostility: actionable && policy === "Betrayal" ? requireNumber(
+            government.hstl,
+            `SpyManager.foreignActive[${foreignIndex}].gov.hstl`
+          ) : 0,
+          occupied: !!government.occ,
+          annexed: !!government.anx,
+          purchased: !!government.buy,
+          purchaseMoney: actionable ? requireNumber(
+            active.manager.purchaseMoney,
+            "SpyManager.purchaseMoney"
+          ) : 0,
+          purchaseForeign: purchaseForeigns.includes(governmentId),
+          elusive: actionable ? !!readGameRace(dependencies.getGame).elusive : !1,
+          isPrimaryTarget: foreign === active.manager.foreignTarget,
+          missionIds: active.missionIds
+        });
+        return sample = Object.freeze({
+          kind: "espionage",
+          input,
+          foreign,
+          government
+        }), input;
+      }
+    }), executor = Object.freeze({
+      execute(decision2) {
+        let active = session, sampled = sample;
+        if (active === null || sampled === null)
+          return stale("spy-session-missing", "spy session is missing");
+        if (dependencies.getSpyManager() !== active.manager || active.manager.foreignActive !== active.foreigns || active.manager.isForeignUnlocked === !0 !== active.foreignUnlocked)
+          return stale("spy-manager-changed", "spy manager state changed");
+        let expected = sampled.kind === "training" ? planSpyTraining(sampled.input) : planSpyEspionage(sampled.input);
+        if (expected === null || !decisionMatches(expected, decision2))
+          return rejected(
+            "invalid-spy-decision",
+            "spy decision does not match the sampled plan"
+          );
+        if (sampled.kind === "training" && !governmentMatchesTraining(sampled) || sampled.kind === "espionage" && !governmentMatchesEspionage(sampled))
+          return stale("spy-foreign-changed", "foreign government state changed");
+        if (sample = null, decision2.kind === "train-spy") {
+          if (sampled.kind !== "training")
+            return rejected("invalid-spy-phase", "spy training phase changed");
+          let gameLog = requireRecord(dependencies.getGameLog(), "GameLog"), logSuccess = requireFunction(
+            gameLog.logSuccess,
+            "GameLog.logSuccess"
+          );
+          return Reflect.apply(logSuccess, gameLog, [
+            "spying",
+            `Training a spy to send against ${decision2.governmentName}.`,
+            ["spy"]
+          ]), dependencies.getForeignControls().trainSpy(decision2.governmentId) ? SUCCEEDED : stale(
+            "spy-panel-withdrawn",
+            "spy training panel is no longer available"
+          );
+        }
+        if (sampled.kind !== "espionage")
+          return rejected("invalid-spy-phase", "spy espionage phase changed");
+        if (decision2.kind === "release-foreign") {
+          let warManager = requireRecord(
+            dependencies.getWarManager(),
+            "WarManager"
+          ), release = requireFunction(
+            warManager.release,
+            "WarManager.release"
+          );
+          return Reflect.apply(release, warManager, [decision2.governmentId]), sampled.foreign.released = !0, SUCCEEDED;
+        }
+        if (decision2.kind === "perform-espionage") {
+          let performEspionage = requireFunction(
+            active.manager.performEspionage,
+            "SpyManager.performEspionage"
+          );
+          return Reflect.apply(performEspionage, active.manager, [
+            decision2.governmentId,
+            decision2.missionId,
+            decision2.secondaryTarget
+          ]), SUCCEEDED;
+        }
+        return rejected("invalid-spy-decision", "spy decision is invalid");
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/application/spy.ts
+  var SUCCEEDED22 = Object.freeze({
+    status: "succeeded"
+  });
+  function runSpyAutomation(dependencies) {
+    let cycle = planSpyCycle(dependencies.reader.readCycle());
+    if (cycle === null) return SUCCEEDED22;
+    if (cycle.trainEnabled)
+      for (let index = 0; index < cycle.foreignCount; index++) {
+        let decision2 = planSpyTraining(dependencies.reader.readTraining(index));
+        if (decision2 === null) continue;
+        let outcome = dependencies.executor.execute(decision2);
+        if (outcome.status !== "succeeded") return outcome;
+      }
+    if (!cycle.espionageEnabled) return SUCCEEDED22;
+    for (let index = 0; index < cycle.foreignCount; index++) {
+      let decision2 = planSpyEspionage(dependencies.reader.readEspionage(index));
+      if (decision2 === null) continue;
+      let outcome = dependencies.executor.execute(decision2);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED22;
+  }
+
+  // src/bootstrap/spy-control.ts
+  function createSpyControl(dependencies) {
+    let adapter = createSpyAdapter(dependencies);
+    return Object.freeze({ autoSpy: () => runSpyAutomation(adapter) });
+  }
+
+  // src/adapters/evolve/progression/prestige/prestige.ts
+  function createPrestigeReader(dependencies) {
+    let buildingBool = (id, method) => {
+      let buildings = requireRecord(dependencies.getBuildings(), "buildings"), building3 = requireRecord(buildings[id], `buildings.${id}`);
+      return callBoolean(building3, method, `buildings.${id}`);
+    }, techBool = (id, method) => {
+      let techIds = requireRecord(dependencies.getTechIds(), "techIds"), tech = requireRecord(techIds[id], `techIds.${id}`);
+      return callBoolean(tech, method, `techIds.${id}`);
+    }, race2 = () => requireRecord(
+      requireRecord(
+        requireRecord(dependencies.getGame(), "game").global,
+        "game.global"
+      ).race,
+      "game.global.race"
+    ), madBranch = (settings) => {
+      let madVue = dependencies.getVueById("mad"), display = typeof madVue == "object" && madVue !== null ? !!madVue.display : !1, armed = typeof madVue == "object" && madVue !== null ? !!madVue.armed : !1, eligible = display && !!dependencies.getHaveTech()("mad"), war = requireRecord(dependencies.getWarManager(), "WarManager"), population = requireRecord(
+        requireRecord(dependencies.getResources(), "resources").Population,
+        "resources.Population"
+      );
+      return {
+        type: "mad",
+        eligible,
+        armed,
+        waitForPopulation: !!settings.prestigeMADWait,
+        // The soldier counts are WarManager getters over live worker/crew fields, and the population
+        // quantities come from the resource wrapper. A NaN fails every `>=` in the wait check, so it
+        // holds MAD back rather than arming it.
+        currentSoldiers: coerceNumber(war.currentSoldiers),
+        maxSoldiers: coerceNumber(war.maxSoldiers),
+        currentPopulation: coerceNumber(population.currentQuantity),
+        maxPopulation: coerceNumber(population.maxQuantity),
+        requiredPopulation: coerceNumber(settings.prestigeMADPopulation)
+      };
+    };
+    return Object.freeze({
+      samplePrestige() {
+        let rawGoal = requireRecord(dependencies.getState(), "state").goal, goal = typeof rawGoal == "string" ? rawGoal : "", settings = requireRecord(dependencies.getSettings(), "settings"), { eligibility } = dependencies, branch;
+        switch (settings.prestigeType) {
+          case "mad":
+            branch = madBranch(settings);
+            break;
+          case "bioseed":
+            branch = {
+              type: "bioseed",
+              eligible: eligibility.isBioseederPrestigeAvailable(),
+              launchUnlocked: buildingBool("GasSpaceDockLaunch", "isUnlocked"),
+              prepUnlocked: buildingBool(
+                "GasSpaceDockPrepForLaunch",
+                "isUnlocked"
+              )
+            };
+            break;
+          case "cataclysm":
+            branch = {
+              type: "cataclysm",
+              eligible: eligibility.isCataclysmPrestigeAvailable(),
+              loadQueuedSettings: !!settings.autoEvolution,
+              dialClickable: techBool("tech-dial_it_to_11", "isClickable")
+            };
+            break;
+          case "whitehole":
+            branch = {
+              type: "whitehole",
+              eligible: eligibility.isWhiteholePrestigeAvailable(),
+              exoticInfusionReady: techBool("tech-exotic_infusion", "isUnlocked") && techBool("tech-exotic_infusion", "isAffordable")
+            };
+            break;
+          case "apocalypse":
+            branch = {
+              type: "apocalypse",
+              eligible: eligibility.isApocalypsePrestigeAvailable()
+            };
+            break;
+          case "ascension": {
+            let witchHunter = !!race2().witch_hunter;
+            branch = {
+              type: "ascension",
+              witchHunter,
+              eligible: witchHunter ? eligibility.isWitchAscensionPrestigeAvailable(!1) : eligibility.isAscensionPrestigeAvailable()
+            };
+            break;
+          }
+          case "demonic": {
+            let current = race2(), witchHunter = !!current.witch_hunter;
+            branch = {
+              type: "demonic",
+              witchHunter,
+              fasting: !!current.fasting,
+              eligible: witchHunter ? eligibility.isWitchAscensionPrestigeAvailable(!0) : eligibility.isDemonicPrestigeAvailable()
+            };
+            break;
+          }
+          case "terraform":
+            branch = {
+              type: "building-reset",
+              building: "RedTerraform",
+              unlocked: buildingBool("RedTerraform", "isUnlocked")
+            };
+            break;
+          case "matrix":
+            branch = {
+              type: "building-reset",
+              building: "TauStarBluePill",
+              unlocked: buildingBool("TauStarBluePill", "isUnlocked")
+            };
+            break;
+          case "apotheosis":
+            branch = {
+              type: "building-reset",
+              building: "PalaceApotheosis",
+              unlocked: buildingBool("PalaceApotheosis", "isUnlocked")
+            };
+            break;
+          default:
+            branch = { type: "noop" };
+        }
+        return Object.freeze({ goal, branch: Object.freeze(branch) });
+      }
+    });
+  }
+  function createPrestigeCommandExecutor(dependencies) {
+    let callBuilding = (id, method) => {
+      let buildings = requireRecord(dependencies.getBuildings(), "buildings"), building3 = requireRecord(buildings[id], `buildings.${id}`);
+      requireFunction(building3[method], `buildings.${id}.${method}`).call(
+        building3
+      );
+    }, clickTech = (id) => {
+      let techIds = requireRecord(dependencies.getTechIds(), "techIds"), tech = requireRecord(techIds[id], `techIds.${id}`);
+      requireFunction(tech.click, `techIds.${id}.click`).call(tech);
+    }, callMad = (method) => {
+      let madVue = requireRecord(dependencies.getVueById("mad"), "vue.mad");
+      requireFunction(madVue[method], `vue.mad.${method}`).call(madVue);
+    };
+    return Object.freeze({
+      execute(command) {
+        switch (command.kind) {
+          case "set-goal": {
+            let state = requireRecord(dependencies.getState(), "state");
+            state.goal = command.goal;
+            return;
+          }
+          case "log-prestige":
+            dependencies.logPrestige();
+            return;
+          case "arm-mad":
+            callMad("arm");
+            return;
+          case "launch-mad":
+            callMad("launch");
+            return;
+          case "click-building":
+            callBuilding(command.id, "click");
+            return;
+          case "cache-building-options":
+            callBuilding(command.id, "cacheOptions");
+            return;
+          case "click-tech":
+            clickTech(command.id);
+            return;
+          case "reset-modifier-keys":
+            dependencies.clickMultipliers.clear();
+            return;
+          case "absorption-chamber-action": {
+            let buildings = requireRecord(
+              dependencies.getBuildings(),
+              "buildings"
+            ), chamber = requireRecord(
+              buildings.PitAbsorptionChamber,
+              "buildings.PitAbsorptionChamber"
+            );
+            requireFunction(
+              chamber.activate,
+              "buildings.PitAbsorptionChamber.activate"
+            ).call(chamber);
+            return;
+          }
+          case "load-queued-settings":
+            dependencies.loadQueuedSettings();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/progression/prestige/prestige.ts
+  var WITCH_ASCENSION_ACT = [
+    { kind: "reset-modifier-keys" },
+    { kind: "log-prestige" },
+    { kind: "absorption-chamber-action" },
+    { kind: "set-goal", goal: "GameOverMan" }
+  ];
+  function tryReset(goal, check, act) {
+    return check ? goal !== "Reset" ? [{ kind: "set-goal", goal: "Reset" }] : act : [];
+  }
+  function planPrestige(input) {
+    let { goal, branch } = input;
+    switch (branch.type) {
+      case "noop":
+        return [];
+      case "mad": {
+        let act = [];
+        return branch.armed && act.push({ kind: "arm-mad" }), (!branch.waitForPopulation || branch.currentSoldiers >= branch.maxSoldiers && branch.currentPopulation >= branch.maxPopulation && branch.currentSoldiers + branch.currentPopulation >= branch.requiredPopulation) && act.push(
+          { kind: "set-goal", goal: "GameOverMan" },
+          { kind: "log-prestige" },
+          { kind: "launch-mad" }
+        ), tryReset(goal, branch.eligible, act);
+      }
+      case "bioseed": {
+        let act = branch.launchUnlocked ? [{ kind: "click-building", id: "GasSpaceDockLaunch" }] : branch.prepUnlocked ? [{ kind: "click-building", id: "GasSpaceDockPrepForLaunch" }] : [{ kind: "cache-building-options", id: "GasSpaceDock" }];
+        return tryReset(goal, branch.eligible, act);
+      }
+      case "cataclysm": {
+        let act = [];
+        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push(
+          { kind: "log-prestige" },
+          { kind: "click-tech", id: "tech-dial_it_to_11" }
+        ), tryReset(goal, branch.eligible, act);
+      }
+      case "whitehole": {
+        let act = [];
+        branch.exoticInfusionReady && act.push({ kind: "log-prestige" });
+        for (let id of [
+          "tech-infusion_confirm",
+          "tech-infusion_check",
+          "tech-exotic_infusion"
+        ])
+          act.push({ kind: "click-tech", id });
+        return tryReset(goal, branch.eligible, act);
+      }
+      case "apocalypse":
+        return tryReset(goal, branch.eligible, [
+          { kind: "log-prestige" },
+          { kind: "click-tech", id: "tech-protocol66" },
+          { kind: "click-tech", id: "tech-protocol66a" }
+        ]);
+      case "ascension":
+        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
+          { kind: "reset-modifier-keys" },
+          { kind: "click-building", id: "SiriusAscend" }
+        ]);
+      case "demonic":
+        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
+          { kind: "log-prestige" },
+          {
+            kind: "click-tech",
+            id: branch.fasting ? "tech-final_ingredient" : "tech-demonic_infusion"
+          }
+        ]);
+      case "building-reset":
+        return tryReset(goal, branch.unlocked, [
+          { kind: "reset-modifier-keys" },
+          { kind: "click-building", id: branch.building }
+        ]);
+    }
+  }
+
+  // src/application/prestige.ts
+  function runPrestige({
+    reader,
+    executor
+  }) {
+    for (let command of planPrestige(reader.samplePrestige()))
+      executor.execute(command);
+  }
+
+  // src/bootstrap/prestige-control.ts
+  function createPrestigeControl(dependencies) {
+    let reader = createPrestigeReader(dependencies.reader), executor = createPrestigeCommandExecutor(dependencies.executor);
+    return Object.freeze({
+      autoPrestige: () => runPrestige({ reader, executor })
     });
   }
 
@@ -50537,16 +50549,40 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           getMouseEvent: () => MouseEvent
         }
       }
-    }), { autoCraft } = createCraftControl({
-      reader: {
-        getResources: () => resources,
-        getGame: () => game,
-        getFoundryList: () => foundryList,
-        ticksPerSecond
+    }), { autoCraft, autoJobs } = createCraftJobsControls({
+      craft: {
+        reader: {
+          getResources: () => resources,
+          getGame: () => game,
+          getFoundryList: () => foundryList,
+          ticksPerSecond
+        },
+        executor: {
+          getResources: () => resources,
+          getFoundryList: () => foundryList
+        }
       },
-      executor: {
+      jobs: {
+        getJobManager: () => JobManager,
+        getGame: () => game,
+        getJobs: () => jobs,
+        getCrafter: () => crafter,
+        getSettings: () => settings,
+        getBuildings: () => buildings,
         getResources: () => resources,
-        getFoundryList: () => foundryList
+        getState: () => state,
+        getDebugWindow: () => runtimeEnvironment.window,
+        isDemonRace,
+        isLumberRace,
+        traitValue: traitVal,
+        haveTech,
+        haveTask,
+        ticksPerSecond,
+        findRequiredResourceWeight: findRequiredResourceWeight2,
+        taxCap: (minimum) => poly.taxCap(minimum),
+        isCraftingJob: (job) => job instanceof CraftingJob,
+        getFoodConsume,
+        log: (message) => runtimeEnvironment.log(message)
       }
     }), { autoGovernment, autoBattle, autoHell } = createCombatCivicControls({
       government: {
@@ -50609,27 +50645,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGameLog: () => GameLog,
       getGovName,
       getGame: () => game
-    }), { autoJobs } = createJobsControl({
-      getJobManager: () => JobManager,
-      getGame: () => game,
-      getJobs: () => jobs,
-      getCrafter: () => crafter,
-      getSettings: () => settings,
-      getBuildings: () => buildings,
-      getResources: () => resources,
-      getState: () => state,
-      getDebugWindow: () => runtimeEnvironment.window,
-      isDemonRace,
-      isLumberRace,
-      traitValue: traitVal,
-      haveTech,
-      haveTask,
-      ticksPerSecond,
-      findRequiredResourceWeight: findRequiredResourceWeight2,
-      taxCap: (minimum) => poly.taxCap(minimum),
-      isCraftingJob: (job) => job instanceof CraftingJob,
-      getFoodConsume,
-      log: (message) => runtimeEnvironment.log(message)
     }), { autoTax } = createTaxControl({
       nowMs: () => browserClock.nowMs(),
       getVueById,
