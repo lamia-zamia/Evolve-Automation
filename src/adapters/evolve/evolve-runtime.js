@@ -122,6 +122,7 @@ import {
   applyDemandPrioritizationResult,
   applyStorageRequirementsResult,
 } from "../../game/state-demand.ts";
+import { createPlannerState } from "../../game/planner-state.ts";
 import { findCostConflict } from "../../domain/cost-conflicts.ts";
 import { readCostConflictInput } from "./cost-conflicts.ts";
 import { findPlannerLimit } from "../../domain/planner-analysis.ts";
@@ -2336,27 +2337,18 @@ function startEvolveRuntimeComposition(
   const plannerStatsLifecycle = createPlannerStatsLifecycle(
     createPlannerStatsStore(runtimeEnvironment.storage),
   );
-  function plannerLimitingResource(target) {
-    const readResult = readPlannerLimitInput(target, resources);
-    return readResult.status === "ready"
-      ? findPlannerLimit(readResult.input)
-      : readResult;
-  }
-  function makePlannerStats() {
-    const readResult = readPlannerRun(game);
-    return readResult.status === "ready"
-      ? plannerStatsLifecycle.make(readResult.run)
-      : null;
-  }
-  function loadPlannerStats() {
-    const readResult = readPlannerRun(game);
-    return readResult.status === "ready"
-      ? plannerStatsLifecycle.load(readResult.run)
-      : null;
-  }
-  function savePlannerStats(stats) {
-    return plannerStatsLifecycle.save(stats);
-  }
+  const {
+    plannerLimitingResource,
+    makePlannerStats,
+    loadPlannerStats,
+    savePlannerStats,
+  } = createPlannerState({
+    getResources: () => resources,
+    getGame: () => game,
+    readPlannerLimitInput,
+    readPlannerRun,
+    lifecycle: plannerStatsLifecycle,
+  });
   const { expandStorage } = createStorageExpansionControl({
     nowMs: () => browserClock.nowMs(),
     reader: {

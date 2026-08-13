@@ -15944,6 +15944,147 @@
     }
   }
 
+  // src/domain/planner-analysis.ts
+  function isRecord2(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isNonNegativeSafeInteger(value) {
+    return Number.isSafeInteger(value) && value >= 0;
+  }
+  function freezeStats(stats) {
+    return Object.freeze({
+      ...stats,
+      samples: Object.freeze({ ...stats.samples })
+    });
+  }
+  function findPlannerLimit(input) {
+    if (input.affordable) return null;
+    let worst = null;
+    let locked = null;
+    for (const requirement of input.requirements) {
+      if (!requirement.unlocked) {
+        if (locked === null && requirement.currentQuantity < requirement.requiredQuantity) {
+          locked = {
+            resourceId: requirement.resourceId,
+            resourceTitle: requirement.resourceTitle,
+            time: Number.MAX_SAFE_INTEGER,
+            blocker: "locked"
+          };
+        }
+        continue;
+      }
+      if (requirement.currentQuantity >= requirement.requiredQuantity) {
+        continue;
+      }
+      let time;
+      let blocker;
+      if (requirement.maximumQuantity < requirement.requiredQuantity) {
+        time = Number.MAX_SAFE_INTEGER;
+        blocker = "storage";
+      } else if (requirement.income > 0) {
+        time = (requirement.requiredQuantity - requirement.currentQuantity) / requirement.income;
+        blocker = "income";
+      } else {
+        time = Number.MAX_SAFE_INTEGER / 2;
+        blocker = "stalled";
+      }
+      if (worst === null || time > worst.time) {
+        worst = {
+          resourceId: requirement.resourceId,
+          resourceTitle: requirement.resourceTitle,
+          time,
+          blocker
+        };
+      }
+    }
+    const result2 = locked ?? worst;
+    return result2 === null ? null : Object.freeze(result2);
+  }
+  function createPlannerStats(run) {
+    if (!isNonNegativeSafeInteger(run.day) || !isNonNegativeSafeInteger(run.reset)) {
+      throw new TypeError(
+        "planner run values must be non-negative safe integers"
+      );
+    }
+    return freezeStats({
+      startDay: run.day,
+      day: run.day,
+      reset: run.reset,
+      samples: {},
+      total: 0
+    });
+  }
+  function parsePlannerStats(value) {
+    if (!isRecord2(value)) return null;
+    const { startDay, day, reset, samples, total } = value;
+    if (!isNonNegativeSafeInteger(startDay) || !isNonNegativeSafeInteger(day) || !isNonNegativeSafeInteger(reset) || !isNonNegativeSafeInteger(total) || startDay > day || !isRecord2(samples)) {
+      return null;
+    }
+    const validatedSamples = {};
+    let sampleTotal = 0;
+    for (const [bucket, count2] of Object.entries(samples)) {
+      if (!isNonNegativeSafeInteger(count2)) return null;
+      validatedSamples[bucket] = count2;
+      sampleTotal += count2;
+    }
+    if (!Number.isSafeInteger(sampleTotal) || sampleTotal !== total) return null;
+    return freezeStats({
+      startDay,
+      day,
+      reset,
+      samples: validatedSamples,
+      total
+    });
+  }
+  function selectPlannerStats(saved, run) {
+    return saved !== null && saved.reset === run.reset && saved.day <= run.day ? saved : createPlannerStats(run);
+  }
+  function recordPlannerSample(stats, bucket, currentDay) {
+    if (!isNonNegativeSafeInteger(currentDay)) {
+      throw new TypeError("currentDay must be a non-negative safe integer");
+    }
+    return freezeStats({
+      ...stats,
+      day: currentDay,
+      samples: {
+        ...stats.samples,
+        [bucket]: (stats.samples[bucket] ?? 0) + 1
+      },
+      total: stats.total + 1
+    });
+  }
+
+  // src/game/planner-state.ts
+  function createPlannerState({
+    getResources,
+    getGame,
+    readPlannerLimitInput: readPlannerLimitInput2,
+    readPlannerRun: readPlannerRun2,
+    lifecycle
+  }) {
+    function plannerLimitingResource(target) {
+      const readResult = readPlannerLimitInput2(target, getResources());
+      return readResult.status === "ready" ? findPlannerLimit(readResult.input) : readResult;
+    }
+    function makePlannerStats() {
+      const readResult = readPlannerRun2(getGame());
+      return readResult.status === "ready" ? lifecycle.make(readResult.run) : null;
+    }
+    function loadPlannerStats() {
+      const readResult = readPlannerRun2(getGame());
+      return readResult.status === "ready" ? lifecycle.load(readResult.run) : null;
+    }
+    function savePlannerStats(stats) {
+      return lifecycle.save(stats);
+    }
+    return {
+      plannerLimitingResource,
+      makePlannerStats,
+      loadPlannerStats,
+      savePlannerStats
+    };
+  }
+
   // src/domain/cost-conflicts.ts
   function findCostConflict(input) {
     const resourceNames = [];
@@ -16066,116 +16207,6 @@
         reservedTargets: Object.freeze(reservedTargets),
         resources: Object.freeze(resources)
       })
-    });
-  }
-
-  // src/domain/planner-analysis.ts
-  function isRecord2(value) {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-  }
-  function isNonNegativeSafeInteger(value) {
-    return Number.isSafeInteger(value) && value >= 0;
-  }
-  function freezeStats(stats) {
-    return Object.freeze({
-      ...stats,
-      samples: Object.freeze({ ...stats.samples })
-    });
-  }
-  function findPlannerLimit(input) {
-    if (input.affordable) return null;
-    let worst = null;
-    let locked = null;
-    for (const requirement of input.requirements) {
-      if (!requirement.unlocked) {
-        if (locked === null && requirement.currentQuantity < requirement.requiredQuantity) {
-          locked = {
-            resourceId: requirement.resourceId,
-            resourceTitle: requirement.resourceTitle,
-            time: Number.MAX_SAFE_INTEGER,
-            blocker: "locked"
-          };
-        }
-        continue;
-      }
-      if (requirement.currentQuantity >= requirement.requiredQuantity) {
-        continue;
-      }
-      let time;
-      let blocker;
-      if (requirement.maximumQuantity < requirement.requiredQuantity) {
-        time = Number.MAX_SAFE_INTEGER;
-        blocker = "storage";
-      } else if (requirement.income > 0) {
-        time = (requirement.requiredQuantity - requirement.currentQuantity) / requirement.income;
-        blocker = "income";
-      } else {
-        time = Number.MAX_SAFE_INTEGER / 2;
-        blocker = "stalled";
-      }
-      if (worst === null || time > worst.time) {
-        worst = {
-          resourceId: requirement.resourceId,
-          resourceTitle: requirement.resourceTitle,
-          time,
-          blocker
-        };
-      }
-    }
-    const result2 = locked ?? worst;
-    return result2 === null ? null : Object.freeze(result2);
-  }
-  function createPlannerStats(run) {
-    if (!isNonNegativeSafeInteger(run.day) || !isNonNegativeSafeInteger(run.reset)) {
-      throw new TypeError(
-        "planner run values must be non-negative safe integers"
-      );
-    }
-    return freezeStats({
-      startDay: run.day,
-      day: run.day,
-      reset: run.reset,
-      samples: {},
-      total: 0
-    });
-  }
-  function parsePlannerStats(value) {
-    if (!isRecord2(value)) return null;
-    const { startDay, day, reset, samples, total } = value;
-    if (!isNonNegativeSafeInteger(startDay) || !isNonNegativeSafeInteger(day) || !isNonNegativeSafeInteger(reset) || !isNonNegativeSafeInteger(total) || startDay > day || !isRecord2(samples)) {
-      return null;
-    }
-    const validatedSamples = {};
-    let sampleTotal = 0;
-    for (const [bucket, count2] of Object.entries(samples)) {
-      if (!isNonNegativeSafeInteger(count2)) return null;
-      validatedSamples[bucket] = count2;
-      sampleTotal += count2;
-    }
-    if (!Number.isSafeInteger(sampleTotal) || sampleTotal !== total) return null;
-    return freezeStats({
-      startDay,
-      day,
-      reset,
-      samples: validatedSamples,
-      total
-    });
-  }
-  function selectPlannerStats(saved, run) {
-    return saved !== null && saved.reset === run.reset && saved.day <= run.day ? saved : createPlannerStats(run);
-  }
-  function recordPlannerSample(stats, bucket, currentDay) {
-    if (!isNonNegativeSafeInteger(currentDay)) {
-      throw new TypeError("currentDay must be a non-negative safe integer");
-    }
-    return freezeStats({
-      ...stats,
-      day: currentDay,
-      samples: {
-        ...stats.samples,
-        [bucket]: (stats.samples[bucket] ?? 0) + 1
-      },
-      total: stats.total + 1
     });
   }
 
@@ -57904,21 +57935,18 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const plannerStatsLifecycle = createPlannerStatsLifecycle(
       createPlannerStatsStore(runtimeEnvironment.storage)
     );
-    function plannerLimitingResource(target) {
-      const readResult = readPlannerLimitInput(target, resources);
-      return readResult.status === "ready" ? findPlannerLimit(readResult.input) : readResult;
-    }
-    function makePlannerStats() {
-      const readResult = readPlannerRun(game);
-      return readResult.status === "ready" ? plannerStatsLifecycle.make(readResult.run) : null;
-    }
-    function loadPlannerStats() {
-      const readResult = readPlannerRun(game);
-      return readResult.status === "ready" ? plannerStatsLifecycle.load(readResult.run) : null;
-    }
-    function savePlannerStats(stats) {
-      return plannerStatsLifecycle.save(stats);
-    }
+    const {
+      plannerLimitingResource,
+      makePlannerStats,
+      loadPlannerStats,
+      savePlannerStats
+    } = createPlannerState({
+      getResources: () => resources,
+      getGame: () => game,
+      readPlannerLimitInput,
+      readPlannerRun,
+      lifecycle: plannerStatsLifecycle
+    });
     const { expandStorage } = createStorageExpansionControl({
       nowMs: () => browserClock.nowMs(),
       reader: {
