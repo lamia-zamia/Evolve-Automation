@@ -38,6 +38,7 @@
     "src/game/building-state.ts",
     "src/game/runtime-queries.ts",
     "src/game/rates.ts",
+    "src/game/foreign-affairs-managers.ts",
     "src/config.ts",
     "src/main.ts"
   ]

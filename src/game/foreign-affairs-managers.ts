@@ -25,6 +25,13 @@ type ActiveForeign = {
   gov: Gov;
   policy: string;
 };
+type SpyTypeSet = {
+  Influence: { id: "influence" };
+  Sabotage: { id: "sabotage" };
+  Incite: { id: "incite" };
+  Annex: { id: "annex" };
+  Purchase: { id: "purchase" };
+};
 
 type GameSurface = {
   global: {
@@ -75,10 +82,11 @@ type SettingsSurface = {
   hellAssaultReserve: boolean;
 } & Record<`foreignPolicy${ForeignRank}`, string>;
 
-type ResourcesSurface = Record<
-  string,
-  { currentQuantity: number; maxQuantity: number }
->;
+type Resource = { currentQuantity: number; maxQuantity: number };
+type ResourcesSurface = Record<string, Resource> & {
+  Money: Resource;
+  Morale: Resource;
+};
 
 type BuildingsSurface = Record<
   string,
@@ -111,7 +119,7 @@ type SpyManagerShape = {
   purchaseForeigngs: number[];
   foreignActive: ActiveForeign[];
   foreignTarget: ActiveForeign | null;
-  Types: Record<string, { id: string }>;
+  Types: SpyTypeSet;
   spyCost(govIndex: number, spy?: number): number;
   updateForeigns(): void;
   performEspionage(
@@ -254,7 +262,7 @@ export function createForeignAffairsManagers({
     spyCost(govIndex, spy) {
       const game = getGame();
       const state = getState();
-      let gov = game.global.civic.foreign[`gov${govIndex}`];
+      let gov = game.global.civic.foreign[`gov${govIndex}`]!;
       const spyLevel = spy ?? gov.spy + 1;
 
       let base = Math.max(
@@ -312,7 +320,7 @@ export function createForeignAffairsManagers({
 
           const foreign: ActiveForeign = {
             id,
-            gov: game.global.civic.foreign[`gov${id}`],
+            gov: game.global.civic.foreign[`gov${id}`]!,
             policy:
               id < 3 && achievementPolicy !== null
                 ? achievementPolicy
@@ -349,7 +357,7 @@ export function createForeignAffairsManagers({
           currentTarget =
             currentTarget ??
             activeForeigns.find((f) => f.gov.occ) ??
-            activeForeigns[0];
+            activeForeigns[0]!;
 
           let readyToUnify =
             unificationRequested &&
@@ -362,7 +370,7 @@ export function createForeignAffairsManagers({
             ["Annex", "Purchase"].includes(currentTarget.policy) &&
             SpyManager.isEspionageUseful(
               currentTarget.id,
-              SpyManager.Types[currentTarget.policy].id,
+              SpyManager.Types[currentTarget.policy as keyof SpyTypeSet].id,
             )
           ) {
             currentTarget.policy = "Ignore";
@@ -393,7 +401,7 @@ export function createForeignAffairsManagers({
             )
               ? 2
               : currentTarget.id;
-            activeForeigns[lastTarget].policy = readyToUnify
+            activeForeigns[lastTarget]!.policy = readyToUnify
               ? (achievementPolicy ?? "Occupy")
               : "Sabotage";
           }
@@ -504,7 +512,7 @@ export function createForeignAffairsManagers({
       const game = getGame();
       const resources = getResources();
       const poly = getPoly();
-      let gov = game.global.civic.foreign["gov" + govIndex];
+      let gov = game.global.civic.foreign["gov" + govIndex]!;
 
       // Return true when requested task is useful, or when we don't have enough spies prove it's not
       switch (espionageId) {
@@ -634,7 +642,7 @@ export function createForeignAffairsManagers({
 
     release(govIndex) {
       const game = getGame();
-      if (game.global.civic.foreign["gov" + govIndex].occ) {
+      if (game.global.civic.foreign["gov" + govIndex]!.occ) {
         let occSoldiers = getOccCosts();
         this.workers += occSoldiers;
         this.max += occSoldiers;
@@ -698,14 +706,14 @@ export function createForeignAffairsManagers({
       // Assign soldiers to assault forge once other requirements are met
       if (
         settings.autoBuild &&
-        buildings.PitAssaultForge.isAutoBuildable() &&
+        buildings.PitAssaultForge!.isAutoBuildable() &&
         soldierRating > 0
       ) {
         if (
           settings.hellAssaultReserve ||
           !Object.entries(
-            buildings.PitAssaultForge.cost as Record<string, number>,
-          ).find(([id, amount]) => resources[id].currentQuantity < amount)
+            buildings.PitAssaultForge!.cost as Record<string, number>,
+          ).find(([id, amount]) => resources[id]!.currentQuantity < amount)
         ) {
           soldiers = Math.round(650 / soldierRating);
         }
@@ -713,9 +721,9 @@ export function createForeignAffairsManagers({
 
       // Reserve soldiers operating forge - check if it exists and could be powered, not if it's already powered
       if (
-        buildings.PitSoulForge.count > 0 &&
-        (buildings.PitSoulForge.autoStateEnabled ||
-          buildings.PitSoulForge.stateOnCount > 0) &&
+        buildings.PitSoulForge!.count > 0 &&
+        (buildings.PitSoulForge!.autoStateEnabled ||
+          buildings.PitSoulForge!.stateOnCount > 0) &&
         soldierRating > 0
       ) {
         // Calculate number of soldiers needed for Soul Forge
@@ -723,9 +731,9 @@ export function createForeignAffairsManagers({
         let soulForgeSoldiers = Math.round(base / soldierRating);
 
         // Adjust for gun emplacements
-        if (buildings.PitGunEmplacement.count > 0) {
+        if (buildings.PitGunEmplacement!.count > 0) {
           soulForgeSoldiers -= Math.floor(
-            buildings.PitGunEmplacement.stateOnCount * 1.5,
+            buildings.PitGunEmplacement!.stateOnCount * 1.5,
           );
           soulForgeSoldiers = Math.max(1, soulForgeSoldiers);
         }
@@ -734,9 +742,9 @@ export function createForeignAffairsManagers({
       }
 
       // Guardposts need at least one soldier free so lets just always keep one handy
-      if (buildings.RuinsGuardPost.count > 0) {
+      if (buildings.RuinsGuardPost!.count > 0) {
         soldiers +=
-          (buildings.RuinsGuardPost.stateOnCount + 1) *
+          (buildings.RuinsGuardPost!.stateOnCount + 1) *
           traitVal("high_pop", 0, 1);
       }
       return soldiers;
@@ -785,7 +793,7 @@ export function createForeignAffairsManagers({
     getGovArmy(tactic, govIndex) {
       const game = getGame();
       // function battleAssessment(gov)
-      let enemy = [5, 27.5, 62.5, 125, 300][tactic];
+      let enemy = [5, 27.5, 62.5, 125, 300][tactic]!;
       if (game.global.race["banana"]) {
         enemy *= 2;
       }
