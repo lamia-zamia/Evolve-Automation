@@ -34,6 +34,7 @@
     "src/game/magic-managers.ts",
     "src/game/mech-manager.ts",
     "src/game/fleet-managers.ts",
+    "src/game/race-initialization.ts",
     "src/config.ts",
     "src/main.ts"
   ]

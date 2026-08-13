@@ -15296,7 +15296,7 @@
       for (let id in currentGame.actions.evolution) {
         currentEvolutions[id] = new CurrentEvolutionAction(id);
       }
-      let e = currentEvolutions;
+      const e = currentEvolutions;
       let bilateralSymmetry = [
         e.bilateral_symmetry,
         e.multicellular,
@@ -15344,34 +15344,36 @@
         if (id === "protoplasm") {
           continue;
         }
-        currentRaces[id] = new CurrentRace(id);
+        const race2 = new CurrentRace(id);
+        currentRaces[id] = race2;
+        const raceDefinition = currentGame.races[id];
         if (id === "hellspawn") {
-          currentRaces[id].evolutionTree[currentRaces[id].genus] = [
+          race2.evolutionTree[race2.genus] = [
             e.bunker,
             e.warlord,
-            ...genusEvolution[currentRaces[id].genus] ?? []
+            ...genusEvolution[race2.genus] ?? []
           ];
         } else if (id === "junker" || id === "sludge" || id === "ultra_sludge") {
           for (let genus of Object.keys(genusEvolution)) {
-            currentRaces[id].evolutionTree[genus] = [
+            race2.evolutionTree[genus] = [
               e.bunker,
               e[id],
               ...genusEvolution[genus] ?? []
             ];
           }
-        } else if (currentGame.races[id].type === "hybrid") {
-          for (let genus of currentGame.races[id].hybrid ?? []) {
-            currentRaces[id].evolutionTree[genus] = [
+        } else if (raceDefinition.type === "hybrid") {
+          for (let genus of raceDefinition.hybrid ?? []) {
+            race2.evolutionTree[genus] = [
               e.bunker,
               e[id],
               ...genusEvolution[genus] ?? []
             ];
           }
         } else {
-          currentRaces[id].evolutionTree[currentRaces[id].genus] = [
+          race2.evolutionTree[race2.genus] = [
             e.bunker,
             e[id],
-            ...genusEvolution[currentRaces[id].genus] ?? []
+            ...genusEvolution[race2.genus] ?? []
           ];
         }
         currentImitations[id] = new CurrentEvolutionAction(`s-${id}`);

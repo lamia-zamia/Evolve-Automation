@@ -3,6 +3,42 @@
  * collects them into per-genus trees, so their identity is all it needs.
  */
 type EvolutionAction = object;
+type EvolutionId =
+  | "animalism"
+  | "aquatic"
+  | "athropods"
+  | "bilateral_symmetry"
+  | "bryophyte"
+  | "bunker"
+  | "carnivore"
+  | "celestial"
+  | "chitin"
+  | "chloroplasts"
+  | "demonic"
+  | "dwarfism"
+  | "ectothermic"
+  | "eggshell"
+  | "eldritch"
+  | "endothermic"
+  | "exterminate"
+  | "fey"
+  | "gigantism"
+  | "heat"
+  | "herbivore"
+  | "humanoid"
+  | "mammals"
+  | "multicellular"
+  | "omnivore"
+  | "phagocytosis"
+  | "poikilohydric"
+  | "polar"
+  | "sand"
+  | "sentience"
+  | "sexual_reproduction"
+  | "spores"
+  | "warlord";
+type EvolutionLookup = Record<string, EvolutionAction> &
+  Record<EvolutionId, EvolutionAction>;
 
 type RaceEntity = {
   genus: string;
@@ -43,7 +79,7 @@ export function createRaceInitialization({
     for (let id in currentGame.actions.evolution) {
       currentEvolutions[id] = new CurrentEvolutionAction(id);
     }
-    let e = currentEvolutions;
+    const e = currentEvolutions as EvolutionLookup;
 
     let bilateralSymmetry = [
       e.bilateral_symmetry,
@@ -96,34 +132,36 @@ export function createRaceInitialization({
         continue;
       }
 
-      currentRaces[id] = new CurrentRace(id);
+      const race = new CurrentRace(id);
+      currentRaces[id] = race;
+      const raceDefinition = currentGame.races[id]!;
       if (id === "hellspawn") {
-        currentRaces[id].evolutionTree[currentRaces[id].genus] = [
+        race.evolutionTree[race.genus] = [
           e.bunker,
           e.warlord,
-          ...(genusEvolution[currentRaces[id].genus] ?? []),
+          ...(genusEvolution[race.genus] ?? []),
         ];
       } else if (id === "junker" || id === "sludge" || id === "ultra_sludge") {
         for (let genus of Object.keys(genusEvolution)) {
-          currentRaces[id].evolutionTree[genus] = [
+          race.evolutionTree[genus] = [
             e.bunker,
-            e[id],
+            e[id]!,
             ...(genusEvolution[genus] ?? []),
           ];
         }
-      } else if (currentGame.races[id].type === "hybrid") {
-        for (let genus of currentGame.races[id].hybrid ?? []) {
-          currentRaces[id].evolutionTree[genus] = [
+      } else if (raceDefinition.type === "hybrid") {
+        for (let genus of raceDefinition.hybrid ?? []) {
+          race.evolutionTree[genus] = [
             e.bunker,
-            e[id],
+            e[id]!,
             ...(genusEvolution[genus] ?? []),
           ];
         }
       } else {
-        currentRaces[id].evolutionTree[currentRaces[id].genus] = [
+        race.evolutionTree[race.genus] = [
           e.bunker,
-          e[id],
-          ...(genusEvolution[currentRaces[id].genus] ?? []),
+          e[id]!,
+          ...(genusEvolution[race.genus] ?? []),
         ];
       }
 
