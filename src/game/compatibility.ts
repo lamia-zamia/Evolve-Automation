@@ -1,17 +1,55 @@
 import type { GameStorageControlsPort } from "../ports/game-storage-controls.ts";
 
-type LooseFunction = (...args: any[]) => any;
-type LooseObject = Record<PropertyKey, any>;
+type TraitValue = (
+  trait: string,
+  level: number,
+  mode: string | number,
+) => number;
+type HaveTech = (id: string, level: number) => boolean;
+type Building = { stateOnCount: number };
+type HellSuppression = { supress: number; rating: number };
+type Mech = { equip: string[]; size: string };
+type CloneOptions = { cloneFunctions?: boolean };
+
+type GameCompatibilityGame = {
+  global: {
+    civic: {
+      foreign: Record<string, { eco: number; hstl: number; unrest: number }>;
+      govern?: { type?: string };
+    };
+    race: {
+      kindling_kindred?: string;
+      smoldering?: string;
+      terrifying?: boolean;
+      noble?: boolean;
+      wish?: unknown;
+      wishStats?: { tax: number };
+      universe?: string;
+    };
+    blood: { prepared: number };
+    portal: { mechbay: { scouts: number } };
+  };
+  armyRating: (troops: number, kind: string, base: number) => number;
+  adjustCosts: (action: unknown, wiki?: unknown) => unknown;
+  loc: (key: string, variables?: unknown) => string;
+  messageQueue: (
+    message: unknown,
+    color: unknown,
+    doNotRepeat: unknown,
+    tags: unknown,
+  ) => unknown;
+  shipCosts: (blueprint: unknown) => unknown;
+};
 
 type GameCompatibilityDependencies = {
-  getGame: () => LooseObject;
-  getBuildings: () => LooseObject;
-  getTraitVal: () => LooseFunction;
-  getHaveTech: () => LooseFunction;
+  getGame: () => GameCompatibilityGame;
+  getBuildings: () => Record<string, Building>;
+  getTraitVal: () => TraitValue;
+  getHaveTech: () => HaveTech;
   getGovernor: () => string;
   storageControls: GameStorageControlsPort;
-  normalizeProperties: LooseFunction;
-  cloneIntoPage: (value: unknown, options?: LooseObject) => any;
+  normalizeProperties: <T>(value: T) => T;
+  cloneIntoPage: <T>(value: T, options?: CloneOptions) => T;
   getDate: () => { getMonth: () => number; getDate: () => number };
 };
 
@@ -26,8 +64,9 @@ export function createGameCompatibility({
   cloneIntoPage,
   getDate,
 }: GameCompatibilityDependencies) {
-  const traitVal: LooseFunction = (...args) => getTraitVal()(...args);
-  const haveTech: LooseFunction = (...args) => getHaveTech()(...args);
+  const traitVal: TraitValue = (trait, level, mode) =>
+    getTraitVal()(trait, level, mode);
+  const haveTech: HaveTech = (id, level) => getHaveTech()(id, level);
 
   const poly = {
     // Taken directly from game code with no functional changes, and minified.
@@ -97,12 +136,12 @@ export function createGameCompatibility({
       else return "time itself is broken";
     },
     // export function arpaAdjustCosts(costs) from arpa.js
-    arpaAdjustCosts: function (t: any): any {
+    arpaAdjustCosts: function (t: Record<string, () => number>) {
       return (
         (t = (function (t) {
           var r = traitVal("creative", 1, "-");
           if (r < 1) {
-            var a: LooseObject = {};
+            var a: Record<string, () => number> = {};
             return (
               Object.keys(t).forEach(function (e) {
                 a[e] = function () {
@@ -118,7 +157,7 @@ export function createGameCompatibility({
       );
     },
     // function govPrice(gov) from civics.js
-    govPrice: function (e: any) {
+    govPrice: function (e: string) {
       const o = getGame().global.civic.foreign[`gov${e}`];
       let i = 15384 * o.eco;
       i *= 1 + (1.6 * o.hstl) / 100;
@@ -1339,7 +1378,7 @@ export function createGameCompatibility({
       },
     },
     // export function hellSupression(area, val) from portal.js
-    hellSupression: function (t: any, e: any): any {
+    hellSupression: function (t: string, e?: number): HellSuppression | 0 {
       switch (t) {
         case "ruins": {
           let t = e || getBuildings().RuinsGuardPost.stateOnCount,
@@ -1354,7 +1393,7 @@ export function createGameCompatibility({
           return { supress: l > 1 ? 1 : l, rating: a + r };
         }
         case "gate": {
-          let t = poly.hellSupression("ruins", e),
+          let t = poly.hellSupression("ruins", e) as HellSuppression,
             r = 100 * getBuildings().GateTurret.stateOnCount;
           r *= traitVal("holy", 1, "+");
           let a = (t.rating + r) / 7500;
@@ -1365,27 +1404,26 @@ export function createGameCompatibility({
       }
     },
     // function taxCap(min) from civics.js
-    taxCap: function (e: any) {
+    taxCap: function (e: unknown) {
       let a =
         (haveTech("currency", 5) || getGame().global.race.terrifying) &&
         !getGame().global.race.noble;
       if (e) return a ? 0 : traitVal("noble", 0, 10);
       {
         let e = traitVal("noble", 1, 30);
+        const wishStats = getGame().global.race.wishStats;
         return (
           a && (e += 20),
           "oligarchy" === getGame().global.civic.govern?.type &&
             (e += "bureaucrat" === getGovernor() ? 25 : 20),
           "noble" === getGovernor() && (e += 20),
-          getGame().global.race["wish"] &&
-            getGame().global.race["wishStats"] &&
-            (e += getGame().global.race.wishStats.tax),
+          getGame().global.race["wish"] && wishStats && (e += wishStats.tax),
           e
         );
       }
     },
     // export function mechCost(size,infernal) from portal.js
-    mechCost: function (e: any, a: any, x: any) {
+    mechCost: function (e: string, a?: boolean, x?: number) {
       let l = 9999,
         r = 1e7;
       switch (e) {
@@ -1417,7 +1455,7 @@ export function createGameCompatibility({
       return { s: l, c: r };
     },
     // function terrainRating(mech,rating,effects) from portal.js
-    terrainRating: function (e: any, i: any, s: any, x: any) {
+    terrainRating: function (e: Mech, i: number, s: string[], x?: number) {
       return (
         !e.equip.includes("special") ||
           ("small" !== e.size &&
@@ -1434,7 +1472,7 @@ export function createGameCompatibility({
       );
     },
     // function weaponPower(mech,power) from portal.js
-    weaponPower: function (e: any, i: any) {
+    weaponPower: function (e: Mech, i: number) {
       return (
         i < 1 &&
           0 !== i &&
@@ -1448,7 +1486,7 @@ export function createGameCompatibility({
       );
     },
     // export function timeFormat(time) from functions.js
-    timeFormat: function (e: any) {
+    timeFormat: function (e: number) {
       if (e < 0) return getGame().loc("time_never");
       const total = +e.toFixed(0);
       if (total <= 60) return `${("0" + total).slice(-2)}s`;
@@ -1466,7 +1504,7 @@ export function createGameCompatibility({
       return `${totalHours}h ${("0" + minutes).slice(-2)}m`;
     },
     // export universeAffix(universe) from achieve.js
-    universeAffix: function (e: any) {
+    universeAffix: function (e?: string) {
       switch (e || getGame().global.race.universe) {
         case "evil":
           return "e";
@@ -1546,16 +1584,16 @@ export function createGameCompatibility({
     containerValue: () => storageControls.containerCapacity(),
 
     // Firefox compatibility:
-    adjustCosts: (c_action: any, wiki?: any) =>
+    adjustCosts: (c_action: unknown, wiki?: unknown) =>
       getGame().adjustCosts(
         cloneIntoPage(c_action, { cloneFunctions: true }),
         wiki,
       ),
-    loc: (key: any, variables: any) =>
+    loc: (key: string, variables?: unknown) =>
       getGame().loc(key, cloneIntoPage(variables)),
-    messageQueue: (msg: any, color: any, dnr: any, tags: any) =>
+    messageQueue: (msg: unknown, color: unknown, dnr: unknown, tags: unknown) =>
       getGame().messageQueue(msg, color, dnr, cloneIntoPage(tags)),
-    shipCosts: (bp: any) => getGame().shipCosts(cloneIntoPage(bp)),
+    shipCosts: (bp: unknown) => getGame().shipCosts(cloneIntoPage(bp)),
   };
 
   return poly;

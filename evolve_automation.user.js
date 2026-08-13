@@ -10806,8 +10806,8 @@
     cloneIntoPage,
     getDate
   }) {
-    const traitVal = (...args) => getTraitVal()(...args);
-    const haveTech = (...args) => getHaveTech()(...args);
+    const traitVal = (trait2, level, mode) => getTraitVal()(trait2, level, mode);
+    const haveTech = (id, level) => getHaveTech()(id, level);
     const poly = {
       // Taken directly from game code with no functional changes, and minified.
       // export function astrologySign() from seasons.js
@@ -12098,7 +12098,8 @@
         if (e) return a ? 0 : traitVal("noble", 0, 10);
         {
           let e2 = traitVal("noble", 1, 30);
-          return a && (e2 += 20), "oligarchy" === getGame().global.civic.govern?.type && (e2 += "bureaucrat" === getGovernor() ? 25 : 20), "noble" === getGovernor() && (e2 += 20), getGame().global.race["wish"] && getGame().global.race["wishStats"] && (e2 += getGame().global.race.wishStats.tax), e2;
+          const wishStats = getGame().global.race.wishStats;
+          return a && (e2 += 20), "oligarchy" === getGame().global.civic.govern?.type && (e2 += "bureaucrat" === getGovernor() ? 25 : 20), "noble" === getGovernor() && (e2 += 20), getGame().global.race["wish"] && wishStats && (e2 += wishStats.tax), e2;
         }
       },
       // export function mechCost(size,infernal) from portal.js
