@@ -182,9 +182,7 @@ import {
   createGovernmentSettingsControl,
   createPlanetSettingsControl,
 } from "../../bootstrap/settings/government-planet-settings-controls.ts";
-import { createBuildingSettingsIntentHandler } from "../../application/building-settings.ts";
-import { createBuildingSettingsBrowserAdapter } from "../browser/building-settings.ts";
-import { createBuildingSettingsEvolveAdapter } from "./progression/build/building-settings.ts";
+import { createBuildingSettingsControl } from "../../bootstrap/settings/building-settings-control.ts";
 import { createOptionsModalBrowserAdapter } from "../browser/options-modal.ts";
 import { createTotalDaysTopBarBrowserAdapter } from "../browser/total-days-top-bar.ts";
 import { createTotalDaysTopBarEvolveAdapter } from "./total-days-top-bar.ts";
@@ -285,9 +283,7 @@ import { createPrestigeSettingsEvolveAdapter } from "./progression/prestige/pres
 import { createEvolutionSettingsIntentHandler } from "../../application/evolution-settings.ts";
 import { createEvolutionSettingsBrowserAdapter } from "../browser/evolution-settings.ts";
 import { createEvolutionSettingsEvolveAdapter } from "./progression/evolution/evolution-settings.ts";
-import { createProductionSettingsIntentHandler } from "../../application/production-settings.ts";
-import { createProductionSettingsBrowserAdapter } from "../browser/production-settings.ts";
-import { createProductionSettingsEvolveAdapter } from "./economy/production/production-settings.ts";
+import { createProductionSettingsControl } from "../../bootstrap/settings/production-settings-control.ts";
 import { createTraitSettingsIntentHandler } from "../../application/trait-settings.ts";
 import { createTraitSettingsBrowserAdapter } from "../browser/trait-settings.ts";
 import { createTraitSettingsEvolveAdapter } from "./traits/trait-settings.ts";
@@ -620,74 +616,25 @@ export function startEvolveRuntimeComposition(
     buildTableLabel,
     getSorterHelper: () => sorterHelper,
   };
-  const productionSettingsEvolveAdapter = createProductionSettingsEvolveAdapter(
-    {
-      getResources: () =>
-        getTestContext("productionSettings")?.resources ?? resources,
-      getCraftablesList: () =>
-        getTestContext("productionSettings")?.craftablesList ?? craftablesList,
-      getSmelterManager: () =>
-        getTestContext("productionSettings")?.SmelterManager ?? SmelterManager,
-      getFactoryManager: () =>
-        getTestContext("productionSettings")?.FactoryManager ?? FactoryManager,
-      getDroidManager: () =>
-        getTestContext("productionSettings")?.DroidManager ?? DroidManager,
-      getReplicatorManager: () =>
-        getTestContext("productionSettings")?.ReplicatorManager ??
-        ReplicatorManager,
-      getSettingsRaw: () =>
-        getTestContext("productionSettings")?.settingsRaw ?? settingsRaw,
-      consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
+  const productionSettingsBrowserAdapter = createProductionSettingsControl({
+    getDocument: () => runtimeEnvironment.document,
+    getJQuery: () => $,
+    actions: productionSettingsActions,
+    getResources: () => resources,
+    getCraftablesList: () => craftablesList,
+    getSmelterManager: () => SmelterManager,
+    getFactoryManager: () => FactoryManager,
+    getDroidManager: () => DroidManager,
+    getReplicatorManager: () => ReplicatorManager,
+    getSettingsRaw: () => settingsRaw,
+    resetProductionSettings: (...args) => resetProductionSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    removeCraftToggles: () => removeCraftToggles(),
+    setSettingsRaw: (value) => {
+      settingsRaw = value;
     },
-  );
-  let productionSettingsIntentHandler;
-  const productionSettingsBrowserAdapter =
-    createProductionSettingsBrowserAdapter({
-      getDocument: () => runtimeEnvironment.document,
-      getJQuery: () => $,
-      getReadModel: () =>
-        productionSettingsEvolveAdapter.readProductionSettingsReadModel(),
-      intents: {
-        handle: (intent) => productionSettingsIntentHandler.handle(intent),
-      },
-      ...productionSettingsActions,
-    });
-  productionSettingsIntentHandler = createProductionSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("productionSettings")?.resetProductionSettings ??
-          resetProductionSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("productionSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-      reorderSmelterFuels: (fuelIds) =>
-        productionSettingsEvolveAdapter.reorderSmelterFuels(fuelIds),
-    },
-    renderSettingsContent: () =>
-      productionSettingsBrowserAdapter.updateProductionSettingsContent(),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("productionSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoQuarry",
-          "autoMine",
-          "autoExtractor",
-          "autoGraphenePlant",
-          "autoSmelter",
-          "autoCraft",
-          "autoFactory",
-          "autoMiningDroid",
-          "autoReplicator",
-        ),
-      removeCraftToggles: () =>
-        (
-          getTestContext("productionSettings")?.removeCraftToggles ??
-          removeCraftToggles
-        )(),
-    },
+    testSurface,
   });
   const {
     buildProductionSettings,
@@ -699,22 +646,6 @@ export function startEvolveRuntimeComposition(
     updateProductionTableReplicator,
   } = productionSettingsBrowserAdapter;
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      productionSettings: {
-        buildProductionSettings,
-        updateProductionSettingsContent,
-        updateProductionTableSmelter,
-        updateProductionTableFoundry,
-        updateProductionTableFactory,
-        updateProductionTableMiningDrone,
-        updateProductionTableReplicator,
-      },
-      setProductionSettingsTestContext(context) {
-        settingsRaw = context.settingsRaw;
-        setTestContext("productionSettings", context);
-      },
-    });
   const storageSettingsActions = {
     buildSettingsSection,
     addSettingsToggle,
@@ -810,77 +741,24 @@ export function startEvolveRuntimeComposition(
     confirm: (...args) => runtimeEnvironment.confirm(...args),
     getSorterHelper: () => sorterHelper,
   };
-  const buildingSettingsEvolveAdapter = createBuildingSettingsEvolveAdapter({
-    getBuildingManager: () =>
-      getTestContext("buildingSettings")?.BuildingManager ?? BuildingManager,
-    getBuildingIds: () =>
-      getTestContext("buildingSettings")?.buildingIds ?? buildingIds,
-    getResources: () =>
-      getTestContext("buildingSettings")?.resources ?? resources,
-    getLinkedBuildings: () =>
-      getTestContext("buildingSettings")?.linkedBuildings ?? linkedBuildings,
-    getCheckCompare: () =>
-      getTestContext("buildingSettings")?.checkCompare ?? checkCompare,
-    getOverrideKey: () =>
-      getTestContext("buildingSettings")?.overrideKey ?? overrideKey,
-    getRealNumber: () =>
-      getTestContext("buildingSettings")?.getRealNumber ?? getRealNumber,
-    getInitBuildingState: () =>
-      getTestContext("buildingSettings")?.initBuildingState ??
-      initBuildingState,
-    getSettingsRaw: () =>
-      getTestContext("buildingSettings")?.settingsRaw ?? settingsRaw,
-  });
-  let buildingSettingsIntentHandler;
-  const buildingSettingsBrowserAdapter = createBuildingSettingsBrowserAdapter({
+  const buildingSettingsBrowserAdapter = createBuildingSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getReadModel: () =>
-      buildingSettingsEvolveAdapter.readBuildingSettingsReadModel(),
-    getFilterMatches: (query) =>
-      buildingSettingsEvolveAdapter.filterBuildingSettings(query),
-    intents: {
-      handle: (intent) => buildingSettingsIntentHandler.handle(intent),
-    },
-    getActions: () =>
-      getTestContext("buildingSettings")?.actions ?? buildingSettingsActions,
-  });
-  buildingSettingsIntentHandler = createBuildingSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("buildingSettings")?.resetBuildingSettings ??
-          resetBuildingSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("buildingSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-      resetPriorities: () => buildingSettingsEvolveAdapter.resetPriorities(),
-      reorderBuildings: (buildingIds) =>
-        buildingSettingsEvolveAdapter.reorderBuildings(buildingIds),
-      setAllAutoBuild: (enabled) =>
-        buildingSettingsEvolveAdapter.setAllAutoBuild(enabled),
-      setAllAutoPower: (enabled) =>
-        buildingSettingsEvolveAdapter.setAllAutoPower(enabled),
-      setLinkedSmartState: (buildingIds, enabled) =>
-        buildingSettingsEvolveAdapter.setLinkedSmartState(buildingIds, enabled),
-    },
-    renderSettingsContent: () =>
-      buildingSettingsBrowserAdapter.updateBuildingSettingsContent(),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("buildingSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoBuild",
-          "autoPower",
-        ),
-      removeBuildingToggles: () =>
-        (
-          getTestContext("buildingSettings")?.removeBuildingToggles ??
-          removeBuildingToggles
-        )(),
-    },
+    actions: buildingSettingsActions,
+    getBuildingManager: () => BuildingManager,
+    getBuildingIds: () => buildingIds,
+    getResources: () => resources,
+    getLinkedBuildings: () => linkedBuildings,
+    getCheckCompare: () => checkCompare,
+    getOverrideKey: () => overrideKey,
+    getRealNumber: () => getRealNumber,
+    getInitBuildingState: () => initBuildingState,
+    getSettingsRaw: () => settingsRaw,
+    resetBuildingSettings: (...args) => resetBuildingSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    removeBuildingToggles: () => removeBuildingToggles(),
+    testSurface,
   });
   const { buildBuildingSettings, filterBuildingSettingsTable } =
     buildingSettingsBrowserAdapter;
@@ -5354,10 +5232,6 @@ export function startEvolveRuntimeComposition(
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("mechSettings", {
       mechSettings: mechSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("buildingSettings", {
-      buildingSettings: buildingSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("optionsModal", {
