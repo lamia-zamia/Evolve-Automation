@@ -26,6 +26,7 @@
     "src/game/script-bootstrap.ts",
     "src/game/trait-value.ts",
     "src/game/planet-generation.ts",
+    "src/game/foreign-government.ts",
     "src/config.ts",
     "src/main.ts"
   ]

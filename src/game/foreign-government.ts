@@ -27,7 +27,8 @@ export function createForeignGovernment({
   getPoly,
 }: ForeignGovernmentDependencies) {
   function getGovName(govIndex: number) {
-    const foreign = getGame().global.civic.foreign[`gov${govIndex}`];
+    // Government ids are contiguous and the game creates each foreign entry.
+    const foreign = getGame().global.civic.foreign[`gov${govIndex}`]!;
     if (!foreign.name) {
       return `foreign power ${govIndex + 1}`;
     }
@@ -42,7 +43,7 @@ export function createForeignGovernment({
     // This function is full of hacks. But all that can be accomplished by wise player without peeking inside game variables
     // We really need to know power as accurate as possible, otherwise script becomes wonky when spies dies on mission
     const game = getGame();
-    const gov = game.global.civic.foreign[`gov${govIndex}`];
+    const gov = game.global.civic.foreign[`gov${govIndex}`]!;
     if (gov.spy > 0) {
       // With 2+ spies we know exact number, for 1 we're assuming trick with advantage
       // We can see ambush advantage with a single spy, and knowing advantage we can calculate power
@@ -59,16 +60,16 @@ export function createForeignGovernment({
       const maxPower = [125, 175, 300, 750, 300];
       if (game.global.race["truepath"]) {
         [1.5, 1.4, 1.25].forEach((modifier, index) => {
-          minPower[index] *= modifier;
-          maxPower[index] *= modifier;
+          minPower[index]! *= modifier;
+          maxPower[index]! *= modifier;
         });
       }
 
-      if (gov.mil < minPower[govIndex]) {
+      if (gov.mil < minPower[govIndex]!) {
         return gov.mil;
       } else {
         // Above minimum. Even if we ever sabotaged it, unfortunately we can't prove it. Not peeking inside, and assuming worst.
-        return maxPower[govIndex];
+        return maxPower[govIndex]!;
       }
     }
   }
