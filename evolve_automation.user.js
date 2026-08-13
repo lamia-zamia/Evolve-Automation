@@ -4319,9 +4319,7 @@ Only continue if you trust the source. Injected code:
         crateValue: 0,
         containerValue: 0,
         _crateDebounce: {},
-        // { resourceId: { dir, ticks, prev, locked } }
         _containerDebounce: {},
-        // same
         initStorage() {
           return this.isUnlocked ? storageControls.isConstructionRendered() : !1;
         },

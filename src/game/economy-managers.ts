@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { GameFeatureVisibilityPort } from "../ports/game-feature-visibility.ts";
 import type { GameGovernmentSelectionPort } from "../ports/game-government-selection.ts";
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
@@ -18,23 +17,75 @@ function marketOrderControls(resourceId: string): string {
 }
 
 /** Names a resource's market row the way the market controls port expects. */
-function marketRow(resource: any) {
-  return { elementId: resource._marketVueBinding, id: resource.id };
+interface EconomyResource {
+  id: string;
+  _marketVueBinding: string;
+  _stackVueBinding: string;
+  currentQuantity: number;
+  isUnlocked: () => boolean;
+  marketPriority: number;
+  storagePriority: number;
+  autoTradeBuyEnabled: boolean;
+  autoTradeSellEnabled: boolean;
+  tradeRoutes: number;
+}
+
+interface EconomyResources extends Record<string, EconomyResource> {
+  Money: EconomyResource;
+}
+
+interface EconomyBuilding {
+  count: number;
+}
+
+interface EconomyBuildings extends Record<string, EconomyBuilding> {
+  Alien1SuperFreighter: EconomyBuilding;
+  GorddonFreighter: EconomyBuilding;
+}
+
+interface EconomyGame {
+  global: {
+    galaxy: { trade: { cur: number; max: number; [key: string]: number } };
+    civic: { govern?: { type?: string } };
+    race: Record<string, boolean>;
+    resource: Record<string, EconomyGameResource>;
+    city: { market: { qty: number; mtrade: number } };
+  };
+  loc: (key: string) => string;
+}
+
+interface EconomyGameResource extends StorageModelResource {
+  value: number;
+}
+
+interface EconomyGameLog {
+  logSuccess: (category: string, message: string, tags: string[]) => void;
+}
+
+interface StorageDebounceState {
+  dir: number;
+  ticks: number;
+  prev: number;
+  locked: boolean;
 }
 
 interface EconomyManagersDependencies {
-  getGame: () => any;
-  getResources: () => Record<string, any>;
-  getBuildings: () => Record<string, any>;
+  getGame: () => EconomyGame;
+  getResources: () => EconomyResources;
+  getBuildings: () => EconomyBuildings;
   governmentSelection: GameGovernmentSelectionPort;
   marketControls: GameMarketControlsPort;
   storageControls: GameStorageControlsPort;
   getFeatureVisibility: () => GameFeatureVisibilityPort;
   getGameModal: () => GameModalPort;
-  getGameLog: () => any;
+  getGameLog: () => EconomyGameLog;
   haveTech: (tech: string, level?: number) => boolean;
   traitVal: (trait: string, index: number, sign?: string) => number;
   industryControls: GameIndustryControlsPort;
+}
+
+function marketRow(resource: EconomyResource) {
+  return { elementId: resource._marketVueBinding, id: resource.id };
 }
 
 interface StorageModelResource {
@@ -242,7 +293,7 @@ export function createEconomyManagers({
   };
 
   const MarketManager = {
-    priorityList: [] as any[],
+    priorityList: [] as EconomyResource[],
     multiplier: 0,
 
     updateData() {
@@ -260,7 +311,7 @@ export function createEconomyManagers({
       this.priorityList.sort((a, b) => a.marketPriority - b.marketPriority);
     },
 
-    isBuySellUnlocked(resource: any) {
+    isBuySellUnlocked(resource: EconomyResource) {
       return getFeatureVisibility().isVisible(marketOrderControls(resource.id));
     },
 
@@ -277,7 +328,7 @@ export function createEconomyManagers({
       return marketControls.maxMultiplier();
     },
 
-    getUnitBuyPrice(resource: any) {
+    getUnitBuyPrice(resource: EconomyResource) {
       const game = getGame();
       // marketItem > vBind > purchase from resources.js
       let price = game.global.resource[resource.id].value;
@@ -288,7 +339,7 @@ export function createEconomyManagers({
       return price;
     },
 
-    getUnitSellPrice(resource: any) {
+    getUnitSellPrice(resource: EconomyResource) {
       const game = getGame();
       // marketItem > vBind > sell from resources.js
       let divide = 4;
@@ -300,7 +351,7 @@ export function createEconomyManagers({
       return game.global.resource[resource.id].value / divide;
     },
 
-    buy(resource: any) {
+    buy(resource: EconomyResource) {
       const resources = getResources();
       if (!marketControls.isRowRendered(resource._marketVueBinding)) {
         return false;
@@ -318,7 +369,7 @@ export function createEconomyManagers({
       marketControls.buy(marketRow(resource));
     },
 
-    sell(resource: any) {
+    sell(resource: EconomyResource) {
       const resources = getResources();
       if (!marketControls.isRowRendered(resource._marketVueBinding)) {
         return false;
@@ -369,11 +420,11 @@ export function createEconomyManagers({
       return [max, unmanaged];
     },
 
-    zeroTradeRoutes(resource: any) {
+    zeroTradeRoutes(resource: EconomyResource) {
       marketControls.clearTradeRoutes(marketRow(resource));
     },
 
-    addTradeRoutes(resource: any, count: number) {
+    addTradeRoutes(resource: EconomyResource, count: number) {
       if (!resource.isUnlocked()) {
         return false;
       }
@@ -381,7 +432,7 @@ export function createEconomyManagers({
       marketControls.addTradeRoutes({ ...marketRow(resource), count });
     },
 
-    removeTradeRoutes(resource: any, count: number) {
+    removeTradeRoutes(resource: EconomyResource, count: number) {
       if (!resource.isUnlocked()) {
         return false;
       }
@@ -391,11 +442,11 @@ export function createEconomyManagers({
   };
 
   const StorageManager = {
-    priorityList: [] as any[],
+    priorityList: [] as EconomyResource[],
     crateValue: 0,
     containerValue: 0,
-    _crateDebounce: {} as any, // { resourceId: { dir, ticks, prev, locked } }
-    _containerDebounce: {} as any, // same
+    _crateDebounce: {} as Record<string, StorageDebounceState>,
+    _containerDebounce: {} as Record<string, StorageDebounceState>,
 
     initStorage() {
       if (!this.isUnlocked) {
@@ -428,7 +479,7 @@ export function createEconomyManagers({
      * have made, and reports whether the whole count was applied.
      */
     _moveStack(
-      resource: any,
+      resource: EconomyResource,
       count: number,
       unit: "crate" | "container",
       direction: 1 | -1,
@@ -465,19 +516,19 @@ export function createEconomyManagers({
       }
     },
 
-    assignCrate(resource: any, count: number) {
+    assignCrate(resource: EconomyResource, count: number) {
       return this._moveStack(resource, count, "crate", 1);
     },
 
-    unassignCrate(resource: any, count: number) {
+    unassignCrate(resource: EconomyResource, count: number) {
       return this._moveStack(resource, count, "crate", -1);
     },
 
-    assignContainer(resource: any, count: number) {
+    assignContainer(resource: EconomyResource, count: number) {
       return this._moveStack(resource, count, "container", 1);
     },
 
-    unassignContainer(resource: any, count: number) {
+    unassignContainer(resource: EconomyResource, count: number) {
       return this._moveStack(resource, count, "container", -1);
     },
   };
