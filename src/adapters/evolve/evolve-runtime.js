@@ -178,12 +178,10 @@ import {
 import { createResearchSettingsIntentHandler } from "../../application/research-settings.ts";
 import { createResearchSettingsBrowserAdapter } from "../browser/research-settings.ts";
 import { createResearchSettingsEvolveAdapter } from "./progression/research/research-settings.ts";
-import { createGovernmentSettingsIntentHandler } from "../../application/government-settings.ts";
-import { createGovernmentSettingsBrowserAdapter } from "../browser/government-settings.ts";
-import { createGovernmentSettingsEvolveAdapter } from "./civic/government-settings.ts";
-import { createPlanetSettingsIntentHandler } from "../../application/planet-settings.ts";
-import { createPlanetSettingsBrowserAdapter } from "../browser/planet-settings.ts";
-import { createPlanetSettingsEvolveAdapter } from "./progression/evolution/planet-settings.ts";
+import {
+  createGovernmentSettingsControl,
+  createPlanetSettingsControl,
+} from "../../bootstrap/settings/government-planet-settings-controls.ts";
 import { createBuildingSettingsIntentHandler } from "../../application/building-settings.ts";
 import { createBuildingSettingsBrowserAdapter } from "../browser/building-settings.ts";
 import { createBuildingSettingsEvolveAdapter } from "./progression/build/building-settings.ts";
@@ -265,12 +263,7 @@ import { createMechControl } from "../../bootstrap/mech-control.ts";
 import { createEjectorSettingsIntentHandler } from "../../application/ejector-settings.ts";
 import { createEjectorSettingsBrowserAdapter } from "../browser/ejector-settings.ts";
 import { createEjectorSettingsEvolveAdapter } from "./economy/resources/ejector-settings.ts";
-import { createMarketSettingsIntentHandler } from "../../application/market-settings.ts";
-import { createMarketSettingsBrowserAdapter } from "../browser/market-settings.ts";
-import {
-  createMarketSettingsEvolveAdapter,
-  createMarketSettingsWriter,
-} from "./economy/market/market-settings.ts";
+import { createMarketSettingsControl } from "../../bootstrap/settings/market-settings-control.ts";
 import { createWarSettingsIntentHandler } from "../../application/war-settings.ts";
 import { createWarSettingsBrowserAdapter } from "../browser/war-settings.ts";
 import { createWarSettingsEvolveAdapter } from "./combat/war-settings.ts";
@@ -1254,54 +1247,17 @@ export function startEvolveRuntimeComposition(
     addSettingsNumber,
     addSettingsSelect,
   };
-  const governmentSettingsEvolveAdapter = createGovernmentSettingsEvolveAdapter(
-    {
-      getGame: () => getTestContext("governmentSettings")?.game ?? game,
-      getGovernmentManager: () =>
-        getTestContext("governmentSettings")?.GovernmentManager ??
-        GovernmentManager,
-      getGovernors: () =>
-        getTestContext("governmentSettings")?.governors ?? governors,
-    },
-  );
-  let governmentSettingsIntentHandler;
-  const governmentSettingsBrowserAdapter =
-    createGovernmentSettingsBrowserAdapter({
-      getDocument: () => runtimeEnvironment.document,
-      getJQuery: () => $,
-      getReadModel: () =>
-        governmentSettingsEvolveAdapter.readGovernmentSettingsReadModel(),
-      intents: {
-        handle: (intent) => governmentSettingsIntentHandler.handle(intent),
-      },
-      getActions: () =>
-        getTestContext("governmentSettings")?.actions ??
-        governmentSettingsActions,
-    });
-  governmentSettingsIntentHandler = createGovernmentSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("governmentSettings")?.resetGovernmentSettings ??
-          resetGovernmentSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("governmentSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: (secondaryPrefix) =>
-      governmentSettingsBrowserAdapter.updateGovernmentSettingsContent(
-        secondaryPrefix,
-      ),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("governmentSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoTax",
-          "autoGovernment",
-        ),
-    },
+  const governmentSettingsBrowserAdapter = createGovernmentSettingsControl({
+    getDocument: () => runtimeEnvironment.document,
+    getJQuery: () => $,
+    actions: governmentSettingsActions,
+    getGame: () => game,
+    getGovernmentManager: () => GovernmentManager,
+    getGovernors: () => governors,
+    resetGovernmentSettings: (...args) => resetGovernmentSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
   const { buildGovernmentSettings } = governmentSettingsBrowserAdapter;
 
@@ -1438,42 +1394,17 @@ export function startEvolveRuntimeComposition(
     addTableInput,
     buildTableLabel,
   };
-  const planetSettingsEvolveAdapter = createPlanetSettingsEvolveAdapter({
-    getGame: () => getTestContext("planetSettings")?.game ?? game,
-    getBiomeList: () =>
-      getTestContext("planetSettings")?.biomeList ?? biomeList,
-    getTraitList: () =>
-      getTestContext("planetSettings")?.traitList ?? traitList,
-    getExtraList: () =>
-      getTestContext("planetSettings")?.extraList ?? extraList,
-  });
-  let planetSettingsIntentHandler;
-  const planetSettingsBrowserAdapter = createPlanetSettingsBrowserAdapter({
+  const planetSettingsBrowserAdapter = createPlanetSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getReadModel: () =>
-      planetSettingsEvolveAdapter.readPlanetSettingsReadModel(),
-    intents: {
-      handle: (intent) => planetSettingsIntentHandler.handle(intent),
-    },
-    getActions: () =>
-      getTestContext("planetSettings")?.actions ?? planetSettingsActions,
-  });
-  planetSettingsIntentHandler = createPlanetSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("planetSettings")?.resetPlanetSettings ??
-          resetPlanetSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("planetSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: () =>
-      planetSettingsBrowserAdapter.updatePlanetSettingsContent(),
+    actions: planetSettingsActions,
+    getGame: () => game,
+    getBiomeList: () => biomeList,
+    getTraitList: () => traitList,
+    getExtraList: () => extraList,
+    resetPlanetSettings: (...args) => resetPlanetSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    testSurface,
   });
   const { buildPlanetSettings } = planetSettingsBrowserAdapter;
   const triggerSettingsReader = createTriggerSettingsEvolveAdapter({
@@ -1863,19 +1794,6 @@ export function startEvolveRuntimeComposition(
   });
   const { buildEjectorSettings, updateEjectorSettingsContent } =
     ejectorSettingsBrowserAdapter;
-  const marketSettingsReader = createMarketSettingsEvolveAdapter({
-    getMarketManager: () =>
-      getTestContext("marketSettings")?.MarketManager ?? MarketManager,
-    getResources: () =>
-      getTestContext("marketSettings")?.resources ?? resources,
-    getPoly: () => getTestContext("marketSettings")?.poly ?? poly,
-  });
-  const marketSettingsReorderer = createMarketSettingsWriter({
-    getMarketManager: () =>
-      getTestContext("marketSettings")?.MarketManager ?? MarketManager,
-    getSettingsRaw: () =>
-      getTestContext("marketSettings")?.settingsRaw ?? settingsRaw,
-  });
   const marketSettingsActions = {
     buildSettingsSection: (...args) => buildSettingsSection(...args),
     addSettingsNumber: (...args) => addSettingsNumber(...args),
@@ -1886,42 +1804,19 @@ export function startEvolveRuntimeComposition(
     buildTableLabel: (...args) => buildTableLabel(...args),
     getSorterHelper: () => sorterHelper,
   };
-  const marketSettingsIntentHandler = createMarketSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("marketSettings")?.resetMarketSettings ??
-          resetMarketSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("marketSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-      reorderResources: (resourceIds) =>
-        marketSettingsReorderer.reorderResources(resourceIds),
-    },
-    renderSettingsContent: () => updateMarketSettingsContent(),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("marketSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoMarket",
-          "autoGalaxyMarket",
-        ),
-      removeMarketToggles: () =>
-        (
-          getTestContext("marketSettings")?.removeMarketToggles ??
-          removeMarketToggles
-        )(),
-    },
-  });
-  const marketSettingsBrowserAdapter = createMarketSettingsBrowserAdapter({
+  const marketSettingsBrowserAdapter = createMarketSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    reader: marketSettingsReader,
-    intents: marketSettingsIntentHandler,
-    getActions: () =>
-      getTestContext("marketSettings")?.actions ?? marketSettingsActions,
+    actions: marketSettingsActions,
+    getMarketManager: () => MarketManager,
+    getResources: () => resources,
+    getPoly: () => poly,
+    getSettingsRaw: () => settingsRaw,
+    resetMarketSettings: (...args) => resetMarketSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    removeMarketToggles: () => removeMarketToggles(),
+    testSurface,
   });
   const { buildMarketSettings, updateMarketSettingsContent } =
     marketSettingsBrowserAdapter;
@@ -5449,10 +5344,6 @@ export function startEvolveRuntimeComposition(
       ejectorSettings: ejectorSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("marketSettings", {
-      marketSettings: marketSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("warSettings", {
       warSettings: warSettingsBrowserAdapter,
     });
@@ -5463,14 +5354,6 @@ export function startEvolveRuntimeComposition(
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("mechSettings", {
       mechSettings: mechSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("governmentSettings", {
-      governmentSettings: governmentSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("planetSettings", {
-      planetSettings: planetSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("buildingSettings", {

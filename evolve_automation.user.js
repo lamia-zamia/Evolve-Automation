@@ -19261,6 +19261,21 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/application/planet-settings.ts
+  function createPlanetSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-planet-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
+          return;
+        }
+      }
+    });
+  }
+
   // src/domain/civic/government-settings.ts
   function freezeOption2(option3) {
     return Object.freeze({ ...option3 });
@@ -19395,89 +19410,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
-  // src/adapters/evolve/civic/government-settings.ts
-  function readLocalizedOption(id, localize2, game) {
-    return {
-      val: id,
-      label: requireString(
-        Reflect.apply(localize2, game, [`govern_${id}`]),
-        `game.loc(govern_${id}) result`
-      ),
-      hint: requireString(
-        Reflect.apply(localize2, game, [`govern_${id}_desc`]),
-        `game.loc(govern_${id}_desc) result`
-      )
-    };
-  }
-  function createGovernmentSettingsEvolveAdapter({
-    getGame,
-    getGovernmentManager,
-    getGovernors
-  }) {
-    function readGovernmentSettingsReadModel() {
-      let game = requireNonArrayRecord(getGame(), "game"), rawLocalize = game.loc;
-      if (typeof rawLocalize != "function")
-        throw new TypeError("game.loc must be a function");
-      let localize2 = (key) => Reflect.apply(rawLocalize, game, [key]), manager = requireNonArrayRecord(
-        getGovernmentManager(),
-        "GovernmentManager"
-      ), rawTypes = requireNonArrayRecord(
-        manager.Types,
-        "GovernmentManager.Types"
-      ), governmentOptions = [
-        { val: "none", label: "None", hint: "Do not select government" }
-      ];
-      for (let [key, rawType] of Object.entries(rawTypes)) {
-        let type = requireNonArrayRecord(
-          rawType,
-          `GovernmentManager.Types.${key}`
-        );
-        if (type.selectable === !1) continue;
-        let id = requireString(type.id, `GovernmentManager.Types.${key}.id`);
-        governmentOptions.push(readLocalizedOption(id, localize2, game));
-      }
-      let rawGovernors = getGovernors();
-      if (!Array.isArray(rawGovernors))
-        throw new TypeError("governors must be an array");
-      let governorOptions = [
-        { val: "none", label: "None", hint: "Do not select governor" }
-      ];
-      return rawGovernors.forEach((rawGovernor, index) => {
-        let id = requireString(rawGovernor, `governors[${index}]`);
-        governorOptions.push({
-          val: id,
-          label: requireString(
-            localize2(`governor_${id}`),
-            `game.loc(governor_${id}) result`
-          ),
-          hint: requireString(
-            localize2(`governor_${id}_desc`),
-            `game.loc(governor_${id}_desc) result`
-          )
-        });
-      }), createGovernmentSettingsReadModel({
-        governmentOptions,
-        governorOptions
-      });
-    }
-    return Object.freeze({ readGovernmentSettingsReadModel });
-  }
-
-  // src/application/planet-settings.ts
-  function createPlanetSettingsIntentHandler({
-    writer,
-    renderSettingsContent
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        if (intent.type === "reset-planet-settings") {
-          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
-          return;
-        }
-      }
-    });
-  }
-
   // src/domain/progression/evolution/planet-settings.ts
   function freezeCell(cell) {
     return Object.freeze({ ...cell });
@@ -19576,6 +19508,74 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/adapters/evolve/civic/government-settings.ts
+  function readLocalizedOption(id, localize2, game) {
+    return {
+      val: id,
+      label: requireString(
+        Reflect.apply(localize2, game, [`govern_${id}`]),
+        `game.loc(govern_${id}) result`
+      ),
+      hint: requireString(
+        Reflect.apply(localize2, game, [`govern_${id}_desc`]),
+        `game.loc(govern_${id}_desc) result`
+      )
+    };
+  }
+  function createGovernmentSettingsEvolveAdapter({
+    getGame,
+    getGovernmentManager,
+    getGovernors
+  }) {
+    function readGovernmentSettingsReadModel() {
+      let game = requireNonArrayRecord(getGame(), "game"), rawLocalize = game.loc;
+      if (typeof rawLocalize != "function")
+        throw new TypeError("game.loc must be a function");
+      let localize2 = (key) => Reflect.apply(rawLocalize, game, [key]), manager = requireNonArrayRecord(
+        getGovernmentManager(),
+        "GovernmentManager"
+      ), rawTypes = requireNonArrayRecord(
+        manager.Types,
+        "GovernmentManager.Types"
+      ), governmentOptions = [
+        { val: "none", label: "None", hint: "Do not select government" }
+      ];
+      for (let [key, rawType] of Object.entries(rawTypes)) {
+        let type = requireNonArrayRecord(
+          rawType,
+          `GovernmentManager.Types.${key}`
+        );
+        if (type.selectable === !1) continue;
+        let id = requireString(type.id, `GovernmentManager.Types.${key}.id`);
+        governmentOptions.push(readLocalizedOption(id, localize2, game));
+      }
+      let rawGovernors = getGovernors();
+      if (!Array.isArray(rawGovernors))
+        throw new TypeError("governors must be an array");
+      let governorOptions = [
+        { val: "none", label: "None", hint: "Do not select governor" }
+      ];
+      return rawGovernors.forEach((rawGovernor, index) => {
+        let id = requireString(rawGovernor, `governors[${index}]`);
+        governorOptions.push({
+          val: id,
+          label: requireString(
+            localize2(`governor_${id}`),
+            `game.loc(governor_${id}) result`
+          ),
+          hint: requireString(
+            localize2(`governor_${id}_desc`),
+            `game.loc(governor_${id}_desc) result`
+          )
+        });
+      }), createGovernmentSettingsReadModel({
+        governmentOptions,
+        governorOptions
+      });
+    }
+    return Object.freeze({ readGovernmentSettingsReadModel });
+  }
+
   // src/adapters/evolve/progression/evolution/planet-settings.ts
   function requireStringArray(value, path) {
     if (!Array.isArray(value))
@@ -19611,6 +19611,113 @@ If script is allowed to reassign non-empty storage it might waste time producing
       return createPlanetSettingsReadModel({ biomes, traits, extras });
     }
     return Object.freeze({ readPlanetSettingsReadModel });
+  }
+
+  // src/bootstrap/settings/government-planet-settings-controls.ts
+  function readRecord2(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue2(context, property, fallback) {
+    let value = readRecord2(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function readContextActions2(context, fallback) {
+    let record = readRecord2(context);
+    return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
+  }
+  function getTestContextReader2(testSurface) {
+    return () => {
+    };
+  }
+  function createGovernmentSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getGame,
+    getGovernmentManager,
+    getGovernors,
+    resetGovernmentSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("governmentSettings"), evolveAdapter = createGovernmentSettingsEvolveAdapter({
+      getGame: () => readContextValue2(context(), "game", getGame()),
+      getGovernmentManager: () => readContextValue2(context(), "GovernmentManager", getGovernmentManager()),
+      getGovernors: () => readContextValue2(context(), "governors", getGovernors())
+    }), intentHandler, browserAdapter = createGovernmentSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readGovernmentSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions2(context(), actions)
+    });
+    return intentHandler = createGovernmentSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue2(
+          context(),
+          "resetGovernmentSettings",
+          resetGovernmentSettings
+        )(!0),
+        persist: () => readContextValue2(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: (secondaryPrefix) => browserAdapter.updateGovernmentSettingsContent(secondaryPrefix),
+      effects: {
+        resetCheckboxes: () => readContextValue2(
+          context(),
+          "resetCheckbox",
+          resetCheckbox
+        )("autoTax", "autoGovernment")
+      }
+    }), browserAdapter;
+  }
+  function createPlanetSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getGame,
+    getBiomeList,
+    getTraitList,
+    getExtraList,
+    resetPlanetSettings,
+    persistSettings,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("planetSettings"), evolveAdapter = createPlanetSettingsEvolveAdapter({
+      getGame: () => readContextValue2(context(), "game", getGame()),
+      getBiomeList: () => readContextValue2(context(), "biomeList", getBiomeList()),
+      getTraitList: () => readContextValue2(context(), "traitList", getTraitList()),
+      getExtraList: () => readContextValue2(context(), "extraList", getExtraList())
+    }), intentHandler, browserAdapter = createPlanetSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readPlanetSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions2(context(), actions)
+    });
+    return intentHandler = createPlanetSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue2(
+          context(),
+          "resetPlanetSettings",
+          resetPlanetSettings
+        )(!0),
+        persist: () => readContextValue2(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updatePlanetSettingsContent()
+    }), browserAdapter;
   }
 
   // src/application/building-settings.ts
@@ -39832,6 +39939,80 @@ If script is allowed to reassign non-empty storage it might waste time producing
     };
   }
 
+  // src/bootstrap/settings/market-settings-control.ts
+  function readRecord3(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue3(context, property, fallback) {
+    let value = readRecord3(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function readContextActions3(context, fallback) {
+    let record = readRecord3(context);
+    return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
+  }
+  function getTestContextReader3(testSurface) {
+    return () => {
+    };
+  }
+  function createMarketSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getMarketManager,
+    getResources,
+    getPoly,
+    getSettingsRaw,
+    resetMarketSettings,
+    persistSettings,
+    resetCheckbox,
+    removeMarketToggles,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader3(testSurface), context = () => getTestContext("marketSettings"), reader = createMarketSettingsEvolveAdapter({
+      getMarketManager: () => readContextValue3(context(), "MarketManager", getMarketManager()),
+      getResources: () => readContextValue3(context(), "resources", getResources()),
+      getPoly: () => readContextValue3(context(), "poly", getPoly())
+    }), reorderer = createMarketSettingsWriter({
+      getMarketManager: () => readContextValue3(context(), "MarketManager", getMarketManager()),
+      getSettingsRaw: () => readContextValue3(context(), "settingsRaw", getSettingsRaw())
+    }), intentHandler = createMarketSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue3(
+          context(),
+          "resetMarketSettings",
+          resetMarketSettings
+        )(!0),
+        persist: () => readContextValue3(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )(),
+        reorderResources: (resourceIds) => reorderer.reorderResources(resourceIds)
+      },
+      renderSettingsContent: () => browserAdapter.updateMarketSettingsContent(),
+      effects: {
+        resetCheckboxes: () => readContextValue3(
+          context(),
+          "resetCheckbox",
+          resetCheckbox
+        )("autoMarket", "autoGalaxyMarket"),
+        removeMarketToggles: () => readContextValue3(
+          context(),
+          "removeMarketToggles",
+          removeMarketToggles
+        )()
+      }
+    }), browserAdapter = createMarketSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      reader,
+      intents: intentHandler,
+      getActions: () => readContextActions3(context(), actions)
+    });
+    return browserAdapter;
+  }
+
   // src/application/war-settings.ts
   function createWarSettingsIntentHandler({
     writer,
@@ -47611,41 +47792,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         confirm: (message) => (getTestContext("prestigeSettings")?.confirm ?? runtimeEnvironment.confirm)(message)
       }
     });
-    let { buildPrestigeSettings } = prestigeSettingsBrowserAdapter, governmentSettingsActions = {
-      buildSettingsSection2,
-      addSettingsNumber,
-      addSettingsSelect
-    }, governmentSettingsEvolveAdapter = createGovernmentSettingsEvolveAdapter(
-      {
-        getGame: () => getTestContext("governmentSettings")?.game ?? game,
-        getGovernmentManager: () => getTestContext("governmentSettings")?.GovernmentManager ?? GovernmentManager,
-        getGovernors: () => getTestContext("governmentSettings")?.governors ?? governors
-      }
-    ), governmentSettingsIntentHandler, governmentSettingsBrowserAdapter = createGovernmentSettingsBrowserAdapter({
+    let { buildPrestigeSettings } = prestigeSettingsBrowserAdapter, governmentSettingsBrowserAdapter = createGovernmentSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      getReadModel: () => governmentSettingsEvolveAdapter.readGovernmentSettingsReadModel(),
-      intents: {
-        handle: (intent) => governmentSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection2,
+        addSettingsNumber,
+        addSettingsSelect
       },
-      getActions: () => getTestContext("governmentSettings")?.actions ?? governmentSettingsActions
-    });
-    governmentSettingsIntentHandler = createGovernmentSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("governmentSettings")?.resetGovernmentSettings ?? resetGovernmentSettings)(!0),
-        persist: () => (getTestContext("governmentSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
-      },
-      renderSettingsContent: (secondaryPrefix) => governmentSettingsBrowserAdapter.updateGovernmentSettingsContent(
-        secondaryPrefix
-      ),
-      effects: {
-        resetCheckboxes: () => (getTestContext("governmentSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoTax",
-          "autoGovernment"
-        )
-      }
-    });
-    let { buildGovernmentSettings } = governmentSettingsBrowserAdapter, authoritySettingsBrowserAdapter = createAuthoritySettingsControl({
+      getGame: () => game,
+      getGovernmentManager: () => GovernmentManager,
+      getGovernors: () => governors,
+      resetGovernmentSettings: (...args) => resetGovernmentSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface
+    }), { buildGovernmentSettings } = governmentSettingsBrowserAdapter, authoritySettingsBrowserAdapter = createAuthoritySettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       actions: {
@@ -47732,32 +47894,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let addEvolutionSetting = () => evolutionSettingsIntentHandler.handle({
       type: "add-evolution",
       prestigeType: "auto"
-    }), { buildEvolutionSettings } = evolutionSettingsBrowserAdapter, planetSettingsActions = {
-      buildSettingsSection,
-      addTableInput,
-      buildTableLabel
-    }, planetSettingsEvolveAdapter = createPlanetSettingsEvolveAdapter({
-      getGame: () => getTestContext("planetSettings")?.game ?? game,
-      getBiomeList: () => getTestContext("planetSettings")?.biomeList ?? biomeList,
-      getTraitList: () => getTestContext("planetSettings")?.traitList ?? traitList,
-      getExtraList: () => getTestContext("planetSettings")?.extraList ?? extraList
-    }), planetSettingsIntentHandler, planetSettingsBrowserAdapter = createPlanetSettingsBrowserAdapter({
+    }), { buildEvolutionSettings } = evolutionSettingsBrowserAdapter, planetSettingsBrowserAdapter = createPlanetSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      getReadModel: () => planetSettingsEvolveAdapter.readPlanetSettingsReadModel(),
-      intents: {
-        handle: (intent) => planetSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection,
+        addTableInput,
+        buildTableLabel
       },
-      getActions: () => getTestContext("planetSettings")?.actions ?? planetSettingsActions
-    });
-    planetSettingsIntentHandler = createPlanetSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("planetSettings")?.resetPlanetSettings ?? resetPlanetSettings)(!0),
-        persist: () => (getTestContext("planetSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
-      },
-      renderSettingsContent: () => planetSettingsBrowserAdapter.updatePlanetSettingsContent()
-    });
-    let { buildPlanetSettings } = planetSettingsBrowserAdapter, triggerSettingsReader = createTriggerSettingsEvolveAdapter({
+      getGame: () => game,
+      getBiomeList: () => biomeList,
+      getTraitList: () => traitList,
+      getExtraList: () => extraList,
+      resetPlanetSettings: (...args) => resetPlanetSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      testSurface
+    }), { buildPlanetSettings } = planetSettingsBrowserAdapter, triggerSettingsReader = createTriggerSettingsEvolveAdapter({
       getTriggerManager: () => getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager,
       getCheckTypes: () => getTestContext("triggerSettings")?.checkTypes ?? checkTypes,
       getActionInputs: () => getTestContext("triggerSettings")?.argType ?? argType,
@@ -47988,42 +48140,28 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: ejectorSettingsReader,
       intents: ejectorSettingsIntentHandler,
       getActions: () => getTestContext("ejectorSettings")?.actions ?? ejectorSettingsActions
-    }), { buildEjectorSettings, updateEjectorSettingsContent } = ejectorSettingsBrowserAdapter, marketSettingsReader = createMarketSettingsEvolveAdapter({
-      getMarketManager: () => getTestContext("marketSettings")?.MarketManager ?? MarketManager,
-      getResources: () => getTestContext("marketSettings")?.resources ?? resources,
-      getPoly: () => getTestContext("marketSettings")?.poly ?? poly
-    }), marketSettingsReorderer = createMarketSettingsWriter({
-      getMarketManager: () => getTestContext("marketSettings")?.MarketManager ?? MarketManager,
-      getSettingsRaw: () => getTestContext("marketSettings")?.settingsRaw ?? settingsRaw
-    }), marketSettingsActions = {
-      buildSettingsSection: (...args) => buildSettingsSection(...args),
-      addSettingsNumber: (...args) => addSettingsNumber(...args),
-      addSettingsToggle: (...args) => addSettingsToggle(...args),
-      addStandardHeading: (...args) => addStandardHeading(...args),
-      addTableInput: (...args) => addTableInput(...args),
-      addTableToggle: (...args) => addTableToggle(...args),
-      buildTableLabel: (...args) => buildTableLabel(...args),
-      getSorterHelper: () => sorterHelper
-    }, marketSettingsIntentHandler = createMarketSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("marketSettings")?.resetMarketSettings ?? resetMarketSettings)(!0),
-        persist: () => (getTestContext("marketSettings")?.updateSettingsFromState ?? updateSettingsFromState)(),
-        reorderResources: (resourceIds) => marketSettingsReorderer.reorderResources(resourceIds)
-      },
-      renderSettingsContent: () => updateMarketSettingsContent(),
-      effects: {
-        resetCheckboxes: () => (getTestContext("marketSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoMarket",
-          "autoGalaxyMarket"
-        ),
-        removeMarketToggles: () => (getTestContext("marketSettings")?.removeMarketToggles ?? removeMarketToggles)()
-      }
-    }), marketSettingsBrowserAdapter = createMarketSettingsBrowserAdapter({
+    }), { buildEjectorSettings, updateEjectorSettingsContent } = ejectorSettingsBrowserAdapter, marketSettingsBrowserAdapter = createMarketSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      reader: marketSettingsReader,
-      intents: marketSettingsIntentHandler,
-      getActions: () => getTestContext("marketSettings")?.actions ?? marketSettingsActions
+      actions: {
+        buildSettingsSection: (...args) => buildSettingsSection(...args),
+        addSettingsNumber: (...args) => addSettingsNumber(...args),
+        addSettingsToggle: (...args) => addSettingsToggle(...args),
+        addStandardHeading: (...args) => addStandardHeading(...args),
+        addTableInput: (...args) => addTableInput(...args),
+        addTableToggle: (...args) => addTableToggle(...args),
+        buildTableLabel: (...args) => buildTableLabel(...args),
+        getSorterHelper: () => sorterHelper
+      },
+      getMarketManager: () => MarketManager,
+      getResources: () => resources,
+      getPoly: () => poly,
+      getSettingsRaw: () => settingsRaw,
+      resetMarketSettings: (...args) => resetMarketSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      removeMarketToggles: () => removeMarketToggles(),
+      testSurface
     }), { buildMarketSettings, updateMarketSettingsContent } = marketSettingsBrowserAdapter, { traitVal } = createTraitValue({ getGame: () => game }), authorityPolicy = createAuthorityPolicy({
       getGame: () => game,
       getSettings: () => settings,
