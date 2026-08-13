@@ -1,18 +1,53 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
 
+interface MagicRace {
+  casting: Record<string, number>;
+  alchemy: Record<string, number>;
+  [key: string]: boolean | Record<string, number>;
+}
+
+interface MagicGame {
+  global: {
+    tech: { alchemy: number };
+    race: MagicRace;
+  };
+  tradeRatio: Record<string, unknown>;
+}
+
+interface MagicSettings {
+  [key: string]: boolean | number | undefined;
+}
+
+interface MagicResource {
+  id: string;
+  isUnlocked: () => boolean;
+  instance?: Record<string, unknown>;
+  rateOfChange: number;
+}
+
+interface MagicResources extends Record<string, MagicResource> {
+  Crystal: MagicResource;
+  Food: MagicResource;
+  Mana: MagicResource;
+}
+
+interface RitualSpell {
+  id: string;
+  isUnlocked: () => boolean;
+}
+
 interface MagicManagersDependencies {
-  getGame: () => any;
-  getSettings: () => Record<string, any>;
-  getResources: () => Record<string, any>;
+  getGame: () => MagicGame;
+  getSettings: () => MagicSettings;
+  getResources: () => MagicResources;
   getBuildings: () => Record<string, { count: number }>;
   haveTech: (tech: string, level?: number) => boolean;
   isLumberRace: () => boolean;
   addProps: (
-    target: any,
-    idFn: (item: any) => string,
+    target: Record<string, RitualSpell>,
+    idFn: (item: RitualSpell) => string,
     specs: { s: string; p: string }[],
-  ) => any;
+  ) => Record<string, RitualSpell>;
   industryControls: GameIndustryControlsPort;
 }
 
@@ -28,7 +63,7 @@ export function createMagicManagers({
 }: MagicManagersDependencies) {
   const AlchemyManager = {
     _alchemyVuePrefix: "alchemy",
-    priorityList: [] as any[],
+    priorityList: [] as MagicResource[],
 
     resEnabled: (id: string) => getSettings()["res_alchemy_" + id],
     resWeighting: (id: string) => getSettings()["res_alchemy_w_" + id],
@@ -49,7 +84,7 @@ export function createMagicManagers({
       );
     },
 
-    transmuteTier(res: any) {
+    transmuteTier(res: MagicResource) {
       const game = getGame();
       const resources = getResources();
       return !Object.hasOwn(game.tradeRatio, res.id) ||
@@ -133,7 +168,7 @@ export function createMagicManagers({
         Hunting: { id: "hunting", isUnlocked: () => true },
         Crafting: { id: "crafting", isUnlocked: () => haveTech("magic", 4) },
       },
-      (s: any) => s.id,
+      (s: RitualSpell) => s.id,
       [{ s: "spell_w_", p: "weighting" }],
     ),
 
@@ -152,12 +187,12 @@ export function createMagicManagers({
       return industryControls.isRendered(this._industryElementId);
     },
 
-    currentSpells(spell: any) {
+    currentSpells(spell: RitualSpell) {
       const game = getGame();
-      return game.global.race.casting[spell.id];
+      return game.global.race.casting[spell.id]!;
     },
 
-    spellCost(spell: any) {
+    spellCost(spell: RitualSpell) {
       return this.manaCost(this.currentSpells(spell));
     },
 
@@ -174,7 +209,7 @@ export function createMagicManagers({
       return level * (1.0025 ** level - 1);
     },
 
-    increaseRitual(spell: any, count: number): any {
+    increaseRitual(spell: RitualSpell, count: number): boolean {
       if (count === 0 || !spell.isUnlocked()) {
         return false;
       }
@@ -189,15 +224,12 @@ export function createMagicManagers({
       });
     },
 
-    decreaseRitual(spell: any, count: number): any {
+    decreaseRitual(spell: RitualSpell, count: number): boolean {
       if (count === 0 || !spell.isUnlocked()) {
         return false;
       }
       if (count < 0) {
-        // Preserved from the original: this passes a single argument to a
-        // two-parameter method (latent bug), not a structural change.
-        // @ts-expect-error intentional verbatim preservation
-        return this.increaseRitual(count * -1);
+        return this.increaseRitual(spell, count * -1);
       }
 
       return industryControls.decreaseSpell({

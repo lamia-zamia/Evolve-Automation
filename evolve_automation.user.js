@@ -3414,7 +3414,7 @@ Only continue if you trust the source. Injected code:
         });
       },
       decreaseRitual(spell, count2) {
-        return count2 === 0 || !spell.isUnlocked() ? !1 : count2 < 0 ? this.increaseRitual(count2 * -1) : industryControls.decreaseSpell({
+        return count2 === 0 || !spell.isUnlocked() ? !1 : count2 < 0 ? this.increaseRitual(spell, count2 * -1) : industryControls.decreaseSpell({
           elementId: this._industryElementId,
           id: spell.id,
           count: count2
