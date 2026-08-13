@@ -3328,117 +3328,6 @@ Only continue if you trust the source. Injected code:
     } };
   }
 
-  // src/game/magic-managers.ts
-  function createMagicManagers({
-    getGame,
-    getSettings,
-    getResources,
-    getBuildings,
-    haveTech,
-    isLumberRace,
-    addProps,
-    industryControls
-  }) {
-    let AlchemyManager = {
-      _alchemyVuePrefix: "alchemy",
-      priorityList: [],
-      resEnabled: (id) => getSettings()["res_alchemy_" + id],
-      resWeighting: (id) => getSettings()["res_alchemy_w_" + id],
-      isUnlocked() {
-        return haveTech("alchemy");
-      },
-      managedPriorityList() {
-        let game = getGame(), resources = getResources();
-        return this.priorityList.filter(
-          (res) => this.resEnabled(res.id) && res.isUnlocked() && this.transmuteTier(res) <= game.global.tech.alchemy && (!game.global.race.artifical || res !== resources.Food)
-        );
-      },
-      transmuteTier(res) {
-        let game = getGame(), resources = getResources();
-        return !Object.hasOwn(game.tradeRatio, res.id) || res === resources.Crystal ? 0 : Object.hasOwn(res.instance ?? {}, "trade") ? 1 : 2;
-      },
-      currentCount(id) {
-        return getGame().global.race.alchemy[id];
-      },
-      transmuteMore(id, count2) {
-        let resources = getResources();
-        return industryControls.increaseSpell({
-          elementId: this._alchemyVuePrefix + id,
-          id,
-          count: count2
-        }) ? (resources.Mana.rateOfChange -= count2 * 1, resources.Crystal.rateOfChange -= count2 * 0.5, !0) : !1;
-      },
-      transmuteLess(id, count2) {
-        let resources = getResources();
-        return industryControls.decreaseSpell({
-          elementId: this._alchemyVuePrefix + id,
-          id,
-          count: count2
-        }) ? (resources.Mana.rateOfChange += count2 * 1, resources.Crystal.rateOfChange += count2 * 0.5, !0) : !1;
-      }
-    }, RitualManager = {
-      _industryElementId: "iPylon",
-      Productions: addProps(
-        {
-          Farmer: {
-            id: "farmer",
-            isUnlocked: () => !getGame().global.race.orbit_decayed && !getGame().global.race.cataclysm && !getGame().global.race.carnivore && !getGame().global.race.soul_eater && !getGame().global.race.artifical && !getGame().global.race.unfathomable
-          },
-          Miner: {
-            id: "miner",
-            isUnlocked: () => !getGame().global.race.cataclysm
-          },
-          Lumberjack: {
-            id: "lumberjack",
-            isUnlocked: () => !getGame().global.race.orbit_decayed && !getGame().global.race.cataclysm && isLumberRace() && !getGame().global.race.evil
-          },
-          Science: { id: "science", isUnlocked: () => !0 },
-          Factory: { id: "factory", isUnlocked: () => !0 },
-          Army: { id: "army", isUnlocked: () => !0 },
-          Hunting: { id: "hunting", isUnlocked: () => !0 },
-          Crafting: { id: "crafting", isUnlocked: () => haveTech("magic", 4) }
-        },
-        (s) => s.id,
-        [{ s: "spell_w_", p: "weighting" }]
-      ),
-      initIndustry() {
-        let game = getGame(), buildings = getBuildings();
-        return buildings.Pylon.count < 1 && buildings.RedPylon.count < 1 && buildings.TauPylon.count < 1 || !game.global.race.casting ? !1 : industryControls.isRendered(this._industryElementId);
-      },
-      currentSpells(spell) {
-        return getGame().global.race.casting[spell.id];
-      },
-      spellCost(spell) {
-        return this.manaCost(this.currentSpells(spell));
-      },
-      costStep(level) {
-        if (level === 0)
-          return 25e-4;
-        let cost = this.manaCost(level);
-        return (cost / level * 1.0025 + 25e-4) * (level + 1) - cost;
-      },
-      // export function manaCost(spell,rate) from industry.js
-      manaCost(level) {
-        return level * (1.0025 ** level - 1);
-      },
-      increaseRitual(spell, count2) {
-        return count2 === 0 || !spell.isUnlocked() ? !1 : count2 < 0 ? this.decreaseRitual(spell, count2 * -1) : industryControls.increaseSpell({
-          elementId: this._industryElementId,
-          id: spell.id,
-          count: count2
-        });
-      },
-      decreaseRitual(spell, count2) {
-        return count2 === 0 || !spell.isUnlocked() ? !1 : count2 < 0 ? this.increaseRitual(spell, count2 * -1) : industryControls.decreaseSpell({
-          elementId: this._industryElementId,
-          id: spell.id,
-          count: count2
-        });
-      }
-    };
-    return { AlchemyManager, RitualManager };
-  }
-
   // src/game/disposal-managers.ts
   function createDisposalManagers({
     getGame,
@@ -3726,6 +3615,117 @@ Only continue if you trust the source. Injected code:
         }) ? !1 : (resource2.rateMods.eject = (resource2.rateMods.eject ?? 0) - count2, !0);
       }
     } };
+  }
+
+  // src/game/magic-managers.ts
+  function createMagicManagers({
+    getGame,
+    getSettings,
+    getResources,
+    getBuildings,
+    haveTech,
+    isLumberRace,
+    addProps,
+    industryControls
+  }) {
+    let AlchemyManager = {
+      _alchemyVuePrefix: "alchemy",
+      priorityList: [],
+      resEnabled: (id) => getSettings()["res_alchemy_" + id],
+      resWeighting: (id) => getSettings()["res_alchemy_w_" + id],
+      isUnlocked() {
+        return haveTech("alchemy");
+      },
+      managedPriorityList() {
+        let game = getGame(), resources = getResources();
+        return this.priorityList.filter(
+          (res) => this.resEnabled(res.id) && res.isUnlocked() && this.transmuteTier(res) <= game.global.tech.alchemy && (!game.global.race.artifical || res !== resources.Food)
+        );
+      },
+      transmuteTier(res) {
+        let game = getGame(), resources = getResources();
+        return !Object.hasOwn(game.tradeRatio, res.id) || res === resources.Crystal ? 0 : Object.hasOwn(res.instance ?? {}, "trade") ? 1 : 2;
+      },
+      currentCount(id) {
+        return getGame().global.race.alchemy[id];
+      },
+      transmuteMore(id, count2) {
+        let resources = getResources();
+        return industryControls.increaseSpell({
+          elementId: this._alchemyVuePrefix + id,
+          id,
+          count: count2
+        }) ? (resources.Mana.rateOfChange -= count2 * 1, resources.Crystal.rateOfChange -= count2 * 0.5, !0) : !1;
+      },
+      transmuteLess(id, count2) {
+        let resources = getResources();
+        return industryControls.decreaseSpell({
+          elementId: this._alchemyVuePrefix + id,
+          id,
+          count: count2
+        }) ? (resources.Mana.rateOfChange += count2 * 1, resources.Crystal.rateOfChange += count2 * 0.5, !0) : !1;
+      }
+    }, RitualManager = {
+      _industryElementId: "iPylon",
+      Productions: addProps(
+        {
+          Farmer: {
+            id: "farmer",
+            isUnlocked: () => !getGame().global.race.orbit_decayed && !getGame().global.race.cataclysm && !getGame().global.race.carnivore && !getGame().global.race.soul_eater && !getGame().global.race.artifical && !getGame().global.race.unfathomable
+          },
+          Miner: {
+            id: "miner",
+            isUnlocked: () => !getGame().global.race.cataclysm
+          },
+          Lumberjack: {
+            id: "lumberjack",
+            isUnlocked: () => !getGame().global.race.orbit_decayed && !getGame().global.race.cataclysm && isLumberRace() && !getGame().global.race.evil
+          },
+          Science: { id: "science", isUnlocked: () => !0 },
+          Factory: { id: "factory", isUnlocked: () => !0 },
+          Army: { id: "army", isUnlocked: () => !0 },
+          Hunting: { id: "hunting", isUnlocked: () => !0 },
+          Crafting: { id: "crafting", isUnlocked: () => haveTech("magic", 4) }
+        },
+        (s) => s.id,
+        [{ s: "spell_w_", p: "weighting" }]
+      ),
+      initIndustry() {
+        let game = getGame(), buildings = getBuildings();
+        return buildings.Pylon.count < 1 && buildings.RedPylon.count < 1 && buildings.TauPylon.count < 1 || !game.global.race.casting ? !1 : industryControls.isRendered(this._industryElementId);
+      },
+      currentSpells(spell) {
+        return getGame().global.race.casting[spell.id];
+      },
+      spellCost(spell) {
+        return this.manaCost(this.currentSpells(spell));
+      },
+      costStep(level) {
+        if (level === 0)
+          return 25e-4;
+        let cost = this.manaCost(level);
+        return (cost / level * 1.0025 + 25e-4) * (level + 1) - cost;
+      },
+      // export function manaCost(spell,rate) from industry.js
+      manaCost(level) {
+        return level * (1.0025 ** level - 1);
+      },
+      increaseRitual(spell, count2) {
+        return count2 === 0 || !spell.isUnlocked() ? !1 : count2 < 0 ? this.decreaseRitual(spell, count2 * -1) : industryControls.increaseSpell({
+          elementId: this._industryElementId,
+          id: spell.id,
+          count: count2
+        });
+      },
+      decreaseRitual(spell, count2) {
+        return count2 === 0 || !spell.isUnlocked() ? !1 : count2 < 0 ? this.increaseRitual(spell, count2 * -1) : industryControls.decreaseSpell({
+          elementId: this._industryElementId,
+          id: spell.id,
+          count: count2
+        });
+      }
+    };
+    return { AlchemyManager, RitualManager };
   }
 
   // src/game/production-managers.ts
@@ -4162,6 +4162,24 @@ Only continue if you trust the source. Injected code:
       DroidManager,
       GrapheneManager
     };
+  }
+
+  // src/bootstrap/industry-manager-controls.ts
+  function createIndustryManagerControls({
+    trait: trait2,
+    industry,
+    disposal,
+    magic,
+    production
+  }) {
+    let traitManagers = createTraitManagers(trait2), industryManagers = createIndustryManagers(industry), disposalManagers = createDisposalManagers(disposal), magicManagers = createMagicManagers(magic), productionManagers = createProductionManagers(production);
+    return Object.freeze({
+      ...traitManagers,
+      ...industryManagers,
+      ...disposalManagers,
+      ...magicManagers,
+      ...productionManagers
+    });
   }
 
   // src/game/economy-managers.ts
@@ -50141,60 +50159,68 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       requiredManaRate: Number(
         settings.prestigeVacuumMana ?? 10
       )
-    }), MinorTraitManager, MutableTraitManager;
-    ({ MinorTraitManager, MutableTraitManager } = createTraitManagers({
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      haveTech
-    }));
-    let { QuarryManager, MineManager, ExtractorManager } = createIndustryManagers({
-      getGame: () => game,
-      getBuildings: () => buildings,
-      industryControls,
-      haveTech
-    }), NaniteManager, SupplyManager, EjectManager;
-    ({ NaniteManager, SupplyManager, EjectManager } = createDisposalManagers({
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getPoly: () => poly,
-      haveTask,
-      industryControls,
-      disposalControls
-    }));
-    let AlchemyManager, RitualManager;
-    ({ AlchemyManager, RitualManager } = createMagicManagers({
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      haveTech,
-      isLumberRace,
-      addProps,
-      industryControls
-    }));
-    let SmelterManager, FactoryManager, ReplicatorManager, DroidManager, GrapheneManager;
-    ({
+    }), {
+      MinorTraitManager,
+      MutableTraitManager,
+      QuarryManager,
+      MineManager,
+      ExtractorManager,
+      NaniteManager,
+      SupplyManager,
+      EjectManager,
+      AlchemyManager,
+      RitualManager,
       SmelterManager,
       FactoryManager,
       ReplicatorManager,
       DroidManager,
       GrapheneManager
-    } = createProductionManagers({
-      getGame: () => game,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      industryControls,
-      haveTech,
-      isLumberRace,
-      addProps,
-      normalizeProperties,
-      replicableResources,
-      ResourceProductionCost
-    }));
-    let GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager;
+    } = createIndustryManagerControls({
+      trait: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        haveTech
+      },
+      industry: {
+        getGame: () => game,
+        getBuildings: () => buildings,
+        industryControls,
+        haveTech
+      },
+      disposal: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getPoly: () => poly,
+        haveTask,
+        industryControls,
+        disposalControls
+      },
+      magic: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        haveTech,
+        isLumberRace,
+        addProps,
+        industryControls
+      },
+      production: {
+        getGame: () => game,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        industryControls,
+        haveTech,
+        isLumberRace,
+        addProps,
+        normalizeProperties,
+        replicableResources,
+        ResourceProductionCost
+      }
+    }), GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager;
     ({ GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } = createEconomyManagers({
       getGame: () => game,
       getResources: () => resources,

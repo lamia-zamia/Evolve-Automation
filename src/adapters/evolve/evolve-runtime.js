@@ -85,11 +85,7 @@ import { createGameResearchControls } from "../browser/game-research-controls.ts
 import { createGameTraitControls } from "../browser/game-trait-controls.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
 import { createRuntimeQueries } from "../../game/runtime-queries.ts";
-import { createTraitManagers } from "../../game/trait-managers.ts";
-import { createIndustryManagers } from "../../game/industry-managers.ts";
-import { createMagicManagers } from "../../game/magic-managers.ts";
-import { createDisposalManagers } from "../../game/disposal-managers.ts";
-import { createProductionManagers } from "../../game/production-managers.ts";
+import { createIndustryManagerControls } from "../../bootstrap/industry-manager-controls.ts";
 import { createEconomyManagers } from "../../game/economy-managers.ts";
 import { createForeignAffairsManagers } from "../../game/foreign-affairs-managers.ts";
 import { readForeignAchievementGoal } from "./combat/foreign-achievements.ts";
@@ -1890,69 +1886,68 @@ export function startEvolveRuntimeComposition(
     });
 
   // Singleton manager objects
-  let MinorTraitManager, MutableTraitManager;
-  ({ MinorTraitManager, MutableTraitManager } = createTraitManagers({
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    haveTech,
-  }));
-
-  const { QuarryManager, MineManager, ExtractorManager } =
-    createIndustryManagers({
-      getGame: () => game,
-      getBuildings: () => buildings,
-      industryControls,
-      haveTech,
-    });
-
-  let NaniteManager, SupplyManager, EjectManager;
-  ({ NaniteManager, SupplyManager, EjectManager } = createDisposalManagers({
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getPoly: () => poly,
-    haveTask,
-    industryControls,
-    disposalControls,
-  }));
-
-  let AlchemyManager, RitualManager;
-  ({ AlchemyManager, RitualManager } = createMagicManagers({
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    haveTech,
-    isLumberRace,
-    addProps,
-    industryControls,
-  }));
-
-  let SmelterManager,
-    FactoryManager,
-    ReplicatorManager,
-    DroidManager,
-    GrapheneManager;
-  ({
+  let {
+    MinorTraitManager,
+    MutableTraitManager,
+    QuarryManager,
+    MineManager,
+    ExtractorManager,
+    NaniteManager,
+    SupplyManager,
+    EjectManager,
+    AlchemyManager,
+    RitualManager,
     SmelterManager,
     FactoryManager,
     ReplicatorManager,
     DroidManager,
     GrapheneManager,
-  } = createProductionManagers({
-    getGame: () => game,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    industryControls,
-    haveTech,
-    isLumberRace,
-    addProps,
-    normalizeProperties,
-    replicableResources,
-    ResourceProductionCost,
-  }));
+  } = createIndustryManagerControls({
+    trait: {
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      haveTech,
+    },
+    industry: {
+      getGame: () => game,
+      getBuildings: () => buildings,
+      industryControls,
+      haveTech,
+    },
+    disposal: {
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getPoly: () => poly,
+      haveTask,
+      industryControls,
+      disposalControls,
+    },
+    magic: {
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      haveTech,
+      isLumberRace,
+      addProps,
+      industryControls,
+    },
+    production: {
+      getGame: () => game,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      industryControls,
+      haveTech,
+      isLumberRace,
+      addProps,
+      normalizeProperties,
+      replicableResources,
+      ResourceProductionCost,
+    },
+  });
 
   let GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager;
   ({ GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
