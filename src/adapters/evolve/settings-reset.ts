@@ -3,8 +3,8 @@
 // the getter-bag proxies in the legacy `reset-settings.ts`; the pure defaults tables and the
 // application orchestration never touch a live manager.
 //
-// Adapter-edge exception: game objects, managers and the trait constructors are untyped
-// external surfaces, so `Loose` is `any` here and does not escape this file.
+// Adapter-edge values are described only by the fields this reset slice samples. The live
+// game remains dynamic, but those details stop at these narrow compatibility interfaces.
 
 import type {
   BuildingResetContext,
@@ -28,47 +28,157 @@ import type {
   SettingsResetReader,
 } from "../../ports/settings-reset.ts";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Loose = any;
+interface ResetResource {
+  id: string;
+  is: { tradable?: boolean };
+  hasStorage: () => boolean;
+  atomicMass: number;
+}
+
+interface ResetResources extends Record<string, ResetResource> {
+  Bolognium: ResetResource;
+  Elerium: ResetResource;
+  Infernite: ResetResource;
+  Orichalcum: ResetResource;
+  Vitreloy: ResetResource;
+}
+
+interface ResetTrait {
+  type: string;
+}
+
+interface ResetGame {
+  traits: Record<string, ResetTrait>;
+  global: { race: { universe: string } };
+}
+
+interface ResetPoly {
+  galaxyOffers: Array<{ buy: { res: string } }>;
+  neg_roll_traits: string[];
+  genus_traits: Record<string, unknown>;
+}
+
+interface PriorityManager {
+  priorityList: unknown[];
+  sortByPriority: () => void;
+}
+
+interface GovernmentManager {
+  Types: {
+    democracy: { id: string };
+    technocracy: { id: string };
+    corpocracy: { id: string };
+  };
+}
+
+interface BuildingView {
+  _vueBinding: string;
+  isSwitchable: () => boolean;
+  is: { smart?: boolean };
+}
+
+interface BuildingManager extends PriorityManager {
+  priorityList: BuildingView[];
+}
+
+interface ResetJob {
+  _originalId: string;
+  is: { smart?: boolean };
+}
+
+interface ResetProject {
+  id: string;
+}
+
+interface ProductionView {
+  resource: ResetResource;
+}
+
+interface ProductionManager {
+  Productions: Record<string, ProductionView>;
+}
+
+interface SmelterManager {
+  Fuels: Record<string, { id: string }>;
+}
+
+interface ReplicatorManager {
+  Productions: Record<string, { id: string }>;
+}
+
+interface AlchemyManager extends PriorityManager {
+  transmuteTier: (resource: ResetResource) => number;
+}
+
+interface RitualManager {
+  Productions: Record<string, { id: string }>;
+}
+
+interface DisposalManager extends PriorityManager {
+  isConsumable: (resource: ResetResource) => boolean;
+  supplyIn?: (id: string) => number;
+}
+
+interface TraitInstance {
+  traitName: string;
+  type: "major" | "genus";
+  genus: string;
+  isGainable: () => boolean;
+}
+
+interface TraitConstructor {
+  new (id: string): TraitInstance;
+}
+
+interface TriggerManager extends PriorityManager {
+  AddTrigger: (
+    requirementType: string,
+    requirementId: string,
+    requirementCount: number,
+    actionType: string,
+    actionId: string,
+    actionCount: number,
+  ) => unknown;
+}
 
 /** Getters for the live managers/catalogs each reset section reads, resolved at sample time. */
 export interface SettingsResetAdapterDependencies {
-  AlchemyManager: () => Loose;
-  biomeList: () => Loose[];
-  BuildingManager: () => Loose;
-  buildings: () => Record<string, Loose>;
-  challenges: () => Loose[];
-  DroidManager: () => Loose;
-  EjectManager: () => Loose;
-  extraList: () => Loose[];
-  FactoryManager: () => Loose;
-  game: () => Loose;
-  GameLog: () => Loose;
-  GenusTrait: () => Loose;
-  GovernmentManager: () => Loose;
+  AlchemyManager: () => AlchemyManager;
+  biomeList: () => string[];
+  BuildingManager: () => BuildingManager;
+  buildings: () => Record<string, BuildingView>;
+  challenges: () => Array<Array<{ id: string }>>;
+  DroidManager: () => ProductionManager;
+  EjectManager: () => DisposalManager;
+  extraList: () => string[];
+  FactoryManager: () => ProductionManager;
+  game: () => ResetGame;
+  GameLog: () => { Types: Record<string, unknown> };
+  GenusTrait: () => TraitConstructor;
+  GovernmentManager: () => GovernmentManager;
   initBuildingState: () => () => void;
-  JobManager: () => Loose;
-  jobs: () => Record<string, Loose>;
-  MajorTrait: () => Loose;
-  MarketManager: () => Loose;
-  MinorTrait: () => Loose;
-  MinorTraitManager: () => Loose;
-  MutableTraitManager: () => Loose;
-  NaniteManager: () => Loose;
-  ocularPowerData: () => Record<string, Loose>;
-  planetBiomes: () => Loose[];
-  planetTraits: () => Loose[];
-  poly: () => Loose;
-  ProjectManager: () => Loose;
-  projects: () => Record<string, Loose>;
-  ReplicatorManager: () => Loose;
-  resources: () => Record<string, Loose>;
-  RitualManager: () => Loose;
-  SmelterManager: () => Loose;
-  StorageManager: () => Loose;
-  SupplyManager: () => Loose;
-  traitList: () => Loose[];
-  TriggerManager: () => Loose;
+  JobManager: () => PriorityManager;
+  jobs: () => Record<string, ResetJob>;
+  MajorTrait: () => TraitConstructor;
+  MarketManager: () => PriorityManager;
+  MinorTrait: () => TraitConstructor;
+  MinorTraitManager: () => PriorityManager;
+  MutableTraitManager: () => PriorityManager;
+  NaniteManager: () => DisposalManager;
+  ocularPowerData: () => Record<string, { id: string }>;
+  planetBiomes: () => string[];
+  planetTraits: () => string[];
+  poly: () => ResetPoly;
+  ProjectManager: () => PriorityManager;
+  projects: () => Record<string, ResetProject>;
+  ReplicatorManager: () => ReplicatorManager;
+  resources: () => ResetResources;
+  RitualManager: () => RitualManager;
+  SmelterManager: () => SmelterManager;
+  StorageManager: () => PriorityManager;
+  SupplyManager: () => DisposalManager;
+  traitList: () => string[];
+  TriggerManager: () => TriggerManager;
 }
 
 export function createEvolveSettingsResetAdapter(
@@ -87,7 +197,7 @@ export function createEvolveSettingsResetAdapter(
     },
 
     readEvolution(): EvolutionResetContext {
-      return { challengeIds: d.challenges().map((set: Loose) => set[0].id) };
+      return { challengeIds: d.challenges().map((set) => set[0]!.id) };
     },
 
     readLogging(): LoggingResetContext {
@@ -109,10 +219,10 @@ export function createEvolveSettingsResetAdapter(
       const poly = d.poly();
       return {
         tradableResourceIds: Object.values(resources)
-          .filter((r: Loose) => r.is.tradable)
-          .map((r: Loose) => r.id),
+          .filter((r) => r.is.tradable)
+          .map((r) => r.id),
         galaxyOfferResourceIds: poly.galaxyOffers.map(
-          (offer: Loose) => resources[offer.buy.res].id,
+          (offer) => resources[offer.buy.res]!.id,
         ),
       };
     },
@@ -121,8 +231,8 @@ export function createEvolveSettingsResetAdapter(
       const resources = d.resources();
       return {
         storableResourceIds: Object.values(resources)
-          .filter((r: Loose) => r.hasStorage())
-          .map((r: Loose) => r.id),
+          .filter((r) => r.hasStorage())
+          .map((r) => r.id),
         orichalcumId: resources.Orichalcum.id,
         vitreloyId: resources.Vitreloy.id,
         bolognumId: resources.Bolognium.id,
@@ -133,14 +243,14 @@ export function createEvolveSettingsResetAdapter(
       const game = d.game();
       // Legacy builds `new MinorTrait(id)` and keys defaults by its `traitName`, which the
       // constructor sets to the id; so the filtered game.traits ids are the trait names.
-      const traitNames = (Object.entries(game.traits) as [string, Loose][])
+      const traitNames = Object.entries(game.traits)
         .filter(
           ([id, trait]) =>
             trait.type === "minor" || id === "mastery" || id === "fortify",
         )
         .map(([id]) => id);
       const ocularPowerIds = Object.values(d.ocularPowerData()).map(
-        (v: Loose) => v.id,
+        (v) => v.id,
       );
       return { traitNames, ocularPowerIds };
     },
@@ -151,7 +261,7 @@ export function createEvolveSettingsResetAdapter(
       const MajorTrait = d.MajorTrait();
       const GenusTrait = d.GenusTrait();
       const unobtainableTraits = ["xenophobic", "rigid", "soul_eater"];
-      const traits = (Object.entries(game.traits) as [string, Loose][])
+      const traits = Object.entries(game.traits)
         .filter(
           ([id, trait]) =>
             (trait.type === "major" || trait.type === "genus") &&
@@ -182,13 +292,11 @@ export function createEvolveSettingsResetAdapter(
 
     readBuilding(): BuildingResetContext {
       const buildingsMap = d.buildings();
-      const buildings = d
-        .BuildingManager()
-        .priorityList.map((building: Loose) => ({
-          binding: building._vueBinding,
-          switchable: building.isSwitchable(),
-          smart: Boolean(building.is.smart),
-        }));
+      const buildings = d.BuildingManager().priorityList.map((building) => ({
+        binding: building._vueBinding,
+        switchable: building.isSwitchable(),
+        smart: Boolean(building.is.smart),
+      }));
       const bindingByKey: Record<string, string> = {};
       Object.entries(buildingsMap).forEach(
         ([key, building]) => (bindingByKey[key] = building._vueBinding),
@@ -203,7 +311,7 @@ export function createEvolveSettingsResetAdapter(
         ([key, project]) => (idByKey[key] = project.id),
       );
       return {
-        projectIds: Object.values(projectsMap).map((p: Loose) => p.id),
+        projectIds: Object.values(projectsMap).map((p) => p.id),
         idByKey,
       };
     },
@@ -212,10 +320,10 @@ export function createEvolveSettingsResetAdapter(
       const AlchemyManager = d.AlchemyManager();
       return {
         alchemyResourceIds: Object.values(d.resources())
-          .filter((r: Loose) => AlchemyManager.transmuteTier(r) > 0)
-          .map((r: Loose) => r.id),
+          .filter((r) => AlchemyManager.transmuteTier(r) > 0)
+          .map((r) => r.id),
         ritualProductionIds: Object.values(d.RitualManager().Productions).map(
-          (spell: Loose) => spell.id,
+          (spell) => spell.id,
         ),
       };
     },
@@ -228,23 +336,23 @@ export function createEvolveSettingsResetAdapter(
       const factoryResourceIdByKey: Record<string, string> = {};
       Object.entries(d.FactoryManager().Productions).forEach(
         ([key, production]) =>
-          (factoryResourceIdByKey[key] = (production as Loose).resource.id),
+          (factoryResourceIdByKey[key] = production.resource.id),
       );
       const droidResourceIdByKey: Record<string, string> = {};
       Object.entries(d.DroidManager().Productions).forEach(
         ([key, production]) =>
-          (droidResourceIdByKey[key] = (production as Loose).resource.id),
+          (droidResourceIdByKey[key] = production.resource.id),
       );
       return {
         foundryResourceIdByKey,
         smelterFuelIds: Object.values(d.SmelterManager().Fuels).map(
-          (fuel: Loose) => fuel.id,
+          (fuel) => fuel.id,
         ),
         factoryResourceIdByKey,
         droidResourceIdByKey,
         replicatorProductionIds: Object.values(
           d.ReplicatorManager().Productions,
-        ).map((production: Loose) => production.id),
+        ).map((production) => production.id),
       };
     },
 
@@ -253,7 +361,7 @@ export function createEvolveSettingsResetAdapter(
       const EjectManager = d.EjectManager();
       const SupplyManager = d.SupplyManager();
       const NaniteManager = d.NaniteManager();
-      const descriptors = Object.values(resources).map((r: Loose) => {
+      const descriptors = Object.values(resources).map((r) => {
         const supplyConsumable = SupplyManager.isConsumable(r);
         return {
           id: r.id,
@@ -263,7 +371,7 @@ export function createEvolveSettingsResetAdapter(
           supplyConsumable,
           naniteConsumable: NaniteManager.isConsumable(r),
           // supplyIn is only consulted for the supply list; guard non-supply resources.
-          supplyIn: supplyConsumable ? SupplyManager.supplyIn(r.id) : 0,
+          supplyIn: supplyConsumable ? SupplyManager.supplyIn!(r.id) : 0,
         };
       });
       return {
@@ -275,7 +383,7 @@ export function createEvolveSettingsResetAdapter(
     },
   };
 
-  const managerFor = (manager: PriorityManagerKey): Loose => {
+  const managerFor = (manager: PriorityManagerKey): PriorityManager => {
     switch (manager) {
       case "market":
         return d.MarketManager();
@@ -305,7 +413,7 @@ export function createEvolveSettingsResetAdapter(
   const reconstruct = (
     manager: PriorityManagerKey,
     ids: readonly string[],
-  ): Loose[] => {
+  ): unknown[] => {
     switch (manager) {
       case "market":
       case "storage":
@@ -314,19 +422,19 @@ export function createEvolveSettingsResetAdapter(
       case "supply":
       case "nanite": {
         const byId = new Map(
-          Object.values(d.resources()).map((r: Loose) => [r.id, r]),
+          Object.values(d.resources()).map((r) => [r.id, r] as const),
         );
         return ids.map((id) => byId.get(id));
       }
       case "job": {
         const byId = new Map(
-          Object.values(d.jobs()).map((job: Loose) => [job._originalId, job]),
+          Object.values(d.jobs()).map((job) => [job._originalId, job] as const),
         );
         return ids.map((id) => byId.get(id));
       }
       case "project": {
         const byId = new Map(
-          Object.values(d.projects()).map((p: Loose) => [p.id, p]),
+          Object.values(d.projects()).map((p) => [p.id, p] as const),
         );
         return ids.map((id) => byId.get(id));
       }
@@ -339,7 +447,7 @@ export function createEvolveSettingsResetAdapter(
         const MajorTrait = d.MajorTrait();
         const GenusTrait = d.GenusTrait();
         return ids.map((id) =>
-          game.traits[id].type === "major"
+          game.traits[id]!.type === "major"
             ? new MajorTrait(id)
             : new GenusTrait(id),
         );
