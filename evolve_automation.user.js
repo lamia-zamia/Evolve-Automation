@@ -6670,10 +6670,11 @@
         this.mechsPower = 0;
         let mechBay = game.global.portal.mechbay;
         for (let i = 0; i < mechBay.mechs.length; i++) {
+          const storedMech = mechBay.mechs[i];
           let mech = {
             id: i,
-            ...mechBay.mechs[i],
-            ...this.getMechStats(mechBay.mechs[i])
+            ...storedMech,
+            ...this.getMechStats(storedMech)
           };
           if (i < mechBay.active) {
             this.activeMechs.push(mech);

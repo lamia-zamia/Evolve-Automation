@@ -32,6 +32,7 @@
     "src/game/trait-managers.ts",
     "src/game/industry-managers.ts",
     "src/game/magic-managers.ts",
+    "src/game/mech-manager.ts",
     "src/config.ts",
     "src/main.ts"
   ]

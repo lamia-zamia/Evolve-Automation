@@ -494,10 +494,11 @@ export function createMechManager({
 
       let mechBay = game.global.portal.mechbay;
       for (let i = 0; i < mechBay.mechs.length; i++) {
+        const storedMech = mechBay.mechs[i]!;
         let mech = {
           id: i,
-          ...mechBay.mechs[i],
-          ...this.getMechStats(mechBay.mechs[i]),
+          ...storedMech,
+          ...this.getMechStats(storedMech),
         };
         if (i < mechBay.active) {
           this.activeMechs.push(mech);
@@ -531,7 +532,7 @@ export function createMechManager({
         createMechInfo();
       }
 
-      let bestMech = this.bestMech[this.bestSize[0]];
+      let bestMech = this.bestMech[this.bestSize[0]!]!;
       this.mechsPotential =
         this.mechsPower /
           (((buildings.SpireMechBay.count * 25) / this.getMechSpace(bestMech)) *
@@ -544,8 +545,8 @@ export function createMechManager({
       let floor = game.global.portal.spire;
       let terrainFactor =
         mech.size === "small" || mech.size === "medium"
-          ? this.SmallChassisMod[mech.chassis][floor.type]
-          : this.LargeChassisMod[mech.chassis][floor.type];
+          ? this.SmallChassisMod[mech.chassis]![floor.type]!
+          : this.LargeChassisMod[mech.chassis]![floor.type]!;
 
       let rating = poly.terrainRating(
         mech,
@@ -553,16 +554,16 @@ export function createMechManager({
         Object.keys(floor.status),
       );
       for (let effect in floor.status) {
-        rating *= this.StatusMod[effect](mech);
+        rating *= this.StatusMod[effect]!(mech);
       }
       return rating;
     },
 
     getWeaponMod(mech) {
-      let weapons = poly.monsters[game.global.portal.spire.boss].weapon;
+      let weapons = poly.monsters[game.global.portal.spire.boss]!.weapon;
       let rating = 0;
       for (let i = 0; i < mech.hardpoint.length; i++) {
-        rating += poly.weaponPower(mech, weapons[mech.hardpoint[i]]);
+        rating += poly.weaponPower(mech, weapons[mech.hardpoint[i]!]!);
       }
       return rating;
     },
@@ -644,7 +645,7 @@ export function createMechManager({
             : this.bestSize;
 
       for (let i = 0; i < mechPriority.length; i++) {
-        let mechSize = mechPriority[i];
+        let mechSize = mechPriority[i]!;
         let { s, c } = poly.mechCost(mechSize);
         if (
           resources.Soul_Gem.spareQuantity >= s &&
@@ -686,7 +687,7 @@ export function createMechManager({
       let currentBestBodyList: MechDesign[] = [];
 
       let equipmentSlots =
-        this.SizeSlots[size] +
+        this.SizeSlots[size]! +
         (game.global.blood.prepared ? 1 : 0) -
         (settings.mechSpecial === "always" ? 1 : 0);
       let equipOptions =
@@ -738,9 +739,9 @@ export function createMechManager({
 
     updateBestWeapon() {
       let bestMod = 0;
-      let list = poly.monsters[game.global.portal.spire.boss].weapon;
+      let list = poly.monsters[game.global.portal.spire.boss]!.weapon;
       for (let weapon of MechManager.Weapon) {
-        let mod = list[weapon];
+        let mod = list[weapon]!;
         if (mod > bestMod) {
           bestMod = mod;
           this.bestWeapon = [weapon];
@@ -752,14 +753,14 @@ export function createMechManager({
 
     getRandomMech(size) {
       let randomBody =
-        this.bestBody[size][
-          Math.floor(randomSource.nextUnit() * this.bestBody[size].length)
-        ];
+        this.bestBody[size]![
+          Math.floor(randomSource.nextUnit() * this.bestBody[size]!.length)
+        ]!;
       let randomWeapon =
         this.bestWeapon[
           Math.floor(randomSource.nextUnit() * this.bestWeapon.length)
-        ];
-      let weaponsAmount = this.SizeWeapons[size];
+        ]!;
+      let weaponsAmount = this.SizeWeapons[size]!;
       let mech = {
         hardpoint: new Array(weaponsAmount).fill(randomWeapon),
         ...randomBody,
@@ -795,7 +796,7 @@ export function createMechManager({
 
     mechDesc(mech) {
       // (${mech.hardpoint.map(id => game.loc("portal_mech_weapon_" + id)).join(", ")}) [${mech.equip.map(id => game.loc("portal_mech_equip_" + id)).join(", ")}]
-      let rating = mech.power / this.bestMech[mech.size].power;
+      let rating = mech.power / this.bestMech[mech.size]!.power;
       return `${game.loc("portal_mech_size_" + mech.size)} ${game.loc(
         "portal_mech_chassis_" + mech.chassis,
       )} (${Math.round(rating * 100)}%)`;
