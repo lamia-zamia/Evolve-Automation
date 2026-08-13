@@ -266,7 +266,7 @@ import { createMechInfoBrowserAdapter } from "../browser/mech-info.ts";
 import { createResourceToggleEvolveAdapter } from "./economy/resources/resource-toggles.ts";
 import { createResourceToggleBrowserAdapter } from "../browser/resource-toggles.ts";
 import { createTooltipUiControl } from "../../bootstrap/tooltip-ui-control.ts";
-import { createCustomRaceUI } from "../../ui/custom-race-ui.ts";
+import { createCustomRaceUiControl } from "../../bootstrap/custom-race-ui-control.ts";
 import { createSettingsShell } from "../../ui/settings-shell.ts";
 import { createOverrideConditionControls } from "../../ui/override-condition-controls.ts";
 import { createOverrideEditorControls } from "../../ui/override-editor.ts";
@@ -4236,7 +4236,7 @@ export function startEvolveRuntimeComposition(
     buildCustomRacePresetEditor,
     importCustomRaceIntoLab,
     automateLab,
-  } = createCustomRaceUI({
+  } = createCustomRaceUiControl({
     getJQuery: () => $,
     getUiSurface: () => gameUiSurface,
     getSettingsRaw: () => settingsRaw,
@@ -4256,29 +4256,18 @@ export function startEvolveRuntimeComposition(
       getDocument: () => runtimeEnvironment.document,
     }),
     getAlert: () => (message) => runtimeEnvironment.alert(message),
+    testSurface,
+    setTestContext(context) {
+      if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+      if ("settings" in context) settings = context.settings;
+      if ("state" in context) state = context.state;
+      if ("game" in context) game = context.game;
+      if ("poly" in context) poly = context.poly;
+      if ("resources" in context) resources = context.resources;
+      if ("races" in context) races = context.races;
+      if ("win" in context) win = context.win;
+    },
   });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      customRaceUI: {
-        showCustomRaceImportStatus,
-        getCustomRacePreset,
-        refreshCustomRacePresetSelectors,
-        buildCustomRacePresetEditor,
-        importCustomRaceIntoLab,
-        automateLab,
-      },
-      setCustomRaceUITestContext(context) {
-        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-        if ("settings" in context) settings = context.settings;
-        if ("state" in context) state = context.state;
-        if ("game" in context) game = context.game;
-        if ("poly" in context) poly = context.poly;
-        if ("resources" in context) resources = context.resources;
-        if ("races" in context) races = context.races;
-        if ("win" in context) win = context.win;
-      },
-    });
 
   let tickTestControllers;
   const tickControllers = {

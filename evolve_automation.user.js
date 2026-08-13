@@ -46082,6 +46082,15 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     };
   }
 
+  // src/bootstrap/custom-race-ui-control.ts
+  function createCustomRaceUiControl({
+    testSurface,
+    setTestContext,
+    ...dependencies
+  }) {
+    return createCustomRaceUI(dependencies);
+  }
+
   // src/ui/settings-shell.ts
   function createSettingsShell({
     $,
@@ -51113,7 +51122,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       buildCustomRacePresetEditor,
       importCustomRaceIntoLab,
       automateLab
-    } = createCustomRaceUI({
+    } = createCustomRaceUiControl({
       getJQuery: () => $,
       getUiSurface: () => gameUiSurface,
       getSettingsRaw: () => settingsRaw,
@@ -51132,7 +51141,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getVueById: (id) => getVueById(id),
         getDocument: () => runtimeEnvironment.document
       }),
-      getAlert: () => (message) => runtimeEnvironment.alert(message)
+      getAlert: () => (message) => runtimeEnvironment.alert(message),
+      testSurface,
+      setTestContext(context) {
+        "settingsRaw" in context && (settingsRaw = context.settingsRaw), "settings" in context && (settings = context.settings), "state" in context && (state = context.state), "game" in context && (game = context.game), "poly" in context && (poly = context.poly), "resources" in context && (resources = context.resources), "races" in context && (races = context.races), "win" in context && (win = context.win);
+      }
     }), tickTestControllers, tickControllers = {
       updateScriptData,
       updateOverrides,
