@@ -229,6 +229,10 @@ import {
   conflictingTraits,
   replicableResources,
 } from "./runtime-catalogs.ts";
+import {
+  createRuntimeLookupTables,
+  createInitialRuntimeState,
+} from "./runtime-state.ts";
 import { createCombatCivicControls } from "../../bootstrap/combat-civic-controls.ts";
 import { createUserscriptEnvironment } from "../userscript/environment.ts";
 import { createTaxControl } from "../../bootstrap/tax-control.ts";
@@ -1733,68 +1737,20 @@ export function startEvolveRuntimeComposition(
 
   // Static catalogs are imported from runtime-catalogs.ts.
 
-  // Lookup tables, will be filled on init
-  let techIds = {};
-  let buildingIds = {};
-  let arpaIds = {};
-  let jobIds = {};
-  let evolutions = {};
-  let imitations = {};
-  let races = {};
-  let craftablesList = [];
-  let foundryList = [];
-
-  // State variables
-  let state = {
-    forcedUpdate: false,
-    gameTicked: false,
-    scriptTick: 1,
-    multiplierTick: 0,
-    buildingToggles: 0,
-    evolutionAttempts: 0,
-    tabHash: 0,
-
-    lastWasteful: null,
-    lastHighPop: null,
-    lastFlier: null,
-    lastPopulationCount: 0,
-    lastFarmerCount: 0,
-    astroSign: null,
-
-    evoCheckNeeded: true,
-    warnDebug: true,
-    warnPreload: true,
-
-    // We need to keep them separated, as we *don't* want to click on queue targets. Game will handle that. We're just managing resources for them.
-    queuedTargets: [],
-    queuedTargetsAll: [],
-    triggerTargets: [],
-    unlockedTechs: [],
-    unlockedBuildings: [],
-    conflictTargets: [],
-
-    maxSpaceMiners: Number.MAX_SAFE_INTEGER,
-    globalProductionModifier: 1,
-    moneyIncomes: [],
-    moneyMedian: 0,
-    soulGemIncomes: [{ sec: 0, gems: 0 }],
-    soulGemPerHour: 0,
-    soulGemLast: Number.MAX_SAFE_INTEGER,
-
-    knowledgeRequiredByTechs: 0,
-    knowledgeRequiredByBuildTargets: 0,
-    cheapestTechKnowledge: 0,
-
-    goal: "Standard",
-
-    missionBuildingList: [],
-    tooltips: {},
-    filterRegExp: null,
-    evolutionTarget: null,
-
-    whiteholeLastStabilise: 0,
-    whiteholeLastExoticMass: 0,
-  };
+  // Lookup tables are filled during initialization; state is a fresh mutable
+  // session object for each runtime startup.
+  let {
+    techIds,
+    buildingIds,
+    arpaIds,
+    jobIds,
+    evolutions,
+    imitations,
+    races,
+    craftablesList,
+    foundryList,
+  } = createRuntimeLookupTables();
+  let state = createInitialRuntimeState();
 
   // Class instances
   var { resources, jobs, crafter, buildings, linkedBuildings, projects } =

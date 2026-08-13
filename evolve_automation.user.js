@@ -24412,6 +24412,66 @@ If script is allowed to reassign non-empty storage it might waste time producing
     "Quantium"
   ];
 
+  // src/adapters/evolve/runtime-state.ts
+  function createRuntimeLookupTables() {
+    return {
+      techIds: {},
+      buildingIds: {},
+      arpaIds: {},
+      jobIds: {},
+      evolutions: {},
+      imitations: {},
+      races: {},
+      craftablesList: [],
+      foundryList: []
+    };
+  }
+  function createInitialRuntimeState() {
+    return {
+      forcedUpdate: !1,
+      gameTicked: !1,
+      scriptTick: 1,
+      multiplierTick: 0,
+      buildingToggles: 0,
+      evolutionAttempts: 0,
+      tabHash: 0,
+      lastWasteful: null,
+      lastHighPop: null,
+      lastFlier: null,
+      lastPopulationCount: 0,
+      lastFarmerCount: 0,
+      astroSign: null,
+      evoCheckNeeded: !0,
+      warnDebug: !0,
+      warnPreload: !0,
+      // Keep queue targets separate so the game can manage queue clicks while
+      // automation only manages their resource requirements.
+      queuedTargets: [],
+      queuedTargetsAll: [],
+      triggerTargets: [],
+      unlockedTechs: [],
+      unlockedBuildings: [],
+      conflictTargets: [],
+      maxSpaceMiners: Number.MAX_SAFE_INTEGER,
+      globalProductionModifier: 1,
+      moneyIncomes: [],
+      moneyMedian: 0,
+      soulGemIncomes: [{ sec: 0, gems: 0 }],
+      soulGemPerHour: 0,
+      soulGemLast: Number.MAX_SAFE_INTEGER,
+      knowledgeRequiredByTechs: 0,
+      knowledgeRequiredByBuildTargets: 0,
+      cheapestTechKnowledge: 0,
+      goal: "Standard",
+      missionBuildingList: [],
+      tooltips: {},
+      filterRegExp: null,
+      evolutionTarget: null,
+      whiteholeLastStabilise: 0,
+      whiteholeLastExoticMass: 0
+    };
+  }
+
   // src/adapters/browser/government-controls.ts
   function createGovernmentControls(getVueById) {
     function candidateView() {
@@ -50097,48 +50157,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readGameModal: () => gameModal,
       readProjectControls: () => projectControls,
       readResearchControls: () => researchControls
-    }), techIds = {}, buildingIds = {}, arpaIds = {}, jobIds = {}, evolutions = {}, imitations = {}, races = {}, craftablesList = [], foundryList = [], state = {
-      forcedUpdate: !1,
-      gameTicked: !1,
-      scriptTick: 1,
-      multiplierTick: 0,
-      buildingToggles: 0,
-      evolutionAttempts: 0,
-      tabHash: 0,
-      lastWasteful: null,
-      lastHighPop: null,
-      lastFlier: null,
-      lastPopulationCount: 0,
-      lastFarmerCount: 0,
-      astroSign: null,
-      evoCheckNeeded: !0,
-      warnDebug: !0,
-      warnPreload: !0,
-      // We need to keep them separated, as we *don't* want to click on queue targets. Game will handle that. We're just managing resources for them.
-      queuedTargets: [],
-      queuedTargetsAll: [],
-      triggerTargets: [],
-      unlockedTechs: [],
-      unlockedBuildings: [],
-      conflictTargets: [],
-      maxSpaceMiners: Number.MAX_SAFE_INTEGER,
-      globalProductionModifier: 1,
-      moneyIncomes: [],
-      moneyMedian: 0,
-      soulGemIncomes: [{ sec: 0, gems: 0 }],
-      soulGemPerHour: 0,
-      soulGemLast: Number.MAX_SAFE_INTEGER,
-      knowledgeRequiredByTechs: 0,
-      knowledgeRequiredByBuildTargets: 0,
-      cheapestTechKnowledge: 0,
-      goal: "Standard",
-      missionBuildingList: [],
-      tooltips: {},
-      filterRegExp: null,
-      evolutionTarget: null,
-      whiteholeLastStabilise: 0,
-      whiteholeLastExoticMass: 0
-    };
+    }), {
+      techIds,
+      buildingIds,
+      arpaIds,
+      jobIds,
+      evolutions,
+      imitations,
+      races,
+      craftablesList,
+      foundryList
+    } = createRuntimeLookupTables(), state = createInitialRuntimeState();
     var { resources, jobs, crafter, buildings, linkedBuildings, projects } = createEntityCatalogs({
       classes: {
         Action,
