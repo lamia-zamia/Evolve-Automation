@@ -223,13 +223,9 @@ import { createStorageExpansionControl } from "../../bootstrap/storage-expansion
 import { createAlchemyControl } from "../../bootstrap/alchemy-control.ts";
 import { createPylonControl } from "../../bootstrap/pylon-control.ts";
 import { createIndustryAutomationControls } from "../../bootstrap/industry-automation-controls.ts";
-import { createShapeshiftControl } from "../../bootstrap/shapeshift-control.ts";
 import { createEvolutionControls } from "../../bootstrap/evolution-controls.ts";
-import { createWishControl } from "../../bootstrap/wish-control.ts";
-import { createGeneticsControl } from "../../bootstrap/genetics-control.ts";
 import { createMercenaryControl } from "../../bootstrap/mercenary-control.ts";
-import { createPsychicControl } from "../../bootstrap/psychic-control.ts";
-import { createOcularPowerControl } from "../../bootstrap/ocular-power-control.ts";
+import { createTraitAutomationControls } from "../../bootstrap/trait-automation-controls.ts";
 import { createMinorTraitControl } from "../../bootstrap/minor-trait-control.ts";
 import { createTriggerControl } from "../../bootstrap/trigger-control.ts";
 import { createEconomyAutomationControls } from "../../bootstrap/economy-automation-controls.ts";
@@ -3192,29 +3188,6 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { autoShapeshift } = createShapeshiftControl({
-    reader: {
-      getGame: () => game,
-      getSettings: () => settings,
-    },
-    executor: {
-      getGame: () => game,
-      getVueById,
-    },
-  });
-
-  const { autoPsychic } = createPsychicControl({
-    controls: {
-      getVueById,
-      clickSelector: (selector) => $(selector).click(),
-    },
-    adapter: {
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-    },
-  });
-
   const ocularPowerData = [
     { key: "d", id: "disintegration", locParam: ["X"] },
     { key: "p", id: "petrification", locParam: [resources.Stone.name] },
@@ -3223,18 +3196,6 @@ export function startEvolveRuntimeComposition(
     { key: "f", id: "fear", locParam: undefined },
     { key: "c", id: "charm", locParam: ["X"] },
   ];
-
-  const { autoOcularPowers } = createOcularPowerControl({
-    controls: {
-      getVueById,
-      getDocument: () => runtimeEnvironment.document,
-    },
-    adapter: {
-      getGame: () => game,
-      getSettings: () => settings,
-      getPowerData: () => ocularPowerData,
-    },
-  });
 
   const wishData = {
     minor: [
@@ -3258,30 +3219,69 @@ export function startEvolveRuntimeComposition(
       { id: "Greatness", loc: "wish_greatness" },
     ],
   };
-  const { autoWish } = createWishControl({
-    reader: {
-      getGame: () => game,
-      getSettings: () => settings,
+  const {
+    autoShapeshift,
+    autoPsychic,
+    autoOcularPowers,
+    autoWish,
+    autoGenetics,
+  } = createTraitAutomationControls({
+    shapeshift: {
+      reader: {
+        getGame: () => game,
+        getSettings: () => settings,
+      },
+      executor: {
+        getGame: () => game,
+        getVueById,
+      },
     },
-    executor: {
-      getGame: () => game,
+    psychic: {
       controls: {
         getVueById,
         clickSelector: (selector) => $(selector).click(),
       },
+      adapter: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+      },
     },
-  });
-
-  const { autoGenetics } = createGeneticsControl({
-    controls: {
-      getVueById,
-      clickMultipliers,
+    ocularPower: {
+      controls: {
+        getVueById,
+        getDocument: () => runtimeEnvironment.document,
+      },
+      adapter: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getPowerData: () => ocularPowerData,
+      },
     },
-    adapter: {
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getTicksPerSecond: () => ticksPerSecond(),
+    wish: {
+      reader: {
+        getGame: () => game,
+        getSettings: () => settings,
+      },
+      executor: {
+        getGame: () => game,
+        controls: {
+          getVueById,
+          clickSelector: (selector) => $(selector).click(),
+        },
+      },
+    },
+    genetics: {
+      controls: {
+        getVueById,
+        clickMultipliers,
+      },
+      adapter: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getTicksPerSecond: () => ticksPerSecond(),
+      },
     },
   });
 
