@@ -39952,6 +39952,20 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/bootstrap/fleet-mech-controls.ts
+  function createFleetMechControls({
+    outerFleet,
+    fleet,
+    mech
+  }) {
+    let outerFleetControl = createOuterFleetControl(outerFleet), fleetControl = createFleetControl(fleet), mechControl = createMechControl(mech);
+    return Object.freeze({
+      ...outerFleetControl,
+      ...fleetControl,
+      ...mechControl
+    });
+  }
+
   // src/application/ejector-settings.ts
   function createEjectorSettingsIntentHandler({
     writer,
@@ -51003,40 +51017,44 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getMarketManager: () => MarketManager,
       getGovernor: () => getGovernor(),
       shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney()
-    }), { autoFleetOuter } = createOuterFleetControl({
-      getFleetManagerOuter: () => FleetManagerOuter,
-      getWarManager: () => WarManager,
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      traitVal,
-      assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
-      getGameLog: () => GameLog
-    }), { autoFleet } = createFleetControl({
-      getFleetManager: () => FleetManager,
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getGalaxyRegions,
-      guardActive,
-      galaxyAssaultPending
-    }), { autoMech } = createMechControl({
-      adapter: {
-        getMechManager: () => MechManager,
+    }), { autoFleetOuter, autoFleet, autoMech } = createFleetMechControls({
+      outerFleet: {
+        getFleetManagerOuter: () => FleetManagerOuter,
+        getWarManager: () => WarManager,
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        traitVal,
+        assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
+        getGameLog: () => GameLog
+      },
+      fleet: {
+        getFleetManager: () => FleetManager,
         getGame: () => game,
         getSettings: () => settings,
         getResources: () => resources,
         getBuildings: () => buildings,
-        haveTech,
-        haveTask,
-        getGameLog: () => GameLog,
-        getJQuery: () => $,
-        readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
-        debugLog: (message) => runtimeEnvironment.log(message)
+        getGalaxyRegions,
+        guardActive,
+        galaxyAssaultPending
       },
-      readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
-      log: (label, outcome) => runtimeEnvironment.log(label, outcome)
+      mech: {
+        adapter: {
+          getMechManager: () => MechManager,
+          getGame: () => game,
+          getSettings: () => settings,
+          getResources: () => resources,
+          getBuildings: () => buildings,
+          haveTech,
+          haveTask,
+          getGameLog: () => GameLog,
+          getJQuery: () => $,
+          readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
+          debugLog: (message) => runtimeEnvironment.log(message)
+        },
+        readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
+        log: (label, outcome) => runtimeEnvironment.log(label, outcome)
+      }
     }), { updateScriptData, finalizeScriptData } = createScriptDataLifecycleControl({
       getSettings: () => settings,
       getState: () => state,

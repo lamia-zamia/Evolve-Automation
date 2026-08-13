@@ -236,9 +236,7 @@ import { createSpyControl } from "../../bootstrap/spy-control.ts";
 import { createPrestigeControl } from "../../bootstrap/prestige-control.ts";
 import { createJobsControl } from "../../bootstrap/jobs-control.ts";
 import { createProgressionAutomationControls } from "../../bootstrap/progression-automation-controls.ts";
-import { createOuterFleetControl } from "../../bootstrap/fleet-outer-control.ts";
-import { createFleetControl } from "../../bootstrap/fleet-control.ts";
-import { createMechControl } from "../../bootstrap/mech-control.ts";
+import { createFleetMechControls } from "../../bootstrap/fleet-mech-controls.ts";
 import { createEjectorSettingsControl } from "../../bootstrap/settings/ejector-settings-control.ts";
 import { createMarketSettingsControl } from "../../bootstrap/settings/market-settings-control.ts";
 import { createWarSettingsControl } from "../../bootstrap/settings/war-settings-control.ts";
@@ -3586,15 +3584,44 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { autoFleetOuter } = createOuterFleetControl({
-    getFleetManagerOuter: () => FleetManagerOuter,
-    getWarManager: () => WarManager,
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    traitVal,
-    assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
-    getGameLog: () => GameLog,
+  const { autoFleetOuter, autoFleet, autoMech } = createFleetMechControls({
+    outerFleet: {
+      getFleetManagerOuter: () => FleetManagerOuter,
+      getWarManager: () => WarManager,
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      traitVal,
+      assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
+      getGameLog: () => GameLog,
+    },
+    fleet: {
+      getFleetManager: () => FleetManager,
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getGalaxyRegions,
+      guardActive,
+      galaxyAssaultPending,
+    },
+    mech: {
+      adapter: {
+        getMechManager: () => MechManager,
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        haveTech,
+        haveTask,
+        getGameLog: () => GameLog,
+        getJQuery: () => $,
+        readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
+        debugLog: (message) => runtimeEnvironment.log(message),
+      },
+      readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
+      log: (label, outcome) => runtimeEnvironment.log(label, outcome),
+    },
   });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
@@ -3614,35 +3641,6 @@ export function startEvolveRuntimeComposition(
         traitVal = context.traitVal;
       },
     });
-
-  const { autoFleet } = createFleetControl({
-    getFleetManager: () => FleetManager,
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getGalaxyRegions,
-    guardActive,
-    galaxyAssaultPending,
-  });
-
-  const { autoMech } = createMechControl({
-    adapter: {
-      getMechManager: () => MechManager,
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      haveTech,
-      haveTask,
-      getGameLog: () => GameLog,
-      getJQuery: () => $,
-      readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
-      debugLog: (message) => runtimeEnvironment.log(message),
-    },
-    readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
-    log: (label, outcome) => runtimeEnvironment.log(label, outcome),
-  });
 
   const { updateScriptData, finalizeScriptData } =
     createScriptDataLifecycleControl({
