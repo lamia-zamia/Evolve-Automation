@@ -87,7 +87,7 @@ import { createSettingsTransfer } from "../../settings/transfer.ts";
 import { createRuntimeQueries } from "../../game/runtime-queries.ts";
 import { createIndustryManagerControls } from "../../bootstrap/industry-manager-controls.ts";
 import { createEconomyManagerControl } from "../../bootstrap/economy-manager-control.ts";
-import { createForeignAffairsManagers } from "../../game/foreign-affairs-managers.ts";
+import { createForeignAffairsManagerControl } from "../../bootstrap/foreign-affairs-manager-control.ts";
 import { readForeignAchievementGoal } from "./combat/foreign-achievements.ts";
 import { createFleetManagers } from "../../game/fleet-managers.ts";
 import { createMechManager } from "../../game/mech-manager.ts";
@@ -1967,7 +1967,7 @@ export function startEvolveRuntimeComposition(
     }));
 
   let SpyManager, WarManager;
-  ({ SpyManager, WarManager } = createForeignAffairsManagers({
+  ({ SpyManager, WarManager } = createForeignAffairsManagerControl({
     getGame: () => game,
     getSettings: () => settings,
     getState: () => state,

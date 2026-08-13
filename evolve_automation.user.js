@@ -4746,6 +4746,11 @@ Only continue if you trust the source. Injected code:
     } };
   }
 
+  // src/bootstrap/foreign-affairs-manager-control.ts
+  function createForeignAffairsManagerControl(dependencies) {
+    return createForeignAffairsManagers(dependencies);
+  }
+
   // src/domain/combat/foreign-achievements.ts
   function planForeignAchievementGoal(input) {
     if (input.foreignStates.length !== 3) return null;
@@ -50241,7 +50246,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       industryControls
     }));
     let SpyManager, WarManager;
-    ({ SpyManager, WarManager } = createForeignAffairsManagers({
+    ({ SpyManager, WarManager } = createForeignAffairsManagerControl({
       getGame: () => game,
       getSettings: () => settings,
       getState: () => state,
