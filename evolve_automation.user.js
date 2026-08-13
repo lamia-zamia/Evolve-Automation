@@ -44448,6 +44448,116 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
   }
 
+  // src/bootstrap/settings/trait-settings-control.ts
+  function readRecord15(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue15(context, property, fallback) {
+    let value = readRecord15(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function getTestContextReader15(testSurface) {
+    return () => {
+    };
+  }
+  function createTraitSettingsControl({
+    getDocument,
+    getJQuery,
+    getSettingsRaw,
+    setSettingsRaw,
+    getState,
+    getGame,
+    getRaces,
+    getResources,
+    getPoly,
+    getMinorTraitManager,
+    getMutableTraitManager,
+    getOcularPowerData,
+    getWishData,
+    getMutationCostMultipliers,
+    getSorterHelper,
+    buildSettingsSection,
+    addStandardHeading,
+    addSettingsSelect,
+    addSettingsNumber,
+    addSettingsToggle,
+    addTableToggle,
+    addTableInput,
+    buildTableLabel,
+    resetMinorTraitSettings,
+    resetMutableTraitSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader15(testSurface), context = () => getTestContext("traitSettings"), evolveAdapter = createTraitSettingsEvolveAdapter({
+      getSettingsRaw: () => readContextValue15(context(), "settingsRaw", getSettingsRaw()),
+      getState: () => readContextValue15(context(), "state", getState()),
+      getGame: () => readContextValue15(context(), "game", getGame()),
+      getRaces: () => readContextValue15(context(), "races", getRaces()),
+      getResources: () => readContextValue15(context(), "resources", getResources()),
+      getPoly: () => readContextValue15(context(), "poly", getPoly()),
+      getMinorTraitManager: () => readContextValue15(context(), "MinorTraitManager", getMinorTraitManager()),
+      getMutableTraitManager: () => readContextValue15(
+        context(),
+        "MutableTraitManager",
+        getMutableTraitManager()
+      ),
+      getOcularPowerData,
+      getWishData,
+      getMutationCostMultipliers
+    }), intentHandler, browserAdapter = createTraitSettingsBrowserAdapter({
+      getReadModel: () => evolveAdapter.readTraitSettingsReadModel(),
+      getDocument,
+      getJQuery,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getSorterHelper,
+      buildSettingsSection,
+      addStandardHeading,
+      addSettingsSelect,
+      addSettingsNumber,
+      addSettingsToggle,
+      addTableToggle,
+      addTableInput,
+      buildTableLabel
+    });
+    return intentHandler = createTraitSettingsIntentHandler({
+      writer: {
+        resetMinorTraits: () => readContextValue15(
+          context(),
+          "resetMinorTraitSettings",
+          resetMinorTraitSettings
+        )(!0),
+        resetMutableTraits: () => readContextValue15(
+          context(),
+          "resetMutableTraitSettings",
+          resetMutableTraitSettings
+        )(!0),
+        persist: () => readContextValue15(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )(),
+        clearEvolutionTarget: () => evolveAdapter.clearEvolutionTarget(),
+        reorderMinorTraits: (traitIds) => evolveAdapter.reorderMinorTraits(traitIds),
+        reorderMutableTraits: (traitIds) => evolveAdapter.reorderMutableTraits(traitIds),
+        setBoolean: (settingName, value) => evolveAdapter.setBoolean(settingName, value)
+      },
+      renderSettingsContent: () => browserAdapter.updateTraitSettingsContent(),
+      effects: {
+        resetCheckboxes: () => readContextValue15(context(), "resetCheckbox", resetCheckbox)(
+          "autoMinorTrait",
+          "autoMutateTraits",
+          "autoGenetics"
+        )
+      }
+    }), {
+      ...browserAdapter
+    };
+  }
+
   // src/ui/queue-panels.ts
   function remainingCostMultiplier(target, isArpaProject, isMultiSegmented) {
     if (isArpaProject) {
@@ -48153,6 +48263,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       resetEjectorSettings
     } = createSettingsResets({
       getSettingsRaw: () => settingsRaw,
+      setSettingsRaw: (value) => {
+        settingsRaw = value;
+      },
       ...createEvolveSettingsResetAdapter({
         AlchemyManager: () => AlchemyManager,
         biomeList: () => biomeList,
@@ -50937,25 +51050,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getPoly: () => poly,
       getGame: () => game,
       average
-    }), traitSettingsEvolveAdapter = createTraitSettingsEvolveAdapter({
-      getSettingsRaw: () => getTestContext("traitSettings")?.settingsRaw ?? settingsRaw,
-      getState: () => getTestContext("traitSettings")?.state ?? state,
-      getGame: () => getTestContext("traitSettings")?.game ?? game,
-      getRaces: () => getTestContext("traitSettings")?.races ?? races,
-      getResources: () => getTestContext("traitSettings")?.resources ?? resources,
-      getPoly: () => getTestContext("traitSettings")?.poly ?? poly,
-      getMinorTraitManager: () => getTestContext("traitSettings")?.MinorTraitManager ?? MinorTraitManager,
-      getMutableTraitManager: () => getTestContext("traitSettings")?.MutableTraitManager ?? MutableTraitManager,
+    }), traitSettings = createTraitSettingsControl({
+      getSettingsRaw: () => settingsRaw,
+      setSettingsRaw: (value) => {
+        settingsRaw = value;
+      },
+      getState: () => state,
+      getGame: () => game,
+      getRaces: () => races,
+      getResources: () => resources,
+      getPoly: () => poly,
+      getMinorTraitManager: () => MinorTraitManager,
+      getMutableTraitManager: () => MutableTraitManager,
       getOcularPowerData: () => ocularPowerData,
       getWishData: () => wishData,
-      getMutationCostMultipliers: () => mutationCostMultipliers
-    }), traitSettingsIntentHandler, traitSettingsBrowserAdapter = createTraitSettingsBrowserAdapter({
-      getReadModel: () => traitSettingsEvolveAdapter.readTraitSettingsReadModel(),
+      getMutationCostMultipliers: () => mutationCostMultipliers,
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      intents: {
-        handle: (intent) => traitSettingsIntentHandler.handle(intent)
-      },
       getSorterHelper: () => sorterHelper,
       buildSettingsSection,
       addStandardHeading,
@@ -50964,33 +51075,18 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addSettingsToggle,
       addTableToggle,
       addTableInput,
-      buildTableLabel
-    });
-    traitSettingsIntentHandler = createTraitSettingsIntentHandler({
-      writer: {
-        resetMinorTraits: () => (getTestContext("traitSettings")?.resetMinorTraitSettings ?? resetMinorTraitSettings)(!0),
-        resetMutableTraits: () => (getTestContext("traitSettings")?.resetMutableTraitSettings ?? resetMutableTraitSettings)(!0),
-        persist: () => (getTestContext("traitSettings")?.updateSettingsFromState ?? updateSettingsFromState)(),
-        clearEvolutionTarget: () => traitSettingsEvolveAdapter.clearEvolutionTarget(),
-        reorderMinorTraits: (traitIds) => traitSettingsEvolveAdapter.reorderMinorTraits(traitIds),
-        reorderMutableTraits: (traitIds) => traitSettingsEvolveAdapter.reorderMutableTraits(traitIds),
-        setBoolean: (settingName, value) => traitSettingsEvolveAdapter.setBoolean(settingName, value)
-      },
-      renderSettingsContent: () => traitSettingsBrowserAdapter.updateTraitSettingsContent(),
-      effects: {
-        resetCheckboxes: () => (getTestContext("traitSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoMinorTrait",
-          "autoMutateTraits",
-          "autoGenetics"
-        )
-      }
-    });
-    let {
+      buildTableLabel,
+      resetMinorTraitSettings: (...args) => resetMinorTraitSettings(...args),
+      resetMutableTraitSettings: (...args) => resetMutableTraitSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface
+    }), {
       buildTraitSettings,
       updateImitateWarning,
       updateTraitSettingsContent,
       makeToggleSwitchesMutuallyExclusive
-    } = traitSettingsBrowserAdapter, uiRefreshActions = {
+    } = traitSettings, uiRefreshActions = {
       createOptionsModal,
       updateOptionsUI,
       updatePrestigeInTopBar,
