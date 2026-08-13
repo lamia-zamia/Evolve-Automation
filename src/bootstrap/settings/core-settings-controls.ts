@@ -1,30 +1,25 @@
+import { createChallengeHelperSettingsIntentHandler } from "../../application/challenge-helper-settings.ts";
+import { createAchievementGuardSettingsIntentHandler } from "../../application/achievement-guard-settings.ts";
+import { createAuthoritySettingsIntentHandler } from "../../application/authority-settings.ts";
+import { createGeneralSettingsIntentHandler } from "../../application/general-settings.ts";
+import { createLoggingSettingsIntentHandler } from "../../application/logging-settings.ts";
 import { createProjectSettingsIntentHandler } from "../../application/project-settings.ts";
 import { createStorageSettingsIntentHandler } from "../../application/storage-settings.ts";
 import { createMagicSettingsIntentHandler } from "../../application/magic-settings.ts";
 import { createJobSettingsIntentHandler } from "../../application/job-settings.ts";
 import { createWeightingSettingsIntentHandler } from "../../application/weighting-settings.ts";
-import { createGeneralSettingsIntentHandler } from "../../application/general-settings.ts";
-import { createLoggingSettingsIntentHandler } from "../../application/logging-settings.ts";
 import {
-  createProjectSettingsBrowserAdapter,
-  type ProjectSettingsBrowserActions,
-} from "../../adapters/browser/project-settings.ts";
+  createChallengeHelperSettingsBrowserAdapter,
+  type ChallengeHelperSettingsBrowserActions,
+} from "../../adapters/browser/challenge-helper-settings.ts";
 import {
-  createStorageSettingsBrowserAdapter,
-  type StorageSettingsBrowserActions,
-} from "../../adapters/browser/storage-settings.ts";
+  createAchievementGuardSettingsBrowserAdapter,
+  type AchievementGuardSettingsBrowserActions,
+} from "../../adapters/browser/achievement-guard-settings.ts";
 import {
-  createMagicSettingsBrowserAdapter,
-  type MagicSettingsBrowserActions,
-} from "../../adapters/browser/magic-settings.ts";
-import {
-  createJobSettingsBrowserAdapter,
-  type JobSettingsBrowserActions,
-} from "../../adapters/browser/job-settings.ts";
-import {
-  createWeightingSettingsBrowserAdapter,
-  type WeightingSettingsBrowserActions,
-} from "../../adapters/browser/weighting-settings.ts";
+  createAuthoritySettingsBrowserAdapter,
+  type AuthoritySettingsBrowserActions,
+} from "../../adapters/browser/authority-settings.ts";
 import {
   createGeneralSettingsBrowserAdapter,
   type GeneralSettingsBrowserActions,
@@ -33,11 +28,31 @@ import {
   createLoggingSettingsBrowserAdapter,
   type LoggingSettingsBrowserActions,
 } from "../../adapters/browser/logging-settings.ts";
-import { createProjectSettingsEvolveAdapter } from "../../adapters/evolve/progression/research/project-settings.ts";
-import { createStorageSettingsEvolveAdapter } from "../../adapters/evolve/economy/storage/storage-settings.ts";
-import { createMagicSettingsEvolveAdapter } from "../../adapters/evolve/economy/production/magic-settings.ts";
-import { createJobSettingsEvolveAdapter } from "../../adapters/evolve/civic/job-settings.ts";
 import { createLoggingSettingsEvolveAdapter } from "../../adapters/evolve/logging-settings.ts";
+import {
+  createProjectSettingsBrowserAdapter,
+  type ProjectSettingsBrowserActions,
+} from "../../adapters/browser/project-settings.ts";
+import { createProjectSettingsEvolveAdapter } from "../../adapters/evolve/progression/research/project-settings.ts";
+import {
+  createStorageSettingsBrowserAdapter,
+  type StorageSettingsBrowserActions,
+} from "../../adapters/browser/storage-settings.ts";
+import { createStorageSettingsEvolveAdapter } from "../../adapters/evolve/economy/storage/storage-settings.ts";
+import {
+  createMagicSettingsBrowserAdapter,
+  type MagicSettingsBrowserActions,
+} from "../../adapters/browser/magic-settings.ts";
+import { createMagicSettingsEvolveAdapter } from "../../adapters/evolve/economy/production/magic-settings.ts";
+import {
+  createJobSettingsBrowserAdapter,
+  type JobSettingsBrowserActions,
+} from "../../adapters/browser/job-settings.ts";
+import { createJobSettingsEvolveAdapter } from "../../adapters/evolve/civic/job-settings.ts";
+import {
+  createWeightingSettingsBrowserAdapter,
+  type WeightingSettingsBrowserActions,
+} from "../../adapters/browser/weighting-settings.ts";
 import type { StorageSettingsIntentHandler } from "../../ports/storage-settings.ts";
 import type { ProjectSettingsIntentHandler } from "../../ports/project-settings.ts";
 import type { MagicSettingsIntentHandler } from "../../ports/magic-settings.ts";
@@ -76,6 +91,15 @@ type GeneralBrowserDependencies = Parameters<
 >[0];
 type LoggingBrowserDependencies = Parameters<
   typeof createLoggingSettingsBrowserAdapter
+>[0];
+type AchievementGuardBrowserDependencies = Parameters<
+  typeof createAchievementGuardSettingsBrowserAdapter
+>[0];
+type ChallengeHelperBrowserDependencies = Parameters<
+  typeof createChallengeHelperSettingsBrowserAdapter
+>[0];
+type AuthorityBrowserDependencies = Parameters<
+  typeof createAuthoritySettingsBrowserAdapter
 >[0];
 type RuntimeFunction = (...args: unknown[]) => unknown;
 
@@ -609,6 +633,169 @@ export function createLoggingSettingsControl({
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("loggingSettings", {
       loggingSettings: browserAdapter,
+    });
+  return browserAdapter;
+}
+
+interface AchievementGuardSettingsControlDependencies {
+  readonly getDocument: AchievementGuardBrowserDependencies["getDocument"];
+  readonly getJQuery: AchievementGuardBrowserDependencies["getJQuery"];
+  readonly actions: AchievementGuardSettingsBrowserActions;
+  readonly resetAchievementGuardSettings: RuntimeFunction;
+  readonly persistSettings: RuntimeFunction;
+  readonly testSurface: RuntimeTestSurface | undefined;
+}
+
+export function createAchievementGuardSettingsControl({
+  getDocument,
+  getJQuery,
+  actions,
+  resetAchievementGuardSettings,
+  persistSettings,
+  testSurface,
+}: AchievementGuardSettingsControlDependencies) {
+  const getTestContext = getTestContextReader(testSurface);
+  const context = () => getTestContext("achievementGuardSettings");
+  let intentHandler: ReturnType<
+    typeof createAchievementGuardSettingsIntentHandler
+  >;
+  const browserAdapter = createAchievementGuardSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents: {
+      handle: (intent) => intentHandler.handle(intent),
+    },
+    getActions: () => readContextActions(context(), actions),
+  });
+  intentHandler = createAchievementGuardSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        readContextValue(
+          context(),
+          "resetAchievementGuardSettings",
+          resetAchievementGuardSettings,
+        )(true),
+      persist: () =>
+        readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings,
+        )(),
+    },
+    renderSettingsContent: () =>
+      browserAdapter.updateAchievementGuardSettingsContent(),
+  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("achievementGuardSettings", {
+      achievementGuardSettings: browserAdapter,
+    });
+  return browserAdapter;
+}
+
+interface ChallengeHelperSettingsControlDependencies {
+  readonly getDocument: ChallengeHelperBrowserDependencies["getDocument"];
+  readonly getJQuery: ChallengeHelperBrowserDependencies["getJQuery"];
+  readonly actions: ChallengeHelperSettingsBrowserActions;
+  readonly resetChallengeHelperSettings: RuntimeFunction;
+  readonly persistSettings: RuntimeFunction;
+  readonly testSurface: RuntimeTestSurface | undefined;
+}
+
+export function createChallengeHelperSettingsControl({
+  getDocument,
+  getJQuery,
+  actions,
+  resetChallengeHelperSettings,
+  persistSettings,
+  testSurface,
+}: ChallengeHelperSettingsControlDependencies) {
+  const getTestContext = getTestContextReader(testSurface);
+  const context = () => getTestContext("challengeHelperSettings");
+  let intentHandler: ReturnType<
+    typeof createChallengeHelperSettingsIntentHandler
+  >;
+  const browserAdapter = createChallengeHelperSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents: {
+      handle: (intent) => intentHandler.handle(intent),
+    },
+    getActions: () => readContextActions(context(), actions),
+  });
+  intentHandler = createChallengeHelperSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        readContextValue(
+          context(),
+          "resetChallengeHelperSettings",
+          resetChallengeHelperSettings,
+        )(true),
+      persist: () =>
+        readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings,
+        )(),
+    },
+    renderSettingsContent: () =>
+      browserAdapter.updateChallengeHelperSettingsContent(),
+  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("challengeHelperSettings", {
+      challengeHelperSettings: browserAdapter,
+    });
+  return browserAdapter;
+}
+
+interface AuthoritySettingsControlDependencies {
+  readonly getDocument: AuthorityBrowserDependencies["getDocument"];
+  readonly getJQuery: AuthorityBrowserDependencies["getJQuery"];
+  readonly actions: AuthoritySettingsBrowserActions;
+  readonly resetAuthoritySettings: RuntimeFunction;
+  readonly persistSettings: RuntimeFunction;
+  readonly testSurface: RuntimeTestSurface | undefined;
+}
+
+export function createAuthoritySettingsControl({
+  getDocument,
+  getJQuery,
+  actions,
+  resetAuthoritySettings,
+  persistSettings,
+  testSurface,
+}: AuthoritySettingsControlDependencies) {
+  const getTestContext = getTestContextReader(testSurface);
+  const context = () => getTestContext("authoritySettings");
+  let intentHandler: ReturnType<typeof createAuthoritySettingsIntentHandler>;
+  const browserAdapter = createAuthoritySettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents: {
+      handle: (intent) => intentHandler.handle(intent),
+    },
+    getActions: () => readContextActions(context(), actions),
+  });
+  intentHandler = createAuthoritySettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        readContextValue(
+          context(),
+          "resetAuthoritySettings",
+          resetAuthoritySettings,
+        )(true),
+      persist: () =>
+        readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings,
+        )(),
+    },
+    renderSettingsContent: () =>
+      browserAdapter.updateAuthoritySettingsContent(),
+  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("authoritySettings", {
+      authoritySettings: browserAdapter,
     });
   return browserAdapter;
 }

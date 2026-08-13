@@ -16799,6 +16799,166 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/application/achievement-guard-settings.ts
+  function createAchievementGuardSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-achievement-guard-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/authority-settings.ts
+  function createAuthoritySettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-authority-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/general-settings.ts
+  function createGeneralSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-general-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/logging-settings.ts
+  function createLoggingSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-logging-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(intent.secondaryPrefix), effects.buildFilterRegExp();
+            return;
+          case "set-log-filter":
+            writer.setLogFilter(intent.value), effects.buildFilterRegExp(), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/application/project-settings.ts
+  function createProjectSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-project-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckbox();
+            return;
+          case "reorder-projects":
+            writer.reorderProjects(intent.projectIds), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/application/storage-settings.ts
+  function createStorageSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-storage-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckbox(), effects.removeStorageToggles();
+            return;
+          case "reorder-storage-resources":
+            writer.reorderResources(intent.resourceIds), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/application/magic-settings.ts
+  function createMagicSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-magic-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/job-settings.ts
+  function createJobSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-job-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
+            return;
+          case "reset-job-priorities":
+            writer.resetPriorities(), writer.persist(), renderSettingsContent();
+            return;
+          case "reorder-jobs":
+            writer.reorderJobs(intent.jobIds), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/application/weighting-settings.ts
+  function createWeightingSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-weighting-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
+          return;
+        }
+      }
+    });
+  }
+
   // src/domain/progression/prestige/challenge-helper-settings.ts
   var challengeHelperSettingsReadModel = Object.freeze({
     sectionId: "challengeHelper",
@@ -16880,21 +17040,6 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({
       buildChallengeHelperSettings,
       updateChallengeHelperSettingsContent
-    });
-  }
-
-  // src/application/achievement-guard-settings.ts
-  function createAchievementGuardSettingsIntentHandler({
-    writer,
-    renderSettingsContent
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        if (intent.type === "reset-achievement-guard-settings") {
-          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
-          return;
-        }
-      }
     });
   }
 
@@ -17027,21 +17172,6 @@ Only continue if you trust the source. Injected code:
     });
   }
 
-  // src/application/authority-settings.ts
-  function createAuthoritySettingsIntentHandler({
-    writer,
-    renderSettingsContent
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        if (intent.type === "reset-authority-settings") {
-          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
-          return;
-        }
-      }
-    });
-  }
-
   // src/domain/civic/authority-settings.ts
   var authoritySettingsReadModel = Object.freeze({
     sectionId: "authority",
@@ -17130,6 +17260,1809 @@ Only continue if you trust the source. Injected code:
       buildAuthoritySettings,
       updateAuthoritySettingsContent
     });
+  }
+
+  // src/domain/general-settings.ts
+  var priorityOptions = Object.freeze([
+    Object.freeze({ val: "ignore", label: "Ignore", hint: "Does nothing" }),
+    Object.freeze({
+      val: "save",
+      label: "Save",
+      hint: "Missing resources preserved from using."
+    }),
+    Object.freeze({
+      val: "req",
+      label: "Request",
+      hint: "Production and buying of missing resources will be prioritized."
+    }),
+    Object.freeze({
+      val: "savereq",
+      label: "Request & Save",
+      hint: "Missing resources will be prioritized, and preserved from using."
+    })
+  ]), generalSettingsReadModel = Object.freeze({
+    sectionId: "general",
+    sectionName: "General",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "number",
+        settingName: "tickRate",
+        label: "Script tick rate",
+        hint: "Script runs once per this amount of game ticks. Game tick every 250ms, thus with rate 4 script will run once per second. You can set it lower to make script act faster, or increase it if you have performance issues. Tick rate should be a positive integer."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "tickSchedule",
+        label: "Schedule script ticks",
+        hint: "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently."
+      }),
+      Object.freeze({ kind: "header", label: "Prioritization" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "useDemanded",
+        label: "Allow using prioritized resources for crafting",
+        hint: "When disabled script won't make craftables out of prioritized resources in foundry and factory."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "researchRequest",
+        label: "Prioritize resources for Pre-MAD researches",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "researchRequestSpace",
+        label: "Prioritize resources for Space+ researches",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "missionRequest",
+        label: "Prioritize resources for missions",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable missions. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeQueue",
+        label: "Queue",
+        hint: "Alter script behaviour to speed up queued items, prioritizing missing resources.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeTriggers",
+        label: "Triggers",
+        hint: "Alter script behaviour to speed up triggers, prioritizing missing resources.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeUnify",
+        label: "Unification",
+        hint: "Alter script behaviour to speed up unification, prioritizing money required to purchase foreign cities.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeOuterFleet",
+        label: "Ship Yard Blueprint (The True Path)",
+        hint: "Alter script behaviour to assist fleet building, prioritizing resources required for current design of ship.",
+        options: priorityOptions
+      }),
+      Object.freeze({ kind: "header", label: "Auto clicker" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildingAlwaysClick",
+        label: "Always autoclick resources",
+        hint: "By default script will click only during early stage of autoBuild, to bootstrap production. With this toggled on it will continue clicking forever"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "buildingClickPerTick",
+        label: "Maximum clicks per tick",
+        hint: "Number of clicks performed at once, each script tick. Will not ever click more than needed to fill storage."
+      }),
+      Object.freeze({ kind: "header", label: "Misc" }),
+      Object.freeze({
+        kind: "string",
+        settingName: "scriptSettingsExportFilename",
+        label: "Export Filename",
+        hint: "Configures the filename used when using the 'Script Settings as File' button. This is useful if you keep multiple different profiles around."
+      })
+    ])
+  });
+  function getGeneralSettingsReadModel() {
+    return generalSettingsReadModel;
+  }
+
+  // src/adapters/browser/general-settings.ts
+  function createGeneralSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    let readModel = getGeneralSettingsReadModel();
+    function renderControl2(node, control, actions) {
+      switch (control.kind) {
+        case "header":
+          actions.addSettingsHeader1(node, control.label);
+          return;
+        case "number":
+          actions.addSettingsNumber(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "select":
+          actions.addSettingsSelect(
+            node,
+            control.settingName,
+            control.label,
+            control.hint,
+            control.options
+          );
+          return;
+        case "string":
+          actions.addSettingsString(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "toggle":
+          actions.addSettingsToggle(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+      }
+    }
+    function buildGeneralSettings() {
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-general-settings" });
+        },
+        updateGeneralSettingsContent
+      );
+    }
+    function updateGeneralSettingsContent() {
+      let actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (let control of readModel.controls)
+            renderControl2(currentNode, control, actions);
+        }
+      );
+    }
+    return Object.freeze({
+      buildGeneralSettings,
+      updateGeneralSettingsContent
+    });
+  }
+
+  // src/domain/logging-settings.ts
+  function freezeMessageType(messageType) {
+    return Object.freeze({ ...messageType });
+  }
+  function createLoggingSettingsReadModel({
+    messageTypes,
+    locale,
+    logFilter
+  }) {
+    let frozenMessageTypes = Object.freeze(messageTypes.map(freezeMessageType)), controls4 = [
+      Object.freeze({ kind: "header", label: "Script Messages" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "logEnabled",
+        label: "Enable logging",
+        hint: "Master switch to enable logging of script actions in the game message queue"
+      })
+    ];
+    for (let { id, label } of frozenMessageTypes)
+      controls4.push(
+        Object.freeze({
+          kind: "toggle",
+          settingName: "log_" + id,
+          label,
+          hint: `If logging is enabled then logs ${label} actions`
+        })
+      );
+    return controls4.push(
+      Object.freeze({
+        kind: "string",
+        settingName: "log_prestige_format",
+        label: "Prestige Log Format",
+        hint: "Available placeholders: {resetType}, {species}, {timestamp} (in game days). Use {eval: XXX } to log custom information"
+      }),
+      Object.freeze({ kind: "header", label: "Game Messages" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "hellTurnOffLogMessages",
+        label: "Turn off patrol and surveyor log messages",
+        hint: "Automatically turns off the hell patrol and surveyor log messages"
+      })
+    ), Object.freeze({
+      sectionId: "logging",
+      sectionName: "Logging",
+      locale,
+      logFilter,
+      controls: Object.freeze(controls4)
+    });
+  }
+
+  // src/adapters/browser/logging-settings.ts
+  function createLoggingSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function renderControl2(node, control, actions) {
+      switch (control.kind) {
+        case "header":
+          actions.addSettingsHeader1(node, control.label);
+          return;
+        case "string":
+          actions.addSettingsString(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "toggle":
+          actions.addSettingsToggle(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+      }
+    }
+    function buildLoggingSettings(parentNode, secondaryPrefix) {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection2(
+        parentNode,
+        secondaryPrefix,
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({
+            type: "reset-logging-settings",
+            secondaryPrefix
+          });
+        },
+        updateLoggingSettingsContent
+      );
+    }
+    function updateLoggingSettingsContent(secondaryPrefix) {
+      let readModel = getReadModel(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${secondaryPrefix}${readModel.sectionId}`
+        },
+        (currentNode) => {
+          renderLoggingContent(currentNode, readModel, actions);
+        }
+      );
+    }
+    function renderLoggingContent(currentNode, readModel, actions) {
+      for (let control of readModel.controls)
+        renderControl2(currentNode, control, actions);
+      let stringsUrl = `strings/strings${readModel.locale === "en-US" ? "" : "." + readModel.locale}.json`;
+      currentNode.append(`
+          <div>
+            <span>List of message IDs to filter, all game messages can be found <a href="${stringsUrl}" target="_blank">here</a>.</span><br>
+            <textarea id="script_logFilter" class="textarea" style="margin-top: 4px;">${readModel.logFilter}</textarea>
+          </div>`), getJQuery()("#script_logFilter").on("change", function() {
+        intents.handle({ type: "set-log-filter", value: this.value }), this.value = getReadModel().logFilter;
+      });
+    }
+    return Object.freeze({
+      buildLoggingSettings,
+      updateLoggingSettingsContent
+    });
+  }
+
+  // src/adapters/evolve/logging-settings.ts
+  function createLoggingSettingsEvolveAdapter({
+    getGame,
+    getGameLog,
+    getSettingsRaw
+  }) {
+    function readLoggingSettingsReadModel() {
+      let game = requireNonArrayRecord(getGame(), "game"), global = requireNonArrayRecord(game.global, "game.global"), gameSettings = requireNonArrayRecord(
+        global.settings,
+        "game.global.settings"
+      ), locale = requireString(
+        gameSettings.locale,
+        "game.global.settings.locale"
+      ), gameLog = requireNonArrayRecord(getGameLog(), "GameLog"), rawTypes = requireNonArrayRecord(gameLog.Types, "GameLog.Types"), messageTypes = [];
+      for (let [id, rawLabel] of Object.entries(rawTypes))
+        messageTypes.push({
+          id,
+          label: requireString(rawLabel, `GameLog.Types.${id}`)
+        });
+      let settingsRaw = requireNonArrayRecord(getSettingsRaw(), "settingsRaw"), logFilter = requireString(
+        settingsRaw.logFilter,
+        "settingsRaw.logFilter"
+      );
+      return createLoggingSettingsReadModel({
+        messageTypes,
+        locale,
+        logFilter
+      });
+    }
+    return Object.freeze({ readLoggingSettingsReadModel });
+  }
+
+  // src/domain/progression/research/project-settings.ts
+  function freezeRow(row) {
+    return Object.freeze({ ...row });
+  }
+  function createProjectSettingsReadModel(rows) {
+    return Object.freeze({
+      sectionId: "project",
+      sectionName: "A.R.P.A.",
+      rows: Object.freeze(rows.map(freezeRow))
+    });
+  }
+
+  // src/adapters/browser/project-settings.ts
+  function createProjectSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildProjectSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-project-settings" }),
+        updateProjectSettingsContent
+      );
+    }
+    function updateProjectSettingsContent() {
+      let readModel = getReadModel(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderProjectContent(currentNode, readModel, actions);
+        }
+      );
+    }
+    function renderProjectContent(currentNode, readModel, actions) {
+      actions.addSettingsToggle(
+        currentNode,
+        "arpaScaleWeighting",
+        "Scale weighting with progress",
+        "Projects weighting scales  with current progress, making script more eager to spend resources on finishing nearly constructed projects."
+      ), actions.addSettingsNumber(
+        currentNode,
+        "arpaStep",
+        "Preferred progress step",
+        "Projects will be weighted and build in this steps. Increasing number can speed up constructing. Step will be adjusted down when preferred step above remaining amount, or surpass storage caps. Weightings below will be multiplied by current step. Projects builded by triggers will always have maximum possible step."
+      ), currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:25%">Project</th>
+              <th class="has-text-warning" style="width:25%">Auto Build</th>
+              <th class="has-text-warning" style="width:25%">Max Build</th>
+              <th class="has-text-warning" style="width:25%">Weighting</th>
+            </tr>
+            <tbody id="script_projectTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = getJQuery()("#script_projectTableBody"), newTableBodyText = "";
+      for (let row of readModel.rows)
+        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_${row.id}" style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td></tr>`;
+      tableBodyNode.append(getJQuery()(newTableBodyText));
+      for (let row of readModel.rows) {
+        let projectElement = getJQuery()(`#script_${row.id}`);
+        projectElement.append(actions.buildTableLabel(row.label)), projectElement = projectElement.next(), actions.addTableToggle(projectElement, row.enabledSettingName), projectElement = projectElement.next(), actions.addTableInput(projectElement, row.maximumSettingName), projectElement = projectElement.next(), actions.addTableInput(projectElement, row.weightingSettingName);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: actions.getSorterHelper(),
+        update: () => {
+          let projectIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          intents.handle({ type: "reorder-projects", projectIds });
+        }
+      });
+    }
+    return Object.freeze({
+      buildProjectSettings,
+      updateProjectSettingsContent
+    });
+  }
+
+  // src/adapters/evolve/progression/research/project-settings.ts
+  function readPriorityList(manager) {
+    let priorityList = manager.priorityList;
+    if (!Array.isArray(priorityList))
+      throw new TypeError("ProjectManager.priorityList must be an array");
+    return priorityList.map(
+      (project, index) => requireRecord(project, `ProjectManager.priorityList[${index}]`)
+    );
+  }
+  function createProjectSettingsEvolveAdapter({
+    getProjectManager,
+    getSettingsRaw
+  }) {
+    function readProjectSettingsReadModel() {
+      let manager = requireRecord(getProjectManager(), "ProjectManager"), rows = readPriorityList(manager).map(
+        (project, index) => {
+          let id = requireString(
+            project.id,
+            `ProjectManager.priorityList[${index}].id`
+          );
+          return {
+            id,
+            label: requireString(
+              project.name,
+              `ProjectManager.priorityList[${index}].name`
+            ),
+            enabledSettingName: `arpa_${id}`,
+            maximumSettingName: `arpa_m_${id}`,
+            weightingSettingName: `arpa_w_${id}`
+          };
+        }
+      );
+      return createProjectSettingsReadModel(rows);
+    }
+    function reorderProjects(projectIds) {
+      let manager = requireRecord(getProjectManager(), "ProjectManager"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), sortByPriority = requireFunction(
+        manager.sortByPriority,
+        "ProjectManager.sortByPriority"
+      );
+      projectIds.forEach((projectId, index) => {
+        let id = requireString(projectId, `projectIds[${index}]`);
+        settingsRaw[`arpa_p_${id}`] = index;
+      }), Reflect.apply(sortByPriority, manager, []);
+    }
+    return Object.freeze({ readProjectSettingsReadModel, reorderProjects });
+  }
+
+  // src/domain/economy/storage/storage-settings.ts
+  function freezeRow2(row) {
+    return Object.freeze({ ...row });
+  }
+  function createStorageSettingsReadModel(rows) {
+    return Object.freeze({
+      sectionId: "storage",
+      sectionName: "Storage",
+      controls: Object.freeze([
+        Object.freeze({
+          settingName: "storageLimitPreMad",
+          label: "Limit Pre-MAD Storage",
+          hint: "Saves resources and shortens run time by limiting storage pre-MAD"
+        }),
+        Object.freeze({
+          settingName: "storageSafeReassign",
+          label: "Reassign only empty storages",
+          hint: "Wait until storage is empty before reassigning containers to another resource, to prevent overflowing and wasting resources"
+        }),
+        Object.freeze({
+          settingName: "storageAssignExtra",
+          label: "Assign buffer storage",
+          hint: "Assigns 3% extra strorage above required amounts, ensuring that required quantity will be actually reached, even if other part of script trying to sell\\eject\\switch production, etc. When manual trades enabled applies additional adjust derieved from selling threshold."
+        }),
+        Object.freeze({
+          settingName: "storageAssignPart",
+          label: "Assign partial storage",
+          hint: `When enabled script will be allowed to assign some crates and containers even if resulting storage space won't be enough to build new building. It allows to pre-build stock of resources for further use, but can be potentially dungerous.
+If script not allowed to reassign non-empty storage it can lock storage in position when stored resources can't be used.
+If script is allowed to reassign non-empty storage it might waste time producing materials which might need to be disposed.`
+        })
+      ]),
+      rows: Object.freeze(rows.map(freezeRow2))
+    });
+  }
+
+  // src/adapters/browser/storage-settings.ts
+  function createStorageSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildStorageSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-storage-settings" }),
+        updateStorageSettingsContent
+      );
+    }
+    function updateStorageSettingsContent() {
+      let readModel = getReadModel(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderStorageContent(currentNode, readModel, actions);
+        }
+      );
+    }
+    function renderStorageContent(currentNode, readModel, actions) {
+      for (let control of readModel.controls)
+        renderControl2(currentNode, control, actions);
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Resource</th>
+              <th class="has-text-warning" style="width:15%">Enabled</th>
+              <th class="has-text-warning" style="width:15%">Store Overflow</th>
+              <th class="has-text-warning" style="width:15%">Min Storage</th>
+              <th class="has-text-warning" style="width:15%">Max Storage</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_storageTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = getJQuery()("#script_storageTableBody"), newTableBodyText = "";
+      for (let row of readModel.rows)
+        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_storage_${row.id}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      tableBodyNode.append(getJQuery()(newTableBodyText));
+      for (let row of readModel.rows) {
+        let storageElement = getJQuery()(`#script_storage_${row.id}`);
+        storageElement.append(actions.buildTableLabel(row.label)), storageElement = storageElement.next(), actions.addTableToggle(storageElement, row.enabledSettingName), storageElement = storageElement.next(), actions.addTableToggle(storageElement, row.overflowSettingName), storageElement = storageElement.next(), actions.addTableInput(storageElement, row.minimumSettingName), storageElement = storageElement.next(), actions.addTableInput(storageElement, row.maximumSettingName);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: actions.getSorterHelper(),
+        update: () => {
+          let resourceIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          intents.handle({ type: "reorder-storage-resources", resourceIds });
+        }
+      });
+    }
+    function renderControl2(node, control, actions) {
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    return Object.freeze({
+      buildStorageSettings,
+      updateStorageSettingsContent
+    });
+  }
+
+  // src/adapters/evolve/economy/storage/storage-settings.ts
+  function readPriorityList2(manager) {
+    let priorityList = manager.priorityList;
+    if (!Array.isArray(priorityList))
+      throw new TypeError("StorageManager.priorityList must be an array");
+    return priorityList.map(
+      (resource2, index) => requireRecord(resource2, `StorageManager.priorityList[${index}]`)
+    );
+  }
+  function createStorageSettingsEvolveAdapter({
+    getStorageManager,
+    getSettingsRaw
+  }) {
+    function readStorageSettingsReadModel() {
+      let manager = requireRecord(getStorageManager(), "StorageManager"), rows = readPriorityList2(manager).map(
+        (resource2, index) => {
+          let id = requireString(
+            resource2.id,
+            `StorageManager.priorityList[${index}].id`
+          );
+          return {
+            id,
+            label: requireString(
+              resource2.name,
+              `StorageManager.priorityList[${index}].name`
+            ),
+            enabledSettingName: `res_storage${id}`,
+            overflowSettingName: `res_storage_o_${id}`,
+            minimumSettingName: `res_min_store${id}`,
+            maximumSettingName: `res_max_store${id}`
+          };
+        }
+      );
+      return createStorageSettingsReadModel(rows);
+    }
+    function reorderResources(resourceIds) {
+      let manager = requireRecord(getStorageManager(), "StorageManager"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), sortByPriority = requireFunction(
+        manager.sortByPriority,
+        "StorageManager.sortByPriority"
+      );
+      resourceIds.forEach((resourceId3, index) => {
+        let id = requireString(resourceId3, `resourceIds[${index}]`);
+        settingsRaw[`res_storage_p_${id}`] = index;
+      }), Reflect.apply(sortByPriority, manager, []);
+    }
+    return Object.freeze({
+      readStorageSettingsReadModel,
+      reorderResources
+    });
+  }
+
+  // src/domain/economy/production/magic-settings.ts
+  function freezeAlchemyRow(row) {
+    return Object.freeze({ ...row });
+  }
+  function freezePylonRow(row) {
+    return Object.freeze({ ...row });
+  }
+  function createMagicSettingsReadModel({
+    alchemyRows,
+    pylonRows
+  }) {
+    return Object.freeze({
+      sectionId: "magic",
+      sectionName: "Magic",
+      alchemyControls: Object.freeze([
+        Object.freeze({ kind: "heading", label: "Alchemy" }),
+        Object.freeze({
+          kind: "number",
+          settingName: "magicAlchemyManaUse",
+          label: "Mana income used",
+          hint: "Income portion to use on alchemy. Setting to 1 is not recommended, leftover mana will be used for rituals."
+        }),
+        Object.freeze({
+          kind: "toggle",
+          settingName: "magicFullmetalHelper",
+          label: "Fullmetal helper",
+          hint: "In Magic universe with Alchemy II, keep one non-basic alchemy transmutation active long enough to claim Fullmetal if the achievement is still below the current star level. Requires autoAlchemy."
+        })
+      ]),
+      pylonControls: Object.freeze([
+        Object.freeze({ kind: "heading", label: "Pylon" }),
+        Object.freeze({
+          kind: "number",
+          settingName: "productionRitualManaUse",
+          label: "Mana income used",
+          hint: "Income portion to use on rituals. Setting to 1 is not recommended, as it will halt mana regeneration. Applied only when mana not capped - with capped mana script will always use all income."
+        }),
+        Object.freeze({
+          kind: "toggle",
+          settingName: "productionRitualSafe",
+          label: "Safe rituals",
+          hint: "Limit max rituals to safe, unsuspicious amount. Have no effect out of Witch Hunter scenario."
+        })
+      ]),
+      alchemyRows: Object.freeze(alchemyRows.map(freezeAlchemyRow)),
+      pylonRows: Object.freeze(pylonRows.map(freezePylonRow))
+    });
+  }
+
+  // src/adapters/browser/magic-settings.ts
+  function createMagicSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildMagicSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-magic-settings" }),
+        updateMagicSettingsContent
+      );
+    }
+    function updateMagicSettingsContent() {
+      let readModel = getReadModel(), actions = getActions(), jquery = getJQuery();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderMagicContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderMagicContent(currentNode, readModel, actions, jquery) {
+      for (let control of readModel.alchemyControls)
+        renderControl2(currentNode, control, actions);
+      renderAlchemy(currentNode, readModel.alchemyRows, actions, jquery);
+      for (let control of readModel.pylonControls)
+        renderControl2(currentNode, control, actions);
+      renderPylon(currentNode, readModel.pylonRows, actions, jquery);
+    }
+    function renderControl2(node, control, actions) {
+      switch (control.kind) {
+        case "heading":
+          actions.addStandardHeading(node, control.label);
+          return;
+        case "number":
+          actions.addSettingsNumber(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "toggle":
+          actions.addSettingsToggle(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+      }
+    }
+    function renderAlchemy(currentNode, rows, actions, getJQuery2) {
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Resource</th>
+              <th class="has-text-warning" style="width:20%">Enabled</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:40%"></th>
+            </tr>
+            <tbody id="script_alchemyTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = getJQuery2("#script_alchemyTableBody"), newTableBodyText = "";
+      for (let row of rows)
+        newTableBodyText += `<tr><td id="script_alchemy_${row.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"></td></tr>`;
+      tableBodyNode.append(getJQuery2(newTableBodyText));
+      for (let row of rows) {
+        let node = getJQuery2(`#script_alchemy_${row.id}`);
+        node.append(actions.buildTableLabel(row.label, "", row.color)), node = node.next(), actions.addTableToggle(node, row.enabledSettingName), node = node.next(), actions.addTableInput(node, row.weightingSettingName);
+      }
+    }
+    function renderPylon(currentNode, rows, actions, getJQuery2) {
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:55%">Ritual</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th style="width:25%"></th>
+            </tr>
+            <tbody id="script_magicTableBodyPylon"></tbody>
+          </table>`);
+      let tableBodyNode = getJQuery2("#script_magicTableBodyPylon"), newTableBodyText = "";
+      for (let row of rows)
+        newTableBodyText += `<tr><td id="script_pylon_${row.id}" style="width:55%"></td><td style="width:20%"></td><td style="width:25%"></td></tr>`;
+      tableBodyNode.append(getJQuery2(newTableBodyText));
+      for (let row of rows) {
+        let node = getJQuery2(`#script_pylon_${row.id}`);
+        node.append(actions.buildTableLabel(row.label)), node = node.next(), actions.addTableInput(node, row.weightingSettingName);
+      }
+    }
+    return Object.freeze({
+      buildMagicSettings,
+      updateMagicSettingsContent
+    });
+  }
+
+  // src/adapters/evolve/economy/production/magic-settings.ts
+  function readPriorityList3(manager) {
+    let priorityList = manager.priorityList;
+    if (!Array.isArray(priorityList))
+      throw new TypeError("AlchemyManager.priorityList must be an array");
+    return priorityList.map(
+      (resource2, index) => requireRecord(resource2, `AlchemyManager.priorityList[${index}]`)
+    );
+  }
+  function createMagicSettingsEvolveAdapter({
+    getGame,
+    getAlchemyManager,
+    getRitualManager
+  }) {
+    function readMagicSettingsReadModel() {
+      let game = requireRecord(getGame(), "game"), localize2 = requireFunction(game.loc, "game.loc"), alchemyManager = requireRecord(getAlchemyManager(), "AlchemyManager"), resources = readPriorityList3(alchemyManager), transmuteTier = requireFunction(
+        alchemyManager.transmuteTier,
+        "AlchemyManager.transmuteTier"
+      ), alchemyRows = resources.map((resource2, index) => {
+        let path = `AlchemyManager.priorityList[${index}]`, id = requireString(resource2.id, `${path}.id`), tier = requireNumber(
+          Reflect.apply(transmuteTier, alchemyManager, [resource2]),
+          `${path}.transmuteTier result`
+        );
+        return {
+          id,
+          label: requireString(resource2.name, `${path}.name`),
+          color: tier > 1 ? "has-text-advanced" : "has-text-info",
+          enabledSettingName: `res_alchemy_${id}`,
+          weightingSettingName: `res_alchemy_w_${id}`
+        };
+      }), ritualManager = requireRecord(getRitualManager(), "RitualManager"), productions = requireRecord(
+        ritualManager.Productions,
+        "RitualManager.Productions"
+      ), pylonRows = Object.entries(productions).map(
+        ([key, rawProduction]) => {
+          let production = requireRecord(
+            rawProduction,
+            `RitualManager.Productions.${key}`
+          ), id = requireString(
+            production.id,
+            `RitualManager.Productions.${key}.id`
+          );
+          return {
+            id,
+            label: requireString(
+              Reflect.apply(localize2, game, [`modal_pylon_spell_${id}`]),
+              `game.loc(modal_pylon_spell_${id}) result`
+            ),
+            weightingSettingName: `spell_w_${id}`
+          };
+        }
+      );
+      return createMagicSettingsReadModel({ alchemyRows, pylonRows });
+    }
+    return Object.freeze({ readMagicSettingsReadModel });
+  }
+
+  // src/domain/civic/job-settings.ts
+  function freezeBreakpoint(breakpoint) {
+    return Object.freeze({ ...breakpoint });
+  }
+  function freezeRow3(row) {
+    return Object.freeze({
+      ...row,
+      breakpoints: Object.freeze(
+        row.breakpoints.map(freezeBreakpoint)
+      )
+    });
+  }
+  function createJobSettingsReadModel({
+    rows
+  }) {
+    return Object.freeze({
+      sectionId: "job",
+      sectionName: "Job",
+      controls: Object.freeze([
+        Object.freeze({
+          kind: "toggle",
+          settingName: "jobSetDefault",
+          label: "Set default job",
+          hint: "Automatically sets the default job in order of Quarry Worker -> Lumberjack -> Crystal Miner -> Scavenger -> Hunter -> Farmer -> Unemployed"
+        }),
+        Object.freeze({
+          kind: "toggle",
+          settingName: "jobManageServants",
+          label: "Manage Servants",
+          hint: "Automatically manage servants, they will be used as substitute of regular workers, sharing same breakpoints and priorities, i.e. for breakpoint 10 script might assign 8 workers and 2 servants, and such."
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobLumberWeighting",
+          label: "Final Lumberjack Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobQuarryWeighting",
+          label: "Final Quarry Worker Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobCrystalWeighting",
+          label: "Final Crystal Miner Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobScavengerWeighting",
+          label: "Final Scavenger Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobRaiderWeighting",
+          label: "Final Raider Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobForagerWeighting",
+          label: "Final Forager Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "toggle",
+          settingName: "jobDisableMiners",
+          label: "Disable miners in Andromeda",
+          hint: "Disable Miners and Coal Miners after reaching Andromeda"
+        }),
+        Object.freeze({
+          kind: "string",
+          settingName: "crewReserve",
+          label: "Crew reserve (workers or %)",
+          hint: "Civilians kept out of ship crew and available for jobs. Enter an absolute count (e.g. 800) or a percentage of population (e.g. 50%). When ship crew exceeds population minus this reserve, the lowest-value crewed ships (trade freighters first, combat ships last) are idled to return workers to jobs. 0 disables it."
+        })
+      ]),
+      rows: Object.freeze(rows.map(freezeRow3))
+    });
+  }
+
+  // src/adapters/browser/job-settings.ts
+  function createJobSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildJobSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-job-settings" }),
+        updateJobSettingsContent
+      );
+    }
+    function updateJobSettingsContent() {
+      let readModel = getReadModel(), actions = getActions(), jquery = getJQuery();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderJobContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderJobContent(currentNode, readModel, actions, jquery) {
+      for (let control of readModel.controls)
+        renderControl2(currentNode, control, actions);
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Job</th>
+              <th class="has-text-warning" style="width:17%">1st Pass</th>
+              <th class="has-text-warning" style="width:17%">2nd Pass</th>
+              <th class="has-text-warning" style="width:17%">3rd Pass</th>
+              <th class="has-text-warning" style="width:9%" title="When enabled script will limit amount of assigned workers down to maximum useful quantity, moving idling workers to other jobs">Smart</th>
+              <td style="width:5%"><span id="script_resetJobsPriority" class="script-refresh"></span></td>
+            </tr>
+            <tbody id="script_jobTableBody"></tbody>
+          </table>`), jquery("#script_resetJobsPriority").on("click", () => {
+        actions.confirm("Are you sure you wish to reset jobs priority?") && intents.handle({ type: "reset-job-priorities" });
+      });
+      let tableBodyNode = jquery("#script_jobTableBody"), newTableBodyText = "";
+      for (let row of readModel.rows)
+        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_${row.id}" style="width:35%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:9%"></td><td style="width:5%"></td></tr>`;
+      tableBodyNode.append(jquery(newTableBodyText));
+      for (let row of readModel.rows) {
+        let jobElement = jquery(`#script_${row.id}`);
+        renderJobToggle(jobElement, row, actions, jquery);
+        for (let breakpoint of row.breakpoints)
+          jobElement = jobElement.next(), renderBreakpoint(jobElement, breakpoint, actions);
+        jobElement = jobElement.next(), row.smartSettingName !== void 0 && actions.addTableToggle(jobElement, row.smartSettingName), jobElement = jobElement.next(), jobElement.append(jquery('<span class="script-lastcolumn"></span>'));
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: actions.getSorterHelper(),
+        update: () => {
+          let sortedIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          intents.handle({ type: "reorder-jobs", jobIds: sortedIds });
+        }
+      });
+    }
+    function renderControl2(node, control, actions) {
+      if (control.kind === "number") {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      if (control.kind === "string") {
+        actions.addSettingsString(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function renderJobToggle(node, row, actions, jquery) {
+      let settingKey = row.enabledSettingName;
+      node.addClass(
+        `script_bg_${settingKey}${row.hasOverride ? " inactive-row" : ""}`
+      ).append(
+        actions.addToggleCallbacks(
+          jquery(`
+          <label tabindex="0" class="switch" style="margin-top:4px; margin-left:10px;">
+            <input class="script_${settingKey}" type="checkbox"${row.enabled ? " checked" : ""}>
+            <span class="check" style="height:5px; max-width:15px"></span>
+            <span class="has-text-${row.color}" style="margin-left: 20px;">${row.label}</span>
+          </label>`),
+          settingKey
+        )
+      );
+    }
+    function renderBreakpoint(node, breakpoint, actions) {
+      breakpoint.kind === "managed" ? node.append("<span>Managed</span>") : breakpoint.kind === "weighted" ? node.append("<span>Weighted</span>") : actions.addTableInput(node, breakpoint.settingName);
+    }
+    return Object.freeze({ buildJobSettings, updateJobSettingsContent });
+  }
+
+  // src/adapters/evolve/civic/job-settings.ts
+  function readPriorityList4(manager) {
+    let priorityList = manager.priorityList;
+    if (!Array.isArray(priorityList))
+      throw new TypeError("JobManager.priorityList must be an array");
+    return priorityList.map(
+      (job, index) => requireRecord(job, `JobManager.priorityList[${index}]`)
+    );
+  }
+  function readJobId(job, path) {
+    return requireString(job._originalId, `${path}._originalId`);
+  }
+  function readJobRows(manager, jobs, settingsRaw, BasicJob, CraftingJob) {
+    let overrides = requireRecord(
+      settingsRaw.overrides,
+      "settingsRaw.overrides"
+    );
+    return readPriorityList4(manager).map((job, index) => {
+      let path = `JobManager.priorityList[${index}]`, id = readJobId(job, path), flags = requireRecord(job.is, `${path}.is`), settingName = `job_${id}`, breakpoint = (number) => job instanceof CraftingJob ? { kind: "managed" } : number === 3 && flags.split ? { kind: "weighted" } : { kind: "input", settingName: `job_b${number}_${id}` }, color = job === jobs.Unemployed ? "warning" : job instanceof CraftingJob ? "danger" : job instanceof BasicJob ? "info" : "advanced";
+      return {
+        id,
+        label: requireString(job._originalName, `${path}._originalName`),
+        color,
+        enabledSettingName: settingName,
+        enabled: !!settingsRaw[settingName],
+        hasOverride: !!overrides[settingName],
+        breakpoints: [breakpoint(1), breakpoint(2), breakpoint(3)],
+        ...flags.smart ? { smartSettingName: `job_s_${id}` } : {}
+      };
+    });
+  }
+  function createJobSettingsEvolveAdapter({
+    getBasicJob,
+    getCraftingJob,
+    getJobManager,
+    getJobs,
+    getSettingsRaw
+  }) {
+    function readJobSettingsReadModel() {
+      let BasicJob = requireFunction(getBasicJob(), "BasicJob"), CraftingJob = requireFunction(getCraftingJob(), "CraftingJob");
+      return createJobSettingsReadModel({
+        rows: readJobRows(
+          requireRecord(getJobManager(), "JobManager"),
+          requireRecord(getJobs(), "jobs"),
+          requireRecord(getSettingsRaw(), "settingsRaw"),
+          BasicJob,
+          CraftingJob
+        )
+      });
+    }
+    function resetPriorities() {
+      let manager = requireRecord(getJobManager(), "JobManager"), jobs = requireRecord(getJobs(), "jobs"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), priorityList = Object.values(jobs).map(
+        (job, index) => requireRecord(job, `jobs[${index}]`)
+      );
+      manager.priorityList = priorityList;
+      for (let index = 0; index < priorityList.length; index += 1) {
+        let id = readJobId(
+          requireRecord(priorityList[index], `JobManager.priorityList[${index}]`),
+          `JobManager.priorityList[${index}]`
+        );
+        settingsRaw[`job_p_${id}`] = index;
+      }
+    }
+    function reorderJobs(jobIds) {
+      let manager = requireRecord(getJobManager(), "JobManager"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), sortByPriority = requireFunction(
+        manager.sortByPriority,
+        "JobManager.sortByPriority"
+      );
+      jobIds.forEach((jobId, index) => {
+        let id = requireString(jobId, `jobIds[${index}]`);
+        settingsRaw[`job_p_${id}`] = index;
+      }), Reflect.apply(sortByPriority, manager, []);
+    }
+    return Object.freeze({
+      readJobSettingsReadModel,
+      resetPriorities,
+      reorderJobs
+    });
+  }
+
+  // src/domain/economy/resources/weighting-settings.ts
+  var weightingSettingsReadModel = Object.freeze({
+    sectionId: "weighting",
+    sectionName: "AutoBuild Weighting",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildingBuildIfStorageFull",
+        label: "Ignore weighting and build if any storage is full",
+        hint: "Ignore weighting and immediately construct building if it uses any capped resource, preventing wasting them by overflowing. Weight still need to be positive(above zero) for this to happen."
+      })
+    ]),
+    rules: Object.freeze([
+      Object.freeze({
+        target: "Any",
+        condition: "New building",
+        settingName: "buildingWeightingNew"
+      }),
+      Object.freeze({
+        target: "Powered building",
+        condition: "Low available energy",
+        settingName: "buildingWeightingUnderpowered"
+      }),
+      Object.freeze({
+        target: "Power plant",
+        condition: "Low available energy",
+        settingName: "buildingWeightingNeedfulPowerPlant"
+      }),
+      Object.freeze({
+        target: "Power plant",
+        condition: "Producing more energy than required",
+        settingName: "buildingWeightingUselessPowerPlant"
+      }),
+      Object.freeze({
+        target: "Knowledge storage",
+        condition: "Have unaffordable researches or build targets",
+        settingName: "buildingWeightingNeedfulKnowledge"
+      }),
+      Object.freeze({
+        target: "Knowledge storage",
+        condition: "All researches and build targets already affordable",
+        settingName: "buildingWeightingUselessKnowledge"
+      }),
+      Object.freeze({
+        target: "Building with state (city)",
+        condition: "Some instances of this building are not working",
+        settingName: "buildingWeightingNonOperatingCity"
+      }),
+      Object.freeze({
+        target: "Building with state (space)",
+        condition: "Some instances of this building are not working",
+        settingName: "buildingWeightingNonOperating"
+      }),
+      Object.freeze({
+        target: "Building with consumption",
+        condition: "Missing consumables to operate",
+        settingName: "buildingWeightingMissingSupply"
+      }),
+      Object.freeze({
+        target: "Support consumer",
+        condition: "Missing support to operate",
+        settingName: "buildingWeightingMissingSupport"
+      }),
+      Object.freeze({
+        target: "Support provider",
+        condition: "Provided support not currently needed",
+        settingName: "buildingWeightingUselessSupport"
+      }),
+      Object.freeze({
+        target: "All fuel depots",
+        condition: "Missing Oil or Helium for techs and missions",
+        settingName: "buildingWeightingMissingFuel"
+      }),
+      Object.freeze({
+        target: "Not housing, barrack, oil derrick, or knowledge building",
+        condition: "MAD prestige enabled, and affordable",
+        settingName: "buildingWeightingMADUseless"
+      }),
+      Object.freeze({
+        target: "Mass Ejector",
+        condition: "Existed ejectors not fully utilized",
+        settingName: "buildingWeightingUnusedEjectors"
+      }),
+      Object.freeze({
+        target: "Freight Yard, Container Port, Munitions Depot",
+        condition: "Have unused crates or containers",
+        settingName: "buildingWeightingCrateUseless"
+      }),
+      Object.freeze({
+        target: "Horseshoes",
+        condition: "No more Horseshoes needed",
+        settingName: "buildingWeightingHorseshoeUseless"
+      }),
+      Object.freeze({
+        target: "Meditation Chamber",
+        condition: "No more Meditation Space needed",
+        settingName: "buildingWeightingZenUseless"
+      }),
+      Object.freeze({
+        target: "Gate Turret",
+        condition: "Gate demons fully supressed",
+        settingName: "buildingWeightingGateTurret"
+      }),
+      Object.freeze({
+        target: "Warehouses, Garage, Cargo Yard, Storehouse",
+        condition: "Need more storage",
+        settingName: "buildingWeightingNeedStorage"
+      }),
+      Object.freeze({
+        target: "Housing",
+        condition: "Less than 90% of houses are used",
+        settingName: "buildingWeightingUselessHousing"
+      }),
+      Object.freeze({
+        target: "Orbital Decay",
+        condition: "City and Moon buildings",
+        settingName: "buildingWeightingTemporal"
+      }),
+      Object.freeze({
+        target: "The True Path",
+        condition: "Solar buildings after reaching Tau Ceti",
+        settingName: "buildingWeightingSolar"
+      }),
+      Object.freeze({
+        target: "Mana Pylons and Mana Syphon",
+        condition: "Vacuum Collapse",
+        settingName: "buildingWeightingVacuumCollapse"
+      }),
+      Object.freeze({
+        target: "Eris Control Relays, Tanks, and Android Troopers",
+        condition: "The True Path Digsite is not yet secured",
+        settingName: "buildingWeightingTruepathDigsite"
+      }),
+      Object.freeze({
+        target: "Womlings Missions",
+        condition: "Womlings unlock actions conflicting with Overlord",
+        settingName: "buildingWeightingOverlord"
+      }),
+      Object.freeze({
+        target: "Banana Republic objectives",
+        condition: "World Collider and Monuments while their objectives are unfinished",
+        settingName: "buildingWeightingBananaObjective"
+      }),
+      Object.freeze({
+        target: "Inflation Money helpers",
+        condition: "Money storage until $250B cap is reachable, then Money income",
+        settingName: "buildingWeightingInflationMoney"
+      }),
+      Object.freeze({
+        target: "Retirement preparation",
+        condition: "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
+        settingName: "buildingWeightingRetirementPrep"
+      })
+    ])
+  });
+  function getWeightingSettingsReadModel() {
+    return weightingSettingsReadModel;
+  }
+
+  // src/adapters/browser/weighting-settings.ts
+  function createWeightingSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions,
+    getReadModel = getWeightingSettingsReadModel
+  }) {
+    function buildWeightingSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-weighting-settings" }),
+        updateWeightingSettingsContent
+      );
+    }
+    function updateWeightingSettingsContent() {
+      let readModel = getReadModel(), actions = getActions(), jquery = getJQuery();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderWeightingContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderWeightingContent(currentNode, readModel, actions, jquery) {
+      for (let control of readModel.controls)
+        renderControl2(currentNode, control, actions);
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:30%">Target</th>
+              <th class="has-text-warning" style="width:60%">Condition</th>
+              <th class="has-text-warning" style="width:10%">Multiplier</th>
+            </tr>
+            <tbody id="script_weightingTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = jquery("#script_weightingTableBody");
+      for (let rule of readModel.rules)
+        renderRule(tableBodyNode, rule, actions, jquery);
+    }
+    function renderControl2(node, control, actions) {
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function renderRule(table, rule, actions, jquery) {
+      let ruleNode = jquery(`
+          <tr>
+            <td style="width:30%"><span class="has-text-info">${rule.target}</span></td>
+            <td style="width:60%"><span class="has-text-info">${rule.condition}</span></td>
+            <td style="width:10%"></td>
+          </tr>`);
+      actions.addTableInput(ruleNode.find("td:eq(2)"), rule.settingName), table.append(ruleNode);
+    }
+    return Object.freeze({
+      buildWeightingSettings,
+      updateWeightingSettingsContent
+    });
+  }
+
+  // src/bootstrap/settings/core-settings-controls.ts
+  function readRecord(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue(context, property, fallback) {
+    let value = readRecord(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function getTestContextReader(testSurface) {
+    return () => {
+    };
+  }
+  function readContextActions(context, fallback) {
+    let record = readRecord(context);
+    return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
+  }
+  function createStorageSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getStorageManager,
+    getSettingsRaw,
+    resetStorageSettings,
+    persistSettings,
+    resetCheckbox,
+    removeStorageToggles,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("storageSettings"), evolveAdapter = createStorageSettingsEvolveAdapter({
+      getStorageManager: () => readContextValue(context(), "StorageManager", getStorageManager()),
+      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    }), intentHandler, browserAdapter = createStorageSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readStorageSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createStorageSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetStorageSettings",
+          resetStorageSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )(),
+        reorderResources: (resourceIds) => evolveAdapter.reorderResources(resourceIds)
+      },
+      renderSettingsContent: () => browserAdapter.updateStorageSettingsContent(),
+      effects: {
+        resetCheckbox: () => readContextValue(
+          context(),
+          "resetCheckbox",
+          resetCheckbox
+        )("autoStorage"),
+        removeStorageToggles: () => readContextValue(
+          context(),
+          "removeStorageToggles",
+          removeStorageToggles
+        )()
+      }
+    }), browserAdapter;
+  }
+  function createProjectSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getProjectManager,
+    getSettingsRaw,
+    resetProjectSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("projectSettings"), evolveAdapter = createProjectSettingsEvolveAdapter({
+      getProjectManager: () => readContextValue(context(), "ProjectManager", getProjectManager()),
+      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    }), intentHandler, browserAdapter = createProjectSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readProjectSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createProjectSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetProjectSettings",
+          resetProjectSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )(),
+        reorderProjects: (projectIds) => evolveAdapter.reorderProjects(projectIds)
+      },
+      renderSettingsContent: () => browserAdapter.updateProjectSettingsContent(),
+      effects: {
+        resetCheckbox: () => readContextValue(context(), "resetCheckbox", resetCheckbox)("autoARPA")
+      }
+    }), browserAdapter;
+  }
+  function createMagicSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getGame,
+    getAlchemyManager,
+    getRitualManager,
+    resetMagicSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("magicSettings"), evolveAdapter = createMagicSettingsEvolveAdapter({
+      getGame: () => readContextValue(context(), "game", getGame()),
+      getAlchemyManager: () => readContextValue(context(), "AlchemyManager", getAlchemyManager()),
+      getRitualManager: () => readContextValue(context(), "RitualManager", getRitualManager())
+    }), intentHandler, browserAdapter = createMagicSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readMagicSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createMagicSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetMagicSettings",
+          resetMagicSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updateMagicSettingsContent(),
+      effects: {
+        resetCheckboxes: () => readContextValue(context(), "resetCheckbox", resetCheckbox)(
+          "autoAlchemy",
+          "autoPylon",
+          "magicFullmetalHelper"
+        )
+      }
+    }), browserAdapter;
+  }
+  function createJobSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getBasicJob,
+    getCraftingJob,
+    getJobManager,
+    getJobs,
+    getSettingsRaw,
+    resetJobSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("jobSettings"), evolveAdapter = createJobSettingsEvolveAdapter({
+      getBasicJob: () => readContextValue(context(), "BasicJob", getBasicJob()),
+      getCraftingJob: () => readContextValue(context(), "CraftingJob", getCraftingJob()),
+      getJobManager: () => readContextValue(context(), "JobManager", getJobManager()),
+      getJobs: () => readContextValue(context(), "jobs", getJobs()),
+      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    }), intentHandler, browserAdapter = createJobSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readJobSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createJobSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(context(), "resetJobSettings", resetJobSettings)(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )(),
+        resetPriorities: () => evolveAdapter.resetPriorities(),
+        reorderJobs: (jobIds) => evolveAdapter.reorderJobs(jobIds)
+      },
+      renderSettingsContent: () => browserAdapter.updateJobSettingsContent(),
+      effects: {
+        resetCheckboxes: () => readContextValue(
+          context(),
+          "resetCheckbox",
+          resetCheckbox
+        )("autoJobs", "autoCraftsmen")
+      }
+    }), browserAdapter;
+  }
+  function createWeightingSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    resetWeightingSettings,
+    persistSettings,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("weightingSettings"), intentHandler, browserAdapter = createWeightingSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createWeightingSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetWeightingSettings",
+          resetWeightingSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updateWeightingSettingsContent()
+    }), browserAdapter;
+  }
+  function createGeneralSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    resetGeneralSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("generalSettings"), intentHandler, browserAdapter = createGeneralSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions(context(), actions)
+    });
+    return intentHandler = createGeneralSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetGeneralSettings",
+          resetGeneralSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updateGeneralSettingsContent(),
+      effects: {
+        resetCheckboxes: () => readContextValue(context(), "resetCheckbox", resetCheckbox)(
+          "masterScriptToggle",
+          "showSettings",
+          "autoPrestige"
+        )
+      }
+    }), browserAdapter;
+  }
+  function createLoggingSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getGame,
+    getGameLog,
+    getSettingsRaw,
+    resetLoggingSettings,
+    persistSettings,
+    buildFilterRegExp,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("loggingSettings"), evolveAdapter = createLoggingSettingsEvolveAdapter({
+      getGame: () => readContextValue(context(), "game", getGame()),
+      getGameLog: () => readContextValue(context(), "GameLog", getGameLog()),
+      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    }), intentHandler, browserAdapter = createLoggingSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readLoggingSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createLoggingSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetLoggingSettings",
+          resetLoggingSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )(),
+        setLogFilter: (value) => {
+          let target = readRecord(
+            readContextValue(context(), "settingsRaw", getSettingsRaw())
+          );
+          if (target === void 0)
+            throw new TypeError("settingsRaw must be an object");
+          target.logFilter = value;
+        }
+      },
+      renderSettingsContent: (secondaryPrefix) => browserAdapter.updateLoggingSettingsContent(secondaryPrefix),
+      effects: {
+        buildFilterRegExp: () => readContextValue(context(), "buildFilterRegExp", buildFilterRegExp)()
+      }
+    }), browserAdapter;
+  }
+  function createAchievementGuardSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    resetAchievementGuardSettings,
+    persistSettings,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("achievementGuardSettings"), intentHandler, browserAdapter = createAchievementGuardSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions(context(), actions)
+    });
+    return intentHandler = createAchievementGuardSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetAchievementGuardSettings",
+          resetAchievementGuardSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updateAchievementGuardSettingsContent()
+    }), browserAdapter;
+  }
+  function createChallengeHelperSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    resetChallengeHelperSettings,
+    persistSettings,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("challengeHelperSettings"), intentHandler, browserAdapter = createChallengeHelperSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions(context(), actions)
+    });
+    return intentHandler = createChallengeHelperSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetChallengeHelperSettings",
+          resetChallengeHelperSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updateChallengeHelperSettingsContent()
+    }), browserAdapter;
+  }
+  function createAuthoritySettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    resetAuthoritySettings,
+    persistSettings,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("authoritySettings"), intentHandler, browserAdapter = createAuthoritySettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextActions(context(), actions)
+    });
+    return intentHandler = createAuthoritySettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetAuthoritySettings",
+          resetAuthoritySettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updateAuthoritySettingsContent()
+    }), browserAdapter;
   }
 
   // src/application/research-settings.ts
@@ -17678,1843 +19611,6 @@ Only continue if you trust the source. Injected code:
       return createPlanetSettingsReadModel({ biomes, traits, extras });
     }
     return Object.freeze({ readPlanetSettingsReadModel });
-  }
-
-  // src/application/project-settings.ts
-  function createProjectSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        switch (intent.type) {
-          case "reset-project-settings":
-            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckbox();
-            return;
-          case "reorder-projects":
-            writer.reorderProjects(intent.projectIds), writer.persist();
-            return;
-        }
-      }
-    });
-  }
-
-  // src/application/storage-settings.ts
-  function createStorageSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        switch (intent.type) {
-          case "reset-storage-settings":
-            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckbox(), effects.removeStorageToggles();
-            return;
-          case "reorder-storage-resources":
-            writer.reorderResources(intent.resourceIds), writer.persist();
-            return;
-        }
-      }
-    });
-  }
-
-  // src/application/magic-settings.ts
-  function createMagicSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        if (intent.type === "reset-magic-settings") {
-          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
-          return;
-        }
-      }
-    });
-  }
-
-  // src/application/job-settings.ts
-  function createJobSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        switch (intent.type) {
-          case "reset-job-settings":
-            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
-            return;
-          case "reset-job-priorities":
-            writer.resetPriorities(), writer.persist(), renderSettingsContent();
-            return;
-          case "reorder-jobs":
-            writer.reorderJobs(intent.jobIds), writer.persist();
-            return;
-        }
-      }
-    });
-  }
-
-  // src/application/weighting-settings.ts
-  function createWeightingSettingsIntentHandler({
-    writer,
-    renderSettingsContent
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        if (intent.type === "reset-weighting-settings") {
-          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
-          return;
-        }
-      }
-    });
-  }
-
-  // src/application/general-settings.ts
-  function createGeneralSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        if (intent.type === "reset-general-settings") {
-          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
-          return;
-        }
-      }
-    });
-  }
-
-  // src/application/logging-settings.ts
-  function createLoggingSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        switch (intent.type) {
-          case "reset-logging-settings":
-            writer.resetToDefaults(), writer.persist(), renderSettingsContent(intent.secondaryPrefix), effects.buildFilterRegExp();
-            return;
-          case "set-log-filter":
-            writer.setLogFilter(intent.value), effects.buildFilterRegExp(), writer.persist();
-            return;
-        }
-      }
-    });
-  }
-
-  // src/domain/progression/research/project-settings.ts
-  function freezeRow(row) {
-    return Object.freeze({ ...row });
-  }
-  function createProjectSettingsReadModel(rows) {
-    return Object.freeze({
-      sectionId: "project",
-      sectionName: "A.R.P.A.",
-      rows: Object.freeze(rows.map(freezeRow))
-    });
-  }
-
-  // src/adapters/browser/project-settings.ts
-  function createProjectSettingsBrowserAdapter({
-    getDocument,
-    getJQuery,
-    getReadModel,
-    intents,
-    getActions
-  }) {
-    function buildProjectSettings() {
-      let readModel = getReadModel();
-      getActions().buildSettingsSection(
-        readModel.sectionId,
-        readModel.sectionName,
-        () => intents.handle({ type: "reset-project-settings" }),
-        updateProjectSettingsContent
-      );
-    }
-    function updateProjectSettingsContent() {
-      let readModel = getReadModel(), actions = getActions();
-      renderSettingsSectionContent(
-        {
-          scrollDocument: getDocument(),
-          jquery: getJQuery(),
-          sectionId: readModel.sectionId
-        },
-        (currentNode) => {
-          renderProjectContent(currentNode, readModel, actions);
-        }
-      );
-    }
-    function renderProjectContent(currentNode, readModel, actions) {
-      actions.addSettingsToggle(
-        currentNode,
-        "arpaScaleWeighting",
-        "Scale weighting with progress",
-        "Projects weighting scales  with current progress, making script more eager to spend resources on finishing nearly constructed projects."
-      ), actions.addSettingsNumber(
-        currentNode,
-        "arpaStep",
-        "Preferred progress step",
-        "Projects will be weighted and build in this steps. Increasing number can speed up constructing. Step will be adjusted down when preferred step above remaining amount, or surpass storage caps. Weightings below will be multiplied by current step. Projects builded by triggers will always have maximum possible step."
-      ), currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:25%">Project</th>
-              <th class="has-text-warning" style="width:25%">Auto Build</th>
-              <th class="has-text-warning" style="width:25%">Max Build</th>
-              <th class="has-text-warning" style="width:25%">Weighting</th>
-            </tr>
-            <tbody id="script_projectTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = getJQuery()("#script_projectTableBody"), newTableBodyText = "";
-      for (let row of readModel.rows)
-        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_${row.id}" style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td></tr>`;
-      tableBodyNode.append(getJQuery()(newTableBodyText));
-      for (let row of readModel.rows) {
-        let projectElement = getJQuery()(`#script_${row.id}`);
-        projectElement.append(actions.buildTableLabel(row.label)), projectElement = projectElement.next(), actions.addTableToggle(projectElement, row.enabledSettingName), projectElement = projectElement.next(), actions.addTableInput(projectElement, row.maximumSettingName), projectElement = projectElement.next(), actions.addTableInput(projectElement, row.weightingSettingName);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: actions.getSorterHelper(),
-        update: () => {
-          let projectIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          intents.handle({ type: "reorder-projects", projectIds });
-        }
-      });
-    }
-    return Object.freeze({
-      buildProjectSettings,
-      updateProjectSettingsContent
-    });
-  }
-
-  // src/domain/economy/storage/storage-settings.ts
-  function freezeRow2(row) {
-    return Object.freeze({ ...row });
-  }
-  function createStorageSettingsReadModel(rows) {
-    return Object.freeze({
-      sectionId: "storage",
-      sectionName: "Storage",
-      controls: Object.freeze([
-        Object.freeze({
-          settingName: "storageLimitPreMad",
-          label: "Limit Pre-MAD Storage",
-          hint: "Saves resources and shortens run time by limiting storage pre-MAD"
-        }),
-        Object.freeze({
-          settingName: "storageSafeReassign",
-          label: "Reassign only empty storages",
-          hint: "Wait until storage is empty before reassigning containers to another resource, to prevent overflowing and wasting resources"
-        }),
-        Object.freeze({
-          settingName: "storageAssignExtra",
-          label: "Assign buffer storage",
-          hint: "Assigns 3% extra strorage above required amounts, ensuring that required quantity will be actually reached, even if other part of script trying to sell\\eject\\switch production, etc. When manual trades enabled applies additional adjust derieved from selling threshold."
-        }),
-        Object.freeze({
-          settingName: "storageAssignPart",
-          label: "Assign partial storage",
-          hint: `When enabled script will be allowed to assign some crates and containers even if resulting storage space won't be enough to build new building. It allows to pre-build stock of resources for further use, but can be potentially dungerous.
-If script not allowed to reassign non-empty storage it can lock storage in position when stored resources can't be used.
-If script is allowed to reassign non-empty storage it might waste time producing materials which might need to be disposed.`
-        })
-      ]),
-      rows: Object.freeze(rows.map(freezeRow2))
-    });
-  }
-
-  // src/adapters/browser/storage-settings.ts
-  function createStorageSettingsBrowserAdapter({
-    getDocument,
-    getJQuery,
-    getReadModel,
-    intents,
-    getActions
-  }) {
-    function buildStorageSettings() {
-      let readModel = getReadModel();
-      getActions().buildSettingsSection(
-        readModel.sectionId,
-        readModel.sectionName,
-        () => intents.handle({ type: "reset-storage-settings" }),
-        updateStorageSettingsContent
-      );
-    }
-    function updateStorageSettingsContent() {
-      let readModel = getReadModel(), actions = getActions();
-      renderSettingsSectionContent(
-        {
-          scrollDocument: getDocument(),
-          jquery: getJQuery(),
-          sectionId: readModel.sectionId
-        },
-        (currentNode) => {
-          renderStorageContent(currentNode, readModel, actions);
-        }
-      );
-    }
-    function renderStorageContent(currentNode, readModel, actions) {
-      for (let control of readModel.controls)
-        renderControl2(currentNode, control, actions);
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Resource</th>
-              <th class="has-text-warning" style="width:15%">Enabled</th>
-              <th class="has-text-warning" style="width:15%">Store Overflow</th>
-              <th class="has-text-warning" style="width:15%">Min Storage</th>
-              <th class="has-text-warning" style="width:15%">Max Storage</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_storageTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = getJQuery()("#script_storageTableBody"), newTableBodyText = "";
-      for (let row of readModel.rows)
-        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_storage_${row.id}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
-      tableBodyNode.append(getJQuery()(newTableBodyText));
-      for (let row of readModel.rows) {
-        let storageElement = getJQuery()(`#script_storage_${row.id}`);
-        storageElement.append(actions.buildTableLabel(row.label)), storageElement = storageElement.next(), actions.addTableToggle(storageElement, row.enabledSettingName), storageElement = storageElement.next(), actions.addTableToggle(storageElement, row.overflowSettingName), storageElement = storageElement.next(), actions.addTableInput(storageElement, row.minimumSettingName), storageElement = storageElement.next(), actions.addTableInput(storageElement, row.maximumSettingName);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: actions.getSorterHelper(),
-        update: () => {
-          let resourceIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          intents.handle({ type: "reorder-storage-resources", resourceIds });
-        }
-      });
-    }
-    function renderControl2(node, control, actions) {
-      actions.addSettingsToggle(
-        node,
-        control.settingName,
-        control.label,
-        control.hint
-      );
-    }
-    return Object.freeze({
-      buildStorageSettings,
-      updateStorageSettingsContent
-    });
-  }
-
-  // src/domain/economy/production/magic-settings.ts
-  function freezeAlchemyRow(row) {
-    return Object.freeze({ ...row });
-  }
-  function freezePylonRow(row) {
-    return Object.freeze({ ...row });
-  }
-  function createMagicSettingsReadModel({
-    alchemyRows,
-    pylonRows
-  }) {
-    return Object.freeze({
-      sectionId: "magic",
-      sectionName: "Magic",
-      alchemyControls: Object.freeze([
-        Object.freeze({ kind: "heading", label: "Alchemy" }),
-        Object.freeze({
-          kind: "number",
-          settingName: "magicAlchemyManaUse",
-          label: "Mana income used",
-          hint: "Income portion to use on alchemy. Setting to 1 is not recommended, leftover mana will be used for rituals."
-        }),
-        Object.freeze({
-          kind: "toggle",
-          settingName: "magicFullmetalHelper",
-          label: "Fullmetal helper",
-          hint: "In Magic universe with Alchemy II, keep one non-basic alchemy transmutation active long enough to claim Fullmetal if the achievement is still below the current star level. Requires autoAlchemy."
-        })
-      ]),
-      pylonControls: Object.freeze([
-        Object.freeze({ kind: "heading", label: "Pylon" }),
-        Object.freeze({
-          kind: "number",
-          settingName: "productionRitualManaUse",
-          label: "Mana income used",
-          hint: "Income portion to use on rituals. Setting to 1 is not recommended, as it will halt mana regeneration. Applied only when mana not capped - with capped mana script will always use all income."
-        }),
-        Object.freeze({
-          kind: "toggle",
-          settingName: "productionRitualSafe",
-          label: "Safe rituals",
-          hint: "Limit max rituals to safe, unsuspicious amount. Have no effect out of Witch Hunter scenario."
-        })
-      ]),
-      alchemyRows: Object.freeze(alchemyRows.map(freezeAlchemyRow)),
-      pylonRows: Object.freeze(pylonRows.map(freezePylonRow))
-    });
-  }
-
-  // src/adapters/browser/magic-settings.ts
-  function createMagicSettingsBrowserAdapter({
-    getDocument,
-    getJQuery,
-    getReadModel,
-    intents,
-    getActions
-  }) {
-    function buildMagicSettings() {
-      let readModel = getReadModel();
-      getActions().buildSettingsSection(
-        readModel.sectionId,
-        readModel.sectionName,
-        () => intents.handle({ type: "reset-magic-settings" }),
-        updateMagicSettingsContent
-      );
-    }
-    function updateMagicSettingsContent() {
-      let readModel = getReadModel(), actions = getActions(), jquery = getJQuery();
-      renderSettingsSectionContent(
-        {
-          scrollDocument: getDocument(),
-          jquery,
-          sectionId: readModel.sectionId
-        },
-        (currentNode) => {
-          renderMagicContent(currentNode, readModel, actions, jquery);
-        }
-      );
-    }
-    function renderMagicContent(currentNode, readModel, actions, jquery) {
-      for (let control of readModel.alchemyControls)
-        renderControl2(currentNode, control, actions);
-      renderAlchemy(currentNode, readModel.alchemyRows, actions, jquery);
-      for (let control of readModel.pylonControls)
-        renderControl2(currentNode, control, actions);
-      renderPylon(currentNode, readModel.pylonRows, actions, jquery);
-    }
-    function renderControl2(node, control, actions) {
-      switch (control.kind) {
-        case "heading":
-          actions.addStandardHeading(node, control.label);
-          return;
-        case "number":
-          actions.addSettingsNumber(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-        case "toggle":
-          actions.addSettingsToggle(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-      }
-    }
-    function renderAlchemy(currentNode, rows, actions, getJQuery2) {
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:20%">Resource</th>
-              <th class="has-text-warning" style="width:20%">Enabled</th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th class="has-text-warning" style="width:40%"></th>
-            </tr>
-            <tbody id="script_alchemyTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = getJQuery2("#script_alchemyTableBody"), newTableBodyText = "";
-      for (let row of rows)
-        newTableBodyText += `<tr><td id="script_alchemy_${row.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"></td></tr>`;
-      tableBodyNode.append(getJQuery2(newTableBodyText));
-      for (let row of rows) {
-        let node = getJQuery2(`#script_alchemy_${row.id}`);
-        node.append(actions.buildTableLabel(row.label, "", row.color)), node = node.next(), actions.addTableToggle(node, row.enabledSettingName), node = node.next(), actions.addTableInput(node, row.weightingSettingName);
-      }
-    }
-    function renderPylon(currentNode, rows, actions, getJQuery2) {
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:55%">Ritual</th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th style="width:25%"></th>
-            </tr>
-            <tbody id="script_magicTableBodyPylon"></tbody>
-          </table>`);
-      let tableBodyNode = getJQuery2("#script_magicTableBodyPylon"), newTableBodyText = "";
-      for (let row of rows)
-        newTableBodyText += `<tr><td id="script_pylon_${row.id}" style="width:55%"></td><td style="width:20%"></td><td style="width:25%"></td></tr>`;
-      tableBodyNode.append(getJQuery2(newTableBodyText));
-      for (let row of rows) {
-        let node = getJQuery2(`#script_pylon_${row.id}`);
-        node.append(actions.buildTableLabel(row.label)), node = node.next(), actions.addTableInput(node, row.weightingSettingName);
-      }
-    }
-    return Object.freeze({
-      buildMagicSettings,
-      updateMagicSettingsContent
-    });
-  }
-
-  // src/domain/civic/job-settings.ts
-  function freezeBreakpoint(breakpoint) {
-    return Object.freeze({ ...breakpoint });
-  }
-  function freezeRow3(row) {
-    return Object.freeze({
-      ...row,
-      breakpoints: Object.freeze(
-        row.breakpoints.map(freezeBreakpoint)
-      )
-    });
-  }
-  function createJobSettingsReadModel({
-    rows
-  }) {
-    return Object.freeze({
-      sectionId: "job",
-      sectionName: "Job",
-      controls: Object.freeze([
-        Object.freeze({
-          kind: "toggle",
-          settingName: "jobSetDefault",
-          label: "Set default job",
-          hint: "Automatically sets the default job in order of Quarry Worker -> Lumberjack -> Crystal Miner -> Scavenger -> Hunter -> Farmer -> Unemployed"
-        }),
-        Object.freeze({
-          kind: "toggle",
-          settingName: "jobManageServants",
-          label: "Manage Servants",
-          hint: "Automatically manage servants, they will be used as substitute of regular workers, sharing same breakpoints and priorities, i.e. for breakpoint 10 script might assign 8 workers and 2 servants, and such."
-        }),
-        Object.freeze({
-          kind: "number",
-          settingName: "jobLumberWeighting",
-          label: "Final Lumberjack Weighting",
-          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-        }),
-        Object.freeze({
-          kind: "number",
-          settingName: "jobQuarryWeighting",
-          label: "Final Quarry Worker Weighting",
-          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-        }),
-        Object.freeze({
-          kind: "number",
-          settingName: "jobCrystalWeighting",
-          label: "Final Crystal Miner Weighting",
-          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-        }),
-        Object.freeze({
-          kind: "number",
-          settingName: "jobScavengerWeighting",
-          label: "Final Scavenger Weighting",
-          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-        }),
-        Object.freeze({
-          kind: "number",
-          settingName: "jobRaiderWeighting",
-          label: "Final Raider Weighting",
-          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-        }),
-        Object.freeze({
-          kind: "number",
-          settingName: "jobForagerWeighting",
-          label: "Final Forager Weighting",
-          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-        }),
-        Object.freeze({
-          kind: "toggle",
-          settingName: "jobDisableMiners",
-          label: "Disable miners in Andromeda",
-          hint: "Disable Miners and Coal Miners after reaching Andromeda"
-        }),
-        Object.freeze({
-          kind: "string",
-          settingName: "crewReserve",
-          label: "Crew reserve (workers or %)",
-          hint: "Civilians kept out of ship crew and available for jobs. Enter an absolute count (e.g. 800) or a percentage of population (e.g. 50%). When ship crew exceeds population minus this reserve, the lowest-value crewed ships (trade freighters first, combat ships last) are idled to return workers to jobs. 0 disables it."
-        })
-      ]),
-      rows: Object.freeze(rows.map(freezeRow3))
-    });
-  }
-
-  // src/adapters/browser/job-settings.ts
-  function createJobSettingsBrowserAdapter({
-    getDocument,
-    getJQuery,
-    getReadModel,
-    intents,
-    getActions
-  }) {
-    function buildJobSettings() {
-      let readModel = getReadModel();
-      getActions().buildSettingsSection(
-        readModel.sectionId,
-        readModel.sectionName,
-        () => intents.handle({ type: "reset-job-settings" }),
-        updateJobSettingsContent
-      );
-    }
-    function updateJobSettingsContent() {
-      let readModel = getReadModel(), actions = getActions(), jquery = getJQuery();
-      renderSettingsSectionContent(
-        {
-          scrollDocument: getDocument(),
-          jquery,
-          sectionId: readModel.sectionId
-        },
-        (currentNode) => {
-          renderJobContent(currentNode, readModel, actions, jquery);
-        }
-      );
-    }
-    function renderJobContent(currentNode, readModel, actions, jquery) {
-      for (let control of readModel.controls)
-        renderControl2(currentNode, control, actions);
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Job</th>
-              <th class="has-text-warning" style="width:17%">1st Pass</th>
-              <th class="has-text-warning" style="width:17%">2nd Pass</th>
-              <th class="has-text-warning" style="width:17%">3rd Pass</th>
-              <th class="has-text-warning" style="width:9%" title="When enabled script will limit amount of assigned workers down to maximum useful quantity, moving idling workers to other jobs">Smart</th>
-              <td style="width:5%"><span id="script_resetJobsPriority" class="script-refresh"></span></td>
-            </tr>
-            <tbody id="script_jobTableBody"></tbody>
-          </table>`), jquery("#script_resetJobsPriority").on("click", () => {
-        actions.confirm("Are you sure you wish to reset jobs priority?") && intents.handle({ type: "reset-job-priorities" });
-      });
-      let tableBodyNode = jquery("#script_jobTableBody"), newTableBodyText = "";
-      for (let row of readModel.rows)
-        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_${row.id}" style="width:35%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:9%"></td><td style="width:5%"></td></tr>`;
-      tableBodyNode.append(jquery(newTableBodyText));
-      for (let row of readModel.rows) {
-        let jobElement = jquery(`#script_${row.id}`);
-        renderJobToggle(jobElement, row, actions, jquery);
-        for (let breakpoint of row.breakpoints)
-          jobElement = jobElement.next(), renderBreakpoint(jobElement, breakpoint, actions);
-        jobElement = jobElement.next(), row.smartSettingName !== void 0 && actions.addTableToggle(jobElement, row.smartSettingName), jobElement = jobElement.next(), jobElement.append(jquery('<span class="script-lastcolumn"></span>'));
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: actions.getSorterHelper(),
-        update: () => {
-          let sortedIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          intents.handle({ type: "reorder-jobs", jobIds: sortedIds });
-        }
-      });
-    }
-    function renderControl2(node, control, actions) {
-      if (control.kind === "number") {
-        actions.addSettingsNumber(
-          node,
-          control.settingName,
-          control.label,
-          control.hint
-        );
-        return;
-      }
-      if (control.kind === "string") {
-        actions.addSettingsString(
-          node,
-          control.settingName,
-          control.label,
-          control.hint
-        );
-        return;
-      }
-      actions.addSettingsToggle(
-        node,
-        control.settingName,
-        control.label,
-        control.hint
-      );
-    }
-    function renderJobToggle(node, row, actions, jquery) {
-      let settingKey = row.enabledSettingName;
-      node.addClass(
-        `script_bg_${settingKey}${row.hasOverride ? " inactive-row" : ""}`
-      ).append(
-        actions.addToggleCallbacks(
-          jquery(`
-          <label tabindex="0" class="switch" style="margin-top:4px; margin-left:10px;">
-            <input class="script_${settingKey}" type="checkbox"${row.enabled ? " checked" : ""}>
-            <span class="check" style="height:5px; max-width:15px"></span>
-            <span class="has-text-${row.color}" style="margin-left: 20px;">${row.label}</span>
-          </label>`),
-          settingKey
-        )
-      );
-    }
-    function renderBreakpoint(node, breakpoint, actions) {
-      breakpoint.kind === "managed" ? node.append("<span>Managed</span>") : breakpoint.kind === "weighted" ? node.append("<span>Weighted</span>") : actions.addTableInput(node, breakpoint.settingName);
-    }
-    return Object.freeze({ buildJobSettings, updateJobSettingsContent });
-  }
-
-  // src/domain/economy/resources/weighting-settings.ts
-  var weightingSettingsReadModel = Object.freeze({
-    sectionId: "weighting",
-    sectionName: "AutoBuild Weighting",
-    controls: Object.freeze([
-      Object.freeze({
-        kind: "toggle",
-        settingName: "buildingBuildIfStorageFull",
-        label: "Ignore weighting and build if any storage is full",
-        hint: "Ignore weighting and immediately construct building if it uses any capped resource, preventing wasting them by overflowing. Weight still need to be positive(above zero) for this to happen."
-      })
-    ]),
-    rules: Object.freeze([
-      Object.freeze({
-        target: "Any",
-        condition: "New building",
-        settingName: "buildingWeightingNew"
-      }),
-      Object.freeze({
-        target: "Powered building",
-        condition: "Low available energy",
-        settingName: "buildingWeightingUnderpowered"
-      }),
-      Object.freeze({
-        target: "Power plant",
-        condition: "Low available energy",
-        settingName: "buildingWeightingNeedfulPowerPlant"
-      }),
-      Object.freeze({
-        target: "Power plant",
-        condition: "Producing more energy than required",
-        settingName: "buildingWeightingUselessPowerPlant"
-      }),
-      Object.freeze({
-        target: "Knowledge storage",
-        condition: "Have unaffordable researches or build targets",
-        settingName: "buildingWeightingNeedfulKnowledge"
-      }),
-      Object.freeze({
-        target: "Knowledge storage",
-        condition: "All researches and build targets already affordable",
-        settingName: "buildingWeightingUselessKnowledge"
-      }),
-      Object.freeze({
-        target: "Building with state (city)",
-        condition: "Some instances of this building are not working",
-        settingName: "buildingWeightingNonOperatingCity"
-      }),
-      Object.freeze({
-        target: "Building with state (space)",
-        condition: "Some instances of this building are not working",
-        settingName: "buildingWeightingNonOperating"
-      }),
-      Object.freeze({
-        target: "Building with consumption",
-        condition: "Missing consumables to operate",
-        settingName: "buildingWeightingMissingSupply"
-      }),
-      Object.freeze({
-        target: "Support consumer",
-        condition: "Missing support to operate",
-        settingName: "buildingWeightingMissingSupport"
-      }),
-      Object.freeze({
-        target: "Support provider",
-        condition: "Provided support not currently needed",
-        settingName: "buildingWeightingUselessSupport"
-      }),
-      Object.freeze({
-        target: "All fuel depots",
-        condition: "Missing Oil or Helium for techs and missions",
-        settingName: "buildingWeightingMissingFuel"
-      }),
-      Object.freeze({
-        target: "Not housing, barrack, oil derrick, or knowledge building",
-        condition: "MAD prestige enabled, and affordable",
-        settingName: "buildingWeightingMADUseless"
-      }),
-      Object.freeze({
-        target: "Mass Ejector",
-        condition: "Existed ejectors not fully utilized",
-        settingName: "buildingWeightingUnusedEjectors"
-      }),
-      Object.freeze({
-        target: "Freight Yard, Container Port, Munitions Depot",
-        condition: "Have unused crates or containers",
-        settingName: "buildingWeightingCrateUseless"
-      }),
-      Object.freeze({
-        target: "Horseshoes",
-        condition: "No more Horseshoes needed",
-        settingName: "buildingWeightingHorseshoeUseless"
-      }),
-      Object.freeze({
-        target: "Meditation Chamber",
-        condition: "No more Meditation Space needed",
-        settingName: "buildingWeightingZenUseless"
-      }),
-      Object.freeze({
-        target: "Gate Turret",
-        condition: "Gate demons fully supressed",
-        settingName: "buildingWeightingGateTurret"
-      }),
-      Object.freeze({
-        target: "Warehouses, Garage, Cargo Yard, Storehouse",
-        condition: "Need more storage",
-        settingName: "buildingWeightingNeedStorage"
-      }),
-      Object.freeze({
-        target: "Housing",
-        condition: "Less than 90% of houses are used",
-        settingName: "buildingWeightingUselessHousing"
-      }),
-      Object.freeze({
-        target: "Orbital Decay",
-        condition: "City and Moon buildings",
-        settingName: "buildingWeightingTemporal"
-      }),
-      Object.freeze({
-        target: "The True Path",
-        condition: "Solar buildings after reaching Tau Ceti",
-        settingName: "buildingWeightingSolar"
-      }),
-      Object.freeze({
-        target: "Mana Pylons and Mana Syphon",
-        condition: "Vacuum Collapse",
-        settingName: "buildingWeightingVacuumCollapse"
-      }),
-      Object.freeze({
-        target: "Eris Control Relays, Tanks, and Android Troopers",
-        condition: "The True Path Digsite is not yet secured",
-        settingName: "buildingWeightingTruepathDigsite"
-      }),
-      Object.freeze({
-        target: "Womlings Missions",
-        condition: "Womlings unlock actions conflicting with Overlord",
-        settingName: "buildingWeightingOverlord"
-      }),
-      Object.freeze({
-        target: "Banana Republic objectives",
-        condition: "World Collider and Monuments while their objectives are unfinished",
-        settingName: "buildingWeightingBananaObjective"
-      }),
-      Object.freeze({
-        target: "Inflation Money helpers",
-        condition: "Money storage until $250B cap is reachable, then Money income",
-        settingName: "buildingWeightingInflationMoney"
-      }),
-      Object.freeze({
-        target: "Retirement preparation",
-        condition: "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
-        settingName: "buildingWeightingRetirementPrep"
-      })
-    ])
-  });
-  function getWeightingSettingsReadModel() {
-    return weightingSettingsReadModel;
-  }
-
-  // src/adapters/browser/weighting-settings.ts
-  function createWeightingSettingsBrowserAdapter({
-    getDocument,
-    getJQuery,
-    intents,
-    getActions,
-    getReadModel = getWeightingSettingsReadModel
-  }) {
-    function buildWeightingSettings() {
-      let readModel = getReadModel();
-      getActions().buildSettingsSection(
-        readModel.sectionId,
-        readModel.sectionName,
-        () => intents.handle({ type: "reset-weighting-settings" }),
-        updateWeightingSettingsContent
-      );
-    }
-    function updateWeightingSettingsContent() {
-      let readModel = getReadModel(), actions = getActions(), jquery = getJQuery();
-      renderSettingsSectionContent(
-        {
-          scrollDocument: getDocument(),
-          jquery,
-          sectionId: readModel.sectionId
-        },
-        (currentNode) => {
-          renderWeightingContent(currentNode, readModel, actions, jquery);
-        }
-      );
-    }
-    function renderWeightingContent(currentNode, readModel, actions, jquery) {
-      for (let control of readModel.controls)
-        renderControl2(currentNode, control, actions);
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:30%">Target</th>
-              <th class="has-text-warning" style="width:60%">Condition</th>
-              <th class="has-text-warning" style="width:10%">Multiplier</th>
-            </tr>
-            <tbody id="script_weightingTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = jquery("#script_weightingTableBody");
-      for (let rule of readModel.rules)
-        renderRule(tableBodyNode, rule, actions, jquery);
-    }
-    function renderControl2(node, control, actions) {
-      actions.addSettingsToggle(
-        node,
-        control.settingName,
-        control.label,
-        control.hint
-      );
-    }
-    function renderRule(table, rule, actions, jquery) {
-      let ruleNode = jquery(`
-          <tr>
-            <td style="width:30%"><span class="has-text-info">${rule.target}</span></td>
-            <td style="width:60%"><span class="has-text-info">${rule.condition}</span></td>
-            <td style="width:10%"></td>
-          </tr>`);
-      actions.addTableInput(ruleNode.find("td:eq(2)"), rule.settingName), table.append(ruleNode);
-    }
-    return Object.freeze({
-      buildWeightingSettings,
-      updateWeightingSettingsContent
-    });
-  }
-
-  // src/domain/general-settings.ts
-  var priorityOptions = Object.freeze([
-    Object.freeze({ val: "ignore", label: "Ignore", hint: "Does nothing" }),
-    Object.freeze({
-      val: "save",
-      label: "Save",
-      hint: "Missing resources preserved from using."
-    }),
-    Object.freeze({
-      val: "req",
-      label: "Request",
-      hint: "Production and buying of missing resources will be prioritized."
-    }),
-    Object.freeze({
-      val: "savereq",
-      label: "Request & Save",
-      hint: "Missing resources will be prioritized, and preserved from using."
-    })
-  ]), generalSettingsReadModel = Object.freeze({
-    sectionId: "general",
-    sectionName: "General",
-    controls: Object.freeze([
-      Object.freeze({
-        kind: "number",
-        settingName: "tickRate",
-        label: "Script tick rate",
-        hint: "Script runs once per this amount of game ticks. Game tick every 250ms, thus with rate 4 script will run once per second. You can set it lower to make script act faster, or increase it if you have performance issues. Tick rate should be a positive integer."
-      }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "tickSchedule",
-        label: "Schedule script ticks",
-        hint: "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently."
-      }),
-      Object.freeze({ kind: "header", label: "Prioritization" }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "useDemanded",
-        label: "Allow using prioritized resources for crafting",
-        hint: "When disabled script won't make craftables out of prioritized resources in foundry and factory."
-      }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "researchRequest",
-        label: "Prioritize resources for Pre-MAD researches",
-        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "researchRequestSpace",
-        label: "Prioritize resources for Space+ researches",
-        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "missionRequest",
-        label: "Prioritize resources for missions",
-        hint: "Readjust trade routes and production to resources required for unlocked and affordable missions. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      }),
-      Object.freeze({
-        kind: "select",
-        settingName: "prioritizeQueue",
-        label: "Queue",
-        hint: "Alter script behaviour to speed up queued items, prioritizing missing resources.",
-        options: priorityOptions
-      }),
-      Object.freeze({
-        kind: "select",
-        settingName: "prioritizeTriggers",
-        label: "Triggers",
-        hint: "Alter script behaviour to speed up triggers, prioritizing missing resources.",
-        options: priorityOptions
-      }),
-      Object.freeze({
-        kind: "select",
-        settingName: "prioritizeUnify",
-        label: "Unification",
-        hint: "Alter script behaviour to speed up unification, prioritizing money required to purchase foreign cities.",
-        options: priorityOptions
-      }),
-      Object.freeze({
-        kind: "select",
-        settingName: "prioritizeOuterFleet",
-        label: "Ship Yard Blueprint (The True Path)",
-        hint: "Alter script behaviour to assist fleet building, prioritizing resources required for current design of ship.",
-        options: priorityOptions
-      }),
-      Object.freeze({ kind: "header", label: "Auto clicker" }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "buildingAlwaysClick",
-        label: "Always autoclick resources",
-        hint: "By default script will click only during early stage of autoBuild, to bootstrap production. With this toggled on it will continue clicking forever"
-      }),
-      Object.freeze({
-        kind: "number",
-        settingName: "buildingClickPerTick",
-        label: "Maximum clicks per tick",
-        hint: "Number of clicks performed at once, each script tick. Will not ever click more than needed to fill storage."
-      }),
-      Object.freeze({ kind: "header", label: "Misc" }),
-      Object.freeze({
-        kind: "string",
-        settingName: "scriptSettingsExportFilename",
-        label: "Export Filename",
-        hint: "Configures the filename used when using the 'Script Settings as File' button. This is useful if you keep multiple different profiles around."
-      })
-    ])
-  });
-  function getGeneralSettingsReadModel() {
-    return generalSettingsReadModel;
-  }
-
-  // src/adapters/browser/general-settings.ts
-  function createGeneralSettingsBrowserAdapter({
-    getDocument,
-    getJQuery,
-    intents,
-    getActions
-  }) {
-    let readModel = getGeneralSettingsReadModel();
-    function renderControl2(node, control, actions) {
-      switch (control.kind) {
-        case "header":
-          actions.addSettingsHeader1(node, control.label);
-          return;
-        case "number":
-          actions.addSettingsNumber(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-        case "select":
-          actions.addSettingsSelect(
-            node,
-            control.settingName,
-            control.label,
-            control.hint,
-            control.options
-          );
-          return;
-        case "string":
-          actions.addSettingsString(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-        case "toggle":
-          actions.addSettingsToggle(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-      }
-    }
-    function buildGeneralSettings() {
-      getActions().buildSettingsSection(
-        readModel.sectionId,
-        readModel.sectionName,
-        () => {
-          intents.handle({ type: "reset-general-settings" });
-        },
-        updateGeneralSettingsContent
-      );
-    }
-    function updateGeneralSettingsContent() {
-      let actions = getActions();
-      renderSettingsSectionContent(
-        {
-          scrollDocument: getDocument(),
-          jquery: getJQuery(),
-          sectionId: readModel.sectionId
-        },
-        (currentNode) => {
-          for (let control of readModel.controls)
-            renderControl2(currentNode, control, actions);
-        }
-      );
-    }
-    return Object.freeze({
-      buildGeneralSettings,
-      updateGeneralSettingsContent
-    });
-  }
-
-  // src/domain/logging-settings.ts
-  function freezeMessageType(messageType) {
-    return Object.freeze({ ...messageType });
-  }
-  function createLoggingSettingsReadModel({
-    messageTypes,
-    locale,
-    logFilter
-  }) {
-    let frozenMessageTypes = Object.freeze(messageTypes.map(freezeMessageType)), controls4 = [
-      Object.freeze({ kind: "header", label: "Script Messages" }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "logEnabled",
-        label: "Enable logging",
-        hint: "Master switch to enable logging of script actions in the game message queue"
-      })
-    ];
-    for (let { id, label } of frozenMessageTypes)
-      controls4.push(
-        Object.freeze({
-          kind: "toggle",
-          settingName: "log_" + id,
-          label,
-          hint: `If logging is enabled then logs ${label} actions`
-        })
-      );
-    return controls4.push(
-      Object.freeze({
-        kind: "string",
-        settingName: "log_prestige_format",
-        label: "Prestige Log Format",
-        hint: "Available placeholders: {resetType}, {species}, {timestamp} (in game days). Use {eval: XXX } to log custom information"
-      }),
-      Object.freeze({ kind: "header", label: "Game Messages" }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "hellTurnOffLogMessages",
-        label: "Turn off patrol and surveyor log messages",
-        hint: "Automatically turns off the hell patrol and surveyor log messages"
-      })
-    ), Object.freeze({
-      sectionId: "logging",
-      sectionName: "Logging",
-      locale,
-      logFilter,
-      controls: Object.freeze(controls4)
-    });
-  }
-
-  // src/adapters/browser/logging-settings.ts
-  function createLoggingSettingsBrowserAdapter({
-    getDocument,
-    getJQuery,
-    getReadModel,
-    intents,
-    getActions
-  }) {
-    function renderControl2(node, control, actions) {
-      switch (control.kind) {
-        case "header":
-          actions.addSettingsHeader1(node, control.label);
-          return;
-        case "string":
-          actions.addSettingsString(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-        case "toggle":
-          actions.addSettingsToggle(
-            node,
-            control.settingName,
-            control.label,
-            control.hint
-          );
-          return;
-      }
-    }
-    function buildLoggingSettings(parentNode, secondaryPrefix) {
-      let readModel = getReadModel();
-      getActions().buildSettingsSection2(
-        parentNode,
-        secondaryPrefix,
-        readModel.sectionId,
-        readModel.sectionName,
-        () => {
-          intents.handle({
-            type: "reset-logging-settings",
-            secondaryPrefix
-          });
-        },
-        updateLoggingSettingsContent
-      );
-    }
-    function updateLoggingSettingsContent(secondaryPrefix) {
-      let readModel = getReadModel(), actions = getActions();
-      renderSettingsSectionContent(
-        {
-          scrollDocument: getDocument(),
-          jquery: getJQuery(),
-          sectionId: `${secondaryPrefix}${readModel.sectionId}`
-        },
-        (currentNode) => {
-          renderLoggingContent(currentNode, readModel, actions);
-        }
-      );
-    }
-    function renderLoggingContent(currentNode, readModel, actions) {
-      for (let control of readModel.controls)
-        renderControl2(currentNode, control, actions);
-      let stringsUrl = `strings/strings${readModel.locale === "en-US" ? "" : "." + readModel.locale}.json`;
-      currentNode.append(`
-          <div>
-            <span>List of message IDs to filter, all game messages can be found <a href="${stringsUrl}" target="_blank">here</a>.</span><br>
-            <textarea id="script_logFilter" class="textarea" style="margin-top: 4px;">${readModel.logFilter}</textarea>
-          </div>`), getJQuery()("#script_logFilter").on("change", function() {
-        intents.handle({ type: "set-log-filter", value: this.value }), this.value = getReadModel().logFilter;
-      });
-    }
-    return Object.freeze({
-      buildLoggingSettings,
-      updateLoggingSettingsContent
-    });
-  }
-
-  // src/adapters/evolve/progression/research/project-settings.ts
-  function readPriorityList(manager) {
-    let priorityList = manager.priorityList;
-    if (!Array.isArray(priorityList))
-      throw new TypeError("ProjectManager.priorityList must be an array");
-    return priorityList.map(
-      (project, index) => requireRecord(project, `ProjectManager.priorityList[${index}]`)
-    );
-  }
-  function createProjectSettingsEvolveAdapter({
-    getProjectManager,
-    getSettingsRaw
-  }) {
-    function readProjectSettingsReadModel() {
-      let manager = requireRecord(getProjectManager(), "ProjectManager"), rows = readPriorityList(manager).map(
-        (project, index) => {
-          let id = requireString(
-            project.id,
-            `ProjectManager.priorityList[${index}].id`
-          );
-          return {
-            id,
-            label: requireString(
-              project.name,
-              `ProjectManager.priorityList[${index}].name`
-            ),
-            enabledSettingName: `arpa_${id}`,
-            maximumSettingName: `arpa_m_${id}`,
-            weightingSettingName: `arpa_w_${id}`
-          };
-        }
-      );
-      return createProjectSettingsReadModel(rows);
-    }
-    function reorderProjects(projectIds) {
-      let manager = requireRecord(getProjectManager(), "ProjectManager"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), sortByPriority = requireFunction(
-        manager.sortByPriority,
-        "ProjectManager.sortByPriority"
-      );
-      projectIds.forEach((projectId, index) => {
-        let id = requireString(projectId, `projectIds[${index}]`);
-        settingsRaw[`arpa_p_${id}`] = index;
-      }), Reflect.apply(sortByPriority, manager, []);
-    }
-    return Object.freeze({ readProjectSettingsReadModel, reorderProjects });
-  }
-
-  // src/adapters/evolve/economy/storage/storage-settings.ts
-  function readPriorityList2(manager) {
-    let priorityList = manager.priorityList;
-    if (!Array.isArray(priorityList))
-      throw new TypeError("StorageManager.priorityList must be an array");
-    return priorityList.map(
-      (resource2, index) => requireRecord(resource2, `StorageManager.priorityList[${index}]`)
-    );
-  }
-  function createStorageSettingsEvolveAdapter({
-    getStorageManager,
-    getSettingsRaw
-  }) {
-    function readStorageSettingsReadModel() {
-      let manager = requireRecord(getStorageManager(), "StorageManager"), rows = readPriorityList2(manager).map(
-        (resource2, index) => {
-          let id = requireString(
-            resource2.id,
-            `StorageManager.priorityList[${index}].id`
-          );
-          return {
-            id,
-            label: requireString(
-              resource2.name,
-              `StorageManager.priorityList[${index}].name`
-            ),
-            enabledSettingName: `res_storage${id}`,
-            overflowSettingName: `res_storage_o_${id}`,
-            minimumSettingName: `res_min_store${id}`,
-            maximumSettingName: `res_max_store${id}`
-          };
-        }
-      );
-      return createStorageSettingsReadModel(rows);
-    }
-    function reorderResources(resourceIds) {
-      let manager = requireRecord(getStorageManager(), "StorageManager"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), sortByPriority = requireFunction(
-        manager.sortByPriority,
-        "StorageManager.sortByPriority"
-      );
-      resourceIds.forEach((resourceId3, index) => {
-        let id = requireString(resourceId3, `resourceIds[${index}]`);
-        settingsRaw[`res_storage_p_${id}`] = index;
-      }), Reflect.apply(sortByPriority, manager, []);
-    }
-    return Object.freeze({
-      readStorageSettingsReadModel,
-      reorderResources
-    });
-  }
-
-  // src/adapters/evolve/economy/production/magic-settings.ts
-  function readPriorityList3(manager) {
-    let priorityList = manager.priorityList;
-    if (!Array.isArray(priorityList))
-      throw new TypeError("AlchemyManager.priorityList must be an array");
-    return priorityList.map(
-      (resource2, index) => requireRecord(resource2, `AlchemyManager.priorityList[${index}]`)
-    );
-  }
-  function createMagicSettingsEvolveAdapter({
-    getGame,
-    getAlchemyManager,
-    getRitualManager
-  }) {
-    function readMagicSettingsReadModel() {
-      let game = requireRecord(getGame(), "game"), localize2 = requireFunction(game.loc, "game.loc"), alchemyManager = requireRecord(getAlchemyManager(), "AlchemyManager"), resources = readPriorityList3(alchemyManager), transmuteTier = requireFunction(
-        alchemyManager.transmuteTier,
-        "AlchemyManager.transmuteTier"
-      ), alchemyRows = resources.map((resource2, index) => {
-        let path = `AlchemyManager.priorityList[${index}]`, id = requireString(resource2.id, `${path}.id`), tier = requireNumber(
-          Reflect.apply(transmuteTier, alchemyManager, [resource2]),
-          `${path}.transmuteTier result`
-        );
-        return {
-          id,
-          label: requireString(resource2.name, `${path}.name`),
-          color: tier > 1 ? "has-text-advanced" : "has-text-info",
-          enabledSettingName: `res_alchemy_${id}`,
-          weightingSettingName: `res_alchemy_w_${id}`
-        };
-      }), ritualManager = requireRecord(getRitualManager(), "RitualManager"), productions = requireRecord(
-        ritualManager.Productions,
-        "RitualManager.Productions"
-      ), pylonRows = Object.entries(productions).map(
-        ([key, rawProduction]) => {
-          let production = requireRecord(
-            rawProduction,
-            `RitualManager.Productions.${key}`
-          ), id = requireString(
-            production.id,
-            `RitualManager.Productions.${key}.id`
-          );
-          return {
-            id,
-            label: requireString(
-              Reflect.apply(localize2, game, [`modal_pylon_spell_${id}`]),
-              `game.loc(modal_pylon_spell_${id}) result`
-            ),
-            weightingSettingName: `spell_w_${id}`
-          };
-        }
-      );
-      return createMagicSettingsReadModel({ alchemyRows, pylonRows });
-    }
-    return Object.freeze({ readMagicSettingsReadModel });
-  }
-
-  // src/adapters/evolve/civic/job-settings.ts
-  function readPriorityList4(manager) {
-    let priorityList = manager.priorityList;
-    if (!Array.isArray(priorityList))
-      throw new TypeError("JobManager.priorityList must be an array");
-    return priorityList.map(
-      (job, index) => requireRecord(job, `JobManager.priorityList[${index}]`)
-    );
-  }
-  function readJobId(job, path) {
-    return requireString(job._originalId, `${path}._originalId`);
-  }
-  function readJobRows(manager, jobs, settingsRaw, BasicJob, CraftingJob) {
-    let overrides = requireRecord(
-      settingsRaw.overrides,
-      "settingsRaw.overrides"
-    );
-    return readPriorityList4(manager).map((job, index) => {
-      let path = `JobManager.priorityList[${index}]`, id = readJobId(job, path), flags = requireRecord(job.is, `${path}.is`), settingName = `job_${id}`, breakpoint = (number) => job instanceof CraftingJob ? { kind: "managed" } : number === 3 && flags.split ? { kind: "weighted" } : { kind: "input", settingName: `job_b${number}_${id}` }, color = job === jobs.Unemployed ? "warning" : job instanceof CraftingJob ? "danger" : job instanceof BasicJob ? "info" : "advanced";
-      return {
-        id,
-        label: requireString(job._originalName, `${path}._originalName`),
-        color,
-        enabledSettingName: settingName,
-        enabled: !!settingsRaw[settingName],
-        hasOverride: !!overrides[settingName],
-        breakpoints: [breakpoint(1), breakpoint(2), breakpoint(3)],
-        ...flags.smart ? { smartSettingName: `job_s_${id}` } : {}
-      };
-    });
-  }
-  function createJobSettingsEvolveAdapter({
-    getBasicJob,
-    getCraftingJob,
-    getJobManager,
-    getJobs,
-    getSettingsRaw
-  }) {
-    function readJobSettingsReadModel() {
-      let BasicJob = requireFunction(getBasicJob(), "BasicJob"), CraftingJob = requireFunction(getCraftingJob(), "CraftingJob");
-      return createJobSettingsReadModel({
-        rows: readJobRows(
-          requireRecord(getJobManager(), "JobManager"),
-          requireRecord(getJobs(), "jobs"),
-          requireRecord(getSettingsRaw(), "settingsRaw"),
-          BasicJob,
-          CraftingJob
-        )
-      });
-    }
-    function resetPriorities() {
-      let manager = requireRecord(getJobManager(), "JobManager"), jobs = requireRecord(getJobs(), "jobs"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), priorityList = Object.values(jobs).map(
-        (job, index) => requireRecord(job, `jobs[${index}]`)
-      );
-      manager.priorityList = priorityList;
-      for (let index = 0; index < priorityList.length; index += 1) {
-        let id = readJobId(
-          requireRecord(priorityList[index], `JobManager.priorityList[${index}]`),
-          `JobManager.priorityList[${index}]`
-        );
-        settingsRaw[`job_p_${id}`] = index;
-      }
-    }
-    function reorderJobs(jobIds) {
-      let manager = requireRecord(getJobManager(), "JobManager"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), sortByPriority = requireFunction(
-        manager.sortByPriority,
-        "JobManager.sortByPriority"
-      );
-      jobIds.forEach((jobId, index) => {
-        let id = requireString(jobId, `jobIds[${index}]`);
-        settingsRaw[`job_p_${id}`] = index;
-      }), Reflect.apply(sortByPriority, manager, []);
-    }
-    return Object.freeze({
-      readJobSettingsReadModel,
-      resetPriorities,
-      reorderJobs
-    });
-  }
-
-  // src/adapters/evolve/logging-settings.ts
-  function createLoggingSettingsEvolveAdapter({
-    getGame,
-    getGameLog,
-    getSettingsRaw
-  }) {
-    function readLoggingSettingsReadModel() {
-      let game = requireNonArrayRecord(getGame(), "game"), global = requireNonArrayRecord(game.global, "game.global"), gameSettings = requireNonArrayRecord(
-        global.settings,
-        "game.global.settings"
-      ), locale = requireString(
-        gameSettings.locale,
-        "game.global.settings.locale"
-      ), gameLog = requireNonArrayRecord(getGameLog(), "GameLog"), rawTypes = requireNonArrayRecord(gameLog.Types, "GameLog.Types"), messageTypes = [];
-      for (let [id, rawLabel] of Object.entries(rawTypes))
-        messageTypes.push({
-          id,
-          label: requireString(rawLabel, `GameLog.Types.${id}`)
-        });
-      let settingsRaw = requireNonArrayRecord(getSettingsRaw(), "settingsRaw"), logFilter = requireString(
-        settingsRaw.logFilter,
-        "settingsRaw.logFilter"
-      );
-      return createLoggingSettingsReadModel({
-        messageTypes,
-        locale,
-        logFilter
-      });
-    }
-    return Object.freeze({ readLoggingSettingsReadModel });
-  }
-
-  // src/bootstrap/settings/core-settings-controls.ts
-  function readRecord(value) {
-    return typeof value == "object" && value !== null ? value : void 0;
-  }
-  function readContextValue(context, property, fallback) {
-    let value = readRecord(context)?.[property];
-    return value === void 0 ? fallback : value;
-  }
-  function getTestContextReader(testSurface) {
-    return () => {
-    };
-  }
-  function readContextActions(context, fallback) {
-    let record = readRecord(context);
-    return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
-  }
-  function createStorageSettingsControl({
-    getDocument,
-    getJQuery,
-    actions,
-    getStorageManager,
-    getSettingsRaw,
-    resetStorageSettings,
-    persistSettings,
-    resetCheckbox,
-    removeStorageToggles,
-    testSurface
-  }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("storageSettings"), evolveAdapter = createStorageSettingsEvolveAdapter({
-      getStorageManager: () => readContextValue(context(), "StorageManager", getStorageManager()),
-      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
-    }), intentHandler, browserAdapter = createStorageSettingsBrowserAdapter({
-      getDocument,
-      getJQuery,
-      getReadModel: () => evolveAdapter.readStorageSettingsReadModel(),
-      intents: {
-        handle: (intent) => intentHandler.handle(intent)
-      },
-      getActions: () => readContextValue(context(), "actions", actions)
-    });
-    return intentHandler = createStorageSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => readContextValue(
-          context(),
-          "resetStorageSettings",
-          resetStorageSettings
-        )(!0),
-        persist: () => readContextValue(
-          context(),
-          "updateSettingsFromState",
-          persistSettings
-        )(),
-        reorderResources: (resourceIds) => evolveAdapter.reorderResources(resourceIds)
-      },
-      renderSettingsContent: () => browserAdapter.updateStorageSettingsContent(),
-      effects: {
-        resetCheckbox: () => readContextValue(
-          context(),
-          "resetCheckbox",
-          resetCheckbox
-        )("autoStorage"),
-        removeStorageToggles: () => readContextValue(
-          context(),
-          "removeStorageToggles",
-          removeStorageToggles
-        )()
-      }
-    }), browserAdapter;
-  }
-  function createProjectSettingsControl({
-    getDocument,
-    getJQuery,
-    actions,
-    getProjectManager,
-    getSettingsRaw,
-    resetProjectSettings,
-    persistSettings,
-    resetCheckbox,
-    testSurface
-  }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("projectSettings"), evolveAdapter = createProjectSettingsEvolveAdapter({
-      getProjectManager: () => readContextValue(context(), "ProjectManager", getProjectManager()),
-      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
-    }), intentHandler, browserAdapter = createProjectSettingsBrowserAdapter({
-      getDocument,
-      getJQuery,
-      getReadModel: () => evolveAdapter.readProjectSettingsReadModel(),
-      intents: {
-        handle: (intent) => intentHandler.handle(intent)
-      },
-      getActions: () => readContextValue(context(), "actions", actions)
-    });
-    return intentHandler = createProjectSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => readContextValue(
-          context(),
-          "resetProjectSettings",
-          resetProjectSettings
-        )(!0),
-        persist: () => readContextValue(
-          context(),
-          "updateSettingsFromState",
-          persistSettings
-        )(),
-        reorderProjects: (projectIds) => evolveAdapter.reorderProjects(projectIds)
-      },
-      renderSettingsContent: () => browserAdapter.updateProjectSettingsContent(),
-      effects: {
-        resetCheckbox: () => readContextValue(context(), "resetCheckbox", resetCheckbox)("autoARPA")
-      }
-    }), browserAdapter;
-  }
-  function createMagicSettingsControl({
-    getDocument,
-    getJQuery,
-    actions,
-    getGame,
-    getAlchemyManager,
-    getRitualManager,
-    resetMagicSettings,
-    persistSettings,
-    resetCheckbox,
-    testSurface
-  }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("magicSettings"), evolveAdapter = createMagicSettingsEvolveAdapter({
-      getGame: () => readContextValue(context(), "game", getGame()),
-      getAlchemyManager: () => readContextValue(context(), "AlchemyManager", getAlchemyManager()),
-      getRitualManager: () => readContextValue(context(), "RitualManager", getRitualManager())
-    }), intentHandler, browserAdapter = createMagicSettingsBrowserAdapter({
-      getDocument,
-      getJQuery,
-      getReadModel: () => evolveAdapter.readMagicSettingsReadModel(),
-      intents: {
-        handle: (intent) => intentHandler.handle(intent)
-      },
-      getActions: () => readContextValue(context(), "actions", actions)
-    });
-    return intentHandler = createMagicSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => readContextValue(
-          context(),
-          "resetMagicSettings",
-          resetMagicSettings
-        )(!0),
-        persist: () => readContextValue(
-          context(),
-          "updateSettingsFromState",
-          persistSettings
-        )()
-      },
-      renderSettingsContent: () => browserAdapter.updateMagicSettingsContent(),
-      effects: {
-        resetCheckboxes: () => readContextValue(context(), "resetCheckbox", resetCheckbox)(
-          "autoAlchemy",
-          "autoPylon",
-          "magicFullmetalHelper"
-        )
-      }
-    }), browserAdapter;
-  }
-  function createJobSettingsControl({
-    getDocument,
-    getJQuery,
-    actions,
-    getBasicJob,
-    getCraftingJob,
-    getJobManager,
-    getJobs,
-    getSettingsRaw,
-    resetJobSettings,
-    persistSettings,
-    resetCheckbox,
-    testSurface
-  }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("jobSettings"), evolveAdapter = createJobSettingsEvolveAdapter({
-      getBasicJob: () => readContextValue(context(), "BasicJob", getBasicJob()),
-      getCraftingJob: () => readContextValue(context(), "CraftingJob", getCraftingJob()),
-      getJobManager: () => readContextValue(context(), "JobManager", getJobManager()),
-      getJobs: () => readContextValue(context(), "jobs", getJobs()),
-      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
-    }), intentHandler, browserAdapter = createJobSettingsBrowserAdapter({
-      getDocument,
-      getJQuery,
-      getReadModel: () => evolveAdapter.readJobSettingsReadModel(),
-      intents: {
-        handle: (intent) => intentHandler.handle(intent)
-      },
-      getActions: () => readContextValue(context(), "actions", actions)
-    });
-    return intentHandler = createJobSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => readContextValue(context(), "resetJobSettings", resetJobSettings)(!0),
-        persist: () => readContextValue(
-          context(),
-          "updateSettingsFromState",
-          persistSettings
-        )(),
-        resetPriorities: () => evolveAdapter.resetPriorities(),
-        reorderJobs: (jobIds) => evolveAdapter.reorderJobs(jobIds)
-      },
-      renderSettingsContent: () => browserAdapter.updateJobSettingsContent(),
-      effects: {
-        resetCheckboxes: () => readContextValue(
-          context(),
-          "resetCheckbox",
-          resetCheckbox
-        )("autoJobs", "autoCraftsmen")
-      }
-    }), browserAdapter;
-  }
-  function createWeightingSettingsControl({
-    getDocument,
-    getJQuery,
-    actions,
-    resetWeightingSettings,
-    persistSettings,
-    testSurface
-  }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("weightingSettings"), intentHandler, browserAdapter = createWeightingSettingsBrowserAdapter({
-      getDocument,
-      getJQuery,
-      intents: {
-        handle: (intent) => intentHandler.handle(intent)
-      },
-      getActions: () => readContextValue(context(), "actions", actions)
-    });
-    return intentHandler = createWeightingSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => readContextValue(
-          context(),
-          "resetWeightingSettings",
-          resetWeightingSettings
-        )(!0),
-        persist: () => readContextValue(
-          context(),
-          "updateSettingsFromState",
-          persistSettings
-        )()
-      },
-      renderSettingsContent: () => browserAdapter.updateWeightingSettingsContent()
-    }), browserAdapter;
-  }
-  function createGeneralSettingsControl({
-    getDocument,
-    getJQuery,
-    actions,
-    resetGeneralSettings,
-    persistSettings,
-    resetCheckbox,
-    testSurface
-  }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("generalSettings"), intentHandler, browserAdapter = createGeneralSettingsBrowserAdapter({
-      getDocument,
-      getJQuery,
-      intents: {
-        handle: (intent) => intentHandler.handle(intent)
-      },
-      getActions: () => readContextActions(context(), actions)
-    });
-    return intentHandler = createGeneralSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => readContextValue(
-          context(),
-          "resetGeneralSettings",
-          resetGeneralSettings
-        )(!0),
-        persist: () => readContextValue(
-          context(),
-          "updateSettingsFromState",
-          persistSettings
-        )()
-      },
-      renderSettingsContent: () => browserAdapter.updateGeneralSettingsContent(),
-      effects: {
-        resetCheckboxes: () => readContextValue(context(), "resetCheckbox", resetCheckbox)(
-          "masterScriptToggle",
-          "showSettings",
-          "autoPrestige"
-        )
-      }
-    }), browserAdapter;
-  }
-  function createLoggingSettingsControl({
-    getDocument,
-    getJQuery,
-    actions,
-    getGame,
-    getGameLog,
-    getSettingsRaw,
-    resetLoggingSettings,
-    persistSettings,
-    buildFilterRegExp,
-    testSurface
-  }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("loggingSettings"), evolveAdapter = createLoggingSettingsEvolveAdapter({
-      getGame: () => readContextValue(context(), "game", getGame()),
-      getGameLog: () => readContextValue(context(), "GameLog", getGameLog()),
-      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
-    }), intentHandler, browserAdapter = createLoggingSettingsBrowserAdapter({
-      getDocument,
-      getJQuery,
-      getReadModel: () => evolveAdapter.readLoggingSettingsReadModel(),
-      intents: {
-        handle: (intent) => intentHandler.handle(intent)
-      },
-      getActions: () => readContextValue(context(), "actions", actions)
-    });
-    return intentHandler = createLoggingSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => readContextValue(
-          context(),
-          "resetLoggingSettings",
-          resetLoggingSettings
-        )(!0),
-        persist: () => readContextValue(
-          context(),
-          "updateSettingsFromState",
-          persistSettings
-        )(),
-        setLogFilter: (value) => {
-          let target = readRecord(
-            readContextValue(context(), "settingsRaw", getSettingsRaw())
-          );
-          if (target === void 0)
-            throw new TypeError("settingsRaw must be an object");
-          target.logFilter = value;
-        }
-      },
-      renderSettingsContent: (secondaryPrefix) => browserAdapter.updateLoggingSettingsContent(secondaryPrefix),
-      effects: {
-        buildFilterRegExp: () => readContextValue(context(), "buildFilterRegExp", buildFilterRegExp)()
-      }
-    }), browserAdapter;
   }
 
   // src/application/building-settings.ts
@@ -47442,44 +47538,28 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       persistSettings: () => updateSettingsFromState(),
       resetCheckbox: (...args) => resetCheckbox(...args),
       testSurface
-    }), { buildGeneralSettings } = generalSettingsBrowserAdapter, achievementGuardSettingsActions = {
-      buildSettingsSection,
-      addSettingsToggle
-    }, achievementGuardSettingsIntentHandler, achievementGuardSettingsBrowserAdapter = createAchievementGuardSettingsBrowserAdapter({
+    }), { buildGeneralSettings } = generalSettingsBrowserAdapter, achievementGuardSettingsBrowserAdapter = createAchievementGuardSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      intents: {
-        handle: (intent) => achievementGuardSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection,
+        addSettingsToggle
       },
-      getActions: () => getTestContext("achievementGuardSettings") ?? achievementGuardSettingsActions
-    });
-    achievementGuardSettingsIntentHandler = createAchievementGuardSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("achievementGuardSettings")?.resetAchievementGuardSettings ?? resetAchievementGuardSettings)(!0),
-        persist: () => (getTestContext("achievementGuardSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
-      },
-      renderSettingsContent: () => achievementGuardSettingsBrowserAdapter.updateAchievementGuardSettingsContent()
-    });
-    let { buildAchievementGuardSettings } = achievementGuardSettingsBrowserAdapter, challengeHelperSettingsActions = {
-      buildSettingsSection,
-      addSettingsToggle,
-      addSettingsNumber
-    }, challengeHelperSettingsIntentHandler, challengeHelperSettingsBrowserAdapter = createChallengeHelperSettingsBrowserAdapter({
+      resetAchievementGuardSettings: (...args) => resetAchievementGuardSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      testSurface
+    }), { buildAchievementGuardSettings } = achievementGuardSettingsBrowserAdapter, challengeHelperSettingsBrowserAdapter = createChallengeHelperSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      intents: {
-        handle: (intent) => challengeHelperSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection,
+        addSettingsToggle,
+        addSettingsNumber
       },
-      getActions: () => getTestContext("challengeHelperSettings") ?? challengeHelperSettingsActions
-    });
-    challengeHelperSettingsIntentHandler = createChallengeHelperSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("challengeHelperSettings")?.resetChallengeHelperSettings ?? resetChallengeHelperSettings)(!0),
-        persist: () => (getTestContext("challengeHelperSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
-      },
-      renderSettingsContent: () => challengeHelperSettingsBrowserAdapter.updateChallengeHelperSettingsContent()
-    });
-    let { buildChallengeHelperSettings } = challengeHelperSettingsBrowserAdapter, prestigeSettingsReader = createPrestigeSettingsEvolveAdapter({
+      resetChallengeHelperSettings: (...args) => resetChallengeHelperSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      testSurface
+    }), { buildChallengeHelperSettings } = challengeHelperSettingsBrowserAdapter, prestigeSettingsReader = createPrestigeSettingsEvolveAdapter({
       getPrestigeTypes: () => getTestContext("prestigeSettings")?.prestigeTypes ?? prestigeTypes,
       getGame: () => getTestContext("prestigeSettings")?.game ?? game,
       getBuildings: () => getTestContext("prestigeSettings")?.buildings ?? buildings,
@@ -47565,28 +47645,18 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       }
     });
-    let { buildGovernmentSettings } = governmentSettingsBrowserAdapter, authoritySettingsActions = {
-      buildSettingsSection,
-      addSettingsToggle,
-      addSettingsNumber
-    }, authoritySettingsIntentHandler, authoritySettingsBrowserAdapter = createAuthoritySettingsBrowserAdapter(
-      {
-        getDocument: () => runtimeEnvironment.document,
-        getJQuery: () => $,
-        intents: {
-          handle: (intent) => authoritySettingsIntentHandler.handle(intent)
-        },
-        getActions: () => getTestContext("authoritySettings") ?? authoritySettingsActions
-      }
-    );
-    authoritySettingsIntentHandler = createAuthoritySettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("authoritySettings")?.resetAuthoritySettings ?? resetAuthoritySettings)(!0),
-        persist: () => (getTestContext("authoritySettings")?.updateSettingsFromState ?? updateSettingsFromState)()
+    let { buildGovernmentSettings } = governmentSettingsBrowserAdapter, authoritySettingsBrowserAdapter = createAuthoritySettingsControl({
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addSettingsToggle,
+        addSettingsNumber
       },
-      renderSettingsContent: () => authoritySettingsBrowserAdapter.updateAuthoritySettingsContent()
-    });
-    let { buildAuthoritySettings } = authoritySettingsBrowserAdapter, evolutionSettingsReader = createEvolutionSettingsEvolveAdapter({
+      resetAuthoritySettings: (...args) => resetAuthoritySettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      testSurface
+    }), { buildAuthoritySettings } = authoritySettingsBrowserAdapter, evolutionSettingsReader = createEvolutionSettingsEvolveAdapter({
       getGame: () => getTestContext("evolutionSettings")?.game ?? game,
       getRaces: () => getTestContext("evolutionSettings")?.races ?? races,
       getChallenges: () => getTestContext("evolutionSettings")?.challenges ?? challenges,

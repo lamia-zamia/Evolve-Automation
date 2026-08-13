@@ -163,12 +163,18 @@ import { createStateLogSettingsIntentHandler } from "../../application/state-log
 import { createStateLogSettingsBrowserAdapter } from "../browser/state-log-settings.ts";
 import { createInterfaceSettingsIntentHandler } from "../../application/interface-settings.ts";
 import { createInterfaceSettingsBrowserAdapter } from "../browser/interface-settings.ts";
-import { createChallengeHelperSettingsIntentHandler } from "../../application/challenge-helper-settings.ts";
-import { createChallengeHelperSettingsBrowserAdapter } from "../browser/challenge-helper-settings.ts";
-import { createAchievementGuardSettingsIntentHandler } from "../../application/achievement-guard-settings.ts";
-import { createAchievementGuardSettingsBrowserAdapter } from "../browser/achievement-guard-settings.ts";
-import { createAuthoritySettingsIntentHandler } from "../../application/authority-settings.ts";
-import { createAuthoritySettingsBrowserAdapter } from "../browser/authority-settings.ts";
+import {
+  createGeneralSettingsControl,
+  createAchievementGuardSettingsControl,
+  createAuthoritySettingsControl,
+  createChallengeHelperSettingsControl,
+  createJobSettingsControl,
+  createLoggingSettingsControl,
+  createMagicSettingsControl,
+  createProjectSettingsControl,
+  createStorageSettingsControl,
+  createWeightingSettingsControl,
+} from "../../bootstrap/settings/core-settings-controls.ts";
 import { createResearchSettingsIntentHandler } from "../../application/research-settings.ts";
 import { createResearchSettingsBrowserAdapter } from "../browser/research-settings.ts";
 import { createResearchSettingsEvolveAdapter } from "./progression/research/research-settings.ts";
@@ -178,15 +184,6 @@ import { createGovernmentSettingsEvolveAdapter } from "./civic/government-settin
 import { createPlanetSettingsIntentHandler } from "../../application/planet-settings.ts";
 import { createPlanetSettingsBrowserAdapter } from "../browser/planet-settings.ts";
 import { createPlanetSettingsEvolveAdapter } from "./progression/evolution/planet-settings.ts";
-import {
-  createGeneralSettingsControl,
-  createJobSettingsControl,
-  createLoggingSettingsControl,
-  createMagicSettingsControl,
-  createProjectSettingsControl,
-  createStorageSettingsControl,
-  createWeightingSettingsControl,
-} from "../../bootstrap/settings/core-settings-controls.ts";
 import { createBuildingSettingsIntentHandler } from "../../application/building-settings.ts";
 import { createBuildingSettingsBrowserAdapter } from "../browser/building-settings.ts";
 import { createBuildingSettingsEvolveAdapter } from "./progression/build/building-settings.ts";
@@ -1117,35 +1114,15 @@ export function startEvolveRuntimeComposition(
     buildSettingsSection,
     addSettingsToggle,
   };
-  let achievementGuardSettingsIntentHandler;
   const achievementGuardSettingsBrowserAdapter =
-    createAchievementGuardSettingsBrowserAdapter({
+    createAchievementGuardSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      intents: {
-        handle: (intent) =>
-          achievementGuardSettingsIntentHandler.handle(intent),
-      },
-      getActions: () =>
-        getTestContext("achievementGuardSettings") ??
-        achievementGuardSettingsActions,
-    });
-  achievementGuardSettingsIntentHandler =
-    createAchievementGuardSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () =>
-          (
-            getTestContext("achievementGuardSettings")
-              ?.resetAchievementGuardSettings ?? resetAchievementGuardSettings
-          )(true),
-        persist: () =>
-          (
-            getTestContext("achievementGuardSettings")
-              ?.updateSettingsFromState ?? updateSettingsFromState
-          )(),
-      },
-      renderSettingsContent: () =>
-        achievementGuardSettingsBrowserAdapter.updateAchievementGuardSettingsContent(),
+      actions: achievementGuardSettingsActions,
+      resetAchievementGuardSettings: (...args) =>
+        resetAchievementGuardSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      testSurface,
     });
   const { buildAchievementGuardSettings } =
     achievementGuardSettingsBrowserAdapter;
@@ -1155,34 +1132,15 @@ export function startEvolveRuntimeComposition(
     addSettingsToggle,
     addSettingsNumber,
   };
-  let challengeHelperSettingsIntentHandler;
   const challengeHelperSettingsBrowserAdapter =
-    createChallengeHelperSettingsBrowserAdapter({
+    createChallengeHelperSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      intents: {
-        handle: (intent) => challengeHelperSettingsIntentHandler.handle(intent),
-      },
-      getActions: () =>
-        getTestContext("challengeHelperSettings") ??
-        challengeHelperSettingsActions,
-    });
-  challengeHelperSettingsIntentHandler =
-    createChallengeHelperSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () =>
-          (
-            getTestContext("challengeHelperSettings")
-              ?.resetChallengeHelperSettings ?? resetChallengeHelperSettings
-          )(true),
-        persist: () =>
-          (
-            getTestContext("challengeHelperSettings")
-              ?.updateSettingsFromState ?? updateSettingsFromState
-          )(),
-      },
-      renderSettingsContent: () =>
-        challengeHelperSettingsBrowserAdapter.updateChallengeHelperSettingsContent(),
+      actions: challengeHelperSettingsActions,
+      resetChallengeHelperSettings: (...args) =>
+        resetChallengeHelperSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      testSurface,
     });
   const { buildChallengeHelperSettings } =
     challengeHelperSettingsBrowserAdapter;
@@ -1352,33 +1310,13 @@ export function startEvolveRuntimeComposition(
     addSettingsToggle,
     addSettingsNumber,
   };
-  let authoritySettingsIntentHandler;
-  const authoritySettingsBrowserAdapter = createAuthoritySettingsBrowserAdapter(
-    {
-      getDocument: () => runtimeEnvironment.document,
-      getJQuery: () => $,
-      intents: {
-        handle: (intent) => authoritySettingsIntentHandler.handle(intent),
-      },
-      getActions: () =>
-        getTestContext("authoritySettings") ?? authoritySettingsActions,
-    },
-  );
-  authoritySettingsIntentHandler = createAuthoritySettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("authoritySettings")?.resetAuthoritySettings ??
-          resetAuthoritySettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("authoritySettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: () =>
-      authoritySettingsBrowserAdapter.updateAuthoritySettingsContent(),
+  const authoritySettingsBrowserAdapter = createAuthoritySettingsControl({
+    getDocument: () => runtimeEnvironment.document,
+    getJQuery: () => $,
+    actions: authoritySettingsActions,
+    resetAuthoritySettings: (...args) => resetAuthoritySettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    testSurface,
   });
   const { buildAuthoritySettings } = authoritySettingsBrowserAdapter;
   const evolutionSettingsReader = createEvolutionSettingsEvolveAdapter({
@@ -5527,10 +5465,6 @@ export function startEvolveRuntimeComposition(
       mechSettings: mechSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("challengeHelperSettings", {
-      challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("governmentSettings", {
       governmentSettings: governmentSettingsBrowserAdapter,
     });
@@ -5545,14 +5479,6 @@ export function startEvolveRuntimeComposition(
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("optionsModal", {
       optionsModal: optionsModalBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("achievementGuardSettings", {
-      achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("authoritySettings", {
-      authoritySettings: authoritySettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("researchSettings", {
