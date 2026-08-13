@@ -438,9 +438,9 @@ function startEvolveRuntimeComposition(
     getDocument: () => runtimeEnvironment.document,
   });
   const settingsStore = createSettingsStore(runtimeEnvironment.storage);
-  var settingsRaw = settingsStore.load();
-  var settings = {};
-  var game = null;
+  let settingsRaw = settingsStore.load();
+  let settings = {};
+  let game = null;
   const { fastEval, cacheSize: fastEvalCacheSize } =
     createCustomExpressionAdapter({
       getScope: () => ({
@@ -2536,7 +2536,7 @@ function startEvolveRuntimeComposition(
     getHaveTech: () => haveTech,
     getDate: () => runtimeEnvironment.createDate(),
   });
-  var win = null;
+  let win = null;
   const userscriptEnvironment = createUserscriptEnvironment(
     runtimeEnvironment.window,
   );
@@ -2554,16 +2554,16 @@ function startEvolveRuntimeComposition(
     getBlobConstructor: () => runtimeEnvironment.BlobConstructor,
     schedule: (callback, delay) => runtimeEnvironment.schedule(callback, delay),
   });
-  var needSandboxBypass = false;
+  let needSandboxBypass = false;
 
-  var overrideKey = "ctrlKey";
-  var overrideKeyLabel = "Ctrl";
+  let overrideKey = "ctrlKey";
+  let overrideKeyLabel = "Ctrl";
   if (runtimeEnvironment.window.navigator.platform.indexOf("Mac") === 0) {
     overrideKey = "altKey";
     overrideKeyLabel = "Alt";
   }
 
-  var checkActions = false;
+  let checkActions = false;
 
   let safeMode =
     String(runtimeEnvironment.window.location)
@@ -3016,18 +3016,18 @@ function startEvolveRuntimeComposition(
   ];
 
   // Lookup tables, will be filled on init
-  var techIds = {};
-  var buildingIds = {};
-  var arpaIds = {};
-  var jobIds = {};
-  var evolutions = {};
-  var imitations = {};
-  var races = {};
-  var craftablesList = [];
-  var foundryList = [];
+  let techIds = {};
+  let buildingIds = {};
+  let arpaIds = {};
+  let jobIds = {};
+  let evolutions = {};
+  let imitations = {};
+  let races = {};
+  let craftablesList = [];
+  let foundryList = [];
 
   // State variables
-  var state = {
+  let state = {
     forcedUpdate: false,
     gameTicked: false,
     scriptTick: 1,
@@ -6562,7 +6562,7 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  var poly = createGameCompatibility({
+  let poly = createGameCompatibility({
     getGame: () => game,
     getBuildings: () => buildings,
     getTraitVal: () => traitVal,

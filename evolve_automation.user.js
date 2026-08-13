@@ -56437,9 +56437,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getDocument: () => runtimeEnvironment.document
     });
     const settingsStore = createSettingsStore(runtimeEnvironment.storage);
-    var settingsRaw = settingsStore.load();
-    var settings = {};
-    var game = null;
+    let settingsRaw = settingsStore.load();
+    let settings = {};
+    let game = null;
     const { fastEval, cacheSize: fastEvalCacheSize } = createCustomExpressionAdapter({
       getScope: () => ({
         settings,
@@ -58078,7 +58078,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       getDate: () => runtimeEnvironment.createDate()
     });
-    var win = null;
+    let win = null;
     const userscriptEnvironment = createUserscriptEnvironment(
       runtimeEnvironment.window
     );
@@ -58096,14 +58096,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBlobConstructor: () => runtimeEnvironment.BlobConstructor,
       schedule: (callback, delay) => runtimeEnvironment.schedule(callback, delay)
     });
-    var needSandboxBypass = false;
-    var overrideKey = "ctrlKey";
-    var overrideKeyLabel = "Ctrl";
+    let needSandboxBypass = false;
+    let overrideKey = "ctrlKey";
+    let overrideKeyLabel = "Ctrl";
     if (runtimeEnvironment.window.navigator.platform.indexOf("Mac") === 0) {
       overrideKey = "altKey";
       overrideKeyLabel = "Alt";
     }
-    var checkActions = false;
+    let checkActions = false;
     let safeMode = String(runtimeEnvironment.window.location).toLowerCase().indexOf("safemode") !== -1;
     const projectControls = createGameProjectControls({
       getVueById: (id) => getVueById(id),
@@ -58537,16 +58537,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       "Scarletite",
       "Quantium"
     ];
-    var techIds = {};
-    var buildingIds = {};
-    var arpaIds = {};
-    var jobIds = {};
-    var evolutions = {};
-    var imitations = {};
-    var races = {};
-    var craftablesList = [];
-    var foundryList = [];
-    var state = {
+    let techIds = {};
+    let buildingIds = {};
+    let arpaIds = {};
+    let jobIds = {};
+    let evolutions = {};
+    let imitations = {};
+    let races = {};
+    let craftablesList = [];
+    let foundryList = [];
+    let state = {
       forcedUpdate: false,
       gameTicked: false,
       scriptTick: 1,
@@ -61699,7 +61699,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         settingsTransferTestActions = context.actions;
       }
     });
-    var poly = createGameCompatibility({
+    let poly = createGameCompatibility({
       getGame: () => game,
       getBuildings: () => buildings,
       getTraitVal: () => traitVal,
