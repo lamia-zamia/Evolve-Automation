@@ -14522,6 +14522,40 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/bootstrap/build-planner-control.ts
+  function createBuildPlannerControl({
+    getGame,
+    getDocument,
+    getJQuery,
+    getPoly,
+    getNiceNumber,
+    getSettings,
+    getSettingsRaw,
+    getState,
+    plannerLimitingResource,
+    loadPlannerStats,
+    savePlannerStats,
+    testSurface,
+    setTestContext
+  }) {
+    let gameBuildPlanner = createGameBuildPlannerEvolveAdapter({
+      getGame,
+      getDocument,
+      getJQuery,
+      getPoly,
+      getNiceNumber
+    });
+    return createBuildPlanner({
+      gameBuildPlanner,
+      getSettings,
+      getSettingsRaw,
+      getState,
+      plannerLimitingResource,
+      loadPlannerStats,
+      savePlannerStats
+    });
+  }
+
   // src/game/state-demand.ts
   function applyStorageRequirementsResult(result2, resources, state) {
     for (let requirement of result2.resources) {
@@ -50733,20 +50767,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateSettingsFromState: () => updateSettingsFromState(),
       makePlannerStats: () => makePlannerStats(),
       savePlannerStats: (stats) => savePlannerStats(stats)
-    }), gameBuildPlanner = createGameBuildPlannerEvolveAdapter({
+    }), { updateBuildPlanner } = createBuildPlannerControl({
       getGame: () => game,
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getPoly: () => poly,
-      getNiceNumber
-    }), { updateBuildPlanner } = createBuildPlanner({
-      gameBuildPlanner,
+      getNiceNumber,
       getSettings: () => settings,
       getSettingsRaw: () => settingsRaw,
       getState: () => state,
       plannerLimitingResource,
       loadPlannerStats,
-      savePlannerStats
+      savePlannerStats,
+      testSurface,
+      setTestContext(context) {
+        settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, game = context.game, resources = context.resources, poly = context.poly;
+      }
     }), stateUpdateTestHelpers, stateUpdateHelpers = {
       checkEvolutionResult,
       updateTriggerSettingsContent,

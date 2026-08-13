@@ -129,8 +129,7 @@ import { createPlannerStatsStore } from "../storage/planner-stats.ts";
 import { createSettingsStore } from "../storage/settings-store.ts";
 import { createStateLogStore } from "../storage/state-log-store.ts";
 import { createPlannerStatsLifecycle } from "../../application/planner-stats.ts";
-import { createBuildPlanner } from "../../planning/build-planner.ts";
-import { createGameBuildPlannerEvolveAdapter } from "./game-build-planner.ts";
+import { createBuildPlannerControl } from "../../bootstrap/build-planner-control.ts";
 import {
   createDemandPrioritizationAction,
   createStorageRequirementsAction,
@@ -3950,35 +3949,28 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const gameBuildPlanner = createGameBuildPlannerEvolveAdapter({
+  const { updateBuildPlanner } = createBuildPlannerControl({
     getGame: () => game,
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getPoly: () => poly,
     getNiceNumber,
-  });
-  const { updateBuildPlanner } = createBuildPlanner({
-    gameBuildPlanner,
     getSettings: () => settings,
     getSettingsRaw: () => settingsRaw,
     getState: () => state,
     plannerLimitingResource,
     loadPlannerStats,
     savePlannerStats,
+    testSurface,
+    setTestContext(context) {
+      settings = context.settings;
+      settingsRaw = context.settingsRaw;
+      state = context.state;
+      game = context.game;
+      resources = context.resources;
+      poly = context.poly;
+    },
   });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      updateBuildPlanner: () => updateBuildPlanner(),
-      setBuildPlannerTestContext(context) {
-        settings = context.settings;
-        settingsRaw = context.settingsRaw;
-        state = context.state;
-        game = context.game;
-        resources = context.resources;
-        poly = context.poly;
-      },
-    });
 
   let stateUpdateTestHelpers;
   const stateUpdateHelpers = {
