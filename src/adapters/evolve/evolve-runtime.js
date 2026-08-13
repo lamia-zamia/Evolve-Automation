@@ -183,18 +183,12 @@ import { createGovernmentSettingsEvolveAdapter } from "./civic/government-settin
 import { createPlanetSettingsIntentHandler } from "../../application/planet-settings.ts";
 import { createPlanetSettingsBrowserAdapter } from "../browser/planet-settings.ts";
 import { createPlanetSettingsEvolveAdapter } from "./progression/evolution/planet-settings.ts";
-import { createProjectSettingsIntentHandler } from "../../application/project-settings.ts";
-import { createProjectSettingsBrowserAdapter } from "../browser/project-settings.ts";
-import { createProjectSettingsEvolveAdapter } from "./progression/research/project-settings.ts";
-import { createStorageSettingsIntentHandler } from "../../application/storage-settings.ts";
-import { createStorageSettingsBrowserAdapter } from "../browser/storage-settings.ts";
-import { createStorageSettingsEvolveAdapter } from "./economy/storage/storage-settings.ts";
-import { createMagicSettingsIntentHandler } from "../../application/magic-settings.ts";
-import { createMagicSettingsBrowserAdapter } from "../browser/magic-settings.ts";
-import { createMagicSettingsEvolveAdapter } from "./economy/production/magic-settings.ts";
-import { createJobSettingsIntentHandler } from "../../application/job-settings.ts";
-import { createJobSettingsBrowserAdapter } from "../browser/job-settings.ts";
-import { createJobSettingsEvolveAdapter } from "./civic/job-settings.ts";
+import {
+  createJobSettingsControl,
+  createMagicSettingsControl,
+  createProjectSettingsControl,
+  createStorageSettingsControl,
+} from "../../bootstrap/settings/core-settings-controls.ts";
 import { createWeightingSettingsIntentHandler } from "../../application/weighting-settings.ts";
 import { createWeightingSettingsBrowserAdapter } from "../browser/weighting-settings.ts";
 import { createBuildingSettingsIntentHandler } from "../../application/building-settings.ts";
@@ -743,52 +737,17 @@ export function startEvolveRuntimeComposition(
     buildTableLabel,
     getSorterHelper: () => sorterHelper,
   };
-  const storageSettingsEvolveAdapter = createStorageSettingsEvolveAdapter({
-    getStorageManager: () =>
-      getTestContext("storageSettings")?.StorageManager ?? StorageManager,
-    getSettingsRaw: () =>
-      getTestContext("storageSettings")?.settingsRaw ?? settingsRaw,
-  });
-  let storageSettingsIntentHandler;
-  const storageSettingsBrowserAdapter = createStorageSettingsBrowserAdapter({
+  const storageSettingsBrowserAdapter = createStorageSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getReadModel: () =>
-      storageSettingsEvolveAdapter.readStorageSettingsReadModel(),
-    intents: {
-      handle: (intent) => storageSettingsIntentHandler.handle(intent),
-    },
-    getActions: () =>
-      getTestContext("storageSettings")?.actions ?? storageSettingsActions,
-  });
-  storageSettingsIntentHandler = createStorageSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("storageSettings")?.resetStorageSettings ??
-          resetStorageSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("storageSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-      reorderResources: (resourceIds) =>
-        storageSettingsEvolveAdapter.reorderResources(resourceIds),
-    },
-    renderSettingsContent: () =>
-      storageSettingsBrowserAdapter.updateStorageSettingsContent(),
-    effects: {
-      resetCheckbox: () =>
-        (getTestContext("storageSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoStorage",
-        ),
-      removeStorageToggles: () =>
-        (
-          getTestContext("storageSettings")?.removeStorageToggles ??
-          removeStorageToggles
-        )(),
-    },
+    actions: storageSettingsActions,
+    getStorageManager: () => StorageManager,
+    getSettingsRaw: () => settingsRaw,
+    resetStorageSettings: (...args) => resetStorageSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    removeStorageToggles: () => removeStorageToggles(),
+    testSurface,
   });
   const { buildStorageSettings } = storageSettingsBrowserAdapter;
   const magicSettingsActions = {
@@ -800,47 +759,17 @@ export function startEvolveRuntimeComposition(
     addTableToggle,
     buildTableLabel,
   };
-  const magicSettingsEvolveAdapter = createMagicSettingsEvolveAdapter({
-    getGame: () => getTestContext("magicSettings")?.game ?? game,
-    getAlchemyManager: () =>
-      getTestContext("magicSettings")?.AlchemyManager ?? AlchemyManager,
-    getRitualManager: () =>
-      getTestContext("magicSettings")?.RitualManager ?? RitualManager,
-  });
-  let magicSettingsIntentHandler;
-  const magicSettingsBrowserAdapter = createMagicSettingsBrowserAdapter({
+  const magicSettingsBrowserAdapter = createMagicSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getReadModel: () => magicSettingsEvolveAdapter.readMagicSettingsReadModel(),
-    intents: {
-      handle: (intent) => magicSettingsIntentHandler.handle(intent),
-    },
-    getActions: () =>
-      getTestContext("magicSettings")?.actions ?? magicSettingsActions,
-  });
-  magicSettingsIntentHandler = createMagicSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("magicSettings")?.resetMagicSettings ??
-          resetMagicSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("magicSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: () =>
-      magicSettingsBrowserAdapter.updateMagicSettingsContent(),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("magicSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoAlchemy",
-          "autoPylon",
-          "magicFullmetalHelper",
-        ),
-    },
+    actions: magicSettingsActions,
+    getGame: () => game,
+    getAlchemyManager: () => AlchemyManager,
+    getRitualManager: () => RitualManager,
+    resetMagicSettings: (...args) => resetMagicSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
   const { buildMagicSettings } = magicSettingsBrowserAdapter;
   const jobSettingsActions = {
@@ -854,50 +783,19 @@ export function startEvolveRuntimeComposition(
     getSorterHelper: () => sorterHelper,
     confirm: (...args) => runtimeEnvironment.confirm(...args),
   };
-  const jobSettingsEvolveAdapter = createJobSettingsEvolveAdapter({
-    getBasicJob: () => getTestContext("jobSettings")?.BasicJob ?? BasicJob,
-    getCraftingJob: () =>
-      getTestContext("jobSettings")?.CraftingJob ?? CraftingJob,
-    getJobManager: () =>
-      getTestContext("jobSettings")?.JobManager ?? JobManager,
-    getJobs: () => getTestContext("jobSettings")?.jobs ?? jobs,
-    getSettingsRaw: () =>
-      getTestContext("jobSettings")?.settingsRaw ?? settingsRaw,
-  });
-  let jobSettingsIntentHandler;
-  const jobSettingsBrowserAdapter = createJobSettingsBrowserAdapter({
+  const jobSettingsBrowserAdapter = createJobSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getReadModel: () => jobSettingsEvolveAdapter.readJobSettingsReadModel(),
-    intents: {
-      handle: (intent) => jobSettingsIntentHandler.handle(intent),
-    },
-    getActions: () =>
-      getTestContext("jobSettings")?.actions ?? jobSettingsActions,
-  });
-  jobSettingsIntentHandler = createJobSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (getTestContext("jobSettings")?.resetJobSettings ?? resetJobSettings)(
-          true,
-        ),
-      persist: () =>
-        (
-          getTestContext("jobSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-      resetPriorities: () => jobSettingsEvolveAdapter.resetPriorities(),
-      reorderJobs: (jobIds) => jobSettingsEvolveAdapter.reorderJobs(jobIds),
-    },
-    renderSettingsContent: () =>
-      jobSettingsBrowserAdapter.updateJobSettingsContent(),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("jobSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoJobs",
-          "autoCraftsmen",
-        ),
-    },
+    actions: jobSettingsActions,
+    getBasicJob: () => BasicJob,
+    getCraftingJob: () => CraftingJob,
+    getJobManager: () => JobManager,
+    getJobs: () => jobs,
+    getSettingsRaw: () => settingsRaw,
+    resetJobSettings: (...args) => resetJobSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
   const { buildJobSettings } = jobSettingsBrowserAdapter;
   const weightingSettingsActions = {
@@ -1030,47 +928,16 @@ export function startEvolveRuntimeComposition(
     buildTableLabel,
     getSorterHelper: () => sorterHelper,
   };
-  const projectSettingsEvolveAdapter = createProjectSettingsEvolveAdapter({
-    getProjectManager: () =>
-      getTestContext("projectSettings")?.ProjectManager ?? ProjectManager,
-    getSettingsRaw: () =>
-      getTestContext("projectSettings")?.settingsRaw ?? settingsRaw,
-  });
-  let projectSettingsIntentHandler;
-  const projectSettingsBrowserAdapter = createProjectSettingsBrowserAdapter({
+  const projectSettingsBrowserAdapter = createProjectSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getReadModel: () =>
-      projectSettingsEvolveAdapter.readProjectSettingsReadModel(),
-    intents: {
-      handle: (intent) => projectSettingsIntentHandler.handle(intent),
-    },
-    getActions: () =>
-      getTestContext("projectSettings")?.actions ?? projectSettingsActions,
-  });
-  projectSettingsIntentHandler = createProjectSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("projectSettings")?.resetProjectSettings ??
-          resetProjectSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("projectSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-      reorderProjects: (projectIds) =>
-        projectSettingsEvolveAdapter.reorderProjects(projectIds),
-    },
-    renderSettingsContent: () =>
-      projectSettingsBrowserAdapter.updateProjectSettingsContent(),
-    effects: {
-      resetCheckbox: () =>
-        (getTestContext("projectSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoARPA",
-        ),
-    },
+    actions: projectSettingsActions,
+    getProjectManager: () => ProjectManager,
+    getSettingsRaw: () => settingsRaw,
+    resetProjectSettings: (...args) => resetProjectSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
   const { buildProjectSettings } = projectSettingsBrowserAdapter;
   const loggingSettingsActions = {
@@ -5756,22 +5623,6 @@ export function startEvolveRuntimeComposition(
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("planetSettings", {
       planetSettings: planetSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("projectSettings", {
-      projectSettings: projectSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("storageSettings", {
-      storageSettings: storageSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("magicSettings", {
-      magicSettings: magicSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("jobSettings", {
-      jobSettings: jobSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("weightingSettings", {

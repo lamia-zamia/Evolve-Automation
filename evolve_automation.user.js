@@ -18087,6 +18087,65 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/application/storage-settings.ts
+  function createStorageSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-storage-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckbox(), effects.removeStorageToggles();
+            return;
+          case "reorder-storage-resources":
+            writer.reorderResources(intent.resourceIds), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/application/magic-settings.ts
+  function createMagicSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-magic-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/job-settings.ts
+  function createJobSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-job-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
+            return;
+          case "reset-job-priorities":
+            writer.resetPriorities(), writer.persist(), renderSettingsContent();
+            return;
+          case "reorder-jobs":
+            writer.reorderJobs(intent.jobIds), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
   // src/domain/progression/research/project-settings.ts
   function freezeRow(row) {
     return Object.freeze({ ...row });
@@ -18172,73 +18231,6 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({
       buildProjectSettings,
       updateProjectSettingsContent
-    });
-  }
-
-  // src/adapters/evolve/progression/research/project-settings.ts
-  function readPriorityList(manager) {
-    let priorityList = manager.priorityList;
-    if (!Array.isArray(priorityList))
-      throw new TypeError("ProjectManager.priorityList must be an array");
-    return priorityList.map(
-      (project, index) => requireRecord(project, `ProjectManager.priorityList[${index}]`)
-    );
-  }
-  function createProjectSettingsEvolveAdapter({
-    getProjectManager,
-    getSettingsRaw
-  }) {
-    function readProjectSettingsReadModel() {
-      let manager = requireRecord(getProjectManager(), "ProjectManager"), rows = readPriorityList(manager).map(
-        (project, index) => {
-          let id = requireString(
-            project.id,
-            `ProjectManager.priorityList[${index}].id`
-          );
-          return {
-            id,
-            label: requireString(
-              project.name,
-              `ProjectManager.priorityList[${index}].name`
-            ),
-            enabledSettingName: `arpa_${id}`,
-            maximumSettingName: `arpa_m_${id}`,
-            weightingSettingName: `arpa_w_${id}`
-          };
-        }
-      );
-      return createProjectSettingsReadModel(rows);
-    }
-    function reorderProjects(projectIds) {
-      let manager = requireRecord(getProjectManager(), "ProjectManager"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), sortByPriority = requireFunction(
-        manager.sortByPriority,
-        "ProjectManager.sortByPriority"
-      );
-      projectIds.forEach((projectId, index) => {
-        let id = requireString(projectId, `projectIds[${index}]`);
-        settingsRaw[`arpa_p_${id}`] = index;
-      }), Reflect.apply(sortByPriority, manager, []);
-    }
-    return Object.freeze({ readProjectSettingsReadModel, reorderProjects });
-  }
-
-  // src/application/storage-settings.ts
-  function createStorageSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        switch (intent.type) {
-          case "reset-storage-settings":
-            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckbox(), effects.removeStorageToggles();
-            return;
-          case "reorder-storage-resources":
-            writer.reorderResources(intent.resourceIds), writer.persist();
-            return;
-        }
-      }
     });
   }
 
@@ -18353,73 +18345,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return Object.freeze({
       buildStorageSettings,
       updateStorageSettingsContent
-    });
-  }
-
-  // src/adapters/evolve/economy/storage/storage-settings.ts
-  function readPriorityList2(manager) {
-    let priorityList = manager.priorityList;
-    if (!Array.isArray(priorityList))
-      throw new TypeError("StorageManager.priorityList must be an array");
-    return priorityList.map(
-      (resource2, index) => requireRecord(resource2, `StorageManager.priorityList[${index}]`)
-    );
-  }
-  function createStorageSettingsEvolveAdapter({
-    getStorageManager,
-    getSettingsRaw
-  }) {
-    function readStorageSettingsReadModel() {
-      let manager = requireRecord(getStorageManager(), "StorageManager"), rows = readPriorityList2(manager).map(
-        (resource2, index) => {
-          let id = requireString(
-            resource2.id,
-            `StorageManager.priorityList[${index}].id`
-          );
-          return {
-            id,
-            label: requireString(
-              resource2.name,
-              `StorageManager.priorityList[${index}].name`
-            ),
-            enabledSettingName: `res_storage${id}`,
-            overflowSettingName: `res_storage_o_${id}`,
-            minimumSettingName: `res_min_store${id}`,
-            maximumSettingName: `res_max_store${id}`
-          };
-        }
-      );
-      return createStorageSettingsReadModel(rows);
-    }
-    function reorderResources(resourceIds) {
-      let manager = requireRecord(getStorageManager(), "StorageManager"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), sortByPriority = requireFunction(
-        manager.sortByPriority,
-        "StorageManager.sortByPriority"
-      );
-      resourceIds.forEach((resourceId3, index) => {
-        let id = requireString(resourceId3, `resourceIds[${index}]`);
-        settingsRaw[`res_storage_p_${id}`] = index;
-      }), Reflect.apply(sortByPriority, manager, []);
-    }
-    return Object.freeze({
-      readStorageSettingsReadModel,
-      reorderResources
-    });
-  }
-
-  // src/application/magic-settings.ts
-  function createMagicSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        if (intent.type === "reset-magic-settings") {
-          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
-          return;
-        }
-      }
     });
   }
 
@@ -18575,86 +18500,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return Object.freeze({
       buildMagicSettings,
       updateMagicSettingsContent
-    });
-  }
-
-  // src/adapters/evolve/economy/production/magic-settings.ts
-  function readPriorityList3(manager) {
-    let priorityList = manager.priorityList;
-    if (!Array.isArray(priorityList))
-      throw new TypeError("AlchemyManager.priorityList must be an array");
-    return priorityList.map(
-      (resource2, index) => requireRecord(resource2, `AlchemyManager.priorityList[${index}]`)
-    );
-  }
-  function createMagicSettingsEvolveAdapter({
-    getGame,
-    getAlchemyManager,
-    getRitualManager
-  }) {
-    function readMagicSettingsReadModel() {
-      let game = requireRecord(getGame(), "game"), localize2 = requireFunction(game.loc, "game.loc"), alchemyManager = requireRecord(getAlchemyManager(), "AlchemyManager"), resources = readPriorityList3(alchemyManager), transmuteTier = requireFunction(
-        alchemyManager.transmuteTier,
-        "AlchemyManager.transmuteTier"
-      ), alchemyRows = resources.map((resource2, index) => {
-        let path = `AlchemyManager.priorityList[${index}]`, id = requireString(resource2.id, `${path}.id`), tier = requireNumber(
-          Reflect.apply(transmuteTier, alchemyManager, [resource2]),
-          `${path}.transmuteTier result`
-        );
-        return {
-          id,
-          label: requireString(resource2.name, `${path}.name`),
-          color: tier > 1 ? "has-text-advanced" : "has-text-info",
-          enabledSettingName: `res_alchemy_${id}`,
-          weightingSettingName: `res_alchemy_w_${id}`
-        };
-      }), ritualManager = requireRecord(getRitualManager(), "RitualManager"), productions = requireRecord(
-        ritualManager.Productions,
-        "RitualManager.Productions"
-      ), pylonRows = Object.entries(productions).map(
-        ([key, rawProduction]) => {
-          let production = requireRecord(
-            rawProduction,
-            `RitualManager.Productions.${key}`
-          ), id = requireString(
-            production.id,
-            `RitualManager.Productions.${key}.id`
-          );
-          return {
-            id,
-            label: requireString(
-              Reflect.apply(localize2, game, [`modal_pylon_spell_${id}`]),
-              `game.loc(modal_pylon_spell_${id}) result`
-            ),
-            weightingSettingName: `spell_w_${id}`
-          };
-        }
-      );
-      return createMagicSettingsReadModel({ alchemyRows, pylonRows });
-    }
-    return Object.freeze({ readMagicSettingsReadModel });
-  }
-
-  // src/application/job-settings.ts
-  function createJobSettingsIntentHandler({
-    writer,
-    renderSettingsContent,
-    effects
-  }) {
-    return Object.freeze({
-      handle(intent) {
-        switch (intent.type) {
-          case "reset-job-settings":
-            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
-            return;
-          case "reset-job-priorities":
-            writer.resetPriorities(), writer.persist(), renderSettingsContent();
-            return;
-          case "reorder-jobs":
-            writer.reorderJobs(intent.jobIds), writer.persist();
-            return;
-        }
-      }
     });
   }
 
@@ -18859,6 +18704,161 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return Object.freeze({ buildJobSettings, updateJobSettingsContent });
   }
 
+  // src/adapters/evolve/progression/research/project-settings.ts
+  function readPriorityList(manager) {
+    let priorityList = manager.priorityList;
+    if (!Array.isArray(priorityList))
+      throw new TypeError("ProjectManager.priorityList must be an array");
+    return priorityList.map(
+      (project, index) => requireRecord(project, `ProjectManager.priorityList[${index}]`)
+    );
+  }
+  function createProjectSettingsEvolveAdapter({
+    getProjectManager,
+    getSettingsRaw
+  }) {
+    function readProjectSettingsReadModel() {
+      let manager = requireRecord(getProjectManager(), "ProjectManager"), rows = readPriorityList(manager).map(
+        (project, index) => {
+          let id = requireString(
+            project.id,
+            `ProjectManager.priorityList[${index}].id`
+          );
+          return {
+            id,
+            label: requireString(
+              project.name,
+              `ProjectManager.priorityList[${index}].name`
+            ),
+            enabledSettingName: `arpa_${id}`,
+            maximumSettingName: `arpa_m_${id}`,
+            weightingSettingName: `arpa_w_${id}`
+          };
+        }
+      );
+      return createProjectSettingsReadModel(rows);
+    }
+    function reorderProjects(projectIds) {
+      let manager = requireRecord(getProjectManager(), "ProjectManager"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), sortByPriority = requireFunction(
+        manager.sortByPriority,
+        "ProjectManager.sortByPriority"
+      );
+      projectIds.forEach((projectId, index) => {
+        let id = requireString(projectId, `projectIds[${index}]`);
+        settingsRaw[`arpa_p_${id}`] = index;
+      }), Reflect.apply(sortByPriority, manager, []);
+    }
+    return Object.freeze({ readProjectSettingsReadModel, reorderProjects });
+  }
+
+  // src/adapters/evolve/economy/storage/storage-settings.ts
+  function readPriorityList2(manager) {
+    let priorityList = manager.priorityList;
+    if (!Array.isArray(priorityList))
+      throw new TypeError("StorageManager.priorityList must be an array");
+    return priorityList.map(
+      (resource2, index) => requireRecord(resource2, `StorageManager.priorityList[${index}]`)
+    );
+  }
+  function createStorageSettingsEvolveAdapter({
+    getStorageManager,
+    getSettingsRaw
+  }) {
+    function readStorageSettingsReadModel() {
+      let manager = requireRecord(getStorageManager(), "StorageManager"), rows = readPriorityList2(manager).map(
+        (resource2, index) => {
+          let id = requireString(
+            resource2.id,
+            `StorageManager.priorityList[${index}].id`
+          );
+          return {
+            id,
+            label: requireString(
+              resource2.name,
+              `StorageManager.priorityList[${index}].name`
+            ),
+            enabledSettingName: `res_storage${id}`,
+            overflowSettingName: `res_storage_o_${id}`,
+            minimumSettingName: `res_min_store${id}`,
+            maximumSettingName: `res_max_store${id}`
+          };
+        }
+      );
+      return createStorageSettingsReadModel(rows);
+    }
+    function reorderResources(resourceIds) {
+      let manager = requireRecord(getStorageManager(), "StorageManager"), settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw"), sortByPriority = requireFunction(
+        manager.sortByPriority,
+        "StorageManager.sortByPriority"
+      );
+      resourceIds.forEach((resourceId3, index) => {
+        let id = requireString(resourceId3, `resourceIds[${index}]`);
+        settingsRaw[`res_storage_p_${id}`] = index;
+      }), Reflect.apply(sortByPriority, manager, []);
+    }
+    return Object.freeze({
+      readStorageSettingsReadModel,
+      reorderResources
+    });
+  }
+
+  // src/adapters/evolve/economy/production/magic-settings.ts
+  function readPriorityList3(manager) {
+    let priorityList = manager.priorityList;
+    if (!Array.isArray(priorityList))
+      throw new TypeError("AlchemyManager.priorityList must be an array");
+    return priorityList.map(
+      (resource2, index) => requireRecord(resource2, `AlchemyManager.priorityList[${index}]`)
+    );
+  }
+  function createMagicSettingsEvolveAdapter({
+    getGame,
+    getAlchemyManager,
+    getRitualManager
+  }) {
+    function readMagicSettingsReadModel() {
+      let game = requireRecord(getGame(), "game"), localize2 = requireFunction(game.loc, "game.loc"), alchemyManager = requireRecord(getAlchemyManager(), "AlchemyManager"), resources = readPriorityList3(alchemyManager), transmuteTier = requireFunction(
+        alchemyManager.transmuteTier,
+        "AlchemyManager.transmuteTier"
+      ), alchemyRows = resources.map((resource2, index) => {
+        let path = `AlchemyManager.priorityList[${index}]`, id = requireString(resource2.id, `${path}.id`), tier = requireNumber(
+          Reflect.apply(transmuteTier, alchemyManager, [resource2]),
+          `${path}.transmuteTier result`
+        );
+        return {
+          id,
+          label: requireString(resource2.name, `${path}.name`),
+          color: tier > 1 ? "has-text-advanced" : "has-text-info",
+          enabledSettingName: `res_alchemy_${id}`,
+          weightingSettingName: `res_alchemy_w_${id}`
+        };
+      }), ritualManager = requireRecord(getRitualManager(), "RitualManager"), productions = requireRecord(
+        ritualManager.Productions,
+        "RitualManager.Productions"
+      ), pylonRows = Object.entries(productions).map(
+        ([key, rawProduction]) => {
+          let production = requireRecord(
+            rawProduction,
+            `RitualManager.Productions.${key}`
+          ), id = requireString(
+            production.id,
+            `RitualManager.Productions.${key}.id`
+          );
+          return {
+            id,
+            label: requireString(
+              Reflect.apply(localize2, game, [`modal_pylon_spell_${id}`]),
+              `game.loc(modal_pylon_spell_${id}) result`
+            ),
+            weightingSettingName: `spell_w_${id}`
+          };
+        }
+      );
+      return createMagicSettingsReadModel({ alchemyRows, pylonRows });
+    }
+    return Object.freeze({ readMagicSettingsReadModel });
+  }
+
   // src/adapters/evolve/civic/job-settings.ts
   function readPriorityList4(manager) {
     let priorityList = manager.priorityList;
@@ -18937,6 +18937,213 @@ If script is allowed to reassign non-empty storage it might waste time producing
       resetPriorities,
       reorderJobs
     });
+  }
+
+  // src/bootstrap/settings/core-settings-controls.ts
+  function readRecord(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue(context, property, fallback) {
+    let value = readRecord(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function getTestContextReader(testSurface) {
+    return () => {
+    };
+  }
+  function createStorageSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getStorageManager,
+    getSettingsRaw,
+    resetStorageSettings,
+    persistSettings,
+    resetCheckbox,
+    removeStorageToggles,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("storageSettings"), evolveAdapter = createStorageSettingsEvolveAdapter({
+      getStorageManager: () => readContextValue(context(), "StorageManager", getStorageManager()),
+      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    }), intentHandler, browserAdapter = createStorageSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readStorageSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createStorageSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetStorageSettings",
+          resetStorageSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )(),
+        reorderResources: (resourceIds) => evolveAdapter.reorderResources(resourceIds)
+      },
+      renderSettingsContent: () => browserAdapter.updateStorageSettingsContent(),
+      effects: {
+        resetCheckbox: () => readContextValue(
+          context(),
+          "resetCheckbox",
+          resetCheckbox
+        )("autoStorage"),
+        removeStorageToggles: () => readContextValue(
+          context(),
+          "removeStorageToggles",
+          removeStorageToggles
+        )()
+      }
+    }), browserAdapter;
+  }
+  function createProjectSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getProjectManager,
+    getSettingsRaw,
+    resetProjectSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("projectSettings"), evolveAdapter = createProjectSettingsEvolveAdapter({
+      getProjectManager: () => readContextValue(context(), "ProjectManager", getProjectManager()),
+      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    }), intentHandler, browserAdapter = createProjectSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readProjectSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createProjectSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetProjectSettings",
+          resetProjectSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )(),
+        reorderProjects: (projectIds) => evolveAdapter.reorderProjects(projectIds)
+      },
+      renderSettingsContent: () => browserAdapter.updateProjectSettingsContent(),
+      effects: {
+        resetCheckbox: () => readContextValue(context(), "resetCheckbox", resetCheckbox)("autoARPA")
+      }
+    }), browserAdapter;
+  }
+  function createMagicSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getGame,
+    getAlchemyManager,
+    getRitualManager,
+    resetMagicSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("magicSettings"), evolveAdapter = createMagicSettingsEvolveAdapter({
+      getGame: () => readContextValue(context(), "game", getGame()),
+      getAlchemyManager: () => readContextValue(context(), "AlchemyManager", getAlchemyManager()),
+      getRitualManager: () => readContextValue(context(), "RitualManager", getRitualManager())
+    }), intentHandler, browserAdapter = createMagicSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readMagicSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createMagicSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(
+          context(),
+          "resetMagicSettings",
+          resetMagicSettings
+        )(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      renderSettingsContent: () => browserAdapter.updateMagicSettingsContent(),
+      effects: {
+        resetCheckboxes: () => readContextValue(context(), "resetCheckbox", resetCheckbox)(
+          "autoAlchemy",
+          "autoPylon",
+          "magicFullmetalHelper"
+        )
+      }
+    }), browserAdapter;
+  }
+  function createJobSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getBasicJob,
+    getCraftingJob,
+    getJobManager,
+    getJobs,
+    getSettingsRaw,
+    resetJobSettings,
+    persistSettings,
+    resetCheckbox,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("jobSettings"), evolveAdapter = createJobSettingsEvolveAdapter({
+      getBasicJob: () => readContextValue(context(), "BasicJob", getBasicJob()),
+      getCraftingJob: () => readContextValue(context(), "CraftingJob", getCraftingJob()),
+      getJobManager: () => readContextValue(context(), "JobManager", getJobManager()),
+      getJobs: () => readContextValue(context(), "jobs", getJobs()),
+      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    }), intentHandler, browserAdapter = createJobSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      getReadModel: () => evolveAdapter.readJobSettingsReadModel(),
+      intents: {
+        handle: (intent) => intentHandler.handle(intent)
+      },
+      getActions: () => readContextValue(context(), "actions", actions)
+    });
+    return intentHandler = createJobSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue(context(), "resetJobSettings", resetJobSettings)(!0),
+        persist: () => readContextValue(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )(),
+        resetPriorities: () => evolveAdapter.resetPriorities(),
+        reorderJobs: (jobIds) => evolveAdapter.reorderJobs(jobIds)
+      },
+      renderSettingsContent: () => browserAdapter.updateJobSettingsContent(),
+      effects: {
+        resetCheckboxes: () => readContextValue(
+          context(),
+          "resetCheckbox",
+          resetCheckbox
+        )("autoJobs", "autoCraftsmen")
+      }
+    }), browserAdapter;
   }
 
   // src/application/weighting-settings.ts
@@ -46841,117 +47048,67 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateProductionTableFactory,
       updateProductionTableMiningDrone,
       updateProductionTableReplicator
-    } = productionSettingsBrowserAdapter, storageSettingsActions = {
-      buildSettingsSection,
-      addSettingsToggle,
-      addTableInput,
-      addTableToggle,
-      buildTableLabel,
-      getSorterHelper: () => sorterHelper
-    }, storageSettingsEvolveAdapter = createStorageSettingsEvolveAdapter({
-      getStorageManager: () => getTestContext("storageSettings")?.StorageManager ?? StorageManager,
-      getSettingsRaw: () => getTestContext("storageSettings")?.settingsRaw ?? settingsRaw
-    }), storageSettingsIntentHandler, storageSettingsBrowserAdapter = createStorageSettingsBrowserAdapter({
+    } = productionSettingsBrowserAdapter, storageSettingsBrowserAdapter = createStorageSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      getReadModel: () => storageSettingsEvolveAdapter.readStorageSettingsReadModel(),
-      intents: {
-        handle: (intent) => storageSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection,
+        addSettingsToggle,
+        addTableInput,
+        addTableToggle,
+        buildTableLabel,
+        getSorterHelper: () => sorterHelper
       },
-      getActions: () => getTestContext("storageSettings")?.actions ?? storageSettingsActions
-    });
-    storageSettingsIntentHandler = createStorageSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("storageSettings")?.resetStorageSettings ?? resetStorageSettings)(!0),
-        persist: () => (getTestContext("storageSettings")?.updateSettingsFromState ?? updateSettingsFromState)(),
-        reorderResources: (resourceIds) => storageSettingsEvolveAdapter.reorderResources(resourceIds)
-      },
-      renderSettingsContent: () => storageSettingsBrowserAdapter.updateStorageSettingsContent(),
-      effects: {
-        resetCheckbox: () => (getTestContext("storageSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoStorage"
-        ),
-        removeStorageToggles: () => (getTestContext("storageSettings")?.removeStorageToggles ?? removeStorageToggles)()
-      }
-    });
-    let { buildStorageSettings } = storageSettingsBrowserAdapter, magicSettingsActions = {
-      buildSettingsSection,
-      addStandardHeading,
-      addSettingsNumber,
-      addSettingsToggle,
-      addTableInput,
-      addTableToggle,
-      buildTableLabel
-    }, magicSettingsEvolveAdapter = createMagicSettingsEvolveAdapter({
-      getGame: () => getTestContext("magicSettings")?.game ?? game,
-      getAlchemyManager: () => getTestContext("magicSettings")?.AlchemyManager ?? AlchemyManager,
-      getRitualManager: () => getTestContext("magicSettings")?.RitualManager ?? RitualManager
-    }), magicSettingsIntentHandler, magicSettingsBrowserAdapter = createMagicSettingsBrowserAdapter({
+      getStorageManager: () => StorageManager,
+      getSettingsRaw: () => settingsRaw,
+      resetStorageSettings: (...args) => resetStorageSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      removeStorageToggles: () => removeStorageToggles(),
+      testSurface
+    }), { buildStorageSettings } = storageSettingsBrowserAdapter, magicSettingsBrowserAdapter = createMagicSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      getReadModel: () => magicSettingsEvolveAdapter.readMagicSettingsReadModel(),
-      intents: {
-        handle: (intent) => magicSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection,
+        addStandardHeading,
+        addSettingsNumber,
+        addSettingsToggle,
+        addTableInput,
+        addTableToggle,
+        buildTableLabel
       },
-      getActions: () => getTestContext("magicSettings")?.actions ?? magicSettingsActions
-    });
-    magicSettingsIntentHandler = createMagicSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("magicSettings")?.resetMagicSettings ?? resetMagicSettings)(!0),
-        persist: () => (getTestContext("magicSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
-      },
-      renderSettingsContent: () => magicSettingsBrowserAdapter.updateMagicSettingsContent(),
-      effects: {
-        resetCheckboxes: () => (getTestContext("magicSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoAlchemy",
-          "autoPylon",
-          "magicFullmetalHelper"
-        )
-      }
-    });
-    let { buildMagicSettings } = magicSettingsBrowserAdapter, jobSettingsActions = {
-      buildSettingsSection,
-      addSettingsNumber,
-      addSettingsString,
-      addSettingsToggle,
-      addTableInput,
-      addTableToggle,
-      addToggleCallbacks,
-      getSorterHelper: () => sorterHelper,
-      confirm: (...args) => runtimeEnvironment.confirm(...args)
-    }, jobSettingsEvolveAdapter = createJobSettingsEvolveAdapter({
-      getBasicJob: () => getTestContext("jobSettings")?.BasicJob ?? BasicJob,
-      getCraftingJob: () => getTestContext("jobSettings")?.CraftingJob ?? CraftingJob,
-      getJobManager: () => getTestContext("jobSettings")?.JobManager ?? JobManager,
-      getJobs: () => getTestContext("jobSettings")?.jobs ?? jobs,
-      getSettingsRaw: () => getTestContext("jobSettings")?.settingsRaw ?? settingsRaw
-    }), jobSettingsIntentHandler, jobSettingsBrowserAdapter = createJobSettingsBrowserAdapter({
+      getGame: () => game,
+      getAlchemyManager: () => AlchemyManager,
+      getRitualManager: () => RitualManager,
+      resetMagicSettings: (...args) => resetMagicSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface
+    }), { buildMagicSettings } = magicSettingsBrowserAdapter, jobSettingsBrowserAdapter = createJobSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      getReadModel: () => jobSettingsEvolveAdapter.readJobSettingsReadModel(),
-      intents: {
-        handle: (intent) => jobSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection,
+        addSettingsNumber,
+        addSettingsString,
+        addSettingsToggle,
+        addTableInput,
+        addTableToggle,
+        addToggleCallbacks,
+        getSorterHelper: () => sorterHelper,
+        confirm: (...args) => runtimeEnvironment.confirm(...args)
       },
-      getActions: () => getTestContext("jobSettings")?.actions ?? jobSettingsActions
-    });
-    jobSettingsIntentHandler = createJobSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("jobSettings")?.resetJobSettings ?? resetJobSettings)(
-          !0
-        ),
-        persist: () => (getTestContext("jobSettings")?.updateSettingsFromState ?? updateSettingsFromState)(),
-        resetPriorities: () => jobSettingsEvolveAdapter.resetPriorities(),
-        reorderJobs: (jobIds2) => jobSettingsEvolveAdapter.reorderJobs(jobIds2)
-      },
-      renderSettingsContent: () => jobSettingsBrowserAdapter.updateJobSettingsContent(),
-      effects: {
-        resetCheckboxes: () => (getTestContext("jobSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoJobs",
-          "autoCraftsmen"
-        )
-      }
-    });
-    let { buildJobSettings } = jobSettingsBrowserAdapter, weightingSettingsActions = {
+      getBasicJob: () => BasicJob,
+      getCraftingJob: () => CraftingJob,
+      getJobManager: () => JobManager,
+      getJobs: () => jobs,
+      getSettingsRaw: () => settingsRaw,
+      resetJobSettings: (...args) => resetJobSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface
+    }), { buildJobSettings } = jobSettingsBrowserAdapter, weightingSettingsActions = {
       buildSettingsSection,
       addSettingsToggle,
       addTableInput
@@ -47022,40 +47179,25 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         removeBuildingToggles: () => (getTestContext("buildingSettings")?.removeBuildingToggles ?? removeBuildingToggles)()
       }
     });
-    let { buildBuildingSettings, filterBuildingSettingsTable } = buildingSettingsBrowserAdapter, projectSettingsActions = {
-      buildSettingsSection,
-      addSettingsNumber,
-      addSettingsToggle,
-      addTableInput,
-      addTableToggle,
-      buildTableLabel,
-      getSorterHelper: () => sorterHelper
-    }, projectSettingsEvolveAdapter = createProjectSettingsEvolveAdapter({
-      getProjectManager: () => getTestContext("projectSettings")?.ProjectManager ?? ProjectManager,
-      getSettingsRaw: () => getTestContext("projectSettings")?.settingsRaw ?? settingsRaw
-    }), projectSettingsIntentHandler, projectSettingsBrowserAdapter = createProjectSettingsBrowserAdapter({
+    let { buildBuildingSettings, filterBuildingSettingsTable } = buildingSettingsBrowserAdapter, projectSettingsBrowserAdapter = createProjectSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      getReadModel: () => projectSettingsEvolveAdapter.readProjectSettingsReadModel(),
-      intents: {
-        handle: (intent) => projectSettingsIntentHandler.handle(intent)
+      actions: {
+        buildSettingsSection,
+        addSettingsNumber,
+        addSettingsToggle,
+        addTableInput,
+        addTableToggle,
+        buildTableLabel,
+        getSorterHelper: () => sorterHelper
       },
-      getActions: () => getTestContext("projectSettings")?.actions ?? projectSettingsActions
-    });
-    projectSettingsIntentHandler = createProjectSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("projectSettings")?.resetProjectSettings ?? resetProjectSettings)(!0),
-        persist: () => (getTestContext("projectSettings")?.updateSettingsFromState ?? updateSettingsFromState)(),
-        reorderProjects: (projectIds) => projectSettingsEvolveAdapter.reorderProjects(projectIds)
-      },
-      renderSettingsContent: () => projectSettingsBrowserAdapter.updateProjectSettingsContent(),
-      effects: {
-        resetCheckbox: () => (getTestContext("projectSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoARPA"
-        )
-      }
-    });
-    let { buildProjectSettings } = projectSettingsBrowserAdapter, loggingSettingsActions = {
+      getProjectManager: () => ProjectManager,
+      getSettingsRaw: () => settingsRaw,
+      resetProjectSettings: (...args) => resetProjectSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface
+    }), { buildProjectSettings } = projectSettingsBrowserAdapter, loggingSettingsActions = {
       buildSettingsSection2,
       addSettingsHeader1,
       addSettingsString,
