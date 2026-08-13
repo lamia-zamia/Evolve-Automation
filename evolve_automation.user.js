@@ -42436,6 +42436,128 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     return Object.freeze({ read, getConfirmationText });
   }
 
+  // src/bootstrap/settings/prestige-settings-control.ts
+  function readRecord12(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue12(context, property, fallback) {
+    let value = readRecord12(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function readContextActions12(context, fallback) {
+    let record = readRecord12(context);
+    return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
+  }
+  function getTestContextReader12(testSurface) {
+    return () => {
+    };
+  }
+  function createPrestigeSettingsControl({
+    getDocument,
+    getJQuery,
+    actions,
+    getPrestigeTypes,
+    getGame,
+    getBuildings,
+    isPrestigeAllowed: isPrestigeAllowed2,
+    haveTech,
+    isBioseederPrestigeAvailable,
+    isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable2,
+    isWhiteholePrestigeAvailable: isWhiteholePrestigeAvailable2,
+    isApocalypsePrestigeAvailable: isApocalypsePrestigeAvailable2,
+    isAscensionPrestigeAvailable: isAscensionPrestigeAvailable2,
+    isWitchAscensionPrestigeAvailable: isWitchAscensionPrestigeAvailable2,
+    isDemonicPrestigeAvailable: isDemonicPrestigeAvailable2,
+    resetPrestigeSettings,
+    persistSettings,
+    getSettingsRaw,
+    getState,
+    confirm,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader12(testSurface), context = () => getTestContext("prestigeSettings"), reader = createPrestigeSettingsEvolveAdapter({
+      getPrestigeTypes: () => readContextValue12(context(), "prestigeTypes", getPrestigeTypes()),
+      getGame: () => readContextValue12(context(), "game", getGame()),
+      getBuildings: () => readContextValue12(context(), "buildings", getBuildings()),
+      isPrestigeAllowed: () => readContextValue12(context(), "isPrestigeAllowed", isPrestigeAllowed2)(),
+      haveTech: (...args) => readContextValue12(context(), "haveTech", haveTech)(...args),
+      isBioseederPrestigeAvailable: () => readContextValue12(
+        context(),
+        "isBioseederPrestigeAvailable",
+        isBioseederPrestigeAvailable
+      )(),
+      isCataclysmPrestigeAvailable: () => readContextValue12(
+        context(),
+        "isCataclysmPrestigeAvailable",
+        isCataclysmPrestigeAvailable2
+      )(),
+      isWhiteholePrestigeAvailable: () => readContextValue12(
+        context(),
+        "isWhiteholePrestigeAvailable",
+        isWhiteholePrestigeAvailable2
+      )(),
+      isApocalypsePrestigeAvailable: () => readContextValue12(
+        context(),
+        "isApocalypsePrestigeAvailable",
+        isApocalypsePrestigeAvailable2
+      )(),
+      isAscensionPrestigeAvailable: () => readContextValue12(
+        context(),
+        "isAscensionPrestigeAvailable",
+        isAscensionPrestigeAvailable2
+      )(),
+      isWitchAscensionPrestigeAvailable: (demonic) => readContextValue12(
+        context(),
+        "isWitchAscensionPrestigeAvailable",
+        isWitchAscensionPrestigeAvailable2
+      )(demonic),
+      isDemonicPrestigeAvailable: () => readContextValue12(
+        context(),
+        "isDemonicPrestigeAvailable",
+        isDemonicPrestigeAvailable2
+      )()
+    }), intentHandler = createPrestigeSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => readContextValue12(
+          context(),
+          "resetPrestigeSettings",
+          resetPrestigeSettings
+        )(!0),
+        setPrestigeType: (value) => {
+          readContextValue12(
+            context(),
+            "settingsRaw",
+            getSettingsRaw()
+          ).prestigeType = value;
+        },
+        setGoalStandard: () => {
+          readContextValue12(
+            context(),
+            "state",
+            getState()
+          ).goal = "Standard";
+        },
+        persist: () => readContextValue12(
+          context(),
+          "updateSettingsFromState",
+          persistSettings
+        )()
+      },
+      reader,
+      render: (secondaryPrefix) => browserAdapter.updatePrestigeSettingsContent(secondaryPrefix),
+      effects: {
+        confirm: (message) => !!readContextValue12(context(), "confirm", confirm)(message)
+      }
+    }), browserAdapter = createPrestigeSettingsBrowserAdapter({
+      getDocument,
+      getJQuery,
+      reader,
+      intents: intentHandler,
+      getActions: () => readContextActions12(context(), actions)
+    });
+    return browserAdapter;
+  }
+
   // src/application/evolution-settings.ts
   function createEvolutionSettingsIntentHandler({
     writer,
@@ -42817,18 +42939,18 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/evolution-settings-control.ts
-  function readRecord12(value) {
+  function readRecord13(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue12(context, property, fallback) {
-    let value = readRecord12(context)?.[property];
+  function readContextValue13(context, property, fallback) {
+    let value = readRecord13(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function readContextActions12(context, fallback) {
-    let record = readRecord12(context);
+  function readContextActions13(context, fallback) {
+    let record = readRecord13(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader12(testSurface) {
+  function getTestContextReader13(testSurface) {
     return () => {
     };
   }
@@ -42851,20 +42973,20 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader12(testSurface), context = () => getTestContext("evolutionSettings"), reader = createEvolutionSettingsEvolveAdapter({
-      getGame: () => readContextValue12(context(), "game", getGame()),
-      getRaces: () => readContextValue12(context(), "races", getRaces()),
-      getChallenges: () => readContextValue12(context(), "challenges", getChallenges()),
-      getUniverses: () => readContextValue12(context(), "universes", getUniverses()),
-      getSettingsRaw: () => readContextValue12(context(), "settingsRaw", getSettingsRaw()),
-      getSettings: () => readContextValue12(context(), "settings", getSettings()),
-      getSettingsToStore: () => readContextValue12(
+    let getTestContext = getTestContextReader13(testSurface), context = () => getTestContext("evolutionSettings"), reader = createEvolutionSettingsEvolveAdapter({
+      getGame: () => readContextValue13(context(), "game", getGame()),
+      getRaces: () => readContextValue13(context(), "races", getRaces()),
+      getChallenges: () => readContextValue13(context(), "challenges", getChallenges()),
+      getUniverses: () => readContextValue13(context(), "universes", getUniverses()),
+      getSettingsRaw: () => readContextValue13(context(), "settingsRaw", getSettingsRaw()),
+      getSettings: () => readContextValue13(context(), "settings", getSettings()),
+      getSettingsToStore: () => readContextValue13(
         context(),
         "evolutionSettingsToStore",
         getSettingsToStore()
       ),
-      getPrestigeTypes: () => readContextValue12(context(), "prestigeTypes", getPrestigeTypes()),
-      getStarLevel: (queueItem) => readContextValue12(context(), "getStarLevel", getStarLevel)(queueItem)
+      getPrestigeTypes: () => readContextValue13(context(), "prestigeTypes", getPrestigeTypes()),
+      getStarLevel: (queueItem) => readContextValue13(context(), "getStarLevel", getStarLevel)(queueItem)
     }), intentHandler, browserAdapter = createEvolutionSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -42872,37 +42994,37 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextActions12(context(), actions)
+      getActions: () => readContextActions13(context(), actions)
     });
     return intentHandler = createEvolutionSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue12(
+        resetToDefaults: () => readContextValue13(
           context(),
           "resetEvolutionSettings",
           resetEvolutionSettings
         )(!0),
         setTarget: (value) => {
-          let target = readContextValue12(
+          let target = readContextValue13(
             context(),
             "settingsRaw",
             getSettingsRaw()
           );
-          target.userEvolutionTarget = value, readContextValue12(
+          target.userEvolutionTarget = value, readContextValue13(
             context(),
             "state",
             getState()
           ).evolutionTarget = null;
         },
         addCurrent: (prestigeType) => {
-          let target = readContextValue12(
+          let target = readContextValue13(
             context(),
             "settingsRaw",
             getSettingsRaw()
-          ), currentSettings = readContextValue12(
+          ), currentSettings = readContextValue13(
             context(),
             "settings",
             getSettings()
-          ), names = readContextValue12(
+          ), names = readContextValue13(
             context(),
             "evolutionSettingsToStore",
             getSettingsToStore()
@@ -42912,7 +43034,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           prestigeType !== "auto" && (queued.prestigeType = prestigeType), target.evolutionQueue.push(queued);
         },
         remove: (index) => {
-          readContextValue12(
+          readContextValue13(
             context(),
             "settingsRaw",
             getSettingsRaw()
@@ -42921,7 +43043,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         edit: (index, json) => {
           try {
             let value = JSON.parse(json);
-            value && typeof value == "object" && !Array.isArray(value) && (readContextValue12(
+            value && typeof value == "object" && !Array.isArray(value) && (readContextValue13(
               context(),
               "settingsRaw",
               getSettingsRaw()
@@ -42931,7 +43053,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           }
         },
         reorder: (indexes) => {
-          let target = readContextValue12(
+          let target = readContextValue13(
             context(),
             "settingsRaw",
             getSettingsRaw()
@@ -42940,7 +43062,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
             (index) => target.evolutionQueue[index]
           );
         },
-        persist: () => readContextValue12(
+        persist: () => readContextValue13(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -42948,7 +43070,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       render: () => browserAdapter.updateEvolutionSettingsContent(),
       effects: {
-        resetCheckbox: () => readContextValue12(
+        resetCheckbox: () => readContextValue13(
           context(),
           "resetCheckbox",
           resetCheckbox
@@ -43499,14 +43621,14 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/production-settings-control.ts
-  function readRecord13(value) {
+  function readRecord14(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue13(context, property, fallback) {
-    let value = readRecord13(context)?.[property];
+  function readContextValue14(context, property, fallback) {
+    let value = readRecord14(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function getTestContextReader13(testSurface) {
+  function getTestContextReader14(testSurface) {
     return () => {
     };
   }
@@ -43528,14 +43650,14 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     setSettingsRaw,
     testSurface
   }) {
-    let getTestContext = getTestContextReader13(testSurface), context = () => getTestContext("productionSettings"), evolveAdapter = createProductionSettingsEvolveAdapter({
-      getResources: () => readContextValue13(context(), "resources", getResources()),
-      getCraftablesList: () => readContextValue13(context(), "craftablesList", getCraftablesList()),
-      getSmelterManager: () => readContextValue13(context(), "SmelterManager", getSmelterManager()),
-      getFactoryManager: () => readContextValue13(context(), "FactoryManager", getFactoryManager()),
-      getDroidManager: () => readContextValue13(context(), "DroidManager", getDroidManager()),
-      getReplicatorManager: () => readContextValue13(context(), "ReplicatorManager", getReplicatorManager()),
-      getSettingsRaw: () => readContextValue13(context(), "settingsRaw", getSettingsRaw()),
+    let getTestContext = getTestContextReader14(testSurface), context = () => getTestContext("productionSettings"), evolveAdapter = createProductionSettingsEvolveAdapter({
+      getResources: () => readContextValue14(context(), "resources", getResources()),
+      getCraftablesList: () => readContextValue14(context(), "craftablesList", getCraftablesList()),
+      getSmelterManager: () => readContextValue14(context(), "SmelterManager", getSmelterManager()),
+      getFactoryManager: () => readContextValue14(context(), "FactoryManager", getFactoryManager()),
+      getDroidManager: () => readContextValue14(context(), "DroidManager", getDroidManager()),
+      getReplicatorManager: () => readContextValue14(context(), "ReplicatorManager", getReplicatorManager()),
+      getSettingsRaw: () => readContextValue14(context(), "settingsRaw", getSettingsRaw()),
       consumptionBalanceTarget: 120
     }), intentHandler, browserAdapter = createProductionSettingsBrowserAdapter({
       getDocument,
@@ -43548,12 +43670,12 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
     return intentHandler = createProductionSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue13(
+        resetToDefaults: () => readContextValue14(
           context(),
           "resetProductionSettings",
           resetProductionSettings
         )(!0),
-        persist: () => readContextValue13(
+        persist: () => readContextValue14(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -43562,7 +43684,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       renderSettingsContent: () => browserAdapter.updateProductionSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue13(context(), "resetCheckbox", resetCheckbox)(
+        resetCheckboxes: () => readContextValue14(context(), "resetCheckbox", resetCheckbox)(
           "autoQuarry",
           "autoMine",
           "autoExtractor",
@@ -43573,7 +43695,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           "autoMiningDroid",
           "autoReplicator"
         ),
-        removeCraftToggles: () => readContextValue13(context(), "removeCraftToggles", removeCraftToggles)()
+        removeCraftToggles: () => readContextValue14(context(), "removeCraftToggles", removeCraftToggles)()
       }
     }), browserAdapter;
   }
@@ -48506,27 +48628,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       resetChallengeHelperSettings: (...args) => resetChallengeHelperSettings(...args),
       persistSettings: () => updateSettingsFromState(),
       testSurface
-    }), { buildChallengeHelperSettings } = challengeHelperSettingsBrowserAdapter, prestigeSettingsReader = createPrestigeSettingsEvolveAdapter({
-      getPrestigeTypes: () => getTestContext("prestigeSettings")?.prestigeTypes ?? prestigeTypes,
-      getGame: () => getTestContext("prestigeSettings")?.game ?? game,
-      getBuildings: () => getTestContext("prestigeSettings")?.buildings ?? buildings,
-      isPrestigeAllowed: () => (getTestContext("prestigeSettings")?.isPrestigeAllowed ?? isPrestigeAllowed2)(),
-      haveTech: (...args) => (getTestContext("prestigeSettings")?.haveTech ?? haveTech)(...args),
-      isBioseederPrestigeAvailable: () => (getTestContext("prestigeSettings")?.isBioseederPrestigeAvailable ?? isBioseederPrestigeAvailable)(),
-      isCataclysmPrestigeAvailable: () => (getTestContext("prestigeSettings")?.isCataclysmPrestigeAvailable ?? isCataclysmPrestigeAvailable2)(),
-      isWhiteholePrestigeAvailable: () => (getTestContext("prestigeSettings")?.isWhiteholePrestigeAvailable ?? isWhiteholePrestigeAvailable2)(),
-      isApocalypsePrestigeAvailable: () => (getTestContext("prestigeSettings")?.isApocalypsePrestigeAvailable ?? isApocalypsePrestigeAvailable2)(),
-      isAscensionPrestigeAvailable: () => (getTestContext("prestigeSettings")?.isAscensionPrestigeAvailable ?? isAscensionPrestigeAvailable2)(),
-      isWitchAscensionPrestigeAvailable: (demonic) => (getTestContext("prestigeSettings")?.isWitchAscensionPrestigeAvailable ?? isWitchAscensionPrestigeAvailable2)(demonic),
-      isDemonicPrestigeAvailable: () => (getTestContext("prestigeSettings")?.isDemonicPrestigeAvailable ?? isDemonicPrestigeAvailable2)()
-    }), prestigeSettingsIntentHandler, prestigeSettingsBrowserAdapter = createPrestigeSettingsBrowserAdapter({
+    }), { buildChallengeHelperSettings } = challengeHelperSettingsBrowserAdapter, prestigeSettingsBrowserAdapter = createPrestigeSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      reader: prestigeSettingsReader,
-      intents: {
-        handle: (intent) => prestigeSettingsIntentHandler.handle(intent)
-      },
-      getActions: () => getTestContext("prestigeSettings")?.actions ?? {
+      actions: {
         buildSettingsSection2,
         addSettingsHeader1,
         addSettingsNumber,
@@ -48534,31 +48639,29 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         addSettingsToggle,
         openOverrideModal,
         openOptionsModal,
-        buildCustomRacePresetEditor
-      }
-    });
-    prestigeSettingsIntentHandler = createPrestigeSettingsIntentHandler({
-      writer: {
-        resetToDefaults: () => (getTestContext("prestigeSettings")?.resetPrestigeSettings ?? resetPrestigeSettings)(!0),
-        setPrestigeType: (value) => {
-          let target = getTestContext("prestigeSettings")?.settingsRaw ?? settingsRaw;
-          target.prestigeType = value;
-        },
-        setGoalStandard: () => {
-          let target = getTestContext("prestigeSettings")?.state ?? state;
-          target.goal = "Standard";
-        },
-        persist: () => (getTestContext("prestigeSettings")?.updateSettingsFromState ?? updateSettingsFromState)()
+        get buildCustomRacePresetEditor() {
+          return buildCustomRacePresetEditor;
+        }
       },
-      reader: prestigeSettingsReader,
-      render: (secondaryPrefix) => prestigeSettingsBrowserAdapter.updatePrestigeSettingsContent(
-        secondaryPrefix
-      ),
-      effects: {
-        confirm: (message) => (getTestContext("prestigeSettings")?.confirm ?? runtimeEnvironment.confirm)(message)
-      }
-    });
-    let { buildPrestigeSettings } = prestigeSettingsBrowserAdapter, governmentSettingsBrowserAdapter = createGovernmentSettingsControl({
+      getPrestigeTypes: () => prestigeTypes,
+      getGame: () => game,
+      getBuildings: () => buildings,
+      isPrestigeAllowed: (...args) => isPrestigeAllowed2(...args),
+      haveTech: (...args) => haveTech(...args),
+      isBioseederPrestigeAvailable: (...args) => isBioseederPrestigeAvailable(...args),
+      isCataclysmPrestigeAvailable: (...args) => isCataclysmPrestigeAvailable2(...args),
+      isWhiteholePrestigeAvailable: (...args) => isWhiteholePrestigeAvailable2(...args),
+      isApocalypsePrestigeAvailable: (...args) => isApocalypsePrestigeAvailable2(...args),
+      isAscensionPrestigeAvailable: (...args) => isAscensionPrestigeAvailable2(...args),
+      isWitchAscensionPrestigeAvailable: (...args) => isWitchAscensionPrestigeAvailable2(...args),
+      isDemonicPrestigeAvailable: (...args) => isDemonicPrestigeAvailable2(...args),
+      resetPrestigeSettings: (...args) => resetPrestigeSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      getSettingsRaw: () => settingsRaw,
+      getState: () => state,
+      confirm: (message) => runtimeEnvironment.confirm(message),
+      testSurface
+    }), { buildPrestigeSettings } = prestigeSettingsBrowserAdapter, governmentSettingsBrowserAdapter = createGovernmentSettingsControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       actions: {

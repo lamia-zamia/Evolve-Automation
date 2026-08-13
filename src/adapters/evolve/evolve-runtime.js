@@ -263,9 +263,7 @@ import { createHellSettingsControl } from "../../bootstrap/settings/hell-setting
 import { createMechSettingsControl } from "../../bootstrap/settings/mech-settings-control.ts";
 import { createTriggerSettingsControl } from "../../bootstrap/settings/trigger-settings-control.ts";
 import { createFleetSettingsControl } from "../../bootstrap/settings/fleet-settings-control.ts";
-import { createPrestigeSettingsIntentHandler } from "../../application/prestige-settings.ts";
-import { createPrestigeSettingsBrowserAdapter } from "../browser/prestige-settings.ts";
-import { createPrestigeSettingsEvolveAdapter } from "./progression/prestige/prestige-settings.ts";
+import { createPrestigeSettingsControl } from "../../bootstrap/settings/prestige-settings-control.ts";
 import { createEvolutionSettingsControl } from "../../bootstrap/settings/evolution-settings-control.ts";
 import { createProductionSettingsControl } from "../../bootstrap/settings/production-settings-control.ts";
 import { createTraitSettingsIntentHandler } from "../../application/trait-settings.ts";
@@ -999,109 +997,46 @@ export function startEvolveRuntimeComposition(
     });
   const { buildChallengeHelperSettings } =
     challengeHelperSettingsBrowserAdapter;
-  const prestigeSettingsReader = createPrestigeSettingsEvolveAdapter({
-    getPrestigeTypes: () =>
-      getTestContext("prestigeSettings")?.prestigeTypes ?? prestigeTypes,
-    getGame: () => getTestContext("prestigeSettings")?.game ?? game,
-    getBuildings: () =>
-      getTestContext("prestigeSettings")?.buildings ?? buildings,
-    isPrestigeAllowed: () =>
-      (
-        getTestContext("prestigeSettings")?.isPrestigeAllowed ??
-        isPrestigeAllowed
-      )(),
-    haveTech: (...args) =>
-      (getTestContext("prestigeSettings")?.haveTech ?? haveTech)(...args),
-    isBioseederPrestigeAvailable: () =>
-      (
-        getTestContext("prestigeSettings")?.isBioseederPrestigeAvailable ??
-        isBioseederPrestigeAvailable
-      )(),
-    isCataclysmPrestigeAvailable: () =>
-      (
-        getTestContext("prestigeSettings")?.isCataclysmPrestigeAvailable ??
-        isCataclysmPrestigeAvailable
-      )(),
-    isWhiteholePrestigeAvailable: () =>
-      (
-        getTestContext("prestigeSettings")?.isWhiteholePrestigeAvailable ??
-        isWhiteholePrestigeAvailable
-      )(),
-    isApocalypsePrestigeAvailable: () =>
-      (
-        getTestContext("prestigeSettings")?.isApocalypsePrestigeAvailable ??
-        isApocalypsePrestigeAvailable
-      )(),
-    isAscensionPrestigeAvailable: () =>
-      (
-        getTestContext("prestigeSettings")?.isAscensionPrestigeAvailable ??
-        isAscensionPrestigeAvailable
-      )(),
-    isWitchAscensionPrestigeAvailable: (demonic) =>
-      (
-        getTestContext("prestigeSettings")?.isWitchAscensionPrestigeAvailable ??
-        isWitchAscensionPrestigeAvailable
-      )(demonic),
-    isDemonicPrestigeAvailable: () =>
-      (
-        getTestContext("prestigeSettings")?.isDemonicPrestigeAvailable ??
-        isDemonicPrestigeAvailable
-      )(),
-  });
-  let prestigeSettingsIntentHandler;
-  const prestigeSettingsBrowserAdapter = createPrestigeSettingsBrowserAdapter({
+  const prestigeSettingsBrowserAdapter = createPrestigeSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    reader: prestigeSettingsReader,
-    intents: {
-      handle: (intent) => prestigeSettingsIntentHandler.handle(intent),
-    },
-    getActions: () =>
-      getTestContext("prestigeSettings")?.actions ?? {
-        buildSettingsSection2,
-        addSettingsHeader1,
-        addSettingsNumber,
-        addSettingsSelect,
-        addSettingsToggle,
-        openOverrideModal,
-        openOptionsModal,
-        buildCustomRacePresetEditor,
+    actions: {
+      buildSettingsSection2,
+      addSettingsHeader1,
+      addSettingsNumber,
+      addSettingsSelect,
+      addSettingsToggle,
+      openOverrideModal,
+      openOptionsModal,
+      get buildCustomRacePresetEditor() {
+        return buildCustomRacePresetEditor;
       },
-  });
-  prestigeSettingsIntentHandler = createPrestigeSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("prestigeSettings")?.resetPrestigeSettings ??
-          resetPrestigeSettings
-        )(true),
-      setPrestigeType: (value) => {
-        const target =
-          getTestContext("prestigeSettings")?.settingsRaw ?? settingsRaw;
-        target.prestigeType = value;
-      },
-      setGoalStandard: () => {
-        const target = getTestContext("prestigeSettings")?.state ?? state;
-        target.goal = "Standard";
-      },
-      persist: () =>
-        (
-          getTestContext("prestigeSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
     },
-    reader: prestigeSettingsReader,
-    render: (secondaryPrefix) =>
-      prestigeSettingsBrowserAdapter.updatePrestigeSettingsContent(
-        secondaryPrefix,
-      ),
-    effects: {
-      confirm: (message) =>
-        (
-          getTestContext("prestigeSettings")?.confirm ??
-          runtimeEnvironment.confirm
-        )(message),
-    },
+    getPrestigeTypes: () => prestigeTypes,
+    getGame: () => game,
+    getBuildings: () => buildings,
+    isPrestigeAllowed: (...args) => isPrestigeAllowed(...args),
+    haveTech: (...args) => haveTech(...args),
+    isBioseederPrestigeAvailable: (...args) =>
+      isBioseederPrestigeAvailable(...args),
+    isCataclysmPrestigeAvailable: (...args) =>
+      isCataclysmPrestigeAvailable(...args),
+    isWhiteholePrestigeAvailable: (...args) =>
+      isWhiteholePrestigeAvailable(...args),
+    isApocalypsePrestigeAvailable: (...args) =>
+      isApocalypsePrestigeAvailable(...args),
+    isAscensionPrestigeAvailable: (...args) =>
+      isAscensionPrestigeAvailable(...args),
+    isWitchAscensionPrestigeAvailable: (...args) =>
+      isWitchAscensionPrestigeAvailable(...args),
+    isDemonicPrestigeAvailable: (...args) =>
+      isDemonicPrestigeAvailable(...args),
+    resetPrestigeSettings: (...args) => resetPrestigeSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    getSettingsRaw: () => settingsRaw,
+    getState: () => state,
+    confirm: (message) => runtimeEnvironment.confirm(message),
+    testSurface,
   });
   const { buildPrestigeSettings } = prestigeSettingsBrowserAdapter;
   const governmentSettingsActions = {
@@ -4864,10 +4799,6 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("prestigeSettings", {
-      prestigeSettings: prestigeSettingsBrowserAdapter,
-    });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("optionsModal", {
       optionsModal: optionsModalBrowserAdapter,
