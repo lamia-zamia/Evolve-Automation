@@ -222,7 +222,6 @@ import { createAlchemyControl } from "../../bootstrap/alchemy-control.ts";
 import { createPylonControl } from "../../bootstrap/pylon-control.ts";
 import { createIndustryAutomationControls } from "../../bootstrap/industry-automation-controls.ts";
 import { createEvolutionControls } from "../../bootstrap/evolution-controls.ts";
-import { createMercenaryControl } from "../../bootstrap/mercenary-control.ts";
 import { createTraitAutomationControls } from "../../bootstrap/trait-automation-controls.ts";
 import { createTraitResourceControls } from "../../bootstrap/trait-resource-controls.ts";
 import { createTriggerControl } from "../../bootstrap/trigger-control.ts";
@@ -230,7 +229,7 @@ import { createEconomyAutomationControls } from "../../bootstrap/economy-automat
 import { createPowerStorageControls } from "../../bootstrap/power-storage-controls.ts";
 import { createMarketAutomationControls } from "../../bootstrap/market-automation-controls.ts";
 import { createCraftJobsControls } from "../../bootstrap/craft-jobs-controls.ts";
-import { createSpyControl } from "../../bootstrap/spy-control.ts";
+import { createEspionageControls } from "../../bootstrap/espionage-controls.ts";
 import { createPrestigeControl } from "../../bootstrap/prestige-control.ts";
 import { createProgressionAutomationControls } from "../../bootstrap/progression-automation-controls.ts";
 import { createFleetMechControls } from "../../bootstrap/fleet-mech-controls.ts";
@@ -2918,28 +2917,29 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  const { autoMerc } = createMercenaryControl({
-    getWarManager: () => WarManager,
-    getState: () => state,
-    getSettings: () => settings,
-    getResources: () => resources,
-    shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
-    getGameLog: () => GameLog,
-  });
-
-  const { autoSpy } = createSpyControl({
-    getSpyManager: () => SpyManager,
-    getWarManager: () => WarManager,
-    getForeignControls: () => foreignControls,
-    getHaveTask: () => haveTask,
-    getHaveTech: () => haveTech,
-    shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
-    getResources: () => resources,
-    getSettings: () => settings,
-    getPoly: () => poly,
-    getGameLog: () => GameLog,
-    getGovName,
-    getGame: () => game,
+  const { autoMerc, autoSpy } = createEspionageControls({
+    mercenary: {
+      getWarManager: () => WarManager,
+      getState: () => state,
+      getSettings: () => settings,
+      getResources: () => resources,
+      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+      getGameLog: () => GameLog,
+    },
+    spy: {
+      getSpyManager: () => SpyManager,
+      getWarManager: () => WarManager,
+      getForeignControls: () => foreignControls,
+      getHaveTask: () => haveTask,
+      getHaveTech: () => haveTech,
+      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+      getResources: () => resources,
+      getSettings: () => settings,
+      getPoly: () => poly,
+      getGameLog: () => GameLog,
+      getGovName,
+      getGame: () => game,
+    },
   });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__) testSurface?.add({ autoHell });

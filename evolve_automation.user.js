@@ -28429,222 +28429,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
-  // src/adapters/evolve/combat/mercenary.ts
-  function unavailableInput2() {
-    return Object.freeze({
-      available: !1,
-      saveInflationMoney: !1,
-      goal: "Normal",
-      maxSoldiers: 0,
-      deadSoldierReserve: 0,
-      moneyMedian: 0,
-      costIncomeMultiplier: 0,
-      moneyStoragePercent: 0,
-      storageAssignExtra: !1,
-      moneyMaximum: 0,
-      moneyStorageRequired: 0
-    });
-  }
-  function readMercenaryState(manager, money) {
-    return Object.freeze({
-      currentSoldiers: requireNumber(
-        manager.currentSoldiers,
-        "WarManager.currentSoldiers"
-      ),
-      mercenaryCost: requireNumber(
-        manager.mercenaryCost,
-        "WarManager.mercenaryCost"
-      ),
-      moneyCurrent: requireNumber(
-        money.currentQuantity,
-        "resources.Money.currentQuantity"
-      ),
-      moneySpare: requireNumber(
-        money.spareQuantity,
-        "resources.Money.spareQuantity"
-      )
-    });
-  }
-  function decisionMatchesState(decision2, state) {
-    return decision2.kind === "hire-mercenary" && decision2.expectedSoldiers === state.currentSoldiers && decision2.expectedCost === state.mercenaryCost && decision2.expectedMoneyCurrent === state.moneyCurrent && decision2.expectedMoneySpare === state.moneySpare;
-  }
-  function createMercenaryAdapter(dependencies) {
-    let session = null, lastState = null, reader = Object.freeze({
-      readCycle() {
-        session = null, lastState = null;
-        let manager = requireRecord(dependencies.getWarManager(), "WarManager");
-        if (manager.isGarrisonVisible !== !0) return unavailableInput2();
-        let isUnlocked2 = requireFunction(
-          manager.isMercenaryUnlocked,
-          "WarManager.isMercenaryUnlocked"
-        );
-        if (!Reflect.apply(isUnlocked2, manager, []) || requireNumber(
-          manager.maxCityGarrison,
-          "WarManager.maxCityGarrison"
-        ) <= 0) return unavailableInput2();
-        let state = requireRecord(dependencies.getState(), "state"), goal = requireString(state.goal, "state.goal"), saveInflationMoney = !!dependencies.shouldSaveInflationMoney();
-        if (saveInflationMoney && goal !== "Reset")
-          return Object.freeze({
-            ...unavailableInput2(),
-            available: !0,
-            saveInflationMoney: !0,
-            goal
-          });
-        let settings = requireRecord(dependencies.getSettings(), "settings"), resources = requireRecord(dependencies.getResources(), "resources"), money = requireRecord(resources.Money, "resources.Money");
-        return session = Object.freeze({ manager, resources, money }), Object.freeze({
-          available: !0,
-          saveInflationMoney,
-          goal,
-          maxSoldiers: requireNumber(
-            manager.maxSoldiers,
-            "WarManager.maxSoldiers"
-          ),
-          deadSoldierReserve: requireNumber(
-            settings.foreignHireMercDeadSoldiers,
-            "settings.foreignHireMercDeadSoldiers"
-          ),
-          moneyMedian: requireNumber(state.moneyMedian, "state.moneyMedian"),
-          costIncomeMultiplier: requireNumber(
-            settings.foreignHireMercCostLowerThanIncome,
-            "settings.foreignHireMercCostLowerThanIncome"
-          ),
-          moneyStoragePercent: requireNumber(
-            settings.foreignHireMercMoneyStoragePercent,
-            "settings.foreignHireMercMoneyStoragePercent"
-          ),
-          storageAssignExtra: requireBoolean(
-            settings.storageAssignExtra,
-            "settings.storageAssignExtra"
-          ),
-          moneyMaximum: requireNumber(
-            money.maxQuantity,
-            "resources.Money.maxQuantity"
-          ),
-          moneyStorageRequired: requireNumber(
-            money.storageRequired,
-            "resources.Money.storageRequired"
-          )
-        });
-      },
-      readState() {
-        if (session === null)
-          throw new Error("mercenary cycle must be read before mercenary state");
-        return lastState = readMercenaryState(session.manager, session.money), lastState;
-      }
-    }), executor = Object.freeze({
-      hire(decision2) {
-        let active = session, sampled = lastState;
-        if (active === null || sampled === null)
-          return stale(
-            "mercenary-session-missing",
-            "mercenary session is missing"
-          );
-        if (!Number.isFinite(decision2.expectedSoldiers) || !Number.isFinite(decision2.expectedCost) || !Number.isFinite(decision2.expectedMoneyCurrent) || !Number.isFinite(decision2.expectedMoneySpare) || !decisionMatchesState(decision2, sampled))
-          return rejected(
-            "invalid-mercenary-decision",
-            "mercenary decision does not match the sampled state"
-          );
-        if (dependencies.getWarManager() !== active.manager || dependencies.getResources() !== active.resources)
-          return stale(
-            "mercenary-dependencies-changed",
-            "mercenary dependencies changed"
-          );
-        let actual = readMercenaryState(active.manager, active.money);
-        if (!decisionMatchesState(decision2, actual))
-          return stale("mercenary-state-changed", "mercenary state changed");
-        let hireMercenary = requireFunction(
-          active.manager.hireMercenary,
-          "WarManager.hireMercenary"
-        );
-        return lastState = null, Reflect.apply(hireMercenary, active.manager, []) ? Object.freeze({ status: "hired" }) : Object.freeze({ status: "not-hired" });
-      }
-    }), logger = Object.freeze({
-      write(event) {
-        let gameLog = requireRecord(dependencies.getGameLog(), "GameLog"), logSuccess = requireFunction(
-          gameLog.logSuccess,
-          "GameLog.logSuccess"
-        );
-        Reflect.apply(logSuccess, gameLog, [
-          event.id,
-          event.message,
-          event.categories
-        ]);
-      }
-    });
-    return Object.freeze({ reader, executor, logger });
-  }
-
-  // src/domain/combat/mercenary.ts
-  function planMercenaryCycle(input) {
-    if (!input.available || input.saveInflationMoney && input.goal !== "Reset")
-      return null;
-    if (input.goal === "Reset")
-      return Object.freeze({
-        soldierLimit: input.maxSoldiers,
-        minimumMoney: 0,
-        maximumCheapCost: Number.MAX_SAFE_INTEGER
-      });
-    let maximumCheapCost = input.moneyMedian * input.costIncomeMultiplier, minimumMoney = Math.max(
-      input.moneyMaximum * input.moneyStoragePercent / 100,
-      Math.min(
-        input.moneyMaximum - maximumCheapCost,
-        input.storageAssignExtra ? input.moneyStorageRequired / 1.03 : input.moneyStorageRequired
-      )
-    );
-    return Object.freeze({
-      soldierLimit: input.maxSoldiers - input.deadSoldierReserve,
-      minimumMoney,
-      maximumCheapCost
-    });
-  }
-  function planMercenaryHire(cycle, state) {
-    return state.currentSoldiers >= cycle.soldierLimit || state.moneyCurrent < state.mercenaryCost || !(state.moneySpare - state.mercenaryCost > cycle.minimumMoney || state.mercenaryCost < cycle.maximumCheapCost) ? null : Object.freeze({
-      kind: "hire-mercenary",
-      expectedSoldiers: state.currentSoldiers,
-      expectedCost: state.mercenaryCost,
-      expectedMoneyCurrent: state.moneyCurrent,
-      expectedMoneySpare: state.moneySpare
-    });
-  }
-  function planMercenaryLog(count2) {
-    return count2 <= 0 ? null : Object.freeze({
-      id: "mercenary",
-      message: count2 === 1 ? "Hired a mercenary to join the garrison." : `Hired ${count2} mercenaries to join the garrison.`,
-      categories: Object.freeze(["combat"])
-    });
-  }
-
-  // src/application/mercenary.ts
-  var SUCCEEDED5 = Object.freeze({
-    status: "succeeded"
-  });
-  function runMercenaryAutomation(dependencies) {
-    let cycle = planMercenaryCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED5;
-    let hired = 0, outcome = SUCCEEDED5;
-    for (; ; ) {
-      let decision2 = planMercenaryHire(cycle, dependencies.reader.readState());
-      if (decision2 === null) break;
-      let result2 = dependencies.executor.hire(decision2);
-      if (result2.status === "hired") {
-        hired++;
-        continue;
-      }
-      result2.status !== "not-hired" && (outcome = result2);
-      break;
-    }
-    let event = planMercenaryLog(hired);
-    return event !== null && dependencies.logger.write(event), outcome;
-  }
-
-  // src/bootstrap/mercenary-control.ts
-  function createMercenaryControl(dependencies) {
-    let adapter = createMercenaryAdapter(dependencies);
-    return Object.freeze({
-      autoMerc: () => runMercenaryAutomation(adapter)
-    });
-  }
-
   // src/adapters/evolve/traits/shapeshift.ts
   function readShapeshiftInput(dependencies) {
     let game = requireRecord(dependencies.getGame(), "game"), settings = requireRecord(dependencies.getSettings(), "settings"), race2 = requireRecord(
@@ -29046,16 +28830,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/psychic.ts
-  var SUCCEEDED6 = Object.freeze({
+  var SUCCEEDED5 = Object.freeze({
     status: "succeeded"
   });
   function runPsychicAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED6;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED5;
     for (let decision2 of planPsychic(dependencies.reader.readPlan())) {
       let outcome = dependencies.executor.execute(decision2);
       if (outcome.status === "succeeded" || outcome.failure.code !== "psychic-control-unavailable") return outcome;
     }
-    return SUCCEEDED6;
+    return SUCCEEDED5;
   }
 
   // src/bootstrap/psychic-control.ts
@@ -29210,11 +28994,11 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/ocular-power.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED6 = Object.freeze({
     status: "succeeded"
   });
   function runOcularPowerAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED7;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED6;
     if (!dependencies.controls.capture())
       return {
         status: "stale",
@@ -29227,7 +29011,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       let outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED7;
+    return SUCCEEDED6;
   }
 
   // src/bootstrap/ocular-power-control.ts
@@ -29357,7 +29141,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/wish.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED7 = Object.freeze({
     status: "succeeded"
   });
   function runWishAutomation(dependencies) {
@@ -29365,7 +29149,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       let outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED8;
+    return SUCCEEDED7;
   }
 
   // src/bootstrap/wish-control.ts
@@ -29664,11 +29448,11 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/genetics.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function runGeneticsAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED9;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED8;
     if (!dependencies.controls.capture())
       return {
         status: "stale",
@@ -29681,7 +29465,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       let outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED9;
+    return SUCCEEDED8;
   }
 
   // src/bootstrap/genetics-control.ts
@@ -29837,7 +29621,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/minor-trait.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function staleCandidate(index, expectedTraitName, actualTraitName) {
@@ -29853,7 +29637,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   function runMinorTraitAutomation(dependencies) {
     let summary = summarizeMinorTraits(dependencies.reader.readSummary());
     if (summary === null)
-      return SUCCEEDED10;
+      return SUCCEEDED9;
     for (let index = 0; index < summary.traits.length; index++) {
       let expected = summary.traits[index];
       if (expected === void 0)
@@ -29872,7 +29656,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       if (outcome.status !== "succeeded")
         return outcome;
     }
-    return SUCCEEDED10;
+    return SUCCEEDED9;
   }
 
   // src/bootstrap/minor-trait-control.ts
@@ -30065,12 +29849,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     let decision2 = planMutation(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED11 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED10 : dependencies.executor.execute(decision2);
   }
 
   // src/bootstrap/mutation-control.ts
@@ -30177,7 +29961,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -30188,7 +29972,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     for (; ; ) {
       let decision2 = planTrigger(dependencies.reader.read(index));
       if (decision2 === null)
-        return result(SUCCEEDED12, active);
+        return result(SUCCEEDED11, active);
       if (decision2.kind === "click") {
         let execution = dependencies.executor.execute(decision2);
         if (execution.outcome.status !== "succeeded")
@@ -30972,7 +30756,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/mining-droid.ts
-  var SUCCEEDED13 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function runMiningDroidAutomation(dependencies) {
@@ -30980,7 +30764,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       dependencies.reader.readPlanningInput()
     );
     if (targets === null)
-      return SUCCEEDED13;
+      return SUCCEEDED12;
     let current = dependencies.reader.readCurrent(
       targets.map((target) => target.productionId)
     );
@@ -31374,13 +31158,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/replicator.ts
-  var SUCCEEDED14 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function runReplicatorAutomation(dependencies) {
     let planningInput = dependencies.selectionReader.readPlanningInput();
     if (!planningInput.initialised)
-      return SUCCEEDED14;
+      return SUCCEEDED13;
     let priorityPlan = planReplicatorPriority(planningInput);
     if (priorityPlan !== null) {
       let selection = planReplicatorSelection(
@@ -31396,12 +31180,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     if (!planningInput.assignGovernorTask || !shouldConfigureReplicatorGovernor(
       dependencies.governorGameReader.readGate()
     ) || !dependencies.governorOfficeReader.open())
-      return SUCCEEDED14;
+      return SUCCEEDED13;
     let taskPlan = planReplicatorGovernorTask(
       dependencies.governorGameReader.readTasks()
     );
     if (taskPlan.status === "unavailable")
-      return SUCCEEDED14;
+      return SUCCEEDED13;
     if (taskPlan.assignment !== null) {
       let outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
       if (outcome.status !== "succeeded")
@@ -31409,9 +31193,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
     }
     let settings = dependencies.governorOfficeReader.readSettings();
     if (settings === null)
-      return SUCCEEDED14;
+      return SUCCEEDED13;
     let settingsDecision = planReplicatorGovernorSettings(settings);
-    return settingsDecision === null ? SUCCEEDED14 : dependencies.governorExecutor.execute(settingsDecision);
+    return settingsDecision === null ? SUCCEEDED13 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
   // src/bootstrap/replicator-control.ts
@@ -33425,7 +33209,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   );
 
   // src/application/power.ts
-  var SUCCEEDED15 = Object.freeze({
+  var SUCCEEDED14 = Object.freeze({
     status: "succeeded"
   });
   function createPowerAutomation(dependencies) {
@@ -33440,7 +33224,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           () => planPowerCycle(cycle, state)
         ), decision2 = plan.decision;
         if (decision2 === null)
-          return SUCCEEDED15;
+          return SUCCEEDED14;
         let cycleOutcome = measure(
           "autoPower.executeCycle",
           () => dependencies.executor.execute(decision2)
@@ -33457,7 +33241,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           )
         );
         if (warning === null)
-          return SUCCEEDED15;
+          return SUCCEEDED14;
         let warningOutcome = measure(
           "autoPower.executeWarning",
           () => dependencies.executor.execute(warning)
@@ -33466,7 +33250,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           state,
           warning.binding,
           dependencies.reader.readStateOn(warning.binding)
-        ), SUCCEEDED15);
+        ), SUCCEEDED14);
       },
       readState() {
         return state;
@@ -34263,7 +34047,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED16 = Object.freeze({
+  var SUCCEEDED15 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -34272,7 +34056,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       run() {
         let rawPlan = planStorageAllocation(dependencies.reader.read());
         if (rawPlan === null || rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild))
-          return SUCCEEDED16;
+          return SUCCEEDED15;
         let finalized = finalizeStorageAllocation(rawPlan, state), outcome = dependencies.executor.execute(finalized.decision);
         return outcome.status === "succeeded" && (state = finalized.nextState), outcome;
       },
@@ -34654,14 +34438,14 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/market.ts
-  var SUCCEEDED17 = Object.freeze({
+  var SUCCEEDED16 = Object.freeze({
     status: "succeeded"
   });
   function runMarketAutomation(dependencies, bulkSell = !1, ignoreSellRatio = !1) {
     let gate = dependencies.reader.readGate();
     if (!gate.unlocked || (dependencies.tradeRoutes.adjust(), gate.noTrade))
-      return SUCCEEDED17;
-    let session = dependencies.reader.readSession(), outcome = SUCCEEDED17;
+      return SUCCEEDED16;
+    let session = dependencies.reader.readSession(), outcome = SUCCEEDED16;
     for (let index = 0; ; index++) {
       let sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
       if (sellInput === null)
@@ -34983,12 +34767,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/galaxy-market.ts
-  var SUCCEEDED18 = Object.freeze({
+  var SUCCEEDED17 = Object.freeze({
     status: "succeeded"
   });
   function runGalaxyMarketAutomation(dependencies) {
     let decision2 = planGalaxyMarket(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED18 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED17 : dependencies.executor.execute(decision2);
   }
 
   // src/bootstrap/galaxy-market-control.ts
@@ -35372,12 +35156,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/gather-resources.ts
-  var SUCCEEDED19 = Object.freeze({
+  var SUCCEEDED18 = Object.freeze({
     status: "succeeded"
   });
   function runGatherResourcesAutomation(dependencies) {
     let decision2 = planGatherResources(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED19 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED18 : dependencies.executor.execute(decision2);
   }
 
   // src/bootstrap/gather-resources-control.ts
@@ -35670,16 +35454,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/craft.ts
-  var SUCCEEDED20 = Object.freeze({
+  var SUCCEEDED19 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate()))
-      return SUCCEEDED20;
+      return SUCCEEDED19;
     for (let index = 0; ; index++) {
       let candidate = dependencies.reader.readCandidate(index);
       if (candidate === null)
-        return SUCCEEDED20;
+        return SUCCEEDED19;
       let decision2 = planCraft(candidate);
       if (decision2 === null)
         continue;
@@ -36248,7 +36032,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     }
     return maximum !== null && !Number.isFinite(maximum) && (maximum = maximum > 0 ? Number.MAX_SAFE_INTEGER : 0), { maximum, farmerMinimum };
   }
-  function unavailableInput3(craftOnly) {
+  function unavailableInput2(craftOnly) {
     return Object.freeze({
       available: !1,
       craftOnly,
@@ -36313,7 +36097,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         );
         if (!Array.isArray(listed))
           throw new TypeError("managedPriorityList must return an array");
-        if (listed.length === 0) return unavailableInput3(craftOnly);
+        if (listed.length === 0) return unavailableInput2(craftOnly);
         let rawJobs = listed.map(
           (value, index) => requireRecord(value, `jobList[${index}]`)
         ), game = requireRecord(dependencies.getGame(), "game"), jobs = requireRecord(dependencies.getJobs(), "jobs"), crafter = requireRecord(dependencies.getCrafter(), "crafter"), settings = requireRecord(dependencies.getSettings(), "settings"), buildings = requireRecord(dependencies.getBuildings(), "buildings"), resources = requireRecord(dependencies.getResources(), "resources"), state = requireRecord(dependencies.getState(), "state"), debugWindow = requireRecord(
@@ -36754,12 +36538,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/jobs.ts
-  var SUCCEEDED21 = Object.freeze({
+  var SUCCEEDED20 = Object.freeze({
     status: "succeeded"
   });
   function runJobsAutomation(dependencies, craftOnly = !1) {
     let decision2 = planJobs(dependencies.reader.readCycle(craftOnly));
-    return decision2 === null ? SUCCEEDED21 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED20 : dependencies.executor.execute(decision2);
   }
 
   // src/bootstrap/jobs-control.ts
@@ -36779,6 +36563,222 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return Object.freeze({
       ...craftControl,
       ...jobsControl
+    });
+  }
+
+  // src/adapters/evolve/combat/mercenary.ts
+  function unavailableInput3() {
+    return Object.freeze({
+      available: !1,
+      saveInflationMoney: !1,
+      goal: "Normal",
+      maxSoldiers: 0,
+      deadSoldierReserve: 0,
+      moneyMedian: 0,
+      costIncomeMultiplier: 0,
+      moneyStoragePercent: 0,
+      storageAssignExtra: !1,
+      moneyMaximum: 0,
+      moneyStorageRequired: 0
+    });
+  }
+  function readMercenaryState(manager, money) {
+    return Object.freeze({
+      currentSoldiers: requireNumber(
+        manager.currentSoldiers,
+        "WarManager.currentSoldiers"
+      ),
+      mercenaryCost: requireNumber(
+        manager.mercenaryCost,
+        "WarManager.mercenaryCost"
+      ),
+      moneyCurrent: requireNumber(
+        money.currentQuantity,
+        "resources.Money.currentQuantity"
+      ),
+      moneySpare: requireNumber(
+        money.spareQuantity,
+        "resources.Money.spareQuantity"
+      )
+    });
+  }
+  function decisionMatchesState(decision2, state) {
+    return decision2.kind === "hire-mercenary" && decision2.expectedSoldiers === state.currentSoldiers && decision2.expectedCost === state.mercenaryCost && decision2.expectedMoneyCurrent === state.moneyCurrent && decision2.expectedMoneySpare === state.moneySpare;
+  }
+  function createMercenaryAdapter(dependencies) {
+    let session = null, lastState = null, reader = Object.freeze({
+      readCycle() {
+        session = null, lastState = null;
+        let manager = requireRecord(dependencies.getWarManager(), "WarManager");
+        if (manager.isGarrisonVisible !== !0) return unavailableInput3();
+        let isUnlocked2 = requireFunction(
+          manager.isMercenaryUnlocked,
+          "WarManager.isMercenaryUnlocked"
+        );
+        if (!Reflect.apply(isUnlocked2, manager, []) || requireNumber(
+          manager.maxCityGarrison,
+          "WarManager.maxCityGarrison"
+        ) <= 0) return unavailableInput3();
+        let state = requireRecord(dependencies.getState(), "state"), goal = requireString(state.goal, "state.goal"), saveInflationMoney = !!dependencies.shouldSaveInflationMoney();
+        if (saveInflationMoney && goal !== "Reset")
+          return Object.freeze({
+            ...unavailableInput3(),
+            available: !0,
+            saveInflationMoney: !0,
+            goal
+          });
+        let settings = requireRecord(dependencies.getSettings(), "settings"), resources = requireRecord(dependencies.getResources(), "resources"), money = requireRecord(resources.Money, "resources.Money");
+        return session = Object.freeze({ manager, resources, money }), Object.freeze({
+          available: !0,
+          saveInflationMoney,
+          goal,
+          maxSoldiers: requireNumber(
+            manager.maxSoldiers,
+            "WarManager.maxSoldiers"
+          ),
+          deadSoldierReserve: requireNumber(
+            settings.foreignHireMercDeadSoldiers,
+            "settings.foreignHireMercDeadSoldiers"
+          ),
+          moneyMedian: requireNumber(state.moneyMedian, "state.moneyMedian"),
+          costIncomeMultiplier: requireNumber(
+            settings.foreignHireMercCostLowerThanIncome,
+            "settings.foreignHireMercCostLowerThanIncome"
+          ),
+          moneyStoragePercent: requireNumber(
+            settings.foreignHireMercMoneyStoragePercent,
+            "settings.foreignHireMercMoneyStoragePercent"
+          ),
+          storageAssignExtra: requireBoolean(
+            settings.storageAssignExtra,
+            "settings.storageAssignExtra"
+          ),
+          moneyMaximum: requireNumber(
+            money.maxQuantity,
+            "resources.Money.maxQuantity"
+          ),
+          moneyStorageRequired: requireNumber(
+            money.storageRequired,
+            "resources.Money.storageRequired"
+          )
+        });
+      },
+      readState() {
+        if (session === null)
+          throw new Error("mercenary cycle must be read before mercenary state");
+        return lastState = readMercenaryState(session.manager, session.money), lastState;
+      }
+    }), executor = Object.freeze({
+      hire(decision2) {
+        let active = session, sampled = lastState;
+        if (active === null || sampled === null)
+          return stale(
+            "mercenary-session-missing",
+            "mercenary session is missing"
+          );
+        if (!Number.isFinite(decision2.expectedSoldiers) || !Number.isFinite(decision2.expectedCost) || !Number.isFinite(decision2.expectedMoneyCurrent) || !Number.isFinite(decision2.expectedMoneySpare) || !decisionMatchesState(decision2, sampled))
+          return rejected(
+            "invalid-mercenary-decision",
+            "mercenary decision does not match the sampled state"
+          );
+        if (dependencies.getWarManager() !== active.manager || dependencies.getResources() !== active.resources)
+          return stale(
+            "mercenary-dependencies-changed",
+            "mercenary dependencies changed"
+          );
+        let actual = readMercenaryState(active.manager, active.money);
+        if (!decisionMatchesState(decision2, actual))
+          return stale("mercenary-state-changed", "mercenary state changed");
+        let hireMercenary = requireFunction(
+          active.manager.hireMercenary,
+          "WarManager.hireMercenary"
+        );
+        return lastState = null, Reflect.apply(hireMercenary, active.manager, []) ? Object.freeze({ status: "hired" }) : Object.freeze({ status: "not-hired" });
+      }
+    }), logger = Object.freeze({
+      write(event) {
+        let gameLog = requireRecord(dependencies.getGameLog(), "GameLog"), logSuccess = requireFunction(
+          gameLog.logSuccess,
+          "GameLog.logSuccess"
+        );
+        Reflect.apply(logSuccess, gameLog, [
+          event.id,
+          event.message,
+          event.categories
+        ]);
+      }
+    });
+    return Object.freeze({ reader, executor, logger });
+  }
+
+  // src/domain/combat/mercenary.ts
+  function planMercenaryCycle(input) {
+    if (!input.available || input.saveInflationMoney && input.goal !== "Reset")
+      return null;
+    if (input.goal === "Reset")
+      return Object.freeze({
+        soldierLimit: input.maxSoldiers,
+        minimumMoney: 0,
+        maximumCheapCost: Number.MAX_SAFE_INTEGER
+      });
+    let maximumCheapCost = input.moneyMedian * input.costIncomeMultiplier, minimumMoney = Math.max(
+      input.moneyMaximum * input.moneyStoragePercent / 100,
+      Math.min(
+        input.moneyMaximum - maximumCheapCost,
+        input.storageAssignExtra ? input.moneyStorageRequired / 1.03 : input.moneyStorageRequired
+      )
+    );
+    return Object.freeze({
+      soldierLimit: input.maxSoldiers - input.deadSoldierReserve,
+      minimumMoney,
+      maximumCheapCost
+    });
+  }
+  function planMercenaryHire(cycle, state) {
+    return state.currentSoldiers >= cycle.soldierLimit || state.moneyCurrent < state.mercenaryCost || !(state.moneySpare - state.mercenaryCost > cycle.minimumMoney || state.mercenaryCost < cycle.maximumCheapCost) ? null : Object.freeze({
+      kind: "hire-mercenary",
+      expectedSoldiers: state.currentSoldiers,
+      expectedCost: state.mercenaryCost,
+      expectedMoneyCurrent: state.moneyCurrent,
+      expectedMoneySpare: state.moneySpare
+    });
+  }
+  function planMercenaryLog(count2) {
+    return count2 <= 0 ? null : Object.freeze({
+      id: "mercenary",
+      message: count2 === 1 ? "Hired a mercenary to join the garrison." : `Hired ${count2} mercenaries to join the garrison.`,
+      categories: Object.freeze(["combat"])
+    });
+  }
+
+  // src/application/mercenary.ts
+  var SUCCEEDED21 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMercenaryAutomation(dependencies) {
+    let cycle = planMercenaryCycle(dependencies.reader.readCycle());
+    if (cycle === null) return SUCCEEDED21;
+    let hired = 0, outcome = SUCCEEDED21;
+    for (; ; ) {
+      let decision2 = planMercenaryHire(cycle, dependencies.reader.readState());
+      if (decision2 === null) break;
+      let result2 = dependencies.executor.hire(decision2);
+      if (result2.status === "hired") {
+        hired++;
+        continue;
+      }
+      result2.status !== "not-hired" && (outcome = result2);
+      break;
+    }
+    let event = planMercenaryLog(hired);
+    return event !== null && dependencies.logger.write(event), outcome;
+  }
+
+  // src/bootstrap/mercenary-control.ts
+  function createMercenaryControl(dependencies) {
+    let adapter = createMercenaryAdapter(dependencies);
+    return Object.freeze({
+      autoMerc: () => runMercenaryAutomation(adapter)
     });
   }
 
@@ -37111,6 +37111,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   function createSpyControl(dependencies) {
     let adapter = createSpyAdapter(dependencies);
     return Object.freeze({ autoSpy: () => runSpyAutomation(adapter) });
+  }
+
+  // src/bootstrap/espionage-controls.ts
+  function createEspionageControls({
+    mercenary,
+    spy
+  }) {
+    let mercenaryControl = createMercenaryControl(mercenary), spyControl = createSpyControl(spy);
+    return Object.freeze({
+      ...mercenaryControl,
+      ...spyControl
+    });
   }
 
   // src/adapters/evolve/progression/prestige/prestige.ts
@@ -50625,26 +50637,29 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getDebugWindow: () => runtimeEnvironment.window,
         debugLog: (message) => runtimeEnvironment.log(message)
       }
-    }), { autoMerc } = createMercenaryControl({
-      getWarManager: () => WarManager,
-      getState: () => state,
-      getSettings: () => settings,
-      getResources: () => resources,
-      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
-      getGameLog: () => GameLog
-    }), { autoSpy } = createSpyControl({
-      getSpyManager: () => SpyManager,
-      getWarManager: () => WarManager,
-      getForeignControls: () => foreignControls,
-      getHaveTask: () => haveTask,
-      getHaveTech: () => haveTech,
-      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
-      getResources: () => resources,
-      getSettings: () => settings,
-      getPoly: () => poly,
-      getGameLog: () => GameLog,
-      getGovName,
-      getGame: () => game
+    }), { autoMerc, autoSpy } = createEspionageControls({
+      mercenary: {
+        getWarManager: () => WarManager,
+        getState: () => state,
+        getSettings: () => settings,
+        getResources: () => resources,
+        shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+        getGameLog: () => GameLog
+      },
+      spy: {
+        getSpyManager: () => SpyManager,
+        getWarManager: () => WarManager,
+        getForeignControls: () => foreignControls,
+        getHaveTask: () => haveTask,
+        getHaveTech: () => haveTech,
+        shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+        getResources: () => resources,
+        getSettings: () => settings,
+        getPoly: () => poly,
+        getGameLog: () => GameLog,
+        getGovName,
+        getGame: () => game
+      }
     }), { autoTax } = createTaxControl({
       nowMs: () => browserClock.nowMs(),
       getVueById,
