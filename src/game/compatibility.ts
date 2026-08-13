@@ -145,7 +145,7 @@ export function createGameCompatibility({
             return (
               Object.keys(t).forEach(function (e) {
                 a[e] = function () {
-                  return t[e]() * r;
+                  return t[e]!() * r;
                 };
               }),
               a
@@ -158,7 +158,8 @@ export function createGameCompatibility({
     },
     // function govPrice(gov) from civics.js
     govPrice: function (e: string) {
-      const o = getGame().global.civic.foreign[`gov${e}`];
+      // The game creates one foreign civic entry for every government id.
+      const o = getGame().global.civic.foreign[`gov${e}`]!;
       let i = 15384 * o.eco;
       i *= 1 + (1.6 * o.hstl) / 100;
       i *= 1 - (0.25 * o.unrest) / 100;
@@ -1381,8 +1382,9 @@ export function createGameCompatibility({
     hellSupression: function (t: string, e?: number): HellSuppression | 0 {
       switch (t) {
         case "ruins": {
-          let t = e || getBuildings().RuinsGuardPost.stateOnCount,
-            r = 75 * getBuildings().RuinsArcology.stateOnCount,
+          // These buildings are present whenever the hell portal exposes this branch.
+          let t = e || getBuildings().RuinsGuardPost!.stateOnCount,
+            r = 75 * getBuildings().RuinsArcology!.stateOnCount,
             a = getGame().armyRating(
               t * traitVal("high_pop", 0, 1),
               "hellArmy",
@@ -1394,7 +1396,7 @@ export function createGameCompatibility({
         }
         case "gate": {
           let t = poly.hellSupression("ruins", e) as HellSuppression,
-            r = 100 * getBuildings().GateTurret.stateOnCount;
+            r = 100 * getBuildings().GateTurret!.stateOnCount;
           r *= traitVal("holy", 1, "+");
           let a = (t.rating + r) / 7500;
           return { supress: a > 1 ? 1 : a, rating: t.rating + r };

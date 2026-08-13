@@ -21,6 +21,8 @@
     "src/ui/**/*.ts",
     "src/utils/**/*.ts",
     "src/validation/**/*.ts",
+    "src/game/compatibility.ts",
+    "src/game/entity-catalogs.ts",
     "src/config.ts",
     "src/main.ts"
   ]
