@@ -40,7 +40,10 @@ const layerOfRootFile = new Map([
 // The Vue 2 compatibility runtime assembles features the same way the bootstrap seams do.
 // TRANSITIONAL: it loses this classification once its remaining feature logic moves behind
 // ports and it imports adapters only.
-const compositionFiles = new Set(["adapters/evolve/evolve-runtime.js"]);
+const compositionFiles = new Set([
+  "adapters/evolve/evolve-runtime.js",
+  "adapters/evolve/evolve-runtime-test.js",
+]);
 
 // Not production source: userscript release metadata consumed by the build.
 const excludedFiles = new Set(["userscript.meta.js"]);

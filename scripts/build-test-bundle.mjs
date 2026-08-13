@@ -18,5 +18,8 @@ await esbuild.build({
   logLevel: "warning",
   platform: "browser",
   target: ["esnext"],
+  define: {
+    "globalThis.__EA_TEST_SURFACE_ENABLED__": "true",
+  },
   treeShaking: false,
 });

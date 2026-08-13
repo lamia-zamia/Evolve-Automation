@@ -38,7 +38,9 @@ const sourceJavaScript = sourceFiles
   .map((file) => path.relative(root, file).replaceAll(path.sep, "/"))
   .sort();
 assert.deepEqual(sourceJavaScript, [
+  "src/adapters/evolve/evolve-runtime-test.js",
   "src/adapters/evolve/evolve-runtime.js",
+  "src/adapters/evolve/runtime-test-surface.js",
   "src/userscript.meta.js",
 ]);
 

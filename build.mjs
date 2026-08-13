@@ -35,7 +35,11 @@ const buildOptions = {
   logLevel: "info",
   platform: "browser",
   target: ["esnext"],
-  treeShaking: false,
+  define: {
+    "globalThis.__EA_TEST_SURFACE_ENABLED__": "false",
+  },
+  minifySyntax: true,
+  treeShaking: true,
 };
 
 if (watch) {

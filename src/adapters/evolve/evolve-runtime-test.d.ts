@@ -2,13 +2,10 @@ import type { BrowserDiagnostics } from "../browser/diagnostics.ts";
 import type { JQueryGlobal } from "../browser/jquery.ts";
 import type { LegacyRuntimeEnvironment } from "../browser/legacy-runtime-environment.ts";
 
-/**
- * Evolve production compatibility boundary. The current Vue 2 integration is
- * intentionally dynamic at this external adapter edge; typed domain and
- * application contracts do not escape into the game surface.
- */
-export declare function startEvolveRuntime(
+export type EvolveCharacterizationSurface = Record<string, unknown>;
+
+export declare function startEvolveRuntimeForTests(
   jquery: JQueryGlobal,
   diagnostics: BrowserDiagnostics,
   environment: LegacyRuntimeEnvironment,
-): void;
+): EvolveCharacterizationSurface;

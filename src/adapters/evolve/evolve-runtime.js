@@ -327,30 +327,23 @@ import { createOverrideCatalog } from "../../settings/override-catalog.ts";
 import { createScriptRuntimeUI } from "../../ui/script-runtime.ts";
 
 export function startEvolveRuntime($, diagnostics, runtimeEnvironment) {
-  startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment, false);
+  startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment);
 }
 
-export function startEvolveRuntimeForTests($, diagnostics, runtimeEnvironment) {
-  return startEvolveRuntimeComposition(
-    $,
-    diagnostics,
-    runtimeEnvironment,
-    true,
-  );
-}
-
-function startEvolveRuntimeComposition(
+export function startEvolveRuntimeComposition(
   $,
   diagnostics,
   runtimeEnvironment,
-  captureTestSurface,
+  testSurface,
 ) {
   "use strict";
-  const characterizationSurface = captureTestSurface === true ? {} : null;
-  const publishTestSurface = (...parts) => {
-    if (characterizationSurface)
-      Object.assign(characterizationSurface, ...parts);
-  };
+  const TEST_SURFACE_ENABLED = globalThis.__EA_TEST_SURFACE_ENABLED__ === true;
+  const getTestContext = TEST_SURFACE_ENABLED
+    ? (name) => testSurface?.getContext(name)
+    : () => undefined;
+  const setTestContext = TEST_SURFACE_ENABLED
+    ? (name, context) => testSurface?.setContext(name, context)
+    : () => {};
   const { getRealNumber, getNumberString, getNiceNumber } =
     createNumberFormatting({ numberSuffix });
   const browserClock = createBrowserClock();
@@ -594,38 +587,41 @@ function startEvolveRuntimeComposition(
     openOverrideModal: (event) => openOverrideModal(event),
     buildSelectOptions,
   });
-  let mechInfoTestContext;
   const { reader: mechInfoReader, observer: mechInfoObserver } =
     createMechInfoEvolveAdapter({
-      getGame: () => mechInfoTestContext?.game ?? game,
-      getMechManager: () => mechInfoTestContext?.MechManager ?? MechManager,
+      getGame: () => getTestContext("mechInfo")?.game ?? game,
+      getMechManager: () =>
+        getTestContext("mechInfo")?.MechManager ?? MechManager,
       getNiceNumber: (value) =>
-        mechInfoTestContext?.getNiceNumber?.(value) ?? getNiceNumber(value),
+        getTestContext("mechInfo")?.getNiceNumber?.(value) ??
+        getNiceNumber(value),
     });
   const mechInfoBrowserAdapter = createMechInfoBrowserAdapter({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getVueById: (id) => mechInfoTestContext?.getVueById?.(id) ?? getVueById(id),
+    getVueById: (id) =>
+      getTestContext("mechInfo")?.getVueById?.(id) ?? getVueById(id),
     reader: mechInfoReader,
     observer: mechInfoObserver,
   });
   const { createMechInfo, removeMechInfo } = mechInfoBrowserAdapter;
-  let resourceToggleTestContext;
   const resourceToggleReader = createResourceToggleEvolveAdapter({
-    getGame: () => resourceToggleTestContext?.game ?? game,
-    getSettingsRaw: () => resourceToggleTestContext?.settingsRaw ?? settingsRaw,
+    getGame: () => getTestContext("resourceToggle")?.game ?? game,
+    getSettingsRaw: () =>
+      getTestContext("resourceToggle")?.settingsRaw ?? settingsRaw,
     getMarketManager: () =>
-      resourceToggleTestContext?.MarketManager ?? MarketManager,
+      getTestContext("resourceToggle")?.MarketManager ?? MarketManager,
     getStorageManager: () =>
-      resourceToggleTestContext?.StorageManager ?? StorageManager,
+      getTestContext("resourceToggle")?.StorageManager ?? StorageManager,
   });
   const resourceToggleBrowserAdapter = createResourceToggleBrowserAdapter({
     getJQuery: () => $,
     reader: resourceToggleReader,
     addToggleCallbacks: (...args) =>
-      (resourceToggleTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
-        ...args,
-      ),
+      (
+        getTestContext("resourceToggle")?.addToggleCallbacks ??
+        addToggleCallbacks
+      )(...args),
   });
   const {
     createMarketToggles,
@@ -633,7 +629,6 @@ function startEvolveRuntimeComposition(
     createStorageToggles,
     removeStorageToggles,
   } = resourceToggleBrowserAdapter;
-  let productionSettingsTestContext;
   const productionSettingsActions = {
     buildSettingsSection,
     addSettingsNumber,
@@ -647,19 +642,21 @@ function startEvolveRuntimeComposition(
   };
   const productionSettingsEvolveAdapter = createProductionSettingsEvolveAdapter(
     {
-      getResources: () => productionSettingsTestContext?.resources ?? resources,
+      getResources: () =>
+        getTestContext("productionSettings")?.resources ?? resources,
       getCraftablesList: () =>
-        productionSettingsTestContext?.craftablesList ?? craftablesList,
+        getTestContext("productionSettings")?.craftablesList ?? craftablesList,
       getSmelterManager: () =>
-        productionSettingsTestContext?.SmelterManager ?? SmelterManager,
+        getTestContext("productionSettings")?.SmelterManager ?? SmelterManager,
       getFactoryManager: () =>
-        productionSettingsTestContext?.FactoryManager ?? FactoryManager,
+        getTestContext("productionSettings")?.FactoryManager ?? FactoryManager,
       getDroidManager: () =>
-        productionSettingsTestContext?.DroidManager ?? DroidManager,
+        getTestContext("productionSettings")?.DroidManager ?? DroidManager,
       getReplicatorManager: () =>
-        productionSettingsTestContext?.ReplicatorManager ?? ReplicatorManager,
+        getTestContext("productionSettings")?.ReplicatorManager ??
+        ReplicatorManager,
       getSettingsRaw: () =>
-        productionSettingsTestContext?.settingsRaw ?? settingsRaw,
+        getTestContext("productionSettings")?.settingsRaw ?? settingsRaw,
       consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
     },
   );
@@ -679,12 +676,12 @@ function startEvolveRuntimeComposition(
     writer: {
       resetToDefaults: () =>
         (
-          productionSettingsTestContext?.resetProductionSettings ??
+          getTestContext("productionSettings")?.resetProductionSettings ??
           resetProductionSettings
         )(true),
       persist: () =>
         (
-          productionSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("productionSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
       reorderSmelterFuels: (fuelIds) =>
@@ -694,7 +691,7 @@ function startEvolveRuntimeComposition(
       productionSettingsBrowserAdapter.updateProductionSettingsContent(),
     effects: {
       resetCheckboxes: () =>
-        (productionSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("productionSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoQuarry",
           "autoMine",
           "autoExtractor",
@@ -707,7 +704,7 @@ function startEvolveRuntimeComposition(
         ),
       removeCraftToggles: () =>
         (
-          productionSettingsTestContext?.removeCraftToggles ??
+          getTestContext("productionSettings")?.removeCraftToggles ??
           removeCraftToggles
         )(),
     },
@@ -722,23 +719,22 @@ function startEvolveRuntimeComposition(
     updateProductionTableReplicator,
   } = productionSettingsBrowserAdapter;
 
-  publishTestSurface({
-    productionSettings: {
-      buildProductionSettings,
-      updateProductionSettingsContent,
-      updateProductionTableSmelter,
-      updateProductionTableFoundry,
-      updateProductionTableFactory,
-      updateProductionTableMiningDrone,
-      updateProductionTableReplicator,
-    },
-    setProductionSettingsTestContext(context) {
-      settingsRaw = context.settingsRaw;
-      productionSettingsTestContext = context;
-    },
-  });
-
-  let storageSettingsTestContext;
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      productionSettings: {
+        buildProductionSettings,
+        updateProductionSettingsContent,
+        updateProductionTableSmelter,
+        updateProductionTableFoundry,
+        updateProductionTableFactory,
+        updateProductionTableMiningDrone,
+        updateProductionTableReplicator,
+      },
+      setProductionSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        setTestContext("productionSettings", context);
+      },
+    });
   const storageSettingsActions = {
     buildSettingsSection,
     addSettingsToggle,
@@ -749,9 +745,9 @@ function startEvolveRuntimeComposition(
   };
   const storageSettingsEvolveAdapter = createStorageSettingsEvolveAdapter({
     getStorageManager: () =>
-      storageSettingsTestContext?.StorageManager ?? StorageManager,
+      getTestContext("storageSettings")?.StorageManager ?? StorageManager,
     getSettingsRaw: () =>
-      storageSettingsTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("storageSettings")?.settingsRaw ?? settingsRaw,
   });
   let storageSettingsIntentHandler;
   const storageSettingsBrowserAdapter = createStorageSettingsBrowserAdapter({
@@ -763,18 +759,18 @@ function startEvolveRuntimeComposition(
       handle: (intent) => storageSettingsIntentHandler.handle(intent),
     },
     getActions: () =>
-      storageSettingsTestContext?.actions ?? storageSettingsActions,
+      getTestContext("storageSettings")?.actions ?? storageSettingsActions,
   });
   storageSettingsIntentHandler = createStorageSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
         (
-          storageSettingsTestContext?.resetStorageSettings ??
+          getTestContext("storageSettings")?.resetStorageSettings ??
           resetStorageSettings
         )(true),
       persist: () =>
         (
-          storageSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("storageSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
       reorderResources: (resourceIds) =>
@@ -784,19 +780,17 @@ function startEvolveRuntimeComposition(
       storageSettingsBrowserAdapter.updateStorageSettingsContent(),
     effects: {
       resetCheckbox: () =>
-        (storageSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("storageSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoStorage",
         ),
       removeStorageToggles: () =>
         (
-          storageSettingsTestContext?.removeStorageToggles ??
+          getTestContext("storageSettings")?.removeStorageToggles ??
           removeStorageToggles
         )(),
     },
   });
   const { buildStorageSettings } = storageSettingsBrowserAdapter;
-
-  let magicSettingsTestContext;
   const magicSettingsActions = {
     buildSettingsSection,
     addStandardHeading,
@@ -807,11 +801,11 @@ function startEvolveRuntimeComposition(
     buildTableLabel,
   };
   const magicSettingsEvolveAdapter = createMagicSettingsEvolveAdapter({
-    getGame: () => magicSettingsTestContext?.game ?? game,
+    getGame: () => getTestContext("magicSettings")?.game ?? game,
     getAlchemyManager: () =>
-      magicSettingsTestContext?.AlchemyManager ?? AlchemyManager,
+      getTestContext("magicSettings")?.AlchemyManager ?? AlchemyManager,
     getRitualManager: () =>
-      magicSettingsTestContext?.RitualManager ?? RitualManager,
+      getTestContext("magicSettings")?.RitualManager ?? RitualManager,
   });
   let magicSettingsIntentHandler;
   const magicSettingsBrowserAdapter = createMagicSettingsBrowserAdapter({
@@ -821,17 +815,19 @@ function startEvolveRuntimeComposition(
     intents: {
       handle: (intent) => magicSettingsIntentHandler.handle(intent),
     },
-    getActions: () => magicSettingsTestContext?.actions ?? magicSettingsActions,
+    getActions: () =>
+      getTestContext("magicSettings")?.actions ?? magicSettingsActions,
   });
   magicSettingsIntentHandler = createMagicSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
-        (magicSettingsTestContext?.resetMagicSettings ?? resetMagicSettings)(
-          true,
-        ),
+        (
+          getTestContext("magicSettings")?.resetMagicSettings ??
+          resetMagicSettings
+        )(true),
       persist: () =>
         (
-          magicSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("magicSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -839,7 +835,7 @@ function startEvolveRuntimeComposition(
       magicSettingsBrowserAdapter.updateMagicSettingsContent(),
     effects: {
       resetCheckboxes: () =>
-        (magicSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("magicSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoAlchemy",
           "autoPylon",
           "magicFullmetalHelper",
@@ -847,8 +843,6 @@ function startEvolveRuntimeComposition(
     },
   });
   const { buildMagicSettings } = magicSettingsBrowserAdapter;
-
-  let jobSettingsTestContext;
   const jobSettingsActions = {
     buildSettingsSection,
     addSettingsNumber,
@@ -861,11 +855,14 @@ function startEvolveRuntimeComposition(
     confirm: (...args) => runtimeEnvironment.confirm(...args),
   };
   const jobSettingsEvolveAdapter = createJobSettingsEvolveAdapter({
-    getBasicJob: () => jobSettingsTestContext?.BasicJob ?? BasicJob,
-    getCraftingJob: () => jobSettingsTestContext?.CraftingJob ?? CraftingJob,
-    getJobManager: () => jobSettingsTestContext?.JobManager ?? JobManager,
-    getJobs: () => jobSettingsTestContext?.jobs ?? jobs,
-    getSettingsRaw: () => jobSettingsTestContext?.settingsRaw ?? settingsRaw,
+    getBasicJob: () => getTestContext("jobSettings")?.BasicJob ?? BasicJob,
+    getCraftingJob: () =>
+      getTestContext("jobSettings")?.CraftingJob ?? CraftingJob,
+    getJobManager: () =>
+      getTestContext("jobSettings")?.JobManager ?? JobManager,
+    getJobs: () => getTestContext("jobSettings")?.jobs ?? jobs,
+    getSettingsRaw: () =>
+      getTestContext("jobSettings")?.settingsRaw ?? settingsRaw,
   });
   let jobSettingsIntentHandler;
   const jobSettingsBrowserAdapter = createJobSettingsBrowserAdapter({
@@ -875,15 +872,18 @@ function startEvolveRuntimeComposition(
     intents: {
       handle: (intent) => jobSettingsIntentHandler.handle(intent),
     },
-    getActions: () => jobSettingsTestContext?.actions ?? jobSettingsActions,
+    getActions: () =>
+      getTestContext("jobSettings")?.actions ?? jobSettingsActions,
   });
   jobSettingsIntentHandler = createJobSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
-        (jobSettingsTestContext?.resetJobSettings ?? resetJobSettings)(true),
+        (getTestContext("jobSettings")?.resetJobSettings ?? resetJobSettings)(
+          true,
+        ),
       persist: () =>
         (
-          jobSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("jobSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
       resetPriorities: () => jobSettingsEvolveAdapter.resetPriorities(),
@@ -893,15 +893,13 @@ function startEvolveRuntimeComposition(
       jobSettingsBrowserAdapter.updateJobSettingsContent(),
     effects: {
       resetCheckboxes: () =>
-        (jobSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("jobSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoJobs",
           "autoCraftsmen",
         ),
     },
   });
   const { buildJobSettings } = jobSettingsBrowserAdapter;
-
-  let weightingSettingsTestContext;
   const weightingSettingsActions = {
     buildSettingsSection,
     addSettingsToggle,
@@ -916,19 +914,20 @@ function startEvolveRuntimeComposition(
         handle: (intent) => weightingSettingsIntentHandler.handle(intent),
       },
       getActions: () =>
-        weightingSettingsTestContext?.actions ?? weightingSettingsActions,
+        getTestContext("weightingSettings")?.actions ??
+        weightingSettingsActions,
     },
   );
   weightingSettingsIntentHandler = createWeightingSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
         (
-          weightingSettingsTestContext?.resetWeightingSettings ??
+          getTestContext("weightingSettings")?.resetWeightingSettings ??
           resetWeightingSettings
         )(true),
       persist: () =>
         (
-          weightingSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("weightingSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -936,8 +935,6 @@ function startEvolveRuntimeComposition(
       weightingSettingsBrowserAdapter.updateWeightingSettingsContent(),
   });
   const { buildWeightingSettings } = weightingSettingsBrowserAdapter;
-
-  let buildingSettingsTestContext;
   const buildingSettingsActions = {
     buildSettingsSection,
     addSettingsNumber,
@@ -952,22 +949,24 @@ function startEvolveRuntimeComposition(
   };
   const buildingSettingsEvolveAdapter = createBuildingSettingsEvolveAdapter({
     getBuildingManager: () =>
-      buildingSettingsTestContext?.BuildingManager ?? BuildingManager,
+      getTestContext("buildingSettings")?.BuildingManager ?? BuildingManager,
     getBuildingIds: () =>
-      buildingSettingsTestContext?.buildingIds ?? buildingIds,
-    getResources: () => buildingSettingsTestContext?.resources ?? resources,
+      getTestContext("buildingSettings")?.buildingIds ?? buildingIds,
+    getResources: () =>
+      getTestContext("buildingSettings")?.resources ?? resources,
     getLinkedBuildings: () =>
-      buildingSettingsTestContext?.linkedBuildings ?? linkedBuildings,
+      getTestContext("buildingSettings")?.linkedBuildings ?? linkedBuildings,
     getCheckCompare: () =>
-      buildingSettingsTestContext?.checkCompare ?? checkCompare,
+      getTestContext("buildingSettings")?.checkCompare ?? checkCompare,
     getOverrideKey: () =>
-      buildingSettingsTestContext?.overrideKey ?? overrideKey,
+      getTestContext("buildingSettings")?.overrideKey ?? overrideKey,
     getRealNumber: () =>
-      buildingSettingsTestContext?.getRealNumber ?? getRealNumber,
+      getTestContext("buildingSettings")?.getRealNumber ?? getRealNumber,
     getInitBuildingState: () =>
-      buildingSettingsTestContext?.initBuildingState ?? initBuildingState,
+      getTestContext("buildingSettings")?.initBuildingState ??
+      initBuildingState,
     getSettingsRaw: () =>
-      buildingSettingsTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("buildingSettings")?.settingsRaw ?? settingsRaw,
   });
   let buildingSettingsIntentHandler;
   const buildingSettingsBrowserAdapter = createBuildingSettingsBrowserAdapter({
@@ -981,18 +980,18 @@ function startEvolveRuntimeComposition(
       handle: (intent) => buildingSettingsIntentHandler.handle(intent),
     },
     getActions: () =>
-      buildingSettingsTestContext?.actions ?? buildingSettingsActions,
+      getTestContext("buildingSettings")?.actions ?? buildingSettingsActions,
   });
   buildingSettingsIntentHandler = createBuildingSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
         (
-          buildingSettingsTestContext?.resetBuildingSettings ??
+          getTestContext("buildingSettings")?.resetBuildingSettings ??
           resetBuildingSettings
         )(true),
       persist: () =>
         (
-          buildingSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("buildingSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
       resetPriorities: () => buildingSettingsEvolveAdapter.resetPriorities(),
@@ -1009,21 +1008,19 @@ function startEvolveRuntimeComposition(
       buildingSettingsBrowserAdapter.updateBuildingSettingsContent(),
     effects: {
       resetCheckboxes: () =>
-        (buildingSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("buildingSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoBuild",
           "autoPower",
         ),
       removeBuildingToggles: () =>
         (
-          buildingSettingsTestContext?.removeBuildingToggles ??
+          getTestContext("buildingSettings")?.removeBuildingToggles ??
           removeBuildingToggles
         )(),
     },
   });
   const { buildBuildingSettings, filterBuildingSettingsTable } =
     buildingSettingsBrowserAdapter;
-
-  let projectSettingsTestContext;
   const projectSettingsActions = {
     buildSettingsSection,
     addSettingsNumber,
@@ -1035,9 +1032,9 @@ function startEvolveRuntimeComposition(
   };
   const projectSettingsEvolveAdapter = createProjectSettingsEvolveAdapter({
     getProjectManager: () =>
-      projectSettingsTestContext?.ProjectManager ?? ProjectManager,
+      getTestContext("projectSettings")?.ProjectManager ?? ProjectManager,
     getSettingsRaw: () =>
-      projectSettingsTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("projectSettings")?.settingsRaw ?? settingsRaw,
   });
   let projectSettingsIntentHandler;
   const projectSettingsBrowserAdapter = createProjectSettingsBrowserAdapter({
@@ -1049,18 +1046,18 @@ function startEvolveRuntimeComposition(
       handle: (intent) => projectSettingsIntentHandler.handle(intent),
     },
     getActions: () =>
-      projectSettingsTestContext?.actions ?? projectSettingsActions,
+      getTestContext("projectSettings")?.actions ?? projectSettingsActions,
   });
   projectSettingsIntentHandler = createProjectSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
         (
-          projectSettingsTestContext?.resetProjectSettings ??
+          getTestContext("projectSettings")?.resetProjectSettings ??
           resetProjectSettings
         )(true),
       persist: () =>
         (
-          projectSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("projectSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
       reorderProjects: (projectIds) =>
@@ -1070,14 +1067,12 @@ function startEvolveRuntimeComposition(
       projectSettingsBrowserAdapter.updateProjectSettingsContent(),
     effects: {
       resetCheckbox: () =>
-        (projectSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("projectSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoARPA",
         ),
     },
   });
   const { buildProjectSettings } = projectSettingsBrowserAdapter;
-
-  let loggingSettingsTestContext;
   const loggingSettingsActions = {
     buildSettingsSection2,
     addSettingsHeader1,
@@ -1085,10 +1080,10 @@ function startEvolveRuntimeComposition(
     addSettingsToggle,
   };
   const loggingSettingsEvolveAdapter = createLoggingSettingsEvolveAdapter({
-    getGame: () => loggingSettingsTestContext?.game ?? game,
-    getGameLog: () => loggingSettingsTestContext?.GameLog ?? GameLog,
+    getGame: () => getTestContext("loggingSettings")?.game ?? game,
+    getGameLog: () => getTestContext("loggingSettings")?.GameLog ?? GameLog,
     getSettingsRaw: () =>
-      loggingSettingsTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("loggingSettings")?.settingsRaw ?? settingsRaw,
   });
   let loggingSettingsIntentHandler;
   const loggingSettingsBrowserAdapter = createLoggingSettingsBrowserAdapter({
@@ -1100,22 +1095,23 @@ function startEvolveRuntimeComposition(
       handle: (intent) => loggingSettingsIntentHandler.handle(intent),
     },
     getActions: () =>
-      loggingSettingsTestContext?.actions ?? loggingSettingsActions,
+      getTestContext("loggingSettings")?.actions ?? loggingSettingsActions,
   });
   loggingSettingsIntentHandler = createLoggingSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
         (
-          loggingSettingsTestContext?.resetLoggingSettings ??
+          getTestContext("loggingSettings")?.resetLoggingSettings ??
           resetLoggingSettings
         )(true),
       persist: () =>
         (
-          loggingSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("loggingSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
       setLogFilter: (value) => {
-        const target = loggingSettingsTestContext?.settingsRaw ?? settingsRaw;
+        const target =
+          getTestContext("loggingSettings")?.settingsRaw ?? settingsRaw;
         target.logFilter = value;
       },
     },
@@ -1125,19 +1121,20 @@ function startEvolveRuntimeComposition(
       ),
     effects: {
       buildFilterRegExp: () =>
-        (loggingSettingsTestContext?.buildFilterRegExp ?? buildFilterRegExp)(),
+        (
+          getTestContext("loggingSettings")?.buildFilterRegExp ??
+          buildFilterRegExp
+        )(),
     },
   });
   const { buildLoggingSettings } = loggingSettingsBrowserAdapter;
-
-  let optionsModalTestContext;
   const optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getWindow: () => runtimeEnvironment.window,
     getSettingsReader: () => ({
       readToggle: (settingName) => {
-        const raw = optionsModalTestContext?.settingsRaw ?? settingsRaw;
+        const raw = getTestContext("optionsModal")?.settingsRaw ?? settingsRaw;
         const overrides = raw.overrides ?? {};
         return {
           checked: Boolean(raw[settingName]),
@@ -1147,24 +1144,26 @@ function startEvolveRuntimeComposition(
     }),
     getSettingsWriter: () => ({
       setToggle: (settingName, checked) => {
-        const raw = optionsModalTestContext?.settingsRaw ?? settingsRaw;
+        const raw = getTestContext("optionsModal")?.settingsRaw ?? settingsRaw;
         raw[settingName] = checked;
       },
       persist: () =>
         (
-          optionsModalTestContext?.updateSettingsFromState ??
+          getTestContext("optionsModal")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     }),
     getBuilders: () =>
-      optionsModalTestContext?.builders ?? {
+      getTestContext("optionsModal")?.builders ?? {
         government: buildGovernmentSettings,
         war: buildWarSettings,
         hell: buildHellSettings,
         fleet: buildFleetSettings,
       },
     openOverrideModal: (event) =>
-      (optionsModalTestContext?.openOverrideModal ?? openOverrideModal)(event),
+      (getTestContext("optionsModal")?.openOverrideModal ?? openOverrideModal)(
+        event,
+      ),
   });
   const {
     createSettingToggle,
@@ -1173,32 +1172,28 @@ function startEvolveRuntimeComposition(
     openOptionsModal,
     createOptionsModal,
   } = optionsModalBrowserAdapter;
-
-  let prestigeTopBarTestContext;
   const prestigeTopBarReader = createPrestigeTopBarEvolveAdapter({
-    getSettings: () => prestigeTopBarTestContext?.settings ?? settings,
+    getSettings: () => getTestContext("prestigeTopBar")?.settings ?? settings,
     getPrestigeTypes: () =>
-      prestigeTopBarTestContext?.prestigeTypes ?? prestigeTypes,
+      getTestContext("prestigeTopBar")?.prestigeTypes ?? prestigeTypes,
   });
   const prestigeTopBarBrowserAdapter = createPrestigeTopBarBrowserAdapter({
     getDocument: () => runtimeEnvironment.document,
     reader: prestigeTopBarReader,
     options: {
       addOptionUI: (...args) =>
-        (prestigeTopBarTestContext?.addOptionUI ?? addOptionUI)(...args),
+        (getTestContext("prestigeTopBar")?.addOptionUI ?? addOptionUI)(...args),
     },
     buildPrestigeSettings: (...args) =>
       (
-        prestigeTopBarTestContext?.buildPrestigeSettings ??
+        getTestContext("prestigeTopBar")?.buildPrestigeSettings ??
         buildPrestigeSettings
       )(...args),
   });
   const { updatePrestigeInTopBar } = prestigeTopBarBrowserAdapter;
-
-  let totalDaysTopBarTestContext;
   const totalDaysTopBarReader = createTotalDaysTopBarEvolveAdapter({
-    getSettings: () => totalDaysTopBarTestContext?.settings ?? settings,
-    getGame: () => totalDaysTopBarTestContext?.game ?? game,
+    getSettings: () => getTestContext("totalDaysTopBar")?.settings ?? settings,
+    getGame: () => getTestContext("totalDaysTopBar")?.game ?? game,
   });
   const totalDaysTopBarBrowserAdapter = createTotalDaysTopBarBrowserAdapter({
     getDocument: () => runtimeEnvironment.document,
@@ -1206,98 +1201,93 @@ function startEvolveRuntimeComposition(
     reader: totalDaysTopBarReader,
   });
   const { updateTotalDaysInTopBar } = totalDaysTopBarBrowserAdapter;
-
-  let arpaTogglesTestContext;
   const arpaToggleReader = createArpaToggleEvolveAdapter({
     getProjectManager: () =>
-      arpaTogglesTestContext?.ProjectManager ?? ProjectManager,
-    getSettingsRaw: () => arpaTogglesTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("arpaToggles")?.ProjectManager ?? ProjectManager,
+    getSettingsRaw: () =>
+      getTestContext("arpaToggles")?.settingsRaw ?? settingsRaw,
   });
   const arpaToggleBrowserAdapter = createArpaToggleBrowserAdapter({
     getJQuery: () => $,
     reader: arpaToggleReader,
     addToggleCallbacks: (...args) =>
-      (arpaTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
+      (getTestContext("arpaToggles")?.addToggleCallbacks ?? addToggleCallbacks)(
         ...args,
       ),
   });
   const { createArpaToggles, removeArpaToggles } = arpaToggleBrowserAdapter;
-
-  let craftTogglesTestContext;
   const craftToggleReader = createCraftToggleEvolveAdapter({
     getCraftablesList: () =>
-      craftTogglesTestContext?.craftablesList ?? craftablesList,
-    getSettingsRaw: () => craftTogglesTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("craftToggles")?.craftablesList ?? craftablesList,
+    getSettingsRaw: () =>
+      getTestContext("craftToggles")?.settingsRaw ?? settingsRaw,
   });
   const craftToggleBrowserAdapter = createCraftToggleBrowserAdapter({
     getJQuery: () => $,
     reader: craftToggleReader,
     addToggleCallbacks: (...args) =>
-      (craftTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
-        ...args,
-      ),
+      (
+        getTestContext("craftToggles")?.addToggleCallbacks ?? addToggleCallbacks
+      )(...args),
   });
   const { createCraftToggles, removeCraftToggles } = craftToggleBrowserAdapter;
-
-  let buildingTogglesTestContext;
   const buildingToggleReader = createBuildingToggleEvolveAdapter({
     getBuildingManager: () =>
-      buildingTogglesTestContext?.BuildingManager ?? BuildingManager,
-    getSettings: () => buildingTogglesTestContext?.settings ?? settings,
+      getTestContext("buildingToggles")?.BuildingManager ?? BuildingManager,
+    getSettings: () => getTestContext("buildingToggles")?.settings ?? settings,
     getSettingsRaw: () =>
-      buildingTogglesTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("buildingToggles")?.settingsRaw ?? settingsRaw,
   });
   const buildingToggleBrowserAdapter = createBuildingToggleBrowserAdapter({
     getJQuery: () => $,
     reader: buildingToggleReader,
     getCountWriter: () => ({
       setCount: (count) => {
-        const targetState = buildingTogglesTestContext?.state ?? state;
+        const targetState = getTestContext("buildingToggles")?.state ?? state;
         targetState.buildingToggles = count;
       },
     }),
     addToggleCallbacks: (...args) =>
-      (buildingTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
-        ...args,
-      ),
+      (
+        getTestContext("buildingToggles")?.addToggleCallbacks ??
+        addToggleCallbacks
+      )(...args),
   });
   const { createBuildingToggles, removeBuildingToggles } =
     buildingToggleBrowserAdapter;
-
-  let ejectTogglesTestContext;
   const ejectToggleReader = createEjectToggleEvolveAdapter({
     getEjectManager: () =>
-      ejectTogglesTestContext?.EjectManager ?? EjectManager,
-    getSettingsRaw: () => ejectTogglesTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("ejectToggles")?.EjectManager ?? EjectManager,
+    getSettingsRaw: () =>
+      getTestContext("ejectToggles")?.settingsRaw ?? settingsRaw,
   });
   const ejectToggleBrowserAdapter = createEjectToggleBrowserAdapter({
     getJQuery: () => $,
     reader: ejectToggleReader,
     addToggleCallbacks: (...args) =>
-      (ejectTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
-        ...args,
-      ),
+      (
+        getTestContext("ejectToggles")?.addToggleCallbacks ?? addToggleCallbacks
+      )(...args),
   });
   const { createEjectToggles, removeEjectToggles } = ejectToggleBrowserAdapter;
-
-  let supplyTogglesTestContext;
   const supplyToggleReader = createSupplyToggleEvolveAdapter({
     getSupplyManager: () =>
-      supplyTogglesTestContext?.SupplyManager ?? SupplyManager,
-    getSettingsRaw: () => supplyTogglesTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("supplyToggles")?.SupplyManager ?? SupplyManager,
+    getSettingsRaw: () =>
+      getTestContext("supplyToggles")?.settingsRaw ?? settingsRaw,
   });
   const supplyToggleBrowserAdapter = createSupplyToggleBrowserAdapter({
     getJQuery: () => $,
     reader: supplyToggleReader,
     addToggleCallbacks: (...args) =>
-      (supplyTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
-        ...args,
-      ),
+      (
+        getTestContext("supplyToggles")?.addToggleCallbacks ??
+        addToggleCallbacks
+      )(...args),
   });
   const { createSupplyToggles, removeSupplyToggles } =
     supplyToggleBrowserAdapter;
 
-  let generalSettingsTestActions;
   const generalSettingsActions = {
     buildSettingsSection,
     addSettingsHeader1,
@@ -1313,18 +1303,19 @@ function startEvolveRuntimeComposition(
     intents: {
       handle: (intent) => generalSettingsIntentHandler.handle(intent),
     },
-    getActions: () => generalSettingsTestActions ?? generalSettingsActions,
+    getActions: () =>
+      getTestContext("generalSettings") ?? generalSettingsActions,
   });
   generalSettingsIntentHandler = createGeneralSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
         (
-          generalSettingsTestActions?.resetGeneralSettings ??
+          getTestContext("generalSettings")?.resetGeneralSettings ??
           resetGeneralSettings
         )(true),
       persist: () =>
         (
-          generalSettingsTestActions?.updateSettingsFromState ??
+          getTestContext("generalSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -1332,7 +1323,7 @@ function startEvolveRuntimeComposition(
       generalSettingsBrowserAdapter.updateGeneralSettingsContent(),
     effects: {
       resetCheckboxes: () =>
-        (generalSettingsTestActions?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("generalSettings")?.resetCheckbox ?? resetCheckbox)(
           "masterScriptToggle",
           "showSettings",
           "autoPrestige",
@@ -1341,7 +1332,6 @@ function startEvolveRuntimeComposition(
   });
   const { buildGeneralSettings } = generalSettingsBrowserAdapter;
 
-  let achievementGuardSettingsTestActions;
   const achievementGuardSettingsActions = {
     buildSettingsSection,
     addSettingsToggle,
@@ -1356,20 +1346,21 @@ function startEvolveRuntimeComposition(
           achievementGuardSettingsIntentHandler.handle(intent),
       },
       getActions: () =>
-        achievementGuardSettingsTestActions ?? achievementGuardSettingsActions,
+        getTestContext("achievementGuardSettings") ??
+        achievementGuardSettingsActions,
     });
   achievementGuardSettingsIntentHandler =
     createAchievementGuardSettingsIntentHandler({
       writer: {
         resetToDefaults: () =>
           (
-            achievementGuardSettingsTestActions?.resetAchievementGuardSettings ??
-            resetAchievementGuardSettings
+            getTestContext("achievementGuardSettings")
+              ?.resetAchievementGuardSettings ?? resetAchievementGuardSettings
           )(true),
         persist: () =>
           (
-            achievementGuardSettingsTestActions?.updateSettingsFromState ??
-            updateSettingsFromState
+            getTestContext("achievementGuardSettings")
+              ?.updateSettingsFromState ?? updateSettingsFromState
           )(),
       },
       renderSettingsContent: () =>
@@ -1378,7 +1369,6 @@ function startEvolveRuntimeComposition(
   const { buildAchievementGuardSettings } =
     achievementGuardSettingsBrowserAdapter;
 
-  let challengeHelperSettingsTestActions;
   const challengeHelperSettingsActions = {
     buildSettingsSection,
     addSettingsToggle,
@@ -1393,20 +1383,21 @@ function startEvolveRuntimeComposition(
         handle: (intent) => challengeHelperSettingsIntentHandler.handle(intent),
       },
       getActions: () =>
-        challengeHelperSettingsTestActions ?? challengeHelperSettingsActions,
+        getTestContext("challengeHelperSettings") ??
+        challengeHelperSettingsActions,
     });
   challengeHelperSettingsIntentHandler =
     createChallengeHelperSettingsIntentHandler({
       writer: {
         resetToDefaults: () =>
           (
-            challengeHelperSettingsTestActions?.resetChallengeHelperSettings ??
-            resetChallengeHelperSettings
+            getTestContext("challengeHelperSettings")
+              ?.resetChallengeHelperSettings ?? resetChallengeHelperSettings
           )(true),
         persist: () =>
           (
-            challengeHelperSettingsTestActions?.updateSettingsFromState ??
-            updateSettingsFromState
+            getTestContext("challengeHelperSettings")
+              ?.updateSettingsFromState ?? updateSettingsFromState
           )(),
       },
       renderSettingsContent: () =>
@@ -1414,50 +1405,52 @@ function startEvolveRuntimeComposition(
     });
   const { buildChallengeHelperSettings } =
     challengeHelperSettingsBrowserAdapter;
-
-  let prestigeSettingsTestContext;
   const prestigeSettingsReader = createPrestigeSettingsEvolveAdapter({
     getPrestigeTypes: () =>
-      prestigeSettingsTestContext?.prestigeTypes ?? prestigeTypes,
-    getGame: () => prestigeSettingsTestContext?.game ?? game,
-    getBuildings: () => prestigeSettingsTestContext?.buildings ?? buildings,
+      getTestContext("prestigeSettings")?.prestigeTypes ?? prestigeTypes,
+    getGame: () => getTestContext("prestigeSettings")?.game ?? game,
+    getBuildings: () =>
+      getTestContext("prestigeSettings")?.buildings ?? buildings,
     isPrestigeAllowed: () =>
-      (prestigeSettingsTestContext?.isPrestigeAllowed ?? isPrestigeAllowed)(),
+      (
+        getTestContext("prestigeSettings")?.isPrestigeAllowed ??
+        isPrestigeAllowed
+      )(),
     haveTech: (...args) =>
-      (prestigeSettingsTestContext?.haveTech ?? haveTech)(...args),
+      (getTestContext("prestigeSettings")?.haveTech ?? haveTech)(...args),
     isBioseederPrestigeAvailable: () =>
       (
-        prestigeSettingsTestContext?.isBioseederPrestigeAvailable ??
+        getTestContext("prestigeSettings")?.isBioseederPrestigeAvailable ??
         isBioseederPrestigeAvailable
       )(),
     isCataclysmPrestigeAvailable: () =>
       (
-        prestigeSettingsTestContext?.isCataclysmPrestigeAvailable ??
+        getTestContext("prestigeSettings")?.isCataclysmPrestigeAvailable ??
         isCataclysmPrestigeAvailable
       )(),
     isWhiteholePrestigeAvailable: () =>
       (
-        prestigeSettingsTestContext?.isWhiteholePrestigeAvailable ??
+        getTestContext("prestigeSettings")?.isWhiteholePrestigeAvailable ??
         isWhiteholePrestigeAvailable
       )(),
     isApocalypsePrestigeAvailable: () =>
       (
-        prestigeSettingsTestContext?.isApocalypsePrestigeAvailable ??
+        getTestContext("prestigeSettings")?.isApocalypsePrestigeAvailable ??
         isApocalypsePrestigeAvailable
       )(),
     isAscensionPrestigeAvailable: () =>
       (
-        prestigeSettingsTestContext?.isAscensionPrestigeAvailable ??
+        getTestContext("prestigeSettings")?.isAscensionPrestigeAvailable ??
         isAscensionPrestigeAvailable
       )(),
     isWitchAscensionPrestigeAvailable: (demonic) =>
       (
-        prestigeSettingsTestContext?.isWitchAscensionPrestigeAvailable ??
+        getTestContext("prestigeSettings")?.isWitchAscensionPrestigeAvailable ??
         isWitchAscensionPrestigeAvailable
       )(demonic),
     isDemonicPrestigeAvailable: () =>
       (
-        prestigeSettingsTestContext?.isDemonicPrestigeAvailable ??
+        getTestContext("prestigeSettings")?.isDemonicPrestigeAvailable ??
         isDemonicPrestigeAvailable
       )(),
   });
@@ -1470,7 +1463,7 @@ function startEvolveRuntimeComposition(
       handle: (intent) => prestigeSettingsIntentHandler.handle(intent),
     },
     getActions: () =>
-      prestigeSettingsTestContext?.actions ?? {
+      getTestContext("prestigeSettings")?.actions ?? {
         buildSettingsSection2,
         addSettingsHeader1,
         addSettingsNumber,
@@ -1485,20 +1478,21 @@ function startEvolveRuntimeComposition(
     writer: {
       resetToDefaults: () =>
         (
-          prestigeSettingsTestContext?.resetPrestigeSettings ??
+          getTestContext("prestigeSettings")?.resetPrestigeSettings ??
           resetPrestigeSettings
         )(true),
       setPrestigeType: (value) => {
-        const target = prestigeSettingsTestContext?.settingsRaw ?? settingsRaw;
+        const target =
+          getTestContext("prestigeSettings")?.settingsRaw ?? settingsRaw;
         target.prestigeType = value;
       },
       setGoalStandard: () => {
-        const target = prestigeSettingsTestContext?.state ?? state;
+        const target = getTestContext("prestigeSettings")?.state ?? state;
         target.goal = "Standard";
       },
       persist: () =>
         (
-          prestigeSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("prestigeSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -1509,14 +1503,13 @@ function startEvolveRuntimeComposition(
       ),
     effects: {
       confirm: (message) =>
-        (prestigeSettingsTestContext?.confirm ?? runtimeEnvironment.confirm)(
-          message,
-        ),
+        (
+          getTestContext("prestigeSettings")?.confirm ??
+          runtimeEnvironment.confirm
+        )(message),
     },
   });
   const { buildPrestigeSettings } = prestigeSettingsBrowserAdapter;
-
-  let governmentSettingsTestContext;
   const governmentSettingsActions = {
     buildSettingsSection2,
     addSettingsNumber,
@@ -1524,10 +1517,12 @@ function startEvolveRuntimeComposition(
   };
   const governmentSettingsEvolveAdapter = createGovernmentSettingsEvolveAdapter(
     {
-      getGame: () => governmentSettingsTestContext?.game ?? game,
+      getGame: () => getTestContext("governmentSettings")?.game ?? game,
       getGovernmentManager: () =>
-        governmentSettingsTestContext?.GovernmentManager ?? GovernmentManager,
-      getGovernors: () => governmentSettingsTestContext?.governors ?? governors,
+        getTestContext("governmentSettings")?.GovernmentManager ??
+        GovernmentManager,
+      getGovernors: () =>
+        getTestContext("governmentSettings")?.governors ?? governors,
     },
   );
   let governmentSettingsIntentHandler;
@@ -1541,18 +1536,19 @@ function startEvolveRuntimeComposition(
         handle: (intent) => governmentSettingsIntentHandler.handle(intent),
       },
       getActions: () =>
-        governmentSettingsTestContext?.actions ?? governmentSettingsActions,
+        getTestContext("governmentSettings")?.actions ??
+        governmentSettingsActions,
     });
   governmentSettingsIntentHandler = createGovernmentSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
         (
-          governmentSettingsTestContext?.resetGovernmentSettings ??
+          getTestContext("governmentSettings")?.resetGovernmentSettings ??
           resetGovernmentSettings
         )(true),
       persist: () =>
         (
-          governmentSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("governmentSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -1562,7 +1558,7 @@ function startEvolveRuntimeComposition(
       ),
     effects: {
       resetCheckboxes: () =>
-        (governmentSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("governmentSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoTax",
           "autoGovernment",
         ),
@@ -1570,7 +1566,6 @@ function startEvolveRuntimeComposition(
   });
   const { buildGovernmentSettings } = governmentSettingsBrowserAdapter;
 
-  let authoritySettingsTestActions;
   const authoritySettingsActions = {
     buildSettingsSection,
     addSettingsToggle,
@@ -1585,19 +1580,19 @@ function startEvolveRuntimeComposition(
         handle: (intent) => authoritySettingsIntentHandler.handle(intent),
       },
       getActions: () =>
-        authoritySettingsTestActions ?? authoritySettingsActions,
+        getTestContext("authoritySettings") ?? authoritySettingsActions,
     },
   );
   authoritySettingsIntentHandler = createAuthoritySettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
         (
-          authoritySettingsTestActions?.resetAuthoritySettings ??
+          getTestContext("authoritySettings")?.resetAuthoritySettings ??
           resetAuthoritySettings
         )(true),
       persist: () =>
         (
-          authoritySettingsTestActions?.updateSettingsFromState ??
+          getTestContext("authoritySettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -1605,23 +1600,26 @@ function startEvolveRuntimeComposition(
       authoritySettingsBrowserAdapter.updateAuthoritySettingsContent(),
   });
   const { buildAuthoritySettings } = authoritySettingsBrowserAdapter;
-
-  let evolutionSettingsTestContext;
   const evolutionSettingsReader = createEvolutionSettingsEvolveAdapter({
-    getGame: () => evolutionSettingsTestContext?.game ?? game,
-    getRaces: () => evolutionSettingsTestContext?.races ?? races,
-    getChallenges: () => evolutionSettingsTestContext?.challenges ?? challenges,
-    getUniverses: () => evolutionSettingsTestContext?.universes ?? universes,
+    getGame: () => getTestContext("evolutionSettings")?.game ?? game,
+    getRaces: () => getTestContext("evolutionSettings")?.races ?? races,
+    getChallenges: () =>
+      getTestContext("evolutionSettings")?.challenges ?? challenges,
+    getUniverses: () =>
+      getTestContext("evolutionSettings")?.universes ?? universes,
     getSettingsRaw: () =>
-      evolutionSettingsTestContext?.settingsRaw ?? settingsRaw,
-    getSettings: () => evolutionSettingsTestContext?.settings ?? settings,
+      getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw,
+    getSettings: () =>
+      getTestContext("evolutionSettings")?.settings ?? settings,
     getSettingsToStore: () =>
-      evolutionSettingsTestContext?.evolutionSettingsToStore ??
+      getTestContext("evolutionSettings")?.evolutionSettingsToStore ??
       evolutionSettingsToStore,
     getPrestigeTypes: () =>
-      evolutionSettingsTestContext?.prestigeTypes ?? prestigeTypes,
+      getTestContext("evolutionSettings")?.prestigeTypes ?? prestigeTypes,
     getStarLevel: (queueItem) =>
-      (evolutionSettingsTestContext?.getStarLevel ?? getStarLevel)(queueItem),
+      (getTestContext("evolutionSettings")?.getStarLevel ?? getStarLevel)(
+        queueItem,
+      ),
   });
   let evolutionSettingsIntentHandler;
   const evolutionSettingsBrowserAdapter = createEvolutionSettingsBrowserAdapter(
@@ -1633,7 +1631,7 @@ function startEvolveRuntimeComposition(
         handle: (intent) => evolutionSettingsIntentHandler.handle(intent),
       },
       getActions: () =>
-        evolutionSettingsTestContext?.actions ?? {
+        getTestContext("evolutionSettings")?.actions ?? {
           buildSettingsSection,
           addStandardHeading,
           addSettingsSelect,
@@ -1646,21 +1644,24 @@ function startEvolveRuntimeComposition(
     writer: {
       resetToDefaults: () =>
         (
-          evolutionSettingsTestContext?.resetEvolutionSettings ??
+          getTestContext("evolutionSettings")?.resetEvolutionSettings ??
           resetEvolutionSettings
         )(true),
       setTarget: (value) => {
-        const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+        const target =
+          getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
         target.userEvolutionTarget = value;
-        const currentState = evolutionSettingsTestContext?.state ?? state;
+        const currentState =
+          getTestContext("evolutionSettings")?.state ?? state;
         currentState.evolutionTarget = null;
       },
       addCurrent: (prestigeType) => {
-        const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+        const target =
+          getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
         const currentSettings =
-          evolutionSettingsTestContext?.settings ?? settings;
+          getTestContext("evolutionSettings")?.settings ?? settings;
         const names =
-          evolutionSettingsTestContext?.evolutionSettingsToStore ??
+          getTestContext("evolutionSettings")?.evolutionSettingsToStore ??
           evolutionSettingsToStore;
         const queued = {};
         for (const name of names)
@@ -1669,7 +1670,8 @@ function startEvolveRuntimeComposition(
         target.evolutionQueue.push(queued);
       },
       remove: (index) => {
-        const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+        const target =
+          getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
         target.evolutionQueue.splice(index, 1);
       },
       edit: (index, json) => {
@@ -1677,7 +1679,7 @@ function startEvolveRuntimeComposition(
           const value = JSON.parse(json);
           if (value && typeof value === "object" && !Array.isArray(value)) {
             const target =
-              evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+              getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
             target.evolutionQueue[index] = value;
           }
         } catch {
@@ -1685,14 +1687,15 @@ function startEvolveRuntimeComposition(
         }
       },
       reorder: (indexes) => {
-        const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+        const target =
+          getTestContext("evolutionSettings")?.settingsRaw ?? settingsRaw;
         target.evolutionQueue = indexes.map(
           (index) => target.evolutionQueue[index],
         );
       },
       persist: () =>
         (
-          evolutionSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("evolutionSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -1700,7 +1703,7 @@ function startEvolveRuntimeComposition(
       evolutionSettingsBrowserAdapter.updateEvolutionSettingsContent(),
     effects: {
       resetCheckbox: () =>
-        (evolutionSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("evolutionSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoEvolution",
         ),
     },
@@ -1711,18 +1714,19 @@ function startEvolveRuntimeComposition(
       prestigeType: "auto",
     });
   const { buildEvolutionSettings } = evolutionSettingsBrowserAdapter;
-
-  let planetSettingsTestContext;
   const planetSettingsActions = {
     buildSettingsSection,
     addTableInput,
     buildTableLabel,
   };
   const planetSettingsEvolveAdapter = createPlanetSettingsEvolveAdapter({
-    getGame: () => planetSettingsTestContext?.game ?? game,
-    getBiomeList: () => planetSettingsTestContext?.biomeList ?? biomeList,
-    getTraitList: () => planetSettingsTestContext?.traitList ?? traitList,
-    getExtraList: () => planetSettingsTestContext?.extraList ?? extraList,
+    getGame: () => getTestContext("planetSettings")?.game ?? game,
+    getBiomeList: () =>
+      getTestContext("planetSettings")?.biomeList ?? biomeList,
+    getTraitList: () =>
+      getTestContext("planetSettings")?.traitList ?? traitList,
+    getExtraList: () =>
+      getTestContext("planetSettings")?.extraList ?? extraList,
   });
   let planetSettingsIntentHandler;
   const planetSettingsBrowserAdapter = createPlanetSettingsBrowserAdapter({
@@ -1734,17 +1738,18 @@ function startEvolveRuntimeComposition(
       handle: (intent) => planetSettingsIntentHandler.handle(intent),
     },
     getActions: () =>
-      planetSettingsTestContext?.actions ?? planetSettingsActions,
+      getTestContext("planetSettings")?.actions ?? planetSettingsActions,
   });
   planetSettingsIntentHandler = createPlanetSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
-        (planetSettingsTestContext?.resetPlanetSettings ?? resetPlanetSettings)(
-          true,
-        ),
+        (
+          getTestContext("planetSettings")?.resetPlanetSettings ??
+          resetPlanetSettings
+        )(true),
       persist: () =>
         (
-          planetSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("planetSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -1752,17 +1757,18 @@ function startEvolveRuntimeComposition(
       planetSettingsBrowserAdapter.updatePlanetSettingsContent(),
   });
   const { buildPlanetSettings } = planetSettingsBrowserAdapter;
-
-  let triggerSettingsTestContext;
   const triggerSettingsReader = createTriggerSettingsEvolveAdapter({
     getTriggerManager: () =>
-      triggerSettingsTestContext?.TriggerManager ?? TriggerManager,
-    getCheckTypes: () => triggerSettingsTestContext?.checkTypes ?? checkTypes,
-    getActionInputs: () => triggerSettingsTestContext?.argType ?? argType,
+      getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager,
+    getCheckTypes: () =>
+      getTestContext("triggerSettings")?.checkTypes ?? checkTypes,
+    getActionInputs: () =>
+      getTestContext("triggerSettings")?.argType ?? argType,
     getBooleanResultChecks: () =>
-      triggerSettingsTestContext?.retBools ?? retBools,
+      getTestContext("triggerSettings")?.retBools ?? retBools,
     getOverrideOnlyChecks: () =>
-      triggerSettingsTestContext?.overrideOnlyChecks ?? overrideOnlyChecks,
+      getTestContext("triggerSettings")?.overrideOnlyChecks ??
+      overrideOnlyChecks,
   });
   let triggerSettingsIntentHandler;
   const triggerSettingsBrowserAdapter = createTriggerSettingsBrowserAdapter({
@@ -1773,7 +1779,7 @@ function startEvolveRuntimeComposition(
       handle: (intent) => triggerSettingsIntentHandler.handle(intent),
     },
     getActions: () =>
-      triggerSettingsTestContext?.actions ?? {
+      getTestContext("triggerSettings")?.actions ?? {
         buildSettingsSection,
         buildInputNode,
         sorterHelper,
@@ -1783,17 +1789,17 @@ function startEvolveRuntimeComposition(
     writer: {
       resetToDefaults: () =>
         (
-          triggerSettingsTestContext?.resetTriggerSettings ??
+          getTestContext("triggerSettings")?.resetTriggerSettings ??
           resetTriggerSettings
         )(true),
       addDefault: () => {
         const manager =
-          triggerSettingsTestContext?.TriggerManager ?? TriggerManager;
+          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager;
         manager.AddTrigger("Boolean", false, 1, "research", "tech-club", 0);
       },
       update: (seq, field, value) => {
         const manager =
-          triggerSettingsTestContext?.TriggerManager ?? TriggerManager;
+          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager;
         const trigger = manager.getTrigger(seq);
         if (!trigger) return;
         trigger[field] = value;
@@ -1809,19 +1815,19 @@ function startEvolveRuntimeComposition(
       },
       remove: (seq) =>
         (
-          triggerSettingsTestContext?.TriggerManager ?? TriggerManager
+          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager
         ).RemoveTrigger(seq),
       duplicate: (seq) =>
         (
-          triggerSettingsTestContext?.TriggerManager ?? TriggerManager
+          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager
         ).DuplicateTrigger(seq),
       evalize: (seq) =>
         (
-          triggerSettingsTestContext?.TriggerManager ?? TriggerManager
+          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager
         ).EvalizeTrigger(seq),
       reorder: (seqs) => {
         const manager =
-          triggerSettingsTestContext?.TriggerManager ?? TriggerManager;
+          getTestContext("triggerSettings")?.TriggerManager ?? TriggerManager;
         seqs.forEach((seq, index) => {
           const trigger = manager.getTrigger(seq);
           if (trigger) trigger.priority = index;
@@ -1830,30 +1836,28 @@ function startEvolveRuntimeComposition(
       },
       persist: () =>
         (
-          triggerSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("triggerSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
     render: () => triggerSettingsBrowserAdapter.updateTriggerSettingsContent(),
     effects: {
       resetCheckbox: () =>
-        (triggerSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("triggerSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoTrigger",
         ),
     },
   });
   const { buildTriggerSettings, updateTriggerSettingsContent } =
     triggerSettingsBrowserAdapter;
-
-  let researchSettingsTestContext;
   const researchSettingsActions = {
     buildSettingsSection,
     addSettingsList,
     addSettingsSelect,
   };
   const researchSettingsEvolveAdapter = createResearchSettingsEvolveAdapter({
-    getGame: () => researchSettingsTestContext?.game ?? game,
-    getTechIds: () => researchSettingsTestContext?.techIds ?? techIds,
+    getGame: () => getTestContext("researchSettings")?.game ?? game,
+    getTechIds: () => getTestContext("researchSettings")?.techIds ?? techIds,
   });
   let researchSettingsIntentHandler;
   const researchSettingsBrowserAdapter = createResearchSettingsBrowserAdapter({
@@ -1865,18 +1869,18 @@ function startEvolveRuntimeComposition(
       handle: (intent) => researchSettingsIntentHandler.handle(intent),
     },
     getActions: () =>
-      researchSettingsTestContext?.actions ?? researchSettingsActions,
+      getTestContext("researchSettings")?.actions ?? researchSettingsActions,
   });
   researchSettingsIntentHandler = createResearchSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
         (
-          researchSettingsTestContext?.resetResearchSettings ??
+          getTestContext("researchSettings")?.resetResearchSettings ??
           resetResearchSettings
         )(true),
       persist: () =>
         (
-          researchSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("researchSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -1884,17 +1888,16 @@ function startEvolveRuntimeComposition(
       researchSettingsBrowserAdapter.updateResearchSettingsContent(),
     effects: {
       resetCheckbox: () =>
-        (researchSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("researchSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoResearch",
         ),
     },
   });
   const { buildResearchSettings } = researchSettingsBrowserAdapter;
-
-  let warSettingsTestContext;
   const warSettingsReader = createWarSettingsEvolveAdapter({
-    getSpyManager: () => warSettingsTestContext?.SpyManager ?? SpyManager,
-    getGame: () => warSettingsTestContext?.game ?? game,
+    getSpyManager: () =>
+      getTestContext("warSettings")?.SpyManager ?? SpyManager,
+    getGame: () => getTestContext("warSettings")?.game ?? game,
   });
   const warSettingsActions = {
     buildSettingsSection2: (...args) => buildSettingsSection2(...args),
@@ -1906,10 +1909,12 @@ function startEvolveRuntimeComposition(
   const warSettingsIntentHandler = createWarSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
-        (warSettingsTestContext?.resetWarSettings ?? resetWarSettings)(true),
+        (getTestContext("warSettings")?.resetWarSettings ?? resetWarSettings)(
+          true,
+        ),
       persist: () =>
         (
-          warSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("warSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -1917,7 +1922,9 @@ function startEvolveRuntimeComposition(
       updateWarSettingsContent(secondaryPrefix),
     effects: {
       resetCheckboxes: () =>
-        (warSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoFight"),
+        (getTestContext("warSettings")?.resetCheckbox ?? resetCheckbox)(
+          "autoFight",
+        ),
     },
   });
   const warSettingsBrowserAdapter = createWarSettingsBrowserAdapter({
@@ -1925,12 +1932,11 @@ function startEvolveRuntimeComposition(
     getJQuery: () => $,
     reader: warSettingsReader,
     intents: warSettingsIntentHandler,
-    getActions: () => warSettingsTestContext?.actions ?? warSettingsActions,
+    getActions: () =>
+      getTestContext("warSettings")?.actions ?? warSettingsActions,
   });
   const { buildWarSettings, updateWarSettingsContent } =
     warSettingsBrowserAdapter;
-
-  let hellSettingsTestContext;
   const hellSettingsReader = { read: getHellSettingsReadModel };
   const hellSettingsActions = {
     buildSettingsSection2: (...args) => buildSettingsSection2(...args),
@@ -1941,10 +1947,12 @@ function startEvolveRuntimeComposition(
   const hellSettingsIntentHandler = createHellSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
-        (hellSettingsTestContext?.resetHellSettings ?? resetHellSettings)(true),
+        (
+          getTestContext("hellSettings")?.resetHellSettings ?? resetHellSettings
+        )(true),
       persist: () =>
         (
-          hellSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("hellSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -1952,7 +1960,9 @@ function startEvolveRuntimeComposition(
       updateHellSettingsContent(secondaryPrefix),
     effects: {
       resetCheckboxes: () =>
-        (hellSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoHell"),
+        (getTestContext("hellSettings")?.resetCheckbox ?? resetCheckbox)(
+          "autoHell",
+        ),
     },
   });
   const hellSettingsBrowserAdapter = createHellSettingsBrowserAdapter({
@@ -1960,19 +1970,19 @@ function startEvolveRuntimeComposition(
     getJQuery: () => $,
     reader: hellSettingsReader,
     intents: hellSettingsIntentHandler,
-    getActions: () => hellSettingsTestContext?.actions ?? hellSettingsActions,
+    getActions: () =>
+      getTestContext("hellSettings")?.actions ?? hellSettingsActions,
   });
   const { buildHellSettings, updateHellSettingsContent } =
     hellSettingsBrowserAdapter;
-
-  let fleetSettingsTestContext;
   const fleetSettingsReader = createFleetSettingsEvolveAdapter({
     getFleetManagerOuter: () =>
-      fleetSettingsTestContext?.FleetManagerOuter ?? FleetManagerOuter,
+      getTestContext("fleetSettings")?.FleetManagerOuter ?? FleetManagerOuter,
     getGalaxyRegions: () =>
-      fleetSettingsTestContext?.galaxyRegions ?? galaxyRegions,
-    getGame: () => fleetSettingsTestContext?.game ?? game,
-    getSettingsRaw: () => fleetSettingsTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("fleetSettings")?.galaxyRegions ?? galaxyRegions,
+    getGame: () => getTestContext("fleetSettings")?.game ?? game,
+    getSettingsRaw: () =>
+      getTestContext("fleetSettings")?.settingsRaw ?? settingsRaw,
   });
   let fleetSettingsIntentHandler;
   const fleetSettingsBrowserAdapter = createFleetSettingsBrowserAdapter({
@@ -1983,7 +1993,7 @@ function startEvolveRuntimeComposition(
       handle: (intent) => fleetSettingsIntentHandler.handle(intent),
     },
     getActions: () =>
-      fleetSettingsTestContext?.actions ?? {
+      getTestContext("fleetSettings")?.actions ?? {
         buildSettingsSection2,
         addSettingsHeader1,
         addSettingsNumber,
@@ -1999,18 +2009,20 @@ function startEvolveRuntimeComposition(
   fleetSettingsIntentHandler = createFleetSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
-        (fleetSettingsTestContext?.resetFleetSettings ?? resetFleetSettings)(
-          true,
-        ),
+        (
+          getTestContext("fleetSettings")?.resetFleetSettings ??
+          resetFleetSettings
+        )(true),
       reorderAndromeda: (regionIds) => {
-        const target = fleetSettingsTestContext?.settingsRaw ?? settingsRaw;
+        const target =
+          getTestContext("fleetSettings")?.settingsRaw ?? settingsRaw;
         regionIds.forEach((regionId, index) => {
           target[`fleet_pr_${regionId}`] = index;
         });
       },
       persist: () =>
         (
-          fleetSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("fleetSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
@@ -2018,15 +2030,16 @@ function startEvolveRuntimeComposition(
       fleetSettingsBrowserAdapter.updateFleetSettingsContent(secondaryPrefix),
     effects: {
       resetCheckbox: () =>
-        (fleetSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoFleet"),
+        (getTestContext("fleetSettings")?.resetCheckbox ?? resetCheckbox)(
+          "autoFleet",
+        ),
     },
   });
   const { buildFleetSettings } = fleetSettingsBrowserAdapter;
-
-  let mechSettingsTestContext;
   const mechSettingsReader = createMechSettingsEvolveAdapter({
-    getMechManager: () => mechSettingsTestContext?.MechManager ?? MechManager,
-    getGame: () => mechSettingsTestContext?.game ?? game,
+    getMechManager: () =>
+      getTestContext("mechSettings")?.MechManager ?? MechManager,
+    getGame: () => getTestContext("mechSettings")?.game ?? game,
   });
   const mechSettingsActions = {
     buildSettingsSection: (...args) => buildSettingsSection(...args),
@@ -2039,19 +2052,23 @@ function startEvolveRuntimeComposition(
   const mechSettingsIntentHandler = createMechSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
-        (mechSettingsTestContext?.resetMechSettings ?? resetMechSettings)(true),
+        (
+          getTestContext("mechSettings")?.resetMechSettings ?? resetMechSettings
+        )(true),
       persist: () =>
         (
-          mechSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("mechSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
     renderSettingsContent: () => updateMechSettingsContent(),
     effects: {
       resetCheckboxes: () =>
-        (mechSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoMech"),
+        (getTestContext("mechSettings")?.resetCheckbox ?? resetCheckbox)(
+          "autoMech",
+        ),
       removeMechInfo: () =>
-        (mechSettingsTestContext?.removeMechInfo ?? removeMechInfo)(),
+        (getTestContext("mechSettings")?.removeMechInfo ?? removeMechInfo)(),
     },
   });
   const mechSettingsBrowserAdapter = createMechSettingsBrowserAdapter({
@@ -2059,22 +2076,22 @@ function startEvolveRuntimeComposition(
     getJQuery: () => $,
     reader: mechSettingsReader,
     intents: mechSettingsIntentHandler,
-    getActions: () => mechSettingsTestContext?.actions ?? mechSettingsActions,
+    getActions: () =>
+      getTestContext("mechSettings")?.actions ?? mechSettingsActions,
   });
   const { buildMechSettings, updateMechSettingsContent } =
     mechSettingsBrowserAdapter;
-
-  let ejectorSettingsTestContext;
   const ejectorSettingsReader = createEjectorSettingsEvolveAdapter({
-    getResources: () => ejectorSettingsTestContext?.resources ?? resources,
+    getResources: () =>
+      getTestContext("ejectorSettings")?.resources ?? resources,
     getEjectManager: () =>
-      ejectorSettingsTestContext?.EjectManager ?? EjectManager,
+      getTestContext("ejectorSettings")?.EjectManager ?? EjectManager,
     getNaniteManager: () =>
-      ejectorSettingsTestContext?.NaniteManager ?? NaniteManager,
+      getTestContext("ejectorSettings")?.NaniteManager ?? NaniteManager,
     getSupplyManager: () =>
-      ejectorSettingsTestContext?.SupplyManager ?? SupplyManager,
+      getTestContext("ejectorSettings")?.SupplyManager ?? SupplyManager,
     getSettingsRaw: () =>
-      ejectorSettingsTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("ejectorSettings")?.settingsRaw ?? settingsRaw,
   });
   const ejectorSettingsActions = {
     buildSettingsSection: (...args) => buildSettingsSection(...args),
@@ -2088,30 +2105,32 @@ function startEvolveRuntimeComposition(
     writer: {
       resetToDefaults: () =>
         (
-          ejectorSettingsTestContext?.resetEjectorSettings ??
+          getTestContext("ejectorSettings")?.resetEjectorSettings ??
           resetEjectorSettings
         )(true),
       persist: () =>
         (
-          ejectorSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("ejectorSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
     },
     renderSettingsContent: () => updateEjectorSettingsContent(),
     effects: {
       resetCheckboxes: () =>
-        (ejectorSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("ejectorSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoEject",
           "autoSupply",
           "autoNanite",
         ),
       removeEjectToggles: () =>
         (
-          ejectorSettingsTestContext?.removeEjectToggles ?? removeEjectToggles
+          getTestContext("ejectorSettings")?.removeEjectToggles ??
+          removeEjectToggles
         )(),
       removeSupplyToggles: () =>
         (
-          ejectorSettingsTestContext?.removeSupplyToggles ?? removeSupplyToggles
+          getTestContext("ejectorSettings")?.removeSupplyToggles ??
+          removeSupplyToggles
         )(),
     },
   });
@@ -2121,22 +2140,22 @@ function startEvolveRuntimeComposition(
     reader: ejectorSettingsReader,
     intents: ejectorSettingsIntentHandler,
     getActions: () =>
-      ejectorSettingsTestContext?.actions ?? ejectorSettingsActions,
+      getTestContext("ejectorSettings")?.actions ?? ejectorSettingsActions,
   });
   const { buildEjectorSettings, updateEjectorSettingsContent } =
     ejectorSettingsBrowserAdapter;
-
-  let marketSettingsTestContext;
   const marketSettingsReader = createMarketSettingsEvolveAdapter({
     getMarketManager: () =>
-      marketSettingsTestContext?.MarketManager ?? MarketManager,
-    getResources: () => marketSettingsTestContext?.resources ?? resources,
-    getPoly: () => marketSettingsTestContext?.poly ?? poly,
+      getTestContext("marketSettings")?.MarketManager ?? MarketManager,
+    getResources: () =>
+      getTestContext("marketSettings")?.resources ?? resources,
+    getPoly: () => getTestContext("marketSettings")?.poly ?? poly,
   });
   const marketSettingsReorderer = createMarketSettingsWriter({
     getMarketManager: () =>
-      marketSettingsTestContext?.MarketManager ?? MarketManager,
-    getSettingsRaw: () => marketSettingsTestContext?.settingsRaw ?? settingsRaw,
+      getTestContext("marketSettings")?.MarketManager ?? MarketManager,
+    getSettingsRaw: () =>
+      getTestContext("marketSettings")?.settingsRaw ?? settingsRaw,
   });
   const marketSettingsActions = {
     buildSettingsSection: (...args) => buildSettingsSection(...args),
@@ -2151,12 +2170,13 @@ function startEvolveRuntimeComposition(
   const marketSettingsIntentHandler = createMarketSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>
-        (marketSettingsTestContext?.resetMarketSettings ?? resetMarketSettings)(
-          true,
-        ),
+        (
+          getTestContext("marketSettings")?.resetMarketSettings ??
+          resetMarketSettings
+        )(true),
       persist: () =>
         (
-          marketSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("marketSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
       reorderResources: (resourceIds) =>
@@ -2165,13 +2185,14 @@ function startEvolveRuntimeComposition(
     renderSettingsContent: () => updateMarketSettingsContent(),
     effects: {
       resetCheckboxes: () =>
-        (marketSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("marketSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoMarket",
           "autoGalaxyMarket",
         ),
       removeMarketToggles: () =>
         (
-          marketSettingsTestContext?.removeMarketToggles ?? removeMarketToggles
+          getTestContext("marketSettings")?.removeMarketToggles ??
+          removeMarketToggles
         )(),
     },
   });
@@ -2181,7 +2202,7 @@ function startEvolveRuntimeComposition(
     reader: marketSettingsReader,
     intents: marketSettingsIntentHandler,
     getActions: () =>
-      marketSettingsTestContext?.actions ?? marketSettingsActions,
+      getTestContext("marketSettings")?.actions ?? marketSettingsActions,
   });
   const { buildMarketSettings, updateMarketSettingsContent } =
     marketSettingsBrowserAdapter;
@@ -2196,27 +2217,28 @@ function startEvolveRuntimeComposition(
     readAuthorityQuantity,
   });
 
-  publishTestSurface({
-    authorityPolicy: {
-      getAuthorityTarget: authorityPolicy.getAuthorityTarget,
-      getAuthorityPerSoldier: authorityPolicy.getAuthorityPerSoldier,
-      getRequiredAuthorityGarrison(currentGarrison) {
-        const requirement =
-          authorityPolicy.getRequiredAuthorityGarrison(currentGarrison);
-        return requirement.status === "ready"
-          ? requirement.requiredGarrison
-          : requirement;
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      authorityPolicy: {
+        getAuthorityTarget: authorityPolicy.getAuthorityTarget,
+        getAuthorityPerSoldier: authorityPolicy.getAuthorityPerSoldier,
+        getRequiredAuthorityGarrison(currentGarrison) {
+          const requirement =
+            authorityPolicy.getRequiredAuthorityGarrison(currentGarrison);
+          return requirement.status === "ready"
+            ? requirement.requiredGarrison
+            : requirement;
+        },
+        getPredictedAuthorityAfterRemovingSoldiers:
+          authorityPolicy.getPredictedAuthorityAfterRemovingSoldiers,
+        assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
       },
-      getPredictedAuthorityAfterRemovingSoldiers:
-        authorityPolicy.getPredictedAuthorityAfterRemovingSoldiers,
-      assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
-    },
-    setAuthorityPolicyTestContext(context) {
-      game = context.game;
-      settings = context.settings;
-      resources = context.resources;
-    },
-  });
+      setAuthorityPolicyTestContext(context) {
+        game = context.game;
+        settings = context.settings;
+        resources = context.resources;
+      },
+    });
 
   const { normalizeProperties, addProps } = createPropertyHelpers({
     getSettings: () => settings,
@@ -2459,10 +2481,9 @@ function startEvolveRuntimeComposition(
   const espionageControls = createGameEspionageControls({
     getVueById: (id) => getVueById(id),
   });
-  let foreignControlsTestContext;
   const foreignControls = createGameForeignControls({
     getVueById: (id) =>
-      foreignControlsTestContext?.getVueById?.(id) ?? getVueById(id),
+      getTestContext("foreignControls")?.getVueById?.(id) ?? getVueById(id),
   });
   const governmentSelection = createGameGovernmentSelection({
     getVueById: (id) => getVueById(id),
@@ -2584,41 +2605,43 @@ function startEvolveRuntimeComposition(
     readResearchControls: () => researchControls,
   });
 
-  if (characterizationSurface)
-    characterizationSurface.entityClasses = {
-      Job,
-      BasicJob,
-      CraftingJob,
-      Resource,
-      SoulGem,
-      Troops,
-      Supply,
-      Power,
-      Support,
-      BeltSupport,
-      ElectrolysisSupport,
-      WomlingsSupport,
-      PrestigeResource,
-      Population,
-      Morale,
-      Thrall,
-      ResourceProductionCost,
-      Action,
-      CityAction,
-      Pillar,
-      ResourceAction,
-      EvolutionAction,
-      SpaceDock,
-      ModalAction,
-      Project,
-      Technology,
-      Race,
-      Trigger,
-      MinorTrait,
-      MutableTrait,
-      MajorTrait,
-      GenusTrait,
-    };
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      entityClasses: {
+        Job,
+        BasicJob,
+        CraftingJob,
+        Resource,
+        SoulGem,
+        Troops,
+        Supply,
+        Power,
+        Support,
+        BeltSupport,
+        ElectrolysisSupport,
+        WomlingsSupport,
+        PrestigeResource,
+        Population,
+        Morale,
+        Thrall,
+        ResourceProductionCost,
+        Action,
+        CityAction,
+        Pillar,
+        ResourceAction,
+        EvolutionAction,
+        SpaceDock,
+        ModalAction,
+        Project,
+        Technology,
+        Race,
+        Trigger,
+        MinorTrait,
+        MutableTrait,
+        MajorTrait,
+        GenusTrait,
+      },
+    });
 
   // Script constants
 
@@ -2965,16 +2988,17 @@ function startEvolveRuntimeComposition(
       setResources: (value) => (resources = value),
     });
 
-  publishTestSurface({
-    entityCatalogs: {
-      resources,
-      jobs,
-      crafter,
-      buildings,
-      linkedBuildings,
-      projects,
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      entityCatalogs: {
+        resources,
+        jobs,
+        crafter,
+        buildings,
+        linkedBuildings,
+        projects,
+      },
+    });
 
   const {
     namedBuildings,
@@ -3006,18 +3030,19 @@ function startEvolveRuntimeComposition(
       ),
     });
 
-  publishTestSurface({
-    weightingPolicy: {
-      namedBuildings,
-      authorityCapBuildings,
-      INFLATION_CHALLENGE_MONEY,
-      RETIREMENT_PREP,
-      inflationMoneyStorageBuildings,
-      inflationMoneyIncomeBuildings,
-      galaxyCombatShips,
-      weightingRules,
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      weightingPolicy: {
+        namedBuildings,
+        authorityCapBuildings,
+        INFLATION_CHALLENGE_MONEY,
+        RETIREMENT_PREP,
+        inflationMoneyStorageBuildings,
+        inflationMoneyIncomeBuildings,
+        galaxyCombatShips,
+        weightingRules,
+      },
+    });
 
   // Singleton manager objects
   let MinorTraitManager, MutableTraitManager;
@@ -3131,24 +3156,25 @@ function startEvolveRuntimeComposition(
     logError: (...args) => runtimeEnvironment.error(...args),
   }));
 
-  publishTestSurface({
-    foreignAffairsManagers: { SpyManager, WarManager },
-    setForeignAffairsManagersTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("settings" in context) settings = context.settings;
-      if ("state" in context) state = context.state;
-      if ("resources" in context) resources = context.resources;
-      if ("buildings" in context) buildings = context.buildings;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("gameModal" in context) gameModal = context.gameModal;
-      if ("GameLog" in context) GameLog = context.GameLog;
-      if ("KeyManager" in context) KeyManager = context.KeyManager;
-      if ("haveTech" in context) haveTech = context.haveTech;
-      if ("guardActive" in context) guardActive = context.guardActive;
-      if ("traitVal" in context) traitVal = context.traitVal;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      foreignAffairsManagers: { SpyManager, WarManager },
+      setForeignAffairsManagersTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("state" in context) state = context.state;
+        if ("resources" in context) resources = context.resources;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("gameModal" in context) gameModal = context.gameModal;
+        if ("GameLog" in context) GameLog = context.GameLog;
+        if ("KeyManager" in context) KeyManager = context.KeyManager;
+        if ("haveTech" in context) haveTech = context.haveTech;
+        if ("guardActive" in context) guardActive = context.guardActive;
+        if ("traitVal" in context) traitVal = context.traitVal;
+      },
+    });
 
   let FleetManagerOuter, FleetManager;
   ({ FleetManagerOuter, FleetManager } = createFleetManagers({
@@ -3161,19 +3187,20 @@ function startEvolveRuntimeComposition(
     fleetControls,
   }));
 
-  publishTestSurface({
-    fleetManagers: { FleetManagerOuter, FleetManager },
-    setFleetManagersTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("settings" in context) settings = context.settings;
-      if ("resources" in context) resources = context.resources;
-      if ("buildings" in context) buildings = context.buildings;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("KeyManager" in context) KeyManager = context.KeyManager;
-      if ("haveTech" in context) haveTech = context.haveTech;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      fleetManagers: { FleetManagerOuter, FleetManager },
+      setFleetManagersTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("resources" in context) resources = context.resources;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("KeyManager" in context) KeyManager = context.KeyManager;
+        if ("haveTech" in context) haveTech = context.haveTech;
+      },
+    });
 
   let { MechManager } = createMechManager({
     getGame: () => game,
@@ -3200,20 +3227,21 @@ function startEvolveRuntimeComposition(
     getHaveTask: () => haveTask,
   });
 
-  publishTestSurface({
-    MechManager,
-    setMechManagerTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("settings" in context) settings = context.settings;
-      if ("resources" in context) resources = context.resources;
-      if ("buildings" in context) buildings = context.buildings;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("GameLog" in context) GameLog = context.GameLog;
-      if ("needSandboxBypass" in context)
-        needSandboxBypass = context.needSandboxBypass;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      MechManager,
+      setMechManagerTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("resources" in context) resources = context.resources;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("GameLog" in context) GameLog = context.GameLog;
+        if ("needSandboxBypass" in context)
+          needSandboxBypass = context.needSandboxBypass;
+      },
+    });
 
   let JobManager, BuildingManager, ProjectManager, TriggerManager;
   ({ JobManager, BuildingManager, ProjectManager, TriggerManager } =
@@ -3349,18 +3377,19 @@ function startEvolveRuntimeComposition(
     getDocument: () => runtimeEnvironment.document,
   });
 
-  publishTestSurface({
-    gameModal,
-    infrastructureManagers: { KeyManager, GameLog },
-    setInfrastructureManagersTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("settings" in context) settings = context.settings;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("needSandboxBypass" in context)
-        needSandboxBypass = context.needSandboxBypass;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      gameModal,
+      infrastructureManagers: { KeyManager, GameLog },
+      setInfrastructureManagersTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("needSandboxBypass" in context)
+          needSandboxBypass = context.needSandboxBypass;
+      },
+    });
 
   // Gui & Init functions
   const { updateCraftCost } = createCraftingCosts({
@@ -3371,19 +3400,18 @@ function startEvolveRuntimeComposition(
     setFoundryList: (list) => (foundryList = list),
   });
 
-  publishTestSurface({
-    updateCraftCost,
-    getCraftCostTestLists: () => ({ craftablesList, foundryList }),
-    setCraftCostTestContext(context) {
-      game = context.game;
-      state = context.state;
-      resources = context.resources;
-      craftablesList = context.craftablesList ?? [];
-      foundryList = context.foundryList ?? [];
-    },
-  });
-
-  let stateInitializationTestActions = null;
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      updateCraftCost,
+      getCraftCostTestLists: () => ({ craftablesList, foundryList }),
+      setCraftCostTestContext(context) {
+        game = context.game;
+        state = context.state;
+        resources = context.resources;
+        craftablesList = context.craftablesList ?? [];
+        foundryList = context.foundryList ?? [];
+      },
+    });
 
   const { initialiseState } = createStateInitialization({
     getGame: () => game,
@@ -3394,69 +3422,73 @@ function startEvolveRuntimeComposition(
     setBuildings: (value) => (buildings = value),
     getProjects: () => projects,
     getUpdateCraftCost: () =>
-      stateInitializationTestActions?.updateCraftCost ?? updateCraftCost,
+      getTestContext("stateInitialization")?.actions?.updateCraftCost ??
+      updateCraftCost,
     getUpdateTabs: () =>
-      stateInitializationTestActions?.updateTabs ?? updateTabs,
+      getTestContext("stateInitialization")?.actions?.updateTabs ?? updateTabs,
     getIsLumberRace: () =>
-      stateInitializationTestActions?.isLumberRace ?? isLumberRace,
-    getHaveTech: () => stateInitializationTestActions?.haveTech ?? haveTech,
+      getTestContext("stateInitialization")?.actions?.isLumberRace ??
+      isLumberRace,
+    getHaveTech: () =>
+      getTestContext("stateInitialization")?.actions?.haveTech ?? haveTech,
     log: (message) => runtimeEnvironment.log(message),
   });
 
-  publishTestSurface({
-    initialiseState,
-    getStateInitializationTestContext: () => ({
-      game,
-      resources,
-      JobManager,
-      crafter,
-      buildings,
-      projects,
-    }),
-    setStateInitializationTestContext(context) {
-      game = context.game;
-      resources = context.resources;
-      JobManager = context.JobManager;
-      crafter = context.crafter;
-      buildings = context.buildings;
-      projects = context.projects;
-      stateInitializationTestActions = context.actions;
-    },
-  });
-
-  let raceInitializationTestContext = null;
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      initialiseState,
+      getStateInitializationTestContext: () => ({
+        game,
+        resources,
+        JobManager,
+        crafter,
+        buildings,
+        projects,
+      }),
+      setStateInitializationTestContext(context) {
+        game = context.game;
+        resources = context.resources;
+        JobManager = context.JobManager;
+        crafter = context.crafter;
+        buildings = context.buildings;
+        projects = context.projects;
+        setTestContext("stateInitialization", context);
+      },
+    });
 
   const { initialiseRaces } = createRaceInitialization({
-    getGame: () => raceInitializationTestContext?.game ?? game,
+    getGame: () => getTestContext("raceInitialization")?.game ?? game,
     getEvolutions: () =>
-      raceInitializationTestContext?.evolutions ?? evolutions,
-    getRaces: () => raceInitializationTestContext?.races ?? races,
+      getTestContext("raceInitialization")?.evolutions ?? evolutions,
+    getRaces: () => getTestContext("raceInitialization")?.races ?? races,
     getImitations: () =>
-      raceInitializationTestContext?.imitations ?? imitations,
+      getTestContext("raceInitialization")?.imitations ?? imitations,
     getEvolutionAction: () =>
-      raceInitializationTestContext?.EvolutionAction ?? EvolutionAction,
-    getRace: () => raceInitializationTestContext?.Race ?? Race,
+      getTestContext("raceInitialization")?.EvolutionAction ?? EvolutionAction,
+    getRace: () => getTestContext("raceInitialization")?.Race ?? Race,
   });
 
-  publishTestSurface({
-    initialiseRaces,
-    setRaceInitializationTestContext(context) {
-      raceInitializationTestContext = context;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      initialiseRaces,
+      setRaceInitializationTestContext(context) {
+        setTestContext("raceInitialization", context);
+      },
+    });
 
   const { initBuildingState } = createBuildingStateInitialization({
     getBuildings: () => buildings,
     getBuildingManager: () => BuildingManager,
   });
 
-  publishTestSurface({
-    initBuildingState,
-    setBuildingStateTestContext(context) {
-      buildings = context.buildings;
-      BuildingManager = context.BuildingManager;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      initBuildingState,
+      setBuildingStateTestContext(context) {
+        buildings = context.buildings;
+        BuildingManager = context.BuildingManager;
+      },
+    });
 
   const { updateStateFromSettings, updateSettingsFromState } =
     createSettingsState({
@@ -3526,52 +3558,54 @@ function startEvolveRuntimeComposition(
     getGameLog: () => GameLog,
   });
 
-  publishTestSurface({
-    settingsMigration: { updateStandAloneSettings },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      settingsMigration: { updateStandAloneSettings },
+    });
 
-  publishTestSurface({
-    settingsState: {
-      updateStateFromSettings,
-      updateSettingsFromState,
-      applySettings,
-      migrateSetting,
-    },
-    resetSettings: {
-      resetWarSettings,
-      resetHellSettings,
-      resetGeneralSettings,
-      resetInterfaceSettings,
-      resetStateLogSettings,
-      resetAchievementGuardSettings,
-      resetChallengeHelperSettings,
-      resetPrestigeSettings,
-      resetGovernmentSettings,
-      resetAuthoritySettings,
-      resetEvolutionSettings,
-      resetResearchSettings,
-      resetMarketSettings,
-      resetStorageSettings,
-      resetMinorTraitSettings,
-      resetMutableTraitSettings,
-      resetJobSettings,
-      resetWeightingSettings,
-      resetBuildingSettings,
-      resetProjectSettings,
-      resetMagicSettings,
-      resetProductionSettings,
-      resetTriggerSettings,
-      resetLoggingSettings,
-      resetPlanetSettings,
-      resetFleetSettings,
-      resetMechSettings,
-      resetEjectorSettings,
-    },
-    setSettingsStateTestContext(context) {
-      settingsRaw = context.settingsRaw;
-      TriggerManager = context.triggerManager;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      settingsState: {
+        updateStateFromSettings,
+        updateSettingsFromState,
+        applySettings,
+        migrateSetting,
+      },
+      resetSettings: {
+        resetWarSettings,
+        resetHellSettings,
+        resetGeneralSettings,
+        resetInterfaceSettings,
+        resetStateLogSettings,
+        resetAchievementGuardSettings,
+        resetChallengeHelperSettings,
+        resetPrestigeSettings,
+        resetGovernmentSettings,
+        resetAuthoritySettings,
+        resetEvolutionSettings,
+        resetResearchSettings,
+        resetMarketSettings,
+        resetStorageSettings,
+        resetMinorTraitSettings,
+        resetMutableTraitSettings,
+        resetJobSettings,
+        resetWeightingSettings,
+        resetBuildingSettings,
+        resetProjectSettings,
+        resetMagicSettings,
+        resetProductionSettings,
+        resetTriggerSettings,
+        resetLoggingSettings,
+        resetPlanetSettings,
+        resetFleetSettings,
+        resetMechSettings,
+        resetEjectorSettings,
+      },
+      setSettingsStateTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        TriggerManager = context.triggerManager;
+      },
+    });
 
   let {
     getStarLevel,
@@ -3601,75 +3635,80 @@ function startEvolveRuntimeComposition(
     retirementPreparation: RETIREMENT_PREP,
   });
 
-  publishTestSurface({
-    runGuards: {
-      getStarLevel,
-      getAchievementStar,
-      isAchievementUnlocked,
-      guardActive,
-      bananaRepublicObjectiveComplete,
-      bananaRepublicSmoothieComplete,
-      bananaRepublicReadyForUnification,
-      guardBananaRepublicActive,
-      inflationChallengeAssistActive,
-      inflationChallengeMoneyReachable,
-      inflationChallengeSecondsToFinish,
-      inflationChallengeShouldSaveMoney,
-      retirementChallengeAssistActive,
-      retirementPreparationMissing,
-    },
-    setRunGuardTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      poly = context.poly;
-      resources = context.resources;
-      buildings = context.buildings;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      runGuards: {
+        getStarLevel,
+        getAchievementStar,
+        isAchievementUnlocked,
+        guardActive,
+        bananaRepublicObjectiveComplete,
+        bananaRepublicSmoothieComplete,
+        bananaRepublicReadyForUnification,
+        guardBananaRepublicActive,
+        inflationChallengeAssistActive,
+        inflationChallengeMoneyReachable,
+        inflationChallengeSecondsToFinish,
+        inflationChallengeShouldSaveMoney,
+        retirementChallengeAssistActive,
+        retirementPreparationMissing,
+      },
+      setRunGuardTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        poly = context.poly;
+        resources = context.resources;
+        buildings = context.buildings;
+      },
+    });
 
-  let queuedSettingsTestActions;
   const { loadQueuedSettings } = createQueuedSettings({
     getSettings: () => settings,
     getSettingsRaw: () => settingsRaw,
     getState: () => state,
     getGameLog: () => GameLog,
     getUpdateOverrides: () =>
-      queuedSettingsTestActions?.updateOverrides ?? updateOverrides,
+      getTestContext("queuedSettings")?.actions?.updateOverrides ??
+      updateOverrides,
     getUpdateStandAloneSettings: () =>
-      queuedSettingsTestActions?.updateStandAloneSettings ??
+      getTestContext("queuedSettings")?.actions?.updateStandAloneSettings ??
       updateStandAloneSettings,
     getUpdateStateFromSettings: () =>
-      queuedSettingsTestActions?.updateStateFromSettings ??
+      getTestContext("queuedSettings")?.actions?.updateStateFromSettings ??
       updateStateFromSettings,
     getUpdateSettingsFromState: () =>
-      queuedSettingsTestActions?.updateSettingsFromState ??
+      getTestContext("queuedSettings")?.actions?.updateSettingsFromState ??
       updateSettingsFromState,
     getRemoveScriptSettings: () =>
-      queuedSettingsTestActions?.removeScriptSettings ?? removeScriptSettings,
+      getTestContext("queuedSettings")?.actions?.removeScriptSettings ??
+      removeScriptSettings,
     getBuildScriptSettings: () =>
-      queuedSettingsTestActions?.buildScriptSettings ?? buildScriptSettings,
+      getTestContext("queuedSettings")?.actions?.buildScriptSettings ??
+      buildScriptSettings,
   });
 
-  publishTestSurface({
-    loadQueuedSettings,
-    setQueuedSettingsTestContext(context) {
-      settings = context.settings;
-      settingsRaw = context.settingsRaw;
-      state = context.state;
-      GameLog = context.GameLog;
-      queuedSettingsTestActions = context.actions;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      loadQueuedSettings,
+      setQueuedSettingsTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        GameLog = context.GameLog;
+        setTestContext("queuedSettings", context);
+      },
+    });
 
   const findRequiredResourceWeight = (resource) =>
     findRequiredResourceWeightPolicy(state.unlockedBuildings, resource);
 
-  publishTestSurface({
-    findRequiredResourceWeight,
-    setResourceWeightTestContext(context) {
-      state = context.state;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      findRequiredResourceWeight,
+      setResourceWeightTestContext(context) {
+        state = context.state;
+      },
+    });
 
   const challengeGroups = challenges.map((members) => ({ members }));
   // function setPlanet from actions.js
@@ -3681,14 +3720,15 @@ function startEvolveRuntimeComposition(
     universes,
   });
 
-  publishTestSurface({
-    generatePlanets,
-    setPlanetGenerationTestContext(context) {
-      game = context.game;
-      poly = context.poly;
-      isAchievementUnlocked = context.isAchievementUnlocked;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      generatePlanets,
+      setPlanetGenerationTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        isAchievementUnlocked = context.isAchievementUnlocked;
+      },
+    });
 
   const { autoEvolution, autoUniverseSelection, autoPlanetSelection } =
     createEvolutionControls({
@@ -3825,7 +3865,7 @@ function startEvolveRuntimeComposition(
     debugLog: (message) => runtimeEnvironment.log(message),
   });
 
-  publishTestSurface({ autoHell });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__) testSurface?.add({ autoHell });
 
   const { autoJobs } = createJobsControl({
     getJobManager: () => JobManager,
@@ -3866,17 +3906,18 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  publishTestSurface({
-    autoTax: () => autoTax(),
-    setAutoTaxTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("settings" in context) settings = context.settings;
-      if ("resources" in context) resources = context.resources;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("keySet" in context) KeyManager.set = context.keySet;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      autoTax: () => autoTax(),
+      setAutoTaxTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("resources" in context) resources = context.resources;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("keySet" in context) KeyManager.set = context.keySet;
+      },
+    });
 
   const { autoAlchemy } = createAlchemyControl({
     getAlchemyManager: () => AlchemyManager,
@@ -3935,12 +3976,13 @@ function startEvolveRuntimeComposition(
     getState: () => state,
   });
 
-  publishTestSurface({
-    autoFactory,
-    FactoryManager,
-    factorySettings: settings,
-    factoryState: state,
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      autoFactory,
+      FactoryManager,
+      factorySettings: settings,
+      factoryState: state,
+    });
 
   const { autoMiningDroid } = createMiningDroidControl(() => DroidManager);
 
@@ -3972,7 +4014,6 @@ function startEvolveRuntimeComposition(
     resolveVueMethod,
   });
 
-  let prestigeLogTestActions;
   const { formatLogString, logPrestige } = createPrestigeLog({
     getSettings: () => settings,
     getGame: () => game,
@@ -3980,21 +4021,24 @@ function startEvolveRuntimeComposition(
     getPrestigeTypes: () => prestigeTypes,
     getGameLog: () => GameLog,
     getFastEval: () => fastEval,
-    getSaveStateLog: () => prestigeLogTestActions?.saveStateLog ?? saveStateLog,
+    getSaveStateLog: () =>
+      getTestContext("prestigeLog")?.actions?.saveStateLog ?? saveStateLog,
     getTriggerFileDownload: () =>
-      prestigeLogTestActions?.triggerFileDownload ?? triggerFileDownload,
+      getTestContext("prestigeLog")?.actions?.triggerFileDownload ??
+      triggerFileDownload,
   });
 
-  publishTestSurface({
-    prestigeLog: { formatLogString, logPrestige },
-    setPrestigeLogTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      state = context.state;
-      GameLog = context.GameLog;
-      prestigeLogTestActions = context.actions;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      prestigeLog: { formatLogString, logPrestige },
+      setPrestigeLogTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        state = context.state;
+        GameLog = context.GameLog;
+        setTestContext("prestigeLog", context);
+      },
+    });
 
   let {
     isPrestigeAllowed,
@@ -4052,56 +4096,58 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  publishTestSurface({
-    autoEvolution,
-    autoUniverseSelection,
-    autoCraft,
-    autoSpy,
-    autoBattle,
-    autoPrestige,
-    setWave3TestContext(context) {
-      foundryList = context.foundryList;
-      SpyManager = context.SpyManager;
-      buildings = context.buildings;
-      haveTask = context.haveTask;
-      haveTech = context.haveTech;
-      isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
-      if ("foreignView" in context) {
-        foreignControlsTestContext = {
-          getVueById: () => context.foreignView,
-        };
-      }
-    },
-    setForeignControlsTestContext(context) {
-      foreignControlsTestContext = context;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      autoEvolution,
+      autoUniverseSelection,
+      autoCraft,
+      autoSpy,
+      autoBattle,
+      autoPrestige,
+      setWave3TestContext(context) {
+        foundryList = context.foundryList;
+        SpyManager = context.SpyManager;
+        buildings = context.buildings;
+        haveTask = context.haveTask;
+        haveTech = context.haveTech;
+        isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
+        if ("foreignView" in context) {
+          setTestContext("foreignControls", {
+            getVueById: () => context.foreignView,
+          });
+        }
+      },
+      setForeignControlsTestContext(context) {
+        setTestContext("foreignControls", context);
+      },
+    });
 
-  publishTestSurface({
-    prestigeEligibility: {
-      isPrestigeAllowed,
-      isCataclysmPrestigeAvailable,
-      isBioseederPrestigeAvailable,
-      isWhiteholePrestigeAvailable,
-      isApocalypsePrestigeAvailable,
-      isAscensionPrestigeAvailable,
-      isWitchAscensionPrestigeAvailable,
-      isDemonicPrestigeAvailable,
-      isPillarFinished,
-      isGECKNeeded,
-      getBlackholeMass,
-    },
-    setPrestigeEligibilityTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      resources = context.resources;
-      buildings = context.buildings;
-      techIds = context.techIds;
-      MechManager = context.MechManager;
-      haveTech = context.haveTech;
-      isAchievementUnlocked = context.isAchievementUnlocked;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      prestigeEligibility: {
+        isPrestigeAllowed,
+        isCataclysmPrestigeAvailable,
+        isBioseederPrestigeAvailable,
+        isWhiteholePrestigeAvailable,
+        isApocalypsePrestigeAvailable,
+        isAscensionPrestigeAvailable,
+        isWitchAscensionPrestigeAvailable,
+        isDemonicPrestigeAvailable,
+        isPillarFinished,
+        isGECKNeeded,
+        getBlackholeMass,
+      },
+      setPrestigeEligibilityTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        techIds = context.techIds;
+        MechManager = context.MechManager;
+        haveTech = context.haveTech;
+        isAchievementUnlocked = context.isAchievementUnlocked;
+      },
+    });
 
   const { autoShapeshift } = createShapeshiftControl({
     reader: {
@@ -4196,22 +4242,23 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  publishTestSurface({
-    autoMiningDroid,
-    DroidManager,
-    autoGraphenePlant,
-    GrapheneManager,
-    autoShapeshift,
-    autoWish,
-    autoGenetics,
-    automationSettings: settings,
-    automationResources: resources,
-    automationKeyManager: KeyManager,
-    setAutomationTestContext(context) {
-      game = context.game;
-      win = context.win;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      autoMiningDroid,
+      DroidManager,
+      autoGraphenePlant,
+      GrapheneManager,
+      autoShapeshift,
+      autoWish,
+      autoGenetics,
+      automationSettings: settings,
+      automationResources: resources,
+      automationKeyManager: KeyManager,
+      setAutomationTestContext(context) {
+        game = context.game;
+        win = context.win;
+      },
+    });
 
   const { autoMarket } = createMarketControl({
     reader: {
@@ -4243,22 +4290,23 @@ function startEvolveRuntimeComposition(
     getResourcesPerClick: () => getResourcesPerClick(),
   });
 
-  publishTestSurface({
-    autoConsume,
-    autoReplicator,
-    autoMarket,
-    autoGalaxyMarket,
-    autoGatherResources,
-    getAutomationPoly: () => poly,
-    setWave2TestContext(context) {
-      ReplicatorManager = context.ReplicatorManager;
-      MarketManager = context.MarketManager;
-      GalaxyTradeManager = context.GalaxyTradeManager;
-      buildings = context.buildings;
-      adjustTradeRoutes = context.adjustTradeRoutes;
-      getResourcesPerClick = context.getResourcesPerClick;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      autoConsume,
+      autoReplicator,
+      autoMarket,
+      autoGalaxyMarket,
+      autoGatherResources,
+      getAutomationPoly: () => poly,
+      setWave2TestContext(context) {
+        ReplicatorManager = context.ReplicatorManager;
+        MarketManager = context.MarketManager;
+        GalaxyTradeManager = context.GalaxyTradeManager;
+        buildings = context.buildings;
+        adjustTradeRoutes = context.adjustTradeRoutes;
+        getResourcesPerClick = context.getResourcesPerClick;
+      },
+    });
 
   const { autoBuild } = createBuildControl({
     adapter: {
@@ -4290,18 +4338,19 @@ function startEvolveRuntimeComposition(
     getNumberString,
   });
 
-  publishTestSurface({
-    getTechConflict,
-    setTechConflictTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      state = context.state;
-      resources = context.resources;
-      buildings = context.buildings;
-      isAchievementUnlocked = context.isAchievementUnlocked;
-      techConflictClock = context.clock ?? browserClock;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      getTechConflict,
+      setTechConflictTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        isAchievementUnlocked = context.isAchievementUnlocked;
+        techConflictClock = context.clock ?? browserClock;
+      },
+    });
 
   const { autoTrigger } = createTriggerControl({
     reader: {
@@ -4313,19 +4362,20 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  publishTestSurface({
-    autoMerc,
-    WarManager,
-    GameLog,
-    autoPsychic,
-    autoOcularPowers,
-    autoTrigger,
-    automationState: state,
-    setWave1TestManagers(managers) {
-      WarManager = managers.WarManager;
-      MinorTraitManager = managers.MinorTraitManager;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      autoMerc,
+      WarManager,
+      GameLog,
+      autoPsychic,
+      autoOcularPowers,
+      autoTrigger,
+      automationState: state,
+      setWave1TestManagers(managers) {
+        WarManager = managers.WarManager;
+        MinorTraitManager = managers.MinorTraitManager;
+      },
+    });
 
   const { autoResearch } = createResearchControl({
     reader: {
@@ -4374,31 +4424,33 @@ function startEvolveRuntimeComposition(
     diagnostics,
   });
 
-  publishTestSurface({
-    powerSupport: {
-      getCitadelConsumption,
-      isHellSupressUseful,
-      adjustSpire,
-      getBestSupplyRatio,
-    },
-    setPowerSupportTestContext(context) {
-      game = context.game;
-      jobs = context.jobs;
-      crafter = context.crafter;
-      buildings = context.buildings;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      powerSupport: {
+        getCitadelConsumption,
+        isHellSupressUseful,
+        adjustSpire,
+        getBestSupplyRatio,
+      },
+      setPowerSupportTestContext(context) {
+        game = context.game;
+        jobs = context.jobs;
+        crafter = context.crafter;
+        buildings = context.buildings;
+      },
+    });
 
-  publishTestSurface({
-    expandStorage,
-    setStorageExpansionTestContext(context) {
-      game = context.game;
-      settings = context.settings;
-      resources = context.resources;
-      buildings = context.buildings;
-      StorageManager = context.StorageManager;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      expandStorage,
+      setStorageExpansionTestContext(context) {
+        game = context.game;
+        settings = context.settings;
+        resources = context.resources;
+        buildings = context.buildings;
+        StorageManager = context.StorageManager;
+      },
+    });
 
   const { autoStorage } = createStorageAllocationControl({
     debug: { getWindow: () => runtimeEnvironment.window },
@@ -4427,10 +4479,11 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  publishTestSurface({
-    autoMinorTrait,
-    MinorTraitManager,
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      autoMinorTrait,
+      MinorTraitManager,
+    });
 
   const { autoMutateTrait } = createMutationControl({
     reader: {
@@ -4447,24 +4500,25 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  publishTestSurface({
-    autoPlanetSelection,
-    autoJobs,
-    autoBuild,
-    autoResearch,
-    autoMutateTrait,
-    setWave4TestContext(context) {
-      generatePlanets = context.generatePlanets;
-      getStarLevel = context.getStarLevel;
-      isAchievementUnlocked = context.isAchievementUnlocked;
-      races = context.races;
-      JobManager = context.JobManager;
-      BuildingManager = context.BuildingManager;
-      ProjectManager = context.ProjectManager;
-      MutableTraitManager = context.MutableTraitManager;
-      getCostConflict = context.getCostConflict;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      autoPlanetSelection,
+      autoJobs,
+      autoBuild,
+      autoResearch,
+      autoMutateTrait,
+      setWave4TestContext(context) {
+        generatePlanets = context.generatePlanets;
+        getStarLevel = context.getStarLevel;
+        isAchievementUnlocked = context.isAchievementUnlocked;
+        races = context.races;
+        JobManager = context.JobManager;
+        BuildingManager = context.BuildingManager;
+        ProjectManager = context.ProjectManager;
+        MutableTraitManager = context.MutableTraitManager;
+        getCostConflict = context.getCostConflict;
+      },
+    });
 
   let { adjustTradeRoutes } = createTradeRoutes({
     getSettings: () => settings,
@@ -4475,15 +4529,16 @@ function startEvolveRuntimeComposition(
     shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney(),
   });
 
-  publishTestSurface({
-    adjustTradeRoutes,
-    setTradeRoutesTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      resources = context.resources;
-      MarketManager = context.MarketManager;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      adjustTradeRoutes,
+      setTradeRoutesTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        resources = context.resources;
+        MarketManager = context.MarketManager;
+      },
+    });
 
   const { autoFleetOuter } = createOuterFleetControl({
     getFleetManagerOuter: () => FleetManagerOuter,
@@ -4496,22 +4551,23 @@ function startEvolveRuntimeComposition(
     getGameLog: () => GameLog,
   });
 
-  publishTestSurface({
-    galaxyIntelligence: {
-      getGalaxyCombatShipPower,
-      getPiracyMultiplier,
-      galaxyAssaultPending,
-      getGalaxyRegions,
-    },
-    setGalaxyIntelligenceTestContext(context) {
-      game = context.game;
-      buildings = context.buildings;
-      resources = context.resources;
-      poly = context.poly;
-      settings = context.settings;
-      traitVal = context.traitVal;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      galaxyIntelligence: {
+        getGalaxyCombatShipPower,
+        getPiracyMultiplier,
+        galaxyAssaultPending,
+        getGalaxyRegions,
+      },
+      setGalaxyIntelligenceTestContext(context) {
+        game = context.game;
+        buildings = context.buildings;
+        resources = context.resources;
+        poly = context.poly;
+        settings = context.settings;
+        traitVal = context.traitVal;
+      },
+    });
 
   const { autoFleet } = createFleetControl({
     getFleetManager: () => FleetManager,
@@ -4542,7 +4598,6 @@ function startEvolveRuntimeComposition(
     log: (label, outcome) => runtimeEnvironment.log(label, outcome),
   });
 
-  let scriptDataTestActions;
   const { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({
     getSettings: () => settings,
     getState: () => state,
@@ -4558,87 +4613,95 @@ function startEvolveRuntimeComposition(
     getNaniteManager: () => NaniteManager,
     getRitualManager: () => RitualManager,
     getUpdateCraftCost: () =>
-      scriptDataTestActions?.updateCraftCost ?? updateCraftCost,
+      getTestContext("scriptData")?.actions?.updateCraftCost ?? updateCraftCost,
     getResourcesPerClick: () =>
-      scriptDataTestActions?.getResourcesPerClick ?? getResourcesPerClick,
+      getTestContext("scriptData")?.actions?.getResourcesPerClick ??
+      getResourcesPerClick,
     getTicksPerSecond: () =>
-      scriptDataTestActions?.ticksPerSecond ?? ticksPerSecond,
-    getHaveTech: () => scriptDataTestActions?.haveTech ?? haveTech,
+      getTestContext("scriptData")?.actions?.ticksPerSecond ?? ticksPerSecond,
+    getHaveTech: () =>
+      getTestContext("scriptData")?.actions?.haveTech ?? haveTech,
   });
 
-  publishTestSurface({
-    scriptDataLifecycle: { updateScriptData, finalizeScriptData },
-    setScriptDataTestContext(context) {
-      settings = context.settings;
-      state = context.state;
-      game = context.game;
-      resources = context.resources;
-      buildings = context.buildings;
-      WarManager = context.WarManager;
-      MarketManager = context.MarketManager;
-      BuildingManager = context.BuildingManager;
-      SpyManager = context.SpyManager;
-      EjectManager = context.EjectManager;
-      SupplyManager = context.SupplyManager;
-      NaniteManager = context.NaniteManager;
-      RitualManager = context.RitualManager;
-      scriptDataTestActions = context.actions;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      scriptDataLifecycle: { updateScriptData, finalizeScriptData },
+      setScriptDataTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        WarManager = context.WarManager;
+        MarketManager = context.MarketManager;
+        BuildingManager = context.BuildingManager;
+        SpyManager = context.SpyManager;
+        EjectManager = context.EjectManager;
+        SupplyManager = context.SupplyManager;
+        NaniteManager = context.NaniteManager;
+        RitualManager = context.RitualManager;
+        setTestContext("scriptData", context);
+      },
+    });
 
-  publishTestSurface({
-    autoPower,
-    autoStorage,
-    autoFleetOuter,
-    autoFleet,
-    autoMech,
-    setWave5TestManagers(managers) {
-      StorageManager = managers.StorageManager;
-      FleetManagerOuter = managers.FleetManagerOuter;
-      FleetManager = managers.FleetManager;
-      MechManager = managers.MechManager;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      autoPower,
+      autoStorage,
+      autoFleetOuter,
+      autoFleet,
+      autoMech,
+      setWave5TestManagers(managers) {
+        StorageManager = managers.StorageManager;
+        FleetManagerOuter = managers.FleetManagerOuter;
+        FleetManager = managers.FleetManager;
+        MechManager = managers.MechManager;
+      },
+    });
 
-  publishTestSurface({
-    storageRequirements: { calculateRequiredStorages },
-    setStorageRequirementTestContext(context) {
-      settings = context.settings;
-      state = context.state;
-      resources = context.resources;
-      buildings = context.buildings;
-      game = context.game;
-      BuildingManager = context.BuildingManager;
-      ProjectManager = context.ProjectManager;
-      FleetManagerOuter = context.FleetManagerOuter;
-      inflationChallengeAssistActive = context.inflationChallengeAssistActive;
-      retirementChallengeAssistActive = context.retirementChallengeAssistActive;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      storageRequirements: { calculateRequiredStorages },
+      setStorageRequirementTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        game = context.game;
+        BuildingManager = context.BuildingManager;
+        ProjectManager = context.ProjectManager;
+        FleetManagerOuter = context.FleetManagerOuter;
+        inflationChallengeAssistActive = context.inflationChallengeAssistActive;
+        retirementChallengeAssistActive =
+          context.retirementChallengeAssistActive;
+      },
+    });
 
-  publishTestSurface({
-    prioritizeDemandedResources,
-    makeDemandProject(cost, progress) {
-      return Object.defineProperties(Object.create(Project.prototype), {
-        cost: { value: cost, writable: true, enumerable: true },
-        progress: { value: progress, writable: true, enumerable: true },
-      });
-    },
-    setDemandPrioritizationTestContext(context) {
-      settings = context.settings;
-      state = context.state;
-      resources = context.resources;
-      buildings = context.buildings;
-      game = context.game;
-      crafter = context.crafter;
-      SpyManager = context.SpyManager;
-      FleetManagerOuter = context.FleetManagerOuter;
-      JobManager = context.JobManager;
-      FactoryManager = context.FactoryManager;
-      inflationChallengeAssistActive = context.inflationChallengeAssistActive;
-      retirementChallengeAssistActive = context.retirementChallengeAssistActive;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      prioritizeDemandedResources,
+      makeDemandProject(cost, progress) {
+        return Object.defineProperties(Object.create(Project.prototype), {
+          cost: { value: cost, writable: true, enumerable: true },
+          progress: { value: progress, writable: true, enumerable: true },
+        });
+      },
+      setDemandPrioritizationTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        game = context.game;
+        crafter = context.crafter;
+        SpyManager = context.SpyManager;
+        FleetManagerOuter = context.FleetManagerOuter;
+        JobManager = context.JobManager;
+        FactoryManager = context.FactoryManager;
+        inflationChallengeAssistActive = context.inflationChallengeAssistActive;
+        retirementChallengeAssistActive =
+          context.retirementChallengeAssistActive;
+      },
+    });
 
   let { checkAffordableCustom, readQueuedTarget } = createQueueQueries({
     getResources: () => resources,
@@ -4674,26 +4737,26 @@ function startEvolveRuntimeComposition(
     inflationChallengeMoney: INFLATION_CHALLENGE_MONEY,
   });
 
-  publishTestSurface({
-    updatePriorityTargets: () => updatePriorityTargets(),
-    setPriorityTargetsTestContext(context) {
-      settings = context.settings;
-      state = context.state;
-      game = context.game;
-      resources = context.resources;
-      buildings = context.buildings;
-      techIds = context.techIds;
-      buildingIds = context.buildingIds;
-      arpaIds = context.arpaIds;
-      SpyManager = context.SpyManager;
-      FleetManagerOuter = context.FleetManagerOuter;
-      MechManager = context.MechManager;
-      TriggerManager = context.TriggerManager;
-      if (context.poly) poly = context.poly;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      updatePriorityTargets: () => updatePriorityTargets(),
+      setPriorityTargetsTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        techIds = context.techIds;
+        buildingIds = context.buildingIds;
+        arpaIds = context.arpaIds;
+        SpyManager = context.SpyManager;
+        FleetManagerOuter = context.FleetManagerOuter;
+        MechManager = context.MechManager;
+        TriggerManager = context.TriggerManager;
+        if (context.poly) poly = context.poly;
+      },
+    });
 
-  let evolutionResultTestActions;
   const { checkEvolutionResult } = createEvolutionResultCheck({
     getSettings: () => settings,
     getSettingsRaw: () => settingsRaw,
@@ -4708,22 +4771,23 @@ function startEvolveRuntimeComposition(
     formatLog: (event, localize) => formatEvolutionLog(event, localize),
     addEvolutionSetting: () => addEvolutionSetting(),
     updateSettingsFromState: () => updateSettingsFromState(),
-    getTestActions: () => evolutionResultTestActions,
+    getTestActions: () => getTestContext("evolutionResult")?.actions,
   });
 
-  publishTestSurface({
-    checkEvolutionResult: () => checkEvolutionResult(),
-    setEvolutionResultTestContext(context) {
-      settings = context.settings;
-      settingsRaw = context.settingsRaw;
-      state = context.state;
-      game = context.game;
-      races = context.races;
-      MutableTraitManager = context.MutableTraitManager;
-      GameLog = context.GameLog;
-      evolutionResultTestActions = context.actions;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      checkEvolutionResult: () => checkEvolutionResult(),
+      setEvolutionResultTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        races = context.races;
+        MutableTraitManager = context.MutableTraitManager;
+        GameLog = context.GameLog;
+        setTestContext("evolutionResult", context);
+      },
+    });
 
   const { updateTabs } = createTabRefresh({
     getState: () => state,
@@ -4734,17 +4798,18 @@ function startEvolveRuntimeComposition(
     getMainVue,
   });
 
-  publishTestSurface({
-    updateTabs: (update) => updateTabs(update),
-    setTabRefreshTestContext(context) {
-      state = context.state;
-      game = context.game;
-      buildings = context.buildings;
-      resources = context.resources;
-      haveTech = context.haveTech;
-      win = context.win;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      updateTabs: (update) => updateTabs(update),
+      setTabRefreshTestContext(context) {
+        state = context.state;
+        game = context.game;
+        buildings = context.buildings;
+        resources = context.resources;
+        haveTech = context.haveTech;
+        win = context.win;
+      },
+    });
 
   const { getMultiSegmentedTimeLeft } = createTargetTimingDisplay({
     getGame: () => game,
@@ -4752,22 +4817,23 @@ function startEvolveRuntimeComposition(
     isProject: (target) => target instanceof Project,
   });
 
-  publishTestSurface({
-    getMultiSegmentedTimeLeft,
-    makeTargetTimingProject(progress, currentStep, cost) {
-      return Object.defineProperties(Object.create(Project.prototype), {
-        gameMax: { value: 0, enumerable: true },
-        count: { value: 0, enumerable: true },
-        progress: { value: progress, enumerable: true },
-        currentStep: { value: currentStep, enumerable: true },
-        cost: { value: cost, enumerable: true },
-      });
-    },
-    setTargetTimingTestContext(context) {
-      game = context.game;
-      poly = context.poly;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      getMultiSegmentedTimeLeft,
+      makeTargetTimingProject(progress, currentStep, cost) {
+        return Object.defineProperties(Object.create(Project.prototype), {
+          gameMax: { value: 0, enumerable: true },
+          count: { value: 0, enumerable: true },
+          progress: { value: progress, enumerable: true },
+          currentStep: { value: currentStep, enumerable: true },
+          cost: { value: cost, enumerable: true },
+        });
+      },
+      setTargetTimingTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+      },
+    });
 
   const {
     updateActiveTargetsUI,
@@ -4794,35 +4860,37 @@ function startEvolveRuntimeComposition(
     savePlannerStats: (stats) => savePlannerStats(stats),
   });
 
-  publishTestSurface({
-    plannerAnalysis: {
-      plannerLimitingResource,
-      makePlannerStats,
-      loadPlannerStats,
-      savePlannerStats: () => savePlannerStats(state.plannerStats),
-    },
-    setPlannerAnalysisTestContext(context) {
-      game = context.game;
-      resources = context.resources;
-      state = context.state;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      plannerAnalysis: {
+        plannerLimitingResource,
+        makePlannerStats,
+        loadPlannerStats,
+        savePlannerStats: () => savePlannerStats(state.plannerStats),
+      },
+      setPlannerAnalysisTestContext(context) {
+        game = context.game;
+        resources = context.resources;
+        state = context.state;
+      },
+    });
 
-  publishTestSurface({
-    stateLogLifecycle: {
-      makeStateLog,
-      loadStateLog,
-      saveStateLog,
-      stateLogDiff,
-      stateLogBlocker,
-      recordStateSnapshot,
-    },
-    setStateLogTestContext(context) {
-      game = context.game;
-      resources = context.resources;
-      state = context.state;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      stateLogLifecycle: {
+        makeStateLog,
+        loadStateLog,
+        saveStateLog,
+        stateLogDiff,
+        stateLogBlocker,
+        recordStateSnapshot,
+      },
+      setStateLogTestContext(context) {
+        game = context.game;
+        resources = context.resources;
+        state = context.state;
+      },
+    });
 
   const gameBuildPlanner = createGameBuildPlannerEvolveAdapter({
     getGame: () => game,
@@ -4841,17 +4909,18 @@ function startEvolveRuntimeComposition(
     savePlannerStats,
   });
 
-  publishTestSurface({
-    updateBuildPlanner: () => updateBuildPlanner(),
-    setBuildPlannerTestContext(context) {
-      settings = context.settings;
-      settingsRaw = context.settingsRaw;
-      state = context.state;
-      game = context.game;
-      resources = context.resources;
-      poly = context.poly;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      updateBuildPlanner: () => updateBuildPlanner(),
+      setBuildPlannerTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        poly = context.poly;
+      },
+    });
 
   let stateUpdateTestHelpers;
   const stateUpdateHelpers = {
@@ -4912,46 +4981,47 @@ function startEvolveRuntimeComposition(
       clock: browserClock,
     });
 
-  publishTestSurface({
-    updateState: () => updateState(),
-    // Real prototypes, so the instanceof classification of queued targets is exercised for real.
-    makeStateUpdateTargets() {
-      return {
-        technology: Object.create(Technology.prototype),
-        project: Object.create(Project.prototype),
-        building: {},
-      };
-    },
-    setStateUpdateTestContext(context) {
-      settings = context.settings;
-      settingsRaw = context.settingsRaw;
-      state = context.state;
-      game = context.game;
-      resources = context.resources;
-      buildings = context.buildings;
-      StorageManager = context.StorageManager;
-      ProjectManager = context.ProjectManager;
-      TriggerManager = context.TriggerManager;
-      poly = context.poly;
-      stateUpdateTestHelpers = context.helpers;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      updateState: () => updateState(),
+      // Real prototypes, so the instanceof classification of queued targets is exercised for real.
+      makeStateUpdateTargets() {
+        return {
+          technology: Object.create(Technology.prototype),
+          project: Object.create(Project.prototype),
+          building: {},
+        };
+      },
+      setStateUpdateTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        StorageManager = context.StorageManager;
+        ProjectManager = context.ProjectManager;
+        TriggerManager = context.TriggerManager;
+        poly = context.poly;
+        stateUpdateTestHelpers = context.helpers;
+      },
+    });
 
-  publishTestSurface({
-    gameActionVerification: {
-      verifyGameActions,
-      verifyGameActionsExist,
-      verifyGameActionExists,
-    },
-    setGameActionVerificationTestContext(context) {
-      game = context.game;
-      buildings = context.buildings;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      gameActionVerification: {
+        verifyGameActions,
+        verifyGameActionsExist,
+        verifyGameActionExists,
+      },
+      setGameActionVerificationTestContext(context) {
+        game = context.game;
+        buildings = context.buildings;
+      },
+    });
 
-  let scriptBootstrapTestActions;
   const getScriptBootstrapActions = () =>
-    scriptBootstrapTestActions ?? {
+    getTestContext("scriptBootstrap")?.actions ?? {
       updateStandAloneSettings,
       updateStateFromSettings,
       updateSettingsFromState,
@@ -5014,30 +5084,32 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  publishTestSurface({
-    scriptBootstrap: { initialiseScript, mainAutoEvolveScript },
-    setScriptBootstrapTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("state" in context) state = context.state;
-      if ("settings" in context) settings = context.settings;
-      if ("techIds" in context) techIds = context.techIds;
-      if ("buildingIds" in context) buildingIds = context.buildingIds;
-      if ("arpaIds" in context) arpaIds = context.arpaIds;
-      if ("jobIds" in context) jobIds = context.jobIds;
-      if ("buildings" in context) buildings = context.buildings;
-      if ("projects" in context) projects = context.projects;
-      if ("jobs" in context) jobs = context.jobs;
-      if ("crafter" in context) crafter = context.crafter;
-      if ("TriggerManager" in context) TriggerManager = context.TriggerManager;
-      if ("gameModal" in context) gameModal = context.gameModal;
-      if ("KeyManager" in context) KeyManager = context.KeyManager;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("safeMode" in context) safeMode = context.safeMode;
-      if ("checkActions" in context) checkActions = context.checkActions;
-      scriptBootstrapTestActions = context.actions;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      scriptBootstrap: { initialiseScript, mainAutoEvolveScript },
+      setScriptBootstrapTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("state" in context) state = context.state;
+        if ("settings" in context) settings = context.settings;
+        if ("techIds" in context) techIds = context.techIds;
+        if ("buildingIds" in context) buildingIds = context.buildingIds;
+        if ("arpaIds" in context) arpaIds = context.arpaIds;
+        if ("jobIds" in context) jobIds = context.jobIds;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("projects" in context) projects = context.projects;
+        if ("jobs" in context) jobs = context.jobs;
+        if ("crafter" in context) crafter = context.crafter;
+        if ("TriggerManager" in context)
+          TriggerManager = context.TriggerManager;
+        if ("gameModal" in context) gameModal = context.gameModal;
+        if ("KeyManager" in context) KeyManager = context.KeyManager;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("safeMode" in context) safeMode = context.safeMode;
+        if ("checkActions" in context) checkActions = context.checkActions;
+        setTestContext("scriptBootstrap", context);
+      },
+    });
 
   const { buildFilterRegExp, filterLog } = createLogFilter({
     getSettingsRaw: () => settingsRaw,
@@ -5046,15 +5118,16 @@ function startEvolveRuntimeComposition(
     getPoly: () => poly,
   });
 
-  publishTestSurface({
-    logFilter: { buildFilterRegExp, filterLog },
-    setLogFilterTestContext(context) {
-      settingsRaw = context.settingsRaw;
-      settings = context.settings;
-      state = context.state;
-      poly = context.poly;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      logFilter: { buildFilterRegExp, filterLog },
+      setLogFilterTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        settings = context.settings;
+        state = context.state;
+        poly = context.poly;
+      },
+    });
 
   const { getTooltipInfo, tooltipObserverCallback, addTooltip } =
     createTooltipUI({
@@ -5085,23 +5158,24 @@ function startEvolveRuntimeComposition(
       isTechnology: (value) => value instanceof Technology,
     });
 
-  publishTestSurface({
-    tooltipUI: { getTooltipInfo, tooltipObserverCallback, addTooltip },
-    setTooltipUITestContext(context) {
-      if ("settings" in context) settings = context.settings;
-      if ("state" in context) state = context.state;
-      if ("game" in context) game = context.game;
-      if ("buildings" in context) buildings = context.buildings;
-      if ("jobs" in context) jobs = context.jobs;
-      if ("resources" in context) resources = context.resources;
-      if ("techIds" in context) techIds = context.techIds;
-      if ("buildingIds" in context) buildingIds = context.buildingIds;
-      if ("arpaIds" in context) arpaIds = context.arpaIds;
-      if ("MechManager" in context) MechManager = context.MechManager;
-      if ("FleetManagerOuter" in context)
-        FleetManagerOuter = context.FleetManagerOuter;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      tooltipUI: { getTooltipInfo, tooltipObserverCallback, addTooltip },
+      setTooltipUITestContext(context) {
+        if ("settings" in context) settings = context.settings;
+        if ("state" in context) state = context.state;
+        if ("game" in context) game = context.game;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("jobs" in context) jobs = context.jobs;
+        if ("resources" in context) resources = context.resources;
+        if ("techIds" in context) techIds = context.techIds;
+        if ("buildingIds" in context) buildingIds = context.buildingIds;
+        if ("arpaIds" in context) arpaIds = context.arpaIds;
+        if ("MechManager" in context) MechManager = context.MechManager;
+        if ("FleetManagerOuter" in context)
+          FleetManagerOuter = context.FleetManagerOuter;
+      },
+    });
 
   const { updateOverrides } = createOverrideSettings({
     getSafeMode: () => safeMode,
@@ -5161,22 +5235,23 @@ function startEvolveRuntimeComposition(
     genusOpposition: customRaceGenusOpposition,
   });
 
-  publishTestSurface({
-    customRaceModel: {
-      customRaceRankCost,
-      customRaceGeneBalance,
-      customRaceRankOptions,
-      customRaceTraitEffect,
-      customRaceEditorTraits,
-      customRaceDraftFromPreset,
-    },
-    setCustomRaceModelTestContext(context) {
-      game = context.game;
-      poly = context.poly;
-      resources = context.resources;
-      races = context.races;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      customRaceModel: {
+        customRaceRankCost,
+        customRaceGeneBalance,
+        customRaceRankOptions,
+        customRaceTraitEffect,
+        customRaceEditorTraits,
+        customRaceDraftFromPreset,
+      },
+      setCustomRaceModelTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        resources = context.resources;
+        races = context.races;
+      },
+    });
 
   const {
     showCustomRaceImportStatus,
@@ -5207,26 +5282,27 @@ function startEvolveRuntimeComposition(
     getAlert: () => (message) => runtimeEnvironment.alert(message),
   });
 
-  publishTestSurface({
-    customRaceUI: {
-      showCustomRaceImportStatus,
-      getCustomRacePreset,
-      refreshCustomRacePresetSelectors,
-      buildCustomRacePresetEditor,
-      importCustomRaceIntoLab,
-      automateLab,
-    },
-    setCustomRaceUITestContext(context) {
-      if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-      if ("settings" in context) settings = context.settings;
-      if ("state" in context) state = context.state;
-      if ("game" in context) game = context.game;
-      if ("poly" in context) poly = context.poly;
-      if ("resources" in context) resources = context.resources;
-      if ("races" in context) races = context.races;
-      if ("win" in context) win = context.win;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      customRaceUI: {
+        showCustomRaceImportStatus,
+        getCustomRacePreset,
+        refreshCustomRacePresetSelectors,
+        buildCustomRacePresetEditor,
+        importCustomRaceIntoLab,
+        automateLab,
+      },
+      setCustomRaceUITestContext(context) {
+        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+        if ("settings" in context) settings = context.settings;
+        if ("state" in context) state = context.state;
+        if ("game" in context) game = context.game;
+        if ("poly" in context) poly = context.poly;
+        if ("resources" in context) resources = context.resources;
+        if ("races" in context) races = context.races;
+        if ("win" in context) win = context.win;
+      },
+    });
 
   let tickTestControllers;
   const tickControllers = {
@@ -5299,20 +5375,21 @@ function startEvolveRuntimeComposition(
     diagnostics,
   });
 
-  publishTestSurface({
-    automate: () => automate(),
-    setTickTestContext(context) {
-      settings = context.settings;
-      state = context.state;
-      game = context.game;
-      resources = context.resources;
-      KeyManager = context.KeyManager;
-      NaniteManager = context.NaniteManager;
-      SupplyManager = context.SupplyManager;
-      EjectManager = context.EjectManager;
-      tickTestControllers = context.controllers;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      automate: () => automate(),
+      setTickTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        KeyManager = context.KeyManager;
+        NaniteManager = context.NaniteManager;
+        SupplyManager = context.SupplyManager;
+        EjectManager = context.EjectManager;
+        tickTestControllers = context.controllers;
+      },
+    });
 
   const {
     updateDebugData,
@@ -5332,20 +5409,21 @@ function startEvolveRuntimeComposition(
     getScriptVersion: () => userscriptEnvironment.getScriptVersion(),
   });
 
-  publishTestSurface({
-    scriptRuntimeUI: {
-      updateDebugData,
-      addScriptStyle,
-      checkIgnoredError,
-      displayScriptWarningNode,
-      addErrorHandler,
-    },
-    setScriptRuntimeUITestContext(context) {
-      if ("state" in context) state = context.state;
-      if ("game" in context) game = context.game;
-      if ("win" in context) win = context.win;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      scriptRuntimeUI: {
+        updateDebugData,
+        addScriptStyle,
+        checkIgnoredError,
+        displayScriptWarningNode,
+        addErrorHandler,
+      },
+      setScriptRuntimeUITestContext(context) {
+        if ("state" in context) state = context.state;
+        if ("game" in context) game = context.game;
+        if ("win" in context) win = context.win;
+      },
+    });
 
   const {
     prestigeTypes,
@@ -5383,61 +5461,61 @@ function startEvolveRuntimeComposition(
     readGovernor: () => getGovernor,
   });
 
-  publishTestSurface({
-    settingsControls: {
-      removeScriptSettings,
-      buildScriptSettings,
-      buildImportExport,
-      buildSettingsSectionImpl,
-      buildSettingsSection,
-      buildSettingsSection2,
-      genericResetFunction,
-      addStandardHeading,
-      addSettingsHeader1,
-      addSettingsHeader2,
-      buildSelectOptions,
-      openOverrideModal,
-      buildOverrideSettings,
-      buildInputNode,
-      buildInputNodeForDisplay,
-      changeDisplayInputNode,
-      buildConditionType,
-      buildConditionArg,
-      buildConditionComparator,
-      buildConditionRemove,
-      buildConditionDuplicate,
-      buildConditionEvalize,
-      buildConditionRet,
-      buildObjectListInput,
-      addSettingsToggle,
-      addSettingsNumber,
-      addSettingsString,
-      addSettingsSelect,
-      addSettingsList,
-      addInputCallbacks,
-      addTableInput,
-      addToggleCallbacks,
-      addTableToggle,
-      buildTableLabel,
-      resetCheckbox,
-      evaluateCheck: _,
-      prestigeTypes,
-      prestigeOptions,
-      checkCompare,
-      checkCustom,
-      argType,
-      checkTypes,
-    },
-    setSettingsControlsTestContext(context) {
-      if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-      if ("settings" in context) settings = context.settings;
-      if ("game" in context) game = context.game;
-      if ("state" in context) state = context.state;
-      if ("win" in context) win = context.win;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      settingsControls: {
+        removeScriptSettings,
+        buildScriptSettings,
+        buildImportExport,
+        buildSettingsSectionImpl,
+        buildSettingsSection,
+        buildSettingsSection2,
+        genericResetFunction,
+        addStandardHeading,
+        addSettingsHeader1,
+        addSettingsHeader2,
+        buildSelectOptions,
+        openOverrideModal,
+        buildOverrideSettings,
+        buildInputNode,
+        buildInputNodeForDisplay,
+        changeDisplayInputNode,
+        buildConditionType,
+        buildConditionArg,
+        buildConditionComparator,
+        buildConditionRemove,
+        buildConditionDuplicate,
+        buildConditionEvalize,
+        buildConditionRet,
+        buildObjectListInput,
+        addSettingsToggle,
+        addSettingsNumber,
+        addSettingsString,
+        addSettingsSelect,
+        addSettingsList,
+        addInputCallbacks,
+        addTableInput,
+        addToggleCallbacks,
+        addTableToggle,
+        buildTableLabel,
+        resetCheckbox,
+        evaluateCheck: _,
+        prestigeTypes,
+        prestigeOptions,
+        checkCompare,
+        checkCustom,
+        argType,
+        checkTypes,
+      },
+      setSettingsControlsTestContext(context) {
+        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+        if ("settings" in context) settings = context.settings;
+        if ("game" in context) game = context.game;
+        if ("state" in context) state = context.state;
+        if ("win" in context) win = context.win;
+      },
+    });
 
-  let interfaceSettingsTestActions;
   const interfaceSettingsActions = {
     buildSettingsSection,
     addSettingsToggle,
@@ -5463,30 +5541,43 @@ function startEvolveRuntimeComposition(
   };
 
   const getInterfaceSettingsActions = () => {
-    if (!interfaceSettingsTestActions) {
+    if (!getTestContext("interfaceSettings")?.actions) {
       return interfaceSettingsActions;
     }
 
     return {
-      buildSettingsSection: interfaceSettingsTestActions.buildSettingsSection,
-      addSettingsToggle: interfaceSettingsTestActions.addSettingsToggle,
-      addSettingsHeader1: interfaceSettingsTestActions.addSettingsHeader1,
+      buildSettingsSection:
+        getTestContext("interfaceSettings")?.actions.buildSettingsSection,
+      addSettingsToggle:
+        getTestContext("interfaceSettings")?.actions.addSettingsToggle,
+      addSettingsHeader1:
+        getTestContext("interfaceSettings")?.actions.addSettingsHeader1,
       controlEffects: {
         activeTargetsUI: {
-          enabled: interfaceSettingsTestActions.buildActiveTargetsUI,
-          disabled: interfaceSettingsTestActions.removeActiveTargetsUI,
+          enabled:
+            getTestContext("interfaceSettings")?.actions.buildActiveTargetsUI,
+          disabled:
+            getTestContext("interfaceSettings")?.actions.removeActiveTargetsUI,
         },
         buildPlannerUI: {
-          enabled: interfaceSettingsTestActions.buildBuildPlannerUI,
-          disabled: interfaceSettingsTestActions.removeBuildPlannerUI,
+          enabled:
+            getTestContext("interfaceSettings")?.actions.buildBuildPlannerUI,
+          disabled:
+            getTestContext("interfaceSettings")?.actions.removeBuildPlannerUI,
         },
         displayPrestigeTypeInTopBar: {
-          enabled: interfaceSettingsTestActions.updatePrestigeInTopBar,
-          disabled: interfaceSettingsTestActions.updatePrestigeInTopBar,
+          enabled:
+            getTestContext("interfaceSettings")?.actions.updatePrestigeInTopBar,
+          disabled:
+            getTestContext("interfaceSettings")?.actions.updatePrestigeInTopBar,
         },
         displayTotalDaysTypeInTopBar: {
-          enabled: interfaceSettingsTestActions.updateTotalDaysInTopBar,
-          disabled: interfaceSettingsTestActions.updateTotalDaysInTopBar,
+          enabled:
+            getTestContext("interfaceSettings")?.actions
+              .updateTotalDaysInTopBar,
+          disabled:
+            getTestContext("interfaceSettings")?.actions
+              .updateTotalDaysInTopBar,
         },
       },
     };
@@ -5508,13 +5599,13 @@ function startEvolveRuntimeComposition(
     writer: {
       resetToDefaults: () =>
         (
-          interfaceSettingsTestActions?.resetInterfaceSettings ??
-          resetInterfaceSettings
+          getTestContext("interfaceSettings")?.actions
+            ?.resetInterfaceSettings ?? resetInterfaceSettings
         )(true),
       persist: () =>
         (
-          interfaceSettingsTestActions?.updateSettingsFromState ??
-          updateSettingsFromState
+          getTestContext("interfaceSettings")?.actions
+            ?.updateSettingsFromState ?? updateSettingsFromState
         )(),
     },
     reader: {
@@ -5528,25 +5619,25 @@ function startEvolveRuntimeComposition(
         interfaceSettingsBrowserAdapter.updateInterfaceSettingsContent(),
       syncActiveTargetsUI: (enabled) =>
         (enabled
-          ? (interfaceSettingsTestActions?.buildActiveTargetsUI ??
-              buildActiveTargetsUI)
-          : (interfaceSettingsTestActions?.removeActiveTargetsUI ??
-              removeActiveTargetsUI))(),
+          ? (getTestContext("interfaceSettings")?.actions
+              ?.buildActiveTargetsUI ?? buildActiveTargetsUI)
+          : (getTestContext("interfaceSettings")?.actions
+              ?.removeActiveTargetsUI ?? removeActiveTargetsUI))(),
       syncBuildPlannerUI: (enabled) =>
         (enabled
-          ? (interfaceSettingsTestActions?.buildBuildPlannerUI ??
-              buildBuildPlannerUI)
-          : (interfaceSettingsTestActions?.removeBuildPlannerUI ??
-              removeBuildPlannerUI))(),
+          ? (getTestContext("interfaceSettings")?.actions
+              ?.buildBuildPlannerUI ?? buildBuildPlannerUI)
+          : (getTestContext("interfaceSettings")?.actions
+              ?.removeBuildPlannerUI ?? removeBuildPlannerUI))(),
       updatePrestigeInTopBar: () =>
         (
-          interfaceSettingsTestActions?.updatePrestigeInTopBar ??
-          updatePrestigeInTopBar
+          getTestContext("interfaceSettings")?.actions
+            ?.updatePrestigeInTopBar ?? updatePrestigeInTopBar
         )(),
       updateTotalDaysInTopBar: () =>
         (
-          interfaceSettingsTestActions?.updateTotalDaysInTopBar ??
-          updateTotalDaysInTopBar
+          getTestContext("interfaceSettings")?.actions
+            ?.updateTotalDaysInTopBar ?? updateTotalDaysInTopBar
         )(),
     },
   });
@@ -5554,16 +5645,17 @@ function startEvolveRuntimeComposition(
   const { buildInterfaceSettings, updateInterfaceSettingsContent } =
     interfaceSettingsBrowserAdapter;
 
-  publishTestSurface({
-    interfaceSettings: {
-      buildInterfaceSettings,
-      updateInterfaceSettingsContent,
-    },
-    setInterfaceSettingsTestContext(context) {
-      settingsRaw = context.settingsRaw;
-      interfaceSettingsTestActions = context.actions;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      interfaceSettings: {
+        buildInterfaceSettings,
+        updateInterfaceSettingsContent,
+      },
+      setInterfaceSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        setTestContext("interfaceSettings", context);
+      },
+    });
 
   let stateLogSettingsIntentHandler;
   const stateLogSettingsBrowserAdapter = createStateLogSettingsBrowserAdapter({
@@ -5587,15 +5679,16 @@ function startEvolveRuntimeComposition(
   const { buildStateLogSettings, updateStateLogSettingsContent } =
     stateLogSettingsBrowserAdapter;
 
-  publishTestSurface({
-    stateLogSettings: {
-      buildStateLogSettings,
-      updateStateLogSettingsContent,
-    },
-    setStateLogSettingsTestContext(context) {
-      settingsRaw = context.settingsRaw;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      stateLogSettings: {
+        buildStateLogSettings,
+        updateStateLogSettingsContent,
+      },
+      setStateLogSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+      },
+    });
 
   const { calculateMechStats } = createMechStats({
     getUiSurface: () => gameUiSurface,
@@ -5606,166 +5699,121 @@ function startEvolveRuntimeComposition(
     average,
   });
 
-  publishTestSurface({
-    calculateMechStats,
-    setMechStatsTestContext(context) {
-      game = context.game;
-      poly = context.poly;
-      MechManager = context.MechManager;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      calculateMechStats,
+      setMechStatsTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        MechManager = context.MechManager;
+      },
+    });
 
-  publishTestSurface({
-    evolutionSettings: evolutionSettingsBrowserAdapter,
-    setEvolutionSettingsTestContext(context) {
-      evolutionSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    prestigeSettings: prestigeSettingsBrowserAdapter,
-    setPrestigeSettingsTestContext(context) {
-      prestigeSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    triggerSettings: triggerSettingsBrowserAdapter,
-    setTriggerSettingsTestContext(context) {
-      triggerSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    fleetSettings: fleetSettingsBrowserAdapter,
-    setFleetSettingsTestContext(context) {
-      fleetSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    ejectorSettings: ejectorSettingsBrowserAdapter,
-    setEjectorSettingsTestContext(context) {
-      ejectorSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    marketSettings: marketSettingsBrowserAdapter,
-    setMarketSettingsTestContext(context) {
-      marketSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    warSettings: warSettingsBrowserAdapter,
-    setWarSettingsTestContext(context) {
-      warSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    hellSettings: hellSettingsBrowserAdapter,
-    setHellSettingsTestContext(context) {
-      hellSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    mechSettings: mechSettingsBrowserAdapter,
-    setMechSettingsTestContext(context) {
-      mechSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
-    setChallengeHelperSettingsTestContext(context) {
-      challengeHelperSettingsTestActions = context;
-    },
-  });
-  publishTestSurface({
-    governmentSettings: governmentSettingsBrowserAdapter,
-    setGovernmentSettingsTestContext(context) {
-      governmentSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    planetSettings: planetSettingsBrowserAdapter,
-    setPlanetSettingsTestContext(context) {
-      planetSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    projectSettings: projectSettingsBrowserAdapter,
-    setProjectSettingsTestContext(context) {
-      projectSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    storageSettings: storageSettingsBrowserAdapter,
-    setStorageSettingsTestContext(context) {
-      storageSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    magicSettings: magicSettingsBrowserAdapter,
-    setMagicSettingsTestContext(context) {
-      magicSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    jobSettings: jobSettingsBrowserAdapter,
-    setJobSettingsTestContext(context) {
-      jobSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    weightingSettings: weightingSettingsBrowserAdapter,
-    setWeightingSettingsTestContext(context) {
-      weightingSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    buildingSettings: buildingSettingsBrowserAdapter,
-    setBuildingSettingsTestContext(context) {
-      buildingSettingsTestContext = context;
-    },
-  });
-  publishTestSurface({
-    optionsModal: optionsModalBrowserAdapter,
-    setOptionsModalTestContext(context) {
-      optionsModalTestContext = context;
-    },
-  });
-  publishTestSurface({
-    achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
-    setAchievementGuardSettingsTestContext(context) {
-      achievementGuardSettingsTestActions = context;
-    },
-  });
-  publishTestSurface({
-    authoritySettings: authoritySettingsBrowserAdapter,
-    setAuthoritySettingsTestContext(context) {
-      authoritySettingsTestActions = context;
-    },
-  });
-  publishTestSurface({
-    generalSettings: generalSettingsBrowserAdapter,
-    setGeneralSettingsTestContext(context) {
-      generalSettingsTestActions = context;
-    },
-  });
-  publishTestSurface({
-    researchSettings: researchSettingsBrowserAdapter,
-    setResearchSettingsTestContext(context) {
-      researchSettingsTestContext = context;
-    },
-  });
-
-  let traitSettingsTestContext;
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("evolutionSettings", {
+      evolutionSettings: evolutionSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("prestigeSettings", {
+      prestigeSettings: prestigeSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("triggerSettings", {
+      triggerSettings: triggerSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("fleetSettings", {
+      fleetSettings: fleetSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("ejectorSettings", {
+      ejectorSettings: ejectorSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("marketSettings", {
+      marketSettings: marketSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("warSettings", {
+      warSettings: warSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("hellSettings", {
+      hellSettings: hellSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("mechSettings", {
+      mechSettings: mechSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("challengeHelperSettings", {
+      challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("governmentSettings", {
+      governmentSettings: governmentSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("planetSettings", {
+      planetSettings: planetSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("projectSettings", {
+      projectSettings: projectSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("storageSettings", {
+      storageSettings: storageSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("magicSettings", {
+      magicSettings: magicSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("jobSettings", {
+      jobSettings: jobSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("weightingSettings", {
+      weightingSettings: weightingSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("buildingSettings", {
+      buildingSettings: buildingSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("optionsModal", {
+      optionsModal: optionsModalBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("achievementGuardSettings", {
+      achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("authoritySettings", {
+      authoritySettings: authoritySettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("generalSettings", {
+      generalSettings: generalSettingsBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("researchSettings", {
+      researchSettings: researchSettingsBrowserAdapter,
+    });
   const traitSettingsEvolveAdapter = createTraitSettingsEvolveAdapter({
-    getSettingsRaw: () => traitSettingsTestContext?.settingsRaw ?? settingsRaw,
-    getState: () => traitSettingsTestContext?.state ?? state,
-    getGame: () => traitSettingsTestContext?.game ?? game,
-    getRaces: () => traitSettingsTestContext?.races ?? races,
-    getResources: () => traitSettingsTestContext?.resources ?? resources,
-    getPoly: () => traitSettingsTestContext?.poly ?? poly,
+    getSettingsRaw: () =>
+      getTestContext("traitSettings")?.settingsRaw ?? settingsRaw,
+    getState: () => getTestContext("traitSettings")?.state ?? state,
+    getGame: () => getTestContext("traitSettings")?.game ?? game,
+    getRaces: () => getTestContext("traitSettings")?.races ?? races,
+    getResources: () => getTestContext("traitSettings")?.resources ?? resources,
+    getPoly: () => getTestContext("traitSettings")?.poly ?? poly,
     getMinorTraitManager: () =>
-      traitSettingsTestContext?.MinorTraitManager ?? MinorTraitManager,
+      getTestContext("traitSettings")?.MinorTraitManager ?? MinorTraitManager,
     getMutableTraitManager: () =>
-      traitSettingsTestContext?.MutableTraitManager ?? MutableTraitManager,
+      getTestContext("traitSettings")?.MutableTraitManager ??
+      MutableTraitManager,
     getOcularPowerData: () => ocularPowerData,
     getWishData: () => wishData,
     getMutationCostMultipliers: () => mutationCostMultipliers,
@@ -5792,17 +5840,17 @@ function startEvolveRuntimeComposition(
     writer: {
       resetMinorTraits: () =>
         (
-          traitSettingsTestContext?.resetMinorTraitSettings ??
+          getTestContext("traitSettings")?.resetMinorTraitSettings ??
           resetMinorTraitSettings
         )(true),
       resetMutableTraits: () =>
         (
-          traitSettingsTestContext?.resetMutableTraitSettings ??
+          getTestContext("traitSettings")?.resetMutableTraitSettings ??
           resetMutableTraitSettings
         )(true),
       persist: () =>
         (
-          traitSettingsTestContext?.updateSettingsFromState ??
+          getTestContext("traitSettings")?.updateSettingsFromState ??
           updateSettingsFromState
         )(),
       clearEvolutionTarget: () =>
@@ -5818,7 +5866,7 @@ function startEvolveRuntimeComposition(
       traitSettingsBrowserAdapter.updateTraitSettingsContent(),
     effects: {
       resetCheckboxes: () =>
-        (traitSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+        (getTestContext("traitSettings")?.resetCheckbox ?? resetCheckbox)(
           "autoMinorTrait",
           "autoMutateTraits",
           "autoGenetics",
@@ -5832,20 +5880,20 @@ function startEvolveRuntimeComposition(
     makeToggleSwitchesMutuallyExclusive,
   } = traitSettingsBrowserAdapter;
 
-  publishTestSurface({
-    traitSettings: {
-      buildTraitSettings,
-      updateImitateWarning,
-      updateTraitSettingsContent,
-      makeToggleSwitchesMutuallyExclusive,
-    },
-    setTraitSettingsTestContext(context) {
-      settingsRaw = context.settingsRaw;
-      traitSettingsTestContext = context;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      traitSettings: {
+        buildTraitSettings,
+        updateImitateWarning,
+        updateTraitSettingsContent,
+        makeToggleSwitchesMutuallyExclusive,
+      },
+      setTraitSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        setTestContext("traitSettings", context);
+      },
+    });
 
-  let uiRefreshTestActions;
   const uiRefreshActions = {
     createOptionsModal,
     updateOptionsUI,
@@ -5885,7 +5933,9 @@ function startEvolveRuntimeComposition(
     getResources: () => resources,
     getJQuery: () => $,
     getNiceNumber: (value) =>
-      (uiRefreshTestActions ?? uiRefreshActions).getNiceNumber(value),
+      (getTestContext("uiRefresh")?.actions ?? uiRefreshActions).getNiceNumber(
+        value,
+      ),
   });
 
   const { renderPreviousGameStats } = createPreviousGameStats({
@@ -5901,7 +5951,7 @@ function startEvolveRuntimeComposition(
     getState: () => state,
     getGame: () => game,
     getJQuery: () => $,
-    getActions: () => uiRefreshTestActions ?? uiRefreshActions,
+    getActions: () => getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
   });
 
   const { ensureAutomationContainer } = createAutomationContainer({
@@ -5909,12 +5959,12 @@ function startEvolveRuntimeComposition(
     getJQuery: () => $,
     getSafeMode: () => safeMode,
     getOverrideKeyLabel: () => overrideKeyLabel,
-    getActions: () => uiRefreshTestActions ?? uiRefreshActions,
+    getActions: () => getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
   });
 
   const { updateUI } = createUIRefresh({
     getUiSurface: () => gameUiSurface,
-    getActions: () => uiRefreshTestActions ?? uiRefreshActions,
+    getActions: () => getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
     getPhases: () => ({
       ensureAutomationContainer,
       repairRuntimeAdapters,
@@ -5923,91 +5973,94 @@ function startEvolveRuntimeComposition(
     }),
   });
 
-  publishTestSurface({
-    updateUI: () => updateUI(),
-    setUIRefreshTestContext(context) {
-      settings = context.settings;
-      settingsRaw = context.settingsRaw;
-      state = context.state;
-      game = context.game;
-      resources = context.resources;
-      win = context.win;
-      safeMode = context.safeMode;
-      overrideKeyLabel = context.overrideKeyLabel;
-      uiRefreshTestActions = context.actions;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      updateUI: () => updateUI(),
+      setUIRefreshTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        win = context.win;
+        safeMode = context.safeMode;
+        overrideKeyLabel = context.overrideKeyLabel;
+        setTestContext("uiRefresh", context);
+      },
+    });
 
-  publishTestSurface({
-    prestigeTopBar: prestigeTopBarBrowserAdapter,
-    setPrestigeTopBarTestContext(context) {
-      prestigeTopBarTestContext = context;
-    },
-    totalDaysTopBar: totalDaysTopBarBrowserAdapter,
-    setTotalDaysTopBarTestContext(context) {
-      totalDaysTopBarTestContext = context;
-    },
-    ejectToggles: ejectToggleBrowserAdapter,
-    setEjectTogglesTestContext(context) {
-      ejectTogglesTestContext = context;
-    },
-    supplyToggles: supplyToggleBrowserAdapter,
-    setSupplyTogglesTestContext(context) {
-      supplyTogglesTestContext = context;
-    },
-    craftToggles: craftToggleBrowserAdapter,
-    setCraftTogglesTestContext(context) {
-      craftTogglesTestContext = context;
-    },
-    arpaToggles: arpaToggleBrowserAdapter,
-    setArpaTogglesTestContext(context) {
-      arpaTogglesTestContext = context;
-    },
-    buildingToggles: buildingToggleBrowserAdapter,
-    setBuildingTogglesTestContext(context) {
-      buildingTogglesTestContext = context;
-    },
-    resourceToggles: resourceToggleBrowserAdapter,
-    setResourceTogglesTestContext(context) {
-      resourceToggleTestContext = context;
-    },
-    mechInfo: mechInfoBrowserAdapter,
-    setMechInfoTestContext(context) {
-      mechInfoTestContext = context;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("prestigeTopBar", {
+      prestigeTopBar: prestigeTopBarBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("totalDaysTopBar", {
+      totalDaysTopBar: totalDaysTopBarBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("ejectToggles", {
+      ejectToggles: ejectToggleBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("supplyToggles", {
+      supplyToggles: supplyToggleBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("craftToggles", {
+      craftToggles: craftToggleBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("arpaToggles", {
+      arpaToggles: arpaToggleBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("buildingToggles", {
+      buildingToggles: buildingToggleBrowserAdapter,
+    });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext(
+      "resourceToggle",
+      {
+        resourceToggles: resourceToggleBrowserAdapter,
+      },
+      "resourceToggles",
+    );
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("mechInfo", {
+      mechInfo: mechInfoBrowserAdapter,
+    });
 
-  publishTestSurface({
-    loggingSettings: loggingSettingsBrowserAdapter,
-    setLoggingSettingsTestContext(context) {
-      loggingSettingsTestContext = context;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.addContext("loggingSettings", {
+      loggingSettings: loggingSettingsBrowserAdapter,
+    });
 
-  publishTestSurface({
-    finalInlineUiBoundaries: {
-      updateActiveTargetsUI,
-      buildActiveTargetsUI,
-      removeActiveTargetsUI,
-      buildBuildPlannerUI,
-      removeBuildPlannerUI,
-      createMechInfo,
-      removeMechInfo,
-      createMarketToggles,
-      removeMarketToggles,
-      createStorageToggles,
-      removeStorageToggles,
-    },
-    setFinalInlineUiBoundariesTestContext(context) {
-      if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-      if ("state" in context) state = context.state;
-      if ("game" in context) game = context.game;
-      if ("resources" in context) resources = context.resources;
-      if ("MarketManager" in context) MarketManager = context.MarketManager;
-      if ("StorageManager" in context) StorageManager = context.StorageManager;
-      if ("MechManager" in context) MechManager = context.MechManager;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      finalInlineUiBoundaries: {
+        updateActiveTargetsUI,
+        buildActiveTargetsUI,
+        removeActiveTargetsUI,
+        buildBuildPlannerUI,
+        removeBuildPlannerUI,
+        createMechInfo,
+        removeMechInfo,
+        createMarketToggles,
+        removeMarketToggles,
+        createStorageToggles,
+        removeStorageToggles,
+      },
+      setFinalInlineUiBoundariesTestContext(context) {
+        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+        if ("state" in context) state = context.state;
+        if ("game" in context) game = context.game;
+        if ("resources" in context) resources = context.resources;
+        if ("MarketManager" in context) MarketManager = context.MarketManager;
+        if ("StorageManager" in context)
+          StorageManager = context.StorageManager;
+        if ("MechManager" in context) MechManager = context.MechManager;
+      },
+    });
 
   const { sorterHelper } = createSortHelper({
     getJQuery: () => $,
@@ -6016,105 +6069,116 @@ function startEvolveRuntimeComposition(
       value instanceof runtimeEnvironment.HTMLElement,
   });
 
-  publishTestSurface({ sorterHelper });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({ sorterHelper });
 
-  publishTestSurface({
-    gameRates: {
-      ticksPerSecond,
-      getHealingRate,
-      getFoodConsume,
-      getGrowthRate,
-      getResourcesPerClick,
-    },
-    setGameRateTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      buildings = context.buildings;
-      state = context.state;
-      resources = context.resources;
-      jobs = context.jobs;
-      traitVal = context.traitVal;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      gameRates: {
+        ticksPerSecond,
+        getHealingRate,
+        getFoodConsume,
+        getGrowthRate,
+        getResourcesPerClick,
+      },
+      setGameRateTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        buildings = context.buildings;
+        state = context.state;
+        resources = context.resources;
+        jobs = context.jobs;
+        traitVal = context.traitVal;
+      },
+    });
 
-  publishTestSurface({
-    getCostConflict,
-    setCostConflictTestContext(context) {
-      state = context.state;
-      resources = context.resources;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      getCostConflict,
+      setCostConflictTestContext(context) {
+        state = context.state;
+        resources = context.resources;
+      },
+    });
 
-  if (characterizationSurface)
-    characterizationSurface.numberFormatting = {
-      getRealNumber,
-      getNumberString,
-      getNiceNumber,
-    };
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      numberFormatting: {
+        getRealNumber,
+        getNumberString,
+        getNiceNumber,
+      },
+    });
 
-  publishTestSurface({
-    runtimeQueries: { getGovernor, haveTask, haveTech, isEarlyGame },
-    setRuntimeQueryTestContext(context) {
-      game = context.game;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      runtimeQueries: { getGovernor, haveTask, haveTech, isEarlyGame },
+      setRuntimeQueryTestContext(context) {
+        game = context.game;
+      },
+    });
 
-  publishTestSurface({
-    raceProfile: { isHungryRace, isDemonRace, isLumberRace, getOccCosts },
-    setRaceProfileTestContext(context) {
-      game = context.game;
-      traitVal = context.traitVal;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      raceProfile: { isHungryRace, isDemonRace, isLumberRace, getOccCosts },
+      setRaceProfileTestContext(context) {
+        game = context.game;
+        traitVal = context.traitVal;
+      },
+    });
 
-  publishTestSurface({
-    foreignGovernment: { getGovName, getGovPower },
-    setForeignGovernmentTestContext(context) {
-      game = context.game;
-      poly = context.poly;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      foreignGovernment: { getGovName, getGovPower },
+      setForeignGovernmentTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+      },
+    });
 
-  publishTestSurface({
-    fastEvaluator: {
-      fastEval,
-      cacheSize: fastEvalCacheSize,
-    },
-    setFastEvaluatorTestContext(context) {
-      if ("settings" in context) settings = context.settings;
-      if ("state" in context) state = context.state;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      fastEvaluator: {
+        fastEval,
+        cacheSize: fastEvalCacheSize,
+      },
+      setFastEvaluatorTestContext(context) {
+        if ("settings" in context) settings = context.settings;
+        if ("state" in context) state = context.state;
+      },
+    });
 
-  publishTestSurface({
-    propertyHelpers: { normalizeProperties, addProps },
-    setPropertyHelperTestContext(context) {
-      settings = context.settings;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      propertyHelpers: { normalizeProperties, addProps },
+      setPropertyHelperTestContext(context) {
+        settings = context.settings;
+      },
+    });
 
-  publishTestSurface({
-    browserRuntime: {
-      callVueMethod,
-      getMainVue,
-      getVueById,
-      getVueElement,
-      resolveVueMethod,
-      triggerFileDownload,
-    },
-    setBrowserRuntimeTestContext(context) {
-      win = context.win;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      browserRuntime: {
+        callVueMethod,
+        getMainVue,
+        getVueById,
+        getVueElement,
+        resolveVueMethod,
+        triggerFileDownload,
+      },
+      setBrowserRuntimeTestContext(context) {
+        win = context.win;
+      },
+    });
 
-  publishTestSurface({
-    traitVal,
-    setTraitValueTestContext(context) {
-      game = context.game;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      traitVal,
+      setTraitValueTestContext(context) {
+        game = context.game;
+      },
+    });
 
-  let settingsTransferTestActions;
   const settingsTransferActions = {
     updateStandAloneSettings,
     updateStateFromSettings,
@@ -6139,19 +6203,21 @@ function startEvolveRuntimeComposition(
     },
     getJQuery: () => $,
     getGameLog: () => GameLog,
-    getActions: () => settingsTransferTestActions ?? settingsTransferActions,
+    getActions: () =>
+      getTestContext("settingsTransfer")?.actions ?? settingsTransferActions,
     confirmImport: (message) => runtimeEnvironment.confirm(message),
     logToConsole: (message) => runtimeEnvironment.log(message),
   });
 
-  publishTestSurface({
-    settingsTransfer: { importSettings, exportSettings },
-    setSettingsTransferTestContext(context) {
-      settingsRaw = context.settingsRaw;
-      GameLog = context.GameLog;
-      settingsTransferTestActions = context.actions;
-    },
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      settingsTransfer: { importSettings, exportSettings },
+      setSettingsTransferTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        GameLog = context.GameLog;
+        setTestContext("settingsTransfer", context);
+      },
+    });
 
   let poly = createGameCompatibility({
     getGame: () => game,
@@ -6166,10 +6232,11 @@ function startEvolveRuntimeComposition(
     getDate: () => runtimeEnvironment.createDate(),
   });
 
-  publishTestSurface({
-    gameCompatibility: poly,
-  });
+  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
+    testSurface?.add({
+      gameCompatibility: poly,
+    });
 
   $().ready(mainAutoEvolveScript);
-  return characterizationSurface ?? {};
+  return testSurface?.finish() ?? {};
 }
