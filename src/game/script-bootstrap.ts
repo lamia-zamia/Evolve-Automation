@@ -1,36 +1,121 @@
 import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
 import type { GamePageShellPort } from "../ports/game-page-shell.ts";
 
-type AnyFunction = (...args: any[]) => any;
-type AnyRecord = Record<string, any>;
-
+type ScriptFunction = (...args: unknown[]) => unknown;
+type Lookup = Record<string, unknown>;
+type Building = {
+  _vueBinding: string;
+  isMission: () => boolean;
+};
+type Project = { _vueBinding: string };
+type Job = { _originalId: string };
+type Trigger = { complete: boolean };
+type GameSurface = {
+  actions: { tech: Record<string, { id: string }> };
+  global: {
+    race?: unknown;
+    settings: { tabLoad: boolean };
+    stats: { days: number };
+  };
+  breakdown: { p: { consume: unknown } };
+  adjustCosts: (action: unknown, wiki?: unknown) => unknown;
+  loc: (key: string, variables?: unknown) => string;
+  messageQueue: (
+    message: unknown,
+    color: unknown,
+    doNotRepeat: unknown,
+    tags: unknown,
+  ) => unknown;
+  shipCosts: (blueprint: unknown) => unknown;
+};
+type PageWindow = {
+  evolve: GameSurface | null;
+  importAutomationSettings?: ScriptFunction;
+  exportAutomationSettings?: ScriptFunction;
+  eaExportStateLog?: () => unknown;
+};
+type UserscriptEnvironment = {
+  capabilities: {
+    hasPageWindow: boolean;
+    needsSandboxBridge: boolean;
+  };
+  pageWindow: PageWindow;
+  exportToPage: <T>(fn: T) => T;
+};
+type JQuerySurface = { noConflict: () => void };
+type StateSurface = {
+  missionBuildingList: Building[];
+  warnDebug: boolean;
+  warnPreload: boolean;
+  gameTicked: boolean;
+  stateLog?: unknown;
+};
+type ActionsSurface = {
+  updateStandAloneSettings: () => void;
+  updateStateFromSettings: () => void;
+  updateSettingsFromState: () => void;
+  verifyGameActions: () => void;
+  buildFilterRegExp: () => void;
+  schedule: (fn: ScriptFunction, delay?: number) => void;
+  alert: (message: string) => void;
+  addErrorHandler: () => void;
+  addScriptStyle: () => void;
+  keyManagerInit: () => void;
+  initialiseState: () => void;
+  initialiseRaces: () => void;
+  updateOverrides: () => void;
+  automate: ScriptFunction;
+  automateLab: ScriptFunction;
+  repeat: (fn: ScriptFunction, interval: number) => void;
+  importSettings: ScriptFunction;
+  exportSettings: ScriptFunction;
+  triggerFileDownload: (content: string, filename: string) => void;
+  loadStateLog: () => unknown;
+  displayScriptWarningNode: (
+    title: string,
+    message: string,
+    detail: null,
+  ) => void;
+};
+type PolySurface = {
+  adjustCosts: (action: unknown, wiki?: unknown) => unknown;
+  loc: (key: string, variables?: unknown) => string;
+  messageQueue: (
+    message: unknown,
+    color: unknown,
+    doNotRepeat: unknown,
+    tags: unknown,
+  ) => unknown;
+  shipCosts: (blueprint: unknown) => unknown;
+};
+type Technology = new (id: string) => unknown;
 type ScriptBootstrapDependencies = {
-  getGame: () => AnyRecord | null;
-  getTechIds: () => AnyRecord;
-  getTechnology: () => any;
-  getBuildings: () => AnyRecord;
-  getBuildingIds: () => AnyRecord;
-  getState: () => AnyRecord;
-  getProjects: () => AnyRecord;
-  getArpaIds: () => AnyRecord;
-  getJobs: () => AnyRecord;
-  getJobIds: () => AnyRecord;
-  getCrafter: () => AnyRecord;
-  getTriggerManager: () => AnyRecord;
+  getGame: () => GameSurface | null;
+  getTechIds: () => Lookup;
+  getTechnology: () => Technology;
+  getBuildings: () => Record<string, Building>;
+  getBuildingIds: () => Lookup;
+  getState: () => StateSurface;
+  getProjects: () => Record<string, Project>;
+  getArpaIds: () => Lookup;
+  getJobs: () => Record<string, Job>;
+  getJobIds: () => Lookup;
+  getCrafter: () => Record<string, Job>;
+  getTriggerManager: () => { priorityList: Trigger[] };
   getCheckActions: () => boolean;
-  getJQuery: () => AnyFunction & AnyRecord;
-  getWindow: () => AnyRecord;
-  getUserscriptEnvironment: () => AnyRecord;
-  getWin: () => AnyRecord;
+  getJQuery: () => JQuerySurface;
+  getWindow: () => PageWindow;
+  getUserscriptEnvironment: () => UserscriptEnvironment;
+  getWin: () => PageWindow;
   getGameKeyboardHandlers: () => GameKeyboardHandlersPort;
   getPageShell: () => GamePageShellPort;
   getNeedSandboxBypass: () => boolean;
-  getPoly: () => AnyRecord;
-  getSettings: () => AnyRecord;
+  getPoly: () => PolySurface;
+  getSettings: () => { tickSchedule: boolean };
   getSafeMode: () => boolean;
-  getActions: () => AnyRecord;
-  setWin: (value: AnyRecord) => void;
-  setGame: (value: AnyRecord | null) => void;
+  getActions: () => ActionsSurface;
+  setWin: (value: PageWindow) => void;
+  setGame: (value: GameSurface | null) => void;
   setNeedSandboxBypass: (value: boolean) => void;
 };
 
@@ -63,26 +148,26 @@ export function createScriptBootstrap({
   setGame,
   setNeedSandboxBypass,
 }: ScriptBootstrapDependencies) {
-  let game: AnyRecord | null;
-  let techIds: AnyRecord;
-  let Technology: any;
-  let buildings: AnyRecord;
-  let buildingIds: AnyRecord;
-  let state: AnyRecord;
-  let projects: AnyRecord;
-  let arpaIds: AnyRecord;
-  let jobs: AnyRecord;
-  let jobIds: AnyRecord;
-  let crafter: AnyRecord;
-  let TriggerManager: AnyRecord;
+  let game: GameSurface | null;
+  let techIds: Lookup;
+  let Technology: Technology;
+  let buildings: Record<string, Building>;
+  let buildingIds: Lookup;
+  let state: StateSurface;
+  let projects: Record<string, Project>;
+  let arpaIds: Lookup;
+  let jobs: Record<string, Job>;
+  let jobIds: Lookup;
+  let crafter: Record<string, Job>;
+  let TriggerManager: { priorityList: Trigger[] };
   let checkActions: boolean;
-  let $: AnyFunction & AnyRecord;
-  let window: AnyRecord;
-  let userscriptEnvironment: AnyRecord;
-  let win: AnyRecord;
+  let $: JQuerySurface;
+  let window: PageWindow;
+  let userscriptEnvironment: UserscriptEnvironment;
+  let win: PageWindow;
   let needSandboxBypass: boolean;
-  let poly: AnyRecord;
-  let settings: AnyRecord;
+  let poly: PolySurface;
+  let settings: { tickSchedule: boolean };
   let safeMode: boolean;
 
   const getScriptBootstrapActions = getActions;
@@ -118,8 +203,8 @@ export function createScriptBootstrap({
   }
 
   let contextDepth = 0;
-  function withContext(fn: AnyFunction, name: string): AnyFunction {
-    const wrapped = function (this: unknown, ...args: any[]) {
+  function withContext(fn: ScriptFunction, name: string): ScriptFunction {
+    const wrapped = function (this: unknown, ...args: unknown[]) {
       const outermost = contextDepth === 0;
       if (outermost) {
         refreshContext();
@@ -143,7 +228,7 @@ export function createScriptBootstrap({
     // Init objects and lookup tables
     for (let [key, action] of Object.entries(game!.actions.tech) as [
       string,
-      AnyRecord,
+      { id: string },
     ][]) {
       techIds[action.id] = new Technology(key);
     }
@@ -172,7 +257,7 @@ export function createScriptBootstrap({
     actions.updateStateFromSettings();
     actions.updateSettingsFromState();
 
-    TriggerManager.priorityList.forEach((trigger: any) => {
+    TriggerManager.priorityList.forEach((trigger) => {
       trigger.complete = false;
     });
 
@@ -292,13 +377,13 @@ export function createScriptBootstrap({
     actions.updateOverrides();
 
     // Hook to game loop, to allow script run at full speed in unfocused tab
-    const setCallback = (fn: any) =>
+    const setCallback = <T>(fn: T): T =>
       !needSandboxBypass ? fn : userscriptEnvironment.exportToPage(fn);
     // This should be the last var set in game's debug.js:updateDebugData(), otherwise we may be working with partially outdated data
     let breakdown = game.breakdown;
     Object.defineProperty(game, "breakdown", {
       get: setCallback(() => breakdown),
-      set: setCallback((v: any) => {
+      set: setCallback((v: GameSurface["breakdown"]) => {
         breakdown = v;
         state.gameTicked = true;
         if (settings.tickSchedule) {
@@ -336,7 +421,7 @@ export function createScriptBootstrap({
     initialiseScriptImpl,
     "initialiseScript",
   );
-  let mainAutoEvolveScript: AnyFunction;
+  let mainAutoEvolveScript: ScriptFunction;
   mainAutoEvolveScript = withContext(
     mainAutoEvolveScriptImpl,
     "mainAutoEvolveScript",
