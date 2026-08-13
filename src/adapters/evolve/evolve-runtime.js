@@ -151,7 +151,7 @@ import { createLogFilter } from "../../observability/log-filter.ts";
 import { createBrowserRuntime } from "../browser/runtime.ts";
 import { createMechStats } from "../../ui/mech-stats.ts";
 import { createSortHelper } from "../../ui/sort-helper.ts";
-import { createTabRefresh } from "../../ui/tab-refresh.ts";
+import { createTabRefreshControl } from "../../bootstrap/tab-refresh-control.ts";
 import { createSoulGemRateDisplay } from "../../ui/soul-gem-rate.ts";
 import { createPreviousGameStats } from "../../ui/previous-game-stats.ts";
 import { createRuntimeAdapters } from "../../ui/runtime-adapters.ts";
@@ -3852,27 +3852,23 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { updateTabs } = createTabRefresh({
+  const { updateTabs } = createTabRefreshControl({
     getState: () => state,
     getGame: () => game,
     getBuildings: () => buildings,
     getResources: () => resources,
     getHaveTech: () => haveTech,
     getMainVue,
+    testSurface,
+    setTestContext(context) {
+      state = context.state;
+      game = context.game;
+      buildings = context.buildings;
+      resources = context.resources;
+      haveTech = context.haveTech;
+      win = context.win;
+    },
   });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      updateTabs: (update) => updateTabs(update),
-      setTabRefreshTestContext(context) {
-        state = context.state;
-        game = context.game;
-        buildings = context.buildings;
-        resources = context.resources;
-        haveTech = context.haveTech;
-        win = context.win;
-      },
-    });
 
   const { getMultiSegmentedTimeLeft } = createTargetTimingDisplay({
     getGame: () => game,

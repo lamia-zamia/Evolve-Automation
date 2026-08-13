@@ -16503,6 +16503,27 @@ Only continue if you trust the source. Injected code:
     return { updateTabs };
   }
 
+  // src/bootstrap/tab-refresh-control.ts
+  function createTabRefreshControl({
+    getState,
+    getGame,
+    getBuildings,
+    getResources,
+    getHaveTech,
+    getMainVue,
+    testSurface,
+    setTestContext
+  }) {
+    return createTabRefresh({
+      getState,
+      getGame,
+      getBuildings,
+      getResources,
+      getHaveTech,
+      getMainVue
+    });
+  }
+
   // src/ui/soul-gem-rate.ts
   function createSoulGemRateDisplay({
     getState,
@@ -50759,13 +50780,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addEvolutionSetting: () => addEvolutionSetting(),
       updateSettingsFromState: () => updateSettingsFromState(),
       getTestActions: () => getTestContext("evolutionResult")?.actions
-    }), { updateTabs } = createTabRefresh({
+    }), { updateTabs } = createTabRefreshControl({
       getState: () => state,
       getGame: () => game,
       getBuildings: () => buildings,
       getResources: () => resources,
       getHaveTech: () => haveTech,
-      getMainVue
+      getMainVue,
+      testSurface,
+      setTestContext(context) {
+        state = context.state, game = context.game, buildings = context.buildings, resources = context.resources, haveTech = context.haveTech, win = context.win;
+      }
     }), { getMultiSegmentedTimeLeft } = createTargetTimingDisplay({
       getGame: () => game,
       getTimeFormat: () => (seconds) => poly.timeFormat(seconds),
