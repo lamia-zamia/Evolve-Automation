@@ -16304,6 +16304,15 @@ Only continue if you trust the source. Injected code:
     return { buildFilterRegExp, filterLog };
   }
 
+  // src/bootstrap/log-filter-control.ts
+  function createLogFilterControl({
+    testSurface,
+    setTestContext,
+    ...dependencies
+  }) {
+    return createLogFilter(dependencies);
+  }
+
   // src/adapters/browser/vue.ts
   function isPresent(value) {
     return value != null;
@@ -45624,6 +45633,15 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     return { getTooltipInfo, tooltipObserverCallback, addTooltip };
   }
 
+  // src/bootstrap/tooltip-ui-control.ts
+  function createTooltipUiControl({
+    testSurface,
+    setTestContext,
+    ...dependencies
+  }) {
+    return createTooltipUI(dependencies);
+  }
+
   // src/ui/custom-race-ui.ts
   var requiredTextKeys = [
     "name",
@@ -50997,12 +51015,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setTestContext(context) {
         "game" in context && (game = context.game), "state" in context && (state = context.state), "settings" in context && (settings = context.settings), "techIds" in context && (techIds = context.techIds), "buildingIds" in context && (buildingIds = context.buildingIds), "arpaIds" in context && (arpaIds = context.arpaIds), "jobIds" in context && (jobIds = context.jobIds), "buildings" in context && (buildings = context.buildings), "projects" in context && (projects = context.projects), "jobs" in context && (jobs = context.jobs), "crafter" in context && (crafter = context.crafter), "TriggerManager" in context && (TriggerManager = context.TriggerManager), "gameModal" in context && (gameModal = context.gameModal), "KeyManager" in context && (KeyManager = context.KeyManager), "poly" in context && (poly = context.poly), "win" in context && (win = context.win), "safeMode" in context && (safeMode = context.safeMode), "checkActions" in context && (checkActions = context.checkActions), setTestContext("scriptBootstrap", context);
       }
-    }), { buildFilterRegExp, filterLog } = createLogFilter({
+    }), { buildFilterRegExp, filterLog } = createLogFilterControl({
       getSettingsRaw: () => settingsRaw,
       getSettings: () => settings,
       getState: () => state,
-      getPoly: () => poly
-    }), { getTooltipInfo, tooltipObserverCallback, addTooltip } = createTooltipUI({
+      getPoly: () => poly,
+      testSurface,
+      setTestContext(context) {
+        settingsRaw = context.settingsRaw, settings = context.settings, state = context.state, poly = context.poly;
+      }
+    }), { getTooltipInfo, tooltipObserverCallback, addTooltip } = createTooltipUiControl({
       getJQuery: () => $,
       getUiSurface: () => gameUiSurface,
       getMutationObserver: () => runtimeEnvironment.MutationObserver,
@@ -51027,7 +51049,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readGrowthRate: () => getGrowthRate,
       readGovernor: () => getGovernor,
       readTraitVal: () => traitVal,
-      isTechnology: (value) => value instanceof Technology
+      isTechnology: (value) => value instanceof Technology,
+      testSurface,
+      setTestContext(context) {
+        "settings" in context && (settings = context.settings), "state" in context && (state = context.state), "game" in context && (game = context.game), "buildings" in context && (buildings = context.buildings), "jobs" in context && (jobs = context.jobs), "resources" in context && (resources = context.resources), "techIds" in context && (techIds = context.techIds), "buildingIds" in context && (buildingIds = context.buildingIds), "arpaIds" in context && (arpaIds = context.arpaIds), "MechManager" in context && (MechManager = context.MechManager), "FleetManagerOuter" in context && (FleetManagerOuter = context.FleetManagerOuter);
+      }
     }), { updateOverrides } = createOverrideSettings({
       getSafeMode: () => safeMode,
       getSettings: () => settings,

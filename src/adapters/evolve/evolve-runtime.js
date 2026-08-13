@@ -147,7 +147,7 @@ import { findRequiredResourceWeight as findRequiredResourceWeightPolicy } from "
 import { createGameActionVerification } from "../../validation/game-actions.ts";
 import { createStateLogControl } from "../../bootstrap/state-log-control.ts";
 import { createPrestigeLog } from "../../observability/prestige-log.ts";
-import { createLogFilter } from "../../observability/log-filter.ts";
+import { createLogFilterControl } from "../../bootstrap/log-filter-control.ts";
 import { createBrowserRuntime } from "../browser/runtime.ts";
 import { createMechStats } from "../../ui/mech-stats.ts";
 import { createSortHelper } from "../../ui/sort-helper.ts";
@@ -265,7 +265,7 @@ import { createMechInfoEvolveAdapter } from "./combat/mech-info.ts";
 import { createMechInfoBrowserAdapter } from "../browser/mech-info.ts";
 import { createResourceToggleEvolveAdapter } from "./economy/resources/resource-toggles.ts";
 import { createResourceToggleBrowserAdapter } from "../browser/resource-toggles.ts";
-import { createTooltipUI } from "../../ui/tooltips.ts";
+import { createTooltipUiControl } from "../../bootstrap/tooltip-ui-control.ts";
 import { createCustomRaceUI } from "../../ui/custom-race-ui.ts";
 import { createSettingsShell } from "../../ui/settings-shell.ts";
 import { createOverrideConditionControls } from "../../ui/override-condition-controls.ts";
@@ -4095,26 +4095,22 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { buildFilterRegExp, filterLog } = createLogFilter({
+  const { buildFilterRegExp, filterLog } = createLogFilterControl({
     getSettingsRaw: () => settingsRaw,
     getSettings: () => settings,
     getState: () => state,
     getPoly: () => poly,
+    testSurface,
+    setTestContext(context) {
+      settingsRaw = context.settingsRaw;
+      settings = context.settings;
+      state = context.state;
+      poly = context.poly;
+    },
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      logFilter: { buildFilterRegExp, filterLog },
-      setLogFilterTestContext(context) {
-        settingsRaw = context.settingsRaw;
-        settings = context.settings;
-        state = context.state;
-        poly = context.poly;
-      },
-    });
-
   const { getTooltipInfo, tooltipObserverCallback, addTooltip } =
-    createTooltipUI({
+    createTooltipUiControl({
       getJQuery: () => $,
       getUiSurface: () => gameUiSurface,
       getMutationObserver: () => runtimeEnvironment.MutationObserver,
@@ -4140,12 +4136,8 @@ export function startEvolveRuntimeComposition(
       readGovernor: () => getGovernor,
       readTraitVal: () => traitVal,
       isTechnology: (value) => value instanceof Technology,
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      tooltipUI: { getTooltipInfo, tooltipObserverCallback, addTooltip },
-      setTooltipUITestContext(context) {
+      testSurface,
+      setTestContext(context) {
         if ("settings" in context) settings = context.settings;
         if ("state" in context) state = context.state;
         if ("game" in context) game = context.game;
