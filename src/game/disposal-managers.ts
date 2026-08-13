@@ -1,13 +1,70 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { GameDisposalControlsPort } from "../ports/game-disposal-controls.ts";
 import type { GameIndustryControlsPort } from "../ports/game-industry-controls.ts";
 
+interface DisposalResource {
+  id: string;
+  isUnlocked: () => boolean;
+  rateOfChange: number;
+  rateMods: Record<string, number>;
+  currentQuantity: number;
+  storageRequired: number;
+  storageRatio: number;
+  maxQuantity: number;
+  calculateRateOfChange: (options: {
+    buy: boolean;
+    supply?: boolean;
+    nanite?: boolean;
+  }) => number;
+}
+
+interface DisposalResources extends Record<string, DisposalResource> {
+  Food: DisposalResource;
+  Supply: DisposalResource;
+}
+
+interface DisposalBuilding {
+  count: number;
+  stateOnCount: number;
+}
+
+interface DisposalBuildings extends Record<string, DisposalBuilding> {
+  BlackholeMassEjector: DisposalBuilding;
+  LakeBireme: DisposalBuilding;
+  LakeTransport: DisposalBuilding;
+}
+
+interface DisposalSettings {
+  autoEject: boolean;
+  autoNanite: boolean;
+  autoSupply: boolean;
+  ejectMode: string;
+  naniteMode: string;
+  supplyMode: string;
+  [key: string]: boolean | number | string | undefined;
+}
+
+interface DisposalGame {
+  global: {
+    city: { nanite_factory: { count: number; [key: string]: number } };
+    portal: { transport: { cargo: { max: number; [key: string]: number } } };
+    interstellar: {
+      mass_ejector: { on: number; [key: string]: number };
+    };
+    race: Record<string, boolean>;
+  };
+  atomic_mass: Record<string, number>;
+}
+
+interface DisposalPoly {
+  supplyValue: Record<string, { in?: number; out?: number }>;
+}
+
 interface DisposalManagersDependencies {
-  getGame: () => any;
-  getSettings: () => Record<string, any>;
-  getResources: () => Record<string, any>;
-  getBuildings: () => Record<string, any>;
-  getPoly: () => any;
+  getGame: () => DisposalGame;
+  getSettings: () => DisposalSettings;
+  getResources: () => DisposalResources;
+  getBuildings: () => DisposalBuildings;
+  getPoly: () => DisposalPoly;
   haveTask: (task: string) => boolean;
   industryControls: GameIndustryControlsPort;
   disposalControls: GameDisposalControlsPort;
@@ -26,7 +83,7 @@ export function createDisposalManagers({
   const NaniteManager = {
     _industryElementId: "iNFactory",
     storageShift: 1.005,
-    priorityList: [] as any[],
+    priorityList: [] as DisposalResource[],
 
     // export const nf_resources from industry.js
     Resources: [
@@ -81,7 +138,7 @@ export function createDisposalManagers({
       return industryControls.isRendered(this._industryElementId);
     },
 
-    isConsumable(res: any) {
+    isConsumable(res: DisposalResource) {
       return this.Resources.includes(res.id);
     },
 
@@ -126,14 +183,14 @@ export function createDisposalManagers({
       }
     },
 
-    maxConsumeCraftable(resource: any) {
+    maxConsumeCraftable(resource: DisposalResource) {
       let extraIncome = resource.rateOfChange;
       let extraStore =
         resource.currentQuantity - resource.storageRequired * this.storageShift;
       return Math.max(extraIncome, extraStore);
     },
 
-    maxConsumeForRatio(resource: any, keepRatio: number) {
+    maxConsumeForRatio(resource: DisposalResource, keepRatio: number) {
       let extraIncome = resource.rateOfChange;
       let extraStore =
         (resource.storageRatio - keepRatio) * resource.maxQuantity;
@@ -166,7 +223,7 @@ export function createDisposalManagers({
   const SupplyManager = {
     _supplyElementPrefix: "supply",
     storageShift: 1.01,
-    priorityList: [] as any[],
+    priorityList: [] as DisposalResource[],
 
     resEnabled: (id: string) => getSettings()["res_supply" + id],
 
@@ -188,7 +245,7 @@ export function createDisposalManagers({
       return this.isUnlocked();
     },
 
-    isConsumable(res: any) {
+    isConsumable(res: DisposalResource) {
       return Object.hasOwn(getPoly().supplyValue, res.id);
     },
 
@@ -242,7 +299,7 @@ export function createDisposalManagers({
       }
     },
 
-    maxConsumeCraftable(resource: any) {
+    maxConsumeCraftable(resource: DisposalResource) {
       let extraIncome = resource.calculateRateOfChange({
         buy: false,
         nanite: true,
@@ -252,7 +309,7 @@ export function createDisposalManagers({
       return Math.max(extraIncome, extraStore) / this.supplyOut(resource.id);
     },
 
-    maxConsumeForRatio(resource: any, keepRatio: number) {
+    maxConsumeForRatio(resource: DisposalResource, keepRatio: number) {
       let extraIncome = resource.calculateRateOfChange({
         buy: false,
         nanite: true,
@@ -296,7 +353,7 @@ export function createDisposalManagers({
   const EjectManager = {
     _ejectElementPrefix: "eject",
     storageShift: 1.015,
-    priorityList: [] as any[],
+    priorityList: [] as DisposalResource[],
 
     resEnabled: (id: string) => getSettings()["res_eject" + id],
 
@@ -312,7 +369,7 @@ export function createDisposalManagers({
       return this.isUnlocked();
     },
 
-    isConsumable(res: any) {
+    isConsumable(res: DisposalResource) {
       return Object.hasOwn(getGame().atomic_mass, res.id);
     },
 
@@ -364,7 +421,7 @@ export function createDisposalManagers({
       }
     },
 
-    maxConsumeCraftable(resource: any) {
+    maxConsumeCraftable(resource: DisposalResource) {
       let extraIncome = resource.calculateRateOfChange({
         buy: false,
         supply: true,
@@ -375,7 +432,7 @@ export function createDisposalManagers({
       return Math.max(extraIncome, extraStore);
     },
 
-    maxConsumeForRatio(resource: any, keepRatio: number) {
+    maxConsumeForRatio(resource: DisposalResource, keepRatio: number) {
       let extraIncome = resource.calculateRateOfChange({
         buy: false,
         supply: true,
