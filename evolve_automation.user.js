@@ -16085,6 +16085,112 @@
     };
   }
 
+  // src/domain/civic/authority.ts
+  function resolveAuthorityTarget(input) {
+    if (!input.manage || input.configuredTarget === 0) return null;
+    return input.configuredTarget < 0 ? input.maximum : input.configuredTarget;
+  }
+  function calculateAuthorityPerSoldier(modifiers) {
+    let authorityPerSoldier = (0.7 + 0.1 * modifiers.evilTechLevel) * (modifiers.highPopulationPercent / 100);
+    if (modifiers.grenadier) authorityPerSoldier *= 1.75;
+    if (modifiers.governmentType === "autocracy") {
+      authorityPerSoldier *= 1.08;
+    } else if (modifiers.governmentType === "dictator") {
+      authorityPerSoldier *= 1.12;
+    }
+    return authorityPerSoldier;
+  }
+  function calculateRequiredAuthorityGarrison(view, currentGarrison) {
+    const target = resolveAuthorityTarget(view.target);
+    if (target === null) {
+      return Object.freeze({ status: "ready", requiredGarrison: 0 });
+    }
+    const authorityPerSoldier = calculateAuthorityPerSoldier(view.modifiers);
+    if (authorityPerSoldier <= 0) {
+      return Object.freeze({
+        status: "ready",
+        requiredGarrison: currentGarrison
+      });
+    }
+    const nonGarrisonAuthority = view.current - currentGarrison * authorityPerSoldier;
+    return Object.freeze({
+      status: "ready",
+      requiredGarrison: Math.max(
+        0,
+        Math.ceil((target - nonGarrisonAuthority) / authorityPerSoldier - 1e-9)
+      )
+    });
+  }
+  function predictAuthorityAfterRemovingSoldiers(view, removedSoldiers) {
+    return Math.floor(
+      view.current - removedSoldiers * calculateAuthorityPerSoldier(view.modifiers)
+    );
+  }
+  function assessAuthorityRemoval(view, removedSoldiers) {
+    const target = resolveAuthorityTarget(view.target);
+    if (target === null) return Object.freeze({ status: "unmanaged" });
+    const predicted = predictAuthorityAfterRemovingSoldiers(
+      view,
+      removedSoldiers
+    );
+    return Object.freeze({
+      status: "ready",
+      target,
+      predicted,
+      blocksRemoval: predicted < target
+    });
+  }
+
+  // src/game/authority-policy.ts
+  function createAuthorityPolicy({
+    getGame,
+    getSettings,
+    getResources,
+    readHighPopulationPercent,
+    readAuthorityPolicyView: readAuthorityPolicyView2,
+    readAuthorityQuantity: readAuthorityQuantity2
+  }) {
+    const readView2 = () => readAuthorityPolicyView2(
+      getGame(),
+      getSettings(),
+      getResources(),
+      readHighPopulationPercent
+    );
+    function getAuthorityTarget() {
+      const view = readView2();
+      return view.status === "ready" ? resolveAuthorityTarget(view.view.target) : view;
+    }
+    function getAuthorityPerSoldier() {
+      const view = readView2();
+      return view.status === "ready" ? calculateAuthorityPerSoldier(view.view.modifiers) : view;
+    }
+    function getRequiredAuthorityGarrison(currentGarrison) {
+      const quantity = readAuthorityQuantity2(currentGarrison);
+      if (quantity.status === "unavailable") return quantity;
+      const view = readView2();
+      return view.status === "ready" ? calculateRequiredAuthorityGarrison(view.view, quantity.value) : view;
+    }
+    function getPredictedAuthorityAfterRemovingSoldiers(removedSoldiers) {
+      const quantity = readAuthorityQuantity2(removedSoldiers);
+      if (quantity.status === "unavailable") return quantity;
+      const view = readView2();
+      return view.status === "ready" ? predictAuthorityAfterRemovingSoldiers(view.view, quantity.value) : view;
+    }
+    function assessAuthorityRemoval2(removedSoldiers) {
+      const quantity = readAuthorityQuantity2(removedSoldiers);
+      if (quantity.status === "unavailable") return quantity;
+      const view = readView2();
+      return view.status === "ready" ? assessAuthorityRemoval(view.view, quantity.value) : view;
+    }
+    return {
+      getAuthorityTarget,
+      getAuthorityPerSoldier,
+      getRequiredAuthorityGarrison,
+      getPredictedAuthorityAfterRemovingSoldiers,
+      assessAuthorityRemoval: assessAuthorityRemoval2
+    };
+  }
+
   // src/domain/cost-conflicts.ts
   function findCostConflict(input) {
     const resourceNames = [];
@@ -17665,62 +17771,6 @@
           tags: PROGRESS_ACHIEVEMENTS
         };
     }
-  }
-
-  // src/domain/civic/authority.ts
-  function resolveAuthorityTarget(input) {
-    if (!input.manage || input.configuredTarget === 0) return null;
-    return input.configuredTarget < 0 ? input.maximum : input.configuredTarget;
-  }
-  function calculateAuthorityPerSoldier(modifiers) {
-    let authorityPerSoldier = (0.7 + 0.1 * modifiers.evilTechLevel) * (modifiers.highPopulationPercent / 100);
-    if (modifiers.grenadier) authorityPerSoldier *= 1.75;
-    if (modifiers.governmentType === "autocracy") {
-      authorityPerSoldier *= 1.08;
-    } else if (modifiers.governmentType === "dictator") {
-      authorityPerSoldier *= 1.12;
-    }
-    return authorityPerSoldier;
-  }
-  function calculateRequiredAuthorityGarrison(view, currentGarrison) {
-    const target = resolveAuthorityTarget(view.target);
-    if (target === null) {
-      return Object.freeze({ status: "ready", requiredGarrison: 0 });
-    }
-    const authorityPerSoldier = calculateAuthorityPerSoldier(view.modifiers);
-    if (authorityPerSoldier <= 0) {
-      return Object.freeze({
-        status: "ready",
-        requiredGarrison: currentGarrison
-      });
-    }
-    const nonGarrisonAuthority = view.current - currentGarrison * authorityPerSoldier;
-    return Object.freeze({
-      status: "ready",
-      requiredGarrison: Math.max(
-        0,
-        Math.ceil((target - nonGarrisonAuthority) / authorityPerSoldier - 1e-9)
-      )
-    });
-  }
-  function predictAuthorityAfterRemovingSoldiers(view, removedSoldiers) {
-    return Math.floor(
-      view.current - removedSoldiers * calculateAuthorityPerSoldier(view.modifiers)
-    );
-  }
-  function assessAuthorityRemoval(view, removedSoldiers) {
-    const target = resolveAuthorityTarget(view.target);
-    if (target === null) return Object.freeze({ status: "unmanaged" });
-    const predicted = predictAuthorityAfterRemovingSoldiers(
-      view,
-      removedSoldiers
-    );
-    return Object.freeze({
-      status: "ready",
-      target,
-      predicted,
-      blocksRemoval: predicted < target
-    });
   }
 
   // src/adapters/evolve/civic/authority.ts
@@ -57879,45 +57929,24 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     const { buildMarketSettings, updateMarketSettingsContent } = marketSettingsBrowserAdapter;
     let { traitVal } = createTraitValue({ getGame: () => game });
-    const readAuthorityView = () => readAuthorityPolicyView(
-      game,
-      settings,
-      resources,
-      () => traitVal("high_pop", 1, 100)
-    );
-    const getAuthorityGarrisonRequirement = (currentGarrison) => {
-      const quantity = readAuthorityQuantity(currentGarrison);
-      if (quantity.status === "unavailable") return quantity;
-      const view = readAuthorityView();
-      return view.status === "ready" ? calculateRequiredAuthorityGarrison(view.view, quantity.value) : view;
-    };
-    const assessAuthorityRemoval2 = (removedSoldiers) => {
-      const quantity = readAuthorityQuantity(removedSoldiers);
-      if (quantity.status === "unavailable") return quantity;
-      const view = readAuthorityView();
-      return view.status === "ready" ? assessAuthorityRemoval(view.view, quantity.value) : view;
-    };
+    const authorityPolicy = createAuthorityPolicy({
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      readHighPopulationPercent: () => traitVal("high_pop", 1, 100),
+      readAuthorityPolicyView,
+      readAuthorityQuantity
+    });
     publishTestSurface({
       authorityPolicy: {
-        getAuthorityTarget() {
-          const view = readAuthorityView();
-          return view.status === "ready" ? resolveAuthorityTarget(view.view.target) : view;
-        },
-        getAuthorityPerSoldier() {
-          const view = readAuthorityView();
-          return view.status === "ready" ? calculateAuthorityPerSoldier(view.view.modifiers) : view;
-        },
+        getAuthorityTarget: authorityPolicy.getAuthorityTarget,
+        getAuthorityPerSoldier: authorityPolicy.getAuthorityPerSoldier,
         getRequiredAuthorityGarrison(currentGarrison) {
-          const requirement = getAuthorityGarrisonRequirement(currentGarrison);
+          const requirement = authorityPolicy.getRequiredAuthorityGarrison(currentGarrison);
           return requirement.status === "ready" ? requirement.requiredGarrison : requirement;
         },
-        getPredictedAuthorityAfterRemovingSoldiers(removedSoldiers) {
-          const quantity = readAuthorityQuantity(removedSoldiers);
-          if (quantity.status === "unavailable") return quantity;
-          const view = readAuthorityView();
-          return view.status === "ready" ? predictAuthorityAfterRemovingSoldiers(view.view, quantity.value) : view;
-        },
-        assessAuthorityRemoval: assessAuthorityRemoval2
+        getPredictedAuthorityAfterRemovingSoldiers: authorityPolicy.getPredictedAuthorityAfterRemovingSoldiers,
+        assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval
       },
       setAuthorityPolicyTestContext(context) {
         game = context.game;
@@ -60048,7 +60077,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isHellSuppressionUseful: isHellSupressUseful,
         getGalaxyRegions,
         traitValue: traitVal,
-        getAuthorityGarrisonRequirement,
+        getAuthorityGarrisonRequirement: authorityPolicy.getRequiredAuthorityGarrison,
         haveTech,
         getHealingRate,
         isHungryRace,
@@ -60182,7 +60211,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSettings: () => settings,
       getResources: () => resources,
       traitVal,
-      assessAuthorityRemoval: assessAuthorityRemoval2,
+      assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
       getGameLog: () => GameLog
     });
     publishTestSurface({

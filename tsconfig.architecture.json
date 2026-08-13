@@ -42,6 +42,7 @@
     "src/game/state-initialization.ts",
     "src/game/state-demand.ts",
     "src/game/planner-state.ts",
+    "src/game/authority-policy.ts",
     "src/config.ts",
     "src/main.ts"
   ]

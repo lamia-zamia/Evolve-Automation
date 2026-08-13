@@ -123,6 +123,7 @@ import {
   applyStorageRequirementsResult,
 } from "../../game/state-demand.ts";
 import { createPlannerState } from "../../game/planner-state.ts";
+import { createAuthorityPolicy } from "../../game/authority-policy.ts";
 import { findCostConflict } from "../../domain/cost-conflicts.ts";
 import { readCostConflictInput } from "./cost-conflicts.ts";
 import { findPlannerLimit } from "../../domain/planner-analysis.ts";
@@ -145,13 +146,6 @@ import { createPriorityTargets } from "../../planning/priority-targets.ts";
 import { decideEvolutionResult } from "../../domain/progression/evolution/evolution-result.ts";
 import { readEvolutionResultInput } from "./progression/evolution/evolution-result.ts";
 import { formatEvolutionLog } from "../../application/evolution-result.ts";
-import {
-  assessAuthorityRemoval as assessAuthorityRemovalPolicy,
-  calculateAuthorityPerSoldier,
-  calculateRequiredAuthorityGarrison,
-  predictAuthorityAfterRemovingSoldiers,
-  resolveAuthorityTarget,
-} from "../../domain/civic/authority.ts";
 import {
   readAuthorityPolicyView,
   readAuthorityQuantity,
@@ -2267,56 +2261,29 @@ function startEvolveRuntimeComposition(
     marketSettingsBrowserAdapter;
 
   let { traitVal } = createTraitValue({ getGame: () => game });
-  const readAuthorityView = () =>
-    readAuthorityPolicyView(game, settings, resources, () =>
-      traitVal("high_pop", 1, 100),
-    );
-  const getAuthorityGarrisonRequirement = (currentGarrison) => {
-    const quantity = readAuthorityQuantity(currentGarrison);
-    if (quantity.status === "unavailable") return quantity;
-    const view = readAuthorityView();
-    return view.status === "ready"
-      ? calculateRequiredAuthorityGarrison(view.view, quantity.value)
-      : view;
-  };
-  const assessAuthorityRemoval = (removedSoldiers) => {
-    const quantity = readAuthorityQuantity(removedSoldiers);
-    if (quantity.status === "unavailable") return quantity;
-    const view = readAuthorityView();
-    return view.status === "ready"
-      ? assessAuthorityRemovalPolicy(view.view, quantity.value)
-      : view;
-  };
+  const authorityPolicy = createAuthorityPolicy({
+    getGame: () => game,
+    getSettings: () => settings,
+    getResources: () => resources,
+    readHighPopulationPercent: () => traitVal("high_pop", 1, 100),
+    readAuthorityPolicyView,
+    readAuthorityQuantity,
+  });
 
   publishTestSurface({
     authorityPolicy: {
-      getAuthorityTarget() {
-        const view = readAuthorityView();
-        return view.status === "ready"
-          ? resolveAuthorityTarget(view.view.target)
-          : view;
-      },
-      getAuthorityPerSoldier() {
-        const view = readAuthorityView();
-        return view.status === "ready"
-          ? calculateAuthorityPerSoldier(view.view.modifiers)
-          : view;
-      },
+      getAuthorityTarget: authorityPolicy.getAuthorityTarget,
+      getAuthorityPerSoldier: authorityPolicy.getAuthorityPerSoldier,
       getRequiredAuthorityGarrison(currentGarrison) {
-        const requirement = getAuthorityGarrisonRequirement(currentGarrison);
+        const requirement =
+          authorityPolicy.getRequiredAuthorityGarrison(currentGarrison);
         return requirement.status === "ready"
           ? requirement.requiredGarrison
           : requirement;
       },
-      getPredictedAuthorityAfterRemovingSoldiers(removedSoldiers) {
-        const quantity = readAuthorityQuantity(removedSoldiers);
-        if (quantity.status === "unavailable") return quantity;
-        const view = readAuthorityView();
-        return view.status === "ready"
-          ? predictAuthorityAfterRemovingSoldiers(view.view, quantity.value)
-          : view;
-      },
-      assessAuthorityRemoval,
+      getPredictedAuthorityAfterRemovingSoldiers:
+        authorityPolicy.getPredictedAuthorityAfterRemovingSoldiers,
+      assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
     },
     setAuthorityPolicyTestContext(context) {
       game = context.game;
@@ -4670,7 +4637,8 @@ function startEvolveRuntimeComposition(
       isHellSuppressionUseful: isHellSupressUseful,
       getGalaxyRegions,
       traitValue: traitVal,
-      getAuthorityGarrisonRequirement,
+      getAuthorityGarrisonRequirement:
+        authorityPolicy.getRequiredAuthorityGarrison,
       haveTech,
       getHealingRate,
       isHungryRace,
@@ -4814,7 +4782,7 @@ function startEvolveRuntimeComposition(
     getSettings: () => settings,
     getResources: () => resources,
     traitVal,
-    assessAuthorityRemoval,
+    assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
     getGameLog: () => GameLog,
   });
 
