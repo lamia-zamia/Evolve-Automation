@@ -19226,6 +19226,75 @@
     }
   }
 
+  // src/adapters/evolve/evolution-result-check.ts
+  function createEvolutionResultCheck({
+    getSettings,
+    getSettingsRaw,
+    getState,
+    getGame,
+    getRaces,
+    getTraitManager,
+    getGameLog,
+    getResetButton,
+    localize: localize2,
+    formatLog,
+    addEvolutionSetting,
+    updateSettingsFromState,
+    getTestActions
+  }) {
+    function checkEvolutionResult() {
+      const settings = getSettings();
+      const state = getState();
+      if (!settings.masterScriptToggle || !state.evoCheckNeeded) {
+        return true;
+      }
+      state.evoCheckNeeded = false;
+      const read = readEvolutionResultInput(
+        settings,
+        getGame(),
+        getRaces(),
+        getTraitManager()
+      );
+      if (read.status !== "ready") {
+        return true;
+      }
+      const decision2 = decideEvolutionResult(read.input);
+      const gameLog = getGameLog();
+      for (const event of decision2.logs) {
+        const { level, message, tags } = formatLog(event, localize2);
+        if (level === "danger") {
+          gameLog.logDanger("special", message, [...tags]);
+        } else if (level === "warning") {
+          gameLog.logWarning("special", message, [...tags]);
+        } else {
+          gameLog.logInfo("special", message, [...tags]);
+        }
+      }
+      if (decision2.needReset) {
+        const resetButton = getResetButton();
+        if (resetButton.innerText === localize2("reset_soft")) {
+          const actions = getTestActions();
+          const addEvolutionSettingFn = actions?.addEvolutionSetting ?? addEvolutionSetting;
+          const updateSettingsFromStateFn = actions?.updateSettingsFromState ?? updateSettingsFromState;
+          const settingsRaw = getSettingsRaw();
+          if (settings.evolutionQueueEnabled && settingsRaw.evolutionQueue.length > 0) {
+            if (!settings.evolutionQueueRepeat) {
+              addEvolutionSettingFn();
+            }
+            settingsRaw.evolutionQueue.unshift(settingsRaw.evolutionQueue.pop());
+          }
+          updateSettingsFromStateFn();
+          state.goal = "GameOverMan";
+          resetButton.disabled = false;
+          resetButton.click();
+          return false;
+        }
+      }
+      return true;
+    }
+    return { checkEvolutionResult };
+  }
+
   // src/application/evolution-result.ts
   var PROGRESS = ["progress"];
   var PROGRESS_ACHIEVEMENTS = ["progress", "achievements"];
@@ -60635,56 +60704,21 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     let evolutionResultTestActions;
-    const checkEvolutionResult = () => {
-      if (!settings.masterScriptToggle || !state.evoCheckNeeded) {
-        return true;
-      }
-      state.evoCheckNeeded = false;
-      const read = readEvolutionResultInput(
-        settings,
-        game,
-        races,
-        MutableTraitManager
-      );
-      if (read.status !== "ready") {
-        return true;
-      }
-      const decision2 = decideEvolutionResult(read.input);
-      for (const event of decision2.logs) {
-        const { level, message, tags } = formatEvolutionLog(
-          event,
-          (key) => game.loc(key)
-        );
-        if (level === "danger") {
-          GameLog.logDanger("special", message, [...tags]);
-        } else if (level === "warning") {
-          GameLog.logWarning("special", message, [...tags]);
-        } else {
-          GameLog.logInfo("special", message, [...tags]);
-        }
-      }
-      if (decision2.needReset) {
-        const resetButton = runtimeEnvironment.document.querySelector(
-          ".reset .button:not(.right)"
-        );
-        if (resetButton.innerText === game.loc("reset_soft")) {
-          const addEvolutionSettingFn = evolutionResultTestActions?.addEvolutionSetting ?? addEvolutionSetting;
-          const updateSettingsFromStateFn = evolutionResultTestActions?.updateSettingsFromState ?? updateSettingsFromState;
-          if (settings.evolutionQueueEnabled && settingsRaw.evolutionQueue.length > 0) {
-            if (!settings.evolutionQueueRepeat) {
-              addEvolutionSettingFn();
-            }
-            settingsRaw.evolutionQueue.unshift(settingsRaw.evolutionQueue.pop());
-          }
-          updateSettingsFromStateFn();
-          state.goal = "GameOverMan";
-          resetButton.disabled = false;
-          resetButton.click();
-          return false;
-        }
-      }
-      return true;
-    };
+    const { checkEvolutionResult } = createEvolutionResultCheck({
+      getSettings: () => settings,
+      getSettingsRaw: () => settingsRaw,
+      getState: () => state,
+      getGame: () => game,
+      getRaces: () => races,
+      getTraitManager: () => MutableTraitManager,
+      getGameLog: () => GameLog,
+      getResetButton: () => runtimeEnvironment.document.querySelector(".reset .button:not(.right)"),
+      localize: (key) => game.loc(key),
+      formatLog: (event, localize2) => formatEvolutionLog(event, localize2),
+      addEvolutionSetting: () => addEvolutionSetting(),
+      updateSettingsFromState: () => updateSettingsFromState(),
+      getTestActions: () => evolutionResultTestActions
+    });
     publishTestSurface({
       checkEvolutionResult: () => checkEvolutionResult(),
       setEvolutionResultTestContext(context) {

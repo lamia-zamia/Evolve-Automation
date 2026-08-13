@@ -145,8 +145,7 @@ import { planFuelDepotDemand } from "../../domain/economy/storage/fuel-depot-dem
 import { readDemandPrioritizationInput } from "./economy/resources/demand-prioritization.ts";
 import { planDemandPrioritization } from "../../domain/economy/resources/demand-prioritization.ts";
 import { createPriorityTargets } from "../../planning/priority-targets.ts";
-import { decideEvolutionResult } from "../../domain/progression/evolution/evolution-result.ts";
-import { readEvolutionResultInput } from "./progression/evolution/evolution-result.ts";
+import { createEvolutionResultCheck } from "./evolution-result-check.ts";
 import { formatEvolutionLog } from "../../application/evolution-result.ts";
 import {
   readAuthorityPolicyView,
@@ -4730,66 +4729,22 @@ function startEvolveRuntimeComposition(
   });
 
   let evolutionResultTestActions;
-  const checkEvolutionResult = () => {
-    if (!settings.masterScriptToggle || !state.evoCheckNeeded) {
-      return true;
-    }
-    state.evoCheckNeeded = false;
-
-    const read = readEvolutionResultInput(
-      settings,
-      game,
-      races,
-      MutableTraitManager,
-    );
-    if (read.status !== "ready") {
-      // Malformed evolution data: continue the tick without a risky soft reset.
-      return true;
-    }
-    const decision = decideEvolutionResult(read.input);
-    for (const event of decision.logs) {
-      const { level, message, tags } = formatEvolutionLog(event, (key) =>
-        game.loc(key),
-      );
-      if (level === "danger") {
-        GameLog.logDanger("special", message, [...tags]);
-      } else if (level === "warning") {
-        GameLog.logWarning("special", message, [...tags]);
-      } else {
-        GameLog.logInfo("special", message, [...tags]);
-      }
-    }
-
-    if (decision.needReset) {
-      const resetButton = runtimeEnvironment.document.querySelector(
-        ".reset .button:not(.right)",
-      );
-      if (resetButton.innerText === game.loc("reset_soft")) {
-        const addEvolutionSettingFn =
-          evolutionResultTestActions?.addEvolutionSetting ??
-          addEvolutionSetting;
-        const updateSettingsFromStateFn =
-          evolutionResultTestActions?.updateSettingsFromState ??
-          updateSettingsFromState;
-        if (
-          settings.evolutionQueueEnabled &&
-          settingsRaw.evolutionQueue.length > 0
-        ) {
-          if (!settings.evolutionQueueRepeat) {
-            addEvolutionSettingFn();
-          }
-          settingsRaw.evolutionQueue.unshift(settingsRaw.evolutionQueue.pop());
-        }
-        updateSettingsFromStateFn();
-
-        state.goal = "GameOverMan";
-        resetButton.disabled = false;
-        resetButton.click();
-        return false;
-      }
-    }
-    return true;
-  };
+  const { checkEvolutionResult } = createEvolutionResultCheck({
+    getSettings: () => settings,
+    getSettingsRaw: () => settingsRaw,
+    getState: () => state,
+    getGame: () => game,
+    getRaces: () => races,
+    getTraitManager: () => MutableTraitManager,
+    getGameLog: () => GameLog,
+    getResetButton: () =>
+      runtimeEnvironment.document.querySelector(".reset .button:not(.right)"),
+    localize: (key) => game.loc(key),
+    formatLog: (event, localize) => formatEvolutionLog(event, localize),
+    addEvolutionSetting: () => addEvolutionSetting(),
+    updateSettingsFromState: () => updateSettingsFromState(),
+    getTestActions: () => evolutionResultTestActions,
+  });
 
   publishTestSurface({
     checkEvolutionResult: () => checkEvolutionResult(),
