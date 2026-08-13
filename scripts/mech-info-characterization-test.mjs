@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import vm from "node:vm";
+import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
-const source = await readFile("evolve_automation.user.js", "utf8");
-const hooks = {};
 const trace = [];
 const selectorLengths = new Map();
 let inserted;
@@ -55,8 +52,7 @@ const document = {
   getElementById: () => ({ id: "mech-list" }),
 };
 const storageValues = new Map();
-const sandbox = {
-  __EA_TEST_HOOKS__: hooks,
+const { hooks } = await loadCharacterizationBundle({
   console,
   confirm: () => true,
   document,
@@ -73,13 +69,6 @@ const sandbox = {
   clearTimeout,
   structuredClone,
   $: jquery,
-};
-sandbox.window = sandbox;
-sandbox.window.location = "https://pmotschmann.github.io/Evolve/";
-
-vm.runInNewContext(source, sandbox, {
-  filename: "evolve_automation.user.js",
-  timeout: 10_000,
 });
 
 assert.equal(typeof hooks.setMechInfoTestContext, "function");

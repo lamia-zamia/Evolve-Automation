@@ -1,31 +1,23 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 import vm from "node:vm";
 
-const source = await readFile("evolve_automation.user.js", "utf8");
-const hooks = {};
-const sandbox = {
-  __EA_TEST_HOOKS__: hooks,
-  console,
-  localStorage: { getItem: () => null },
-  MutationObserver: class {
-    observe() {}
-    disconnect() {}
+const { context, hooks, sandbox } = await loadCharacterizationBundle(
+  {
+    console,
+    localStorage: { getItem: () => null },
+    MutationObserver: class {
+      observe() {}
+      disconnect() {}
+    },
+    navigator: { platform: "Win32" },
+    setTimeout,
+    clearTimeout,
+    structuredClone,
+    $: () => ({ ready() {} }),
   },
-  navigator: { platform: "Win32" },
-  setTimeout,
-  clearTimeout,
-  structuredClone,
-  $: () => ({ ready() {} }),
-};
-sandbox.window = sandbox;
-sandbox.window.location = "https://pmotschmann.github.io/Evolve/";
-const context = vm.createContext(sandbox);
-
-vm.runInContext(source, context, {
-  filename: "evolve_automation.user.js",
-  timeout: 10_000,
-});
+  { useContext: true },
+);
 
 assert.equal(typeof hooks.setPropertyHelperTestContext, "function");
 const helpers = hooks.propertyHelpers;

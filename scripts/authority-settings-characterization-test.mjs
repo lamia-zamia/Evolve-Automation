@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import vm from "node:vm";
+import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
-const source = await readFile("evolve_automation.user.js", "utf8");
-const hooks = {};
 const domTrace = [];
 const controls = [];
 let sectionRegistration;
@@ -34,8 +31,7 @@ const document = {
   querySelectorAll: () => [],
   getElementById: () => null,
 };
-const sandbox = {
-  __EA_TEST_HOOKS__: hooks,
+const { hooks } = await loadCharacterizationBundle({
   console,
   confirm: () => true,
   document,
@@ -52,13 +48,6 @@ const sandbox = {
   clearTimeout,
   structuredClone,
   $: jquery,
-};
-sandbox.window = sandbox;
-sandbox.window.location = "https://pmotschmann.github.io/Evolve/";
-
-vm.runInNewContext(source, sandbox, {
-  filename: "evolve_automation.user.js",
-  timeout: 10_000,
 });
 
 assert.deepEqual(Object.keys(hooks.authoritySettings), [

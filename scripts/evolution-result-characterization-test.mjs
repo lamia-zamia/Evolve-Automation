@@ -1,9 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import vm from "node:vm";
-
-const source = await readFile("evolve_automation.user.js", "utf8");
-const hooks = {};
+import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
 // checkEvolutionResult confirms the pending reset is a *soft* reset by comparing the
 // reset button's label against the localized string, so the button is a stub the
@@ -13,8 +9,7 @@ resetButton.click = () => {
   resetButton.clicks += 1;
 };
 
-const sandbox = {
-  __EA_TEST_HOOKS__: hooks,
+const { hooks } = await loadCharacterizationBundle({
   console,
   localStorage: { getItem: () => null },
   MutationObserver: class {
@@ -33,13 +28,6 @@ const sandbox = {
   $: Object.assign(() => ({ ready() {}, each() {} }), {
     isEmptyObject: (object) => Object.keys(object).length === 0,
   }),
-};
-sandbox.window = sandbox;
-sandbox.window.location = "https://pmotschmann.github.io/Evolve/";
-
-vm.runInNewContext(source, sandbox, {
-  filename: "evolve_automation.user.js",
-  timeout: 10_000,
 });
 
 assert.equal(typeof hooks.checkEvolutionResult, "function");

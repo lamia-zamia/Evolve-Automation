@@ -1,9 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import vm from "node:vm";
-
-const source = await readFile("evolve_automation.user.js", "utf8");
-const hooks = {};
+import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
 // The `#tech .action` sweep at the end of updatePriorityTargets is driven through
 // jQuery; this stub lets each scenario decide which tech elements exist.
@@ -23,8 +19,7 @@ function jquery(selector) {
 }
 jquery.isEmptyObject = (object) => Object.keys(object).length === 0;
 
-const sandbox = {
-  __EA_TEST_HOOKS__: hooks,
+const { hooks } = await loadCharacterizationBundle({
   console,
   localStorage: { getItem: () => null },
   MutationObserver: class {
@@ -36,13 +31,6 @@ const sandbox = {
   clearTimeout,
   structuredClone,
   $: jquery,
-};
-sandbox.window = sandbox;
-sandbox.window.location = "https://pmotschmann.github.io/Evolve/";
-
-vm.runInNewContext(source, sandbox, {
-  filename: "evolve_automation.user.js",
-  timeout: 10_000,
 });
 
 assert.equal(typeof hooks.updatePriorityTargets, "function");

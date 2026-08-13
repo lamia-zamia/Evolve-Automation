@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
+import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import vm from "node:vm";
 
-const source = await readFile("evolve_automation.user.js", "utf8");
-const hooks = {};
 class FixedDate {
   getMonth() {
     return 0;
@@ -13,8 +10,7 @@ class FixedDate {
     return 1;
   }
 }
-const sandbox = {
-  __EA_TEST_HOOKS__: hooks,
+const { hooks } = await loadCharacterizationBundle({
   cloneInto: (value) => value,
   console,
   Date: FixedDate,
@@ -28,13 +24,6 @@ const sandbox = {
   clearTimeout,
   structuredClone,
   $: () => ({ ready() {} }),
-};
-sandbox.window = sandbox;
-sandbox.window.location = "https://pmotschmann.github.io/Evolve/";
-
-vm.runInNewContext(source, sandbox, {
-  filename: "evolve_automation.user.js",
-  timeout: 10_000,
 });
 
 const compatibility = hooks.gameCompatibility;
