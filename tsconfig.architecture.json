@@ -25,6 +25,7 @@
     "src/game/entity-catalogs.ts",
     "src/game/script-bootstrap.ts",
     "src/game/trait-value.ts",
+    "src/game/planet-generation.ts",
     "src/config.ts",
     "src/main.ts"
   ]

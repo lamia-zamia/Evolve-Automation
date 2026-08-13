@@ -8389,8 +8389,9 @@
         };
         if (avail.length > 0 && Math.floor(seededRandom(0, 10)) === 0) {
           const custom = avail[Math.floor(seededRandom(0, avail.length))];
-          avail.splice(avail.indexOf(custom), 1);
-          const target = custom.split(":");
+          const selectedCustom = custom;
+          avail.splice(avail.indexOf(selectedCustom), 1);
+          const target = selectedCustom.split(":");
           const customPlanet = game.global.custom.planet[target[0]][target[1]];
           planet.biome = customPlanet.biome;
           planet.traits = customPlanet.traitlist;
@@ -8408,11 +8409,12 @@
           }
           for (let traitIndex = 0; traitIndex < 2; traitIndex++) {
             const index = Math.floor(seededRandom(0, 18 + 9 * traitIndex));
-            if (traits[index] === "permafrost" && ["volcanic", "ashland", "hellscape"].includes(planet.biome)) {
+            const trait2 = traits[index];
+            if (trait2 === "permafrost" && ["volcanic", "ashland", "hellscape"].includes(planet.biome)) {
               continue;
             }
-            if (index < traits.length && !planet.traits.includes(traits[index])) {
-              planet.traits.push(traits[index]);
+            if (trait2 && !planet.traits.includes(trait2)) {
+              planet.traits.push(trait2);
             }
           }
           planet.traits.sort();
