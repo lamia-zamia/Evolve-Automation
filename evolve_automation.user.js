@@ -25681,6 +25681,52 @@
     });
   }
 
+  // src/application/tech-conflicts.ts
+  function formatTechConflict(conflict2, formatNumber) {
+    switch (conflict2.code) {
+      case "ignored-research":
+        return "Ignored research";
+      case "reset-research":
+        return "Reset research";
+      case "saving-soul-gems":
+        return "Saving up Soul Gems for prestige";
+      case "retirement-fork":
+        return "Progression fork to Retirement reset";
+      case "retirement-preparation":
+        return `Retirement preparation incomplete: ${conflict2.missing.join(", ")}`;
+      case "witch-demonic-fork":
+        return "Progression fork to Witch Hunter's Demonic Infusion";
+      case "matrix-fork":
+        return "Progression fork to Matrix reset";
+      case "apotheosis-fork":
+        return "Progression fork to Apotheosis";
+      case "vaccination-strategy":
+        return "Undesirable Vaccination Strategy";
+      case "dark-bomb-disabled":
+        return "Dark Bomb disabled";
+      case "prestige-unneeded":
+        return "Not needed for current prestige";
+      case "maximum-knowledge":
+        return `${formatNumber(conflict2.required)} Max Knowledge required`;
+      case "banana-republic-guard":
+        return "Banana Republic guard";
+      case "cult-of-personality-guard":
+        return "Cult of Personality achievement guard";
+      case "unification-disabled":
+        return "Unification disabled";
+      case "stabilization-disabled":
+        return "Blackhole stabilization disabled";
+      case "stabilization-during-whitehole":
+        return "Disabled during whitehole reset";
+      case "stabilization-cooldown":
+        return `On cooldown for ${conflict2.seconds} more seconds`;
+      case "second-evolution-guard":
+        return "Second Evolution achievement guard";
+      case "theology-path":
+        return "Undesirable theology path";
+    }
+  }
+
   // src/domain/progression/research/tech-conflicts.ts
   var RESET_RESEARCH = /* @__PURE__ */ new Set([
     "tech-exotic_infusion",
@@ -26008,50 +26054,46 @@
     }
   }
 
-  // src/application/tech-conflicts.ts
-  function formatTechConflict(conflict2, formatNumber) {
-    switch (conflict2.code) {
-      case "ignored-research":
-        return "Ignored research";
-      case "reset-research":
-        return "Reset research";
-      case "saving-soul-gems":
-        return "Saving up Soul Gems for prestige";
-      case "retirement-fork":
-        return "Progression fork to Retirement reset";
-      case "retirement-preparation":
-        return `Retirement preparation incomplete: ${conflict2.missing.join(", ")}`;
-      case "witch-demonic-fork":
-        return "Progression fork to Witch Hunter's Demonic Infusion";
-      case "matrix-fork":
-        return "Progression fork to Matrix reset";
-      case "apotheosis-fork":
-        return "Progression fork to Apotheosis";
-      case "vaccination-strategy":
-        return "Undesirable Vaccination Strategy";
-      case "dark-bomb-disabled":
-        return "Dark Bomb disabled";
-      case "prestige-unneeded":
-        return "Not needed for current prestige";
-      case "maximum-knowledge":
-        return `${formatNumber(conflict2.required)} Max Knowledge required`;
-      case "banana-republic-guard":
-        return "Banana Republic guard";
-      case "cult-of-personality-guard":
-        return "Cult of Personality achievement guard";
-      case "unification-disabled":
-        return "Unification disabled";
-      case "stabilization-disabled":
-        return "Blackhole stabilization disabled";
-      case "stabilization-during-whitehole":
-        return "Disabled during whitehole reset";
-      case "stabilization-cooldown":
-        return `On cooldown for ${conflict2.seconds} more seconds`;
-      case "second-evolution-guard":
-        return "Second Evolution achievement guard";
-      case "theology-path":
-        return "Undesirable theology path";
+  // src/adapters/evolve/tech-conflict.ts
+  function createTechConflict({
+    getClock,
+    getSettings,
+    getResources,
+    getState,
+    getGame,
+    guardActive,
+    guardBananaRepublicActive,
+    retirementChallengeAssistActive,
+    retirementPreparationMissing,
+    isAchievementUnlocked: isAchievementUnlocked2,
+    fanatAchievements,
+    formatTechConflict: formatTechConflict2,
+    getNumberString
+  }) {
+    function getTechConflict(tech) {
+      const readResult = readTechConflictInput(
+        tech,
+        getSettings(),
+        getResources(),
+        getState(),
+        getGame(),
+        {
+          clock: getClock(),
+          guardActive,
+          guardBananaRepublicActive,
+          retirementChallengeAssistActive,
+          retirementPreparationMissing,
+          isAchievementUnlocked: isAchievementUnlocked2,
+          fanatAchievements
+        }
+      );
+      if (readResult.status === "unavailable") {
+        return "Research data unavailable";
+      }
+      const conflict2 = findTechConflict(readResult.input);
+      return conflict2 === null ? false : formatTechConflict2(conflict2, getNumberString);
     }
+    return { getTechConflict };
   }
 
   // src/adapters/browser/clock.ts
@@ -60097,29 +60139,21 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       diagnostics
     });
     let techConflictClock = browserClock;
-    const getTechConflict = (tech) => {
-      const readResult = readTechConflictInput(
-        tech,
-        settings,
-        resources,
-        state,
-        game,
-        {
-          clock: techConflictClock,
-          guardActive,
-          guardBananaRepublicActive,
-          retirementChallengeAssistActive,
-          retirementPreparationMissing,
-          isAchievementUnlocked: isAchievementUnlocked2,
-          fanatAchievements
-        }
-      );
-      if (readResult.status === "unavailable") {
-        return "Research data unavailable";
-      }
-      const conflict2 = findTechConflict(readResult.input);
-      return conflict2 === null ? false : formatTechConflict(conflict2, getNumberString);
-    };
+    const { getTechConflict } = createTechConflict({
+      getClock: () => techConflictClock,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getState: () => state,
+      getGame: () => game,
+      guardActive: (setting) => guardActive(setting),
+      guardBananaRepublicActive: () => guardBananaRepublicActive(),
+      retirementChallengeAssistActive: () => retirementChallengeAssistActive(),
+      retirementPreparationMissing: () => retirementPreparationMissing(),
+      isAchievementUnlocked: (...args) => isAchievementUnlocked2(...args),
+      fanatAchievements,
+      formatTechConflict,
+      getNumberString
+    });
     publishTestSurface({
       getTechConflict,
       setTechConflictTestContext(context) {

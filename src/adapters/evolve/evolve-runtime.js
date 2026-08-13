@@ -240,9 +240,8 @@ import {
   DEFAULT_VACUUM_MANA_REQUIREMENT,
   isVacuumCollapseManaStageReady,
 } from "../../domain/progression/prestige/vacuum.ts";
-import { findTechConflict } from "../../domain/progression/research/tech-conflicts.ts";
-import { readTechConflictInput } from "./progression/research/tech-conflicts.ts";
 import { formatTechConflict } from "../../application/tech-conflicts.ts";
+import { createTechConflict } from "./tech-conflict.ts";
 import { createBrowserClock } from "../browser/clock.ts";
 import { createBrowserRandomSource } from "../browser/random.ts";
 import { createBuildingWeightingPolicy } from "../../domain/progression/build/building-weighting-rules.ts";
@@ -4317,31 +4316,21 @@ function startEvolveRuntimeComposition(
   });
 
   let techConflictClock = browserClock;
-  const getTechConflict = (tech) => {
-    const readResult = readTechConflictInput(
-      tech,
-      settings,
-      resources,
-      state,
-      game,
-      {
-        clock: techConflictClock,
-        guardActive,
-        guardBananaRepublicActive,
-        retirementChallengeAssistActive,
-        retirementPreparationMissing,
-        isAchievementUnlocked,
-        fanatAchievements,
-      },
-    );
-    if (readResult.status === "unavailable") {
-      return "Research data unavailable";
-    }
-    const conflict = findTechConflict(readResult.input);
-    return conflict === null
-      ? false
-      : formatTechConflict(conflict, getNumberString);
-  };
+  const { getTechConflict } = createTechConflict({
+    getClock: () => techConflictClock,
+    getSettings: () => settings,
+    getResources: () => resources,
+    getState: () => state,
+    getGame: () => game,
+    guardActive: (setting) => guardActive(setting),
+    guardBananaRepublicActive: () => guardBananaRepublicActive(),
+    retirementChallengeAssistActive: () => retirementChallengeAssistActive(),
+    retirementPreparationMissing: () => retirementPreparationMissing(),
+    isAchievementUnlocked: (...args) => isAchievementUnlocked(...args),
+    fanatAchievements,
+    formatTechConflict,
+    getNumberString,
+  });
 
   publishTestSurface({
     getTechConflict,
