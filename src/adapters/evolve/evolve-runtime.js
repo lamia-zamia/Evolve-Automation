@@ -240,8 +240,7 @@ import { createCraftControl } from "../../bootstrap/craft-control.ts";
 import { createSpyControl } from "../../bootstrap/spy-control.ts";
 import { createPrestigeControl } from "../../bootstrap/prestige-control.ts";
 import { createJobsControl } from "../../bootstrap/jobs-control.ts";
-import { createBuildControl } from "../../bootstrap/build-control.ts";
-import { createResearchControl } from "../../bootstrap/research-control.ts";
+import { createProgressionAutomationControls } from "../../bootstrap/progression-automation-controls.ts";
 import { createMutationControl } from "../../bootstrap/mutation-control.ts";
 import { createOuterFleetControl } from "../../bootstrap/fleet-outer-control.ts";
 import { createFleetControl } from "../../bootstrap/fleet-control.ts";
@@ -3354,17 +3353,31 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { autoBuild } = createBuildControl({
-    adapter: {
-      getBuildingManager: () => BuildingManager,
-      getProjectManager: () => ProjectManager,
-      getState: () => state,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getCostConflict: (target) => getCostConflict(target),
+  const { autoBuild, autoResearch } = createProgressionAutomationControls({
+    build: {
+      adapter: {
+        getBuildingManager: () => BuildingManager,
+        getProjectManager: () => ProjectManager,
+        getState: () => state,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getCostConflict: (target) => getCostConflict(target),
+      },
+      isGovernReady: () => Boolean(game?.global?.civic?.govern),
+      diagnostics,
     },
-    isGovernReady: () => Boolean(game?.global?.civic?.govern),
-    diagnostics,
+    research: {
+      reader: {
+        getState: () => state,
+        getCostConflict: (tech) => getCostConflict(tech),
+      },
+      executor: {
+        getState: () => state,
+        getBuildingManager: () => BuildingManager,
+        getProjectManager: () => ProjectManager,
+      },
+      diagnostics,
+    },
   });
 
   let techConflictClock = browserClock;
@@ -3422,19 +3435,6 @@ export function startEvolveRuntimeComposition(
         MinorTraitManager = managers.MinorTraitManager;
       },
     });
-
-  const { autoResearch } = createResearchControl({
-    reader: {
-      getState: () => state,
-      getCostConflict: (tech) => getCostConflict(tech),
-    },
-    executor: {
-      getState: () => state,
-      getBuildingManager: () => BuildingManager,
-      getProjectManager: () => ProjectManager,
-    },
-    diagnostics,
-  });
 
   const { autoPower } = createPowerControl({
     warnings: {

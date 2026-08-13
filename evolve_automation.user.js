@@ -37806,6 +37806,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/bootstrap/progression-automation-controls.ts
+  function createProgressionAutomationControls({
+    build,
+    research
+  }) {
+    let buildControl = createBuildControl(build), researchControl = createResearchControl(research);
+    return Object.freeze({
+      ...buildControl,
+      ...researchControl
+    });
+  }
+
   // src/adapters/evolve/traits/mutation.ts
   function currencyIdFromGame(getGame) {
     let game = requireRecord(getGame(), "game"), global = requireRecord(game.global, "game.global");
@@ -50810,17 +50822,31 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getBuildings: () => buildings,
         getResourcesPerClick: () => getResourcesPerClick()
       }
-    }), { autoBuild } = createBuildControl({
-      adapter: {
-        getBuildingManager: () => BuildingManager,
-        getProjectManager: () => ProjectManager,
-        getState: () => state,
-        getSettings: () => settings,
-        getResources: () => resources,
-        getCostConflict: (target) => getCostConflict(target)
+    }), { autoBuild, autoResearch } = createProgressionAutomationControls({
+      build: {
+        adapter: {
+          getBuildingManager: () => BuildingManager,
+          getProjectManager: () => ProjectManager,
+          getState: () => state,
+          getSettings: () => settings,
+          getResources: () => resources,
+          getCostConflict: (target) => getCostConflict(target)
+        },
+        isGovernReady: () => !!game?.global?.civic?.govern,
+        diagnostics
       },
-      isGovernReady: () => !!game?.global?.civic?.govern,
-      diagnostics
+      research: {
+        reader: {
+          getState: () => state,
+          getCostConflict: (tech) => getCostConflict(tech)
+        },
+        executor: {
+          getState: () => state,
+          getBuildingManager: () => BuildingManager,
+          getProjectManager: () => ProjectManager
+        },
+        diagnostics
+      }
     }), techConflictClock = browserClock, { getTechConflict } = createTechConflict({
       getClock: () => techConflictClock,
       getSettings: () => settings,
@@ -50843,17 +50869,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       executor: {
         getState: () => state
       }
-    }), { autoResearch } = createResearchControl({
-      reader: {
-        getState: () => state,
-        getCostConflict: (tech) => getCostConflict(tech)
-      },
-      executor: {
-        getState: () => state,
-        getBuildingManager: () => BuildingManager,
-        getProjectManager: () => ProjectManager
-      },
-      diagnostics
     }), { autoPower } = createPowerControl({
       warnings: {
         getDocument: () => runtimeEnvironment.window.document,
