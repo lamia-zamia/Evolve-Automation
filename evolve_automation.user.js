@@ -5517,6 +5517,18 @@ Only continue if you trust the source. Injected code:
     return { MechManager };
   }
 
+  // src/bootstrap/fleet-mech-manager-control.ts
+  function createFleetMechManagerControl({
+    fleet,
+    mech
+  }) {
+    let fleetManagers = createFleetManagers(fleet), mechManager = createMechManager(mech);
+    return Object.freeze({
+      ...fleetManagers,
+      ...mechManager
+    });
+  }
+
   // src/game/infrastructure-managers.ts
   function createInfrastructureManagers({
     getGame,
@@ -50272,30 +50284,31 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getOccCosts,
       logError: (...args) => runtimeEnvironment.error(...args)
     }));
-    let FleetManagerOuter, FleetManager;
-    ({ FleetManagerOuter, FleetManager } = createFleetManagers({
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getPoly: () => poly,
-      getHaveTech: () => haveTech,
-      fleetControls
-    }));
-    let { MechManager } = createMechManager({
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getPoly: () => poly,
-      getGameLog: () => GameLog,
-      getUpdateDebugData: () => updateDebugData,
-      getCreateMechInfo: () => createMechInfo,
-      getMechControls: () => mechControls,
-      getMechListControls: () => mechListControls,
-      kCombinations: k_combinations,
-      createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback),
-      randomSource
+    let { FleetManagerOuter, FleetManager, MechManager } = createFleetMechManagerControl({
+      fleet: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getPoly: () => poly,
+        getHaveTech: () => haveTech,
+        fleetControls
+      },
+      mech: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getPoly: () => poly,
+        getGameLog: () => GameLog,
+        getUpdateDebugData: () => updateDebugData,
+        getCreateMechInfo: () => createMechInfo,
+        getMechControls: () => mechControls,
+        getMechListControls: () => mechListControls,
+        kCombinations: k_combinations,
+        createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback),
+        randomSource
+      }
     }), { mechSupplySavingReason } = createMechIntelligence({
       getGame: () => game,
       getSettings: () => settings,

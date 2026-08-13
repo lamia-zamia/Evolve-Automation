@@ -89,8 +89,7 @@ import { createIndustryManagerControls } from "../../bootstrap/industry-manager-
 import { createEconomyManagerControl } from "../../bootstrap/economy-manager-control.ts";
 import { createForeignAffairsManagerControl } from "../../bootstrap/foreign-affairs-manager-control.ts";
 import { readForeignAchievementGoal } from "./combat/foreign-achievements.ts";
-import { createFleetManagers } from "../../game/fleet-managers.ts";
-import { createMechManager } from "../../game/mech-manager.ts";
+import { createFleetMechManagerControl } from "../../bootstrap/fleet-mech-manager-control.ts";
 import { createInfrastructureManagers } from "../../game/infrastructure-managers.ts";
 import { createScriptBootstrapControl } from "../../bootstrap/script-bootstrap-control.ts";
 import { createCoreManagers } from "../../game/core-managers.ts";
@@ -2016,16 +2015,34 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  let FleetManagerOuter, FleetManager;
-  ({ FleetManagerOuter, FleetManager } = createFleetManagers({
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getPoly: () => poly,
-    getHaveTech: () => haveTech,
-    fleetControls,
-  }));
+  let { FleetManagerOuter, FleetManager, MechManager } =
+    createFleetMechManagerControl({
+      fleet: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getPoly: () => poly,
+        getHaveTech: () => haveTech,
+        fleetControls,
+      },
+      mech: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getPoly: () => poly,
+        getGameLog: () => GameLog,
+        getUpdateDebugData: () => updateDebugData,
+        getCreateMechInfo: () => createMechInfo,
+        getMechControls: () => mechControls,
+        getMechListControls: () => mechListControls,
+        kCombinations: k_combinations,
+        createMutationObserver: (callback) =>
+          new runtimeEnvironment.MutationObserver(callback),
+        randomSource,
+      },
+    });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.add({
@@ -2042,22 +2059,6 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  let { MechManager } = createMechManager({
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getPoly: () => poly,
-    getGameLog: () => GameLog,
-    getUpdateDebugData: () => updateDebugData,
-    getCreateMechInfo: () => createMechInfo,
-    getMechControls: () => mechControls,
-    getMechListControls: () => mechListControls,
-    kCombinations: k_combinations,
-    createMutationObserver: (callback) =>
-      new runtimeEnvironment.MutationObserver(callback),
-    randomSource,
-  });
   const { mechSupplySavingReason } = createMechIntelligence({
     getGame: () => game,
     getSettings: () => settings,
