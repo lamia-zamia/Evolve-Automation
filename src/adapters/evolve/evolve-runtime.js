@@ -86,7 +86,7 @@ import { createGameTraitControls } from "../browser/game-trait-controls.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
 import { createRuntimeQueries } from "../../game/runtime-queries.ts";
 import { createIndustryManagerControls } from "../../bootstrap/industry-manager-controls.ts";
-import { createEconomyManagers } from "../../game/economy-managers.ts";
+import { createEconomyManagerControl } from "../../bootstrap/economy-manager-control.ts";
 import { createForeignAffairsManagers } from "../../game/foreign-affairs-managers.ts";
 import { readForeignAchievementGoal } from "./combat/foreign-achievements.ts";
 import { createFleetManagers } from "../../game/fleet-managers.ts";
@@ -1951,7 +1951,7 @@ export function startEvolveRuntimeComposition(
 
   let GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager;
   ({ GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
-    createEconomyManagers({
+    createEconomyManagerControl({
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,

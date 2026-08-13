@@ -4430,6 +4430,11 @@ Only continue if you trust the source. Injected code:
     };
   }
 
+  // src/bootstrap/economy-manager-control.ts
+  function createEconomyManagerControl(dependencies) {
+    return createEconomyManagers(dependencies);
+  }
+
   // src/game/foreign-affairs-managers.ts
   function espionageOptions(govIndex) {
     return `#gov${govIndex} div span:nth-child(3)`;
@@ -50221,7 +50226,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         ResourceProductionCost
       }
     }), GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager;
-    ({ GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } = createEconomyManagers({
+    ({ GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } = createEconomyManagerControl({
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
