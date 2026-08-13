@@ -15288,6 +15288,197 @@ Only continue if you trust the source. Injected code:
     return { updatePriorityTargets };
   }
 
+  // src/adapters/evolve/game-priority-targets.ts
+  var NOORDER_SETTING = {
+    queue: "qAny",
+    r_queue: "qAny_res"
+  };
+  function readGlobal2(dependencies) {
+    let game = requireRecord(dependencies.getGame(), "game");
+    return readProperty(game, "global");
+  }
+  function readQueue(kind, dependencies) {
+    let rawGlobal = readGlobal2(dependencies);
+    if (!isNonArrayRecord(rawGlobal))
+      return Object.freeze({ display: !1, items: [], noorder: !1 });
+    let rawQueue = rawGlobal[kind], display = isNonArrayRecord(rawQueue) && !!rawQueue.display, rawItems = isNonArrayRecord(rawQueue) ? rawQueue.queue : [], items = Array.isArray(rawItems) ? rawItems : [], rawSettings = rawGlobal.settings, noorder = isNonArrayRecord(rawSettings) && !!rawSettings[NOORDER_SETTING[kind]];
+    return Object.freeze({ display, items, noorder });
+  }
+  function readCostMap(rawCost) {
+    if (!isNonArrayRecord(rawCost))
+      return Object.freeze({});
+    let cost = {};
+    for (let key of Object.keys(rawCost)) {
+      let value = rawCost[key];
+      isFiniteNumber(value) && (cost[key] = value);
+    }
+    return Object.freeze(cost);
+  }
+  function readOuterFleetNextShip(dependencies) {
+    let outer = requireRecord(
+      dependencies.getFleetManagerOuter(),
+      "FleetManagerOuter"
+    );
+    return Object.freeze({
+      affordable: !!outer.nextShipAffordable,
+      name: typeof outer.nextShipName == "string" ? outer.nextShipName : "",
+      cost: readCostMap(outer.nextShipCost)
+    });
+  }
+  function readMechBay(dependencies) {
+    let global = readGlobal2(dependencies), portal = isNonArrayRecord(global) ? global.portal : void 0, mechbay = isNonArrayRecord(portal) ? portal.mechbay : void 0;
+    if (!isNonArrayRecord(mechbay))
+      return Object.freeze({ max: 0, bay: 0, blueprintSize: "small" });
+    let blueprint = mechbay.blueprint, max = isFiniteNumber(mechbay.max) ? mechbay.max : 0, bay = isFiniteNumber(mechbay.bay) ? mechbay.bay : 0, blueprintSize = isNonArrayRecord(blueprint) && typeof blueprint.size == "string" ? blueprint.size : "small";
+    return Object.freeze({ max, bay, blueprintSize });
+  }
+  function readMechLabReady(dependencies) {
+    return callBoolean(
+      requireRecord(dependencies.getMechManager(), "MechManager"),
+      "initLab",
+      "MechManager"
+    );
+  }
+  function readMechPreferredSize(dependencies) {
+    let mechManager = requireRecord(
+      dependencies.getMechManager(),
+      "MechManager"
+    ), getPreferredSize = requireFunction(
+      mechManager.getPreferredSize,
+      "MechManager.getPreferredSize"
+    ), preferredList = Reflect.apply(getPreferredSize, mechManager, []);
+    return Array.isArray(preferredList) && typeof preferredList[0] == "string" ? preferredList[0] : void 0;
+  }
+  function readMechCost(size, dependencies) {
+    let mechManager = requireRecord(
+      dependencies.getMechManager(),
+      "MechManager"
+    ), getMechCost = requireFunction(
+      mechManager.getMechCost,
+      "MechManager.getMechCost"
+    ), cost = Reflect.apply(getMechCost, mechManager, [
+      Object.freeze({ size })
+    ]);
+    return Array.isArray(cost) && isFiniteNumber(cost[0]) ? cost[0] : 0;
+  }
+  function readTriggerTargets(dependencies) {
+    let rawTriggers = requireRecord(
+      dependencies.getTriggerManager(),
+      "TriggerManager"
+    ).targetTriggers;
+    if (!Array.isArray(rawTriggers))
+      return Object.freeze([]);
+    let triggers = [];
+    for (let raw of rawTriggers) {
+      if (!isNonArrayRecord(raw)) continue;
+      let actionId = raw.actionId;
+      typeof actionId == "string" && triggers.push(Object.freeze({ actionId }));
+    }
+    return Object.freeze(triggers);
+  }
+  function resetTargetTriggers(dependencies) {
+    callVoid(
+      requireRecord(dependencies.getTriggerManager(), "TriggerManager"),
+      "resetTargetTriggers",
+      "TriggerManager"
+    );
+  }
+  function readTechActionIds(dependencies) {
+    let jquery = dependencies.getJQuery(), ids = [];
+    if (typeof jquery != "function")
+      return Object.freeze(ids);
+    let collection = jquery("#tech .action");
+    return collection == null || typeof collection != "object" || typeof collection.each != "function" || collection.each.call(collection, function() {
+      let id = readProperty(this, "id");
+      typeof id == "string" && ids.push(id);
+    }), Object.freeze(ids);
+  }
+  function createGamePriorityTargetsEvolveAdapter(dependencies) {
+    return Object.freeze({
+      readQueue(kind) {
+        return readQueue(kind, dependencies);
+      },
+      readSpyPurchaseMoney() {
+        let spy = requireRecord(dependencies.getSpyManager(), "SpyManager");
+        return coerceNumber(spy.purchaseMoney);
+      },
+      readOuterFleetNextShip() {
+        return readOuterFleetNextShip(dependencies);
+      },
+      readMechBay() {
+        return readMechBay(dependencies);
+      },
+      readMechLabReady() {
+        return readMechLabReady(dependencies);
+      },
+      readMechPreferredSize() {
+        return readMechPreferredSize(dependencies);
+      },
+      readMechCost(size) {
+        return readMechCost(size, dependencies);
+      },
+      readTriggerTargets() {
+        return readTriggerTargets(dependencies);
+      },
+      resetTargetTriggers() {
+        resetTargetTriggers(dependencies);
+      },
+      readTechActionIds() {
+        return readTechActionIds(dependencies);
+      }
+    });
+  }
+
+  // src/bootstrap/priority-targets-control.ts
+  function createPriorityTargetsControl({
+    getGame,
+    getSpyManager,
+    getFleetManagerOuter,
+    getMechManager,
+    getTriggerManager,
+    getJQuery,
+    getSettings,
+    getState,
+    getResources,
+    getBuildings,
+    getTechIds,
+    getBuildingIds,
+    getArpaIds,
+    readQueuedTarget,
+    getTechConflict,
+    isPrestigeAllowed: isPrestigeAllowed2,
+    haveTask,
+    inflationChallengeShouldSaveMoney,
+    inflationChallengeMoney,
+    testSurface,
+    setTestContext
+  }) {
+    let gamePriorityTargets = createGamePriorityTargetsEvolveAdapter({
+      getGame,
+      getSpyManager,
+      getFleetManagerOuter,
+      getMechManager,
+      getTriggerManager,
+      getJQuery
+    });
+    return createPriorityTargets({
+      gamePriorityTargets,
+      getSettings,
+      getState,
+      getResources,
+      getBuildings,
+      getTechIds,
+      getBuildingIds,
+      getArpaIds,
+      readQueuedTarget,
+      getTechConflict,
+      isPrestigeAllowed: isPrestigeAllowed2,
+      haveTask,
+      inflationChallengeShouldSaveMoney,
+      inflationChallengeMoney
+    });
+  }
+
   // src/domain/progression/evolution/evolution-result.ts
   var INTENTIONAL_SPECIES = [
     "junker",
@@ -20643,147 +20834,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
       readTotalDays() {
         let game = requireRecord(getGame(), "game"), global = requireRecord(game.global, "game.global"), stats = requireRecord(global.stats, "game.global.stats");
         return requireNumber(stats.days, "game.global.stats.days");
-      }
-    });
-  }
-
-  // src/adapters/evolve/game-priority-targets.ts
-  var NOORDER_SETTING = {
-    queue: "qAny",
-    r_queue: "qAny_res"
-  };
-  function readGlobal2(dependencies) {
-    let game = requireRecord(dependencies.getGame(), "game");
-    return readProperty(game, "global");
-  }
-  function readQueue(kind, dependencies) {
-    let rawGlobal = readGlobal2(dependencies);
-    if (!isNonArrayRecord(rawGlobal))
-      return Object.freeze({ display: !1, items: [], noorder: !1 });
-    let rawQueue = rawGlobal[kind], display = isNonArrayRecord(rawQueue) && !!rawQueue.display, rawItems = isNonArrayRecord(rawQueue) ? rawQueue.queue : [], items = Array.isArray(rawItems) ? rawItems : [], rawSettings = rawGlobal.settings, noorder = isNonArrayRecord(rawSettings) && !!rawSettings[NOORDER_SETTING[kind]];
-    return Object.freeze({ display, items, noorder });
-  }
-  function readCostMap(rawCost) {
-    if (!isNonArrayRecord(rawCost))
-      return Object.freeze({});
-    let cost = {};
-    for (let key of Object.keys(rawCost)) {
-      let value = rawCost[key];
-      isFiniteNumber(value) && (cost[key] = value);
-    }
-    return Object.freeze(cost);
-  }
-  function readOuterFleetNextShip(dependencies) {
-    let outer = requireRecord(
-      dependencies.getFleetManagerOuter(),
-      "FleetManagerOuter"
-    );
-    return Object.freeze({
-      affordable: !!outer.nextShipAffordable,
-      name: typeof outer.nextShipName == "string" ? outer.nextShipName : "",
-      cost: readCostMap(outer.nextShipCost)
-    });
-  }
-  function readMechBay(dependencies) {
-    let global = readGlobal2(dependencies), portal = isNonArrayRecord(global) ? global.portal : void 0, mechbay = isNonArrayRecord(portal) ? portal.mechbay : void 0;
-    if (!isNonArrayRecord(mechbay))
-      return Object.freeze({ max: 0, bay: 0, blueprintSize: "small" });
-    let blueprint = mechbay.blueprint, max = isFiniteNumber(mechbay.max) ? mechbay.max : 0, bay = isFiniteNumber(mechbay.bay) ? mechbay.bay : 0, blueprintSize = isNonArrayRecord(blueprint) && typeof blueprint.size == "string" ? blueprint.size : "small";
-    return Object.freeze({ max, bay, blueprintSize });
-  }
-  function readMechLabReady(dependencies) {
-    return callBoolean(
-      requireRecord(dependencies.getMechManager(), "MechManager"),
-      "initLab",
-      "MechManager"
-    );
-  }
-  function readMechPreferredSize(dependencies) {
-    let mechManager = requireRecord(
-      dependencies.getMechManager(),
-      "MechManager"
-    ), getPreferredSize = requireFunction(
-      mechManager.getPreferredSize,
-      "MechManager.getPreferredSize"
-    ), preferredList = Reflect.apply(getPreferredSize, mechManager, []);
-    return Array.isArray(preferredList) && typeof preferredList[0] == "string" ? preferredList[0] : void 0;
-  }
-  function readMechCost(size, dependencies) {
-    let mechManager = requireRecord(
-      dependencies.getMechManager(),
-      "MechManager"
-    ), getMechCost = requireFunction(
-      mechManager.getMechCost,
-      "MechManager.getMechCost"
-    ), cost = Reflect.apply(getMechCost, mechManager, [
-      Object.freeze({ size })
-    ]);
-    return Array.isArray(cost) && isFiniteNumber(cost[0]) ? cost[0] : 0;
-  }
-  function readTriggerTargets(dependencies) {
-    let rawTriggers = requireRecord(
-      dependencies.getTriggerManager(),
-      "TriggerManager"
-    ).targetTriggers;
-    if (!Array.isArray(rawTriggers))
-      return Object.freeze([]);
-    let triggers = [];
-    for (let raw of rawTriggers) {
-      if (!isNonArrayRecord(raw)) continue;
-      let actionId = raw.actionId;
-      typeof actionId == "string" && triggers.push(Object.freeze({ actionId }));
-    }
-    return Object.freeze(triggers);
-  }
-  function resetTargetTriggers(dependencies) {
-    callVoid(
-      requireRecord(dependencies.getTriggerManager(), "TriggerManager"),
-      "resetTargetTriggers",
-      "TriggerManager"
-    );
-  }
-  function readTechActionIds(dependencies) {
-    let jquery = dependencies.getJQuery(), ids = [];
-    if (typeof jquery != "function")
-      return Object.freeze(ids);
-    let collection = jquery("#tech .action");
-    return collection == null || typeof collection != "object" || typeof collection.each != "function" || collection.each.call(collection, function() {
-      let id = readProperty(this, "id");
-      typeof id == "string" && ids.push(id);
-    }), Object.freeze(ids);
-  }
-  function createGamePriorityTargetsEvolveAdapter(dependencies) {
-    return Object.freeze({
-      readQueue(kind) {
-        return readQueue(kind, dependencies);
-      },
-      readSpyPurchaseMoney() {
-        let spy = requireRecord(dependencies.getSpyManager(), "SpyManager");
-        return coerceNumber(spy.purchaseMoney);
-      },
-      readOuterFleetNextShip() {
-        return readOuterFleetNextShip(dependencies);
-      },
-      readMechBay() {
-        return readMechBay(dependencies);
-      },
-      readMechLabReady() {
-        return readMechLabReady(dependencies);
-      },
-      readMechPreferredSize() {
-        return readMechPreferredSize(dependencies);
-      },
-      readMechCost(size) {
-        return readMechCost(size, dependencies);
-      },
-      readTriggerTargets() {
-        return readTriggerTargets(dependencies);
-      },
-      resetTargetTriggers() {
-        resetTargetTriggers(dependencies);
-      },
-      readTechActionIds() {
-        return readTechActionIds(dependencies);
       }
     });
   }
@@ -50614,15 +50664,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getMechManager: () => MechManager,
       getBuildingIds: () => buildingIds,
       getArpaIds: () => arpaIds
-    }), gamePriorityTargets = createGamePriorityTargetsEvolveAdapter({
+    }), { updatePriorityTargets } = createPriorityTargetsControl({
       getGame: () => game,
       getSpyManager: () => SpyManager,
       getFleetManagerOuter: () => FleetManagerOuter,
       getMechManager: () => MechManager,
       getTriggerManager: () => TriggerManager,
-      getJQuery: () => $
-    }), { updatePriorityTargets } = createPriorityTargets({
-      gamePriorityTargets,
+      getJQuery: () => $,
       getSettings: () => settings,
       getState: () => state,
       getResources: () => resources,
@@ -50635,7 +50683,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       isPrestigeAllowed: isPrestigeAllowed2,
       haveTask,
       inflationChallengeShouldSaveMoney,
-      inflationChallengeMoney: INFLATION_CHALLENGE_MONEY2
+      inflationChallengeMoney: INFLATION_CHALLENGE_MONEY2,
+      testSurface,
+      setTestContext(context) {
+        settings = context.settings, state = context.state, game = context.game, resources = context.resources, buildings = context.buildings, techIds = context.techIds, buildingIds = context.buildingIds, arpaIds = context.arpaIds, SpyManager = context.SpyManager, FleetManagerOuter = context.FleetManagerOuter, MechManager = context.MechManager, TriggerManager = context.TriggerManager, context.poly && (poly = context.poly);
+      }
     }), { checkEvolutionResult } = createEvolutionResultCheck({
       getSettings: () => settings,
       getSettingsRaw: () => settingsRaw,

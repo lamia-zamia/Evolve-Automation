@@ -135,7 +135,7 @@ import {
   createDemandPrioritizationAction,
   createStorageRequirementsAction,
 } from "./state-demand-actions.ts";
-import { createPriorityTargets } from "../../planning/priority-targets.ts";
+import { createPriorityTargetsControl } from "../../bootstrap/priority-targets-control.ts";
 import { createEvolutionResultCheck } from "./evolution-result-check.ts";
 import { formatEvolutionLog } from "../../application/evolution-result.ts";
 import {
@@ -184,7 +184,6 @@ import { createBuildingSettingsControl } from "../../bootstrap/settings/building
 import { createOptionsModalBrowserAdapter } from "../browser/options-modal.ts";
 import { createTotalDaysTopBarBrowserAdapter } from "../browser/total-days-top-bar.ts";
 import { createTotalDaysTopBarEvolveAdapter } from "./total-days-top-bar.ts";
-import { createGamePriorityTargetsEvolveAdapter } from "./game-priority-targets.ts";
 import { createPrestigeTopBarBrowserAdapter } from "../browser/prestige-top-bar.ts";
 import { createPrestigeTopBarEvolveAdapter } from "./progression/prestige/prestige-top-bar.ts";
 import { createEjectToggleBrowserAdapter } from "../browser/eject-toggles.ts";
@@ -3778,17 +3777,13 @@ export function startEvolveRuntimeComposition(
     getArpaIds: () => arpaIds,
   });
 
-  const gamePriorityTargets = createGamePriorityTargetsEvolveAdapter({
+  const { updatePriorityTargets } = createPriorityTargetsControl({
     getGame: () => game,
     getSpyManager: () => SpyManager,
     getFleetManagerOuter: () => FleetManagerOuter,
     getMechManager: () => MechManager,
     getTriggerManager: () => TriggerManager,
     getJQuery: () => $,
-  });
-
-  const { updatePriorityTargets } = createPriorityTargets({
-    gamePriorityTargets,
     getSettings: () => settings,
     getState: () => state,
     getResources: () => resources,
@@ -3802,27 +3797,23 @@ export function startEvolveRuntimeComposition(
     haveTask,
     inflationChallengeShouldSaveMoney,
     inflationChallengeMoney: INFLATION_CHALLENGE_MONEY,
+    testSurface,
+    setTestContext(context) {
+      settings = context.settings;
+      state = context.state;
+      game = context.game;
+      resources = context.resources;
+      buildings = context.buildings;
+      techIds = context.techIds;
+      buildingIds = context.buildingIds;
+      arpaIds = context.arpaIds;
+      SpyManager = context.SpyManager;
+      FleetManagerOuter = context.FleetManagerOuter;
+      MechManager = context.MechManager;
+      TriggerManager = context.TriggerManager;
+      if (context.poly) poly = context.poly;
+    },
   });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      updatePriorityTargets: () => updatePriorityTargets(),
-      setPriorityTargetsTestContext(context) {
-        settings = context.settings;
-        state = context.state;
-        game = context.game;
-        resources = context.resources;
-        buildings = context.buildings;
-        techIds = context.techIds;
-        buildingIds = context.buildingIds;
-        arpaIds = context.arpaIds;
-        SpyManager = context.SpyManager;
-        FleetManagerOuter = context.FleetManagerOuter;
-        MechManager = context.MechManager;
-        TriggerManager = context.TriggerManager;
-        if (context.poly) poly = context.poly;
-      },
-    });
 
   const { checkEvolutionResult } = createEvolutionResultCheck({
     getSettings: () => settings,
