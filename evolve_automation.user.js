@@ -27623,110 +27623,6 @@
     };
   }
 
-  // src/adapters/evolve/economy/market/trade-routes.ts
-  function readResourceView(value, index) {
-    const path = `MarketManager.priorityList[${index}]`;
-    const resource2 = requireRecord(value, path);
-    const id = resource2["id"];
-    if (typeof id !== "string") {
-      throw new TypeError(`${path}.id must be a string`);
-    }
-    const number = (name) => requireNumber(resource2[name], `${path}.${name}`);
-    return Object.freeze({
-      id,
-      tradeRoutes: number("tradeRoutes"),
-      autoTradeBuyEnabled: Boolean(resource2["autoTradeBuyEnabled"]),
-      autoTradeSellEnabled: Boolean(resource2["autoTradeSellEnabled"]),
-      usefulRatio: number("usefulRatio"),
-      storageRatio: number("storageRatio"),
-      tradeSellPrice: number("tradeSellPrice"),
-      tradeBuyPrice: number("tradeBuyPrice"),
-      rateOfChange: number("rateOfChange"),
-      tradeRouteQuantity: number("tradeRouteQuantity"),
-      autoTradeWeighting: number("autoTradeWeighting"),
-      autoTradePriority: number("autoTradePriority"),
-      isRoutesUnlocked: callBoolean(resource2, "isRoutesUnlocked", path),
-      isDemanded: callBoolean(resource2, "isDemanded", path)
-    });
-  }
-  function readMoney(value) {
-    const money = requireRecord(value, "resources.Money");
-    return Object.freeze({
-      rateOfChange: requireNumber(
-        money["rateOfChange"],
-        "resources.Money.rateOfChange"
-      ),
-      maxQuantity: requireNumber(
-        money["maxQuantity"],
-        "resources.Money.maxQuantity"
-      ),
-      currentQuantity: requireNumber(
-        money["currentQuantity"],
-        "resources.Money.currentQuantity"
-      ),
-      isDemanded: callBoolean(money, "isDemanded", "resources.Money")
-    });
-  }
-  function readSettings2(value) {
-    const settings = requireRecord(value, "settings");
-    return Object.freeze({
-      tradeRouteSellExcess: Boolean(settings["tradeRouteSellExcess"]),
-      tradeRouteMinimumMoneyPerSecond: requireNumber(
-        settings["tradeRouteMinimumMoneyPerSecond"],
-        "settings.tradeRouteMinimumMoneyPerSecond"
-      ),
-      tradeRouteMinimumMoneyPercentage: requireNumber(
-        settings["tradeRouteMinimumMoneyPercentage"],
-        "settings.tradeRouteMinimumMoneyPercentage"
-      )
-    });
-  }
-  function readMaxTradeRoutes(manager) {
-    const getMax = requireFunction(
-      manager["getMaxTradeRoutes"],
-      "MarketManager.getMaxTradeRoutes"
-    );
-    const tuple = Reflect.apply(getMax, manager, []);
-    if (!Array.isArray(tuple)) {
-      throw new TypeError(
-        "MarketManager.getMaxTradeRoutes() must return an array"
-      );
-    }
-    return [
-      requireNumber(tuple[0], "MarketManager.getMaxTradeRoutes()[0]"),
-      requireNumber(tuple[1], "MarketManager.getMaxTradeRoutes()[1]")
-    ];
-  }
-  function readTradeRoutesInput(dependencies) {
-    const resources = requireRecord(dependencies.getResources(), "resources");
-    const manager = requireRecord(
-      dependencies.getMarketManager(),
-      "MarketManager"
-    );
-    const game = requireRecord(dependencies.getGame(), "game");
-    const race2 = requireRecord(
-      requireRecord(game["global"], "game.global")["race"],
-      "game.global.race"
-    );
-    const priorityListRaw = manager["priorityList"];
-    if (!Array.isArray(priorityListRaw)) {
-      throw new TypeError("MarketManager.priorityList must be an array");
-    }
-    const [maxTradeRoutes, unmanagedTradeRoutes] = readMaxTradeRoutes(manager);
-    return Object.freeze({
-      settings: readSettings2(dependencies.getSettings()),
-      priorityList: Object.freeze(priorityListRaw.map(readResourceView)),
-      money: readMoney(resources["Money"]),
-      importRouteCap: callNumber(manager, "getImportRouteCap", "MarketManager"),
-      exportRouteCap: callNumber(manager, "getExportRouteCap", "MarketManager"),
-      maxTradeRoutes,
-      unmanagedTradeRoutes,
-      isBanana: Boolean(race2["banana"]),
-      isEntrepreneur: dependencies.getGovernor() === "entrepreneur",
-      saveInflationMoney: dependencies.shouldSaveInflationMoney()
-    });
-  }
-
   // src/domain/economy/market/trade-routes.ts
   function planTradeRoutes(input) {
     const { settings } = input;
@@ -27930,6 +27826,147 @@
       operations: Object.freeze(operations.map((op) => Object.freeze(op))),
       moneyRate: currentMoneyPerSecond
     });
+  }
+
+  // src/adapters/evolve/economy/market/trade-routes.ts
+  function readResourceView(value, index) {
+    const path = `MarketManager.priorityList[${index}]`;
+    const resource2 = requireRecord(value, path);
+    const id = resource2["id"];
+    if (typeof id !== "string") {
+      throw new TypeError(`${path}.id must be a string`);
+    }
+    const number = (name) => requireNumber(resource2[name], `${path}.${name}`);
+    return Object.freeze({
+      id,
+      tradeRoutes: number("tradeRoutes"),
+      autoTradeBuyEnabled: Boolean(resource2["autoTradeBuyEnabled"]),
+      autoTradeSellEnabled: Boolean(resource2["autoTradeSellEnabled"]),
+      usefulRatio: number("usefulRatio"),
+      storageRatio: number("storageRatio"),
+      tradeSellPrice: number("tradeSellPrice"),
+      tradeBuyPrice: number("tradeBuyPrice"),
+      rateOfChange: number("rateOfChange"),
+      tradeRouteQuantity: number("tradeRouteQuantity"),
+      autoTradeWeighting: number("autoTradeWeighting"),
+      autoTradePriority: number("autoTradePriority"),
+      isRoutesUnlocked: callBoolean(resource2, "isRoutesUnlocked", path),
+      isDemanded: callBoolean(resource2, "isDemanded", path)
+    });
+  }
+  function readMoney(value) {
+    const money = requireRecord(value, "resources.Money");
+    return Object.freeze({
+      rateOfChange: requireNumber(
+        money["rateOfChange"],
+        "resources.Money.rateOfChange"
+      ),
+      maxQuantity: requireNumber(
+        money["maxQuantity"],
+        "resources.Money.maxQuantity"
+      ),
+      currentQuantity: requireNumber(
+        money["currentQuantity"],
+        "resources.Money.currentQuantity"
+      ),
+      isDemanded: callBoolean(money, "isDemanded", "resources.Money")
+    });
+  }
+  function readSettings2(value) {
+    const settings = requireRecord(value, "settings");
+    return Object.freeze({
+      tradeRouteSellExcess: Boolean(settings["tradeRouteSellExcess"]),
+      tradeRouteMinimumMoneyPerSecond: requireNumber(
+        settings["tradeRouteMinimumMoneyPerSecond"],
+        "settings.tradeRouteMinimumMoneyPerSecond"
+      ),
+      tradeRouteMinimumMoneyPercentage: requireNumber(
+        settings["tradeRouteMinimumMoneyPercentage"],
+        "settings.tradeRouteMinimumMoneyPercentage"
+      )
+    });
+  }
+  function readMaxTradeRoutes(manager) {
+    const getMax = requireFunction(
+      manager["getMaxTradeRoutes"],
+      "MarketManager.getMaxTradeRoutes"
+    );
+    const tuple = Reflect.apply(getMax, manager, []);
+    if (!Array.isArray(tuple)) {
+      throw new TypeError(
+        "MarketManager.getMaxTradeRoutes() must return an array"
+      );
+    }
+    return [
+      requireNumber(tuple[0], "MarketManager.getMaxTradeRoutes()[0]"),
+      requireNumber(tuple[1], "MarketManager.getMaxTradeRoutes()[1]")
+    ];
+  }
+  function readTradeRoutesInput(dependencies) {
+    const resources = requireRecord(dependencies.getResources(), "resources");
+    const manager = requireRecord(
+      dependencies.getMarketManager(),
+      "MarketManager"
+    );
+    const game = requireRecord(dependencies.getGame(), "game");
+    const race2 = requireRecord(
+      requireRecord(game["global"], "game.global")["race"],
+      "game.global.race"
+    );
+    const priorityListRaw = manager["priorityList"];
+    if (!Array.isArray(priorityListRaw)) {
+      throw new TypeError("MarketManager.priorityList must be an array");
+    }
+    const [maxTradeRoutes, unmanagedTradeRoutes] = readMaxTradeRoutes(manager);
+    return Object.freeze({
+      settings: readSettings2(dependencies.getSettings()),
+      priorityList: Object.freeze(priorityListRaw.map(readResourceView)),
+      money: readMoney(resources["Money"]),
+      importRouteCap: callNumber(manager, "getImportRouteCap", "MarketManager"),
+      exportRouteCap: callNumber(manager, "getExportRouteCap", "MarketManager"),
+      maxTradeRoutes,
+      unmanagedTradeRoutes,
+      isBanana: Boolean(race2["banana"]),
+      isEntrepreneur: dependencies.getGovernor() === "entrepreneur",
+      saveInflationMoney: dependencies.shouldSaveInflationMoney()
+    });
+  }
+
+  // src/adapters/evolve/trade-routes.ts
+  function createTradeRoutes({
+    getSettings,
+    getGame,
+    getResources,
+    getMarketManager,
+    getGovernor,
+    shouldSaveInflationMoney: shouldSaveInflationMoney2
+  }) {
+    function adjustTradeRoutes() {
+      const result2 = planTradeRoutes(
+        readTradeRoutesInput({
+          getSettings,
+          getGame,
+          getResources,
+          getMarketManager,
+          getGovernor,
+          shouldSaveInflationMoney: shouldSaveInflationMoney2
+        })
+      );
+      const resources = getResources();
+      const marketManager = getMarketManager();
+      for (const operation2 of result2.operations) {
+        const resource2 = resources[operation2.resourceId];
+        if (operation2.kind === "zero") {
+          marketManager.zeroTradeRoutes(resource2);
+        } else if (operation2.kind === "add") {
+          marketManager.addTradeRoutes(resource2, operation2.count);
+        } else {
+          marketManager.removeTradeRoutes(resource2, operation2.count);
+        }
+      }
+      resources.Money.rateOfChange = result2.moneyRate;
+    }
+    return { adjustTradeRoutes };
   }
 
   // src/domain/combat/hell.ts
@@ -60317,29 +60354,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getCostConflict = context.getCostConflict;
       }
     });
-    let adjustTradeRoutes = function adjustTradeRoutes2() {
-      const result2 = planTradeRoutes(
-        readTradeRoutesInput({
-          getSettings: () => settings,
-          getGame: () => game,
-          getResources: () => resources,
-          getMarketManager: () => MarketManager,
-          getGovernor: () => getGovernor(),
-          shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney()
-        })
-      );
-      for (const operation2 of result2.operations) {
-        const resource2 = resources[operation2.resourceId];
-        if (operation2.kind === "zero") {
-          MarketManager.zeroTradeRoutes(resource2);
-        } else if (operation2.kind === "add") {
-          MarketManager.addTradeRoutes(resource2, operation2.count);
-        } else {
-          MarketManager.removeTradeRoutes(resource2, operation2.count);
-        }
-      }
-      resources.Money.rateOfChange = result2.moneyRate;
-    };
+    let { adjustTradeRoutes } = createTradeRoutes({
+      getSettings: () => settings,
+      getGame: () => game,
+      getResources: () => resources,
+      getMarketManager: () => MarketManager,
+      getGovernor: () => getGovernor(),
+      shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney()
+    });
     publishTestSurface({
       adjustTradeRoutes,
       setTradeRoutesTestContext(context) {

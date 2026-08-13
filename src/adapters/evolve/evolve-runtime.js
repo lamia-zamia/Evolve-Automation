@@ -248,8 +248,7 @@ import { createBuildingWeightingPolicy } from "../../domain/progression/build/bu
 import { createBuildingWeightingDecider } from "../../domain/progression/build/building-weighting-decision.ts";
 import { readWeightingCandidate } from "./progression/build/weighting-candidate.ts";
 import { createWeightingSnapshotReader } from "./progression/build/weighting-snapshot.ts";
-import { readTradeRoutesInput } from "./economy/market/trade-routes.ts";
-import { planTradeRoutes } from "../../domain/economy/market/trade-routes.ts";
+import { createTradeRoutes } from "./trade-routes.ts";
 import { createHellControl } from "../../bootstrap/hell-control.ts";
 import { createGovernmentControl } from "../../bootstrap/government-control.ts";
 import { createBattleControl } from "../../bootstrap/battle-control.ts";
@@ -4508,29 +4507,14 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  let adjustTradeRoutes = function adjustTradeRoutes() {
-    const result = planTradeRoutes(
-      readTradeRoutesInput({
-        getSettings: () => settings,
-        getGame: () => game,
-        getResources: () => resources,
-        getMarketManager: () => MarketManager,
-        getGovernor: () => getGovernor(),
-        shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney(),
-      }),
-    );
-    for (const operation of result.operations) {
-      const resource = resources[operation.resourceId];
-      if (operation.kind === "zero") {
-        MarketManager.zeroTradeRoutes(resource);
-      } else if (operation.kind === "add") {
-        MarketManager.addTradeRoutes(resource, operation.count);
-      } else {
-        MarketManager.removeTradeRoutes(resource, operation.count);
-      }
-    }
-    resources.Money.rateOfChange = result.moneyRate;
-  };
+  let { adjustTradeRoutes } = createTradeRoutes({
+    getSettings: () => settings,
+    getGame: () => game,
+    getResources: () => resources,
+    getMarketManager: () => MarketManager,
+    getGovernor: () => getGovernor(),
+    shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney(),
+  });
 
   publishTestSurface({
     adjustTradeRoutes,
