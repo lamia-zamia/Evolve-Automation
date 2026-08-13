@@ -27574,477 +27574,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
-  // src/adapters/evolve/economy/production/mining-droid.ts
-  function readProductions(manager) {
-    let productions = requireRecord(
-      manager.Productions,
-      "DroidManager.Productions"
-    ), values = [], byId = /* @__PURE__ */ new Map();
-    for (let [key, value] of Object.entries(productions)) {
-      let path = `DroidManager.Productions.${key}`, production = requireRecord(value, path), id = requireNonEmptyString(production.id, `${path}.id`);
-      if (byId.has(id))
-        throw new TypeError(`DroidManager.Productions has duplicate id ${id}`);
-      values.push(production), byId.set(id, production);
-    }
-    return Object.freeze({ values: Object.freeze(values), byId });
-  }
-  function createMiningDroidReader(getManager) {
-    let session = null;
-    return Object.freeze({
-      readPlanningInput() {
-        let manager = requireRecord(getManager(), "DroidManager");
-        if (!callBoolean(manager, "initIndustry", "DroidManager"))
-          return session = null, Object.freeze({
-            initialised: !1,
-            maximum: 0,
-            productions: Object.freeze([])
-          });
-        let rawProductions = readProductions(manager);
-        session = Object.freeze({
-          manager,
-          productions: rawProductions.byId
-        });
-        let partial = rawProductions.values.map((production, index) => {
-          let path = `DroidManager.Productions[${index}]`, id = requireNonEmptyString(production.id, `${path}.id`), weighting = requireNumber(
-            production.weighting,
-            `${path}.weighting`
-          );
-          if (weighting <= 0)
-            return { production, id, weighting, priority: 0, demanded: !1 };
-          let resource2 = requireRecord(
-            production.resource,
-            `${path}.resource`
-          );
-          return {
-            production,
-            resource: resource2,
-            id,
-            weighting,
-            priority: requireNumber(production.priority, `${path}.priority`),
-            demanded: callBoolean(resource2, "isDemanded", `${path}.resource`)
-          };
-        }), maximum = requireCount(
-          callNumber(manager, "maxOperating", "DroidManager"),
-          "DroidManager.maxOperating()"
-        ), productions = partial.map((entry) => {
-          let effectivePriority = entry.demanded ? Math.max(entry.priority, 100) : entry.priority, useful = maximum > 0 && entry.weighting > 0 && effectivePriority !== 0 ? callBoolean(
-            requireRecord(
-              entry.production.resource,
-              `DroidManager production ${entry.id}.resource`
-            ),
-            "isUseful",
-            `DroidManager production ${entry.id}.resource`
-          ) : !1;
-          return Object.freeze({
-            id: entry.id,
-            weighting: entry.weighting,
-            priority: entry.priority,
-            demanded: entry.demanded,
-            useful
-          });
-        });
-        return Object.freeze({
-          initialised: !0,
-          maximum,
-          productions: Object.freeze(productions)
-        });
-      },
-      readCurrent(productionIds) {
-        if (session === null)
-          throw new Error(
-            "mining-droid planning input must be read before current allocations"
-          );
-        let activeSession = session, seen = /* @__PURE__ */ new Set(), current = productionIds.map((productionId) => {
-          if (seen.has(productionId))
-            throw new TypeError(
-              `duplicate mining-droid production id ${productionId}`
-            );
-          seen.add(productionId);
-          let production = activeSession.productions.get(productionId);
-          if (production === void 0)
-            throw new TypeError(
-              `unknown mining-droid production id ${productionId}`
-            );
-          let count2 = requireCount(
-            callNumber(
-              activeSession.manager,
-              "currentProduction",
-              "DroidManager",
-              production
-            ),
-            `DroidManager.currentProduction(${productionId})`
-          );
-          return Object.freeze({ productionId, count: count2 });
-        });
-        return Object.freeze(current);
-      }
-    });
-  }
-  function createMiningDroidCommandExecutor(getManager) {
-    return Object.freeze({
-      execute(decision2) {
-        let decisionIds = /* @__PURE__ */ new Set();
-        for (let adjustment of decision2.adjustments) {
-          if (typeof adjustment.productionId != "string" || adjustment.productionId.length === 0 || decisionIds.has(adjustment.productionId) || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent < 0 || !Number.isSafeInteger(adjustment.delta) || !Number.isSafeInteger(
-            adjustment.expectedCurrent + adjustment.delta
-          ) || adjustment.expectedCurrent + adjustment.delta < 0)
-            return rejected(
-              "invalid-mining-droid-adjustment",
-              "mining-droid adjustments require unique ids and safe non-negative target allocations"
-            );
-          decisionIds.add(adjustment.productionId);
-        }
-        let active = decision2.adjustments.filter(
-          (adjustment) => adjustment.delta !== 0
-        );
-        if (active.length === 0)
-          return SUCCEEDED;
-        let manager = requireRecord(getManager(), "DroidManager"), productions = readProductions(manager).byId, currentProduction2 = requireFunction(
-          manager.currentProduction,
-          "DroidManager.currentProduction"
-        ), decreaseProduction = active.some((entry) => entry.delta < 0) ? requireFunction(
-          manager.decreaseProduction,
-          "DroidManager.decreaseProduction"
-        ) : null, increaseProduction = active.some((entry) => entry.delta > 0) ? requireFunction(
-          manager.increaseProduction,
-          "DroidManager.increaseProduction"
-        ) : null, resolved = [];
-        for (let adjustment of active) {
-          let production = productions.get(adjustment.productionId);
-          if (production === void 0)
-            return stale(
-              "stale-mining-droid-production",
-              "mining-droid production list changed",
-              { productionId: adjustment.productionId }
-            );
-          let actual = requireCount(
-            requireNumber(
-              Reflect.apply(currentProduction2, manager, [production]),
-              `DroidManager.currentProduction(${adjustment.productionId})`
-            ),
-            `DroidManager.currentProduction(${adjustment.productionId})`
-          );
-          if (actual !== adjustment.expectedCurrent)
-            return stale(
-              "stale-mining-droid-allocation",
-              "mining-droid allocation changed",
-              {
-                productionId: adjustment.productionId,
-                expected: adjustment.expectedCurrent,
-                actual
-              }
-            );
-          resolved.push({ adjustment, production });
-        }
-        for (let entry of resolved)
-          entry.adjustment.delta < 0 && decreaseProduction !== null && Reflect.apply(decreaseProduction, manager, [
-            entry.production,
-            entry.adjustment.delta * -1
-          ]);
-        for (let entry of resolved)
-          entry.adjustment.delta > 0 && increaseProduction !== null && Reflect.apply(increaseProduction, manager, [
-            entry.production,
-            entry.adjustment.delta
-          ]);
-        return SUCCEEDED;
-      }
-    });
-  }
-
-  // src/domain/economy/production/mining-droid.ts
-  function planMiningDroidTargets(input) {
-    if (!input.initialised)
-      return null;
-    let priorityGroups = /* @__PURE__ */ new Map(), targets = new Map(
-      input.productions.map((production) => [production.id, 0])
-    );
-    for (let production of input.productions) {
-      if (production.weighting <= 0)
-        continue;
-      let priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
-      if (priority === 0)
-        continue;
-      let group = priorityGroups.get(priority) ?? [];
-      group.push(production), priorityGroups.set(priority, group);
-    }
-    let priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group), supplementary = priorityGroups.get(-1);
-    if (supplementary !== void 0 && priorityList.length > 1) {
-      let supplementaryIndex = priorityList.indexOf(supplementary);
-      priorityList.splice(supplementaryIndex, 1), priorityList[0]?.push(...supplementary);
-    }
-    let remaining = input.maximum;
-    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
-      let products = [...priorityList[groupIndex] ?? []].sort(
-        (left, right) => left.weighting - right.weighting
-      );
-      for (; remaining > 0; ) {
-        let beforeDistribution = remaining, totalWeight = products.reduce(
-          (sum, production) => sum + production.weighting,
-          0
-        );
-        for (let index = products.length - 1; index >= 0 && remaining > 0; index--) {
-          let production = products[index];
-          if (production === void 0)
-            continue;
-          let requested = Math.min(
-            remaining,
-            Math.max(
-              1,
-              Math.floor(
-                beforeDistribution / totalWeight * production.weighting
-              )
-            )
-          ), assigned = production.useful ? requested : 0;
-          assigned > 0 && (remaining -= assigned, targets.set(
-            production.id,
-            (targets.get(production.id) ?? 0) + assigned
-          )), assigned < requested && products.splice(index, 1);
-        }
-        if (beforeDistribution === remaining)
-          break;
-      }
-    }
-    return remaining > 0 ? null : Object.freeze(
-      input.productions.map(
-        (production) => Object.freeze({
-          productionId: production.id,
-          target: targets.get(production.id) ?? 0
-        })
-      )
-    );
-  }
-  function planMiningDroidAdjustments(targets, current) {
-    let currentById = new Map(
-      current.map((production) => [production.productionId, production.count])
-    );
-    return Object.freeze({
-      adjustments: Object.freeze(
-        targets.map((target) => {
-          let expectedCurrent = currentById.get(target.productionId) ?? 0;
-          return Object.freeze({
-            productionId: target.productionId,
-            expectedCurrent,
-            delta: target.target - expectedCurrent
-          });
-        })
-      )
-    });
-  }
-
-  // src/application/mining-droid.ts
-  var SUCCEEDED5 = Object.freeze({
-    status: "succeeded"
-  });
-  function runMiningDroidAutomation(dependencies) {
-    let targets = planMiningDroidTargets(
-      dependencies.reader.readPlanningInput()
-    );
-    if (targets === null)
-      return SUCCEEDED5;
-    let current = dependencies.reader.readCurrent(
-      targets.map((target) => target.productionId)
-    );
-    return dependencies.executor.execute(
-      planMiningDroidAdjustments(targets, current)
-    );
-  }
-
-  // src/bootstrap/mining-droid-control.ts
-  function createMiningDroidControl(getManager) {
-    return Object.freeze({
-      autoMiningDroid: () => runMiningDroidAutomation({
-        reader: createMiningDroidReader(getManager),
-        executor: createMiningDroidCommandExecutor(getManager)
-      })
-    });
-  }
-
-  // src/adapters/evolve/economy/production/graphene.ts
-  function readFuels2(manager, graphene, maxOperating) {
-    let fuels = requireRecord(manager.Fuels, "GrapheneManager.Fuels"), rawFuels = Object.values(fuels).map((entry, index) => {
-      let path = `GrapheneManager.Fuels[${index}]`, fuel = requireRecord(entry, path), id = fuel.id;
-      if (typeof id != "string")
-        throw new TypeError(`${path}.id must be a string`);
-      let cost = requireRecord(fuel.cost, `${path}.cost`), resource2 = requireRecord(cost.resource, `${path}.cost.resource`);
-      return {
-        index,
-        id,
-        storageRatio: requireNumber(
-          resource2.storageRatio,
-          `${path}.cost.resource.storageRatio`
-        ),
-        rateOfChange: requireNumber(
-          resource2.rateOfChange,
-          `${path}.cost.resource.rateOfChange`
-        ),
-        fuel,
-        cost,
-        resource: resource2
-      };
-    }), result2 = rawFuels.map(
-      (fuel) => Object.freeze({
-        id: fuel.id,
-        storageRatio: fuel.storageRatio,
-        rateOfChange: fuel.rateOfChange,
-        currentQuantity: 0,
-        isUnlocked: !1,
-        costQuantity: 0,
-        costMinRateOfChange: 0,
-        currentFuelCount: 0
-      })
-    ), grapheneUseful = !1, usefulnessSampled = !1;
-    if (maxOperating !== 0) {
-      let sorted = [...rawFuels].sort(
-        (a, b) => b.storageRatio < 0.995 || a.storageRatio < 0.995 ? b.storageRatio - a.storageRatio : b.rateOfChange - a.rateOfChange
-      );
-      for (let raw of sorted) {
-        let path = `GrapheneManager.Fuels[${raw.index}]`;
-        callBoolean(
-          raw.resource,
-          "isUnlocked",
-          `${path}.cost.resource`
-        ) && (usefulnessSampled || (grapheneUseful = callBoolean(
-          graphene,
-          "isUseful",
-          "resources.Graphene"
-        ), usefulnessSampled = !0), result2[raw.index] = Object.freeze({
-          id: raw.id,
-          storageRatio: raw.storageRatio,
-          rateOfChange: raw.rateOfChange,
-          currentQuantity: requireNumber(
-            raw.resource.currentQuantity,
-            `${path}.cost.resource.currentQuantity`
-          ),
-          isUnlocked: !0,
-          costQuantity: requireNumber(
-            raw.cost.quantity,
-            `${path}.cost.quantity`
-          ),
-          costMinRateOfChange: requireNumber(
-            raw.cost.minRateOfChange,
-            `${path}.cost.minRateOfChange`
-          ),
-          currentFuelCount: callNumber(
-            manager,
-            "fueledCount",
-            "GrapheneManager",
-            raw.fuel
-          )
-        }));
-      }
-    }
-    return { fuels: result2, grapheneUseful };
-  }
-  function readGrapheneInput(dependencies) {
-    let resourcesValue = dependencies.getResources(), manager = requireRecord(
-      dependencies.getGrapheneManager(),
-      "GrapheneManager"
-    );
-    if (!callBoolean(manager, "initIndustry", "GrapheneManager"))
-      return Object.freeze({
-        initialised: !1,
-        maxOperating: 0,
-        grapheneUseful: !1,
-        consumptionBalanceMin: dependencies.consumptionBalanceMin,
-        fuels: Object.freeze([])
-      });
-    let resources = requireRecord(resourcesValue, "resources"), graphene = requireRecord(resources.Graphene, "resources.Graphene"), maxOperating = callNumber(manager, "maxOperating", "GrapheneManager"), fuelSnapshot = readFuels2(manager, graphene, maxOperating);
-    return Object.freeze({
-      initialised: !0,
-      maxOperating,
-      grapheneUseful: fuelSnapshot.grapheneUseful,
-      consumptionBalanceMin: dependencies.consumptionBalanceMin,
-      fuels: Object.freeze(fuelSnapshot.fuels)
-    });
-  }
-  function createGrapheneCommandExecutor(getGrapheneManager) {
-    function execute2(adjustments) {
-      if (adjustments.length === 0)
-        return SUCCEEDED;
-      let manager = requireRecord(getGrapheneManager(), "GrapheneManager"), fuels = requireRecord(manager.Fuels, "GrapheneManager.Fuels"), fueledCount = requireFunction(
-        manager.fueledCount,
-        "GrapheneManager.fueledCount"
-      ), decreaseFuel = requireFunction(
-        manager.decreaseFuel,
-        "GrapheneManager.decreaseFuel"
-      ), increaseFuel = requireFunction(
-        manager.increaseFuel,
-        "GrapheneManager.increaseFuel"
-      ), resolved = [];
-      for (let adjustment of adjustments) {
-        if (!Number.isSafeInteger(adjustment.delta))
-          return rejected(
-            "invalid-graphene-adjustment",
-            "graphene fuel adjustment must be a safe integer"
-          );
-        let fuel = requireRecord(
-          fuels[adjustment.fuelId],
-          `GrapheneManager.Fuels.${adjustment.fuelId}`
-        ), actual = requireNumber(
-          Reflect.apply(fueledCount, manager, [fuel]),
-          `GrapheneManager.fueledCount(${adjustment.fuelId})`
-        );
-        if (actual !== adjustment.expectedCurrentFuelCount)
-          return stale("stale-graphene-fuel", "graphene fuel count changed", {
-            fuelId: adjustment.fuelId,
-            expected: adjustment.expectedCurrentFuelCount,
-            actual
-          });
-        resolved.push({ adjustment, fuel });
-      }
-      for (let { adjustment, fuel } of resolved)
-        adjustment.delta < 0 && Reflect.apply(decreaseFuel, manager, [fuel, adjustment.delta * -1]);
-      for (let { adjustment, fuel } of resolved)
-        adjustment.delta > 0 && Reflect.apply(increaseFuel, manager, [fuel, adjustment.delta]);
-      return SUCCEEDED;
-    }
-    return Object.freeze({ execute: execute2 });
-  }
-
-  // src/domain/economy/production/graphene.ts
-  function planGraphene(input) {
-    if (!input.initialised)
-      return Object.freeze([]);
-    let remainingPlants = input.maxOperating, fuelAdjust = [], sortedFuel = [...input.fuels].sort(
-      (a, b) => b.storageRatio < 0.995 || a.storageRatio < 0.995 ? b.storageRatio - a.storageRatio : b.rateOfChange - a.rateOfChange
-    );
-    for (let fuel of sortedFuel) {
-      if (remainingPlants === 0)
-        break;
-      if (!fuel.isUnlocked)
-        continue;
-      let currentFuelCount = fuel.currentFuelCount, maxFueledForConsumption = remainingPlants;
-      if (!input.grapheneUseful)
-        maxFueledForConsumption = 0;
-      else if (fuel.currentQuantity < maxFueledForConsumption * fuel.costQuantity * input.consumptionBalanceMin + fuel.costMinRateOfChange) {
-        let rateOfChange = fuel.rateOfChange + fuel.costQuantity * currentFuelCount - fuel.costMinRateOfChange, affordableAmount = Math.floor(rateOfChange / fuel.costQuantity);
-        maxFueledForConsumption = Math.max(
-          Math.min(maxFueledForConsumption, affordableAmount),
-          0
-        );
-      }
-      let deltaFuel = maxFueledForConsumption - currentFuelCount;
-      deltaFuel !== 0 && fuelAdjust.push(
-        Object.freeze({
-          fuelId: fuel.id,
-          expectedCurrentFuelCount: currentFuelCount,
-          delta: deltaFuel
-        })
-      ), remainingPlants -= currentFuelCount + deltaFuel;
-    }
-    return Object.freeze(fuelAdjust);
-  }
-
-  // src/bootstrap/graphene-control.ts
-  function createGrapheneControl(dependencies) {
-    let executor = createGrapheneCommandExecutor(
-      dependencies.getGrapheneManager
-    );
-    return Object.freeze({
-      autoGraphenePlant: () => executor.execute(planGraphene(readGrapheneInput(dependencies)))
-    });
-  }
-
   // src/adapters/browser/progression-controls.ts
   function createShapeshiftControls(getVueById) {
     return Object.freeze({
@@ -29042,7 +28571,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/wish.ts
-  var SUCCEEDED6 = Object.freeze({
+  var SUCCEEDED5 = Object.freeze({
     status: "succeeded"
   });
   function runWishAutomation(dependencies) {
@@ -29050,7 +28579,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       let outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED6;
+    return SUCCEEDED5;
   }
 
   // src/bootstrap/wish-control.ts
@@ -29349,11 +28878,11 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/genetics.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED6 = Object.freeze({
     status: "succeeded"
   });
   function runGeneticsAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED7;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED6;
     if (!dependencies.controls.capture())
       return {
         status: "stale",
@@ -29366,7 +28895,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       let outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED7;
+    return SUCCEEDED6;
   }
 
   // src/bootstrap/genetics-control.ts
@@ -29567,13 +29096,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/mercenary.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED7 = Object.freeze({
     status: "succeeded"
   });
   function runMercenaryAutomation(dependencies) {
     let cycle = planMercenaryCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED8;
-    let hired = 0, outcome = SUCCEEDED8;
+    if (cycle === null) return SUCCEEDED7;
+    let hired = 0, outcome = SUCCEEDED7;
     for (; ; ) {
       let decision2 = planMercenaryHire(cycle, dependencies.reader.readState());
       if (decision2 === null) break;
@@ -29945,16 +29474,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/psychic.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function runPsychicAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED9;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED8;
     for (let decision2 of planPsychic(dependencies.reader.readPlan())) {
       let outcome = dependencies.executor.execute(decision2);
       if (outcome.status === "succeeded" || outcome.failure.code !== "psychic-control-unavailable") return outcome;
     }
-    return SUCCEEDED9;
+    return SUCCEEDED8;
   }
 
   // src/bootstrap/psychic-control.ts
@@ -30109,11 +29638,11 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/ocular-power.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function runOcularPowerAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED10;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED9;
     if (!dependencies.controls.capture())
       return {
         status: "stale",
@@ -30126,7 +29655,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       let outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED10;
+    return SUCCEEDED9;
   }
 
   // src/bootstrap/ocular-power-control.ts
@@ -30267,7 +29796,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/minor-trait.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function staleCandidate(index, expectedTraitName, actualTraitName) {
@@ -30283,7 +29812,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   function runMinorTraitAutomation(dependencies) {
     let summary = summarizeMinorTraits(dependencies.reader.readSummary());
     if (summary === null)
-      return SUCCEEDED11;
+      return SUCCEEDED10;
     for (let index = 0; index < summary.traits.length; index++) {
       let expected = summary.traits[index];
       if (expected === void 0)
@@ -30302,7 +29831,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       if (outcome.status !== "succeeded")
         return outcome;
     }
-    return SUCCEEDED11;
+    return SUCCEEDED10;
   }
 
   // src/bootstrap/minor-trait-control.ts
@@ -30397,7 +29926,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -30408,7 +29937,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     for (; ; ) {
       let decision2 = planTrigger(dependencies.reader.read(index));
       if (decision2 === null)
-        return result(SUCCEEDED12, active);
+        return result(SUCCEEDED11, active);
       if (decision2.kind === "click") {
         let execution = dependencies.executor.execute(decision2);
         if (execution.outcome.status !== "succeeded")
@@ -30744,6 +30273,477 @@ If script is allowed to reassign non-empty storage it might waste time producing
           isHungryRace: dependencies.isHungryRace
         }),
         executor: createConsumeCommandExecutor(() => manager)
+      })
+    });
+  }
+
+  // src/adapters/evolve/economy/production/graphene.ts
+  function readFuels2(manager, graphene, maxOperating) {
+    let fuels = requireRecord(manager.Fuels, "GrapheneManager.Fuels"), rawFuels = Object.values(fuels).map((entry, index) => {
+      let path = `GrapheneManager.Fuels[${index}]`, fuel = requireRecord(entry, path), id = fuel.id;
+      if (typeof id != "string")
+        throw new TypeError(`${path}.id must be a string`);
+      let cost = requireRecord(fuel.cost, `${path}.cost`), resource2 = requireRecord(cost.resource, `${path}.cost.resource`);
+      return {
+        index,
+        id,
+        storageRatio: requireNumber(
+          resource2.storageRatio,
+          `${path}.cost.resource.storageRatio`
+        ),
+        rateOfChange: requireNumber(
+          resource2.rateOfChange,
+          `${path}.cost.resource.rateOfChange`
+        ),
+        fuel,
+        cost,
+        resource: resource2
+      };
+    }), result2 = rawFuels.map(
+      (fuel) => Object.freeze({
+        id: fuel.id,
+        storageRatio: fuel.storageRatio,
+        rateOfChange: fuel.rateOfChange,
+        currentQuantity: 0,
+        isUnlocked: !1,
+        costQuantity: 0,
+        costMinRateOfChange: 0,
+        currentFuelCount: 0
+      })
+    ), grapheneUseful = !1, usefulnessSampled = !1;
+    if (maxOperating !== 0) {
+      let sorted = [...rawFuels].sort(
+        (a, b) => b.storageRatio < 0.995 || a.storageRatio < 0.995 ? b.storageRatio - a.storageRatio : b.rateOfChange - a.rateOfChange
+      );
+      for (let raw of sorted) {
+        let path = `GrapheneManager.Fuels[${raw.index}]`;
+        callBoolean(
+          raw.resource,
+          "isUnlocked",
+          `${path}.cost.resource`
+        ) && (usefulnessSampled || (grapheneUseful = callBoolean(
+          graphene,
+          "isUseful",
+          "resources.Graphene"
+        ), usefulnessSampled = !0), result2[raw.index] = Object.freeze({
+          id: raw.id,
+          storageRatio: raw.storageRatio,
+          rateOfChange: raw.rateOfChange,
+          currentQuantity: requireNumber(
+            raw.resource.currentQuantity,
+            `${path}.cost.resource.currentQuantity`
+          ),
+          isUnlocked: !0,
+          costQuantity: requireNumber(
+            raw.cost.quantity,
+            `${path}.cost.quantity`
+          ),
+          costMinRateOfChange: requireNumber(
+            raw.cost.minRateOfChange,
+            `${path}.cost.minRateOfChange`
+          ),
+          currentFuelCount: callNumber(
+            manager,
+            "fueledCount",
+            "GrapheneManager",
+            raw.fuel
+          )
+        }));
+      }
+    }
+    return { fuels: result2, grapheneUseful };
+  }
+  function readGrapheneInput(dependencies) {
+    let resourcesValue = dependencies.getResources(), manager = requireRecord(
+      dependencies.getGrapheneManager(),
+      "GrapheneManager"
+    );
+    if (!callBoolean(manager, "initIndustry", "GrapheneManager"))
+      return Object.freeze({
+        initialised: !1,
+        maxOperating: 0,
+        grapheneUseful: !1,
+        consumptionBalanceMin: dependencies.consumptionBalanceMin,
+        fuels: Object.freeze([])
+      });
+    let resources = requireRecord(resourcesValue, "resources"), graphene = requireRecord(resources.Graphene, "resources.Graphene"), maxOperating = callNumber(manager, "maxOperating", "GrapheneManager"), fuelSnapshot = readFuels2(manager, graphene, maxOperating);
+    return Object.freeze({
+      initialised: !0,
+      maxOperating,
+      grapheneUseful: fuelSnapshot.grapheneUseful,
+      consumptionBalanceMin: dependencies.consumptionBalanceMin,
+      fuels: Object.freeze(fuelSnapshot.fuels)
+    });
+  }
+  function createGrapheneCommandExecutor(getGrapheneManager) {
+    function execute2(adjustments) {
+      if (adjustments.length === 0)
+        return SUCCEEDED;
+      let manager = requireRecord(getGrapheneManager(), "GrapheneManager"), fuels = requireRecord(manager.Fuels, "GrapheneManager.Fuels"), fueledCount = requireFunction(
+        manager.fueledCount,
+        "GrapheneManager.fueledCount"
+      ), decreaseFuel = requireFunction(
+        manager.decreaseFuel,
+        "GrapheneManager.decreaseFuel"
+      ), increaseFuel = requireFunction(
+        manager.increaseFuel,
+        "GrapheneManager.increaseFuel"
+      ), resolved = [];
+      for (let adjustment of adjustments) {
+        if (!Number.isSafeInteger(adjustment.delta))
+          return rejected(
+            "invalid-graphene-adjustment",
+            "graphene fuel adjustment must be a safe integer"
+          );
+        let fuel = requireRecord(
+          fuels[adjustment.fuelId],
+          `GrapheneManager.Fuels.${adjustment.fuelId}`
+        ), actual = requireNumber(
+          Reflect.apply(fueledCount, manager, [fuel]),
+          `GrapheneManager.fueledCount(${adjustment.fuelId})`
+        );
+        if (actual !== adjustment.expectedCurrentFuelCount)
+          return stale("stale-graphene-fuel", "graphene fuel count changed", {
+            fuelId: adjustment.fuelId,
+            expected: adjustment.expectedCurrentFuelCount,
+            actual
+          });
+        resolved.push({ adjustment, fuel });
+      }
+      for (let { adjustment, fuel } of resolved)
+        adjustment.delta < 0 && Reflect.apply(decreaseFuel, manager, [fuel, adjustment.delta * -1]);
+      for (let { adjustment, fuel } of resolved)
+        adjustment.delta > 0 && Reflect.apply(increaseFuel, manager, [fuel, adjustment.delta]);
+      return SUCCEEDED;
+    }
+    return Object.freeze({ execute: execute2 });
+  }
+
+  // src/domain/economy/production/graphene.ts
+  function planGraphene(input) {
+    if (!input.initialised)
+      return Object.freeze([]);
+    let remainingPlants = input.maxOperating, fuelAdjust = [], sortedFuel = [...input.fuels].sort(
+      (a, b) => b.storageRatio < 0.995 || a.storageRatio < 0.995 ? b.storageRatio - a.storageRatio : b.rateOfChange - a.rateOfChange
+    );
+    for (let fuel of sortedFuel) {
+      if (remainingPlants === 0)
+        break;
+      if (!fuel.isUnlocked)
+        continue;
+      let currentFuelCount = fuel.currentFuelCount, maxFueledForConsumption = remainingPlants;
+      if (!input.grapheneUseful)
+        maxFueledForConsumption = 0;
+      else if (fuel.currentQuantity < maxFueledForConsumption * fuel.costQuantity * input.consumptionBalanceMin + fuel.costMinRateOfChange) {
+        let rateOfChange = fuel.rateOfChange + fuel.costQuantity * currentFuelCount - fuel.costMinRateOfChange, affordableAmount = Math.floor(rateOfChange / fuel.costQuantity);
+        maxFueledForConsumption = Math.max(
+          Math.min(maxFueledForConsumption, affordableAmount),
+          0
+        );
+      }
+      let deltaFuel = maxFueledForConsumption - currentFuelCount;
+      deltaFuel !== 0 && fuelAdjust.push(
+        Object.freeze({
+          fuelId: fuel.id,
+          expectedCurrentFuelCount: currentFuelCount,
+          delta: deltaFuel
+        })
+      ), remainingPlants -= currentFuelCount + deltaFuel;
+    }
+    return Object.freeze(fuelAdjust);
+  }
+
+  // src/bootstrap/graphene-control.ts
+  function createGrapheneControl(dependencies) {
+    let executor = createGrapheneCommandExecutor(
+      dependencies.getGrapheneManager
+    );
+    return Object.freeze({
+      autoGraphenePlant: () => executor.execute(planGraphene(readGrapheneInput(dependencies)))
+    });
+  }
+
+  // src/adapters/evolve/economy/production/mining-droid.ts
+  function readProductions(manager) {
+    let productions = requireRecord(
+      manager.Productions,
+      "DroidManager.Productions"
+    ), values = [], byId = /* @__PURE__ */ new Map();
+    for (let [key, value] of Object.entries(productions)) {
+      let path = `DroidManager.Productions.${key}`, production = requireRecord(value, path), id = requireNonEmptyString(production.id, `${path}.id`);
+      if (byId.has(id))
+        throw new TypeError(`DroidManager.Productions has duplicate id ${id}`);
+      values.push(production), byId.set(id, production);
+    }
+    return Object.freeze({ values: Object.freeze(values), byId });
+  }
+  function createMiningDroidReader(getManager) {
+    let session = null;
+    return Object.freeze({
+      readPlanningInput() {
+        let manager = requireRecord(getManager(), "DroidManager");
+        if (!callBoolean(manager, "initIndustry", "DroidManager"))
+          return session = null, Object.freeze({
+            initialised: !1,
+            maximum: 0,
+            productions: Object.freeze([])
+          });
+        let rawProductions = readProductions(manager);
+        session = Object.freeze({
+          manager,
+          productions: rawProductions.byId
+        });
+        let partial = rawProductions.values.map((production, index) => {
+          let path = `DroidManager.Productions[${index}]`, id = requireNonEmptyString(production.id, `${path}.id`), weighting = requireNumber(
+            production.weighting,
+            `${path}.weighting`
+          );
+          if (weighting <= 0)
+            return { production, id, weighting, priority: 0, demanded: !1 };
+          let resource2 = requireRecord(
+            production.resource,
+            `${path}.resource`
+          );
+          return {
+            production,
+            resource: resource2,
+            id,
+            weighting,
+            priority: requireNumber(production.priority, `${path}.priority`),
+            demanded: callBoolean(resource2, "isDemanded", `${path}.resource`)
+          };
+        }), maximum = requireCount(
+          callNumber(manager, "maxOperating", "DroidManager"),
+          "DroidManager.maxOperating()"
+        ), productions = partial.map((entry) => {
+          let effectivePriority = entry.demanded ? Math.max(entry.priority, 100) : entry.priority, useful = maximum > 0 && entry.weighting > 0 && effectivePriority !== 0 ? callBoolean(
+            requireRecord(
+              entry.production.resource,
+              `DroidManager production ${entry.id}.resource`
+            ),
+            "isUseful",
+            `DroidManager production ${entry.id}.resource`
+          ) : !1;
+          return Object.freeze({
+            id: entry.id,
+            weighting: entry.weighting,
+            priority: entry.priority,
+            demanded: entry.demanded,
+            useful
+          });
+        });
+        return Object.freeze({
+          initialised: !0,
+          maximum,
+          productions: Object.freeze(productions)
+        });
+      },
+      readCurrent(productionIds) {
+        if (session === null)
+          throw new Error(
+            "mining-droid planning input must be read before current allocations"
+          );
+        let activeSession = session, seen = /* @__PURE__ */ new Set(), current = productionIds.map((productionId) => {
+          if (seen.has(productionId))
+            throw new TypeError(
+              `duplicate mining-droid production id ${productionId}`
+            );
+          seen.add(productionId);
+          let production = activeSession.productions.get(productionId);
+          if (production === void 0)
+            throw new TypeError(
+              `unknown mining-droid production id ${productionId}`
+            );
+          let count2 = requireCount(
+            callNumber(
+              activeSession.manager,
+              "currentProduction",
+              "DroidManager",
+              production
+            ),
+            `DroidManager.currentProduction(${productionId})`
+          );
+          return Object.freeze({ productionId, count: count2 });
+        });
+        return Object.freeze(current);
+      }
+    });
+  }
+  function createMiningDroidCommandExecutor(getManager) {
+    return Object.freeze({
+      execute(decision2) {
+        let decisionIds = /* @__PURE__ */ new Set();
+        for (let adjustment of decision2.adjustments) {
+          if (typeof adjustment.productionId != "string" || adjustment.productionId.length === 0 || decisionIds.has(adjustment.productionId) || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent < 0 || !Number.isSafeInteger(adjustment.delta) || !Number.isSafeInteger(
+            adjustment.expectedCurrent + adjustment.delta
+          ) || adjustment.expectedCurrent + adjustment.delta < 0)
+            return rejected(
+              "invalid-mining-droid-adjustment",
+              "mining-droid adjustments require unique ids and safe non-negative target allocations"
+            );
+          decisionIds.add(adjustment.productionId);
+        }
+        let active = decision2.adjustments.filter(
+          (adjustment) => adjustment.delta !== 0
+        );
+        if (active.length === 0)
+          return SUCCEEDED;
+        let manager = requireRecord(getManager(), "DroidManager"), productions = readProductions(manager).byId, currentProduction2 = requireFunction(
+          manager.currentProduction,
+          "DroidManager.currentProduction"
+        ), decreaseProduction = active.some((entry) => entry.delta < 0) ? requireFunction(
+          manager.decreaseProduction,
+          "DroidManager.decreaseProduction"
+        ) : null, increaseProduction = active.some((entry) => entry.delta > 0) ? requireFunction(
+          manager.increaseProduction,
+          "DroidManager.increaseProduction"
+        ) : null, resolved = [];
+        for (let adjustment of active) {
+          let production = productions.get(adjustment.productionId);
+          if (production === void 0)
+            return stale(
+              "stale-mining-droid-production",
+              "mining-droid production list changed",
+              { productionId: adjustment.productionId }
+            );
+          let actual = requireCount(
+            requireNumber(
+              Reflect.apply(currentProduction2, manager, [production]),
+              `DroidManager.currentProduction(${adjustment.productionId})`
+            ),
+            `DroidManager.currentProduction(${adjustment.productionId})`
+          );
+          if (actual !== adjustment.expectedCurrent)
+            return stale(
+              "stale-mining-droid-allocation",
+              "mining-droid allocation changed",
+              {
+                productionId: adjustment.productionId,
+                expected: adjustment.expectedCurrent,
+                actual
+              }
+            );
+          resolved.push({ adjustment, production });
+        }
+        for (let entry of resolved)
+          entry.adjustment.delta < 0 && decreaseProduction !== null && Reflect.apply(decreaseProduction, manager, [
+            entry.production,
+            entry.adjustment.delta * -1
+          ]);
+        for (let entry of resolved)
+          entry.adjustment.delta > 0 && increaseProduction !== null && Reflect.apply(increaseProduction, manager, [
+            entry.production,
+            entry.adjustment.delta
+          ]);
+        return SUCCEEDED;
+      }
+    });
+  }
+
+  // src/domain/economy/production/mining-droid.ts
+  function planMiningDroidTargets(input) {
+    if (!input.initialised)
+      return null;
+    let priorityGroups = /* @__PURE__ */ new Map(), targets = new Map(
+      input.productions.map((production) => [production.id, 0])
+    );
+    for (let production of input.productions) {
+      if (production.weighting <= 0)
+        continue;
+      let priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
+      if (priority === 0)
+        continue;
+      let group = priorityGroups.get(priority) ?? [];
+      group.push(production), priorityGroups.set(priority, group);
+    }
+    let priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group), supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      let supplementaryIndex = priorityList.indexOf(supplementary);
+      priorityList.splice(supplementaryIndex, 1), priorityList[0]?.push(...supplementary);
+    }
+    let remaining = input.maximum;
+    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
+      let products = [...priorityList[groupIndex] ?? []].sort(
+        (left, right) => left.weighting - right.weighting
+      );
+      for (; remaining > 0; ) {
+        let beforeDistribution = remaining, totalWeight = products.reduce(
+          (sum, production) => sum + production.weighting,
+          0
+        );
+        for (let index = products.length - 1; index >= 0 && remaining > 0; index--) {
+          let production = products[index];
+          if (production === void 0)
+            continue;
+          let requested = Math.min(
+            remaining,
+            Math.max(
+              1,
+              Math.floor(
+                beforeDistribution / totalWeight * production.weighting
+              )
+            )
+          ), assigned = production.useful ? requested : 0;
+          assigned > 0 && (remaining -= assigned, targets.set(
+            production.id,
+            (targets.get(production.id) ?? 0) + assigned
+          )), assigned < requested && products.splice(index, 1);
+        }
+        if (beforeDistribution === remaining)
+          break;
+      }
+    }
+    return remaining > 0 ? null : Object.freeze(
+      input.productions.map(
+        (production) => Object.freeze({
+          productionId: production.id,
+          target: targets.get(production.id) ?? 0
+        })
+      )
+    );
+  }
+  function planMiningDroidAdjustments(targets, current) {
+    let currentById = new Map(
+      current.map((production) => [production.productionId, production.count])
+    );
+    return Object.freeze({
+      adjustments: Object.freeze(
+        targets.map((target) => {
+          let expectedCurrent = currentById.get(target.productionId) ?? 0;
+          return Object.freeze({
+            productionId: target.productionId,
+            expectedCurrent,
+            delta: target.target - expectedCurrent
+          });
+        })
+      )
+    });
+  }
+
+  // src/application/mining-droid.ts
+  var SUCCEEDED12 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMiningDroidAutomation(dependencies) {
+    let targets = planMiningDroidTargets(
+      dependencies.reader.readPlanningInput()
+    );
+    if (targets === null)
+      return SUCCEEDED12;
+    let current = dependencies.reader.readCurrent(
+      targets.map((target) => target.productionId)
+    );
+    return dependencies.executor.execute(
+      planMiningDroidAdjustments(targets, current)
+    );
+  }
+
+  // src/bootstrap/mining-droid-control.ts
+  function createMiningDroidControl(getManager) {
+    return Object.freeze({
+      autoMiningDroid: () => runMiningDroidAutomation({
+        reader: createMiningDroidReader(getManager),
+        executor: createMiningDroidCommandExecutor(getManager)
       })
     });
   }
@@ -31183,6 +31183,22 @@ If script is allowed to reassign non-empty storage it might waste time producing
         governorOfficeReader: governorOffice.reader,
         governorExecutor: governorOffice.executor
       })
+    });
+  }
+
+  // src/bootstrap/economy-automation-controls.ts
+  function createEconomyAutomationControls({
+    miningDroid,
+    graphene,
+    consume,
+    replicator
+  }) {
+    let miningDroidControl = createMiningDroidControl(miningDroid), grapheneControl = createGrapheneControl(graphene), consumeControl = createConsumeControl(consume), replicatorControl = createReplicatorControl(replicator);
+    return Object.freeze({
+      ...miningDroidControl,
+      ...grapheneControl,
+      ...consumeControl,
+      ...replicatorControl
     });
   }
 
@@ -50573,27 +50589,32 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getFactorySettings: () => settings,
       getFactoryState: () => state,
       testSurface
-    }), { autoMiningDroid } = createMiningDroidControl(() => DroidManager), { autoGraphenePlant } = createGrapheneControl({
-      getGrapheneManager: () => GrapheneManager,
-      getResources: () => resources,
-      consumptionBalanceMin: 60
-    }), { autoConsume } = createConsumeControl({
-      getResources: () => resources,
-      isHungryRace
-    }), { autoReplicator } = createReplicatorControl({
-      selectionReader: {
-        getManager: () => ReplicatorManager,
-        getSettings: () => settings,
-        getResources: () => resources
+    }), { autoMiningDroid, autoGraphenePlant, autoConsume, autoReplicator } = createEconomyAutomationControls({
+      miningDroid: () => DroidManager,
+      graphene: {
+        getGrapheneManager: () => GrapheneManager,
+        getResources: () => resources,
+        consumptionBalanceMin: 60
       },
-      governorGameReader: {
-        getGovernor,
-        haveReplicatorTechnology: () => haveTech("replicator"),
-        getGame: () => game
+      consume: {
+        getResources: () => resources,
+        isHungryRace
       },
-      getReplicatorManager: () => ReplicatorManager,
-      getGovernorOffice: () => getVueById("govOffice"),
-      resolveVueMethod
+      replicator: {
+        selectionReader: {
+          getManager: () => ReplicatorManager,
+          getSettings: () => settings,
+          getResources: () => resources
+        },
+        governorGameReader: {
+          getGovernor,
+          haveReplicatorTechnology: () => haveTech("replicator"),
+          getGame: () => game
+        },
+        getReplicatorManager: () => ReplicatorManager,
+        getGovernorOffice: () => getVueById("govOffice"),
+        resolveVueMethod
+      }
     }), { formatLogString, logPrestige } = createPrestigeLog({
       getSettings: () => settings,
       getGame: () => game,

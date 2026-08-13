@@ -223,8 +223,6 @@ import { createStorageExpansionControl } from "../../bootstrap/storage-expansion
 import { createAlchemyControl } from "../../bootstrap/alchemy-control.ts";
 import { createPylonControl } from "../../bootstrap/pylon-control.ts";
 import { createIndustryAutomationControls } from "../../bootstrap/industry-automation-controls.ts";
-import { createMiningDroidControl } from "../../bootstrap/mining-droid-control.ts";
-import { createGrapheneControl } from "../../bootstrap/graphene-control.ts";
 import { createShapeshiftControl } from "../../bootstrap/shapeshift-control.ts";
 import { createEvolutionControls } from "../../bootstrap/evolution-controls.ts";
 import { createWishControl } from "../../bootstrap/wish-control.ts";
@@ -234,8 +232,7 @@ import { createPsychicControl } from "../../bootstrap/psychic-control.ts";
 import { createOcularPowerControl } from "../../bootstrap/ocular-power-control.ts";
 import { createMinorTraitControl } from "../../bootstrap/minor-trait-control.ts";
 import { createTriggerControl } from "../../bootstrap/trigger-control.ts";
-import { createConsumeControl } from "../../bootstrap/consume-control.ts";
-import { createReplicatorControl } from "../../bootstrap/replicator-control.ts";
+import { createEconomyAutomationControls } from "../../bootstrap/economy-automation-controls.ts";
 import { createMarketControl } from "../../bootstrap/market-control.ts";
 import { createPowerControl } from "../../bootstrap/power-control.ts";
 import { createStorageAllocationControl } from "../../bootstrap/storage-allocation-control.ts";
@@ -3051,35 +3048,34 @@ export function startEvolveRuntimeComposition(
       testSurface,
     });
 
-  const { autoMiningDroid } = createMiningDroidControl(() => DroidManager);
-
-  const { autoGraphenePlant } = createGrapheneControl({
-    getGrapheneManager: () => GrapheneManager,
-    getResources: () => resources,
-    consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
-  });
-
-  // TODO: Allow configuring priorities between eject\supply\nanite
-  const { autoConsume } = createConsumeControl({
-    getResources: () => resources,
-    isHungryRace,
-  });
-
-  const { autoReplicator } = createReplicatorControl({
-    selectionReader: {
-      getManager: () => ReplicatorManager,
-      getSettings: () => settings,
-      getResources: () => resources,
-    },
-    governorGameReader: {
-      getGovernor,
-      haveReplicatorTechnology: () => haveTech("replicator"),
-      getGame: () => game,
-    },
-    getReplicatorManager: () => ReplicatorManager,
-    getGovernorOffice: () => getVueById("govOffice"),
-    resolveVueMethod,
-  });
+  const { autoMiningDroid, autoGraphenePlant, autoConsume, autoReplicator } =
+    createEconomyAutomationControls({
+      miningDroid: () => DroidManager,
+      graphene: {
+        getGrapheneManager: () => GrapheneManager,
+        getResources: () => resources,
+        consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
+      },
+      consume: {
+        getResources: () => resources,
+        isHungryRace,
+      },
+      replicator: {
+        selectionReader: {
+          getManager: () => ReplicatorManager,
+          getSettings: () => settings,
+          getResources: () => resources,
+        },
+        governorGameReader: {
+          getGovernor,
+          haveReplicatorTechnology: () => haveTech("replicator"),
+          getGame: () => game,
+        },
+        getReplicatorManager: () => ReplicatorManager,
+        getGovernorOffice: () => getVueById("govOffice"),
+        resolveVueMethod,
+      },
+    });
 
   const { formatLogString, logPrestige } = createPrestigeLog({
     getSettings: () => settings,
