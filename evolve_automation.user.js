@@ -5712,6 +5712,15 @@ Only continue if you trust the source. Injected code:
     ), { initialiseScript, mainAutoEvolveScript };
   }
 
+  // src/bootstrap/script-bootstrap-control.ts
+  function createScriptBootstrapControl({
+    testSurface,
+    setTestContext,
+    ...dependencies
+  }) {
+    return createScriptBootstrap(dependencies);
+  }
+
   // src/utils/performance.ts
   var runUnmeasured = (_phase, action) => action();
   function createPhaseMeasure(diagnostics) {
@@ -50950,7 +50959,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       loadStateLog,
       triggerFileDownload,
       displayScriptWarningNode
-    }, { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
+    }, { initialiseScript, mainAutoEvolveScript } = createScriptBootstrapControl({
       getGame: () => game,
       getTechIds: () => techIds,
       getTechnology: () => Technology,
@@ -50983,6 +50992,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       },
       setNeedSandboxBypass: (value) => {
         needSandboxBypass = value;
+      },
+      testSurface,
+      setTestContext(context) {
+        "game" in context && (game = context.game), "state" in context && (state = context.state), "settings" in context && (settings = context.settings), "techIds" in context && (techIds = context.techIds), "buildingIds" in context && (buildingIds = context.buildingIds), "arpaIds" in context && (arpaIds = context.arpaIds), "jobIds" in context && (jobIds = context.jobIds), "buildings" in context && (buildings = context.buildings), "projects" in context && (projects = context.projects), "jobs" in context && (jobs = context.jobs), "crafter" in context && (crafter = context.crafter), "TriggerManager" in context && (TriggerManager = context.TriggerManager), "gameModal" in context && (gameModal = context.gameModal), "KeyManager" in context && (KeyManager = context.KeyManager), "poly" in context && (poly = context.poly), "win" in context && (win = context.win), "safeMode" in context && (safeMode = context.safeMode), "checkActions" in context && (checkActions = context.checkActions), setTestContext("scriptBootstrap", context);
       }
     }), { buildFilterRegExp, filterLog } = createLogFilter({
       getSettingsRaw: () => settingsRaw,

@@ -94,7 +94,7 @@ import { readForeignAchievementGoal } from "./combat/foreign-achievements.ts";
 import { createFleetManagers } from "../../game/fleet-managers.ts";
 import { createMechManager } from "../../game/mech-manager.ts";
 import { createInfrastructureManagers } from "../../game/infrastructure-managers.ts";
-import { createScriptBootstrap } from "../../game/script-bootstrap.ts";
+import { createScriptBootstrapControl } from "../../bootstrap/script-bootstrap-control.ts";
 import { createCoreManagers } from "../../game/core-managers.ts";
 import { createRaceProfile } from "../../game/race-profile.ts";
 import { createForeignGovernment } from "../../game/foreign-government.ts";
@@ -4035,46 +4035,43 @@ export function startEvolveRuntimeComposition(
       displayScriptWarningNode,
     };
 
-  const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
-    getGame: () => game,
-    getTechIds: () => techIds,
-    getTechnology: () => Technology,
-    getBuildings: () => buildings,
-    getBuildingIds: () => buildingIds,
-    getState: () => state,
-    getProjects: () => projects,
-    getArpaIds: () => arpaIds,
-    getJobs: () => jobs,
-    getJobIds: () => jobIds,
-    getCrafter: () => crafter,
-    getTriggerManager: () => TriggerManager,
-    getCheckActions: () => checkActions,
-    getJQuery: () => $,
-    getWindow: () => runtimeEnvironment.window,
-    getUserscriptEnvironment: () => userscriptEnvironment,
-    getWin: () => win,
-    getGameKeyboardHandlers: () => gameKeyboardHandlers,
-    getPageShell: () => gamePageShell,
-    getNeedSandboxBypass: () => needSandboxBypass,
-    getPoly: () => poly,
-    getSettings: () => settings,
-    getSafeMode: () => safeMode,
-    getActions: getScriptBootstrapActions,
-    setWin: (value) => {
-      win = value;
-    },
-    setGame: (value) => {
-      game = value;
-    },
-    setNeedSandboxBypass: (value) => {
-      needSandboxBypass = value;
-    },
-  });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      scriptBootstrap: { initialiseScript, mainAutoEvolveScript },
-      setScriptBootstrapTestContext(context) {
+  const { initialiseScript, mainAutoEvolveScript } =
+    createScriptBootstrapControl({
+      getGame: () => game,
+      getTechIds: () => techIds,
+      getTechnology: () => Technology,
+      getBuildings: () => buildings,
+      getBuildingIds: () => buildingIds,
+      getState: () => state,
+      getProjects: () => projects,
+      getArpaIds: () => arpaIds,
+      getJobs: () => jobs,
+      getJobIds: () => jobIds,
+      getCrafter: () => crafter,
+      getTriggerManager: () => TriggerManager,
+      getCheckActions: () => checkActions,
+      getJQuery: () => $,
+      getWindow: () => runtimeEnvironment.window,
+      getUserscriptEnvironment: () => userscriptEnvironment,
+      getWin: () => win,
+      getGameKeyboardHandlers: () => gameKeyboardHandlers,
+      getPageShell: () => gamePageShell,
+      getNeedSandboxBypass: () => needSandboxBypass,
+      getPoly: () => poly,
+      getSettings: () => settings,
+      getSafeMode: () => safeMode,
+      getActions: getScriptBootstrapActions,
+      setWin: (value) => {
+        win = value;
+      },
+      setGame: (value) => {
+        game = value;
+      },
+      setNeedSandboxBypass: (value) => {
+        needSandboxBypass = value;
+      },
+      testSurface,
+      setTestContext(context) {
         if ("game" in context) game = context.game;
         if ("state" in context) state = context.state;
         if ("settings" in context) settings = context.settings;
