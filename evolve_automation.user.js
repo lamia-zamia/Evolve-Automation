@@ -29869,6 +29869,216 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/adapters/evolve/traits/mutation.ts
+  function currencyIdFromGame(getGame) {
+    let game = requireRecord(getGame(), "game"), global = requireRecord(game.global, "game.global");
+    return requireRecord(global.race, "game.global.race").universe === "antimatter" ? "AntiPlasmid" : "Plasmid";
+  }
+  function readCurrency(getResources, currencyId) {
+    let resources = requireRecord(getResources(), "resources"), currency = requireRecord(
+      resources[currencyId],
+      `resources.${currencyId}`
+    ), name = currency.name;
+    if (typeof name != "string")
+      throw new TypeError(`resources.${currencyId}.name must be a string`);
+    return Object.freeze({
+      id: currencyId,
+      name,
+      currentQuantity: requireNumber(
+        currency.currentQuantity,
+        `resources.${currencyId}.currentQuantity`
+      )
+    });
+  }
+  function readPriorityList6(manager) {
+    let priorityList = manager.priorityList;
+    if (!Array.isArray(priorityList))
+      throw new TypeError("MutableTraitManager.priorityList must be an array");
+    return priorityList;
+  }
+  function readMutationCost(trait2, kind, path) {
+    let mutationCost = requireFunction(
+      trait2.mutationCost,
+      `${path}.mutationCost`
+    ), cost = requireNumber(
+      Reflect.apply(mutationCost, trait2, [kind]),
+      `${path}.mutationCost(${kind})`
+    );
+    if (cost < 0)
+      throw new TypeError(`${path}.mutationCost(${kind}) must be non-negative`);
+    return cost;
+  }
+  function actionableTrait(trait2, index, kind, canGain, canPurge, path) {
+    let mutationCost = readMutationCost(trait2, kind, path);
+    return Object.freeze({
+      index,
+      canGain,
+      canPurge,
+      mutationCost,
+      traitName: requireString(trait2.traitName, `${path}.traitName`),
+      displayName: requireString(trait2.name, `${path}.name`)
+    });
+  }
+  function createMutationReader(dependencies) {
+    return Object.freeze({
+      read() {
+        let manager = requireRecord(
+          dependencies.getMutableTraitManager(),
+          "MutableTraitManager"
+        ), isUnlocked2 = requireFunction(
+          manager.isUnlocked,
+          "MutableTraitManager.isUnlocked"
+        );
+        if (!Reflect.apply(isUnlocked2, manager, []))
+          return Object.freeze({
+            unlocked: !1,
+            currency: null,
+            traits: Object.freeze([])
+          });
+        let currencyId = currencyIdFromGame(dependencies.getGame), views = [], currency = null, list = readPriorityList6(manager);
+        for (let index = 0; index < list.length; index++) {
+          let path = `MutableTraitManager.priorityList[${index}]`, trait2 = requireRecord(list[index], path), canGainMethod = requireFunction(
+            trait2.canGain,
+            `${path}.canGain`
+          );
+          if (!!Reflect.apply(canGainMethod, trait2, [])) {
+            views.push(actionableTrait(trait2, index, "gain", !0, !1, path)), currency = readCurrency(dependencies.getResources, currencyId);
+            break;
+          }
+          let canPurgeMethod = requireFunction(
+            trait2.canPurge,
+            `${path}.canPurge`
+          );
+          if (!!Reflect.apply(canPurgeMethod, trait2, [])) {
+            views.push(actionableTrait(trait2, index, "purge", !1, !0, path)), currency = readCurrency(dependencies.getResources, currencyId);
+            break;
+          }
+          views.push(
+            Object.freeze({
+              index,
+              canGain: !1,
+              canPurge: !1,
+              traitName: null,
+              displayName: null,
+              mutationCost: null
+            })
+          );
+        }
+        return Object.freeze({
+          unlocked: !0,
+          currency,
+          traits: Object.freeze(views)
+        });
+      }
+    });
+  }
+  function createMutationCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision2) {
+        if (!Number.isFinite(decision2.mutationCost) || decision2.mutationCost < 0)
+          return rejected(
+            "invalid-mutation-cost",
+            "mutation cost must be a non-negative finite number"
+          );
+        let actualCurrencyId = currencyIdFromGame(dependencies.getGame);
+        if (actualCurrencyId !== decision2.currencyId)
+          return stale("stale-mutation-universe", "mutation universe changed", {
+            expectedCurrencyId: decision2.currencyId,
+            actualCurrencyId
+          });
+        let resources = requireRecord(dependencies.getResources(), "resources"), currency = requireRecord(
+          resources[decision2.currencyId],
+          `resources.${decision2.currencyId}`
+        ), actualQuantity = requireNumber(
+          currency.currentQuantity,
+          `resources.${decision2.currencyId}.currentQuantity`
+        );
+        if (actualQuantity !== decision2.expectedCurrencyQuantity)
+          return stale(
+            "stale-mutation-currency",
+            "mutation currency balance changed",
+            {
+              currencyId: decision2.currencyId,
+              expected: decision2.expectedCurrencyQuantity,
+              actual: actualQuantity
+            }
+          );
+        let manager = requireRecord(
+          dependencies.getMutableTraitManager(),
+          "MutableTraitManager"
+        ), list = readPriorityList6(manager), trait2 = typeof list[decision2.index] == "object" && list[decision2.index] !== null ? list[decision2.index] : null, actualTraitName = trait2 !== null && typeof trait2.traitName == "string" ? trait2.traitName : null;
+        if (trait2 === null || actualTraitName !== decision2.traitName)
+          return stale("stale-mutation-trait", "mutation trait list changed", {
+            index: decision2.index,
+            expectedTraitName: decision2.traitName,
+            actualTraitName
+          });
+        let gameLog = requireRecord(dependencies.getGameLog(), "GameLog"), logSuccess = requireFunction(
+          gameLog.logSuccess,
+          "GameLog.logSuccess"
+        );
+        return (decision2.kind === "gain" ? dependencies.traitControls.gainTrait(decision2.traitName) : dependencies.traitControls.purgeTrait(decision2.traitName)) ? (Reflect.apply(logSuccess, gameLog, [
+          "mutation",
+          `Mutating ${decision2.kind === "gain" ? "in" : "out"} ${decision2.displayName} for ${decision2.mutationCost} ${decision2.currencyName}`,
+          ["progress"]
+        ]), currency.currentQuantity = actualQuantity - decision2.mutationCost, SUCCEEDED) : stale("stale-mutation-panel", "trait panel is not offered", {
+          traitName: decision2.traitName,
+          kind: decision2.kind
+        });
+      }
+    });
+  }
+
+  // src/domain/traits/mutation.ts
+  function planMutation(input) {
+    if (!input.unlocked || input.currency === null)
+      return null;
+    for (let trait2 of input.traits) {
+      let kind = trait2.canGain ? "gain" : trait2.canPurge ? "purge" : null;
+      if (kind !== null && trait2.traitName !== null && trait2.displayName !== null && trait2.mutationCost !== null)
+        return Object.freeze({
+          kind,
+          index: trait2.index,
+          traitName: trait2.traitName,
+          displayName: trait2.displayName,
+          mutationCost: trait2.mutationCost,
+          currencyId: input.currency.id,
+          currencyName: input.currency.name,
+          expectedCurrencyQuantity: input.currency.currentQuantity
+        });
+    }
+    return null;
+  }
+
+  // src/application/mutation.ts
+  var SUCCEEDED11 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMutationAutomation(dependencies) {
+    let decision2 = planMutation(dependencies.reader.read());
+    return decision2 === null ? SUCCEEDED11 : dependencies.executor.execute(decision2);
+  }
+
+  // src/bootstrap/mutation-control.ts
+  function createMutationControl(dependencies) {
+    let reader = createMutationReader(dependencies.reader), executor = createMutationCommandExecutor(dependencies.executor);
+    return Object.freeze({
+      autoMutateTrait: () => runMutationAutomation({ reader, executor })
+    });
+  }
+
+  // src/bootstrap/trait-resource-controls.ts
+  function createTraitResourceControls({
+    minorTrait,
+    mutation
+  }) {
+    let minorTraitControl = createMinorTraitControl(minorTrait), mutationControl = createMutationControl(mutation);
+    return Object.freeze({
+      ...minorTraitControl,
+      ...mutationControl
+    });
+  }
+
   // src/adapters/evolve/progression/build/trigger.ts
   function readTriggerTargets2(getState) {
     let targets = requireRecord(getState(), "state").triggerTargets;
@@ -29953,7 +30163,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -29964,7 +30174,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     for (; ; ) {
       let decision2 = planTrigger(dependencies.reader.read(index));
       if (decision2 === null)
-        return result(SUCCEEDED11, active);
+        return result(SUCCEEDED12, active);
       if (decision2.kind === "click") {
         let execution = dependencies.executor.execute(decision2);
         if (execution.outcome.status !== "succeeded")
@@ -30748,7 +30958,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/mining-droid.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function runMiningDroidAutomation(dependencies) {
@@ -30756,7 +30966,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       dependencies.reader.readPlanningInput()
     );
     if (targets === null)
-      return SUCCEEDED12;
+      return SUCCEEDED13;
     let current = dependencies.reader.readCurrent(
       targets.map((target) => target.productionId)
     );
@@ -31150,13 +31360,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/replicator.ts
-  var SUCCEEDED13 = Object.freeze({
+  var SUCCEEDED14 = Object.freeze({
     status: "succeeded"
   });
   function runReplicatorAutomation(dependencies) {
     let planningInput = dependencies.selectionReader.readPlanningInput();
     if (!planningInput.initialised)
-      return SUCCEEDED13;
+      return SUCCEEDED14;
     let priorityPlan = planReplicatorPriority(planningInput);
     if (priorityPlan !== null) {
       let selection = planReplicatorSelection(
@@ -31172,12 +31382,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     if (!planningInput.assignGovernorTask || !shouldConfigureReplicatorGovernor(
       dependencies.governorGameReader.readGate()
     ) || !dependencies.governorOfficeReader.open())
-      return SUCCEEDED13;
+      return SUCCEEDED14;
     let taskPlan = planReplicatorGovernorTask(
       dependencies.governorGameReader.readTasks()
     );
     if (taskPlan.status === "unavailable")
-      return SUCCEEDED13;
+      return SUCCEEDED14;
     if (taskPlan.assignment !== null) {
       let outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
       if (outcome.status !== "succeeded")
@@ -31185,9 +31395,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
     }
     let settings = dependencies.governorOfficeReader.readSettings();
     if (settings === null)
-      return SUCCEEDED13;
+      return SUCCEEDED14;
     let settingsDecision = planReplicatorGovernorSettings(settings);
-    return settingsDecision === null ? SUCCEEDED13 : dependencies.governorExecutor.execute(settingsDecision);
+    return settingsDecision === null ? SUCCEEDED14 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
   // src/bootstrap/replicator-control.ts
@@ -33201,7 +33411,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   );
 
   // src/application/power.ts
-  var SUCCEEDED14 = Object.freeze({
+  var SUCCEEDED15 = Object.freeze({
     status: "succeeded"
   });
   function createPowerAutomation(dependencies) {
@@ -33216,7 +33426,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           () => planPowerCycle(cycle, state)
         ), decision2 = plan.decision;
         if (decision2 === null)
-          return SUCCEEDED14;
+          return SUCCEEDED15;
         let cycleOutcome = measure(
           "autoPower.executeCycle",
           () => dependencies.executor.execute(decision2)
@@ -33233,7 +33443,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           )
         );
         if (warning === null)
-          return SUCCEEDED14;
+          return SUCCEEDED15;
         let warningOutcome = measure(
           "autoPower.executeWarning",
           () => dependencies.executor.execute(warning)
@@ -33242,7 +33452,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           state,
           warning.binding,
           dependencies.reader.readStateOn(warning.binding)
-        ), SUCCEEDED14);
+        ), SUCCEEDED15);
       },
       readState() {
         return state;
@@ -34039,7 +34249,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED15 = Object.freeze({
+  var SUCCEEDED16 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -34048,7 +34258,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       run() {
         let rawPlan = planStorageAllocation(dependencies.reader.read());
         if (rawPlan === null || rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild))
-          return SUCCEEDED15;
+          return SUCCEEDED16;
         let finalized = finalizeStorageAllocation(rawPlan, state), outcome = dependencies.executor.execute(finalized.decision);
         return outcome.status === "succeeded" && (state = finalized.nextState), outcome;
       },
@@ -34311,7 +34521,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       }
     });
   }
-  function readPriorityList6(manager) {
+  function readPriorityList7(manager) {
     let list = manager.priorityList;
     if (!Array.isArray(list))
       throw new TypeError("MarketManager.priorityList must be an array");
@@ -34343,7 +34553,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         let manager = requireRecord(dependencies.getManager(), "MarketManager"), setMultiplier = requireFunction(
           manager.setMultiplier,
           "MarketManager.setMultiplier"
-        ), raw = readPriorityList6(manager)[decision2.index], resource2 = typeof raw == "object" && raw !== null ? raw : null, actualId = resource2 !== null && typeof resource2.id == "string" ? resource2.id : null;
+        ), raw = readPriorityList7(manager)[decision2.index], resource2 = typeof raw == "object" && raw !== null ? raw : null, actualId = resource2 !== null && typeof resource2.id == "string" ? resource2.id : null;
         if (resource2 === null || actualId !== decision2.resourceId)
           return stale("stale-market-resource", "market priority list changed", {
             index: decision2.index,
@@ -34430,14 +34640,14 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/market.ts
-  var SUCCEEDED16 = Object.freeze({
+  var SUCCEEDED17 = Object.freeze({
     status: "succeeded"
   });
   function runMarketAutomation(dependencies, bulkSell = !1, ignoreSellRatio = !1) {
     let gate = dependencies.reader.readGate();
     if (!gate.unlocked || (dependencies.tradeRoutes.adjust(), gate.noTrade))
-      return SUCCEEDED16;
-    let session = dependencies.reader.readSession(), outcome = SUCCEEDED16;
+      return SUCCEEDED17;
+    let session = dependencies.reader.readSession(), outcome = SUCCEEDED17;
     for (let index = 0; ; index++) {
       let sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
       if (sellInput === null)
@@ -34759,12 +34969,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/galaxy-market.ts
-  var SUCCEEDED17 = Object.freeze({
+  var SUCCEEDED18 = Object.freeze({
     status: "succeeded"
   });
   function runGalaxyMarketAutomation(dependencies) {
     let decision2 = planGalaxyMarket(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED17 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED18 : dependencies.executor.execute(decision2);
   }
 
   // src/bootstrap/galaxy-market-control.ts
@@ -35148,12 +35358,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/gather-resources.ts
-  var SUCCEEDED18 = Object.freeze({
+  var SUCCEEDED19 = Object.freeze({
     status: "succeeded"
   });
   function runGatherResourcesAutomation(dependencies) {
     let decision2 = planGatherResources(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED18 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED19 : dependencies.executor.execute(decision2);
   }
 
   // src/bootstrap/gather-resources-control.ts
@@ -35446,16 +35656,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/craft.ts
-  var SUCCEEDED19 = Object.freeze({
+  var SUCCEEDED20 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate()))
-      return SUCCEEDED19;
+      return SUCCEEDED20;
     for (let index = 0; ; index++) {
       let candidate = dependencies.reader.readCandidate(index);
       if (candidate === null)
-        return SUCCEEDED19;
+        return SUCCEEDED20;
       let decision2 = planCraft(candidate);
       if (decision2 === null)
         continue;
@@ -35777,12 +35987,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/spy.ts
-  var SUCCEEDED20 = Object.freeze({
+  var SUCCEEDED21 = Object.freeze({
     status: "succeeded"
   });
   function runSpyAutomation(dependencies) {
     let cycle = planSpyCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED20;
+    if (cycle === null) return SUCCEEDED21;
     if (cycle.trainEnabled)
       for (let index = 0; index < cycle.foreignCount; index++) {
         let decision2 = planSpyTraining(dependencies.reader.readTraining(index));
@@ -35790,14 +36000,14 @@ If script is allowed to reassign non-empty storage it might waste time producing
         let outcome = dependencies.executor.execute(decision2);
         if (outcome.status !== "succeeded") return outcome;
       }
-    if (!cycle.espionageEnabled) return SUCCEEDED20;
+    if (!cycle.espionageEnabled) return SUCCEEDED21;
     for (let index = 0; index < cycle.foreignCount; index++) {
       let decision2 = planSpyEspionage(dependencies.reader.readEspionage(index));
       if (decision2 === null) continue;
       let outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED20;
+    return SUCCEEDED21;
   }
 
   // src/bootstrap/spy-control.ts
@@ -37134,12 +37344,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/jobs.ts
-  var SUCCEEDED21 = Object.freeze({
+  var SUCCEEDED22 = Object.freeze({
     status: "succeeded"
   });
   function runJobsAutomation(dependencies, craftOnly = !1) {
     let decision2 = planJobs(dependencies.reader.readCycle(craftOnly));
-    return decision2 === null ? SUCCEEDED21 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED22 : dependencies.executor.execute(decision2);
   }
 
   // src/bootstrap/jobs-control.ts
@@ -37601,7 +37811,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/build.ts
-  var SUCCEEDED22 = Object.freeze({
+  var SUCCEEDED23 = Object.freeze({
     status: "succeeded"
   }), EMPTY_SAMPLE = Object.freeze({});
   function runBuildAutomation(dependencies) {
@@ -37676,7 +37886,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       if (state = application.state, application.stop)
         break;
     }
-    return SUCCEEDED22;
+    return SUCCEEDED23;
   }
 
   // src/bootstrap/build-control.ts
@@ -37796,7 +38006,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/research.ts
-  var SUCCEEDED23 = Object.freeze({
+  var SUCCEEDED24 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -37810,7 +38020,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         () => planResearch(observation)
       );
       if (decision2 === null)
-        return SUCCEEDED23;
+        return SUCCEEDED24;
       let result2 = measure(
         "autoResearch.execute",
         () => dependencies.executor.execute(decision2)
@@ -37845,204 +38055,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return Object.freeze({
       ...buildControl,
       ...researchControl
-    });
-  }
-
-  // src/adapters/evolve/traits/mutation.ts
-  function currencyIdFromGame(getGame) {
-    let game = requireRecord(getGame(), "game"), global = requireRecord(game.global, "game.global");
-    return requireRecord(global.race, "game.global.race").universe === "antimatter" ? "AntiPlasmid" : "Plasmid";
-  }
-  function readCurrency(getResources, currencyId) {
-    let resources = requireRecord(getResources(), "resources"), currency = requireRecord(
-      resources[currencyId],
-      `resources.${currencyId}`
-    ), name = currency.name;
-    if (typeof name != "string")
-      throw new TypeError(`resources.${currencyId}.name must be a string`);
-    return Object.freeze({
-      id: currencyId,
-      name,
-      currentQuantity: requireNumber(
-        currency.currentQuantity,
-        `resources.${currencyId}.currentQuantity`
-      )
-    });
-  }
-  function readPriorityList7(manager) {
-    let priorityList = manager.priorityList;
-    if (!Array.isArray(priorityList))
-      throw new TypeError("MutableTraitManager.priorityList must be an array");
-    return priorityList;
-  }
-  function readMutationCost(trait2, kind, path) {
-    let mutationCost = requireFunction(
-      trait2.mutationCost,
-      `${path}.mutationCost`
-    ), cost = requireNumber(
-      Reflect.apply(mutationCost, trait2, [kind]),
-      `${path}.mutationCost(${kind})`
-    );
-    if (cost < 0)
-      throw new TypeError(`${path}.mutationCost(${kind}) must be non-negative`);
-    return cost;
-  }
-  function actionableTrait(trait2, index, kind, canGain, canPurge, path) {
-    let mutationCost = readMutationCost(trait2, kind, path);
-    return Object.freeze({
-      index,
-      canGain,
-      canPurge,
-      mutationCost,
-      traitName: requireString(trait2.traitName, `${path}.traitName`),
-      displayName: requireString(trait2.name, `${path}.name`)
-    });
-  }
-  function createMutationReader(dependencies) {
-    return Object.freeze({
-      read() {
-        let manager = requireRecord(
-          dependencies.getMutableTraitManager(),
-          "MutableTraitManager"
-        ), isUnlocked2 = requireFunction(
-          manager.isUnlocked,
-          "MutableTraitManager.isUnlocked"
-        );
-        if (!Reflect.apply(isUnlocked2, manager, []))
-          return Object.freeze({
-            unlocked: !1,
-            currency: null,
-            traits: Object.freeze([])
-          });
-        let currencyId = currencyIdFromGame(dependencies.getGame), views = [], currency = null, list = readPriorityList7(manager);
-        for (let index = 0; index < list.length; index++) {
-          let path = `MutableTraitManager.priorityList[${index}]`, trait2 = requireRecord(list[index], path), canGainMethod = requireFunction(
-            trait2.canGain,
-            `${path}.canGain`
-          );
-          if (!!Reflect.apply(canGainMethod, trait2, [])) {
-            views.push(actionableTrait(trait2, index, "gain", !0, !1, path)), currency = readCurrency(dependencies.getResources, currencyId);
-            break;
-          }
-          let canPurgeMethod = requireFunction(
-            trait2.canPurge,
-            `${path}.canPurge`
-          );
-          if (!!Reflect.apply(canPurgeMethod, trait2, [])) {
-            views.push(actionableTrait(trait2, index, "purge", !1, !0, path)), currency = readCurrency(dependencies.getResources, currencyId);
-            break;
-          }
-          views.push(
-            Object.freeze({
-              index,
-              canGain: !1,
-              canPurge: !1,
-              traitName: null,
-              displayName: null,
-              mutationCost: null
-            })
-          );
-        }
-        return Object.freeze({
-          unlocked: !0,
-          currency,
-          traits: Object.freeze(views)
-        });
-      }
-    });
-  }
-  function createMutationCommandExecutor(dependencies) {
-    return Object.freeze({
-      execute(decision2) {
-        if (!Number.isFinite(decision2.mutationCost) || decision2.mutationCost < 0)
-          return rejected(
-            "invalid-mutation-cost",
-            "mutation cost must be a non-negative finite number"
-          );
-        let actualCurrencyId = currencyIdFromGame(dependencies.getGame);
-        if (actualCurrencyId !== decision2.currencyId)
-          return stale("stale-mutation-universe", "mutation universe changed", {
-            expectedCurrencyId: decision2.currencyId,
-            actualCurrencyId
-          });
-        let resources = requireRecord(dependencies.getResources(), "resources"), currency = requireRecord(
-          resources[decision2.currencyId],
-          `resources.${decision2.currencyId}`
-        ), actualQuantity = requireNumber(
-          currency.currentQuantity,
-          `resources.${decision2.currencyId}.currentQuantity`
-        );
-        if (actualQuantity !== decision2.expectedCurrencyQuantity)
-          return stale(
-            "stale-mutation-currency",
-            "mutation currency balance changed",
-            {
-              currencyId: decision2.currencyId,
-              expected: decision2.expectedCurrencyQuantity,
-              actual: actualQuantity
-            }
-          );
-        let manager = requireRecord(
-          dependencies.getMutableTraitManager(),
-          "MutableTraitManager"
-        ), list = readPriorityList7(manager), trait2 = typeof list[decision2.index] == "object" && list[decision2.index] !== null ? list[decision2.index] : null, actualTraitName = trait2 !== null && typeof trait2.traitName == "string" ? trait2.traitName : null;
-        if (trait2 === null || actualTraitName !== decision2.traitName)
-          return stale("stale-mutation-trait", "mutation trait list changed", {
-            index: decision2.index,
-            expectedTraitName: decision2.traitName,
-            actualTraitName
-          });
-        let gameLog = requireRecord(dependencies.getGameLog(), "GameLog"), logSuccess = requireFunction(
-          gameLog.logSuccess,
-          "GameLog.logSuccess"
-        );
-        return (decision2.kind === "gain" ? dependencies.traitControls.gainTrait(decision2.traitName) : dependencies.traitControls.purgeTrait(decision2.traitName)) ? (Reflect.apply(logSuccess, gameLog, [
-          "mutation",
-          `Mutating ${decision2.kind === "gain" ? "in" : "out"} ${decision2.displayName} for ${decision2.mutationCost} ${decision2.currencyName}`,
-          ["progress"]
-        ]), currency.currentQuantity = actualQuantity - decision2.mutationCost, SUCCEEDED) : stale("stale-mutation-panel", "trait panel is not offered", {
-          traitName: decision2.traitName,
-          kind: decision2.kind
-        });
-      }
-    });
-  }
-
-  // src/domain/traits/mutation.ts
-  function planMutation(input) {
-    if (!input.unlocked || input.currency === null)
-      return null;
-    for (let trait2 of input.traits) {
-      let kind = trait2.canGain ? "gain" : trait2.canPurge ? "purge" : null;
-      if (kind !== null && trait2.traitName !== null && trait2.displayName !== null && trait2.mutationCost !== null)
-        return Object.freeze({
-          kind,
-          index: trait2.index,
-          traitName: trait2.traitName,
-          displayName: trait2.displayName,
-          mutationCost: trait2.mutationCost,
-          currencyId: input.currency.id,
-          currencyName: input.currency.name,
-          expectedCurrencyQuantity: input.currency.currentQuantity
-        });
-    }
-    return null;
-  }
-
-  // src/application/mutation.ts
-  var SUCCEEDED24 = Object.freeze({
-    status: "succeeded"
-  });
-  function runMutationAutomation(dependencies) {
-    let decision2 = planMutation(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED24 : dependencies.executor.execute(decision2);
-  }
-
-  // src/bootstrap/mutation-control.ts
-  function createMutationControl(dependencies) {
-    let reader = createMutationReader(dependencies.reader), executor = createMutationCommandExecutor(dependencies.executor);
-    return Object.freeze({
-      autoMutateTrait: () => runMutationAutomation({ reader, executor })
     });
   }
 
@@ -50959,27 +50971,30 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         },
         expand: expandStorage
       }
-    }), { autoMinorTrait } = createMinorTraitControl({
-      reader: {
-        getMinorTraitManager: () => MinorTraitManager,
-        getResources: () => resources
+    }), { autoMinorTrait, autoMutateTrait } = createTraitResourceControls({
+      minorTrait: {
+        reader: {
+          getMinorTraitManager: () => MinorTraitManager,
+          getResources: () => resources
+        },
+        executor: {
+          traitControls,
+          getResources: () => resources
+        }
       },
-      executor: {
-        traitControls,
-        getResources: () => resources
-      }
-    }), { autoMutateTrait } = createMutationControl({
-      reader: {
-        getMutableTraitManager: () => MutableTraitManager,
-        getGame: () => game,
-        getResources: () => resources
-      },
-      executor: {
-        getMutableTraitManager: () => MutableTraitManager,
-        getGame: () => game,
-        getResources: () => resources,
-        traitControls,
-        getGameLog: () => GameLog
+      mutation: {
+        reader: {
+          getMutableTraitManager: () => MutableTraitManager,
+          getGame: () => game,
+          getResources: () => resources
+        },
+        executor: {
+          getMutableTraitManager: () => MutableTraitManager,
+          getGame: () => game,
+          getResources: () => resources,
+          traitControls,
+          getGameLog: () => GameLog
+        }
       }
     }), { adjustTradeRoutes } = createTradeRoutes({
       getSettings: () => settings,

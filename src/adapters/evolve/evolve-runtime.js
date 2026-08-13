@@ -226,7 +226,7 @@ import { createIndustryAutomationControls } from "../../bootstrap/industry-autom
 import { createEvolutionControls } from "../../bootstrap/evolution-controls.ts";
 import { createMercenaryControl } from "../../bootstrap/mercenary-control.ts";
 import { createTraitAutomationControls } from "../../bootstrap/trait-automation-controls.ts";
-import { createMinorTraitControl } from "../../bootstrap/minor-trait-control.ts";
+import { createTraitResourceControls } from "../../bootstrap/trait-resource-controls.ts";
 import { createTriggerControl } from "../../bootstrap/trigger-control.ts";
 import { createEconomyAutomationControls } from "../../bootstrap/economy-automation-controls.ts";
 import { createPowerStorageControls } from "../../bootstrap/power-storage-controls.ts";
@@ -236,7 +236,6 @@ import { createSpyControl } from "../../bootstrap/spy-control.ts";
 import { createPrestigeControl } from "../../bootstrap/prestige-control.ts";
 import { createJobsControl } from "../../bootstrap/jobs-control.ts";
 import { createProgressionAutomationControls } from "../../bootstrap/progression-automation-controls.ts";
-import { createMutationControl } from "../../bootstrap/mutation-control.ts";
 import { createOuterFleetControl } from "../../bootstrap/fleet-outer-control.ts";
 import { createFleetControl } from "../../bootstrap/fleet-control.ts";
 import { createMechControl } from "../../bootstrap/mech-control.ts";
@@ -3514,14 +3513,30 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { autoMinorTrait } = createMinorTraitControl({
-    reader: {
-      getMinorTraitManager: () => MinorTraitManager,
-      getResources: () => resources,
+  const { autoMinorTrait, autoMutateTrait } = createTraitResourceControls({
+    minorTrait: {
+      reader: {
+        getMinorTraitManager: () => MinorTraitManager,
+        getResources: () => resources,
+      },
+      executor: {
+        traitControls,
+        getResources: () => resources,
+      },
     },
-    executor: {
-      traitControls,
-      getResources: () => resources,
+    mutation: {
+      reader: {
+        getMutableTraitManager: () => MutableTraitManager,
+        getGame: () => game,
+        getResources: () => resources,
+      },
+      executor: {
+        getMutableTraitManager: () => MutableTraitManager,
+        getGame: () => game,
+        getResources: () => resources,
+        traitControls,
+        getGameLog: () => GameLog,
+      },
     },
   });
 
@@ -3530,21 +3545,6 @@ export function startEvolveRuntimeComposition(
       autoMinorTrait,
       MinorTraitManager,
     });
-
-  const { autoMutateTrait } = createMutationControl({
-    reader: {
-      getMutableTraitManager: () => MutableTraitManager,
-      getGame: () => game,
-      getResources: () => resources,
-    },
-    executor: {
-      getMutableTraitManager: () => MutableTraitManager,
-      getGame: () => game,
-      getResources: () => resources,
-      traitControls,
-      getGameLog: () => GameLog,
-    },
-  });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.add({
