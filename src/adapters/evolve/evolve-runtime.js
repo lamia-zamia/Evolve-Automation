@@ -256,15 +256,11 @@ import { createMutationControl } from "../../bootstrap/mutation-control.ts";
 import { createOuterFleetControl } from "../../bootstrap/fleet-outer-control.ts";
 import { createFleetControl } from "../../bootstrap/fleet-control.ts";
 import { createMechControl } from "../../bootstrap/mech-control.ts";
-import { createEjectorSettingsIntentHandler } from "../../application/ejector-settings.ts";
-import { createEjectorSettingsBrowserAdapter } from "../browser/ejector-settings.ts";
-import { createEjectorSettingsEvolveAdapter } from "./economy/resources/ejector-settings.ts";
+import { createEjectorSettingsControl } from "../../bootstrap/settings/ejector-settings-control.ts";
 import { createMarketSettingsControl } from "../../bootstrap/settings/market-settings-control.ts";
 import { createWarSettingsControl } from "../../bootstrap/settings/war-settings-control.ts";
 import { createHellSettingsControl } from "../../bootstrap/settings/hell-settings-control.ts";
-import { createMechSettingsIntentHandler } from "../../application/mech-settings.ts";
-import { createMechSettingsBrowserAdapter } from "../browser/mech-settings.ts";
-import { createMechSettingsEvolveAdapter } from "./combat/mech-settings.ts";
+import { createMechSettingsControl } from "../../bootstrap/settings/mech-settings-control.ts";
 import { createTriggerSettingsControl } from "../../bootstrap/settings/trigger-settings-control.ts";
 import { createFleetSettingsControl } from "../../bootstrap/settings/fleet-settings-control.ts";
 import { createPrestigeSettingsIntentHandler } from "../../application/prestige-settings.ts";
@@ -1291,111 +1287,51 @@ export function startEvolveRuntimeComposition(
     testSurface,
   });
   const { buildFleetSettings } = fleetSettingsBrowserAdapter;
-  const mechSettingsReader = createMechSettingsEvolveAdapter({
-    getMechManager: () =>
-      getTestContext("mechSettings")?.MechManager ?? MechManager,
-    getGame: () => getTestContext("mechSettings")?.game ?? game,
-  });
-  const mechSettingsActions = {
-    buildSettingsSection: (...args) => buildSettingsSection(...args),
-    addSettingsNumber: (...args) => addSettingsNumber(...args),
-    addSettingsSelect: (...args) => addSettingsSelect(...args),
-    addSettingsToggle: (...args) => addSettingsToggle(...args),
-    addStandardHeading: (...args) => addStandardHeading(...args),
-    calculateMechStats: (...args) => calculateMechStats(...args),
-  };
-  const mechSettingsIntentHandler = createMechSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("mechSettings")?.resetMechSettings ?? resetMechSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("mechSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: () => updateMechSettingsContent(),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("mechSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoMech",
-        ),
-      removeMechInfo: () =>
-        (getTestContext("mechSettings")?.removeMechInfo ?? removeMechInfo)(),
-    },
-  });
-  const mechSettingsBrowserAdapter = createMechSettingsBrowserAdapter({
+  const mechSettingsBrowserAdapter = createMechSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    reader: mechSettingsReader,
-    intents: mechSettingsIntentHandler,
-    getActions: () =>
-      getTestContext("mechSettings")?.actions ?? mechSettingsActions,
+    actions: {
+      buildSettingsSection,
+      addSettingsNumber,
+      addSettingsSelect,
+      addSettingsToggle,
+      addStandardHeading,
+      get calculateMechStats() {
+        return calculateMechStats;
+      },
+    },
+    getMechManager: () => MechManager,
+    getGame: () => game,
+    resetMechSettings: (...args) => resetMechSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    removeMechInfo: (...args) => removeMechInfo(...args),
+    testSurface,
   });
   const { buildMechSettings, updateMechSettingsContent } =
     mechSettingsBrowserAdapter;
-  const ejectorSettingsReader = createEjectorSettingsEvolveAdapter({
-    getResources: () =>
-      getTestContext("ejectorSettings")?.resources ?? resources,
-    getEjectManager: () =>
-      getTestContext("ejectorSettings")?.EjectManager ?? EjectManager,
-    getNaniteManager: () =>
-      getTestContext("ejectorSettings")?.NaniteManager ?? NaniteManager,
-    getSupplyManager: () =>
-      getTestContext("ejectorSettings")?.SupplyManager ?? SupplyManager,
-    getSettingsRaw: () =>
-      getTestContext("ejectorSettings")?.settingsRaw ?? settingsRaw,
-  });
-  const ejectorSettingsActions = {
-    buildSettingsSection: (...args) => buildSettingsSection(...args),
-    addSettingsNumber: (...args) => addSettingsNumber(...args),
-    addSettingsSelect: (...args) => addSettingsSelect(...args),
-    addSettingsToggle: (...args) => addSettingsToggle(...args),
-    addTableToggle: (...args) => addTableToggle(...args),
-    buildTableLabel: (...args) => buildTableLabel(...args),
-  };
-  const ejectorSettingsIntentHandler = createEjectorSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("ejectorSettings")?.resetEjectorSettings ??
-          resetEjectorSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("ejectorSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: () => updateEjectorSettingsContent(),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("ejectorSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoEject",
-          "autoSupply",
-          "autoNanite",
-        ),
-      removeEjectToggles: () =>
-        (
-          getTestContext("ejectorSettings")?.removeEjectToggles ??
-          removeEjectToggles
-        )(),
-      removeSupplyToggles: () =>
-        (
-          getTestContext("ejectorSettings")?.removeSupplyToggles ??
-          removeSupplyToggles
-        )(),
-    },
-  });
-  const ejectorSettingsBrowserAdapter = createEjectorSettingsBrowserAdapter({
+  const ejectorSettingsBrowserAdapter = createEjectorSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    reader: ejectorSettingsReader,
-    intents: ejectorSettingsIntentHandler,
-    getActions: () =>
-      getTestContext("ejectorSettings")?.actions ?? ejectorSettingsActions,
+    actions: {
+      buildSettingsSection,
+      addSettingsNumber,
+      addSettingsSelect,
+      addSettingsToggle,
+      addTableToggle,
+      buildTableLabel,
+    },
+    getResources: () => resources,
+    getEjectManager: () => EjectManager,
+    getNaniteManager: () => NaniteManager,
+    getSupplyManager: () => SupplyManager,
+    getSettingsRaw: () => settingsRaw,
+    resetEjectorSettings: (...args) => resetEjectorSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    removeEjectToggles: (...args) => removeEjectToggles(...args),
+    removeSupplyToggles: (...args) => removeSupplyToggles(...args),
+    testSurface,
   });
   const { buildEjectorSettings, updateEjectorSettingsContent } =
     ejectorSettingsBrowserAdapter;
@@ -4931,14 +4867,6 @@ export function startEvolveRuntimeComposition(
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("prestigeSettings", {
       prestigeSettings: prestigeSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("ejectorSettings", {
-      ejectorSettings: ejectorSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("mechSettings", {
-      mechSettings: mechSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("optionsModal", {
