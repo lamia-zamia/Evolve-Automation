@@ -1,7 +1,24 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+interface TraitGame {
+  global: {
+    genes: Record<string, boolean>;
+  };
+}
+
+interface TraitSettings {
+  minimumPlasmidsToPreserve: number;
+  doNotGoBelowPlasmidSoftcap: boolean;
+  [key: string]: boolean | number | undefined;
+}
+
+interface ManagedTrait {
+  priority: number;
+  enabled: boolean;
+  isUnlocked: () => boolean;
+}
+
 interface TraitManagersDependencies {
-  getGame: () => any;
-  getSettings: () => Record<string, any>;
+  getGame: () => TraitGame;
+  getSettings: () => TraitSettings;
   getResources: () => Record<string, { currentQuantity: number }>;
   haveTech: (tech: string, level?: number) => boolean;
 }
@@ -13,7 +30,7 @@ export function createTraitManagers({
   haveTech,
 }: TraitManagersDependencies) {
   const MinorTraitManager = {
-    priorityList: [] as any[],
+    priorityList: [] as ManagedTrait[],
 
     isUnlocked() {
       return haveTech("genetics", 3);
@@ -31,7 +48,7 @@ export function createTraitManagers({
   };
 
   const MutableTraitManager = {
-    priorityList: [] as any[],
+    priorityList: [] as ManagedTrait[],
 
     isUnlocked() {
       return haveTech("genetics", 3) && getGame().global.genes["mutation"];
