@@ -127,8 +127,7 @@ import { createAuthorityPolicy } from "../../game/authority-policy.ts";
 import { createRunGuards } from "./run-guards.ts";
 import { createPrestigeEligibility } from "./prestige-eligibility.ts";
 import { formatRetirementShortfalls } from "../../application/retirement-prep.ts";
-import { findCostConflict } from "../../domain/cost-conflicts.ts";
-import { readCostConflictInput } from "./cost-conflicts.ts";
+import { createCostConflict } from "./cost-conflict.ts";
 import { findPlannerLimit } from "../../domain/planner-analysis.ts";
 import { readPlannerLimitInput, readPlannerRun } from "./planner-analysis.ts";
 import { createPlannerStatsStore } from "../storage/planner-stats.ts";
@@ -2234,12 +2233,10 @@ function startEvolveRuntimeComposition(
   const { normalizeProperties, addProps } = createPropertyHelpers({
     getSettings: () => settings,
   });
-  let getCostConflict = (action) => {
-    const readResult = readCostConflictInput(state, resources, action);
-    return readResult.status === "ready"
-      ? findCostConflict(readResult.input)
-      : readResult;
-  };
+  let { getCostConflict } = createCostConflict({
+    getState: () => state,
+    getResources: () => resources,
+  });
   const plannerStatsLifecycle = createPlannerStatsLifecycle(
     createPlannerStatsStore(runtimeEnvironment.storage),
   );

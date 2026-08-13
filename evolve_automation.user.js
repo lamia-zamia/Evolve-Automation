@@ -17797,6 +17797,22 @@
     });
   }
 
+  // src/adapters/evolve/cost-conflict.ts
+  function createCostConflict({
+    getState,
+    getResources
+  }) {
+    function getCostConflict(action) {
+      const readResult = readCostConflictInput(
+        getState(),
+        getResources(),
+        action
+      );
+      return readResult.status === "ready" ? findCostConflict(readResult.input) : readResult;
+    }
+    return { getCostConflict };
+  }
+
   // src/adapters/evolve/planner-analysis.ts
   function isNonNegativeSafeInteger2(value) {
     return Number.isSafeInteger(value) && value >= 0;
@@ -58270,10 +58286,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const { normalizeProperties, addProps } = createPropertyHelpers({
       getSettings: () => settings
     });
-    let getCostConflict = (action) => {
-      const readResult = readCostConflictInput(state, resources, action);
-      return readResult.status === "ready" ? findCostConflict(readResult.input) : readResult;
-    };
+    let { getCostConflict } = createCostConflict({
+      getState: () => state,
+      getResources: () => resources
+    });
     const plannerStatsLifecycle = createPlannerStatsLifecycle(
       createPlannerStatsStore(runtimeEnvironment.storage)
     );
