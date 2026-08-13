@@ -11,7 +11,8 @@ export function createTraitValue({ getGame }: TraitValueDependencies) {
   function traitVal(trait: string, index: number, operation?: string | number) {
     const game = getGame();
     if (game.global.race[trait]) {
-      const value = game.traits[trait].vars()[index];
+      // A truthy race trait has a matching definition and its requested variable.
+      const value = game.traits[trait]!.vars()[index]!;
       if (operation === "-") {
         return 1 - value / 100;
       } else if (operation === "+") {
