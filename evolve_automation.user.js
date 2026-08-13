@@ -12256,114 +12256,6 @@ Only continue if you trust the source. Injected code:
     return { resources, jobs, crafter, buildings, linkedBuildings, projects };
   }
 
-  // src/game/building-state.ts
-  function createBuildingStateInitialization({
-    getBuildings,
-    getBuildingManager
-  }) {
-    function initBuildingState() {
-      let buildings = getBuildings(), BuildingManager = getBuildingManager(), priorityList = [];
-      priorityList.push(buildings.Windmill), priorityList.push(buildings.Mill), priorityList.push(buildings.CoalPower), priorityList.push(buildings.OilPower), priorityList.push(buildings.FissionPower), priorityList.push(buildings.TauFusionGenerator), priorityList.push(buildings.TauGas2AlienSpaceStation), priorityList.push(buildings.WastelandIncinerator), priorityList.push(buildings.RuinsHellForge), priorityList.push(buildings.RuinsInfernoPower), priorityList.push(buildings.AsphodelEncampment), priorityList.push(buildings.AsphodelRectory), priorityList.push(buildings.AsphodelCorruptor), priorityList.push(buildings.AsphodelSoulEngine), priorityList.push(buildings.TitanElectrolysis), priorityList.push(buildings.TitanHydrogen), priorityList.push(buildings.TitanQuarters), priorityList.push(buildings.DwarfMassRelayComplete), priorityList.push(buildings.RuinsArcology), priorityList.push(buildings.Apartment), priorityList.push(buildings.Barracks), priorityList.push(buildings.TouristCenter), priorityList.push(buildings.University), priorityList.push(buildings.Smelter), priorityList.push(buildings.Temple), priorityList.push(buildings.OilWell), priorityList.push(buildings.StorageYard), priorityList.push(buildings.Warehouse), priorityList.push(buildings.Bank), priorityList.push(buildings.Hospital), priorityList.push(buildings.BootCamp), priorityList.push(buildings.House), priorityList.push(buildings.Cottage), priorityList.push(buildings.Farm), priorityList.push(buildings.Silo), priorityList.push(buildings.Shed), priorityList.push(buildings.LumberYard), priorityList.push(buildings.Foundry), priorityList.push(buildings.OilDepot), priorityList.push(buildings.Trade), priorityList.push(buildings.Amphitheatre), priorityList.push(buildings.Library), priorityList.push(buildings.Wharf), priorityList.push(buildings.NaniteFactory), priorityList.push(buildings.RedNaniteFactory), priorityList.push(buildings.TauNaniteFactory), priorityList.push(buildings.Transmitter), priorityList.push(buildings.Assembly), priorityList.push(buildings.RedAssembly), priorityList.push(buildings.TauAssembly), priorityList.push(buildings.TauCloning), priorityList.push(buildings.Lodge), priorityList.push(buildings.Smokehouse), priorityList.push(buildings.SoulWell), priorityList.push(buildings.SlavePen), priorityList.push(buildings.SlaveMarket), priorityList.push(buildings.CaptiveHousing), priorityList.push(buildings.RedCaptiveHousing), priorityList.push(buildings.TauCaptiveHousing), priorityList.push(buildings.Graveyard), priorityList.push(buildings.Shrine), priorityList.push(buildings.CompostHeap), priorityList.push(buildings.ConcealWard), priorityList.push(buildings.Pylon), priorityList.push(buildings.RedPylon), priorityList.push(buildings.TauPylon), priorityList.push(buildings.ForgeHorseshoe), priorityList.push(buildings.RedForgeHorseshoe), priorityList.push(buildings.TauForgeHorseshoe), priorityList.push(buildings.SacrificialAltar), priorityList.push(buildings.MeditationChamber), priorityList.push(buildings.Banquet), priorityList.push(buildings.DwarfMission), priorityList.push(buildings.DwarfEleriumReactor), priorityList.push(buildings.DwarfWorldCollider), priorityList.push(buildings.HellMission), priorityList.push(buildings.HellGeothermal), priorityList.push(buildings.HellSwarmPlant), priorityList.push(buildings.ProximaTransferStation), priorityList.push(buildings.ProximaMission), priorityList.push(buildings.ProximaCargoYard), priorityList.push(buildings.ProximaCruiser), priorityList.push(buildings.ProximaDyson), priorityList.push(buildings.ProximaDysonSphere), priorityList.push(buildings.ProximaOrichalcumSphere), priorityList.push(buildings.ProximaElysaniteSphere), priorityList.push(buildings.AlphaMission), priorityList.push(buildings.AlphaStarport), priorityList.push(buildings.AlphaHabitat), priorityList.push(buildings.AlphaFusion), priorityList.push(buildings.AlphaLuxuryCondo), priorityList.push(buildings.AlphaMiningDroid), priorityList.push(buildings.AlphaProcessing), priorityList.push(buildings.AlphaLaboratory), priorityList.push(buildings.AlphaExoticZoo), priorityList.push(buildings.AlphaExchange), priorityList.push(buildings.AlphaGraphenePlant), priorityList.push(buildings.AlphaWarehouse), priorityList.push(buildings.SpaceTestLaunch), priorityList.push(buildings.SpaceSatellite), priorityList.push(buildings.SpaceGps), priorityList.push(buildings.SpacePropellantDepot), priorityList.push(buildings.SpaceNavBeacon), priorityList.push(buildings.RedMission), priorityList.push(buildings.RedTower), priorityList.push(buildings.RedSpaceport), priorityList.push(buildings.RedLivingQuarters), priorityList.push(buildings.RedBiodome), priorityList.push(buildings.RedSpaceBarracks), priorityList.push(buildings.RedExoticLab), priorityList.push(buildings.RedFabrication), priorityList.push(buildings.RedMine), priorityList.push(buildings.RedVrCenter), priorityList.push(buildings.RedZiggurat), priorityList.push(buildings.RedGarage), priorityList.push(buildings.RedUniversity), priorityList.push(buildings.RedTerraformer), priorityList.push(buildings.MoonMission), priorityList.push(buildings.MoonBase), priorityList.push(buildings.MoonObservatory), priorityList.push(buildings.MoonHeliumMine), priorityList.push(buildings.MoonIridiumMine), priorityList.push(buildings.SunMission), priorityList.push(buildings.SunSwarmControl), priorityList.push(buildings.SunSwarmSatellite), priorityList.push(buildings.SunJumpGate), priorityList.push(buildings.GasMission), priorityList.push(buildings.GasStorage), priorityList.push(buildings.GasSpaceDock), priorityList.push(buildings.GasSpaceDockProbe), priorityList.push(buildings.GasSpaceDockGECK), priorityList.push(buildings.GasSpaceDockShipSegment), priorityList.push(buildings.GasMoonMission), priorityList.push(buildings.GasMoonDrone), priorityList.push(buildings.Blackhole), priorityList.push(buildings.BlackholeStellarEngine), priorityList.push(buildings.BlackholeJumpShip), priorityList.push(buildings.BlackholeWormholeMission), priorityList.push(buildings.BlackholeStargate), priorityList.push(buildings.SiriusMission), priorityList.push(buildings.SiriusAnalysis), priorityList.push(buildings.SiriusSpaceElevator), priorityList.push(buildings.SiriusGravityDome), priorityList.push(buildings.SiriusThermalCollector), priorityList.push(buildings.SiriusAscensionMachine), priorityList.push(buildings.BlackholeStargateComplete), priorityList.push(buildings.GatewayMission), priorityList.push(buildings.GatewayStarbase), priorityList.push(buildings.GatewayShipDock), priorityList.push(buildings.StargateStation), priorityList.push(buildings.StargateTelemetryBeacon), priorityList.push(buildings.Dreadnought), priorityList.push(buildings.CruiserShip), priorityList.push(buildings.FrigateShip), priorityList.push(buildings.BologniumShip), priorityList.push(buildings.CorvetteShip), priorityList.push(buildings.ScoutShip), priorityList.push(buildings.GorddonMission), priorityList.push(buildings.GorddonEmbassy), priorityList.push(buildings.GorddonDormitory), priorityList.push(buildings.GorddonSymposium), priorityList.push(buildings.GorddonFreighter), priorityList.push(buildings.NeutronCitadel), priorityList.push(buildings.SiriusAscensionTrigger), priorityList.push(buildings.RedAtmoTerraformer), priorityList.push(buildings.BlackholeMassEjector), priorityList.push(buildings.PitSoulForge), priorityList.push(buildings.Alien1Consulate), priorityList.push(buildings.Alien1Resort), priorityList.push(buildings.Alien1VitreloyPlant), priorityList.push(buildings.Alien1SuperFreighter), priorityList.push(buildings.Alien2Foothold), priorityList.push(buildings.Alien2Scavenger), priorityList.push(buildings.Alien2ArmedMiner), priorityList.push(buildings.Alien2OreProcessor), priorityList.push(buildings.ChthonianMineLayer), priorityList.push(buildings.ChthonianExcavator), priorityList.push(buildings.ChthonianRaider), priorityList.push(buildings.Wardenclyffe), priorityList.push(buildings.BioLab), priorityList.push(buildings.DwarfWorldController), priorityList.push(buildings.BlackholeFarReach), priorityList.push(buildings.NebulaMission), priorityList.push(buildings.NebulaNexus), priorityList.push(buildings.NebulaHarvester), priorityList.push(buildings.NebulaEleriumProspector), priorityList.push(buildings.BeltMission), priorityList.push(buildings.BeltSpaceStation), priorityList.push(buildings.BeltEleriumShip), priorityList.push(buildings.BeltIridiumShip), priorityList.push(buildings.BeltIronShip), priorityList.push(buildings.CementPlant), priorityList.push(buildings.Factory), priorityList.push(buildings.GasMoonOutpost), priorityList.push(buildings.StargateDefensePlatform), priorityList.push(buildings.RedFactory), priorityList.push(buildings.AlphaMegaFactory), priorityList.push(buildings.PortalTurret), priorityList.push(buildings.BadlandsSensorDrone), priorityList.push(buildings.PortalWarDroid), priorityList.push(buildings.BadlandsPredatorDrone), priorityList.push(buildings.BadlandsAttractor), priorityList.push(buildings.PortalCarport), priorityList.push(buildings.BadlandsMinions), priorityList.push(buildings.BadlandsReaper), priorityList.push(buildings.BadlandsCorpsePile), priorityList.push(buildings.BadlandsMortuary), priorityList.push(buildings.BadlandsCodex), priorityList.push(buildings.PitGunEmplacement), priorityList.push(buildings.PitSoulAttractor), priorityList.push(buildings.PitSoulCapacitor), priorityList.push(buildings.PitAbsorptionChamber), priorityList.push(buildings.PitShadowMine), priorityList.push(buildings.PitTavern), priorityList.push(buildings.PortalRepairDroid), priorityList.push(buildings.PitMission), priorityList.push(buildings.PitAssaultForge), priorityList.push(buildings.RuinsAncientPillars), priorityList.push(buildings.WastelandThrone), priorityList.push(buildings.WastelandWarehouse), priorityList.push(buildings.WastelandHovel), priorityList.push(buildings.WastelandHellCasino), priorityList.push(buildings.WastelandTwistedLab), priorityList.push(buildings.WastelandDemonForge), priorityList.push(buildings.WastelandHellFactory), priorityList.push(buildings.WastelandPumpjack), priorityList.push(buildings.WastelandDigDemon), priorityList.push(buildings.WastelandTunneler), priorityList.push(buildings.WastelandBrute), priorityList.push(buildings.WastelandAltar), priorityList.push(buildings.WastelandShrine), priorityList.push(buildings.WastelandMeditationChamber), priorityList.push(buildings.RuinsMission), priorityList.push(buildings.RuinsGuardPost), priorityList.push(buildings.RuinsVault), priorityList.push(buildings.RuinsWarVault), priorityList.push(buildings.RuinsArchaeology), priorityList.push(buildings.GateMission), priorityList.push(buildings.GateEastTower), priorityList.push(buildings.GateWestTower), priorityList.push(buildings.GateTurret), priorityList.push(buildings.GateInferniteMine), priorityList.push(buildings.LakeMission), priorityList.push(buildings.LakeCoolingTower), priorityList.push(buildings.LakeHarbor), priorityList.push(buildings.LakeBireme), priorityList.push(buildings.LakeTransport), priorityList.push(buildings.LakeOven), priorityList.push(buildings.LakeOvenComplete), priorityList.push(buildings.LakeSoulSteeper), priorityList.push(buildings.LakeLifeInfuser), priorityList.push(buildings.SpireMission), priorityList.push(buildings.SpirePurifier), priorityList.push(buildings.SpireMechBay), priorityList.push(buildings.SpireBaseCamp), priorityList.push(buildings.SpirePort), priorityList.push(buildings.SpireBridge), priorityList.push(buildings.SpireSphinx), priorityList.push(buildings.SpireBribeSphinx), priorityList.push(buildings.SpireSurveyTower), priorityList.push(buildings.SpireWaygate), priorityList.push(buildings.SpireEdenicGate), priorityList.push(buildings.SpireBazaar), priorityList.push(buildings.AsphodelMission), priorityList.push(buildings.AsphodelMechStation), priorityList.push(buildings.AsphodelHarvester), priorityList.push(buildings.AsphodelProcessor), priorityList.push(buildings.AsphodelResearchStation), priorityList.push(buildings.AsphodelWarehouse), priorityList.push(buildings.AsphodelStabilizer), priorityList.push(buildings.AsphodelRuneGate), priorityList.push(buildings.AsphodelBunker), priorityList.push(buildings.AsphodelBlissDen), priorityList.push(buildings.ElysiumMission), priorityList.push(buildings.ElysiumAmbush), priorityList.push(buildings.ElysiumRaid), priorityList.push(buildings.ElysiumSiege), priorityList.push(buildings.ElysiumScout), priorityList.push(buildings.ElysiumFireSupportBase), priorityList.push(buildings.ElysiumMine), priorityList.push(buildings.ElysiumSacredSmelter), priorityList.push(buildings.ElysiumEleriumContainment), priorityList.push(buildings.ElysiumPillbox), priorityList.push(buildings.ElysiumRestaurant), priorityList.push(buildings.ElysiumEternalBank), priorityList.push(buildings.ElysiumArchive), priorityList.push(buildings.ElysiumNorthPier), priorityList.push(buildings.ElysiumRushmore), priorityList.push(buildings.ElysiumReincarnation), priorityList.push(buildings.ElysiumCement), priorityList.push(buildings.IsleSouthPier), priorityList.push(buildings.IsleSpiritBattery), priorityList.push(buildings.IsleSpiritVacuum), priorityList.push(buildings.IsleSoulCompactor), priorityList.push(buildings.PalaceMission), priorityList.push(buildings.PalaceInfuser), priorityList.push(buildings.PalaceConduit), priorityList.push(buildings.PalaceTomb), priorityList.push(buildings.HellSmelter), priorityList.push(buildings.DwarfShipyard), priorityList.push(buildings.DwarfMassRelay), priorityList.push(buildings.TitanMission), priorityList.push(buildings.TitanSpaceport), priorityList.push(buildings.TitanAIColonist), priorityList.push(buildings.TitanMine), priorityList.push(buildings.TitanSAM), priorityList.push(buildings.TitanGraphene), priorityList.push(buildings.TitanStorehouse), priorityList.push(buildings.TitanBank), priorityList.push(buildings.TitanAI), priorityList.push(buildings.TitanAIComplete), priorityList.push(buildings.TitanDecoder), priorityList.push(buildings.EnceladusMission), priorityList.push(buildings.EnceladusZeroGLab), priorityList.push(buildings.EnceladusWaterFreighter), priorityList.push(buildings.EnceladusBase), priorityList.push(buildings.EnceladusMunitions), priorityList.push(buildings.TritonMission), priorityList.push(buildings.TritonFOB), priorityList.push(buildings.TritonLander), priorityList.push(buildings.KuiperMission), priorityList.push(buildings.KuiperOrichalcum), priorityList.push(buildings.KuiperUranium), priorityList.push(buildings.KuiperNeutronium), priorityList.push(buildings.KuiperElerium), priorityList.push(buildings.ErisMission), priorityList.push(buildings.ErisDrone), priorityList.push(buildings.ErisTank), priorityList.push(buildings.ErisTrooper), priorityList.push(buildings.TauStarRingworld), priorityList.push(buildings.TauStarMatrix), priorityList.push(buildings.TauStarEden), priorityList.push(buildings.TauMission), priorityList.push(buildings.TauDismantle), priorityList.push(buildings.TauOrbitalStation), priorityList.push(buildings.TauFarm), priorityList.push(buildings.TauColony), priorityList.push(buildings.TauHousing), priorityList.push(buildings.TauExcavate), priorityList.push(buildings.TauAlienOutpost), priorityList.push(buildings.TauJumpGate), priorityList.push(buildings.TauRepository), priorityList.push(buildings.TauFactory), priorityList.push(buildings.TauDiseaseLab), priorityList.push(buildings.TauCasino), priorityList.push(buildings.TauCulturalCenter), priorityList.push(buildings.TauMiningPit), priorityList.push(buildings.TauRedMission), priorityList.push(buildings.TauRedOrbitalPlatform), priorityList.push(buildings.TauRedContact), priorityList.push(buildings.TauRedIntroduce), priorityList.push(buildings.TauRedSubjugate), priorityList.push(buildings.TauRedWomlingVillage), priorityList.push(buildings.TauRedWomlingFarm), priorityList.push(buildings.TauRedWomlingLab), priorityList.push(buildings.TauRedWomlingMine), priorityList.push(buildings.TauRedWomlingFun), priorityList.push(buildings.TauRedOverseer), priorityList.push(buildings.TauGasContest), priorityList.push(buildings.TauGasName1), priorityList.push(buildings.TauGasName2), priorityList.push(buildings.TauGasName3), priorityList.push(buildings.TauGasName4), priorityList.push(buildings.TauGasName5), priorityList.push(buildings.TauGasName6), priorityList.push(buildings.TauGasName7), priorityList.push(buildings.TauGasName8), priorityList.push(buildings.TauGasRefuelingStation), priorityList.push(buildings.TauGasOreRefinery), priorityList.push(buildings.TauGasWhalingStation), priorityList.push(buildings.TauGasWomlingStation), priorityList.push(buildings.TauBeltMission), priorityList.push(buildings.TauBeltPatrolShip), priorityList.push(buildings.TauBeltMiningShip), priorityList.push(buildings.TauBeltWhalingShip), priorityList.push(buildings.TauGas2Contest), priorityList.push(buildings.TauGas2Name1), priorityList.push(buildings.TauGas2Name2), priorityList.push(buildings.TauGas2Name3), priorityList.push(buildings.TauGas2Name4), priorityList.push(buildings.TauGas2Name5), priorityList.push(buildings.TauGas2Name6), priorityList.push(buildings.TauGas2Name7), priorityList.push(buildings.TauGas2Name8), priorityList.push(buildings.TauGas2AlienSurvey), priorityList.push(buildings.TauGas2AlienStation), priorityList.push(buildings.TauGas2MatrioshkaBrain), priorityList.push(buildings.TauGas2IgnitionDevice), priorityList.push(buildings.TauGas2IgniteGasGiant), priorityList.push(buildings.StargateDepot), priorityList.push(buildings.DwarfEleriumContainer), priorityList.push(buildings.GasMoonOilExtractor), priorityList.push(buildings.NeutronMission), priorityList.push(buildings.NeutronStellarForge), priorityList.push(buildings.NeutronMiner), priorityList.push(buildings.MassDriver), priorityList.push(buildings.MetalRefinery), priorityList.push(buildings.Casino), priorityList.push(buildings.HellSpaceCasino), priorityList.push(buildings.RockQuarry), priorityList.push(buildings.Sawmill), priorityList.push(buildings.GasMining), priorityList.push(buildings.Mine), priorityList.push(buildings.CoalMine);
-      let available = priorityList.filter((b) => b !== void 0);
-      BuildingManager.priorityList = available, BuildingManager.statePriorityList = available.filter(
-        (b) => b.isSwitchable()
-      );
-    }
-    return { initBuildingState };
-  }
-
-  // src/game/race-initialization.ts
-  function createRaceInitialization({
-    getGame,
-    getEvolutions,
-    getRaces,
-    getImitations,
-    getEvolutionAction,
-    getRace
-  }) {
-    function initialiseRaces() {
-      let currentGame = getGame(), currentEvolutions = getEvolutions(), currentRaces = getRaces(), currentImitations = getImitations(), CurrentEvolutionAction = getEvolutionAction(), CurrentRace = getRace();
-      for (let id in currentGame.actions.evolution)
-        currentEvolutions[id] = new CurrentEvolutionAction(id);
-      let e = currentEvolutions, bilateralSymmetry = [
-        e.bilateral_symmetry,
-        e.multicellular,
-        e.phagocytosis,
-        e.sexual_reproduction
-      ], mammals = [e.mammals, ...bilateralSymmetry], genusEvolution = {
-        eldritch: [e.sentience, e.eldritch, ...bilateralSymmetry],
-        aquatic: [e.sentience, e.aquatic, ...bilateralSymmetry],
-        insectoid: [e.sentience, e.athropods, ...bilateralSymmetry],
-        humanoid: [e.sentience, e.humanoid, ...mammals],
-        giant: [e.sentience, e.gigantism, ...mammals],
-        small: [e.sentience, e.dwarfism, ...mammals],
-        carnivore: [e.sentience, e.carnivore, e.animalism, ...mammals],
-        herbivore: [e.sentience, e.herbivore, e.animalism, ...mammals],
-        //omnivore: [e.sentience, e.omnivore, e.animalism, ...mammals],
-        demonic: [e.sentience, e.demonic, ...mammals],
-        angelic: [e.sentience, e.celestial, ...mammals],
-        fey: [e.sentience, e.fey, ...mammals],
-        heat: [e.sentience, e.heat, ...mammals],
-        polar: [e.sentience, e.polar, ...mammals],
-        sand: [e.sentience, e.sand, ...mammals],
-        avian: [e.sentience, e.endothermic, e.eggshell, ...bilateralSymmetry],
-        reptilian: [e.sentience, e.ectothermic, e.eggshell, ...bilateralSymmetry],
-        plant: [
-          e.sentience,
-          e.bryophyte,
-          e.poikilohydric,
-          e.multicellular,
-          e.chloroplasts,
-          e.sexual_reproduction
-        ],
-        fungi: [
-          e.sentience,
-          e.bryophyte,
-          e.spores,
-          e.multicellular,
-          e.chitin,
-          e.sexual_reproduction
-        ],
-        synthetic: [e.sentience, e.exterminate, e.sexual_reproduction]
-      };
-      for (let id in currentGame.races) {
-        if (id === "protoplasm")
-          continue;
-        let race2 = new CurrentRace(id);
-        currentRaces[id] = race2;
-        let raceDefinition = currentGame.races[id];
-        if (id === "hellspawn")
-          race2.evolutionTree[race2.genus] = [
-            e.bunker,
-            e.warlord,
-            ...genusEvolution[race2.genus] ?? []
-          ];
-        else if (id === "junker" || id === "sludge" || id === "ultra_sludge")
-          for (let genus of Object.keys(genusEvolution))
-            race2.evolutionTree[genus] = [
-              e.bunker,
-              e[id],
-              ...genusEvolution[genus] ?? []
-            ];
-        else if (raceDefinition.type === "hybrid")
-          for (let genus of raceDefinition.hybrid ?? [])
-            race2.evolutionTree[genus] = [
-              e.bunker,
-              e[id],
-              ...genusEvolution[genus] ?? []
-            ];
-        else
-          race2.evolutionTree[race2.genus] = [
-            e.bunker,
-            e[id],
-            ...genusEvolution[race2.genus] ?? []
-          ];
-        currentImitations[id] = new CurrentEvolutionAction(`s-${id}`);
-      }
-    }
-    return { initialiseRaces };
-  }
-
   // src/game/state-initialization.ts
   function createStateInitialization({
     getGame,
@@ -12649,6 +12541,138 @@ Only continue if you trust the source. Injected code:
       }), getBuildings().Windmill.overridePowered = -1, getBuildings().SunSwarmSatellite.overridePowered = -0.35, getBuildings().ProximaDyson.overridePowered = -1.25, getBuildings().ProximaDysonSphere.overridePowered = -5, getBuildings().ProximaOrichalcumSphere.overridePowered = -8, getBuildings().ProximaElysaniteSphere.overridePowered = -18, getBuildings().BlackholeStellarEngine.overridePowered = 0, getBuildings().WastelandIncinerator.overridePowered = -25;
     }
     return { initialiseState };
+  }
+
+  // src/game/race-initialization.ts
+  function createRaceInitialization({
+    getGame,
+    getEvolutions,
+    getRaces,
+    getImitations,
+    getEvolutionAction,
+    getRace
+  }) {
+    function initialiseRaces() {
+      let currentGame = getGame(), currentEvolutions = getEvolutions(), currentRaces = getRaces(), currentImitations = getImitations(), CurrentEvolutionAction = getEvolutionAction(), CurrentRace = getRace();
+      for (let id in currentGame.actions.evolution)
+        currentEvolutions[id] = new CurrentEvolutionAction(id);
+      let e = currentEvolutions, bilateralSymmetry = [
+        e.bilateral_symmetry,
+        e.multicellular,
+        e.phagocytosis,
+        e.sexual_reproduction
+      ], mammals = [e.mammals, ...bilateralSymmetry], genusEvolution = {
+        eldritch: [e.sentience, e.eldritch, ...bilateralSymmetry],
+        aquatic: [e.sentience, e.aquatic, ...bilateralSymmetry],
+        insectoid: [e.sentience, e.athropods, ...bilateralSymmetry],
+        humanoid: [e.sentience, e.humanoid, ...mammals],
+        giant: [e.sentience, e.gigantism, ...mammals],
+        small: [e.sentience, e.dwarfism, ...mammals],
+        carnivore: [e.sentience, e.carnivore, e.animalism, ...mammals],
+        herbivore: [e.sentience, e.herbivore, e.animalism, ...mammals],
+        //omnivore: [e.sentience, e.omnivore, e.animalism, ...mammals],
+        demonic: [e.sentience, e.demonic, ...mammals],
+        angelic: [e.sentience, e.celestial, ...mammals],
+        fey: [e.sentience, e.fey, ...mammals],
+        heat: [e.sentience, e.heat, ...mammals],
+        polar: [e.sentience, e.polar, ...mammals],
+        sand: [e.sentience, e.sand, ...mammals],
+        avian: [e.sentience, e.endothermic, e.eggshell, ...bilateralSymmetry],
+        reptilian: [e.sentience, e.ectothermic, e.eggshell, ...bilateralSymmetry],
+        plant: [
+          e.sentience,
+          e.bryophyte,
+          e.poikilohydric,
+          e.multicellular,
+          e.chloroplasts,
+          e.sexual_reproduction
+        ],
+        fungi: [
+          e.sentience,
+          e.bryophyte,
+          e.spores,
+          e.multicellular,
+          e.chitin,
+          e.sexual_reproduction
+        ],
+        synthetic: [e.sentience, e.exterminate, e.sexual_reproduction]
+      };
+      for (let id in currentGame.races) {
+        if (id === "protoplasm")
+          continue;
+        let race2 = new CurrentRace(id);
+        currentRaces[id] = race2;
+        let raceDefinition = currentGame.races[id];
+        if (id === "hellspawn")
+          race2.evolutionTree[race2.genus] = [
+            e.bunker,
+            e.warlord,
+            ...genusEvolution[race2.genus] ?? []
+          ];
+        else if (id === "junker" || id === "sludge" || id === "ultra_sludge")
+          for (let genus of Object.keys(genusEvolution))
+            race2.evolutionTree[genus] = [
+              e.bunker,
+              e[id],
+              ...genusEvolution[genus] ?? []
+            ];
+        else if (raceDefinition.type === "hybrid")
+          for (let genus of raceDefinition.hybrid ?? [])
+            race2.evolutionTree[genus] = [
+              e.bunker,
+              e[id],
+              ...genusEvolution[genus] ?? []
+            ];
+        else
+          race2.evolutionTree[race2.genus] = [
+            e.bunker,
+            e[id],
+            ...genusEvolution[race2.genus] ?? []
+          ];
+        currentImitations[id] = new CurrentEvolutionAction(`s-${id}`);
+      }
+    }
+    return { initialiseRaces };
+  }
+
+  // src/game/building-state.ts
+  function createBuildingStateInitialization({
+    getBuildings,
+    getBuildingManager
+  }) {
+    function initBuildingState() {
+      let buildings = getBuildings(), BuildingManager = getBuildingManager(), priorityList = [];
+      priorityList.push(buildings.Windmill), priorityList.push(buildings.Mill), priorityList.push(buildings.CoalPower), priorityList.push(buildings.OilPower), priorityList.push(buildings.FissionPower), priorityList.push(buildings.TauFusionGenerator), priorityList.push(buildings.TauGas2AlienSpaceStation), priorityList.push(buildings.WastelandIncinerator), priorityList.push(buildings.RuinsHellForge), priorityList.push(buildings.RuinsInfernoPower), priorityList.push(buildings.AsphodelEncampment), priorityList.push(buildings.AsphodelRectory), priorityList.push(buildings.AsphodelCorruptor), priorityList.push(buildings.AsphodelSoulEngine), priorityList.push(buildings.TitanElectrolysis), priorityList.push(buildings.TitanHydrogen), priorityList.push(buildings.TitanQuarters), priorityList.push(buildings.DwarfMassRelayComplete), priorityList.push(buildings.RuinsArcology), priorityList.push(buildings.Apartment), priorityList.push(buildings.Barracks), priorityList.push(buildings.TouristCenter), priorityList.push(buildings.University), priorityList.push(buildings.Smelter), priorityList.push(buildings.Temple), priorityList.push(buildings.OilWell), priorityList.push(buildings.StorageYard), priorityList.push(buildings.Warehouse), priorityList.push(buildings.Bank), priorityList.push(buildings.Hospital), priorityList.push(buildings.BootCamp), priorityList.push(buildings.House), priorityList.push(buildings.Cottage), priorityList.push(buildings.Farm), priorityList.push(buildings.Silo), priorityList.push(buildings.Shed), priorityList.push(buildings.LumberYard), priorityList.push(buildings.Foundry), priorityList.push(buildings.OilDepot), priorityList.push(buildings.Trade), priorityList.push(buildings.Amphitheatre), priorityList.push(buildings.Library), priorityList.push(buildings.Wharf), priorityList.push(buildings.NaniteFactory), priorityList.push(buildings.RedNaniteFactory), priorityList.push(buildings.TauNaniteFactory), priorityList.push(buildings.Transmitter), priorityList.push(buildings.Assembly), priorityList.push(buildings.RedAssembly), priorityList.push(buildings.TauAssembly), priorityList.push(buildings.TauCloning), priorityList.push(buildings.Lodge), priorityList.push(buildings.Smokehouse), priorityList.push(buildings.SoulWell), priorityList.push(buildings.SlavePen), priorityList.push(buildings.SlaveMarket), priorityList.push(buildings.CaptiveHousing), priorityList.push(buildings.RedCaptiveHousing), priorityList.push(buildings.TauCaptiveHousing), priorityList.push(buildings.Graveyard), priorityList.push(buildings.Shrine), priorityList.push(buildings.CompostHeap), priorityList.push(buildings.ConcealWard), priorityList.push(buildings.Pylon), priorityList.push(buildings.RedPylon), priorityList.push(buildings.TauPylon), priorityList.push(buildings.ForgeHorseshoe), priorityList.push(buildings.RedForgeHorseshoe), priorityList.push(buildings.TauForgeHorseshoe), priorityList.push(buildings.SacrificialAltar), priorityList.push(buildings.MeditationChamber), priorityList.push(buildings.Banquet), priorityList.push(buildings.DwarfMission), priorityList.push(buildings.DwarfEleriumReactor), priorityList.push(buildings.DwarfWorldCollider), priorityList.push(buildings.HellMission), priorityList.push(buildings.HellGeothermal), priorityList.push(buildings.HellSwarmPlant), priorityList.push(buildings.ProximaTransferStation), priorityList.push(buildings.ProximaMission), priorityList.push(buildings.ProximaCargoYard), priorityList.push(buildings.ProximaCruiser), priorityList.push(buildings.ProximaDyson), priorityList.push(buildings.ProximaDysonSphere), priorityList.push(buildings.ProximaOrichalcumSphere), priorityList.push(buildings.ProximaElysaniteSphere), priorityList.push(buildings.AlphaMission), priorityList.push(buildings.AlphaStarport), priorityList.push(buildings.AlphaHabitat), priorityList.push(buildings.AlphaFusion), priorityList.push(buildings.AlphaLuxuryCondo), priorityList.push(buildings.AlphaMiningDroid), priorityList.push(buildings.AlphaProcessing), priorityList.push(buildings.AlphaLaboratory), priorityList.push(buildings.AlphaExoticZoo), priorityList.push(buildings.AlphaExchange), priorityList.push(buildings.AlphaGraphenePlant), priorityList.push(buildings.AlphaWarehouse), priorityList.push(buildings.SpaceTestLaunch), priorityList.push(buildings.SpaceSatellite), priorityList.push(buildings.SpaceGps), priorityList.push(buildings.SpacePropellantDepot), priorityList.push(buildings.SpaceNavBeacon), priorityList.push(buildings.RedMission), priorityList.push(buildings.RedTower), priorityList.push(buildings.RedSpaceport), priorityList.push(buildings.RedLivingQuarters), priorityList.push(buildings.RedBiodome), priorityList.push(buildings.RedSpaceBarracks), priorityList.push(buildings.RedExoticLab), priorityList.push(buildings.RedFabrication), priorityList.push(buildings.RedMine), priorityList.push(buildings.RedVrCenter), priorityList.push(buildings.RedZiggurat), priorityList.push(buildings.RedGarage), priorityList.push(buildings.RedUniversity), priorityList.push(buildings.RedTerraformer), priorityList.push(buildings.MoonMission), priorityList.push(buildings.MoonBase), priorityList.push(buildings.MoonObservatory), priorityList.push(buildings.MoonHeliumMine), priorityList.push(buildings.MoonIridiumMine), priorityList.push(buildings.SunMission), priorityList.push(buildings.SunSwarmControl), priorityList.push(buildings.SunSwarmSatellite), priorityList.push(buildings.SunJumpGate), priorityList.push(buildings.GasMission), priorityList.push(buildings.GasStorage), priorityList.push(buildings.GasSpaceDock), priorityList.push(buildings.GasSpaceDockProbe), priorityList.push(buildings.GasSpaceDockGECK), priorityList.push(buildings.GasSpaceDockShipSegment), priorityList.push(buildings.GasMoonMission), priorityList.push(buildings.GasMoonDrone), priorityList.push(buildings.Blackhole), priorityList.push(buildings.BlackholeStellarEngine), priorityList.push(buildings.BlackholeJumpShip), priorityList.push(buildings.BlackholeWormholeMission), priorityList.push(buildings.BlackholeStargate), priorityList.push(buildings.SiriusMission), priorityList.push(buildings.SiriusAnalysis), priorityList.push(buildings.SiriusSpaceElevator), priorityList.push(buildings.SiriusGravityDome), priorityList.push(buildings.SiriusThermalCollector), priorityList.push(buildings.SiriusAscensionMachine), priorityList.push(buildings.BlackholeStargateComplete), priorityList.push(buildings.GatewayMission), priorityList.push(buildings.GatewayStarbase), priorityList.push(buildings.GatewayShipDock), priorityList.push(buildings.StargateStation), priorityList.push(buildings.StargateTelemetryBeacon), priorityList.push(buildings.Dreadnought), priorityList.push(buildings.CruiserShip), priorityList.push(buildings.FrigateShip), priorityList.push(buildings.BologniumShip), priorityList.push(buildings.CorvetteShip), priorityList.push(buildings.ScoutShip), priorityList.push(buildings.GorddonMission), priorityList.push(buildings.GorddonEmbassy), priorityList.push(buildings.GorddonDormitory), priorityList.push(buildings.GorddonSymposium), priorityList.push(buildings.GorddonFreighter), priorityList.push(buildings.NeutronCitadel), priorityList.push(buildings.SiriusAscensionTrigger), priorityList.push(buildings.RedAtmoTerraformer), priorityList.push(buildings.BlackholeMassEjector), priorityList.push(buildings.PitSoulForge), priorityList.push(buildings.Alien1Consulate), priorityList.push(buildings.Alien1Resort), priorityList.push(buildings.Alien1VitreloyPlant), priorityList.push(buildings.Alien1SuperFreighter), priorityList.push(buildings.Alien2Foothold), priorityList.push(buildings.Alien2Scavenger), priorityList.push(buildings.Alien2ArmedMiner), priorityList.push(buildings.Alien2OreProcessor), priorityList.push(buildings.ChthonianMineLayer), priorityList.push(buildings.ChthonianExcavator), priorityList.push(buildings.ChthonianRaider), priorityList.push(buildings.Wardenclyffe), priorityList.push(buildings.BioLab), priorityList.push(buildings.DwarfWorldController), priorityList.push(buildings.BlackholeFarReach), priorityList.push(buildings.NebulaMission), priorityList.push(buildings.NebulaNexus), priorityList.push(buildings.NebulaHarvester), priorityList.push(buildings.NebulaEleriumProspector), priorityList.push(buildings.BeltMission), priorityList.push(buildings.BeltSpaceStation), priorityList.push(buildings.BeltEleriumShip), priorityList.push(buildings.BeltIridiumShip), priorityList.push(buildings.BeltIronShip), priorityList.push(buildings.CementPlant), priorityList.push(buildings.Factory), priorityList.push(buildings.GasMoonOutpost), priorityList.push(buildings.StargateDefensePlatform), priorityList.push(buildings.RedFactory), priorityList.push(buildings.AlphaMegaFactory), priorityList.push(buildings.PortalTurret), priorityList.push(buildings.BadlandsSensorDrone), priorityList.push(buildings.PortalWarDroid), priorityList.push(buildings.BadlandsPredatorDrone), priorityList.push(buildings.BadlandsAttractor), priorityList.push(buildings.PortalCarport), priorityList.push(buildings.BadlandsMinions), priorityList.push(buildings.BadlandsReaper), priorityList.push(buildings.BadlandsCorpsePile), priorityList.push(buildings.BadlandsMortuary), priorityList.push(buildings.BadlandsCodex), priorityList.push(buildings.PitGunEmplacement), priorityList.push(buildings.PitSoulAttractor), priorityList.push(buildings.PitSoulCapacitor), priorityList.push(buildings.PitAbsorptionChamber), priorityList.push(buildings.PitShadowMine), priorityList.push(buildings.PitTavern), priorityList.push(buildings.PortalRepairDroid), priorityList.push(buildings.PitMission), priorityList.push(buildings.PitAssaultForge), priorityList.push(buildings.RuinsAncientPillars), priorityList.push(buildings.WastelandThrone), priorityList.push(buildings.WastelandWarehouse), priorityList.push(buildings.WastelandHovel), priorityList.push(buildings.WastelandHellCasino), priorityList.push(buildings.WastelandTwistedLab), priorityList.push(buildings.WastelandDemonForge), priorityList.push(buildings.WastelandHellFactory), priorityList.push(buildings.WastelandPumpjack), priorityList.push(buildings.WastelandDigDemon), priorityList.push(buildings.WastelandTunneler), priorityList.push(buildings.WastelandBrute), priorityList.push(buildings.WastelandAltar), priorityList.push(buildings.WastelandShrine), priorityList.push(buildings.WastelandMeditationChamber), priorityList.push(buildings.RuinsMission), priorityList.push(buildings.RuinsGuardPost), priorityList.push(buildings.RuinsVault), priorityList.push(buildings.RuinsWarVault), priorityList.push(buildings.RuinsArchaeology), priorityList.push(buildings.GateMission), priorityList.push(buildings.GateEastTower), priorityList.push(buildings.GateWestTower), priorityList.push(buildings.GateTurret), priorityList.push(buildings.GateInferniteMine), priorityList.push(buildings.LakeMission), priorityList.push(buildings.LakeCoolingTower), priorityList.push(buildings.LakeHarbor), priorityList.push(buildings.LakeBireme), priorityList.push(buildings.LakeTransport), priorityList.push(buildings.LakeOven), priorityList.push(buildings.LakeOvenComplete), priorityList.push(buildings.LakeSoulSteeper), priorityList.push(buildings.LakeLifeInfuser), priorityList.push(buildings.SpireMission), priorityList.push(buildings.SpirePurifier), priorityList.push(buildings.SpireMechBay), priorityList.push(buildings.SpireBaseCamp), priorityList.push(buildings.SpirePort), priorityList.push(buildings.SpireBridge), priorityList.push(buildings.SpireSphinx), priorityList.push(buildings.SpireBribeSphinx), priorityList.push(buildings.SpireSurveyTower), priorityList.push(buildings.SpireWaygate), priorityList.push(buildings.SpireEdenicGate), priorityList.push(buildings.SpireBazaar), priorityList.push(buildings.AsphodelMission), priorityList.push(buildings.AsphodelMechStation), priorityList.push(buildings.AsphodelHarvester), priorityList.push(buildings.AsphodelProcessor), priorityList.push(buildings.AsphodelResearchStation), priorityList.push(buildings.AsphodelWarehouse), priorityList.push(buildings.AsphodelStabilizer), priorityList.push(buildings.AsphodelRuneGate), priorityList.push(buildings.AsphodelBunker), priorityList.push(buildings.AsphodelBlissDen), priorityList.push(buildings.ElysiumMission), priorityList.push(buildings.ElysiumAmbush), priorityList.push(buildings.ElysiumRaid), priorityList.push(buildings.ElysiumSiege), priorityList.push(buildings.ElysiumScout), priorityList.push(buildings.ElysiumFireSupportBase), priorityList.push(buildings.ElysiumMine), priorityList.push(buildings.ElysiumSacredSmelter), priorityList.push(buildings.ElysiumEleriumContainment), priorityList.push(buildings.ElysiumPillbox), priorityList.push(buildings.ElysiumRestaurant), priorityList.push(buildings.ElysiumEternalBank), priorityList.push(buildings.ElysiumArchive), priorityList.push(buildings.ElysiumNorthPier), priorityList.push(buildings.ElysiumRushmore), priorityList.push(buildings.ElysiumReincarnation), priorityList.push(buildings.ElysiumCement), priorityList.push(buildings.IsleSouthPier), priorityList.push(buildings.IsleSpiritBattery), priorityList.push(buildings.IsleSpiritVacuum), priorityList.push(buildings.IsleSoulCompactor), priorityList.push(buildings.PalaceMission), priorityList.push(buildings.PalaceInfuser), priorityList.push(buildings.PalaceConduit), priorityList.push(buildings.PalaceTomb), priorityList.push(buildings.HellSmelter), priorityList.push(buildings.DwarfShipyard), priorityList.push(buildings.DwarfMassRelay), priorityList.push(buildings.TitanMission), priorityList.push(buildings.TitanSpaceport), priorityList.push(buildings.TitanAIColonist), priorityList.push(buildings.TitanMine), priorityList.push(buildings.TitanSAM), priorityList.push(buildings.TitanGraphene), priorityList.push(buildings.TitanStorehouse), priorityList.push(buildings.TitanBank), priorityList.push(buildings.TitanAI), priorityList.push(buildings.TitanAIComplete), priorityList.push(buildings.TitanDecoder), priorityList.push(buildings.EnceladusMission), priorityList.push(buildings.EnceladusZeroGLab), priorityList.push(buildings.EnceladusWaterFreighter), priorityList.push(buildings.EnceladusBase), priorityList.push(buildings.EnceladusMunitions), priorityList.push(buildings.TritonMission), priorityList.push(buildings.TritonFOB), priorityList.push(buildings.TritonLander), priorityList.push(buildings.KuiperMission), priorityList.push(buildings.KuiperOrichalcum), priorityList.push(buildings.KuiperUranium), priorityList.push(buildings.KuiperNeutronium), priorityList.push(buildings.KuiperElerium), priorityList.push(buildings.ErisMission), priorityList.push(buildings.ErisDrone), priorityList.push(buildings.ErisTank), priorityList.push(buildings.ErisTrooper), priorityList.push(buildings.TauStarRingworld), priorityList.push(buildings.TauStarMatrix), priorityList.push(buildings.TauStarEden), priorityList.push(buildings.TauMission), priorityList.push(buildings.TauDismantle), priorityList.push(buildings.TauOrbitalStation), priorityList.push(buildings.TauFarm), priorityList.push(buildings.TauColony), priorityList.push(buildings.TauHousing), priorityList.push(buildings.TauExcavate), priorityList.push(buildings.TauAlienOutpost), priorityList.push(buildings.TauJumpGate), priorityList.push(buildings.TauRepository), priorityList.push(buildings.TauFactory), priorityList.push(buildings.TauDiseaseLab), priorityList.push(buildings.TauCasino), priorityList.push(buildings.TauCulturalCenter), priorityList.push(buildings.TauMiningPit), priorityList.push(buildings.TauRedMission), priorityList.push(buildings.TauRedOrbitalPlatform), priorityList.push(buildings.TauRedContact), priorityList.push(buildings.TauRedIntroduce), priorityList.push(buildings.TauRedSubjugate), priorityList.push(buildings.TauRedWomlingVillage), priorityList.push(buildings.TauRedWomlingFarm), priorityList.push(buildings.TauRedWomlingLab), priorityList.push(buildings.TauRedWomlingMine), priorityList.push(buildings.TauRedWomlingFun), priorityList.push(buildings.TauRedOverseer), priorityList.push(buildings.TauGasContest), priorityList.push(buildings.TauGasName1), priorityList.push(buildings.TauGasName2), priorityList.push(buildings.TauGasName3), priorityList.push(buildings.TauGasName4), priorityList.push(buildings.TauGasName5), priorityList.push(buildings.TauGasName6), priorityList.push(buildings.TauGasName7), priorityList.push(buildings.TauGasName8), priorityList.push(buildings.TauGasRefuelingStation), priorityList.push(buildings.TauGasOreRefinery), priorityList.push(buildings.TauGasWhalingStation), priorityList.push(buildings.TauGasWomlingStation), priorityList.push(buildings.TauBeltMission), priorityList.push(buildings.TauBeltPatrolShip), priorityList.push(buildings.TauBeltMiningShip), priorityList.push(buildings.TauBeltWhalingShip), priorityList.push(buildings.TauGas2Contest), priorityList.push(buildings.TauGas2Name1), priorityList.push(buildings.TauGas2Name2), priorityList.push(buildings.TauGas2Name3), priorityList.push(buildings.TauGas2Name4), priorityList.push(buildings.TauGas2Name5), priorityList.push(buildings.TauGas2Name6), priorityList.push(buildings.TauGas2Name7), priorityList.push(buildings.TauGas2Name8), priorityList.push(buildings.TauGas2AlienSurvey), priorityList.push(buildings.TauGas2AlienStation), priorityList.push(buildings.TauGas2MatrioshkaBrain), priorityList.push(buildings.TauGas2IgnitionDevice), priorityList.push(buildings.TauGas2IgniteGasGiant), priorityList.push(buildings.StargateDepot), priorityList.push(buildings.DwarfEleriumContainer), priorityList.push(buildings.GasMoonOilExtractor), priorityList.push(buildings.NeutronMission), priorityList.push(buildings.NeutronStellarForge), priorityList.push(buildings.NeutronMiner), priorityList.push(buildings.MassDriver), priorityList.push(buildings.MetalRefinery), priorityList.push(buildings.Casino), priorityList.push(buildings.HellSpaceCasino), priorityList.push(buildings.RockQuarry), priorityList.push(buildings.Sawmill), priorityList.push(buildings.GasMining), priorityList.push(buildings.Mine), priorityList.push(buildings.CoalMine);
+      let available = priorityList.filter((b) => b !== void 0);
+      BuildingManager.priorityList = available, BuildingManager.statePriorityList = available.filter(
+        (b) => b.isSwitchable()
+      );
+    }
+    return { initBuildingState };
+  }
+
+  // src/bootstrap/initialization-controls.ts
+  function createStateInitializationControl({
+    testSurface,
+    getTestContextSnapshot,
+    setTestContext,
+    ...dependencies
+  }) {
+    return createStateInitialization(dependencies);
+  }
+  function createRaceInitializationControl({
+    testSurface,
+    setTestContext,
+    ...dependencies
+  }) {
+    return createRaceInitialization(dependencies);
+  }
+  function createBuildingStateInitializationControl({
+    testSurface,
+    setTestContext,
+    ...dependencies
+  }) {
+    return createBuildingStateInitialization(dependencies);
   }
 
   // src/domain/planner-analysis.ts
@@ -50166,7 +50190,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getResources: () => resources,
       setCraftablesList: (list) => craftablesList = list,
       setFoundryList: (list) => foundryList = list
-    }), { initialiseState } = createStateInitialization({
+    }), { initialiseState } = createStateInitializationControl({
       getGame: () => game,
       getResources: () => resources,
       getJobManager: () => JobManager,
@@ -50178,17 +50202,35 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getUpdateTabs: () => getTestContext("stateInitialization")?.actions?.updateTabs ?? updateTabs,
       getIsLumberRace: () => getTestContext("stateInitialization")?.actions?.isLumberRace ?? isLumberRace,
       getHaveTech: () => getTestContext("stateInitialization")?.actions?.haveTech ?? haveTech,
-      log: (message) => runtimeEnvironment.log(message)
-    }), { initialiseRaces } = createRaceInitialization({
+      log: (message) => runtimeEnvironment.log(message),
+      testSurface,
+      getTestContextSnapshot: () => ({
+        game,
+        resources,
+        JobManager,
+        crafter,
+        buildings,
+        projects
+      }),
+      setTestContext(context) {
+        game = context.game, resources = context.resources, JobManager = context.JobManager, crafter = context.crafter, buildings = context.buildings, projects = context.projects, setTestContext("stateInitialization", context);
+      }
+    }), { initialiseRaces } = createRaceInitializationControl({
       getGame: () => getTestContext("raceInitialization")?.game ?? game,
       getEvolutions: () => getTestContext("raceInitialization")?.evolutions ?? evolutions,
       getRaces: () => getTestContext("raceInitialization")?.races ?? races,
       getImitations: () => getTestContext("raceInitialization")?.imitations ?? imitations,
       getEvolutionAction: () => getTestContext("raceInitialization")?.EvolutionAction ?? EvolutionAction,
-      getRace: () => getTestContext("raceInitialization")?.Race ?? Race
-    }), { initBuildingState } = createBuildingStateInitialization({
+      getRace: () => getTestContext("raceInitialization")?.Race ?? Race,
+      testSurface,
+      setTestContext: (context) => setTestContext("raceInitialization", context)
+    }), { initBuildingState } = createBuildingStateInitializationControl({
       getBuildings: () => buildings,
-      getBuildingManager: () => BuildingManager
+      getBuildingManager: () => BuildingManager,
+      testSurface,
+      setTestContext(context) {
+        buildings = context.buildings, BuildingManager = context.BuildingManager;
+      }
     }), { updateStateFromSettings, updateSettingsFromState } = createSettingsState({
       getSettingsRaw: () => settingsRaw,
       getTriggerManager: () => TriggerManager,

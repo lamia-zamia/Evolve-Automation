@@ -114,9 +114,11 @@ import { createCraftingCosts } from "../../game/crafting-costs.ts";
 import { createEntityClasses } from "../../game/entities.ts";
 import { createGameCompatibility } from "../../game/compatibility.ts";
 import { createEntityCatalogs } from "../../game/entity-catalogs.ts";
-import { createBuildingStateInitialization } from "../../game/building-state.ts";
-import { createRaceInitialization } from "../../game/race-initialization.ts";
-import { createStateInitialization } from "../../game/state-initialization.ts";
+import {
+  createStateInitializationControl,
+  createRaceInitializationControl,
+  createBuildingStateInitializationControl,
+} from "../../bootstrap/initialization-controls.ts";
 import { createPlannerState } from "../../game/planner-state.ts";
 import { createAuthorityPolicy } from "../../game/authority-policy.ts";
 import { createRunGuards } from "./run-guards.ts";
@@ -2503,7 +2505,7 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { initialiseState } = createStateInitialization({
+  const { initialiseState } = createStateInitializationControl({
     getGame: () => game,
     getResources: () => resources,
     getJobManager: () => JobManager,
@@ -2522,31 +2524,27 @@ export function startEvolveRuntimeComposition(
     getHaveTech: () =>
       getTestContext("stateInitialization")?.actions?.haveTech ?? haveTech,
     log: (message) => runtimeEnvironment.log(message),
+    testSurface,
+    getTestContextSnapshot: () => ({
+      game,
+      resources,
+      JobManager,
+      crafter,
+      buildings,
+      projects,
+    }),
+    setTestContext(context) {
+      game = context.game;
+      resources = context.resources;
+      JobManager = context.JobManager;
+      crafter = context.crafter;
+      buildings = context.buildings;
+      projects = context.projects;
+      setTestContext("stateInitialization", context);
+    },
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      initialiseState,
-      getStateInitializationTestContext: () => ({
-        game,
-        resources,
-        JobManager,
-        crafter,
-        buildings,
-        projects,
-      }),
-      setStateInitializationTestContext(context) {
-        game = context.game;
-        resources = context.resources;
-        JobManager = context.JobManager;
-        crafter = context.crafter;
-        buildings = context.buildings;
-        projects = context.projects;
-        setTestContext("stateInitialization", context);
-      },
-    });
-
-  const { initialiseRaces } = createRaceInitialization({
+  const { initialiseRaces } = createRaceInitializationControl({
     getGame: () => getTestContext("raceInitialization")?.game ?? game,
     getEvolutions: () =>
       getTestContext("raceInitialization")?.evolutions ?? evolutions,
@@ -2556,29 +2554,19 @@ export function startEvolveRuntimeComposition(
     getEvolutionAction: () =>
       getTestContext("raceInitialization")?.EvolutionAction ?? EvolutionAction,
     getRace: () => getTestContext("raceInitialization")?.Race ?? Race,
+    testSurface,
+    setTestContext: (context) => setTestContext("raceInitialization", context),
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      initialiseRaces,
-      setRaceInitializationTestContext(context) {
-        setTestContext("raceInitialization", context);
-      },
-    });
-
-  const { initBuildingState } = createBuildingStateInitialization({
+  const { initBuildingState } = createBuildingStateInitializationControl({
     getBuildings: () => buildings,
     getBuildingManager: () => BuildingManager,
+    testSurface,
+    setTestContext(context) {
+      buildings = context.buildings;
+      BuildingManager = context.BuildingManager;
+    },
   });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      initBuildingState,
-      setBuildingStateTestContext(context) {
-        buildings = context.buildings;
-        BuildingManager = context.BuildingManager;
-      },
-    });
 
   const { updateStateFromSettings, updateSettingsFromState } =
     createSettingsState({
