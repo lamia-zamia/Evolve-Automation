@@ -214,9 +214,7 @@ import { createBuildingWeightingDecider } from "../../domain/progression/build/b
 import { readWeightingCandidate } from "./progression/build/weighting-candidate.ts";
 import { createWeightingSnapshotReader } from "./progression/build/weighting-snapshot.ts";
 import { createTradeRoutes } from "./trade-routes.ts";
-import { createHellControl } from "../../bootstrap/hell-control.ts";
-import { createGovernmentControl } from "../../bootstrap/government-control.ts";
-import { createBattleControl } from "../../bootstrap/battle-control.ts";
+import { createCombatCivicControls } from "../../bootstrap/combat-civic-controls.ts";
 import { createUserscriptEnvironment } from "../userscript/environment.ts";
 import { createTaxControl } from "../../bootstrap/tax-control.ts";
 import { createStorageExpansionControl } from "../../bootstrap/storage-expansion-control.ts";
@@ -2853,22 +2851,47 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  const { autoGovernment } = createGovernmentControl({
-    reader: {
-      getGovernmentManager: () => GovernmentManager,
+  const { autoGovernment, autoBattle, autoHell } = createCombatCivicControls({
+    government: {
+      reader: {
+        getGovernmentManager: () => GovernmentManager,
+        getSettings: () => settings,
+        getGame: () => game,
+        guardActive,
+        haveTech,
+        getGovernor,
+        isTradeFederationAchievementUnlocked: () =>
+          isAchievementUnlocked("trade", 1),
+      },
+      executor: {
+        getGovernmentManager: () => GovernmentManager,
+        getGame: () => game,
+        getGovernor,
+        getVueById,
+      },
+    },
+    battle: {
+      getSpyManager: () => SpyManager,
+      getWarManager: () => WarManager,
+      getGameLog: () => GameLog,
+      getState: () => state,
       getSettings: () => settings,
       getGame: () => game,
       guardActive,
-      haveTech,
-      getGovernor,
-      isTradeFederationAchievementUnlocked: () =>
-        isAchievementUnlocked("trade", 1),
+      getHealingRate,
+      traitVal,
+      getOccupationCost: getOccCosts,
+      getGovernmentName: getGovName,
     },
-    executor: {
-      getGovernmentManager: () => GovernmentManager,
+    hell: {
+      getWarManager: () => WarManager,
       getGame: () => game,
-      getGovernor,
-      getVueById,
+      getSettings: () => settings,
+      getBuildings: () => buildings,
+      getResources: () => resources,
+      getState: () => state,
+      getDebugWindow: () => runtimeEnvironment.window,
+      debugLog: (message) => runtimeEnvironment.log(message),
     },
   });
 
@@ -2894,31 +2917,6 @@ export function startEvolveRuntimeComposition(
     getGameLog: () => GameLog,
     getGovName,
     getGame: () => game,
-  });
-
-  const { autoBattle } = createBattleControl({
-    getSpyManager: () => SpyManager,
-    getWarManager: () => WarManager,
-    getGameLog: () => GameLog,
-    getState: () => state,
-    getSettings: () => settings,
-    getGame: () => game,
-    guardActive,
-    getHealingRate,
-    traitVal,
-    getOccupationCost: getOccCosts,
-    getGovernmentName: getGovName,
-  });
-
-  const { autoHell } = createHellControl({
-    getWarManager: () => WarManager,
-    getGame: () => game,
-    getSettings: () => settings,
-    getBuildings: () => buildings,
-    getResources: () => resources,
-    getState: () => state,
-    getDebugWindow: () => runtimeEnvironment.window,
-    debugLog: (message) => runtimeEnvironment.log(message),
   });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__) testSurface?.add({ autoHell });

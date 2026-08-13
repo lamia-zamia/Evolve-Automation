@@ -23845,589 +23845,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return { adjustTradeRoutes };
   }
 
-  // src/domain/combat/hell.ts
-  function freezeCommands(commands) {
-    return Object.freeze(commands.map((command) => Object.freeze(command)));
-  }
-  function manageDecision(commands, authorityAdjusted = !1, authorityDebug = null) {
-    return commands.length === 0 && !authorityAdjusted && authorityDebug === null ? null : Object.freeze({
-      kind: "manage-hell",
-      commands: freezeCommands(commands),
-      authorityAdjusted,
-      authorityDebug: authorityDebug === null ? null : Object.freeze(authorityDebug)
-    });
-  }
-  function adjustmentCommands(input, targetSoldiers, targetPatrols, targetPatrolSize) {
-    let commands = [];
-    return input.handlePatrolSize && input.hellPatrolSize > targetPatrolSize && commands.push({
-      kind: "remove-patrol-size",
-      count: input.hellPatrolSize - targetPatrolSize
-    }), input.hellPatrols > targetPatrols && commands.push({
-      kind: "remove-patrol",
-      count: input.hellPatrols - targetPatrols
-    }), input.hellSoldiers > targetSoldiers && commands.push({
-      kind: "remove-garrison",
-      count: input.hellSoldiers - targetSoldiers
-    }), input.hellSoldiers < targetSoldiers && commands.push({
-      kind: "add-garrison",
-      count: targetSoldiers - input.hellSoldiers
-    }), input.handlePatrolSize && input.hellPatrolSize < targetPatrolSize && commands.push({
-      kind: "add-patrol-size",
-      count: targetPatrolSize - input.hellPatrolSize
-    }), input.hellPatrols < targetPatrols && commands.push({
-      kind: "add-patrol",
-      count: targetPatrols - input.hellPatrols
-    }), commands;
-  }
-  function calculatePatrolRating(input) {
-    let rating = input.fortressThreat * input.patrolThreatPercent / 100;
-    if (rating -= input.patrolDroneModifier * input.warDroneCount * (input.portalTechnology >= 7 ? 1.5 : 1), rating -= input.patrolDroidModifier * input.warDroidCount * (input.hellDroidTechnology ? 2 : 1), rating -= input.patrolBootcampModifier * input.bootCampCount, rating = Math.max(rating, input.minimumPatrolRating), input.bolsterPatrolRating > 0 && input.bolsterPercentTop > 0) {
-      let fillRatio = input.currentCityGarrison / input.maximumCityGarrison;
-      fillRatio <= input.bolsterPercentTop / 100 && (fillRatio <= input.bolsterPercentBottom / 100 ? rating += input.bolsterPatrolRating : input.bolsterPercentBottom < input.bolsterPercentTop && (rating += input.bolsterPatrolRating * (input.bolsterPercentTop / 100 - fillRatio) / (input.bolsterPercentTop - input.bolsterPercentBottom) * 100));
-    }
-    return rating;
-  }
-  function prepareHellCycle(input) {
-    if (!input.available) return null;
-    if (input.warlord)
-      return input.enemies > 0 && input.handleEnemyFortress && input.minions > input.minimumMinions ? Object.freeze({ kind: "attack-enemy-fortress", enemyIndex: 0 }) : null;
-    let homeSoldiers = input.homeGarrison;
-    if (input.elysiumUnlocked && homeSoldiers < 100 && (homeSoldiers = 100), !(input.maximumSoldiers > homeSoldiers + input.minimumHellSoldiers && (input.hellSoldiers > input.minimumHellSoldiers || input.currentSoldiers >= input.maximumSoldiers * input.minimumSoldierPercent / 100)))
-      return input.hellAssigned > 0 ? manageDecision([
-        { kind: "remove-patrol-size", count: input.hellPatrolSize },
-        { kind: "remove-patrol", count: input.hellPatrols },
-        { kind: "remove-garrison", count: input.hellSoldiers }
-      ]) : manageDecision(adjustmentCommands(input, 0, 0, 0));
-    let targetHellSoldiers = Math.min(input.currentSoldiers, input.maximumSoldiers) - homeSoldiers, availableHellSoldiers = targetHellSoldiers - input.hellReservedSoldiers, wallMultiplier = input.lowWallsMultiplier * (1 - input.fortressWalls / 100), targetDefense = input.fortressThreat * 35 / input.targetFortressDamage, turretPower = input.turretCount * (input.turretTechnology ? input.turretTechnology >= 2 ? 70 : 50 : 35);
-    return Object.freeze({
-      kind: "calculate-hell-targets",
-      input,
-      targetHellSoldiers,
-      availableHellSoldiers,
-      garrisonRating: Math.max(0, wallMultiplier * targetDefense - turretPower),
-      patrolRating: input.handlePatrolSize ? calculatePatrolRating(input) : null
-    });
-  }
-  function calculateHellBaseTargets(request, targets) {
-    let hellGarrison = targets.garrisonSoldiers;
-    request.availableHellSoldiers < hellGarrison ? hellGarrison = 0 : request.availableHellSoldiers < hellGarrison * 2 && (hellGarrison = Math.floor(request.availableHellSoldiers / 2));
-    let patrolSize = request.input.handlePatrolSize ? Math.min(
-      targets.patrolSoldiers,
-      request.availableHellSoldiers - hellGarrison
-    ) : request.input.hellPatrolSize;
-    return Object.freeze({ hellGarrison, patrolSize });
-  }
-  function planHell(request, calculated) {
-    let input = request.input, base = calculateHellBaseTargets(request, calculated), hellGarrison = base.hellGarrison, patrolSize = base.patrolSize, authorityAdjusted = !1, authorityDebug = null;
-    if (input.manageAuthority && input.minimumAuthority !== 0 && calculated.authority.unlocked && patrolSize > 0) {
-      let perSoldier = 0.7 + 0.1 * input.evilTechnology;
-      input.grenadier && (perSoldier *= 1.75), input.government === "autocracy" ? perSoldier *= 1.08 : input.government === "dictator" && (perSoldier *= 1.12);
-      let authorityTarget = input.minimumAuthority < 0 ? calculated.authority.maximum : input.minimumAuthority, deficit = authorityTarget - calculated.authority.current, neededStationed = input.currentHellGarrison + Math.ceil(deficit / perSoldier), patrolReserve = 1;
-      input.minimumAuthority < 0 && input.minimumAuthorityPatrolPercent > 0 && (patrolReserve = Math.min(
-        request.availableHellSoldiers,
-        Math.ceil(
-          request.availableHellSoldiers * input.minimumAuthorityPatrolPercent / 100
-        )
-      ));
-      let maximumStationed = Math.max(
-        0,
-        request.availableHellSoldiers - patrolReserve
-      ), authorityGarrison = Math.max(
-        hellGarrison,
-        Math.min(neededStationed, maximumStationed)
-      );
-      patrolSize = Math.min(
-        patrolSize,
-        Math.max(1, request.availableHellSoldiers - authorityGarrison)
-      ), authorityAdjusted = authorityGarrison !== input.currentHellGarrison, calculated.authority.debugEnabled && authorityGarrison !== hellGarrison && (authorityDebug = {
-        amount: calculated.authority.current,
-        target: authorityTarget,
-        perSoldier,
-        currentStationed: input.currentHellGarrison,
-        neededStationed,
-        defenseGarrison: hellGarrison,
-        authorityGarrison,
-        maximumStationed,
-        patrolReserve,
-        patrolSize,
-        availableSoldiers: request.availableHellSoldiers
-      }), hellGarrison = authorityGarrison;
-    }
-    let targetPatrols = Math.max(
-      1,
-      Math.floor((request.availableHellSoldiers - hellGarrison) / patrolSize)
-    );
-    if (input.handlePatrolSize && targetPatrols === 1) {
-      let availableForPatrol = request.availableHellSoldiers - hellGarrison;
-      availableForPatrol >= 1.5 * patrolSize && (patrolSize = Math.floor(availableForPatrol / 3), targetPatrols = Math.floor(availableForPatrol / patrolSize));
-    }
-    return manageDecision(
-      adjustmentCommands(
-        input,
-        request.targetHellSoldiers,
-        targetPatrols,
-        patrolSize
-      ),
-      authorityAdjusted,
-      authorityDebug
-    );
-  }
-
-  // src/adapters/command-outcomes.ts
-  var SUCCEEDED = Object.freeze({
-    status: "succeeded"
-  });
-  function rejected(code, message) {
-    return { status: "rejected", failure: { code, message } };
-  }
-  function stale(code, message, context) {
-    return context === void 0 ? { status: "stale", failure: { code, message } } : { status: "stale", failure: { code, message, context } };
-  }
-
-  // src/adapters/evolve/combat/hell.ts
-  function optionalNumber(value, path) {
-    return value === void 0 ? 0 : requireNumber(value, path);
-  }
-  function requireSoldierTarget(value, path) {
-    return value === Number.POSITIVE_INFINITY ? Number.MAX_SAFE_INTEGER : requireNumber(value, path);
-  }
-  function call2(target, name, path, ...args) {
-    let method = requireFunction(target[name], `${path}.${name}`);
-    return Reflect.apply(method, target, args);
-  }
-  function unavailableInput() {
-    return Object.freeze({
-      available: !1,
-      warlord: !1,
-      enemies: 0,
-      minions: 0,
-      handleEnemyFortress: !1,
-      minimumMinions: 0,
-      maximumSoldiers: 0,
-      currentSoldiers: 0,
-      currentCityGarrison: 0,
-      maximumCityGarrison: 0,
-      hellSoldiers: 0,
-      hellPatrols: 0,
-      hellPatrolSize: 0,
-      hellAssigned: 0,
-      hellReservedSoldiers: 0,
-      currentHellGarrison: 0,
-      homeGarrison: 0,
-      minimumHellSoldiers: 0,
-      minimumSoldierPercent: 0,
-      elysiumUnlocked: !1,
-      fortressWalls: 0,
-      fortressThreat: 0,
-      lowWallsMultiplier: 0,
-      targetFortressDamage: 1,
-      turretCount: 0,
-      turretTechnology: 0,
-      handlePatrolSize: !1,
-      patrolThreatPercent: 0,
-      patrolDroneModifier: 0,
-      patrolDroidModifier: 0,
-      patrolBootcampModifier: 0,
-      minimumPatrolRating: 0,
-      bolsterPatrolRating: 0,
-      bolsterPercentTop: 0,
-      bolsterPercentBottom: 0,
-      warDroneCount: 0,
-      portalTechnology: 0,
-      warDroidCount: 0,
-      hellDroidTechnology: !1,
-      bootCampCount: 0,
-      manageAuthority: !1,
-      minimumAuthority: 0,
-      minimumAuthorityPatrolPercent: 0,
-      evilTechnology: 0,
-      grenadier: !1,
-      government: ""
-    });
-  }
-  function decisionsMatch(left, right) {
-    return JSON.stringify(left) === JSON.stringify(right);
-  }
-  function createHellAdapter(dependencies) {
-    let session = null, reader = Object.freeze({
-      readCycle() {
-        session = null;
-        let manager = requireRecord(dependencies.getWarManager(), "WarManager"), game = requireRecord(dependencies.getGame(), "game"), settings = requireRecord(dependencies.getSettings(), "settings"), buildings = requireRecord(dependencies.getBuildings(), "buildings"), resources = requireRecord(dependencies.getResources(), "resources"), state = requireRecord(dependencies.getState(), "state"), debugWindow = requireRecord(
-          dependencies.getDebugWindow(),
-          "debug window"
-        );
-        if (manager.isGarrisonVisible !== !0 || manager.isHellVisible !== !0)
-          return unavailableInput();
-        let global = requireRecord(game.global, "game.global"), race2 = requireRecord(global.race, "game.global.race");
-        if (!!race2.warlord) {
-          let input2 = Object.freeze({
-            ...unavailableInput(),
-            available: !0,
-            warlord: !0,
-            enemies: requireNumber(manager.enemies, "WarManager.enemies"),
-            minions: requireNumber(manager.minions, "WarManager.minions"),
-            handleEnemyFortress: requireBoolean(
-              settings.warlordHandleFortress,
-              "settings.warlordHandleFortress"
-            ),
-            minimumMinions: requireNumber(
-              settings.warlordMinimumMinions,
-              "settings.warlordMinimumMinions"
-            )
-          });
-          return session = {
-            manager,
-            game,
-            settings,
-            buildings,
-            resources,
-            state,
-            debugWindow,
-            cycleInput: input2,
-            calculation: null,
-            request: null
-          }, input2;
-        }
-        let portal = requireRecord(global.portal, "game.global.portal"), fortress = requireRecord(
-          portal.fortress,
-          "game.global.portal.fortress"
-        ), tech = requireRecord(global.tech, "game.global.tech"), city = requireRecord(global.city, "game.global.city"), civic = requireRecord(global.civic, "game.global.civic"), govern = requireRecord(civic.govern, "game.global.civic.govern"), elysiumFortress = requireRecord(
-          buildings.ElysiumFortress,
-          "buildings.ElysiumFortress"
-        ), elysiumUnlocked = callBoolean(
-          elysiumFortress,
-          "isUnlocked",
-          "buildings.ElysiumFortress"
-        );
-        elysiumUnlocked || (elysiumUnlocked = callBoolean(
-          requireRecord(buildings.ElysiumScout, "buildings.ElysiumScout"),
-          "isUnlocked",
-          "buildings.ElysiumScout"
-        ));
-        let warDrone = portal.war_drone ? requireRecord(portal.war_drone, "game.global.portal.war_drone") : null, warDroid = portal.war_droid ? requireRecord(portal.war_droid, "game.global.portal.war_droid") : null, bootCamp = city.boot_camp ? requireRecord(city.boot_camp, "game.global.city.boot_camp") : null, turret = requireRecord(
-          buildings.PortalTurret,
-          "buildings.PortalTurret"
-        ), input = Object.freeze({
-          available: !0,
-          warlord: !1,
-          enemies: 0,
-          minions: 0,
-          handleEnemyFortress: !1,
-          minimumMinions: 0,
-          maximumSoldiers: requireNumber(
-            manager.maxSoldiers,
-            "WarManager.maxSoldiers"
-          ),
-          currentSoldiers: requireNumber(
-            manager.currentSoldiers,
-            "WarManager.currentSoldiers"
-          ),
-          currentCityGarrison: requireNumber(
-            manager.currentCityGarrison,
-            "WarManager.currentCityGarrison"
-          ),
-          maximumCityGarrison: requireNumber(
-            manager.maxCityGarrison,
-            "WarManager.maxCityGarrison"
-          ),
-          hellSoldiers: requireNumber(
-            manager.hellSoldiers,
-            "WarManager.hellSoldiers"
-          ),
-          hellPatrols: requireNumber(
-            manager.hellPatrols,
-            "WarManager.hellPatrols"
-          ),
-          hellPatrolSize: requireNumber(
-            manager.hellPatrolSize,
-            "WarManager.hellPatrolSize"
-          ),
-          // A freshly unlocked fortress has no `assigned` property until the game
-          // first writes it; treat the absent value as zero as legacy did.
-          hellAssigned: optionalNumber(
-            manager.hellAssigned,
-            "WarManager.hellAssigned"
-          ),
-          hellReservedSoldiers: requireNumber(
-            manager.hellReservedSoldiers,
-            "WarManager.hellReservedSoldiers"
-          ),
-          currentHellGarrison: requireNumber(
-            manager.hellGarrison,
-            "WarManager.hellGarrison"
-          ),
-          homeGarrison: requireNumber(
-            settings.hellHomeGarrison,
-            "settings.hellHomeGarrison"
-          ),
-          minimumHellSoldiers: requireNumber(
-            settings.hellMinSoldiers,
-            "settings.hellMinSoldiers"
-          ),
-          minimumSoldierPercent: requireNumber(
-            settings.hellMinSoldiersPercent,
-            "settings.hellMinSoldiersPercent"
-          ),
-          elysiumUnlocked,
-          fortressWalls: requireNumber(
-            fortress.walls,
-            "game.global.portal.fortress.walls"
-          ),
-          fortressThreat: requireNumber(
-            fortress.threat,
-            "game.global.portal.fortress.threat"
-          ),
-          lowWallsMultiplier: requireNumber(
-            settings.hellLowWallsMulti,
-            "settings.hellLowWallsMulti"
-          ),
-          targetFortressDamage: requireNumber(
-            settings.hellTargetFortressDamage,
-            "settings.hellTargetFortressDamage"
-          ),
-          turretCount: requireNumber(
-            turret.stateOnCount,
-            "buildings.PortalTurret.stateOnCount"
-          ),
-          turretTechnology: optionalNumber(
-            tech.turret,
-            "game.global.tech.turret"
-          ),
-          handlePatrolSize: requireBoolean(
-            settings.hellHandlePatrolSize,
-            "settings.hellHandlePatrolSize"
-          ),
-          patrolThreatPercent: requireNumber(
-            settings.hellPatrolThreatPercent,
-            "settings.hellPatrolThreatPercent"
-          ),
-          patrolDroneModifier: requireNumber(
-            settings.hellPatrolDroneMod,
-            "settings.hellPatrolDroneMod"
-          ),
-          patrolDroidModifier: requireNumber(
-            settings.hellPatrolDroidMod,
-            "settings.hellPatrolDroidMod"
-          ),
-          patrolBootcampModifier: requireNumber(
-            settings.hellPatrolBootcampMod,
-            "settings.hellPatrolBootcampMod"
-          ),
-          minimumPatrolRating: requireNumber(
-            settings.hellPatrolMinRating,
-            "settings.hellPatrolMinRating"
-          ),
-          bolsterPatrolRating: requireNumber(
-            settings.hellBolsterPatrolRating,
-            "settings.hellBolsterPatrolRating"
-          ),
-          bolsterPercentTop: requireNumber(
-            settings.hellBolsterPatrolPercentTop,
-            "settings.hellBolsterPatrolPercentTop"
-          ),
-          bolsterPercentBottom: requireNumber(
-            settings.hellBolsterPatrolPercentBottom,
-            "settings.hellBolsterPatrolPercentBottom"
-          ),
-          warDroneCount: warDrone === null ? 0 : requireNumber(warDrone.on, "game.global.portal.war_drone.on"),
-          portalTechnology: warDrone === null ? 0 : requireNumber(tech.portal, "game.global.tech.portal"),
-          warDroidCount: warDroid === null ? 0 : requireNumber(warDroid.on, "game.global.portal.war_droid.on"),
-          hellDroidTechnology: !!tech.hdroid,
-          bootCampCount: bootCamp === null ? 0 : requireNumber(
-            bootCamp.count,
-            "game.global.city.boot_camp.count"
-          ),
-          manageAuthority: requireBoolean(
-            settings.authorityManage,
-            "settings.authorityManage"
-          ),
-          minimumAuthority: requireNumber(
-            settings.generalMinimumAuthority,
-            "settings.generalMinimumAuthority"
-          ),
-          minimumAuthorityPatrolPercent: requireNumber(
-            settings.generalAuthorityMinPatrolPercent,
-            "settings.generalAuthorityMinPatrolPercent"
-          ),
-          evilTechnology: optionalNumber(tech.evil, "game.global.tech.evil"),
-          grenadier: !!race2.grenadier,
-          government: requireString(
-            govern.type,
-            "game.global.civic.govern.type"
-          )
-        });
-        return session = {
-          manager,
-          game,
-          settings,
-          buildings,
-          resources,
-          state,
-          debugWindow,
-          cycleInput: input,
-          calculation: null,
-          request: null
-        }, input;
-      },
-      readCalculation(request) {
-        let active = session;
-        if (active === null) throw new Error("Hell cycle has not been sampled");
-        let expected = prepareHellCycle(active.cycleInput);
-        if (expected === null || expected.kind !== "calculate-hell-targets" || JSON.stringify(expected) !== JSON.stringify(request))
-          throw new Error("Hell target request does not match the sampled plan");
-        let garrisonSoldiers = requireSoldierTarget(
-          call2(
-            active.manager,
-            "getSoldiersForAttackRating",
-            "WarManager",
-            request.garrisonRating
-          ),
-          "Hell garrison soldier target"
-        ), patrolSoldiers = request.patrolRating === null ? request.input.hellPatrolSize : requireSoldierTarget(
-          call2(
-            active.manager,
-            "getSoldiersForAttackRating",
-            "WarManager",
-            request.patrolRating
-          ),
-          "Hell patrol soldier target"
-        ), base = calculateHellBaseTargets(request, {
-          garrisonSoldiers,
-          patrolSoldiers
-        }), unlocked2 = !1, current = 0, maximum = 0, scriptTick = 0, debugEnabled = !1;
-        if (request.input.manageAuthority && request.input.minimumAuthority !== 0 && base.patrolSize > 0) {
-          let authority = requireRecord(
-            active.resources.Authority,
-            "resources.Authority"
-          );
-          unlocked2 = callBoolean(authority, "isUnlocked", "resources.Authority"), unlocked2 && (current = requireNumber(
-            authority.currentQuantity,
-            "resources.Authority.currentQuantity"
-          ), maximum = requireNumber(
-            authority.maxQuantity,
-            "resources.Authority.maxQuantity"
-          ), scriptTick = requireNumber(
-            active.state.scriptTick,
-            "state.scriptTick"
-          ), debugEnabled = !!active.debugWindow.authorityDebug);
-        }
-        let calculation = Object.freeze({
-          garrisonSoldiers,
-          patrolSoldiers,
-          authority: Object.freeze({
-            unlocked: unlocked2,
-            current,
-            maximum,
-            scriptTick,
-            debugEnabled
-          })
-        });
-        return active.request = request, active.calculation = calculation, calculation;
-      }
-    }), executor = Object.freeze({
-      execute(decision2) {
-        let active = session;
-        if (active === null)
-          return stale("hell-session-missing", "Hell session is missing");
-        if (dependencies.getWarManager() !== active.manager || dependencies.getGame() !== active.game)
-          return stale("hell-source-changed", "Hell source changed");
-        let prepared = prepareHellCycle(active.cycleInput), expected = null;
-        if (prepared !== null && prepared.kind === "calculate-hell-targets") {
-          if (active.calculation === null || active.request === null)
-            return stale(
-              "hell-calculation-missing",
-              "Hell calculation is missing"
-            );
-          expected = planHell(active.request, active.calculation);
-        } else prepared !== null && (prepared.kind === "manage-hell" || prepared.kind === "attack-enemy-fortress") && (expected = prepared);
-        if (expected === null || !decisionsMatch(expected, decision2))
-          return rejected(
-            "invalid-hell-decision",
-            "Hell decision does not match the sampled plan"
-          );
-        if (decision2.kind === "attack-enemy-fortress") {
-          let attack = requireFunction(
-            active.manager.attackEnemyFortress,
-            "WarManager.attackEnemyFortress"
-          );
-          return session = null, Reflect.apply(attack, active.manager, [decision2.enemyIndex]), SUCCEEDED;
-        }
-        let methods = /* @__PURE__ */ new Map();
-        for (let command of decision2.commands) {
-          requireNumber(command.count, `Hell ${command.kind} count`);
-          let methodName = commandMethod(command);
-          methods.has(methodName) || methods.set(
-            methodName,
-            requireFunction(
-              active.manager[methodName],
-              `WarManager.${methodName}`
-            )
-          );
-        }
-        let manageDecision2 = decision2;
-        if (session = null, manageDecision2.authorityDebug !== null) {
-          let debug = manageDecision2.authorityDebug;
-          dependencies.debugLog(
-            `[authority] amount=${debug.amount.toFixed(1)}/${debug.target.toFixed(0)}, perSoldier=${debug.perSoldier.toFixed(2)}, stationed=${debug.currentStationed}→need=${debug.neededStationed}, garrison ${debug.defenseGarrison}→${debug.authorityGarrison} (cap=${debug.maximumStationed}, patrolReserve=${debug.patrolReserve}, patrolSize=${debug.patrolSize}, avail=${debug.availableSoldiers})`
-          );
-        }
-        if (manageDecision2.authorityAdjusted) {
-          let calculation = active.calculation;
-          if (calculation === null)
-            return stale(
-              "hell-calculation-missing",
-              "Hell calculation is missing"
-            );
-          active.state.authoritySoldiersAdjustedTick = calculation.authority.scriptTick;
-        }
-        for (let command of manageDecision2.commands) {
-          let methodName = commandMethod(command);
-          Reflect.apply(methods.get(methodName), active.manager, [
-            command.count
-          ]);
-        }
-        return SUCCEEDED;
-      }
-    });
-    return Object.freeze({ reader, executor });
-  }
-  function commandMethod(command) {
-    switch (command.kind) {
-      case "remove-patrol-size":
-        return "removeHellPatrolSize";
-      case "remove-patrol":
-        return "removeHellPatrol";
-      case "remove-garrison":
-        return "removeHellGarrison";
-      case "add-garrison":
-        return "addHellGarrison";
-      case "add-patrol-size":
-        return "addHellPatrolSize";
-      case "add-patrol":
-        return "addHellPatrol";
-    }
-  }
-
-  // src/application/hell.ts
-  var SUCCEEDED2 = Object.freeze({
-    status: "succeeded"
-  });
-  function runHellAutomation(dependencies) {
-    let prepared = prepareHellCycle(dependencies.reader.readCycle());
-    if (prepared === null) return SUCCEEDED2;
-    let decision2;
-    return prepared.kind === "calculate-hell-targets" ? decision2 = planHell(
-      prepared,
-      dependencies.reader.readCalculation(prepared)
-    ) : decision2 = prepared, decision2 === null ? SUCCEEDED2 : dependencies.executor.execute(decision2);
-  }
-
-  // src/bootstrap/hell-control.ts
-  function createHellControl(dependencies) {
-    let adapter = createHellAdapter(dependencies);
-    return Object.freeze({ autoHell: () => runHellAutomation(adapter) });
-  }
-
   // src/adapters/browser/government-controls.ts
   function createGovernmentControls(getVueById) {
     function candidateView() {
@@ -24450,6 +23867,17 @@ If script is allowed to reassign non-empty storage it might waste time producing
         return Reflect.apply(appoint, view, [index]), !0;
       }
     });
+  }
+
+  // src/adapters/command-outcomes.ts
+  var SUCCEEDED = Object.freeze({
+    status: "succeeded"
+  });
+  function rejected(code, message) {
+    return { status: "rejected", failure: { code, message } };
+  }
+  function stale(code, message, context) {
+    return context === void 0 ? { status: "stale", failure: { code, message } } : { status: "stale", failure: { code, message, context } };
   }
 
   // src/adapters/evolve/civic/government.ts
@@ -24781,7 +24209,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       record: Object.freeze({ foreign, government })
     };
   }
-  function decisionsMatch2(left, right) {
+  function decisionsMatch(left, right) {
     return left.kind === right.kind && left.governmentId === right.governmentId && left.expectedReleased === right.expectedReleased && left.expectedOccupied === right.expectedOccupied && left.expectedAnnexed === right.expectedAnnexed && left.expectedPurchased === right.expectedPurchased && left.spyCount === right.spyCount && left.tactic === right.tactic && left.battalionSize === right.battalionSize && left.releaseControl === right.releaseControl && left.hellPatrolsToRemove === right.hellPatrolsToRemove && left.hellGarrisonToRemove === right.hellGarrisonToRemove;
   }
   function targetStillMatches(target, decision2) {
@@ -25049,7 +24477,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         if (dependencies.getWarManager() !== active.manager || dependencies.getSpyManager() !== active.spyManager || dependencies.getGame() !== active.game)
           return stale("battle-source-changed", "battle source changed");
         let expected = planBattle(active.parameters, active.battlefield);
-        if (expected === null || !decisionsMatch2(expected, decision2))
+        if (expected === null || !decisionsMatch(expected, decision2))
           return rejected(
             "invalid-battle-decision",
             "battle decision does not match the sampled plan"
@@ -25121,23 +24549,609 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/application/battle.ts
-  var SUCCEEDED3 = Object.freeze({
+  var SUCCEEDED2 = Object.freeze({
     status: "succeeded"
   });
   function runBattleAutomation(dependencies) {
     let parameters = prepareBattle(dependencies.reader.readCycle());
-    if (parameters === null) return SUCCEEDED3;
+    if (parameters === null) return SUCCEEDED2;
     let decision2 = planBattle(
       parameters,
       dependencies.reader.readBattlefield(parameters)
     );
-    return decision2 === null ? SUCCEEDED3 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED2 : dependencies.executor.execute(decision2);
   }
 
   // src/bootstrap/battle-control.ts
   function createBattleControl(dependencies) {
     let adapter = createBattleAdapter(dependencies);
     return Object.freeze({ autoBattle: () => runBattleAutomation(adapter) });
+  }
+
+  // src/domain/combat/hell.ts
+  function freezeCommands(commands) {
+    return Object.freeze(commands.map((command) => Object.freeze(command)));
+  }
+  function manageDecision(commands, authorityAdjusted = !1, authorityDebug = null) {
+    return commands.length === 0 && !authorityAdjusted && authorityDebug === null ? null : Object.freeze({
+      kind: "manage-hell",
+      commands: freezeCommands(commands),
+      authorityAdjusted,
+      authorityDebug: authorityDebug === null ? null : Object.freeze(authorityDebug)
+    });
+  }
+  function adjustmentCommands(input, targetSoldiers, targetPatrols, targetPatrolSize) {
+    let commands = [];
+    return input.handlePatrolSize && input.hellPatrolSize > targetPatrolSize && commands.push({
+      kind: "remove-patrol-size",
+      count: input.hellPatrolSize - targetPatrolSize
+    }), input.hellPatrols > targetPatrols && commands.push({
+      kind: "remove-patrol",
+      count: input.hellPatrols - targetPatrols
+    }), input.hellSoldiers > targetSoldiers && commands.push({
+      kind: "remove-garrison",
+      count: input.hellSoldiers - targetSoldiers
+    }), input.hellSoldiers < targetSoldiers && commands.push({
+      kind: "add-garrison",
+      count: targetSoldiers - input.hellSoldiers
+    }), input.handlePatrolSize && input.hellPatrolSize < targetPatrolSize && commands.push({
+      kind: "add-patrol-size",
+      count: targetPatrolSize - input.hellPatrolSize
+    }), input.hellPatrols < targetPatrols && commands.push({
+      kind: "add-patrol",
+      count: targetPatrols - input.hellPatrols
+    }), commands;
+  }
+  function calculatePatrolRating(input) {
+    let rating = input.fortressThreat * input.patrolThreatPercent / 100;
+    if (rating -= input.patrolDroneModifier * input.warDroneCount * (input.portalTechnology >= 7 ? 1.5 : 1), rating -= input.patrolDroidModifier * input.warDroidCount * (input.hellDroidTechnology ? 2 : 1), rating -= input.patrolBootcampModifier * input.bootCampCount, rating = Math.max(rating, input.minimumPatrolRating), input.bolsterPatrolRating > 0 && input.bolsterPercentTop > 0) {
+      let fillRatio = input.currentCityGarrison / input.maximumCityGarrison;
+      fillRatio <= input.bolsterPercentTop / 100 && (fillRatio <= input.bolsterPercentBottom / 100 ? rating += input.bolsterPatrolRating : input.bolsterPercentBottom < input.bolsterPercentTop && (rating += input.bolsterPatrolRating * (input.bolsterPercentTop / 100 - fillRatio) / (input.bolsterPercentTop - input.bolsterPercentBottom) * 100));
+    }
+    return rating;
+  }
+  function prepareHellCycle(input) {
+    if (!input.available) return null;
+    if (input.warlord)
+      return input.enemies > 0 && input.handleEnemyFortress && input.minions > input.minimumMinions ? Object.freeze({ kind: "attack-enemy-fortress", enemyIndex: 0 }) : null;
+    let homeSoldiers = input.homeGarrison;
+    if (input.elysiumUnlocked && homeSoldiers < 100 && (homeSoldiers = 100), !(input.maximumSoldiers > homeSoldiers + input.minimumHellSoldiers && (input.hellSoldiers > input.minimumHellSoldiers || input.currentSoldiers >= input.maximumSoldiers * input.minimumSoldierPercent / 100)))
+      return input.hellAssigned > 0 ? manageDecision([
+        { kind: "remove-patrol-size", count: input.hellPatrolSize },
+        { kind: "remove-patrol", count: input.hellPatrols },
+        { kind: "remove-garrison", count: input.hellSoldiers }
+      ]) : manageDecision(adjustmentCommands(input, 0, 0, 0));
+    let targetHellSoldiers = Math.min(input.currentSoldiers, input.maximumSoldiers) - homeSoldiers, availableHellSoldiers = targetHellSoldiers - input.hellReservedSoldiers, wallMultiplier = input.lowWallsMultiplier * (1 - input.fortressWalls / 100), targetDefense = input.fortressThreat * 35 / input.targetFortressDamage, turretPower = input.turretCount * (input.turretTechnology ? input.turretTechnology >= 2 ? 70 : 50 : 35);
+    return Object.freeze({
+      kind: "calculate-hell-targets",
+      input,
+      targetHellSoldiers,
+      availableHellSoldiers,
+      garrisonRating: Math.max(0, wallMultiplier * targetDefense - turretPower),
+      patrolRating: input.handlePatrolSize ? calculatePatrolRating(input) : null
+    });
+  }
+  function calculateHellBaseTargets(request, targets) {
+    let hellGarrison = targets.garrisonSoldiers;
+    request.availableHellSoldiers < hellGarrison ? hellGarrison = 0 : request.availableHellSoldiers < hellGarrison * 2 && (hellGarrison = Math.floor(request.availableHellSoldiers / 2));
+    let patrolSize = request.input.handlePatrolSize ? Math.min(
+      targets.patrolSoldiers,
+      request.availableHellSoldiers - hellGarrison
+    ) : request.input.hellPatrolSize;
+    return Object.freeze({ hellGarrison, patrolSize });
+  }
+  function planHell(request, calculated) {
+    let input = request.input, base = calculateHellBaseTargets(request, calculated), hellGarrison = base.hellGarrison, patrolSize = base.patrolSize, authorityAdjusted = !1, authorityDebug = null;
+    if (input.manageAuthority && input.minimumAuthority !== 0 && calculated.authority.unlocked && patrolSize > 0) {
+      let perSoldier = 0.7 + 0.1 * input.evilTechnology;
+      input.grenadier && (perSoldier *= 1.75), input.government === "autocracy" ? perSoldier *= 1.08 : input.government === "dictator" && (perSoldier *= 1.12);
+      let authorityTarget = input.minimumAuthority < 0 ? calculated.authority.maximum : input.minimumAuthority, deficit = authorityTarget - calculated.authority.current, neededStationed = input.currentHellGarrison + Math.ceil(deficit / perSoldier), patrolReserve = 1;
+      input.minimumAuthority < 0 && input.minimumAuthorityPatrolPercent > 0 && (patrolReserve = Math.min(
+        request.availableHellSoldiers,
+        Math.ceil(
+          request.availableHellSoldiers * input.minimumAuthorityPatrolPercent / 100
+        )
+      ));
+      let maximumStationed = Math.max(
+        0,
+        request.availableHellSoldiers - patrolReserve
+      ), authorityGarrison = Math.max(
+        hellGarrison,
+        Math.min(neededStationed, maximumStationed)
+      );
+      patrolSize = Math.min(
+        patrolSize,
+        Math.max(1, request.availableHellSoldiers - authorityGarrison)
+      ), authorityAdjusted = authorityGarrison !== input.currentHellGarrison, calculated.authority.debugEnabled && authorityGarrison !== hellGarrison && (authorityDebug = {
+        amount: calculated.authority.current,
+        target: authorityTarget,
+        perSoldier,
+        currentStationed: input.currentHellGarrison,
+        neededStationed,
+        defenseGarrison: hellGarrison,
+        authorityGarrison,
+        maximumStationed,
+        patrolReserve,
+        patrolSize,
+        availableSoldiers: request.availableHellSoldiers
+      }), hellGarrison = authorityGarrison;
+    }
+    let targetPatrols = Math.max(
+      1,
+      Math.floor((request.availableHellSoldiers - hellGarrison) / patrolSize)
+    );
+    if (input.handlePatrolSize && targetPatrols === 1) {
+      let availableForPatrol = request.availableHellSoldiers - hellGarrison;
+      availableForPatrol >= 1.5 * patrolSize && (patrolSize = Math.floor(availableForPatrol / 3), targetPatrols = Math.floor(availableForPatrol / patrolSize));
+    }
+    return manageDecision(
+      adjustmentCommands(
+        input,
+        request.targetHellSoldiers,
+        targetPatrols,
+        patrolSize
+      ),
+      authorityAdjusted,
+      authorityDebug
+    );
+  }
+
+  // src/adapters/evolve/combat/hell.ts
+  function optionalNumber(value, path) {
+    return value === void 0 ? 0 : requireNumber(value, path);
+  }
+  function requireSoldierTarget(value, path) {
+    return value === Number.POSITIVE_INFINITY ? Number.MAX_SAFE_INTEGER : requireNumber(value, path);
+  }
+  function call2(target, name, path, ...args) {
+    let method = requireFunction(target[name], `${path}.${name}`);
+    return Reflect.apply(method, target, args);
+  }
+  function unavailableInput() {
+    return Object.freeze({
+      available: !1,
+      warlord: !1,
+      enemies: 0,
+      minions: 0,
+      handleEnemyFortress: !1,
+      minimumMinions: 0,
+      maximumSoldiers: 0,
+      currentSoldiers: 0,
+      currentCityGarrison: 0,
+      maximumCityGarrison: 0,
+      hellSoldiers: 0,
+      hellPatrols: 0,
+      hellPatrolSize: 0,
+      hellAssigned: 0,
+      hellReservedSoldiers: 0,
+      currentHellGarrison: 0,
+      homeGarrison: 0,
+      minimumHellSoldiers: 0,
+      minimumSoldierPercent: 0,
+      elysiumUnlocked: !1,
+      fortressWalls: 0,
+      fortressThreat: 0,
+      lowWallsMultiplier: 0,
+      targetFortressDamage: 1,
+      turretCount: 0,
+      turretTechnology: 0,
+      handlePatrolSize: !1,
+      patrolThreatPercent: 0,
+      patrolDroneModifier: 0,
+      patrolDroidModifier: 0,
+      patrolBootcampModifier: 0,
+      minimumPatrolRating: 0,
+      bolsterPatrolRating: 0,
+      bolsterPercentTop: 0,
+      bolsterPercentBottom: 0,
+      warDroneCount: 0,
+      portalTechnology: 0,
+      warDroidCount: 0,
+      hellDroidTechnology: !1,
+      bootCampCount: 0,
+      manageAuthority: !1,
+      minimumAuthority: 0,
+      minimumAuthorityPatrolPercent: 0,
+      evilTechnology: 0,
+      grenadier: !1,
+      government: ""
+    });
+  }
+  function decisionsMatch2(left, right) {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+  function createHellAdapter(dependencies) {
+    let session = null, reader = Object.freeze({
+      readCycle() {
+        session = null;
+        let manager = requireRecord(dependencies.getWarManager(), "WarManager"), game = requireRecord(dependencies.getGame(), "game"), settings = requireRecord(dependencies.getSettings(), "settings"), buildings = requireRecord(dependencies.getBuildings(), "buildings"), resources = requireRecord(dependencies.getResources(), "resources"), state = requireRecord(dependencies.getState(), "state"), debugWindow = requireRecord(
+          dependencies.getDebugWindow(),
+          "debug window"
+        );
+        if (manager.isGarrisonVisible !== !0 || manager.isHellVisible !== !0)
+          return unavailableInput();
+        let global = requireRecord(game.global, "game.global"), race2 = requireRecord(global.race, "game.global.race");
+        if (!!race2.warlord) {
+          let input2 = Object.freeze({
+            ...unavailableInput(),
+            available: !0,
+            warlord: !0,
+            enemies: requireNumber(manager.enemies, "WarManager.enemies"),
+            minions: requireNumber(manager.minions, "WarManager.minions"),
+            handleEnemyFortress: requireBoolean(
+              settings.warlordHandleFortress,
+              "settings.warlordHandleFortress"
+            ),
+            minimumMinions: requireNumber(
+              settings.warlordMinimumMinions,
+              "settings.warlordMinimumMinions"
+            )
+          });
+          return session = {
+            manager,
+            game,
+            settings,
+            buildings,
+            resources,
+            state,
+            debugWindow,
+            cycleInput: input2,
+            calculation: null,
+            request: null
+          }, input2;
+        }
+        let portal = requireRecord(global.portal, "game.global.portal"), fortress = requireRecord(
+          portal.fortress,
+          "game.global.portal.fortress"
+        ), tech = requireRecord(global.tech, "game.global.tech"), city = requireRecord(global.city, "game.global.city"), civic = requireRecord(global.civic, "game.global.civic"), govern = requireRecord(civic.govern, "game.global.civic.govern"), elysiumFortress = requireRecord(
+          buildings.ElysiumFortress,
+          "buildings.ElysiumFortress"
+        ), elysiumUnlocked = callBoolean(
+          elysiumFortress,
+          "isUnlocked",
+          "buildings.ElysiumFortress"
+        );
+        elysiumUnlocked || (elysiumUnlocked = callBoolean(
+          requireRecord(buildings.ElysiumScout, "buildings.ElysiumScout"),
+          "isUnlocked",
+          "buildings.ElysiumScout"
+        ));
+        let warDrone = portal.war_drone ? requireRecord(portal.war_drone, "game.global.portal.war_drone") : null, warDroid = portal.war_droid ? requireRecord(portal.war_droid, "game.global.portal.war_droid") : null, bootCamp = city.boot_camp ? requireRecord(city.boot_camp, "game.global.city.boot_camp") : null, turret = requireRecord(
+          buildings.PortalTurret,
+          "buildings.PortalTurret"
+        ), input = Object.freeze({
+          available: !0,
+          warlord: !1,
+          enemies: 0,
+          minions: 0,
+          handleEnemyFortress: !1,
+          minimumMinions: 0,
+          maximumSoldiers: requireNumber(
+            manager.maxSoldiers,
+            "WarManager.maxSoldiers"
+          ),
+          currentSoldiers: requireNumber(
+            manager.currentSoldiers,
+            "WarManager.currentSoldiers"
+          ),
+          currentCityGarrison: requireNumber(
+            manager.currentCityGarrison,
+            "WarManager.currentCityGarrison"
+          ),
+          maximumCityGarrison: requireNumber(
+            manager.maxCityGarrison,
+            "WarManager.maxCityGarrison"
+          ),
+          hellSoldiers: requireNumber(
+            manager.hellSoldiers,
+            "WarManager.hellSoldiers"
+          ),
+          hellPatrols: requireNumber(
+            manager.hellPatrols,
+            "WarManager.hellPatrols"
+          ),
+          hellPatrolSize: requireNumber(
+            manager.hellPatrolSize,
+            "WarManager.hellPatrolSize"
+          ),
+          // A freshly unlocked fortress has no `assigned` property until the game
+          // first writes it; treat the absent value as zero as legacy did.
+          hellAssigned: optionalNumber(
+            manager.hellAssigned,
+            "WarManager.hellAssigned"
+          ),
+          hellReservedSoldiers: requireNumber(
+            manager.hellReservedSoldiers,
+            "WarManager.hellReservedSoldiers"
+          ),
+          currentHellGarrison: requireNumber(
+            manager.hellGarrison,
+            "WarManager.hellGarrison"
+          ),
+          homeGarrison: requireNumber(
+            settings.hellHomeGarrison,
+            "settings.hellHomeGarrison"
+          ),
+          minimumHellSoldiers: requireNumber(
+            settings.hellMinSoldiers,
+            "settings.hellMinSoldiers"
+          ),
+          minimumSoldierPercent: requireNumber(
+            settings.hellMinSoldiersPercent,
+            "settings.hellMinSoldiersPercent"
+          ),
+          elysiumUnlocked,
+          fortressWalls: requireNumber(
+            fortress.walls,
+            "game.global.portal.fortress.walls"
+          ),
+          fortressThreat: requireNumber(
+            fortress.threat,
+            "game.global.portal.fortress.threat"
+          ),
+          lowWallsMultiplier: requireNumber(
+            settings.hellLowWallsMulti,
+            "settings.hellLowWallsMulti"
+          ),
+          targetFortressDamage: requireNumber(
+            settings.hellTargetFortressDamage,
+            "settings.hellTargetFortressDamage"
+          ),
+          turretCount: requireNumber(
+            turret.stateOnCount,
+            "buildings.PortalTurret.stateOnCount"
+          ),
+          turretTechnology: optionalNumber(
+            tech.turret,
+            "game.global.tech.turret"
+          ),
+          handlePatrolSize: requireBoolean(
+            settings.hellHandlePatrolSize,
+            "settings.hellHandlePatrolSize"
+          ),
+          patrolThreatPercent: requireNumber(
+            settings.hellPatrolThreatPercent,
+            "settings.hellPatrolThreatPercent"
+          ),
+          patrolDroneModifier: requireNumber(
+            settings.hellPatrolDroneMod,
+            "settings.hellPatrolDroneMod"
+          ),
+          patrolDroidModifier: requireNumber(
+            settings.hellPatrolDroidMod,
+            "settings.hellPatrolDroidMod"
+          ),
+          patrolBootcampModifier: requireNumber(
+            settings.hellPatrolBootcampMod,
+            "settings.hellPatrolBootcampMod"
+          ),
+          minimumPatrolRating: requireNumber(
+            settings.hellPatrolMinRating,
+            "settings.hellPatrolMinRating"
+          ),
+          bolsterPatrolRating: requireNumber(
+            settings.hellBolsterPatrolRating,
+            "settings.hellBolsterPatrolRating"
+          ),
+          bolsterPercentTop: requireNumber(
+            settings.hellBolsterPatrolPercentTop,
+            "settings.hellBolsterPatrolPercentTop"
+          ),
+          bolsterPercentBottom: requireNumber(
+            settings.hellBolsterPatrolPercentBottom,
+            "settings.hellBolsterPatrolPercentBottom"
+          ),
+          warDroneCount: warDrone === null ? 0 : requireNumber(warDrone.on, "game.global.portal.war_drone.on"),
+          portalTechnology: warDrone === null ? 0 : requireNumber(tech.portal, "game.global.tech.portal"),
+          warDroidCount: warDroid === null ? 0 : requireNumber(warDroid.on, "game.global.portal.war_droid.on"),
+          hellDroidTechnology: !!tech.hdroid,
+          bootCampCount: bootCamp === null ? 0 : requireNumber(
+            bootCamp.count,
+            "game.global.city.boot_camp.count"
+          ),
+          manageAuthority: requireBoolean(
+            settings.authorityManage,
+            "settings.authorityManage"
+          ),
+          minimumAuthority: requireNumber(
+            settings.generalMinimumAuthority,
+            "settings.generalMinimumAuthority"
+          ),
+          minimumAuthorityPatrolPercent: requireNumber(
+            settings.generalAuthorityMinPatrolPercent,
+            "settings.generalAuthorityMinPatrolPercent"
+          ),
+          evilTechnology: optionalNumber(tech.evil, "game.global.tech.evil"),
+          grenadier: !!race2.grenadier,
+          government: requireString(
+            govern.type,
+            "game.global.civic.govern.type"
+          )
+        });
+        return session = {
+          manager,
+          game,
+          settings,
+          buildings,
+          resources,
+          state,
+          debugWindow,
+          cycleInput: input,
+          calculation: null,
+          request: null
+        }, input;
+      },
+      readCalculation(request) {
+        let active = session;
+        if (active === null) throw new Error("Hell cycle has not been sampled");
+        let expected = prepareHellCycle(active.cycleInput);
+        if (expected === null || expected.kind !== "calculate-hell-targets" || JSON.stringify(expected) !== JSON.stringify(request))
+          throw new Error("Hell target request does not match the sampled plan");
+        let garrisonSoldiers = requireSoldierTarget(
+          call2(
+            active.manager,
+            "getSoldiersForAttackRating",
+            "WarManager",
+            request.garrisonRating
+          ),
+          "Hell garrison soldier target"
+        ), patrolSoldiers = request.patrolRating === null ? request.input.hellPatrolSize : requireSoldierTarget(
+          call2(
+            active.manager,
+            "getSoldiersForAttackRating",
+            "WarManager",
+            request.patrolRating
+          ),
+          "Hell patrol soldier target"
+        ), base = calculateHellBaseTargets(request, {
+          garrisonSoldiers,
+          patrolSoldiers
+        }), unlocked2 = !1, current = 0, maximum = 0, scriptTick = 0, debugEnabled = !1;
+        if (request.input.manageAuthority && request.input.minimumAuthority !== 0 && base.patrolSize > 0) {
+          let authority = requireRecord(
+            active.resources.Authority,
+            "resources.Authority"
+          );
+          unlocked2 = callBoolean(authority, "isUnlocked", "resources.Authority"), unlocked2 && (current = requireNumber(
+            authority.currentQuantity,
+            "resources.Authority.currentQuantity"
+          ), maximum = requireNumber(
+            authority.maxQuantity,
+            "resources.Authority.maxQuantity"
+          ), scriptTick = requireNumber(
+            active.state.scriptTick,
+            "state.scriptTick"
+          ), debugEnabled = !!active.debugWindow.authorityDebug);
+        }
+        let calculation = Object.freeze({
+          garrisonSoldiers,
+          patrolSoldiers,
+          authority: Object.freeze({
+            unlocked: unlocked2,
+            current,
+            maximum,
+            scriptTick,
+            debugEnabled
+          })
+        });
+        return active.request = request, active.calculation = calculation, calculation;
+      }
+    }), executor = Object.freeze({
+      execute(decision2) {
+        let active = session;
+        if (active === null)
+          return stale("hell-session-missing", "Hell session is missing");
+        if (dependencies.getWarManager() !== active.manager || dependencies.getGame() !== active.game)
+          return stale("hell-source-changed", "Hell source changed");
+        let prepared = prepareHellCycle(active.cycleInput), expected = null;
+        if (prepared !== null && prepared.kind === "calculate-hell-targets") {
+          if (active.calculation === null || active.request === null)
+            return stale(
+              "hell-calculation-missing",
+              "Hell calculation is missing"
+            );
+          expected = planHell(active.request, active.calculation);
+        } else prepared !== null && (prepared.kind === "manage-hell" || prepared.kind === "attack-enemy-fortress") && (expected = prepared);
+        if (expected === null || !decisionsMatch2(expected, decision2))
+          return rejected(
+            "invalid-hell-decision",
+            "Hell decision does not match the sampled plan"
+          );
+        if (decision2.kind === "attack-enemy-fortress") {
+          let attack = requireFunction(
+            active.manager.attackEnemyFortress,
+            "WarManager.attackEnemyFortress"
+          );
+          return session = null, Reflect.apply(attack, active.manager, [decision2.enemyIndex]), SUCCEEDED;
+        }
+        let methods = /* @__PURE__ */ new Map();
+        for (let command of decision2.commands) {
+          requireNumber(command.count, `Hell ${command.kind} count`);
+          let methodName = commandMethod(command);
+          methods.has(methodName) || methods.set(
+            methodName,
+            requireFunction(
+              active.manager[methodName],
+              `WarManager.${methodName}`
+            )
+          );
+        }
+        let manageDecision2 = decision2;
+        if (session = null, manageDecision2.authorityDebug !== null) {
+          let debug = manageDecision2.authorityDebug;
+          dependencies.debugLog(
+            `[authority] amount=${debug.amount.toFixed(1)}/${debug.target.toFixed(0)}, perSoldier=${debug.perSoldier.toFixed(2)}, stationed=${debug.currentStationed}→need=${debug.neededStationed}, garrison ${debug.defenseGarrison}→${debug.authorityGarrison} (cap=${debug.maximumStationed}, patrolReserve=${debug.patrolReserve}, patrolSize=${debug.patrolSize}, avail=${debug.availableSoldiers})`
+          );
+        }
+        if (manageDecision2.authorityAdjusted) {
+          let calculation = active.calculation;
+          if (calculation === null)
+            return stale(
+              "hell-calculation-missing",
+              "Hell calculation is missing"
+            );
+          active.state.authoritySoldiersAdjustedTick = calculation.authority.scriptTick;
+        }
+        for (let command of manageDecision2.commands) {
+          let methodName = commandMethod(command);
+          Reflect.apply(methods.get(methodName), active.manager, [
+            command.count
+          ]);
+        }
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+  function commandMethod(command) {
+    switch (command.kind) {
+      case "remove-patrol-size":
+        return "removeHellPatrolSize";
+      case "remove-patrol":
+        return "removeHellPatrol";
+      case "remove-garrison":
+        return "removeHellGarrison";
+      case "add-garrison":
+        return "addHellGarrison";
+      case "add-patrol-size":
+        return "addHellPatrolSize";
+      case "add-patrol":
+        return "addHellPatrol";
+    }
+  }
+
+  // src/application/hell.ts
+  var SUCCEEDED3 = Object.freeze({
+    status: "succeeded"
+  });
+  function runHellAutomation(dependencies) {
+    let prepared = prepareHellCycle(dependencies.reader.readCycle());
+    if (prepared === null) return SUCCEEDED3;
+    let decision2;
+    return prepared.kind === "calculate-hell-targets" ? decision2 = planHell(
+      prepared,
+      dependencies.reader.readCalculation(prepared)
+    ) : decision2 = prepared, decision2 === null ? SUCCEEDED3 : dependencies.executor.execute(decision2);
+  }
+
+  // src/bootstrap/hell-control.ts
+  function createHellControl(dependencies) {
+    let adapter = createHellAdapter(dependencies);
+    return Object.freeze({ autoHell: () => runHellAutomation(adapter) });
+  }
+
+  // src/bootstrap/combat-civic-controls.ts
+  function createCombatCivicControls({
+    government,
+    battle,
+    hell
+  }) {
+    let governmentControl = createGovernmentControl(government), battleControl = createBattleControl(battle), hellControl = createHellControl(hell);
+    return Object.freeze({
+      ...governmentControl,
+      ...battleControl,
+      ...hellControl
+    });
   }
 
   // src/adapters/userscript/environment.ts
@@ -50534,21 +50548,46 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getResources: () => resources,
         getFoundryList: () => foundryList
       }
-    }), { autoGovernment } = createGovernmentControl({
-      reader: {
-        getGovernmentManager: () => GovernmentManager,
+    }), { autoGovernment, autoBattle, autoHell } = createCombatCivicControls({
+      government: {
+        reader: {
+          getGovernmentManager: () => GovernmentManager,
+          getSettings: () => settings,
+          getGame: () => game,
+          guardActive,
+          haveTech,
+          getGovernor,
+          isTradeFederationAchievementUnlocked: () => isAchievementUnlocked2("trade", 1)
+        },
+        executor: {
+          getGovernmentManager: () => GovernmentManager,
+          getGame: () => game,
+          getGovernor,
+          getVueById
+        }
+      },
+      battle: {
+        getSpyManager: () => SpyManager,
+        getWarManager: () => WarManager,
+        getGameLog: () => GameLog,
+        getState: () => state,
         getSettings: () => settings,
         getGame: () => game,
         guardActive,
-        haveTech,
-        getGovernor,
-        isTradeFederationAchievementUnlocked: () => isAchievementUnlocked2("trade", 1)
+        getHealingRate,
+        traitVal,
+        getOccupationCost: getOccCosts,
+        getGovernmentName: getGovName
       },
-      executor: {
-        getGovernmentManager: () => GovernmentManager,
+      hell: {
+        getWarManager: () => WarManager,
         getGame: () => game,
-        getGovernor,
-        getVueById
+        getSettings: () => settings,
+        getBuildings: () => buildings,
+        getResources: () => resources,
+        getState: () => state,
+        getDebugWindow: () => runtimeEnvironment.window,
+        debugLog: (message) => runtimeEnvironment.log(message)
       }
     }), { autoMerc } = createMercenaryControl({
       getWarManager: () => WarManager,
@@ -50570,27 +50609,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGameLog: () => GameLog,
       getGovName,
       getGame: () => game
-    }), { autoBattle } = createBattleControl({
-      getSpyManager: () => SpyManager,
-      getWarManager: () => WarManager,
-      getGameLog: () => GameLog,
-      getState: () => state,
-      getSettings: () => settings,
-      getGame: () => game,
-      guardActive,
-      getHealingRate,
-      traitVal,
-      getOccupationCost: getOccCosts,
-      getGovernmentName: getGovName
-    }), { autoHell } = createHellControl({
-      getWarManager: () => WarManager,
-      getGame: () => game,
-      getSettings: () => settings,
-      getBuildings: () => buildings,
-      getResources: () => resources,
-      getState: () => state,
-      getDebugWindow: () => runtimeEnvironment.window,
-      debugLog: (message) => runtimeEnvironment.log(message)
     }), { autoJobs } = createJobsControl({
       getJobManager: () => JobManager,
       getGame: () => game,
