@@ -107,7 +107,7 @@ import { createWomlingAchievements } from "../../game/womling-achievements.ts";
 import { createPowerSupport } from "../../game/power-support.ts";
 import { createGameRates } from "../../game/rates.ts";
 import { createPlanetGeneration } from "../../game/planet-generation.ts";
-import { createScriptDataLifecycle } from "../../game/script-data.ts";
+import { createScriptDataLifecycleControl } from "../../bootstrap/script-data-lifecycle-control.ts";
 import { createCustomRaceModel } from "../../game/custom-race-model.ts";
 import { createTraitValue } from "../../game/trait-value.ts";
 import { createCraftingCosts } from "../../game/crafting-costs.ts";
@@ -3689,50 +3689,26 @@ export function startEvolveRuntimeComposition(
     log: (label, outcome) => runtimeEnvironment.log(label, outcome),
   });
 
-  const { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({
-    getSettings: () => settings,
-    getState: () => state,
-    getGame: () => game,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getWarManager: () => WarManager,
-    getMarketManager: () => MarketManager,
-    getBuildingManager: () => BuildingManager,
-    getSpyManager: () => SpyManager,
-    getEjectManager: () => EjectManager,
-    getSupplyManager: () => SupplyManager,
-    getNaniteManager: () => NaniteManager,
-    getRitualManager: () => RitualManager,
-    getUpdateCraftCost: () =>
-      getTestContext("scriptData")?.actions?.updateCraftCost ?? updateCraftCost,
-    getResourcesPerClick: () =>
-      getTestContext("scriptData")?.actions?.getResourcesPerClick ??
-      getResourcesPerClick,
-    getTicksPerSecond: () =>
-      getTestContext("scriptData")?.actions?.ticksPerSecond ?? ticksPerSecond,
-    getHaveTech: () =>
-      getTestContext("scriptData")?.actions?.haveTech ?? haveTech,
-  });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      scriptDataLifecycle: { updateScriptData, finalizeScriptData },
-      setScriptDataTestContext(context) {
-        settings = context.settings;
-        state = context.state;
-        game = context.game;
-        resources = context.resources;
-        buildings = context.buildings;
-        WarManager = context.WarManager;
-        MarketManager = context.MarketManager;
-        BuildingManager = context.BuildingManager;
-        SpyManager = context.SpyManager;
-        EjectManager = context.EjectManager;
-        SupplyManager = context.SupplyManager;
-        NaniteManager = context.NaniteManager;
-        RitualManager = context.RitualManager;
-        setTestContext("scriptData", context);
-      },
+  const { updateScriptData, finalizeScriptData } =
+    createScriptDataLifecycleControl({
+      getSettings: () => settings,
+      getState: () => state,
+      getGame: () => game,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getWarManager: () => WarManager,
+      getMarketManager: () => MarketManager,
+      getBuildingManager: () => BuildingManager,
+      getSpyManager: () => SpyManager,
+      getEjectManager: () => EjectManager,
+      getSupplyManager: () => SupplyManager,
+      getNaniteManager: () => NaniteManager,
+      getRitualManager: () => RitualManager,
+      getUpdateCraftCost: () => updateCraftCost,
+      getResourcesPerClick: () => getResourcesPerClick,
+      getTicksPerSecond: () => ticksPerSecond,
+      getHaveTech: () => haveTech,
+      testSurface,
     });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)

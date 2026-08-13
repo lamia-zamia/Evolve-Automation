@@ -6542,6 +6542,68 @@ Only continue if you trust the source. Injected code:
     return { updateScriptData, finalizeScriptData };
   }
 
+  // src/bootstrap/script-data-lifecycle-control.ts
+  function readRecord(value) {
+    return typeof value == "object" && value !== null ? value : void 0;
+  }
+  function readContextValue(context, property, fallback) {
+    let value = readRecord(context)?.[property];
+    return value === void 0 ? fallback : value;
+  }
+  function readContextAction(context, property, fallback) {
+    let value = readRecord(readRecord(context)?.actions)?.[property];
+    return typeof value == "function" ? value : fallback;
+  }
+  function getTestContextReader(testSurface) {
+    return () => {
+    };
+  }
+  function createScriptDataLifecycleControl({
+    getSettings,
+    getState,
+    getGame,
+    getResources,
+    getBuildings,
+    getWarManager,
+    getMarketManager,
+    getBuildingManager,
+    getSpyManager,
+    getEjectManager,
+    getSupplyManager,
+    getNaniteManager,
+    getRitualManager,
+    getUpdateCraftCost,
+    getResourcesPerClick,
+    getTicksPerSecond,
+    getHaveTech,
+    testSurface
+  }) {
+    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("scriptData");
+    return createScriptDataLifecycle({
+      getSettings: () => readContextValue(context(), "settings", getSettings()),
+      getState: () => readContextValue(context(), "state", getState()),
+      getGame: () => readContextValue(context(), "game", getGame()),
+      getResources: () => readContextValue(context(), "resources", getResources()),
+      getBuildings: () => readContextValue(context(), "buildings", getBuildings()),
+      getWarManager: () => readContextValue(context(), "WarManager", getWarManager()),
+      getMarketManager: () => readContextValue(context(), "MarketManager", getMarketManager()),
+      getBuildingManager: () => readContextValue(context(), "BuildingManager", getBuildingManager()),
+      getSpyManager: () => readContextValue(context(), "SpyManager", getSpyManager()),
+      getEjectManager: () => readContextValue(context(), "EjectManager", getEjectManager()),
+      getSupplyManager: () => readContextValue(context(), "SupplyManager", getSupplyManager()),
+      getNaniteManager: () => readContextValue(context(), "NaniteManager", getNaniteManager()),
+      getRitualManager: () => readContextValue(context(), "RitualManager", getRitualManager()),
+      getUpdateCraftCost: () => readContextAction(context(), "updateCraftCost", getUpdateCraftCost()),
+      getResourcesPerClick: () => readContextAction(
+        context(),
+        "getResourcesPerClick",
+        getResourcesPerClick()
+      ),
+      getTicksPerSecond: () => readContextAction(context(), "ticksPerSecond", getTicksPerSecond()),
+      getHaveTech: () => readContextAction(context(), "haveTech", getHaveTech())
+    });
+  }
+
   // src/game/custom-race-model.ts
   function createCustomRaceModel({
     getGame,
@@ -18635,19 +18697,19 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/core-settings-controls.ts
-  function readRecord(value) {
+  function readRecord2(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue(context, property, fallback) {
-    let value = readRecord(context)?.[property];
+  function readContextValue2(context, property, fallback) {
+    let value = readRecord2(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function getTestContextReader(testSurface) {
+  function getTestContextReader2(testSurface) {
     return () => {
     };
   }
   function readContextActions(context, fallback) {
-    let record = readRecord(context);
+    let record = readRecord2(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
   function createStorageSettingsControl({
@@ -18662,9 +18724,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
     removeStorageToggles,
     testSurface
   }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("storageSettings"), evolveAdapter = createStorageSettingsEvolveAdapter({
-      getStorageManager: () => readContextValue(context(), "StorageManager", getStorageManager()),
-      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("storageSettings"), evolveAdapter = createStorageSettingsEvolveAdapter({
+      getStorageManager: () => readContextValue2(context(), "StorageManager", getStorageManager()),
+      getSettingsRaw: () => readContextValue2(context(), "settingsRaw", getSettingsRaw())
     }), intentHandler, browserAdapter = createStorageSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -18672,16 +18734,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextValue(context(), "actions", actions)
+      getActions: () => readContextValue2(context(), "actions", actions)
     });
     return intentHandler = createStorageSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue(
+        resetToDefaults: () => readContextValue2(
           context(),
           "resetStorageSettings",
           resetStorageSettings
         )(!0),
-        persist: () => readContextValue(
+        persist: () => readContextValue2(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -18690,12 +18752,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateStorageSettingsContent(),
       effects: {
-        resetCheckbox: () => readContextValue(
+        resetCheckbox: () => readContextValue2(
           context(),
           "resetCheckbox",
           resetCheckbox
         )("autoStorage"),
-        removeStorageToggles: () => readContextValue(
+        removeStorageToggles: () => readContextValue2(
           context(),
           "removeStorageToggles",
           removeStorageToggles
@@ -18714,9 +18776,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("projectSettings"), evolveAdapter = createProjectSettingsEvolveAdapter({
-      getProjectManager: () => readContextValue(context(), "ProjectManager", getProjectManager()),
-      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("projectSettings"), evolveAdapter = createProjectSettingsEvolveAdapter({
+      getProjectManager: () => readContextValue2(context(), "ProjectManager", getProjectManager()),
+      getSettingsRaw: () => readContextValue2(context(), "settingsRaw", getSettingsRaw())
     }), intentHandler, browserAdapter = createProjectSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -18724,16 +18786,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextValue(context(), "actions", actions)
+      getActions: () => readContextValue2(context(), "actions", actions)
     });
     return intentHandler = createProjectSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue(
+        resetToDefaults: () => readContextValue2(
           context(),
           "resetProjectSettings",
           resetProjectSettings
         )(!0),
-        persist: () => readContextValue(
+        persist: () => readContextValue2(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -18742,7 +18804,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateProjectSettingsContent(),
       effects: {
-        resetCheckbox: () => readContextValue(context(), "resetCheckbox", resetCheckbox)("autoARPA")
+        resetCheckbox: () => readContextValue2(context(), "resetCheckbox", resetCheckbox)("autoARPA")
       }
     }), browserAdapter;
   }
@@ -18758,10 +18820,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("magicSettings"), evolveAdapter = createMagicSettingsEvolveAdapter({
-      getGame: () => readContextValue(context(), "game", getGame()),
-      getAlchemyManager: () => readContextValue(context(), "AlchemyManager", getAlchemyManager()),
-      getRitualManager: () => readContextValue(context(), "RitualManager", getRitualManager())
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("magicSettings"), evolveAdapter = createMagicSettingsEvolveAdapter({
+      getGame: () => readContextValue2(context(), "game", getGame()),
+      getAlchemyManager: () => readContextValue2(context(), "AlchemyManager", getAlchemyManager()),
+      getRitualManager: () => readContextValue2(context(), "RitualManager", getRitualManager())
     }), intentHandler, browserAdapter = createMagicSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -18769,16 +18831,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextValue(context(), "actions", actions)
+      getActions: () => readContextValue2(context(), "actions", actions)
     });
     return intentHandler = createMagicSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue(
+        resetToDefaults: () => readContextValue2(
           context(),
           "resetMagicSettings",
           resetMagicSettings
         )(!0),
-        persist: () => readContextValue(
+        persist: () => readContextValue2(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -18786,7 +18848,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateMagicSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue(context(), "resetCheckbox", resetCheckbox)(
+        resetCheckboxes: () => readContextValue2(context(), "resetCheckbox", resetCheckbox)(
           "autoAlchemy",
           "autoPylon",
           "magicFullmetalHelper"
@@ -18808,12 +18870,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("jobSettings"), evolveAdapter = createJobSettingsEvolveAdapter({
-      getBasicJob: () => readContextValue(context(), "BasicJob", getBasicJob()),
-      getCraftingJob: () => readContextValue(context(), "CraftingJob", getCraftingJob()),
-      getJobManager: () => readContextValue(context(), "JobManager", getJobManager()),
-      getJobs: () => readContextValue(context(), "jobs", getJobs()),
-      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("jobSettings"), evolveAdapter = createJobSettingsEvolveAdapter({
+      getBasicJob: () => readContextValue2(context(), "BasicJob", getBasicJob()),
+      getCraftingJob: () => readContextValue2(context(), "CraftingJob", getCraftingJob()),
+      getJobManager: () => readContextValue2(context(), "JobManager", getJobManager()),
+      getJobs: () => readContextValue2(context(), "jobs", getJobs()),
+      getSettingsRaw: () => readContextValue2(context(), "settingsRaw", getSettingsRaw())
     }), intentHandler, browserAdapter = createJobSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -18821,12 +18883,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextValue(context(), "actions", actions)
+      getActions: () => readContextValue2(context(), "actions", actions)
     });
     return intentHandler = createJobSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue(context(), "resetJobSettings", resetJobSettings)(!0),
-        persist: () => readContextValue(
+        resetToDefaults: () => readContextValue2(context(), "resetJobSettings", resetJobSettings)(!0),
+        persist: () => readContextValue2(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -18836,7 +18898,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateJobSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue(
+        resetCheckboxes: () => readContextValue2(
           context(),
           "resetCheckbox",
           resetCheckbox
@@ -18852,22 +18914,22 @@ If script is allowed to reassign non-empty storage it might waste time producing
     persistSettings,
     testSurface
   }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("weightingSettings"), intentHandler, browserAdapter = createWeightingSettingsBrowserAdapter({
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("weightingSettings"), intentHandler, browserAdapter = createWeightingSettingsBrowserAdapter({
       getDocument,
       getJQuery,
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextValue(context(), "actions", actions)
+      getActions: () => readContextValue2(context(), "actions", actions)
     });
     return intentHandler = createWeightingSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue(
+        resetToDefaults: () => readContextValue2(
           context(),
           "resetWeightingSettings",
           resetWeightingSettings
         )(!0),
-        persist: () => readContextValue(
+        persist: () => readContextValue2(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -18885,7 +18947,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("generalSettings"), intentHandler, browserAdapter = createGeneralSettingsBrowserAdapter({
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("generalSettings"), intentHandler, browserAdapter = createGeneralSettingsBrowserAdapter({
       getDocument,
       getJQuery,
       intents: {
@@ -18895,12 +18957,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
     return intentHandler = createGeneralSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue(
+        resetToDefaults: () => readContextValue2(
           context(),
           "resetGeneralSettings",
           resetGeneralSettings
         )(!0),
-        persist: () => readContextValue(
+        persist: () => readContextValue2(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -18908,7 +18970,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateGeneralSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue(context(), "resetCheckbox", resetCheckbox)(
+        resetCheckboxes: () => readContextValue2(context(), "resetCheckbox", resetCheckbox)(
           "masterScriptToggle",
           "showSettings",
           "autoPrestige"
@@ -18928,10 +18990,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
     buildFilterRegExp,
     testSurface
   }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("loggingSettings"), evolveAdapter = createLoggingSettingsEvolveAdapter({
-      getGame: () => readContextValue(context(), "game", getGame()),
-      getGameLog: () => readContextValue(context(), "GameLog", getGameLog()),
-      getSettingsRaw: () => readContextValue(context(), "settingsRaw", getSettingsRaw())
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("loggingSettings"), evolveAdapter = createLoggingSettingsEvolveAdapter({
+      getGame: () => readContextValue2(context(), "game", getGame()),
+      getGameLog: () => readContextValue2(context(), "GameLog", getGameLog()),
+      getSettingsRaw: () => readContextValue2(context(), "settingsRaw", getSettingsRaw())
     }), intentHandler, browserAdapter = createLoggingSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -18939,23 +19001,23 @@ If script is allowed to reassign non-empty storage it might waste time producing
       intents: {
         handle: (intent) => intentHandler.handle(intent)
       },
-      getActions: () => readContextValue(context(), "actions", actions)
+      getActions: () => readContextValue2(context(), "actions", actions)
     });
     return intentHandler = createLoggingSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue(
+        resetToDefaults: () => readContextValue2(
           context(),
           "resetLoggingSettings",
           resetLoggingSettings
         )(!0),
-        persist: () => readContextValue(
+        persist: () => readContextValue2(
           context(),
           "updateSettingsFromState",
           persistSettings
         )(),
         setLogFilter: (value) => {
-          let target = readRecord(
-            readContextValue(context(), "settingsRaw", getSettingsRaw())
+          let target = readRecord2(
+            readContextValue2(context(), "settingsRaw", getSettingsRaw())
           );
           if (target === void 0)
             throw new TypeError("settingsRaw must be an object");
@@ -18964,7 +19026,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: (secondaryPrefix) => browserAdapter.updateLoggingSettingsContent(secondaryPrefix),
       effects: {
-        buildFilterRegExp: () => readContextValue(context(), "buildFilterRegExp", buildFilterRegExp)()
+        buildFilterRegExp: () => readContextValue2(context(), "buildFilterRegExp", buildFilterRegExp)()
       }
     }), browserAdapter;
   }
@@ -18976,7 +19038,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     persistSettings,
     testSurface
   }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("achievementGuardSettings"), intentHandler, browserAdapter = createAchievementGuardSettingsBrowserAdapter({
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("achievementGuardSettings"), intentHandler, browserAdapter = createAchievementGuardSettingsBrowserAdapter({
       getDocument,
       getJQuery,
       intents: {
@@ -18986,12 +19048,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
     return intentHandler = createAchievementGuardSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue(
+        resetToDefaults: () => readContextValue2(
           context(),
           "resetAchievementGuardSettings",
           resetAchievementGuardSettings
         )(!0),
-        persist: () => readContextValue(
+        persist: () => readContextValue2(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -19008,7 +19070,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     persistSettings,
     testSurface
   }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("challengeHelperSettings"), intentHandler, browserAdapter = createChallengeHelperSettingsBrowserAdapter({
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("challengeHelperSettings"), intentHandler, browserAdapter = createChallengeHelperSettingsBrowserAdapter({
       getDocument,
       getJQuery,
       intents: {
@@ -19018,12 +19080,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
     return intentHandler = createChallengeHelperSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue(
+        resetToDefaults: () => readContextValue2(
           context(),
           "resetChallengeHelperSettings",
           resetChallengeHelperSettings
         )(!0),
-        persist: () => readContextValue(
+        persist: () => readContextValue2(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -19040,7 +19102,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     persistSettings,
     testSurface
   }) {
-    let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("authoritySettings"), intentHandler, browserAdapter = createAuthoritySettingsBrowserAdapter({
+    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("authoritySettings"), intentHandler, browserAdapter = createAuthoritySettingsBrowserAdapter({
       getDocument,
       getJQuery,
       intents: {
@@ -19050,12 +19112,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
     return intentHandler = createAuthoritySettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue(
+        resetToDefaults: () => readContextValue2(
           context(),
           "resetAuthoritySettings",
           resetAuthoritySettings
         )(!0),
-        persist: () => readContextValue(
+        persist: () => readContextValue2(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -19246,18 +19308,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/research-settings-control.ts
-  function readRecord2(value) {
+  function readRecord3(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue2(context, property, fallback) {
-    let value = readRecord2(context)?.[property];
+  function readContextValue3(context, property, fallback) {
+    let value = readRecord3(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions2(context, fallback) {
-    let record = readRecord2(context);
+    let record = readRecord3(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader2(testSurface) {
+  function getTestContextReader3(testSurface) {
     return () => {
     };
   }
@@ -19272,9 +19334,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader2(testSurface), context = () => getTestContext("researchSettings"), evolveAdapter = createResearchSettingsEvolveAdapter({
-      getGame: () => readContextValue2(context(), "game", getGame()),
-      getTechIds: () => readContextValue2(context(), "techIds", getTechIds())
+    let getTestContext = getTestContextReader3(testSurface), context = () => getTestContext("researchSettings"), evolveAdapter = createResearchSettingsEvolveAdapter({
+      getGame: () => readContextValue3(context(), "game", getGame()),
+      getTechIds: () => readContextValue3(context(), "techIds", getTechIds())
     }), intentHandler, browserAdapter = createResearchSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -19286,12 +19348,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
     return intentHandler = createResearchSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue2(
+        resetToDefaults: () => readContextValue3(
           context(),
           "resetResearchSettings",
           resetResearchSettings
         )(!0),
-        persist: () => readContextValue2(
+        persist: () => readContextValue3(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -19299,7 +19361,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateResearchSettingsContent(),
       effects: {
-        resetCheckbox: () => readContextValue2(
+        resetCheckbox: () => readContextValue3(
           context(),
           "resetCheckbox",
           resetCheckbox
@@ -19677,18 +19739,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/government-planet-settings-controls.ts
-  function readRecord3(value) {
+  function readRecord4(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue3(context, property, fallback) {
-    let value = readRecord3(context)?.[property];
+  function readContextValue4(context, property, fallback) {
+    let value = readRecord4(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions3(context, fallback) {
-    let record = readRecord3(context);
+    let record = readRecord4(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader3(testSurface) {
+  function getTestContextReader4(testSurface) {
     return () => {
     };
   }
@@ -19704,10 +19766,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader3(testSurface), context = () => getTestContext("governmentSettings"), evolveAdapter = createGovernmentSettingsEvolveAdapter({
-      getGame: () => readContextValue3(context(), "game", getGame()),
-      getGovernmentManager: () => readContextValue3(context(), "GovernmentManager", getGovernmentManager()),
-      getGovernors: () => readContextValue3(context(), "governors", getGovernors())
+    let getTestContext = getTestContextReader4(testSurface), context = () => getTestContext("governmentSettings"), evolveAdapter = createGovernmentSettingsEvolveAdapter({
+      getGame: () => readContextValue4(context(), "game", getGame()),
+      getGovernmentManager: () => readContextValue4(context(), "GovernmentManager", getGovernmentManager()),
+      getGovernors: () => readContextValue4(context(), "governors", getGovernors())
     }), intentHandler, browserAdapter = createGovernmentSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -19719,12 +19781,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
     return intentHandler = createGovernmentSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue3(
+        resetToDefaults: () => readContextValue4(
           context(),
           "resetGovernmentSettings",
           resetGovernmentSettings
         )(!0),
-        persist: () => readContextValue3(
+        persist: () => readContextValue4(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -19732,7 +19794,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: (secondaryPrefix) => browserAdapter.updateGovernmentSettingsContent(secondaryPrefix),
       effects: {
-        resetCheckboxes: () => readContextValue3(
+        resetCheckboxes: () => readContextValue4(
           context(),
           "resetCheckbox",
           resetCheckbox
@@ -19752,11 +19814,11 @@ If script is allowed to reassign non-empty storage it might waste time producing
     persistSettings,
     testSurface
   }) {
-    let getTestContext = getTestContextReader3(testSurface), context = () => getTestContext("planetSettings"), evolveAdapter = createPlanetSettingsEvolveAdapter({
-      getGame: () => readContextValue3(context(), "game", getGame()),
-      getBiomeList: () => readContextValue3(context(), "biomeList", getBiomeList()),
-      getTraitList: () => readContextValue3(context(), "traitList", getTraitList()),
-      getExtraList: () => readContextValue3(context(), "extraList", getExtraList())
+    let getTestContext = getTestContextReader4(testSurface), context = () => getTestContext("planetSettings"), evolveAdapter = createPlanetSettingsEvolveAdapter({
+      getGame: () => readContextValue4(context(), "game", getGame()),
+      getBiomeList: () => readContextValue4(context(), "biomeList", getBiomeList()),
+      getTraitList: () => readContextValue4(context(), "traitList", getTraitList()),
+      getExtraList: () => readContextValue4(context(), "extraList", getExtraList())
     }), intentHandler, browserAdapter = createPlanetSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -19768,12 +19830,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
     return intentHandler = createPlanetSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue3(
+        resetToDefaults: () => readContextValue4(
           context(),
           "resetPlanetSettings",
           resetPlanetSettings
         )(!0),
-        persist: () => readContextValue3(
+        persist: () => readContextValue4(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -20306,18 +20368,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/building-settings-control.ts
-  function readRecord4(value) {
+  function readRecord5(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue4(context, property, fallback) {
-    let value = readRecord4(context)?.[property];
+  function readContextValue5(context, property, fallback) {
+    let value = readRecord5(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions4(context, fallback) {
-    let record = readRecord4(context);
+    let record = readRecord5(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader4(testSurface) {
+  function getTestContextReader5(testSurface) {
     return () => {
     };
   }
@@ -20340,16 +20402,16 @@ If script is allowed to reassign non-empty storage it might waste time producing
     removeBuildingToggles,
     testSurface
   }) {
-    let getTestContext = getTestContextReader4(testSurface), context = () => getTestContext("buildingSettings"), evolveAdapter = createBuildingSettingsEvolveAdapter({
-      getBuildingManager: () => readContextValue4(context(), "BuildingManager", getBuildingManager()),
-      getBuildingIds: () => readContextValue4(context(), "buildingIds", getBuildingIds()),
-      getResources: () => readContextValue4(context(), "resources", getResources()),
-      getLinkedBuildings: () => readContextValue4(context(), "linkedBuildings", getLinkedBuildings()),
-      getCheckCompare: () => readContextValue4(context(), "checkCompare", getCheckCompare()),
-      getOverrideKey: () => readContextValue4(context(), "overrideKey", getOverrideKey()),
-      getRealNumber: () => readContextValue4(context(), "getRealNumber", getRealNumber()),
-      getInitBuildingState: () => readContextValue4(context(), "initBuildingState", getInitBuildingState()),
-      getSettingsRaw: () => readContextValue4(context(), "settingsRaw", getSettingsRaw())
+    let getTestContext = getTestContextReader5(testSurface), context = () => getTestContext("buildingSettings"), evolveAdapter = createBuildingSettingsEvolveAdapter({
+      getBuildingManager: () => readContextValue5(context(), "BuildingManager", getBuildingManager()),
+      getBuildingIds: () => readContextValue5(context(), "buildingIds", getBuildingIds()),
+      getResources: () => readContextValue5(context(), "resources", getResources()),
+      getLinkedBuildings: () => readContextValue5(context(), "linkedBuildings", getLinkedBuildings()),
+      getCheckCompare: () => readContextValue5(context(), "checkCompare", getCheckCompare()),
+      getOverrideKey: () => readContextValue5(context(), "overrideKey", getOverrideKey()),
+      getRealNumber: () => readContextValue5(context(), "getRealNumber", getRealNumber()),
+      getInitBuildingState: () => readContextValue5(context(), "initBuildingState", getInitBuildingState()),
+      getSettingsRaw: () => readContextValue5(context(), "settingsRaw", getSettingsRaw())
     }), intentHandler, browserAdapter = createBuildingSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -20362,12 +20424,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
     return intentHandler = createBuildingSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue4(
+        resetToDefaults: () => readContextValue5(
           context(),
           "resetBuildingSettings",
           resetBuildingSettings
         )(!0),
-        persist: () => readContextValue4(
+        persist: () => readContextValue5(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -20380,12 +20442,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateBuildingSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue4(
+        resetCheckboxes: () => readContextValue5(
           context(),
           "resetCheckbox",
           resetCheckbox
         )("autoBuild", "autoPower"),
-        removeBuildingToggles: () => readContextValue4(
+        removeBuildingToggles: () => readContextValue5(
           context(),
           "removeBuildingToggles",
           removeBuildingToggles
@@ -39793,18 +39855,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/ejector-settings-control.ts
-  function readRecord5(value) {
+  function readRecord6(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue5(context, property, fallback) {
-    let value = readRecord5(context)?.[property];
+  function readContextValue6(context, property, fallback) {
+    let value = readRecord6(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions5(context, fallback) {
-    let record = readRecord5(context);
+    let record = readRecord6(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader5(testSurface) {
+  function getTestContextReader6(testSurface) {
     return () => {
     };
   }
@@ -39824,20 +39886,20 @@ If script is allowed to reassign non-empty storage it might waste time producing
     removeSupplyToggles,
     testSurface
   }) {
-    let getTestContext = getTestContextReader5(testSurface), context = () => getTestContext("ejectorSettings"), reader = createEjectorSettingsEvolveAdapter({
-      getResources: () => readContextValue5(context(), "resources", getResources()),
-      getEjectManager: () => readContextValue5(context(), "EjectManager", getEjectManager()),
-      getNaniteManager: () => readContextValue5(context(), "NaniteManager", getNaniteManager()),
-      getSupplyManager: () => readContextValue5(context(), "SupplyManager", getSupplyManager()),
-      getSettingsRaw: () => readContextValue5(context(), "settingsRaw", getSettingsRaw())
+    let getTestContext = getTestContextReader6(testSurface), context = () => getTestContext("ejectorSettings"), reader = createEjectorSettingsEvolveAdapter({
+      getResources: () => readContextValue6(context(), "resources", getResources()),
+      getEjectManager: () => readContextValue6(context(), "EjectManager", getEjectManager()),
+      getNaniteManager: () => readContextValue6(context(), "NaniteManager", getNaniteManager()),
+      getSupplyManager: () => readContextValue6(context(), "SupplyManager", getSupplyManager()),
+      getSettingsRaw: () => readContextValue6(context(), "settingsRaw", getSettingsRaw())
     }), intentHandler = createEjectorSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue5(
+        resetToDefaults: () => readContextValue6(
           context(),
           "resetEjectorSettings",
           resetEjectorSettings
         )(!0),
-        persist: () => readContextValue5(
+        persist: () => readContextValue6(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -39845,13 +39907,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateEjectorSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue5(context(), "resetCheckbox", resetCheckbox)(
+        resetCheckboxes: () => readContextValue6(context(), "resetCheckbox", resetCheckbox)(
           "autoEject",
           "autoSupply",
           "autoNanite"
         ),
-        removeEjectToggles: () => readContextValue5(context(), "removeEjectToggles", removeEjectToggles)(),
-        removeSupplyToggles: () => readContextValue5(
+        removeEjectToggles: () => readContextValue6(context(), "removeEjectToggles", removeEjectToggles)(),
+        removeSupplyToggles: () => readContextValue6(
           context(),
           "removeSupplyToggles",
           removeSupplyToggles
@@ -40167,18 +40229,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/market-settings-control.ts
-  function readRecord6(value) {
+  function readRecord7(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue6(context, property, fallback) {
-    let value = readRecord6(context)?.[property];
+  function readContextValue7(context, property, fallback) {
+    let value = readRecord7(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions6(context, fallback) {
-    let record = readRecord6(context);
+    let record = readRecord7(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader6(testSurface) {
+  function getTestContextReader7(testSurface) {
     return () => {
     };
   }
@@ -40196,21 +40258,21 @@ If script is allowed to reassign non-empty storage it might waste time producing
     removeMarketToggles,
     testSurface
   }) {
-    let getTestContext = getTestContextReader6(testSurface), context = () => getTestContext("marketSettings"), reader = createMarketSettingsEvolveAdapter({
-      getMarketManager: () => readContextValue6(context(), "MarketManager", getMarketManager()),
-      getResources: () => readContextValue6(context(), "resources", getResources()),
-      getPoly: () => readContextValue6(context(), "poly", getPoly())
+    let getTestContext = getTestContextReader7(testSurface), context = () => getTestContext("marketSettings"), reader = createMarketSettingsEvolveAdapter({
+      getMarketManager: () => readContextValue7(context(), "MarketManager", getMarketManager()),
+      getResources: () => readContextValue7(context(), "resources", getResources()),
+      getPoly: () => readContextValue7(context(), "poly", getPoly())
     }), reorderer = createMarketSettingsWriter({
-      getMarketManager: () => readContextValue6(context(), "MarketManager", getMarketManager()),
-      getSettingsRaw: () => readContextValue6(context(), "settingsRaw", getSettingsRaw())
+      getMarketManager: () => readContextValue7(context(), "MarketManager", getMarketManager()),
+      getSettingsRaw: () => readContextValue7(context(), "settingsRaw", getSettingsRaw())
     }), intentHandler = createMarketSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue6(
+        resetToDefaults: () => readContextValue7(
           context(),
           "resetMarketSettings",
           resetMarketSettings
         )(!0),
-        persist: () => readContextValue6(
+        persist: () => readContextValue7(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -40219,12 +40281,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: () => browserAdapter.updateMarketSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue6(
+        resetCheckboxes: () => readContextValue7(
           context(),
           "resetCheckbox",
           resetCheckbox
         )("autoMarket", "autoGalaxyMarket"),
-        removeMarketToggles: () => readContextValue6(
+        removeMarketToggles: () => readContextValue7(
           context(),
           "removeMarketToggles",
           removeMarketToggles
@@ -40512,18 +40574,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/war-settings-control.ts
-  function readRecord7(value) {
+  function readRecord8(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue7(context, property, fallback) {
-    let value = readRecord7(context)?.[property];
+  function readContextValue8(context, property, fallback) {
+    let value = readRecord8(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions7(context, fallback) {
-    let record = readRecord7(context);
+    let record = readRecord8(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader7(testSurface) {
+  function getTestContextReader8(testSurface) {
     return () => {
     };
   }
@@ -40538,13 +40600,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader7(testSurface), context = () => getTestContext("warSettings"), reader = createWarSettingsEvolveAdapter({
-      getSpyManager: () => readContextValue7(context(), "SpyManager", getSpyManager()),
-      getGame: () => readContextValue7(context(), "game", getGame())
+    let getTestContext = getTestContextReader8(testSurface), context = () => getTestContext("warSettings"), reader = createWarSettingsEvolveAdapter({
+      getSpyManager: () => readContextValue8(context(), "SpyManager", getSpyManager()),
+      getGame: () => readContextValue8(context(), "game", getGame())
     }), intentHandler = createWarSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue7(context(), "resetWarSettings", resetWarSettings)(!0),
-        persist: () => readContextValue7(
+        resetToDefaults: () => readContextValue8(context(), "resetWarSettings", resetWarSettings)(!0),
+        persist: () => readContextValue8(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -40552,7 +40614,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: (secondaryPrefix) => browserAdapter.updateWarSettingsContent(secondaryPrefix),
       effects: {
-        resetCheckboxes: () => readContextValue7(
+        resetCheckboxes: () => readContextValue8(
           context(),
           "resetCheckbox",
           resetCheckbox
@@ -40765,18 +40827,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/settings/hell-settings-control.ts
-  function readRecord8(value) {
+  function readRecord9(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue8(context, property, fallback) {
-    let value = readRecord8(context)?.[property];
+  function readContextValue9(context, property, fallback) {
+    let value = readRecord9(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions8(context, fallback) {
-    let record = readRecord8(context);
+    let record = readRecord9(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader8(testSurface) {
+  function getTestContextReader9(testSurface) {
     return () => {
     };
   }
@@ -40789,14 +40851,14 @@ If script is allowed to reassign non-empty storage it might waste time producing
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader8(testSurface), context = () => getTestContext("hellSettings"), reader = { read: getHellSettingsReadModel }, intentHandler = createHellSettingsIntentHandler({
+    let getTestContext = getTestContextReader9(testSurface), context = () => getTestContext("hellSettings"), reader = { read: getHellSettingsReadModel }, intentHandler = createHellSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue8(
+        resetToDefaults: () => readContextValue9(
           context(),
           "resetHellSettings",
           resetHellSettings
         )(!0),
-        persist: () => readContextValue8(
+        persist: () => readContextValue9(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -40804,7 +40866,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       renderSettingsContent: (secondaryPrefix) => browserAdapter.updateHellSettingsContent(secondaryPrefix),
       effects: {
-        resetCheckboxes: () => readContextValue8(context(), "resetCheckbox", resetCheckbox)("autoHell")
+        resetCheckboxes: () => readContextValue9(context(), "resetCheckbox", resetCheckbox)("autoHell")
       }
     }), browserAdapter = createHellSettingsBrowserAdapter({
       getDocument,
@@ -41143,18 +41205,18 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/mech-settings-control.ts
-  function readRecord9(value) {
+  function readRecord10(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue9(context, property, fallback) {
-    let value = readRecord9(context)?.[property];
+  function readContextValue10(context, property, fallback) {
+    let value = readRecord10(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions9(context, fallback) {
-    let record = readRecord9(context);
+    let record = readRecord10(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader9(testSurface) {
+  function getTestContextReader10(testSurface) {
     return () => {
     };
   }
@@ -41170,17 +41232,17 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     removeMechInfo,
     testSurface
   }) {
-    let getTestContext = getTestContextReader9(testSurface), context = () => getTestContext("mechSettings"), reader = createMechSettingsEvolveAdapter({
-      getMechManager: () => readContextValue9(context(), "MechManager", getMechManager()),
-      getGame: () => readContextValue9(context(), "game", getGame())
+    let getTestContext = getTestContextReader10(testSurface), context = () => getTestContext("mechSettings"), reader = createMechSettingsEvolveAdapter({
+      getMechManager: () => readContextValue10(context(), "MechManager", getMechManager()),
+      getGame: () => readContextValue10(context(), "game", getGame())
     }), intentHandler = createMechSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue9(
+        resetToDefaults: () => readContextValue10(
           context(),
           "resetMechSettings",
           resetMechSettings
         )(!0),
-        persist: () => readContextValue9(
+        persist: () => readContextValue10(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -41188,8 +41250,8 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       renderSettingsContent: () => browserAdapter.updateMechSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue9(context(), "resetCheckbox", resetCheckbox)("autoMech"),
-        removeMechInfo: () => readContextValue9(context(), "removeMechInfo", removeMechInfo)()
+        resetCheckboxes: () => readContextValue10(context(), "resetCheckbox", resetCheckbox)("autoMech"),
+        removeMechInfo: () => readContextValue10(context(), "removeMechInfo", removeMechInfo)()
       }
     }), browserAdapter = createMechSettingsBrowserAdapter({
       getDocument,
@@ -41502,18 +41564,18 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/trigger-settings-control.ts
-  function readRecord10(value) {
+  function readRecord11(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue10(context, property, fallback) {
-    let value = readRecord10(context)?.[property];
+  function readContextValue11(context, property, fallback) {
+    let value = readRecord11(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions10(context, fallback) {
-    let record = readRecord10(context);
+    let record = readRecord11(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader10(testSurface) {
+  function getTestContextReader11(testSurface) {
     return () => {
     };
   }
@@ -41531,12 +41593,12 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader10(testSurface), context = () => getTestContext("triggerSettings"), reader = createTriggerSettingsEvolveAdapter({
-      getTriggerManager: () => readContextValue10(context(), "TriggerManager", getTriggerManager()),
-      getCheckTypes: () => readContextValue10(context(), "checkTypes", getCheckTypes()),
-      getActionInputs: () => readContextValue10(context(), "argType", getActionInputs()),
-      getBooleanResultChecks: () => readContextValue10(context(), "retBools", getBooleanResultChecks()),
-      getOverrideOnlyChecks: () => readContextValue10(
+    let getTestContext = getTestContextReader11(testSurface), context = () => getTestContext("triggerSettings"), reader = createTriggerSettingsEvolveAdapter({
+      getTriggerManager: () => readContextValue11(context(), "TriggerManager", getTriggerManager()),
+      getCheckTypes: () => readContextValue11(context(), "checkTypes", getCheckTypes()),
+      getActionInputs: () => readContextValue11(context(), "argType", getActionInputs()),
+      getBooleanResultChecks: () => readContextValue11(context(), "retBools", getBooleanResultChecks()),
+      getOverrideOnlyChecks: () => readContextValue11(
         context(),
         "overrideOnlyChecks",
         getOverrideOnlyChecks()
@@ -41552,43 +41614,43 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
     return intentHandler = createTriggerSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue10(
+        resetToDefaults: () => readContextValue11(
           context(),
           "resetTriggerSettings",
           resetTriggerSettings
         )(!0),
         addDefault: () => {
-          readContextValue10(
+          readContextValue11(
             context(),
             "TriggerManager",
             getTriggerManager()
           ).AddTrigger("Boolean", !1, 1, "research", "tech-club", 0);
         },
         update: (seq, field, value) => {
-          let trigger = readContextValue10(
+          let trigger = readContextValue11(
             context(),
             "TriggerManager",
             getTriggerManager()
           ).getTrigger(seq);
           trigger && (trigger[field] = value, trigger.complete = !1, field === "requirementType" && (trigger.requirementId = !1, trigger.requirementCount = 1), field === "actionType" && (trigger.actionId = "", trigger.actionCount = 0));
         },
-        remove: (seq) => readContextValue10(
+        remove: (seq) => readContextValue11(
           context(),
           "TriggerManager",
           getTriggerManager()
         ).RemoveTrigger(seq),
-        duplicate: (seq) => readContextValue10(
+        duplicate: (seq) => readContextValue11(
           context(),
           "TriggerManager",
           getTriggerManager()
         ).DuplicateTrigger(seq),
-        evalize: (seq) => readContextValue10(
+        evalize: (seq) => readContextValue11(
           context(),
           "TriggerManager",
           getTriggerManager()
         ).EvalizeTrigger(seq),
         reorder: (seqs) => {
-          let manager = readContextValue10(
+          let manager = readContextValue11(
             context(),
             "TriggerManager",
             getTriggerManager()
@@ -41598,7 +41660,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
             trigger && (trigger.priority = index);
           }), manager.sortByPriority();
         },
-        persist: () => readContextValue10(
+        persist: () => readContextValue11(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -41606,7 +41668,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       render: () => browserAdapter.updateTriggerSettingsContent(),
       effects: {
-        resetCheckbox: () => readContextValue10(
+        resetCheckbox: () => readContextValue11(
           context(),
           "resetCheckbox",
           resetCheckbox
@@ -42014,18 +42076,18 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/fleet-settings-control.ts
-  function readRecord11(value) {
+  function readRecord12(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue11(context, property, fallback) {
-    let value = readRecord11(context)?.[property];
+  function readContextValue12(context, property, fallback) {
+    let value = readRecord12(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions11(context, fallback) {
-    let record = readRecord11(context);
+    let record = readRecord12(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader11(testSurface) {
+  function getTestContextReader12(testSurface) {
     return () => {
     };
   }
@@ -42042,11 +42104,11 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader11(testSurface), context = () => getTestContext("fleetSettings"), reader = createFleetSettingsEvolveAdapter({
-      getFleetManagerOuter: () => readContextValue11(context(), "FleetManagerOuter", getFleetManagerOuter()),
-      getGalaxyRegions: () => readContextValue11(context(), "galaxyRegions", getGalaxyRegions()),
-      getGame: () => readContextValue11(context(), "game", getGame()),
-      getSettingsRaw: () => readContextValue11(context(), "settingsRaw", getSettingsRaw())
+    let getTestContext = getTestContextReader12(testSurface), context = () => getTestContext("fleetSettings"), reader = createFleetSettingsEvolveAdapter({
+      getFleetManagerOuter: () => readContextValue12(context(), "FleetManagerOuter", getFleetManagerOuter()),
+      getGalaxyRegions: () => readContextValue12(context(), "galaxyRegions", getGalaxyRegions()),
+      getGame: () => readContextValue12(context(), "game", getGame()),
+      getSettingsRaw: () => readContextValue12(context(), "settingsRaw", getSettingsRaw())
     }), intentHandler, browserAdapter = createFleetSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -42058,13 +42120,13 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
     return intentHandler = createFleetSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue11(
+        resetToDefaults: () => readContextValue12(
           context(),
           "resetFleetSettings",
           resetFleetSettings
         )(!0),
         reorderAndromeda: (regionIds) => {
-          let target = readContextValue11(
+          let target = readContextValue12(
             context(),
             "settingsRaw",
             getSettingsRaw()
@@ -42073,7 +42135,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
             target[`fleet_pr_${regionId}`] = index;
           });
         },
-        persist: () => readContextValue11(
+        persist: () => readContextValue12(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -42081,7 +42143,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       render: (secondaryPrefix) => browserAdapter.updateFleetSettingsContent(secondaryPrefix),
       effects: {
-        resetCheckbox: () => readContextValue11(
+        resetCheckbox: () => readContextValue12(
           context(),
           "resetCheckbox",
           resetCheckbox
@@ -42437,18 +42499,18 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/prestige-settings-control.ts
-  function readRecord12(value) {
+  function readRecord13(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue12(context, property, fallback) {
-    let value = readRecord12(context)?.[property];
+  function readContextValue13(context, property, fallback) {
+    let value = readRecord13(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions12(context, fallback) {
-    let record = readRecord12(context);
+    let record = readRecord13(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader12(testSurface) {
+  function getTestContextReader13(testSurface) {
     return () => {
     };
   }
@@ -42475,69 +42537,69 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     confirm,
     testSurface
   }) {
-    let getTestContext = getTestContextReader12(testSurface), context = () => getTestContext("prestigeSettings"), reader = createPrestigeSettingsEvolveAdapter({
-      getPrestigeTypes: () => readContextValue12(context(), "prestigeTypes", getPrestigeTypes()),
-      getGame: () => readContextValue12(context(), "game", getGame()),
-      getBuildings: () => readContextValue12(context(), "buildings", getBuildings()),
-      isPrestigeAllowed: () => readContextValue12(context(), "isPrestigeAllowed", isPrestigeAllowed2)(),
-      haveTech: (...args) => readContextValue12(context(), "haveTech", haveTech)(...args),
-      isBioseederPrestigeAvailable: () => readContextValue12(
+    let getTestContext = getTestContextReader13(testSurface), context = () => getTestContext("prestigeSettings"), reader = createPrestigeSettingsEvolveAdapter({
+      getPrestigeTypes: () => readContextValue13(context(), "prestigeTypes", getPrestigeTypes()),
+      getGame: () => readContextValue13(context(), "game", getGame()),
+      getBuildings: () => readContextValue13(context(), "buildings", getBuildings()),
+      isPrestigeAllowed: () => readContextValue13(context(), "isPrestigeAllowed", isPrestigeAllowed2)(),
+      haveTech: (...args) => readContextValue13(context(), "haveTech", haveTech)(...args),
+      isBioseederPrestigeAvailable: () => readContextValue13(
         context(),
         "isBioseederPrestigeAvailable",
         isBioseederPrestigeAvailable
       )(),
-      isCataclysmPrestigeAvailable: () => readContextValue12(
+      isCataclysmPrestigeAvailable: () => readContextValue13(
         context(),
         "isCataclysmPrestigeAvailable",
         isCataclysmPrestigeAvailable2
       )(),
-      isWhiteholePrestigeAvailable: () => readContextValue12(
+      isWhiteholePrestigeAvailable: () => readContextValue13(
         context(),
         "isWhiteholePrestigeAvailable",
         isWhiteholePrestigeAvailable2
       )(),
-      isApocalypsePrestigeAvailable: () => readContextValue12(
+      isApocalypsePrestigeAvailable: () => readContextValue13(
         context(),
         "isApocalypsePrestigeAvailable",
         isApocalypsePrestigeAvailable2
       )(),
-      isAscensionPrestigeAvailable: () => readContextValue12(
+      isAscensionPrestigeAvailable: () => readContextValue13(
         context(),
         "isAscensionPrestigeAvailable",
         isAscensionPrestigeAvailable2
       )(),
-      isWitchAscensionPrestigeAvailable: (demonic) => readContextValue12(
+      isWitchAscensionPrestigeAvailable: (demonic) => readContextValue13(
         context(),
         "isWitchAscensionPrestigeAvailable",
         isWitchAscensionPrestigeAvailable2
       )(demonic),
-      isDemonicPrestigeAvailable: () => readContextValue12(
+      isDemonicPrestigeAvailable: () => readContextValue13(
         context(),
         "isDemonicPrestigeAvailable",
         isDemonicPrestigeAvailable2
       )()
     }), intentHandler = createPrestigeSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue12(
+        resetToDefaults: () => readContextValue13(
           context(),
           "resetPrestigeSettings",
           resetPrestigeSettings
         )(!0),
         setPrestigeType: (value) => {
-          readContextValue12(
+          readContextValue13(
             context(),
             "settingsRaw",
             getSettingsRaw()
           ).prestigeType = value;
         },
         setGoalStandard: () => {
-          readContextValue12(
+          readContextValue13(
             context(),
             "state",
             getState()
           ).goal = "Standard";
         },
-        persist: () => readContextValue12(
+        persist: () => readContextValue13(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -42546,7 +42608,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       reader,
       render: (secondaryPrefix) => browserAdapter.updatePrestigeSettingsContent(secondaryPrefix),
       effects: {
-        confirm: (message) => !!readContextValue12(context(), "confirm", confirm)(message)
+        confirm: (message) => !!readContextValue13(context(), "confirm", confirm)(message)
       }
     }), browserAdapter = createPrestigeSettingsBrowserAdapter({
       getDocument,
@@ -42939,18 +43001,18 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/evolution-settings-control.ts
-  function readRecord13(value) {
+  function readRecord14(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue13(context, property, fallback) {
-    let value = readRecord13(context)?.[property];
+  function readContextValue14(context, property, fallback) {
+    let value = readRecord14(context)?.[property];
     return value === void 0 ? fallback : value;
   }
   function readContextActions13(context, fallback) {
-    let record = readRecord13(context);
+    let record = readRecord14(context);
     return record === void 0 ? fallback : record.actions === void 0 ? context : record.actions;
   }
-  function getTestContextReader13(testSurface) {
+  function getTestContextReader14(testSurface) {
     return () => {
     };
   }
@@ -42973,20 +43035,20 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader13(testSurface), context = () => getTestContext("evolutionSettings"), reader = createEvolutionSettingsEvolveAdapter({
-      getGame: () => readContextValue13(context(), "game", getGame()),
-      getRaces: () => readContextValue13(context(), "races", getRaces()),
-      getChallenges: () => readContextValue13(context(), "challenges", getChallenges()),
-      getUniverses: () => readContextValue13(context(), "universes", getUniverses()),
-      getSettingsRaw: () => readContextValue13(context(), "settingsRaw", getSettingsRaw()),
-      getSettings: () => readContextValue13(context(), "settings", getSettings()),
-      getSettingsToStore: () => readContextValue13(
+    let getTestContext = getTestContextReader14(testSurface), context = () => getTestContext("evolutionSettings"), reader = createEvolutionSettingsEvolveAdapter({
+      getGame: () => readContextValue14(context(), "game", getGame()),
+      getRaces: () => readContextValue14(context(), "races", getRaces()),
+      getChallenges: () => readContextValue14(context(), "challenges", getChallenges()),
+      getUniverses: () => readContextValue14(context(), "universes", getUniverses()),
+      getSettingsRaw: () => readContextValue14(context(), "settingsRaw", getSettingsRaw()),
+      getSettings: () => readContextValue14(context(), "settings", getSettings()),
+      getSettingsToStore: () => readContextValue14(
         context(),
         "evolutionSettingsToStore",
         getSettingsToStore()
       ),
-      getPrestigeTypes: () => readContextValue13(context(), "prestigeTypes", getPrestigeTypes()),
-      getStarLevel: (queueItem) => readContextValue13(context(), "getStarLevel", getStarLevel)(queueItem)
+      getPrestigeTypes: () => readContextValue14(context(), "prestigeTypes", getPrestigeTypes()),
+      getStarLevel: (queueItem) => readContextValue14(context(), "getStarLevel", getStarLevel)(queueItem)
     }), intentHandler, browserAdapter = createEvolutionSettingsBrowserAdapter({
       getDocument,
       getJQuery,
@@ -42998,33 +43060,33 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
     return intentHandler = createEvolutionSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue13(
+        resetToDefaults: () => readContextValue14(
           context(),
           "resetEvolutionSettings",
           resetEvolutionSettings
         )(!0),
         setTarget: (value) => {
-          let target = readContextValue13(
+          let target = readContextValue14(
             context(),
             "settingsRaw",
             getSettingsRaw()
           );
-          target.userEvolutionTarget = value, readContextValue13(
+          target.userEvolutionTarget = value, readContextValue14(
             context(),
             "state",
             getState()
           ).evolutionTarget = null;
         },
         addCurrent: (prestigeType) => {
-          let target = readContextValue13(
+          let target = readContextValue14(
             context(),
             "settingsRaw",
             getSettingsRaw()
-          ), currentSettings = readContextValue13(
+          ), currentSettings = readContextValue14(
             context(),
             "settings",
             getSettings()
-          ), names = readContextValue13(
+          ), names = readContextValue14(
             context(),
             "evolutionSettingsToStore",
             getSettingsToStore()
@@ -43034,7 +43096,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           prestigeType !== "auto" && (queued.prestigeType = prestigeType), target.evolutionQueue.push(queued);
         },
         remove: (index) => {
-          readContextValue13(
+          readContextValue14(
             context(),
             "settingsRaw",
             getSettingsRaw()
@@ -43043,7 +43105,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         edit: (index, json) => {
           try {
             let value = JSON.parse(json);
-            value && typeof value == "object" && !Array.isArray(value) && (readContextValue13(
+            value && typeof value == "object" && !Array.isArray(value) && (readContextValue14(
               context(),
               "settingsRaw",
               getSettingsRaw()
@@ -43053,7 +43115,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           }
         },
         reorder: (indexes) => {
-          let target = readContextValue13(
+          let target = readContextValue14(
             context(),
             "settingsRaw",
             getSettingsRaw()
@@ -43062,7 +43124,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
             (index) => target.evolutionQueue[index]
           );
         },
-        persist: () => readContextValue13(
+        persist: () => readContextValue14(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -43070,7 +43132,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       render: () => browserAdapter.updateEvolutionSettingsContent(),
       effects: {
-        resetCheckbox: () => readContextValue13(
+        resetCheckbox: () => readContextValue14(
           context(),
           "resetCheckbox",
           resetCheckbox
@@ -43621,14 +43683,14 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/production-settings-control.ts
-  function readRecord14(value) {
+  function readRecord15(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue14(context, property, fallback) {
-    let value = readRecord14(context)?.[property];
+  function readContextValue15(context, property, fallback) {
+    let value = readRecord15(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function getTestContextReader14(testSurface) {
+  function getTestContextReader15(testSurface) {
     return () => {
     };
   }
@@ -43650,14 +43712,14 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     setSettingsRaw,
     testSurface
   }) {
-    let getTestContext = getTestContextReader14(testSurface), context = () => getTestContext("productionSettings"), evolveAdapter = createProductionSettingsEvolveAdapter({
-      getResources: () => readContextValue14(context(), "resources", getResources()),
-      getCraftablesList: () => readContextValue14(context(), "craftablesList", getCraftablesList()),
-      getSmelterManager: () => readContextValue14(context(), "SmelterManager", getSmelterManager()),
-      getFactoryManager: () => readContextValue14(context(), "FactoryManager", getFactoryManager()),
-      getDroidManager: () => readContextValue14(context(), "DroidManager", getDroidManager()),
-      getReplicatorManager: () => readContextValue14(context(), "ReplicatorManager", getReplicatorManager()),
-      getSettingsRaw: () => readContextValue14(context(), "settingsRaw", getSettingsRaw()),
+    let getTestContext = getTestContextReader15(testSurface), context = () => getTestContext("productionSettings"), evolveAdapter = createProductionSettingsEvolveAdapter({
+      getResources: () => readContextValue15(context(), "resources", getResources()),
+      getCraftablesList: () => readContextValue15(context(), "craftablesList", getCraftablesList()),
+      getSmelterManager: () => readContextValue15(context(), "SmelterManager", getSmelterManager()),
+      getFactoryManager: () => readContextValue15(context(), "FactoryManager", getFactoryManager()),
+      getDroidManager: () => readContextValue15(context(), "DroidManager", getDroidManager()),
+      getReplicatorManager: () => readContextValue15(context(), "ReplicatorManager", getReplicatorManager()),
+      getSettingsRaw: () => readContextValue15(context(), "settingsRaw", getSettingsRaw()),
       consumptionBalanceTarget: 120
     }), intentHandler, browserAdapter = createProductionSettingsBrowserAdapter({
       getDocument,
@@ -43670,12 +43732,12 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
     return intentHandler = createProductionSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => readContextValue14(
+        resetToDefaults: () => readContextValue15(
           context(),
           "resetProductionSettings",
           resetProductionSettings
         )(!0),
-        persist: () => readContextValue14(
+        persist: () => readContextValue15(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -43684,7 +43746,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       renderSettingsContent: () => browserAdapter.updateProductionSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue14(context(), "resetCheckbox", resetCheckbox)(
+        resetCheckboxes: () => readContextValue15(context(), "resetCheckbox", resetCheckbox)(
           "autoQuarry",
           "autoMine",
           "autoExtractor",
@@ -43695,7 +43757,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           "autoMiningDroid",
           "autoReplicator"
         ),
-        removeCraftToggles: () => readContextValue14(context(), "removeCraftToggles", removeCraftToggles)()
+        removeCraftToggles: () => readContextValue15(context(), "removeCraftToggles", removeCraftToggles)()
       }
     }), browserAdapter;
   }
@@ -44449,14 +44511,14 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
 
   // src/bootstrap/settings/trait-settings-control.ts
-  function readRecord15(value) {
+  function readRecord16(value) {
     return typeof value == "object" && value !== null ? value : void 0;
   }
-  function readContextValue15(context, property, fallback) {
-    let value = readRecord15(context)?.[property];
+  function readContextValue16(context, property, fallback) {
+    let value = readRecord16(context)?.[property];
     return value === void 0 ? fallback : value;
   }
-  function getTestContextReader15(testSurface) {
+  function getTestContextReader16(testSurface) {
     return () => {
     };
   }
@@ -44490,15 +44552,15 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     resetCheckbox,
     testSurface
   }) {
-    let getTestContext = getTestContextReader15(testSurface), context = () => getTestContext("traitSettings"), evolveAdapter = createTraitSettingsEvolveAdapter({
-      getSettingsRaw: () => readContextValue15(context(), "settingsRaw", getSettingsRaw()),
-      getState: () => readContextValue15(context(), "state", getState()),
-      getGame: () => readContextValue15(context(), "game", getGame()),
-      getRaces: () => readContextValue15(context(), "races", getRaces()),
-      getResources: () => readContextValue15(context(), "resources", getResources()),
-      getPoly: () => readContextValue15(context(), "poly", getPoly()),
-      getMinorTraitManager: () => readContextValue15(context(), "MinorTraitManager", getMinorTraitManager()),
-      getMutableTraitManager: () => readContextValue15(
+    let getTestContext = getTestContextReader16(testSurface), context = () => getTestContext("traitSettings"), evolveAdapter = createTraitSettingsEvolveAdapter({
+      getSettingsRaw: () => readContextValue16(context(), "settingsRaw", getSettingsRaw()),
+      getState: () => readContextValue16(context(), "state", getState()),
+      getGame: () => readContextValue16(context(), "game", getGame()),
+      getRaces: () => readContextValue16(context(), "races", getRaces()),
+      getResources: () => readContextValue16(context(), "resources", getResources()),
+      getPoly: () => readContextValue16(context(), "poly", getPoly()),
+      getMinorTraitManager: () => readContextValue16(context(), "MinorTraitManager", getMinorTraitManager()),
+      getMutableTraitManager: () => readContextValue16(
         context(),
         "MutableTraitManager",
         getMutableTraitManager()
@@ -44525,17 +44587,17 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     });
     return intentHandler = createTraitSettingsIntentHandler({
       writer: {
-        resetMinorTraits: () => readContextValue15(
+        resetMinorTraits: () => readContextValue16(
           context(),
           "resetMinorTraitSettings",
           resetMinorTraitSettings
         )(!0),
-        resetMutableTraits: () => readContextValue15(
+        resetMutableTraits: () => readContextValue16(
           context(),
           "resetMutableTraitSettings",
           resetMutableTraitSettings
         )(!0),
-        persist: () => readContextValue15(
+        persist: () => readContextValue16(
           context(),
           "updateSettingsFromState",
           persistSettings
@@ -44547,7 +44609,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       },
       renderSettingsContent: () => browserAdapter.updateTraitSettingsContent(),
       effects: {
-        resetCheckboxes: () => readContextValue15(context(), "resetCheckbox", resetCheckbox)(
+        resetCheckboxes: () => readContextValue16(context(), "resetCheckbox", resetCheckbox)(
           "autoMinorTrait",
           "autoMutateTraits",
           "autoGenetics"
@@ -50527,7 +50589,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       },
       readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
       log: (label, outcome) => runtimeEnvironment.log(label, outcome)
-    }), { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({
+    }), { updateScriptData, finalizeScriptData } = createScriptDataLifecycleControl({
       getSettings: () => settings,
       getState: () => state,
       getGame: () => game,
@@ -50541,10 +50603,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSupplyManager: () => SupplyManager,
       getNaniteManager: () => NaniteManager,
       getRitualManager: () => RitualManager,
-      getUpdateCraftCost: () => getTestContext("scriptData")?.actions?.updateCraftCost ?? updateCraftCost,
-      getResourcesPerClick: () => getTestContext("scriptData")?.actions?.getResourcesPerClick ?? getResourcesPerClick,
-      getTicksPerSecond: () => getTestContext("scriptData")?.actions?.ticksPerSecond ?? ticksPerSecond,
-      getHaveTech: () => getTestContext("scriptData")?.actions?.haveTech ?? haveTech
+      getUpdateCraftCost: () => updateCraftCost,
+      getResourcesPerClick: () => getResourcesPerClick,
+      getTicksPerSecond: () => ticksPerSecond,
+      getHaveTech: () => haveTech,
+      testSurface
     }), { checkAffordableCustom, readQueuedTarget } = createQueueQueries({
       getResources: () => resources,
       getPoly: () => poly,
