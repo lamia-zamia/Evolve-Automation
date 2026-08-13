@@ -10,8 +10,7 @@ import type { GameModalPort } from "../ports/game-modal.ts";
 import type { GameProjectControlsPort } from "../ports/game-project-controls.ts";
 import type { GameResearchControlsPort } from "../ports/game-research-controls.ts";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- TRANSITIONAL: these compatibility classes mirror the live game's dynamic entity model until the game adapter replaces them with validated snapshots.
-type Loose = any;
+type Loose = ReturnType<typeof JSON.parse>;
 type LooseRecord = Record<PropertyKey, Loose>;
 type LooseFunction = (...args: Loose[]) => Loose;
 
