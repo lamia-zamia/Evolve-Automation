@@ -152,8 +152,7 @@ import {
   readAuthorityPolicyView,
   readAuthorityQuantity,
 } from "./civic/authority.ts";
-import { isCostAffordable } from "../../domain/cost-affordability.ts";
-import { readCostAffordabilityInput, readQueueTarget } from "./queue-items.ts";
+import { createQueueQueries } from "./queue-queries.ts";
 import { calculateTargetTiming } from "../../domain/target-timing.ts";
 import { readTargetTimingInput } from "./target-timing.ts";
 import { findRequiredResourceWeight as findRequiredResourceWeightPolicy } from "../../domain/economy/resources/resource-weighting.ts";
@@ -4678,24 +4677,13 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  function checkAffordableCustom(cost, max = false) {
-    const readResult = readCostAffordabilityInput(
-      cost,
-      resources,
-      max ? "maximum" : "current",
-    );
-    return readResult.status === "ready"
-      ? isCostAffordable(readResult.input)
-      : false;
-  }
-  const readQueuedTarget = (item) =>
-    readQueueTarget(item, {
-      resources,
-      poly,
-      mechManager: MechManager,
-      buildingIds,
-      arpaIds,
-    });
+  let { checkAffordableCustom, readQueuedTarget } = createQueueQueries({
+    getResources: () => resources,
+    getPoly: () => poly,
+    getMechManager: () => MechManager,
+    getBuildingIds: () => buildingIds,
+    getArpaIds: () => arpaIds,
+  });
 
   const gamePriorityTargets = createGamePriorityTargetsEvolveAdapter({
     getGame: () => game,

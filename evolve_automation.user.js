@@ -19495,6 +19495,34 @@
     }
   }
 
+  // src/adapters/evolve/queue-queries.ts
+  function createQueueQueries({
+    getResources,
+    getPoly,
+    getMechManager,
+    getBuildingIds,
+    getArpaIds
+  }) {
+    function checkAffordableCustom(cost, max = false) {
+      const readResult = readCostAffordabilityInput(
+        cost,
+        getResources(),
+        max ? "maximum" : "current"
+      );
+      return readResult.status === "ready" ? isCostAffordable(readResult.input) : false;
+    }
+    function readQueuedTarget(item) {
+      return readQueueTarget(item, {
+        resources: getResources(),
+        poly: getPoly(),
+        mechManager: getMechManager(),
+        buildingIds: getBuildingIds(),
+        arpaIds: getArpaIds()
+      });
+    }
+    return { checkAffordableCustom, readQueuedTarget };
+  }
+
   // src/domain/target-timing.ts
   function calculateTargetTiming(input) {
     let resourceId3 = "";
@@ -60530,20 +60558,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         retirementChallengeAssistActive = context.retirementChallengeAssistActive;
       }
     });
-    function checkAffordableCustom(cost, max = false) {
-      const readResult = readCostAffordabilityInput(
-        cost,
-        resources,
-        max ? "maximum" : "current"
-      );
-      return readResult.status === "ready" ? isCostAffordable(readResult.input) : false;
-    }
-    const readQueuedTarget = (item) => readQueueTarget(item, {
-      resources,
-      poly,
-      mechManager: MechManager,
-      buildingIds,
-      arpaIds
+    let { checkAffordableCustom, readQueuedTarget } = createQueueQueries({
+      getResources: () => resources,
+      getPoly: () => poly,
+      getMechManager: () => MechManager,
+      getBuildingIds: () => buildingIds,
+      getArpaIds: () => arpaIds
     });
     const gamePriorityTargets = createGamePriorityTargetsEvolveAdapter({
       getGame: () => game,
