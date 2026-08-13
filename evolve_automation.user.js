@@ -31211,398 +31211,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
-  // src/adapters/evolve/economy/market/market.ts
-  function readResourceId2(resource2, path) {
-    let id = resource2.id;
-    if (typeof id != "string" || id.length === 0)
-      throw new TypeError(`${path}.id must be a non-empty string`);
-    return id;
-  }
-  function emptySell(candidate, ignoreSellRatio) {
-    return Object.freeze({
-      index: candidate.index,
-      resourceId: candidate.resourceId,
-      eligible: candidate.eligible,
-      autoSellEnabled: !1,
-      ignoreSellRatio,
-      storageRatio: 0,
-      autoSellRatio: 0,
-      moneyMaximum: 0,
-      moneyCurrent: 0,
-      unitPrice: 1,
-      currentQuantity: 0,
-      maxQuantity: 0,
-      income: 0,
-      ticksPerSecond: 1,
-      maximumMultiplier: 1
-    });
-  }
-  function emptyBuy(candidate) {
-    return Object.freeze({
-      index: candidate.index,
-      resourceId: candidate.resourceId,
-      eligible: candidate.eligible,
-      autoBuyEnabled: !1,
-      storageRatio: 0,
-      autoBuyRatio: 0,
-      moneyDemanded: !1,
-      moneyCurrent: 0,
-      minimumMoneyAllowed: 0,
-      unitPrice: 1,
-      currentQuantity: 0,
-      maxQuantity: 0,
-      maximumMultiplier: 1
-    });
-  }
-  function createMarketReader(dependencies) {
-    let manager = null, session = null, maximumMultiplier = 1;
-    return Object.freeze({
-      readGate() {
-        if (manager = requireRecord(dependencies.getManager(), "MarketManager"), session = null, !callBoolean(manager, "isUnlocked", "MarketManager"))
-          return Object.freeze({ unlocked: !1, noTrade: !1 });
-        let game = requireRecord(dependencies.getGame(), "game"), global = requireRecord(game.global, "game.global"), race2 = requireRecord(global.race, "game.global.race");
-        return Object.freeze({
-          unlocked: !0,
-          noTrade: !!race2.no_trade
-        });
-      },
-      readSession() {
-        if (manager === null)
-          throw new Error("market gate must be read before the trading session");
-        let resources = requireRecord(dependencies.getResources(), "resources"), money = requireRecord(resources.Money, "resources.Money"), settings = requireRecord(dependencies.getSettings(), "settings"), moneyMaximum = requireNumber(
-          money.maxQuantity,
-          "resources.Money.maxQuantity"
-        ), minimumPercentage = requireNumber(
-          settings.minimumMoneyPercentage,
-          "settings.minimumMoneyPercentage"
-        ), minimum = requireNumber(
-          settings.minimumMoney,
-          "settings.minimumMoney"
-        ), minimumMoneyAllowed = Math.max(
-          moneyMaximum * minimumPercentage / 100,
-          minimum
-        ), originalMultiplier = requireNumber(
-          manager.multiplier,
-          "MarketManager.multiplier"
-        );
-        if (maximumMultiplier = callNumber(
-          manager,
-          "getMaxMultiplier",
-          "MarketManager"
-        ), !Number.isSafeInteger(maximumMultiplier) || maximumMultiplier < 1)
-          throw new TypeError(
-            "MarketManager.getMaxMultiplier() must be a positive safe integer"
-          );
-        let list = manager.priorityList;
-        if (!Array.isArray(list))
-          throw new TypeError("MarketManager.priorityList must be an array");
-        return session = {
-          manager,
-          money,
-          priorityList: list,
-          lastCandidate: null
-        }, Object.freeze({
-          originalMultiplier,
-          maximumMultiplier,
-          minimumMoneyAllowed
-        });
-      },
-      readSell(index, ignoreSellRatio) {
-        if (session === null)
-          throw new Error("market session must be read before sell candidates");
-        if (!Number.isSafeInteger(index) || index < 0)
-          throw new TypeError("market candidate index must be non-negative");
-        if (index >= session.priorityList.length)
-          return session.lastCandidate = null, null;
-        let path = `MarketManager.priorityList[${index}]`, resource2 = requireRecord(session.priorityList[index], path), resourceId3 = readResourceId2(resource2, path), eligible = !!requireRecord(resource2.is, `${path}.is`).tradable;
-        eligible && (eligible = callBoolean(resource2, "isUnlocked", path)), eligible && (eligible = callBoolean(
-          session.manager,
-          "isBuySellUnlocked",
-          "MarketManager",
-          resource2
-        ));
-        let candidate = { index, resourceId: resourceId3, resource: resource2, eligible };
-        if (session.lastCandidate = candidate, !eligible || !resource2.autoSellEnabled)
-          return emptySell(candidate, ignoreSellRatio);
-        let storageRatio = requireNumber(
-          resource2.storageRatio,
-          `${path}.storageRatio`
-        ), autoSellRatio = requireNumber(
-          resource2.autoSellRatio,
-          `${path}.autoSellRatio`
-        );
-        if (!ignoreSellRatio && storageRatio < autoSellRatio)
-          return Object.freeze({
-            ...emptySell(candidate, ignoreSellRatio),
-            autoSellEnabled: !0,
-            storageRatio,
-            autoSellRatio
-          });
-        let moneyMaximum = requireNumber(
-          session.money.maxQuantity,
-          "resources.Money.maxQuantity"
-        ), moneyCurrent = requireNumber(
-          session.money.currentQuantity,
-          "resources.Money.currentQuantity"
-        ), currentQuantity = requireNumber(
-          resource2.currentQuantity,
-          `${path}.currentQuantity`
-        ), maxQuantity = requireNumber(
-          resource2.maxQuantity,
-          `${path}.maxQuantity`
-        ), usesIncome = storageRatio <= autoSellRatio, ticks = usesIncome ? requireNumber(dependencies.ticksPerSecond(), "ticksPerSecond()") : 1;
-        if (ticks <= 0)
-          throw new TypeError("ticksPerSecond() must be positive");
-        return Object.freeze({
-          index,
-          resourceId: resourceId3,
-          eligible: !0,
-          autoSellEnabled: !0,
-          ignoreSellRatio,
-          storageRatio,
-          autoSellRatio,
-          moneyMaximum,
-          moneyCurrent,
-          unitPrice: callNumber(
-            session.manager,
-            "getUnitSellPrice",
-            "MarketManager",
-            resource2
-          ),
-          currentQuantity,
-          maxQuantity,
-          income: usesIncome ? requireNumber(resource2.income, `${path}.income`) : 0,
-          ticksPerSecond: ticks,
-          maximumMultiplier
-        });
-      },
-      readBuy(index, minimumMoneyAllowed) {
-        if (session === null || session.lastCandidate === null || session.lastCandidate.index !== index)
-          throw new Error("market buy must follow its sell candidate");
-        let candidate = session.lastCandidate, resource2 = candidate.resource;
-        if (!candidate.eligible || resource2.autoBuyEnabled !== !0)
-          return emptyBuy(candidate);
-        let path = `MarketManager.priorityList[${index}]`, storageRatio = requireNumber(
-          resource2.storageRatio,
-          `${path}.storageRatio`
-        ), autoBuyRatio = requireNumber(
-          resource2.autoBuyRatio,
-          `${path}.autoBuyRatio`
-        );
-        return storageRatio >= autoBuyRatio ? Object.freeze({
-          ...emptyBuy(candidate),
-          autoBuyEnabled: !0,
-          storageRatio,
-          autoBuyRatio
-        }) : callBoolean(
-          session.money,
-          "isDemanded",
-          "resources.Money"
-        ) ? Object.freeze({
-          ...emptyBuy(candidate),
-          autoBuyEnabled: !0,
-          storageRatio,
-          autoBuyRatio,
-          moneyDemanded: !0
-        }) : Object.freeze({
-          index,
-          resourceId: candidate.resourceId,
-          eligible: !0,
-          autoBuyEnabled: !0,
-          storageRatio,
-          autoBuyRatio,
-          moneyDemanded: !1,
-          moneyCurrent: requireNumber(
-            session.money.currentQuantity,
-            "resources.Money.currentQuantity"
-          ),
-          minimumMoneyAllowed: requireNumber(
-            minimumMoneyAllowed,
-            "minimumMoneyAllowed"
-          ),
-          unitPrice: callNumber(
-            session.manager,
-            "getUnitBuyPrice",
-            "MarketManager",
-            resource2
-          ),
-          currentQuantity: requireNumber(
-            resource2.currentQuantity,
-            `${path}.currentQuantity`
-          ),
-          maxQuantity: requireNumber(
-            resource2.maxQuantity,
-            `${path}.maxQuantity`
-          ),
-          maximumMultiplier
-        });
-      }
-    });
-  }
-  function readPriorityList6(manager) {
-    let list = manager.priorityList;
-    if (!Array.isArray(list))
-      throw new TypeError("MarketManager.priorityList must be an array");
-    return list;
-  }
-  function createMarketCommandExecutor(dependencies) {
-    return Object.freeze({
-      execute(decision2) {
-        if (decision2.kind === "restore-multiplier") {
-          if (!Number.isFinite(decision2.multiplier))
-            return rejected(
-              "invalid-market-multiplier",
-              "market multiplier must be finite"
-            );
-          let manager2 = requireRecord(
-            dependencies.getManager(),
-            "MarketManager"
-          ), setMultiplier2 = requireFunction(
-            manager2.setMultiplier,
-            "MarketManager.setMultiplier"
-          );
-          return Reflect.apply(setMultiplier2, manager2, [decision2.multiplier]), SUCCEEDED;
-        }
-        if (!Number.isSafeInteger(decision2.repetitions) || decision2.repetitions < 1 || !Number.isSafeInteger(decision2.multiplier))
-          return rejected(
-            "invalid-market-trade",
-            "market trade multiplier and repetitions must be safe integers"
-          );
-        let manager = requireRecord(dependencies.getManager(), "MarketManager"), setMultiplier = requireFunction(
-          manager.setMultiplier,
-          "MarketManager.setMultiplier"
-        ), raw = readPriorityList6(manager)[decision2.index], resource2 = typeof raw == "object" && raw !== null ? raw : null, actualId = resource2 !== null && typeof resource2.id == "string" ? resource2.id : null;
-        if (resource2 === null || actualId !== decision2.resourceId)
-          return stale("stale-market-resource", "market priority list changed", {
-            index: decision2.index,
-            expectedResourceId: decision2.resourceId,
-            actualResourceId: actualId
-          });
-        let resources = requireRecord(dependencies.getResources(), "resources"), money = requireRecord(resources.Money, "resources.Money"), actualMoney = requireNumber(
-          money.currentQuantity,
-          "resources.Money.currentQuantity"
-        ), actualResource = requireNumber(
-          resource2.currentQuantity,
-          `resources.${decision2.resourceId}.currentQuantity`
-        ), priceMethod = decision2.side === "sell" ? "getUnitSellPrice" : "getUnitBuyPrice", actualPrice = callNumber(
-          manager,
-          priceMethod,
-          "MarketManager",
-          resource2
-        );
-        if (actualMoney !== decision2.expectedMoneyCurrent || actualResource !== decision2.expectedResourceCurrent || actualPrice !== decision2.expectedUnitPrice)
-          return stale("stale-market-state", "market inputs changed", {
-            resourceId: decision2.resourceId
-          });
-        let trade = requireFunction(
-          manager[decision2.side],
-          `MarketManager.${decision2.side}`
-        );
-        Reflect.apply(setMultiplier, manager, [decision2.multiplier]);
-        for (let index = 0; index < decision2.repetitions; index++)
-          Reflect.apply(trade, manager, [resource2]);
-        return SUCCEEDED;
-      }
-    });
-  }
-
-  // src/domain/economy/market/market.ts
-  function batchTrade(side, input, maximumUnits) {
-    return maximumUnits <= input.maximumMultiplier ? Object.freeze({
-      kind: "trade",
-      side,
-      index: input.index,
-      resourceId: input.resourceId,
-      expectedMoneyCurrent: input.moneyCurrent,
-      expectedResourceCurrent: input.currentQuantity,
-      expectedUnitPrice: input.unitPrice,
-      multiplier: maximumUnits,
-      repetitions: 1
-    }) : Object.freeze({
-      kind: "trade",
-      side,
-      index: input.index,
-      resourceId: input.resourceId,
-      expectedMoneyCurrent: input.moneyCurrent,
-      expectedResourceCurrent: input.currentQuantity,
-      expectedUnitPrice: input.unitPrice,
-      multiplier: input.maximumMultiplier,
-      repetitions: Math.min(
-        5,
-        Math.floor(maximumUnits / input.maximumMultiplier)
-      )
-    });
-  }
-  function planMarketSell(input) {
-    if (!input.eligible || !input.autoSellEnabled || !input.ignoreSellRatio && input.storageRatio < input.autoSellRatio)
-      return null;
-    let maximumUnits = Math.floor(
-      (input.moneyMaximum - input.moneyCurrent) / input.unitPrice
-    );
-    return maximumUnits = Math.min(
-      maximumUnits,
-      input.storageRatio > input.autoSellRatio ? Math.floor(
-        input.currentQuantity - input.autoSellRatio * input.maxQuantity
-      ) : Math.floor(input.income * 2 / input.ticksPerSecond)
-    ), batchTrade("sell", input, maximumUnits);
-  }
-  function planMarketBuy(input) {
-    if (!input.eligible || !input.autoBuyEnabled || input.storageRatio >= input.autoBuyRatio || input.moneyDemanded)
-      return null;
-    let storableAmount = Math.floor(
-      (input.autoBuyRatio - input.storageRatio) * input.maxQuantity
-    ), affordableAmount = Math.floor(
-      (input.moneyCurrent - input.minimumMoneyAllowed) / input.unitPrice
-    ), maximumUnits = Math.min(storableAmount, affordableAmount);
-    return maximumUnits > 0 ? batchTrade("buy", input, maximumUnits) : null;
-  }
-
-  // src/application/market.ts
-  var SUCCEEDED14 = Object.freeze({
-    status: "succeeded"
-  });
-  function runMarketAutomation(dependencies, bulkSell = !1, ignoreSellRatio = !1) {
-    let gate = dependencies.reader.readGate();
-    if (!gate.unlocked || (dependencies.tradeRoutes.adjust(), gate.noTrade))
-      return SUCCEEDED14;
-    let session = dependencies.reader.readSession(), outcome = SUCCEEDED14;
-    for (let index = 0; ; index++) {
-      let sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
-      if (sellInput === null)
-        break;
-      let sell = planMarketSell(sellInput);
-      if (sell !== null && (outcome = dependencies.executor.execute(sell), outcome.status !== "succeeded"))
-        break;
-      if (bulkSell === !0 || !sellInput.eligible)
-        continue;
-      let buy = planMarketBuy(
-        dependencies.reader.readBuy(index, session.minimumMoneyAllowed)
-      );
-      if (buy !== null && (outcome = dependencies.executor.execute(buy), outcome.status !== "succeeded"))
-        break;
-    }
-    let restore = dependencies.executor.execute({
-      kind: "restore-multiplier",
-      multiplier: session.originalMultiplier
-    });
-    return outcome.status === "succeeded" ? restore : outcome;
-  }
-
-  // src/bootstrap/market-control.ts
-  function createMarketControl(dependencies) {
-    return Object.freeze({
-      autoMarket: (bulkSell, ignoreSellRatio) => runMarketAutomation(
-        {
-          reader: createMarketReader(dependencies.reader),
-          executor: createMarketCommandExecutor(dependencies.executor),
-          tradeRoutes: dependencies.tradeRoutes
-        },
-        bulkSell,
-        ignoreSellRatio
-      )
-    });
-  }
-
   // src/adapters/browser/power-warnings.ts
   function createPowerWarningSource(getDocument, getWindow) {
     return Object.freeze({
@@ -33575,7 +33183,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   );
 
   // src/application/power.ts
-  var SUCCEEDED15 = Object.freeze({
+  var SUCCEEDED14 = Object.freeze({
     status: "succeeded"
   });
   function createPowerAutomation(dependencies) {
@@ -33590,7 +33198,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           () => planPowerCycle(cycle, state)
         ), decision2 = plan.decision;
         if (decision2 === null)
-          return SUCCEEDED15;
+          return SUCCEEDED14;
         let cycleOutcome = measure(
           "autoPower.executeCycle",
           () => dependencies.executor.execute(decision2)
@@ -33607,7 +33215,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           )
         );
         if (warning === null)
-          return SUCCEEDED15;
+          return SUCCEEDED14;
         let warningOutcome = measure(
           "autoPower.executeWarning",
           () => dependencies.executor.execute(warning)
@@ -33616,7 +33224,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           state,
           warning.binding,
           dependencies.reader.readStateOn(warning.binding)
-        ), SUCCEEDED15);
+        ), SUCCEEDED14);
       },
       readState() {
         return state;
@@ -34413,7 +34021,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED16 = Object.freeze({
+  var SUCCEEDED15 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -34422,7 +34030,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       run() {
         let rawPlan = planStorageAllocation(dependencies.reader.read());
         if (rawPlan === null || rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild))
-          return SUCCEEDED16;
+          return SUCCEEDED15;
         let finalized = finalizeStorageAllocation(rawPlan, state), outcome = dependencies.executor.execute(finalized.decision);
         return outcome.status === "succeeded" && (state = finalized.nextState), outcome;
       },
@@ -34443,6 +34051,398 @@ If script is allowed to reassign non-empty storage it might waste time producing
       expansion: { expand: dependencies.expand }
     });
     return Object.freeze({ autoStorage: () => automation.run() });
+  }
+
+  // src/adapters/evolve/economy/market/market.ts
+  function readResourceId2(resource2, path) {
+    let id = resource2.id;
+    if (typeof id != "string" || id.length === 0)
+      throw new TypeError(`${path}.id must be a non-empty string`);
+    return id;
+  }
+  function emptySell(candidate, ignoreSellRatio) {
+    return Object.freeze({
+      index: candidate.index,
+      resourceId: candidate.resourceId,
+      eligible: candidate.eligible,
+      autoSellEnabled: !1,
+      ignoreSellRatio,
+      storageRatio: 0,
+      autoSellRatio: 0,
+      moneyMaximum: 0,
+      moneyCurrent: 0,
+      unitPrice: 1,
+      currentQuantity: 0,
+      maxQuantity: 0,
+      income: 0,
+      ticksPerSecond: 1,
+      maximumMultiplier: 1
+    });
+  }
+  function emptyBuy(candidate) {
+    return Object.freeze({
+      index: candidate.index,
+      resourceId: candidate.resourceId,
+      eligible: candidate.eligible,
+      autoBuyEnabled: !1,
+      storageRatio: 0,
+      autoBuyRatio: 0,
+      moneyDemanded: !1,
+      moneyCurrent: 0,
+      minimumMoneyAllowed: 0,
+      unitPrice: 1,
+      currentQuantity: 0,
+      maxQuantity: 0,
+      maximumMultiplier: 1
+    });
+  }
+  function createMarketReader(dependencies) {
+    let manager = null, session = null, maximumMultiplier = 1;
+    return Object.freeze({
+      readGate() {
+        if (manager = requireRecord(dependencies.getManager(), "MarketManager"), session = null, !callBoolean(manager, "isUnlocked", "MarketManager"))
+          return Object.freeze({ unlocked: !1, noTrade: !1 });
+        let game = requireRecord(dependencies.getGame(), "game"), global = requireRecord(game.global, "game.global"), race2 = requireRecord(global.race, "game.global.race");
+        return Object.freeze({
+          unlocked: !0,
+          noTrade: !!race2.no_trade
+        });
+      },
+      readSession() {
+        if (manager === null)
+          throw new Error("market gate must be read before the trading session");
+        let resources = requireRecord(dependencies.getResources(), "resources"), money = requireRecord(resources.Money, "resources.Money"), settings = requireRecord(dependencies.getSettings(), "settings"), moneyMaximum = requireNumber(
+          money.maxQuantity,
+          "resources.Money.maxQuantity"
+        ), minimumPercentage = requireNumber(
+          settings.minimumMoneyPercentage,
+          "settings.minimumMoneyPercentage"
+        ), minimum = requireNumber(
+          settings.minimumMoney,
+          "settings.minimumMoney"
+        ), minimumMoneyAllowed = Math.max(
+          moneyMaximum * minimumPercentage / 100,
+          minimum
+        ), originalMultiplier = requireNumber(
+          manager.multiplier,
+          "MarketManager.multiplier"
+        );
+        if (maximumMultiplier = callNumber(
+          manager,
+          "getMaxMultiplier",
+          "MarketManager"
+        ), !Number.isSafeInteger(maximumMultiplier) || maximumMultiplier < 1)
+          throw new TypeError(
+            "MarketManager.getMaxMultiplier() must be a positive safe integer"
+          );
+        let list = manager.priorityList;
+        if (!Array.isArray(list))
+          throw new TypeError("MarketManager.priorityList must be an array");
+        return session = {
+          manager,
+          money,
+          priorityList: list,
+          lastCandidate: null
+        }, Object.freeze({
+          originalMultiplier,
+          maximumMultiplier,
+          minimumMoneyAllowed
+        });
+      },
+      readSell(index, ignoreSellRatio) {
+        if (session === null)
+          throw new Error("market session must be read before sell candidates");
+        if (!Number.isSafeInteger(index) || index < 0)
+          throw new TypeError("market candidate index must be non-negative");
+        if (index >= session.priorityList.length)
+          return session.lastCandidate = null, null;
+        let path = `MarketManager.priorityList[${index}]`, resource2 = requireRecord(session.priorityList[index], path), resourceId3 = readResourceId2(resource2, path), eligible = !!requireRecord(resource2.is, `${path}.is`).tradable;
+        eligible && (eligible = callBoolean(resource2, "isUnlocked", path)), eligible && (eligible = callBoolean(
+          session.manager,
+          "isBuySellUnlocked",
+          "MarketManager",
+          resource2
+        ));
+        let candidate = { index, resourceId: resourceId3, resource: resource2, eligible };
+        if (session.lastCandidate = candidate, !eligible || !resource2.autoSellEnabled)
+          return emptySell(candidate, ignoreSellRatio);
+        let storageRatio = requireNumber(
+          resource2.storageRatio,
+          `${path}.storageRatio`
+        ), autoSellRatio = requireNumber(
+          resource2.autoSellRatio,
+          `${path}.autoSellRatio`
+        );
+        if (!ignoreSellRatio && storageRatio < autoSellRatio)
+          return Object.freeze({
+            ...emptySell(candidate, ignoreSellRatio),
+            autoSellEnabled: !0,
+            storageRatio,
+            autoSellRatio
+          });
+        let moneyMaximum = requireNumber(
+          session.money.maxQuantity,
+          "resources.Money.maxQuantity"
+        ), moneyCurrent = requireNumber(
+          session.money.currentQuantity,
+          "resources.Money.currentQuantity"
+        ), currentQuantity = requireNumber(
+          resource2.currentQuantity,
+          `${path}.currentQuantity`
+        ), maxQuantity = requireNumber(
+          resource2.maxQuantity,
+          `${path}.maxQuantity`
+        ), usesIncome = storageRatio <= autoSellRatio, ticks = usesIncome ? requireNumber(dependencies.ticksPerSecond(), "ticksPerSecond()") : 1;
+        if (ticks <= 0)
+          throw new TypeError("ticksPerSecond() must be positive");
+        return Object.freeze({
+          index,
+          resourceId: resourceId3,
+          eligible: !0,
+          autoSellEnabled: !0,
+          ignoreSellRatio,
+          storageRatio,
+          autoSellRatio,
+          moneyMaximum,
+          moneyCurrent,
+          unitPrice: callNumber(
+            session.manager,
+            "getUnitSellPrice",
+            "MarketManager",
+            resource2
+          ),
+          currentQuantity,
+          maxQuantity,
+          income: usesIncome ? requireNumber(resource2.income, `${path}.income`) : 0,
+          ticksPerSecond: ticks,
+          maximumMultiplier
+        });
+      },
+      readBuy(index, minimumMoneyAllowed) {
+        if (session === null || session.lastCandidate === null || session.lastCandidate.index !== index)
+          throw new Error("market buy must follow its sell candidate");
+        let candidate = session.lastCandidate, resource2 = candidate.resource;
+        if (!candidate.eligible || resource2.autoBuyEnabled !== !0)
+          return emptyBuy(candidate);
+        let path = `MarketManager.priorityList[${index}]`, storageRatio = requireNumber(
+          resource2.storageRatio,
+          `${path}.storageRatio`
+        ), autoBuyRatio = requireNumber(
+          resource2.autoBuyRatio,
+          `${path}.autoBuyRatio`
+        );
+        return storageRatio >= autoBuyRatio ? Object.freeze({
+          ...emptyBuy(candidate),
+          autoBuyEnabled: !0,
+          storageRatio,
+          autoBuyRatio
+        }) : callBoolean(
+          session.money,
+          "isDemanded",
+          "resources.Money"
+        ) ? Object.freeze({
+          ...emptyBuy(candidate),
+          autoBuyEnabled: !0,
+          storageRatio,
+          autoBuyRatio,
+          moneyDemanded: !0
+        }) : Object.freeze({
+          index,
+          resourceId: candidate.resourceId,
+          eligible: !0,
+          autoBuyEnabled: !0,
+          storageRatio,
+          autoBuyRatio,
+          moneyDemanded: !1,
+          moneyCurrent: requireNumber(
+            session.money.currentQuantity,
+            "resources.Money.currentQuantity"
+          ),
+          minimumMoneyAllowed: requireNumber(
+            minimumMoneyAllowed,
+            "minimumMoneyAllowed"
+          ),
+          unitPrice: callNumber(
+            session.manager,
+            "getUnitBuyPrice",
+            "MarketManager",
+            resource2
+          ),
+          currentQuantity: requireNumber(
+            resource2.currentQuantity,
+            `${path}.currentQuantity`
+          ),
+          maxQuantity: requireNumber(
+            resource2.maxQuantity,
+            `${path}.maxQuantity`
+          ),
+          maximumMultiplier
+        });
+      }
+    });
+  }
+  function readPriorityList6(manager) {
+    let list = manager.priorityList;
+    if (!Array.isArray(list))
+      throw new TypeError("MarketManager.priorityList must be an array");
+    return list;
+  }
+  function createMarketCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision2) {
+        if (decision2.kind === "restore-multiplier") {
+          if (!Number.isFinite(decision2.multiplier))
+            return rejected(
+              "invalid-market-multiplier",
+              "market multiplier must be finite"
+            );
+          let manager2 = requireRecord(
+            dependencies.getManager(),
+            "MarketManager"
+          ), setMultiplier2 = requireFunction(
+            manager2.setMultiplier,
+            "MarketManager.setMultiplier"
+          );
+          return Reflect.apply(setMultiplier2, manager2, [decision2.multiplier]), SUCCEEDED;
+        }
+        if (!Number.isSafeInteger(decision2.repetitions) || decision2.repetitions < 1 || !Number.isSafeInteger(decision2.multiplier))
+          return rejected(
+            "invalid-market-trade",
+            "market trade multiplier and repetitions must be safe integers"
+          );
+        let manager = requireRecord(dependencies.getManager(), "MarketManager"), setMultiplier = requireFunction(
+          manager.setMultiplier,
+          "MarketManager.setMultiplier"
+        ), raw = readPriorityList6(manager)[decision2.index], resource2 = typeof raw == "object" && raw !== null ? raw : null, actualId = resource2 !== null && typeof resource2.id == "string" ? resource2.id : null;
+        if (resource2 === null || actualId !== decision2.resourceId)
+          return stale("stale-market-resource", "market priority list changed", {
+            index: decision2.index,
+            expectedResourceId: decision2.resourceId,
+            actualResourceId: actualId
+          });
+        let resources = requireRecord(dependencies.getResources(), "resources"), money = requireRecord(resources.Money, "resources.Money"), actualMoney = requireNumber(
+          money.currentQuantity,
+          "resources.Money.currentQuantity"
+        ), actualResource = requireNumber(
+          resource2.currentQuantity,
+          `resources.${decision2.resourceId}.currentQuantity`
+        ), priceMethod = decision2.side === "sell" ? "getUnitSellPrice" : "getUnitBuyPrice", actualPrice = callNumber(
+          manager,
+          priceMethod,
+          "MarketManager",
+          resource2
+        );
+        if (actualMoney !== decision2.expectedMoneyCurrent || actualResource !== decision2.expectedResourceCurrent || actualPrice !== decision2.expectedUnitPrice)
+          return stale("stale-market-state", "market inputs changed", {
+            resourceId: decision2.resourceId
+          });
+        let trade = requireFunction(
+          manager[decision2.side],
+          `MarketManager.${decision2.side}`
+        );
+        Reflect.apply(setMultiplier, manager, [decision2.multiplier]);
+        for (let index = 0; index < decision2.repetitions; index++)
+          Reflect.apply(trade, manager, [resource2]);
+        return SUCCEEDED;
+      }
+    });
+  }
+
+  // src/domain/economy/market/market.ts
+  function batchTrade(side, input, maximumUnits) {
+    return maximumUnits <= input.maximumMultiplier ? Object.freeze({
+      kind: "trade",
+      side,
+      index: input.index,
+      resourceId: input.resourceId,
+      expectedMoneyCurrent: input.moneyCurrent,
+      expectedResourceCurrent: input.currentQuantity,
+      expectedUnitPrice: input.unitPrice,
+      multiplier: maximumUnits,
+      repetitions: 1
+    }) : Object.freeze({
+      kind: "trade",
+      side,
+      index: input.index,
+      resourceId: input.resourceId,
+      expectedMoneyCurrent: input.moneyCurrent,
+      expectedResourceCurrent: input.currentQuantity,
+      expectedUnitPrice: input.unitPrice,
+      multiplier: input.maximumMultiplier,
+      repetitions: Math.min(
+        5,
+        Math.floor(maximumUnits / input.maximumMultiplier)
+      )
+    });
+  }
+  function planMarketSell(input) {
+    if (!input.eligible || !input.autoSellEnabled || !input.ignoreSellRatio && input.storageRatio < input.autoSellRatio)
+      return null;
+    let maximumUnits = Math.floor(
+      (input.moneyMaximum - input.moneyCurrent) / input.unitPrice
+    );
+    return maximumUnits = Math.min(
+      maximumUnits,
+      input.storageRatio > input.autoSellRatio ? Math.floor(
+        input.currentQuantity - input.autoSellRatio * input.maxQuantity
+      ) : Math.floor(input.income * 2 / input.ticksPerSecond)
+    ), batchTrade("sell", input, maximumUnits);
+  }
+  function planMarketBuy(input) {
+    if (!input.eligible || !input.autoBuyEnabled || input.storageRatio >= input.autoBuyRatio || input.moneyDemanded)
+      return null;
+    let storableAmount = Math.floor(
+      (input.autoBuyRatio - input.storageRatio) * input.maxQuantity
+    ), affordableAmount = Math.floor(
+      (input.moneyCurrent - input.minimumMoneyAllowed) / input.unitPrice
+    ), maximumUnits = Math.min(storableAmount, affordableAmount);
+    return maximumUnits > 0 ? batchTrade("buy", input, maximumUnits) : null;
+  }
+
+  // src/application/market.ts
+  var SUCCEEDED16 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMarketAutomation(dependencies, bulkSell = !1, ignoreSellRatio = !1) {
+    let gate = dependencies.reader.readGate();
+    if (!gate.unlocked || (dependencies.tradeRoutes.adjust(), gate.noTrade))
+      return SUCCEEDED16;
+    let session = dependencies.reader.readSession(), outcome = SUCCEEDED16;
+    for (let index = 0; ; index++) {
+      let sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
+      if (sellInput === null)
+        break;
+      let sell = planMarketSell(sellInput);
+      if (sell !== null && (outcome = dependencies.executor.execute(sell), outcome.status !== "succeeded"))
+        break;
+      if (bulkSell === !0 || !sellInput.eligible)
+        continue;
+      let buy = planMarketBuy(
+        dependencies.reader.readBuy(index, session.minimumMoneyAllowed)
+      );
+      if (buy !== null && (outcome = dependencies.executor.execute(buy), outcome.status !== "succeeded"))
+        break;
+    }
+    let restore = dependencies.executor.execute({
+      kind: "restore-multiplier",
+      multiplier: session.originalMultiplier
+    });
+    return outcome.status === "succeeded" ? restore : outcome;
+  }
+
+  // src/bootstrap/market-control.ts
+  function createMarketControl(dependencies) {
+    return Object.freeze({
+      autoMarket: (bulkSell, ignoreSellRatio) => runMarketAutomation(
+        {
+          reader: createMarketReader(dependencies.reader),
+          executor: createMarketCommandExecutor(dependencies.executor),
+          tradeRoutes: dependencies.tradeRoutes
+        },
+        bulkSell,
+        ignoreSellRatio
+      )
+    });
   }
 
   // src/adapters/evolve/economy/market/galaxy-market.ts
@@ -35134,6 +35134,20 @@ If script is allowed to reassign non-empty storage it might waste time producing
         reader: adapter.reader,
         executor: adapter.executor
       })
+    });
+  }
+
+  // src/bootstrap/market-automation-controls.ts
+  function createMarketAutomationControls({
+    market,
+    galaxyMarket,
+    gatherResources
+  }) {
+    let marketControl = createMarketControl(market), galaxyMarketControl = createGalaxyMarketControl(galaxyMarket), gatherResourcesControl = createGatherResourcesControl(gatherResources);
+    return Object.freeze({
+      ...marketControl,
+      ...galaxyMarketControl,
+      ...gatherResourcesControl
     });
   }
 
@@ -50768,30 +50782,34 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getResources: () => resources,
         getTicksPerSecond: () => ticksPerSecond()
       }
-    }), { autoMarket } = createMarketControl({
-      reader: {
-        getManager: () => MarketManager,
-        getGame: () => game,
+    }), { autoMarket, autoGalaxyMarket, autoGatherResources } = createMarketAutomationControls({
+      market: {
+        reader: {
+          getManager: () => MarketManager,
+          getGame: () => game,
+          getResources: () => resources,
+          getSettings: () => settings,
+          ticksPerSecond
+        },
+        executor: {
+          getManager: () => MarketManager,
+          getResources: () => resources
+        },
+        tradeRoutes: { adjust: () => adjustTradeRoutes() }
+      },
+      galaxyMarket: {
+        getManager: () => GalaxyTradeManager,
+        getOffers: () => poly.galaxyOffers,
         getResources: () => resources,
+        getSettings: () => settings
+      },
+      gatherResources: {
+        getGame: () => game,
         getSettings: () => settings,
-        ticksPerSecond
-      },
-      executor: {
-        getManager: () => MarketManager,
-        getResources: () => resources
-      },
-      tradeRoutes: { adjust: () => adjustTradeRoutes() }
-    }), { autoGalaxyMarket } = createGalaxyMarketControl({
-      getManager: () => GalaxyTradeManager,
-      getOffers: () => poly.galaxyOffers,
-      getResources: () => resources,
-      getSettings: () => settings
-    }), { autoGatherResources } = createGatherResourcesControl({
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getResourcesPerClick: () => getResourcesPerClick()
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getResourcesPerClick: () => getResourcesPerClick()
+      }
     }), { autoBuild } = createBuildControl({
       adapter: {
         getBuildingManager: () => BuildingManager,

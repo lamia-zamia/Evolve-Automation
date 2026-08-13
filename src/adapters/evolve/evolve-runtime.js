@@ -233,11 +233,9 @@ import { createOcularPowerControl } from "../../bootstrap/ocular-power-control.t
 import { createMinorTraitControl } from "../../bootstrap/minor-trait-control.ts";
 import { createTriggerControl } from "../../bootstrap/trigger-control.ts";
 import { createEconomyAutomationControls } from "../../bootstrap/economy-automation-controls.ts";
-import { createMarketControl } from "../../bootstrap/market-control.ts";
 import { createPowerControl } from "../../bootstrap/power-control.ts";
 import { createStorageAllocationControl } from "../../bootstrap/storage-allocation-control.ts";
-import { createGalaxyMarketControl } from "../../bootstrap/galaxy-market-control.ts";
-import { createGatherResourcesControl } from "../../bootstrap/gather-resources-control.ts";
+import { createMarketAutomationControls } from "../../bootstrap/market-automation-controls.ts";
 import { createCraftControl } from "../../bootstrap/craft-control.ts";
 import { createSpyControl } from "../../bootstrap/spy-control.ts";
 import { createPrestigeControl } from "../../bootstrap/prestige-control.ts";
@@ -3307,35 +3305,36 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { autoMarket } = createMarketControl({
-    reader: {
-      getManager: () => MarketManager,
-      getGame: () => game,
-      getResources: () => resources,
-      getSettings: () => settings,
-      ticksPerSecond,
-    },
-    executor: {
-      getManager: () => MarketManager,
-      getResources: () => resources,
-    },
-    tradeRoutes: { adjust: () => adjustTradeRoutes() },
-  });
-
-  const { autoGalaxyMarket } = createGalaxyMarketControl({
-    getManager: () => GalaxyTradeManager,
-    getOffers: () => poly.galaxyOffers,
-    getResources: () => resources,
-    getSettings: () => settings,
-  });
-
-  const { autoGatherResources } = createGatherResourcesControl({
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getResourcesPerClick: () => getResourcesPerClick(),
-  });
+  const { autoMarket, autoGalaxyMarket, autoGatherResources } =
+    createMarketAutomationControls({
+      market: {
+        reader: {
+          getManager: () => MarketManager,
+          getGame: () => game,
+          getResources: () => resources,
+          getSettings: () => settings,
+          ticksPerSecond,
+        },
+        executor: {
+          getManager: () => MarketManager,
+          getResources: () => resources,
+        },
+        tradeRoutes: { adjust: () => adjustTradeRoutes() },
+      },
+      galaxyMarket: {
+        getManager: () => GalaxyTradeManager,
+        getOffers: () => poly.galaxyOffers,
+        getResources: () => resources,
+        getSettings: () => settings,
+      },
+      gatherResources: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getResourcesPerClick: () => getResourcesPerClick(),
+      },
+    });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.add({
