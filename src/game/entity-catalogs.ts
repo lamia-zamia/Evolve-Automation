@@ -1,10 +1,11 @@
-type LooseFunction = (...args: any[]) => any;
-type LooseConstructor = new (...args: any[]) => any;
+type CatalogEntity = { [key: string]: unknown };
+type EntityConstructor = new (...args: unknown[]) => CatalogEntity;
+type HaveTech = (id: string, level: number) => unknown;
 
 type EntityCatalogDependencies = {
-  classes: Record<string, LooseConstructor>;
-  getHaveTech: () => LooseFunction;
-  setResources: (resources: Record<string, any>) => void;
+  classes: Record<string, EntityConstructor>;
+  getHaveTech: () => HaveTech;
+  setResources: (resources: Record<string, CatalogEntity>) => void;
 };
 
 export function createEntityCatalogs({
@@ -37,7 +38,7 @@ export function createEntityCatalogs({
     Troops,
     WomlingsSupport,
   } = classes;
-  const haveTech: LooseFunction = (...args) => getHaveTech()(...args);
+  const haveTech: HaveTech = (id, level) => getHaveTech()(id, level);
   const resources = {
     // Resources order follow game order, and used to initialize priorities
     // Evolution resources

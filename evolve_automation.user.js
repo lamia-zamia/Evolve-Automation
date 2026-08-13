@@ -12280,7 +12280,7 @@
       Troops,
       WomlingsSupport
     } = classes;
-    const haveTech = (...args) => getHaveTech()(...args);
+    const haveTech = (id, level) => getHaveTech()(id, level);
     const resources = {
       // Resources order follow game order, and used to initialize priorities
       // Evolution resources
