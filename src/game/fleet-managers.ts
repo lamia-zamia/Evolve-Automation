@@ -246,7 +246,7 @@ export function createFleetManagers({
       let locRef =
         loc === "tauceti"
           ? game.loc("tech_era_tauceti")
-          : game.actions.space[loc].info.name;
+          : game.actions.space[loc]!.info.name;
       return typeof locRef === "function" ? locRef() : locRef;
     },
 
@@ -254,7 +254,7 @@ export function createFleetManagers({
       const game = getGame();
       return id === "spc_moon" && game.global.race["orbit_decayed"]
         ? false
-        : (game.actions.space[id].info.syndicate?.() ?? false);
+        : (game.actions.space[id]!.info.syndicate?.() ?? false);
     },
 
     updateNextShip(ship) {
@@ -268,9 +268,9 @@ export function createFleetManagers({
         this.nextShipMsg = null;
         this.nextShipName = null;
         for (let res in cost) {
-          if (resources[res].maxQuantity < cost[res]) {
+          if (resources[res]!.maxQuantity < cost[res]!) {
             this.nextShipAffordable = false;
-            if (!resources[res].hasStorage()) {
+            if (!resources[res]!.hasStorage()) {
               this.nextShipExpandable = false;
             }
           }
@@ -321,7 +321,7 @@ export function createFleetManagers({
       const resources = getResources();
       let cost = poly.shipCosts(ship);
       for (let res in cost) {
-        if (resources[res].currentQuantity < cost[res]) {
+        if (resources[res]!.currentQuantity < cost[res]!) {
           return res;
         }
       }
@@ -354,7 +354,7 @@ export function createFleetManagers({
               elementId: this._fleetElementId,
               type,
               part,
-              index: this.ShipConfig[type].indexOf(part),
+              index: this.ShipConfig[type]!.indexOf(part),
             })
           ) {
             return false;
@@ -392,7 +392,7 @@ export function createFleetManagers({
 
       let cost = poly.shipCosts(ship);
       for (let res in cost) {
-        resources[res].currentQuantity -= cost[res];
+        resources[res]!.currentQuantity -= cost[res]!;
       }
 
       return fleetControls.buildShip({
@@ -403,7 +403,7 @@ export function createFleetManagers({
 
     getShipAttackPower(ship) {
       return Math.round(
-        this.WeaponPower[ship.weapon] * this.ClassPower[ship.class],
+        this.WeaponPower[ship.weapon]! * this.ClassPower[ship.class]!,
       );
     },
 
@@ -462,12 +462,12 @@ export function createFleetManagers({
         case "spc_enceladus":
           divisor = !haveTech("triton")
             ? 600
-            : game.actions.space[region].info.syndicate_cap();
+            : game.actions.space[region]!.info.syndicate_cap!();
           break;
         case "spc_triton":
         case "spc_kuiper":
         case "spc_eris":
-          divisor = game.actions.space[region].info.syndicate_cap();
+          divisor = game.actions.space[region]!.info.syndicate_cap!();
           break;
       }
 
@@ -486,17 +486,17 @@ export function createFleetManagers({
               ship.damage > 0
                 ? Math.round((rating * (100 - ship.damage)) / 100)
                 : rating;
-            sensor += this.SensorRange[ship.sensor];
+            sensor += this.SensorRange[ship.sensor]!;
           }
         }
 
         if (region === "spc_enceladus") {
-          patrol += buildings.EnceladusBase.stateOnCount * 50;
+          patrol += buildings.EnceladusBase!.stateOnCount * 50;
         } else if (region === "spc_titan") {
-          patrol += buildings.TitanSAM.stateOnCount * 25;
+          patrol += buildings.TitanSAM!.stateOnCount * 25;
         } else if (
           region === "spc_triton" &&
-          buildings.TritonFOB.stateOnCount > 0
+          buildings.TritonFOB!.stateOnCount > 0
         ) {
           patrol += 500;
           sensor += 10;
