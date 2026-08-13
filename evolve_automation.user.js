@@ -15963,27 +15963,6 @@
     return { initialiseState };
   }
 
-  // src/game/state-demand.ts
-  function applyStorageRequirementsResult(result2, resources, state) {
-    for (const requirement of result2.resources) {
-      const resource2 = resources[requirement.id];
-      resource2.maxCost = requirement.maxCost;
-      resource2.storageRequired = requirement.storageRequired;
-    }
-    state.knowledgeRequiredByTechs = result2.knowledge.knowledgeRequiredByTechs;
-    state.cheapestTechKnowledge = result2.knowledge.cheapestTechKnowledge;
-    state.knowledgeRequiredByBuildTargets = result2.knowledge.knowledgeRequiredByBuildTargets;
-  }
-  function applyDemandPrioritizationResult(result2, resources, state) {
-    for (const request of result2.requests) {
-      const resource2 = resources[request.resourceId];
-      resource2.requestQuantity(request.amount);
-    }
-    for (const index of result2.removedMissionIndices) {
-      state.missionBuildingList.splice(index, 1);
-    }
-  }
-
   // src/domain/planner-analysis.ts
   function isRecord2(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -18208,209 +18187,124 @@
     });
   }
 
-  // src/adapters/evolve/economy/storage/storage-requirements.ts
-  function readCosts(value) {
-    if (typeof value !== "object" || value === null) return [];
-    const record = value;
-    const costs = [];
-    for (const key in record) {
-      costs.push(
-        Object.freeze({
-          resourceId: key,
-          amount: requireNumber(record[key], `cost.${key}`)
-        })
-      );
+  // src/game/state-demand.ts
+  function applyStorageRequirementsResult(result2, resources, state) {
+    for (const requirement of result2.resources) {
+      const resource2 = resources[requirement.id];
+      resource2.maxCost = requirement.maxCost;
+      resource2.storageRequired = requirement.storageRequired;
     }
-    return costs;
+    state.knowledgeRequiredByTechs = result2.knowledge.knowledgeRequiredByTechs;
+    state.cheapestTechKnowledge = result2.knowledge.cheapestTechKnowledge;
+    state.knowledgeRequiredByBuildTargets = result2.knowledge.knowledgeRequiredByBuildTargets;
   }
-  function knowledgeCostOf(target) {
-    const cost = target["cost"];
-    if (typeof cost !== "object" || cost === null) return 0;
-    const value = cost["Knowledge"];
-    return typeof value === "number" && Number.isFinite(value) ? value : 0;
-  }
-  function isKnowledgeProducer(target) {
-    const is = target["is"];
-    return typeof is === "object" && is !== null && Boolean(is["knowledge"]);
-  }
-  function optionalPredicate(target, name) {
-    const method = target[name];
-    if (typeof method !== "function") return false;
-    return Boolean(
-      Reflect.apply(method, target, [])
-    );
-  }
-  function readMaxQuantity(value, path) {
-    if (typeof value !== "number") {
-      throw new TypeError(`${path} must be a number`);
+  function applyDemandPrioritizationResult(result2, resources, state) {
+    for (const request of result2.requests) {
+      const resource2 = resources[request.resourceId];
+      resource2.requestQuantity(request.amount);
     }
-    return value;
-  }
-  function targetList(value, path) {
-    return requireArray(value, path).map(
-      (entry, index) => requireRecord(entry, `${path}[${index}]`)
-    );
-  }
-  function costTargets(list) {
-    return list.map(
-      (target) => Object.freeze({ costs: readCosts(target["cost"]) })
-    );
-  }
-  function readResources(resourcesValue) {
-    const resources = requireRecord(resourcesValue, "resources");
-    const states = [];
-    for (const id in resources) {
-      const resource2 = requireRecord(resources[id], `resources.${id}`);
-      const hasStorage = requireFunction(
-        resource2["hasStorage"],
-        `resources.${id}.hasStorage`
-      );
-      states.push(
-        Object.freeze({
-          id,
-          maxQuantity: readMaxQuantity(
-            resource2["maxQuantity"],
-            `resources.${id}.maxQuantity`
-          ),
-          maxCost: requireNumber(resource2["maxCost"], `resources.${id}.maxCost`),
-          storageRequired: requireNumber(
-            resource2["storageRequired"],
-            `resources.${id}.storageRequired`
-          ),
-          hasStorage: Boolean(Reflect.apply(hasStorage, resource2, [])),
-          // TRANSITIONAL: auto-sell fields are settings-backed getters
-          // (`settings["sell"+id]` / `["res_sell_r_"+id]`) that are undefined for
-          // non-market resources (RNA, DNA, ...). Legacy used them only in
-          // `enabled && ratio > 0`, so they are read leniently here. When the
-          // `market` (autoMarket) slice migrates, these should come from a validated
-          // market-settings view keyed by sellable-resource id rather than being
-          // coerced per resource at this boundary. (The trade-routes slice, already
-          // migrated, owns trade-route quantities, not these auto-sell settings.)
-          autoSellEnabled: Boolean(resource2["autoSellEnabled"]),
-          autoSellRatio: typeof resource2["autoSellRatio"] === "number" && Number.isFinite(resource2["autoSellRatio"]) ? resource2["autoSellRatio"] : 0
-        })
-      );
+    for (const index of result2.removedMissionIndices) {
+      state.missionBuildingList.splice(index, 1);
     }
-    return states;
   }
-  function readStorageRequirementsInput(dependencies) {
-    const settings = requireRecord(dependencies.getSettings(), "settings");
-    const state = requireRecord(dependencies.getState(), "state");
-    const buildings = requireRecord(dependencies.getBuildings(), "buildings");
-    const game = requireRecord(dependencies.getGame(), "game");
-    const buildingManager = requireRecord(
-      dependencies.getBuildingManager(),
-      "BuildingManager"
-    );
-    const projectManager = requireRecord(
-      dependencies.getProjectManager(),
-      "ProjectManager"
-    );
-    const fleetManagerOuter = requireRecord(
-      dependencies.getFleetManagerOuter(),
-      "FleetManagerOuter"
-    );
-    const unlockedTechs = targetList(
-      state["unlockedTechs"],
-      "state.unlockedTechs"
-    );
-    const queuedTargetsAll = targetList(
-      state["queuedTargetsAll"],
-      "state.queuedTargetsAll"
-    );
-    const triggerTargets = targetList(
-      state["triggerTargets"],
-      "state.triggerTargets"
-    );
-    const buildingList = targetList(
-      buildingManager["priorityList"],
-      "BuildingManager.priorityList"
-    );
-    const projectList = targetList(
-      projectManager["priorityList"],
-      "ProjectManager.priorityList"
-    );
-    const autoBuildableFiltered = (list) => list.filter(
-      (entry) => optionalPredicate(entry, "isUnlocked") && Boolean(entry["autoBuildEnabled"])
-    );
-    const requestLists = [];
-    const nextShipExpandable = Boolean(fleetManagerOuter["nextShipExpandable"]);
-    if (Boolean(settings["autoFleet"]) && nextShipExpandable && settings["prioritizeOuterFleet"] !== "ignore") {
-      requestLists.push([
-        Object.freeze({ costs: readCosts(fleetManagerOuter["nextShipCost"]) })
-      ]);
-    }
-    requestLists.push(costTargets(unlockedTechs));
-    requestLists.push(costTargets(queuedTargetsAll));
-    requestLists.push(costTargets(autoBuildableFiltered(buildingList)));
-    requestLists.push(costTargets(autoBuildableFiltered(projectList)));
-    const embassy = requireRecord(
-      buildings["GorddonEmbassy"],
-      "buildings.GorddonEmbassy"
-    );
-    const fleetEmbassyKnowledge = requireNumber(
-      settings["fleetEmbassyKnowledge"],
-      "settings.fleetEmbassyKnowledge"
-    );
-    const knowledge = {
-      techKnowledgeCosts: [
-        ...unlockedTechs.map((tech) => knowledgeCostOf(tech)),
-        ...optionalPredicate(embassy, "isAutoBuildable") ? [fleetEmbassyKnowledge] : []
-      ],
-      reservedTargets: [...queuedTargetsAll, ...triggerTargets].map((target) => ({
-        knowledgeCost: knowledgeCostOf(target),
-        isTechnology: dependencies.isTechnology(target),
-        isKnowledge: isKnowledgeProducer(target)
-      })),
-      buildCandidates: [...buildingList, ...projectList].map((object) => ({
-        knowledgeCost: knowledgeCostOf(object),
-        isKnowledge: isKnowledgeProducer(object),
-        weighting: typeof object["weighting"] === "number" && Number.isFinite(object["weighting"]) ? object["weighting"] : 0,
-        autoBuildable: optionalPredicate(object, "isAutoBuildable")
-      }))
+
+  // src/domain/economy/resources/demand-prioritization.ts
+  function projectDoubles(target) {
+    return target.isProject && target.progress !== null && target.progress < 99;
+  }
+  function planDemandPrioritization(input) {
+    const { settings, consumptionBalanceTarget: balance } = input;
+    const requests = [];
+    const removedMissionIndices = [];
+    const request = (resourceId3, amount) => {
+      requests.push({ resourceId: resourceId3, amount });
     };
-    const race2 = requireRecord(
-      requireRecord(game["global"], "game.global")["race"],
-      "game.global.race"
-    );
+    if (input.inflationMoney !== null) {
+      request("Money", input.inflationMoney);
+    }
+    if (input.retirementGraphene !== null) {
+      request("Graphene", input.retirementGraphene);
+    }
+    let prioritizedTasks = [];
+    if (settings.prioritizeQueue.includes("req")) {
+      prioritizedTasks.push(...input.queuedTargets);
+    }
+    if (settings.prioritizeTriggers.includes("req")) {
+      prioritizedTasks.push(...input.triggerTargets);
+    }
+    if (settings.missionRequest) {
+      for (let i = input.missions.length - 1; i >= 0; i--) {
+        const mission = input.missions[i];
+        if (mission === void 0) continue;
+        if (mission.isUnlocked && mission.autoBuildEnabled && (!mission.isBlackholeJumpShip || !settings.prestigeBioseedConstruct || settings.prestigeType !== "whitehole")) {
+          prioritizedTasks.push(mission.target);
+        } else if (mission.isComplete) {
+          removedMissionIndices.push(i);
+        }
+      }
+    }
+    if (prioritizedTasks.length === 0 && (input.isEarlyGame ? settings.researchRequest : settings.researchRequestSpace)) {
+      prioritizedTasks = input.unlockedTechs.filter((tech) => tech.isAffordable).map((tech) => tech.target);
+    }
+    for (const task of prioritizedTasks) {
+      const multiplier = projectDoubles(task) ? 2 : 1;
+      for (const cost of task.costs) {
+        request(cost.resourceId, cost.amount * multiplier);
+      }
+    }
+    if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req")) {
+      request("Money", input.spyPurchaseMoney);
+    }
+    if (settings.autoFleet && input.fleet.nextShipAffordable && settings.prioritizeOuterFleet.includes("req")) {
+      for (const cost of input.fleet.nextShipCost) {
+        request(cost.resourceId, cost.amount);
+      }
+    }
+    for (const crafter of input.crafters) {
+      if ((settings.productionFactoryFocusMaterials || crafter.isDemanded) && crafter.isUnlocked) {
+        for (const cost of crafter.costs) {
+          const minExpected = cost.materialMaxQuantity * crafter.craftPreserve + input.availableCrafters * (1 / 140) * balance * cost.amount;
+          request(cost.resourceId, minExpected);
+        }
+      }
+    }
+    const { vitreloyPlant } = input;
+    const vitPlantCount = settings.autoPower && vitreloyPlant.autoStateEnabled ? vitreloyPlant.count : vitreloyPlant.stateOnCount;
+    if (vitPlantCount > 0) {
+      request("Stanene", vitPlantCount * balance * 100);
+    }
+    if (input.factoryCount > 0) {
+      const multiplier = input.factoryCount * balance;
+      const storageThreshold = settings.productionFactoryMinIngredients;
+      for (const production of input.factoryProductions) {
+        if ((settings.productionFactoryFocusMaterials || production.isDemanded) && production.unlocked && production.enabled && production.weighting) {
+          for (const cost of production.costs) {
+            request(
+              cost.resourceId,
+              cost.quantity * multiplier + cost.minRateOfChange + storageThreshold * cost.resourceMaxQuantity
+            );
+          }
+        }
+      }
+    }
     return Object.freeze({
-      storageAssignExtra: requireBoolean(
-        settings["storageAssignExtra"],
-        "settings.storageAssignExtra"
-      ),
-      autoMarket: Boolean(settings["autoMarket"]),
-      noTrade: Boolean(race2["no_trade"]),
-      requestLists: Object.freeze(requestLists),
-      knowledge,
-      resources: Object.freeze(readResources(dependencies.getResources())),
-      inflationMoney: dependencies.isInflationAssistActive() ? requireNumber(
-        dependencies.getInflationChallengeMoney(),
-        "inflation challenge money"
-      ) : null,
-      retirementGraphene: dependencies.isRetirementAssistActive() ? requireNumber(
-        dependencies.getRetirementGraphene(),
-        "retirement graphene"
-      ) : null
+      requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
+      removedMissionIndices: Object.freeze(removedMissionIndices)
     });
   }
-  function readFuelDepotDemandInput(dependencies) {
-    const state = requireRecord(dependencies.getState(), "state");
-    const unlockedTechs = targetList(
-      state["unlockedTechs"],
-      "state.unlockedTechs"
-    );
-    const missions = targetList(
-      state["missionBuildingList"],
-      "state.missionBuildingList"
-    ).filter(
-      (mission) => optionalPredicate(mission, "isUnlocked") && Boolean(mission["autoBuildEnabled"]) && !optionalPredicate(mission, "isComplete")
-    );
-    return Object.freeze({
-      targets: Object.freeze([
-        ...costTargets(unlockedTechs),
-        ...costTargets(missions)
-      ])
-    });
+
+  // src/domain/economy/storage/fuel-depot-demand.ts
+  function planFuelDepotDemand(input) {
+    const maxCost = /* @__PURE__ */ new Map();
+    for (const target of input.targets) {
+      for (const cost of target.costs) {
+        const previous = maxCost.get(cost.resourceId) ?? 0;
+        if (cost.amount > previous) {
+          maxCost.set(cost.resourceId, cost.amount);
+        }
+      }
+    }
+    return maxCost;
   }
 
   // src/domain/knowledge-requirements.ts
@@ -18526,22 +18420,8 @@
     });
   }
 
-  // src/domain/economy/storage/fuel-depot-demand.ts
-  function planFuelDepotDemand(input) {
-    const maxCost = /* @__PURE__ */ new Map();
-    for (const target of input.targets) {
-      for (const cost of target.costs) {
-        const previous = maxCost.get(cost.resourceId) ?? 0;
-        if (cost.amount > previous) {
-          maxCost.set(cost.resourceId, cost.amount);
-        }
-      }
-    }
-    return maxCost;
-  }
-
   // src/adapters/evolve/economy/resources/demand-prioritization.ts
-  function readCosts2(value, path) {
+  function readCosts(value, path) {
     if (typeof value !== "object" || value === null) return [];
     const record = value;
     const costs = [];
@@ -18560,12 +18440,12 @@
   }
   function readTarget(raw, path, isProject) {
     return Object.freeze({
-      costs: Object.freeze(readCosts2(raw["cost"], `${path}.cost`)),
+      costs: Object.freeze(readCosts(raw["cost"], `${path}.cost`)),
       isProject: isProject(raw),
       progress: readProgress(raw["progress"])
     });
   }
-  function targetList2(value, path, isProject) {
+  function targetList(value, path, isProject) {
     if (!Array.isArray(value)) {
       throw new TypeError(`${path} must be an array`);
     }
@@ -18753,10 +18633,10 @@
         "retirement graphene"
       ) : null,
       queuedTargets: Object.freeze(
-        targetList2(state["queuedTargets"], "state.queuedTargets", isProject)
+        targetList(state["queuedTargets"], "state.queuedTargets", isProject)
       ),
       triggerTargets: Object.freeze(
-        targetList2(state["triggerTargets"], "state.triggerTargets", isProject)
+        targetList(state["triggerTargets"], "state.triggerTargets", isProject)
       ),
       missions: Object.freeze(
         readMissions(
@@ -18770,7 +18650,7 @@
       fleet: Object.freeze({
         nextShipAffordable: Boolean(fleet["nextShipAffordable"]),
         nextShipCost: Object.freeze(
-          readCosts2(fleet["nextShipCost"], "FleetManagerOuter.nextShipCost")
+          readCosts(fleet["nextShipCost"], "FleetManagerOuter.nextShipCost")
         )
       }),
       availableCrafters: requireNumber(
@@ -18818,89 +18698,304 @@
     });
   }
 
-  // src/domain/economy/resources/demand-prioritization.ts
-  function projectDoubles(target) {
-    return target.isProject && target.progress !== null && target.progress < 99;
+  // src/adapters/evolve/economy/storage/storage-requirements.ts
+  function readCosts2(value) {
+    if (typeof value !== "object" || value === null) return [];
+    const record = value;
+    const costs = [];
+    for (const key in record) {
+      costs.push(
+        Object.freeze({
+          resourceId: key,
+          amount: requireNumber(record[key], `cost.${key}`)
+        })
+      );
+    }
+    return costs;
   }
-  function planDemandPrioritization(input) {
-    const { settings, consumptionBalanceTarget: balance } = input;
-    const requests = [];
-    const removedMissionIndices = [];
-    const request = (resourceId3, amount) => {
-      requests.push({ resourceId: resourceId3, amount });
+  function knowledgeCostOf(target) {
+    const cost = target["cost"];
+    if (typeof cost !== "object" || cost === null) return 0;
+    const value = cost["Knowledge"];
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  }
+  function isKnowledgeProducer(target) {
+    const is = target["is"];
+    return typeof is === "object" && is !== null && Boolean(is["knowledge"]);
+  }
+  function optionalPredicate(target, name) {
+    const method = target[name];
+    if (typeof method !== "function") return false;
+    return Boolean(
+      Reflect.apply(method, target, [])
+    );
+  }
+  function readMaxQuantity(value, path) {
+    if (typeof value !== "number") {
+      throw new TypeError(`${path} must be a number`);
+    }
+    return value;
+  }
+  function targetList2(value, path) {
+    return requireArray(value, path).map(
+      (entry, index) => requireRecord(entry, `${path}[${index}]`)
+    );
+  }
+  function costTargets(list) {
+    return list.map(
+      (target) => Object.freeze({ costs: readCosts2(target["cost"]) })
+    );
+  }
+  function readResources(resourcesValue) {
+    const resources = requireRecord(resourcesValue, "resources");
+    const states = [];
+    for (const id in resources) {
+      const resource2 = requireRecord(resources[id], `resources.${id}`);
+      const hasStorage = requireFunction(
+        resource2["hasStorage"],
+        `resources.${id}.hasStorage`
+      );
+      states.push(
+        Object.freeze({
+          id,
+          maxQuantity: readMaxQuantity(
+            resource2["maxQuantity"],
+            `resources.${id}.maxQuantity`
+          ),
+          maxCost: requireNumber(resource2["maxCost"], `resources.${id}.maxCost`),
+          storageRequired: requireNumber(
+            resource2["storageRequired"],
+            `resources.${id}.storageRequired`
+          ),
+          hasStorage: Boolean(Reflect.apply(hasStorage, resource2, [])),
+          // TRANSITIONAL: auto-sell fields are settings-backed getters
+          // (`settings["sell"+id]` / `["res_sell_r_"+id]`) that are undefined for
+          // non-market resources (RNA, DNA, ...). Legacy used them only in
+          // `enabled && ratio > 0`, so they are read leniently here. When the
+          // `market` (autoMarket) slice migrates, these should come from a validated
+          // market-settings view keyed by sellable-resource id rather than being
+          // coerced per resource at this boundary. (The trade-routes slice, already
+          // migrated, owns trade-route quantities, not these auto-sell settings.)
+          autoSellEnabled: Boolean(resource2["autoSellEnabled"]),
+          autoSellRatio: typeof resource2["autoSellRatio"] === "number" && Number.isFinite(resource2["autoSellRatio"]) ? resource2["autoSellRatio"] : 0
+        })
+      );
+    }
+    return states;
+  }
+  function readStorageRequirementsInput(dependencies) {
+    const settings = requireRecord(dependencies.getSettings(), "settings");
+    const state = requireRecord(dependencies.getState(), "state");
+    const buildings = requireRecord(dependencies.getBuildings(), "buildings");
+    const game = requireRecord(dependencies.getGame(), "game");
+    const buildingManager = requireRecord(
+      dependencies.getBuildingManager(),
+      "BuildingManager"
+    );
+    const projectManager = requireRecord(
+      dependencies.getProjectManager(),
+      "ProjectManager"
+    );
+    const fleetManagerOuter = requireRecord(
+      dependencies.getFleetManagerOuter(),
+      "FleetManagerOuter"
+    );
+    const unlockedTechs = targetList2(
+      state["unlockedTechs"],
+      "state.unlockedTechs"
+    );
+    const queuedTargetsAll = targetList2(
+      state["queuedTargetsAll"],
+      "state.queuedTargetsAll"
+    );
+    const triggerTargets = targetList2(
+      state["triggerTargets"],
+      "state.triggerTargets"
+    );
+    const buildingList = targetList2(
+      buildingManager["priorityList"],
+      "BuildingManager.priorityList"
+    );
+    const projectList = targetList2(
+      projectManager["priorityList"],
+      "ProjectManager.priorityList"
+    );
+    const autoBuildableFiltered = (list) => list.filter(
+      (entry) => optionalPredicate(entry, "isUnlocked") && Boolean(entry["autoBuildEnabled"])
+    );
+    const requestLists = [];
+    const nextShipExpandable = Boolean(fleetManagerOuter["nextShipExpandable"]);
+    if (Boolean(settings["autoFleet"]) && nextShipExpandable && settings["prioritizeOuterFleet"] !== "ignore") {
+      requestLists.push([
+        Object.freeze({ costs: readCosts2(fleetManagerOuter["nextShipCost"]) })
+      ]);
+    }
+    requestLists.push(costTargets(unlockedTechs));
+    requestLists.push(costTargets(queuedTargetsAll));
+    requestLists.push(costTargets(autoBuildableFiltered(buildingList)));
+    requestLists.push(costTargets(autoBuildableFiltered(projectList)));
+    const embassy = requireRecord(
+      buildings["GorddonEmbassy"],
+      "buildings.GorddonEmbassy"
+    );
+    const fleetEmbassyKnowledge = requireNumber(
+      settings["fleetEmbassyKnowledge"],
+      "settings.fleetEmbassyKnowledge"
+    );
+    const knowledge = {
+      techKnowledgeCosts: [
+        ...unlockedTechs.map((tech) => knowledgeCostOf(tech)),
+        ...optionalPredicate(embassy, "isAutoBuildable") ? [fleetEmbassyKnowledge] : []
+      ],
+      reservedTargets: [...queuedTargetsAll, ...triggerTargets].map((target) => ({
+        knowledgeCost: knowledgeCostOf(target),
+        isTechnology: dependencies.isTechnology(target),
+        isKnowledge: isKnowledgeProducer(target)
+      })),
+      buildCandidates: [...buildingList, ...projectList].map((object) => ({
+        knowledgeCost: knowledgeCostOf(object),
+        isKnowledge: isKnowledgeProducer(object),
+        weighting: typeof object["weighting"] === "number" && Number.isFinite(object["weighting"]) ? object["weighting"] : 0,
+        autoBuildable: optionalPredicate(object, "isAutoBuildable")
+      }))
     };
-    if (input.inflationMoney !== null) {
-      request("Money", input.inflationMoney);
-    }
-    if (input.retirementGraphene !== null) {
-      request("Graphene", input.retirementGraphene);
-    }
-    let prioritizedTasks = [];
-    if (settings.prioritizeQueue.includes("req")) {
-      prioritizedTasks.push(...input.queuedTargets);
-    }
-    if (settings.prioritizeTriggers.includes("req")) {
-      prioritizedTasks.push(...input.triggerTargets);
-    }
-    if (settings.missionRequest) {
-      for (let i = input.missions.length - 1; i >= 0; i--) {
-        const mission = input.missions[i];
-        if (mission === void 0) continue;
-        if (mission.isUnlocked && mission.autoBuildEnabled && (!mission.isBlackholeJumpShip || !settings.prestigeBioseedConstruct || settings.prestigeType !== "whitehole")) {
-          prioritizedTasks.push(mission.target);
-        } else if (mission.isComplete) {
-          removedMissionIndices.push(i);
-        }
-      }
-    }
-    if (prioritizedTasks.length === 0 && (input.isEarlyGame ? settings.researchRequest : settings.researchRequestSpace)) {
-      prioritizedTasks = input.unlockedTechs.filter((tech) => tech.isAffordable).map((tech) => tech.target);
-    }
-    for (const task of prioritizedTasks) {
-      const multiplier = projectDoubles(task) ? 2 : 1;
-      for (const cost of task.costs) {
-        request(cost.resourceId, cost.amount * multiplier);
-      }
-    }
-    if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req")) {
-      request("Money", input.spyPurchaseMoney);
-    }
-    if (settings.autoFleet && input.fleet.nextShipAffordable && settings.prioritizeOuterFleet.includes("req")) {
-      for (const cost of input.fleet.nextShipCost) {
-        request(cost.resourceId, cost.amount);
-      }
-    }
-    for (const crafter of input.crafters) {
-      if ((settings.productionFactoryFocusMaterials || crafter.isDemanded) && crafter.isUnlocked) {
-        for (const cost of crafter.costs) {
-          const minExpected = cost.materialMaxQuantity * crafter.craftPreserve + input.availableCrafters * (1 / 140) * balance * cost.amount;
-          request(cost.resourceId, minExpected);
-        }
-      }
-    }
-    const { vitreloyPlant } = input;
-    const vitPlantCount = settings.autoPower && vitreloyPlant.autoStateEnabled ? vitreloyPlant.count : vitreloyPlant.stateOnCount;
-    if (vitPlantCount > 0) {
-      request("Stanene", vitPlantCount * balance * 100);
-    }
-    if (input.factoryCount > 0) {
-      const multiplier = input.factoryCount * balance;
-      const storageThreshold = settings.productionFactoryMinIngredients;
-      for (const production of input.factoryProductions) {
-        if ((settings.productionFactoryFocusMaterials || production.isDemanded) && production.unlocked && production.enabled && production.weighting) {
-          for (const cost of production.costs) {
-            request(
-              cost.resourceId,
-              cost.quantity * multiplier + cost.minRateOfChange + storageThreshold * cost.resourceMaxQuantity
-            );
-          }
-        }
-      }
-    }
+    const race2 = requireRecord(
+      requireRecord(game["global"], "game.global")["race"],
+      "game.global.race"
+    );
     return Object.freeze({
-      requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
-      removedMissionIndices: Object.freeze(removedMissionIndices)
+      storageAssignExtra: requireBoolean(
+        settings["storageAssignExtra"],
+        "settings.storageAssignExtra"
+      ),
+      autoMarket: Boolean(settings["autoMarket"]),
+      noTrade: Boolean(race2["no_trade"]),
+      requestLists: Object.freeze(requestLists),
+      knowledge,
+      resources: Object.freeze(readResources(dependencies.getResources())),
+      inflationMoney: dependencies.isInflationAssistActive() ? requireNumber(
+        dependencies.getInflationChallengeMoney(),
+        "inflation challenge money"
+      ) : null,
+      retirementGraphene: dependencies.isRetirementAssistActive() ? requireNumber(
+        dependencies.getRetirementGraphene(),
+        "retirement graphene"
+      ) : null
     });
+  }
+  function readFuelDepotDemandInput(dependencies) {
+    const state = requireRecord(dependencies.getState(), "state");
+    const unlockedTechs = targetList2(
+      state["unlockedTechs"],
+      "state.unlockedTechs"
+    );
+    const missions = targetList2(
+      state["missionBuildingList"],
+      "state.missionBuildingList"
+    ).filter(
+      (mission) => optionalPredicate(mission, "isUnlocked") && Boolean(mission["autoBuildEnabled"]) && !optionalPredicate(mission, "isComplete")
+    );
+    return Object.freeze({
+      targets: Object.freeze([
+        ...costTargets(unlockedTechs),
+        ...costTargets(missions)
+      ])
+    });
+  }
+
+  // src/adapters/evolve/state-demand-actions.ts
+  function createStorageRequirementsAction({
+    getSettings,
+    getState,
+    getResources,
+    getBuildings,
+    getGame,
+    getBuildingManager,
+    getProjectManager,
+    getFleetManagerOuter,
+    isTechnology,
+    isInflationAssistActive: isInflationAssistActive2,
+    isRetirementAssistActive: isRetirementAssistActive2,
+    getInflationChallengeMoney,
+    getRetirementGraphene
+  }) {
+    function calculateRequiredStorages() {
+      const resources = getResources();
+      const state = getState();
+      const result2 = planStorageRequirements(
+        readStorageRequirementsInput({
+          getSettings,
+          getState,
+          getResources,
+          getBuildings,
+          getGame,
+          getBuildingManager,
+          getProjectManager,
+          getFleetManagerOuter,
+          isTechnology,
+          isInflationAssistActive: isInflationAssistActive2,
+          isRetirementAssistActive: isRetirementAssistActive2,
+          getInflationChallengeMoney,
+          getRetirementGraphene
+        })
+      );
+      applyStorageRequirementsResult(result2, resources, state);
+      const fuelDepotDemand = planFuelDepotDemand(
+        readFuelDepotDemandInput({ getState })
+      );
+      for (const [resourceId3, maxCost] of fuelDepotDemand) {
+        const resource2 = resources[resourceId3];
+        if (resource2 !== void 0) {
+          resource2.techMissionMaxCost = maxCost;
+        }
+      }
+    }
+    return { calculateRequiredStorages };
+  }
+  function createDemandPrioritizationAction({
+    getSettings,
+    getState,
+    getResources,
+    getBuildings,
+    getCrafter,
+    getSpyManager,
+    getFleetManagerOuter,
+    getJobManager,
+    getFactoryManager,
+    getIsEarlyGame,
+    isProject,
+    isInflationAssistActive: isInflationAssistActive2,
+    isRetirementAssistActive: isRetirementAssistActive2,
+    getInflationChallengeMoney,
+    getRetirementGraphene,
+    consumptionBalanceTarget
+  }) {
+    function prioritizeDemandedResources() {
+      const resources = getResources();
+      const state = getState();
+      const result2 = planDemandPrioritization(
+        readDemandPrioritizationInput({
+          getSettings,
+          getState,
+          getResources,
+          getBuildings,
+          getCrafter,
+          getSpyManager,
+          getFleetManagerOuter,
+          getJobManager,
+          getFactoryManager,
+          getIsEarlyGame,
+          isProject,
+          isInflationAssistActive: isInflationAssistActive2,
+          isRetirementAssistActive: isRetirementAssistActive2,
+          getInflationChallengeMoney,
+          getRetirementGraphene,
+          consumptionBalanceTarget
+        })
+      );
+      applyDemandPrioritizationResult(result2, resources, state);
+    }
+    return { prioritizeDemandedResources };
   }
 
   // src/planning/priority-targets.ts
@@ -58484,58 +58579,39 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getResources: () => resources
       }
     });
-    function calculateRequiredStorages() {
-      const result2 = planStorageRequirements(
-        readStorageRequirementsInput({
-          getSettings: () => settings,
-          getState: () => state,
-          getResources: () => resources,
-          getBuildings: () => buildings,
-          getGame: () => game,
-          getBuildingManager: () => BuildingManager,
-          getProjectManager: () => ProjectManager,
-          getFleetManagerOuter: () => FleetManagerOuter,
-          isTechnology: (target) => target instanceof Technology,
-          isInflationAssistActive: () => inflationChallengeAssistActive(),
-          isRetirementAssistActive: () => retirementChallengeAssistActive(),
-          getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY2,
-          getRetirementGraphene: () => RETIREMENT_PREP2.graphene
-        })
-      );
-      applyStorageRequirementsResult(result2, resources, state);
-      const fuelDepotDemand = planFuelDepotDemand(
-        readFuelDepotDemandInput({ getState: () => state })
-      );
-      for (const [resourceId3, maxCost] of fuelDepotDemand) {
-        const resource2 = resources[resourceId3];
-        if (resource2 !== void 0) {
-          resource2.techMissionMaxCost = maxCost;
-        }
-      }
-    }
-    function prioritizeDemandedResources() {
-      const result2 = planDemandPrioritization(
-        readDemandPrioritizationInput({
-          getSettings: () => settings,
-          getState: () => state,
-          getResources: () => resources,
-          getBuildings: () => buildings,
-          getCrafter: () => crafter,
-          getSpyManager: () => SpyManager,
-          getFleetManagerOuter: () => FleetManagerOuter,
-          getJobManager: () => JobManager,
-          getFactoryManager: () => FactoryManager,
-          getIsEarlyGame: () => isEarlyGame(),
-          isProject: (object) => object instanceof Project,
-          isInflationAssistActive: () => inflationChallengeAssistActive(),
-          isRetirementAssistActive: () => retirementChallengeAssistActive(),
-          getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY2,
-          getRetirementGraphene: () => RETIREMENT_PREP2.graphene,
-          consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET
-        })
-      );
-      applyDemandPrioritizationResult(result2, resources, state);
-    }
+    const { calculateRequiredStorages } = createStorageRequirementsAction({
+      getSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getGame: () => game,
+      getBuildingManager: () => BuildingManager,
+      getProjectManager: () => ProjectManager,
+      getFleetManagerOuter: () => FleetManagerOuter,
+      isTechnology: (target) => target instanceof Technology,
+      isInflationAssistActive: () => inflationChallengeAssistActive(),
+      isRetirementAssistActive: () => retirementChallengeAssistActive(),
+      getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY2,
+      getRetirementGraphene: () => RETIREMENT_PREP2.graphene
+    });
+    const { prioritizeDemandedResources } = createDemandPrioritizationAction({
+      getSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getCrafter: () => crafter,
+      getSpyManager: () => SpyManager,
+      getFleetManagerOuter: () => FleetManagerOuter,
+      getJobManager: () => JobManager,
+      getFactoryManager: () => FactoryManager,
+      getIsEarlyGame: () => isEarlyGame(),
+      isProject: (object) => object instanceof Project,
+      isInflationAssistActive: () => inflationChallengeAssistActive(),
+      isRetirementAssistActive: () => retirementChallengeAssistActive(),
+      getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY2,
+      getRetirementGraphene: () => RETIREMENT_PREP2.graphene,
+      consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET
+    });
     const {
       makeStateLog,
       loadStateLog,

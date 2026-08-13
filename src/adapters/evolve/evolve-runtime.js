@@ -117,10 +117,6 @@ import { createEntityCatalogs } from "../../game/entity-catalogs.ts";
 import { createBuildingStateInitialization } from "../../game/building-state.ts";
 import { createRaceInitialization } from "../../game/race-initialization.ts";
 import { createStateInitialization } from "../../game/state-initialization.ts";
-import {
-  applyDemandPrioritizationResult,
-  applyStorageRequirementsResult,
-} from "../../game/state-demand.ts";
 import { createPlannerState } from "../../game/planner-state.ts";
 import { createAuthorityPolicy } from "../../game/authority-policy.ts";
 import { createRunGuards } from "./run-guards.ts";
@@ -136,13 +132,9 @@ import { createPlannerStatsLifecycle } from "../../application/planner-stats.ts"
 import { createBuildPlanner } from "../../planning/build-planner.ts";
 import { createGameBuildPlannerEvolveAdapter } from "./game-build-planner.ts";
 import {
-  readStorageRequirementsInput,
-  readFuelDepotDemandInput,
-} from "./economy/storage/storage-requirements.ts";
-import { planStorageRequirements } from "../../domain/economy/storage/storage-requirements.ts";
-import { planFuelDepotDemand } from "../../domain/economy/storage/fuel-depot-demand.ts";
-import { readDemandPrioritizationInput } from "./economy/resources/demand-prioritization.ts";
-import { planDemandPrioritization } from "../../domain/economy/resources/demand-prioritization.ts";
+  createDemandPrioritizationAction,
+  createStorageRequirementsAction,
+} from "./state-demand-actions.ts";
 import { createPriorityTargets } from "../../planning/priority-targets.ts";
 import { createEvolutionResultCheck } from "./evolution-result-check.ts";
 import { formatEvolutionLog } from "../../application/evolution-result.ts";
@@ -2263,58 +2255,39 @@ function startEvolveRuntimeComposition(
       getResources: () => resources,
     },
   });
-  function calculateRequiredStorages() {
-    const result = planStorageRequirements(
-      readStorageRequirementsInput({
-        getSettings: () => settings,
-        getState: () => state,
-        getResources: () => resources,
-        getBuildings: () => buildings,
-        getGame: () => game,
-        getBuildingManager: () => BuildingManager,
-        getProjectManager: () => ProjectManager,
-        getFleetManagerOuter: () => FleetManagerOuter,
-        isTechnology: (target) => target instanceof Technology,
-        isInflationAssistActive: () => inflationChallengeAssistActive(),
-        isRetirementAssistActive: () => retirementChallengeAssistActive(),
-        getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
-        getRetirementGraphene: () => RETIREMENT_PREP.graphene,
-      }),
-    );
-    applyStorageRequirementsResult(result, resources, state);
-    const fuelDepotDemand = planFuelDepotDemand(
-      readFuelDepotDemandInput({ getState: () => state }),
-    );
-    for (const [resourceId, maxCost] of fuelDepotDemand) {
-      const resource = resources[resourceId];
-      if (resource !== undefined) {
-        resource.techMissionMaxCost = maxCost;
-      }
-    }
-  }
-  function prioritizeDemandedResources() {
-    const result = planDemandPrioritization(
-      readDemandPrioritizationInput({
-        getSettings: () => settings,
-        getState: () => state,
-        getResources: () => resources,
-        getBuildings: () => buildings,
-        getCrafter: () => crafter,
-        getSpyManager: () => SpyManager,
-        getFleetManagerOuter: () => FleetManagerOuter,
-        getJobManager: () => JobManager,
-        getFactoryManager: () => FactoryManager,
-        getIsEarlyGame: () => isEarlyGame(),
-        isProject: (object) => object instanceof Project,
-        isInflationAssistActive: () => inflationChallengeAssistActive(),
-        isRetirementAssistActive: () => retirementChallengeAssistActive(),
-        getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
-        getRetirementGraphene: () => RETIREMENT_PREP.graphene,
-        consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
-      }),
-    );
-    applyDemandPrioritizationResult(result, resources, state);
-  }
+  const { calculateRequiredStorages } = createStorageRequirementsAction({
+    getSettings: () => settings,
+    getState: () => state,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    getGame: () => game,
+    getBuildingManager: () => BuildingManager,
+    getProjectManager: () => ProjectManager,
+    getFleetManagerOuter: () => FleetManagerOuter,
+    isTechnology: (target) => target instanceof Technology,
+    isInflationAssistActive: () => inflationChallengeAssistActive(),
+    isRetirementAssistActive: () => retirementChallengeAssistActive(),
+    getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
+    getRetirementGraphene: () => RETIREMENT_PREP.graphene,
+  });
+  const { prioritizeDemandedResources } = createDemandPrioritizationAction({
+    getSettings: () => settings,
+    getState: () => state,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    getCrafter: () => crafter,
+    getSpyManager: () => SpyManager,
+    getFleetManagerOuter: () => FleetManagerOuter,
+    getJobManager: () => JobManager,
+    getFactoryManager: () => FactoryManager,
+    getIsEarlyGame: () => isEarlyGame(),
+    isProject: (object) => object instanceof Project,
+    isInflationAssistActive: () => inflationChallengeAssistActive(),
+    isRetirementAssistActive: () => retirementChallengeAssistActive(),
+    getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
+    getRetirementGraphene: () => RETIREMENT_PREP.graphene,
+    consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
+  });
   const {
     makeStateLog,
     loadStateLog,
