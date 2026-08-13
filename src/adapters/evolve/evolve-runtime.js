@@ -49,9 +49,8 @@ import { createSettingsResets } from "../../application/settings-reset.ts";
 import {
   applySettings as applySettingsRecord,
   migrateSetting as migrateSettingRecord,
-  migrateSettingsRecord,
 } from "../../domain/settings-migration.ts";
-import { describeDroppedOverride } from "../../domain/override-resolution.ts";
+import { createSettingsMigrationRunner } from "./settings-migration-runner.ts";
 import { createOverrideSettings } from "../../application/override-settings.ts";
 import { createOverrideEditor } from "../../application/override-editing.ts";
 import { createOverrideEvaluationSource } from "./override-evaluation.ts";
@@ -3506,60 +3505,53 @@ function startEvolveRuntimeComposition(
       keepOldValue,
     );
 
-  const updateStandAloneSettings = () => {
-    const report = migrateSettingsRecord(settingsRaw, {
-      settingsSections,
-      // The 28 default-reset builders, in their load-bearing order.
-      defaultResets: [
-        resetEvolutionSettings,
-        resetWarSettings,
-        resetHellSettings,
-        resetMechSettings,
-        resetFleetSettings,
-        resetGovernmentSettings,
-        resetAuthoritySettings,
-        resetBuildingSettings,
-        resetWeightingSettings,
-        resetMarketSettings,
-        resetResearchSettings,
-        resetProjectSettings,
-        resetJobSettings,
-        resetMagicSettings,
-        resetProductionSettings,
-        resetStorageSettings,
-        resetGeneralSettings,
-        resetInterfaceSettings,
-        resetStateLogSettings,
-        resetAchievementGuardSettings,
-        resetChallengeHelperSettings,
-        resetPrestigeSettings,
-        resetEjectorSettings,
-        resetPlanetSettings,
-        resetLoggingSettings,
-        resetTriggerSettings,
-        resetMinorTraitSettings,
-        resetMutableTraitSettings,
-      ],
-      prestigeAscensionSkipCustom: Boolean(
-        settings.prestigeAscensionSkipCustom,
-      ),
-      techIds,
-      marketPriorityIds: MarketManager.priorityList.map((res) => res.id),
-      resourceIds: Object.values(resources).map((res) => res.id),
-      projectIds: Object.values(projects).map((project) => project.id),
-      buildings: Object.values(buildings).map((building) => ({
+  const { updateStandAloneSettings } = createSettingsMigrationRunner({
+    getSettingsRaw: () => settingsRaw,
+    getSettings: () => settings,
+    getSettingsSections: () => settingsSections,
+    getDefaultResets: () => [
+      resetEvolutionSettings,
+      resetWarSettings,
+      resetHellSettings,
+      resetMechSettings,
+      resetFleetSettings,
+      resetGovernmentSettings,
+      resetAuthoritySettings,
+      resetBuildingSettings,
+      resetWeightingSettings,
+      resetMarketSettings,
+      resetResearchSettings,
+      resetProjectSettings,
+      resetJobSettings,
+      resetMagicSettings,
+      resetProductionSettings,
+      resetStorageSettings,
+      resetGeneralSettings,
+      resetInterfaceSettings,
+      resetStateLogSettings,
+      resetAchievementGuardSettings,
+      resetChallengeHelperSettings,
+      resetPrestigeSettings,
+      resetEjectorSettings,
+      resetPlanetSettings,
+      resetLoggingSettings,
+      resetTriggerSettings,
+      resetMinorTraitSettings,
+      resetMutableTraitSettings,
+    ],
+    getTechIds: () => techIds,
+    getMarketPriorityIds: () => MarketManager.priorityList.map((res) => res.id),
+    getResourceIds: () => Object.values(resources).map((res) => res.id),
+    getProjectIds: () => Object.values(projects).map((project) => project.id),
+    getBuildings: () =>
+      Object.values(buildings).map((building) => ({
         vueBinding: building._vueBinding,
         switchable: building.isSwitchable(),
       })),
-      crafterOriginalIds: Object.values(crafter).map((job) => job._originalId),
-    });
-    for (const dropped of report.droppedOverrides) {
-      GameLog.logDanger("special", describeDroppedOverride(dropped), [
-        "events",
-        "major_events",
-      ]);
-    }
-  };
+    getCrafterOriginalIds: () =>
+      Object.values(crafter).map((job) => job._originalId),
+    getGameLog: () => GameLog,
+  });
 
   publishTestSurface({
     settingsMigration: { updateStandAloneSettings },
