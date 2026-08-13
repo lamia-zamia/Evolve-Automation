@@ -118,6 +118,10 @@ import { createEntityCatalogs } from "../../game/entity-catalogs.ts";
 import { createBuildingStateInitialization } from "../../game/building-state.ts";
 import { createRaceInitialization } from "../../game/race-initialization.ts";
 import { createStateInitialization } from "../../game/state-initialization.ts";
+import {
+  applyDemandPrioritizationResult,
+  applyStorageRequirementsResult,
+} from "../../game/state-demand.ts";
 import { findCostConflict } from "../../domain/cost-conflicts.ts";
 import { readCostConflictInput } from "./cost-conflicts.ts";
 import { findPlannerLimit } from "../../domain/planner-analysis.ts";
@@ -2386,11 +2390,7 @@ function startEvolveRuntimeComposition(
         getRetirementGraphene: () => RETIREMENT_PREP.graphene,
       }),
     );
-    for (const requirement of result.resources) {
-      const resource = resources[requirement.id];
-      resource.maxCost = requirement.maxCost;
-      resource.storageRequired = requirement.storageRequired;
-    }
+    applyStorageRequirementsResult(result, resources, state);
     const fuelDepotDemand = planFuelDepotDemand(
       readFuelDepotDemandInput({ getState: () => state }),
     );
@@ -2400,10 +2400,6 @@ function startEvolveRuntimeComposition(
         resource.techMissionMaxCost = maxCost;
       }
     }
-    state.knowledgeRequiredByTechs = result.knowledge.knowledgeRequiredByTechs;
-    state.cheapestTechKnowledge = result.knowledge.cheapestTechKnowledge;
-    state.knowledgeRequiredByBuildTargets =
-      result.knowledge.knowledgeRequiredByBuildTargets;
   }
   function prioritizeDemandedResources() {
     const result = planDemandPrioritization(
@@ -2426,12 +2422,7 @@ function startEvolveRuntimeComposition(
         consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
       }),
     );
-    for (const request of result.requests) {
-      resources[request.resourceId].requestQuantity(request.amount);
-    }
-    for (const index of result.removedMissionIndices) {
-      state.missionBuildingList.splice(index, 1);
-    }
+    applyDemandPrioritizationResult(result, resources, state);
   }
   const {
     makeStateLog,

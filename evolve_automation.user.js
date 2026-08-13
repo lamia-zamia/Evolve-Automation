@@ -15923,6 +15923,27 @@
     return { initialiseState };
   }
 
+  // src/game/state-demand.ts
+  function applyStorageRequirementsResult(result2, resources, state) {
+    for (const requirement of result2.resources) {
+      const resource2 = resources[requirement.id];
+      resource2.maxCost = requirement.maxCost;
+      resource2.storageRequired = requirement.storageRequired;
+    }
+    state.knowledgeRequiredByTechs = result2.knowledge.knowledgeRequiredByTechs;
+    state.cheapestTechKnowledge = result2.knowledge.cheapestTechKnowledge;
+    state.knowledgeRequiredByBuildTargets = result2.knowledge.knowledgeRequiredByBuildTargets;
+  }
+  function applyDemandPrioritizationResult(result2, resources, state) {
+    for (const request of result2.requests) {
+      const resource2 = resources[request.resourceId];
+      resource2.requestQuantity(request.amount);
+    }
+    for (const index of result2.removedMissionIndices) {
+      state.missionBuildingList.splice(index, 1);
+    }
+  }
+
   // src/domain/cost-conflicts.ts
   function findCostConflict(input) {
     const resourceNames = [];
@@ -57931,11 +57952,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           getRetirementGraphene: () => RETIREMENT_PREP2.graphene
         })
       );
-      for (const requirement of result2.resources) {
-        const resource2 = resources[requirement.id];
-        resource2.maxCost = requirement.maxCost;
-        resource2.storageRequired = requirement.storageRequired;
-      }
+      applyStorageRequirementsResult(result2, resources, state);
       const fuelDepotDemand = planFuelDepotDemand(
         readFuelDepotDemandInput({ getState: () => state })
       );
@@ -57945,9 +57962,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           resource2.techMissionMaxCost = maxCost;
         }
       }
-      state.knowledgeRequiredByTechs = result2.knowledge.knowledgeRequiredByTechs;
-      state.cheapestTechKnowledge = result2.knowledge.cheapestTechKnowledge;
-      state.knowledgeRequiredByBuildTargets = result2.knowledge.knowledgeRequiredByBuildTargets;
     }
     function prioritizeDemandedResources() {
       const result2 = planDemandPrioritization(
@@ -57970,12 +57984,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET
         })
       );
-      for (const request of result2.requests) {
-        resources[request.resourceId].requestQuantity(request.amount);
-      }
-      for (const index of result2.removedMissionIndices) {
-        state.missionBuildingList.splice(index, 1);
-      }
+      applyDemandPrioritizationResult(result2, resources, state);
     }
     const {
       makeStateLog,

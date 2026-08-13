@@ -40,6 +40,7 @@
     "src/game/rates.ts",
     "src/game/foreign-affairs-managers.ts",
     "src/game/state-initialization.ts",
+    "src/game/state-demand.ts",
     "src/config.ts",
     "src/main.ts"
   ]
