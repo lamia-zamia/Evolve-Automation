@@ -20,7 +20,7 @@ export function createIndustryManagers({
     initIndustry(): boolean {
       const game = getGame();
       const buildings = getBuildings();
-      if (!game.global.race["smoldering"] || buildings.RockQuarry.count < 1) {
+      if (!game.global.race["smoldering"] || buildings.RockQuarry!.count < 1) {
         return false;
       }
 
@@ -66,7 +66,7 @@ export function createIndustryManagers({
 
     initIndustry(): boolean {
       const buildings = getBuildings();
-      if (buildings.TitanMine.count < 1) {
+      if (buildings.TitanMine!.count < 1) {
         return false;
       }
 
@@ -112,7 +112,7 @@ export function createIndustryManagers({
 
     initIndustry(): boolean {
       const buildings = getBuildings();
-      if (!haveTech("tau_roid", 4) || buildings.TauBeltMiningShip.count < 1) {
+      if (!haveTech("tau_roid", 4) || buildings.TauBeltMiningShip!.count < 1) {
         return false;
       }
 

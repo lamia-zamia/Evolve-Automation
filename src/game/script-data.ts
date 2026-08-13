@@ -106,7 +106,7 @@ export function createScriptDataLifecycle({
     WarManager.updateGarrison();
     WarManager.updateHell();
     for (const id in resources) {
-      resources[id].updateData();
+      resources[id]!.updateData();
     }
     getUpdateCraftCost()();
     getMarketManager().updateData();
@@ -126,7 +126,7 @@ export function createScriptDataLifecycle({
     const buildings = getBuildings();
     getSpyManager().updateForeigns();
     for (const id in resources) {
-      resources[id].finalizeData();
+      resources[id]!.finalizeData();
     }
     getEjectManager().updateResources();
     getSupplyManager().updateResources();

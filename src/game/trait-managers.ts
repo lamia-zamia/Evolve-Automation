@@ -48,7 +48,7 @@ export function createTraitManagers({
         0,
         settings.minimumPlasmidsToPreserve,
         settings.doNotGoBelowPlasmidSoftcap
-          ? resources.Phage.currentQuantity + 250
+          ? resources.Phage!.currentQuantity + 250
           : 0,
       );
     },

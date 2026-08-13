@@ -141,9 +141,9 @@ export function createMagicManagers({
       const game = getGame();
       const buildings = getBuildings();
       if (
-        (buildings.Pylon.count < 1 &&
-          buildings.RedPylon.count < 1 &&
-          buildings.TauPylon.count < 1) ||
+        (buildings.Pylon!.count < 1 &&
+          buildings.RedPylon!.count < 1 &&
+          buildings.TauPylon!.count < 1) ||
         !game.global.race["casting"]
       ) {
         return false;
