@@ -260,12 +260,8 @@ import { createEjectorSettingsIntentHandler } from "../../application/ejector-se
 import { createEjectorSettingsBrowserAdapter } from "../browser/ejector-settings.ts";
 import { createEjectorSettingsEvolveAdapter } from "./economy/resources/ejector-settings.ts";
 import { createMarketSettingsControl } from "../../bootstrap/settings/market-settings-control.ts";
-import { createWarSettingsIntentHandler } from "../../application/war-settings.ts";
-import { createWarSettingsBrowserAdapter } from "../browser/war-settings.ts";
-import { createWarSettingsEvolveAdapter } from "./combat/war-settings.ts";
-import { createHellSettingsIntentHandler } from "../../application/hell-settings.ts";
-import { createHellSettingsBrowserAdapter } from "../browser/hell-settings.ts";
-import { getHellSettingsReadModel } from "../../domain/combat/hell-settings.ts";
+import { createWarSettingsControl } from "../../bootstrap/settings/war-settings-control.ts";
+import { createHellSettingsControl } from "../../bootstrap/settings/hell-settings-control.ts";
 import { createMechSettingsIntentHandler } from "../../application/mech-settings.ts";
 import { createMechSettingsBrowserAdapter } from "../browser/mech-settings.ts";
 import { createMechSettingsEvolveAdapter } from "./combat/mech-settings.ts";
@@ -1235,84 +1231,38 @@ export function startEvolveRuntimeComposition(
     testSurface,
   });
   const { buildResearchSettings } = researchSettingsBrowserAdapter;
-  const warSettingsReader = createWarSettingsEvolveAdapter({
-    getSpyManager: () =>
-      getTestContext("warSettings")?.SpyManager ?? SpyManager,
-    getGame: () => getTestContext("warSettings")?.game ?? game,
-  });
-  const warSettingsActions = {
-    buildSettingsSection2: (...args) => buildSettingsSection2(...args),
-    addSettingsHeader1: (...args) => addSettingsHeader1(...args),
-    addSettingsNumber: (...args) => addSettingsNumber(...args),
-    addSettingsSelect: (...args) => addSettingsSelect(...args),
-    addSettingsToggle: (...args) => addSettingsToggle(...args),
-  };
-  const warSettingsIntentHandler = createWarSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (getTestContext("warSettings")?.resetWarSettings ?? resetWarSettings)(
-          true,
-        ),
-      persist: () =>
-        (
-          getTestContext("warSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: (secondaryPrefix) =>
-      updateWarSettingsContent(secondaryPrefix),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("warSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoFight",
-        ),
-    },
-  });
-  const warSettingsBrowserAdapter = createWarSettingsBrowserAdapter({
+  const warSettingsBrowserAdapter = createWarSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    reader: warSettingsReader,
-    intents: warSettingsIntentHandler,
-    getActions: () =>
-      getTestContext("warSettings")?.actions ?? warSettingsActions,
+    actions: {
+      buildSettingsSection2,
+      addSettingsHeader1,
+      addSettingsNumber,
+      addSettingsSelect,
+      addSettingsToggle,
+    },
+    getSpyManager: () => SpyManager,
+    getGame: () => game,
+    resetWarSettings: (...args) => resetWarSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
   const { buildWarSettings, updateWarSettingsContent } =
     warSettingsBrowserAdapter;
-  const hellSettingsReader = { read: getHellSettingsReadModel };
-  const hellSettingsActions = {
-    buildSettingsSection2: (...args) => buildSettingsSection2(...args),
-    addSettingsHeader1: (...args) => addSettingsHeader1(...args),
-    addSettingsNumber: (...args) => addSettingsNumber(...args),
-    addSettingsToggle: (...args) => addSettingsToggle(...args),
-  };
-  const hellSettingsIntentHandler = createHellSettingsIntentHandler({
-    writer: {
-      resetToDefaults: () =>
-        (
-          getTestContext("hellSettings")?.resetHellSettings ?? resetHellSettings
-        )(true),
-      persist: () =>
-        (
-          getTestContext("hellSettings")?.updateSettingsFromState ??
-          updateSettingsFromState
-        )(),
-    },
-    renderSettingsContent: (secondaryPrefix) =>
-      updateHellSettingsContent(secondaryPrefix),
-    effects: {
-      resetCheckboxes: () =>
-        (getTestContext("hellSettings")?.resetCheckbox ?? resetCheckbox)(
-          "autoHell",
-        ),
-    },
-  });
-  const hellSettingsBrowserAdapter = createHellSettingsBrowserAdapter({
+  const hellSettingsBrowserAdapter = createHellSettingsControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    reader: hellSettingsReader,
-    intents: hellSettingsIntentHandler,
-    getActions: () =>
-      getTestContext("hellSettings")?.actions ?? hellSettingsActions,
+    actions: {
+      buildSettingsSection2,
+      addSettingsHeader1,
+      addSettingsNumber,
+      addSettingsToggle,
+    },
+    resetHellSettings: (...args) => resetHellSettings(...args),
+    persistSettings: () => updateSettingsFromState(),
+    resetCheckbox: (...args) => resetCheckbox(...args),
+    testSurface,
   });
   const { buildHellSettings, updateHellSettingsContent } =
     hellSettingsBrowserAdapter;
@@ -5025,14 +4975,6 @@ export function startEvolveRuntimeComposition(
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("ejectorSettings", {
       ejectorSettings: ejectorSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("warSettings", {
-      warSettings: warSettingsBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("hellSettings", {
-      hellSettings: hellSettingsBrowserAdapter,
     });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.addContext("mechSettings", {
