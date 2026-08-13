@@ -125,6 +125,7 @@ import {
 import { createPlannerState } from "../../game/planner-state.ts";
 import { createAuthorityPolicy } from "../../game/authority-policy.ts";
 import { createRunGuards } from "./run-guards.ts";
+import { createPrestigeEligibility } from "./prestige-eligibility.ts";
 import { formatRetirementShortfalls } from "../../application/retirement-prep.ts";
 import { findCostConflict } from "../../domain/cost-conflicts.ts";
 import { readCostConflictInput } from "./cost-conflicts.ts";
@@ -239,27 +240,6 @@ import {
   DEFAULT_VACUUM_MANA_REQUIREMENT,
   isVacuumCollapseManaStageReady,
 } from "../../domain/progression/prestige/vacuum.ts";
-import {
-  getBlackholeMass as getBlackholeMassPolicy,
-  isApocalypsePrestigeAvailable as isApocalypsePrestigeAvailablePolicy,
-  isAscensionPrestigeAvailable as isAscensionPrestigeAvailablePolicy,
-  isBioseedPrestigeAvailable as isBioseedPrestigeAvailablePolicy,
-  isCataclysmPrestigeAvailable as isCataclysmPrestigeAvailablePolicy,
-  isDemonicPrestigeAvailable as isDemonicPrestigeAvailablePolicy,
-  isGeckNeeded as isGeckNeededPolicy,
-  isPillarFinished as isPillarFinishedPolicy,
-  isPrestigeAllowed as isPrestigeAllowedPolicy,
-  isWhiteholePrestigeAvailable as isWhiteholePrestigeAvailablePolicy,
-  isWitchAscensionPrestigeAvailable as isWitchAscensionPrestigeAvailablePolicy,
-} from "../../domain/progression/prestige/prestige-eligibility.ts";
-import {
-  readAscensionEligibilityView,
-  readGeckEligibilityView,
-  readPillarEligibilityView,
-  readPrestigeEligibilityView,
-  readPrestigePermissionView,
-  readWitchAscensionEligibilityView,
-} from "./progression/prestige/prestige-eligibility.ts";
 import { findTechConflict } from "../../domain/progression/research/tech-conflicts.ts";
 import { readTechConflictInput } from "./progression/research/tech-conflicts.ts";
 import { formatTechConflict } from "../../application/tech-conflicts.ts";
@@ -4059,94 +4039,28 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const readPrestigeView = () =>
-    readPrestigeEligibilityView(
-      settings,
-      game,
-      resources,
-      buildings,
-      techIds,
-      MechManager,
-      (...args) => haveTech(...args),
-      (...args) => isAchievementUnlocked(...args),
-    );
-  let isPrestigeAllowed = (type) => {
-    const result = readPrestigePermissionView(settings, game);
-    return result.status === "ready"
-      ? isPrestigeAllowedPolicy(result.view, type)
-      : false;
-  };
-  let isCataclysmPrestigeAvailable = () => {
-    const result = readPrestigeView();
-    return result.status === "ready"
-      ? isCataclysmPrestigeAvailablePolicy(result.view)
-      : false;
-  };
-  let isBioseederPrestigeAvailable = () => {
-    const result = readPrestigeView();
-    return result.status === "ready"
-      ? isBioseedPrestigeAvailablePolicy(result.view)
-      : false;
-  };
-  let isWhiteholePrestigeAvailable = () => {
-    const result = readPrestigeView();
-    return result.status === "ready"
-      ? isWhiteholePrestigeAvailablePolicy(result.view)
-      : false;
-  };
-  let isApocalypsePrestigeAvailable = () => {
-    const result = readPrestigeView();
-    return result.status === "ready"
-      ? isApocalypsePrestigeAvailablePolicy(result.view)
-      : false;
-  };
-  let isAscensionPrestigeAvailable = () => {
-    const result = readAscensionEligibilityView(
-      settings,
-      game,
-      resources,
-      buildings,
-    );
-    return result.status === "ready"
-      ? isAscensionPrestigeAvailablePolicy(result.view)
-      : false;
-  };
-  let isWitchAscensionPrestigeAvailable = (demonic) => {
-    const isDemonic = Boolean(demonic);
-    const result = readWitchAscensionEligibilityView(
-      settings,
-      game,
-      resources,
-      buildings,
-      isDemonic,
-      (...args) => haveTech(...args),
-    );
-    return result.status === "ready"
-      ? isWitchAscensionPrestigeAvailablePolicy(result.view, isDemonic)
-      : false;
-  };
-  let isDemonicPrestigeAvailable = () => {
-    const result = readPrestigeView();
-    return result.status === "ready"
-      ? isDemonicPrestigeAvailablePolicy(result.view)
-      : false;
-  };
-  let isPillarFinished = () => {
-    const result = readPillarEligibilityView(settings, game, resources);
-    return result.status === "ready"
-      ? isPillarFinishedPolicy(result.view)
-      : false;
-  };
-  let isGECKNeeded = () => {
-    const result = readGeckEligibilityView(settings, buildings, (...args) =>
-      isAchievementUnlocked(...args),
-    );
-    return result.status === "ready" ? isGeckNeededPolicy(result.view) : true;
-  };
-  let getBlackholeMass = () => {
-    const result = readPrestigeView();
-    return result.status === "ready" ? getBlackholeMassPolicy(result.view) : 0;
-  };
+  let {
+    isPrestigeAllowed,
+    isCataclysmPrestigeAvailable,
+    isBioseederPrestigeAvailable,
+    isWhiteholePrestigeAvailable,
+    isApocalypsePrestigeAvailable,
+    isAscensionPrestigeAvailable,
+    isWitchAscensionPrestigeAvailable,
+    isDemonicPrestigeAvailable,
+    isPillarFinished,
+    isGECKNeeded,
+    getBlackholeMass,
+  } = createPrestigeEligibility({
+    getSettings: () => settings,
+    getGame: () => game,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    getTechIds: () => techIds,
+    getMechManager: () => MechManager,
+    haveTech: (...args) => haveTech(...args),
+    isAchievementUnlocked: (...args) => isAchievementUnlocked(...args),
+  });
 
   const { autoPrestige } = createPrestigeControl({
     reader: {
