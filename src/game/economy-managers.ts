@@ -331,7 +331,11 @@ export function createEconomyManagers({
     getUnitBuyPrice(resource: EconomyResource) {
       const game = getGame();
       // marketItem > vBind > purchase from resources.js
-      let price = game.global.resource[resource.id].value;
+      const gameResource = game.global.resource[resource.id];
+      if (!gameResource) {
+        return 0;
+      }
+      let price = gameResource.value;
 
       price *= traitVal("arrogant", 0, "+");
       price *= traitVal("conniving", 0, "-");
@@ -348,7 +352,8 @@ export function createEconomyManagers({
       divide *= traitVal("asymmetrical", 0, "+");
       divide *= traitVal("conniving", 1, "-");
 
-      return game.global.resource[resource.id].value / divide;
+      const gameResource = game.global.resource[resource.id];
+      return gameResource ? gameResource.value / divide : 0;
     },
 
     buy(resource: EconomyResource) {

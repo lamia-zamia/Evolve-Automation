@@ -19,6 +19,7 @@ interface DisposalResource {
 
 interface DisposalResources extends Record<string, DisposalResource> {
   Food: DisposalResource;
+  Nanite: DisposalResource;
   Supply: DisposalResource;
 }
 
@@ -31,6 +32,9 @@ interface DisposalBuildings extends Record<string, DisposalBuilding> {
   BlackholeMassEjector: DisposalBuilding;
   LakeBireme: DisposalBuilding;
   LakeTransport: DisposalBuilding;
+  NaniteFactory: DisposalBuilding;
+  RedNaniteFactory: DisposalBuilding;
+  TauNaniteFactory: DisposalBuilding;
 }
 
 interface DisposalSettings {
@@ -148,8 +152,9 @@ export function createDisposalManagers({
       }
       for (let resource of this.priorityList) {
         if (resource.isUnlocked()) {
-          resource.rateMods["nanite"] = this.currentConsume(resource.id);
-          resource.rateOfChange += resource.rateMods["nanite"];
+          const rate = this.currentConsume(resource.id);
+          resource.rateMods["nanite"] = rate;
+          resource.rateOfChange += rate;
         }
       }
     },
@@ -163,7 +168,7 @@ export function createDisposalManagers({
     },
 
     currentConsume(id: string) {
-      return getGame().global.city.nanite_factory[id];
+      return getGame().global.city.nanite_factory[id] ?? 0;
     },
 
     useRatio() {
@@ -199,7 +204,11 @@ export function createDisposalManagers({
 
     consumeMore(id: string, count: number) {
       const resources = getResources();
-      resources[id].rateMods["nanite"] += count;
+      const resource = resources[id];
+      if (!resource) {
+        return false;
+      }
+      resource.rateMods["nanite"] = (resource.rateMods["nanite"] ?? 0) + count;
 
       return industryControls.increaseItem({
         elementId: this._industryElementId,
@@ -210,7 +219,11 @@ export function createDisposalManagers({
 
     consumeLess(id: string, count: number) {
       const resources = getResources();
-      resources[id].rateMods["nanite"] -= count;
+      const resource = resources[id];
+      if (!resource) {
+        return false;
+      }
+      resource.rateMods["nanite"] = (resource.rateMods["nanite"] ?? 0) - count;
 
       return industryControls.decreaseItem({
         elementId: this._industryElementId,
@@ -255,9 +268,10 @@ export function createDisposalManagers({
       }
       for (let resource of this.priorityList) {
         if (resource.isUnlocked()) {
-          resource.rateMods["supply"] =
+          const rate =
             this.currentConsume(resource.id) * this.supplyOut(resource.id);
-          resource.rateOfChange += resource.rateMods["supply"];
+          resource.rateMods["supply"] = rate;
+          resource.rateOfChange += rate;
         }
       }
     },
@@ -279,7 +293,7 @@ export function createDisposalManagers({
     },
 
     currentConsume(id: string) {
-      return getGame().global.portal.transport.cargo[id];
+      return getGame().global.portal.transport.cargo[id] ?? 0;
     },
 
     useRatio() {
@@ -320,6 +334,10 @@ export function createDisposalManagers({
     },
 
     consumeMore(id: string, count: number) {
+      const resource = getResources()[id];
+      if (!resource) {
+        return false;
+      }
       if (
         !disposalControls.increaseSupply({
           elementId: this._supplyElementPrefix + id,
@@ -330,11 +348,16 @@ export function createDisposalManagers({
         return false;
       }
 
-      getResources()[id].rateMods["supply"] += count * this.supplyOut(id);
+      resource.rateMods["supply"] =
+        (resource.rateMods["supply"] ?? 0) + count * this.supplyOut(id);
       return true;
     },
 
     consumeLess(id: string, count: number) {
+      const resource = getResources()[id];
+      if (!resource) {
+        return false;
+      }
       if (
         !disposalControls.decreaseSupply({
           elementId: this._supplyElementPrefix + id,
@@ -345,7 +368,8 @@ export function createDisposalManagers({
         return false;
       }
 
-      getResources()[id].rateMods["supply"] -= count * this.supplyOut(id);
+      resource.rateMods["supply"] =
+        (resource.rateMods["supply"] ?? 0) - count * this.supplyOut(id);
       return true;
     },
   };
@@ -382,8 +406,9 @@ export function createDisposalManagers({
       }
       for (let resource of this.priorityList) {
         if (resource.isUnlocked()) {
-          resource.rateMods["eject"] = this.currentConsume(resource.id);
-          resource.rateOfChange += resource.rateMods["eject"];
+          const rate = this.currentConsume(resource.id);
+          resource.rateMods["eject"] = rate;
+          resource.rateOfChange += rate;
         }
       }
     },
@@ -401,7 +426,7 @@ export function createDisposalManagers({
     },
 
     currentConsume(id: string) {
-      return getGame().global.interstellar.mass_ejector[id];
+      return getGame().global.interstellar.mass_ejector[id] ?? 0;
     },
 
     useRatio() {
@@ -444,6 +469,10 @@ export function createDisposalManagers({
     },
 
     consumeMore(id: string, count: number) {
+      const resource = getResources()[id];
+      if (!resource) {
+        return false;
+      }
       if (
         !disposalControls.increaseEject({
           elementId: this._ejectElementPrefix + id,
@@ -454,11 +483,15 @@ export function createDisposalManagers({
         return false;
       }
 
-      getResources()[id].rateMods["eject"] += count;
+      resource.rateMods["eject"] = (resource.rateMods["eject"] ?? 0) + count;
       return true;
     },
 
     consumeLess(id: string, count: number) {
+      const resource = getResources()[id];
+      if (!resource) {
+        return false;
+      }
       if (
         !disposalControls.decreaseEject({
           elementId: this._ejectElementPrefix + id,
@@ -469,7 +502,7 @@ export function createDisposalManagers({
         return false;
       }
 
-      getResources()[id].rateMods["eject"] -= count;
+      resource.rateMods["eject"] = (resource.rateMods["eject"] ?? 0) - count;
       return true;
     },
   };

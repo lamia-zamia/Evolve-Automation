@@ -3481,9 +3481,13 @@ Only continue if you trust the source. Injected code:
         return this.Resources.includes(res.id);
       },
       updateResources() {
-        if (!(!this.isUnlocked() || !getSettings().autoNanite))
+        if (!(!this.isUnlocked() || !getSettings().autoNanite)) {
           for (let resource2 of this.priorityList)
-            resource2.isUnlocked() && (resource2.rateMods.nanite = this.currentConsume(resource2.id), resource2.rateOfChange += resource2.rateMods.nanite);
+            if (resource2.isUnlocked()) {
+              let rate = this.currentConsume(resource2.id);
+              resource2.rateMods.nanite = rate, resource2.rateOfChange += rate;
+            }
+        }
       },
       managedPriorityList() {
         return this.priorityList;
@@ -3492,7 +3496,7 @@ Only continue if you trust the source. Injected code:
         return getGame().global.city.nanite_factory.count * 50;
       },
       currentConsume(id) {
-        return getGame().global.city.nanite_factory[id];
+        return getGame().global.city.nanite_factory[id] ?? 0;
       },
       useRatio() {
         switch (getSettings().naniteMode) {
@@ -3519,20 +3523,20 @@ Only continue if you trust the source. Injected code:
         return Math.max(extraIncome, extraStore);
       },
       consumeMore(id, count2) {
-        let resources = getResources();
-        return resources[id].rateMods.nanite += count2, industryControls.increaseItem({
+        let resource2 = getResources()[id];
+        return resource2 ? (resource2.rateMods.nanite = (resource2.rateMods.nanite ?? 0) + count2, industryControls.increaseItem({
           elementId: this._industryElementId,
           id,
           count: count2
-        });
+        })) : !1;
       },
       consumeLess(id, count2) {
-        let resources = getResources();
-        return resources[id].rateMods.nanite -= count2, industryControls.decreaseItem({
+        let resource2 = getResources()[id];
+        return resource2 ? (resource2.rateMods.nanite = (resource2.rateMods.nanite ?? 0) - count2, industryControls.decreaseItem({
           elementId: this._industryElementId,
           id,
           count: count2
-        });
+        })) : !1;
       }
     }, SupplyManager: {
       _supplyElementPrefix: "supply",
@@ -3553,9 +3557,13 @@ Only continue if you trust the source. Injected code:
         return Object.hasOwn(getPoly().supplyValue, res.id);
       },
       updateResources() {
-        if (!(!this.isUnlocked() || !getSettings().autoSupply))
+        if (!(!this.isUnlocked() || !getSettings().autoSupply)) {
           for (let resource2 of this.priorityList)
-            resource2.isUnlocked() && (resource2.rateMods.supply = this.currentConsume(resource2.id) * this.supplyOut(resource2.id), resource2.rateOfChange += resource2.rateMods.supply);
+            if (resource2.isUnlocked()) {
+              let rate = this.currentConsume(resource2.id) * this.supplyOut(resource2.id);
+              resource2.rateMods.supply = rate, resource2.rateOfChange += rate;
+            }
+        }
       },
       supplyIn(id) {
         return getPoly().supplyValue[id]?.in ?? 0;
@@ -3570,7 +3578,7 @@ Only continue if you trust the source. Injected code:
         return getGame().global.portal.transport.cargo.max;
       },
       currentConsume(id) {
-        return getGame().global.portal.transport.cargo[id];
+        return getGame().global.portal.transport.cargo[id] ?? 0;
       },
       useRatio() {
         switch (getSettings().supplyMode) {
@@ -3603,18 +3611,20 @@ Only continue if you trust the source. Injected code:
         return Math.max(extraIncome, extraStore) / this.supplyOut(resource2.id);
       },
       consumeMore(id, count2) {
-        return disposalControls.increaseSupply({
+        let resource2 = getResources()[id];
+        return !resource2 || !disposalControls.increaseSupply({
           elementId: this._supplyElementPrefix + id,
           id,
           count: count2
-        }) ? (getResources()[id].rateMods.supply += count2 * this.supplyOut(id), !0) : !1;
+        }) ? !1 : (resource2.rateMods.supply = (resource2.rateMods.supply ?? 0) + count2 * this.supplyOut(id), !0);
       },
       consumeLess(id, count2) {
-        return disposalControls.decreaseSupply({
+        let resource2 = getResources()[id];
+        return !resource2 || !disposalControls.decreaseSupply({
           elementId: this._supplyElementPrefix + id,
           id,
           count: count2
-        }) ? (getResources()[id].rateMods.supply -= count2 * this.supplyOut(id), !0) : !1;
+        }) ? !1 : (resource2.rateMods.supply = (resource2.rateMods.supply ?? 0) - count2 * this.supplyOut(id), !0);
       }
     }, EjectManager: {
       _ejectElementPrefix: "eject",
@@ -3634,9 +3644,13 @@ Only continue if you trust the source. Injected code:
         return Object.hasOwn(getGame().atomic_mass, res.id);
       },
       updateResources() {
-        if (!(!this.isUnlocked() || !getSettings().autoEject && !haveTask("trash")))
+        if (!(!this.isUnlocked() || !getSettings().autoEject && !haveTask("trash"))) {
           for (let resource2 of this.priorityList)
-            resource2.isUnlocked() && (resource2.rateMods.eject = this.currentConsume(resource2.id), resource2.rateOfChange += resource2.rateMods.eject);
+            if (resource2.isUnlocked()) {
+              let rate = this.currentConsume(resource2.id);
+              resource2.rateMods.eject = rate, resource2.rateOfChange += rate;
+            }
+        }
       },
       managedPriorityList() {
         let game = getGame(), resources = getResources();
@@ -3646,7 +3660,7 @@ Only continue if you trust the source. Injected code:
         return getGame().global.interstellar.mass_ejector.on * 1e3;
       },
       currentConsume(id) {
-        return getGame().global.interstellar.mass_ejector[id];
+        return getGame().global.interstellar.mass_ejector[id] ?? 0;
       },
       useRatio() {
         switch (getSettings().ejectMode) {
@@ -3681,18 +3695,20 @@ Only continue if you trust the source. Injected code:
         return Math.max(extraIncome, extraStore);
       },
       consumeMore(id, count2) {
-        return disposalControls.increaseEject({
+        let resource2 = getResources()[id];
+        return !resource2 || !disposalControls.increaseEject({
           elementId: this._ejectElementPrefix + id,
           id,
           count: count2
-        }) ? (getResources()[id].rateMods.eject += count2, !0) : !1;
+        }) ? !1 : (resource2.rateMods.eject = (resource2.rateMods.eject ?? 0) + count2, !0);
       },
       consumeLess(id, count2) {
-        return disposalControls.decreaseEject({
+        let resource2 = getResources()[id];
+        return !resource2 || !disposalControls.decreaseEject({
           elementId: this._ejectElementPrefix + id,
           id,
           count: count2
-        }) ? (getResources()[id].rateMods.eject -= count2, !0) : !1;
+        }) ? !1 : (resource2.rateMods.eject = (resource2.rateMods.eject ?? 0) - count2, !0);
       }
     } };
   }
@@ -3743,12 +3759,12 @@ Only continue if you trust the source. Injected code:
           {
             Oil: {
               id: "Oil",
-              unlocked: () => getGame().global.resource.Oil.display,
+              unlocked: () => getGame().global.resource.Oil?.display ?? !1,
               cost: [new ResourceProductionCost(resources.Oil, 0.35, 2)]
             },
             Coal: {
               id: "Coal",
-              unlocked: () => getGame().global.resource.Coal.display,
+              unlocked: () => getGame().global.resource.Coal?.display ?? !1,
               cost: [
                 new ResourceProductionCost(
                   resources.Coal,
@@ -3813,14 +3829,16 @@ Only continue if you trust the source. Injected code:
         });
       },
       increaseSmelting(id, count2) {
-        return count2 === 0 || !this.Productions[id].unlocked ? !1 : count2 < 0 ? this.decreaseSmelting(id, count2 * -1) : industryControls.increaseMetal({
+        let production = this.Productions[id];
+        return count2 === 0 || !production?.unlocked ? !1 : count2 < 0 ? this.decreaseSmelting(id, count2 * -1) : industryControls.increaseMetal({
           elementId: this._industryElementId,
           id,
           count: count2
         });
       },
       decreaseSmelting(id, count2) {
-        return count2 === 0 || !this.Productions[id].unlocked ? !1 : count2 < 0 ? this.increaseSmelting(id, count2 * -1) : industryControls.decreaseMetal({
+        let production = this.Productions[id];
+        return count2 === 0 || !production?.unlocked ? !1 : count2 < 0 ? this.increaseSmelting(id, count2 * -1) : industryControls.decreaseMetal({
           elementId: this._industryElementId,
           id,
           count: count2
@@ -3835,7 +3853,7 @@ Only continue if you trust the source. Injected code:
       }
     }, factoryRate = (production, resource2) => {
       let game = getGame();
-      return game.f_rate[production][resource2][game.global.tech.factory || 0];
+      return game.f_rate[production]?.[resource2]?.[game.global.tech.factory || 0] ?? 0;
     }, FactoryManager = {
       _industryElementId: "iFactory",
       Productions: addProps(
@@ -3969,7 +3987,7 @@ Only continue if you trust the source. Injected code:
         let game = getGame(), total = 0;
         for (let key in this.Productions) {
           let production = this.Productions[key];
-          total += game.global.city.factory[production.id];
+          production && (total += game.global.city.factory[production.id]);
         }
         return total;
       },
@@ -3979,7 +3997,7 @@ Only continue if you trust the source. Injected code:
           return max;
         for (let key in this.Productions) {
           let production = this.Productions[key];
-          production.unlocked && !production.enabled && (max -= game.global.city.factory[production.id]);
+          production && production.unlocked && !production.enabled && (max -= game.global.city.factory[production.id]);
         }
         return max;
       },
@@ -4006,7 +4024,7 @@ Only continue if you trust the source. Injected code:
       Productions: addProps(
         normalizeProperties(
           replicableResources.map((resId) => resources[resId]).reduce(
-            (a, res) => ({
+            (a, res) => res ? {
               ...a,
               [res.id]: {
                 id: res.id,
@@ -4014,7 +4032,7 @@ Only continue if you trust the source. Injected code:
                 unlocked: () => res.isUnlocked(),
                 cost: []
               }
-            }),
+            } : a,
             {}
           )
         ),
@@ -4056,7 +4074,7 @@ Only continue if you trust the source. Injected code:
         let game = getGame(), total = 0;
         for (let key in this.Productions) {
           let production = this.Productions[key];
-          total += game.global.interstellar.mining_droid[production.id];
+          production && (total += game.global.interstellar.mining_droid[production.id] ?? 0);
         }
         return total;
       },
@@ -4266,12 +4284,17 @@ Only continue if you trust the source. Injected code:
           return marketControls.maxMultiplier();
         },
         getUnitBuyPrice(resource2) {
-          let price = getGame().global.resource[resource2.id].value;
+          let gameResource = getGame().global.resource[resource2.id];
+          if (!gameResource)
+            return 0;
+          let price = gameResource.value;
           return price *= traitVal("arrogant", 0, "+"), price *= traitVal("conniving", 0, "-"), price;
         },
         getUnitSellPrice(resource2) {
           let game = getGame(), divide = 4;
-          return divide *= traitVal("merchant", 0, "-"), divide *= traitVal("asymmetrical", 0, "+"), divide *= traitVal("conniving", 1, "-"), game.global.resource[resource2.id].value / divide;
+          divide *= traitVal("merchant", 0, "-"), divide *= traitVal("asymmetrical", 0, "+"), divide *= traitVal("conniving", 1, "-");
+          let gameResource = game.global.resource[resource2.id];
+          return gameResource ? gameResource.value / divide : 0;
         },
         buy(resource2) {
           let resources = getResources();
@@ -5866,10 +5889,8 @@ Only continue if you trust the source. Injected code:
         );
         if (indexToRemove !== -1) {
           this.priorityList.splice(indexToRemove, 1);
-          for (let i = 0; i < this.priorityList.length; i++) {
-            let trigger = this.priorityList[i];
+          for (let [i, trigger] of this.priorityList.entries())
             trigger.seq = i, trigger.priority = i;
-          }
         }
       },
       DuplicateTrigger(seq) {
@@ -5878,7 +5899,10 @@ Only continue if you trust the source. Injected code:
         );
         if (indexToDuplicate === -1)
           return;
-        let triggerToDuplicate = this.priorityList[indexToDuplicate], trigger = new Trigger(
+        let triggerToDuplicate = this.priorityList[indexToDuplicate];
+        if (!triggerToDuplicate)
+          return;
+        let trigger = new Trigger(
           0,
           0,
           triggerToDuplicate.requirementType,
@@ -5889,10 +5913,8 @@ Only continue if you trust the source. Injected code:
           triggerToDuplicate.actionCount
         );
         this.priorityList.splice(indexToDuplicate, 0, trigger);
-        for (let i = 0; i < this.priorityList.length; i++) {
-          let trigger2 = this.priorityList[i];
+        for (let [i, trigger2] of this.priorityList.entries())
           trigger2.seq = i, trigger2.priority = i;
-        }
       },
       EvalizeTrigger(seq) {
         let indexToEval = this.priorityList.findIndex(
@@ -5900,7 +5922,10 @@ Only continue if you trust the source. Injected code:
         );
         if (indexToEval === -1)
           return;
-        let trigger = this.priorityList[indexToEval], check = trigger.requirementType === "Eval" ? trigger.requirementId : `_("${trigger.requirementType}",${JSON.stringify(
+        let trigger = this.priorityList[indexToEval];
+        if (!trigger)
+          return;
+        let check = trigger.requirementType === "Eval" ? trigger.requirementId : `_("${trigger.requirementType}",${JSON.stringify(
           trigger.requirementId
         )})`;
         getWindow().prompt("Eval of this condition:", check);

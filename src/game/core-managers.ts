@@ -495,8 +495,7 @@ export function createCoreManagers({
 
       this.priorityList.splice(indexToRemove, 1);
 
-      for (let i = 0; i < this.priorityList.length; i++) {
-        let trigger = this.priorityList[i];
+      for (const [i, trigger] of this.priorityList.entries()) {
         trigger.seq = i;
         trigger.priority = i;
       }
@@ -511,7 +510,10 @@ export function createCoreManagers({
         return;
       }
 
-      let triggerToDuplicate = this.priorityList[indexToDuplicate];
+      const triggerToDuplicate = this.priorityList[indexToDuplicate];
+      if (!triggerToDuplicate) {
+        return;
+      }
       let trigger = new Trigger(
         0,
         0,
@@ -524,8 +526,7 @@ export function createCoreManagers({
       );
       this.priorityList.splice(indexToDuplicate, 0, trigger);
 
-      for (let i = 0; i < this.priorityList.length; i++) {
-        let trigger = this.priorityList[i];
+      for (const [i, trigger] of this.priorityList.entries()) {
         trigger.seq = i;
         trigger.priority = i;
       }
@@ -540,7 +541,10 @@ export function createCoreManagers({
         return;
       }
 
-      let trigger = this.priorityList[indexToEval];
+      const trigger = this.priorityList[indexToEval];
+      if (!trigger) {
+        return;
+      }
 
       const check =
         trigger.requirementType === "Eval"

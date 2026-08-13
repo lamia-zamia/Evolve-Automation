@@ -179,12 +179,12 @@ export function createProductionManagers({
         {
           Oil: {
             id: "Oil",
-            unlocked: () => getGame().global.resource.Oil.display,
+            unlocked: () => getGame().global.resource.Oil?.display ?? false,
             cost: [new ResourceProductionCost(resources.Oil, 0.35, 2)],
           },
           Coal: {
             id: "Coal",
-            unlocked: () => getGame().global.resource.Coal.display,
+            unlocked: () => getGame().global.resource.Coal?.display ?? false,
             cost: [
               new ResourceProductionCost(
                 resources.Coal,
@@ -302,7 +302,8 @@ export function createProductionManagers({
     },
 
     increaseSmelting(id: string, count: number): boolean {
-      if (count === 0 || !this.Productions[id].unlocked) {
+      const production = this.Productions[id];
+      if (count === 0 || !production?.unlocked) {
         return false;
       }
       if (count < 0) {
@@ -317,7 +318,8 @@ export function createProductionManagers({
     },
 
     decreaseSmelting(id: string, count: number): boolean {
-      if (count === 0 || !this.Productions[id].unlocked) {
+      const production = this.Productions[id];
+      if (count === 0 || !production?.unlocked) {
         return false;
       }
       if (count < 0) {
@@ -343,7 +345,9 @@ export function createProductionManagers({
 
   const factoryRate = (production: string, resource: string) => {
     const game = getGame();
-    return game.f_rate[production][resource][game.global.tech["factory"] || 0];
+    const productionRates = game.f_rate[production];
+    const resourceRates = productionRates?.[resource];
+    return resourceRates?.[game.global.tech["factory"] || 0] ?? 0;
   };
 
   const FactoryManager = {
@@ -494,7 +498,10 @@ export function createProductionManagers({
       const game = getGame();
       let total = 0;
       for (let key in this.Productions) {
-        let production = this.Productions[key];
+        const production = this.Productions[key];
+        if (!production) {
+          continue;
+        }
         total += game.global.city.factory![production.id]!;
       }
       return total;
@@ -514,7 +521,10 @@ export function createProductionManagers({
         return max;
       }
       for (let key in this.Productions) {
-        let production = this.Productions[key];
+        const production = this.Productions[key];
+        if (!production) {
+          continue;
+        }
         if (production.unlocked && !production.enabled) {
           max -= game.global.city.factory[production.id]!;
         }
@@ -568,15 +578,20 @@ export function createProductionManagers({
         replicableResources
           .map((resId) => resources[resId])
           .reduce(
-            (a, res) => ({
-              ...a,
-              [res.id]: {
-                id: res.id,
-                resource: res,
-                unlocked: () => res.isUnlocked(),
-                cost: [],
-              },
-            }),
+            (a, res) => {
+              if (!res) {
+                return a;
+              }
+              return {
+                ...a,
+                [res.id]: {
+                  id: res.id,
+                  resource: res,
+                  unlocked: () => res.isUnlocked(),
+                  cost: [],
+                },
+              };
+            },
             {} as Record<string, ProductionDefinition>,
           ),
       ),
@@ -634,8 +649,11 @@ export function createProductionManagers({
       const game = getGame();
       let total = 0;
       for (let key in this.Productions) {
-        let production = this.Productions[key];
-        total += game.global.interstellar.mining_droid[production.id];
+        const production = this.Productions[key];
+        if (!production) {
+          continue;
+        }
+        total += game.global.interstellar.mining_droid[production.id] ?? 0;
       }
       return total;
     },
