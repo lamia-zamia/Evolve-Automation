@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.json && npm run typecheck:architecture",
     "typecheck:architecture": "tsc -p tsconfig.architecture.json",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
-    "lint:check": "eslint . --quiet --cache --cache-location node_modules/.cache/eslint/",
+    "lint:check": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "lint:fix": "eslint . --fix --cache --cache-location node_modules/.cache/eslint/",
     "format": "prettier . --write --cache",
     "format:check": "prettier . --check --cache",

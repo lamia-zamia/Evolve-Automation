@@ -81,6 +81,7 @@ export default defineConfig(
       "src/ui/**/*.ts",
       "src/utils/**/*.ts",
       "src/validation/**/*.ts",
+      "src/game/**/*.ts",
       "src/*.ts",
     ],
     rules: {

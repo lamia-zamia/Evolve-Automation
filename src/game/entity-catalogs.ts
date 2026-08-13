@@ -1,9 +1,34 @@
 type CatalogEntity = { [key: string]: unknown };
 type EntityConstructor = new (...args: unknown[]) => CatalogEntity;
 type HaveTech = (id: string, level: number) => unknown;
+type EntityCatalogClasses = {
+  Action: EntityConstructor;
+  BasicJob: EntityConstructor;
+  BeltSupport: EntityConstructor;
+  CityAction: EntityConstructor;
+  CraftingJob: EntityConstructor;
+  ElectrolysisSupport: EntityConstructor;
+  Job: EntityConstructor;
+  ModalAction: EntityConstructor;
+  Morale: EntityConstructor;
+  Pillar: EntityConstructor;
+  Population: EntityConstructor;
+  Power: EntityConstructor;
+  PrestigeResource: EntityConstructor;
+  Project: EntityConstructor;
+  Resource: EntityConstructor;
+  ResourceAction: EntityConstructor;
+  SoulGem: EntityConstructor;
+  SpaceDock: EntityConstructor;
+  Supply: EntityConstructor;
+  Support: EntityConstructor;
+  Thrall: EntityConstructor;
+  Troops: EntityConstructor;
+  WomlingsSupport: EntityConstructor;
+};
 
 type EntityCatalogDependencies = {
-  classes: Record<string, EntityConstructor>;
+  classes: EntityCatalogClasses;
   getHaveTech: () => HaveTech;
   setResources: (resources: Record<string, CatalogEntity>) => void;
 };
