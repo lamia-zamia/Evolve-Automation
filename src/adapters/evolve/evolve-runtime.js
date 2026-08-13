@@ -124,7 +124,7 @@ import {
 import { createPlannerState } from "../../game/planner-state.ts";
 import { createAuthorityPolicy } from "../../game/authority-policy.ts";
 import { createRunGuards } from "./run-guards.ts";
-import { createPrestigeEligibility } from "./prestige-eligibility.ts";
+import { createPrestigeEligibilityControl } from "../../bootstrap/prestige-eligibility-control.ts";
 import { formatRetirementShortfalls } from "../../application/retirement-prep.ts";
 import { createCostConflict } from "./cost-conflict.ts";
 import { findPlannerLimit } from "../../domain/planner-analysis.ts";
@@ -3115,7 +3115,7 @@ export function startEvolveRuntimeComposition(
     isPillarFinished,
     isGECKNeeded,
     getBlackholeMass,
-  } = createPrestigeEligibility({
+  } = createPrestigeEligibilityControl({
     getSettings: () => settings,
     getGame: () => game,
     getResources: () => resources,
@@ -3124,6 +3124,17 @@ export function startEvolveRuntimeComposition(
     getMechManager: () => MechManager,
     haveTech: (...args) => haveTech(...args),
     isAchievementUnlocked: (...args) => isAchievementUnlocked(...args),
+    testSurface,
+    setTestContext(context) {
+      settings = context.settings;
+      game = context.game;
+      resources = context.resources;
+      buildings = context.buildings;
+      techIds = context.techIds;
+      MechManager = context.MechManager;
+      haveTech = context.haveTech;
+      isAchievementUnlocked = context.isAchievementUnlocked;
+    },
   });
 
   const { autoPrestige } = createPrestigeControl({
@@ -3182,33 +3193,6 @@ export function startEvolveRuntimeComposition(
       },
       setForeignControlsTestContext(context) {
         setTestContext("foreignControls", context);
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      prestigeEligibility: {
-        isPrestigeAllowed,
-        isCataclysmPrestigeAvailable,
-        isBioseederPrestigeAvailable,
-        isWhiteholePrestigeAvailable,
-        isApocalypsePrestigeAvailable,
-        isAscensionPrestigeAvailable,
-        isWitchAscensionPrestigeAvailable,
-        isDemonicPrestigeAvailable,
-        isPillarFinished,
-        isGECKNeeded,
-        getBlackholeMass,
-      },
-      setPrestigeEligibilityTestContext(context) {
-        settings = context.settings;
-        game = context.game;
-        resources = context.resources;
-        buildings = context.buildings;
-        techIds = context.techIds;
-        MechManager = context.MechManager;
-        haveTech = context.haveTech;
-        isAchievementUnlocked = context.isAchievementUnlocked;
       },
     });
 

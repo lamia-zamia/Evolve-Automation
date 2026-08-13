@@ -14157,6 +14157,15 @@ Only continue if you trust the source. Injected code:
     };
   }
 
+  // src/bootstrap/prestige-eligibility-control.ts
+  function createPrestigeEligibilityControl({
+    testSurface,
+    setTestContext,
+    ...dependencies
+  }) {
+    return createPrestigeEligibility(dependencies);
+  }
+
   // src/application/retirement-prep.ts
   function formatRetirementShortfall(shortfall, formatNumber) {
     switch (shortfall.kind) {
@@ -50636,7 +50645,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       isPillarFinished: isPillarFinished2,
       isGECKNeeded,
       getBlackholeMass: getBlackholeMass2
-    } = createPrestigeEligibility({
+    } = createPrestigeEligibilityControl({
       getSettings: () => settings,
       getGame: () => game,
       getResources: () => resources,
@@ -50644,7 +50653,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getTechIds: () => techIds,
       getMechManager: () => MechManager,
       haveTech: (...args) => haveTech(...args),
-      isAchievementUnlocked: (...args) => isAchievementUnlocked2(...args)
+      isAchievementUnlocked: (...args) => isAchievementUnlocked2(...args),
+      testSurface,
+      setTestContext(context) {
+        settings = context.settings, game = context.game, resources = context.resources, buildings = context.buildings, techIds = context.techIds, MechManager = context.MechManager, haveTech = context.haveTech, isAchievementUnlocked2 = context.isAchievementUnlocked;
+      }
     }), { autoPrestige } = createPrestigeControl({
       reader: {
         getState: () => state,
