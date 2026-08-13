@@ -153,8 +153,7 @@ import {
   readAuthorityQuantity,
 } from "./civic/authority.ts";
 import { createQueueQueries } from "./queue-queries.ts";
-import { calculateTargetTiming } from "../../domain/target-timing.ts";
-import { readTargetTimingInput } from "./target-timing.ts";
+import { createTargetTimingDisplay } from "./target-timing-display.ts";
 import { findRequiredResourceWeight as findRequiredResourceWeightPolicy } from "../../domain/economy/resources/resource-weighting.ts";
 import { createGameActionVerification } from "../../validation/game-actions.ts";
 import { createStateLogLifecycle } from "../../observability/state-log.ts";
@@ -4827,26 +4826,11 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const getMultiSegmentedTimeLeft = (target) => {
-    const readResult = readTargetTimingInput(
-      game,
-      target,
-      target instanceof Project,
-    );
-    if (readResult.status === "unavailable") {
-      return {
-        resource: readResult.resourceId ?? "",
-        timeLeft: "Never",
-      };
-    }
-
-    const result = calculateTargetTiming(readResult.input);
-    return {
-      resource: result.resourceId,
-      timeLeft:
-        result.seconds === Infinity ? "Never" : poly.timeFormat(result.seconds),
-    };
-  };
+  const { getMultiSegmentedTimeLeft } = createTargetTimingDisplay({
+    getGame: () => game,
+    getTimeFormat: () => (seconds) => poly.timeFormat(seconds),
+    isProject: (target) => target instanceof Project,
+  });
 
   publishTestSurface({
     getMultiSegmentedTimeLeft,

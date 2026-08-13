@@ -19610,6 +19610,33 @@
     return gameMax - count2;
   }
 
+  // src/adapters/evolve/target-timing-display.ts
+  function createTargetTimingDisplay({
+    getGame,
+    getTimeFormat,
+    isProject
+  }) {
+    function getMultiSegmentedTimeLeft(target) {
+      const readResult = readTargetTimingInput(
+        getGame(),
+        target,
+        isProject(target)
+      );
+      if (readResult.status === "unavailable") {
+        return {
+          resource: readResult.resourceId ?? "",
+          timeLeft: "Never"
+        };
+      }
+      const result2 = calculateTargetTiming(readResult.input);
+      return {
+        resource: result2.resourceId,
+        timeLeft: result2.seconds === Infinity ? "Never" : getTimeFormat()(result2.seconds)
+      };
+    }
+    return { getMultiSegmentedTimeLeft };
+  }
+
   // src/domain/economy/resources/resource-weighting.ts
   function findRequiredResourceWeight(orderedRequirements, resource2) {
     return orderedRequirements.find((requirement) => {
@@ -60690,24 +60717,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         win = context.win;
       }
     });
-    const getMultiSegmentedTimeLeft = (target) => {
-      const readResult = readTargetTimingInput(
-        game,
-        target,
-        target instanceof Project
-      );
-      if (readResult.status === "unavailable") {
-        return {
-          resource: readResult.resourceId ?? "",
-          timeLeft: "Never"
-        };
-      }
-      const result2 = calculateTargetTiming(readResult.input);
-      return {
-        resource: result2.resourceId,
-        timeLeft: result2.seconds === Infinity ? "Never" : poly.timeFormat(result2.seconds)
-      };
-    };
+    const { getMultiSegmentedTimeLeft } = createTargetTimingDisplay({
+      getGame: () => game,
+      getTimeFormat: () => (seconds) => poly.timeFormat(seconds),
+      isProject: (target) => target instanceof Project
+    });
     publishTestSurface({
       getMultiSegmentedTimeLeft,
       makeTargetTimingProject(progress, currentStep, cost) {
