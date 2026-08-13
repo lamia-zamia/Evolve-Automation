@@ -233,8 +233,7 @@ import { createOcularPowerControl } from "../../bootstrap/ocular-power-control.t
 import { createMinorTraitControl } from "../../bootstrap/minor-trait-control.ts";
 import { createTriggerControl } from "../../bootstrap/trigger-control.ts";
 import { createEconomyAutomationControls } from "../../bootstrap/economy-automation-controls.ts";
-import { createPowerControl } from "../../bootstrap/power-control.ts";
-import { createStorageAllocationControl } from "../../bootstrap/storage-allocation-control.ts";
+import { createPowerStorageControls } from "../../bootstrap/power-storage-controls.ts";
 import { createMarketAutomationControls } from "../../bootstrap/market-automation-controls.ts";
 import { createCraftControl } from "../../bootstrap/craft-control.ts";
 import { createSpyControl } from "../../bootstrap/spy-control.ts";
@@ -3436,38 +3435,55 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { autoPower } = createPowerControl({
-    warnings: {
-      getDocument: () => runtimeEnvironment.window.document,
-      getWindow: () => runtimeEnvironment.window,
+  const { autoPower, autoStorage } = createPowerStorageControls({
+    power: {
+      warnings: {
+        getDocument: () => runtimeEnvironment.window.document,
+        getWindow: () => runtimeEnvironment.window,
+      },
+      adapter: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getState: () => state,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getJobs: () => jobs,
+        getPoly: () => poly,
+        getBuildingManager: () => BuildingManager,
+        getFleetManager: () => FleetManager,
+        getMechManager: () => MechManager,
+        getWarManager: () => WarManager,
+        consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+        isSupportResource: (value) => value instanceof Support,
+        isHellSuppressionUseful: isHellSupressUseful,
+        getGalaxyRegions,
+        traitValue: traitVal,
+        getAuthorityGarrisonRequirement:
+          authorityPolicy.getRequiredAuthorityGarrison,
+        haveTech,
+        getHealingRate,
+        isHungryRace,
+        isPillarFinished,
+        getBuildingIds: () => buildingIds,
+        log: (message) => runtimeEnvironment.log(message),
+      },
+      diagnostics,
     },
-    adapter: {
-      getGame: () => game,
-      getSettings: () => settings,
-      getState: () => state,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getJobs: () => jobs,
-      getPoly: () => poly,
-      getBuildingManager: () => BuildingManager,
-      getFleetManager: () => FleetManager,
-      getMechManager: () => MechManager,
-      getWarManager: () => WarManager,
-      consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
-      isSupportResource: (value) => value instanceof Support,
-      isHellSuppressionUseful: isHellSupressUseful,
-      getGalaxyRegions,
-      traitValue: traitVal,
-      getAuthorityGarrisonRequirement:
-        authorityPolicy.getRequiredAuthorityGarrison,
-      haveTech,
-      getHealingRate,
-      isHungryRace,
-      isPillarFinished,
-      getBuildingIds: () => buildingIds,
-      log: (message) => runtimeEnvironment.log(message),
+    storage: {
+      debug: { getWindow: () => runtimeEnvironment.window },
+      adapter: {
+        getStorageManager: () => StorageManager,
+        getGame: () => game,
+        getSettings: () => settings,
+        getState: () => state,
+        getResources: () => resources,
+        getBuildingManager: () => BuildingManager,
+        getProjectManager: () => ProjectManager,
+        getFleetManagerOuter: () => FleetManagerOuter,
+        log: (message) => runtimeEnvironment.log(message),
+      },
+      expand: expandStorage,
     },
-    diagnostics,
   });
 
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
@@ -3497,22 +3513,6 @@ export function startEvolveRuntimeComposition(
         StorageManager = context.StorageManager;
       },
     });
-
-  const { autoStorage } = createStorageAllocationControl({
-    debug: { getWindow: () => runtimeEnvironment.window },
-    adapter: {
-      getStorageManager: () => StorageManager,
-      getGame: () => game,
-      getSettings: () => settings,
-      getState: () => state,
-      getResources: () => resources,
-      getBuildingManager: () => BuildingManager,
-      getProjectManager: () => ProjectManager,
-      getFleetManagerOuter: () => FleetManagerOuter,
-      log: (message) => runtimeEnvironment.log(message),
-    },
-    expand: expandStorage,
-  });
 
   const { autoMinorTrait } = createMinorTraitControl({
     reader: {

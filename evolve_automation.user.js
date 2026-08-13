@@ -34053,6 +34053,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return Object.freeze({ autoStorage: () => automation.run() });
   }
 
+  // src/bootstrap/power-storage-controls.ts
+  function createPowerStorageControls({
+    power,
+    storage
+  }) {
+    let powerControl = createPowerControl(power), storageControl = createStorageAllocationControl(storage);
+    return Object.freeze({
+      ...powerControl,
+      ...storageControl
+    });
+  }
+
   // src/adapters/evolve/economy/market/market.ts
   function readResourceId2(resource2, path) {
     let id = resource2.id;
@@ -50869,51 +50881,54 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       executor: {
         getState: () => state
       }
-    }), { autoPower } = createPowerControl({
-      warnings: {
-        getDocument: () => runtimeEnvironment.window.document,
-        getWindow: () => runtimeEnvironment.window
+    }), { autoPower, autoStorage } = createPowerStorageControls({
+      power: {
+        warnings: {
+          getDocument: () => runtimeEnvironment.window.document,
+          getWindow: () => runtimeEnvironment.window
+        },
+        adapter: {
+          getGame: () => game,
+          getSettings: () => settings,
+          getState: () => state,
+          getResources: () => resources,
+          getBuildings: () => buildings,
+          getJobs: () => jobs,
+          getPoly: () => poly,
+          getBuildingManager: () => BuildingManager,
+          getFleetManager: () => FleetManager,
+          getMechManager: () => MechManager,
+          getWarManager: () => WarManager,
+          consumptionBalanceMinimum: 60,
+          isSupportResource: (value) => value instanceof Support,
+          isHellSuppressionUseful: isHellSupressUseful,
+          getGalaxyRegions,
+          traitValue: traitVal,
+          getAuthorityGarrisonRequirement: authorityPolicy.getRequiredAuthorityGarrison,
+          haveTech,
+          getHealingRate,
+          isHungryRace,
+          isPillarFinished: isPillarFinished2,
+          getBuildingIds: () => buildingIds,
+          log: (message) => runtimeEnvironment.log(message)
+        },
+        diagnostics
       },
-      adapter: {
-        getGame: () => game,
-        getSettings: () => settings,
-        getState: () => state,
-        getResources: () => resources,
-        getBuildings: () => buildings,
-        getJobs: () => jobs,
-        getPoly: () => poly,
-        getBuildingManager: () => BuildingManager,
-        getFleetManager: () => FleetManager,
-        getMechManager: () => MechManager,
-        getWarManager: () => WarManager,
-        consumptionBalanceMinimum: 60,
-        isSupportResource: (value) => value instanceof Support,
-        isHellSuppressionUseful: isHellSupressUseful,
-        getGalaxyRegions,
-        traitValue: traitVal,
-        getAuthorityGarrisonRequirement: authorityPolicy.getRequiredAuthorityGarrison,
-        haveTech,
-        getHealingRate,
-        isHungryRace,
-        isPillarFinished: isPillarFinished2,
-        getBuildingIds: () => buildingIds,
-        log: (message) => runtimeEnvironment.log(message)
-      },
-      diagnostics
-    }), { autoStorage } = createStorageAllocationControl({
-      debug: { getWindow: () => runtimeEnvironment.window },
-      adapter: {
-        getStorageManager: () => StorageManager,
-        getGame: () => game,
-        getSettings: () => settings,
-        getState: () => state,
-        getResources: () => resources,
-        getBuildingManager: () => BuildingManager,
-        getProjectManager: () => ProjectManager,
-        getFleetManagerOuter: () => FleetManagerOuter,
-        log: (message) => runtimeEnvironment.log(message)
-      },
-      expand: expandStorage
+      storage: {
+        debug: { getWindow: () => runtimeEnvironment.window },
+        adapter: {
+          getStorageManager: () => StorageManager,
+          getGame: () => game,
+          getSettings: () => settings,
+          getState: () => state,
+          getResources: () => resources,
+          getBuildingManager: () => BuildingManager,
+          getProjectManager: () => ProjectManager,
+          getFleetManagerOuter: () => FleetManagerOuter,
+          log: (message) => runtimeEnvironment.log(message)
+        },
+        expand: expandStorage
+      }
     }), { autoMinorTrait } = createMinorTraitControl({
       reader: {
         getMinorTraitManager: () => MinorTraitManager,
