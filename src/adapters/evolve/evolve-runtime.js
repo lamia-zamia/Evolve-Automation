@@ -90,9 +90,9 @@ import { createEconomyManagerControl } from "../../bootstrap/economy-manager-con
 import { createForeignAffairsManagerControl } from "../../bootstrap/foreign-affairs-manager-control.ts";
 import { readForeignAchievementGoal } from "./combat/foreign-achievements.ts";
 import { createFleetMechManagerControl } from "../../bootstrap/fleet-mech-manager-control.ts";
-import { createInfrastructureManagers } from "../../game/infrastructure-managers.ts";
+import { createInfrastructureManagerControl } from "../../bootstrap/infrastructure-manager-control.ts";
 import { createScriptBootstrapControl } from "../../bootstrap/script-bootstrap-control.ts";
-import { createCoreManagers } from "../../game/core-managers.ts";
+import { createCoreManagerControl } from "../../bootstrap/core-manager-control.ts";
 import { createRaceProfile } from "../../game/race-profile.ts";
 import { createForeignGovernment } from "../../game/foreign-government.ts";
 import { createGalaxyIntelligence } from "../../game/galaxy-intelligence.ts";
@@ -2086,7 +2086,7 @@ export function startEvolveRuntimeComposition(
 
   let JobManager, BuildingManager, ProjectManager, TriggerManager;
   ({ JobManager, BuildingManager, ProjectManager, TriggerManager } =
-    createCoreManagers({
+    createCoreManagerControl({
       getGame: () => game,
       getSettings: () => settings,
       getState: () => state,
@@ -2197,7 +2197,7 @@ export function startEvolveRuntimeComposition(
     getNeedSandboxBypass: () => needSandboxBypass,
     cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value),
   });
-  ({ KeyManager, GameLog } = createInfrastructureManagers({
+  ({ KeyManager, GameLog } = createInfrastructureManagerControl({
     getGame: () => game,
     getSettings: () => settings,
     getPoly: () => poly,

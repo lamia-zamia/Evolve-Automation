@@ -5640,6 +5640,11 @@ Only continue if you trust the source. Injected code:
     return { KeyManager, GameLog };
   }
 
+  // src/bootstrap/infrastructure-manager-control.ts
+  function createInfrastructureManagerControl(dependencies) {
+    return createInfrastructureManagers(dependencies);
+  }
+
   // src/game/script-bootstrap.ts
   function createScriptBootstrap({
     getGame,
@@ -6004,6 +6009,11 @@ Only continue if you trust the source. Injected code:
         return !1;
       }
     } };
+  }
+
+  // src/bootstrap/core-manager-control.ts
+  function createCoreManagerControl(dependencies) {
+    return createCoreManagers(dependencies);
   }
 
   // src/game/race-profile.ts
@@ -50317,7 +50327,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getMechManager: () => MechManager,
       getHaveTask: () => haveTask
     }), JobManager, BuildingManager, ProjectManager, TriggerManager;
-    ({ JobManager, BuildingManager, ProjectManager, TriggerManager } = createCoreManagers({
+    ({ JobManager, BuildingManager, ProjectManager, TriggerManager } = createCoreManagerControl({
       getGame: () => game,
       getSettings: () => settings,
       getState: () => state,
@@ -50414,7 +50424,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getNeedSandboxBypass: () => needSandboxBypass,
       cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value)
     });
-    ({ KeyManager, GameLog } = createInfrastructureManagers({
+    ({ KeyManager, GameLog } = createInfrastructureManagerControl({
       getGame: () => game,
       getSettings: () => settings,
       getPoly: () => poly,
