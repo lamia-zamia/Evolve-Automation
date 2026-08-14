@@ -40,158 +40,108 @@ import {
 } from "../../config.ts";
 import { k_combinations } from "../../utils/collections.ts";
 import { Fibonacci, average } from "../../utils/math.ts";
-import { createPropertyHelpers } from "../../utils/properties.ts";
-import { createCustomExpressionAdapter } from "./custom-expression.ts";
-import { createNumberFormatting } from "../../formatting/numbers.ts";
-import { createSettingsState } from "../../settings/state.ts";
-import { createEvolveSettingsResetAdapter } from "./settings-reset.ts";
-import { createSettingsResets } from "../../application/settings-reset.ts";
 import {
-  applySettings as applySettingsRecord,
-  migrateSetting as migrateSettingRecord,
-} from "../../domain/settings-migration.ts";
+  createPropertyHelpersControl,
+  createCustomExpressionControl,
+  createNumberFormattingControl,
+} from "../../bootstrap/runtime-primitives-control.ts";
+import {
+  createSettingsStateControl,
+  createSettingsTransferControl,
+  createPlannerStateControl,
+  createAuthorityPolicyControl,
+  createRunGuardsControl,
+  createCostConflictControl,
+  createPlannerStatsStoreControl,
+  createStateLogStoreControl,
+  createPlannerStatsLifecycleControl,
+  createEvolutionResultCheckControl,
+  createQueueQueriesControl,
+  createTargetTimingDisplayControl,
+  createTechConflictControl,
+} from "../../bootstrap/application-composition-control.ts";
+import { createSettingsResetCompositionControl } from "../../bootstrap/settings-reset-composition-control.ts";
+import {
+  applySettingsRecordControl,
+  migrateSettingRecordControl,
+  createDemandPrioritizationActionControl,
+  createStorageRequirementsActionControl,
+  readAuthorityPolicyViewControl,
+  readAuthorityQuantityControl,
+  createRuntimeLookupTablesControl,
+  createInitialRuntimeStateControl,
+} from "../../bootstrap/runtime-compatibility-composition-control.ts";
 import {
   createSettingsMigrationControl,
   createQueuedSettingsControl,
 } from "../../bootstrap/settings-lifecycle-controls.ts";
-import { createOverrideSettings } from "../../application/override-settings.ts";
-import { createOverrideEditor } from "../../application/override-editing.ts";
-import { createOverrideEvaluationSource } from "./override-evaluation.ts";
-import { createOverrideFailureReporter } from "./override-failure-log.ts";
-import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
-import { createGameCustomRaceLab } from "../browser/game-custom-race-lab.ts";
-import { createGameFeatureVisibility } from "../browser/game-feature-visibility.ts";
-import { createGameKeyboardHandlers } from "../browser/game-keyboard-handlers.ts";
-import { createGameModal } from "../browser/game-modal.ts";
-import { createGamePageShell } from "../browser/game-page-shell.ts";
-import { createGameUiSurface } from "../browser/game-ui-surface.ts";
-import { createSettingsTransfer } from "../../settings/transfer.ts";
-import { createRuntimeQueries } from "../../game/runtime-queries.ts";
-import { createIndustryManagerControls } from "../../bootstrap/industry-manager-controls.ts";
-import { createEconomyManagerControl } from "../../bootstrap/economy-manager-control.ts";
-import { createForeignAffairsManagerControl } from "../../bootstrap/foreign-affairs-manager-control.ts";
-import { readForeignAchievementGoal } from "./combat/foreign-achievements.ts";
-import { createFleetMechManagerControl } from "../../bootstrap/fleet-mech-manager-control.ts";
-import { createInfrastructureManagerControl } from "../../bootstrap/infrastructure-manager-control.ts";
+import { createOverrideCompositionControl } from "../../bootstrap/override-composition-control.ts";
+import {
+  createBrowserRuntimeControl,
+  createGameCustomRaceLabControl,
+  createOptionsModalBrowserAdapterControl,
+  createInterfaceSettingsBrowserAdapterControl,
+  createStateLogSettingsBrowserAdapterControl,
+} from "../../bootstrap/browser-composition-control.ts";
+import { createRuntimeFoundationsControl } from "../../bootstrap/runtime-foundations-control.ts";
+import { createManagerCompositionControl } from "../../bootstrap/manager-composition-control.ts";
+import {
+  formatRetirementShortfallsControl,
+  formatEvolutionLogControl,
+  formatTechConflictControl,
+  findPlannerLimitControl,
+  findRequiredResourceWeightControl,
+  DEFAULT_VACUUM_MANA_REQUIREMENT_CONTROL,
+  isVacuumCollapseManaStageReadyControl,
+  readForeignAchievementGoalControl,
+  readPlannerLimitInputControl,
+  readPlannerRunControl,
+  readWeightingCandidateControl,
+} from "../../bootstrap/domain-composition-control.ts";
+import { createGameLifecycleControl } from "../../bootstrap/game-lifecycle-control.ts";
+import { createFleetMechManagerCompositionControl } from "../../bootstrap/fleet-mech-manager-composition-control.ts";
 import { createScriptBootstrapControl } from "../../bootstrap/script-bootstrap-control.ts";
-import { createCoreManagerControl } from "../../bootstrap/core-manager-control.ts";
+import { createCoreManagerCompositionControl } from "../../bootstrap/core-manager-composition-control.ts";
 import { createGameControlSet } from "../../bootstrap/game-control-set.ts";
-import { createRaceProfile } from "../../game/race-profile.ts";
-import { createForeignGovernment } from "../../game/foreign-government.ts";
-import { createGalaxyIntelligence } from "../../game/galaxy-intelligence.ts";
-import { createHellIntelligence } from "../../game/hell-intelligence.ts";
-import { createMechIntelligence } from "../../game/mech-intelligence.ts";
-import { createPrestigeIntelligence } from "../../game/prestige-intelligence.ts";
-import { createShrineIntelligence } from "../../game/shrine-intelligence.ts";
-import { createWomlingAchievements } from "../../game/womling-achievements.ts";
-import { createPowerSupport } from "../../game/power-support.ts";
-import { createGameRates } from "../../game/rates.ts";
-import { createPlanetGeneration } from "../../game/planet-generation.ts";
+import {
+  createMechIntelligenceControl,
+  createPlanetGenerationControl,
+  createTraitValueControl,
+  createCraftingCostsControl,
+  createGameCompatibilityControl,
+} from "../../bootstrap/game-surface-composition-control.ts";
 import { createScriptDataLifecycleControl } from "../../bootstrap/script-data-lifecycle-control.ts";
-import { createCustomRaceModel } from "../../game/custom-race-model.ts";
-import { createTraitValue } from "../../game/trait-value.ts";
-import { createCraftingCosts } from "../../game/crafting-costs.ts";
-import { createEntityClasses } from "../../game/entities.ts";
-import { createGameCompatibility } from "../../game/compatibility.ts";
-import { createEntityCatalogs } from "../../game/entity-catalogs.ts";
+import { createCustomRaceModelControl } from "../../bootstrap/custom-race-model-control.ts";
 import {
   createStateInitializationControl,
   createRaceInitializationControl,
   createBuildingStateInitializationControl,
 } from "../../bootstrap/initialization-controls.ts";
-import { createPlannerState } from "../../game/planner-state.ts";
-import { createAuthorityPolicy } from "../../game/authority-policy.ts";
-import { createRunGuards } from "./run-guards.ts";
-import { createPrestigeEligibilityControl } from "../../bootstrap/prestige-eligibility-control.ts";
-import { formatRetirementShortfalls } from "../../application/retirement-prep.ts";
-import { createCostConflict } from "./cost-conflict.ts";
-import { findPlannerLimit } from "../../domain/planner-analysis.ts";
-import { readPlannerLimitInput, readPlannerRun } from "./planner-analysis.ts";
-import { createPlannerStatsStore } from "../storage/planner-stats.ts";
-import { createSettingsStore } from "../storage/settings-store.ts";
-import { createStateLogStore } from "../storage/state-log-store.ts";
-import { createPlannerStatsLifecycle } from "../../application/planner-stats.ts";
+import { createEntityCompatibilitySurface } from "../../bootstrap/entity-compatibility-surface.ts";
 import { createBuildPlannerControl } from "../../bootstrap/build-planner-control.ts";
-import {
-  createDemandPrioritizationAction,
-  createStorageRequirementsAction,
-} from "./state-demand-actions.ts";
 import { createPriorityTargetsControl } from "../../bootstrap/priority-targets-control.ts";
-import { createEvolutionResultCheck } from "./evolution-result-check.ts";
-import { formatEvolutionLog } from "../../application/evolution-result.ts";
-import {
-  readAuthorityPolicyView,
-  readAuthorityQuantity,
-} from "./civic/authority.ts";
-import { createQueueQueries } from "./queue-queries.ts";
-import { createTargetTimingDisplay } from "./target-timing-display.ts";
-import { findRequiredResourceWeight as findRequiredResourceWeightPolicy } from "../../domain/economy/resources/resource-weighting.ts";
-import { createGameActionVerification } from "../../validation/game-actions.ts";
+import { createRuntimeIntelligenceControl } from "../../bootstrap/runtime-intelligence-control.ts";
 import { createStateLogControl } from "../../bootstrap/state-log-control.ts";
-import { createPrestigeAutomationControls } from "../../bootstrap/prestige-automation-controls.ts";
+import { createPrestigeAutomationCompositionControl } from "../../bootstrap/prestige-automation-composition-control.ts";
 import { createLogFilterControl } from "../../bootstrap/log-filter-control.ts";
-import { createBrowserRuntime } from "../browser/runtime.ts";
-import { createMechStats } from "../../ui/mech-stats.ts";
-import { createSortHelper } from "../../ui/sort-helper.ts";
+import { createUiSupportControl } from "../../bootstrap/ui-support-control.ts";
 import { createTabRefreshControl } from "../../bootstrap/tab-refresh-control.ts";
-import { createSoulGemRateDisplay } from "../../ui/soul-gem-rate.ts";
-import { createPreviousGameStats } from "../../ui/previous-game-stats.ts";
-import { createRuntimeAdapters } from "../../ui/runtime-adapters.ts";
-import { createAutomationContainer } from "../../ui/automation-container.ts";
-import { createUIRefresh } from "../../ui/ui-refresh.ts";
-import { createBuildingWeightingDescriber } from "../../ui/building-weighting-description.ts";
-import { createStateLogSettingsIntentHandler } from "../../application/state-log-settings.ts";
-import { createStateLogSettingsBrowserAdapter } from "../browser/state-log-settings.ts";
-import { createInterfaceSettingsIntentHandler } from "../../application/interface-settings.ts";
-import { createInterfaceSettingsBrowserAdapter } from "../browser/interface-settings.ts";
+import { createRuntimeUiCompositionControl } from "../../bootstrap/runtime-ui-composition-control.ts";
 import {
-  createGeneralSettingsControl,
-  createAchievementGuardSettingsControl,
-  createAuthoritySettingsControl,
-  createChallengeHelperSettingsControl,
-  createJobSettingsControl,
-  createLoggingSettingsControl,
-  createMagicSettingsControl,
-  createProjectSettingsControl,
-  createStorageSettingsControl,
-  createWeightingSettingsControl,
-} from "../../bootstrap/settings/core-settings-controls.ts";
-import { createResearchSettingsControl } from "../../bootstrap/settings/research-settings-control.ts";
-import {
-  createGovernmentSettingsControl,
-  createPlanetSettingsControl,
-} from "../../bootstrap/settings/government-planet-settings-controls.ts";
-import { createBuildingSettingsControl } from "../../bootstrap/settings/building-settings-control.ts";
-import { createOptionsModalBrowserAdapter } from "../browser/options-modal.ts";
-import { createTotalDaysTopBarBrowserAdapter } from "../browser/total-days-top-bar.ts";
-import { createTotalDaysTopBarEvolveAdapter } from "./total-days-top-bar.ts";
-import { createPrestigeTopBarBrowserAdapter } from "../browser/prestige-top-bar.ts";
-import { createPrestigeTopBarEvolveAdapter } from "./progression/prestige/prestige-top-bar.ts";
-import { createEjectToggleBrowserAdapter } from "../browser/eject-toggles.ts";
-import { createEjectToggleEvolveAdapter } from "./economy/resources/eject-toggles.ts";
-import { createSupplyToggleBrowserAdapter } from "../browser/supply-toggles.ts";
-import { createSupplyToggleEvolveAdapter } from "./economy/resources/supply-toggles.ts";
-import { createCraftToggleBrowserAdapter } from "../browser/craft-toggles.ts";
-import { createCraftToggleEvolveAdapter } from "./economy/production/craft-toggles.ts";
-import { createArpaToggleBrowserAdapter } from "../browser/arpa-toggles.ts";
-import { createArpaToggleEvolveAdapter } from "./progression/research/arpa-toggles.ts";
-import { createBuildingToggleBrowserAdapter } from "../browser/building-toggles.ts";
-import { createBuildingToggleEvolveAdapter } from "./progression/build/building-toggles.ts";
-import { createTickRunner } from "../../bootstrap/tick-runner.ts";
+  createStateLogSettingsIntentControl,
+  createInterfaceSettingsIntentControl,
+} from "../../bootstrap/runtime-adapter-composition-control.ts";
+import { createTopBarControls } from "../../bootstrap/top-bar-controls.ts";
+import { createToggleControls } from "../../bootstrap/toggle-controls.ts";
+import { createTickCompositionControl } from "../../bootstrap/tick-composition-control.ts";
 import { createStateUpdateControl } from "../../bootstrap/state-update-control.ts";
 import {
-  DEFAULT_VACUUM_MANA_REQUIREMENT,
-  isVacuumCollapseManaStageReady,
-} from "../../domain/progression/prestige/vacuum.ts";
-import { formatTechConflict } from "../../application/tech-conflicts.ts";
-import { createTechConflict } from "./tech-conflict.ts";
-import { createBrowserClock } from "../browser/clock.ts";
-import { createBrowserRandomSource } from "../browser/random.ts";
-import { createBuildingWeightingPolicy } from "../../domain/progression/build/building-weighting-rules.ts";
-import { createBuildingWeightingDecider } from "../../domain/progression/build/building-weighting-decision.ts";
-import { readWeightingCandidate } from "./progression/build/weighting-candidate.ts";
-import { createWeightingSnapshotReader } from "./progression/build/weighting-snapshot.ts";
-import { createTradeRoutes } from "./trade-routes.ts";
+  createBrowserClockControl,
+  createBrowserRandomSourceControl,
+  createUserscriptEnvironmentControl,
+} from "../../bootstrap/runtime-adapter-composition-control.ts";
+import { createBuildingWeightingControl } from "../../bootstrap/building-weighting-control.ts";
+import { createTradeRouteControl } from "../../bootstrap/trade-route-control.ts";
 import {
   biomeList,
   traitList,
@@ -212,53 +162,29 @@ import {
   conflictingTraits,
   replicableResources,
 } from "./runtime-catalogs.ts";
-import {
-  createRuntimeLookupTables,
-  createInitialRuntimeState,
-} from "./runtime-state.ts";
-import { createCombatCivicControls } from "../../bootstrap/combat-civic-controls.ts";
-import { createUserscriptEnvironment } from "../userscript/environment.ts";
+import { createEarlyAutomationComposition } from "../../bootstrap/early-automation-composition-control.ts";
 import { createTaxControl } from "../../bootstrap/tax-control.ts";
 import { createStorageExpansionControl } from "../../bootstrap/storage-expansion-control.ts";
-import { createAlchemyControl } from "../../bootstrap/alchemy-control.ts";
-import { createPylonControl } from "../../bootstrap/pylon-control.ts";
-import { createIndustryAutomationControls } from "../../bootstrap/industry-automation-controls.ts";
+import { createResourceAutomationControl } from "../../bootstrap/resource-automation-control.ts";
 import { createEvolutionControls } from "../../bootstrap/evolution-controls.ts";
-import { createTraitAutomationControls } from "../../bootstrap/trait-automation-controls.ts";
-import { createTraitResourceControls } from "../../bootstrap/trait-resource-controls.ts";
-import { createTriggerControl } from "../../bootstrap/trigger-control.ts";
-import { createEconomyAutomationControls } from "../../bootstrap/economy-automation-controls.ts";
-import { createPowerStorageControls } from "../../bootstrap/power-storage-controls.ts";
-import { createMarketAutomationControls } from "../../bootstrap/market-automation-controls.ts";
-import { createCraftJobsControls } from "../../bootstrap/craft-jobs-controls.ts";
-import { createEspionageControls } from "../../bootstrap/espionage-controls.ts";
-import { createProgressionAutomationControls } from "../../bootstrap/progression-automation-controls.ts";
-import { createFleetMechControls } from "../../bootstrap/fleet-mech-controls.ts";
-import { createEjectorSettingsControl } from "../../bootstrap/settings/ejector-settings-control.ts";
-import { createMarketSettingsControl } from "../../bootstrap/settings/market-settings-control.ts";
-import { createWarSettingsControl } from "../../bootstrap/settings/war-settings-control.ts";
-import { createHellSettingsControl } from "../../bootstrap/settings/hell-settings-control.ts";
-import { createMechSettingsControl } from "../../bootstrap/settings/mech-settings-control.ts";
+import { createTraitAutomationCompositionControl } from "../../bootstrap/trait-automation-composition-control.ts";
+import { createTraitFleetAutomationControl } from "../../bootstrap/trait-fleet-automation-control.ts";
+import { createTriggerPowerAutomationControl } from "../../bootstrap/trigger-power-automation-control.ts";
+import { createMarketProgressionAutomationControl } from "../../bootstrap/market-progression-automation-control.ts";
+import { createLateSettingsControl } from "../../bootstrap/late-settings-control.ts";
+import { createProgressionSettingsControl } from "../../bootstrap/progression-settings-control.ts";
 import { createTriggerSettingsControl } from "../../bootstrap/settings/trigger-settings-control.ts";
-import { createFleetSettingsControl } from "../../bootstrap/settings/fleet-settings-control.ts";
-import { createPrestigeSettingsControl } from "../../bootstrap/settings/prestige-settings-control.ts";
-import { createEvolutionSettingsControl } from "../../bootstrap/settings/evolution-settings-control.ts";
-import { createProductionSettingsControl } from "../../bootstrap/settings/production-settings-control.ts";
+import { createExtendedSettingsControl } from "../../bootstrap/extended-settings-control.ts";
 import { createTraitSettingsControl } from "../../bootstrap/settings/trait-settings-control.ts";
 import { createQueuePanelsControl } from "../../bootstrap/queue-panels-control.ts";
-import { createMechInfoEvolveAdapter } from "./combat/mech-info.ts";
-import { createMechInfoBrowserAdapter } from "../browser/mech-info.ts";
-import { createResourceToggleEvolveAdapter } from "./economy/resources/resource-toggles.ts";
-import { createResourceToggleBrowserAdapter } from "../browser/resource-toggles.ts";
+import { createMechResourceUiControl } from "../../bootstrap/mech-resource-ui-control.ts";
 import { createTooltipUiControl } from "../../bootstrap/tooltip-ui-control.ts";
 import { createCustomRaceUiControl } from "../../bootstrap/custom-race-ui-control.ts";
-import { createSettingsShell } from "../../ui/settings-shell.ts";
-import { createOverrideConditionControls } from "../../ui/override-condition-controls.ts";
-import { createOverrideEditorControls } from "../../ui/override-editor.ts";
-import { createSettingsControls } from "../../ui/settings-controls.ts";
-import { createSettingsInputs } from "../../ui/settings-inputs.ts";
-import { createOverrideCatalog } from "../../settings/override-catalog.ts";
-import { createScriptRuntimeUI } from "../../ui/script-runtime.ts";
+import { createSettingsShellControl } from "../../bootstrap/settings-shell-control.ts";
+import { createSettingsEditorControl } from "../../bootstrap/settings-editor-control.ts";
+import { createCoreSettingsPanelControl } from "../../bootstrap/core-settings-panel-control.ts";
+import { createOverrideCatalogControl } from "../../bootstrap/override-catalog-control.ts";
+import { createScriptRuntimeUiControl } from "../../bootstrap/script-runtime-ui-control.ts";
 
 export function startEvolveRuntime($, diagnostics, runtimeEnvironment) {
   startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment);
@@ -269,6 +195,7 @@ export function startEvolveRuntimeComposition(
   diagnostics,
   runtimeEnvironment,
   testSurface,
+  registerRuntimeSupportTestSurface,
 ) {
   "use strict";
   const TEST_SURFACE_ENABLED = globalThis.__EA_TEST_SURFACE_ENABLED__ === true;
@@ -278,23 +205,37 @@ export function startEvolveRuntimeComposition(
   const setTestContext = TEST_SURFACE_ENABLED
     ? (name, context) => testSurface?.setContext(name, context)
     : () => {};
+  const testParts = [];
+  const testContexts = [];
+  const registerTestPart = TEST_SURFACE_ENABLED
+    ? (partFactory) => testParts.push(partFactory())
+    : () => {};
+  const registerTestContext = TEST_SURFACE_ENABLED
+    ? (contextFactory) => testContexts.push(contextFactory())
+    : () => {};
   const { getRealNumber, getNumberString, getNiceNumber } =
-    createNumberFormatting({ numberSuffix });
-  const browserClock = createBrowserClock();
-  const randomSource = createBrowserRandomSource();
-  let gameModal = createGameModal({
+    createNumberFormattingControl({ numberSuffix });
+  const browserClock = createBrowserClockControl();
+  const randomSource = createBrowserRandomSourceControl();
+  const {
+    gameModal: initialGameModal,
+    featureVisibility,
+    settingsStore,
+    settingsRaw: initialSettingsRaw,
+  } = createRuntimeFoundationsControl({
     getDocument: () => runtimeEnvironment.document,
     getMutationObserver: () => runtimeEnvironment.MutationObserver,
+    storage: runtimeEnvironment.storage,
   });
-  const featureVisibility = createGameFeatureVisibility({
-    getDocument: () => runtimeEnvironment.document,
-  });
-  const settingsStore = createSettingsStore(runtimeEnvironment.storage);
-  let settingsRaw = settingsStore.load();
+  let gameModal = initialGameModal;
+  let settingsRaw = initialSettingsRaw;
   let settings = {};
   let game = null;
+  let importSettings;
+  let exportSettings;
+  let poly;
   const { fastEval, cacheSize: fastEvalCacheSize } =
-    createCustomExpressionAdapter({
+    createCustomExpressionControl({
       getScope: () => ({
         settings,
         state,
@@ -358,12 +299,12 @@ export function startEvolveRuntimeComposition(
     resetFleetSettings,
     resetMechSettings,
     resetEjectorSettings,
-  } = createSettingsResets({
+  } = createSettingsResetCompositionControl({
     getSettingsRaw: () => settingsRaw,
     setSettingsRaw: (value) => {
       settingsRaw = value;
     },
-    ...createEvolveSettingsResetAdapter({
+    evolve: {
       AlchemyManager: () => AlchemyManager,
       biomeList: () => biomeList,
       BuildingManager: () => BuildingManager,
@@ -400,7 +341,7 @@ export function startEvolveRuntimeComposition(
       SupplyManager: () => SupplyManager,
       traitList: () => traitList,
       TriggerManager: () => TriggerManager,
-    }),
+    },
   });
   const {
     removeScriptSettings,
@@ -413,7 +354,7 @@ export function startEvolveRuntimeComposition(
     addStandardHeading,
     addSettingsHeader1,
     addSettingsHeader2,
-  } = createSettingsShell({
+  } = createSettingsShellControl({
     $,
     getDocument: () => runtimeEnvironment.document,
     getSettingsRaw: () => settingsRaw,
@@ -457,26 +398,10 @@ export function startEvolveRuntimeComposition(
     confirm: (...args) => runtimeEnvironment.confirm(...args),
   });
 
-  const overrideEditor = createOverrideEditor({
-    getSettingsRaw: () => settingsRaw,
-    persistence: { save: () => updateSettingsFromState() },
-  });
-  const { buildSelectOptions, buildInputNode, buildObjectListInput } =
-    createSettingsInputs({
-      getJQuery: () => $,
-      getRealNumber: () => getRealNumber,
-    });
-  const conditionControls = createOverrideConditionControls({
-    overrideEditor,
-    getJQuery: () => $,
-    getSettingsRaw: () => settingsRaw,
-    getWin: () => win,
-    getCheckCompareExpressions: () => checkCompareExpressions,
-    getCheckCustom: () => checkCustom,
-    getCheckTypes: () => checkTypes,
-    buildInputNode,
-  });
   const {
+    buildSelectOptions,
+    buildInputNode,
+    buildObjectListInput,
     evaluateCheck: _,
     buildConditionType,
     buildConditionArg,
@@ -485,26 +410,10 @@ export function startEvolveRuntimeComposition(
     buildConditionDuplicate,
     buildConditionEvalize,
     buildConditionRet,
-  } = conditionControls;
-  const {
     openOverrideModal,
     buildOverrideSettings,
     buildInputNodeForDisplay,
     changeDisplayInputNode,
-  } = createOverrideEditorControls({
-    overrideEditor,
-    conditionControls,
-    getJQuery: () => $,
-    getSettingsRaw: () => settingsRaw,
-    getSettings: () => settings,
-    getTechIds: () => techIds,
-    getCheckCustom: () => checkCustom,
-    getOverrideKey: () => overrideKey,
-    getOpenOptionsModal: () => openOptionsModal,
-    getSorterHelper: () => sorterHelper,
-    buildInputNode,
-  });
-  const {
     addSettingsToggle,
     addSettingsNumber,
     addSettingsString,
@@ -516,56 +425,77 @@ export function startEvolveRuntimeComposition(
     addTableToggle,
     buildTableLabel,
     resetCheckbox,
-  } = createSettingsControls({
-    getJQuery: () => $,
-    getSettingsRaw: () => settingsRaw,
-    getRealNumber: () => getRealNumber,
-    getUpdateSettingsFromState: () => updateSettingsFromState,
-    openOverrideModal: (event) => openOverrideModal(event),
-    buildSelectOptions,
+  } = createSettingsEditorControl({
+    overrideEditor: {
+      getSettingsRaw: () => settingsRaw,
+      persistence: { save: () => updateSettingsFromState() },
+    },
+    settingsInputs: {
+      getJQuery: () => $,
+      getRealNumber: () => getRealNumber,
+    },
+    conditionControls: {
+      getJQuery: () => $,
+      getSettingsRaw: () => settingsRaw,
+      getWin: () => win,
+      getCheckCompareExpressions: () => checkCompareExpressions,
+      getCheckCustom: () => checkCustom,
+      getCheckTypes: () => checkTypes,
+    },
+    overrideControls: {
+      getJQuery: () => $,
+      getSettingsRaw: () => settingsRaw,
+      getSettings: () => settings,
+      getTechIds: () => techIds,
+      getCheckCustom: () => checkCustom,
+      getOverrideKey: () => overrideKey,
+      getOpenOptionsModal: () => openOptionsModal,
+      getSorterHelper: () => sorterHelper,
+    },
+    settingsControls: {
+      getJQuery: () => $,
+      getSettingsRaw: () => settingsRaw,
+      getRealNumber: () => getRealNumber,
+      getUpdateSettingsFromState: () => updateSettingsFromState,
+    },
   });
-  const { reader: mechInfoReader, observer: mechInfoObserver } =
-    createMechInfoEvolveAdapter({
-      getGame: () => getTestContext("mechInfo")?.game ?? game,
-      getMechManager: () =>
-        getTestContext("mechInfo")?.MechManager ?? MechManager,
-      getNiceNumber: (value) =>
-        getTestContext("mechInfo")?.getNiceNumber?.(value) ??
-        getNiceNumber(value),
-    });
-  const mechInfoBrowserAdapter = createMechInfoBrowserAdapter({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    getVueById: (id) =>
+  const {
+    mechInfoReader,
+    mechInfoObserver,
+    mechInfoBrowserAdapter,
+    resourceToggleReader,
+    resourceToggleBrowserAdapter,
+    createMarketToggles,
+    removeMarketToggles,
+    createStorageToggles,
+    removeStorageToggles,
+    createMechInfo,
+    removeMechInfo,
+  } = createMechResourceUiControl({
+    getMechInfoGame: () => getTestContext("mechInfo")?.game ?? game,
+    getMechManager: () =>
+      getTestContext("mechInfo")?.MechManager ?? MechManager,
+    getNiceNumber: (value) =>
+      getTestContext("mechInfo")?.getNiceNumber?.(value) ??
+      getNiceNumber(value),
+    getMechInfoDocument: () => runtimeEnvironment.document,
+    getMechInfoJQuery: () => $,
+    getMechInfoVueById: (id) =>
       getTestContext("mechInfo")?.getVueById?.(id) ?? getVueById(id),
-    reader: mechInfoReader,
-    observer: mechInfoObserver,
-  });
-  const { createMechInfo, removeMechInfo } = mechInfoBrowserAdapter;
-  const resourceToggleReader = createResourceToggleEvolveAdapter({
-    getGame: () => getTestContext("resourceToggle")?.game ?? game,
+    getResourceToggleGame: () => getTestContext("resourceToggle")?.game ?? game,
     getSettingsRaw: () =>
       getTestContext("resourceToggle")?.settingsRaw ?? settingsRaw,
     getMarketManager: () =>
       getTestContext("resourceToggle")?.MarketManager ?? MarketManager,
     getStorageManager: () =>
       getTestContext("resourceToggle")?.StorageManager ?? StorageManager,
-  });
-  const resourceToggleBrowserAdapter = createResourceToggleBrowserAdapter({
-    getJQuery: () => $,
-    reader: resourceToggleReader,
+    getResourceToggleJQuery: () => $,
     addToggleCallbacks: (...args) =>
       (
         getTestContext("resourceToggle")?.addToggleCallbacks ??
         addToggleCallbacks
       )(...args),
   });
-  const {
-    createMarketToggles,
-    removeMarketToggles,
-    createStorageToggles,
-    removeStorageToggles,
-  } = resourceToggleBrowserAdapter;
   const productionSettingsActions = {
     buildSettingsSection,
     addSettingsNumber,
@@ -577,25 +507,173 @@ export function startEvolveRuntimeComposition(
     buildTableLabel,
     getSorterHelper: () => sorterHelper,
   };
-  const productionSettingsBrowserAdapter = createProductionSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: productionSettingsActions,
-    getResources: () => resources,
-    getCraftablesList: () => craftablesList,
-    getSmelterManager: () => SmelterManager,
-    getFactoryManager: () => FactoryManager,
-    getDroidManager: () => DroidManager,
-    getReplicatorManager: () => ReplicatorManager,
-    getSettingsRaw: () => settingsRaw,
-    resetProductionSettings: (...args) => resetProductionSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    removeCraftToggles: () => removeCraftToggles(),
-    setSettingsRaw: (value) => {
-      settingsRaw = value;
+  const {
+    productionSettingsBrowserAdapter,
+    storageSettingsBrowserAdapter,
+    magicSettingsBrowserAdapter,
+    jobSettingsBrowserAdapter,
+    weightingSettingsBrowserAdapter,
+    buildingSettingsBrowserAdapter,
+    projectSettingsBrowserAdapter,
+    loggingSettingsBrowserAdapter,
+  } = createCoreSettingsPanelControl({
+    production: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: productionSettingsActions,
+      getResources: () => resources,
+      getCraftablesList: () => craftablesList,
+      getSmelterManager: () => SmelterManager,
+      getFactoryManager: () => FactoryManager,
+      getDroidManager: () => DroidManager,
+      getReplicatorManager: () => ReplicatorManager,
+      getSettingsRaw: () => settingsRaw,
+      resetProductionSettings: (...args) => resetProductionSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      removeCraftToggles: () => removeCraftToggles(),
+      setSettingsRaw: (value) => {
+        settingsRaw = value;
+      },
+      testSurface,
     },
-    testSurface,
+    storage: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addSettingsToggle,
+        addTableInput,
+        addTableToggle,
+        buildTableLabel,
+        getSorterHelper: () => sorterHelper,
+      },
+      getStorageManager: () => StorageManager,
+      getSettingsRaw: () => settingsRaw,
+      resetStorageSettings: (...args) => resetStorageSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      removeStorageToggles: () => removeStorageToggles(),
+      testSurface,
+    },
+    magic: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addStandardHeading,
+        addSettingsNumber,
+        addSettingsToggle,
+        addTableInput,
+        addTableToggle,
+        buildTableLabel,
+      },
+      getGame: () => game,
+      getAlchemyManager: () => AlchemyManager,
+      getRitualManager: () => RitualManager,
+      resetMagicSettings: (...args) => resetMagicSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
+    },
+    job: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addSettingsNumber,
+        addSettingsString,
+        addSettingsToggle,
+        addTableInput,
+        addTableToggle,
+        addToggleCallbacks,
+        getSorterHelper: () => sorterHelper,
+        confirm: (...args) => runtimeEnvironment.confirm(...args),
+      },
+      getBasicJob: () => BasicJob,
+      getCraftingJob: () => CraftingJob,
+      getJobManager: () => JobManager,
+      getJobs: () => jobs,
+      getSettingsRaw: () => settingsRaw,
+      resetJobSettings: (...args) => resetJobSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
+    },
+    weighting: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: { buildSettingsSection, addSettingsToggle, addTableInput },
+      resetWeightingSettings: (...args) => resetWeightingSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      testSurface,
+    },
+    building: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsToggle,
+        addTableInput,
+        addTableToggle,
+        addToggleCallbacks,
+        buildTableLabel,
+        confirm: (...args) => runtimeEnvironment.confirm(...args),
+        getSorterHelper: () => sorterHelper,
+      },
+      getBuildingManager: () => BuildingManager,
+      getBuildingIds: () => buildingIds,
+      getResources: () => resources,
+      getLinkedBuildings: () => linkedBuildings,
+      getCheckCompare: () => checkCompare,
+      getOverrideKey: () => overrideKey,
+      getRealNumber: () => getRealNumber,
+      getInitBuildingState: () => initBuildingState,
+      getSettingsRaw: () => settingsRaw,
+      resetBuildingSettings: (...args) => resetBuildingSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      removeBuildingToggles: () => removeBuildingToggles(),
+      testSurface,
+    },
+    project: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addSettingsNumber,
+        addSettingsToggle,
+        addTableInput,
+        addTableToggle,
+        buildTableLabel,
+        getSorterHelper: () => sorterHelper,
+      },
+      getProjectManager: () => ProjectManager,
+      getSettingsRaw: () => settingsRaw,
+      resetProjectSettings: (...args) => resetProjectSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
+    },
+    logging: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection2,
+        addSettingsHeader1,
+        addSettingsString,
+        addSettingsToggle,
+      },
+      getGame: () => game,
+      getGameLog: () => GameLog,
+      getSettingsRaw: () => settingsRaw,
+      resetLoggingSettings: (...args) => resetLoggingSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      buildFilterRegExp: () => buildFilterRegExp(),
+      testSurface,
+    },
   });
   const {
     buildProductionSettings,
@@ -606,164 +684,15 @@ export function startEvolveRuntimeComposition(
     updateProductionTableMiningDrone,
     updateProductionTableReplicator,
   } = productionSettingsBrowserAdapter;
-
-  const storageSettingsActions = {
-    buildSettingsSection,
-    addSettingsToggle,
-    addTableInput,
-    addTableToggle,
-    buildTableLabel,
-    getSorterHelper: () => sorterHelper,
-  };
-  const storageSettingsBrowserAdapter = createStorageSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: storageSettingsActions,
-    getStorageManager: () => StorageManager,
-    getSettingsRaw: () => settingsRaw,
-    resetStorageSettings: (...args) => resetStorageSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    removeStorageToggles: () => removeStorageToggles(),
-    testSurface,
-  });
   const { buildStorageSettings } = storageSettingsBrowserAdapter;
-  const magicSettingsActions = {
-    buildSettingsSection,
-    addStandardHeading,
-    addSettingsNumber,
-    addSettingsToggle,
-    addTableInput,
-    addTableToggle,
-    buildTableLabel,
-  };
-  const magicSettingsBrowserAdapter = createMagicSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: magicSettingsActions,
-    getGame: () => game,
-    getAlchemyManager: () => AlchemyManager,
-    getRitualManager: () => RitualManager,
-    resetMagicSettings: (...args) => resetMagicSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
-  });
   const { buildMagicSettings } = magicSettingsBrowserAdapter;
-  const jobSettingsActions = {
-    buildSettingsSection,
-    addSettingsNumber,
-    addSettingsString,
-    addSettingsToggle,
-    addTableInput,
-    addTableToggle,
-    addToggleCallbacks,
-    getSorterHelper: () => sorterHelper,
-    confirm: (...args) => runtimeEnvironment.confirm(...args),
-  };
-  const jobSettingsBrowserAdapter = createJobSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: jobSettingsActions,
-    getBasicJob: () => BasicJob,
-    getCraftingJob: () => CraftingJob,
-    getJobManager: () => JobManager,
-    getJobs: () => jobs,
-    getSettingsRaw: () => settingsRaw,
-    resetJobSettings: (...args) => resetJobSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
-  });
   const { buildJobSettings } = jobSettingsBrowserAdapter;
-  const weightingSettingsActions = {
-    buildSettingsSection,
-    addSettingsToggle,
-    addTableInput,
-  };
-  const weightingSettingsBrowserAdapter = createWeightingSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: weightingSettingsActions,
-    resetWeightingSettings: (...args) => resetWeightingSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    testSurface,
-  });
   const { buildWeightingSettings } = weightingSettingsBrowserAdapter;
-  const buildingSettingsActions = {
-    buildSettingsSection,
-    addSettingsNumber,
-    addSettingsSelect,
-    addSettingsToggle,
-    addTableInput,
-    addTableToggle,
-    addToggleCallbacks,
-    buildTableLabel,
-    confirm: (...args) => runtimeEnvironment.confirm(...args),
-    getSorterHelper: () => sorterHelper,
-  };
-  const buildingSettingsBrowserAdapter = createBuildingSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: buildingSettingsActions,
-    getBuildingManager: () => BuildingManager,
-    getBuildingIds: () => buildingIds,
-    getResources: () => resources,
-    getLinkedBuildings: () => linkedBuildings,
-    getCheckCompare: () => checkCompare,
-    getOverrideKey: () => overrideKey,
-    getRealNumber: () => getRealNumber,
-    getInitBuildingState: () => initBuildingState,
-    getSettingsRaw: () => settingsRaw,
-    resetBuildingSettings: (...args) => resetBuildingSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    removeBuildingToggles: () => removeBuildingToggles(),
-    testSurface,
-  });
   const { buildBuildingSettings, filterBuildingSettingsTable } =
     buildingSettingsBrowserAdapter;
-  const projectSettingsActions = {
-    buildSettingsSection,
-    addSettingsNumber,
-    addSettingsToggle,
-    addTableInput,
-    addTableToggle,
-    buildTableLabel,
-    getSorterHelper: () => sorterHelper,
-  };
-  const projectSettingsBrowserAdapter = createProjectSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: projectSettingsActions,
-    getProjectManager: () => ProjectManager,
-    getSettingsRaw: () => settingsRaw,
-    resetProjectSettings: (...args) => resetProjectSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
-  });
   const { buildProjectSettings } = projectSettingsBrowserAdapter;
-  const loggingSettingsActions = {
-    buildSettingsSection2,
-    addSettingsHeader1,
-    addSettingsString,
-    addSettingsToggle,
-  };
-  const loggingSettingsBrowserAdapter = createLoggingSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: loggingSettingsActions,
-    getGame: () => game,
-    getGameLog: () => GameLog,
-    getSettingsRaw: () => settingsRaw,
-    resetLoggingSettings: (...args) => resetLoggingSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    buildFilterRegExp: () => buildFilterRegExp(),
-    testSurface,
-  });
   const { buildLoggingSettings } = loggingSettingsBrowserAdapter;
-  const optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
+  const optionsModalBrowserAdapter = createOptionsModalBrowserAdapterControl({
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getWindow: () => runtimeEnvironment.window,
@@ -807,528 +736,526 @@ export function startEvolveRuntimeComposition(
     openOptionsModal,
     createOptionsModal,
   } = optionsModalBrowserAdapter;
-  const prestigeTopBarReader = createPrestigeTopBarEvolveAdapter({
-    getSettings: () => getTestContext("prestigeTopBar")?.settings ?? settings,
+  const {
+    prestigeTopBarReader,
+    prestigeTopBarBrowserAdapter,
+    updatePrestigeInTopBar,
+    totalDaysTopBarReader,
+    totalDaysTopBarBrowserAdapter,
+    updateTotalDaysInTopBar,
+  } = createTopBarControls({
+    getPrestigeSettings: () =>
+      getTestContext("prestigeTopBar")?.settings ?? settings,
     getPrestigeTypes: () =>
       getTestContext("prestigeTopBar")?.prestigeTypes ?? prestigeTypes,
-  });
-  const prestigeTopBarBrowserAdapter = createPrestigeTopBarBrowserAdapter({
-    getDocument: () => runtimeEnvironment.document,
-    reader: prestigeTopBarReader,
-    options: {
-      addOptionUI: (...args) =>
-        (getTestContext("prestigeTopBar")?.addOptionUI ?? addOptionUI)(...args),
-    },
+    getPrestigeDocument: () => runtimeEnvironment.document,
+    addPrestigeOptionUi: (...args) =>
+      (getTestContext("prestigeTopBar")?.addOptionUI ?? addOptionUI)(...args),
     buildPrestigeSettings: (...args) =>
       (
         getTestContext("prestigeTopBar")?.buildPrestigeSettings ??
         buildPrestigeSettings
       )(...args),
+    getTotalDaysSettings: () =>
+      getTestContext("totalDaysTopBar")?.settings ?? settings,
+    getTotalDaysGame: () => getTestContext("totalDaysTopBar")?.game ?? game,
+    getTotalDaysDocument: () => runtimeEnvironment.document,
+    getTotalDaysJQuery: () => $,
   });
-  const { updatePrestigeInTopBar } = prestigeTopBarBrowserAdapter;
-  const totalDaysTopBarReader = createTotalDaysTopBarEvolveAdapter({
-    getSettings: () => getTestContext("totalDaysTopBar")?.settings ?? settings,
-    getGame: () => getTestContext("totalDaysTopBar")?.game ?? game,
-  });
-  const totalDaysTopBarBrowserAdapter = createTotalDaysTopBarBrowserAdapter({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    reader: totalDaysTopBarReader,
-  });
-  const { updateTotalDaysInTopBar } = totalDaysTopBarBrowserAdapter;
-  const arpaToggleReader = createArpaToggleEvolveAdapter({
-    getProjectManager: () =>
-      getTestContext("arpaToggles")?.ProjectManager ?? ProjectManager,
-    getSettingsRaw: () =>
-      getTestContext("arpaToggles")?.settingsRaw ?? settingsRaw,
-  });
-  const arpaToggleBrowserAdapter = createArpaToggleBrowserAdapter({
-    getJQuery: () => $,
-    reader: arpaToggleReader,
-    addToggleCallbacks: (...args) =>
-      (getTestContext("arpaToggles")?.addToggleCallbacks ?? addToggleCallbacks)(
-        ...args,
-      ),
+  const {
+    arpaToggleReader,
+    arpaToggleBrowserAdapter,
+    craftToggleReader,
+    craftToggleBrowserAdapter,
+    buildingToggleReader,
+    buildingToggleBrowserAdapter,
+    ejectToggleReader,
+    ejectToggleBrowserAdapter,
+    supplyToggleReader,
+    supplyToggleBrowserAdapter,
+  } = createToggleControls({
+    arpa: {
+      getProjectManager: () =>
+        getTestContext("arpaToggles")?.ProjectManager ?? ProjectManager,
+      getSettingsRaw: () =>
+        getTestContext("arpaToggles")?.settingsRaw ?? settingsRaw,
+    },
+    arpaBrowser: {
+      getJQuery: () => $,
+      addToggleCallbacks: (...args) =>
+        (
+          getTestContext("arpaToggles")?.addToggleCallbacks ??
+          addToggleCallbacks
+        )(...args),
+    },
+    craft: {
+      getCraftablesList: () =>
+        getTestContext("craftToggles")?.craftablesList ?? craftablesList,
+      getSettingsRaw: () =>
+        getTestContext("craftToggles")?.settingsRaw ?? settingsRaw,
+    },
+    craftBrowser: {
+      getJQuery: () => $,
+      addToggleCallbacks: (...args) =>
+        (
+          getTestContext("craftToggles")?.addToggleCallbacks ??
+          addToggleCallbacks
+        )(...args),
+    },
+    building: {
+      getBuildingManager: () =>
+        getTestContext("buildingToggles")?.BuildingManager ?? BuildingManager,
+      getSettings: () =>
+        getTestContext("buildingToggles")?.settings ?? settings,
+      getSettingsRaw: () =>
+        getTestContext("buildingToggles")?.settingsRaw ?? settingsRaw,
+    },
+    buildingBrowser: {
+      getJQuery: () => $,
+      getCountWriter: () => ({
+        setCount: (count) => {
+          const targetState = getTestContext("buildingToggles")?.state ?? state;
+          targetState.buildingToggles = count;
+        },
+      }),
+      addToggleCallbacks: (...args) =>
+        (
+          getTestContext("buildingToggles")?.addToggleCallbacks ??
+          addToggleCallbacks
+        )(...args),
+    },
+    eject: {
+      getEjectManager: () =>
+        getTestContext("ejectToggles")?.EjectManager ?? EjectManager,
+      getSettingsRaw: () =>
+        getTestContext("ejectToggles")?.settingsRaw ?? settingsRaw,
+    },
+    ejectBrowser: {
+      getJQuery: () => $,
+      addToggleCallbacks: (...args) =>
+        (
+          getTestContext("ejectToggles")?.addToggleCallbacks ??
+          addToggleCallbacks
+        )(...args),
+    },
+    supply: {
+      getSupplyManager: () =>
+        getTestContext("supplyToggles")?.SupplyManager ?? SupplyManager,
+      getSettingsRaw: () =>
+        getTestContext("supplyToggles")?.settingsRaw ?? settingsRaw,
+    },
+    supplyBrowser: {
+      getJQuery: () => $,
+      addToggleCallbacks: (...args) =>
+        (
+          getTestContext("supplyToggles")?.addToggleCallbacks ??
+          addToggleCallbacks
+        )(...args),
+    },
   });
   const { createArpaToggles, removeArpaToggles } = arpaToggleBrowserAdapter;
-  const craftToggleReader = createCraftToggleEvolveAdapter({
-    getCraftablesList: () =>
-      getTestContext("craftToggles")?.craftablesList ?? craftablesList,
-    getSettingsRaw: () =>
-      getTestContext("craftToggles")?.settingsRaw ?? settingsRaw,
-  });
-  const craftToggleBrowserAdapter = createCraftToggleBrowserAdapter({
-    getJQuery: () => $,
-    reader: craftToggleReader,
-    addToggleCallbacks: (...args) =>
-      (
-        getTestContext("craftToggles")?.addToggleCallbacks ?? addToggleCallbacks
-      )(...args),
-  });
   const { createCraftToggles, removeCraftToggles } = craftToggleBrowserAdapter;
-  const buildingToggleReader = createBuildingToggleEvolveAdapter({
-    getBuildingManager: () =>
-      getTestContext("buildingToggles")?.BuildingManager ?? BuildingManager,
-    getSettings: () => getTestContext("buildingToggles")?.settings ?? settings,
-    getSettingsRaw: () =>
-      getTestContext("buildingToggles")?.settingsRaw ?? settingsRaw,
-  });
-  const buildingToggleBrowserAdapter = createBuildingToggleBrowserAdapter({
-    getJQuery: () => $,
-    reader: buildingToggleReader,
-    getCountWriter: () => ({
-      setCount: (count) => {
-        const targetState = getTestContext("buildingToggles")?.state ?? state;
-        targetState.buildingToggles = count;
-      },
-    }),
-    addToggleCallbacks: (...args) =>
-      (
-        getTestContext("buildingToggles")?.addToggleCallbacks ??
-        addToggleCallbacks
-      )(...args),
-  });
   const { createBuildingToggles, removeBuildingToggles } =
     buildingToggleBrowserAdapter;
-  const ejectToggleReader = createEjectToggleEvolveAdapter({
-    getEjectManager: () =>
-      getTestContext("ejectToggles")?.EjectManager ?? EjectManager,
-    getSettingsRaw: () =>
-      getTestContext("ejectToggles")?.settingsRaw ?? settingsRaw,
-  });
-  const ejectToggleBrowserAdapter = createEjectToggleBrowserAdapter({
-    getJQuery: () => $,
-    reader: ejectToggleReader,
-    addToggleCallbacks: (...args) =>
-      (
-        getTestContext("ejectToggles")?.addToggleCallbacks ?? addToggleCallbacks
-      )(...args),
-  });
   const { createEjectToggles, removeEjectToggles } = ejectToggleBrowserAdapter;
-  const supplyToggleReader = createSupplyToggleEvolveAdapter({
-    getSupplyManager: () =>
-      getTestContext("supplyToggles")?.SupplyManager ?? SupplyManager,
-    getSettingsRaw: () =>
-      getTestContext("supplyToggles")?.settingsRaw ?? settingsRaw,
-  });
-  const supplyToggleBrowserAdapter = createSupplyToggleBrowserAdapter({
-    getJQuery: () => $,
-    reader: supplyToggleReader,
-    addToggleCallbacks: (...args) =>
-      (
-        getTestContext("supplyToggles")?.addToggleCallbacks ??
-        addToggleCallbacks
-      )(...args),
-  });
   const { createSupplyToggles, removeSupplyToggles } =
     supplyToggleBrowserAdapter;
 
-  const generalSettingsActions = {
-    buildSettingsSection,
-    addSettingsHeader1,
-    addSettingsNumber,
-    addSettingsSelect,
-    addSettingsString,
-    addSettingsToggle,
-  };
-  const generalSettingsBrowserAdapter = createGeneralSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: generalSettingsActions,
-    resetGeneralSettings: (...args) => resetGeneralSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
-  });
-  const { buildGeneralSettings } = generalSettingsBrowserAdapter;
-
-  const achievementGuardSettingsActions = {
-    buildSettingsSection,
-    addSettingsToggle,
-  };
-  const achievementGuardSettingsBrowserAdapter =
-    createAchievementGuardSettingsControl({
+  const {
+    generalSettingsBrowserAdapter,
+    achievementGuardSettingsBrowserAdapter,
+    challengeHelperSettingsBrowserAdapter,
+    prestigeSettingsBrowserAdapter,
+    governmentSettingsBrowserAdapter,
+    authoritySettingsBrowserAdapter,
+  } = createExtendedSettingsControl({
+    general: {
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      actions: achievementGuardSettingsActions,
+      actions: {
+        buildSettingsSection,
+        addSettingsHeader1,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsString,
+        addSettingsToggle,
+      },
+      resetGeneralSettings: (...args) => resetGeneralSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
+    },
+    achievementGuard: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: { buildSettingsSection, addSettingsToggle },
       resetAchievementGuardSettings: (...args) =>
         resetAchievementGuardSettings(...args),
       persistSettings: () => updateSettingsFromState(),
       testSurface,
-    });
-  const { buildAchievementGuardSettings } =
-    achievementGuardSettingsBrowserAdapter;
-
-  const challengeHelperSettingsActions = {
-    buildSettingsSection,
-    addSettingsToggle,
-    addSettingsNumber,
-  };
-  const challengeHelperSettingsBrowserAdapter =
-    createChallengeHelperSettingsControl({
+    },
+    challengeHelper: {
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      actions: challengeHelperSettingsActions,
+      actions: { buildSettingsSection, addSettingsToggle, addSettingsNumber },
       resetChallengeHelperSettings: (...args) =>
         resetChallengeHelperSettings(...args),
       persistSettings: () => updateSettingsFromState(),
       testSurface,
-    });
+    },
+    prestige: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection2,
+        addSettingsHeader1,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsToggle,
+        openOverrideModal,
+        openOptionsModal,
+        get buildCustomRacePresetEditor() {
+          return buildCustomRacePresetEditor;
+        },
+      },
+      getPrestigeTypes: () => prestigeTypes,
+      getGame: () => game,
+      getBuildings: () => buildings,
+      isPrestigeAllowed: (...args) => isPrestigeAllowed(...args),
+      haveTech: (...args) => haveTech(...args),
+      isBioseederPrestigeAvailable: (...args) =>
+        isBioseederPrestigeAvailable(...args),
+      isCataclysmPrestigeAvailable: (...args) =>
+        isCataclysmPrestigeAvailable(...args),
+      isWhiteholePrestigeAvailable: (...args) =>
+        isWhiteholePrestigeAvailable(...args),
+      isApocalypsePrestigeAvailable: (...args) =>
+        isApocalypsePrestigeAvailable(...args),
+      isAscensionPrestigeAvailable: (...args) =>
+        isAscensionPrestigeAvailable(...args),
+      isWitchAscensionPrestigeAvailable: (...args) =>
+        isWitchAscensionPrestigeAvailable(...args),
+      isDemonicPrestigeAvailable: (...args) =>
+        isDemonicPrestigeAvailable(...args),
+      resetPrestigeSettings: (...args) => resetPrestigeSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      getSettingsRaw: () => settingsRaw,
+      getState: () => state,
+      confirm: (message) => runtimeEnvironment.confirm(message),
+      testSurface,
+    },
+    government: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: { buildSettingsSection2, addSettingsNumber, addSettingsSelect },
+      getGame: () => game,
+      getGovernmentManager: () => GovernmentManager,
+      getGovernors: () => governors,
+      resetGovernmentSettings: (...args) => resetGovernmentSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
+    },
+    authority: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: { buildSettingsSection, addSettingsToggle, addSettingsNumber },
+      resetAuthoritySettings: (...args) => resetAuthoritySettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      testSurface,
+    },
+  });
+  const { buildGeneralSettings } = generalSettingsBrowserAdapter;
+  const { buildAchievementGuardSettings } =
+    achievementGuardSettingsBrowserAdapter;
   const { buildChallengeHelperSettings } =
     challengeHelperSettingsBrowserAdapter;
-  const prestigeSettingsBrowserAdapter = createPrestigeSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: {
-      buildSettingsSection2,
-      addSettingsHeader1,
-      addSettingsNumber,
-      addSettingsSelect,
-      addSettingsToggle,
-      openOverrideModal,
-      openOptionsModal,
-      get buildCustomRacePresetEditor() {
-        return buildCustomRacePresetEditor;
-      },
-    },
-    getPrestigeTypes: () => prestigeTypes,
-    getGame: () => game,
-    getBuildings: () => buildings,
-    isPrestigeAllowed: (...args) => isPrestigeAllowed(...args),
-    haveTech: (...args) => haveTech(...args),
-    isBioseederPrestigeAvailable: (...args) =>
-      isBioseederPrestigeAvailable(...args),
-    isCataclysmPrestigeAvailable: (...args) =>
-      isCataclysmPrestigeAvailable(...args),
-    isWhiteholePrestigeAvailable: (...args) =>
-      isWhiteholePrestigeAvailable(...args),
-    isApocalypsePrestigeAvailable: (...args) =>
-      isApocalypsePrestigeAvailable(...args),
-    isAscensionPrestigeAvailable: (...args) =>
-      isAscensionPrestigeAvailable(...args),
-    isWitchAscensionPrestigeAvailable: (...args) =>
-      isWitchAscensionPrestigeAvailable(...args),
-    isDemonicPrestigeAvailable: (...args) =>
-      isDemonicPrestigeAvailable(...args),
-    resetPrestigeSettings: (...args) => resetPrestigeSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    getSettingsRaw: () => settingsRaw,
-    getState: () => state,
-    confirm: (message) => runtimeEnvironment.confirm(message),
-    testSurface,
-  });
   const { buildPrestigeSettings } = prestigeSettingsBrowserAdapter;
-  const governmentSettingsActions = {
-    buildSettingsSection2,
-    addSettingsNumber,
-    addSettingsSelect,
-  };
-  const governmentSettingsBrowserAdapter = createGovernmentSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: governmentSettingsActions,
-    getGame: () => game,
-    getGovernmentManager: () => GovernmentManager,
-    getGovernors: () => governors,
-    resetGovernmentSettings: (...args) => resetGovernmentSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
-  });
   const { buildGovernmentSettings } = governmentSettingsBrowserAdapter;
-
-  const authoritySettingsActions = {
-    buildSettingsSection,
-    addSettingsToggle,
-    addSettingsNumber,
-  };
-  const authoritySettingsBrowserAdapter = createAuthoritySettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: authoritySettingsActions,
-    resetAuthoritySettings: (...args) => resetAuthoritySettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    testSurface,
-  });
   const { buildAuthoritySettings } = authoritySettingsBrowserAdapter;
-  const evolutionSettingsControl = createEvolutionSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: {
-      buildSettingsSection,
-      addStandardHeading,
-      addSettingsSelect,
-      addSettingsToggle,
-      get sorterHelper() {
-        return sorterHelper;
+  const {
+    evolutionSettingsControl,
+    planetSettingsBrowserAdapter,
+    triggerSettingsBrowserAdapter,
+    researchSettingsBrowserAdapter,
+    warSettingsBrowserAdapter,
+  } = createProgressionSettingsControl({
+    evolution: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addStandardHeading,
+        addSettingsSelect,
+        addSettingsToggle,
+        get sorterHelper() {
+          return sorterHelper;
+        },
       },
+      getGame: () => game,
+      getRaces: () => races,
+      getChallenges: () => challenges,
+      getUniverses: () => universes,
+      getSettingsRaw: () => settingsRaw,
+      getSettings: () => settings,
+      getSettingsToStore: () => evolutionSettingsToStore,
+      getPrestigeTypes: () => prestigeTypes,
+      getStarLevel: (queueItem) => getStarLevel(queueItem),
+      getState: () => state,
+      resetEvolutionSettings: (...args) => resetEvolutionSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
     },
-    getGame: () => game,
-    getRaces: () => races,
-    getChallenges: () => challenges,
-    getUniverses: () => universes,
-    getSettingsRaw: () => settingsRaw,
-    getSettings: () => settings,
-    getSettingsToStore: () => evolutionSettingsToStore,
-    getPrestigeTypes: () => prestigeTypes,
-    getStarLevel: (queueItem) => getStarLevel(queueItem),
-    getState: () => state,
-    resetEvolutionSettings: (...args) => resetEvolutionSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
+    planet: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: { buildSettingsSection, addTableInput, buildTableLabel },
+      getGame: () => game,
+      getBiomeList: () => biomeList,
+      getTraitList: () => traitList,
+      getExtraList: () => extraList,
+      resetPlanetSettings: (...args) => resetPlanetSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      testSurface,
+    },
+    trigger: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        buildInputNode,
+        get sorterHelper() {
+          return sorterHelper;
+        },
+      },
+      getTriggerManager: () => TriggerManager,
+      getCheckTypes: () => checkTypes,
+      getActionInputs: () => argType,
+      getBooleanResultChecks: () => retBools,
+      getOverrideOnlyChecks: () => overrideOnlyChecks,
+      resetTriggerSettings: (...args) => resetTriggerSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
+    },
+    research: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: { buildSettingsSection, addSettingsList, addSettingsSelect },
+      getGame: () => game,
+      getTechIds: () => techIds,
+      resetResearchSettings: (...args) => resetResearchSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
+    },
+    war: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection2,
+        addSettingsHeader1,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsToggle,
+      },
+      getSpyManager: () => SpyManager,
+      getGame: () => game,
+      resetWarSettings: (...args) => resetWarSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
+    },
   });
   const {
     addEvolutionSetting,
     buildEvolutionSettings,
     updateEvolutionSettingsContent,
   } = evolutionSettingsControl;
-  const planetSettingsActions = {
-    buildSettingsSection,
-    addTableInput,
-    buildTableLabel,
-  };
-  const planetSettingsBrowserAdapter = createPlanetSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: planetSettingsActions,
-    getGame: () => game,
-    getBiomeList: () => biomeList,
-    getTraitList: () => traitList,
-    getExtraList: () => extraList,
-    resetPlanetSettings: (...args) => resetPlanetSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    testSurface,
-  });
   const { buildPlanetSettings } = planetSettingsBrowserAdapter;
-  const triggerSettingsBrowserAdapter = createTriggerSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: {
-      buildSettingsSection,
-      buildInputNode,
-      get sorterHelper() {
-        return sorterHelper;
-      },
-    },
-    getTriggerManager: () => TriggerManager,
-    getCheckTypes: () => checkTypes,
-    getActionInputs: () => argType,
-    getBooleanResultChecks: () => retBools,
-    getOverrideOnlyChecks: () => overrideOnlyChecks,
-    resetTriggerSettings: (...args) => resetTriggerSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
-  });
   const { buildTriggerSettings, updateTriggerSettingsContent } =
     triggerSettingsBrowserAdapter;
-  const researchSettingsBrowserAdapter = createResearchSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: {
-      buildSettingsSection,
-      addSettingsList,
-      addSettingsSelect,
-    },
-    getGame: () => game,
-    getTechIds: () => techIds,
-    resetResearchSettings: (...args) => resetResearchSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
-  });
   const { buildResearchSettings } = researchSettingsBrowserAdapter;
-  const warSettingsBrowserAdapter = createWarSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: {
-      buildSettingsSection2,
-      addSettingsHeader1,
-      addSettingsNumber,
-      addSettingsSelect,
-      addSettingsToggle,
-    },
-    getSpyManager: () => SpyManager,
-    getGame: () => game,
-    resetWarSettings: (...args) => resetWarSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
-  });
   const { buildWarSettings, updateWarSettingsContent } =
     warSettingsBrowserAdapter;
-  const hellSettingsBrowserAdapter = createHellSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: {
-      buildSettingsSection2,
-      addSettingsHeader1,
-      addSettingsNumber,
-      addSettingsToggle,
+  const {
+    hellSettingsBrowserAdapter,
+    fleetSettingsBrowserAdapter,
+    mechSettingsBrowserAdapter,
+    ejectorSettingsBrowserAdapter,
+    marketSettingsBrowserAdapter,
+  } = createLateSettingsControl({
+    hell: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection2,
+        addSettingsHeader1,
+        addSettingsNumber,
+        addSettingsToggle,
+      },
+      resetHellSettings: (...args) => resetHellSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
     },
-    resetHellSettings: (...args) => resetHellSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
+    fleet: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection2,
+        addSettingsHeader1,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsToggle,
+        addStandardHeading,
+        addTableInput,
+        buildTableLabel,
+        openOverrideModal,
+        get sorterHelper() {
+          return sorterHelper;
+        },
+      },
+      getFleetManagerOuter: () => FleetManagerOuter,
+      getGalaxyRegions: () => galaxyRegions,
+      getGame: () => game,
+      getSettingsRaw: () => settingsRaw,
+      resetFleetSettings: (...args) => resetFleetSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      testSurface,
+    },
+    mech: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsToggle,
+        addStandardHeading,
+        get calculateMechStats() {
+          return calculateMechStats;
+        },
+      },
+      getMechManager: () => MechManager,
+      getGame: () => game,
+      resetMechSettings: (...args) => resetMechSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      removeMechInfo: (...args) => removeMechInfo(...args),
+      testSurface,
+    },
+    ejector: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsToggle,
+        addTableToggle,
+        buildTableLabel,
+      },
+      getResources: () => resources,
+      getEjectManager: () => EjectManager,
+      getNaniteManager: () => NaniteManager,
+      getSupplyManager: () => SupplyManager,
+      getSettingsRaw: () => settingsRaw,
+      resetEjectorSettings: (...args) => resetEjectorSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      removeEjectToggles: (...args) => removeEjectToggles(...args),
+      removeSupplyToggles: (...args) => removeSupplyToggles(...args),
+      testSurface,
+    },
+    market: {
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      actions: {
+        buildSettingsSection: (...args) => buildSettingsSection(...args),
+        addSettingsNumber: (...args) => addSettingsNumber(...args),
+        addSettingsToggle: (...args) => addSettingsToggle(...args),
+        addStandardHeading: (...args) => addStandardHeading(...args),
+        addTableInput: (...args) => addTableInput(...args),
+        addTableToggle: (...args) => addTableToggle(...args),
+        buildTableLabel: (...args) => buildTableLabel(...args),
+        getSorterHelper: () => sorterHelper,
+      },
+      getMarketManager: () => MarketManager,
+      getResources: () => resources,
+      getPoly: () => poly,
+      getSettingsRaw: () => settingsRaw,
+      resetMarketSettings: (...args) => resetMarketSettings(...args),
+      persistSettings: () => updateSettingsFromState(),
+      resetCheckbox: (...args) => resetCheckbox(...args),
+      removeMarketToggles: () => removeMarketToggles(),
+      testSurface,
+    },
   });
   const { buildHellSettings, updateHellSettingsContent } =
     hellSettingsBrowserAdapter;
-  const fleetSettingsBrowserAdapter = createFleetSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: {
-      buildSettingsSection2,
-      addSettingsHeader1,
-      addSettingsNumber,
-      addSettingsSelect,
-      addSettingsToggle,
-      addStandardHeading,
-      addTableInput,
-      buildTableLabel,
-      openOverrideModal,
-      get sorterHelper() {
-        return sorterHelper;
-      },
-    },
-    getFleetManagerOuter: () => FleetManagerOuter,
-    getGalaxyRegions: () => galaxyRegions,
-    getGame: () => game,
-    getSettingsRaw: () => settingsRaw,
-    resetFleetSettings: (...args) => resetFleetSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    testSurface,
-  });
   const { buildFleetSettings } = fleetSettingsBrowserAdapter;
-  const mechSettingsBrowserAdapter = createMechSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: {
-      buildSettingsSection,
-      addSettingsNumber,
-      addSettingsSelect,
-      addSettingsToggle,
-      addStandardHeading,
-      get calculateMechStats() {
-        return calculateMechStats;
-      },
-    },
-    getMechManager: () => MechManager,
-    getGame: () => game,
-    resetMechSettings: (...args) => resetMechSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    removeMechInfo: (...args) => removeMechInfo(...args),
-    testSurface,
-  });
   const { buildMechSettings, updateMechSettingsContent } =
     mechSettingsBrowserAdapter;
-  const ejectorSettingsBrowserAdapter = createEjectorSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: {
-      buildSettingsSection,
-      addSettingsNumber,
-      addSettingsSelect,
-      addSettingsToggle,
-      addTableToggle,
-      buildTableLabel,
-    },
-    getResources: () => resources,
-    getEjectManager: () => EjectManager,
-    getNaniteManager: () => NaniteManager,
-    getSupplyManager: () => SupplyManager,
-    getSettingsRaw: () => settingsRaw,
-    resetEjectorSettings: (...args) => resetEjectorSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    removeEjectToggles: (...args) => removeEjectToggles(...args),
-    removeSupplyToggles: (...args) => removeSupplyToggles(...args),
-    testSurface,
-  });
   const { buildEjectorSettings, updateEjectorSettingsContent } =
     ejectorSettingsBrowserAdapter;
-  const marketSettingsActions = {
-    buildSettingsSection: (...args) => buildSettingsSection(...args),
-    addSettingsNumber: (...args) => addSettingsNumber(...args),
-    addSettingsToggle: (...args) => addSettingsToggle(...args),
-    addStandardHeading: (...args) => addStandardHeading(...args),
-    addTableInput: (...args) => addTableInput(...args),
-    addTableToggle: (...args) => addTableToggle(...args),
-    buildTableLabel: (...args) => buildTableLabel(...args),
-    getSorterHelper: () => sorterHelper,
-  };
-  const marketSettingsBrowserAdapter = createMarketSettingsControl({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    actions: marketSettingsActions,
-    getMarketManager: () => MarketManager,
-    getResources: () => resources,
-    getPoly: () => poly,
-    getSettingsRaw: () => settingsRaw,
-    resetMarketSettings: (...args) => resetMarketSettings(...args),
-    persistSettings: () => updateSettingsFromState(),
-    resetCheckbox: (...args) => resetCheckbox(...args),
-    removeMarketToggles: () => removeMarketToggles(),
-    testSurface,
-  });
   const { buildMarketSettings, updateMarketSettingsContent } =
     marketSettingsBrowserAdapter;
 
-  let { traitVal } = createTraitValue({ getGame: () => game });
-  const authorityPolicy = createAuthorityPolicy({
+  let { traitVal } = createTraitValueControl({ getGame: () => game });
+  const authorityPolicy = createAuthorityPolicyControl({
     getGame: () => game,
     getSettings: () => settings,
     getResources: () => resources,
     readHighPopulationPercent: () => traitVal("high_pop", 1, 100),
-    readAuthorityPolicyView,
-    readAuthorityQuantity,
+    readAuthorityPolicyView: readAuthorityPolicyViewControl,
+    readAuthorityQuantity: readAuthorityQuantityControl,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      authorityPolicy: {
-        getAuthorityTarget: authorityPolicy.getAuthorityTarget,
-        getAuthorityPerSoldier: authorityPolicy.getAuthorityPerSoldier,
-        getRequiredAuthorityGarrison(currentGarrison) {
-          const requirement =
-            authorityPolicy.getRequiredAuthorityGarrison(currentGarrison);
-          return requirement.status === "ready"
-            ? requirement.requiredGarrison
-            : requirement;
-        },
-        getPredictedAuthorityAfterRemovingSoldiers:
-          authorityPolicy.getPredictedAuthorityAfterRemovingSoldiers,
-        assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
+  registerTestPart(() => ({
+    authorityPolicy: {
+      getAuthorityTarget: authorityPolicy.getAuthorityTarget,
+      getAuthorityPerSoldier: authorityPolicy.getAuthorityPerSoldier,
+      getRequiredAuthorityGarrison(currentGarrison) {
+        const requirement =
+          authorityPolicy.getRequiredAuthorityGarrison(currentGarrison);
+        return requirement.status === "ready"
+          ? requirement.requiredGarrison
+          : requirement;
       },
-      setAuthorityPolicyTestContext(context) {
-        game = context.game;
-        settings = context.settings;
-        resources = context.resources;
-      },
-    });
+      getPredictedAuthorityAfterRemovingSoldiers:
+        authorityPolicy.getPredictedAuthorityAfterRemovingSoldiers,
+      assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
+    },
+    setAuthorityPolicyTestContext(context) {
+      game = context.game;
+      settings = context.settings;
+      resources = context.resources;
+    },
+  }));
 
-  const { normalizeProperties, addProps } = createPropertyHelpers({
+  const { normalizeProperties, addProps } = createPropertyHelpersControl({
     getSettings: () => settings,
   });
-  let { getCostConflict } = createCostConflict({
+  let { getCostConflict } = createCostConflictControl({
     getState: () => state,
     getResources: () => resources,
   });
-  const plannerStatsLifecycle = createPlannerStatsLifecycle(
-    createPlannerStatsStore(runtimeEnvironment.storage),
+  const plannerStatsLifecycle = createPlannerStatsLifecycleControl(
+    createPlannerStatsStoreControl(runtimeEnvironment.storage),
   );
   const {
     plannerLimitingResource,
     makePlannerStats,
     loadPlannerStats,
     savePlannerStats,
-  } = createPlannerState({
+  } = createPlannerStateControl({
     getResources: () => resources,
     getGame: () => game,
-    readPlannerLimitInput,
-    readPlannerRun,
+    readPlannerLimitInput: readPlannerLimitInputControl,
+    readPlannerRun: readPlannerRunControl,
     lifecycle: plannerStatsLifecycle,
   });
   const { expandStorage } = createStorageExpansionControl({
@@ -1346,7 +1273,7 @@ export function startEvolveRuntimeComposition(
       getResources: () => resources,
     },
   });
-  const { calculateRequiredStorages } = createStorageRequirementsAction({
+  const { calculateRequiredStorages } = createStorageRequirementsActionControl({
     getSettings: () => settings,
     getState: () => state,
     getResources: () => resources,
@@ -1361,24 +1288,25 @@ export function startEvolveRuntimeComposition(
     getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
     getRetirementGraphene: () => RETIREMENT_PREP.graphene,
   });
-  const { prioritizeDemandedResources } = createDemandPrioritizationAction({
-    getSettings: () => settings,
-    getState: () => state,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getCrafter: () => crafter,
-    getSpyManager: () => SpyManager,
-    getFleetManagerOuter: () => FleetManagerOuter,
-    getJobManager: () => JobManager,
-    getFactoryManager: () => FactoryManager,
-    getIsEarlyGame: () => isEarlyGame(),
-    isProject: (object) => object instanceof Project,
-    isInflationAssistActive: () => inflationChallengeAssistActive(),
-    isRetirementAssistActive: () => retirementChallengeAssistActive(),
-    getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
-    getRetirementGraphene: () => RETIREMENT_PREP.graphene,
-    consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
-  });
+  const { prioritizeDemandedResources } =
+    createDemandPrioritizationActionControl({
+      getSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getCrafter: () => crafter,
+      getSpyManager: () => SpyManager,
+      getFleetManagerOuter: () => FleetManagerOuter,
+      getJobManager: () => JobManager,
+      getFactoryManager: () => FactoryManager,
+      getIsEarlyGame: () => isEarlyGame(),
+      isProject: (object) => object instanceof Project,
+      isInflationAssistActive: () => inflationChallengeAssistActive(),
+      isRetirementAssistActive: () => retirementChallengeAssistActive(),
+      getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
+      getRetirementGraphene: () => RETIREMENT_PREP.graphene,
+      consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
+    });
   const {
     makeStateLog,
     loadStateLog,
@@ -1391,7 +1319,7 @@ export function startEvolveRuntimeComposition(
     getResources: () => resources,
     getState: () => state,
     plannerLimitingResource,
-    stateLogStore: createStateLogStore(runtimeEnvironment.storage),
+    stateLogStore: createStateLogStoreControl(runtimeEnvironment.storage),
     testSurface,
     setTestContext(context) {
       game = context.game;
@@ -1399,97 +1327,61 @@ export function startEvolveRuntimeComposition(
       state = context.state;
     },
   });
-  const { verifyGameActions, verifyGameActionsExist, verifyGameActionExists } =
-    createGameActionVerification({
-      getGame: () => game,
-      getBuildings: () => buildings,
-      log: (...values) => runtimeEnvironment.log(...values),
-    });
-  let { getGovernor, haveTask, haveTech, isEarlyGame } = createRuntimeQueries({
-    getGame: () => game,
-  });
-  const { isHungryRace, isDemonRace, isLumberRace, getOccCosts } =
-    createRaceProfile({
-      getGame: () => game,
-      getTraitVal: () => traitVal,
-    });
-  const { getGovName, getGovPower } = createForeignGovernment({
-    getGame: () => game,
-    getPoly: () => poly,
-  });
-  const {
+  let {
+    verifyGameActions,
+    verifyGameActionsExist,
+    verifyGameActionExists,
+    getGovernor,
+    haveTask,
+    haveTech,
+    isEarlyGame,
+    isHungryRace,
+    isDemonRace,
+    isLumberRace,
+    getOccCosts,
+    getGovName,
+    getGovPower,
     getGalaxyCombatShipPower,
     getPiracyMultiplier,
     galaxyAssaultPending,
     getGalaxyRegions,
     stargatePiracySupressed,
     galaxyPiracyCoveredByFleet,
-  } = createGalaxyIntelligence({
-    getGame: () => game,
-    getBuildings: () => buildings,
-    getResources: () => resources,
-    getGalaxyOffers: () => poly.galaxyOffers,
-    getSettings: () => settings,
-    getTraitVal: () => traitVal,
-  });
-  const {
     gateTowerSupressionTooLow,
     gateDemonsSupressed,
     guardPostPrebuildIncomplete,
-  } = createHellIntelligence({
-    getGame: () => game,
-    getBuildings: () => buildings,
-    getPoly: () => poly,
-    getSettings: () => settings,
-    getTraitVal: () => traitVal,
-  });
-  const { womlingStatEarned } = createWomlingAchievements({
-    getGame: () => game,
-    getPoly: () => poly,
-  });
-  const { shrineBonusUnwanted } = createShrineIntelligence({
-    getGame: () => game,
-    getSettings: () => settings,
-  });
-  const { madPrestigeAwaited } = createPrestigeIntelligence({
-    getSettings: () => settings,
-    getTechIds: () => techIds,
-    getHaveTech: () => haveTech,
-  });
-  const {
+    womlingStatEarned,
+    shrineBonusUnwanted,
+    madPrestigeAwaited,
     getCitadelConsumption,
     isHellSupressUseful,
     adjustSpire,
     getBestSupplyRatio,
     nextCitadelPowerDraw,
     spirePrebuildShortfall,
-  } = createPowerSupport({
-    getGame: () => game,
-    getJobs: () => jobs,
-    getCrafter: () => crafter,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-  });
-  let {
     ticksPerSecond,
     getHealingRate,
     getFoodConsume,
     getGrowthRate,
     getResourcesPerClick,
-  } = createGameRates({
-    getSettings: () => settings,
+  } = createRuntimeIntelligenceControl({
     getGame: () => game,
     getBuildings: () => buildings,
-    getState: () => state,
-    getResources: () => resources,
-    getJobs: () => jobs,
+    log: (...values) => runtimeEnvironment.log(...values),
     getTraitVal: () => traitVal,
-    getGovernor: () => getGovernor(),
+    getPoly: () => poly,
+    getResources: () => resources,
+    getGalaxyOffers: () => poly.galaxyOffers,
+    getSettings: () => settings,
+    getState: () => state,
+    getJobs: () => jobs,
+    getCrafter: () => crafter,
+    getTechIds: () => techIds,
     getHaveTech: () => haveTech,
     getDate: () => runtimeEnvironment.createDate(),
   });
   let win = null;
-  const userscriptEnvironment = createUserscriptEnvironment(
+  const userscriptEnvironment = createUserscriptEnvironmentControl(
     runtimeEnvironment.window,
   );
   const {
@@ -1499,7 +1391,7 @@ export function startEvolveRuntimeComposition(
     getVueElement,
     resolveVueMethod,
     triggerFileDownload,
-  } = createBrowserRuntime({
+  } = createBrowserRuntimeControl({
     getWin: () => win,
     getDocument: () => runtimeEnvironment.document,
     getUrlApi: () => runtimeEnvironment.urlApi,
@@ -1559,7 +1451,7 @@ export function startEvolveRuntimeComposition(
       userscriptEnvironment.cloneIntoPage(value, options),
   });
 
-  // Class definitions
+  var resources, jobs, crafter, buildings, linkedBuildings, projects;
   const {
     Job,
     BasicJob,
@@ -1593,7 +1485,13 @@ export function startEvolveRuntimeComposition(
     MutableTrait,
     MajorTrait,
     GenusTrait,
-  } = createEntityClasses({
+    resources: initializedResources,
+    jobs: initializedJobs,
+    crafter: initializedCrafter,
+    buildings: initializedBuildings,
+    linkedBuildings: initializedLinkedBuildings,
+    projects: initializedProjects,
+  } = createEntityCompatibilitySurface({
     readArpaIds: () => arpaIds,
     readBuildingIds: () => buildingIds,
     readBuildings: () => buildings,
@@ -1637,47 +1535,52 @@ export function startEvolveRuntimeComposition(
     readGameModal: () => gameModal,
     readProjectControls: () => projectControls,
     readResearchControls: () => researchControls,
+    getHaveTech: () => haveTech,
+    setResources: (value) => (resources = value),
   });
+  resources = initializedResources;
+  jobs = initializedJobs;
+  crafter = initializedCrafter;
+  buildings = initializedBuildings;
+  linkedBuildings = initializedLinkedBuildings;
+  projects = initializedProjects;
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      entityClasses: {
-        Job,
-        BasicJob,
-        CraftingJob,
-        Resource,
-        SoulGem,
-        Troops,
-        Supply,
-        Power,
-        Support,
-        BeltSupport,
-        ElectrolysisSupport,
-        WomlingsSupport,
-        PrestigeResource,
-        Population,
-        Morale,
-        Thrall,
-        ResourceProductionCost,
-        Action,
-        CityAction,
-        Pillar,
-        ResourceAction,
-        EvolutionAction,
-        SpaceDock,
-        ModalAction,
-        Project,
-        Technology,
-        Race,
-        Trigger,
-        MinorTrait,
-        MutableTrait,
-        MajorTrait,
-        GenusTrait,
-      },
-    });
-
-  // Static catalogs are imported from runtime-catalogs.ts.
+  registerTestPart(() => ({
+    entityClasses: {
+      Job,
+      BasicJob,
+      CraftingJob,
+      Resource,
+      SoulGem,
+      Troops,
+      Supply,
+      Power,
+      Support,
+      BeltSupport,
+      ElectrolysisSupport,
+      WomlingsSupport,
+      PrestigeResource,
+      Population,
+      Morale,
+      Thrall,
+      ResourceProductionCost,
+      Action,
+      CityAction,
+      Pillar,
+      ResourceAction,
+      EvolutionAction,
+      SpaceDock,
+      ModalAction,
+      Project,
+      Technology,
+      Race,
+      Trigger,
+      MinorTrait,
+      MutableTrait,
+      MajorTrait,
+      GenusTrait,
+    },
+  }));
 
   // Lookup tables are filled during initialization; state is a fresh mutable
   // session object for each runtime startup.
@@ -1691,52 +1594,19 @@ export function startEvolveRuntimeComposition(
     races,
     craftablesList,
     foundryList,
-  } = createRuntimeLookupTables();
-  let state = createInitialRuntimeState();
+  } = createRuntimeLookupTablesControl();
+  let state = createInitialRuntimeStateControl();
 
-  // Class instances
-  var { resources, jobs, crafter, buildings, linkedBuildings, projects } =
-    createEntityCatalogs({
-      classes: {
-        Action,
-        BasicJob,
-        BeltSupport,
-        CityAction,
-        CraftingJob,
-        ElectrolysisSupport,
-        Job,
-        ModalAction,
-        Morale,
-        Pillar,
-        Population,
-        Power,
-        PrestigeResource,
-        Project,
-        Resource,
-        ResourceAction,
-        SoulGem,
-        SpaceDock,
-        Supply,
-        Support,
-        Thrall,
-        Troops,
-        WomlingsSupport,
-      },
-      getHaveTech: () => haveTech,
-      setResources: (value) => (resources = value),
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      entityCatalogs: {
-        resources,
-        jobs,
-        crafter,
-        buildings,
-        linkedBuildings,
-        projects,
-      },
-    });
+  registerTestPart(() => ({
+    entityCatalogs: {
+      resources,
+      jobs,
+      crafter,
+      buildings,
+      linkedBuildings,
+      projects,
+    },
+  }));
 
   const {
     namedBuildings,
@@ -1747,40 +1617,36 @@ export function startEvolveRuntimeComposition(
     inflationMoneyIncomeBuildings,
     galaxyCombatShips,
     weightingRules,
-  } = createBuildingWeightingPolicy({
+    buildingWeightingDescriber,
+    buildingWeightingDecider,
+  } = createBuildingWeightingControl({
     formatNumber: getNumberString,
     formatNiceNumber: getNiceNumber,
     nextRandomUnit: () => randomSource.nextUnit(),
   });
-  const buildingWeightingDescriber = createBuildingWeightingDescriber({
-    formatNiceNumber: getNiceNumber,
-  });
-  const buildingWeightingDecider = createBuildingWeightingDecider({
-    weightingRules,
-  });
 
   const isVacuumSyphonStage = () =>
-    isVacuumCollapseManaStageReady({
+    isVacuumCollapseManaStageReadyControl({
       prestigeType: String(settings["prestigeType"] ?? ""),
       manaRate: Number(resources?.Mana?.rateOfChange),
       requiredManaRate: Number(
-        settings["prestigeVacuumMana"] ?? DEFAULT_VACUUM_MANA_REQUIREMENT,
+        settings["prestigeVacuumMana"] ??
+          DEFAULT_VACUUM_MANA_REQUIREMENT_CONTROL,
       ),
     });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      weightingPolicy: {
-        namedBuildings,
-        authorityCapBuildings,
-        INFLATION_CHALLENGE_MONEY,
-        RETIREMENT_PREP,
-        inflationMoneyStorageBuildings,
-        inflationMoneyIncomeBuildings,
-        galaxyCombatShips,
-        weightingRules,
-      },
-    });
+  registerTestPart(() => ({
+    weightingPolicy: {
+      namedBuildings,
+      authorityCapBuildings,
+      INFLATION_CHALLENGE_MONEY,
+      RETIREMENT_PREP,
+      inflationMoneyStorageBuildings,
+      inflationMoneyIncomeBuildings,
+      galaxyCombatShips,
+      weightingRules,
+    },
+  }));
 
   // Singleton manager objects
   let {
@@ -1799,56 +1665,60 @@ export function startEvolveRuntimeComposition(
     ReplicatorManager,
     DroidManager,
     GrapheneManager,
-  } = createIndustryManagerControls({
-    trait: {
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      haveTech,
-    },
+    GalaxyTradeManager,
+    GovernmentManager,
+    MarketManager,
+    StorageManager,
+    SpyManager,
+    WarManager,
+  } = createManagerCompositionControl({
     industry: {
-      getGame: () => game,
-      getBuildings: () => buildings,
-      industryControls,
-      haveTech,
+      trait: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        haveTech,
+      },
+      industry: {
+        getGame: () => game,
+        getBuildings: () => buildings,
+        industryControls,
+        haveTech,
+      },
+      disposal: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getPoly: () => poly,
+        haveTask,
+        industryControls,
+        disposalControls,
+      },
+      magic: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        haveTech,
+        isLumberRace,
+        addProps,
+        industryControls,
+      },
+      production: {
+        getGame: () => game,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        industryControls,
+        haveTech,
+        isLumberRace,
+        addProps,
+        normalizeProperties,
+        replicableResources,
+        ResourceProductionCost,
+      },
     },
-    disposal: {
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getPoly: () => poly,
-      haveTask,
-      industryControls,
-      disposalControls,
-    },
-    magic: {
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      haveTech,
-      isLumberRace,
-      addProps,
-      industryControls,
-    },
-    production: {
-      getGame: () => game,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      industryControls,
-      haveTech,
-      isLumberRace,
-      addProps,
-      normalizeProperties,
-      replicableResources,
-      ResourceProductionCost,
-    },
-  });
-
-  let GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager;
-  ({ GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } =
-    createEconomyManagerControl({
+    economy: {
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
@@ -1861,60 +1731,58 @@ export function startEvolveRuntimeComposition(
       haveTech,
       traitVal,
       industryControls,
-    }));
+    },
+    foreign: {
+      getGame: () => game,
+      getSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getPoly: () => poly,
+      getForeignControls: () => foreignControls,
+      espionageControls,
+      getGarrisonControls: () => garrisonControls,
+      getFeatureVisibility: () => featureVisibility,
+      getGameModal: () => gameModal,
+      getGameLog: () => GameLog,
+      getHaveTech: () => haveTech,
+      getGuardActive: () => guardActive,
+      getForeignAchievementGoal: () =>
+        readForeignAchievementGoalControl({
+          getSettings: () => settings,
+          getGame: () => game,
+          isAchievementUnlocked: (achievement, level) =>
+            isAchievementUnlocked(achievement, level),
+        }),
+      getTraitVal: () => traitVal,
+      getGovPower,
+      getGovName,
+      getOccCosts,
+      logError: (...args) => runtimeEnvironment.error(...args),
+    },
+  });
 
-  let SpyManager, WarManager;
-  ({ SpyManager, WarManager } = createForeignAffairsManagerControl({
-    getGame: () => game,
-    getSettings: () => settings,
-    getState: () => state,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getPoly: () => poly,
-    getForeignControls: () => foreignControls,
-    espionageControls,
-    getGarrisonControls: () => garrisonControls,
-    getFeatureVisibility: () => featureVisibility,
-    getGameModal: () => gameModal,
-    getGameLog: () => GameLog,
-    getHaveTech: () => haveTech,
-    getGuardActive: () => guardActive,
-    getForeignAchievementGoal: () =>
-      readForeignAchievementGoal({
-        getSettings: () => settings,
-        getGame: () => game,
-        isAchievementUnlocked: (achievement, level) =>
-          isAchievementUnlocked(achievement, level),
-      }),
-    getTraitVal: () => traitVal,
-    getGovPower,
-    getGovName,
-    getOccCosts,
-    logError: (...args) => runtimeEnvironment.error(...args),
+  registerTestPart(() => ({
+    foreignAffairsManagers: { SpyManager, WarManager },
+    setForeignAffairsManagersTestContext(context) {
+      if ("game" in context) game = context.game;
+      if ("settings" in context) settings = context.settings;
+      if ("state" in context) state = context.state;
+      if ("resources" in context) resources = context.resources;
+      if ("buildings" in context) buildings = context.buildings;
+      if ("poly" in context) poly = context.poly;
+      if ("win" in context) win = context.win;
+      if ("gameModal" in context) gameModal = context.gameModal;
+      if ("GameLog" in context) GameLog = context.GameLog;
+      if ("KeyManager" in context) KeyManager = context.KeyManager;
+      if ("haveTech" in context) haveTech = context.haveTech;
+      if ("guardActive" in context) guardActive = context.guardActive;
+      if ("traitVal" in context) traitVal = context.traitVal;
+    },
   }));
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      foreignAffairsManagers: { SpyManager, WarManager },
-      setForeignAffairsManagersTestContext(context) {
-        if ("game" in context) game = context.game;
-        if ("settings" in context) settings = context.settings;
-        if ("state" in context) state = context.state;
-        if ("resources" in context) resources = context.resources;
-        if ("buildings" in context) buildings = context.buildings;
-        if ("poly" in context) poly = context.poly;
-        if ("win" in context) win = context.win;
-        if ("gameModal" in context) gameModal = context.gameModal;
-        if ("GameLog" in context) GameLog = context.GameLog;
-        if ("KeyManager" in context) KeyManager = context.KeyManager;
-        if ("haveTech" in context) haveTech = context.haveTech;
-        if ("guardActive" in context) guardActive = context.guardActive;
-        if ("traitVal" in context) traitVal = context.traitVal;
-      },
-    });
-
   let { FleetManagerOuter, FleetManager, MechManager } =
-    createFleetMechManagerControl({
+    createFleetMechManagerCompositionControl({
       fleet: {
         getGame: () => game,
         getSettings: () => settings,
@@ -1942,22 +1810,21 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      fleetManagers: { FleetManagerOuter, FleetManager },
-      setFleetManagersTestContext(context) {
-        if ("game" in context) game = context.game;
-        if ("settings" in context) settings = context.settings;
-        if ("resources" in context) resources = context.resources;
-        if ("buildings" in context) buildings = context.buildings;
-        if ("poly" in context) poly = context.poly;
-        if ("win" in context) win = context.win;
-        if ("KeyManager" in context) KeyManager = context.KeyManager;
-        if ("haveTech" in context) haveTech = context.haveTech;
-      },
-    });
+  registerTestPart(() => ({
+    fleetManagers: { FleetManagerOuter, FleetManager },
+    setFleetManagersTestContext(context) {
+      if ("game" in context) game = context.game;
+      if ("settings" in context) settings = context.settings;
+      if ("resources" in context) resources = context.resources;
+      if ("buildings" in context) buildings = context.buildings;
+      if ("poly" in context) poly = context.poly;
+      if ("win" in context) win = context.win;
+      if ("KeyManager" in context) KeyManager = context.KeyManager;
+      if ("haveTech" in context) haveTech = context.haveTech;
+    },
+  }));
 
-  const { mechSupplySavingReason } = createMechIntelligence({
+  const { mechSupplySavingReason } = createMechIntelligenceControl({
     getGame: () => game,
     getSettings: () => settings,
     getBuildings: () => buildings,
@@ -1966,25 +1833,24 @@ export function startEvolveRuntimeComposition(
     getHaveTask: () => haveTask,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      MechManager,
-      setMechManagerTestContext(context) {
-        if ("game" in context) game = context.game;
-        if ("settings" in context) settings = context.settings;
-        if ("resources" in context) resources = context.resources;
-        if ("buildings" in context) buildings = context.buildings;
-        if ("poly" in context) poly = context.poly;
-        if ("win" in context) win = context.win;
-        if ("GameLog" in context) GameLog = context.GameLog;
-        if ("needSandboxBypass" in context)
-          needSandboxBypass = context.needSandboxBypass;
-      },
-    });
+  registerTestPart(() => ({
+    MechManager,
+    setMechManagerTestContext(context) {
+      if ("game" in context) game = context.game;
+      if ("settings" in context) settings = context.settings;
+      if ("resources" in context) resources = context.resources;
+      if ("buildings" in context) buildings = context.buildings;
+      if ("poly" in context) poly = context.poly;
+      if ("win" in context) win = context.win;
+      if ("GameLog" in context) GameLog = context.GameLog;
+      if ("needSandboxBypass" in context)
+        needSandboxBypass = context.needSandboxBypass;
+    },
+  }));
 
   let JobManager, BuildingManager, ProjectManager, TriggerManager;
   ({ JobManager, BuildingManager, ProjectManager, TriggerManager } =
-    createCoreManagerControl({
+    createCoreManagerCompositionControl({
       getGame: () => game,
       getSettings: () => settings,
       getState: () => state,
@@ -1993,9 +1859,9 @@ export function startEvolveRuntimeComposition(
       isVacuumSyphonStage,
       getNiceNumber,
       weightingDecider: buildingWeightingDecider,
-      readWeightingCandidate,
+      readWeightingCandidate: readWeightingCandidateControl,
       describeBuildingWeighting: buildingWeightingDescriber.describe,
-      readWeightingSnapshot: createWeightingSnapshotReader({
+      weightingSnapshot: {
         getState: () => state,
         getWeightingMultiplier: (setting) => settings[setting],
         isBestFreighterOnly: () => settings.buildingsBestFreighter,
@@ -2057,7 +1923,7 @@ export function startEvolveRuntimeComposition(
         getRetirementPreparationMissing: () => retirementPreparationMissing(),
         isAchievementGuardActive: (guard) => guardActive(guard),
         getForeignAchievementGoal: () =>
-          readForeignAchievementGoal({
+          readForeignAchievementGoalControl({
             getSettings: () => settings,
             getGame: () => game,
             isAchievementUnlocked: (achievement, level) =>
@@ -2077,7 +1943,7 @@ export function startEvolveRuntimeComposition(
         isMadPrestigeAwaited: () => madPrestigeAwaited(),
         getMechSupplySavingReason: () => mechSupplySavingReason(),
         isWomlingStatEarned: (stat) => womlingStatEarned(stat),
-      }),
+      },
       isEarlyGame,
       getIsPrestigeAllowed: () => isPrestigeAllowed,
       getBananaRepublicObjectiveComplete: () => bananaRepublicObjectiveComplete,
@@ -2088,22 +1954,21 @@ export function startEvolveRuntimeComposition(
     }));
 
   let KeyManager, GameLog;
-  const gameKeyboardHandlers = createGameKeyboardHandlers({
+  const {
+    gameKeyboardHandlers,
+    KeyManager: initialKeyManager,
+    GameLog: initialGameLog,
+    gamePageShell,
+    gameUiSurface,
+  } = createGameLifecycleControl({
     getWin: () => win,
     getDocument: () => runtimeEnvironment.document,
     getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
     getNeedSandboxBypass: () => needSandboxBypass,
     cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value),
-  });
-  ({ KeyManager, GameLog } = createInfrastructureManagerControl({
     getGame: () => game,
     getSettings: () => settings,
     getPoly: () => poly,
-    getKeyboardHandlers: () => gameKeyboardHandlers,
-  }));
-
-  const gamePageShell = createGamePageShell({
-    getDocument: () => runtimeEnvironment.document,
     getMutationObserver: () => runtimeEnvironment.MutationObserver,
     getNode: () => runtimeEnvironment.Node,
     getTooltipObserver: () => tooltipObserverCallback,
@@ -2111,27 +1976,24 @@ export function startEvolveRuntimeComposition(
     getModal: () => gameModal,
     getJQuery: () => $,
   });
+  KeyManager = initialKeyManager;
+  GameLog = initialGameLog;
 
-  const gameUiSurface = createGameUiSurface({
-    getDocument: () => runtimeEnvironment.document,
-  });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      gameModal,
-      infrastructureManagers: { KeyManager, GameLog },
-      setInfrastructureManagersTestContext(context) {
-        if ("game" in context) game = context.game;
-        if ("settings" in context) settings = context.settings;
-        if ("poly" in context) poly = context.poly;
-        if ("win" in context) win = context.win;
-        if ("needSandboxBypass" in context)
-          needSandboxBypass = context.needSandboxBypass;
-      },
-    });
+  registerTestPart(() => ({
+    gameModal,
+    infrastructureManagers: { KeyManager, GameLog },
+    setInfrastructureManagersTestContext(context) {
+      if ("game" in context) game = context.game;
+      if ("settings" in context) settings = context.settings;
+      if ("poly" in context) poly = context.poly;
+      if ("win" in context) win = context.win;
+      if ("needSandboxBypass" in context)
+        needSandboxBypass = context.needSandboxBypass;
+    },
+  }));
 
   // Gui & Init functions
-  const { updateCraftCost } = createCraftingCosts({
+  const { updateCraftCost } = createCraftingCostsControl({
     getGame: () => game,
     getState: () => state,
     getResources: () => resources,
@@ -2139,18 +2001,17 @@ export function startEvolveRuntimeComposition(
     setFoundryList: (list) => (foundryList = list),
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      updateCraftCost,
-      getCraftCostTestLists: () => ({ craftablesList, foundryList }),
-      setCraftCostTestContext(context) {
-        game = context.game;
-        state = context.state;
-        resources = context.resources;
-        craftablesList = context.craftablesList ?? [];
-        foundryList = context.foundryList ?? [];
-      },
-    });
+  registerTestPart(() => ({
+    updateCraftCost,
+    getCraftCostTestLists: () => ({ craftablesList, foundryList }),
+    setCraftCostTestContext(context) {
+      game = context.game;
+      state = context.state;
+      resources = context.resources;
+      craftablesList = context.craftablesList ?? [];
+      foundryList = context.foundryList ?? [];
+    },
+  }));
 
   const { initialiseState } = createStateInitializationControl({
     getGame: () => game,
@@ -2216,7 +2077,7 @@ export function startEvolveRuntimeComposition(
   });
 
   const { updateStateFromSettings, updateSettingsFromState } =
-    createSettingsState({
+    createSettingsStateControl({
       getSettingsRaw: () => settingsRaw,
       getTriggerManager: () => TriggerManager,
       settingsStore,
@@ -2225,9 +2086,9 @@ export function startEvolveRuntimeComposition(
   // Pure record primitives bound to the live settingsRaw, exposed to the settingsState
   // test hook below. Production reset/migration call the pure record functions directly.
   const applySettings = (def, reset) =>
-    applySettingsRecord(settingsRaw, def, reset);
+    applySettingsRecordControl(settingsRaw, def, reset);
   const migrateSetting = (oldSetting, newSetting, mapCb, keepOldValue) =>
-    migrateSettingRecord(
+    migrateSettingRecordControl(
       settingsRaw,
       oldSetting,
       newSetting,
@@ -2284,49 +2145,48 @@ export function startEvolveRuntimeComposition(
     testSurface,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      settingsState: {
-        updateStateFromSettings,
-        updateSettingsFromState,
-        applySettings,
-        migrateSetting,
-      },
-      resetSettings: {
-        resetWarSettings,
-        resetHellSettings,
-        resetGeneralSettings,
-        resetInterfaceSettings,
-        resetStateLogSettings,
-        resetAchievementGuardSettings,
-        resetChallengeHelperSettings,
-        resetPrestigeSettings,
-        resetGovernmentSettings,
-        resetAuthoritySettings,
-        resetEvolutionSettings,
-        resetResearchSettings,
-        resetMarketSettings,
-        resetStorageSettings,
-        resetMinorTraitSettings,
-        resetMutableTraitSettings,
-        resetJobSettings,
-        resetWeightingSettings,
-        resetBuildingSettings,
-        resetProjectSettings,
-        resetMagicSettings,
-        resetProductionSettings,
-        resetTriggerSettings,
-        resetLoggingSettings,
-        resetPlanetSettings,
-        resetFleetSettings,
-        resetMechSettings,
-        resetEjectorSettings,
-      },
-      setSettingsStateTestContext(context) {
-        settingsRaw = context.settingsRaw;
-        TriggerManager = context.triggerManager;
-      },
-    });
+  registerTestPart(() => ({
+    settingsState: {
+      updateStateFromSettings,
+      updateSettingsFromState,
+      applySettings,
+      migrateSetting,
+    },
+    resetSettings: {
+      resetWarSettings,
+      resetHellSettings,
+      resetGeneralSettings,
+      resetInterfaceSettings,
+      resetStateLogSettings,
+      resetAchievementGuardSettings,
+      resetChallengeHelperSettings,
+      resetPrestigeSettings,
+      resetGovernmentSettings,
+      resetAuthoritySettings,
+      resetEvolutionSettings,
+      resetResearchSettings,
+      resetMarketSettings,
+      resetStorageSettings,
+      resetMinorTraitSettings,
+      resetMutableTraitSettings,
+      resetJobSettings,
+      resetWeightingSettings,
+      resetBuildingSettings,
+      resetProjectSettings,
+      resetMagicSettings,
+      resetProductionSettings,
+      resetTriggerSettings,
+      resetLoggingSettings,
+      resetPlanetSettings,
+      resetFleetSettings,
+      resetMechSettings,
+      resetEjectorSettings,
+    },
+    setSettingsStateTestContext(context) {
+      settingsRaw = context.settingsRaw;
+      TriggerManager = context.triggerManager;
+    },
+  }));
 
   let {
     getStarLevel,
@@ -2343,7 +2203,7 @@ export function startEvolveRuntimeComposition(
     inflationChallengeShouldSaveMoney,
     retirementChallengeAssistActive,
     retirementPreparationMissing,
-  } = createRunGuards({
+  } = createRunGuardsControl({
     getSettings: () => settings,
     getGame: () => game,
     getPoly: () => poly,
@@ -2351,37 +2211,36 @@ export function startEvolveRuntimeComposition(
     getBuildings: () => buildings,
     haveTech,
     getNumberString,
-    formatRetirementShortfalls,
+    formatRetirementShortfalls: formatRetirementShortfallsControl,
     inflationChallengeMoney: INFLATION_CHALLENGE_MONEY,
     retirementPreparation: RETIREMENT_PREP,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      runGuards: {
-        getStarLevel,
-        getAchievementStar,
-        isAchievementUnlocked,
-        guardActive,
-        bananaRepublicObjectiveComplete,
-        bananaRepublicSmoothieComplete,
-        bananaRepublicReadyForUnification,
-        guardBananaRepublicActive,
-        inflationChallengeAssistActive,
-        inflationChallengeMoneyReachable,
-        inflationChallengeSecondsToFinish,
-        inflationChallengeShouldSaveMoney,
-        retirementChallengeAssistActive,
-        retirementPreparationMissing,
-      },
-      setRunGuardTestContext(context) {
-        settings = context.settings;
-        game = context.game;
-        poly = context.poly;
-        resources = context.resources;
-        buildings = context.buildings;
-      },
-    });
+  registerTestPart(() => ({
+    runGuards: {
+      getStarLevel,
+      getAchievementStar,
+      isAchievementUnlocked,
+      guardActive,
+      bananaRepublicObjectiveComplete,
+      bananaRepublicSmoothieComplete,
+      bananaRepublicReadyForUnification,
+      guardBananaRepublicActive,
+      inflationChallengeAssistActive,
+      inflationChallengeMoneyReachable,
+      inflationChallengeSecondsToFinish,
+      inflationChallengeShouldSaveMoney,
+      retirementChallengeAssistActive,
+      retirementPreparationMissing,
+    },
+    setRunGuardTestContext(context) {
+      settings = context.settings;
+      game = context.game;
+      poly = context.poly;
+      resources = context.resources;
+      buildings = context.buildings;
+    },
+  }));
 
   const { loadQueuedSettings } = createQueuedSettingsControl({
     getSettings: () => settings,
@@ -2417,35 +2276,33 @@ export function startEvolveRuntimeComposition(
   });
 
   const findRequiredResourceWeight = (resource) =>
-    findRequiredResourceWeightPolicy(state.unlockedBuildings, resource);
+    findRequiredResourceWeightControl(state.unlockedBuildings, resource);
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      findRequiredResourceWeight,
-      setResourceWeightTestContext(context) {
-        state = context.state;
-      },
-    });
+  registerTestPart(() => ({
+    findRequiredResourceWeight,
+    setResourceWeightTestContext(context) {
+      state = context.state;
+    },
+  }));
 
   const challengeGroups = challenges.map((members) => ({ members }));
   // function setPlanet from actions.js
   // Produces same set of planets, accurate for v1.0.29
-  let { generatePlanets } = createPlanetGeneration({
+  let { generatePlanets } = createPlanetGenerationControl({
     getGame: () => game,
     getPoly: () => poly,
     getIsAchievementUnlocked: () => isAchievementUnlocked,
     universes,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      generatePlanets,
-      setPlanetGenerationTestContext(context) {
-        game = context.game;
-        poly = context.poly;
-        isAchievementUnlocked = context.isAchievementUnlocked;
-      },
-    });
+  registerTestPart(() => ({
+    generatePlanets,
+    setPlanetGenerationTestContext(context) {
+      game = context.game;
+      poly = context.poly;
+      isAchievementUnlocked = context.isAchievementUnlocked;
+    },
+  }));
 
   const { autoEvolution, autoUniverseSelection, autoPlanetSelection } =
     createEvolutionControls({
@@ -2501,113 +2358,121 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { autoCraft, autoJobs } = createCraftJobsControls({
-    craft: {
-      reader: {
-        getResources: () => resources,
+  const {
+    autoCraft,
+    autoJobs,
+    autoGovernment,
+    autoBattle,
+    autoHell,
+    autoMerc,
+    autoSpy,
+  } = createEarlyAutomationComposition({
+    craftJobs: {
+      craft: {
+        reader: {
+          getResources: () => resources,
+          getGame: () => game,
+          getFoundryList: () => foundryList,
+          ticksPerSecond,
+        },
+        executor: {
+          getResources: () => resources,
+          getFoundryList: () => foundryList,
+        },
+      },
+      jobs: {
+        getJobManager: () => JobManager,
         getGame: () => game,
-        getFoundryList: () => foundryList,
-        ticksPerSecond,
-      },
-      executor: {
+        getJobs: () => jobs,
+        getCrafter: () => crafter,
+        getSettings: () => settings,
+        getBuildings: () => buildings,
         getResources: () => resources,
-        getFoundryList: () => foundryList,
+        getState: () => state,
+        getDebugWindow: () => runtimeEnvironment.window,
+        isDemonRace,
+        isLumberRace,
+        traitValue: traitVal,
+        haveTech,
+        haveTask,
+        ticksPerSecond,
+        findRequiredResourceWeight,
+        taxCap: (minimum) => poly.taxCap(minimum),
+        isCraftingJob: (job) => job instanceof CraftingJob,
+        getFoodConsume,
+        log: (message) => runtimeEnvironment.log(message),
       },
     },
-    jobs: {
-      getJobManager: () => JobManager,
-      getGame: () => game,
-      getJobs: () => jobs,
-      getCrafter: () => crafter,
-      getSettings: () => settings,
-      getBuildings: () => buildings,
-      getResources: () => resources,
-      getState: () => state,
-      getDebugWindow: () => runtimeEnvironment.window,
-      isDemonRace,
-      isLumberRace,
-      traitValue: traitVal,
-      haveTech,
-      haveTask,
-      ticksPerSecond,
-      findRequiredResourceWeight,
-      taxCap: (minimum) => poly.taxCap(minimum),
-      isCraftingJob: (job) => job instanceof CraftingJob,
-      getFoodConsume,
-      log: (message) => runtimeEnvironment.log(message),
-    },
-  });
-
-  const { autoGovernment, autoBattle, autoHell } = createCombatCivicControls({
-    government: {
-      reader: {
-        getGovernmentManager: () => GovernmentManager,
+    combatCivic: {
+      government: {
+        reader: {
+          getGovernmentManager: () => GovernmentManager,
+          getSettings: () => settings,
+          getGame: () => game,
+          guardActive,
+          haveTech,
+          getGovernor,
+          isTradeFederationAchievementUnlocked: () =>
+            isAchievementUnlocked("trade", 1),
+        },
+        executor: {
+          getGovernmentManager: () => GovernmentManager,
+          getGame: () => game,
+          getGovernor,
+          getVueById,
+        },
+      },
+      battle: {
+        getSpyManager: () => SpyManager,
+        getWarManager: () => WarManager,
+        getGameLog: () => GameLog,
+        getState: () => state,
         getSettings: () => settings,
         getGame: () => game,
         guardActive,
-        haveTech,
-        getGovernor,
-        isTradeFederationAchievementUnlocked: () =>
-          isAchievementUnlocked("trade", 1),
+        getHealingRate,
+        traitVal,
+        getOccupationCost: getOccCosts,
+        getGovernmentName: getGovName,
       },
-      executor: {
-        getGovernmentManager: () => GovernmentManager,
+      hell: {
+        getWarManager: () => WarManager,
         getGame: () => game,
-        getGovernor,
-        getVueById,
+        getSettings: () => settings,
+        getBuildings: () => buildings,
+        getResources: () => resources,
+        getState: () => state,
+        getDebugWindow: () => runtimeEnvironment.window,
+        debugLog: (message) => runtimeEnvironment.log(message),
       },
     },
-    battle: {
-      getSpyManager: () => SpyManager,
-      getWarManager: () => WarManager,
-      getGameLog: () => GameLog,
-      getState: () => state,
-      getSettings: () => settings,
-      getGame: () => game,
-      guardActive,
-      getHealingRate,
-      traitVal,
-      getOccupationCost: getOccCosts,
-      getGovernmentName: getGovName,
-    },
-    hell: {
-      getWarManager: () => WarManager,
-      getGame: () => game,
-      getSettings: () => settings,
-      getBuildings: () => buildings,
-      getResources: () => resources,
-      getState: () => state,
-      getDebugWindow: () => runtimeEnvironment.window,
-      debugLog: (message) => runtimeEnvironment.log(message),
-    },
-  });
-
-  const { autoMerc, autoSpy } = createEspionageControls({
-    mercenary: {
-      getWarManager: () => WarManager,
-      getState: () => state,
-      getSettings: () => settings,
-      getResources: () => resources,
-      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
-      getGameLog: () => GameLog,
-    },
-    spy: {
-      getSpyManager: () => SpyManager,
-      getWarManager: () => WarManager,
-      getForeignControls: () => foreignControls,
-      getHaveTask: () => haveTask,
-      getHaveTech: () => haveTech,
-      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
-      getResources: () => resources,
-      getSettings: () => settings,
-      getPoly: () => poly,
-      getGameLog: () => GameLog,
-      getGovName,
-      getGame: () => game,
+    espionage: {
+      mercenary: {
+        getWarManager: () => WarManager,
+        getState: () => state,
+        getSettings: () => settings,
+        getResources: () => resources,
+        shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+        getGameLog: () => GameLog,
+      },
+      spy: {
+        getSpyManager: () => SpyManager,
+        getWarManager: () => WarManager,
+        getForeignControls: () => foreignControls,
+        getHaveTask: () => haveTask,
+        getHaveTech: () => haveTech,
+        shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+        getResources: () => resources,
+        getSettings: () => settings,
+        getPoly: () => poly,
+        getGameLog: () => GameLog,
+        getGovName,
+        getGame: () => game,
+      },
     },
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__) testSurface?.add({ autoHell });
+  registerTestPart(() => ({ autoHell }));
 
   const { autoTax } = createTaxControl({
     nowMs: () => browserClock.nowMs(),
@@ -2625,38 +2490,47 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      autoTax: () => autoTax(),
-      setAutoTaxTestContext(context) {
-        if ("game" in context) game = context.game;
-        if ("settings" in context) settings = context.settings;
-        if ("resources" in context) resources = context.resources;
-        if ("poly" in context) poly = context.poly;
-        if ("win" in context) win = context.win;
-        if ("keySet" in context) KeyManager.set = context.keySet;
-      },
-    });
+  registerTestPart(() => ({
+    autoTax: () => autoTax(),
+    setAutoTaxTestContext(context) {
+      if ("game" in context) game = context.game;
+      if ("settings" in context) settings = context.settings;
+      if ("resources" in context) resources = context.resources;
+      if ("poly" in context) poly = context.poly;
+      if ("win" in context) win = context.win;
+      if ("keySet" in context) KeyManager.set = context.keySet;
+    },
+  }));
 
-  const { autoAlchemy } = createAlchemyControl({
-    getAlchemyManager: () => AlchemyManager,
-    getResources: () => resources,
-    getSettings: () => settings,
-    getGame: () => game,
-    getAchievementStar,
-  });
-
-  const { autoPylon } = createPylonControl({
-    getRitualManager: () => RitualManager,
-    getResources: () => resources,
-    getSettings: () => settings,
-    getGame: () => game,
-    getJobs: () => jobs,
-    haveTech,
-  });
-
-  const { autoQuarry, autoMine, autoExtractor, autoSmelter, autoFactory } =
-    createIndustryAutomationControls({
+  const {
+    autoAlchemy,
+    autoPylon,
+    autoQuarry,
+    autoMine,
+    autoExtractor,
+    autoSmelter,
+    autoFactory,
+    autoMiningDroid,
+    autoGraphenePlant,
+    autoConsume,
+    autoReplicator,
+  } = createResourceAutomationControl({
+    alchemy: {
+      getAlchemyManager: () => AlchemyManager,
+      getResources: () => resources,
+      getSettings: () => settings,
+      getGame: () => game,
+      getAchievementStar,
+    },
+    pylon: {
+      getRitualManager: () => RitualManager,
+      getResources: () => resources,
+      getSettings: () => settings,
+      getGame: () => game,
+      getJobs: () => jobs,
+      haveTech,
+    },
+    industry: {
       resourceRatio: {
         getQuarryManager: () => QuarryManager,
         getMineManager: () => MineManager,
@@ -2698,10 +2572,8 @@ export function startEvolveRuntimeComposition(
       getFactorySettings: () => settings,
       getFactoryState: () => state,
       testSurface,
-    });
-
-  const { autoMiningDroid, autoGraphenePlant, autoConsume, autoReplicator } =
-    createEconomyAutomationControls({
+    },
+    economy: {
       miningDroid: () => DroidManager,
       graphene: {
         getGrapheneManager: () => GrapheneManager,
@@ -2727,10 +2599,26 @@ export function startEvolveRuntimeComposition(
         getGovernorOffice: () => getVueById("govOffice"),
         resolveVueMethod,
       },
-    });
+    },
+  });
 
-  const { formatLogString, logPrestige, autoPrestige } =
-    createPrestigeAutomationControls({
+  let {
+    formatLogString,
+    logPrestige,
+    autoPrestige,
+    isPrestigeAllowed,
+    isCataclysmPrestigeAvailable,
+    isBioseederPrestigeAvailable,
+    isWhiteholePrestigeAvailable,
+    isApocalypsePrestigeAvailable,
+    isAscensionPrestigeAvailable,
+    isWitchAscensionPrestigeAvailable,
+    isDemonicPrestigeAvailable,
+    isPillarFinished,
+    isGECKNeeded,
+    getBlackholeMass,
+  } = createPrestigeAutomationCompositionControl({
+    automation: {
       log: {
         getSettings: () => settings,
         getGame: () => game,
@@ -2776,118 +2664,76 @@ export function startEvolveRuntimeComposition(
           loadQueuedSettings,
         },
       },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      prestigeLog: { formatLogString, logPrestige },
-      setPrestigeLogTestContext(context) {
+    },
+    eligibility: {
+      getSettings: () => settings,
+      getGame: () => game,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getTechIds: () => techIds,
+      getMechManager: () => MechManager,
+      haveTech: (...args) => haveTech(...args),
+      isAchievementUnlocked: (...args) => isAchievementUnlocked(...args),
+      testSurface,
+      setTestContext(context) {
         settings = context.settings;
         game = context.game;
-        state = context.state;
-        GameLog = context.GameLog;
-        setTestContext("prestigeLog", context);
+        resources = context.resources;
+        buildings = context.buildings;
+        techIds = context.techIds;
+        MechManager = context.MechManager;
+        haveTech = context.haveTech;
+        isAchievementUnlocked = context.isAchievementUnlocked;
       },
-    });
-
-  let {
-    isPrestigeAllowed,
-    isCataclysmPrestigeAvailable,
-    isBioseederPrestigeAvailable,
-    isWhiteholePrestigeAvailable,
-    isApocalypsePrestigeAvailable,
-    isAscensionPrestigeAvailable,
-    isWitchAscensionPrestigeAvailable,
-    isDemonicPrestigeAvailable,
-    isPillarFinished,
-    isGECKNeeded,
-    getBlackholeMass,
-  } = createPrestigeEligibilityControl({
-    getSettings: () => settings,
-    getGame: () => game,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getTechIds: () => techIds,
-    getMechManager: () => MechManager,
-    haveTech: (...args) => haveTech(...args),
-    isAchievementUnlocked: (...args) => isAchievementUnlocked(...args),
-    testSurface,
-    setTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      resources = context.resources;
-      buildings = context.buildings;
-      techIds = context.techIds;
-      MechManager = context.MechManager;
-      haveTech = context.haveTech;
-      isAchievementUnlocked = context.isAchievementUnlocked;
     },
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      autoEvolution,
-      autoUniverseSelection,
-      autoCraft,
-      autoSpy,
-      autoBattle,
-      autoPrestige,
-      setWave3TestContext(context) {
-        foundryList = context.foundryList;
-        SpyManager = context.SpyManager;
-        buildings = context.buildings;
-        haveTask = context.haveTask;
-        haveTech = context.haveTech;
-        isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
-        if ("foreignView" in context) {
-          setTestContext("foreignControls", {
-            getVueById: () => context.foreignView,
-          });
-        }
-      },
-      setForeignControlsTestContext(context) {
-        setTestContext("foreignControls", context);
-      },
-    });
+  registerTestPart(() => ({
+    prestigeLog: { formatLogString, logPrestige },
+    setPrestigeLogTestContext(context) {
+      settings = context.settings;
+      game = context.game;
+      state = context.state;
+      GameLog = context.GameLog;
+      setTestContext("prestigeLog", context);
+    },
+  }));
 
-  const ocularPowerData = [
-    { key: "d", id: "disintegration", locParam: ["X"] },
-    { key: "p", id: "petrification", locParam: [resources.Stone.name] },
-    { key: "w", id: "wound", locParam: ["X"] },
-    { key: "t", id: "telekinesis", locParam: ["X"] },
-    { key: "f", id: "fear", locParam: undefined },
-    { key: "c", id: "charm", locParam: ["X"] },
-  ];
+  registerTestPart(() => ({
+    autoEvolution,
+    autoUniverseSelection,
+    autoCraft,
+    autoSpy,
+    autoBattle,
+    autoPrestige,
+    setWave3TestContext(context) {
+      foundryList = context.foundryList;
+      SpyManager = context.SpyManager;
+      buildings = context.buildings;
+      haveTask = context.haveTask;
+      haveTech = context.haveTech;
+      isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
+      if ("foreignView" in context) {
+        setTestContext("foreignControls", {
+          getVueById: () => context.foreignView,
+        });
+      }
+    },
+    setForeignControlsTestContext(context) {
+      setTestContext("foreignControls", context);
+    },
+  }));
 
-  const wishData = {
-    minor: [
-      { id: "Know", loc: "resource_Knowledge_name" },
-      { id: "Money", loc: "resource_Money_name" },
-      { id: "Res", loc: "wish_resources" },
-      { id: "Love", loc: "wish_love" },
-      { id: "Excite", loc: "wish_event" },
-      { id: "Fame", loc: "wish_fame" },
-      { id: "Strength", loc: "wish_strength" },
-      { id: "Influence", loc: "wish_influence" },
-    ],
-    major: [
-      { id: "BigMoney", loc: "wish_big_money" },
-      { id: "BigRes", loc: "wish_big_resources" },
-      { id: "Plasmid", loc: "wish_plasmid" },
-      { id: "Power", loc: "wish_power" },
-      { id: "Adoration", loc: "wish_adoration" },
-      { id: "Thrill", loc: "wish_thrill" },
-      { id: "Peace", loc: "wish_peace" },
-      { id: "Greatness", loc: "wish_greatness" },
-    ],
-  };
   const {
+    ocularPowerData,
+    wishData,
     autoShapeshift,
     autoPsychic,
     autoOcularPowers,
     autoWish,
     autoGenetics,
-  } = createTraitAutomationControls({
+  } = createTraitAutomationCompositionControl({
+    getStoneName: () => resources.Stone.name,
     shapeshift: {
       reader: {
         getGame: () => game,
@@ -2947,26 +2793,31 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      autoMiningDroid,
-      DroidManager,
-      autoGraphenePlant,
-      GrapheneManager,
-      autoShapeshift,
-      autoWish,
-      autoGenetics,
-      automationSettings: settings,
-      automationResources: resources,
-      automationKeyManager: KeyManager,
-      setAutomationTestContext(context) {
-        game = context.game;
-        win = context.win;
-      },
-    });
+  registerTestPart(() => ({
+    autoMiningDroid,
+    DroidManager,
+    autoGraphenePlant,
+    GrapheneManager,
+    autoShapeshift,
+    autoWish,
+    autoGenetics,
+    automationSettings: settings,
+    automationResources: resources,
+    automationKeyManager: KeyManager,
+    setAutomationTestContext(context) {
+      game = context.game;
+      win = context.win;
+    },
+  }));
 
-  const { autoMarket, autoGalaxyMarket, autoGatherResources } =
-    createMarketAutomationControls({
+  const {
+    autoMarket,
+    autoGalaxyMarket,
+    autoGatherResources,
+    autoBuild,
+    autoResearch,
+  } = createMarketProgressionAutomationControl({
+    market: {
       market: {
         reader: {
           getManager: () => MarketManager,
@@ -2994,55 +2845,54 @@ export function startEvolveRuntimeComposition(
         getBuildings: () => buildings,
         getResourcesPerClick: () => getResourcesPerClick(),
       },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      autoConsume,
-      autoReplicator,
-      autoMarket,
-      autoGalaxyMarket,
-      autoGatherResources,
-      getAutomationPoly: () => poly,
-      setWave2TestContext(context) {
-        ReplicatorManager = context.ReplicatorManager;
-        MarketManager = context.MarketManager;
-        GalaxyTradeManager = context.GalaxyTradeManager;
-        buildings = context.buildings;
-        adjustTradeRoutes = context.adjustTradeRoutes;
-        getResourcesPerClick = context.getResourcesPerClick;
-      },
-    });
-
-  const { autoBuild, autoResearch } = createProgressionAutomationControls({
-    build: {
-      adapter: {
-        getBuildingManager: () => BuildingManager,
-        getProjectManager: () => ProjectManager,
-        getState: () => state,
-        getSettings: () => settings,
-        getResources: () => resources,
-        getCostConflict: (target) => getCostConflict(target),
-      },
-      isGovernReady: () => Boolean(game?.global?.civic?.govern),
-      diagnostics,
     },
-    research: {
-      reader: {
-        getState: () => state,
-        getCostConflict: (tech) => getCostConflict(tech),
+    progression: {
+      build: {
+        adapter: {
+          getBuildingManager: () => BuildingManager,
+          getProjectManager: () => ProjectManager,
+          getState: () => state,
+          getSettings: () => settings,
+          getResources: () => resources,
+          getCostConflict: (target) => getCostConflict(target),
+        },
+        isGovernReady: () => Boolean(game?.global?.civic?.govern),
+        diagnostics,
       },
-      executor: {
-        getState: () => state,
-        getBuildingManager: () => BuildingManager,
-        getProjectManager: () => ProjectManager,
+      research: {
+        reader: {
+          getState: () => state,
+          getCostConflict: (tech) => getCostConflict(tech),
+        },
+        executor: {
+          getState: () => state,
+          getBuildingManager: () => BuildingManager,
+          getProjectManager: () => ProjectManager,
+        },
+        diagnostics,
       },
-      diagnostics,
     },
   });
 
+  registerTestPart(() => ({
+    autoConsume,
+    autoReplicator,
+    autoMarket,
+    autoGalaxyMarket,
+    autoGatherResources,
+    getAutomationPoly: () => poly,
+    setWave2TestContext(context) {
+      ReplicatorManager = context.ReplicatorManager;
+      MarketManager = context.MarketManager;
+      GalaxyTradeManager = context.GalaxyTradeManager;
+      buildings = context.buildings;
+      adjustTradeRoutes = context.adjustTradeRoutes;
+      getResourcesPerClick = context.getResourcesPerClick;
+    },
+  }));
+
   let techConflictClock = browserClock;
-  const { getTechConflict } = createTechConflict({
+  const { getTechConflict } = createTechConflictControl({
     getClock: () => techConflictClock,
     getSettings: () => settings,
     getResources: () => resources,
@@ -3054,182 +2904,225 @@ export function startEvolveRuntimeComposition(
     retirementPreparationMissing: () => retirementPreparationMissing(),
     isAchievementUnlocked: (...args) => isAchievementUnlocked(...args),
     fanatAchievements,
-    formatTechConflict,
+    formatTechConflict: formatTechConflictControl,
     getNumberString,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      getTechConflict,
-      setTechConflictTestContext(context) {
-        settings = context.settings;
-        game = context.game;
-        state = context.state;
-        resources = context.resources;
-        buildings = context.buildings;
-        isAchievementUnlocked = context.isAchievementUnlocked;
-        techConflictClock = context.clock ?? browserClock;
+  registerTestPart(() => ({
+    getTechConflict,
+    setTechConflictTestContext(context) {
+      settings = context.settings;
+      game = context.game;
+      state = context.state;
+      resources = context.resources;
+      buildings = context.buildings;
+      isAchievementUnlocked = context.isAchievementUnlocked;
+      techConflictClock = context.clock ?? browserClock;
+    },
+  }));
+
+  const { autoTrigger, autoPower, autoStorage } =
+    createTriggerPowerAutomationControl({
+      trigger: {
+        reader: {
+          getState: () => state,
+          shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+        },
+        executor: {
+          getState: () => state,
+        },
+      },
+      powerStorage: {
+        power: {
+          warnings: {
+            getDocument: () => runtimeEnvironment.window.document,
+            getWindow: () => runtimeEnvironment.window,
+          },
+          adapter: {
+            getGame: () => game,
+            getSettings: () => settings,
+            getState: () => state,
+            getResources: () => resources,
+            getBuildings: () => buildings,
+            getJobs: () => jobs,
+            getPoly: () => poly,
+            getBuildingManager: () => BuildingManager,
+            getFleetManager: () => FleetManager,
+            getMechManager: () => MechManager,
+            getWarManager: () => WarManager,
+            consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+            isSupportResource: (value) => value instanceof Support,
+            isHellSuppressionUseful: isHellSupressUseful,
+            getGalaxyRegions,
+            traitValue: traitVal,
+            getAuthorityGarrisonRequirement:
+              authorityPolicy.getRequiredAuthorityGarrison,
+            haveTech,
+            getHealingRate,
+            isHungryRace,
+            isPillarFinished,
+            getBuildingIds: () => buildingIds,
+            log: (message) => runtimeEnvironment.log(message),
+          },
+          diagnostics,
+        },
+        storage: {
+          debug: { getWindow: () => runtimeEnvironment.window },
+          adapter: {
+            getStorageManager: () => StorageManager,
+            getGame: () => game,
+            getSettings: () => settings,
+            getState: () => state,
+            getResources: () => resources,
+            getBuildingManager: () => BuildingManager,
+            getProjectManager: () => ProjectManager,
+            getFleetManagerOuter: () => FleetManagerOuter,
+            log: (message) => runtimeEnvironment.log(message),
+          },
+          expand: expandStorage,
+        },
       },
     });
 
-  const { autoTrigger } = createTriggerControl({
-    reader: {
-      getState: () => state,
-      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+  registerTestPart(() => ({
+    autoMerc,
+    WarManager,
+    GameLog,
+    autoPsychic,
+    autoOcularPowers,
+    autoTrigger,
+    automationState: state,
+    setWave1TestManagers(managers) {
+      WarManager = managers.WarManager;
+      MinorTraitManager = managers.MinorTraitManager;
     },
-    executor: {
-      getState: () => state,
-    },
-  });
+  }));
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      autoMerc,
-      WarManager,
-      GameLog,
-      autoPsychic,
-      autoOcularPowers,
-      autoTrigger,
-      automationState: state,
-      setWave1TestManagers(managers) {
-        WarManager = managers.WarManager;
-        MinorTraitManager = managers.MinorTraitManager;
-      },
-    });
-
-  const { autoPower, autoStorage } = createPowerStorageControls({
-    power: {
-      warnings: {
-        getDocument: () => runtimeEnvironment.window.document,
-        getWindow: () => runtimeEnvironment.window,
-      },
-      adapter: {
-        getGame: () => game,
-        getSettings: () => settings,
-        getState: () => state,
-        getResources: () => resources,
-        getBuildings: () => buildings,
-        getJobs: () => jobs,
-        getPoly: () => poly,
-        getBuildingManager: () => BuildingManager,
-        getFleetManager: () => FleetManager,
-        getMechManager: () => MechManager,
-        getWarManager: () => WarManager,
-        consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
-        isSupportResource: (value) => value instanceof Support,
-        isHellSuppressionUseful: isHellSupressUseful,
-        getGalaxyRegions,
-        traitValue: traitVal,
-        getAuthorityGarrisonRequirement:
-          authorityPolicy.getRequiredAuthorityGarrison,
-        haveTech,
-        getHealingRate,
-        isHungryRace,
-        isPillarFinished,
-        getBuildingIds: () => buildingIds,
-        log: (message) => runtimeEnvironment.log(message),
-      },
-      diagnostics,
+  registerTestPart(() => ({
+    powerSupport: {
+      getCitadelConsumption,
+      isHellSupressUseful,
+      adjustSpire,
+      getBestSupplyRatio,
     },
-    storage: {
-      debug: { getWindow: () => runtimeEnvironment.window },
-      adapter: {
-        getStorageManager: () => StorageManager,
-        getGame: () => game,
-        getSettings: () => settings,
-        getState: () => state,
-        getResources: () => resources,
-        getBuildingManager: () => BuildingManager,
-        getProjectManager: () => ProjectManager,
+    setPowerSupportTestContext(context) {
+      game = context.game;
+      jobs = context.jobs;
+      crafter = context.crafter;
+      buildings = context.buildings;
+    },
+  }));
+
+  registerTestPart(() => ({
+    expandStorage,
+    setStorageExpansionTestContext(context) {
+      game = context.game;
+      settings = context.settings;
+      resources = context.resources;
+      buildings = context.buildings;
+      StorageManager = context.StorageManager;
+    },
+  }));
+
+  const {
+    autoMinorTrait,
+    autoMutateTrait,
+    autoFleetOuter,
+    autoFleet,
+    autoMech,
+  } = createTraitFleetAutomationControl({
+    traitResource: {
+      minorTrait: {
+        reader: {
+          getMinorTraitManager: () => MinorTraitManager,
+          getResources: () => resources,
+        },
+        executor: {
+          traitControls,
+          getResources: () => resources,
+        },
+      },
+      mutation: {
+        reader: {
+          getMutableTraitManager: () => MutableTraitManager,
+          getGame: () => game,
+          getResources: () => resources,
+        },
+        executor: {
+          getMutableTraitManager: () => MutableTraitManager,
+          getGame: () => game,
+          getResources: () => resources,
+          traitControls,
+          getGameLog: () => GameLog,
+        },
+      },
+    },
+    fleetMech: {
+      outerFleet: {
         getFleetManagerOuter: () => FleetManagerOuter,
-        log: (message) => runtimeEnvironment.log(message),
-      },
-      expand: expandStorage,
-    },
-  });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      powerSupport: {
-        getCitadelConsumption,
-        isHellSupressUseful,
-        adjustSpire,
-        getBestSupplyRatio,
-      },
-      setPowerSupportTestContext(context) {
-        game = context.game;
-        jobs = context.jobs;
-        crafter = context.crafter;
-        buildings = context.buildings;
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      expandStorage,
-      setStorageExpansionTestContext(context) {
-        game = context.game;
-        settings = context.settings;
-        resources = context.resources;
-        buildings = context.buildings;
-        StorageManager = context.StorageManager;
-      },
-    });
-
-  const { autoMinorTrait, autoMutateTrait } = createTraitResourceControls({
-    minorTrait: {
-      reader: {
-        getMinorTraitManager: () => MinorTraitManager,
-        getResources: () => resources,
-      },
-      executor: {
-        traitControls,
-        getResources: () => resources,
-      },
-    },
-    mutation: {
-      reader: {
-        getMutableTraitManager: () => MutableTraitManager,
+        getWarManager: () => WarManager,
         getGame: () => game,
+        getSettings: () => settings,
         getResources: () => resources,
-      },
-      executor: {
-        getMutableTraitManager: () => MutableTraitManager,
-        getGame: () => game,
-        getResources: () => resources,
-        traitControls,
+        traitVal,
+        assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
         getGameLog: () => GameLog,
       },
+      fleet: {
+        getFleetManager: () => FleetManager,
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getGalaxyRegions,
+        guardActive,
+        galaxyAssaultPending,
+      },
+      mech: {
+        adapter: {
+          getMechManager: () => MechManager,
+          getGame: () => game,
+          getSettings: () => settings,
+          getResources: () => resources,
+          getBuildings: () => buildings,
+          haveTech,
+          haveTask,
+          getGameLog: () => GameLog,
+          getJQuery: () => $,
+          readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
+          debugLog: (message) => runtimeEnvironment.log(message),
+        },
+        readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
+        log: (label, outcome) => runtimeEnvironment.log(label, outcome),
+      },
     },
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      autoMinorTrait,
-      MinorTraitManager,
-    });
+  registerTestPart(() => ({
+    autoMinorTrait,
+    MinorTraitManager,
+  }));
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      autoPlanetSelection,
-      autoJobs,
-      autoBuild,
-      autoResearch,
-      autoMutateTrait,
-      setWave4TestContext(context) {
-        generatePlanets = context.generatePlanets;
-        getStarLevel = context.getStarLevel;
-        isAchievementUnlocked = context.isAchievementUnlocked;
-        races = context.races;
-        JobManager = context.JobManager;
-        BuildingManager = context.BuildingManager;
-        ProjectManager = context.ProjectManager;
-        MutableTraitManager = context.MutableTraitManager;
-        getCostConflict = context.getCostConflict;
-      },
-    });
+  registerTestPart(() => ({
+    autoPlanetSelection,
+    autoJobs,
+    autoBuild,
+    autoResearch,
+    autoMutateTrait,
+    setWave4TestContext(context) {
+      generatePlanets = context.generatePlanets;
+      getStarLevel = context.getStarLevel;
+      isAchievementUnlocked = context.isAchievementUnlocked;
+      races = context.races;
+      JobManager = context.JobManager;
+      BuildingManager = context.BuildingManager;
+      ProjectManager = context.ProjectManager;
+      MutableTraitManager = context.MutableTraitManager;
+      getCostConflict = context.getCostConflict;
+    },
+  }));
 
-  let { adjustTradeRoutes } = createTradeRoutes({
+  let { adjustTradeRoutes } = createTradeRouteControl({
     getSettings: () => settings,
     getGame: () => game,
     getResources: () => resources,
@@ -3238,74 +3131,32 @@ export function startEvolveRuntimeComposition(
     shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney(),
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      adjustTradeRoutes,
-      setTradeRoutesTestContext(context) {
-        settings = context.settings;
-        game = context.game;
-        resources = context.resources;
-        MarketManager = context.MarketManager;
-      },
-    });
-
-  const { autoFleetOuter, autoFleet, autoMech } = createFleetMechControls({
-    outerFleet: {
-      getFleetManagerOuter: () => FleetManagerOuter,
-      getWarManager: () => WarManager,
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      traitVal,
-      assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
-      getGameLog: () => GameLog,
+  registerTestPart(() => ({
+    adjustTradeRoutes,
+    setTradeRoutesTestContext(context) {
+      settings = context.settings;
+      game = context.game;
+      resources = context.resources;
+      MarketManager = context.MarketManager;
     },
-    fleet: {
-      getFleetManager: () => FleetManager,
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getGalaxyRegions,
-      guardActive,
+  }));
+
+  registerTestPart(() => ({
+    galaxyIntelligence: {
+      getGalaxyCombatShipPower,
+      getPiracyMultiplier,
       galaxyAssaultPending,
+      getGalaxyRegions,
     },
-    mech: {
-      adapter: {
-        getMechManager: () => MechManager,
-        getGame: () => game,
-        getSettings: () => settings,
-        getResources: () => resources,
-        getBuildings: () => buildings,
-        haveTech,
-        haveTask,
-        getGameLog: () => GameLog,
-        getJQuery: () => $,
-        readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
-        debugLog: (message) => runtimeEnvironment.log(message),
-      },
-      readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
-      log: (label, outcome) => runtimeEnvironment.log(label, outcome),
+    setGalaxyIntelligenceTestContext(context) {
+      game = context.game;
+      buildings = context.buildings;
+      resources = context.resources;
+      poly = context.poly;
+      settings = context.settings;
+      traitVal = context.traitVal;
     },
-  });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      galaxyIntelligence: {
-        getGalaxyCombatShipPower,
-        getPiracyMultiplier,
-        galaxyAssaultPending,
-        getGalaxyRegions,
-      },
-      setGalaxyIntelligenceTestContext(context) {
-        game = context.game;
-        buildings = context.buildings;
-        resources = context.resources;
-        poly = context.poly;
-        settings = context.settings;
-        traitVal = context.traitVal;
-      },
-    });
+  }));
 
   const { updateScriptData, finalizeScriptData } =
     createScriptDataLifecycleControl({
@@ -3329,66 +3180,61 @@ export function startEvolveRuntimeComposition(
       testSurface,
     });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      autoPower,
-      autoStorage,
-      autoFleetOuter,
-      autoFleet,
-      autoMech,
-      setWave5TestManagers(managers) {
-        StorageManager = managers.StorageManager;
-        FleetManagerOuter = managers.FleetManagerOuter;
-        FleetManager = managers.FleetManager;
-        MechManager = managers.MechManager;
-      },
-    });
+  registerTestPart(() => ({
+    autoPower,
+    autoStorage,
+    autoFleetOuter,
+    autoFleet,
+    autoMech,
+    setWave5TestManagers(managers) {
+      StorageManager = managers.StorageManager;
+      FleetManagerOuter = managers.FleetManagerOuter;
+      FleetManager = managers.FleetManager;
+      MechManager = managers.MechManager;
+    },
+  }));
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      storageRequirements: { calculateRequiredStorages },
-      setStorageRequirementTestContext(context) {
-        settings = context.settings;
-        state = context.state;
-        resources = context.resources;
-        buildings = context.buildings;
-        game = context.game;
-        BuildingManager = context.BuildingManager;
-        ProjectManager = context.ProjectManager;
-        FleetManagerOuter = context.FleetManagerOuter;
-        inflationChallengeAssistActive = context.inflationChallengeAssistActive;
-        retirementChallengeAssistActive =
-          context.retirementChallengeAssistActive;
-      },
-    });
+  registerTestPart(() => ({
+    storageRequirements: { calculateRequiredStorages },
+    setStorageRequirementTestContext(context) {
+      settings = context.settings;
+      state = context.state;
+      resources = context.resources;
+      buildings = context.buildings;
+      game = context.game;
+      BuildingManager = context.BuildingManager;
+      ProjectManager = context.ProjectManager;
+      FleetManagerOuter = context.FleetManagerOuter;
+      inflationChallengeAssistActive = context.inflationChallengeAssistActive;
+      retirementChallengeAssistActive = context.retirementChallengeAssistActive;
+    },
+  }));
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      prioritizeDemandedResources,
-      makeDemandProject(cost, progress) {
-        return Object.defineProperties(Object.create(Project.prototype), {
-          cost: { value: cost, writable: true, enumerable: true },
-          progress: { value: progress, writable: true, enumerable: true },
-        });
-      },
-      setDemandPrioritizationTestContext(context) {
-        settings = context.settings;
-        state = context.state;
-        resources = context.resources;
-        buildings = context.buildings;
-        game = context.game;
-        crafter = context.crafter;
-        SpyManager = context.SpyManager;
-        FleetManagerOuter = context.FleetManagerOuter;
-        JobManager = context.JobManager;
-        FactoryManager = context.FactoryManager;
-        inflationChallengeAssistActive = context.inflationChallengeAssistActive;
-        retirementChallengeAssistActive =
-          context.retirementChallengeAssistActive;
-      },
-    });
+  registerTestPart(() => ({
+    prioritizeDemandedResources,
+    makeDemandProject(cost, progress) {
+      return Object.defineProperties(Object.create(Project.prototype), {
+        cost: { value: cost, writable: true, enumerable: true },
+        progress: { value: progress, writable: true, enumerable: true },
+      });
+    },
+    setDemandPrioritizationTestContext(context) {
+      settings = context.settings;
+      state = context.state;
+      resources = context.resources;
+      buildings = context.buildings;
+      game = context.game;
+      crafter = context.crafter;
+      SpyManager = context.SpyManager;
+      FleetManagerOuter = context.FleetManagerOuter;
+      JobManager = context.JobManager;
+      FactoryManager = context.FactoryManager;
+      inflationChallengeAssistActive = context.inflationChallengeAssistActive;
+      retirementChallengeAssistActive = context.retirementChallengeAssistActive;
+    },
+  }));
 
-  let { checkAffordableCustom, readQueuedTarget } = createQueueQueries({
+  let { checkAffordableCustom, readQueuedTarget } = createQueueQueriesControl({
     getResources: () => resources,
     getPoly: () => poly,
     getMechManager: () => MechManager,
@@ -3434,7 +3280,7 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  const { checkEvolutionResult } = createEvolutionResultCheck({
+  const { checkEvolutionResult } = createEvolutionResultCheckControl({
     getSettings: () => settings,
     getSettingsRaw: () => settingsRaw,
     getState: () => state,
@@ -3445,26 +3291,25 @@ export function startEvolveRuntimeComposition(
     getResetButton: () =>
       runtimeEnvironment.document.querySelector(".reset .button:not(.right)"),
     localize: (key) => game.loc(key),
-    formatLog: (event, localize) => formatEvolutionLog(event, localize),
+    formatLog: (event, localize) => formatEvolutionLogControl(event, localize),
     addEvolutionSetting: () => addEvolutionSetting(),
     updateSettingsFromState: () => updateSettingsFromState(),
     getTestActions: () => getTestContext("evolutionResult")?.actions,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      checkEvolutionResult: () => checkEvolutionResult(),
-      setEvolutionResultTestContext(context) {
-        settings = context.settings;
-        settingsRaw = context.settingsRaw;
-        state = context.state;
-        game = context.game;
-        races = context.races;
-        MutableTraitManager = context.MutableTraitManager;
-        GameLog = context.GameLog;
-        setTestContext("evolutionResult", context);
-      },
-    });
+  registerTestPart(() => ({
+    checkEvolutionResult: () => checkEvolutionResult(),
+    setEvolutionResultTestContext(context) {
+      settings = context.settings;
+      settingsRaw = context.settingsRaw;
+      state = context.state;
+      game = context.game;
+      races = context.races;
+      MutableTraitManager = context.MutableTraitManager;
+      GameLog = context.GameLog;
+      setTestContext("evolutionResult", context);
+    },
+  }));
 
   const { updateTabs } = createTabRefreshControl({
     getState: () => state,
@@ -3484,29 +3329,28 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  const { getMultiSegmentedTimeLeft } = createTargetTimingDisplay({
+  const { getMultiSegmentedTimeLeft } = createTargetTimingDisplayControl({
     getGame: () => game,
     getTimeFormat: () => (seconds) => poly.timeFormat(seconds),
     isProject: (target) => target instanceof Project,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      getMultiSegmentedTimeLeft,
-      makeTargetTimingProject(progress, currentStep, cost) {
-        return Object.defineProperties(Object.create(Project.prototype), {
-          gameMax: { value: 0, enumerable: true },
-          count: { value: 0, enumerable: true },
-          progress: { value: progress, enumerable: true },
-          currentStep: { value: currentStep, enumerable: true },
-          cost: { value: cost, enumerable: true },
-        });
-      },
-      setTargetTimingTestContext(context) {
-        game = context.game;
-        poly = context.poly;
-      },
-    });
+  registerTestPart(() => ({
+    getMultiSegmentedTimeLeft,
+    makeTargetTimingProject(progress, currentStep, cost) {
+      return Object.defineProperties(Object.create(Project.prototype), {
+        gameMax: { value: 0, enumerable: true },
+        count: { value: 0, enumerable: true },
+        progress: { value: progress, enumerable: true },
+        currentStep: { value: currentStep, enumerable: true },
+        cost: { value: cost, enumerable: true },
+      });
+    },
+    setTargetTimingTestContext(context) {
+      game = context.game;
+      poly = context.poly;
+    },
+  }));
 
   const {
     updateActiveTargetsUI,
@@ -3533,20 +3377,19 @@ export function startEvolveRuntimeComposition(
     savePlannerStats: (stats) => savePlannerStats(stats),
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      plannerAnalysis: {
-        plannerLimitingResource,
-        makePlannerStats,
-        loadPlannerStats,
-        savePlannerStats: () => savePlannerStats(state.plannerStats),
-      },
-      setPlannerAnalysisTestContext(context) {
-        game = context.game;
-        resources = context.resources;
-        state = context.state;
-      },
-    });
+  registerTestPart(() => ({
+    plannerAnalysis: {
+      plannerLimitingResource,
+      makePlannerStats,
+      loadPlannerStats,
+      savePlannerStats: () => savePlannerStats(state.plannerStats),
+    },
+    setPlannerAnalysisTestContext(context) {
+      game = context.game;
+      resources = context.resources;
+      state = context.state;
+    },
+  }));
 
   const { updateBuildPlanner } = createBuildPlannerControl({
     getGame: () => game,
@@ -3613,18 +3456,17 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      gameActionVerification: {
-        verifyGameActions,
-        verifyGameActionsExist,
-        verifyGameActionExists,
-      },
-      setGameActionVerificationTestContext(context) {
-        game = context.game;
-        buildings = context.buildings;
-      },
-    });
+  registerTestPart(() => ({
+    gameActionVerification: {
+      verifyGameActions,
+      verifyGameActionsExist,
+      verifyGameActionExists,
+    },
+    setGameActionVerificationTestContext(context) {
+      game = context.game;
+      buildings = context.buildings;
+    },
+  }));
 
   const getScriptBootstrapActions = () =>
     getTestContext("scriptBootstrap")?.actions ?? {
@@ -3772,48 +3614,20 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  const { updateOverrides } = createOverrideSettings({
+  const { updateOverrides } = createOverrideCompositionControl({
     getSafeMode: () => safeMode,
     getSettings: () => settings,
     getSettingsRaw: () => settingsRaw,
-    source: createOverrideEvaluationSource({
-      getCheckTypes: () => checkTypes,
-      getCheckCompare: () => checkCompare,
-      getCheckCustom: () => checkCustom,
-      getHaveTask: () => haveTask,
-    }),
-    reporter: createOverrideFailureReporter({
-      getGameModal: () => gameModal,
-      getGame: () => game,
-      getGameLog: () => GameLog,
-    }),
-    display: createOverrideEffectiveValueDisplay({
-      getJQuery: () => $,
-      changeDisplayInputNode,
-    }),
+    getCheckTypes: () => checkTypes,
+    getCheckCompare: () => checkCompare,
+    getCheckCustom: () => checkCustom,
+    getHaveTask: () => haveTask,
+    getGameModal: () => gameModal,
+    getGame: () => game,
+    getGameLog: () => GameLog,
+    getJQuery: () => $,
+    changeDisplayInputNode,
   });
-
-  const customRaceGenusOpposition = {
-    humanoid: ["fungi"],
-    carnivore: ["herbivore"],
-    herbivore: ["carnivore"],
-    small: ["giant"],
-    giant: ["small"],
-    reptilian: ["avian"],
-    avian: ["reptilian"],
-    insectoid: ["plant"],
-    plant: ["insectoid"],
-    fungi: ["humanoid"],
-    aquatic: ["sand"],
-    fey: ["eldritch", "synthetic"],
-    heat: ["polar"],
-    polar: ["heat"],
-    sand: ["aquatic"],
-    demonic: ["angelic"],
-    angelic: ["demonic"],
-    synthetic: ["eldritch", "fey"],
-    eldritch: ["synthetic", "fey"],
-  };
 
   const {
     customRaceRankCost,
@@ -3822,31 +3636,29 @@ export function startEvolveRuntimeComposition(
     customRaceTraitEffect,
     customRaceEditorTraits,
     customRaceDraftFromPreset,
-  } = createCustomRaceModel({
+  } = createCustomRaceModelControl({
     getGame: () => game,
     getPoly: () => poly,
     getResources: () => resources,
     getRaces: () => races,
-    genusOpposition: customRaceGenusOpposition,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      customRaceModel: {
-        customRaceRankCost,
-        customRaceGeneBalance,
-        customRaceRankOptions,
-        customRaceTraitEffect,
-        customRaceEditorTraits,
-        customRaceDraftFromPreset,
-      },
-      setCustomRaceModelTestContext(context) {
-        game = context.game;
-        poly = context.poly;
-        resources = context.resources;
-        races = context.races;
-      },
-    });
+  registerTestPart(() => ({
+    customRaceModel: {
+      customRaceRankCost,
+      customRaceGeneBalance,
+      customRaceRankOptions,
+      customRaceTraitEffect,
+      customRaceEditorTraits,
+      customRaceDraftFromPreset,
+    },
+    setCustomRaceModelTestContext(context) {
+      game = context.game;
+      poly = context.poly;
+      resources = context.resources;
+      races = context.races;
+    },
+  }));
 
   const {
     showCustomRaceImportStatus,
@@ -3870,7 +3682,7 @@ export function startEvolveRuntimeComposition(
     getCustomRaceGeneBalance: customRaceGeneBalance,
     getUpdateSettingsFromState: () => updateSettingsFromState,
     getUpdateOverrides: () => updateOverrides,
-    customRaceLab: createGameCustomRaceLab({
+    customRaceLab: createGameCustomRaceLabControl({
       getVueById: (id) => getVueById(id),
       getDocument: () => runtimeEnvironment.document,
     }),
@@ -3940,7 +3752,7 @@ export function startEvolveRuntimeComposition(
     recordStateSnapshot,
   };
 
-  const { automate } = createTickRunner({
+  const { automate } = createTickCompositionControl({
     reader: {
       getSettings: () => settings,
       getState: () => state,
@@ -3959,21 +3771,20 @@ export function startEvolveRuntimeComposition(
     diagnostics,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      automate: () => automate(),
-      setTickTestContext(context) {
-        settings = context.settings;
-        state = context.state;
-        game = context.game;
-        resources = context.resources;
-        KeyManager = context.KeyManager;
-        NaniteManager = context.NaniteManager;
-        SupplyManager = context.SupplyManager;
-        EjectManager = context.EjectManager;
-        tickTestControllers = context.controllers;
-      },
-    });
+  registerTestPart(() => ({
+    automate: () => automate(),
+    setTickTestContext(context) {
+      settings = context.settings;
+      state = context.state;
+      game = context.game;
+      resources = context.resources;
+      KeyManager = context.KeyManager;
+      NaniteManager = context.NaniteManager;
+      SupplyManager = context.SupplyManager;
+      EjectManager = context.EjectManager;
+      tickTestControllers = context.controllers;
+    },
+  }));
 
   const {
     updateDebugData,
@@ -3981,7 +3792,7 @@ export function startEvolveRuntimeComposition(
     checkIgnoredError,
     displayScriptWarningNode,
     addErrorHandler,
-  } = createScriptRuntimeUI({
+  } = createScriptRuntimeUiControl({
     getJQuery: () => $,
     getDocument: () => runtimeEnvironment.document,
     getState: () => state,
@@ -3993,21 +3804,20 @@ export function startEvolveRuntimeComposition(
     getScriptVersion: () => userscriptEnvironment.getScriptVersion(),
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      scriptRuntimeUI: {
-        updateDebugData,
-        addScriptStyle,
-        checkIgnoredError,
-        displayScriptWarningNode,
-        addErrorHandler,
-      },
-      setScriptRuntimeUITestContext(context) {
-        if ("state" in context) state = context.state;
-        if ("game" in context) game = context.game;
-        if ("win" in context) win = context.win;
-      },
-    });
+  registerTestPart(() => ({
+    scriptRuntimeUI: {
+      updateDebugData,
+      addScriptStyle,
+      checkIgnoredError,
+      displayScriptWarningNode,
+      addErrorHandler,
+    },
+    setScriptRuntimeUITestContext(context) {
+      if ("state" in context) state = context.state;
+      if ("game" in context) game = context.game;
+      if ("win" in context) win = context.win;
+    },
+  }));
 
   const {
     prestigeTypes,
@@ -4019,7 +3829,7 @@ export function startEvolveRuntimeComposition(
     checkTypes,
     retBools,
     overrideOnlyChecks,
-  } = createOverrideCatalog({
+  } = createOverrideCatalogControl({
     readSettings: () => settings,
     readSettingsRaw: () => settingsRaw,
     readState: () => state,
@@ -4045,60 +3855,59 @@ export function startEvolveRuntimeComposition(
     readGovernor: () => getGovernor,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      settingsControls: {
-        removeScriptSettings,
-        buildScriptSettings,
-        buildImportExport,
-        buildSettingsSectionImpl,
-        buildSettingsSection,
-        buildSettingsSection2,
-        genericResetFunction,
-        addStandardHeading,
-        addSettingsHeader1,
-        addSettingsHeader2,
-        buildSelectOptions,
-        openOverrideModal,
-        buildOverrideSettings,
-        buildInputNode,
-        buildInputNodeForDisplay,
-        changeDisplayInputNode,
-        buildConditionType,
-        buildConditionArg,
-        buildConditionComparator,
-        buildConditionRemove,
-        buildConditionDuplicate,
-        buildConditionEvalize,
-        buildConditionRet,
-        buildObjectListInput,
-        addSettingsToggle,
-        addSettingsNumber,
-        addSettingsString,
-        addSettingsSelect,
-        addSettingsList,
-        addInputCallbacks,
-        addTableInput,
-        addToggleCallbacks,
-        addTableToggle,
-        buildTableLabel,
-        resetCheckbox,
-        evaluateCheck: _,
-        prestigeTypes,
-        prestigeOptions,
-        checkCompare,
-        checkCustom,
-        argType,
-        checkTypes,
-      },
-      setSettingsControlsTestContext(context) {
-        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-        if ("settings" in context) settings = context.settings;
-        if ("game" in context) game = context.game;
-        if ("state" in context) state = context.state;
-        if ("win" in context) win = context.win;
-      },
-    });
+  registerTestPart(() => ({
+    settingsControls: {
+      removeScriptSettings,
+      buildScriptSettings,
+      buildImportExport,
+      buildSettingsSectionImpl,
+      buildSettingsSection,
+      buildSettingsSection2,
+      genericResetFunction,
+      addStandardHeading,
+      addSettingsHeader1,
+      addSettingsHeader2,
+      buildSelectOptions,
+      openOverrideModal,
+      buildOverrideSettings,
+      buildInputNode,
+      buildInputNodeForDisplay,
+      changeDisplayInputNode,
+      buildConditionType,
+      buildConditionArg,
+      buildConditionComparator,
+      buildConditionRemove,
+      buildConditionDuplicate,
+      buildConditionEvalize,
+      buildConditionRet,
+      buildObjectListInput,
+      addSettingsToggle,
+      addSettingsNumber,
+      addSettingsString,
+      addSettingsSelect,
+      addSettingsList,
+      addInputCallbacks,
+      addTableInput,
+      addToggleCallbacks,
+      addTableToggle,
+      buildTableLabel,
+      resetCheckbox,
+      evaluateCheck: _,
+      prestigeTypes,
+      prestigeOptions,
+      checkCompare,
+      checkCustom,
+      argType,
+      checkTypes,
+    },
+    setSettingsControlsTestContext(context) {
+      if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+      if ("settings" in context) settings = context.settings;
+      if ("game" in context) game = context.game;
+      if ("state" in context) state = context.state;
+      if ("win" in context) win = context.win;
+    },
+  }));
 
   const interfaceSettingsActions = {
     buildSettingsSection,
@@ -4168,18 +3977,17 @@ export function startEvolveRuntimeComposition(
   };
 
   let interfaceSettingsIntentHandler;
-  const interfaceSettingsBrowserAdapter = createInterfaceSettingsBrowserAdapter(
-    {
+  const interfaceSettingsBrowserAdapter =
+    createInterfaceSettingsBrowserAdapterControl({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
         handle: (intent) => interfaceSettingsIntentHandler.handle(intent),
       },
       getActions: getInterfaceSettingsActions,
-    },
-  );
+    });
 
-  interfaceSettingsIntentHandler = createInterfaceSettingsIntentHandler({
+  interfaceSettingsIntentHandler = createInterfaceSettingsIntentControl({
     writer: {
       resetToDefaults: () =>
         (
@@ -4229,30 +4037,30 @@ export function startEvolveRuntimeComposition(
   const { buildInterfaceSettings, updateInterfaceSettingsContent } =
     interfaceSettingsBrowserAdapter;
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      interfaceSettings: {
-        buildInterfaceSettings,
-        updateInterfaceSettingsContent,
-      },
-      setInterfaceSettingsTestContext(context) {
-        settingsRaw = context.settingsRaw;
-        setTestContext("interfaceSettings", context);
-      },
-    });
+  registerTestPart(() => ({
+    interfaceSettings: {
+      buildInterfaceSettings,
+      updateInterfaceSettingsContent,
+    },
+    setInterfaceSettingsTestContext(context) {
+      settingsRaw = context.settingsRaw;
+      setTestContext("interfaceSettings", context);
+    },
+  }));
 
   let stateLogSettingsIntentHandler;
-  const stateLogSettingsBrowserAdapter = createStateLogSettingsBrowserAdapter({
-    getDocument: () => runtimeEnvironment.document,
-    getJQuery: () => $,
-    intents: {
-      handle: (intent) => stateLogSettingsIntentHandler.handle(intent),
-    },
-    buildSettingsSection,
-    addSettingsToggle,
-    addSettingsNumber,
-  });
-  stateLogSettingsIntentHandler = createStateLogSettingsIntentHandler({
+  const stateLogSettingsBrowserAdapter =
+    createStateLogSettingsBrowserAdapterControl({
+      getDocument: () => runtimeEnvironment.document,
+      getJQuery: () => $,
+      intents: {
+        handle: (intent) => stateLogSettingsIntentHandler.handle(intent),
+      },
+      buildSettingsSection,
+      addSettingsToggle,
+      addSettingsNumber,
+    });
+  stateLogSettingsIntentHandler = createStateLogSettingsIntentControl({
     writer: {
       resetToDefaults: () => resetStateLogSettings(true),
       persist: () => updateSettingsFromState(),
@@ -4263,40 +4071,44 @@ export function startEvolveRuntimeComposition(
   const { buildStateLogSettings, updateStateLogSettingsContent } =
     stateLogSettingsBrowserAdapter;
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      stateLogSettings: {
-        buildStateLogSettings,
-        updateStateLogSettingsContent,
-      },
-      setStateLogSettingsTestContext(context) {
-        settingsRaw = context.settingsRaw;
-      },
-    });
+  registerTestPart(() => ({
+    stateLogSettings: {
+      buildStateLogSettings,
+      updateStateLogSettingsContent,
+    },
+    setStateLogSettingsTestContext(context) {
+      settingsRaw = context.settingsRaw;
+    },
+  }));
 
-  const { calculateMechStats } = createMechStats({
+  const { calculateMechStats, sorterHelper } = createUiSupportControl({
     getUiSurface: () => gameUiSurface,
-    getJQuery: () => $,
+    getMechJQuery: () => $,
+    getSortJQuery: () => $,
     getMechManager: () => MechManager,
     getPoly: () => poly,
     getGame: () => game,
     average,
+    isHTMLElement: (value) =>
+      runtimeEnvironment.HTMLElement !== undefined &&
+      value instanceof runtimeEnvironment.HTMLElement,
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      calculateMechStats,
-      setMechStatsTestContext(context) {
-        game = context.game;
-        poly = context.poly;
-        MechManager = context.MechManager;
-      },
-    });
+  registerTestPart(() => ({
+    calculateMechStats,
+    setMechStatsTestContext(context) {
+      game = context.game;
+      poly = context.poly;
+      MechManager = context.MechManager;
+    },
+  }));
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("optionsModal", {
+  registerTestContext(() => [
+    "optionsModal",
+    {
       optionsModal: optionsModalBrowserAdapter,
-    });
+    },
+  ]);
   const traitSettings = createTraitSettingsControl({
     getSettingsRaw: () => settingsRaw,
     setSettingsRaw: (value) => {
@@ -4370,251 +4182,122 @@ export function startEvolveRuntimeComposition(
     updateTotalDaysInTopBar,
   };
 
-  const { updateSoulGemRate } = createSoulGemRateDisplay({
-    getState: () => state,
-    getResources: () => resources,
-    getJQuery: () => $,
-    getNiceNumber: (value) =>
-      (getTestContext("uiRefresh")?.actions ?? uiRefreshActions).getNiceNumber(
-        value,
-      ),
+  const {
+    updateSoulGemRate,
+    renderPreviousGameStats,
+    repairRuntimeAdapters,
+    ensureAutomationContainer,
+    updateUI,
+  } = createRuntimeUiCompositionControl({
+    soulGemRate: {
+      getState: () => state,
+      getResources: () => resources,
+      getJQuery: () => $,
+      getNiceNumber: (value) =>
+        (
+          getTestContext("uiRefresh")?.actions ?? uiRefreshActions
+        ).getNiceNumber(value),
+    },
+    previousStats: {
+      getGame: () => game,
+      getWin: () => win,
+      getJQuery: () => $,
+      storage: runtimeEnvironment.storage,
+    },
+    runtimeAdapters: {
+      getSettings: () => settings,
+      getSettingsRaw: () => settingsRaw,
+      getState: () => state,
+      getGame: () => game,
+      getJQuery: () => $,
+      getActions: () =>
+        getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
+    },
+    automationContainer: {
+      getSettingsRaw: () => settingsRaw,
+      getJQuery: () => $,
+      getSafeMode: () => safeMode,
+      getOverrideKeyLabel: () => overrideKeyLabel,
+      getActions: () =>
+        getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
+    },
+    uiRefresh: {
+      getUiSurface: () => gameUiSurface,
+      getActions: () =>
+        getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
+    },
   });
 
-  const { renderPreviousGameStats } = createPreviousGameStats({
-    getGame: () => game,
-    getWin: () => win,
-    getJQuery: () => $,
-    storage: runtimeEnvironment.storage,
-  });
+  registerTestPart(() => ({
+    updateUI: () => updateUI(),
+    setUIRefreshTestContext(context) {
+      settings = context.settings;
+      settingsRaw = context.settingsRaw;
+      state = context.state;
+      game = context.game;
+      resources = context.resources;
+      win = context.win;
+      safeMode = context.safeMode;
+      overrideKeyLabel = context.overrideKeyLabel;
+      setTestContext("uiRefresh", context);
+    },
+  }));
 
-  const { repairRuntimeAdapters } = createRuntimeAdapters({
-    getSettings: () => settings,
-    getSettingsRaw: () => settingsRaw,
-    getState: () => state,
-    getGame: () => game,
-    getJQuery: () => $,
-    getActions: () => getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
-  });
-
-  const { ensureAutomationContainer } = createAutomationContainer({
-    getSettingsRaw: () => settingsRaw,
-    getJQuery: () => $,
-    getSafeMode: () => safeMode,
-    getOverrideKeyLabel: () => overrideKeyLabel,
-    getActions: () => getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
-  });
-
-  const { updateUI } = createUIRefresh({
-    getUiSurface: () => gameUiSurface,
-    getActions: () => getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
-    getPhases: () => ({
-      ensureAutomationContainer,
-      repairRuntimeAdapters,
-      updateSoulGemRate,
-      renderPreviousGameStats,
-    }),
-  });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      updateUI: () => updateUI(),
-      setUIRefreshTestContext(context) {
-        settings = context.settings;
-        settingsRaw = context.settingsRaw;
-        state = context.state;
-        game = context.game;
-        resources = context.resources;
-        win = context.win;
-        safeMode = context.safeMode;
-        overrideKeyLabel = context.overrideKeyLabel;
-        setTestContext("uiRefresh", context);
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("prestigeTopBar", {
+  registerTestContext(() => [
+    "prestigeTopBar",
+    {
       prestigeTopBar: prestigeTopBarBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("totalDaysTopBar", {
+    },
+  ]);
+  registerTestContext(() => [
+    "totalDaysTopBar",
+    {
       totalDaysTopBar: totalDaysTopBarBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("ejectToggles", {
+    },
+  ]);
+  registerTestContext(() => [
+    "ejectToggles",
+    {
       ejectToggles: ejectToggleBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("supplyToggles", {
+    },
+  ]);
+  registerTestContext(() => [
+    "supplyToggles",
+    {
       supplyToggles: supplyToggleBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("craftToggles", {
+    },
+  ]);
+  registerTestContext(() => [
+    "craftToggles",
+    {
       craftToggles: craftToggleBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("arpaToggles", {
+    },
+  ]);
+  registerTestContext(() => [
+    "arpaToggles",
+    {
       arpaToggles: arpaToggleBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("buildingToggles", {
+    },
+  ]);
+  registerTestContext(() => [
+    "buildingToggles",
+    {
       buildingToggles: buildingToggleBrowserAdapter,
-    });
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext(
-      "resourceToggle",
-      {
-        resourceToggles: resourceToggleBrowserAdapter,
-      },
-      "resourceToggles",
-    );
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.addContext("mechInfo", {
+    },
+  ]);
+  registerTestContext(() => [
+    "resourceToggle",
+    {
+      resourceToggles: resourceToggleBrowserAdapter,
+    },
+    "resourceToggles",
+  ]);
+  registerTestContext(() => [
+    "mechInfo",
+    {
       mechInfo: mechInfoBrowserAdapter,
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      finalInlineUiBoundaries: {
-        updateActiveTargetsUI,
-        buildActiveTargetsUI,
-        removeActiveTargetsUI,
-        buildBuildPlannerUI,
-        removeBuildPlannerUI,
-        createMechInfo,
-        removeMechInfo,
-        createMarketToggles,
-        removeMarketToggles,
-        createStorageToggles,
-        removeStorageToggles,
-      },
-      setFinalInlineUiBoundariesTestContext(context) {
-        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-        if ("state" in context) state = context.state;
-        if ("game" in context) game = context.game;
-        if ("resources" in context) resources = context.resources;
-        if ("MarketManager" in context) MarketManager = context.MarketManager;
-        if ("StorageManager" in context)
-          StorageManager = context.StorageManager;
-        if ("MechManager" in context) MechManager = context.MechManager;
-      },
-    });
-
-  const { sorterHelper } = createSortHelper({
-    getJQuery: () => $,
-    isHTMLElement: (value) =>
-      runtimeEnvironment.HTMLElement !== undefined &&
-      value instanceof runtimeEnvironment.HTMLElement,
-  });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({ sorterHelper });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      gameRates: {
-        ticksPerSecond,
-        getHealingRate,
-        getFoodConsume,
-        getGrowthRate,
-        getResourcesPerClick,
-      },
-      setGameRateTestContext(context) {
-        settings = context.settings;
-        game = context.game;
-        buildings = context.buildings;
-        state = context.state;
-        resources = context.resources;
-        jobs = context.jobs;
-        traitVal = context.traitVal;
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      getCostConflict,
-      setCostConflictTestContext(context) {
-        state = context.state;
-        resources = context.resources;
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      numberFormatting: {
-        getRealNumber,
-        getNumberString,
-        getNiceNumber,
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      runtimeQueries: { getGovernor, haveTask, haveTech, isEarlyGame },
-      setRuntimeQueryTestContext(context) {
-        game = context.game;
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      raceProfile: { isHungryRace, isDemonRace, isLumberRace, getOccCosts },
-      setRaceProfileTestContext(context) {
-        game = context.game;
-        traitVal = context.traitVal;
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      foreignGovernment: { getGovName, getGovPower },
-      setForeignGovernmentTestContext(context) {
-        game = context.game;
-        poly = context.poly;
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      fastEvaluator: {
-        fastEval,
-        cacheSize: fastEvalCacheSize,
-      },
-      setFastEvaluatorTestContext(context) {
-        if ("settings" in context) settings = context.settings;
-        if ("state" in context) state = context.state;
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      propertyHelpers: { normalizeProperties, addProps },
-      setPropertyHelperTestContext(context) {
-        settings = context.settings;
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      browserRuntime: {
-        callVueMethod,
-        getMainVue,
-        getVueById,
-        getVueElement,
-        resolveVueMethod,
-        triggerFileDownload,
-      },
-      setBrowserRuntimeTestContext(context) {
-        win = context.win;
-      },
-    });
-
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      traitVal,
-      setTraitValueTestContext(context) {
-        game = context.game;
-      },
-    });
+    },
+  ]);
 
   const settingsTransferActions = {
     updateStandAloneSettings,
@@ -4633,7 +4316,7 @@ export function startEvolveRuntimeComposition(
     buildFilterRegExp,
   };
 
-  const { importSettings, exportSettings } = createSettingsTransfer({
+  ({ importSettings, exportSettings } = createSettingsTransferControl({
     getSettingsRaw: () => settingsRaw,
     setSettingsRaw: (value) => {
       settingsRaw = value;
@@ -4644,19 +4327,9 @@ export function startEvolveRuntimeComposition(
       getTestContext("settingsTransfer")?.actions ?? settingsTransferActions,
     confirmImport: (message) => runtimeEnvironment.confirm(message),
     logToConsole: (message) => runtimeEnvironment.log(message),
-  });
+  }));
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      settingsTransfer: { importSettings, exportSettings },
-      setSettingsTransferTestContext(context) {
-        settingsRaw = context.settingsRaw;
-        GameLog = context.GameLog;
-        setTestContext("settingsTransfer", context);
-      },
-    });
-
-  let poly = createGameCompatibility({
+  poly = createGameCompatibilityControl({
     getGame: () => game,
     getBuildings: () => buildings,
     getTraitVal: () => traitVal,
@@ -4669,11 +4342,113 @@ export function startEvolveRuntimeComposition(
     getDate: () => runtimeEnvironment.createDate(),
   });
 
-  if (globalThis.__EA_TEST_SURFACE_ENABLED__)
-    testSurface?.add({
-      gameCompatibility: poly,
-    });
+  const registerRuntimeSupportSurface = () => {
+    if (TEST_SURFACE_ENABLED)
+      registerRuntimeSupportTestSurface?.(testSurface, {
+        parts: testParts,
+        contexts: testContexts,
+        finalInlineUiBoundaries: {
+          updateActiveTargetsUI,
+          buildActiveTargetsUI,
+          removeActiveTargetsUI,
+          buildBuildPlannerUI,
+          removeBuildPlannerUI,
+          createMechInfo,
+          removeMechInfo,
+          createMarketToggles,
+          removeMarketToggles,
+          createStorageToggles,
+          removeStorageToggles,
+        },
+        sorterHelper,
+        gameRates: {
+          ticksPerSecond,
+          getHealingRate,
+          getFoodConsume,
+          getGrowthRate,
+          getResourcesPerClick,
+        },
+        getCostConflict,
+        numberFormatting: {
+          getRealNumber,
+          getNumberString,
+          getNiceNumber,
+        },
+        runtimeQueries: { getGovernor, haveTask, haveTech, isEarlyGame },
+        raceProfile: { isHungryRace, isDemonRace, isLumberRace, getOccCosts },
+        foreignGovernment: { getGovName, getGovPower },
+        fastEvaluator: { fastEval, cacheSize: fastEvalCacheSize },
+        propertyHelpers: { normalizeProperties, addProps },
+        browserRuntime: {
+          callVueMethod,
+          getMainVue,
+          getVueById,
+          getVueElement,
+          resolveVueMethod,
+          triggerFileDownload,
+        },
+        traitVal,
+        settingsTransfer: { importSettings, exportSettings },
+        gameCompatibility: poly,
+        setters: {
+          finalInlineUiBoundaries(context) {
+            if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+            if ("state" in context) state = context.state;
+            if ("game" in context) game = context.game;
+            if ("resources" in context) resources = context.resources;
+            if ("MarketManager" in context)
+              MarketManager = context.MarketManager;
+            if ("StorageManager" in context)
+              StorageManager = context.StorageManager;
+            if ("MechManager" in context) MechManager = context.MechManager;
+          },
+          gameRates(context) {
+            settings = context.settings;
+            game = context.game;
+            buildings = context.buildings;
+            state = context.state;
+            resources = context.resources;
+            jobs = context.jobs;
+            traitVal = context.traitVal;
+          },
+          costConflict(context) {
+            state = context.state;
+            resources = context.resources;
+          },
+          runtimeQueries(context) {
+            game = context.game;
+          },
+          raceProfile(context) {
+            game = context.game;
+            traitVal = context.traitVal;
+          },
+          foreignGovernment(context) {
+            game = context.game;
+            poly = context.poly;
+          },
+          fastEvaluator(context) {
+            if ("settings" in context) settings = context.settings;
+            if ("state" in context) state = context.state;
+          },
+          propertyHelpers(context) {
+            settings = context.settings;
+          },
+          browserRuntime(context) {
+            win = context.win;
+          },
+          traitVal(context) {
+            game = context.game;
+          },
+          settingsTransfer(context) {
+            settingsRaw = context.settingsRaw;
+            GameLog = context.GameLog;
+            setTestContext("settingsTransfer", context);
+          },
+        },
+      });
+  };
 
   $().ready(mainAutoEvolveScript);
+  registerRuntimeSupportSurface();
   return testSurface?.finish() ?? {};
 }

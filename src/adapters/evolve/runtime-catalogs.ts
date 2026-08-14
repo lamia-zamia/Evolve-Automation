@@ -260,3 +260,38 @@ export const replicableResources = [
   "Scarletite",
   "Quantium",
 ];
+
+export function createTraitAutomationCatalogs(getStoneName: () => string) {
+  return Object.freeze({
+    ocularPowerData: [
+      { key: "d", id: "disintegration", locParam: ["X"] },
+      { key: "p", id: "petrification", locParam: [getStoneName()] },
+      { key: "w", id: "wound", locParam: ["X"] },
+      { key: "t", id: "telekinesis", locParam: ["X"] },
+      { key: "f", id: "fear", locParam: undefined },
+      { key: "c", id: "charm", locParam: ["X"] },
+    ],
+    wishData: {
+      minor: [
+        { id: "Know", loc: "resource_Knowledge_name" },
+        { id: "Money", loc: "resource_Money_name" },
+        { id: "Res", loc: "wish_resources" },
+        { id: "Love", loc: "wish_love" },
+        { id: "Excite", loc: "wish_event" },
+        { id: "Fame", loc: "wish_fame" },
+        { id: "Strength", loc: "wish_strength" },
+        { id: "Influence", loc: "wish_influence" },
+      ],
+      major: [
+        { id: "BigMoney", loc: "wish_big_money" },
+        { id: "BigRes", loc: "wish_big_resources" },
+        { id: "Plasmid", loc: "wish_plasmid" },
+        { id: "Power", loc: "wish_power" },
+        { id: "Adoration", loc: "wish_adoration" },
+        { id: "Thrill", loc: "wish_thrill" },
+        { id: "Peace", loc: "wish_peace" },
+        { id: "Greatness", loc: "wish_greatness" },
+      ],
+    },
+  });
+}

@@ -44,6 +44,13 @@ assert.deepEqual(sourceJavaScript, [
   "src/userscript.meta.js",
 ]);
 
+const compatibilityRuntime = read("src/adapters/evolve/evolve-runtime.js");
+assert.doesNotMatch(
+  compatibilityRuntime,
+  /testSurface\?\.(?:add|addContext)/,
+  "characterization registration activation must stay in the test-only surface",
+);
+
 const customExpressionPath = path.join(
   sourceRoot,
   "adapters",

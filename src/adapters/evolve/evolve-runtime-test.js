@@ -1,4 +1,7 @@
-import { createRuntimeTestSurface } from "./runtime-test-surface.js";
+import {
+  createRuntimeTestSurface,
+  registerRuntimeSupportTestSurface,
+} from "./runtime-test-surface.js";
 import { startEvolveRuntimeComposition } from "./evolve-runtime.js";
 
 export function startEvolveRuntimeForTests($, diagnostics, runtimeEnvironment) {
@@ -8,6 +11,7 @@ export function startEvolveRuntimeForTests($, diagnostics, runtimeEnvironment) {
     diagnostics,
     runtimeEnvironment,
     testSurface,
+    registerRuntimeSupportTestSurface,
   );
   return testSurface.finish();
 }
