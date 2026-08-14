@@ -1214,27 +1214,28 @@ export function startEvolveRuntimeComposition(
     readAuthorityQuantity: readAuthorityQuantityControl,
   });
 
-  registerTestPart(() => ({
-    authorityPolicy: {
-      getAuthorityTarget: authorityPolicy.getAuthorityTarget,
-      getAuthorityPerSoldier: authorityPolicy.getAuthorityPerSoldier,
-      getRequiredAuthorityGarrison(currentGarrison) {
-        const requirement =
-          authorityPolicy.getRequiredAuthorityGarrison(currentGarrison);
-        return requirement.status === "ready"
-          ? requirement.requiredGarrison
-          : requirement;
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      authorityPolicy: {
+        getAuthorityTarget: authorityPolicy.getAuthorityTarget,
+        getAuthorityPerSoldier: authorityPolicy.getAuthorityPerSoldier,
+        getRequiredAuthorityGarrison(currentGarrison) {
+          const requirement =
+            authorityPolicy.getRequiredAuthorityGarrison(currentGarrison);
+          return requirement.status === "ready"
+            ? requirement.requiredGarrison
+            : requirement;
+        },
+        getPredictedAuthorityAfterRemovingSoldiers:
+          authorityPolicy.getPredictedAuthorityAfterRemovingSoldiers,
+        assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
       },
-      getPredictedAuthorityAfterRemovingSoldiers:
-        authorityPolicy.getPredictedAuthorityAfterRemovingSoldiers,
-      assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
-    },
-    setAuthorityPolicyTestContext(context) {
-      game = context.game;
-      settings = context.settings;
-      resources = context.resources;
-    },
-  }));
+      setAuthorityPolicyTestContext(context) {
+        game = context.game;
+        settings = context.settings;
+        resources = context.resources;
+      },
+    }));
 
   const { normalizeProperties, addProps } = createPropertyHelpersControl({
     getSettings: () => settings,
@@ -1545,42 +1546,43 @@ export function startEvolveRuntimeComposition(
   linkedBuildings = initializedLinkedBuildings;
   projects = initializedProjects;
 
-  registerTestPart(() => ({
-    entityClasses: {
-      Job,
-      BasicJob,
-      CraftingJob,
-      Resource,
-      SoulGem,
-      Troops,
-      Supply,
-      Power,
-      Support,
-      BeltSupport,
-      ElectrolysisSupport,
-      WomlingsSupport,
-      PrestigeResource,
-      Population,
-      Morale,
-      Thrall,
-      ResourceProductionCost,
-      Action,
-      CityAction,
-      Pillar,
-      ResourceAction,
-      EvolutionAction,
-      SpaceDock,
-      ModalAction,
-      Project,
-      Technology,
-      Race,
-      Trigger,
-      MinorTrait,
-      MutableTrait,
-      MajorTrait,
-      GenusTrait,
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      entityClasses: {
+        Job,
+        BasicJob,
+        CraftingJob,
+        Resource,
+        SoulGem,
+        Troops,
+        Supply,
+        Power,
+        Support,
+        BeltSupport,
+        ElectrolysisSupport,
+        WomlingsSupport,
+        PrestigeResource,
+        Population,
+        Morale,
+        Thrall,
+        ResourceProductionCost,
+        Action,
+        CityAction,
+        Pillar,
+        ResourceAction,
+        EvolutionAction,
+        SpaceDock,
+        ModalAction,
+        Project,
+        Technology,
+        Race,
+        Trigger,
+        MinorTrait,
+        MutableTrait,
+        MajorTrait,
+        GenusTrait,
+      },
+    }));
 
   // Lookup tables are filled during initialization; state is a fresh mutable
   // session object for each runtime startup.
@@ -1597,16 +1599,17 @@ export function startEvolveRuntimeComposition(
   } = createRuntimeLookupTablesControl();
   let state = createInitialRuntimeStateControl();
 
-  registerTestPart(() => ({
-    entityCatalogs: {
-      resources,
-      jobs,
-      crafter,
-      buildings,
-      linkedBuildings,
-      projects,
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      entityCatalogs: {
+        resources,
+        jobs,
+        crafter,
+        buildings,
+        linkedBuildings,
+        projects,
+      },
+    }));
 
   const {
     namedBuildings,
@@ -1635,18 +1638,19 @@ export function startEvolveRuntimeComposition(
       ),
     });
 
-  registerTestPart(() => ({
-    weightingPolicy: {
-      namedBuildings,
-      authorityCapBuildings,
-      INFLATION_CHALLENGE_MONEY,
-      RETIREMENT_PREP,
-      inflationMoneyStorageBuildings,
-      inflationMoneyIncomeBuildings,
-      galaxyCombatShips,
-      weightingRules,
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      weightingPolicy: {
+        namedBuildings,
+        authorityCapBuildings,
+        INFLATION_CHALLENGE_MONEY,
+        RETIREMENT_PREP,
+        inflationMoneyStorageBuildings,
+        inflationMoneyIncomeBuildings,
+        galaxyCombatShips,
+        weightingRules,
+      },
+    }));
 
   // Singleton manager objects
   let {
@@ -1762,24 +1766,25 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  registerTestPart(() => ({
-    foreignAffairsManagers: { SpyManager, WarManager },
-    setForeignAffairsManagersTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("settings" in context) settings = context.settings;
-      if ("state" in context) state = context.state;
-      if ("resources" in context) resources = context.resources;
-      if ("buildings" in context) buildings = context.buildings;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("gameModal" in context) gameModal = context.gameModal;
-      if ("GameLog" in context) GameLog = context.GameLog;
-      if ("KeyManager" in context) KeyManager = context.KeyManager;
-      if ("haveTech" in context) haveTech = context.haveTech;
-      if ("guardActive" in context) guardActive = context.guardActive;
-      if ("traitVal" in context) traitVal = context.traitVal;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      foreignAffairsManagers: { SpyManager, WarManager },
+      setForeignAffairsManagersTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("state" in context) state = context.state;
+        if ("resources" in context) resources = context.resources;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("gameModal" in context) gameModal = context.gameModal;
+        if ("GameLog" in context) GameLog = context.GameLog;
+        if ("KeyManager" in context) KeyManager = context.KeyManager;
+        if ("haveTech" in context) haveTech = context.haveTech;
+        if ("guardActive" in context) guardActive = context.guardActive;
+        if ("traitVal" in context) traitVal = context.traitVal;
+      },
+    }));
 
   let { FleetManagerOuter, FleetManager, MechManager } =
     createFleetMechManagerCompositionControl({
@@ -1810,19 +1815,20 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  registerTestPart(() => ({
-    fleetManagers: { FleetManagerOuter, FleetManager },
-    setFleetManagersTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("settings" in context) settings = context.settings;
-      if ("resources" in context) resources = context.resources;
-      if ("buildings" in context) buildings = context.buildings;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("KeyManager" in context) KeyManager = context.KeyManager;
-      if ("haveTech" in context) haveTech = context.haveTech;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      fleetManagers: { FleetManagerOuter, FleetManager },
+      setFleetManagersTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("resources" in context) resources = context.resources;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("KeyManager" in context) KeyManager = context.KeyManager;
+        if ("haveTech" in context) haveTech = context.haveTech;
+      },
+    }));
 
   const { mechSupplySavingReason } = createMechIntelligenceControl({
     getGame: () => game,
@@ -1833,20 +1839,21 @@ export function startEvolveRuntimeComposition(
     getHaveTask: () => haveTask,
   });
 
-  registerTestPart(() => ({
-    MechManager,
-    setMechManagerTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("settings" in context) settings = context.settings;
-      if ("resources" in context) resources = context.resources;
-      if ("buildings" in context) buildings = context.buildings;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("GameLog" in context) GameLog = context.GameLog;
-      if ("needSandboxBypass" in context)
-        needSandboxBypass = context.needSandboxBypass;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      MechManager,
+      setMechManagerTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("resources" in context) resources = context.resources;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("GameLog" in context) GameLog = context.GameLog;
+        if ("needSandboxBypass" in context)
+          needSandboxBypass = context.needSandboxBypass;
+      },
+    }));
 
   let JobManager, BuildingManager, ProjectManager, TriggerManager;
   ({ JobManager, BuildingManager, ProjectManager, TriggerManager } =
@@ -1979,18 +1986,19 @@ export function startEvolveRuntimeComposition(
   KeyManager = initialKeyManager;
   GameLog = initialGameLog;
 
-  registerTestPart(() => ({
-    gameModal,
-    infrastructureManagers: { KeyManager, GameLog },
-    setInfrastructureManagersTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("settings" in context) settings = context.settings;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("needSandboxBypass" in context)
-        needSandboxBypass = context.needSandboxBypass;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      gameModal,
+      infrastructureManagers: { KeyManager, GameLog },
+      setInfrastructureManagersTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("needSandboxBypass" in context)
+          needSandboxBypass = context.needSandboxBypass;
+      },
+    }));
 
   // Gui & Init functions
   const { updateCraftCost } = createCraftingCostsControl({
@@ -2001,17 +2009,18 @@ export function startEvolveRuntimeComposition(
     setFoundryList: (list) => (foundryList = list),
   });
 
-  registerTestPart(() => ({
-    updateCraftCost,
-    getCraftCostTestLists: () => ({ craftablesList, foundryList }),
-    setCraftCostTestContext(context) {
-      game = context.game;
-      state = context.state;
-      resources = context.resources;
-      craftablesList = context.craftablesList ?? [];
-      foundryList = context.foundryList ?? [];
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      updateCraftCost,
+      getCraftCostTestLists: () => ({ craftablesList, foundryList }),
+      setCraftCostTestContext(context) {
+        game = context.game;
+        state = context.state;
+        resources = context.resources;
+        craftablesList = context.craftablesList ?? [];
+        foundryList = context.foundryList ?? [];
+      },
+    }));
 
   const { initialiseState } = createStateInitializationControl({
     getGame: () => game,
@@ -2145,48 +2154,49 @@ export function startEvolveRuntimeComposition(
     testSurface,
   });
 
-  registerTestPart(() => ({
-    settingsState: {
-      updateStateFromSettings,
-      updateSettingsFromState,
-      applySettings,
-      migrateSetting,
-    },
-    resetSettings: {
-      resetWarSettings,
-      resetHellSettings,
-      resetGeneralSettings,
-      resetInterfaceSettings,
-      resetStateLogSettings,
-      resetAchievementGuardSettings,
-      resetChallengeHelperSettings,
-      resetPrestigeSettings,
-      resetGovernmentSettings,
-      resetAuthoritySettings,
-      resetEvolutionSettings,
-      resetResearchSettings,
-      resetMarketSettings,
-      resetStorageSettings,
-      resetMinorTraitSettings,
-      resetMutableTraitSettings,
-      resetJobSettings,
-      resetWeightingSettings,
-      resetBuildingSettings,
-      resetProjectSettings,
-      resetMagicSettings,
-      resetProductionSettings,
-      resetTriggerSettings,
-      resetLoggingSettings,
-      resetPlanetSettings,
-      resetFleetSettings,
-      resetMechSettings,
-      resetEjectorSettings,
-    },
-    setSettingsStateTestContext(context) {
-      settingsRaw = context.settingsRaw;
-      TriggerManager = context.triggerManager;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      settingsState: {
+        updateStateFromSettings,
+        updateSettingsFromState,
+        applySettings,
+        migrateSetting,
+      },
+      resetSettings: {
+        resetWarSettings,
+        resetHellSettings,
+        resetGeneralSettings,
+        resetInterfaceSettings,
+        resetStateLogSettings,
+        resetAchievementGuardSettings,
+        resetChallengeHelperSettings,
+        resetPrestigeSettings,
+        resetGovernmentSettings,
+        resetAuthoritySettings,
+        resetEvolutionSettings,
+        resetResearchSettings,
+        resetMarketSettings,
+        resetStorageSettings,
+        resetMinorTraitSettings,
+        resetMutableTraitSettings,
+        resetJobSettings,
+        resetWeightingSettings,
+        resetBuildingSettings,
+        resetProjectSettings,
+        resetMagicSettings,
+        resetProductionSettings,
+        resetTriggerSettings,
+        resetLoggingSettings,
+        resetPlanetSettings,
+        resetFleetSettings,
+        resetMechSettings,
+        resetEjectorSettings,
+      },
+      setSettingsStateTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        TriggerManager = context.triggerManager;
+      },
+    }));
 
   let {
     getStarLevel,
@@ -2216,31 +2226,32 @@ export function startEvolveRuntimeComposition(
     retirementPreparation: RETIREMENT_PREP,
   });
 
-  registerTestPart(() => ({
-    runGuards: {
-      getStarLevel,
-      getAchievementStar,
-      isAchievementUnlocked,
-      guardActive,
-      bananaRepublicObjectiveComplete,
-      bananaRepublicSmoothieComplete,
-      bananaRepublicReadyForUnification,
-      guardBananaRepublicActive,
-      inflationChallengeAssistActive,
-      inflationChallengeMoneyReachable,
-      inflationChallengeSecondsToFinish,
-      inflationChallengeShouldSaveMoney,
-      retirementChallengeAssistActive,
-      retirementPreparationMissing,
-    },
-    setRunGuardTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      poly = context.poly;
-      resources = context.resources;
-      buildings = context.buildings;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      runGuards: {
+        getStarLevel,
+        getAchievementStar,
+        isAchievementUnlocked,
+        guardActive,
+        bananaRepublicObjectiveComplete,
+        bananaRepublicSmoothieComplete,
+        bananaRepublicReadyForUnification,
+        guardBananaRepublicActive,
+        inflationChallengeAssistActive,
+        inflationChallengeMoneyReachable,
+        inflationChallengeSecondsToFinish,
+        inflationChallengeShouldSaveMoney,
+        retirementChallengeAssistActive,
+        retirementPreparationMissing,
+      },
+      setRunGuardTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        poly = context.poly;
+        resources = context.resources;
+        buildings = context.buildings;
+      },
+    }));
 
   const { loadQueuedSettings } = createQueuedSettingsControl({
     getSettings: () => settings,
@@ -2278,12 +2289,13 @@ export function startEvolveRuntimeComposition(
   const findRequiredResourceWeight = (resource) =>
     findRequiredResourceWeightControl(state.unlockedBuildings, resource);
 
-  registerTestPart(() => ({
-    findRequiredResourceWeight,
-    setResourceWeightTestContext(context) {
-      state = context.state;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      findRequiredResourceWeight,
+      setResourceWeightTestContext(context) {
+        state = context.state;
+      },
+    }));
 
   const challengeGroups = challenges.map((members) => ({ members }));
   // function setPlanet from actions.js
@@ -2295,14 +2307,15 @@ export function startEvolveRuntimeComposition(
     universes,
   });
 
-  registerTestPart(() => ({
-    generatePlanets,
-    setPlanetGenerationTestContext(context) {
-      game = context.game;
-      poly = context.poly;
-      isAchievementUnlocked = context.isAchievementUnlocked;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      generatePlanets,
+      setPlanetGenerationTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        isAchievementUnlocked = context.isAchievementUnlocked;
+      },
+    }));
 
   const { autoEvolution, autoUniverseSelection, autoPlanetSelection } =
     createEvolutionControls({
@@ -2472,7 +2485,7 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  registerTestPart(() => ({ autoHell }));
+  if (TEST_SURFACE_ENABLED) registerTestPart(() => ({ autoHell }));
 
   const { autoTax } = createTaxControl({
     nowMs: () => browserClock.nowMs(),
@@ -2490,17 +2503,18 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  registerTestPart(() => ({
-    autoTax: () => autoTax(),
-    setAutoTaxTestContext(context) {
-      if ("game" in context) game = context.game;
-      if ("settings" in context) settings = context.settings;
-      if ("resources" in context) resources = context.resources;
-      if ("poly" in context) poly = context.poly;
-      if ("win" in context) win = context.win;
-      if ("keySet" in context) KeyManager.set = context.keySet;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      autoTax: () => autoTax(),
+      setAutoTaxTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("resources" in context) resources = context.resources;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("keySet" in context) KeyManager.set = context.keySet;
+      },
+    }));
 
   const {
     autoAlchemy,
@@ -2688,41 +2702,43 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  registerTestPart(() => ({
-    prestigeLog: { formatLogString, logPrestige },
-    setPrestigeLogTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      state = context.state;
-      GameLog = context.GameLog;
-      setTestContext("prestigeLog", context);
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      prestigeLog: { formatLogString, logPrestige },
+      setPrestigeLogTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        state = context.state;
+        GameLog = context.GameLog;
+        setTestContext("prestigeLog", context);
+      },
+    }));
 
-  registerTestPart(() => ({
-    autoEvolution,
-    autoUniverseSelection,
-    autoCraft,
-    autoSpy,
-    autoBattle,
-    autoPrestige,
-    setWave3TestContext(context) {
-      foundryList = context.foundryList;
-      SpyManager = context.SpyManager;
-      buildings = context.buildings;
-      haveTask = context.haveTask;
-      haveTech = context.haveTech;
-      isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
-      if ("foreignView" in context) {
-        setTestContext("foreignControls", {
-          getVueById: () => context.foreignView,
-        });
-      }
-    },
-    setForeignControlsTestContext(context) {
-      setTestContext("foreignControls", context);
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      autoEvolution,
+      autoUniverseSelection,
+      autoCraft,
+      autoSpy,
+      autoBattle,
+      autoPrestige,
+      setWave3TestContext(context) {
+        foundryList = context.foundryList;
+        SpyManager = context.SpyManager;
+        buildings = context.buildings;
+        haveTask = context.haveTask;
+        haveTech = context.haveTech;
+        isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
+        if ("foreignView" in context) {
+          setTestContext("foreignControls", {
+            getVueById: () => context.foreignView,
+          });
+        }
+      },
+      setForeignControlsTestContext(context) {
+        setTestContext("foreignControls", context);
+      },
+    }));
 
   const {
     ocularPowerData,
@@ -2793,22 +2809,23 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  registerTestPart(() => ({
-    autoMiningDroid,
-    DroidManager,
-    autoGraphenePlant,
-    GrapheneManager,
-    autoShapeshift,
-    autoWish,
-    autoGenetics,
-    automationSettings: settings,
-    automationResources: resources,
-    automationKeyManager: KeyManager,
-    setAutomationTestContext(context) {
-      game = context.game;
-      win = context.win;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      autoMiningDroid,
+      DroidManager,
+      autoGraphenePlant,
+      GrapheneManager,
+      autoShapeshift,
+      autoWish,
+      autoGenetics,
+      automationSettings: settings,
+      automationResources: resources,
+      automationKeyManager: KeyManager,
+      setAutomationTestContext(context) {
+        game = context.game;
+        win = context.win;
+      },
+    }));
 
   const {
     autoMarket,
@@ -2874,22 +2891,23 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  registerTestPart(() => ({
-    autoConsume,
-    autoReplicator,
-    autoMarket,
-    autoGalaxyMarket,
-    autoGatherResources,
-    getAutomationPoly: () => poly,
-    setWave2TestContext(context) {
-      ReplicatorManager = context.ReplicatorManager;
-      MarketManager = context.MarketManager;
-      GalaxyTradeManager = context.GalaxyTradeManager;
-      buildings = context.buildings;
-      adjustTradeRoutes = context.adjustTradeRoutes;
-      getResourcesPerClick = context.getResourcesPerClick;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      autoConsume,
+      autoReplicator,
+      autoMarket,
+      autoGalaxyMarket,
+      autoGatherResources,
+      getAutomationPoly: () => poly,
+      setWave2TestContext(context) {
+        ReplicatorManager = context.ReplicatorManager;
+        MarketManager = context.MarketManager;
+        GalaxyTradeManager = context.GalaxyTradeManager;
+        buildings = context.buildings;
+        adjustTradeRoutes = context.adjustTradeRoutes;
+        getResourcesPerClick = context.getResourcesPerClick;
+      },
+    }));
 
   let techConflictClock = browserClock;
   const { getTechConflict } = createTechConflictControl({
@@ -2908,18 +2926,19 @@ export function startEvolveRuntimeComposition(
     getNumberString,
   });
 
-  registerTestPart(() => ({
-    getTechConflict,
-    setTechConflictTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      state = context.state;
-      resources = context.resources;
-      buildings = context.buildings;
-      isAchievementUnlocked = context.isAchievementUnlocked;
-      techConflictClock = context.clock ?? browserClock;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      getTechConflict,
+      setTechConflictTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        isAchievementUnlocked = context.isAchievementUnlocked;
+        techConflictClock = context.clock ?? browserClock;
+      },
+    }));
 
   const { autoTrigger, autoPower, autoStorage } =
     createTriggerPowerAutomationControl({
@@ -2984,45 +3003,48 @@ export function startEvolveRuntimeComposition(
       },
     });
 
-  registerTestPart(() => ({
-    autoMerc,
-    WarManager,
-    GameLog,
-    autoPsychic,
-    autoOcularPowers,
-    autoTrigger,
-    automationState: state,
-    setWave1TestManagers(managers) {
-      WarManager = managers.WarManager;
-      MinorTraitManager = managers.MinorTraitManager;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      autoMerc,
+      WarManager,
+      GameLog,
+      autoPsychic,
+      autoOcularPowers,
+      autoTrigger,
+      automationState: state,
+      setWave1TestManagers(managers) {
+        WarManager = managers.WarManager;
+        MinorTraitManager = managers.MinorTraitManager;
+      },
+    }));
 
-  registerTestPart(() => ({
-    powerSupport: {
-      getCitadelConsumption,
-      isHellSupressUseful,
-      adjustSpire,
-      getBestSupplyRatio,
-    },
-    setPowerSupportTestContext(context) {
-      game = context.game;
-      jobs = context.jobs;
-      crafter = context.crafter;
-      buildings = context.buildings;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      powerSupport: {
+        getCitadelConsumption,
+        isHellSupressUseful,
+        adjustSpire,
+        getBestSupplyRatio,
+      },
+      setPowerSupportTestContext(context) {
+        game = context.game;
+        jobs = context.jobs;
+        crafter = context.crafter;
+        buildings = context.buildings;
+      },
+    }));
 
-  registerTestPart(() => ({
-    expandStorage,
-    setStorageExpansionTestContext(context) {
-      game = context.game;
-      settings = context.settings;
-      resources = context.resources;
-      buildings = context.buildings;
-      StorageManager = context.StorageManager;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      expandStorage,
+      setStorageExpansionTestContext(context) {
+        game = context.game;
+        settings = context.settings;
+        resources = context.resources;
+        buildings = context.buildings;
+        StorageManager = context.StorageManager;
+      },
+    }));
 
   const {
     autoMinorTrait,
@@ -3098,29 +3120,31 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  registerTestPart(() => ({
-    autoMinorTrait,
-    MinorTraitManager,
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      autoMinorTrait,
+      MinorTraitManager,
+    }));
 
-  registerTestPart(() => ({
-    autoPlanetSelection,
-    autoJobs,
-    autoBuild,
-    autoResearch,
-    autoMutateTrait,
-    setWave4TestContext(context) {
-      generatePlanets = context.generatePlanets;
-      getStarLevel = context.getStarLevel;
-      isAchievementUnlocked = context.isAchievementUnlocked;
-      races = context.races;
-      JobManager = context.JobManager;
-      BuildingManager = context.BuildingManager;
-      ProjectManager = context.ProjectManager;
-      MutableTraitManager = context.MutableTraitManager;
-      getCostConflict = context.getCostConflict;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      autoPlanetSelection,
+      autoJobs,
+      autoBuild,
+      autoResearch,
+      autoMutateTrait,
+      setWave4TestContext(context) {
+        generatePlanets = context.generatePlanets;
+        getStarLevel = context.getStarLevel;
+        isAchievementUnlocked = context.isAchievementUnlocked;
+        races = context.races;
+        JobManager = context.JobManager;
+        BuildingManager = context.BuildingManager;
+        ProjectManager = context.ProjectManager;
+        MutableTraitManager = context.MutableTraitManager;
+        getCostConflict = context.getCostConflict;
+      },
+    }));
 
   let { adjustTradeRoutes } = createTradeRouteControl({
     getSettings: () => settings,
@@ -3131,32 +3155,34 @@ export function startEvolveRuntimeComposition(
     shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney(),
   });
 
-  registerTestPart(() => ({
-    adjustTradeRoutes,
-    setTradeRoutesTestContext(context) {
-      settings = context.settings;
-      game = context.game;
-      resources = context.resources;
-      MarketManager = context.MarketManager;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      adjustTradeRoutes,
+      setTradeRoutesTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        resources = context.resources;
+        MarketManager = context.MarketManager;
+      },
+    }));
 
-  registerTestPart(() => ({
-    galaxyIntelligence: {
-      getGalaxyCombatShipPower,
-      getPiracyMultiplier,
-      galaxyAssaultPending,
-      getGalaxyRegions,
-    },
-    setGalaxyIntelligenceTestContext(context) {
-      game = context.game;
-      buildings = context.buildings;
-      resources = context.resources;
-      poly = context.poly;
-      settings = context.settings;
-      traitVal = context.traitVal;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      galaxyIntelligence: {
+        getGalaxyCombatShipPower,
+        getPiracyMultiplier,
+        galaxyAssaultPending,
+        getGalaxyRegions,
+      },
+      setGalaxyIntelligenceTestContext(context) {
+        game = context.game;
+        buildings = context.buildings;
+        resources = context.resources;
+        poly = context.poly;
+        settings = context.settings;
+        traitVal = context.traitVal;
+      },
+    }));
 
   const { updateScriptData, finalizeScriptData } =
     createScriptDataLifecycleControl({
@@ -3180,59 +3206,64 @@ export function startEvolveRuntimeComposition(
       testSurface,
     });
 
-  registerTestPart(() => ({
-    autoPower,
-    autoStorage,
-    autoFleetOuter,
-    autoFleet,
-    autoMech,
-    setWave5TestManagers(managers) {
-      StorageManager = managers.StorageManager;
-      FleetManagerOuter = managers.FleetManagerOuter;
-      FleetManager = managers.FleetManager;
-      MechManager = managers.MechManager;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      autoPower,
+      autoStorage,
+      autoFleetOuter,
+      autoFleet,
+      autoMech,
+      setWave5TestManagers(managers) {
+        StorageManager = managers.StorageManager;
+        FleetManagerOuter = managers.FleetManagerOuter;
+        FleetManager = managers.FleetManager;
+        MechManager = managers.MechManager;
+      },
+    }));
 
-  registerTestPart(() => ({
-    storageRequirements: { calculateRequiredStorages },
-    setStorageRequirementTestContext(context) {
-      settings = context.settings;
-      state = context.state;
-      resources = context.resources;
-      buildings = context.buildings;
-      game = context.game;
-      BuildingManager = context.BuildingManager;
-      ProjectManager = context.ProjectManager;
-      FleetManagerOuter = context.FleetManagerOuter;
-      inflationChallengeAssistActive = context.inflationChallengeAssistActive;
-      retirementChallengeAssistActive = context.retirementChallengeAssistActive;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      storageRequirements: { calculateRequiredStorages },
+      setStorageRequirementTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        game = context.game;
+        BuildingManager = context.BuildingManager;
+        ProjectManager = context.ProjectManager;
+        FleetManagerOuter = context.FleetManagerOuter;
+        inflationChallengeAssistActive = context.inflationChallengeAssistActive;
+        retirementChallengeAssistActive =
+          context.retirementChallengeAssistActive;
+      },
+    }));
 
-  registerTestPart(() => ({
-    prioritizeDemandedResources,
-    makeDemandProject(cost, progress) {
-      return Object.defineProperties(Object.create(Project.prototype), {
-        cost: { value: cost, writable: true, enumerable: true },
-        progress: { value: progress, writable: true, enumerable: true },
-      });
-    },
-    setDemandPrioritizationTestContext(context) {
-      settings = context.settings;
-      state = context.state;
-      resources = context.resources;
-      buildings = context.buildings;
-      game = context.game;
-      crafter = context.crafter;
-      SpyManager = context.SpyManager;
-      FleetManagerOuter = context.FleetManagerOuter;
-      JobManager = context.JobManager;
-      FactoryManager = context.FactoryManager;
-      inflationChallengeAssistActive = context.inflationChallengeAssistActive;
-      retirementChallengeAssistActive = context.retirementChallengeAssistActive;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      prioritizeDemandedResources,
+      makeDemandProject(cost, progress) {
+        return Object.defineProperties(Object.create(Project.prototype), {
+          cost: { value: cost, writable: true, enumerable: true },
+          progress: { value: progress, writable: true, enumerable: true },
+        });
+      },
+      setDemandPrioritizationTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        game = context.game;
+        crafter = context.crafter;
+        SpyManager = context.SpyManager;
+        FleetManagerOuter = context.FleetManagerOuter;
+        JobManager = context.JobManager;
+        FactoryManager = context.FactoryManager;
+        inflationChallengeAssistActive = context.inflationChallengeAssistActive;
+        retirementChallengeAssistActive =
+          context.retirementChallengeAssistActive;
+      },
+    }));
 
   let { checkAffordableCustom, readQueuedTarget } = createQueueQueriesControl({
     getResources: () => resources,
@@ -3297,19 +3328,20 @@ export function startEvolveRuntimeComposition(
     getTestActions: () => getTestContext("evolutionResult")?.actions,
   });
 
-  registerTestPart(() => ({
-    checkEvolutionResult: () => checkEvolutionResult(),
-    setEvolutionResultTestContext(context) {
-      settings = context.settings;
-      settingsRaw = context.settingsRaw;
-      state = context.state;
-      game = context.game;
-      races = context.races;
-      MutableTraitManager = context.MutableTraitManager;
-      GameLog = context.GameLog;
-      setTestContext("evolutionResult", context);
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      checkEvolutionResult: () => checkEvolutionResult(),
+      setEvolutionResultTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        races = context.races;
+        MutableTraitManager = context.MutableTraitManager;
+        GameLog = context.GameLog;
+        setTestContext("evolutionResult", context);
+      },
+    }));
 
   const { updateTabs } = createTabRefreshControl({
     getState: () => state,
@@ -3335,22 +3367,23 @@ export function startEvolveRuntimeComposition(
     isProject: (target) => target instanceof Project,
   });
 
-  registerTestPart(() => ({
-    getMultiSegmentedTimeLeft,
-    makeTargetTimingProject(progress, currentStep, cost) {
-      return Object.defineProperties(Object.create(Project.prototype), {
-        gameMax: { value: 0, enumerable: true },
-        count: { value: 0, enumerable: true },
-        progress: { value: progress, enumerable: true },
-        currentStep: { value: currentStep, enumerable: true },
-        cost: { value: cost, enumerable: true },
-      });
-    },
-    setTargetTimingTestContext(context) {
-      game = context.game;
-      poly = context.poly;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      getMultiSegmentedTimeLeft,
+      makeTargetTimingProject(progress, currentStep, cost) {
+        return Object.defineProperties(Object.create(Project.prototype), {
+          gameMax: { value: 0, enumerable: true },
+          count: { value: 0, enumerable: true },
+          progress: { value: progress, enumerable: true },
+          currentStep: { value: currentStep, enumerable: true },
+          cost: { value: cost, enumerable: true },
+        });
+      },
+      setTargetTimingTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+      },
+    }));
 
   const {
     updateActiveTargetsUI,
@@ -3377,19 +3410,20 @@ export function startEvolveRuntimeComposition(
     savePlannerStats: (stats) => savePlannerStats(stats),
   });
 
-  registerTestPart(() => ({
-    plannerAnalysis: {
-      plannerLimitingResource,
-      makePlannerStats,
-      loadPlannerStats,
-      savePlannerStats: () => savePlannerStats(state.plannerStats),
-    },
-    setPlannerAnalysisTestContext(context) {
-      game = context.game;
-      resources = context.resources;
-      state = context.state;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      plannerAnalysis: {
+        plannerLimitingResource,
+        makePlannerStats,
+        loadPlannerStats,
+        savePlannerStats: () => savePlannerStats(state.plannerStats),
+      },
+      setPlannerAnalysisTestContext(context) {
+        game = context.game;
+        resources = context.resources;
+        state = context.state;
+      },
+    }));
 
   const { updateBuildPlanner } = createBuildPlannerControl({
     getGame: () => game,
@@ -3456,17 +3490,18 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  registerTestPart(() => ({
-    gameActionVerification: {
-      verifyGameActions,
-      verifyGameActionsExist,
-      verifyGameActionExists,
-    },
-    setGameActionVerificationTestContext(context) {
-      game = context.game;
-      buildings = context.buildings;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      gameActionVerification: {
+        verifyGameActions,
+        verifyGameActionsExist,
+        verifyGameActionExists,
+      },
+      setGameActionVerificationTestContext(context) {
+        game = context.game;
+        buildings = context.buildings;
+      },
+    }));
 
   const getScriptBootstrapActions = () =>
     getTestContext("scriptBootstrap")?.actions ?? {
@@ -3643,22 +3678,23 @@ export function startEvolveRuntimeComposition(
     getRaces: () => races,
   });
 
-  registerTestPart(() => ({
-    customRaceModel: {
-      customRaceRankCost,
-      customRaceGeneBalance,
-      customRaceRankOptions,
-      customRaceTraitEffect,
-      customRaceEditorTraits,
-      customRaceDraftFromPreset,
-    },
-    setCustomRaceModelTestContext(context) {
-      game = context.game;
-      poly = context.poly;
-      resources = context.resources;
-      races = context.races;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      customRaceModel: {
+        customRaceRankCost,
+        customRaceGeneBalance,
+        customRaceRankOptions,
+        customRaceTraitEffect,
+        customRaceEditorTraits,
+        customRaceDraftFromPreset,
+      },
+      setCustomRaceModelTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        resources = context.resources;
+        races = context.races;
+      },
+    }));
 
   const {
     showCustomRaceImportStatus,
@@ -3771,20 +3807,21 @@ export function startEvolveRuntimeComposition(
     diagnostics,
   });
 
-  registerTestPart(() => ({
-    automate: () => automate(),
-    setTickTestContext(context) {
-      settings = context.settings;
-      state = context.state;
-      game = context.game;
-      resources = context.resources;
-      KeyManager = context.KeyManager;
-      NaniteManager = context.NaniteManager;
-      SupplyManager = context.SupplyManager;
-      EjectManager = context.EjectManager;
-      tickTestControllers = context.controllers;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      automate: () => automate(),
+      setTickTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        KeyManager = context.KeyManager;
+        NaniteManager = context.NaniteManager;
+        SupplyManager = context.SupplyManager;
+        EjectManager = context.EjectManager;
+        tickTestControllers = context.controllers;
+      },
+    }));
 
   const {
     updateDebugData,
@@ -3804,20 +3841,21 @@ export function startEvolveRuntimeComposition(
     getScriptVersion: () => userscriptEnvironment.getScriptVersion(),
   });
 
-  registerTestPart(() => ({
-    scriptRuntimeUI: {
-      updateDebugData,
-      addScriptStyle,
-      checkIgnoredError,
-      displayScriptWarningNode,
-      addErrorHandler,
-    },
-    setScriptRuntimeUITestContext(context) {
-      if ("state" in context) state = context.state;
-      if ("game" in context) game = context.game;
-      if ("win" in context) win = context.win;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      scriptRuntimeUI: {
+        updateDebugData,
+        addScriptStyle,
+        checkIgnoredError,
+        displayScriptWarningNode,
+        addErrorHandler,
+      },
+      setScriptRuntimeUITestContext(context) {
+        if ("state" in context) state = context.state;
+        if ("game" in context) game = context.game;
+        if ("win" in context) win = context.win;
+      },
+    }));
 
   const {
     prestigeTypes,
@@ -3855,59 +3893,60 @@ export function startEvolveRuntimeComposition(
     readGovernor: () => getGovernor,
   });
 
-  registerTestPart(() => ({
-    settingsControls: {
-      removeScriptSettings,
-      buildScriptSettings,
-      buildImportExport,
-      buildSettingsSectionImpl,
-      buildSettingsSection,
-      buildSettingsSection2,
-      genericResetFunction,
-      addStandardHeading,
-      addSettingsHeader1,
-      addSettingsHeader2,
-      buildSelectOptions,
-      openOverrideModal,
-      buildOverrideSettings,
-      buildInputNode,
-      buildInputNodeForDisplay,
-      changeDisplayInputNode,
-      buildConditionType,
-      buildConditionArg,
-      buildConditionComparator,
-      buildConditionRemove,
-      buildConditionDuplicate,
-      buildConditionEvalize,
-      buildConditionRet,
-      buildObjectListInput,
-      addSettingsToggle,
-      addSettingsNumber,
-      addSettingsString,
-      addSettingsSelect,
-      addSettingsList,
-      addInputCallbacks,
-      addTableInput,
-      addToggleCallbacks,
-      addTableToggle,
-      buildTableLabel,
-      resetCheckbox,
-      evaluateCheck: _,
-      prestigeTypes,
-      prestigeOptions,
-      checkCompare,
-      checkCustom,
-      argType,
-      checkTypes,
-    },
-    setSettingsControlsTestContext(context) {
-      if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-      if ("settings" in context) settings = context.settings;
-      if ("game" in context) game = context.game;
-      if ("state" in context) state = context.state;
-      if ("win" in context) win = context.win;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      settingsControls: {
+        removeScriptSettings,
+        buildScriptSettings,
+        buildImportExport,
+        buildSettingsSectionImpl,
+        buildSettingsSection,
+        buildSettingsSection2,
+        genericResetFunction,
+        addStandardHeading,
+        addSettingsHeader1,
+        addSettingsHeader2,
+        buildSelectOptions,
+        openOverrideModal,
+        buildOverrideSettings,
+        buildInputNode,
+        buildInputNodeForDisplay,
+        changeDisplayInputNode,
+        buildConditionType,
+        buildConditionArg,
+        buildConditionComparator,
+        buildConditionRemove,
+        buildConditionDuplicate,
+        buildConditionEvalize,
+        buildConditionRet,
+        buildObjectListInput,
+        addSettingsToggle,
+        addSettingsNumber,
+        addSettingsString,
+        addSettingsSelect,
+        addSettingsList,
+        addInputCallbacks,
+        addTableInput,
+        addToggleCallbacks,
+        addTableToggle,
+        buildTableLabel,
+        resetCheckbox,
+        evaluateCheck: _,
+        prestigeTypes,
+        prestigeOptions,
+        checkCompare,
+        checkCustom,
+        argType,
+        checkTypes,
+      },
+      setSettingsControlsTestContext(context) {
+        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+        if ("settings" in context) settings = context.settings;
+        if ("game" in context) game = context.game;
+        if ("state" in context) state = context.state;
+        if ("win" in context) win = context.win;
+      },
+    }));
 
   const interfaceSettingsActions = {
     buildSettingsSection,
@@ -4037,16 +4076,17 @@ export function startEvolveRuntimeComposition(
   const { buildInterfaceSettings, updateInterfaceSettingsContent } =
     interfaceSettingsBrowserAdapter;
 
-  registerTestPart(() => ({
-    interfaceSettings: {
-      buildInterfaceSettings,
-      updateInterfaceSettingsContent,
-    },
-    setInterfaceSettingsTestContext(context) {
-      settingsRaw = context.settingsRaw;
-      setTestContext("interfaceSettings", context);
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      interfaceSettings: {
+        buildInterfaceSettings,
+        updateInterfaceSettingsContent,
+      },
+      setInterfaceSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        setTestContext("interfaceSettings", context);
+      },
+    }));
 
   let stateLogSettingsIntentHandler;
   const stateLogSettingsBrowserAdapter =
@@ -4071,15 +4111,16 @@ export function startEvolveRuntimeComposition(
   const { buildStateLogSettings, updateStateLogSettingsContent } =
     stateLogSettingsBrowserAdapter;
 
-  registerTestPart(() => ({
-    stateLogSettings: {
-      buildStateLogSettings,
-      updateStateLogSettingsContent,
-    },
-    setStateLogSettingsTestContext(context) {
-      settingsRaw = context.settingsRaw;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      stateLogSettings: {
+        buildStateLogSettings,
+        updateStateLogSettingsContent,
+      },
+      setStateLogSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+      },
+    }));
 
   const { calculateMechStats, sorterHelper } = createUiSupportControl({
     getUiSurface: () => gameUiSurface,
@@ -4094,21 +4135,23 @@ export function startEvolveRuntimeComposition(
       value instanceof runtimeEnvironment.HTMLElement,
   });
 
-  registerTestPart(() => ({
-    calculateMechStats,
-    setMechStatsTestContext(context) {
-      game = context.game;
-      poly = context.poly;
-      MechManager = context.MechManager;
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      calculateMechStats,
+      setMechStatsTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        MechManager = context.MechManager;
+      },
+    }));
 
-  registerTestContext(() => [
-    "optionsModal",
-    {
-      optionsModal: optionsModalBrowserAdapter,
-    },
-  ]);
+  if (TEST_SURFACE_ENABLED)
+    registerTestContext(() => [
+      "optionsModal",
+      {
+        optionsModal: optionsModalBrowserAdapter,
+      },
+    ]);
   const traitSettings = createTraitSettingsControl({
     getSettingsRaw: () => settingsRaw,
     setSettingsRaw: (value) => {
@@ -4228,76 +4271,86 @@ export function startEvolveRuntimeComposition(
     },
   });
 
-  registerTestPart(() => ({
-    updateUI: () => updateUI(),
-    setUIRefreshTestContext(context) {
-      settings = context.settings;
-      settingsRaw = context.settingsRaw;
-      state = context.state;
-      game = context.game;
-      resources = context.resources;
-      win = context.win;
-      safeMode = context.safeMode;
-      overrideKeyLabel = context.overrideKeyLabel;
-      setTestContext("uiRefresh", context);
-    },
-  }));
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      updateUI: () => updateUI(),
+      setUIRefreshTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        win = context.win;
+        safeMode = context.safeMode;
+        overrideKeyLabel = context.overrideKeyLabel;
+        setTestContext("uiRefresh", context);
+      },
+    }));
 
-  registerTestContext(() => [
-    "prestigeTopBar",
-    {
-      prestigeTopBar: prestigeTopBarBrowserAdapter,
-    },
-  ]);
-  registerTestContext(() => [
-    "totalDaysTopBar",
-    {
-      totalDaysTopBar: totalDaysTopBarBrowserAdapter,
-    },
-  ]);
-  registerTestContext(() => [
-    "ejectToggles",
-    {
-      ejectToggles: ejectToggleBrowserAdapter,
-    },
-  ]);
-  registerTestContext(() => [
-    "supplyToggles",
-    {
-      supplyToggles: supplyToggleBrowserAdapter,
-    },
-  ]);
-  registerTestContext(() => [
-    "craftToggles",
-    {
-      craftToggles: craftToggleBrowserAdapter,
-    },
-  ]);
-  registerTestContext(() => [
-    "arpaToggles",
-    {
-      arpaToggles: arpaToggleBrowserAdapter,
-    },
-  ]);
-  registerTestContext(() => [
-    "buildingToggles",
-    {
-      buildingToggles: buildingToggleBrowserAdapter,
-    },
-  ]);
-  registerTestContext(() => [
-    "resourceToggle",
-    {
-      resourceToggles: resourceToggleBrowserAdapter,
-    },
-    "resourceToggles",
-  ]);
-  registerTestContext(() => [
-    "mechInfo",
-    {
-      mechInfo: mechInfoBrowserAdapter,
-    },
-  ]);
+  if (TEST_SURFACE_ENABLED)
+    registerTestContext(() => [
+      "prestigeTopBar",
+      {
+        prestigeTopBar: prestigeTopBarBrowserAdapter,
+      },
+    ]);
+  if (TEST_SURFACE_ENABLED)
+    registerTestContext(() => [
+      "totalDaysTopBar",
+      {
+        totalDaysTopBar: totalDaysTopBarBrowserAdapter,
+      },
+    ]);
+  if (TEST_SURFACE_ENABLED)
+    registerTestContext(() => [
+      "ejectToggles",
+      {
+        ejectToggles: ejectToggleBrowserAdapter,
+      },
+    ]);
+  if (TEST_SURFACE_ENABLED)
+    registerTestContext(() => [
+      "supplyToggles",
+      {
+        supplyToggles: supplyToggleBrowserAdapter,
+      },
+    ]);
+  if (TEST_SURFACE_ENABLED)
+    registerTestContext(() => [
+      "craftToggles",
+      {
+        craftToggles: craftToggleBrowserAdapter,
+      },
+    ]);
+  if (TEST_SURFACE_ENABLED)
+    registerTestContext(() => [
+      "arpaToggles",
+      {
+        arpaToggles: arpaToggleBrowserAdapter,
+      },
+    ]);
+  if (TEST_SURFACE_ENABLED)
+    registerTestContext(() => [
+      "buildingToggles",
+      {
+        buildingToggles: buildingToggleBrowserAdapter,
+      },
+    ]);
+  if (TEST_SURFACE_ENABLED)
+    registerTestContext(() => [
+      "resourceToggle",
+      {
+        resourceToggles: resourceToggleBrowserAdapter,
+      },
+      "resourceToggles",
+    ]);
+  if (TEST_SURFACE_ENABLED)
+    registerTestContext(() => [
+      "mechInfo",
+      {
+        mechInfo: mechInfoBrowserAdapter,
+      },
+    ]);
 
   const settingsTransferActions = {
     updateStandAloneSettings,

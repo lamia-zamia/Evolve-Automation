@@ -93,12 +93,24 @@ runNode(["scripts/build-test-bundle.mjs"], "test bundle build");
 const productionBundlePath = join(projectDir, "evolve_automation.user.js");
 const testBundlePath = join(tmpdir(), "evolve-automation-test-bundle.js");
 const productionBundle = await readFile(productionBundlePath, "utf8");
-if (productionBundle.includes("__EA_TEST_HOOKS__")) {
-  throw new Error(
-    "Production bundle must not contain the characterization hook",
-  );
-}
 const testBundle = await readFile(testBundlePath, "utf8");
+
+const characterizationSymbols = [
+  "__EA_TEST_HOOKS__",
+  "testSurface.add",
+  "testSurface.addContext",
+  "setAuthorityPolicyTestContext",
+  "setMechStatsTestContext",
+  "setUIRefreshTestContext",
+];
+for (const symbol of characterizationSymbols) {
+  if (productionBundle.includes(symbol)) {
+    throw new Error(`Production bundle must not contain ${symbol}`);
+  }
+  if (!testBundle.includes(symbol)) {
+    throw new Error(`Test bundle must retain ${symbol}`);
+  }
+}
 
 // Virus scanners and editors briefly hold this file open on Windows, which
 // surfaces as EBUSY/EPERM/UNKNOWN on an otherwise valid write.

@@ -50725,23 +50725,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readHighPopulationPercent: () => traitVal("high_pop", 1, 100),
       readAuthorityPolicyView,
       readAuthorityQuantity
-    });
-    registerTestPart(() => ({
-      authorityPolicy: {
-        getAuthorityTarget: authorityPolicy.getAuthorityTarget,
-        getAuthorityPerSoldier: authorityPolicy.getAuthorityPerSoldier,
-        getRequiredAuthorityGarrison(currentGarrison) {
-          let requirement = authorityPolicy.getRequiredAuthorityGarrison(currentGarrison);
-          return requirement.status === "ready" ? requirement.requiredGarrison : requirement;
-        },
-        getPredictedAuthorityAfterRemovingSoldiers: authorityPolicy.getPredictedAuthorityAfterRemovingSoldiers,
-        assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval
-      },
-      setAuthorityPolicyTestContext(context) {
-        game = context.game, settings = context.settings, resources = context.resources;
-      }
-    }));
-    let { normalizeProperties, addProps } = createPropertyHelpers({
+    }), { normalizeProperties, addProps } = createPropertyHelpers({
       getSettings: () => settings
     }), { getCostConflict } = createCostConflict({
       getState: () => state,
@@ -51011,42 +50995,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       setResources: (value) => resources = value
     });
-    resources = initializedResources, jobs = initializedJobs, crafter = initializedCrafter, buildings = initializedBuildings, linkedBuildings = initializedLinkedBuildings, projects = initializedProjects, registerTestPart(() => ({
-      entityClasses: {
-        Job,
-        BasicJob,
-        CraftingJob,
-        Resource,
-        SoulGem,
-        Troops,
-        Supply,
-        Power,
-        Support,
-        BeltSupport,
-        ElectrolysisSupport,
-        WomlingsSupport,
-        PrestigeResource,
-        Population,
-        Morale,
-        Thrall,
-        ResourceProductionCost,
-        Action,
-        CityAction,
-        Pillar,
-        ResourceAction,
-        EvolutionAction,
-        SpaceDock,
-        ModalAction,
-        Project,
-        Technology,
-        Race,
-        Trigger,
-        MinorTrait,
-        MutableTrait,
-        MajorTrait,
-        GenusTrait
-      }
-    }));
+    resources = initializedResources, jobs = initializedJobs, crafter = initializedCrafter, buildings = initializedBuildings, linkedBuildings = initializedLinkedBuildings, projects = initializedProjects;
     let {
       techIds,
       buildingIds,
@@ -51057,18 +51006,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       races,
       craftablesList,
       foundryList
-    } = createRuntimeLookupTables(), state = createInitialRuntimeState();
-    registerTestPart(() => ({
-      entityCatalogs: {
-        resources,
-        jobs,
-        crafter,
-        buildings,
-        linkedBuildings,
-        projects
-      }
-    }));
-    let {
+    } = createRuntimeLookupTables(), state = createInitialRuntimeState(), {
       namedBuildings,
       authorityCapBuildings: authorityCapBuildings2,
       INFLATION_CHALLENGE_MONEY: INFLATION_CHALLENGE_MONEY2,
@@ -51089,20 +51027,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       requiredManaRate: Number(
         settings.prestigeVacuumMana ?? 10
       )
-    });
-    registerTestPart(() => ({
-      weightingPolicy: {
-        namedBuildings,
-        authorityCapBuildings: authorityCapBuildings2,
-        INFLATION_CHALLENGE_MONEY: INFLATION_CHALLENGE_MONEY2,
-        RETIREMENT_PREP: RETIREMENT_PREP2,
-        inflationMoneyStorageBuildings: inflationMoneyStorageBuildings2,
-        inflationMoneyIncomeBuildings: inflationMoneyIncomeBuildings2,
-        galaxyCombatShips: galaxyCombatShips2,
-        weightingRules
-      }
-    }));
-    let {
+    }), {
       MinorTraitManager,
       MutableTraitManager,
       QuarryManager,
@@ -51211,14 +51136,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getOccCosts,
         logError: (...args) => runtimeEnvironment.error(...args)
       }
-    });
-    registerTestPart(() => ({
-      foreignAffairsManagers: { SpyManager, WarManager },
-      setForeignAffairsManagersTestContext(context) {
-        "game" in context && (game = context.game), "settings" in context && (settings = context.settings), "state" in context && (state = context.state), "resources" in context && (resources = context.resources), "buildings" in context && (buildings = context.buildings), "poly" in context && (poly = context.poly), "win" in context && (win = context.win), "gameModal" in context && (gameModal = context.gameModal), "GameLog" in context && (GameLog = context.GameLog), "KeyManager" in context && (KeyManager = context.KeyManager), "haveTech" in context && (haveTech = context.haveTech), "guardActive" in context && (guardActive = context.guardActive), "traitVal" in context && (traitVal = context.traitVal);
-      }
-    }));
-    let { FleetManagerOuter, FleetManager, MechManager } = createFleetMechManagerCompositionControl({
+    }), { FleetManagerOuter, FleetManager, MechManager } = createFleetMechManagerCompositionControl({
       fleet: {
         getGame: () => game,
         getSettings: () => settings,
@@ -51243,28 +51161,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback),
         randomSource
       }
-    });
-    registerTestPart(() => ({
-      fleetManagers: { FleetManagerOuter, FleetManager },
-      setFleetManagersTestContext(context) {
-        "game" in context && (game = context.game), "settings" in context && (settings = context.settings), "resources" in context && (resources = context.resources), "buildings" in context && (buildings = context.buildings), "poly" in context && (poly = context.poly), "win" in context && (win = context.win), "KeyManager" in context && (KeyManager = context.KeyManager), "haveTech" in context && (haveTech = context.haveTech);
-      }
-    }));
-    let { mechSupplySavingReason } = createMechIntelligenceControl({
+    }), { mechSupplySavingReason } = createMechIntelligenceControl({
       getGame: () => game,
       getSettings: () => settings,
       getBuildings: () => buildings,
       getResources: () => resources,
       getMechManager: () => MechManager,
       getHaveTask: () => haveTask
-    });
-    registerTestPart(() => ({
-      MechManager,
-      setMechManagerTestContext(context) {
-        "game" in context && (game = context.game), "settings" in context && (settings = context.settings), "resources" in context && (resources = context.resources), "buildings" in context && (buildings = context.buildings), "poly" in context && (poly = context.poly), "win" in context && (win = context.win), "GameLog" in context && (GameLog = context.GameLog), "needSandboxBypass" in context && (needSandboxBypass = context.needSandboxBypass);
-      }
-    }));
-    let JobManager, BuildingManager, ProjectManager, TriggerManager;
+    }), JobManager, BuildingManager, ProjectManager, TriggerManager;
     ({ JobManager, BuildingManager, ProjectManager, TriggerManager } = createCoreManagerCompositionControl({
       getGame: () => game,
       getSettings: () => settings,
@@ -51377,28 +51281,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getModal: () => gameModal,
       getJQuery: () => $
     });
-    KeyManager = initialKeyManager, GameLog = initialGameLog, registerTestPart(() => ({
-      gameModal,
-      infrastructureManagers: { KeyManager, GameLog },
-      setInfrastructureManagersTestContext(context) {
-        "game" in context && (game = context.game), "settings" in context && (settings = context.settings), "poly" in context && (poly = context.poly), "win" in context && (win = context.win), "needSandboxBypass" in context && (needSandboxBypass = context.needSandboxBypass);
-      }
-    }));
+    KeyManager = initialKeyManager, GameLog = initialGameLog;
     let { updateCraftCost } = createCraftingCostsControl({
       getGame: () => game,
       getState: () => state,
       getResources: () => resources,
       setCraftablesList: (list) => craftablesList = list,
       setFoundryList: (list) => foundryList = list
-    });
-    registerTestPart(() => ({
-      updateCraftCost,
-      getCraftCostTestLists: () => ({ craftablesList, foundryList }),
-      setCraftCostTestContext(context) {
-        game = context.game, state = context.state, resources = context.resources, craftablesList = context.craftablesList ?? [], foundryList = context.foundryList ?? [];
-      }
-    }));
-    let { initialiseState } = createStateInitializationControl({
+    }), { initialiseState } = createStateInitializationControl({
       getGame: () => game,
       getResources: () => resources,
       getJobManager: () => JobManager,
@@ -51494,49 +51384,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getCrafterOriginalIds: () => Object.values(crafter).map((job) => job._originalId),
       getGameLog: () => GameLog,
       testSurface
-    });
-    registerTestPart(() => ({
-      settingsState: {
-        updateStateFromSettings,
-        updateSettingsFromState,
-        applySettings: applySettings2,
-        migrateSetting: migrateSetting2
-      },
-      resetSettings: {
-        resetWarSettings,
-        resetHellSettings,
-        resetGeneralSettings,
-        resetInterfaceSettings,
-        resetStateLogSettings,
-        resetAchievementGuardSettings,
-        resetChallengeHelperSettings,
-        resetPrestigeSettings,
-        resetGovernmentSettings,
-        resetAuthoritySettings,
-        resetEvolutionSettings,
-        resetResearchSettings,
-        resetMarketSettings,
-        resetStorageSettings,
-        resetMinorTraitSettings,
-        resetMutableTraitSettings,
-        resetJobSettings,
-        resetWeightingSettings,
-        resetBuildingSettings,
-        resetProjectSettings,
-        resetMagicSettings,
-        resetProductionSettings,
-        resetTriggerSettings,
-        resetLoggingSettings,
-        resetPlanetSettings,
-        resetFleetSettings,
-        resetMechSettings,
-        resetEjectorSettings
-      },
-      setSettingsStateTestContext(context) {
-        settingsRaw = context.settingsRaw, TriggerManager = context.triggerManager;
-      }
-    }));
-    let {
+    }), {
       getStarLevel,
       getAchievementStar,
       isAchievementUnlocked: isAchievementUnlocked2,
@@ -51562,29 +51410,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       formatRetirementShortfalls,
       inflationChallengeMoney: INFLATION_CHALLENGE_MONEY2,
       retirementPreparation: RETIREMENT_PREP2
-    });
-    registerTestPart(() => ({
-      runGuards: {
-        getStarLevel,
-        getAchievementStar,
-        isAchievementUnlocked: isAchievementUnlocked2,
-        guardActive,
-        bananaRepublicObjectiveComplete,
-        bananaRepublicSmoothieComplete,
-        bananaRepublicReadyForUnification,
-        guardBananaRepublicActive,
-        inflationChallengeAssistActive,
-        inflationChallengeMoneyReachable,
-        inflationChallengeSecondsToFinish,
-        inflationChallengeShouldSaveMoney,
-        retirementChallengeAssistActive,
-        retirementPreparationMissing
-      },
-      setRunGuardTestContext(context) {
-        settings = context.settings, game = context.game, poly = context.poly, resources = context.resources, buildings = context.buildings;
-      }
-    }));
-    let { loadQueuedSettings } = createQueuedSettingsControl({
+    }), { loadQueuedSettings } = createQueuedSettingsControl({
       getSettings: () => settings,
       getSettingsRaw: () => settingsRaw,
       getState: () => state,
@@ -51599,26 +51425,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setTestContext(context) {
         settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, GameLog = context.GameLog, setTestContext("queuedSettings", context);
       }
-    }), findRequiredResourceWeight2 = (resource2) => findRequiredResourceWeight(state.unlockedBuildings, resource2);
-    registerTestPart(() => ({
-      findRequiredResourceWeight: findRequiredResourceWeight2,
-      setResourceWeightTestContext(context) {
-        state = context.state;
-      }
-    }));
-    let challengeGroups = challenges.map((members) => ({ members })), { generatePlanets } = createPlanetGenerationControl({
+    }), findRequiredResourceWeight2 = (resource2) => findRequiredResourceWeight(state.unlockedBuildings, resource2), challengeGroups = challenges.map((members) => ({ members })), { generatePlanets } = createPlanetGenerationControl({
       getGame: () => game,
       getPoly: () => poly,
       getIsAchievementUnlocked: () => isAchievementUnlocked2,
       universes
-    });
-    registerTestPart(() => ({
-      generatePlanets,
-      setPlanetGenerationTestContext(context) {
-        game = context.game, poly = context.poly, isAchievementUnlocked2 = context.isAchievementUnlocked;
-      }
-    }));
-    let { autoEvolution, autoUniverseSelection, autoPlanetSelection } = createEvolutionControls({
+    }), { autoEvolution, autoUniverseSelection, autoPlanetSelection } = createEvolutionControls({
       evolutionReader: {
         getGame: () => game,
         getSettings: () => settings,
@@ -51780,9 +51592,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           getGame: () => game
         }
       }
-    });
-    registerTestPart(() => ({ autoHell }));
-    let { autoTax } = createTaxControl({
+    }), { autoTax } = createTaxControl({
       nowMs: () => browserClock.nowMs(),
       getVueById,
       gameReader: {
@@ -51796,14 +51606,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getResources: () => resources,
         resetKeyModifiers: () => clickMultipliers.clear()
       }
-    });
-    registerTestPart(() => ({
-      autoTax: () => autoTax(),
-      setAutoTaxTestContext(context) {
-        "game" in context && (game = context.game), "settings" in context && (settings = context.settings), "resources" in context && (resources = context.resources), "poly" in context && (poly = context.poly), "win" in context && (win = context.win), "keySet" in context && (KeyManager.set = context.keySet);
-      }
-    }));
-    let {
+    }), {
       autoAlchemy,
       autoPylon,
       autoQuarry,
@@ -51972,29 +51775,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           settings = context.settings, game = context.game, resources = context.resources, buildings = context.buildings, techIds = context.techIds, MechManager = context.MechManager, haveTech = context.haveTech, isAchievementUnlocked2 = context.isAchievementUnlocked;
         }
       }
-    });
-    registerTestPart(() => ({
-      prestigeLog: { formatLogString, logPrestige },
-      setPrestigeLogTestContext(context) {
-        settings = context.settings, game = context.game, state = context.state, GameLog = context.GameLog, setTestContext("prestigeLog", context);
-      }
-    })), registerTestPart(() => ({
-      autoEvolution,
-      autoUniverseSelection,
-      autoCraft,
-      autoSpy,
-      autoBattle,
-      autoPrestige,
-      setWave3TestContext(context) {
-        foundryList = context.foundryList, SpyManager = context.SpyManager, buildings = context.buildings, haveTask = context.haveTask, haveTech = context.haveTech, isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable, "foreignView" in context && setTestContext("foreignControls", {
-          getVueById: () => context.foreignView
-        });
-      },
-      setForeignControlsTestContext(context) {
-        setTestContext("foreignControls", context);
-      }
-    }));
-    let {
+    }), {
       ocularPowerData,
       wishData,
       autoShapeshift,
@@ -52061,23 +51842,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           getTicksPerSecond: () => ticksPerSecond()
         }
       }
-    });
-    registerTestPart(() => ({
-      autoMiningDroid,
-      DroidManager,
-      autoGraphenePlant,
-      GrapheneManager,
-      autoShapeshift,
-      autoWish,
-      autoGenetics,
-      automationSettings: settings,
-      automationResources: resources,
-      automationKeyManager: KeyManager,
-      setAutomationTestContext(context) {
-        game = context.game, win = context.win;
-      }
-    }));
-    let {
+    }), {
       autoMarket,
       autoGalaxyMarket,
       autoGatherResources,
@@ -52139,19 +51904,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           diagnostics
         }
       }
-    });
-    registerTestPart(() => ({
-      autoConsume,
-      autoReplicator,
-      autoMarket,
-      autoGalaxyMarket,
-      autoGatherResources,
-      getAutomationPoly: () => poly,
-      setWave2TestContext(context) {
-        ReplicatorManager = context.ReplicatorManager, MarketManager = context.MarketManager, GalaxyTradeManager = context.GalaxyTradeManager, buildings = context.buildings, adjustTradeRoutes = context.adjustTradeRoutes, getResourcesPerClick = context.getResourcesPerClick;
-      }
-    }));
-    let techConflictClock = browserClock, { getTechConflict } = createTechConflict({
+    }), techConflictClock = browserClock, { getTechConflict } = createTechConflict({
       getClock: () => techConflictClock,
       getSettings: () => settings,
       getResources: () => resources,
@@ -52165,14 +51918,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       fanatAchievements,
       formatTechConflict,
       getNumberString
-    });
-    registerTestPart(() => ({
-      getTechConflict,
-      setTechConflictTestContext(context) {
-        settings = context.settings, game = context.game, state = context.state, resources = context.resources, buildings = context.buildings, isAchievementUnlocked2 = context.isAchievementUnlocked, techConflictClock = context.clock ?? browserClock;
-      }
-    }));
-    let { autoTrigger, autoPower, autoStorage } = createTriggerPowerAutomationControl({
+    }), { autoTrigger, autoPower, autoStorage } = createTriggerPowerAutomationControl({
       trigger: {
         reader: {
           getState: () => state,
@@ -52231,35 +51977,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           expand: expandStorage
         }
       }
-    });
-    registerTestPart(() => ({
-      autoMerc,
-      WarManager,
-      GameLog,
-      autoPsychic,
-      autoOcularPowers,
-      autoTrigger,
-      automationState: state,
-      setWave1TestManagers(managers) {
-        WarManager = managers.WarManager, MinorTraitManager = managers.MinorTraitManager;
-      }
-    })), registerTestPart(() => ({
-      powerSupport: {
-        getCitadelConsumption,
-        isHellSupressUseful,
-        adjustSpire,
-        getBestSupplyRatio
-      },
-      setPowerSupportTestContext(context) {
-        game = context.game, jobs = context.jobs, crafter = context.crafter, buildings = context.buildings;
-      }
-    })), registerTestPart(() => ({
-      expandStorage,
-      setStorageExpansionTestContext(context) {
-        game = context.game, settings = context.settings, resources = context.resources, buildings = context.buildings, StorageManager = context.StorageManager;
-      }
-    }));
-    let {
+    }), {
       autoMinorTrait,
       autoMutateTrait,
       autoFleetOuter,
@@ -52331,45 +52049,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           log: (label, outcome) => runtimeEnvironment.log(label, outcome)
         }
       }
-    });
-    registerTestPart(() => ({
-      autoMinorTrait,
-      MinorTraitManager
-    })), registerTestPart(() => ({
-      autoPlanetSelection,
-      autoJobs,
-      autoBuild,
-      autoResearch,
-      autoMutateTrait,
-      setWave4TestContext(context) {
-        generatePlanets = context.generatePlanets, getStarLevel = context.getStarLevel, isAchievementUnlocked2 = context.isAchievementUnlocked, races = context.races, JobManager = context.JobManager, BuildingManager = context.BuildingManager, ProjectManager = context.ProjectManager, MutableTraitManager = context.MutableTraitManager, getCostConflict = context.getCostConflict;
-      }
-    }));
-    let { adjustTradeRoutes } = createTradeRouteControl({
+    }), { adjustTradeRoutes } = createTradeRouteControl({
       getSettings: () => settings,
       getGame: () => game,
       getResources: () => resources,
       getMarketManager: () => MarketManager,
       getGovernor: () => getGovernor(),
       shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney()
-    });
-    registerTestPart(() => ({
-      adjustTradeRoutes,
-      setTradeRoutesTestContext(context) {
-        settings = context.settings, game = context.game, resources = context.resources, MarketManager = context.MarketManager;
-      }
-    })), registerTestPart(() => ({
-      galaxyIntelligence: {
-        getGalaxyCombatShipPower,
-        getPiracyMultiplier,
-        galaxyAssaultPending,
-        getGalaxyRegions
-      },
-      setGalaxyIntelligenceTestContext(context) {
-        game = context.game, buildings = context.buildings, resources = context.resources, poly = context.poly, settings = context.settings, traitVal = context.traitVal;
-      }
-    }));
-    let { updateScriptData, finalizeScriptData } = createScriptDataLifecycleControl({
+    }), { updateScriptData, finalizeScriptData } = createScriptDataLifecycleControl({
       getSettings: () => settings,
       getState: () => state,
       getGame: () => game,
@@ -52388,34 +52075,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getTicksPerSecond: () => ticksPerSecond,
       getHaveTech: () => haveTech,
       testSurface
-    });
-    registerTestPart(() => ({
-      autoPower,
-      autoStorage,
-      autoFleetOuter,
-      autoFleet,
-      autoMech,
-      setWave5TestManagers(managers) {
-        StorageManager = managers.StorageManager, FleetManagerOuter = managers.FleetManagerOuter, FleetManager = managers.FleetManager, MechManager = managers.MechManager;
-      }
-    })), registerTestPart(() => ({
-      storageRequirements: { calculateRequiredStorages },
-      setStorageRequirementTestContext(context) {
-        settings = context.settings, state = context.state, resources = context.resources, buildings = context.buildings, game = context.game, BuildingManager = context.BuildingManager, ProjectManager = context.ProjectManager, FleetManagerOuter = context.FleetManagerOuter, inflationChallengeAssistActive = context.inflationChallengeAssistActive, retirementChallengeAssistActive = context.retirementChallengeAssistActive;
-      }
-    })), registerTestPart(() => ({
-      prioritizeDemandedResources,
-      makeDemandProject(cost, progress) {
-        return Object.defineProperties(Object.create(Project.prototype), {
-          cost: { value: cost, writable: !0, enumerable: !0 },
-          progress: { value: progress, writable: !0, enumerable: !0 }
-        });
-      },
-      setDemandPrioritizationTestContext(context) {
-        settings = context.settings, state = context.state, resources = context.resources, buildings = context.buildings, game = context.game, crafter = context.crafter, SpyManager = context.SpyManager, FleetManagerOuter = context.FleetManagerOuter, JobManager = context.JobManager, FactoryManager = context.FactoryManager, inflationChallengeAssistActive = context.inflationChallengeAssistActive, retirementChallengeAssistActive = context.retirementChallengeAssistActive;
-      }
-    }));
-    let { checkAffordableCustom, readQueuedTarget } = createQueueQueries({
+    }), { checkAffordableCustom, readQueuedTarget } = createQueueQueries({
       getResources: () => resources,
       getPoly: () => poly,
       getMechManager: () => MechManager,
@@ -52459,14 +52119,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addEvolutionSetting: () => addEvolutionSetting(),
       updateSettingsFromState: () => updateSettingsFromState(),
       getTestActions: () => getTestContext("evolutionResult")?.actions
-    });
-    registerTestPart(() => ({
-      checkEvolutionResult: () => checkEvolutionResult(),
-      setEvolutionResultTestContext(context) {
-        settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, game = context.game, races = context.races, MutableTraitManager = context.MutableTraitManager, GameLog = context.GameLog, setTestContext("evolutionResult", context);
-      }
-    }));
-    let { updateTabs } = createTabRefreshControl({
+    }), { updateTabs } = createTabRefreshControl({
       getState: () => state,
       getGame: () => game,
       getBuildings: () => buildings,
@@ -52481,23 +52134,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getTimeFormat: () => (seconds) => poly.timeFormat(seconds),
       isProject: (target) => target instanceof Project
-    });
-    registerTestPart(() => ({
-      getMultiSegmentedTimeLeft,
-      makeTargetTimingProject(progress, currentStep, cost) {
-        return Object.defineProperties(Object.create(Project.prototype), {
-          gameMax: { value: 0, enumerable: !0 },
-          count: { value: 0, enumerable: !0 },
-          progress: { value: progress, enumerable: !0 },
-          currentStep: { value: currentStep, enumerable: !0 },
-          cost: { value: cost, enumerable: !0 }
-        });
-      },
-      setTargetTimingTestContext(context) {
-        game = context.game, poly = context.poly;
-      }
-    }));
-    let {
+    }), {
       updateActiveTargetsUI,
       buildActiveTargetsUI,
       removeActiveTargetsUI,
@@ -52517,19 +52154,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateSettingsFromState: () => updateSettingsFromState(),
       makePlannerStats: () => makePlannerStats(),
       savePlannerStats: (stats) => savePlannerStats(stats)
-    });
-    registerTestPart(() => ({
-      plannerAnalysis: {
-        plannerLimitingResource,
-        makePlannerStats,
-        loadPlannerStats,
-        savePlannerStats: () => savePlannerStats(state.plannerStats)
-      },
-      setPlannerAnalysisTestContext(context) {
-        game = context.game, resources = context.resources, state = context.state;
-      }
-    }));
-    let { updateBuildPlanner } = createBuildPlannerControl({
+    }), { updateBuildPlanner } = createBuildPlannerControl({
       getGame: () => game,
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
@@ -52576,18 +52201,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setTestContext(context) {
         settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, game = context.game, resources = context.resources, buildings = context.buildings, StorageManager = context.StorageManager, ProjectManager = context.ProjectManager, TriggerManager = context.TriggerManager, poly = context.poly;
       }
-    });
-    registerTestPart(() => ({
-      gameActionVerification: {
-        verifyGameActions,
-        verifyGameActionsExist,
-        verifyGameActionExists
-      },
-      setGameActionVerificationTestContext(context) {
-        game = context.game, buildings = context.buildings;
-      }
-    }));
-    let getScriptBootstrapActions = () => getTestContext("scriptBootstrap")?.actions ?? {
+    }), getScriptBootstrapActions = () => getTestContext("scriptBootstrap")?.actions ?? {
       updateStandAloneSettings,
       updateStateFromSettings,
       updateSettingsFromState,
@@ -52713,21 +52327,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getPoly: () => poly,
       getResources: () => resources,
       getRaces: () => races
-    });
-    registerTestPart(() => ({
-      customRaceModel: {
-        customRaceRankCost,
-        customRaceGeneBalance,
-        customRaceRankOptions,
-        customRaceTraitEffect,
-        customRaceEditorTraits,
-        customRaceDraftFromPreset
-      },
-      setCustomRaceModelTestContext(context) {
-        game = context.game, poly = context.poly, resources = context.resources, races = context.races;
-      }
-    }));
-    let {
+    }), {
       showCustomRaceImportStatus,
       getCustomRacePreset,
       refreshCustomRacePresetSelectors,
@@ -52824,14 +52424,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       controllers: tickControllers,
       getTestControllers: () => tickTestControllers,
       diagnostics
-    });
-    registerTestPart(() => ({
-      automate: () => automate(),
-      setTickTestContext(context) {
-        settings = context.settings, state = context.state, game = context.game, resources = context.resources, KeyManager = context.KeyManager, NaniteManager = context.NaniteManager, SupplyManager = context.SupplyManager, EjectManager = context.EjectManager, tickTestControllers = context.controllers;
-      }
-    }));
-    let {
+    }), {
       updateDebugData,
       addScriptStyle,
       checkIgnoredError,
@@ -52847,20 +52440,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getOpenOptionsModal: () => openOptionsModal,
       getScriptVersionExtra: () => SCRIPT_VERSION_EXTRA,
       getScriptVersion: () => userscriptEnvironment.getScriptVersion()
-    });
-    registerTestPart(() => ({
-      scriptRuntimeUI: {
-        updateDebugData,
-        addScriptStyle,
-        checkIgnoredError,
-        displayScriptWarningNode,
-        addErrorHandler
-      },
-      setScriptRuntimeUITestContext(context) {
-        "state" in context && (state = context.state), "game" in context && (game = context.game), "win" in context && (win = context.win);
-      }
-    }));
-    let {
+    }), {
       prestigeTypes,
       prestigeOptions,
       checkCompare,
@@ -52894,57 +52474,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readBuildSelectOptions: () => buildSelectOptions,
       readFastEval: () => fastEval,
       readGovernor: () => getGovernor
-    });
-    registerTestPart(() => ({
-      settingsControls: {
-        removeScriptSettings,
-        buildScriptSettings,
-        buildImportExport,
-        buildSettingsSectionImpl,
-        buildSettingsSection,
-        buildSettingsSection2,
-        genericResetFunction,
-        addStandardHeading,
-        addSettingsHeader1,
-        addSettingsHeader2,
-        buildSelectOptions,
-        openOverrideModal,
-        buildOverrideSettings,
-        buildInputNode,
-        buildInputNodeForDisplay,
-        changeDisplayInputNode,
-        buildConditionType,
-        buildConditionArg,
-        buildConditionComparator,
-        buildConditionRemove,
-        buildConditionDuplicate,
-        buildConditionEvalize,
-        buildConditionRet,
-        buildObjectListInput,
-        addSettingsToggle,
-        addSettingsNumber,
-        addSettingsString,
-        addSettingsSelect,
-        addSettingsList,
-        addInputCallbacks,
-        addTableInput,
-        addToggleCallbacks,
-        addTableToggle,
-        buildTableLabel,
-        resetCheckbox,
-        evaluateCheck: _,
-        prestigeTypes,
-        prestigeOptions,
-        checkCompare,
-        checkCustom,
-        argType,
-        checkTypes
-      },
-      setSettingsControlsTestContext(context) {
-        "settingsRaw" in context && (settingsRaw = context.settingsRaw), "settings" in context && (settings = context.settings), "game" in context && (game = context.game), "state" in context && (state = context.state), "win" in context && (win = context.win);
-      }
-    }));
-    let interfaceSettingsActions = {
+    }), interfaceSettingsActions = {
       buildSettingsSection,
       addSettingsToggle,
       addSettingsHeader1,
@@ -53015,17 +52545,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         updateTotalDaysInTopBar: () => (getTestContext("interfaceSettings")?.actions?.updateTotalDaysInTopBar ?? updateTotalDaysInTopBar)()
       }
     });
-    let { buildInterfaceSettings, updateInterfaceSettingsContent } = interfaceSettingsBrowserAdapter;
-    registerTestPart(() => ({
-      interfaceSettings: {
-        buildInterfaceSettings,
-        updateInterfaceSettingsContent
-      },
-      setInterfaceSettingsTestContext(context) {
-        settingsRaw = context.settingsRaw, setTestContext("interfaceSettings", context);
-      }
-    }));
-    let stateLogSettingsIntentHandler, stateLogSettingsBrowserAdapter = createStateLogSettingsBrowserAdapter({
+    let { buildInterfaceSettings, updateInterfaceSettingsContent } = interfaceSettingsBrowserAdapter, stateLogSettingsIntentHandler, stateLogSettingsBrowserAdapter = createStateLogSettingsBrowserAdapter({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
@@ -53042,17 +52562,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       },
       renderSettingsContent: () => stateLogSettingsBrowserAdapter.updateStateLogSettingsContent()
     });
-    let { buildStateLogSettings, updateStateLogSettingsContent } = stateLogSettingsBrowserAdapter;
-    registerTestPart(() => ({
-      stateLogSettings: {
-        buildStateLogSettings,
-        updateStateLogSettingsContent
-      },
-      setStateLogSettingsTestContext(context) {
-        settingsRaw = context.settingsRaw;
-      }
-    }));
-    let { calculateMechStats, sorterHelper } = createUiSupportControl({
+    let { buildStateLogSettings, updateStateLogSettingsContent } = stateLogSettingsBrowserAdapter, { calculateMechStats, sorterHelper } = createUiSupportControl({
       getUiSurface: () => gameUiSurface,
       getMechJQuery: () => $,
       getSortJQuery: () => $,
@@ -53061,19 +52571,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       average,
       isHTMLElement: (value) => runtimeEnvironment.HTMLElement !== void 0 && value instanceof runtimeEnvironment.HTMLElement
-    });
-    registerTestPart(() => ({
-      calculateMechStats,
-      setMechStatsTestContext(context) {
-        game = context.game, poly = context.poly, MechManager = context.MechManager;
-      }
-    })), registerTestContext(() => [
-      "optionsModal",
-      {
-        optionsModal: optionsModalBrowserAdapter
-      }
-    ]);
-    let traitSettings = createTraitSettingsControl({
+    }), traitSettings = createTraitSettingsControl({
       getSettingsRaw: () => settingsRaw,
       setSettingsRaw: (value) => {
         settingsRaw = value;
@@ -53179,60 +52677,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getUiSurface: () => gameUiSurface,
         getActions: () => getTestContext("uiRefresh")?.actions ?? uiRefreshActions
       }
-    });
-    registerTestPart(() => ({
-      updateUI: () => updateUI(),
-      setUIRefreshTestContext(context) {
-        settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, game = context.game, resources = context.resources, win = context.win, safeMode = context.safeMode, overrideKeyLabel = context.overrideKeyLabel, setTestContext("uiRefresh", context);
-      }
-    })), registerTestContext(() => [
-      "prestigeTopBar",
-      {
-        prestigeTopBar: prestigeTopBarBrowserAdapter
-      }
-    ]), registerTestContext(() => [
-      "totalDaysTopBar",
-      {
-        totalDaysTopBar: totalDaysTopBarBrowserAdapter
-      }
-    ]), registerTestContext(() => [
-      "ejectToggles",
-      {
-        ejectToggles: ejectToggleBrowserAdapter
-      }
-    ]), registerTestContext(() => [
-      "supplyToggles",
-      {
-        supplyToggles: supplyToggleBrowserAdapter
-      }
-    ]), registerTestContext(() => [
-      "craftToggles",
-      {
-        craftToggles: craftToggleBrowserAdapter
-      }
-    ]), registerTestContext(() => [
-      "arpaToggles",
-      {
-        arpaToggles: arpaToggleBrowserAdapter
-      }
-    ]), registerTestContext(() => [
-      "buildingToggles",
-      {
-        buildingToggles: buildingToggleBrowserAdapter
-      }
-    ]), registerTestContext(() => [
-      "resourceToggle",
-      {
-        resourceToggles: resourceToggleBrowserAdapter
-      },
-      "resourceToggles"
-    ]), registerTestContext(() => [
-      "mechInfo",
-      {
-        mechInfo: mechInfoBrowserAdapter
-      }
-    ]);
-    let settingsTransferActions = {
+    }), settingsTransferActions = {
       updateStandAloneSettings,
       updateStateFromSettings,
       updateSettingsFromState,
