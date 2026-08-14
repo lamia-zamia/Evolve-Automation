@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -7,11 +7,38 @@ import * as esbuild from "esbuild";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const metadataPath = path.join(root, "src", "userscript.meta.js");
-const metadataOutputPath = path.join(root, "evolve_automation.meta.js");
-const userscriptOutputPath = path.join(root, "evolve_automation.user.js");
+const local = process.argv.includes("--local");
+const outputDirectory = local
+  ? path.join(root, "test-artifacts", "local")
+  : root;
+const metadataOutputPath = path.join(
+  outputDirectory,
+  local ? "evolve_automation.local.meta.js" : "evolve_automation.meta.js",
+);
+const userscriptOutputPath = path.join(
+  outputDirectory,
+  local ? "evolve_automation.local.user.js" : "evolve_automation.user.js",
+);
 const watch = process.argv.includes("--watch");
 
-const metadata = (await readFile(metadataPath, "utf8")).trimEnd();
+const sourceMetadata = (await readFile(metadataPath, "utf8")).trimEnd();
+const metadata = local
+  ? sourceMetadata
+      .replace(
+        /^\/\/ @name\s+.*$/m,
+        "// @name         Evolve Automation (DeadSpace local)",
+      )
+      .replace(
+        /^\/\/ @namespace\s+.*$/m,
+        "// @namespace    http://localhost/evolve-automation",
+      )
+      .replace(/^\/\/ @downloadURL.*\r?\n/m, "")
+      .replace(/^\/\/ @updateURL.*\r?\n/m, "")
+      .replace(
+        /^\/\/ @match\s+.*$/m,
+        "// @match        http://localhost:4400/*",
+      )
+  : sourceMetadata;
 if (
   !metadata.startsWith("// ==UserScript==") ||
   !metadata.endsWith("// ==/UserScript==")
@@ -20,6 +47,8 @@ if (
     `${metadataPath} is not a complete userscript metadata block`,
   );
 }
+
+await mkdir(outputDirectory, { recursive: true });
 
 const buildOptions = {
   absWorkingDir: root,

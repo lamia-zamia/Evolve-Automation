@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
+    "build:local": "node build.mjs --local",
     "typecheck": "tsc -p tsconfig.json && npm run typecheck:architecture",
     "typecheck:architecture": "tsc -p tsconfig.architecture.json",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
@@ -19,6 +20,7 @@
     "check": "node scripts/check.mjs",
     "check:serial": "npm run typecheck && npm run lint:check && npm run format:check && node scripts/test.mjs",
     "dev": "node build.mjs --watch",
+    "dev:local": "node build.mjs --local --watch",
     "version": "node scripts/update-version.mjs",
     "release:patch": "npm version patch --no-git-tag-version",
     "release:minor": "npm version minor --no-git-tag-version",
