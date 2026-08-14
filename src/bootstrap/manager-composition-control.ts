@@ -1,12 +1,10 @@
-import { createEconomyManagerControl } from "./economy-manager-control.ts";
-import { createForeignAffairsManagerControl } from "./foreign-affairs-manager-control.ts";
+import { createEconomyManagers } from "../game/economy-managers.ts";
+import { createForeignAffairsManagers } from "../game/foreign-affairs-managers.ts";
 import { createIndustryManagerControls } from "./industry-manager-controls.ts";
 
 type IndustryDependencies = Parameters<typeof createIndustryManagerControls>[0];
-type EconomyDependencies = Parameters<typeof createEconomyManagerControl>[0];
-type ForeignDependencies = Parameters<
-  typeof createForeignAffairsManagerControl
->[0];
+type EconomyDependencies = Parameters<typeof createEconomyManagers>[0];
+type ForeignDependencies = Parameters<typeof createForeignAffairsManagers>[0];
 export interface ManagerCompositionControlDependencies {
   industry: IndustryDependencies;
   economy: EconomyDependencies;
@@ -20,7 +18,7 @@ export function createManagerCompositionControl({
 }: ManagerCompositionControlDependencies) {
   return {
     ...createIndustryManagerControls(industry),
-    ...createEconomyManagerControl(economy),
-    ...createForeignAffairsManagerControl(foreign),
+    ...createEconomyManagers(economy),
+    ...createForeignAffairsManagers(foreign),
   };
 }

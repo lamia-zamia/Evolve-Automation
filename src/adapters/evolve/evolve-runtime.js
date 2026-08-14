@@ -40,76 +40,76 @@ import {
 } from "../../config.ts";
 import { k_combinations } from "../../utils/collections.ts";
 import { Fibonacci, average } from "../../utils/math.ts";
-import {
-  createPropertyHelpersControl,
-  createCustomExpressionControl,
-  createNumberFormattingControl,
-} from "../../bootstrap/runtime-primitives-control.ts";
-import {
-  createSettingsStateControl,
-  createSettingsTransferControl,
-  createPlannerStateControl,
-  createAuthorityPolicyControl,
-  createRunGuardsControl,
-  createCostConflictControl,
-  createPlannerStatsStoreControl,
-  createStateLogStoreControl,
-  createPlannerStatsLifecycleControl,
-  createEvolutionResultCheckControl,
-  createQueueQueriesControl,
-  createTargetTimingDisplayControl,
-  createTechConflictControl,
-} from "../../bootstrap/application-composition-control.ts";
+import { createCustomExpressionAdapter as createCustomExpressionControl } from "../../adapters/evolve/custom-expression.ts";
+import { createNumberFormatting as createNumberFormattingControl } from "../../formatting/numbers.ts";
+import { createPropertyHelpers as createPropertyHelpersControl } from "../../utils/properties.ts";
+import { createSettingsState as createSettingsStateControl } from "../../settings/state.ts";
+import { createSettingsTransfer as createSettingsTransferControl } from "../../settings/transfer.ts";
+import { createPlannerState as createPlannerStateControl } from "../../game/planner-state.ts";
+import { createAuthorityPolicy as createAuthorityPolicyControl } from "../../game/authority-policy.ts";
+import { createRunGuards as createRunGuardsControl } from "../../adapters/evolve/run-guards.ts";
+import { createCostConflict as createCostConflictControl } from "../../adapters/evolve/cost-conflict.ts";
+import { createPlannerStatsStore as createPlannerStatsStoreControl } from "../../adapters/storage/planner-stats.ts";
+import { createStateLogStore as createStateLogStoreControl } from "../../adapters/storage/state-log-store.ts";
+import { createPlannerStatsLifecycle as createPlannerStatsLifecycleControl } from "../../application/planner-stats.ts";
+import { createEvolutionResultCheck as createEvolutionResultCheckControl } from "../../adapters/evolve/evolution-result-check.ts";
+import { createQueueQueries as createQueueQueriesControl } from "../../adapters/evolve/queue-queries.ts";
+import { createTargetTimingDisplay as createTargetTimingDisplayControl } from "../../adapters/evolve/target-timing-display.ts";
+import { createTechConflict as createTechConflictControl } from "../../adapters/evolve/tech-conflict.ts";
 import { createSettingsResetCompositionControl } from "../../bootstrap/settings-reset-composition-control.ts";
 import {
-  applySettingsRecordControl,
-  migrateSettingRecordControl,
-  createDemandPrioritizationActionControl,
-  createStorageRequirementsActionControl,
-  readAuthorityPolicyViewControl,
-  readAuthorityQuantityControl,
-  createRuntimeLookupTablesControl,
-  createInitialRuntimeStateControl,
-} from "../../bootstrap/runtime-compatibility-composition-control.ts";
+  applySettings as applySettingsRecordControl,
+  migrateSetting as migrateSettingRecordControl,
+} from "../../domain/settings-migration.ts";
+import {
+  createDemandPrioritizationAction as createDemandPrioritizationActionControl,
+  createStorageRequirementsAction as createStorageRequirementsActionControl,
+} from "../../adapters/evolve/state-demand-actions.ts";
+import {
+  readAuthorityPolicyView as readAuthorityPolicyViewControl,
+  readAuthorityQuantity as readAuthorityQuantityControl,
+} from "../../adapters/evolve/civic/authority.ts";
+import {
+  createRuntimeLookupTables as createRuntimeLookupTablesControl,
+  createInitialRuntimeState as createInitialRuntimeStateControl,
+} from "../../adapters/evolve/runtime-state.ts";
 import {
   createSettingsMigrationControl,
   createQueuedSettingsControl,
 } from "../../bootstrap/settings-lifecycle-controls.ts";
 import { createOverrideCompositionControl } from "../../bootstrap/override-composition-control.ts";
-import {
-  createBrowserRuntimeControl,
-  createGameCustomRaceLabControl,
-  createOptionsModalBrowserAdapterControl,
-  createInterfaceSettingsBrowserAdapterControl,
-  createStateLogSettingsBrowserAdapterControl,
-} from "../../bootstrap/browser-composition-control.ts";
+import { createBrowserRuntime as createBrowserRuntimeControl } from "../../adapters/browser/runtime.ts";
+import { createGameCustomRaceLab as createGameCustomRaceLabControl } from "../../adapters/browser/game-custom-race-lab.ts";
+import { createOptionsModalBrowserAdapter as createOptionsModalBrowserAdapterControl } from "../../adapters/browser/options-modal.ts";
+import { createInterfaceSettingsBrowserAdapter as createInterfaceSettingsBrowserAdapterControl } from "../../adapters/browser/interface-settings.ts";
+import { createStateLogSettingsBrowserAdapter as createStateLogSettingsBrowserAdapterControl } from "../../adapters/browser/state-log-settings.ts";
 import { createRuntimeFoundationsControl } from "../../bootstrap/runtime-foundations-control.ts";
 import { createManagerCompositionControl } from "../../bootstrap/manager-composition-control.ts";
+import { formatRetirementShortfalls as formatRetirementShortfallsControl } from "../../application/retirement-prep.ts";
+import { formatEvolutionLog as formatEvolutionLogControl } from "../../application/evolution-result.ts";
+import { formatTechConflict as formatTechConflictControl } from "../../application/tech-conflicts.ts";
+import { findPlannerLimit as findPlannerLimitControl } from "../../domain/planner-analysis.ts";
+import { findRequiredResourceWeight as findRequiredResourceWeightControl } from "../../domain/economy/resources/resource-weighting.ts";
 import {
-  formatRetirementShortfallsControl,
-  formatEvolutionLogControl,
-  formatTechConflictControl,
-  findPlannerLimitControl,
-  findRequiredResourceWeightControl,
-  DEFAULT_VACUUM_MANA_REQUIREMENT_CONTROL,
-  isVacuumCollapseManaStageReadyControl,
-  readForeignAchievementGoalControl,
-  readPlannerLimitInputControl,
-  readPlannerRunControl,
-  readWeightingCandidateControl,
-} from "../../bootstrap/domain-composition-control.ts";
+  DEFAULT_VACUUM_MANA_REQUIREMENT as DEFAULT_VACUUM_MANA_REQUIREMENT_CONTROL,
+  isVacuumCollapseManaStageReady as isVacuumCollapseManaStageReadyControl,
+} from "../../domain/progression/prestige/vacuum.ts";
+import { readForeignAchievementGoal as readForeignAchievementGoalControl } from "../../adapters/evolve/combat/foreign-achievements.ts";
+import {
+  readPlannerLimitInput as readPlannerLimitInputControl,
+  readPlannerRun as readPlannerRunControl,
+} from "../../adapters/evolve/planner-analysis.ts";
+import { readWeightingCandidate as readWeightingCandidateControl } from "../../adapters/evolve/progression/build/weighting-candidate.ts";
 import { createGameLifecycleControl } from "../../bootstrap/game-lifecycle-control.ts";
-import { createFleetMechManagerCompositionControl } from "../../bootstrap/fleet-mech-manager-composition-control.ts";
+import { createFleetMechManagerControl as createFleetMechManagerCompositionControl } from "../../bootstrap/fleet-mech-manager-control.ts";
 import { createScriptBootstrapControl } from "../../bootstrap/script-bootstrap-control.ts";
 import { createCoreManagerCompositionControl } from "../../bootstrap/core-manager-composition-control.ts";
 import { createGameControlSet } from "../../bootstrap/game-control-set.ts";
-import {
-  createMechIntelligenceControl,
-  createPlanetGenerationControl,
-  createTraitValueControl,
-  createCraftingCostsControl,
-  createGameCompatibilityControl,
-} from "../../bootstrap/game-surface-composition-control.ts";
+import { createMechIntelligence as createMechIntelligenceControl } from "../../game/mech-intelligence.ts";
+import { createPlanetGeneration as createPlanetGenerationControl } from "../../game/planet-generation.ts";
+import { createTraitValue as createTraitValueControl } from "../../game/trait-value.ts";
+import { createCraftingCosts as createCraftingCostsControl } from "../../game/crafting-costs.ts";
+import { createGameCompatibility as createGameCompatibilityControl } from "../../game/compatibility.ts";
 import { createScriptDataLifecycleControl } from "../../bootstrap/script-data-lifecycle-control.ts";
 import { createCustomRaceModelControl } from "../../bootstrap/custom-race-model-control.ts";
 import {
@@ -127,21 +127,17 @@ import { createLogFilterControl } from "../../bootstrap/log-filter-control.ts";
 import { createUiSupportControl } from "../../bootstrap/ui-support-control.ts";
 import { createTabRefreshControl } from "../../bootstrap/tab-refresh-control.ts";
 import { createRuntimeUiCompositionControl } from "../../bootstrap/runtime-ui-composition-control.ts";
-import {
-  createStateLogSettingsIntentControl,
-  createInterfaceSettingsIntentControl,
-} from "../../bootstrap/runtime-adapter-composition-control.ts";
+import { createStateLogSettingsIntentHandler as createStateLogSettingsIntentControl } from "../../application/state-log-settings.ts";
+import { createInterfaceSettingsIntentHandler as createInterfaceSettingsIntentControl } from "../../application/interface-settings.ts";
 import { createTopBarControls } from "../../bootstrap/top-bar-controls.ts";
 import { createToggleControls } from "../../bootstrap/toggle-controls.ts";
-import { createTickCompositionControl } from "../../bootstrap/tick-composition-control.ts";
+import { createTickRunner as createTickCompositionControl } from "../../bootstrap/tick-runner.ts";
 import { createStateUpdateControl } from "../../bootstrap/state-update-control.ts";
-import {
-  createBrowserClockControl,
-  createBrowserRandomSourceControl,
-  createUserscriptEnvironmentControl,
-} from "../../bootstrap/runtime-adapter-composition-control.ts";
+import { createBrowserClock as createBrowserClockControl } from "../../adapters/browser/clock.ts";
+import { createBrowserRandomSource as createBrowserRandomSourceControl } from "../../adapters/browser/random.ts";
+import { createUserscriptEnvironment as createUserscriptEnvironmentControl } from "../../adapters/userscript/environment.ts";
 import { createBuildingWeightingControl } from "../../bootstrap/building-weighting-control.ts";
-import { createTradeRouteControl } from "../../bootstrap/trade-route-control.ts";
+import { createTradeRoutes as createTradeRouteControl } from "../../adapters/evolve/trade-routes.ts";
 import {
   biomeList,
   traitList,
@@ -176,15 +172,15 @@ import { createProgressionSettingsControl } from "../../bootstrap/progression-se
 import { createTriggerSettingsControl } from "../../bootstrap/settings/trigger-settings-control.ts";
 import { createExtendedSettingsControl } from "../../bootstrap/extended-settings-control.ts";
 import { createTraitSettingsControl } from "../../bootstrap/settings/trait-settings-control.ts";
-import { createQueuePanelsControl } from "../../bootstrap/queue-panels-control.ts";
+import { createQueuePanels as createQueuePanelsControl } from "../../ui/queue-panels.ts";
 import { createMechResourceUiControl } from "../../bootstrap/mech-resource-ui-control.ts";
 import { createTooltipUiControl } from "../../bootstrap/tooltip-ui-control.ts";
 import { createCustomRaceUiControl } from "../../bootstrap/custom-race-ui-control.ts";
-import { createSettingsShellControl } from "../../bootstrap/settings-shell-control.ts";
+import { createSettingsShell as createSettingsShellControl } from "../../ui/settings-shell.ts";
 import { createSettingsEditorControl } from "../../bootstrap/settings-editor-control.ts";
 import { createCoreSettingsPanelControl } from "../../bootstrap/core-settings-panel-control.ts";
-import { createOverrideCatalogControl } from "../../bootstrap/override-catalog-control.ts";
-import { createScriptRuntimeUiControl } from "../../bootstrap/script-runtime-ui-control.ts";
+import { createOverrideCatalog as createOverrideCatalogControl } from "../../settings/override-catalog.ts";
+import { createScriptRuntimeUI as createScriptRuntimeUiControl } from "../../ui/script-runtime.ts";
 
 export function startEvolveRuntime($, diagnostics, runtimeEnvironment) {
   startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment);

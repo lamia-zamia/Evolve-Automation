@@ -1,7 +1,7 @@
-import { createCoreManagerControl } from "./core-manager-control.ts";
+import { createCoreManagers } from "../game/core-managers.ts";
 import { createWeightingSnapshotReader } from "../adapters/evolve/progression/build/weighting-snapshot.ts";
 
-type CoreManagerDependencies = Parameters<typeof createCoreManagerControl>[0];
+type CoreManagerDependencies = Parameters<typeof createCoreManagers>[0];
 type WeightingSnapshotDependencies = Parameters<
   typeof createWeightingSnapshotReader
 >[0];
@@ -17,7 +17,7 @@ export function createCoreManagerCompositionControl({
   weightingSnapshot,
   ...coreManagerDependencies
 }: CoreManagerCompositionDependencies) {
-  return createCoreManagerControl({
+  return createCoreManagers({
     ...coreManagerDependencies,
     readWeightingSnapshot: createWeightingSnapshotReader(weightingSnapshot),
   });

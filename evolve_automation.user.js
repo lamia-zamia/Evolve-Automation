@@ -5434,11 +5434,6 @@ Only continue if you trust the source. Injected code:
     };
   }
 
-  // src/bootstrap/economy-manager-control.ts
-  function createEconomyManagerControl(dependencies) {
-    return createEconomyManagers(dependencies);
-  }
-
   // src/game/foreign-affairs-managers.ts
   function espionageOptions(govIndex) {
     return `#gov${govIndex} div span:nth-child(3)`;
@@ -5748,11 +5743,6 @@ Only continue if you trust the source. Injected code:
         }
       }
     } };
-  }
-
-  // src/bootstrap/foreign-affairs-manager-control.ts
-  function createForeignAffairsManagerControl(dependencies) {
-    return createForeignAffairsManagers(dependencies);
   }
 
   // src/game/trait-managers.ts
@@ -6730,8 +6720,8 @@ Only continue if you trust the source. Injected code:
   }) {
     return {
       ...createIndustryManagerControls(industry),
-      ...createEconomyManagerControl(economy),
-      ...createForeignAffairsManagerControl(foreign)
+      ...createEconomyManagers(economy),
+      ...createForeignAffairsManagers(foreign)
     };
   }
 
@@ -7378,11 +7368,6 @@ Only continue if you trust the source. Injected code:
     return { KeyManager, GameLog };
   }
 
-  // src/bootstrap/infrastructure-manager-control.ts
-  function createInfrastructureManagerControl(dependencies) {
-    return createInfrastructureManagers(dependencies);
-  }
-
   // src/bootstrap/game-lifecycle-control.ts
   function createGameLifecycleControl({
     getWin,
@@ -7406,7 +7391,7 @@ Only continue if you trust the source. Injected code:
       getKeyboardEvent,
       getNeedSandboxBypass,
       cloneIntoPage
-    }), { KeyManager, GameLog } = createInfrastructureManagerControl({
+    }), { KeyManager, GameLog } = createInfrastructureManagers({
       getGame,
       getSettings,
       getPoly,
@@ -8151,11 +8136,6 @@ Only continue if you trust the source. Injected code:
     });
   }
 
-  // src/bootstrap/fleet-mech-manager-composition-control.ts
-  function createFleetMechManagerCompositionControl(dependencies) {
-    return createFleetMechManagerControl(dependencies);
-  }
-
   // src/game/script-bootstrap.ts
   function createScriptBootstrap({
     getGame,
@@ -8520,11 +8500,6 @@ Only continue if you trust the source. Injected code:
         return !1;
       }
     } };
-  }
-
-  // src/bootstrap/core-manager-control.ts
-  function createCoreManagerControl(dependencies) {
-    return createCoreManagers(dependencies);
   }
 
   // src/adapters/evolve/progression/build/weighting-snapshot.ts
@@ -9033,7 +9008,7 @@ Only continue if you trust the source. Injected code:
     weightingSnapshot,
     ...coreManagerDependencies
   }) {
-    return createCoreManagerControl({
+    return createCoreManagers({
       ...coreManagerDependencies,
       readWeightingSnapshot: createWeightingSnapshotReader(weightingSnapshot)
     });
@@ -9997,6 +9972,161 @@ Only continue if you trust the source. Injected code:
       mechControls,
       mechListControls
     });
+  }
+
+  // src/domain/economy/resources/reservation.ts
+  function canSpendWithDistantReservation(resource2, cost, horizonSeconds = 14400) {
+    return cost <= 0 || resource2.spare >= cost ? !0 : resource2.current < cost || resource2.rate <= 0 ? !1 : (cost - resource2.spare) / resource2.rate > horizonSeconds;
+  }
+
+  // src/game/mech-intelligence.ts
+  function createMechIntelligence({
+    getGame,
+    getSettings,
+    getBuildings,
+    getResources,
+    getMechManager,
+    getHaveTask
+  }) {
+    function mechSupplySavingReason() {
+      let settings = getSettings();
+      if (!settings.autoMech || settings.mechBuild === "none" || !settings.buildingMechsFirst)
+        return null;
+      let spireMechBay = getBuildings().SpireMechBay;
+      if (spireMechBay.count === 0 || spireMechBay.stateOffCount !== 0)
+        return null;
+      let manager = getMechManager();
+      if (manager.isActive)
+        return "building";
+      let mechbay = getGame().global.portal.mechbay, size = getHaveTask()("mech") ? "titan" : settings.mechBuild === "random" ? manager.getPreferredSize()[0] : mechbay.blueprint.size, [gems, supply, space] = manager.getMechCost({ size }), resources = getResources();
+      return space <= mechbay.max - mechbay.bay && supply <= resources.Supply.maxQuantity && canSpendWithDistantReservation(
+        {
+          current: resources.Soul_Gem.currentQuantity,
+          spare: resources.Soul_Gem.spareQuantity,
+          rate: resources.Soul_Gem.rateOfChange
+        },
+        gems
+      ) ? "saving" : null;
+    }
+    return { mechSupplySavingReason };
+  }
+
+  // src/game/planet-generation.ts
+  function createPlanetGeneration({
+    getGame,
+    getPoly,
+    getIsAchievementUnlocked,
+    universes: universes2
+  }) {
+    function generatePlanets() {
+      let game = getGame(), poly = getPoly(), isAchievementUnlocked2 = getIsAchievementUnlocked(), seed = game.global.race.seed, seededRandom = (min = 0, max = 1) => {
+        seed = (seed * 9301 + 49297) % 233280;
+        let rnd = seed / 233280;
+        return min + rnd * (max - min);
+      }, avail = [];
+      if ((game.global.stats.achieve.lamentis?.l ?? 0) >= 4)
+        for (let universe of universes2) {
+          let affix = poly.universeAffix(universe);
+          game.global.custom.planet[affix]?.s && avail.push(`${affix}:s`);
+        }
+      let biomes = [
+        "grassland",
+        "oceanic",
+        "forest",
+        "desert",
+        "volcanic",
+        "tundra",
+        game.global.race.universe === "evil" ? "eden" : "hellscape"
+      ], subbiomes = [
+        "savanna",
+        "swamp",
+        ["taiga", "swamp"],
+        "ashland",
+        "ashland",
+        "taiga"
+      ], traits = [
+        "toxic",
+        "mellow",
+        "rage",
+        "stormy",
+        "ozone",
+        "magnetic",
+        "trashed",
+        "elliptical",
+        "flare",
+        "dense",
+        "unstable",
+        "permafrost",
+        "retrograde",
+        "kamikaze"
+      ], geologys = [
+        "Copper",
+        "Iron",
+        "Aluminium",
+        "Coal",
+        "Oil",
+        "Titanium",
+        "Uranium"
+      ];
+      game.global.stats.achieve.whitehole && geologys.push("Iridium");
+      let planets = [], hell = !1, maxPlanets = Math.max(1, game.global.race.probes);
+      for (let i = 0; i < maxPlanets; i++) {
+        let planet = {
+          biome: "grassland",
+          traits: [],
+          orbit: 365,
+          geology: {}
+        };
+        if (avail.length > 0 && Math.floor(seededRandom(0, 10)) === 0) {
+          let selectedCustom = avail[Math.floor(seededRandom(0, avail.length))];
+          avail.splice(avail.indexOf(selectedCustom), 1);
+          let target = selectedCustom.split(":"), customPlanet = game.global.custom.planet[target[0]][target[1]];
+          planet.biome = customPlanet.biome, planet.traits = customPlanet.traitlist, planet.orbit = customPlanet.orbit, planet.geology = customPlanet.geology;
+        } else {
+          let maxBound = !hell && game.global.stats.portals >= 1 ? 7 : 6, subbiome = Math.floor(seededRandom(0, 3)) === 0, biomeIndex = Math.floor(seededRandom(0, maxBound));
+          if (subbiome && isAchievementUnlocked2(`biome_${biomes[biomeIndex]}`, 1) && biomeIndex < subbiomes.length) {
+            let sub = subbiomes[biomeIndex];
+            planet.biome = sub instanceof Array ? sub[Math.floor(seededRandom(0, sub.length))] : sub;
+          } else
+            planet.biome = biomes[biomeIndex];
+          for (let traitIndex = 0; traitIndex < 2; traitIndex++) {
+            let index = Math.floor(seededRandom(0, 18 + 9 * traitIndex)), trait2 = traits[index];
+            trait2 === "permafrost" && ["volcanic", "ashland", "hellscape"].includes(planet.biome) || trait2 && !planet.traits.includes(trait2) && planet.traits.push(trait2);
+          }
+          planet.traits.sort(), planet.traits.length === 0 && planet.traits.push("none");
+          let max = Math.floor(seededRandom(0, 3)), top = planet.biome === "eden" ? 35 : 30;
+          game.global.stats.achieve.whitehole && (max += game.global.stats.achieve.whitehole.l, top += game.global.stats.achieve.whitehole.l * 5);
+          for (let geologyIndex = 0; geologyIndex < max; geologyIndex++) {
+            let index = Math.floor(seededRandom(0, 10));
+            geologys[index] && (planet.geology[geologys[index]] = (Math.floor(seededRandom(0, top)) - 10) / 100);
+          }
+          if (planet.biome === "hellscape")
+            planet.orbit = 666, hell = !0;
+          else if (planet.biome === "eden")
+            planet.orbit = 777, hell = !0;
+          else {
+            let maxOrbit = 600;
+            planet.traits.includes("elliptical") && (maxOrbit += 200), planet.traits.includes("kamikaze") && (maxOrbit += 100), planet.orbit = Math.floor(seededRandom(200, maxOrbit));
+          }
+        }
+        let id = planet.biome + Math.floor(seededRandom(0, 1e4));
+        planet.id = id.charAt(0).toUpperCase() + id.slice(1), planets.push(planet);
+      }
+      return planets;
+    }
+    return { generatePlanets };
+  }
+
+  // src/game/trait-value.ts
+  function createTraitValue({ getGame }) {
+    function traitVal(trait2, index, operation2) {
+      let game = getGame();
+      if (game.global.race[trait2]) {
+        let value = game.traits[trait2].vars()[index];
+        return operation2 === "-" ? 1 - value / 100 : operation2 === "+" ? 1 + value / 100 : operation2 === "=" ? value / 100 : value;
+      } else return operation2 === "+" || operation2 === "-" || operation2 === "=" ? 1 : operation2 ?? 0;
+    }
+    return { traitVal };
   }
 
   // src/game/crafting-costs.ts
@@ -11442,164 +11572,6 @@ Only continue if you trust the source. Injected code:
     };
     return poly;
   }
-
-  // src/domain/economy/resources/reservation.ts
-  function canSpendWithDistantReservation(resource2, cost, horizonSeconds = 14400) {
-    return cost <= 0 || resource2.spare >= cost ? !0 : resource2.current < cost || resource2.rate <= 0 ? !1 : (cost - resource2.spare) / resource2.rate > horizonSeconds;
-  }
-
-  // src/game/mech-intelligence.ts
-  function createMechIntelligence({
-    getGame,
-    getSettings,
-    getBuildings,
-    getResources,
-    getMechManager,
-    getHaveTask
-  }) {
-    function mechSupplySavingReason() {
-      let settings = getSettings();
-      if (!settings.autoMech || settings.mechBuild === "none" || !settings.buildingMechsFirst)
-        return null;
-      let spireMechBay = getBuildings().SpireMechBay;
-      if (spireMechBay.count === 0 || spireMechBay.stateOffCount !== 0)
-        return null;
-      let manager = getMechManager();
-      if (manager.isActive)
-        return "building";
-      let mechbay = getGame().global.portal.mechbay, size = getHaveTask()("mech") ? "titan" : settings.mechBuild === "random" ? manager.getPreferredSize()[0] : mechbay.blueprint.size, [gems, supply, space] = manager.getMechCost({ size }), resources = getResources();
-      return space <= mechbay.max - mechbay.bay && supply <= resources.Supply.maxQuantity && canSpendWithDistantReservation(
-        {
-          current: resources.Soul_Gem.currentQuantity,
-          spare: resources.Soul_Gem.spareQuantity,
-          rate: resources.Soul_Gem.rateOfChange
-        },
-        gems
-      ) ? "saving" : null;
-    }
-    return { mechSupplySavingReason };
-  }
-
-  // src/game/planet-generation.ts
-  function createPlanetGeneration({
-    getGame,
-    getPoly,
-    getIsAchievementUnlocked,
-    universes: universes2
-  }) {
-    function generatePlanets() {
-      let game = getGame(), poly = getPoly(), isAchievementUnlocked2 = getIsAchievementUnlocked(), seed = game.global.race.seed, seededRandom = (min = 0, max = 1) => {
-        seed = (seed * 9301 + 49297) % 233280;
-        let rnd = seed / 233280;
-        return min + rnd * (max - min);
-      }, avail = [];
-      if ((game.global.stats.achieve.lamentis?.l ?? 0) >= 4)
-        for (let universe of universes2) {
-          let affix = poly.universeAffix(universe);
-          game.global.custom.planet[affix]?.s && avail.push(`${affix}:s`);
-        }
-      let biomes = [
-        "grassland",
-        "oceanic",
-        "forest",
-        "desert",
-        "volcanic",
-        "tundra",
-        game.global.race.universe === "evil" ? "eden" : "hellscape"
-      ], subbiomes = [
-        "savanna",
-        "swamp",
-        ["taiga", "swamp"],
-        "ashland",
-        "ashland",
-        "taiga"
-      ], traits = [
-        "toxic",
-        "mellow",
-        "rage",
-        "stormy",
-        "ozone",
-        "magnetic",
-        "trashed",
-        "elliptical",
-        "flare",
-        "dense",
-        "unstable",
-        "permafrost",
-        "retrograde",
-        "kamikaze"
-      ], geologys = [
-        "Copper",
-        "Iron",
-        "Aluminium",
-        "Coal",
-        "Oil",
-        "Titanium",
-        "Uranium"
-      ];
-      game.global.stats.achieve.whitehole && geologys.push("Iridium");
-      let planets = [], hell = !1, maxPlanets = Math.max(1, game.global.race.probes);
-      for (let i = 0; i < maxPlanets; i++) {
-        let planet = {
-          biome: "grassland",
-          traits: [],
-          orbit: 365,
-          geology: {}
-        };
-        if (avail.length > 0 && Math.floor(seededRandom(0, 10)) === 0) {
-          let selectedCustom = avail[Math.floor(seededRandom(0, avail.length))];
-          avail.splice(avail.indexOf(selectedCustom), 1);
-          let target = selectedCustom.split(":"), customPlanet = game.global.custom.planet[target[0]][target[1]];
-          planet.biome = customPlanet.biome, planet.traits = customPlanet.traitlist, planet.orbit = customPlanet.orbit, planet.geology = customPlanet.geology;
-        } else {
-          let maxBound = !hell && game.global.stats.portals >= 1 ? 7 : 6, subbiome = Math.floor(seededRandom(0, 3)) === 0, biomeIndex = Math.floor(seededRandom(0, maxBound));
-          if (subbiome && isAchievementUnlocked2(`biome_${biomes[biomeIndex]}`, 1) && biomeIndex < subbiomes.length) {
-            let sub = subbiomes[biomeIndex];
-            planet.biome = sub instanceof Array ? sub[Math.floor(seededRandom(0, sub.length))] : sub;
-          } else
-            planet.biome = biomes[biomeIndex];
-          for (let traitIndex = 0; traitIndex < 2; traitIndex++) {
-            let index = Math.floor(seededRandom(0, 18 + 9 * traitIndex)), trait2 = traits[index];
-            trait2 === "permafrost" && ["volcanic", "ashland", "hellscape"].includes(planet.biome) || trait2 && !planet.traits.includes(trait2) && planet.traits.push(trait2);
-          }
-          planet.traits.sort(), planet.traits.length === 0 && planet.traits.push("none");
-          let max = Math.floor(seededRandom(0, 3)), top = planet.biome === "eden" ? 35 : 30;
-          game.global.stats.achieve.whitehole && (max += game.global.stats.achieve.whitehole.l, top += game.global.stats.achieve.whitehole.l * 5);
-          for (let geologyIndex = 0; geologyIndex < max; geologyIndex++) {
-            let index = Math.floor(seededRandom(0, 10));
-            geologys[index] && (planet.geology[geologys[index]] = (Math.floor(seededRandom(0, top)) - 10) / 100);
-          }
-          if (planet.biome === "hellscape")
-            planet.orbit = 666, hell = !0;
-          else if (planet.biome === "eden")
-            planet.orbit = 777, hell = !0;
-          else {
-            let maxOrbit = 600;
-            planet.traits.includes("elliptical") && (maxOrbit += 200), planet.traits.includes("kamikaze") && (maxOrbit += 100), planet.orbit = Math.floor(seededRandom(200, maxOrbit));
-          }
-        }
-        let id = planet.biome + Math.floor(seededRandom(0, 1e4));
-        planet.id = id.charAt(0).toUpperCase() + id.slice(1), planets.push(planet);
-      }
-      return planets;
-    }
-    return { generatePlanets };
-  }
-
-  // src/game/trait-value.ts
-  function createTraitValue({ getGame }) {
-    function traitVal(trait2, index, operation2) {
-      let game = getGame();
-      if (game.global.race[trait2]) {
-        let value = game.traits[trait2].vars()[index];
-        return operation2 === "-" ? 1 - value / 100 : operation2 === "+" ? 1 + value / 100 : operation2 === "=" ? value / 100 : value;
-      } else return operation2 === "+" || operation2 === "-" || operation2 === "=" ? 1 : operation2 ?? 0;
-    }
-    return { traitVal };
-  }
-
-  // src/bootstrap/game-surface-composition-control.ts
-  var createTraitValueControl = createTraitValue, createMechIntelligenceControl = createMechIntelligence, createCraftingCostsControl = createCraftingCosts, createPlanetGenerationControl = createPlanetGeneration, createGameCompatibilityControl = createGameCompatibility;
 
   // src/game/script-data.ts
   function createScriptDataLifecycle({
@@ -18936,88 +18908,6 @@ Only continue if you trust the source. Injected code:
     };
   }
 
-  // src/adapters/browser/clock.ts
-  function createBrowserClock() {
-    return Object.freeze({ nowMs: () => Date.now() });
-  }
-
-  // src/adapters/browser/random.ts
-  function createBrowserRandomSource() {
-    return Object.freeze({ nextUnit: () => Math.random() });
-  }
-
-  // src/adapters/userscript/environment.ts
-  function readSafely(read) {
-    try {
-      return read();
-    } catch {
-      return;
-    }
-  }
-  function readAmbientUserscriptGlobals() {
-    return Object.freeze({
-      unsafeWindow: readSafely(
-        () => typeof unsafeWindow > "u" ? void 0 : unsafeWindow
-      ),
-      cloneInto: readSafely(
-        () => typeof cloneInto > "u" ? void 0 : cloneInto
-      ),
-      exportFunction: readSafely(
-        () => typeof exportFunction > "u" ? void 0 : exportFunction
-      ),
-      gmInfo: readSafely(
-        () => typeof GM_info > "u" ? void 0 : GM_info
-      ),
-      gm: readSafely(() => typeof GM > "u" ? void 0 : GM)
-    });
-  }
-  function asBridge(value) {
-    return typeof value == "function" ? value : void 0;
-  }
-  function readVersion(info) {
-    if (!isRecord(info)) return;
-    let script = info.script;
-    if (!isRecord(script)) return;
-    let version = script.version;
-    return typeof version == "string" && version.length > 0 ? version : void 0;
-  }
-  function createUserscriptEnvironment(browserWindow, globals = readAmbientUserscriptGlobals()) {
-    let candidatePageWindow = readSafely(() => globals.unsafeWindow), pageWindow = isRecord(candidatePageWindow) ? candidatePageWindow : browserWindow, cloneBridge = asBridge(readSafely(() => globals.cloneInto)), exportBridge = asBridge(readSafely(() => globals.exportFunction)), needsSandboxBridge = pageWindow !== browserWindow && cloneBridge !== void 0 && exportBridge !== void 0, capabilities = Object.freeze({
-      hasPageWindow: pageWindow !== browserWindow,
-      canCloneIntoPage: cloneBridge !== void 0,
-      canExportToPage: exportBridge !== void 0,
-      needsSandboxBridge
-    });
-    function cloneIntoPage(value, options2) {
-      return !needsSandboxBridge || cloneBridge === void 0 ? value : Reflect.apply(cloneBridge, void 0, [
-        value,
-        pageWindow,
-        options2
-      ]);
-    }
-    function exportToPage(value) {
-      return !needsSandboxBridge || exportBridge === void 0 ? value : Reflect.apply(exportBridge, void 0, [
-        value,
-        pageWindow
-      ]);
-    }
-    function getScriptVersion() {
-      return readSafely(() => {
-        let directInfo = globals.gmInfo;
-        if (directInfo !== void 0) return readVersion(directInfo);
-        let gm = globals.gm;
-        return isRecord(gm) ? readVersion(gm.info) : void 0;
-      });
-    }
-    return Object.freeze({
-      pageWindow,
-      capabilities,
-      cloneIntoPage,
-      exportToPage,
-      getScriptVersion
-    });
-  }
-
   // src/application/state-log-settings.ts
   function createStateLogSettingsIntentHandler({
     writer,
@@ -19821,11 +19711,6 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({ automate: () => applicationRunner.runCycle() });
   }
 
-  // src/bootstrap/tick-composition-control.ts
-  function createTickCompositionControl(dependencies) {
-    return createTickRunner(dependencies);
-  }
-
   // src/domain/state-update.ts
   function planGoalTransition(snapshot) {
     return snapshot.species === "protoplasm" ? { kind: "force-evolution" } : snapshot.goal === "Evolution" ? {
@@ -20071,6 +19956,88 @@ Only continue if you trust the source. Injected code:
       updateActiveTargets: () => activeTargets.updateActiveTargets()
     });
     return { updateState: () => runStateUpdate({ reader, controls: controls4, clock }) };
+  }
+
+  // src/adapters/browser/clock.ts
+  function createBrowserClock() {
+    return Object.freeze({ nowMs: () => Date.now() });
+  }
+
+  // src/adapters/browser/random.ts
+  function createBrowserRandomSource() {
+    return Object.freeze({ nextUnit: () => Math.random() });
+  }
+
+  // src/adapters/userscript/environment.ts
+  function readSafely(read) {
+    try {
+      return read();
+    } catch {
+      return;
+    }
+  }
+  function readAmbientUserscriptGlobals() {
+    return Object.freeze({
+      unsafeWindow: readSafely(
+        () => typeof unsafeWindow > "u" ? void 0 : unsafeWindow
+      ),
+      cloneInto: readSafely(
+        () => typeof cloneInto > "u" ? void 0 : cloneInto
+      ),
+      exportFunction: readSafely(
+        () => typeof exportFunction > "u" ? void 0 : exportFunction
+      ),
+      gmInfo: readSafely(
+        () => typeof GM_info > "u" ? void 0 : GM_info
+      ),
+      gm: readSafely(() => typeof GM > "u" ? void 0 : GM)
+    });
+  }
+  function asBridge(value) {
+    return typeof value == "function" ? value : void 0;
+  }
+  function readVersion(info) {
+    if (!isRecord(info)) return;
+    let script = info.script;
+    if (!isRecord(script)) return;
+    let version = script.version;
+    return typeof version == "string" && version.length > 0 ? version : void 0;
+  }
+  function createUserscriptEnvironment(browserWindow, globals = readAmbientUserscriptGlobals()) {
+    let candidatePageWindow = readSafely(() => globals.unsafeWindow), pageWindow = isRecord(candidatePageWindow) ? candidatePageWindow : browserWindow, cloneBridge = asBridge(readSafely(() => globals.cloneInto)), exportBridge = asBridge(readSafely(() => globals.exportFunction)), needsSandboxBridge = pageWindow !== browserWindow && cloneBridge !== void 0 && exportBridge !== void 0, capabilities = Object.freeze({
+      hasPageWindow: pageWindow !== browserWindow,
+      canCloneIntoPage: cloneBridge !== void 0,
+      canExportToPage: exportBridge !== void 0,
+      needsSandboxBridge
+    });
+    function cloneIntoPage(value, options2) {
+      return !needsSandboxBridge || cloneBridge === void 0 ? value : Reflect.apply(cloneBridge, void 0, [
+        value,
+        pageWindow,
+        options2
+      ]);
+    }
+    function exportToPage(value) {
+      return !needsSandboxBridge || exportBridge === void 0 ? value : Reflect.apply(exportBridge, void 0, [
+        value,
+        pageWindow
+      ]);
+    }
+    function getScriptVersion() {
+      return readSafely(() => {
+        let directInfo = globals.gmInfo;
+        if (directInfo !== void 0) return readVersion(directInfo);
+        let gm = globals.gm;
+        return isRecord(gm) ? readVersion(gm.info) : void 0;
+      });
+    }
+    return Object.freeze({
+      pageWindow,
+      capabilities,
+      cloneIntoPage,
+      exportToPage,
+      getScriptVersion
+    });
   }
 
   // src/domain/progression/build/building-weighting-decision.ts
@@ -21163,11 +21130,6 @@ Only continue if you trust the source. Injected code:
       resources.Money.rateOfChange = result2.moneyRate;
     }
     return { adjustTradeRoutes };
-  }
-
-  // src/bootstrap/trade-route-control.ts
-  function createTradeRouteControl(dependencies) {
-    return createTradeRoutes(dependencies);
   }
 
   // src/adapters/evolve/runtime-catalogs.ts
@@ -44939,11 +44901,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     };
   }
 
-  // src/bootstrap/queue-panels-control.ts
-  function createQueuePanelsControl(dependencies) {
-    return createQueuePanels(dependencies);
-  }
-
   // src/adapters/browser/mech-info.ts
   function requireObjectLike(value, path) {
     if (value === null || typeof value != "object" && typeof value != "function")
@@ -46254,11 +46211,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
       addSettingsHeader1,
       addSettingsHeader2
     };
-  }
-
-  // src/bootstrap/settings-shell-control.ts
-  function createSettingsShellControl(dependencies) {
-    return createSettingsShell(dependencies);
   }
 
   // src/ui/override-condition-controls.ts
@@ -49315,11 +49267,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     };
   }
 
-  // src/bootstrap/override-catalog-control.ts
-  function createOverrideCatalogControl(dependencies) {
-    return createOverrideCatalog(dependencies);
-  }
-
   // src/ui/script-runtime.ts
   function createScriptRuntimeUI({
     getJQuery,
@@ -49851,11 +49798,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     };
   }
 
-  // src/bootstrap/script-runtime-ui-control.ts
-  function createScriptRuntimeUiControl(dependencies) {
-    return createScriptRuntimeUI(dependencies);
-  }
-
   // src/adapters/evolve/evolve-runtime.js
   function startEvolveRuntime($, diagnostics, runtimeEnvironment) {
     startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment);
@@ -49992,7 +49934,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addStandardHeading,
       addSettingsHeader1,
       addSettingsHeader2
-    } = createSettingsShellControl({
+    } = createSettingsShell({
       $,
       getDocument: () => runtimeEnvironment.document,
       getSettingsRaw: () => settingsRaw,
@@ -50718,7 +50660,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         removeMarketToggles: () => removeMarketToggles(),
         testSurface
       }
-    }), { buildHellSettings, updateHellSettingsContent } = hellSettingsBrowserAdapter, { buildFleetSettings } = fleetSettingsBrowserAdapter, { buildMechSettings, updateMechSettingsContent } = mechSettingsBrowserAdapter, { buildEjectorSettings, updateEjectorSettingsContent } = ejectorSettingsBrowserAdapter, { buildMarketSettings, updateMarketSettingsContent } = marketSettingsBrowserAdapter, { traitVal } = createTraitValueControl({ getGame: () => game }), authorityPolicy = createAuthorityPolicy({
+    }), { buildHellSettings, updateHellSettingsContent } = hellSettingsBrowserAdapter, { buildFleetSettings } = fleetSettingsBrowserAdapter, { buildMechSettings, updateMechSettingsContent } = mechSettingsBrowserAdapter, { buildEjectorSettings, updateEjectorSettingsContent } = ejectorSettingsBrowserAdapter, { buildMarketSettings, updateMarketSettingsContent } = marketSettingsBrowserAdapter, { traitVal } = createTraitValue({ getGame: () => game }), authorityPolicy = createAuthorityPolicy({
       getGame: () => game,
       getSettings: () => settings,
       getResources: () => resources,
@@ -51136,7 +51078,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getOccCosts,
         logError: (...args) => runtimeEnvironment.error(...args)
       }
-    }), { FleetManagerOuter, FleetManager, MechManager } = createFleetMechManagerCompositionControl({
+    }), { FleetManagerOuter, FleetManager, MechManager } = createFleetMechManagerControl({
       fleet: {
         getGame: () => game,
         getSettings: () => settings,
@@ -51161,7 +51103,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback),
         randomSource
       }
-    }), { mechSupplySavingReason } = createMechIntelligenceControl({
+    }), { mechSupplySavingReason } = createMechIntelligence({
       getGame: () => game,
       getSettings: () => settings,
       getBuildings: () => buildings,
@@ -51282,7 +51224,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getJQuery: () => $
     });
     KeyManager = initialKeyManager, GameLog = initialGameLog;
-    let { updateCraftCost } = createCraftingCostsControl({
+    let { updateCraftCost } = createCraftingCosts({
       getGame: () => game,
       getState: () => state,
       getResources: () => resources,
@@ -51425,7 +51367,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setTestContext(context) {
         settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, GameLog = context.GameLog, setTestContext("queuedSettings", context);
       }
-    }), findRequiredResourceWeight2 = (resource2) => findRequiredResourceWeight(state.unlockedBuildings, resource2), challengeGroups = challenges.map((members) => ({ members })), { generatePlanets } = createPlanetGenerationControl({
+    }), findRequiredResourceWeight2 = (resource2) => findRequiredResourceWeight(state.unlockedBuildings, resource2), challengeGroups = challenges.map((members) => ({ members })), { generatePlanets } = createPlanetGeneration({
       getGame: () => game,
       getPoly: () => poly,
       getIsAchievementUnlocked: () => isAchievementUnlocked2,
@@ -52049,7 +51991,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           log: (label, outcome) => runtimeEnvironment.log(label, outcome)
         }
       }
-    }), { adjustTradeRoutes } = createTradeRouteControl({
+    }), { adjustTradeRoutes } = createTradeRoutes({
       getSettings: () => settings,
       getGame: () => game,
       getResources: () => resources,
@@ -52140,7 +52082,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       removeActiveTargetsUI,
       buildBuildPlannerUI,
       removeBuildPlannerUI
-    } = createQueuePanelsControl({
+    } = createQueuePanels({
       getJQuery: () => $,
       getGame: () => game,
       getResources: () => resources,
@@ -52407,7 +52349,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       autoMutateTrait,
       updateBuildPlanner,
       recordStateSnapshot
-    }, { automate } = createTickCompositionControl({
+    }, { automate } = createTickRunner({
       reader: {
         getSettings: () => settings,
         getState: () => state,
@@ -52430,7 +52372,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       checkIgnoredError,
       displayScriptWarningNode,
       addErrorHandler
-    } = createScriptRuntimeUiControl({
+    } = createScriptRuntimeUI({
       getJQuery: () => $,
       getDocument: () => runtimeEnvironment.document,
       getState: () => state,
@@ -52450,7 +52392,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       checkTypes,
       retBools,
       overrideOnlyChecks
-    } = createOverrideCatalogControl({
+    } = createOverrideCatalog({
       readSettings: () => settings,
       readSettingsRaw: () => settingsRaw,
       readState: () => state,
@@ -52703,7 +52645,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getActions: () => getTestContext("settingsTransfer")?.actions ?? settingsTransferActions,
       confirmImport: (message) => runtimeEnvironment.confirm(message),
       logToConsole: (message) => runtimeEnvironment.log(message)
-    })), poly = createGameCompatibilityControl({
+    })), poly = createGameCompatibility({
       getGame: () => game,
       getBuildings: () => buildings,
       getTraitVal: () => traitVal,

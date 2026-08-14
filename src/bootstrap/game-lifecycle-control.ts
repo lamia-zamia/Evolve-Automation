@@ -1,11 +1,11 @@
 import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-handlers.ts";
 import { createGamePageShell } from "../adapters/browser/game-page-shell.ts";
 import { createGameUiSurface } from "../adapters/browser/game-ui-surface.ts";
-import { createInfrastructureManagerControl } from "./infrastructure-manager-control.ts";
+import { createInfrastructureManagers } from "../game/infrastructure-managers.ts";
 
 type KeyboardDependencies = Parameters<typeof createGameKeyboardHandlers>[0];
 type InfrastructureDependencies = Parameters<
-  typeof createInfrastructureManagerControl
+  typeof createInfrastructureManagers
 >[0];
 type PageShellDependencies = Parameters<typeof createGamePageShell>[0];
 type UiSurfaceDependencies = Parameters<typeof createGameUiSurface>[0];
@@ -50,7 +50,7 @@ export function createGameLifecycleControl({
     getNeedSandboxBypass,
     cloneIntoPage,
   });
-  const { KeyManager, GameLog } = createInfrastructureManagerControl({
+  const { KeyManager, GameLog } = createInfrastructureManagers({
     getGame,
     getSettings,
     getPoly,
