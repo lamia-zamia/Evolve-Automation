@@ -138,6 +138,21 @@ function baseDeps(overrides = {}) {
   assert.ok(Object.isFrozen(input.settings));
 }
 
+// A newly unlocked market can expose NaN for one cap refresh; treat it as no
+// available routes while preserving strict validation for other malformed data.
+{
+  const input = readTradeRoutesInput(
+    baseDeps({
+      manager: {
+        ...baseDeps().getMarketManager(),
+        getMaxTradeRoutes: () => [Number.NaN, Number.NaN],
+      },
+    }),
+  );
+  assert.equal(input.maxTradeRoutes, 0);
+  assert.equal(input.unmanagedTradeRoutes, 0);
+}
+
 // Malformed inputs throw at the boundary.
 {
   const managerNoList = { ...baseDeps().getMarketManager(), priorityList: {} };

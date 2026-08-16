@@ -21074,9 +21074,10 @@ Only continue if you trust the source. Injected code:
       throw new TypeError(
         "MarketManager.getMaxTradeRoutes() must return an array"
       );
+    let readCap = (value, path) => typeof value == "number" && Number.isNaN(value) ? 0 : requireNumber(value, path);
     return [
-      requireNumber(tuple[0], "MarketManager.getMaxTradeRoutes()[0]"),
-      requireNumber(tuple[1], "MarketManager.getMaxTradeRoutes()[1]")
+      readCap(tuple[0], "MarketManager.getMaxTradeRoutes()[0]"),
+      readCap(tuple[1], "MarketManager.getMaxTradeRoutes()[1]")
     ];
   }
   function readTradeRoutesInput(dependencies) {

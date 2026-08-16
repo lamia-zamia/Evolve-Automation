@@ -95,9 +95,17 @@ function readMaxTradeRoutes(manager: UnknownRecord): [number, number] {
       "MarketManager.getMaxTradeRoutes() must return an array",
     );
   }
+  const readCap = (value: unknown, path: string): number => {
+    // TRANSITIONAL: Evolve can expose NaN for one refresh while a newly
+    // unlocked market route manager is recalculating its caps. Treat that
+    // transient state as no available routes; reject every other malformed
+    // value at the adapter boundary.
+    if (typeof value === "number" && Number.isNaN(value)) return 0;
+    return requireNumber(value, path);
+  };
   return [
-    requireNumber(tuple[0], "MarketManager.getMaxTradeRoutes()[0]"),
-    requireNumber(tuple[1], "MarketManager.getMaxTradeRoutes()[1]"),
+    readCap(tuple[0], "MarketManager.getMaxTradeRoutes()[0]"),
+    readCap(tuple[1], "MarketManager.getMaxTradeRoutes()[1]"),
   ];
 }
 
