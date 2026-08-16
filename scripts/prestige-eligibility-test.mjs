@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { isDemonicPrestigeAvailable } from "../src/domain/progression/prestige/prestige-eligibility.ts";
+import {
+  isAscensionPrestigeAvailable,
+  isDemonicPrestigeAvailable,
+} from "../src/domain/progression/prestige/prestige-eligibility.ts";
 
 function makeView(overrides = {}) {
   const base = {
@@ -81,5 +84,17 @@ const exactPotential = makeView({
   mech: { active: false, potential: 0.5 },
 });
 assert.equal(isDemonicPrestigeAvailable(exactPotential), true);
+
+assert.equal(
+  isAscensionPrestigeAvailable(
+    makeView({
+      game: { ascensionLevel: 0, speciesPillarLevel: 0 },
+      buildings: { siriusAscendUnlocked: true },
+      resources: { harmony: 1 },
+    }),
+  ),
+  true,
+  "the first Ascension cannot require a pillar that can only be made afterward",
+);
 
 console.log("Prestige eligibility domain tests passed");

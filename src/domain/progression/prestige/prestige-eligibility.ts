@@ -123,6 +123,10 @@ export function isGeckNeeded(view: Readonly<GeckEligibilityView>): boolean {
 export function isPillarFinished(
   view: Readonly<PillarEligibilityView>,
 ): boolean {
+  // A pillar cannot exist before the first Ascension. Requiring one here
+  // would make a default requirePillar setting block the only way to reach
+  // Ascension in a fresh account.
+  if (view.game.ascensionLevel === 0) return true;
   const pillarLevel = view.game.speciesPillarLevel;
   const outsideMicro = view.game.universe !== "micro";
   const canPillar = !pillarLevel && view.resources.harmony >= 1 && outsideMicro;

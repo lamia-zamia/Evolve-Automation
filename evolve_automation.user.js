@@ -17846,6 +17846,7 @@ Only continue if you trust the source. Injected code:
     return view.achievement.lamentisStandardFive && view.buildings.gecks < view.settings.requiredGecks;
   }
   function isPillarFinished(view) {
+    if (view.game.ascensionLevel === 0) return !0;
     let pillarLevel = view.game.speciesPillarLevel, outsideMicro = view.game.universe !== "micro", canPillar = !pillarLevel && view.resources.harmony >= 1 && outsideMicro, canUpgrade = pillarLevel !== void 0 && pillarLevel !== 0 && pillarLevel < view.game.ascensionLevel && outsideMicro;
     return !view.settings.requirePillar || !canPillar && !canUpgrade;
   }
