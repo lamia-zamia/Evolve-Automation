@@ -26946,7 +26946,7 @@ Only continue if you trust the source. Injected code:
         titaniumStorageRatio: 0,
         haveTitaniumTech: !1
       });
-    let game = requireRecord(dependencies.getGame(), "game"), global = requireRecord(game.global, "game.global"), hasForge = !!requireRecord(global.race, "game.global.race").forge, totalSmelters = callNumber(manager, "maxOperating", "SmelterManager"), fuels = hasForge ? [] : readFuels2(manager), extraOperating = callNumber(
+    let game = requireRecord(dependencies.getGame(), "game"), global = requireRecord(game.global, "game.global"), race2 = requireRecord(global.race, "game.global.race"), tech = requireRecord(global.tech, "game.global.tech"), hasForge = !!race2.forge, totalSmelters = callNumber(manager, "maxOperating", "SmelterManager"), fuels = hasForge ? [] : readFuels2(manager), extraOperating = callNumber(
       manager,
       "extraOperating",
       "SmelterManager"
@@ -26983,7 +26983,7 @@ Only continue if you trust the source. Injected code:
     ), productionSmeltingValue = settings.productionSmelting, productionSmelting = typeof productionSmeltingValue == "string" ? productionSmeltingValue : "", jobs = requireRecord(dependencies.getJobs(), "jobs"), miner = requireRecord(jobs.Miner, "jobs.Miner"), buildings = requireRecord(dependencies.getBuildings(), "buildings"), beltIronShip = requireRecord(
       buildings.BeltIronShip,
       "buildings.BeltIronShip"
-    );
+    ), industrialSteelDemand = !!settings.autoBuild && Number(tech.alumina ?? 0) >= 1;
     return Object.freeze({
       initialised: !0,
       hasForge,
@@ -27021,7 +27021,7 @@ Only continue if you trust the source. Injected code:
         steel.timeToRequired,
         "resources.Steel.timeToRequired"
       ),
-      steelDemanded: callBoolean(steel, "isDemanded", "resources.Steel"),
+      steelDemanded: callBoolean(steel, "isDemanded", "resources.Steel") || industrialSteelDemand,
       minerCount: requireNumber(miner.count, "jobs.Miner.count"),
       beltIronShipStateOnCount: requireNumber(
         beltIronShip.stateOnCount,

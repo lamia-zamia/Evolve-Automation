@@ -153,6 +153,7 @@ export function readSmelterInput(
   const game = requireRecord(dependencies.getGame(), "game");
   const global = requireRecord(game["global"], "game.global");
   const race = requireRecord(global["race"], "game.global.race");
+  const tech = requireRecord(global["tech"], "game.global.tech");
   const hasForge = Boolean(race["forge"]);
 
   const totalSmelters = callNumber(manager, "maxOperating", "SmelterManager");
@@ -227,6 +228,14 @@ export function readSmelterInput(
     "buildings.BeltIronShip",
   );
 
+  // The first aluminium refinery is the early industrial gate after Steel is
+  // discovered. Its Steel cost can exceed the normal Steel storage cap, so it
+  // must be treated as a demand while AutoBuild is enabled; otherwise
+  // `productionSmelting: "required"` keeps every smelter on Iron and the
+  // refinery can never become affordable.
+  const industrialSteelDemand =
+    Boolean(settings["autoBuild"]) && Number(tech["alumina"] ?? 0) >= 1;
+
   return Object.freeze({
     initialised: true,
     hasForge,
@@ -264,7 +273,9 @@ export function readSmelterInput(
       steel["timeToRequired"],
       "resources.Steel.timeToRequired",
     ),
-    steelDemanded: callBoolean(steel, "isDemanded", "resources.Steel"),
+    steelDemanded:
+      callBoolean(steel, "isDemanded", "resources.Steel") ||
+      industrialSteelDemand,
     minerCount: requireNumber(miner["count"], "jobs.Miner.count"),
     beltIronShipStateOnCount: requireNumber(
       beltIronShip["stateOnCount"],

@@ -42,6 +42,7 @@ function buildFixture(spec) {
     counts: { Iron: 0, Steel: 0, Iridium: 0 },
     minerCount: 1,
     beltIronShip: 0,
+    haveAlumina: false,
     titaniumStorageRatio: 0.5,
     haveTitanium: false,
     steelCost: [],
@@ -105,12 +106,20 @@ function buildFixture(spec) {
 
   const state = { tooltips: {} };
   const settings = {
+    autoBuild: s.autoBuild ?? false,
     productionSmelting: s.productionSmelting,
     productionSmeltingIridium: s.productionSmeltingIridium,
   };
-  const game = { global: { race: s.forge ? { forge: 1 } : {} } };
+  const game = {
+    global: {
+      race: s.forge ? { forge: 1 } : {},
+      tech: { alumina: s.haveAlumina ? 1 : 0 },
+    },
+  };
   const jobs = { Miner: { count: s.minerCount } };
-  const buildings = { BeltIronShip: { stateOnCount: s.beltIronShip } };
+  const buildings = {
+    BeltIronShip: { stateOnCount: s.beltIronShip },
+  };
   const haveTech = (tech) => tech === "titanium" && s.haveTitanium;
 
   return {
@@ -124,6 +133,39 @@ function buildFixture(spec) {
     haveTech,
     actions,
   };
+}
+
+// Route candidate: after the aluminium tech is known, AutoBuild needs the
+// refinery's Steel reserve even though the refinery itself is not affordable
+// yet.  This must move one smelter to Steel under the "required" policy.
+{
+  const f = buildFixture({
+    autoBuild: true,
+    productionSmelting: "required",
+    haveAlumina: true,
+    counts: { Iron: 1 },
+    resources: {
+      Steel: { currentQuantity: 50, timeToFull: 0, timeToRequired: 0 },
+    },
+  });
+  const decision = planSmelter(
+    readSmelterInput({
+      getSmelterManager: () => f.SmelterManager,
+      getGame: () => f.game,
+      getResources: () => f.resources,
+      getSettings: () => f.settings,
+      getJobs: () => f.jobs,
+      getBuildings: () => f.buildings,
+      haveTech: f.haveTech,
+      consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
+    }),
+  );
+  assert.ok(
+    decision.smeltAdjustments.some(
+      ({ productionId, delta }) => productionId === "Steel" && delta > 0,
+    ),
+    JSON.stringify(decision),
+  );
 }
 
 // Adapter contract: an unavailable industry short-circuits without reading the
