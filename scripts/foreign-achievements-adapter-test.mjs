@@ -25,11 +25,13 @@ let game = {
   },
 };
 const unlocked = new Set();
+let pacifistGuardActive = false;
 const read = () =>
   readForeignAchievementGoal({
     getSettings: () => settings,
     getGame: () => game,
     isAchievementUnlocked: (id) => unlocked.has(id),
+    isPacifistGuardActive: () => pacifistGuardActive,
   });
 
 assert.equal(read(), "world-domination");
@@ -58,9 +60,48 @@ assert.equal(
     isAchievementUnlocked: () => {
       throw new Error("disabled toggles must not query achievements");
     },
+    isPacifistGuardActive: () => false,
   }),
   null,
 );
+
+// An armed Pacifist guard forbids attacking, so World Domination is unreachable
+// and must not be queried; Syndicate remains a pacifist-compatible path.
+settings.achievementGuards = true;
+pacifistGuardActive = true;
+unlocked.delete("world_domination");
+assert.equal(read(), "syndicate");
+assert.equal(
+  readForeignAchievementGoal({
+    getSettings: () => settings,
+    getGame: () => game,
+    isAchievementUnlocked: (id) => {
+      if (id === "world_domination") {
+        throw new Error("pacifist runs must not query world domination");
+      }
+      return unlocked.has(id);
+    },
+    isPacifistGuardActive: () => true,
+  }),
+  "syndicate",
+);
+unlocked.add("syndicate");
+assert.equal(read(), null);
+unlocked.delete("syndicate");
+pacifistGuardActive = false;
+
+// A guard reader that cannot answer leaves the goal unselected rather than
+// silently picking an attacking path.
+assert.equal(
+  readForeignAchievementGoal({
+    getSettings: () => settings,
+    getGame: () => game,
+    isAchievementUnlocked: (id) => unlocked.has(id),
+    isPacifistGuardActive: () => undefined,
+  }),
+  null,
+);
+settings.achievementGuards = false;
 
 game = { global: { civic: { foreign: {} } } };
 assert.equal(read(), null);

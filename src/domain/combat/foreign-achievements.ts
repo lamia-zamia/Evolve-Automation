@@ -11,6 +11,12 @@ export interface ForeignAchievementGoalInput {
   readonly guardSyndicate: boolean;
   readonly worldDominationUnlocked: boolean;
   readonly syndicateUnlocked: boolean;
+  /**
+   * Whether the Pacifist guard currently forbids attacking. World Domination
+   * needs every city occupied and occupation only happens through an attack,
+   * so that path is unreachable while the guard is armed.
+   */
+  readonly pacifistGuardActive: boolean;
   readonly foreignStates: readonly ForeignAchievementState[];
 }
 
@@ -26,6 +32,7 @@ export function planForeignAchievementGoal(
 
   const worldPossible =
     input.guardWorldDomination &&
+    !input.pacifistGuardActive &&
     !input.worldDominationUnlocked &&
     input.foreignStates.every((state) => !state.annexed && !state.purchased);
   const syndicatePossible =

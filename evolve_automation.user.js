@@ -6842,7 +6842,7 @@ Only continue if you trust the source. Injected code:
   // src/domain/combat/foreign-achievements.ts
   function planForeignAchievementGoal(input) {
     if (input.foreignStates.length !== 3) return null;
-    let worldPossible = input.guardWorldDomination && !input.worldDominationUnlocked && input.foreignStates.every((state) => !state.annexed && !state.purchased), syndicatePossible = input.guardSyndicate && !input.syndicateUnlocked && input.foreignStates.every((state) => !state.annexed && !state.occupied);
+    let worldPossible = input.guardWorldDomination && !input.pacifistGuardActive && !input.worldDominationUnlocked && input.foreignStates.every((state) => !state.annexed && !state.purchased), syndicatePossible = input.guardSyndicate && !input.syndicateUnlocked && input.foreignStates.every((state) => !state.annexed && !state.occupied);
     return !worldPossible && !syndicatePossible ? null : worldPossible && input.foreignStates.some((state) => state.occupied) ? "world-domination" : syndicatePossible && input.foreignStates.some((state) => state.purchased) ? "syndicate" : worldPossible ? "world-domination" : "syndicate";
   }
 
@@ -6882,13 +6882,17 @@ Only continue if you trust the source. Injected code:
         "guardWorldDomination"
       ), guardSyndicate = readGuardSetting(settings, "guardSyndicate");
       if (!guardWorldDomination && !guardSyndicate) return null;
+      let pacifistGuardActive = dependencies.isPacifistGuardActive();
+      if (typeof pacifistGuardActive != "boolean")
+        throw new TypeError("isPacifistGuardActive() must return a boolean");
       let foreignStates = readForeignStates(
         requireRecord(dependencies.getGame(), "game")
       );
       return planForeignAchievementGoal({
         guardWorldDomination,
         guardSyndicate,
-        worldDominationUnlocked: guardWorldDomination ? readAchievement(dependencies, "world_domination") : !1,
+        pacifistGuardActive,
+        worldDominationUnlocked: guardWorldDomination && !pacifistGuardActive ? readAchievement(dependencies, "world_domination") : !1,
         syndicateUnlocked: guardSyndicate ? readAchievement(dependencies, "syndicate") : !1,
         foreignStates
       });
@@ -51072,7 +51076,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getForeignAchievementGoal: () => readForeignAchievementGoal({
           getSettings: () => settings,
           getGame: () => game,
-          isAchievementUnlocked: (achievement, level) => isAchievementUnlocked2(achievement, level)
+          isAchievementUnlocked: (achievement, level) => isAchievementUnlocked2(achievement, level),
+          isPacifistGuardActive: () => guardActive("guardPacifist")
         }),
         getTraitVal: () => traitVal,
         getGovPower,
@@ -51178,7 +51183,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getForeignAchievementGoal: () => readForeignAchievementGoal({
           getSettings: () => settings,
           getGame: () => game,
-          isAchievementUnlocked: (achievement, level) => isAchievementUnlocked2(achievement, level)
+          isAchievementUnlocked: (achievement, level) => isAchievementUnlocked2(achievement, level),
+          isPacifistGuardActive: () => guardActive("guardPacifist")
         }),
         isHellSupressUseful: () => isHellSupressUseful(),
         isGateTowerSupressionTooLow: () => gateTowerSupressionTooLow(),

@@ -9,6 +9,7 @@ const base = {
   guardSyndicate: true,
   worldDominationUnlocked: false,
   syndicateUnlocked: false,
+  pacifistGuardActive: false,
   foreignStates: states(),
 };
 
@@ -65,6 +66,30 @@ assert.equal(
     ...base,
     guardWorldDomination: false,
     guardSyndicate: false,
+  }),
+  null,
+);
+
+// World Domination needs every city occupied, and occupation needs an attack,
+// so an armed Pacifist guard must leave the clean slate to Syndicate instead of
+// pinning every government to a policy the guard forbids acting on.
+assert.equal(
+  planForeignAchievementGoal({ ...base, pacifistGuardActive: true }),
+  "syndicate",
+);
+assert.equal(
+  planForeignAchievementGoal({
+    ...base,
+    pacifistGuardActive: true,
+    guardSyndicate: false,
+  }),
+  null,
+);
+assert.equal(
+  planForeignAchievementGoal({
+    ...base,
+    pacifistGuardActive: true,
+    syndicateUnlocked: true,
   }),
   null,
 );

@@ -1753,6 +1753,7 @@ export function startEvolveRuntimeComposition(
           getGame: () => game,
           isAchievementUnlocked: (achievement, level) =>
             isAchievementUnlocked(achievement, level),
+          isPacifistGuardActive: () => guardActive("guardPacifist"),
         }),
       getTraitVal: () => traitVal,
       getGovPower,
@@ -1931,6 +1932,7 @@ export function startEvolveRuntimeComposition(
             getGame: () => game,
             isAchievementUnlocked: (achievement, level) =>
               isAchievementUnlocked(achievement, level),
+            isPacifistGuardActive: () => guardActive("guardPacifist"),
           }),
         isHellSupressUseful: () => isHellSupressUseful(),
         isGateTowerSupressionTooLow: () => gateTowerSupressionTooLow(),

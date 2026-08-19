@@ -12,6 +12,7 @@ export interface ForeignAchievementGoalDependencies {
     achievement: string,
     level: number,
   ) => unknown;
+  readonly isPacifistGuardActive: () => unknown;
 }
 
 function readForeignStates(game: UnknownRecord): ForeignAchievementState[] {
@@ -68,15 +69,24 @@ export function readForeignAchievementGoal(
     const guardSyndicate = readGuardSetting(settings, "guardSyndicate");
     if (!guardWorldDomination && !guardSyndicate) return null;
 
+    // The Pacifist guard forbids attacking, so it decides World Domination's
+    // reachability before either achievement is queried.
+    const pacifistGuardActive = dependencies.isPacifistGuardActive();
+    if (typeof pacifistGuardActive !== "boolean") {
+      throw new TypeError("isPacifistGuardActive() must return a boolean");
+    }
+
     const foreignStates = readForeignStates(
       requireRecord(dependencies.getGame(), "game"),
     );
     return planForeignAchievementGoal({
       guardWorldDomination,
       guardSyndicate,
-      worldDominationUnlocked: guardWorldDomination
-        ? readAchievement(dependencies, "world_domination")
-        : false,
+      pacifistGuardActive,
+      worldDominationUnlocked:
+        guardWorldDomination && !pacifistGuardActive
+          ? readAchievement(dependencies, "world_domination")
+          : false,
       syndicateUnlocked: guardSyndicate
         ? readAchievement(dependencies, "syndicate")
         : false,

@@ -207,6 +207,44 @@ assert.deepEqual(
 );
 assert.deepEqual(SpyManager.purchaseForeigngs, [2]);
 
+// An armed Pacifist guard leaves no attack target, so the achievement goal must
+// stay on a policy the guard can actually complete. Occupy would deadlock every
+// government on sabotage forever; Purchase still reaches unification.
+foreignAchievementGoal = "syndicate";
+guardActive = (name) => name === "guardPacifist";
+game.global.civic.foreign.gov0.buy = false;
+game.global.civic.foreign.gov1.buy = false;
+settings.foreignPolicyInferior = "Annex";
+settings.foreignPolicySuperior = "Sabotage";
+SpyManager.updateForeigns();
+assert.equal(SpyManager.foreignTarget, null);
+assert.deepEqual(
+  SpyManager.foreignActive.map(({ id, policy }) => ({ id, policy })),
+  [
+    { id: 0, policy: "Purchase" },
+    { id: 1, policy: "Purchase" },
+    { id: 2, policy: "Purchase" },
+  ],
+);
+assert.deepEqual(SpyManager.purchaseForeigngs, [0, 1, 2]);
+
+// With no achievement goal the guard falls back to the configured policies,
+// which still take every government without attacking.
+foreignAchievementGoal = null;
+SpyManager.updateForeigns();
+assert.deepEqual(
+  SpyManager.foreignActive.map(({ id, policy }) => ({ id, policy })),
+  [
+    { id: 0, policy: "Annex" },
+    { id: 1, policy: "Annex" },
+    { id: 2, policy: "Annex" },
+  ],
+);
+guardActive = () => false;
+settings.foreignPolicyInferior = "Purchase";
+game.global.civic.foreign.gov0.buy = true;
+game.global.civic.foreign.gov1.buy = true;
+
 // Tech and guard lookups stay live after factory construction.
 haveTech = (id) => id === "world_control";
 guardActive = () => true;
