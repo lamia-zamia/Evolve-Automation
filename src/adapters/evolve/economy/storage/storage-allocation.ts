@@ -113,6 +113,7 @@ export function createStorageAllocationAdapter(
   readonly executor: DecisionExecutor<ApplyStorageAllocationDecision>;
 } {
   let session: StorageSession | null = null;
+  let lastLogged: ReadonlySet<string> = new Set();
 
   const reader: StorageAllocationReader = Object.freeze({
     read(): StorageAllocationInput {
@@ -755,7 +756,14 @@ export function createStorageAllocationAdapter(
               ) + adjustment.containerDelta;
           }
         }
-        for (const message of decision.logs) dependencies.log(message);
+        // A stalled allocation replans identically every tick, so the same
+        // lines repeat forever. Only report what changed since the last cycle.
+        const emitted = new Set<string>();
+        for (const message of decision.logs) {
+          emitted.add(message);
+          if (!lastLogged.has(message)) dependencies.log(message);
+        }
+        lastLogged = emitted;
         return SUCCEEDED;
       },
     });

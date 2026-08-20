@@ -1264,6 +1264,10 @@ export function startEvolveRuntimeComposition(
       isEarlyGame: () => isEarlyGame(),
       isLumberRace: () => isLumberRace(),
     },
+    debug: {
+      getWindow: () => runtimeEnvironment.window,
+      log: (message) => runtimeEnvironment.log(message),
+    },
     getSettings: () => settings,
     commandExecutor: {
       getStorageManager: () => StorageManager,

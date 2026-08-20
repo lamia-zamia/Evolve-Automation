@@ -21,6 +21,10 @@ export interface EvolveStorageExpansionReaderDependencies {
   readonly getStorageManager: () => unknown;
   readonly isEarlyGame: () => unknown;
   readonly isLumberRace: () => unknown;
+  readonly readDebugEnabled: () => boolean;
+  /** Debug-only echo of the pre-MAD limiter setting the planner is given. */
+  readonly readLimitPreMad: () => boolean;
+  readonly log: (message: string) => void;
 }
 
 function readView(
@@ -70,6 +74,36 @@ function readPlywoodCost(library: UnknownRecord): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function describeView(label: string, view: CraftableStorageView): string {
+  const costs = view.costs
+    .map(
+      (cost) =>
+        `${cost.resourceId} ${cost.costPerUnit}/ea have ${cost.available}`,
+    )
+    .join(", ");
+  return `${label} ${view.currentQuantity}/${view.maxQuantity} worth ${view.storagePerUnit} each (${costs || "no cost"})`;
+}
+
+/**
+ * One line per expansion request, naming every input that can clamp the build to
+ * zero: the free unit slots, the cost resource on hand, and the pre-MAD limiter
+ * terms. Without it a zero build is indistinguishable from the planner never
+ * having run.
+ */
+function describeSnapshot(
+  snapshot: StorageExpansionSnapshot,
+  limitPreMad: boolean,
+): string {
+  return [
+    `[storage] expand ${snapshot.storageToBuild}`,
+    describeView("crates", snapshot.crates),
+    describeView("containers", snapshot.containers),
+    `preMadLimit=${limitPreMad} early=${snapshot.isEarlyGame} lumber=${snapshot.isLumberRace}`,
+    `libraries=${snapshot.library.count} libraryPlywood=${snapshot.library.plywoodCost} plywood=${snapshot.plywoodAvailable}`,
+    `steelMax=${snapshot.steel.maxQuantity} steelRequired=${snapshot.steel.storageRequired} steelRatio=${snapshot.steel.storageRatio}`,
+  ].join(" | ");
+}
+
 export function createEvolveStorageExpansionReader(
   dependencies: EvolveStorageExpansionReaderDependencies,
 ): GameReader<StorageExpansionSnapshot> {
@@ -101,7 +135,7 @@ export function createEvolveStorageExpansionReader(
     const steel = requireRecord(resources["Steel"], "resources.Steel");
     const plywood = requireRecord(resources["Plywood"], "resources.Plywood");
 
-    return Object.freeze({
+    const snapshot = Object.freeze({
       metadata,
       storageToBuild: dependencies.getStorageToBuild(),
       crates: readView(resources, "Crates", crateValue),
@@ -131,6 +165,14 @@ export function createEvolveStorageExpansionReader(
         "resources.Plywood.currentQuantity",
       ),
     });
+
+    if (dependencies.readDebugEnabled()) {
+      dependencies.log(
+        describeSnapshot(snapshot, dependencies.readLimitPreMad()),
+      );
+    }
+
+    return snapshot;
   }
 
   return Object.freeze({ readSnapshot });

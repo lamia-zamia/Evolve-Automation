@@ -26,6 +26,9 @@ function readerDeps(overrides = {}) {
     getStorageManager: () => ({ crateValue: 50, containerValue: 200 }),
     isEarlyGame: () => true,
     isLumberRace: () => false,
+    readDebugEnabled: () => false,
+    readLimitPreMad: () => true,
+    log: () => {},
     ...overrides,
   };
 }
@@ -44,6 +47,30 @@ assert.equal(snapshot.isLumberRace, false);
 assert.equal(snapshot.library.plywoodCost, 100);
 assert.ok(Object.isFrozen(snapshot));
 assert.ok(Object.isFrozen(snapshot.crates));
+
+// The debug line names every input that can clamp a build to zero.
+const debugLines = [];
+createEvolveStorageExpansionReader(
+  readerDeps({
+    readDebugEnabled: () => true,
+    log: (message) => debugLines.push(message),
+  }),
+).readSnapshot();
+assert.equal(debugLines.length, 1);
+assert.match(debugLines[0], /^\[storage\] expand 100 \|/);
+assert.match(
+  debugLines[0],
+  /crates 2\/10 worth 50 each \(Wood 10\/ea have 25\)/,
+);
+assert.match(debugLines[0], /preMadLimit=true early=true lumber=false/);
+assert.match(debugLines[0], /libraries=10 libraryPlywood=100 plywood=200/);
+assert.match(debugLines[0], /steelMax=1000 steelRequired=500 steelRatio=0.9/);
+assert.deepEqual(
+  createEvolveStorageExpansionReader(
+    readerDeps({ log: () => assert.fail("logged while debug was off") }),
+  ).readSnapshot().crates.costs,
+  [{ resourceId: "Wood", costPerUnit: 10, available: 25 }],
+);
 
 const overCapPlan = planStorageExpansion(
   {

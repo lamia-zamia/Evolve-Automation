@@ -25094,6 +25094,16 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({ autoTax });
   }
 
+  // src/adapters/browser/storage-debug.ts
+  function createStorageDebugSource(getWindow) {
+    return Object.freeze({
+      readEnabled() {
+        let value = getWindow();
+        return typeof value == "object" && value !== null && Reflect.get(value, "storageDebug") === !0;
+      }
+    });
+  }
+
   // src/adapters/evolve/economy/storage/storage-command-executor.ts
   function rejected2(code, message) {
     return { status: "rejected", failure: { code, message } };
@@ -25174,6 +25184,22 @@ Only continue if you trust the source. Injected code:
     let value = cost.Plywood;
     return typeof value == "number" && Number.isFinite(value) ? value : null;
   }
+  function describeView(label, view) {
+    let costs = view.costs.map(
+      (cost) => `${cost.resourceId} ${cost.costPerUnit}/ea have ${cost.available}`
+    ).join(", ");
+    return `${label} ${view.currentQuantity}/${view.maxQuantity} worth ${view.storagePerUnit} each (${costs || "no cost"})`;
+  }
+  function describeSnapshot(snapshot, limitPreMad) {
+    return [
+      `[storage] expand ${snapshot.storageToBuild}`,
+      describeView("crates", snapshot.crates),
+      describeView("containers", snapshot.containers),
+      `preMadLimit=${limitPreMad} early=${snapshot.isEarlyGame} lumber=${snapshot.isLumberRace}`,
+      `libraries=${snapshot.library.count} libraryPlywood=${snapshot.library.plywoodCost} plywood=${snapshot.plywoodAvailable}`,
+      `steelMax=${snapshot.steel.maxQuantity} steelRequired=${snapshot.steel.storageRequired} steelRatio=${snapshot.steel.storageRatio}`
+    ].join(" | ");
+  }
   function createEvolveStorageExpansionReader(dependencies) {
     let snapshotSequence = 0;
     function readSnapshot() {
@@ -25190,8 +25216,7 @@ Only continue if you trust the source. Injected code:
       ), containerValue = requireNumber(
         storageManager.containerValue,
         "StorageManager.containerValue"
-      ), buildings = requireRecord(dependencies.getBuildings(), "buildings"), library = requireRecord(buildings.Library, "buildings.Library"), steel = requireRecord(resources.Steel, "resources.Steel"), plywood = requireRecord(resources.Plywood, "resources.Plywood");
-      return Object.freeze({
+      ), buildings = requireRecord(dependencies.getBuildings(), "buildings"), library = requireRecord(buildings.Library, "buildings.Library"), steel = requireRecord(resources.Steel, "resources.Steel"), plywood = requireRecord(resources.Plywood, "resources.Plywood"), snapshot = Object.freeze({
         metadata,
         storageToBuild: dependencies.getStorageToBuild(),
         crates: readView(resources, "Crates", crateValue),
@@ -25221,6 +25246,9 @@ Only continue if you trust the source. Injected code:
           "resources.Plywood.currentQuantity"
         )
       });
+      return dependencies.readDebugEnabled() && dependencies.log(
+        describeSnapshot(snapshot, dependencies.readLimitPreMad())
+      ), snapshot;
     }
     return Object.freeze({ readSnapshot });
   }
@@ -25333,16 +25361,19 @@ Only continue if you trust the source. Injected code:
 
   // src/bootstrap/storage-expansion-control.ts
   function createStorageExpansionControl(dependencies) {
-    let clock = Object.freeze({ nowMs: dependencies.nowMs }), { expandStorage } = createStorageExpansion({
+    let clock = Object.freeze({ nowMs: dependencies.nowMs }), debugSource = createStorageDebugSource(dependencies.debug.getWindow), settingsReader = createStorageExpansionSettingsReader(
+      dependencies.getSettings
+    ), { expandStorage } = createStorageExpansion({
       clock,
       createReader: (getStorageToBuild) => createEvolveStorageExpansionReader({
         clock,
         getStorageToBuild,
-        ...dependencies.reader
+        ...dependencies.reader,
+        readDebugEnabled: () => debugSource.readEnabled(),
+        readLimitPreMad: () => settingsReader.readSettings().storageLimitPreMad,
+        log: dependencies.debug.log
       }),
-      settingsReader: createStorageExpansionSettingsReader(
-        dependencies.getSettings
-      ),
+      settingsReader,
       commandExecutor: createStorageCommandExecutor(dependencies.commandExecutor)
     });
     return Object.freeze({ expandStorage });
@@ -34530,16 +34561,6 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({ autoPower: () => automation.run() });
   }
 
-  // src/adapters/browser/storage-debug.ts
-  function createStorageDebugSource(getWindow) {
-    return Object.freeze({
-      readEnabled() {
-        let value = getWindow();
-        return typeof value == "object" && value !== null && Reflect.get(value, "storageDebug") === !0;
-      }
-    });
-  }
-
   // src/adapters/evolve/economy/storage/storage-allocation.ts
   function resourceId2(resource2, path) {
     return requireNonEmptyString(resource2.id, `${path}.id`);
@@ -34585,7 +34606,7 @@ Only continue if you trust the source. Injected code:
     return Object.freeze(result2);
   }
   function createStorageAllocationAdapter(dependencies) {
-    let session = null, reader = Object.freeze({
+    let session = null, lastLogged = /* @__PURE__ */ new Set(), reader = Object.freeze({
       read() {
         let manager = requireRecord(
           dependencies.getStorageManager(),
@@ -35051,8 +35072,10 @@ Only continue if you trust the source. Injected code:
             ) + adjustment.containerDelta;
           }
         }
-        for (let message of decision2.logs) dependencies.log(message);
-        return SUCCEEDED;
+        let emitted = /* @__PURE__ */ new Set();
+        for (let message of decision2.logs)
+          emitted.add(message), lastLogged.has(message) || dependencies.log(message);
+        return lastLogged = emitted, SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -35145,7 +35168,9 @@ Only continue if you trust the source. Injected code:
         amount: resource2.maxQuantity - (resource2.currentCrates * input.crateValue + resource2.currentContainers * input.containerValue)
       }), totalCrates += resource2.currentCrates, totalContainers += resource2.currentContainers;
     }
-    let storageToBuild = 0, drivers = /* @__PURE__ */ new Map(), items = buildAllocationItems(input, managedIds);
+    let storageToBuild = 0, storageToBuildDriver = null, raiseStorageToBuild = (value, label) => {
+      value <= storageToBuild || (storageToBuild = value, storageToBuildDriver = label);
+    }, drivers = /* @__PURE__ */ new Map(), items = buildAllocationItems(input, managedIds);
     nextItem: for (let item of items) {
       let currentAssignment = /* @__PURE__ */ new Map(), remainingCrates = totalCrates, remainingContainers = totalContainers;
       for (let [resourceId3, quantity] of item.costs) {
@@ -35154,11 +35179,7 @@ Only continue if you trust the source. Injected code:
           resourceId3,
           `target resource ${resourceId3}`
         ), adjustment = adjustments.get(resourceId3), modifier = item.target.isList || adjustment === void 0 ? 1 : mapValue2(modifiers, resourceId3, `storage modifier ${resourceId3}`);
-        if (adjustment === void 0) {
-          if (resource2.maxQuantity >= quantity) continue;
-          continue nextItem;
-        }
-        if (adjustment.amount >= quantity * modifier) continue;
+        if (adjustment === void 0 || adjustment.amount >= quantity * modifier) continue;
         if (!item.target.isList && resource2.maxStorage >= 0 && resource2.maxStorage < quantity * modifier)
           continue nextItem;
         let missing = Math.min(
@@ -35181,9 +35202,12 @@ Only continue if you trust the source. Injected code:
             );
             remainingContainers -= count2, missing -= count2 * input.containerValue, assignment.container = count2;
           }
-          missing > 0 && (storageToBuild = Math.max(storageToBuild, missing));
+          missing > 0 && raiseStorageToBuild(missing, `${item.target.label}/${resourceId3}`);
         } else {
-          storageToBuild = Math.max(storageToBuild, missing - available);
+          raiseStorageToBuild(
+            missing - available,
+            `${item.target.label}/${resourceId3}`
+          );
           continue nextItem;
         }
       }
@@ -35212,6 +35236,7 @@ Only continue if you trust the source. Injected code:
       expectedFreeCrates: input.freeCrates,
       expectedFreeContainers: input.freeContainers,
       storageToBuild,
+      storageToBuildDriver,
       assignments: Object.freeze(
         managedIds.map((resourceId3) => {
           let resource2 = mapValue2(
@@ -35249,6 +35274,9 @@ Only continue if you trust the source. Injected code:
         { ...value }
       ])
     ), adjustments = [], logs = [];
+    plan.debug && logs.push(
+      `[storage] plan storageToBuild=${plan.storageToBuild.toFixed(1)}, freeCrates=${plan.expectedFreeCrates}, freeContainers=${plan.expectedFreeContainers}, crateValue=${plan.crateValue}, containerValue=${plan.containerValue}, driver=${plan.storageToBuildDriver ?? "none"}`
+    );
     for (let assignment of plan.assignments) {
       let crateEntry = crateState[assignment.resourceId] ?? (crateState[assignment.resourceId] = {}), containerEntry = containerState[assignment.resourceId] ?? (containerState[assignment.resourceId] = {}), targetCrates = debounce(
         crateEntry,
@@ -35277,7 +35305,13 @@ Only continue if you trust the source. Injected code:
             1
           )}, driver=${assignment.driver ?? "none"}`
         );
-      }
+      } else plan.debug && assignment.storageRequired > assignment.expectedMaximum && logs.push(
+        `[storage] ${assignment.resourceId}: no change | currentQty=${assignment.currentQuantity.toFixed(
+          1
+        )}, max=${assignment.expectedMaximum.toFixed(1)}, storageRequired=${assignment.storageRequired.toFixed(
+          1
+        )}, held ${assignment.expectedCrates}c/${assignment.expectedContainers}C, wanted ${assignment.desiredCrates}c/${assignment.desiredContainers}C, driver=${assignment.driver ?? "none"}`
+      );
     }
     return Object.freeze({
       decision: Object.freeze({
@@ -35296,6 +35330,12 @@ Only continue if you trust the source. Injected code:
       })
     });
   }
+  function unfundedStorageCapacity(decision2) {
+    let crates = decision2.expectedFreeCrates, containers = decision2.expectedFreeContainers;
+    for (let adjustment of decision2.adjustments)
+      crates -= adjustment.crateDelta, containers -= adjustment.containerDelta;
+    return (crates < 0 ? -crates * decision2.crateValue : 0) + (containers < 0 ? -containers * decision2.containerValue : 0);
+  }
   var EMPTY_STORAGE_ALLOCATION_STATE = Object.freeze({
     crates: Object.freeze({}),
     containers: Object.freeze({})
@@ -35312,7 +35352,10 @@ Only continue if you trust the source. Injected code:
         let rawPlan = planStorageAllocation(dependencies.reader.read());
         if (rawPlan === null || rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild))
           return SUCCEEDED20;
-        let finalized = finalizeStorageAllocation(rawPlan, state), outcome = dependencies.executor.execute(finalized.decision);
+        let finalized = finalizeStorageAllocation(rawPlan, state), unfunded = unfundedStorageCapacity(finalized.decision);
+        if (unfunded > 0 && dependencies.expansion.expand(unfunded))
+          return SUCCEEDED20;
+        let outcome = dependencies.executor.execute(finalized.decision);
         return outcome.status === "succeeded" && (state = finalized.nextState), outcome;
       },
       readState() {
@@ -50699,6 +50742,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getStorageManager: () => StorageManager,
         isEarlyGame: () => isEarlyGame(),
         isLumberRace: () => isLumberRace()
+      },
+      debug: {
+        getWindow: () => runtimeEnvironment.window,
+        log: (message) => runtimeEnvironment.log(message)
       },
       getSettings: () => settings,
       commandExecutor: {

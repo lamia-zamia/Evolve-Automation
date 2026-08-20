@@ -80,6 +80,8 @@ export interface StorageRawPlan {
   readonly expectedFreeCrates: number;
   readonly expectedFreeContainers: number;
   readonly storageToBuild: number;
+  /** Label of the target that set `storageToBuild`, for debug output only. */
+  readonly storageToBuildDriver: string | null;
   readonly assignments: readonly StorageRawAssignment[];
   readonly expectedPriorityResourceIds: readonly string[];
   readonly debug: boolean;
@@ -311,6 +313,12 @@ export function planStorageAllocation(
   }
 
   let storageToBuild = 0;
+  let storageToBuildDriver: string | null = null;
+  const raiseStorageToBuild = (value: number, label: string): void => {
+    if (value <= storageToBuild) return;
+    storageToBuild = value;
+    storageToBuildDriver = label;
+  };
   const drivers = new Map<string, string>();
   const items = buildAllocationItems(input, managedIds);
   nextItem: for (const item of items) {
@@ -333,8 +341,14 @@ export function planStorageAllocation(
           ? 1
           : mapValue(modifiers, resourceId, `storage modifier ${resourceId}`);
       if (adjustment === undefined) {
-        if (resource.maxQuantity >= quantity) continue;
-        continue nextItem;
+        // A cost resource this planner does not manage holds no crates or
+        // containers, so its capacity grows from buildings rather than from
+        // anything decided here. Vetoing the whole target on it stalled the
+        // managed materials it is paired with: every research costs Knowledge,
+        // so a Knowledge cap below the research cost used to suppress the
+        // crates its Steel, Titanium, Alloy or Polymer cost needed, and they
+        // stayed capped until Knowledge storage caught up.
+        continue;
       }
       if (adjustment.amount >= quantity * modifier) continue;
       if (
@@ -376,10 +390,13 @@ export function planStorageAllocation(
           assignment.container = count;
         }
         if (missing > 0) {
-          storageToBuild = Math.max(storageToBuild, missing);
+          raiseStorageToBuild(missing, `${item.target.label}/${resourceId}`);
         }
       } else {
-        storageToBuild = Math.max(storageToBuild, missing - available);
+        raiseStorageToBuild(
+          missing - available,
+          `${item.target.label}/${resourceId}`,
+        );
         continue nextItem;
       }
     }
@@ -414,6 +431,7 @@ export function planStorageAllocation(
     expectedFreeCrates: input.freeCrates,
     expectedFreeContainers: input.freeContainers,
     storageToBuild,
+    storageToBuildDriver,
     assignments: Object.freeze(
       managedIds.map((resourceId) => {
         const resource = mapValue(
@@ -465,6 +483,16 @@ export function finalizeStorageAllocation(
     );
   const adjustments: StorageAdjustment[] = [];
   const logs: string[] = [];
+  if (plan.debug) {
+    logs.push(
+      `[storage] plan storageToBuild=${plan.storageToBuild.toFixed(1)}, ` +
+        `freeCrates=${plan.expectedFreeCrates}, freeContainers=${
+          plan.expectedFreeContainers
+        }, crateValue=${plan.crateValue}, containerValue=${
+          plan.containerValue
+        }, driver=${plan.storageToBuildDriver ?? "none"}`,
+    );
+  }
   for (const assignment of plan.assignments) {
     const crateEntry =
       crateState[assignment.resourceId] ??
@@ -514,6 +542,24 @@ export function finalizeStorageAllocation(
           1,
         )}, driver=${assignment.driver ?? "none"}`,
       );
+    } else if (
+      plan.debug &&
+      assignment.storageRequired > assignment.expectedMaximum
+    ) {
+      // A resource that needs more storage than it holds while nothing moves is
+      // the whole symptom of a stalled expansion, and the delta-only line above
+      // stays silent for exactly that case.
+      logs.push(
+        `[storage] ${assignment.resourceId}: no change | currentQty=${assignment.currentQuantity.toFixed(
+          1,
+        )}, max=${assignment.expectedMaximum.toFixed(1)}, storageRequired=${assignment.storageRequired.toFixed(
+          1,
+        )}, held ${assignment.expectedCrates}c/${
+          assignment.expectedContainers
+        }C, wanted ${assignment.desiredCrates}c/${
+          assignment.desiredContainers
+        }C, driver=${assignment.driver ?? "none"}`,
+      );
     }
   }
   return Object.freeze({
@@ -532,6 +578,31 @@ export function finalizeStorageAllocation(
       containers: freezeDebounceMap(containerState),
     }),
   });
+}
+
+/**
+ * Storage capacity the decision hands out but cannot pay for.
+ *
+ * Grants and releases are debounced per resource and independently, so a
+ * release can be held back on the very tick its matching grant is applied. Evolve
+ * clamps `addCrate`/`addCon` to the unassigned count, so the excess grant is a
+ * silent no-op: the resource stays capped, the plan is recomputed unchanged, and
+ * the pair repeats indefinitely. Constructing the missing units breaks that
+ * standoff without unpinning a release the debounce is deliberately holding.
+ */
+export function unfundedStorageCapacity(
+  decision: Readonly<ApplyStorageAllocationDecision>,
+): number {
+  let crates = decision.expectedFreeCrates;
+  let containers = decision.expectedFreeContainers;
+  for (const adjustment of decision.adjustments) {
+    crates -= adjustment.crateDelta;
+    containers -= adjustment.containerDelta;
+  }
+  return (
+    (crates < 0 ? -crates * decision.crateValue : 0) +
+    (containers < 0 ? -containers * decision.containerValue : 0)
+  );
 }
 
 export const EMPTY_STORAGE_ALLOCATION_STATE: StorageAllocationState =
