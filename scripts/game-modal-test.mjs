@@ -144,6 +144,21 @@ observers.at(-1).callback();
 assert.deepEqual(trace, ["open-click", "action", "close-click"]);
 assert.equal(gameModal.isAwaitingScriptModal(), false);
 
+// If the modal is already fully rendered before capture attaches its observer,
+// capture must process the current DOM immediately.
+reset();
+selectors["#trigger"] = { click: () => trace.push("open-click") };
+selectors[".modal .modal-close"] = { click: () => trace.push("close-click") };
+gameModal.open({
+  triggerSelector: "#trigger",
+  title: "Factory",
+  action: () => trace.push("action"),
+});
+elements.modalBoxTitle = { textContent: "Factory" };
+gameModal.captureScriptModal({ style: { display: "" } });
+assert.deepEqual(trace, ["open-click", "action", "close-click"]);
+assert.equal(gameModal.isAwaitingScriptModal(), false);
+
 // open does nothing while a modal is already open, and does not throw when the
 // trigger control is absent.
 reset();

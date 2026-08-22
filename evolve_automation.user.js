@@ -5167,7 +5167,7 @@ Only continue if you trust the source. Injected code:
         new Observer(checkCallbacks).observe(element, {
           childList: !0,
           subtree: !0
-        });
+        }), checkCallbacks();
       }
     });
   }

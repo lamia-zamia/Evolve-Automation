@@ -162,6 +162,11 @@ export function createGameModal({
         childList: true,
         subtree: true,
       });
+      // The body observer may receive the modal after Vue has already rendered
+      // its complete subtree. Check the current DOM as well as future mutations
+      // so a fully mounted modal cannot wait forever for an event that already
+      // happened.
+      checkCallbacks();
     },
   });
 }
