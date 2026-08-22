@@ -46,6 +46,7 @@ export function createGameModal({
   let awaitingScriptModal = false;
   let requestedTitle = "";
   let pendingAction: (() => void) | null = null;
+  let actionCompleted = false;
 
   function currentTitle(): string {
     const text = getDocument().getElementById("modalBoxTitle")?.textContent;
@@ -80,13 +81,33 @@ export function createGameModal({
     }
 
     const document = getDocument();
-    if (
-      awaitingScriptModal &&
-      pendingAction !== null &&
-      title === requestedTitle
-    ) {
-      pendingAction();
-      document.querySelector(".modal .modal-close")?.click?.();
+    if (awaitingScriptModal && title === requestedTitle) {
+      if (!actionCompleted && pendingAction !== null) {
+        const action = pendingAction;
+        pendingAction = null;
+        actionCompleted = true;
+        try {
+          action();
+        } finally {
+          // The close control can be mounted just after the title. Keep the
+          // request alive if it is not queryable yet so a later mutation can
+          // retry the cleanup instead of leaving the construction modal open.
+          const close = document.querySelector(".modal .modal-close");
+          if (typeof close?.click === "function") {
+            close.click();
+            awaitingScriptModal = false;
+            requestedTitle = "";
+            actionCompleted = false;
+          }
+        }
+        return;
+      }
+
+      const close = document.querySelector(".modal .modal-close");
+      if (typeof close?.click !== "function") {
+        return;
+      }
+      close.click();
     } else {
       // The window is the player's, or is not the one that was requested. It was
       // hidden on the way in, so show it back.
@@ -99,6 +120,7 @@ export function createGameModal({
     awaitingScriptModal = false;
     requestedTitle = "";
     pendingAction = null;
+    actionCompleted = false;
   }
 
   return Object.freeze({
@@ -124,6 +146,7 @@ export function createGameModal({
       awaitingScriptModal = true;
       requestedTitle = title;
       pendingAction = action;
+      actionCompleted = false;
       trigger.click();
     },
 

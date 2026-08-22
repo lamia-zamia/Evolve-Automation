@@ -5107,7 +5107,7 @@ Only continue if you trust the source. Injected code:
     getDocument,
     getMutationObserver
   }) {
-    let awaitingScriptModal = !1, requestedTitle = "", pendingAction = null;
+    let awaitingScriptModal = !1, requestedTitle = "", pendingAction = null, actionCompleted = !1;
     function currentTitle() {
       let text = getDocument().getElementById("modalBoxTitle")?.textContent;
       if (typeof text != "string")
@@ -5124,13 +5124,27 @@ Only continue if you trust the source. Injected code:
       if (awaitingScriptModal && title === "")
         return;
       let document = getDocument();
-      if (awaitingScriptModal && pendingAction !== null && title === requestedTitle)
-        pendingAction(), document.querySelector(".modal .modal-close")?.click?.();
-      else {
+      if (awaitingScriptModal && title === requestedTitle) {
+        if (!actionCompleted && pendingAction !== null) {
+          let action = pendingAction;
+          pendingAction = null, actionCompleted = !0;
+          try {
+            action();
+          } finally {
+            let close2 = document.querySelector(".modal .modal-close");
+            typeof close2?.click == "function" && (close2.click(), awaitingScriptModal = !1, requestedTitle = "", actionCompleted = !1);
+          }
+          return;
+        }
+        let close = document.querySelector(".modal .modal-close");
+        if (typeof close?.click != "function")
+          return;
+        close.click();
+      } else {
         let style = document.querySelector(".modal")?.style;
         style !== void 0 && (style.display = "");
       }
-      awaitingScriptModal = !1, requestedTitle = "", pendingAction = null;
+      awaitingScriptModal = !1, requestedTitle = "", pendingAction = null, actionCompleted = !1;
     }
     return Object.freeze({
       isOpen,
@@ -5142,7 +5156,7 @@ Only continue if you trust the source. Injected code:
         if (isOpen())
           return;
         let trigger = getDocument().querySelector(triggerSelector);
-        typeof trigger?.click == "function" && (awaitingScriptModal = !0, requestedTitle = title, pendingAction = action, trigger.click());
+        typeof trigger?.click == "function" && (awaitingScriptModal = !0, requestedTitle = title, pendingAction = action, actionCompleted = !1, trigger.click());
       },
       isAwaitingScriptModal() {
         return awaitingScriptModal;

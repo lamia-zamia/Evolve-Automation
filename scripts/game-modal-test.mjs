@@ -124,6 +124,26 @@ elements.modalBoxTitle = { textContent: "Factory" };
 observers.at(-1).callback();
 assert.deepEqual(trace, ["open-click", "action", "close-click"]);
 
+// If the title mutation wins the race with the close control, keep the request
+// pending and retry the close on a later mutation. The action must not run twice.
+reset();
+selectors["#trigger"] = { click: () => trace.push("open-click") };
+gameModal.open({
+  triggerSelector: "#trigger",
+  title: "Factory",
+  action: () => trace.push("action"),
+});
+gameModal.captureScriptModal({ style: { display: "" } });
+elements.modalBoxTitle = { textContent: "Factory" };
+observers.at(-1).callback();
+assert.deepEqual(trace, ["open-click", "action"]);
+assert.equal(gameModal.isAwaitingScriptModal(), true);
+
+selectors[".modal .modal-close"] = { click: () => trace.push("close-click") };
+observers.at(-1).callback();
+assert.deepEqual(trace, ["open-click", "action", "close-click"]);
+assert.equal(gameModal.isAwaitingScriptModal(), false);
+
 // open does nothing while a modal is already open, and does not throw when the
 // trigger control is absent.
 reset();
