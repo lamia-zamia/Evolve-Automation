@@ -1383,6 +1383,11 @@ assert.equal(
 );
 assert.equal(
   ruleById("prestige-unneeded-ascension-missions").match(named("PitMission")),
+  false,
+  "Ascension still needs the Pit Mission for the Soul Gem progression",
+);
+assert.equal(
+  ruleById("prestige-unneeded-ascension-missions").match(named("RuinsMission")),
   true,
 );
 // The Witch Hunter Ascension has its own Waygate rule and no construction gate.

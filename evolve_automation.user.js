@@ -20677,7 +20677,7 @@ Only continue if you trust the source. Injected code:
       {
         id: "prestige-unneeded-ascension-missions",
         enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "ascension" && snapshot.pillarFinished && !snapshot.witchHunterRace,
-        match: (candidate) => isBuilding(candidate, "PitMission", "RuinsMission"),
+        match: (candidate) => isBuilding(candidate, "RuinsMission"),
         describe: () => "Not needed for Ascension prestige",
         multiplier: () => 0
       },

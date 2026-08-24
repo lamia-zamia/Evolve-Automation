@@ -824,7 +824,7 @@ export function createBuildingWeightingPolicy({
         snapshot.prestigeRoute === "ascension" &&
         snapshot.pillarFinished &&
         !snapshot.witchHunterRace,
-      match: (candidate) => isBuilding(candidate, "PitMission", "RuinsMission"),
+      match: (candidate) => isBuilding(candidate, "RuinsMission"),
       describe: () => "Not needed for Ascension prestige",
       multiplier: () => 0,
     }),
