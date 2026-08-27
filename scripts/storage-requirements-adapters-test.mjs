@@ -110,6 +110,38 @@ assert.equal(input.knowledge.techKnowledgeCosts[0], 0);
 assert.equal(input.knowledge.buildCandidates[0].autoBuildable, false);
 assert.equal(input.knowledge.buildCandidates[0].weighting, 3);
 
+// One walk over the priority lists: the request-list filter and the Knowledge
+// candidate's autoBuildable share the unlocked/enabled answer, and an entry
+// that fails it is never asked isAutoBuildable().
+const autoBuildableCalls = [];
+const target = (id, unlocked, enabled) => ({
+  cost: { Iron: 5 },
+  weighting: 1,
+  isUnlocked: () => unlocked,
+  autoBuildEnabled: enabled,
+  isAutoBuildable: () => {
+    autoBuildableCalls.push(id);
+    return true;
+  },
+});
+input = readStorageRequirementsInput(
+  deps({
+    getBuildingManager: () => ({
+      priorityList: [
+        target("locked", false, true),
+        target("disabled", true, false),
+        target("buildable", true, true),
+      ],
+    }),
+  }),
+);
+assert.deepEqual(autoBuildableCalls, ["buildable"]);
+assert.deepEqual(
+  input.knowledge.buildCandidates.map((candidate) => candidate.autoBuildable),
+  [false, false, true],
+);
+assert.equal(input.requestLists[3].length, 1); // only the buildable one is requested
+
 // no_trade flag from race.
 input = readStorageRequirementsInput(
   deps({ getGame: () => ({ global: { race: { no_trade: 1 } } }) }),

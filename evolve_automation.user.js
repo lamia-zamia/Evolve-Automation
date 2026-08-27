@@ -4280,6 +4280,20 @@ Only continue if you trust the source. Injected code:
     }
     return states;
   }
+  function sampleBuildTargets(buildingList, projectList) {
+    let enabledBuildings = [], enabledProjects = [], candidates = [], walk = (list, enabled) => {
+      for (let entry of list) {
+        let buildEnabled = optionalPredicate(entry, "isUnlocked") && !!entry.autoBuildEnabled;
+        buildEnabled && enabled.push(entry), candidates.push({
+          knowledgeCost: knowledgeCostOf(entry),
+          isKnowledge: isKnowledgeProducer(entry),
+          weighting: typeof entry.weighting == "number" && Number.isFinite(entry.weighting) ? entry.weighting : 0,
+          autoBuildable: buildEnabled && optionalPredicate(entry, "isAutoBuildable")
+        });
+      }
+    };
+    return walk(buildingList, enabledBuildings), walk(projectList, enabledProjects), { enabledBuildings, enabledProjects, candidates };
+  }
   var READ_PREFIX = "updateState.runPlanningPasses.calculateRequiredStorages.readInput.", runUnmeasured = (_phase, action) => action();
   function readStorageRequirementsInput(dependencies) {
     let measure = dependencies.measure ?? runUnmeasured, settings = requireRecord(dependencies.getSettings(), "settings"), state = requireRecord(dependencies.getState(), "state"), buildings = requireRecord(dependencies.getBuildings(), "buildings"), game = requireRecord(dependencies.getGame(), "game"), buildingManager = requireRecord(
@@ -4312,8 +4326,9 @@ Only continue if you trust the source. Injected code:
           "ProjectManager.priorityList"
         )
       ]
-    ), autoBuildableFiltered = (list) => list.filter(
-      (entry) => optionalPredicate(entry, "isUnlocked") && !!entry.autoBuildEnabled
+    ), buildTargets = measure(
+      `${READ_PREFIX}buildTargets`,
+      () => sampleBuildTargets(buildingList, projectList)
     ), requestLists = measure(
       `${READ_PREFIX}requestLists`,
       () => {
@@ -4322,7 +4337,7 @@ Only continue if you trust the source. Injected code:
           Object.freeze({
             costs: readCosts2(fleetManagerOuter.nextShipCost)
           })
-        ]), lists.push(costTargets(unlockedTechs)), lists.push(costTargets(queuedTargetsAll)), lists.push(costTargets(autoBuildableFiltered(buildingList))), lists.push(costTargets(autoBuildableFiltered(projectList))), lists;
+        ]), lists.push(costTargets(unlockedTechs)), lists.push(costTargets(queuedTargetsAll)), lists.push(costTargets(buildTargets.enabledBuildings)), lists.push(costTargets(buildTargets.enabledProjects)), lists;
       }
     ), embassy = requireRecord(
       buildings.GorddonEmbassy,
@@ -4344,12 +4359,7 @@ Only continue if you trust the source. Injected code:
             isKnowledge: isKnowledgeProducer(target)
           })
         ),
-        buildCandidates: [...buildingList, ...projectList].map((object) => ({
-          knowledgeCost: knowledgeCostOf(object),
-          isKnowledge: isKnowledgeProducer(object),
-          weighting: typeof object.weighting == "number" && Number.isFinite(object.weighting) ? object.weighting : 0,
-          autoBuildable: optionalPredicate(object, "isAutoBuildable")
-        }))
+        buildCandidates: buildTargets.candidates
       })
     ), race2 = requireRecord(
       requireRecord(game.global, "game.global").race,

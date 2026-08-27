@@ -598,6 +598,21 @@ assert.deepEqual(actionCalls, ["action"]);
 assert.equal(context.resources.Money.currentQuantity, 380);
 assert.deepEqual(actionLogs, [["construction", "Mine"]]);
 
+// isAutoBuildable() opens with isUnlocked() and autoBuildEnabled, so a caller
+// that has already answered those two may skip the call outright. The storage
+// requirements reader depends on that prefix to spare three quarters of the
+// priority list a document lookup, three settings reads and a count getter.
+context.settings["batcity-mine"] = true;
+context.settings["bld_w_city-mine"] = 5;
+context.settings["bld_m_city-mine"] = -1;
+assert.equal(mine.isAutoBuildable(), true);
+context.settings["batcity-mine"] = false;
+assert.equal(mine.isAutoBuildable(), false, "not auto-build enabled");
+context.settings["batcity-mine"] = true;
+context.game.global.settings.showCity = false;
+assert.equal(mine.isAutoBuildable(), false, "not unlocked");
+context.game.global.settings.showCity = true;
+
 // The game withdrew the control between the clickability check and the click:
 // nothing is spent and nothing is logged as built.
 mineView = {};

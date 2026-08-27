@@ -1,4 +1,7 @@
-import type { KnowledgeRequirementsInput } from "../../../../domain/knowledge-requirements.ts";
+import type {
+  KnowledgeBuildCandidate,
+  KnowledgeRequirementsInput,
+} from "../../../../domain/knowledge-requirements.ts";
 import type {
   StorageRequestCost,
   StorageRequestTarget,
@@ -152,6 +155,58 @@ function readResources(resourcesValue: unknown): StorageResourceState[] {
   return states;
 }
 
+interface SampledBuildTargets {
+  /** Entries the storage request lists ask for: unlocked and auto-build enabled. */
+  readonly enabledBuildings: readonly UnknownRecord[];
+  readonly enabledProjects: readonly UnknownRecord[];
+  /** Every entry, buildings before projects, as the Knowledge planner reads them. */
+  readonly candidates: readonly KnowledgeBuildCandidate[];
+}
+
+/**
+ * One walk over the build and project priority lists for the two things this
+ * reader asks of them.
+ *
+ * `Action.isAutoBuildable()` — the sole implementation, inherited by buildings,
+ * projects and modal actions — is
+ * `isUnlocked() && autoBuildEnabled && _weighting > 0 && count < autoMax`, so an
+ * entry that fails either of the first two answers `false` without the call.
+ * Those first two are exactly what the request lists filter on, so asking them
+ * once serves both and spares roughly three quarters of the list an
+ * `isUnlocked()` document lookup, three settings reads and a `count` getter.
+ * `entity-classes-test.mjs` holds that prefix as a contract.
+ */
+function sampleBuildTargets(
+  buildingList: readonly UnknownRecord[],
+  projectList: readonly UnknownRecord[],
+): SampledBuildTargets {
+  const enabledBuildings: UnknownRecord[] = [];
+  const enabledProjects: UnknownRecord[] = [];
+  const candidates: KnowledgeBuildCandidate[] = [];
+  const walk = (list: readonly UnknownRecord[], enabled: UnknownRecord[]) => {
+    for (const entry of list) {
+      const buildEnabled =
+        optionalPredicate(entry, "isUnlocked") &&
+        Boolean(entry["autoBuildEnabled"]);
+      if (buildEnabled) enabled.push(entry);
+      candidates.push({
+        knowledgeCost: knowledgeCostOf(entry),
+        isKnowledge: isKnowledgeProducer(entry),
+        weighting:
+          typeof entry["weighting"] === "number" &&
+          Number.isFinite(entry["weighting"] as number)
+            ? (entry["weighting"] as number)
+            : 0,
+        autoBuildable:
+          buildEnabled && optionalPredicate(entry, "isAutoBuildable"),
+      });
+    }
+  };
+  walk(buildingList, enabledBuildings);
+  walk(projectList, enabledProjects);
+  return { enabledBuildings, enabledProjects, candidates };
+}
+
 const READ_PREFIX =
   "updateState.runPlanningPasses.calculateRequiredStorages.readInput.";
 
@@ -202,12 +257,9 @@ export function readStorageRequirementsInput(
       ] as const,
   );
 
-  const autoBuildableFiltered = (list: readonly UnknownRecord[]) =>
-    list.filter(
-      (entry) =>
-        optionalPredicate(entry, "isUnlocked") &&
-        Boolean(entry["autoBuildEnabled"]),
-    );
+  const buildTargets = measure(`${READ_PREFIX}buildTargets`, () =>
+    sampleBuildTargets(buildingList, projectList),
+  );
 
   // requestStorageFor lists, in the exact legacy call order.
   const requestLists: (readonly StorageRequestTarget[])[] = measure(
@@ -230,8 +282,8 @@ export function readStorageRequirementsInput(
       }
       lists.push(costTargets(unlockedTechs));
       lists.push(costTargets(queuedTargetsAll));
-      lists.push(costTargets(autoBuildableFiltered(buildingList)));
-      lists.push(costTargets(autoBuildableFiltered(projectList)));
+      lists.push(costTargets(buildTargets.enabledBuildings));
+      lists.push(costTargets(buildTargets.enabledProjects));
       return lists;
     },
   );
@@ -260,16 +312,7 @@ export function readStorageRequirementsInput(
           isKnowledge: isKnowledgeProducer(target),
         }),
       ),
-      buildCandidates: [...buildingList, ...projectList].map((object) => ({
-        knowledgeCost: knowledgeCostOf(object),
-        isKnowledge: isKnowledgeProducer(object),
-        weighting:
-          typeof object["weighting"] === "number" &&
-          Number.isFinite(object["weighting"] as number)
-            ? (object["weighting"] as number)
-            : 0,
-        autoBuildable: optionalPredicate(object, "isAutoBuildable"),
-      })),
+      buildCandidates: buildTargets.candidates,
     }),
   );
 
