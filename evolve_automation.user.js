@@ -4804,6 +4804,13 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/application/override-settings.ts
+  function rebaseOnStoredSettings(settings, settingsRaw) {
+    if (settings !== settingsRaw) {
+      Object.getPrototypeOf(settings) !== settingsRaw && Object.setPrototypeOf(settings, settingsRaw);
+      for (let key of Object.keys(settings))
+        delete settings[key];
+    }
+  }
   function createOverrideSettings({
     getSafeMode,
     getSettings,
@@ -4814,8 +4821,8 @@ Only continue if you trust the source. Injected code:
   }) {
     function updateOverrides() {
       let settings = getSettings(), settingsRaw = getSettingsRaw();
-      if (getSafeMode()) {
-        Object.assign(settings, settingsRaw), settings.masterScriptToggle = !1;
+      if (rebaseOnStoredSettings(settings, settingsRaw), getSafeMode()) {
+        settings.masterScriptToggle = !1;
         return;
       }
       let resolution = resolveOverrides({
@@ -4823,7 +4830,7 @@ Only continue if you trust the source. Injected code:
         evaluator: source.sampleEvaluator(),
         activeTasks: source.readForcedTasks()
       });
-      Object.assign(settings, settingsRaw, resolution.values);
+      Object.assign(settings, resolution.values);
       for (let [key, list] of Object.entries(resolution.lists))
         settings[key] = list;
       reporter.report(resolution.failures), display.publish();

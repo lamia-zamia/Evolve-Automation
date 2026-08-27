@@ -201,4 +201,75 @@ settings = {};
 updateOverrides();
 assert.equal(settings.autoBuild, false);
 
+// --- The effective settings are a layer over the stored ones, not a copy ---
+// Only the keys this pass decided are own properties; everything else resolves
+// to the stored setting as it stands now.
+settings = {};
+probe = { foo: true };
+settingsRaw = {
+  autoBuild: false,
+  autoTax: true,
+  tickRate: 1,
+  overrides: {
+    autoBuild: [
+      {
+        type1: "Value",
+        arg1: "foo",
+        type2: "Boolean",
+        arg2: true,
+        cmp: "==",
+        ret: true,
+      },
+    ],
+  },
+};
+updateOverrides();
+assert.equal(settings.autoBuild, true);
+assert.equal(settings.autoTax, true);
+assert.ok(Object.hasOwn(settings, "autoBuild"));
+assert.ok(!Object.hasOwn(settings, "autoTax"));
+
+// A stored value edited between passes is read live, without a pass.
+settingsRaw.autoTax = false;
+assert.equal(settings.autoTax, false);
+
+// A condition that stops matching drops the override rather than leaving the
+// previous pass's value behind.
+probe = { foo: false };
+updateOverrides();
+assert.equal(settings.autoBuild, false);
+assert.ok(!Object.hasOwn(settings, "autoBuild"));
+
+// --- Replacing the stored settings (import, reset) re-points the layer ---
+settingsRaw = { autoBuild: true, tickRate: 1, overrides: {} };
+updateOverrides();
+assert.equal(settings.autoBuild, true);
+
+// --- Safe mode clears the previous pass's overrides too ---
+probe = { foo: true };
+settingsRaw = {
+  autoBuild: false,
+  tickRate: 1,
+  masterScriptToggle: true,
+  overrides: {
+    autoBuild: [
+      {
+        type1: "Value",
+        arg1: "foo",
+        type2: "Boolean",
+        arg2: true,
+        cmp: "==",
+        ret: true,
+      },
+    ],
+  },
+};
+updateOverrides();
+assert.equal(settings.autoBuild, true);
+safeMode = true;
+updateOverrides();
+assert.equal(settings.autoBuild, false);
+assert.equal(settings.masterScriptToggle, false);
+safeMode = false;
+
 console.log("Override settings handler tests passed");
