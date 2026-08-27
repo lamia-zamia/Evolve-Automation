@@ -4,6 +4,8 @@ import type {
   BuildingWeightingDecider,
   BuildingWeightingDecision,
   BuildingWeightingRule,
+  BuildingWeightingScreeningCandidate,
+  BuildingWeightingScreeningRule,
   BuildingWeightingSnapshot,
 } from "./building-weighting.ts";
 
@@ -26,6 +28,80 @@ export function selectActiveWeightingRules(
   return rules.filter(
     (rule) => rule.enabled(snapshot) && rule.multiplier(snapshot) !== 1,
   );
+}
+
+/**
+ * How many rules from the start of the list read only the screening fields.
+ *
+ * Screening rules have to be a prefix: running a later one early would move it
+ * ahead of rules it is ordered behind, and rule order decides the weight.
+ * A list that interleaves them is a programming error, not a runtime condition.
+ */
+export function selectScreeningRules(
+  rules: readonly BuildingWeightingRule<unknown>[],
+): readonly BuildingWeightingScreeningRule<unknown>[] {
+  const prefix = rules.findIndex((rule) => rule.screening !== true);
+  const screeningCount = prefix === -1 ? rules.length : prefix;
+  const strayIndex = rules.findIndex(
+    (rule, index) => index >= screeningCount && rule.screening === true,
+  );
+  if (strayIndex !== -1) {
+    throw new TypeError(
+      `weighting rule ${rules[strayIndex]?.id} is marked screening but follows a rule that needs the full candidate`,
+    );
+  }
+  // `screening: true` is the rule's declaration that its match, describe, and
+  // multiplier read nothing outside the screening fields. The prefix check
+  // above is what makes reordering visible; this cast is where that promise is
+  // taken at its word, and it is the only place a rule is narrowed.
+  // The two steps are needed because the narrowed `match` accepts less than the
+  // wide one declares, which TypeScript cannot check for us either way.
+  return rules.slice(
+    0,
+    screeningCount,
+  ) as unknown as readonly BuildingWeightingScreeningRule<unknown>[];
+}
+
+/**
+ * Applies the screening rules to a candidate that has only been partly
+ * projected. Returns the decision when they settled it, or `null` when it
+ * survived them and needs the full projection.
+ *
+ * A surviving candidate is later run through `decideBuildingWeighting` from the
+ * start, screening rules included, so every rule applies exactly once and this
+ * pass never has to hand over a partial weight.
+ */
+export function screenBuildingWeighting(
+  screeningRules: readonly BuildingWeightingScreeningRule<unknown>[],
+  candidate: BuildingWeightingScreeningCandidate,
+  snapshot: BuildingWeightingSnapshot,
+): BuildingWeightingDecision | null {
+  let weight = candidate.baseWeight;
+  let annotations: BuildingWeightingAnnotation[] | undefined;
+  for (const rule of screeningRules) {
+    const match = rule.match(candidate, snapshot);
+    if (!match) {
+      continue;
+    }
+    const note = rule.describe(match, candidate, snapshot);
+    if (note !== "") {
+      annotations ??= [];
+      annotations.push(Object.freeze({ ruleId: rule.id, note }));
+    }
+    const weightBeforeRule = weight;
+    weight *= rule.multiplier(snapshot, match);
+    if (weight <= 0) {
+      return Object.freeze({
+        weight,
+        annotations:
+          annotations === undefined
+            ? NO_ANNOTATIONS
+            : Object.freeze(annotations),
+        zeroedBy: weightBeforeRule > 0 ? rule.id : null,
+      });
+    }
+  }
+  return null;
 }
 
 /**
@@ -93,7 +169,10 @@ export function createBuildingWeightingDecider({
   return Object.freeze({
     beginPhase(snapshot: BuildingWeightingSnapshot) {
       const activeRules = selectActiveWeightingRules(weightingRules, snapshot);
+      const screeningRules = selectScreeningRules(activeRules);
       return Object.freeze({
+        screen: (candidate: BuildingWeightingScreeningCandidate) =>
+          screenBuildingWeighting(screeningRules, candidate, snapshot),
         decide: (candidate: BuildingWeightingCandidate) =>
           decideBuildingWeighting(activeRules, candidate, snapshot),
       });

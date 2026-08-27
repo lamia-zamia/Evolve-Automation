@@ -23,6 +23,7 @@ const diagnostics = {
 const weightingRules = [
   {
     id: "locked",
+    screening: true,
     enabled: () => true,
     match: (candidate) => !candidate.unlocked,
     describe: () => "Locked",
@@ -48,17 +49,18 @@ const { BuildingManager } = createCoreManagers({
   getNiceNumber: (n) => String(n),
   weightingDecider: createBuildingWeightingDecider({ weightingRules }),
   readWeightingSnapshot: () => Object.freeze({}),
-  readWeightingCandidate: (building) => {
-    if (building.unlocked) {
-      sampledUnlockedFields++;
-    }
-    return Object.freeze({
+  readWeightingScreeningCandidate: (building) =>
+    Object.freeze({
       id: building.id,
       unlocked: building.unlocked,
-      affordable: building.affordable,
-      baseWeight: building._weighting,
+      autoBuildEnabled: true,
       count: building.count,
-    });
+      autoMax: Number.MAX_SAFE_INTEGER,
+      baseWeight: building._weighting,
+    }),
+  readWeightingCandidate: (building, screening) => {
+    sampledUnlockedFields++;
+    return Object.freeze({ ...screening, affordable: building.affordable });
   },
   describeBuildingWeighting: (candidateId) => `described ${candidateId}`,
   isEarlyGame: () => false,
@@ -91,7 +93,7 @@ BuildingManager.updateWeighting();
 
 const timed = Object.fromEntries(timings);
 const applyRules = "autoBuild.beginCycle.updateBuildingWeighting.applyRules";
-for (const step of ["sample", "decide", "describe"]) {
+for (const step of ["screen", "project", "describe"]) {
   assert.equal(
     timed[`${applyRules}.${step}`],
     3,
@@ -111,10 +113,11 @@ assert.equal(counted["autoBuild.weighting.sampledUnlocked"], 2);
 assert.equal(counted["autoBuild.weighting.surviving"], 1);
 assert.equal(counted["autoBuild.weighting.zeroedBy.locked"], 1);
 assert.equal(counted["autoBuild.weighting.zeroedBy.unaffordable"], 1);
+assert.equal(counted["autoBuild.weighting.projected"], 2);
 assert.equal(
   sampledUnlockedFields,
   2,
-  "the funnel counts exactly the candidates whose expensive fields are sampled",
+  "a candidate a screening rule discarded is never projected in full",
 );
 
 // With diagnostics off, nothing is recorded and the decisions are unchanged.

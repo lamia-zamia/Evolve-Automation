@@ -99,7 +99,10 @@ import {
   readPlannerLimitInput as readPlannerLimitInputControl,
   readPlannerRun as readPlannerRunControl,
 } from "../../adapters/evolve/planner-analysis.ts";
-import { readWeightingCandidate as readWeightingCandidateControl } from "../../adapters/evolve/progression/build/weighting-candidate.ts";
+import {
+  readWeightingCandidate as readWeightingCandidateControl,
+  readWeightingScreeningCandidate as readWeightingScreeningCandidateControl,
+} from "../../adapters/evolve/progression/build/weighting-candidate.ts";
 import { createGameLifecycleControl } from "../../bootstrap/game-lifecycle-control.ts";
 import { createFleetMechManagerControl as createFleetMechManagerCompositionControl } from "../../bootstrap/fleet-mech-manager-control.ts";
 import { createScriptBootstrapControl } from "../../bootstrap/script-bootstrap-control.ts";
@@ -1868,6 +1871,7 @@ export function startEvolveRuntimeComposition(
       isVacuumSyphonStage,
       getNiceNumber,
       weightingDecider: buildingWeightingDecider,
+      readWeightingScreeningCandidate: readWeightingScreeningCandidateControl,
       readWeightingCandidate: readWeightingCandidateControl,
       describeBuildingWeighting: buildingWeightingDescriber.describe,
       weightingSnapshot: {

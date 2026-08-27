@@ -216,6 +216,7 @@ export function createBuildingWeightingPolicy({
     weightingRule({
       // Set weighting to zero right away, and skip all checks if autoBuild is disabled
       id: "autobuild-off",
+      screening: true,
       enabled: (snapshot) => !snapshot.autoBuildEnabled,
       match: () => true,
       describe: () => "",
@@ -224,6 +225,7 @@ export function createBuildingWeightingPolicy({
     weightingRule({
       // Should always be on top, processing locked building may lead to issues
       id: "locked",
+      screening: true,
       enabled: () => true,
       match: (candidate) => !candidate.unlocked,
       describe: () => "Locked",
@@ -231,6 +233,7 @@ export function createBuildingWeightingPolicy({
     }),
     weightingRule({
       id: "queued-target",
+      screening: true,
       enabled: () => true,
       match: (candidate, snapshot) => snapshot.queuedTargets.has(candidate.id),
       describe: () => "Queued building, processing...",
@@ -238,6 +241,7 @@ export function createBuildingWeightingPolicy({
     }),
     weightingRule({
       id: "trigger-target",
+      screening: true,
       enabled: () => true,
       match: (candidate, snapshot) => snapshot.triggerTargets.has(candidate.id),
       describe: () => "Active trigger, processing...",
@@ -245,6 +249,7 @@ export function createBuildingWeightingPolicy({
     }),
     weightingRule({
       id: "autobuild-disabled",
+      screening: true,
       enabled: () => true,
       match: (candidate) => !candidate.autoBuildEnabled,
       describe: () => "AutoBuild disabled",
@@ -252,6 +257,7 @@ export function createBuildingWeightingPolicy({
     }),
     weightingRule({
       id: "maximum-amount-reached",
+      screening: true,
       enabled: () => true,
       match: (candidate) => candidate.count >= candidate.autoMax,
       describe: () => "Maximum amount reached",
