@@ -20273,17 +20273,18 @@ Only continue if you trust the source. Injected code:
 
   // src/adapters/browser/active-targets.ts
   function createActiveTargetsControls(dependencies) {
+    let removalHandlerBound = !1;
     return Object.freeze({
       updateActiveTargets() {
         let $ = dependencies.getJQuery();
         if (!dependencies.getSettings().activeTargetsUI) {
-          $(".active-target-remove-x").off("click");
+          removalHandlerBound && ($(".active-target-remove-x").off("click"), removalHandlerBound = !1);
           return;
         }
         let state = dependencies.getState(), triggersList = state.triggerTargets, buildingsList = [], researchList = [], arpaList = [];
         state.queuedTargetsAll.forEach((target) => {
           dependencies.isTechnology(target) ? researchList.push(target) : dependencies.isProject(target) ? arpaList.push(target) : buildingsList.push(target);
-        }), dependencies.updateActiveTargetsUI(triggersList, "triggers"), dependencies.updateActiveTargetsUI(buildingsList, "buildings"), dependencies.updateActiveTargetsUI(researchList, "research"), dependencies.updateActiveTargetsUI(arpaList, "arpa"), $(".active-target-remove-x").click(function() {
+        }), dependencies.updateActiveTargetsUI(triggersList, "triggers"), dependencies.updateActiveTargetsUI(buildingsList, "buildings"), dependencies.updateActiveTargetsUI(researchList, "research"), dependencies.updateActiveTargetsUI(arpaList, "arpa"), removalHandlerBound = !0, $(".active-target-remove-x").click(function() {
           let queueId = $(this).data("queueid"), type = $(this).data("type"), $queuedItem = $(".queued").filter((_index, element) => element.id.indexOf(queueId) > -1);
           if (type === "triggers") {
             let clickedTrigger = dependencies.getTriggerManager().targetTriggers.find(
