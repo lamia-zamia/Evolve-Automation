@@ -14,6 +14,7 @@ import {
   requireRecord,
   type UnknownRecord,
 } from "../../../validation.ts";
+import type { MeasurePhase } from "../../../../utils/performance.ts";
 
 export interface StorageRequirementsReaderDependencies {
   readonly getSettings: () => unknown;
@@ -29,6 +30,12 @@ export interface StorageRequirementsReaderDependencies {
   readonly isRetirementAssistActive: () => boolean;
   readonly getInflationChallengeMoney: () => number;
   readonly getRetirementGraphene: () => number;
+  /**
+   * The caller's already-resolved phase timer. The reader walks every building
+   * and project once per tick, so which of its four stages that time goes to is
+   * not answerable from the parent phase alone.
+   */
+  readonly measure?: MeasurePhase | undefined;
 }
 
 /** Legacy `for..in object.cost`: a non-record cost contributes nothing. */
@@ -145,9 +152,15 @@ function readResources(resourcesValue: unknown): StorageResourceState[] {
   return states;
 }
 
+const READ_PREFIX =
+  "updateState.runPlanningPasses.calculateRequiredStorages.readInput.";
+
+const runUnmeasured: MeasurePhase = (_phase, action) => action();
+
 export function readStorageRequirementsInput(
   dependencies: StorageRequirementsReaderDependencies,
 ): StorageRequirementsInput {
+  const measure = dependencies.measure ?? runUnmeasured;
   const settings = requireRecord(dependencies.getSettings(), "settings");
   const state = requireRecord(dependencies.getState(), "state");
   const buildings = requireRecord(dependencies.getBuildings(), "buildings");
@@ -165,25 +178,28 @@ export function readStorageRequirementsInput(
     "FleetManagerOuter",
   );
 
-  const unlockedTechs = targetList(
-    state["unlockedTechs"],
-    "state.unlockedTechs",
-  );
-  const queuedTargetsAll = targetList(
-    state["queuedTargetsAll"],
-    "state.queuedTargetsAll",
-  );
-  const triggerTargets = targetList(
-    state["triggerTargets"],
-    "state.triggerTargets",
-  );
-  const buildingList = targetList(
-    buildingManager["priorityList"],
-    "BuildingManager.priorityList",
-  );
-  const projectList = targetList(
-    projectManager["priorityList"],
-    "ProjectManager.priorityList",
+  const [
+    unlockedTechs,
+    queuedTargetsAll,
+    triggerTargets,
+    buildingList,
+    projectList,
+  ] = measure(
+    `${READ_PREFIX}targetLists`,
+    () =>
+      [
+        targetList(state["unlockedTechs"], "state.unlockedTechs"),
+        targetList(state["queuedTargetsAll"], "state.queuedTargetsAll"),
+        targetList(state["triggerTargets"], "state.triggerTargets"),
+        targetList(
+          buildingManager["priorityList"],
+          "BuildingManager.priorityList",
+        ),
+        targetList(
+          projectManager["priorityList"],
+          "ProjectManager.priorityList",
+        ),
+      ] as const,
   );
 
   const autoBuildableFiltered = (list: readonly UnknownRecord[]) =>
@@ -194,21 +210,31 @@ export function readStorageRequirementsInput(
     );
 
   // requestStorageFor lists, in the exact legacy call order.
-  const requestLists: (readonly StorageRequestTarget[])[] = [];
-  const nextShipExpandable = Boolean(fleetManagerOuter["nextShipExpandable"]);
-  if (
-    Boolean(settings["autoFleet"]) &&
-    nextShipExpandable &&
-    settings["prioritizeOuterFleet"] !== "ignore"
-  ) {
-    requestLists.push([
-      Object.freeze({ costs: readCosts(fleetManagerOuter["nextShipCost"]) }),
-    ]);
-  }
-  requestLists.push(costTargets(unlockedTechs));
-  requestLists.push(costTargets(queuedTargetsAll));
-  requestLists.push(costTargets(autoBuildableFiltered(buildingList)));
-  requestLists.push(costTargets(autoBuildableFiltered(projectList)));
+  const requestLists: (readonly StorageRequestTarget[])[] = measure(
+    `${READ_PREFIX}requestLists`,
+    () => {
+      const lists: (readonly StorageRequestTarget[])[] = [];
+      const nextShipExpandable = Boolean(
+        fleetManagerOuter["nextShipExpandable"],
+      );
+      if (
+        Boolean(settings["autoFleet"]) &&
+        nextShipExpandable &&
+        settings["prioritizeOuterFleet"] !== "ignore"
+      ) {
+        lists.push([
+          Object.freeze({
+            costs: readCosts(fleetManagerOuter["nextShipCost"]),
+          }),
+        ]);
+      }
+      lists.push(costTargets(unlockedTechs));
+      lists.push(costTargets(queuedTargetsAll));
+      lists.push(costTargets(autoBuildableFiltered(buildingList)));
+      lists.push(costTargets(autoBuildableFiltered(projectList)));
+      return lists;
+    },
+  );
 
   const embassy = requireRecord(
     buildings["GorddonEmbassy"],
@@ -218,29 +244,34 @@ export function readStorageRequirementsInput(
     settings["fleetEmbassyKnowledge"],
     "settings.fleetEmbassyKnowledge",
   );
-  const knowledge: KnowledgeRequirementsInput = {
-    techKnowledgeCosts: [
-      ...unlockedTechs.map((tech) => knowledgeCostOf(tech)),
-      ...(optionalPredicate(embassy, "isAutoBuildable")
-        ? [fleetEmbassyKnowledge]
-        : []),
-    ],
-    reservedTargets: [...queuedTargetsAll, ...triggerTargets].map((target) => ({
-      knowledgeCost: knowledgeCostOf(target),
-      isTechnology: dependencies.isTechnology(target),
-      isKnowledge: isKnowledgeProducer(target),
-    })),
-    buildCandidates: [...buildingList, ...projectList].map((object) => ({
-      knowledgeCost: knowledgeCostOf(object),
-      isKnowledge: isKnowledgeProducer(object),
-      weighting:
-        typeof object["weighting"] === "number" &&
-        Number.isFinite(object["weighting"] as number)
-          ? (object["weighting"] as number)
-          : 0,
-      autoBuildable: optionalPredicate(object, "isAutoBuildable"),
-    })),
-  };
+  const knowledge: KnowledgeRequirementsInput = measure(
+    `${READ_PREFIX}knowledge`,
+    () => ({
+      techKnowledgeCosts: [
+        ...unlockedTechs.map((tech) => knowledgeCostOf(tech)),
+        ...(optionalPredicate(embassy, "isAutoBuildable")
+          ? [fleetEmbassyKnowledge]
+          : []),
+      ],
+      reservedTargets: [...queuedTargetsAll, ...triggerTargets].map(
+        (target) => ({
+          knowledgeCost: knowledgeCostOf(target),
+          isTechnology: dependencies.isTechnology(target),
+          isKnowledge: isKnowledgeProducer(target),
+        }),
+      ),
+      buildCandidates: [...buildingList, ...projectList].map((object) => ({
+        knowledgeCost: knowledgeCostOf(object),
+        isKnowledge: isKnowledgeProducer(object),
+        weighting:
+          typeof object["weighting"] === "number" &&
+          Number.isFinite(object["weighting"] as number)
+            ? (object["weighting"] as number)
+            : 0,
+        autoBuildable: optionalPredicate(object, "isAutoBuildable"),
+      })),
+    }),
+  );
 
   const race = requireRecord(
     requireRecord(game["global"], "game.global")["race"],
@@ -256,7 +287,9 @@ export function readStorageRequirementsInput(
     noTrade: Boolean(race["no_trade"]),
     requestLists: Object.freeze(requestLists),
     knowledge,
-    resources: Object.freeze(readResources(dependencies.getResources())),
+    resources: measure(`${READ_PREFIX}resources`, () =>
+      Object.freeze(readResources(dependencies.getResources())),
+    ),
     inflationMoney: dependencies.isInflationAssistActive()
       ? requireNumber(
           dependencies.getInflationChallengeMoney(),

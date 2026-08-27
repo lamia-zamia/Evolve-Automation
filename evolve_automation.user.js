@@ -4280,8 +4280,9 @@ Only continue if you trust the source. Injected code:
     }
     return states;
   }
+  var READ_PREFIX = "updateState.runPlanningPasses.calculateRequiredStorages.readInput.", runUnmeasured = (_phase, action) => action();
   function readStorageRequirementsInput(dependencies) {
-    let settings = requireRecord(dependencies.getSettings(), "settings"), state = requireRecord(dependencies.getState(), "state"), buildings = requireRecord(dependencies.getBuildings(), "buildings"), game = requireRecord(dependencies.getGame(), "game"), buildingManager = requireRecord(
+    let measure = dependencies.measure ?? runUnmeasured, settings = requireRecord(dependencies.getSettings(), "settings"), state = requireRecord(dependencies.getState(), "state"), buildings = requireRecord(dependencies.getBuildings(), "buildings"), game = requireRecord(dependencies.getGame(), "game"), buildingManager = requireRecord(
       dependencies.getBuildingManager(),
       "BuildingManager"
     ), projectManager = requireRecord(
@@ -4290,50 +4291,67 @@ Only continue if you trust the source. Injected code:
     ), fleetManagerOuter = requireRecord(
       dependencies.getFleetManagerOuter(),
       "FleetManagerOuter"
-    ), unlockedTechs = targetList2(
-      state.unlockedTechs,
-      "state.unlockedTechs"
-    ), queuedTargetsAll = targetList2(
-      state.queuedTargetsAll,
-      "state.queuedTargetsAll"
-    ), triggerTargets = targetList2(
-      state.triggerTargets,
-      "state.triggerTargets"
-    ), buildingList = targetList2(
-      buildingManager.priorityList,
-      "BuildingManager.priorityList"
-    ), projectList = targetList2(
-      projectManager.priorityList,
-      "ProjectManager.priorityList"
+    ), [
+      unlockedTechs,
+      queuedTargetsAll,
+      triggerTargets,
+      buildingList,
+      projectList
+    ] = measure(
+      `${READ_PREFIX}targetLists`,
+      () => [
+        targetList2(state.unlockedTechs, "state.unlockedTechs"),
+        targetList2(state.queuedTargetsAll, "state.queuedTargetsAll"),
+        targetList2(state.triggerTargets, "state.triggerTargets"),
+        targetList2(
+          buildingManager.priorityList,
+          "BuildingManager.priorityList"
+        ),
+        targetList2(
+          projectManager.priorityList,
+          "ProjectManager.priorityList"
+        )
+      ]
     ), autoBuildableFiltered = (list) => list.filter(
       (entry) => optionalPredicate(entry, "isUnlocked") && !!entry.autoBuildEnabled
-    ), requestLists = [], nextShipExpandable = !!fleetManagerOuter.nextShipExpandable;
-    settings.autoFleet && nextShipExpandable && settings.prioritizeOuterFleet !== "ignore" && requestLists.push([
-      Object.freeze({ costs: readCosts2(fleetManagerOuter.nextShipCost) })
-    ]), requestLists.push(costTargets(unlockedTechs)), requestLists.push(costTargets(queuedTargetsAll)), requestLists.push(costTargets(autoBuildableFiltered(buildingList))), requestLists.push(costTargets(autoBuildableFiltered(projectList)));
-    let embassy = requireRecord(
+    ), requestLists = measure(
+      `${READ_PREFIX}requestLists`,
+      () => {
+        let lists = [], nextShipExpandable = !!fleetManagerOuter.nextShipExpandable;
+        return settings.autoFleet && nextShipExpandable && settings.prioritizeOuterFleet !== "ignore" && lists.push([
+          Object.freeze({
+            costs: readCosts2(fleetManagerOuter.nextShipCost)
+          })
+        ]), lists.push(costTargets(unlockedTechs)), lists.push(costTargets(queuedTargetsAll)), lists.push(costTargets(autoBuildableFiltered(buildingList))), lists.push(costTargets(autoBuildableFiltered(projectList))), lists;
+      }
+    ), embassy = requireRecord(
       buildings.GorddonEmbassy,
       "buildings.GorddonEmbassy"
     ), fleetEmbassyKnowledge = requireNumber(
       settings.fleetEmbassyKnowledge,
       "settings.fleetEmbassyKnowledge"
-    ), knowledge = {
-      techKnowledgeCosts: [
-        ...unlockedTechs.map((tech) => knowledgeCostOf(tech)),
-        ...optionalPredicate(embassy, "isAutoBuildable") ? [fleetEmbassyKnowledge] : []
-      ],
-      reservedTargets: [...queuedTargetsAll, ...triggerTargets].map((target) => ({
-        knowledgeCost: knowledgeCostOf(target),
-        isTechnology: dependencies.isTechnology(target),
-        isKnowledge: isKnowledgeProducer(target)
-      })),
-      buildCandidates: [...buildingList, ...projectList].map((object) => ({
-        knowledgeCost: knowledgeCostOf(object),
-        isKnowledge: isKnowledgeProducer(object),
-        weighting: typeof object.weighting == "number" && Number.isFinite(object.weighting) ? object.weighting : 0,
-        autoBuildable: optionalPredicate(object, "isAutoBuildable")
-      }))
-    }, race2 = requireRecord(
+    ), knowledge = measure(
+      `${READ_PREFIX}knowledge`,
+      () => ({
+        techKnowledgeCosts: [
+          ...unlockedTechs.map((tech) => knowledgeCostOf(tech)),
+          ...optionalPredicate(embassy, "isAutoBuildable") ? [fleetEmbassyKnowledge] : []
+        ],
+        reservedTargets: [...queuedTargetsAll, ...triggerTargets].map(
+          (target) => ({
+            knowledgeCost: knowledgeCostOf(target),
+            isTechnology: dependencies.isTechnology(target),
+            isKnowledge: isKnowledgeProducer(target)
+          })
+        ),
+        buildCandidates: [...buildingList, ...projectList].map((object) => ({
+          knowledgeCost: knowledgeCostOf(object),
+          isKnowledge: isKnowledgeProducer(object),
+          weighting: typeof object.weighting == "number" && Number.isFinite(object.weighting) ? object.weighting : 0,
+          autoBuildable: optionalPredicate(object, "isAutoBuildable")
+        }))
+      })
+    ), race2 = requireRecord(
       requireRecord(game.global, "game.global").race,
       "game.global.race"
     );
@@ -4346,7 +4364,10 @@ Only continue if you trust the source. Injected code:
       noTrade: !!race2.no_trade,
       requestLists: Object.freeze(requestLists),
       knowledge,
-      resources: Object.freeze(readResources(dependencies.getResources())),
+      resources: measure(
+        `${READ_PREFIX}resources`,
+        () => Object.freeze(readResources(dependencies.getResources()))
+      ),
       inflationMoney: dependencies.isInflationAssistActive() ? requireNumber(
         dependencies.getInflationChallengeMoney(),
         "inflation challenge money"
@@ -4375,6 +4396,30 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/utils/performance.ts
+  var runUnmeasured2 = (_phase, action) => action();
+  function createPhaseMeasure(diagnostics) {
+    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? runUnmeasured2 : (phase, action) => {
+      let startedAtMs = diagnostics.nowMs();
+      try {
+        return action();
+      } finally {
+        diagnostics.recordPerformance(phase, diagnostics.nowMs() - startedAtMs);
+      }
+    };
+  }
+  var INERT_TALLY = Object.freeze({
+    enabled: !1,
+    count: () => {
+    }
+  });
+  function createCountTally(diagnostics) {
+    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? INERT_TALLY : Object.freeze({
+      enabled: !0,
+      count: (name, amount = 1) => diagnostics.recordCount(name, amount)
+    });
+  }
+
   // src/adapters/evolve/state-demand-actions.ts
   function createStorageRequirementsAction({
     getSettings,
@@ -4389,11 +4434,14 @@ Only continue if you trust the source. Injected code:
     isInflationAssistActive: isInflationAssistActive2,
     isRetirementAssistActive: isRetirementAssistActive2,
     getInflationChallengeMoney,
-    getRetirementGraphene
+    getRetirementGraphene,
+    diagnostics
   }) {
+    let PREFIX = "updateState.runPlanningPasses.calculateRequiredStorages.";
     function calculateRequiredStorages() {
-      let resources = getResources(), state = getState(), result2 = planStorageRequirements(
-        readStorageRequirementsInput({
+      let measure = createPhaseMeasure(diagnostics), resources = getResources(), state = getState(), input = measure(
+        `${PREFIX}readInput`,
+        () => readStorageRequirementsInput({
           getSettings,
           getState,
           getGame,
@@ -4406,17 +4454,25 @@ Only continue if you trust the source. Injected code:
           isInflationAssistActive: isInflationAssistActive2,
           isRetirementAssistActive: isRetirementAssistActive2,
           getInflationChallengeMoney,
-          getRetirementGraphene
+          getRetirementGraphene,
+          measure
         })
+      ), result2 = measure(
+        `${PREFIX}plan`,
+        () => planStorageRequirements(input)
       );
-      applyStorageRequirementsResult(result2, resources, state);
-      let fuelDepotDemand = planFuelDepotDemand(
-        readFuelDepotDemandInput({ getState })
-      );
-      for (let [resourceId3, maxCost] of fuelDepotDemand) {
-        let resource2 = resources[resourceId3];
-        resource2 !== void 0 && (resource2.techMissionMaxCost = maxCost);
-      }
+      measure(
+        `${PREFIX}apply`,
+        () => applyStorageRequirementsResult(result2, resources, state)
+      ), measure(`${PREFIX}fuelDepot`, () => {
+        let fuelDepotDemand = planFuelDepotDemand(
+          readFuelDepotDemandInput({ getState })
+        );
+        for (let [resourceId3, maxCost] of fuelDepotDemand) {
+          let resource2 = resources[resourceId3];
+          resource2 !== void 0 && (resource2.techMissionMaxCost = maxCost);
+        }
+      });
     }
     return { calculateRequiredStorages };
   }
@@ -8484,30 +8540,6 @@ Only continue if you trust the source. Injected code:
     ...dependencies
   }) {
     return createScriptBootstrap(dependencies);
-  }
-
-  // src/utils/performance.ts
-  var runUnmeasured = (_phase, action) => action();
-  function createPhaseMeasure(diagnostics) {
-    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? runUnmeasured : (phase, action) => {
-      let startedAtMs = diagnostics.nowMs();
-      try {
-        return action();
-      } finally {
-        diagnostics.recordPerformance(phase, diagnostics.nowMs() - startedAtMs);
-      }
-    };
-  }
-  var INERT_TALLY = Object.freeze({
-    enabled: !1,
-    count: () => {
-    }
-  });
-  function createCountTally(diagnostics) {
-    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? INERT_TALLY : Object.freeze({
-      enabled: !0,
-      count: (name, amount = 1) => diagnostics.recordCount(name, amount)
-    });
   }
 
   // src/game/core-managers.ts
@@ -51138,7 +51170,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       isInflationAssistActive: () => inflationChallengeAssistActive(),
       isRetirementAssistActive: () => retirementChallengeAssistActive(),
       getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY2,
-      getRetirementGraphene: () => RETIREMENT_PREP2.graphene
+      getRetirementGraphene: () => RETIREMENT_PREP2.graphene,
+      diagnostics
     }), { prioritizeDemandedResources } = createDemandPrioritizationAction({
       getSettings: () => settings,
       getState: () => state,

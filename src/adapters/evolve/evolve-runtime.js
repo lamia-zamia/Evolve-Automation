@@ -1288,6 +1288,7 @@ export function startEvolveRuntimeComposition(
     isRetirementAssistActive: () => retirementChallengeAssistActive(),
     getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
     getRetirementGraphene: () => RETIREMENT_PREP.graphene,
+    diagnostics,
   });
   const { prioritizeDemandedResources } =
     createDemandPrioritizationActionControl({

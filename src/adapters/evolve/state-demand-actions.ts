@@ -10,6 +10,10 @@ import {
   readFuelDepotDemandInput,
   readStorageRequirementsInput,
 } from "./economy/storage/storage-requirements.ts";
+import {
+  createPhaseMeasure,
+  type PhaseTimingSink,
+} from "../../utils/performance.ts";
 
 interface ResourceState {
   techMissionMaxCost?: number;
@@ -39,6 +43,7 @@ interface StorageRequirementsActionDependencies {
   readonly isRetirementAssistActive: () => boolean;
   readonly getInflationChallengeMoney: () => number;
   readonly getRetirementGraphene: () => number;
+  readonly diagnostics?: PhaseTimingSink | undefined;
 }
 
 interface DemandPrioritizationActionDependencies {
@@ -75,11 +80,14 @@ export function createStorageRequirementsAction({
   isRetirementAssistActive,
   getInflationChallengeMoney,
   getRetirementGraphene,
+  diagnostics,
 }: StorageRequirementsActionDependencies) {
+  const PREFIX = "updateState.runPlanningPasses.calculateRequiredStorages.";
   function calculateRequiredStorages(): void {
+    const measure = createPhaseMeasure(diagnostics);
     const resources = getResources();
     const state = getState() as DemandState;
-    const result = planStorageRequirements(
+    const input = measure(`${PREFIX}readInput`, () =>
       readStorageRequirementsInput({
         getSettings,
         getState,
@@ -94,18 +102,26 @@ export function createStorageRequirementsAction({
         isRetirementAssistActive,
         getInflationChallengeMoney,
         getRetirementGraphene,
+        measure,
       }),
     );
-    applyStorageRequirementsResult(result, resources, state);
-    const fuelDepotDemand = planFuelDepotDemand(
-      readFuelDepotDemandInput({ getState }),
+    const result = measure(`${PREFIX}plan`, () =>
+      planStorageRequirements(input),
     );
-    for (const [resourceId, maxCost] of fuelDepotDemand) {
-      const resource = resources[resourceId];
-      if (resource !== undefined) {
-        resource.techMissionMaxCost = maxCost;
+    measure(`${PREFIX}apply`, () =>
+      applyStorageRequirementsResult(result, resources, state),
+    );
+    measure(`${PREFIX}fuelDepot`, () => {
+      const fuelDepotDemand = planFuelDepotDemand(
+        readFuelDepotDemandInput({ getState }),
+      );
+      for (const [resourceId, maxCost] of fuelDepotDemand) {
+        const resource = resources[resourceId];
+        if (resource !== undefined) {
+          resource.techMissionMaxCost = maxCost;
+        }
       }
-    }
+    });
   }
 
   return { calculateRequiredStorages };
