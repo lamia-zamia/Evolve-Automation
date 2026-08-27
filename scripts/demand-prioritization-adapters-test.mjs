@@ -32,6 +32,8 @@ function baseDeps(overrides = {}) {
         missionBuildingList: [],
         unlockedTechs: [],
       },
+    getGame: () =>
+      overrides.game ?? { global: { race: { truepath: false }, tech: {} } },
     getResources: () => resources,
     getBuildings: () =>
       overrides.buildings ?? {
@@ -76,10 +78,66 @@ function baseDeps(overrides = {}) {
   assert.equal(on.retirementGraphene, 200);
 }
 
+// After the third AI core upgrade, the demand reader reserves the next
+// powered hardware stage, including costs that are not currently affordable.
+{
+  const input = readDemandPrioritizationInput(
+    baseDeps({
+      game: {
+        global: { race: { truepath: true }, tech: { titan_ai_core: 3 } },
+      },
+      buildings: {
+        BlackholeJumpShip: null,
+        Alien1VitreloyPlant: {
+          autoStateEnabled: false,
+          count: 0,
+          stateOnCount: 0,
+        },
+        TitanDecoder: { count: 4, stateOnCount: 4, isUnlocked: () => true },
+        TitanAIColonist: {
+          count: 0,
+          stateOnCount: 0,
+          cost: { Cipher: 10_000, Money: 112_000_000 },
+          isUnlocked: () => true,
+        },
+        ErisTrooper: { stateOnCount: 13 },
+        ErisTank: { stateOnCount: 7 },
+      },
+    }),
+  );
+  assert.deepEqual(input.truepathAiBuildingTarget?.costs, [
+    { resourceId: "Cipher", amount: 10_000 },
+    { resourceId: "Money", amount: 112_000_000 },
+  ]);
+}
+
 // availableCrafters is the sum of the two job caps.
 {
   const input = readDemandPrioritizationInput(baseDeps());
   assert.equal(input.availableCrafters, 7);
+}
+
+// Technology ids are optional on the compatibility surface so an older
+// uninitialized fixture remains valid, but the live game id is preserved for
+// True Path AI research targeting.
+{
+  const input = readDemandPrioritizationInput(
+    baseDeps({
+      state: {
+        queuedTargets: [],
+        triggerTargets: [],
+        missionBuildingList: [],
+        unlockedTechs: [
+          {
+            id: "tech-ai_optimizations",
+            cost: { Coal: 1 },
+            isAffordable: () => false,
+          },
+        ],
+      },
+    }),
+  );
+  assert.equal(input.unlockedTechs[0].id, "tech-ai_optimizations");
 }
 
 // progress: finite number kept; absent/non-finite -> null.

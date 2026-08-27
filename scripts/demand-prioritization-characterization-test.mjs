@@ -35,6 +35,7 @@ const resources = {
   Coal: resource("Coal", 1000),
   Stanene: resource("Stanene"),
   Titanium: resource("Titanium", 100),
+  Cipher: resource("Cipher"),
 };
 
 const queued = { cost: { Iron: 10 } };
@@ -180,5 +181,50 @@ hooks.setDemandPrioritizationTestContext({
 });
 hooks.prioritizeDemandedResources();
 assert.deepEqual(requests, [["Iron", 15]]);
+
+requests.length = 0;
+hooks.setDemandPrioritizationTestContext({
+  settings: {
+    ...settings,
+    prioritizeQueue: "none",
+    prioritizeTriggers: "none",
+    missionRequest: false,
+    autoFleet: false,
+    productionFactoryFocusMaterials: false,
+    autoPower: false,
+    researchRequestSpace: false,
+  },
+  state: {
+    queuedTargets: [],
+    triggerTargets: [],
+    missionBuildingList: [],
+    unlockedTechs: [
+      {
+        id: "tech-ai_optimizations",
+        cost: { Cipher: 75_000 },
+        isAffordable: () => false,
+      },
+    ],
+  },
+  resources,
+  buildings: {
+    BlackholeJumpShip: blackholeMission,
+    Alien1VitreloyPlant: {
+      autoStateEnabled: false,
+      count: 0,
+      stateOnCount: 0,
+    },
+  },
+  game: { global: { race: { truepath: true }, tech: { titan_ai_core: 1 } } },
+  crafter: {},
+  SpyManager: { purchaseMoney: 0 },
+  FleetManagerOuter: { nextShipAffordable: false, nextShipCost: {} },
+  JobManager: { craftingMax: () => 0, skilledServantsMax: () => 0 },
+  FactoryManager: { maxOperating: () => 0, Productions: {} },
+  inflationChallengeAssistActive: () => false,
+  retirementChallengeAssistActive: () => false,
+});
+hooks.prioritizeDemandedResources();
+assert.deepEqual(requests, [["Cipher", 75_000]]);
 
 console.log("Demand prioritization bundled characterization tests passed");

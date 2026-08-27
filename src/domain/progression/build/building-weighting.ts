@@ -265,6 +265,14 @@ export type BuildingWeightingSnapshot = {
   readonly galaxyPiracyCoveredByFleet: boolean;
   /** The True Path scenario is running. */
   readonly truepathRace: boolean;
+  /** The True Path AI chain still needs hardware to reach its apocalypse gate. */
+  readonly truepathAiApocalypse: boolean;
+  /** Powered AI progress as calculated by Evolve, capped at 100. */
+  readonly truepathAiProgress: number;
+  /** The next AI hardware action that can advance the apocalypse, if any. */
+  readonly truepathAiBuildingTarget: "TitanDecoder" | "TitanAIColonist" | null;
+  /** Powered Colonist count needed for 100 AI progress at current support. */
+  readonly truepathAiTargetColonists: number;
   /**
    * Miners are the race's only source of Chrysotile: it is smoldering, so
    * Chrysotile replaces Stone, and sappy, so it has no quarry workers to mine

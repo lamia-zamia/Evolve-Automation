@@ -106,7 +106,9 @@ const NAMED_BUILDINGS = [
   "TauRedSubjugate",
   "TauStarEden",
   "Temple",
+  "TitanAIColonist",
   "TitanBank",
+  "TitanDecoder",
   "TitanMission",
   "TitanStorehouse",
   "TouristCenter",
@@ -264,6 +266,19 @@ export function createBuildingWeightingPolicy({
       match: (candidate) => !candidate.affordable,
       describe: () => "",
       multiplier: () => 0,
+    }),
+    weightingRule({
+      id: "truepath-ai-apocalypse",
+      enabled: (snapshot) => snapshot.truepathAiBuildingTarget !== null,
+      match: (candidate, snapshot) =>
+        candidate.id === snapshot.truepathAiBuildingTarget,
+      describe: (_match, _candidate, snapshot) =>
+        snapshot.truepathAiBuildingTarget === "TitanDecoder"
+          ? "True Path AI needs an active Decoder"
+          : `True Path AI progress ${formatNiceNumber(snapshot.truepathAiProgress)}% — building Colonists toward ${snapshot.truepathAiTargetColonists}`,
+      // This objective beats ordinary space construction once affordable. The
+      // normal power, support, and resource rules still apply afterward.
+      multiplier: () => 100,
     }),
     weightingRule<number>({
       id: "truepath-test-launch-sabotage",

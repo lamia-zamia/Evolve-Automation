@@ -3679,6 +3679,38 @@ Only continue if you trust the source. Injected code:
       state.missionBuildingList.splice(index, 1);
   }
 
+  // src/domain/progression/truepath/ai-apocalypse.ts
+  var AI_RESOURCE_RESEARCH_IDS = /* @__PURE__ */ new Set([
+    "tech-ai_optimizations",
+    "tech-synthetic_life"
+  ]);
+  function isTruepathAiResourceResearch(id) {
+    return id !== null && AI_RESOURCE_RESEARCH_IDS.has(id);
+  }
+  function readTruepathAiProgress(input) {
+    let progress = input.colonistOnCount * input.decoderOnCount * 0.35 + input.trooperOnCount * 2 + input.tankOnCount * 2;
+    return Math.min(100, Math.max(0, progress));
+  }
+  function planTruepathAiApocalypse(input) {
+    let progress = readTruepathAiProgress(input);
+    if (!input.enabled || input.aiCoreLevel < 3 || progress >= 100)
+      return Object.freeze({ progress, target: null, targetColonistCount: 0 });
+    if (input.decoderOnCount < 1)
+      return Object.freeze({
+        progress,
+        target: input.decoderCount < 1 ? "TitanDecoder" : null,
+        targetColonistCount: 0
+      });
+    let baseProgress = input.trooperOnCount * 2 + input.tankOnCount * 2, targetColonistCount = Math.ceil(
+      Math.max(0, 100 - baseProgress) / (input.decoderOnCount * 0.35)
+    );
+    return Object.freeze({
+      progress,
+      target: input.colonistCount < targetColonistCount ? "TitanAIColonist" : null,
+      targetColonistCount
+    });
+  }
+
   // src/domain/economy/resources/demand-prioritization.ts
   function projectDoubles(target) {
     return target.isProject && target.progress !== null && target.progress < 99;
@@ -3694,7 +3726,12 @@ Only continue if you trust the source. Injected code:
         let mission = input.missions[i];
         mission !== void 0 && (mission.isUnlocked && mission.autoBuildEnabled && (!mission.isBlackholeJumpShip || !settings.prestigeBioseedConstruct || settings.prestigeType !== "whitehole") ? prioritizedTasks.push(mission.target) : mission.isComplete && removedMissionIndices.push(i));
       }
-    prioritizedTasks.length === 0 && (input.isEarlyGame ? settings.researchRequest : settings.researchRequestSpace) && (prioritizedTasks = input.unlockedTechs.filter((tech) => tech.isAffordable).map((tech) => tech.target));
+    if (prioritizedTasks.length === 0) {
+      let truepathAiResearch = input.unlockedTechs.filter(
+        (tech) => isTruepathAiResourceResearch(tech.id)
+      ), researchRequestEnabled = input.isEarlyGame ? settings.researchRequest : settings.researchRequestSpace;
+      prioritizedTasks = truepathAiResearch.length > 0 ? truepathAiResearch.map((tech) => tech.target) : input.truepathAiBuildingTarget !== null ? [input.truepathAiBuildingTarget] : researchRequestEnabled ? input.unlockedTechs.filter((tech) => tech.isAffordable).map((tech) => tech.target) : [];
+    }
     for (let task of prioritizedTasks) {
       let multiplier = projectDoubles(task) ? 2 : 1;
       for (let cost of task.costs)
@@ -3989,6 +4026,11 @@ Only continue if you trust the source. Injected code:
       settings: readSettings(dependencies.getSettings()),
       isEarlyGame: dependencies.getIsEarlyGame(),
       consumptionBalanceTarget: dependencies.consumptionBalanceTarget,
+      truepathAiBuildingTarget: readTruepathAiBuildingTarget(
+        dependencies.getGame,
+        buildings,
+        isProject
+      ),
       inflationMoney: dependencies.isInflationAssistActive() ? requireNumber(
         dependencies.getInflationChallengeMoney(),
         "inflation challenge money"
@@ -4049,12 +4091,60 @@ Only continue if you trust the source. Injected code:
       )
     });
   }
+  function readTruepathAiBuildingTarget(getGame, buildings, isProject) {
+    let game = requireRecord(getGame(), "game"), global = requireRecord(game.global, "game.global");
+    if (!requireRecord(global.race, "game.global.race").truepath) return null;
+    let coreLevel = requireRecord(global.tech, "game.global.tech").titan_ai_core;
+    if (typeof coreLevel != "number" || !Number.isFinite(coreLevel) || coreLevel < 3)
+      return null;
+    let decoder = requireRecord(
+      buildings.TitanDecoder,
+      "buildings.TitanDecoder"
+    ), colonist = requireRecord(
+      buildings.TitanAIColonist,
+      "buildings.TitanAIColonist"
+    ), trooper = requireRecord(
+      buildings.ErisTrooper,
+      "buildings.ErisTrooper"
+    ), tank = requireRecord(buildings.ErisTank, "buildings.ErisTank"), targetId = planTruepathAiApocalypse({
+      enabled: !0,
+      aiCoreLevel: coreLevel,
+      decoderCount: requireNumber(
+        decoder.count,
+        "buildings.TitanDecoder.count"
+      ),
+      decoderOnCount: requireNumber(
+        decoder.stateOnCount,
+        "buildings.TitanDecoder.stateOnCount"
+      ),
+      colonistCount: requireNumber(
+        colonist.count,
+        "buildings.TitanAIColonist.count"
+      ),
+      colonistOnCount: requireNumber(
+        colonist.stateOnCount,
+        "buildings.TitanAIColonist.stateOnCount"
+      ),
+      trooperOnCount: requireNumber(
+        trooper.stateOnCount,
+        "buildings.ErisTrooper.stateOnCount"
+      ),
+      tankOnCount: requireNumber(
+        tank.stateOnCount,
+        "buildings.ErisTank.stateOnCount"
+      )
+    }).target;
+    if (targetId === null) return null;
+    let target = requireRecord(buildings[targetId], `buildings.${targetId}`);
+    return callBoolean(target, "isUnlocked", `buildings.${targetId}`, !0) ? readTarget(target, `buildings.${targetId}`, isProject) : null;
+  }
   function readTechs(value, isProject) {
     if (!Array.isArray(value))
       throw new TypeError("state.unlockedTechs must be an array");
     return value.map((entry, index) => {
       let path = `state.unlockedTechs[${index}]`, record = requireRecord(entry, path);
       return Object.freeze({
+        id: typeof record.id == "string" ? record.id : null,
         isAffordable: callBoolean(record, "isAffordable", path, !0),
         target: readTarget(record, path, isProject)
       });
@@ -4237,9 +4327,9 @@ Only continue if you trust the source. Injected code:
   function createStorageRequirementsAction({
     getSettings,
     getState,
+    getGame,
     getResources,
     getBuildings,
-    getGame,
     getBuildingManager,
     getProjectManager,
     getFleetManagerOuter,
@@ -4254,9 +4344,9 @@ Only continue if you trust the source. Injected code:
         readStorageRequirementsInput({
           getSettings,
           getState,
+          getGame,
           getResources,
           getBuildings,
-          getGame,
           getBuildingManager,
           getProjectManager,
           getFleetManagerOuter,
@@ -4281,6 +4371,7 @@ Only continue if you trust the source. Injected code:
   function createDemandPrioritizationAction({
     getSettings,
     getState,
+    getGame,
     getResources,
     getBuildings,
     getCrafter,
@@ -4301,6 +4392,7 @@ Only continue if you trust the source. Injected code:
         readDemandPrioritizationInput({
           getSettings,
           getState,
+          getGame,
           getResources,
           getBuildings,
           getCrafter,
@@ -8640,6 +8732,7 @@ Only continue if you trust the source. Injected code:
     getMissionMaxResourceCost,
     getResourceTitle,
     getBuildingCount,
+    getBuildingOnCount,
     getBuildingName,
     getBuildingTitle,
     getBuildingSoulGemCost,
@@ -8698,10 +8791,7 @@ Only continue if you trust the source. Injected code:
       "vacuum",
       "ascension",
       "terraform"
-    ]), readPrestigeRoute = () => {
-      let route = requireString(getPrestigeType(), "settings.prestigeType");
-      return DISTINGUISHED_ROUTES.has(route) ? route : "other";
-    }, weight = (setting) => requireNumber(getWeightingMultiplier(setting), `settings.${setting}`), readWeights = () => Object.freeze({
+    ]), readPrestigeRoute = (route) => DISTINGUISHED_ROUTES.has(route) ? route : "other", weight = (setting) => requireNumber(getWeightingMultiplier(setting), `settings.${setting}`), readWeights = () => Object.freeze({
       buildingWeightingNew: weight("buildingWeightingNew"),
       buildingWeightingUnderpowered: weight("buildingWeightingUnderpowered"),
       buildingWeightingNeedfulPowerPlant: weight(
@@ -8853,7 +8943,51 @@ Only continue if you trust the source. Injected code:
       ), spirePrebuild = requireRecord(
         getSpirePrebuildShortfall(),
         "getSpirePrebuildShortfall()"
-      ), researched = (research, level) => !!isTechResearched(research, level), trait2 = (name) => !!hasRaceTrait(name), truepathRace = trait2("truepath"), cannibalizeRace = trait2("cannibalize"), lumberRace = requireBoolean(isLumberRace(), "isLumberRace()");
+      ), researched = (research, level) => !!isTechResearched(research, level), trait2 = (name) => !!hasRaceTrait(name), truepathRace = trait2("truepath"), prestigeType = requireString(
+        getPrestigeType(),
+        "settings.prestigeType"
+      ), truepathAiApocalypse = truepathRace, truepathAiPlan = planTruepathAiApocalypse(
+        truepathAiApocalypse ? {
+          enabled: !0,
+          aiCoreLevel: ((research) => {
+            let value = getTechLevel(research);
+            return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+          })("titan_ai_core"),
+          decoderCount: requireNumber(
+            getBuildingCount("TitanDecoder"),
+            "buildings.TitanDecoder.count"
+          ),
+          decoderOnCount: requireNumber(
+            getBuildingOnCount("TitanDecoder"),
+            "buildings.TitanDecoder.stateOnCount"
+          ),
+          colonistCount: requireNumber(
+            getBuildingCount("TitanAIColonist"),
+            "buildings.TitanAIColonist.count"
+          ),
+          colonistOnCount: requireNumber(
+            getBuildingOnCount("TitanAIColonist"),
+            "buildings.TitanAIColonist.stateOnCount"
+          ),
+          trooperOnCount: requireNumber(
+            getBuildingOnCount("ErisTrooper"),
+            "buildings.ErisTrooper.stateOnCount"
+          ),
+          tankOnCount: requireNumber(
+            getBuildingOnCount("ErisTank"),
+            "buildings.ErisTank.stateOnCount"
+          )
+        } : {
+          enabled: !1,
+          aiCoreLevel: 0,
+          decoderCount: 0,
+          decoderOnCount: 0,
+          colonistCount: 0,
+          colonistOnCount: 0,
+          trooperOnCount: 0,
+          tankOnCount: 0
+        }
+      ), cannibalizeRace = trait2("cannibalize"), lumberRace = requireBoolean(isLumberRace(), "isLumberRace()");
       return Object.freeze({
         weights: readWeights(),
         buildBestFreighterOnly: requireBoolean(
@@ -8872,7 +9006,7 @@ Only continue if you trust the source. Injected code:
           isMinerJobsDisabled(),
           "settings.jobDisableMiners"
         ),
-        prestigeRoute: readPrestigeRoute(),
+        prestigeRoute: readPrestigeRoute(prestigeType),
         limitPrestigeConstruction: requireBoolean(
           isPrestigeConstructionLimited(),
           "settings.prestigeBioseedConstruct"
@@ -8966,6 +9100,10 @@ Only continue if you trust the source. Injected code:
           "isGalaxyPiracyCoveredByFleet()"
         ),
         truepathRace,
+        truepathAiApocalypse,
+        truepathAiProgress: truepathAiPlan.progress,
+        truepathAiBuildingTarget: truepathAiPlan.target,
+        truepathAiTargetColonists: truepathAiPlan.targetColonistCount,
         // The game spells the Entish no-quarry-worker trait "sappy".
         mineIsOnlyChrysotileSource: trait2("smoldering") && trait2("sappy"),
         witchHunterRace: trait2("witch_hunter"),
@@ -20326,7 +20464,9 @@ Only continue if you trust the source. Injected code:
     "TauRedSubjugate",
     "TauStarEden",
     "Temple",
+    "TitanAIColonist",
     "TitanBank",
+    "TitanDecoder",
     "TitanMission",
     "TitanStorehouse",
     "TouristCenter",
@@ -20434,6 +20574,15 @@ Only continue if you trust the source. Injected code:
         match: (candidate) => !candidate.affordable,
         describe: () => "",
         multiplier: () => 0
+      },
+      {
+        id: "truepath-ai-apocalypse",
+        enabled: (snapshot) => snapshot.truepathAiBuildingTarget !== null,
+        match: (candidate, snapshot) => candidate.id === snapshot.truepathAiBuildingTarget,
+        describe: (_match, _candidate, snapshot) => snapshot.truepathAiBuildingTarget === "TitanDecoder" ? "True Path AI needs an active Decoder" : `True Path AI progress ${formatNiceNumber(snapshot.truepathAiProgress)}% — building Colonists toward ${snapshot.truepathAiTargetColonists}`,
+        // This objective beats ordinary space construction once affordable. The
+        // normal power, support, and resource rules still apply afterward.
+        multiplier: () => 100
       },
       {
         id: "truepath-test-launch-sabotage",
@@ -50927,6 +51076,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }), { prioritizeDemandedResources } = createDemandPrioritizationAction({
       getSettings: () => settings,
       getState: () => state,
+      getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
       getCrafter: () => crafter,
@@ -51360,6 +51510,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getMissionMaxResourceCost: (resource2) => resources[resource2].techMissionMaxCost,
         getResourceTitle: (resource2) => resources[resource2].title,
         getBuildingCount: (building3) => buildings[building3].count,
+        getBuildingOnCount: (building3) => buildings[building3].stateOnCount,
         getBuildingName: (building3) => buildings[building3].name,
         getBuildingTitle: (building3) => buildings[building3].title,
         getBuildingSoulGemCost: (building3) => buildings[building3].cost.Soul_Gem,

@@ -10,6 +10,7 @@ import type {
   DemandTarget,
   DemandTech,
 } from "../../../../domain/economy/resources/demand-prioritization.ts";
+import { planTruepathAiApocalypse } from "../../../../domain/progression/truepath/ai-apocalypse.ts";
 import {
   callBoolean,
   requireBoolean,
@@ -22,6 +23,7 @@ import {
 export interface DemandPrioritizationReaderDependencies {
   readonly getSettings: () => unknown;
   readonly getState: () => unknown;
+  readonly getGame: () => unknown;
   readonly getResources: () => unknown;
   readonly getBuildings: () => unknown;
   readonly getCrafter: () => unknown;
@@ -278,6 +280,11 @@ export function readDemandPrioritizationInput(
     settings: readSettings(dependencies.getSettings()),
     isEarlyGame: dependencies.getIsEarlyGame(),
     consumptionBalanceTarget: dependencies.consumptionBalanceTarget,
+    truepathAiBuildingTarget: readTruepathAiBuildingTarget(
+      dependencies.getGame,
+      buildings,
+      isProject,
+    ),
     inflationMoney: dependencies.isInflationAssistActive()
       ? requireNumber(
           dependencies.getInflationChallengeMoney(),
@@ -345,6 +352,75 @@ export function readDemandPrioritizationInput(
   });
 }
 
+function readTruepathAiBuildingTarget(
+  getGame: () => unknown,
+  buildings: UnknownRecord,
+  isProject: (target: unknown) => boolean,
+): DemandTarget | null {
+  const game = requireRecord(getGame(), "game");
+  const global = requireRecord(game["global"], "game.global");
+  const race = requireRecord(global["race"], "game.global.race");
+  if (!race["truepath"]) return null;
+
+  const tech = requireRecord(global["tech"], "game.global.tech");
+  const coreLevel = tech["titan_ai_core"];
+  if (
+    typeof coreLevel !== "number" ||
+    !Number.isFinite(coreLevel) ||
+    coreLevel < 3
+  ) {
+    return null;
+  }
+
+  const decoder = requireRecord(
+    buildings["TitanDecoder"],
+    "buildings.TitanDecoder",
+  );
+  const colonist = requireRecord(
+    buildings["TitanAIColonist"],
+    "buildings.TitanAIColonist",
+  );
+  const trooper = requireRecord(
+    buildings["ErisTrooper"],
+    "buildings.ErisTrooper",
+  );
+  const tank = requireRecord(buildings["ErisTank"], "buildings.ErisTank");
+  const targetId = planTruepathAiApocalypse({
+    enabled: true,
+    aiCoreLevel: coreLevel,
+    decoderCount: requireNumber(
+      decoder["count"],
+      "buildings.TitanDecoder.count",
+    ),
+    decoderOnCount: requireNumber(
+      decoder["stateOnCount"],
+      "buildings.TitanDecoder.stateOnCount",
+    ),
+    colonistCount: requireNumber(
+      colonist["count"],
+      "buildings.TitanAIColonist.count",
+    ),
+    colonistOnCount: requireNumber(
+      colonist["stateOnCount"],
+      "buildings.TitanAIColonist.stateOnCount",
+    ),
+    trooperOnCount: requireNumber(
+      trooper["stateOnCount"],
+      "buildings.ErisTrooper.stateOnCount",
+    ),
+    tankOnCount: requireNumber(
+      tank["stateOnCount"],
+      "buildings.ErisTank.stateOnCount",
+    ),
+  }).target;
+  if (targetId === null) return null;
+  const target = requireRecord(buildings[targetId], `buildings.${targetId}`);
+  if (!callBoolean(target, "isUnlocked", `buildings.${targetId}`, true)) {
+    return null;
+  }
+  return readTarget(target, `buildings.${targetId}`, isProject);
+}
+
 function readTechs(
   value: unknown,
   isProject: (target: unknown) => boolean,
@@ -356,6 +432,7 @@ function readTechs(
     const path = `state.unlockedTechs[${index}]`;
     const record = requireRecord(entry, path);
     return Object.freeze({
+      id: typeof record["id"] === "string" ? record["id"] : null,
       isAffordable: callBoolean(record, "isAffordable", path, true),
       target: readTarget(record, path, isProject),
     });

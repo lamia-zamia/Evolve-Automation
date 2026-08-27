@@ -1,3 +1,5 @@
+import { isTruepathAiResourceResearch } from "../../progression/truepath/ai-apocalypse.ts";
+
 /**
  * Pure equivalent of the legacy `prioritizeDemandedResources`. It replays the
  * ordered sequence of resource demand requests (`requestQuantity` calls) over an
@@ -28,6 +30,7 @@ export interface DemandTarget {
 }
 
 export interface DemandTech {
+  readonly id: string | null;
   readonly isAffordable: boolean;
   readonly target: DemandTarget;
 }
@@ -102,6 +105,8 @@ export interface DemandPrioritizationInput {
   readonly settings: DemandPrioritizationSettings;
   readonly isEarlyGame: boolean;
   readonly consumptionBalanceTarget: number;
+  /** Cost of the next True Path AI hardware target, or null outside that stage. */
+  readonly truepathAiBuildingTarget: DemandTarget | null;
   /** Money reserve when the inflation-challenge assist is active, else null. */
   readonly inflationMoney: number | null;
   /** Graphene reserve when the retirement-challenge assist is active, else null. */
@@ -172,15 +177,25 @@ export function planDemandPrioritization(
     }
   }
 
-  if (
-    prioritizedTasks.length === 0 &&
-    (input.isEarlyGame
+  if (prioritizedTasks.length === 0) {
+    // Apocalypse is not selectable in the game settings until this chain has
+    // already unlocked it, so the tech ids themselves are the early-run gate.
+    const truepathAiResearch = input.unlockedTechs.filter((tech) =>
+      isTruepathAiResourceResearch(tech.id),
+    );
+    const researchRequestEnabled = input.isEarlyGame
       ? settings.researchRequest
-      : settings.researchRequestSpace)
-  ) {
-    prioritizedTasks = input.unlockedTechs
-      .filter((tech) => tech.isAffordable)
-      .map((tech) => tech.target);
+      : settings.researchRequestSpace;
+    prioritizedTasks =
+      truepathAiResearch.length > 0
+        ? truepathAiResearch.map((tech) => tech.target)
+        : input.truepathAiBuildingTarget !== null
+          ? [input.truepathAiBuildingTarget]
+          : researchRequestEnabled
+            ? input.unlockedTechs
+                .filter((tech) => tech.isAffordable)
+                .map((tech) => tech.target)
+            : [];
   }
 
   for (const task of prioritizedTasks) {

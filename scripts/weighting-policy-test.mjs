@@ -90,6 +90,10 @@ const snapshotOf = ({ weights = {}, ...overrides } = {}) =>
     stargatePiracySupressed: false,
     galaxyPiracyCoveredByFleet: false,
     truepathRace: false,
+    truepathAiApocalypse: false,
+    truepathAiProgress: 0,
+    truepathAiBuildingTarget: null,
+    truepathAiTargetColonists: 0,
     mineIsOnlyChrysotileSource: false,
     witchHunterRace: false,
     warlordRace: false,
@@ -180,7 +184,7 @@ const policy = createBuildingWeightingPolicy({
   nextRandomUnit: () => 0.5,
 });
 
-assert.equal(policy.weightingRules.length, 72);
+assert.equal(policy.weightingRules.length, 73);
 assert.equal(
   policy.weightingRules.every(
     (rule) =>
@@ -266,6 +270,18 @@ assert.equal(
   ruleById("unaffordable").match(named("Mine", { affordable: false })),
   true,
 );
+
+const aiRule = ruleById("truepath-ai-apocalypse");
+const aiSnapshot = snapshotOf({
+  truepathAiBuildingTarget: "TitanAIColonist",
+  truepathAiProgress: 40,
+  truepathAiTargetColonists: 43,
+});
+assert.equal(aiRule.enabled(aiSnapshot), true);
+assert.equal(aiRule.match(named("TitanAIColonist"), aiSnapshot), true);
+assert.equal(aiRule.match(named("TitanDecoder"), aiSnapshot), false);
+assert.equal(aiRule.multiplier(aiSnapshot), 100);
+assert.match(aiRule.describe(true, named("TitanAIColonist"), aiSnapshot), /43/);
 
 // Target membership is by catalog key: the priority-target planner and the
 // weighting phase now agree on one identity rather than on wrapper identity.

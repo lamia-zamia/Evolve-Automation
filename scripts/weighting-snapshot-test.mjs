@@ -74,6 +74,7 @@ const defaultGates = () => ({
   // A building that no run has reached yet is locked, unbuilt, and — because
   // its AutoBuild setting has not been written — not auto-buildable either.
   getBuildingCount: () => 0,
+  getBuildingOnCount: () => 0,
   getBuildingName: (building) => building,
   getBuildingTitle: (building) => `${building} Title`,
   getBuildingSoulGemCost: () => undefined,
@@ -189,6 +190,10 @@ assert.equal(empty.galaxyAssaultPending, false);
 assert.equal(empty.stargatePiracySupressed, false);
 assert.equal(empty.galaxyPiracyCoveredByFleet, false);
 assert.equal(empty.truepathRace, false);
+assert.equal(empty.truepathAiApocalypse, false);
+assert.equal(empty.truepathAiProgress, 0);
+assert.equal(empty.truepathAiBuildingTarget, null);
+assert.equal(empty.truepathAiTargetColonists, 0);
 assert.equal(empty.mineIsOnlyChrysotileSource, false);
 assert.equal(empty.witchHunterRace, false);
 assert.equal(empty.warlordRace, false);
@@ -740,6 +745,29 @@ assert.equal(raced.hoovedRace, true);
 assert.equal(raced.calmRace, true);
 // The impact has already happened, so nothing more can be destroyed by it.
 assert.equal(raced.orbitalDecayImpactPending, false);
+
+gates = {
+  ...withTraits("truepath"),
+  getPrestigeType: () => "none",
+  getTechLevel: (research) => (research === "titan_ai_core" ? 3 : undefined),
+  getBuildingCount: (building) =>
+    ({
+      TitanDecoder: 4,
+      TitanAIColonist: 0,
+    })[building] ?? 0,
+  getBuildingOnCount: (building) =>
+    ({
+      TitanDecoder: 4,
+      TitanAIColonist: 0,
+      ErisTrooper: 13,
+      ErisTank: 7,
+    })[building] ?? 0,
+};
+const aiApocalypse = read();
+assert.equal(aiApocalypse.truepathAiApocalypse, true);
+assert.equal(aiApocalypse.truepathAiProgress, 40);
+assert.equal(aiApocalypse.truepathAiBuildingTarget, "TitanAIColonist");
+assert.equal(aiApocalypse.truepathAiTargetColonists, 43);
 
 gates = withTraits("orbit_decay");
 assert.equal(read().orbitalDecayImpactPending, true);

@@ -1293,6 +1293,7 @@ export function startEvolveRuntimeComposition(
     createDemandPrioritizationActionControl({
       getSettings: () => settings,
       getState: () => state,
+      getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
       getCrafter: () => crafter,
@@ -1898,6 +1899,7 @@ export function startEvolveRuntimeComposition(
           resources[resource].techMissionMaxCost,
         getResourceTitle: (resource) => resources[resource].title,
         getBuildingCount: (building) => buildings[building].count,
+        getBuildingOnCount: (building) => buildings[building].stateOnCount,
         getBuildingName: (building) => buildings[building].name,
         getBuildingTitle: (building) => buildings[building].title,
         getBuildingSoulGemCost: (building) =>

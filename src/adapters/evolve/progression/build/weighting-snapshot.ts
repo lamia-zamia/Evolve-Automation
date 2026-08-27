@@ -1,4 +1,5 @@
 import type { ForeignAchievementGoal } from "../../../../domain/combat/foreign-achievements.ts";
+import { planTruepathAiApocalypse } from "../../../../domain/progression/truepath/ai-apocalypse.ts";
 import type {
   BuildingChoice,
   BuildingWeightingSnapshot,
@@ -42,6 +43,7 @@ export interface WeightingSnapshotDependencies {
   readonly getMissionMaxResourceCost: (resource: string) => unknown;
   readonly getResourceTitle: (resource: string) => unknown;
   readonly getBuildingCount: (building: string) => unknown;
+  readonly getBuildingOnCount: (building: string) => unknown;
   readonly getBuildingName: (building: string) => unknown;
   readonly getBuildingTitle: (building: string) => unknown;
   readonly getBuildingSoulGemCost: (building: string) => unknown;
@@ -164,6 +166,7 @@ export function createWeightingSnapshotReader({
   getMissionMaxResourceCost,
   getResourceTitle,
   getBuildingCount,
+  getBuildingOnCount,
   getBuildingName,
   getBuildingTitle,
   getBuildingSoulGemCost,
@@ -265,8 +268,7 @@ export function createWeightingSnapshotReader({
     "terraform",
   ]);
 
-  const readPrestigeRoute = (): PrestigeRoute => {
-    const route = requireString(getPrestigeType(), "settings.prestigeType");
+  const readPrestigeRoute = (route: string): PrestigeRoute => {
     return DISTINGUISHED_ROUTES.has(route) ? (route as PrestigeRoute) : "other";
   };
 
@@ -590,6 +592,58 @@ export function createWeightingSnapshotReader({
     // checks are truthiness tests, so the race gates keep that coercion.
     const trait = (name: string): boolean => Boolean(hasRaceTrait(name));
     const truepathRace = trait("truepath");
+    const prestigeType = requireString(
+      getPrestigeType(),
+      "settings.prestigeType",
+    );
+    const truepathAiApocalypse = truepathRace;
+    const readTechLevelOrZero = (research: string): number => {
+      const value = getTechLevel(research);
+      return typeof value === "number" && Number.isFinite(value) && value >= 0
+        ? value
+        : 0;
+    };
+    const truepathAiPlan = planTruepathAiApocalypse(
+      truepathAiApocalypse
+        ? {
+            enabled: true,
+            aiCoreLevel: readTechLevelOrZero("titan_ai_core"),
+            decoderCount: requireNumber(
+              getBuildingCount("TitanDecoder"),
+              "buildings.TitanDecoder.count",
+            ),
+            decoderOnCount: requireNumber(
+              getBuildingOnCount("TitanDecoder"),
+              "buildings.TitanDecoder.stateOnCount",
+            ),
+            colonistCount: requireNumber(
+              getBuildingCount("TitanAIColonist"),
+              "buildings.TitanAIColonist.count",
+            ),
+            colonistOnCount: requireNumber(
+              getBuildingOnCount("TitanAIColonist"),
+              "buildings.TitanAIColonist.stateOnCount",
+            ),
+            trooperOnCount: requireNumber(
+              getBuildingOnCount("ErisTrooper"),
+              "buildings.ErisTrooper.stateOnCount",
+            ),
+            tankOnCount: requireNumber(
+              getBuildingOnCount("ErisTank"),
+              "buildings.ErisTank.stateOnCount",
+            ),
+          }
+        : {
+            enabled: false,
+            aiCoreLevel: 0,
+            decoderCount: 0,
+            decoderOnCount: 0,
+            colonistCount: 0,
+            colonistOnCount: 0,
+            trooperOnCount: 0,
+            tankOnCount: 0,
+          },
+    );
     const cannibalizeRace = trait("cannibalize");
     const lumberRace = requireBoolean(isLumberRace(), "isLumberRace()");
     return Object.freeze({
@@ -610,7 +664,7 @@ export function createWeightingSnapshotReader({
         isMinerJobsDisabled(),
         "settings.jobDisableMiners",
       ),
-      prestigeRoute: readPrestigeRoute(),
+      prestigeRoute: readPrestigeRoute(prestigeType),
       limitPrestigeConstruction: requireBoolean(
         isPrestigeConstructionLimited(),
         "settings.prestigeBioseedConstruct",
@@ -717,6 +771,10 @@ export function createWeightingSnapshotReader({
         "isGalaxyPiracyCoveredByFleet()",
       ),
       truepathRace,
+      truepathAiApocalypse,
+      truepathAiProgress: truepathAiPlan.progress,
+      truepathAiBuildingTarget: truepathAiPlan.target,
+      truepathAiTargetColonists: truepathAiPlan.targetColonistCount,
       // The game spells the Entish no-quarry-worker trait "sappy".
       mineIsOnlyChrysotileSource: trait("smoldering") && trait("sappy"),
       witchHunterRace: trait("witch_hunter"),

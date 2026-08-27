@@ -63,6 +63,7 @@ assert.deepEqual(
     "autobuild-disabled",
     "maximum-amount-reached",
     "unaffordable",
+    "truepath-ai-apocalypse",
     "truepath-test-launch-sabotage",
     "eris-digsite-unsecured",
     "andromeda-miners-disabled",
@@ -154,7 +155,7 @@ assert.deepEqual(
     ships: bindings(policy.galaxyCombatShips),
   },
   {
-    rules: 72,
+    rules: 73,
     authority: [
       "city-garrison",
       "city-temple",

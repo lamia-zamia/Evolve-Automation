@@ -44,6 +44,7 @@ interface StorageRequirementsActionDependencies {
 interface DemandPrioritizationActionDependencies {
   readonly getSettings: () => unknown;
   readonly getState: () => unknown;
+  readonly getGame: () => unknown;
   readonly getResources: () => Record<string, ResourceState>;
   readonly getBuildings: () => unknown;
   readonly getCrafter: () => unknown;
@@ -63,9 +64,9 @@ interface DemandPrioritizationActionDependencies {
 export function createStorageRequirementsAction({
   getSettings,
   getState,
+  getGame,
   getResources,
   getBuildings,
-  getGame,
   getBuildingManager,
   getProjectManager,
   getFleetManagerOuter,
@@ -82,9 +83,9 @@ export function createStorageRequirementsAction({
       readStorageRequirementsInput({
         getSettings,
         getState,
+        getGame,
         getResources,
         getBuildings,
-        getGame,
         getBuildingManager,
         getProjectManager,
         getFleetManagerOuter,
@@ -113,6 +114,7 @@ export function createStorageRequirementsAction({
 export function createDemandPrioritizationAction({
   getSettings,
   getState,
+  getGame,
   getResources,
   getBuildings,
   getCrafter,
@@ -135,6 +137,7 @@ export function createDemandPrioritizationAction({
       readDemandPrioritizationInput({
         getSettings,
         getState,
+        getGame,
         getResources,
         getBuildings,
         getCrafter,
