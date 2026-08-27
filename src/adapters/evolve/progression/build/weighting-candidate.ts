@@ -1,7 +1,4 @@
-import type {
-  BuildingWeightingCandidate,
-  BuildingWeightingScreeningCandidate,
-} from "../../../../domain/progression/build/building-weighting.ts";
+import type { BuildingWeightingCandidate } from "../../../../domain/progression/build/building-weighting.ts";
 import {
   callBoolean,
   requireBoolean,
@@ -45,45 +42,8 @@ const readCost = (
 };
 
 /**
- * Projects the fields the screening rules read.
- *
- * Every one of these is answerable without the game's cost, power, or
- * consumption machinery, which is why the screening pass can afford to run over
- * the whole `priorityList` — most of which is locked buildings that the
- * `locked` rule discards immediately.
- */
-export function readWeightingScreeningCandidate(
-  building: unknown,
-): BuildingWeightingScreeningCandidate {
-  const record = requireRecord(building, "BuildingManager.priorityList entry");
-  const id = requireString(
-    record["catalogKey"],
-    "BuildingManager.priorityList entry.catalogKey",
-  );
-  const path = `buildings.${id}`;
-  return Object.freeze({
-    id,
-    // `Action.isUnlocked()` is an exact boolean: it either fails one of the tab
-    // tests or answers whether the building has a Vue view.
-    unlocked: requireBoolean(
-      call(record, "isUnlocked", path),
-      `${path}.isUnlocked()`,
-    ),
-    // `autoBuildEnabled` chains on `settings["bat" + binding]`, which does not
-    // exist until that building's toggle is first written, so it keeps the
-    // game's truthiness test.
-    autoBuildEnabled: Boolean(record["autoBuildEnabled"]),
-    count: requireNumber(record["count"], `${path}.count`),
-    autoMax: requireNumber(record["autoMax"], `${path}.autoMax`),
-    // `_weighting` forwards the building's own weight setting, which the
-    // defaults write for every catalog building, so it is always a number.
-    baseWeight: requireNumber(record["_weighting"], `${path}._weighting`),
-  });
-}
-
-/**
- * Completes a screened candidate into the one every rule reads, reusing the
- * fields the screening pass already sampled.
+ * Projects one live building wrapper into the immutable candidate the weighting
+ * rules read.
  *
  * Four answers are only sampled while the building is unlocked. A locked
  * building has no `definition`, so `powered` and `isAffordable()` throw on it
@@ -91,29 +51,43 @@ export function readWeightingScreeningCandidate(
  * whatever it held before the building locked because
  * `updateResourceRequirements` returns early. The `locked` rule zeroes such a
  * candidate before any rule reads them, so they are reported as neutral rather
- * than sampled. A locked candidate only reaches here at all when `locked` is
- * not among the phase's active rules.
+ * than sampled.
  */
 export function readWeightingCandidate(
   building: unknown,
-  screening: BuildingWeightingScreeningCandidate,
 ): BuildingWeightingCandidate {
   const record = requireRecord(building, "BuildingManager.priorityList entry");
-  const path = `buildings.${screening.id}`;
+  const id = requireString(
+    record["catalogKey"],
+    "BuildingManager.priorityList entry.catalogKey",
+  );
+  const path = `buildings.${id}`;
   // `is` carries only the flags a building declares, so every other flag is
   // absent rather than false.
   const flags = requireRecord(record["is"], `${path}.is`);
-  const unlocked = screening.unlocked;
+  // `Action.isUnlocked()` is an exact boolean: it either fails one of the tab
+  // tests or answers whether the building has a Vue view.
+  const unlocked = requireBoolean(
+    call(record, "isUnlocked", path),
+    `${path}.isUnlocked()`,
+  );
   return Object.freeze({
-    ...screening,
+    id,
     name: requireString(record["name"], `${path}.name`),
     actionId: requireString(record["_id"], `${path}._id`),
     tab: requireString(record["_tab"], `${path}._tab`),
     location: requireString(record["_location"], `${path}._location`),
-    // `isSmartManaged()` chains on two settings that do not exist until the
-    // building's toggles are first written, so it keeps the game's truthiness
-    // test.
+    unlocked,
+    // `autoBuildEnabled` chains on `settings["bat" + binding]` and
+    // `isSmartManaged()` on two more settings, none of which exist until that
+    // building's toggle is first written. Both keep the game's truthiness test.
+    autoBuildEnabled: Boolean(record["autoBuildEnabled"]),
     smartManaged: callBoolean(record, "isSmartManaged", path),
+    count: requireNumber(record["count"], `${path}.count`),
+    autoMax: requireNumber(record["autoMax"], `${path}.autoMax`),
+    // `_weighting` forwards the building's own weight setting, which the
+    // defaults write for every catalog building, so it is always a number.
+    baseWeight: requireNumber(record["_weighting"], `${path}._weighting`),
     stateOffCount: requireNumber(
       record["stateOffCount"],
       `${path}.stateOffCount`,

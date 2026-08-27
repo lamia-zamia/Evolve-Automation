@@ -45,18 +45,14 @@ const readWeightingSnapshot = () => {
 };
 // Rules only ever see the projected candidate, never the live wrapper.
 const projectedFrom = [];
-const readWeightingScreeningCandidate = (building) =>
-  Object.freeze({
-    id: building.id,
-    unlocked: true,
-    autoBuildEnabled: true,
-    count: building.count,
-    autoMax: Number.MAX_SAFE_INTEGER,
-    baseWeight: building._weighting,
-  });
-const readWeightingCandidate = (building, screening) => {
+const readWeightingCandidate = (building) => {
   projectedFrom.push(building);
-  return Object.freeze({ ...screening, boost: building.boost });
+  return Object.freeze({
+    id: building.id,
+    boost: building.boost,
+    baseWeight: building._weighting,
+    count: building.count,
+  });
 };
 // The manager renders nothing itself; it hands each decision to the describer.
 const described = [];
@@ -95,7 +91,6 @@ const { JobManager, BuildingManager, ProjectManager, TriggerManager } =
     },
     weightingDecider: createBuildingWeightingDecider({ weightingRules }),
     readWeightingSnapshot,
-    readWeightingScreeningCandidate,
     readWeightingCandidate,
     describeBuildingWeighting,
     isEarlyGame: () => earlyGame,

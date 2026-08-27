@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import {
   createBuildingWeightingDecider,
   decideBuildingWeighting,
-  screenBuildingWeighting,
   selectActiveWeightingRules,
-  selectScreeningRules,
 } from "../src/domain/progression/build/building-weighting-decision.ts";
 
 const rule = (id, overrides) =>
@@ -225,77 +223,5 @@ assert.deepEqual(
 const otherSnapshot = Object.freeze({ marker: "later phase" });
 decider.beginPhase(otherSnapshot);
 assert.deepEqual(enabledFor, [snapshot, otherSnapshot]);
-
-// ---------- screening ----------
-// A screening rule reads only the fields a partly projected candidate carries,
-// so the rules that discard most of the list can run before the expensive
-// projection is paid for.
-const screeningRule = (id, overrides) =>
-  Object.freeze({ ...rule(id, overrides), screening: true });
-
-const screeningPrefix = selectScreeningRules([
-  screeningRule("first"),
-  screeningRule("second"),
-  rule("third"),
-  rule("fourth"),
-]);
-assert.deepEqual(
-  screeningPrefix.map((entry) => entry.id),
-  ["first", "second"],
-);
-
-// Running a screening rule out of order would move it ahead of rules it is
-// ordered behind, so an interleaved list is rejected outright.
-assert.throws(
-  () => selectScreeningRules([rule("full"), screeningRule("stray")]),
-  {
-    name: "TypeError",
-    message: /^weighting rule stray is marked screening/,
-  },
-);
-
-// Screening settles a candidate a screening rule zeroes...
-const screened = screenBuildingWeighting(
-  [
-    screeningRule("keeps", { multiplier: () => 1 }),
-    screeningRule("zeroes", { multiplier: () => 0 }),
-  ],
-  candidate(),
-  snapshot,
-);
-assert.equal(screened?.weight, 0);
-assert.equal(screened?.zeroedBy, "zeroes");
-assert.deepEqual(
-  screened?.annotations.map((annotation) => annotation.ruleId),
-  ["keeps", "zeroes"],
-);
-
-// ...and reports nothing for one that survives, so the caller projects it fully.
-assert.equal(
-  screenBuildingWeighting([screeningRule("keeps")], candidate(), snapshot),
-  null,
-);
-
-// A surviving candidate is decided from the start, so a screening rule that
-// also multiplies applies exactly once rather than twice.
-const mixedDecider = createBuildingWeightingDecider({
-  weightingRules: [
-    screeningRule("doubles"),
-    rule("triples", { multiplier: () => 3 }),
-  ],
-});
-const mixedPhase = mixedDecider.beginPhase(snapshot);
-assert.equal(mixedPhase.screen(candidate()), null);
-assert.equal(mixedPhase.decide(candidate()).weight, 600);
-
-// A screening rule the phase dropped as inactive cannot screen anything out.
-const inactiveDecider = createBuildingWeightingDecider({
-  weightingRules: [
-    screeningRule("off", { enabled: () => false, multiplier: () => 0 }),
-    screeningRule("on", { multiplier: () => 0 }),
-  ],
-});
-const inactivePhase = inactiveDecider.beginPhase(snapshot);
-assert.equal(inactivePhase.screen(candidate())?.zeroedBy, "on");
 
 console.log("Building weighting decision policy tests passed");

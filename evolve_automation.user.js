@@ -7047,42 +7047,31 @@ Only continue if you trust the source. Injected code:
       amounts[resource2] = requireNumber(amount, `${path}.cost.${resource2}`);
     return Object.freeze(amounts);
   };
-  function readWeightingScreeningCandidate(building3) {
+  function readWeightingCandidate(building3) {
     let record = requireRecord(building3, "BuildingManager.priorityList entry"), id = requireString(
       record.catalogKey,
       "BuildingManager.priorityList entry.catalogKey"
-    ), path = `buildings.${id}`;
+    ), path = `buildings.${id}`, flags = requireRecord(record.is, `${path}.is`), unlocked2 = requireBoolean(
+      call(record, "isUnlocked", path),
+      `${path}.isUnlocked()`
+    );
     return Object.freeze({
       id,
-      // `Action.isUnlocked()` is an exact boolean: it either fails one of the tab
-      // tests or answers whether the building has a Vue view.
-      unlocked: requireBoolean(
-        call(record, "isUnlocked", path),
-        `${path}.isUnlocked()`
-      ),
-      // `autoBuildEnabled` chains on `settings["bat" + binding]`, which does not
-      // exist until that building's toggle is first written, so it keeps the
-      // game's truthiness test.
-      autoBuildEnabled: !!record.autoBuildEnabled,
-      count: requireNumber(record.count, `${path}.count`),
-      autoMax: requireNumber(record.autoMax, `${path}.autoMax`),
-      // `_weighting` forwards the building's own weight setting, which the
-      // defaults write for every catalog building, so it is always a number.
-      baseWeight: requireNumber(record._weighting, `${path}._weighting`)
-    });
-  }
-  function readWeightingCandidate(building3, screening) {
-    let record = requireRecord(building3, "BuildingManager.priorityList entry"), path = `buildings.${screening.id}`, flags = requireRecord(record.is, `${path}.is`), unlocked2 = screening.unlocked;
-    return Object.freeze({
-      ...screening,
       name: requireString(record.name, `${path}.name`),
       actionId: requireString(record._id, `${path}._id`),
       tab: requireString(record._tab, `${path}._tab`),
       location: requireString(record._location, `${path}._location`),
-      // `isSmartManaged()` chains on two settings that do not exist until the
-      // building's toggles are first written, so it keeps the game's truthiness
-      // test.
+      unlocked: unlocked2,
+      // `autoBuildEnabled` chains on `settings["bat" + binding]` and
+      // `isSmartManaged()` on two more settings, none of which exist until that
+      // building's toggle is first written. Both keep the game's truthiness test.
+      autoBuildEnabled: !!record.autoBuildEnabled,
       smartManaged: callBoolean(record, "isSmartManaged", path),
+      count: requireNumber(record.count, `${path}.count`),
+      autoMax: requireNumber(record.autoMax, `${path}.autoMax`),
+      // `_weighting` forwards the building's own weight setting, which the
+      // defaults write for every catalog building, so it is always a number.
+      baseWeight: requireNumber(record._weighting, `${path}._weighting`),
       stateOffCount: requireNumber(
         record.stateOffCount,
         `${path}.stateOffCount`
@@ -8371,7 +8360,6 @@ Only continue if you trust the source. Injected code:
     getNiceNumber,
     weightingDecider,
     readWeightingSnapshot,
-    readWeightingScreeningCandidate: readWeightingScreeningCandidate2,
     readWeightingCandidate: readWeightingCandidate2,
     describeBuildingWeighting,
     isEarlyGame,
@@ -8436,23 +8424,19 @@ Only continue if you trust the source. Injected code:
           () => weightingDecider.beginPhase(snapshot)
         );
         measure(APPLY_RULES_PHASE, () => {
-          let timing = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, tally = createCountTally(diagnostics), screenMs = 0, projectMs = 0, describeMs = 0, unlockedCount = 0, projectedCount = 0, survivingCount = 0;
+          let timing = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, tally = createCountTally(diagnostics), sampleMs = 0, decideMs = 0, describeMs = 0, unlockedCount = 0, survivingCount = 0;
           for (let building3 of this.priorityList) {
-            let screenStartedMs = timing?.nowMs() ?? 0, screening = readWeightingScreeningCandidate2(building3), decision2 = phase.screen(screening), projectStartedMs = timing?.nowMs() ?? 0;
-            decision2 === null && (decision2 = phase.decide(
-              readWeightingCandidate2(building3, screening)
-            ), projectedCount++);
-            let describeStartedMs = timing?.nowMs() ?? 0;
+            let sampleStartedMs = timing?.nowMs() ?? 0, candidate = readWeightingCandidate2(building3), decideStartedMs = timing?.nowMs() ?? 0, decision2 = phase.decide(candidate), describeStartedMs = timing?.nowMs() ?? 0;
             if (building3.weighting = decision2.weight, building3.extraDescription = describeBuildingWeighting(
-              screening.id,
+              candidate.id,
               decision2
             ), timing !== void 0) {
               let finishedMs = timing.nowMs();
-              screenMs += projectStartedMs - screenStartedMs, projectMs += describeStartedMs - projectStartedMs, describeMs += finishedMs - describeStartedMs;
+              sampleMs += decideStartedMs - sampleStartedMs, decideMs += describeStartedMs - decideStartedMs, describeMs += finishedMs - describeStartedMs;
             }
-            tally.enabled && (screening.unlocked && unlockedCount++, decision2.weight > 0 && survivingCount++, decision2.zeroedBy !== null && tally.count(`${ZEROED_BY_PREFIX}${decision2.zeroedBy}`));
+            tally.enabled && (candidate.unlocked && unlockedCount++, decision2.weight > 0 && survivingCount++, decision2.zeroedBy !== null && tally.count(`${ZEROED_BY_PREFIX}${decision2.zeroedBy}`));
           }
-          timing !== void 0 && (timing.recordPerformance(`${APPLY_RULES_PHASE}.screen`, screenMs), timing.recordPerformance(`${APPLY_RULES_PHASE}.project`, projectMs), timing.recordPerformance(`${APPLY_RULES_PHASE}.describe`, describeMs)), tally.count("autoBuild.weighting.candidates", this.priorityList.length), tally.count("autoBuild.weighting.projected", projectedCount), tally.count("autoBuild.weighting.sampledUnlocked", unlockedCount), tally.count("autoBuild.weighting.surviving", survivingCount);
+          timing !== void 0 && (timing.recordPerformance(`${APPLY_RULES_PHASE}.sample`, sampleMs), timing.recordPerformance(`${APPLY_RULES_PHASE}.decide`, decideMs), timing.recordPerformance(`${APPLY_RULES_PHASE}.describe`, describeMs)), tally.count("autoBuild.weighting.candidates", this.priorityList.length), tally.count("autoBuild.weighting.sampledUnlocked", unlockedCount), tally.count("autoBuild.weighting.surviving", survivingCount);
         });
       },
       sortByPriority() {
@@ -20189,37 +20173,6 @@ Only continue if you trust the source. Injected code:
       (rule) => rule.enabled(snapshot) && rule.multiplier(snapshot) !== 1
     );
   }
-  function selectScreeningRules(rules) {
-    let prefix = rules.findIndex((rule) => rule.screening !== !0), screeningCount = prefix === -1 ? rules.length : prefix, strayIndex = rules.findIndex(
-      (rule, index) => index >= screeningCount && rule.screening === !0
-    );
-    if (strayIndex !== -1)
-      throw new TypeError(
-        `weighting rule ${rules[strayIndex]?.id} is marked screening but follows a rule that needs the full candidate`
-      );
-    return rules.slice(
-      0,
-      screeningCount
-    );
-  }
-  function screenBuildingWeighting(screeningRules, candidate, snapshot) {
-    let weight = candidate.baseWeight, annotations;
-    for (let rule of screeningRules) {
-      let match = rule.match(candidate, snapshot);
-      if (!match)
-        continue;
-      let note = rule.describe(match, candidate, snapshot);
-      note !== "" && (annotations ??= [], annotations.push(Object.freeze({ ruleId: rule.id, note })));
-      let weightBeforeRule = weight;
-      if (weight *= rule.multiplier(snapshot, match), weight <= 0)
-        return Object.freeze({
-          weight,
-          annotations: annotations === void 0 ? NO_ANNOTATIONS : Object.freeze(annotations),
-          zeroedBy: weightBeforeRule > 0 ? rule.id : null
-        });
-    }
-    return null;
-  }
   function decideBuildingWeighting(activeRules, candidate, snapshot) {
     let weight = candidate.baseWeight, annotations, zeroedBy = null;
     for (let rule of activeRules) {
@@ -20245,9 +20198,8 @@ Only continue if you trust the source. Injected code:
   }) {
     return Object.freeze({
       beginPhase(snapshot) {
-        let activeRules = selectActiveWeightingRules(weightingRules, snapshot), screeningRules = selectScreeningRules(activeRules);
+        let activeRules = selectActiveWeightingRules(weightingRules, snapshot);
         return Object.freeze({
-          screen: (candidate) => screenBuildingWeighting(screeningRules, candidate, snapshot),
           decide: (candidate) => decideBuildingWeighting(activeRules, candidate, snapshot)
         });
       }
@@ -20406,7 +20358,6 @@ Only continue if you trust the source. Injected code:
       {
         // Set weighting to zero right away, and skip all checks if autoBuild is disabled
         id: "autobuild-off",
-        screening: !0,
         enabled: (snapshot) => !snapshot.autoBuildEnabled,
         match: () => !0,
         describe: () => "",
@@ -20415,7 +20366,6 @@ Only continue if you trust the source. Injected code:
       {
         // Should always be on top, processing locked building may lead to issues
         id: "locked",
-        screening: !0,
         enabled: () => !0,
         match: (candidate) => !candidate.unlocked,
         describe: () => "Locked",
@@ -20423,7 +20373,6 @@ Only continue if you trust the source. Injected code:
       },
       {
         id: "queued-target",
-        screening: !0,
         enabled: () => !0,
         match: (candidate, snapshot) => snapshot.queuedTargets.has(candidate.id),
         describe: () => "Queued building, processing...",
@@ -20431,7 +20380,6 @@ Only continue if you trust the source. Injected code:
       },
       {
         id: "trigger-target",
-        screening: !0,
         enabled: () => !0,
         match: (candidate, snapshot) => snapshot.triggerTargets.has(candidate.id),
         describe: () => "Active trigger, processing...",
@@ -20439,7 +20387,6 @@ Only continue if you trust the source. Injected code:
       },
       {
         id: "autobuild-disabled",
-        screening: !0,
         enabled: () => !0,
         match: (candidate) => !candidate.autoBuildEnabled,
         describe: () => "AutoBuild disabled",
@@ -20447,7 +20394,6 @@ Only continue if you trust the source. Injected code:
       },
       {
         id: "maximum-amount-reached",
-        screening: !0,
         enabled: () => !0,
         match: (candidate) => candidate.count >= candidate.autoMax,
         describe: () => "Maximum amount reached",
@@ -51359,7 +51305,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       isVacuumSyphonStage,
       getNiceNumber,
       weightingDecider: buildingWeightingDecider,
-      readWeightingScreeningCandidate,
       readWeightingCandidate,
       describeBuildingWeighting: buildingWeightingDescriber.describe,
       weightingSnapshot: {

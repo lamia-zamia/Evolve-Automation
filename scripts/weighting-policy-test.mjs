@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { createBuildingWeightingPolicy } from "../src/domain/progression/build/building-weighting-rules.ts";
-import { selectScreeningRules } from "../src/domain/progression/build/building-weighting-decision.ts";
 
 // Every configured weighting multiplier arrives through the snapshot, so the
 // baseline is zero and each rule's own case supplies the value it asserts.
@@ -1691,22 +1690,6 @@ assert.equal(
 assert.equal(
   slaveRule.match(otherBuilding, snapshotOf({ slavePensFull: true })),
   undefined,
-);
-
-// The rules that can decide a candidate before it is fully projected. This
-// asserts the exact set, because moving a rule across the boundary silently
-// changes how much of the weighting phase a locked building costs, and adding
-// one that reads a field outside the screening candidate would break it.
-assert.deepEqual(
-  selectScreeningRules(policy.weightingRules).map((entry) => entry.id),
-  [
-    "autobuild-off",
-    "locked",
-    "queued-target",
-    "trigger-target",
-    "autobuild-disabled",
-    "maximum-amount-reached",
-  ],
 );
 
 console.log("Weighting policy module tests passed");

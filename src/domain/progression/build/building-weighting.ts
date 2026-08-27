@@ -82,26 +82,6 @@ export type WomlingOverlordAction = {
 };
 
 /**
- * The part of a candidate the screening rules read, projected on its own so a
- * candidate an early rule discards never costs a full projection.
- *
- * Most of a late-game `priorityList` is locked buildings that the `locked` rule
- * zeroes immediately, and projecting one of those was measured as the single
- * largest cost in the weighting phase. Every field here is answerable without
- * touching the game's cost, power, or consumption machinery.
- */
-export type BuildingWeightingScreeningCandidate = {
-  /** The script's catalog key, e.g. `"Barracks"`. Stable candidate identity. */
-  readonly id: string;
-  /** The configured weight this candidate starts from, before any rule applies. */
-  readonly baseWeight: number;
-  readonly unlocked: boolean;
-  readonly autoBuildEnabled: boolean;
-  readonly count: number;
-  readonly autoMax: number;
-};
-
-/**
  * One build candidate, projected from the compatibility building wrapper into
  * immutable data before any rule sees it.
  *
@@ -110,7 +90,9 @@ export type BuildingWeightingScreeningCandidate = {
  * candidate before any later rule reads those fields, and the wrapper's own
  * values are stale rather than meaningful while a building is locked.
  */
-export type BuildingWeightingCandidate = BuildingWeightingScreeningCandidate & {
+export type BuildingWeightingCandidate = {
+  /** The script's catalog key, e.g. `"Barracks"`. Stable candidate identity. */
+  readonly id: string;
   /** The script's own name for the building. */
   readonly name: string;
   /** The game's action id within its tab, e.g. `"s_alter"`. */
@@ -119,10 +101,16 @@ export type BuildingWeightingCandidate = BuildingWeightingScreeningCandidate & {
   readonly tab: string;
   /** The region within the tab, e.g. `"spc_moon"`; `""` when the tab has none. */
   readonly location: string;
+  readonly unlocked: boolean;
+  readonly autoBuildEnabled: boolean;
   /** AutoPower manages this building's on/off state. */
   readonly smartManaged: boolean;
   /** Affordable at the amount AutoBuild would buy. */
   readonly affordable: boolean;
+  readonly count: number;
+  readonly autoMax: number;
+  /** The configured weight this candidate starts from, before any rule applies. */
+  readonly baseWeight: number;
   /** Power one more would draw; negative for a building that produces power. */
   readonly powered: number;
   /** Built copies the game has switched off. */
@@ -405,15 +393,6 @@ export type BuildingWeightingSnapshot = {
 export type BuildingWeightingRule<Match = boolean> = {
   /** Stable identifier for tests and diagnostics. Rule order is still the array order. */
   readonly id: string;
-  /**
-   * This rule's `match` reads nothing outside `BuildingWeightingScreeningCandidate`,
-   * so it can decide a candidate before the full projection is paid for.
-   *
-   * Screening rules must form a prefix of the ordered list; the decider rejects
-   * a list where one appears after a rule that needs the full candidate,
-   * because screening a candidate past that point would reorder the rules.
-   */
-  readonly screening?: boolean;
   readonly enabled: (snapshot: BuildingWeightingSnapshot) => boolean;
   readonly match: (
     candidate: BuildingWeightingCandidate,
@@ -422,30 +401,6 @@ export type BuildingWeightingRule<Match = boolean> = {
   readonly describe: (
     match: Match,
     candidate: BuildingWeightingCandidate,
-    snapshot: BuildingWeightingSnapshot,
-  ) => string;
-  readonly multiplier: (
-    snapshot: BuildingWeightingSnapshot,
-    match?: Match,
-  ) => number;
-};
-
-/**
- * The same contract as `BuildingWeightingRule`, narrowed to what a rule marked
- * `screening` is allowed to read. The decider partitions the ordered list into
- * this shape once per phase.
- */
-export type BuildingWeightingScreeningRule<Match = boolean> = {
-  readonly id: string;
-  readonly screening: true;
-  readonly enabled: (snapshot: BuildingWeightingSnapshot) => boolean;
-  readonly match: (
-    candidate: BuildingWeightingScreeningCandidate,
-    snapshot: BuildingWeightingSnapshot,
-  ) => Match | false | undefined;
-  readonly describe: (
-    match: Match,
-    candidate: BuildingWeightingScreeningCandidate,
     snapshot: BuildingWeightingSnapshot,
   ) => string;
   readonly multiplier: (
@@ -487,14 +442,6 @@ export type BuildingWeightingDecision = {
  * snapshot. Every candidate of the phase is decided by the same one.
  */
 export type BuildingWeightingPhase = {
-  /**
-   * Applies only this phase's screening rules. Returns the finished decision
-   * when they settled the candidate, or `null` when it survived them and the
-   * caller must project it fully and call `decide`.
-   */
-  readonly screen: (
-    candidate: BuildingWeightingScreeningCandidate,
-  ) => BuildingWeightingDecision | null;
   readonly decide: (
     candidate: BuildingWeightingCandidate,
   ) => BuildingWeightingDecision;

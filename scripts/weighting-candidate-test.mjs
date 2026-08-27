@@ -1,8 +1,5 @@
 import assert from "node:assert/strict";
-import {
-  readWeightingCandidate,
-  readWeightingScreeningCandidate,
-} from "../src/adapters/evolve/progression/build/weighting-candidate.ts";
+import { readWeightingCandidate } from "../src/adapters/evolve/progression/build/weighting-candidate.ts";
 
 // A live wrapper answers most questions through getters and methods, so the
 // fixture is a class rather than a literal.
@@ -50,14 +47,8 @@ class BuildingWrapper {
   }
 }
 
-// The full projection completes a screened candidate, so the two run together.
-const read = (overrides) => {
-  const wrapper = new BuildingWrapper(overrides);
-  return readWeightingCandidate(
-    wrapper,
-    readWeightingScreeningCandidate(wrapper),
-  );
-};
+const read = (overrides) =>
+  readWeightingCandidate(new BuildingWrapper(overrides));
 
 const unlocked = read({
   is: { housing: true, knowledge: true },
@@ -127,22 +118,9 @@ class LockedWrapper extends BuildingWrapper {
     throw new Error("support read on a locked building");
   }
 }
-const lockedWrapper = new LockedWrapper({
-  unlocked: false,
-  cost: { Money: 250 },
-});
-const lockedScreening = readWeightingScreeningCandidate(lockedWrapper);
-// Screening a locked building answers the rules that discard it without
-// touching anything the game only maintains while it is unlocked.
-assert.deepEqual(lockedScreening, {
-  id: "Factory",
-  unlocked: false,
-  autoBuildEnabled: true,
-  count: 3,
-  autoMax: Number.MAX_SAFE_INTEGER,
-  baseWeight: 100,
-});
-const locked = readWeightingCandidate(lockedWrapper, lockedScreening);
+const locked = readWeightingCandidate(
+  new LockedWrapper({ unlocked: false, cost: { Money: 250 } }),
+);
 assert.equal(locked.unlocked, false);
 assert.equal(locked.affordable, false);
 assert.equal(locked.powered, 0);
@@ -219,14 +197,11 @@ rejects(
   { useless: { name: 7 } },
   "buildings.Factory.getUselessSupport().name must be a string",
 );
-assert.throws(
-  () => readWeightingScreeningCandidate({ catalogKey: "Factory", is: {} }),
-  {
-    name: "TypeError",
-    message: /^buildings\.Factory\.isUnlocked must be a function/,
-  },
-);
-assert.throws(() => readWeightingScreeningCandidate(null), {
+assert.throws(() => readWeightingCandidate({ catalogKey: "Factory", is: {} }), {
+  name: "TypeError",
+  message: /^buildings\.Factory\.isUnlocked must be a function/,
+});
+assert.throws(() => readWeightingCandidate(null), {
   name: "TypeError",
   message: /^BuildingManager\.priorityList entry must be an object/,
 });
