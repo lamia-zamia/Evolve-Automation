@@ -253,6 +253,7 @@ export function readDemandPrioritizationInput(
     dependencies.getFactoryManager(),
     "FactoryManager",
   );
+  const settings = readSettings(dependencies.getSettings());
   const vitreloy = requireRecord(
     buildings["Alien1VitreloyPlant"],
     "buildings.Alien1VitreloyPlant",
@@ -277,13 +278,14 @@ export function readDemandPrioritizationInput(
   );
 
   return Object.freeze({
-    settings: readSettings(dependencies.getSettings()),
+    settings,
     isEarlyGame: dependencies.getIsEarlyGame(),
     consumptionBalanceTarget: dependencies.consumptionBalanceTarget,
     truepathAiBuildingTarget: readTruepathAiBuildingTarget(
       dependencies.getGame,
       buildings,
       isProject,
+      settings.prestigeType,
     ),
     inflationMoney: dependencies.isInflationAssistActive()
       ? requireNumber(
@@ -356,11 +358,12 @@ function readTruepathAiBuildingTarget(
   getGame: () => unknown,
   buildings: UnknownRecord,
   isProject: (target: unknown) => boolean,
+  prestigeType: string,
 ): DemandTarget | null {
   const game = requireRecord(getGame(), "game");
   const global = requireRecord(game["global"], "game.global");
   const race = requireRecord(global["race"], "game.global.race");
-  if (!race["truepath"]) return null;
+  if (!race["truepath"] || prestigeType !== "apocalypse") return null;
 
   const tech = requireRecord(global["tech"], "game.global.tech");
   const coreLevel = tech["titan_ai_core"];
@@ -385,6 +388,14 @@ function readTruepathAiBuildingTarget(
     "buildings.ErisTrooper",
   );
   const tank = requireRecord(buildings["ErisTank"], "buildings.ErisTank");
+  const readMoneyCost = (building: UnknownRecord): number | null => {
+    const value = building["cost"];
+    if (typeof value !== "object" || value === null) return null;
+    const money = (value as UnknownRecord)["Money"];
+    return typeof money === "number" && Number.isFinite(money) && money >= 0
+      ? money
+      : null;
+  };
   const targetId = planTruepathAiApocalypse({
     enabled: true,
     aiCoreLevel: coreLevel,
@@ -412,6 +423,10 @@ function readTruepathAiBuildingTarget(
       tank["stateOnCount"],
       "buildings.ErisTank.stateOnCount",
     ),
+    decoderMoneyCost: readMoneyCost(decoder),
+    colonistMoneyCost: readMoneyCost(colonist),
+    trooperMoneyCost: readMoneyCost(trooper),
+    tankMoneyCost: readMoneyCost(tank),
   }).target;
   if (targetId === null) return null;
   const target = requireRecord(buildings[targetId], `buildings.${targetId}`);

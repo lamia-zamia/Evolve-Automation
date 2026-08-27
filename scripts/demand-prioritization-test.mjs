@@ -66,7 +66,7 @@ assert.deepEqual(
       progress: null,
     },
   }).requests,
-  [{ resourceId: "Cipher", amount: 10_000 }],
+  [],
 );
 
 assert.deepEqual(

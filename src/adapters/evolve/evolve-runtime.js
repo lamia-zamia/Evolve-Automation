@@ -1900,6 +1900,7 @@ export function startEvolveRuntimeComposition(
         getResourceTitle: (resource) => resources[resource].title,
         getBuildingCount: (building) => buildings[building].count,
         getBuildingOnCount: (building) => buildings[building].stateOnCount,
+        getBuildingCost: (building) => buildings[building].cost,
         getBuildingName: (building) => buildings[building].name,
         getBuildingTitle: (building) => buildings[building].title,
         getBuildingSoulGemCost: (building) =>

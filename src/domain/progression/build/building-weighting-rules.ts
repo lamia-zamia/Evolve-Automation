@@ -275,7 +275,9 @@ export function createBuildingWeightingPolicy({
       describe: (_match, _candidate, snapshot) =>
         snapshot.truepathAiBuildingTarget === "TitanDecoder"
           ? "True Path AI needs an active Decoder"
-          : `True Path AI progress ${formatNiceNumber(snapshot.truepathAiProgress)}% — building Colonists toward ${snapshot.truepathAiTargetColonists}`,
+          : snapshot.truepathAiBuildingTarget === "TitanAIColonist"
+            ? `True Path AI progress ${formatNiceNumber(snapshot.truepathAiProgress)}% — building Colonists toward ${snapshot.truepathAiTargetColonists}`
+            : `True Path AI progress ${formatNiceNumber(snapshot.truepathAiProgress)}% — adding ${snapshot.truepathAiBuildingTarget === "ErisTrooper" ? "Troopers" : "Tanks"}`,
       // This objective beats ordinary space construction once affordable. The
       // normal power, support, and resource rules still apply afterward.
       multiplier: () => 100,

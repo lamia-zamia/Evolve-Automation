@@ -186,6 +186,7 @@ requests.length = 0;
 hooks.setDemandPrioritizationTestContext({
   settings: {
     ...settings,
+    prestigeType: "apocalypse",
     prioritizeQueue: "none",
     prioritizeTriggers: "none",
     missionRequest: false,

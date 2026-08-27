@@ -3682,7 +3682,9 @@ Only continue if you trust the source. Injected code:
   // src/domain/progression/truepath/ai-apocalypse.ts
   var AI_RESOURCE_RESEARCH_IDS = /* @__PURE__ */ new Set([
     "tech-ai_optimizations",
-    "tech-synthetic_life"
+    "tech-synthetic_life",
+    "tech-protocol66",
+    "tech-protocol66a"
   ]);
   function isTruepathAiResourceResearch(id) {
     return id !== null && AI_RESOURCE_RESEARCH_IDS.has(id);
@@ -3694,20 +3696,60 @@ Only continue if you trust the source. Injected code:
   function planTruepathAiApocalypse(input) {
     let progress = readTruepathAiProgress(input);
     if (!input.enabled || input.aiCoreLevel < 3 || progress >= 100)
-      return Object.freeze({ progress, target: null, targetColonistCount: 0 });
+      return Object.freeze({
+        progress,
+        target: null,
+        targetColonistCount: 0,
+        additionalColonistPower: 0
+      });
     if (input.decoderOnCount < 1)
       return Object.freeze({
         progress,
         target: input.decoderCount < 1 ? "TitanDecoder" : null,
-        targetColonistCount: 0
+        targetColonistCount: 0,
+        additionalColonistPower: 0
       });
     let baseProgress = input.trooperOnCount * 2 + input.tankOnCount * 2, targetColonistCount = Math.ceil(
       Math.max(0, 100 - baseProgress) / (input.decoderOnCount * 0.35)
-    );
+    ), additionalColonistPower = Math.max(0, targetColonistCount - input.colonistCount) * 10;
+    if ([
+      input.decoderMoneyCost,
+      input.colonistMoneyCost,
+      input.trooperMoneyCost,
+      input.tankMoneyCost
+    ].some(
+      (price) => typeof price == "number" && Number.isFinite(price)
+    )) {
+      let progressPerColonist = input.decoderOnCount * 0.35, colonistPrice = input.colonistMoneyCost, candidates = [];
+      typeof colonistPrice == "number" && Number.isFinite(colonistPrice) && input.colonistCount < targetColonistCount && progressPerColonist > 0 && candidates.push({
+        target: "TitanAIColonist",
+        score: colonistPrice / progressPerColonist
+      });
+      let addDirectProgressCandidate = (target, price) => {
+        typeof price == "number" && Number.isFinite(price) && candidates.push({ target, score: price / 2 });
+      };
+      addDirectProgressCandidate("ErisTrooper", input.trooperMoneyCost), addDirectProgressCandidate("ErisTank", input.tankMoneyCost);
+      let decoderPrice = input.decoderMoneyCost, nextDecoderCount = input.decoderOnCount + 1, targetWithNextDecoder = Math.ceil(
+        Math.max(0, 100 - baseProgress) / (nextDecoderCount * 0.35)
+      ), colonistsRemoved = targetColonistCount - targetWithNextDecoder;
+      typeof decoderPrice == "number" && Number.isFinite(decoderPrice) && colonistsRemoved > 0 && candidates.push({
+        target: "TitanDecoder",
+        score: decoderPrice / colonistsRemoved
+      }), candidates.sort((left, right) => left.score - right.score);
+      let best = candidates[0];
+      if (best !== void 0)
+        return Object.freeze({
+          progress,
+          target: best.target,
+          targetColonistCount,
+          additionalColonistPower
+        });
+    }
     return Object.freeze({
       progress,
       target: input.colonistCount < targetColonistCount ? "TitanAIColonist" : null,
-      targetColonistCount
+      targetColonistCount,
+      additionalColonistPower
     });
   }
 
@@ -3727,10 +3769,10 @@ Only continue if you trust the source. Injected code:
         mission !== void 0 && (mission.isUnlocked && mission.autoBuildEnabled && (!mission.isBlackholeJumpShip || !settings.prestigeBioseedConstruct || settings.prestigeType !== "whitehole") ? prioritizedTasks.push(mission.target) : mission.isComplete && removedMissionIndices.push(i));
       }
     if (prioritizedTasks.length === 0) {
-      let truepathAiResearch = input.unlockedTechs.filter(
+      let apocalypseSelected = settings.prestigeType === "apocalypse", truepathAiResearch = apocalypseSelected ? input.unlockedTechs.filter(
         (tech) => isTruepathAiResourceResearch(tech.id)
-      ), researchRequestEnabled = input.isEarlyGame ? settings.researchRequest : settings.researchRequestSpace;
-      prioritizedTasks = truepathAiResearch.length > 0 ? truepathAiResearch.map((tech) => tech.target) : input.truepathAiBuildingTarget !== null ? [input.truepathAiBuildingTarget] : researchRequestEnabled ? input.unlockedTechs.filter((tech) => tech.isAffordable).map((tech) => tech.target) : [];
+      ) : [], researchRequestEnabled = input.isEarlyGame ? settings.researchRequest : settings.researchRequestSpace;
+      prioritizedTasks = truepathAiResearch.length > 0 ? truepathAiResearch.map((tech) => tech.target) : apocalypseSelected && input.truepathAiBuildingTarget !== null ? [input.truepathAiBuildingTarget] : researchRequestEnabled ? input.unlockedTechs.filter((tech) => tech.isAffordable).map((tech) => tech.target) : [];
     }
     for (let task of prioritizedTasks) {
       let multiplier = projectDoubles(task) ? 2 : 1;
@@ -4006,7 +4048,7 @@ Only continue if you trust the source. Injected code:
     ), jobManager = requireRecord(dependencies.getJobManager(), "JobManager"), factoryManager = requireRecord(
       dependencies.getFactoryManager(),
       "FactoryManager"
-    ), vitreloy = requireRecord(
+    ), settings = readSettings(dependencies.getSettings()), vitreloy = requireRecord(
       buildings.Alien1VitreloyPlant,
       "buildings.Alien1VitreloyPlant"
     ), craftingMax = requireFunction(
@@ -4023,13 +4065,14 @@ Only continue if you trust the source. Injected code:
       "SpyManager.purchaseMoney"
     );
     return Object.freeze({
-      settings: readSettings(dependencies.getSettings()),
+      settings,
       isEarlyGame: dependencies.getIsEarlyGame(),
       consumptionBalanceTarget: dependencies.consumptionBalanceTarget,
       truepathAiBuildingTarget: readTruepathAiBuildingTarget(
         dependencies.getGame,
         buildings,
-        isProject
+        isProject,
+        settings.prestigeType
       ),
       inflationMoney: dependencies.isInflationAssistActive() ? requireNumber(
         dependencies.getInflationChallengeMoney(),
@@ -4091,9 +4134,9 @@ Only continue if you trust the source. Injected code:
       )
     });
   }
-  function readTruepathAiBuildingTarget(getGame, buildings, isProject) {
+  function readTruepathAiBuildingTarget(getGame, buildings, isProject, prestigeType) {
     let game = requireRecord(getGame(), "game"), global = requireRecord(game.global, "game.global");
-    if (!requireRecord(global.race, "game.global.race").truepath) return null;
+    if (!requireRecord(global.race, "game.global.race").truepath || prestigeType !== "apocalypse") return null;
     let coreLevel = requireRecord(global.tech, "game.global.tech").titan_ai_core;
     if (typeof coreLevel != "number" || !Number.isFinite(coreLevel) || coreLevel < 3)
       return null;
@@ -4106,7 +4149,12 @@ Only continue if you trust the source. Injected code:
     ), trooper = requireRecord(
       buildings.ErisTrooper,
       "buildings.ErisTrooper"
-    ), tank = requireRecord(buildings.ErisTank, "buildings.ErisTank"), targetId = planTruepathAiApocalypse({
+    ), tank = requireRecord(buildings.ErisTank, "buildings.ErisTank"), readMoneyCost = (building3) => {
+      let value = building3.cost;
+      if (typeof value != "object" || value === null) return null;
+      let money = value.Money;
+      return typeof money == "number" && Number.isFinite(money) && money >= 0 ? money : null;
+    }, targetId = planTruepathAiApocalypse({
       enabled: !0,
       aiCoreLevel: coreLevel,
       decoderCount: requireNumber(
@@ -4132,7 +4180,11 @@ Only continue if you trust the source. Injected code:
       tankOnCount: requireNumber(
         tank.stateOnCount,
         "buildings.ErisTank.stateOnCount"
-      )
+      ),
+      decoderMoneyCost: readMoneyCost(decoder),
+      colonistMoneyCost: readMoneyCost(colonist),
+      trooperMoneyCost: readMoneyCost(trooper),
+      tankMoneyCost: readMoneyCost(tank)
     }).target;
     if (targetId === null) return null;
     let target = requireRecord(buildings[targetId], `buildings.${targetId}`);
@@ -8733,6 +8785,7 @@ Only continue if you trust the source. Injected code:
     getResourceTitle,
     getBuildingCount,
     getBuildingOnCount,
+    getBuildingCost,
     getBuildingName,
     getBuildingTitle,
     getBuildingSoulGemCost,
@@ -8946,7 +8999,13 @@ Only continue if you trust the source. Injected code:
       ), researched = (research, level) => !!isTechResearched(research, level), trait2 = (name) => !!hasRaceTrait(name), truepathRace = trait2("truepath"), prestigeType = requireString(
         getPrestigeType(),
         "settings.prestigeType"
-      ), truepathAiApocalypse = truepathRace, truepathAiPlan = planTruepathAiApocalypse(
+      ), truepathAiApocalypse = truepathRace && prestigeType === "apocalypse", readMoneyCost = (building3) => {
+        if (typeof getBuildingCost != "function") return null;
+        let raw = getBuildingCost(building3);
+        if (typeof raw != "object" || raw === null) return null;
+        let money = raw.Money;
+        return typeof money == "number" && Number.isFinite(money) && money >= 0 ? money : null;
+      }, truepathAiPlan = planTruepathAiApocalypse(
         truepathAiApocalypse ? {
           enabled: !0,
           aiCoreLevel: ((research) => {
@@ -8976,7 +9035,11 @@ Only continue if you trust the source. Injected code:
           tankOnCount: requireNumber(
             getBuildingOnCount("ErisTank"),
             "buildings.ErisTank.stateOnCount"
-          )
+          ),
+          decoderMoneyCost: readMoneyCost("TitanDecoder"),
+          colonistMoneyCost: readMoneyCost("TitanAIColonist"),
+          trooperMoneyCost: readMoneyCost("ErisTrooper"),
+          tankMoneyCost: readMoneyCost("ErisTank")
         } : {
           enabled: !1,
           aiCoreLevel: 0,
@@ -9056,7 +9119,10 @@ Only continue if you trust the source. Injected code:
         tauBeltSupportUsed: quantity("Tau_Belt_Support"),
         powerUnlocked: unlocked2("Power"),
         powerSurplus: quantity("Power"),
-        unpoweredPowerDemand: capacity("Power"),
+        // AI Colonists draw 10 Power each. Include the future Colonists needed
+        // for the selected Apocalypse route so power plants are built before
+        // the hardware queue stalls on an unpowered population.
+        unpoweredPowerDemand: capacity("Power") + truepathAiPlan.additionalColonistPower,
         populationAtCap: storageRatio("Population") === 1,
         populationEmpty: quantity("Population") < 1,
         housingUnderused: capacity("Population") > 50 && storageRatio("Population") < 0.9,
@@ -20579,7 +20645,7 @@ Only continue if you trust the source. Injected code:
         id: "truepath-ai-apocalypse",
         enabled: (snapshot) => snapshot.truepathAiBuildingTarget !== null,
         match: (candidate, snapshot) => candidate.id === snapshot.truepathAiBuildingTarget,
-        describe: (_match, _candidate, snapshot) => snapshot.truepathAiBuildingTarget === "TitanDecoder" ? "True Path AI needs an active Decoder" : `True Path AI progress ${formatNiceNumber(snapshot.truepathAiProgress)}% — building Colonists toward ${snapshot.truepathAiTargetColonists}`,
+        describe: (_match, _candidate, snapshot) => snapshot.truepathAiBuildingTarget === "TitanDecoder" ? "True Path AI needs an active Decoder" : snapshot.truepathAiBuildingTarget === "TitanAIColonist" ? `True Path AI progress ${formatNiceNumber(snapshot.truepathAiProgress)}% — building Colonists toward ${snapshot.truepathAiTargetColonists}` : `True Path AI progress ${formatNiceNumber(snapshot.truepathAiProgress)}% — adding ${snapshot.truepathAiBuildingTarget === "ErisTrooper" ? "Troopers" : "Tanks"}`,
         // This objective beats ordinary space construction once affordable. The
         // normal power, support, and resource rules still apply afterward.
         multiplier: () => 100
@@ -51511,6 +51577,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getResourceTitle: (resource2) => resources[resource2].title,
         getBuildingCount: (building3) => buildings[building3].count,
         getBuildingOnCount: (building3) => buildings[building3].stateOnCount,
+        getBuildingCost: (building3) => buildings[building3].cost,
         getBuildingName: (building3) => buildings[building3].name,
         getBuildingTitle: (building3) => buildings[building3].title,
         getBuildingSoulGemCost: (building3) => buildings[building3].cost.Soul_Gem,

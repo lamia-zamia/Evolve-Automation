@@ -44,6 +44,8 @@ export interface WeightingSnapshotDependencies {
   readonly getResourceTitle: (resource: string) => unknown;
   readonly getBuildingCount: (building: string) => unknown;
   readonly getBuildingOnCount: (building: string) => unknown;
+  /** Optional while the Vue 2 characterization surface is being retired. */
+  readonly getBuildingCost?: (building: string) => unknown;
   readonly getBuildingName: (building: string) => unknown;
   readonly getBuildingTitle: (building: string) => unknown;
   readonly getBuildingSoulGemCost: (building: string) => unknown;
@@ -167,6 +169,7 @@ export function createWeightingSnapshotReader({
   getResourceTitle,
   getBuildingCount,
   getBuildingOnCount,
+  getBuildingCost,
   getBuildingName,
   getBuildingTitle,
   getBuildingSoulGemCost,
@@ -596,7 +599,18 @@ export function createWeightingSnapshotReader({
       getPrestigeType(),
       "settings.prestigeType",
     );
-    const truepathAiApocalypse = truepathRace;
+    const truepathAiApocalypse = truepathRace && prestigeType === "apocalypse";
+    const readMoneyCost = (building: string): number | null => {
+      // Keep older characterization fixtures valid until they provide the
+      // optional cost reader used by the live compatibility adapter.
+      if (typeof getBuildingCost !== "function") return null;
+      const raw = getBuildingCost(building);
+      if (typeof raw !== "object" || raw === null) return null;
+      const money = (raw as Record<string, unknown>)["Money"];
+      return typeof money === "number" && Number.isFinite(money) && money >= 0
+        ? money
+        : null;
+    };
     const readTechLevelOrZero = (research: string): number => {
       const value = getTechLevel(research);
       return typeof value === "number" && Number.isFinite(value) && value >= 0
@@ -632,6 +646,10 @@ export function createWeightingSnapshotReader({
               getBuildingOnCount("ErisTank"),
               "buildings.ErisTank.stateOnCount",
             ),
+            decoderMoneyCost: readMoneyCost("TitanDecoder"),
+            colonistMoneyCost: readMoneyCost("TitanAIColonist"),
+            trooperMoneyCost: readMoneyCost("ErisTrooper"),
+            tankMoneyCost: readMoneyCost("ErisTank"),
           }
         : {
             enabled: false,
@@ -716,7 +734,11 @@ export function createWeightingSnapshotReader({
       tauBeltSupportUsed: quantity("Tau_Belt_Support"),
       powerUnlocked: unlocked("Power"),
       powerSurplus: quantity("Power"),
-      unpoweredPowerDemand: capacity("Power"),
+      // AI Colonists draw 10 Power each. Include the future Colonists needed
+      // for the selected Apocalypse route so power plants are built before
+      // the hardware queue stalls on an unpowered population.
+      unpoweredPowerDemand:
+        capacity("Power") + truepathAiPlan.additionalColonistPower,
       populationAtCap: storageRatio("Population") === 1,
       populationEmpty: quantity("Population") < 1,
       housingUnderused:

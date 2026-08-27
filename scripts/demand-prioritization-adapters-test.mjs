@@ -83,6 +83,7 @@ function baseDeps(overrides = {}) {
 {
   const input = readDemandPrioritizationInput(
     baseDeps({
+      settings: { ...baseSettings, prestigeType: "apocalypse" },
       game: {
         global: { race: { truepath: true }, tech: { titan_ai_core: 3 } },
       },
@@ -109,6 +110,19 @@ function baseDeps(overrides = {}) {
     { resourceId: "Cipher", amount: 10_000 },
     { resourceId: "Money", amount: 112_000_000 },
   ]);
+}
+
+// A True Path run must not reserve Apocalypse hardware while another route is
+// selected, even if the AI core has already reached level three.
+{
+  const input = readDemandPrioritizationInput(
+    baseDeps({
+      game: {
+        global: { race: { truepath: true }, tech: { titan_ai_core: 3 } },
+      },
+    }),
+  );
+  assert.equal(input.truepathAiBuildingTarget, null);
 }
 
 // availableCrafters is the sum of the two job caps.

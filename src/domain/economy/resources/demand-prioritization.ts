@@ -179,17 +179,20 @@ export function planDemandPrioritization(
 
   if (prioritizedTasks.length === 0) {
     // Apocalypse is not selectable in the game settings until this chain has
-    // already unlocked it, so the tech ids themselves are the early-run gate.
-    const truepathAiResearch = input.unlockedTechs.filter((tech) =>
-      isTruepathAiResourceResearch(tech.id),
-    );
+    // already unlocked it, but the selected route still gates all AI work.
+    const apocalypseSelected = settings.prestigeType === "apocalypse";
+    const truepathAiResearch = apocalypseSelected
+      ? input.unlockedTechs.filter((tech) =>
+          isTruepathAiResourceResearch(tech.id),
+        )
+      : [];
     const researchRequestEnabled = input.isEarlyGame
       ? settings.researchRequest
       : settings.researchRequestSpace;
     prioritizedTasks =
       truepathAiResearch.length > 0
         ? truepathAiResearch.map((tech) => tech.target)
-        : input.truepathAiBuildingTarget !== null
+        : apocalypseSelected && input.truepathAiBuildingTarget !== null
           ? [input.truepathAiBuildingTarget]
           : researchRequestEnabled
             ? input.unlockedTechs

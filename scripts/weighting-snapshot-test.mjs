@@ -748,7 +748,7 @@ assert.equal(raced.orbitalDecayImpactPending, false);
 
 gates = {
   ...withTraits("truepath"),
-  getPrestigeType: () => "none",
+  getPrestigeType: () => "apocalypse",
   getTechLevel: (research) => (research === "titan_ai_core" ? 3 : undefined),
   getBuildingCount: (building) =>
     ({
@@ -768,6 +768,17 @@ assert.equal(aiApocalypse.truepathAiApocalypse, true);
 assert.equal(aiApocalypse.truepathAiProgress, 40);
 assert.equal(aiApocalypse.truepathAiBuildingTarget, "TitanAIColonist");
 assert.equal(aiApocalypse.truepathAiTargetColonists, 43);
+assert.equal(aiApocalypse.unpoweredPowerDemand, 430);
+
+gates = {
+  ...withTraits("truepath"),
+  getPrestigeType: () => "bioseed",
+  getTechLevel: (research) => (research === "titan_ai_core" ? 3 : undefined),
+};
+const aiBioseed = read();
+assert.equal(aiBioseed.truepathAiApocalypse, false);
+assert.equal(aiBioseed.truepathAiBuildingTarget, null);
+assert.equal(aiBioseed.unpoweredPowerDemand, 0);
 
 gates = withTraits("orbit_decay");
 assert.equal(read().orbitalDecayImpactPending, true);

@@ -270,7 +270,8 @@ export type BuildingWeightingSnapshot = {
   /** Powered AI progress as calculated by Evolve, capped at 100. */
   readonly truepathAiProgress: number;
   /** The next AI hardware action that can advance the apocalypse, if any. */
-  readonly truepathAiBuildingTarget: "TitanDecoder" | "TitanAIColonist" | null;
+  readonly truepathAiBuildingTarget:
+    "TitanDecoder" | "TitanAIColonist" | "ErisTrooper" | "ErisTank" | null;
   /** Powered Colonist count needed for 100 AI progress at current support. */
   readonly truepathAiTargetColonists: number;
   /**
