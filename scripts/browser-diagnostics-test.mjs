@@ -25,6 +25,7 @@ assert.equal(diagnostics.readMechDebugEnabled(), true);
 assert.equal(diagnostics.nowMs(), 12.5);
 assert.equal(diagnostics.readPerformanceEnabled(), false);
 diagnostics.recordPerformance("tick", 99);
+diagnostics.recordCount("autoBuild.weighting.candidates", 76);
 diagnostics.flushPerformance();
 assert.equal(performanceLogs.length, 0);
 browserGlobal.mechDebug = false;
@@ -35,7 +36,10 @@ assert.equal(diagnostics.readPerformanceEnabled(), true);
 for (let index = 0; index < 25; index++) {
   diagnostics.recordPerformance("tick", 10 + index);
   diagnostics.recordPerformance("updateState", 2);
+  diagnostics.recordCount("autoBuild.weighting.candidates", 76);
+  diagnostics.recordCount("autoBuild.weighting.zeroedBy.locked", index);
 }
+diagnostics.recordCount("autoBuild.weighting.candidates", Number.NaN);
 diagnostics.flushPerformance();
 assert.equal(performanceLogs.length, 1);
 assert.equal(performanceLogs[0][0], "[EA perf] 25 work ticks");
@@ -43,11 +47,41 @@ assert.equal(performanceLogs[0][1].tick.count, 25);
 assert.equal(performanceLogs[0][1].tick.averageMs, 22);
 assert.equal(performanceLogs[0][1].tick.maxMs, 34);
 assert.equal(performanceLogs[0][1].updateState.count, 25);
+// Counters report their per-work-tick rate beside the totals, and a counter
+// recorded while diagnostics were off never reaches the summary.
+assert.equal(
+  performanceLogs[0][2]["autoBuild.weighting.candidates"].total,
+  1900,
+);
+assert.equal(
+  performanceLogs[0][2]["autoBuild.weighting.candidates"].perTick,
+  76,
+);
+assert.equal(
+  performanceLogs[0][2]["autoBuild.weighting.zeroedBy.locked"].total,
+  300,
+);
+assert.equal(
+  performanceLogs[0][2]["autoBuild.weighting.zeroedBy.locked"].max,
+  24,
+);
 
 browserGlobal.eaPerformance = false;
 diagnostics.recordPerformance("tick", 1);
+diagnostics.recordCount("autoBuild.weighting.candidates", 1);
 diagnostics.flushPerformance();
 assert.equal(performanceLogs.length, 1);
+browserGlobal.eaPerformance = true;
+for (let index = 0; index < 25; index++) {
+  diagnostics.recordPerformance("tick", 1);
+}
+diagnostics.flushPerformance();
+assert.deepEqual(
+  performanceLogs[1][2],
+  {},
+  "a flush clears the counters along with the timings",
+);
+browserGlobal.eaPerformance = false;
 
 const malformed = createBrowserDiagnostics({
   mechDebug: "true",

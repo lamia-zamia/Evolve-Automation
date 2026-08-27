@@ -5,6 +5,7 @@ export interface BrowserDiagnostics {
   readonly nowMs: () => number;
   readonly readPerformanceEnabled: () => boolean;
   readonly recordPerformance: (phase: string, durationMs: number) => void;
+  readonly recordCount: (name: string, amount: number) => void;
   readonly flushPerformance: () => void;
 }
 
@@ -27,6 +28,10 @@ export function createBrowserDiagnostics(
   const samples = new Map<
     string,
     { count: number; totalMs: number; maxMs: number }
+  >();
+  const counters = new Map<
+    string,
+    { ticks: number; total: number; max: number }
   >();
   let pendingTicks = 0;
 
@@ -59,9 +64,21 @@ export function createBrowserDiagnostics(
     }
   };
 
+  const recordCount = (name: string, amount: number) => {
+    if (!readPerformanceEnabled() || !Number.isFinite(amount)) {
+      return;
+    }
+    const counter = counters.get(name) ?? { ticks: 0, total: 0, max: 0 };
+    counter.ticks++;
+    counter.total += amount;
+    counter.max = Math.max(counter.max, amount);
+    counters.set(name, counter);
+  };
+
   const flushPerformance = () => {
     if (!readPerformanceEnabled()) {
       samples.clear();
+      counters.clear();
       pendingTicks = 0;
       return;
     }
@@ -78,15 +95,29 @@ export function createBrowserDiagnostics(
         },
       ]),
     );
+    // Counters are reported per work tick as well as in total, so a funnel
+    // reads directly against the per-tick phase averages beside it.
+    const counts = Object.fromEntries(
+      [...counters.entries()].map(([name, counter]) => [
+        name,
+        {
+          total: counter.total,
+          perTick: Number((counter.total / pendingTicks).toFixed(2)),
+          max: counter.max,
+        },
+      ]),
+    );
     try {
       Reflect.apply(consoleLog, consoleObject, [
         `[EA perf] ${pendingTicks} work ticks`,
         summary,
+        counts,
       ]);
     } catch {
       // Diagnostics must never interfere with automation when console logging is unavailable.
     }
     samples.clear();
+    counters.clear();
     pendingTicks = 0;
   };
 
@@ -95,6 +126,7 @@ export function createBrowserDiagnostics(
     nowMs,
     readPerformanceEnabled,
     recordPerformance,
+    recordCount,
     flushPerformance,
   });
 }

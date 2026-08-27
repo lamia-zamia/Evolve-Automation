@@ -21,6 +21,7 @@ function createSink(enabled) {
       return clock;
     },
     recordPerformance: (phase, durationMs) => records.push([phase, durationMs]),
+    recordCount: () => {},
   };
 }
 

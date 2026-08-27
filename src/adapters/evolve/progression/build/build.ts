@@ -243,6 +243,10 @@ export function createBuildAdapter(
         consumption?: readonly BuildConsumptionView[];
       } = {};
       if (request.needAffordability) {
+        dependencies.diagnostics?.recordCount(
+          "autoBuild.isAffordable.sampleCandidate",
+          1,
+        );
         sample.affordable = Boolean(callMethod(entity, "isAffordable", path));
       }
       if (request.needConsumption) {
@@ -299,6 +303,10 @@ export function createBuildAdapter(
         if (entity === undefined) {
           throw new TypeError(`unknown build candidate ${key}`);
         }
+        dependencies.diagnostics?.recordCount(
+          "autoBuild.isAffordable.sampleCompetition",
+          1,
+        );
         affordability[key] = Boolean(
           callMethod(entity, "isAffordable", `buildList[${key}]`),
         );

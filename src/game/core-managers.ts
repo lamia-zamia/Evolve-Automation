@@ -1,5 +1,5 @@
 import type { TickDiagnostics } from "../ports/tick.ts";
-import { createPhaseMeasure } from "../utils/performance.ts";
+import { createCountTally, createPhaseMeasure } from "../utils/performance.ts";
 import type {
   BuildingWeightingCandidate,
   BuildingWeightingDecider,
@@ -8,6 +8,10 @@ import type {
 } from "../domain/progression/build/building-weighting.ts";
 
 type TriggerValue = string | number | boolean;
+
+const APPLY_RULES_PHASE =
+  "autoBuild.beginCycle.updateBuildingWeighting.applyRules";
+const ZEROED_BY_PREFIX = "autoBuild.weighting.zeroedBy.";
 
 interface CoreSettings {
   autoARPA: boolean;
@@ -269,16 +273,58 @@ export function createCoreManagers({
       // `extraDescription` is assigned rather than appended because
       // `updateBuildings` cleared it earlier in the same cycle, and the phases
       // that add their own notes all run after this one.
-      measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
+      measure(APPLY_RULES_PHASE, () => {
+        // The three steps are timed inline rather than through `measure`,
+        // and their totals recorded once, because a closure and a map write
+        // per candidate would be a visible share of the loop this timing
+        // exists to size. `timing` is undefined unless diagnostics are on, so
+        // the normal path costs three optional calls and three additions.
+        const timing =
+          diagnostics?.readPerformanceEnabled() === true
+            ? diagnostics
+            : undefined;
+        const tally = createCountTally(diagnostics);
+        let sampleMs = 0;
+        let decideMs = 0;
+        let describeMs = 0;
+        let unlockedCount = 0;
+        let survivingCount = 0;
         for (const building of this.priorityList) {
+          const sampleStartedMs = timing?.nowMs() ?? 0;
           const candidate = readWeightingCandidate(building);
+          const decideStartedMs = timing?.nowMs() ?? 0;
           const decision = phase.decide(candidate);
+          const describeStartedMs = timing?.nowMs() ?? 0;
           building.weighting = decision.weight;
           building.extraDescription = describeBuildingWeighting(
             candidate.id,
             decision,
           );
+          if (timing !== undefined) {
+            const finishedMs = timing.nowMs();
+            sampleMs += decideStartedMs - sampleStartedMs;
+            decideMs += describeStartedMs - decideStartedMs;
+            describeMs += finishedMs - describeStartedMs;
+          }
+          if (tally.enabled) {
+            if (candidate.unlocked) unlockedCount++;
+            if (decision.weight > 0) survivingCount++;
+            if (decision.zeroedBy !== null) {
+              tally.count(`${ZEROED_BY_PREFIX}${decision.zeroedBy}`);
+            }
+          }
         }
+        if (timing !== undefined) {
+          timing.recordPerformance(`${APPLY_RULES_PHASE}.sample`, sampleMs);
+          timing.recordPerformance(`${APPLY_RULES_PHASE}.decide`, decideMs);
+          timing.recordPerformance(`${APPLY_RULES_PHASE}.describe`, describeMs);
+        }
+        tally.count("autoBuild.weighting.candidates", this.priorityList.length);
+        // An unlocked candidate is exactly the one whose sampling calls
+        // `isAffordable`, rebuilds `cost`, and asks the three consumption
+        // questions. This is the funnel width a two-pass sampler would narrow.
+        tally.count("autoBuild.weighting.sampledUnlocked", unlockedCount);
+        tally.count("autoBuild.weighting.surviving", survivingCount);
       });
     },
 

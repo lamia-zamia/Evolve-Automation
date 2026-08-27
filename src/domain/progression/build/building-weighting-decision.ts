@@ -45,6 +45,7 @@ export function decideBuildingWeighting(
 ): BuildingWeightingDecision {
   let weight = candidate.baseWeight;
   let annotations: BuildingWeightingAnnotation[] | undefined;
+  let zeroedBy: string | null = null;
   for (const rule of activeRules) {
     const match = rule.match(candidate, snapshot);
     if (!match) {
@@ -55,8 +56,13 @@ export function decideBuildingWeighting(
       annotations ??= [];
       annotations.push(Object.freeze({ ruleId: rule.id, note }));
     }
+    const weightBeforeRule = weight;
     weight *= rule.multiplier(snapshot, match);
     if (weight <= 0) {
+      // Only a rule that actually took the weight down is blamed. A candidate
+      // configured to weight zero stops at the first matching rule whatever
+      // that rule's multiplier is, and blaming it would misreport the funnel.
+      zeroedBy = weightBeforeRule > 0 ? rule.id : null;
       break;
     }
   }
@@ -67,6 +73,7 @@ export function decideBuildingWeighting(
     weight,
     annotations:
       annotations === undefined ? NO_ANNOTATIONS : Object.freeze(annotations),
+    zeroedBy,
   });
 }
 

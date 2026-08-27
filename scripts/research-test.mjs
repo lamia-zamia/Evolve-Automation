@@ -85,6 +85,7 @@ const successfulResult = createResearchCommandExecutor({
     readPerformanceEnabled: () => true,
     nowMs: () => ++researchClock,
     recordPerformance: (phase) => researchPhases.push(phase),
+    recordCount: () => {},
     flushPerformance: () => {},
   },
 }).execute({ index: 0, techId: "ready" });

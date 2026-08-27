@@ -176,6 +176,7 @@ assert.deepEqual(
     readPerformanceEnabled: () => true,
     nowMs: () => 0,
     recordPerformance: (phase) => phases.push(phase),
+    recordCount: () => {},
     flushPerformance: () => {},
   });
   assert.equal(outcome.status, "succeeded");

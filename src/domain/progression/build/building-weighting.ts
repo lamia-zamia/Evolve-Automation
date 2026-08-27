@@ -429,6 +429,12 @@ export type BuildingWeightingAnnotation = {
 export type BuildingWeightingDecision = {
   readonly weight: number;
   readonly annotations: readonly BuildingWeightingAnnotation[];
+  /**
+   * Id of the rule whose multiplier drove the weight to zero, or `null` when
+   * no rule did. A candidate that reaches zero because its configured base
+   * weight was already zero reports `null` too: no rule ruled it out.
+   */
+  readonly zeroedBy: string | null;
 };
 
 /**

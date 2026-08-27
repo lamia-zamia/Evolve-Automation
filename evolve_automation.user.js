@@ -153,7 +153,7 @@
 
   // src/adapters/browser/diagnostics.ts
   function createBrowserDiagnostics(globalObject) {
-    let readMechDebugEnabled = () => isRecord(globalObject) && globalObject.mechDebug === !0, performance = isRecord(globalObject) && isRecord(globalObject.performance) ? globalObject.performance : void 0, performanceNow = performance?.now, consoleObject = isRecord(globalObject) && isRecord(globalObject.console) ? globalObject.console : void 0, consoleLog = consoleObject?.log, samples = /* @__PURE__ */ new Map(), pendingTicks = 0, readPerformanceEnabled = () => isRecord(globalObject) && globalObject.eaPerformance === !0;
+    let readMechDebugEnabled = () => isRecord(globalObject) && globalObject.mechDebug === !0, performance = isRecord(globalObject) && isRecord(globalObject.performance) ? globalObject.performance : void 0, performanceNow = performance?.now, consoleObject = isRecord(globalObject) && isRecord(globalObject.console) ? globalObject.console : void 0, consoleLog = consoleObject?.log, samples = /* @__PURE__ */ new Map(), counters = /* @__PURE__ */ new Map(), pendingTicks = 0, readPerformanceEnabled = () => isRecord(globalObject) && globalObject.eaPerformance === !0;
     return Object.freeze({
       readMechDebugEnabled,
       nowMs: () => {
@@ -172,9 +172,15 @@
         let sample = samples.get(phase) ?? { count: 0, totalMs: 0, maxMs: 0 };
         sample.count++, sample.totalMs += durationMs, sample.maxMs = Math.max(sample.maxMs, durationMs), samples.set(phase, sample), phase === "tick" && pendingTicks++;
       },
+      recordCount: (name, amount) => {
+        if (!readPerformanceEnabled() || !Number.isFinite(amount))
+          return;
+        let counter = counters.get(name) ?? { ticks: 0, total: 0, max: 0 };
+        counter.ticks++, counter.total += amount, counter.max = Math.max(counter.max, amount), counters.set(name, counter);
+      },
       flushPerformance: () => {
         if (!readPerformanceEnabled()) {
-          samples.clear(), pendingTicks = 0;
+          samples.clear(), counters.clear(), pendingTicks = 0;
           return;
         }
         if (pendingTicks < 25 || typeof consoleLog != "function")
@@ -188,15 +194,25 @@
               maxMs: Number(sample.maxMs.toFixed(2))
             }
           ])
+        ), counts = Object.fromEntries(
+          [...counters.entries()].map(([name, counter]) => [
+            name,
+            {
+              total: counter.total,
+              perTick: Number((counter.total / pendingTicks).toFixed(2)),
+              max: counter.max
+            }
+          ])
         );
         try {
           Reflect.apply(consoleLog, consoleObject, [
             `[EA perf] ${pendingTicks} work ticks`,
-            summary
+            summary,
+            counts
           ]);
         } catch {
         }
-        samples.clear(), pendingTicks = 0;
+        samples.clear(), counters.clear(), pendingTicks = 0;
       }
     });
   }
@@ -8302,8 +8318,20 @@ Only continue if you trust the source. Injected code:
       }
     };
   }
+  var INERT_TALLY = Object.freeze({
+    enabled: !1,
+    count: () => {
+    }
+  });
+  function createCountTally(diagnostics) {
+    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? INERT_TALLY : Object.freeze({
+      enabled: !0,
+      count: (name, amount = 1) => diagnostics.recordCount(name, amount)
+    });
+  }
 
   // src/game/core-managers.ts
+  var APPLY_RULES_PHASE = "autoBuild.beginCycle.updateBuildingWeighting.applyRules", ZEROED_BY_PREFIX = "autoBuild.weighting.zeroedBy.";
   function createCoreManagers({
     getGame,
     getSettings,
@@ -8377,14 +8405,20 @@ Only continue if you trust the source. Injected code:
           "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
           () => weightingDecider.beginPhase(snapshot)
         );
-        measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
+        measure(APPLY_RULES_PHASE, () => {
+          let timing = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, tally = createCountTally(diagnostics), sampleMs = 0, decideMs = 0, describeMs = 0, unlockedCount = 0, survivingCount = 0;
           for (let building3 of this.priorityList) {
-            let candidate = readWeightingCandidate2(building3), decision2 = phase.decide(candidate);
-            building3.weighting = decision2.weight, building3.extraDescription = describeBuildingWeighting(
+            let sampleStartedMs = timing?.nowMs() ?? 0, candidate = readWeightingCandidate2(building3), decideStartedMs = timing?.nowMs() ?? 0, decision2 = phase.decide(candidate), describeStartedMs = timing?.nowMs() ?? 0;
+            if (building3.weighting = decision2.weight, building3.extraDescription = describeBuildingWeighting(
               candidate.id,
               decision2
-            );
+            ), timing !== void 0) {
+              let finishedMs = timing.nowMs();
+              sampleMs += decideStartedMs - sampleStartedMs, decideMs += describeStartedMs - decideStartedMs, describeMs += finishedMs - describeStartedMs;
+            }
+            tally.enabled && (candidate.unlocked && unlockedCount++, decision2.weight > 0 && survivingCount++, decision2.zeroedBy !== null && tally.count(`${ZEROED_BY_PREFIX}${decision2.zeroedBy}`));
           }
+          timing !== void 0 && (timing.recordPerformance(`${APPLY_RULES_PHASE}.sample`, sampleMs), timing.recordPerformance(`${APPLY_RULES_PHASE}.decide`, decideMs), timing.recordPerformance(`${APPLY_RULES_PHASE}.describe`, describeMs)), tally.count("autoBuild.weighting.candidates", this.priorityList.length), tally.count("autoBuild.weighting.sampledUnlocked", unlockedCount), tally.count("autoBuild.weighting.surviving", survivingCount);
         });
       },
       sortByPriority() {
@@ -20069,18 +20103,23 @@ Only continue if you trust the source. Injected code:
     );
   }
   function decideBuildingWeighting(activeRules, candidate, snapshot) {
-    let weight = candidate.baseWeight, annotations;
+    let weight = candidate.baseWeight, annotations, zeroedBy = null;
     for (let rule of activeRules) {
       let match = rule.match(candidate, snapshot);
       if (!match)
         continue;
       let note = rule.describe(match, candidate, snapshot);
-      if (note !== "" && (annotations ??= [], annotations.push(Object.freeze({ ruleId: rule.id, note }))), weight *= rule.multiplier(snapshot, match), weight <= 0)
+      note !== "" && (annotations ??= [], annotations.push(Object.freeze({ ruleId: rule.id, note })));
+      let weightBeforeRule = weight;
+      if (weight *= rule.multiplier(snapshot, match), weight <= 0) {
+        zeroedBy = weightBeforeRule > 0 ? rule.id : null;
         break;
+      }
     }
     return weight > 0 && (weight = Math.max(Number.MIN_VALUE, weight - 1e-7 * candidate.count)), Object.freeze({
       weight,
-      annotations: annotations === void 0 ? NO_ANNOTATIONS : Object.freeze(annotations)
+      annotations: annotations === void 0 ? NO_ANNOTATIONS : Object.freeze(annotations),
+      zeroedBy
     });
   }
   function createBuildingWeightingDecider({
@@ -36752,7 +36791,10 @@ Only continue if you trust the source. Injected code:
       },
       sampleCandidate(index, request) {
         let entity = capturedEntity(index), path = `buildList[${index}]`, sample = {};
-        return request.needAffordability && (sample.affordable = !!callMethod(entity, "isAffordable", path)), request.needConsumption && (sample.consumption = sampleConsumption(entity, path)), Object.freeze(sample);
+        return request.needAffordability && (dependencies.diagnostics?.recordCount(
+          "autoBuild.isAffordable.sampleCandidate",
+          1
+        ), sample.affordable = !!callMethod(entity, "isAffordable", path)), request.needConsumption && (sample.consumption = sampleConsumption(entity, path)), Object.freeze(sample);
       },
       sampleConflict(index) {
         let entity = capturedEntity(index), path = `buildList[${index}]`, raw = dependencies.getCostConflict(entity), conflict2 = null;
@@ -36787,7 +36829,10 @@ Only continue if you trust the source. Injected code:
           let entity = capture.byKey.get(key);
           if (entity === void 0)
             throw new TypeError(`unknown build candidate ${key}`);
-          affordability[key] = !!callMethod(entity, "isAffordable", `buildList[${key}]`);
+          dependencies.diagnostics?.recordCount(
+            "autoBuild.isAffordable.sampleCompetition",
+            1
+          ), affordability[key] = !!callMethod(entity, "isAffordable", `buildList[${key}]`);
         }
         let resources = requireRecord(dependencies.getResources(), "resources"), resourceViews = {};
         for (let resourceId3 of request.resourceIds) {

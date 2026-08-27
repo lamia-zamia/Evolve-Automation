@@ -155,6 +155,7 @@ const diagnostics = {
   readPerformanceEnabled: () => true,
   nowMs: () => diagnosticClock++,
   recordPerformance: (phase) => measuredPhases.push(phase),
+  recordCount: () => {},
   flushPerformance: () => measuredPhases.push("flush"),
 };
 assert.equal(

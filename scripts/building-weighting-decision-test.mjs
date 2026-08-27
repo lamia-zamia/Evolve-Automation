@@ -116,6 +116,11 @@ assert.deepEqual(
   zeroed.annotations.map((annotation) => annotation.ruleId),
   ["before", "zero"],
 );
+assert.equal(
+  zeroed.zeroedBy,
+  "zero",
+  "the rule that zeroed the weight is named",
+);
 
 // A negative multiplier stops the rest just as zero does.
 ran.length = 0;
@@ -141,11 +146,17 @@ assert.deepEqual(
   startsAtZero.annotations.map((annotation) => annotation.ruleId),
   ["first"],
 );
+assert.equal(
+  startsAtZero.zeroedBy,
+  null,
+  "a rule that did not lower the weight is not blamed for it",
+);
 
 // With no active rules the candidate keeps its configured weight.
 assert.deepEqual(decideBuildingWeighting([], candidate(), snapshot), {
   weight: 100,
   annotations: [],
+  zeroedBy: null,
 });
 
 // ---------- The built-copies tie-break ----------
@@ -199,6 +210,7 @@ const firstPhase = decider.beginPhase(snapshot);
 assert.deepEqual(firstPhase.decide(candidate()), {
   weight: 200,
   annotations: [{ ruleId: "phase", note: "phase" }],
+  zeroedBy: null,
 });
 firstPhase.decide(candidate({ id: "Mine" }));
 assert.deepEqual(
