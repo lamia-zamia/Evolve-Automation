@@ -206,4 +206,68 @@ assert.throws(() => readWeightingCandidate(null), {
   message: /^BuildingManager\.priorityList entry must be an object/,
 });
 
+// The sub-phase marks exist to say which sampled answer is the expensive one,
+// so each answer must be charged separately and a locked candidate must not be
+// charged for the four it never asks.
+const timings = () => {
+  const recorded = [];
+  let clockMs = 0;
+  return {
+    recorded,
+    sink: {
+      readPerformanceEnabled: () => true,
+      nowMs: () => (clockMs += 1),
+      recordPerformance: (phase, durationMs) =>
+        recorded.push([phase, durationMs]),
+      recordCount: () => {},
+    },
+  };
+};
+
+const unlockedTiming = timings();
+readWeightingCandidate(new BuildingWrapper(), unlockedTiming.sink);
+assert.deepEqual(
+  unlockedTiming.recorded.map(([phase]) => phase),
+  [
+    "autoBuild.weighting.sample.unlocked",
+    "autoBuild.weighting.sample.flags",
+    "autoBuild.weighting.sample.affordable",
+    "autoBuild.weighting.sample.powered",
+    "autoBuild.weighting.sample.cost",
+    "autoBuild.weighting.sample.missingConsumption",
+    "autoBuild.weighting.sample.missingSupport",
+    "autoBuild.weighting.sample.uselessSupport",
+  ],
+);
+// Contiguous segments: the marks must partition the sample, not overlap it.
+assert.deepEqual(
+  unlockedTiming.recorded.map(([, durationMs]) => durationMs),
+  [1, 1, 1, 1, 1, 1, 1, 1],
+);
+
+// A locked candidate still emits every mark, so the totals stay comparable
+// across a capture, but the segments it skips must cost nothing: the four
+// guarded answers are never asked of it.
+const lockedTiming = timings();
+const asked = [];
+const lockedWrapper = new BuildingWrapper({ unlocked: false });
+for (const name of [
+  "isAffordable",
+  "getMissingConsumption",
+  "getMissingSupport",
+  "getUselessSupport",
+]) {
+  lockedWrapper[name] = () => {
+    asked.push(name);
+    return null;
+  };
+}
+readWeightingCandidate(lockedWrapper, lockedTiming.sink);
+assert.deepEqual(
+  asked,
+  [],
+  "a locked candidate skips the four guarded answers",
+);
+assert.equal(lockedTiming.recorded.length, 8);
+
 console.log("Building weighting candidate adapter tests passed");

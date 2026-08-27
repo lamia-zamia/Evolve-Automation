@@ -7041,64 +7041,82 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/progression/build/weighting-candidate.ts
-  var EMPTY_COST = Object.freeze({}), call = (record, name, path, ...args) => Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, args), resourceName = (value, path) => value == null ? null : requireString(requireRecord(value, path).name, `${path}.name`), readCost = (record, path) => {
+  var EMPTY_COST = Object.freeze({}), SAMPLE_PREFIX = "autoBuild.weighting.sample.", NO_MARK = (_phase) => {
+  }, call = (record, name, path, ...args) => Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, args), resourceName = (value, path) => value == null ? null : requireString(requireRecord(value, path).name, `${path}.name`), readCost = (record, path) => {
     let cost = requireRecord(record.cost, `${path}.cost`), amounts = {};
     for (let [resource2, amount] of Object.entries(cost))
       amounts[resource2] = requireNumber(amount, `${path}.cost.${resource2}`);
     return Object.freeze(amounts);
   };
-  function readWeightingCandidate(building3) {
-    let record = requireRecord(building3, "BuildingManager.priorityList entry"), id = requireString(
+  function readWeightingCandidate(building3, timing) {
+    let record = requireRecord(building3, "BuildingManager.priorityList entry"), mark = NO_MARK;
+    if (timing !== void 0) {
+      let sink = timing, markedAtMs = sink.nowMs();
+      mark = (phase) => {
+        let nowMs = sink.nowMs();
+        sink.recordPerformance(`${SAMPLE_PREFIX}${phase}`, nowMs - markedAtMs), markedAtMs = nowMs;
+      };
+    }
+    let id = requireString(
       record.catalogKey,
       "BuildingManager.priorityList entry.catalogKey"
     ), path = `buildings.${id}`, flags = requireRecord(record.is, `${path}.is`), unlocked2 = requireBoolean(
       call(record, "isUnlocked", path),
       `${path}.isUnlocked()`
     );
-    return Object.freeze({
+    mark("unlocked");
+    let autoBuildEnabled = !!record.autoBuildEnabled, smartManaged = callBoolean(record, "isSmartManaged", path), count2 = requireNumber(record.count, `${path}.count`), stateOffCount = requireNumber(
+      record.stateOffCount,
+      `${path}.stateOffCount`
+    );
+    mark("flags");
+    let affordable2 = unlocked2 && callBoolean(record, "isAffordable", path, !0);
+    mark("affordable");
+    let powered = unlocked2 ? requireNumber(record.powered, `${path}.powered`) : 0;
+    mark("powered");
+    let cost = unlocked2 ? readCost(record, path) : EMPTY_COST;
+    mark("cost");
+    let missingConsumption = unlocked2 ? resourceName(
+      call(record, "getMissingConsumption", path),
+      `${path}.getMissingConsumption()`
+    ) : null;
+    mark("missingConsumption");
+    let missingSupport = unlocked2 ? resourceName(
+      call(record, "getMissingSupport", path),
+      `${path}.getMissingSupport()`
+    ) : null;
+    mark("missingSupport");
+    let uselessSupport = unlocked2 ? resourceName(
+      call(record, "getUselessSupport", path),
+      `${path}.getUselessSupport()`
+    ) : null;
+    return mark("uselessSupport"), Object.freeze({
       id,
       name: requireString(record.name, `${path}.name`),
       actionId: requireString(record._id, `${path}._id`),
       tab: requireString(record._tab, `${path}._tab`),
       location: requireString(record._location, `${path}._location`),
       unlocked: unlocked2,
-      // `autoBuildEnabled` chains on `settings["bat" + binding]` and
-      // `isSmartManaged()` on two more settings, none of which exist until that
-      // building's toggle is first written. Both keep the game's truthiness test.
-      autoBuildEnabled: !!record.autoBuildEnabled,
-      smartManaged: callBoolean(record, "isSmartManaged", path),
-      count: requireNumber(record.count, `${path}.count`),
+      autoBuildEnabled,
+      smartManaged,
+      count: count2,
       autoMax: requireNumber(record.autoMax, `${path}.autoMax`),
       // `_weighting` forwards the building's own weight setting, which the
       // defaults write for every catalog building, so it is always a number.
       baseWeight: requireNumber(record._weighting, `${path}._weighting`),
-      stateOffCount: requireNumber(
-        record.stateOffCount,
-        `${path}.stateOffCount`
-      ),
+      stateOffCount,
       housing: !!flags.housing,
       garrison: !!flags.garrison,
       knowledge: !!flags.knowledge,
       randomlyWeighted: !!flags.random,
       // Only a ResourceAction records the resource it produces directly.
       producedResource: record.resourceKey === void 0 ? null : requireString(record.resourceKey, `${path}.resourceKey`),
-      // `isAffordable()` forwards the game's own `checkAffordable`, which keeps
-      // the game's truthiness test.
-      affordable: unlocked2 && callBoolean(record, "isAffordable", path, !0),
-      powered: unlocked2 ? requireNumber(record.powered, `${path}.powered`) : 0,
-      cost: unlocked2 ? readCost(record, path) : EMPTY_COST,
-      missingConsumption: unlocked2 ? resourceName(
-        call(record, "getMissingConsumption", path),
-        `${path}.getMissingConsumption()`
-      ) : null,
-      missingSupport: unlocked2 ? resourceName(
-        call(record, "getMissingSupport", path),
-        `${path}.getMissingSupport()`
-      ) : null,
-      uselessSupport: unlocked2 ? resourceName(
-        call(record, "getUselessSupport", path),
-        `${path}.getUselessSupport()`
-      ) : null
+      affordable: affordable2,
+      powered,
+      cost,
+      missingConsumption,
+      missingSupport,
+      uselessSupport
     });
   }
 
@@ -8426,7 +8444,7 @@ Only continue if you trust the source. Injected code:
         measure(APPLY_RULES_PHASE, () => {
           let timing = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, tally = createCountTally(diagnostics), sampleMs = 0, decideMs = 0, describeMs = 0, unlockedCount = 0, survivingCount = 0;
           for (let building3 of this.priorityList) {
-            let sampleStartedMs = timing?.nowMs() ?? 0, candidate = readWeightingCandidate2(building3), decideStartedMs = timing?.nowMs() ?? 0, decision2 = phase.decide(candidate), describeStartedMs = timing?.nowMs() ?? 0;
+            let sampleStartedMs = timing?.nowMs() ?? 0, candidate = readWeightingCandidate2(building3, timing), decideStartedMs = timing?.nowMs() ?? 0, decision2 = phase.decide(candidate), describeStartedMs = timing?.nowMs() ?? 0;
             if (building3.weighting = decision2.weight, building3.extraDescription = describeBuildingWeighting(
               candidate.id,
               decision2

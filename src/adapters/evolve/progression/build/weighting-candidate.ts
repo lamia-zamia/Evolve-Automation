@@ -1,4 +1,5 @@
 import type { BuildingWeightingCandidate } from "../../../../domain/progression/build/building-weighting.ts";
+import type { PhaseTimingSink } from "../../../../utils/performance.ts";
 import {
   callBoolean,
   requireBoolean,
@@ -10,6 +11,14 @@ import {
 } from "../../../validation.ts";
 
 const EMPTY_COST: Readonly<Record<string, number>> = Object.freeze({});
+
+const SAMPLE_PREFIX = "autoBuild.weighting.sample.";
+
+/**
+ * Shared no-op so the disabled path allocates nothing per candidate: the marks
+ * sit in a loop whose cost is the thing they exist to measure.
+ */
+const NO_MARK = (_phase: string): void => {};
 
 /** As `callBoolean`, except the caller validates the answer it asked for. */
 const call = (
@@ -52,11 +61,30 @@ const readCost = (
  * `updateResourceRequirements` returns early. The `locked` rule zeroes such a
  * candidate before any rule reads them, so they are reported as neutral rather
  * than sampled.
+ *
+ * `timing` is the caller's already-resolved sink: `undefined` unless the
+ * diagnostics toggle was on when the weighting phase began. When present, each
+ * sampled answer is charged to its own sub-phase, because the phase total alone
+ * does not say which of the game calls below is the expensive one. The fields
+ * are read into locals rather than straight into the literal so the marks can
+ * sit between them.
  */
 export function readWeightingCandidate(
   building: unknown,
+  timing?: PhaseTimingSink,
 ): BuildingWeightingCandidate {
   const record = requireRecord(building, "BuildingManager.priorityList entry");
+  let mark = NO_MARK;
+  if (timing !== undefined) {
+    const sink = timing;
+    let markedAtMs = sink.nowMs();
+    mark = (phase) => {
+      const nowMs = sink.nowMs();
+      sink.recordPerformance(`${SAMPLE_PREFIX}${phase}`, nowMs - markedAtMs);
+      markedAtMs = nowMs;
+    };
+  }
+
   const id = requireString(
     record["catalogKey"],
     "BuildingManager.priorityList entry.catalogKey",
@@ -71,6 +99,58 @@ export function readWeightingCandidate(
     call(record, "isUnlocked", path),
     `${path}.isUnlocked()`,
   );
+  mark("unlocked");
+
+  // `autoBuildEnabled` chains on `settings["bat" + binding]` and
+  // `isSmartManaged()` on two more settings, none of which exist until that
+  // building's toggle is first written. Both keep the game's truthiness test.
+  const autoBuildEnabled = Boolean(record["autoBuildEnabled"]);
+  const smartManaged = callBoolean(record, "isSmartManaged", path);
+  const count = requireNumber(record["count"], `${path}.count`);
+  const stateOffCount = requireNumber(
+    record["stateOffCount"],
+    `${path}.stateOffCount`,
+  );
+  mark("flags");
+
+  // `isAffordable()` forwards the game's own `checkAffordable`, which keeps
+  // the game's truthiness test.
+  const affordable =
+    unlocked && callBoolean(record, "isAffordable", path, true);
+  mark("affordable");
+
+  const powered = unlocked
+    ? requireNumber(record["powered"], `${path}.powered`)
+    : 0;
+  mark("powered");
+
+  const cost = unlocked ? readCost(record, path) : EMPTY_COST;
+  mark("cost");
+
+  const missingConsumption = unlocked
+    ? resourceName(
+        call(record, "getMissingConsumption", path),
+        `${path}.getMissingConsumption()`,
+      )
+    : null;
+  mark("missingConsumption");
+
+  const missingSupport = unlocked
+    ? resourceName(
+        call(record, "getMissingSupport", path),
+        `${path}.getMissingSupport()`,
+      )
+    : null;
+  mark("missingSupport");
+
+  const uselessSupport = unlocked
+    ? resourceName(
+        call(record, "getUselessSupport", path),
+        `${path}.getUselessSupport()`,
+      )
+    : null;
+  mark("uselessSupport");
+
   return Object.freeze({
     id,
     name: requireString(record["name"], `${path}.name`),
@@ -78,20 +158,14 @@ export function readWeightingCandidate(
     tab: requireString(record["_tab"], `${path}._tab`),
     location: requireString(record["_location"], `${path}._location`),
     unlocked,
-    // `autoBuildEnabled` chains on `settings["bat" + binding]` and
-    // `isSmartManaged()` on two more settings, none of which exist until that
-    // building's toggle is first written. Both keep the game's truthiness test.
-    autoBuildEnabled: Boolean(record["autoBuildEnabled"]),
-    smartManaged: callBoolean(record, "isSmartManaged", path),
-    count: requireNumber(record["count"], `${path}.count`),
+    autoBuildEnabled,
+    smartManaged,
+    count,
     autoMax: requireNumber(record["autoMax"], `${path}.autoMax`),
     // `_weighting` forwards the building's own weight setting, which the
     // defaults write for every catalog building, so it is always a number.
     baseWeight: requireNumber(record["_weighting"], `${path}._weighting`),
-    stateOffCount: requireNumber(
-      record["stateOffCount"],
-      `${path}.stateOffCount`,
-    ),
+    stateOffCount,
     housing: Boolean(flags["housing"]),
     garrison: Boolean(flags["garrison"]),
     knowledge: Boolean(flags["knowledge"]),
@@ -101,28 +175,11 @@ export function readWeightingCandidate(
       record["resourceKey"] === undefined
         ? null
         : requireString(record["resourceKey"], `${path}.resourceKey`),
-    // `isAffordable()` forwards the game's own `checkAffordable`, which keeps
-    // the game's truthiness test.
-    affordable: unlocked && callBoolean(record, "isAffordable", path, true),
-    powered: unlocked ? requireNumber(record["powered"], `${path}.powered`) : 0,
-    cost: unlocked ? readCost(record, path) : EMPTY_COST,
-    missingConsumption: unlocked
-      ? resourceName(
-          call(record, "getMissingConsumption", path),
-          `${path}.getMissingConsumption()`,
-        )
-      : null,
-    missingSupport: unlocked
-      ? resourceName(
-          call(record, "getMissingSupport", path),
-          `${path}.getMissingSupport()`,
-        )
-      : null,
-    uselessSupport: unlocked
-      ? resourceName(
-          call(record, "getUselessSupport", path),
-          `${path}.getUselessSupport()`,
-        )
-      : null,
+    affordable,
+    powered,
+    cost,
+    missingConsumption,
+    missingSupport,
+    uselessSupport,
   });
 }

@@ -1,5 +1,9 @@
 import type { TickDiagnostics } from "../ports/tick.ts";
-import { createCountTally, createPhaseMeasure } from "../utils/performance.ts";
+import {
+  createCountTally,
+  createPhaseMeasure,
+  type PhaseTimingSink,
+} from "../utils/performance.ts";
 import type {
   BuildingWeightingCandidate,
   BuildingWeightingDecider,
@@ -143,7 +147,10 @@ interface CoreManagersDependencies {
   getNiceNumber: (value: number) => string;
   weightingDecider: BuildingWeightingDecider;
   readWeightingSnapshot: () => BuildingWeightingSnapshot;
-  readWeightingCandidate: (building: unknown) => BuildingWeightingCandidate;
+  readWeightingCandidate: (
+    building: unknown,
+    timing?: PhaseTimingSink,
+  ) => BuildingWeightingCandidate;
   describeBuildingWeighting: (
     candidateId: string,
     decision: BuildingWeightingDecision,
@@ -291,7 +298,7 @@ export function createCoreManagers({
         let survivingCount = 0;
         for (const building of this.priorityList) {
           const sampleStartedMs = timing?.nowMs() ?? 0;
-          const candidate = readWeightingCandidate(building);
+          const candidate = readWeightingCandidate(building, timing);
           const decideStartedMs = timing?.nowMs() ?? 0;
           const decision = phase.decide(candidate);
           const describeStartedMs = timing?.nowMs() ?? 0;
