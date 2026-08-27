@@ -757,4 +757,104 @@ assert.equal(probes.isUnlocked(), true, "the modal closed, the capture holds");
 assert.equal(probes.activate(), true);
 assert.deepEqual(probeCalls, ["action"]);
 
+// Pricing an action evaluates its adjusted cost entries, and the game's
+// checkAffordable used to evaluate all of them a second time. The snapshot must
+// carry those values forward without changing a single answer.
+const costEvaluations = [];
+const affordabilityCalls = [];
+context.game = {
+  global: {
+    settings: { showCity: true, civTabs: 0 },
+    tech: {},
+    race: {},
+    resource: {},
+  },
+  actions: { city: { factory: { title: "Factory", cost: {} } } },
+  checkAffordable: (action, max, preAdjusted) => {
+    affordabilityCalls.push({
+      max,
+      preAdjusted: preAdjusted === true,
+      prices: Object.fromEntries(
+        Object.entries(action.cost).map(([name, read]) => [name, read()]),
+      ),
+    });
+    return true;
+  },
+};
+context.resources = { Money: {}, Brick: {} };
+context.poly = {
+  adjustCosts: () => ({
+    Money: () => {
+      costEvaluations.push("Money");
+      return 250;
+    },
+    Brick: () => {
+      costEvaluations.push("Brick");
+      return 12;
+    },
+    // Not a resource the script models, so it never reaches `cost` — but the
+    // game still prices it, so the snapshot has to carry it.
+    Structs: () => {
+      costEvaluations.push("Structs");
+      return { city: { factory: { count: 1 } } };
+    },
+  }),
+};
+context.getVueById = () => ({});
+
+const priced = new classes.Action("Factory", "city", "factory", "");
+priced.updateResourceRequirements();
+assert.deepEqual(priced.cost, { Money: 250, Brick: 12 });
+assert.deepEqual(costEvaluations, ["Money", "Brick", "Structs"]);
+
+costEvaluations.length = 0;
+assert.equal(priced.isAffordable(true), true);
+assert.equal(priced.isAffordable(), true);
+assert.deepEqual(
+  costEvaluations,
+  [],
+  "a priced action re-reads no cost function to answer affordability",
+);
+assert.deepEqual(affordabilityCalls, [
+  {
+    max: true,
+    preAdjusted: true,
+    prices: {
+      Money: 250,
+      Brick: 12,
+      Structs: { city: { factory: { count: 1 } } },
+    },
+  },
+  {
+    max: false,
+    preAdjusted: true,
+    prices: {
+      Money: 250,
+      Brick: 12,
+      Structs: { city: { factory: { count: 1 } } },
+    },
+  },
+]);
+
+// A purchase raises this action's own price, so the snapshot must not survive
+// it: the bulk loop re-checks clickability between presses.
+affordabilityCalls.length = 0;
+priced.priceRose();
+assert.equal(priced.isAffordable(true), true);
+assert.deepEqual(
+  affordabilityCalls.map(({ preAdjusted }) => preAdjusted),
+  [false],
+  "after a purchase the game prices the action itself again",
+);
+
+// A locked action keeps the live path, exactly as before: it has no snapshot.
+affordabilityCalls.length = 0;
+context.getVueById = () => undefined;
+priced.updateResourceRequirements();
+assert.equal(priced.isAffordable(true), true);
+assert.deepEqual(
+  affordabilityCalls.map(({ preAdjusted }) => preAdjusted),
+  [false],
+);
+
 console.log("Entity classes module tests passed");

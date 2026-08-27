@@ -1164,6 +1164,7 @@ export function createEntityClasses({
     }
 
     updateResourceRequirements() {
+      this.costSnapshot = undefined;
       if (!this.isUnlocked()) {
         return;
       }
@@ -1174,17 +1175,35 @@ export function createEntityClasses({
       }
 
       let adjustedCosts = readPoly().adjustCosts(this.definition);
+      // Evaluating the adjusted cost entries is the expensive half of pricing an
+      // action, and the game's checkAffordable does the whole of it again on
+      // every call. Each entry is evaluated once here and kept as a constant
+      // function, so isAffordable can hand the game its own cost shape and let
+      // the game's affordability logic — including every special cost key —
+      // run unchanged against values this tick already paid for.
+      let snapshot: Loose = {};
       for (let resourceName in adjustedCosts) {
+        let costValue = adjustedCosts[resourceName]();
+        snapshot[resourceName] = () => costValue;
         if (readResources()[resourceName]) {
-          let resourceAmount = Number(adjustedCosts[resourceName]());
+          let resourceAmount = Number(costValue);
           if (resourceAmount > 0) {
             this.cost[resourceName] = resourceAmount;
           }
         }
       }
+      this.costSnapshot = { cost: snapshot };
     }
 
     isAffordable(max = false) {
+      // The third argument tells the game to price the action from the cost map
+      // as given rather than re-adjusting it. Resource, prestige, morale, army
+      // and support levels are still read live on every call; only the prices
+      // come from the snapshot, which is the same per-tick reading `this.cost`
+      // already carries everywhere else.
+      if (this.costSnapshot !== undefined) {
+        return readGame().checkAffordable(this.costSnapshot, max, true);
+      }
       return readGame().checkAffordable(this.definition, max);
     }
 
@@ -1232,6 +1251,13 @@ export function createEntityClasses({
       }
       // False means the game withdrew the control after the clickability check.
       return actionControls.activate(this._vueBinding);
+    }
+
+    // A purchase raises this action's own price, and the bulk loop in `click`
+    // re-checks `isClickable` between presses, so the snapshot cannot outlive
+    // the press that invalidated it.
+    priceRose() {
+      this.costSnapshot = undefined;
     }
 
     // Charges a completed purchase against the sampled resource quantities.
@@ -1293,12 +1319,14 @@ export function createEntityClasses({
       if (!this.runBuildClick()) {
         return false;
       }
+      this.priceRose();
       // Each repeat re-checks the live game, so running out of resources or
       // hitting the game's own limit simply ends the purchase.
       for (let repeat = 1; repeat < bulkLimit; repeat++) {
         if (!this.isClickable() || !this.runBuildClick()) {
           break;
         }
+        this.priceRose();
       }
 
       // The live count is the only honest record of what a bulk purchase built.
@@ -1592,7 +1620,7 @@ export function createEntityClasses({
       ) {
         return false;
       }
-      return readGame().checkAffordable(this.definition, max);
+      return super.isAffordable(max);
     }
   }
 

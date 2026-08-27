@@ -15595,17 +15595,20 @@ Only continue if you trust the source. Injected code:
         return this.overridePowered !== void 0 ? this.overridePowered : !Object.hasOwn(this.definition, "powered") || !this.checkPowerRequirements() ? 0 : this.definition.powered();
       }
       updateResourceRequirements() {
-        if (!this.isUnlocked() || (this.cost = {}, !this.definition.cost))
+        if (this.costSnapshot = void 0, !this.isUnlocked() || (this.cost = {}, !this.definition.cost))
           return;
-        let adjustedCosts = readPoly().adjustCosts(this.definition);
-        for (let resourceName2 in adjustedCosts)
-          if (readResources2()[resourceName2]) {
-            let resourceAmount = Number(adjustedCosts[resourceName2]());
+        let adjustedCosts = readPoly().adjustCosts(this.definition), snapshot = {};
+        for (let resourceName2 in adjustedCosts) {
+          let costValue = adjustedCosts[resourceName2]();
+          if (snapshot[resourceName2] = () => costValue, readResources2()[resourceName2]) {
+            let resourceAmount = Number(costValue);
             resourceAmount > 0 && (this.cost[resourceName2] = resourceAmount);
           }
+        }
+        this.costSnapshot = { cost: snapshot };
       }
       isAffordable(max = !1) {
-        return readGame().checkAffordable(this.definition, max);
+        return this.costSnapshot !== void 0 ? readGame().checkAffordable(this.costSnapshot, max, !0) : readGame().checkAffordable(this.definition, max);
       }
       // Whether the action is clickable is determined by whether it is unlocked, affordable and not a "permanently clickable" action
       isClickable() {
@@ -15627,6 +15630,12 @@ Only continue if you trust the source. Injected code:
         let actionControls = readActionControls();
         return readSettings3().performanceHackAvoidDrawTech && this.definition.refresh && this.count > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !readGame().global.race.inflation && !actionControls.isTooltipShown() ? (this.definition.action(), !0) : actionControls.activate(this._vueBinding);
       }
+      // A purchase raises this action's own price, and the bulk loop in `click`
+      // re-checks `isClickable` between presses, so the snapshot cannot outlive
+      // the press that invalidated it.
+      priceRose() {
+        this.costSnapshot = void 0;
+      }
       // Charges a completed purchase against the sampled resource quantities.
       spendBuildCost(amountBuilt) {
         for (let res in this.cost) {
@@ -15644,8 +15653,9 @@ Only continue if you trust the source. Injected code:
         let settings = readSettings3(), doMultiClick = this.is.multiSegmented && settings.buildingsUseMultiClick, bulkLimit = allowBulk && settings.buildingsBulkBuild && !this.is.multiSegmented && !this.is.prestige && !this.isMission() ? this.bulkBuildLimit(settings.buildingsBulkBuildMax) : 1, countBeforeClick = this.count, clickMultipliers = readClickMultipliers();
         if (doMultiClick ? clickMultipliers.holdMaximum() : clickMultipliers.clear(), this.is.prestige && logPrestige(), !this.runBuildClick())
           return !1;
+        this.priceRose();
         for (let repeat = 1; repeat < bulkLimit && !(!this.isClickable() || !this.runBuildClick()); repeat++)
-          ;
+          this.priceRose();
         let amountBuilt = Math.max(1, this.count - countBeforeClick);
         return this.spendBuildCost(amountBuilt), readGame().global.race.species !== "protoplasm" && !readLogIgnore().includes(this.id) && (amountBuilt > 1 || this.gameMax < Number.MAX_SAFE_INTEGER && countBeforeClick + amountBuilt < this.gameMax ? readGameLog().logSuccess(
           "multi_construction",
@@ -15769,7 +15779,7 @@ Only continue if you trust the source. Injected code:
         return this.isUnlocked() ? this.definition.on() : 0;
       }
       isAffordable(max = !1) {
-        return readGame().global.tech.pillars !== 1 || readGame().global.race.universe === "micro" ? !1 : readGame().checkAffordable(this.definition, max);
+        return readGame().global.tech.pillars !== 1 || readGame().global.race.universe === "micro" ? !1 : super.isAffordable(max);
       }
     }
     class ResourceAction extends Action {
