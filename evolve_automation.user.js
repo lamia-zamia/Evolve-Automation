@@ -190,7 +190,8 @@
             phase,
             {
               count: sample.count,
-              averageMs: Number((sample.totalMs / sample.count).toFixed(2)),
+              perTickMs: Number((sample.totalMs / pendingTicks).toFixed(2)),
+              totalMs: Number(sample.totalMs.toFixed(2)),
               maxMs: Number(sample.maxMs.toFixed(2))
             }
           ])
@@ -4681,10 +4682,26 @@ Only continue if you trust the source. Injected code:
     let legacyVue = readProperty(element, "__vue__");
     return isPresent(legacyVue) ? legacyVue : void 0;
   }
-  function createVueAdapter({ getWin }) {
-    function getVueById(elementId) {
+  function createVueAdapter({
+    getWin,
+    diagnostics
+  }) {
+    function lookUpVue(elementId) {
       let element = getWin().document.getElementById(elementId);
       return readVueProxy(element);
+    }
+    function getVueById(elementId) {
+      if (diagnostics === void 0 || !diagnostics.readPerformanceEnabled())
+        return lookUpVue(elementId);
+      let startedAtMs = diagnostics.nowMs();
+      try {
+        return lookUpVue(elementId);
+      } finally {
+        diagnostics.recordPerformance(
+          "getVueById",
+          diagnostics.nowMs() - startedAtMs
+        );
+      }
     }
     function getMainVue() {
       let document = getWin().document, querySelector = document.querySelector;
@@ -4720,7 +4737,8 @@ Only continue if you trust the source. Injected code:
     getDocument,
     getUrlApi,
     getBlobConstructor,
-    schedule
+    schedule,
+    diagnostics
   }) {
     let {
       callVueMethod,
@@ -4728,7 +4746,7 @@ Only continue if you trust the source. Injected code:
       getVueById,
       getVueElement,
       resolveVueMethod
-    } = createVueAdapter({ getWin });
+    } = createVueAdapter({ getWin, diagnostics });
     function triggerFileDownload(contents, filename) {
       let UrlApi = getUrlApi(), BlobConstructor = getBlobConstructor(), url = UrlApi.createObjectURL(new BlobConstructor([contents])), anchor = getDocument().createElement("a");
       anchor.download = filename, anchor.href = url, anchor.click(), schedule(() => {
@@ -50974,6 +50992,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       resolveVueMethod,
       triggerFileDownload
     } = createBrowserRuntime({
+      diagnostics,
       getWin: () => win,
       getDocument: () => runtimeEnvironment.document,
       getUrlApi: () => runtimeEnvironment.urlApi,

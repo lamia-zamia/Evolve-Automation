@@ -2,6 +2,7 @@
 // compatibility markers in one browser adapter. Replace this bridge with explicit
 // game-facing ports when the upstream Vue 3 component contracts stabilize.
 
+import type { TickDiagnostics } from "../../ports/tick.ts";
 import { readProperty } from "../validation.ts";
 
 export interface VueAdapterDependencies {
@@ -11,6 +12,7 @@ export interface VueAdapterDependencies {
       readonly querySelector?: (selector: string) => unknown;
     };
   };
+  readonly diagnostics?: TickDiagnostics | undefined;
 }
 
 export type VueMethodCaller = (
@@ -47,10 +49,34 @@ function readVueProxy(element: unknown): unknown {
   return isPresent(legacyVue) ? legacyVue : undefined;
 }
 
-export function createVueAdapter({ getWin }: VueAdapterDependencies) {
-  function getVueById(elementId: string): unknown {
+export function createVueAdapter({
+  getWin,
+  diagnostics,
+}: VueAdapterDependencies) {
+  function lookUpVue(elementId: string): unknown {
     const element = getWin().document.getElementById(elementId);
     return readVueProxy(element);
+  }
+
+  /**
+   * Every "is this action rendered" question in the script funnels through here,
+   * and each one is a document lookup plus a property walk over the element.
+   * The weighting pass asks it several times per candidate, so the call count
+   * and its total cost are measured to size that.
+   */
+  function getVueById(elementId: string): unknown {
+    if (diagnostics === undefined || !diagnostics.readPerformanceEnabled()) {
+      return lookUpVue(elementId);
+    }
+    const startedAtMs = diagnostics.nowMs();
+    try {
+      return lookUpVue(elementId);
+    } finally {
+      diagnostics.recordPerformance(
+        "getVueById",
+        diagnostics.nowMs() - startedAtMs,
+      );
+    }
   }
 
   function getMainVue(): unknown {

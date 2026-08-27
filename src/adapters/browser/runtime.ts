@@ -22,6 +22,7 @@ export function createBrowserRuntime({
   getUrlApi,
   getBlobConstructor,
   schedule,
+  diagnostics,
 }: BrowserRuntimeDependencies) {
   const {
     callVueMethod,
@@ -29,7 +30,7 @@ export function createBrowserRuntime({
     getVueById,
     getVueElement,
     resolveVueMethod,
-  } = createVueAdapter({ getWin });
+  } = createVueAdapter({ getWin, diagnostics });
 
   function triggerFileDownload(contents: string, filename: string) {
     const UrlApi = getUrlApi();

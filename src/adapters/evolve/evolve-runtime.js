@@ -1393,6 +1393,7 @@ export function startEvolveRuntimeComposition(
     resolveVueMethod,
     triggerFileDownload,
   } = createBrowserRuntimeControl({
+    diagnostics,
     getWin: () => win,
     getDocument: () => runtimeEnvironment.document,
     getUrlApi: () => runtimeEnvironment.urlApi,

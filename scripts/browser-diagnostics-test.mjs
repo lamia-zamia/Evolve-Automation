@@ -44,9 +44,11 @@ diagnostics.flushPerformance();
 assert.equal(performanceLogs.length, 1);
 assert.equal(performanceLogs[0][0], "[EA perf] 25 work ticks");
 assert.equal(performanceLogs[0][1].tick.count, 25);
-assert.equal(performanceLogs[0][1].tick.averageMs, 22);
+assert.equal(performanceLogs[0][1].tick.perTickMs, 22);
+assert.equal(performanceLogs[0][1].tick.totalMs, 550);
 assert.equal(performanceLogs[0][1].tick.maxMs, 34);
 assert.equal(performanceLogs[0][1].updateState.count, 25);
+assert.equal(performanceLogs[0][1].updateState.perTickMs, 2);
 // Counters report their per-work-tick rate beside the totals, and a counter
 // recorded while diagnostics were off never reaches the summary.
 assert.equal(

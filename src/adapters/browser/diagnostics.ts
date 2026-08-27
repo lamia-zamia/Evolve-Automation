@@ -85,12 +85,16 @@ export function createBrowserDiagnostics(
     if (pendingTicks < 25 || typeof consoleLog !== "function") {
       return;
     }
+    // `perTickMs` is the figure to read: a phase recorded once per tick and a
+    // phase recorded thousands of times per tick are then directly comparable,
+    // where a per-sample average rounds the second kind to 0.00 and hides it.
     const summary = Object.fromEntries(
       [...samples.entries()].map(([phase, sample]) => [
         phase,
         {
           count: sample.count,
-          averageMs: Number((sample.totalMs / sample.count).toFixed(2)),
+          perTickMs: Number((sample.totalMs / pendingTicks).toFixed(2)),
+          totalMs: Number(sample.totalMs.toFixed(2)),
           maxMs: Number(sample.maxMs.toFixed(2)),
         },
       ]),

@@ -3,6 +3,7 @@ import { runStateUpdate } from "../src/application/state-update.ts";
 import { createStateUpdateControls } from "../src/adapters/evolve/state-update.ts";
 import { createScriptDataLifecycle } from "../src/game/script-data.ts";
 import { createUIRefresh } from "../src/ui/ui-refresh.ts";
+import { createVueAdapter } from "../src/adapters/browser/vue.ts";
 
 // The three bookkeeping passes were 26% of a work tick with no internal
 // structure. Each now reports its own sub-phases, and reports none of them
@@ -184,5 +185,28 @@ enabled = false;
 updateScriptData();
 updateUI();
 assert.deepEqual(measured(), []);
+
+// ---------- getVueById ----------
+// The document lookup behind every "is this action rendered" question is timed
+// per call, and the lookup itself is unchanged when diagnostics are off.
+enabled = true;
+const lookedUp = [];
+const vue = createVueAdapter({
+  getWin: () => ({
+    document: {
+      getElementById: (id) => {
+        lookedUp.push(id);
+        return { __vue__: { id } };
+      },
+    },
+  }),
+  diagnostics,
+});
+assert.deepEqual(vue.getVueById("city-Barracks"), { id: "city-Barracks" });
+assert.deepEqual(measured(), ["getVueById"]);
+enabled = false;
+assert.deepEqual(vue.getVueById("city-Barracks"), { id: "city-Barracks" });
+assert.deepEqual(measured(), []);
+assert.deepEqual(lookedUp, ["city-Barracks", "city-Barracks"]);
 
 console.log("Bookkeeping phase diagnostics tests passed");
