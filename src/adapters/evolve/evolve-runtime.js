@@ -3188,6 +3188,7 @@ export function startEvolveRuntimeComposition(
 
   const { updateScriptData, finalizeScriptData } =
     createScriptDataLifecycleControl({
+      diagnostics,
       getSettings: () => settings,
       getState: () => state,
       getGame: () => game,
@@ -3451,6 +3452,7 @@ export function startEvolveRuntimeComposition(
   });
 
   const { updateState } = createStateUpdateControl({
+    diagnostics,
     getJQuery: () => $,
     getGame: () => game,
     getState: () => state,
@@ -4267,6 +4269,7 @@ export function startEvolveRuntimeComposition(
         getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
     },
     uiRefresh: {
+      diagnostics,
       getUiSurface: () => gameUiSurface,
       getActions: () =>
         getTestContext("uiRefresh")?.actions ?? uiRefreshActions,

@@ -1,3 +1,6 @@
+import type { TickDiagnostics } from "../ports/tick.ts";
+import { createPhaseMeasure } from "../utils/performance.ts";
+
 interface ScriptDataSettings {
   autoMarket: boolean;
   autoPylon: boolean;
@@ -79,6 +82,7 @@ interface ScriptDataDependencies {
   getResourcesPerClick: () => () => number;
   getTicksPerSecond: () => () => number;
   getHaveTech: () => (technology: string, level?: number) => boolean;
+  diagnostics?: TickDiagnostics | undefined;
 }
 
 export function createScriptDataLifecycle({
@@ -99,24 +103,37 @@ export function createScriptDataLifecycle({
   getResourcesPerClick,
   getTicksPerSecond,
   getHaveTech,
+  diagnostics,
 }: ScriptDataDependencies) {
   function updateScriptData() {
+    const measure = createPhaseMeasure(diagnostics);
     const WarManager = getWarManager();
     const resources = getResources();
-    WarManager.updateGarrison();
-    WarManager.updateHell();
-    for (const id in resources) {
-      resources[id]!.updateData();
-    }
-    getUpdateCraftCost()();
-    getMarketManager().updateData();
-    getBuildingManager().updateBuildings();
+    measure("updateScriptData.war", () => {
+      WarManager.updateGarrison();
+      WarManager.updateHell();
+    });
+    measure("updateScriptData.resourceData", () => {
+      for (const id in resources) {
+        resources[id]!.updateData();
+      }
+    });
+    measure("updateScriptData.craftCost", () => getUpdateCraftCost()());
+    measure("updateScriptData.market", () => getMarketManager().updateData());
+    // Rebuilds every unlocked building's `cost` through the game's
+    // `adjustCosts`, which is the sampling cost a two-pass weighting sampler
+    // would be trying to avoid paying for discarded candidates.
+    measure("updateScriptData.updateBuildings", () =>
+      getBuildingManager().updateBuildings(),
+    );
 
-    const state = getState();
-    state.globalProductionModifier = 1;
-    for (const mod of Object.values(getGame().breakdown.p.Global ?? {})) {
-      state.globalProductionModifier *= 1 + (parseFloat(mod) || 0) / 100;
-    }
+    measure("updateScriptData.productionModifier", () => {
+      const state = getState();
+      state.globalProductionModifier = 1;
+      for (const mod of Object.values(getGame().breakdown.p.Global ?? {})) {
+        state.globalProductionModifier *= 1 + (parseFloat(mod) || 0) / 100;
+      }
+    });
   }
 
   function finalizeScriptData() {

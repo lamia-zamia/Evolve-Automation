@@ -4,6 +4,8 @@ import type {
   StateUpdateReader,
   StateUpdateRefreshSnapshot,
 } from "../../ports/state-update.ts";
+import type { TickDiagnostics } from "../../ports/tick.ts";
+import { createPhaseMeasure } from "../../utils/performance.ts";
 import { coerceNumber, requireRecord } from "../validation.ts";
 
 export interface StateUpdateReaderDependencies {
@@ -151,6 +153,7 @@ export interface StateUpdateControlsDependencies {
   readonly calculateRequiredStorages: () => void;
   readonly prioritizeDemandedResources: () => void;
   readonly updateActiveTargets: () => void;
+  readonly diagnostics?: TickDiagnostics | undefined;
 }
 
 export function createStateUpdateControls(
@@ -181,10 +184,19 @@ export function createStateUpdateControls(
       storage.containerValue = poly.containerValue();
     },
     runPlanningPasses(): void {
-      dependencies.updatePriorityTargets(); // Set queuedTargets and triggerTargets
-      dependencies.updateProjects(); // Set obj.cost, uses triggerTargets
-      dependencies.calculateRequiredStorages(); // Uses obj.cost
-      dependencies.prioritizeDemandedResources(); // Set res.requestedQuantity, uses queuedTargets and triggerTargets
+      const measure = createPhaseMeasure(dependencies.diagnostics);
+      measure("updateState.runPlanningPasses.updatePriorityTargets", () =>
+        dependencies.updatePriorityTargets(),
+      ); // Set queuedTargets and triggerTargets
+      measure("updateState.runPlanningPasses.updateProjects", () =>
+        dependencies.updateProjects(),
+      ); // Set obj.cost, uses triggerTargets
+      measure("updateState.runPlanningPasses.calculateRequiredStorages", () =>
+        dependencies.calculateRequiredStorages(),
+      ); // Uses obj.cost
+      measure("updateState.runPlanningPasses.prioritizeDemandedResources", () =>
+        dependencies.prioritizeDemandedResources(),
+      ); // Set res.requestedQuantity, uses queuedTargets and triggerTargets
     },
     resetTooltips(): void {
       dependencies.getState().tooltips = {};

@@ -3,6 +3,8 @@ import type {
   StateUpdateControls,
   StateUpdateReader,
 } from "../ports/state-update.ts";
+import type { TickDiagnostics } from "../ports/tick.ts";
+import { createPhaseMeasure } from "../utils/performance.ts";
 import {
   computeMoneyWindow,
   computeTowerSize,
@@ -14,6 +16,7 @@ export interface StateUpdateDependencies {
   readonly reader: StateUpdateReader;
   readonly controls: StateUpdateControls;
   readonly clock: Clock;
+  readonly diagnostics?: TickDiagnostics | undefined;
 }
 
 /**
@@ -26,7 +29,9 @@ export function runStateUpdate({
   reader,
   controls,
   clock,
+  diagnostics,
 }: StateUpdateDependencies): void {
+  const measure = createPhaseMeasure(diagnostics);
   const goalSnapshot = reader.sampleGoalTransition();
   const transition = planGoalTransition(goalSnapshot);
   switch (transition.kind) {
@@ -51,13 +56,19 @@ export function runStateUpdate({
       break;
   }
 
-  controls.resetResourceAccumulators();
-  controls.applyStorageUnitValues();
-  controls.runPlanningPasses();
+  measure("updateState.resetResourceAccumulators", () =>
+    controls.resetResourceAccumulators(),
+  );
+  measure("updateState.applyStorageUnitValues", () =>
+    controls.applyStorageUnitValues(),
+  );
+  measure("updateState.runPlanningPasses", () => controls.runPlanningPasses());
 
   controls.resetTooltips();
 
-  const refresh = reader.sampleRefresh();
+  const refresh = measure("updateState.sampleRefresh", () =>
+    reader.sampleRefresh(),
+  );
   const money = computeMoneyWindow(refresh.moneyIncomes, refresh.moneyRate);
   controls.applyMoneyWindow(money.incomes, money.median);
   controls.applyAstroSign();
@@ -72,6 +83,10 @@ export function runStateUpdate({
     stabilise.lastExoticMass,
   );
 
-  controls.cacheSpaceDockOptions();
-  controls.updateActiveTargets();
+  measure("updateState.cacheSpaceDockOptions", () =>
+    controls.cacheSpaceDockOptions(),
+  );
+  measure("updateState.updateActiveTargets", () =>
+    controls.updateActiveTargets(),
+  );
 }

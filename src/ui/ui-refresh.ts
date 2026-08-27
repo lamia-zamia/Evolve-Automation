@@ -1,4 +1,6 @@
 import type { GameUiSurfacePort } from "../ports/game-ui-surface.ts";
+import type { TickDiagnostics } from "../ports/tick.ts";
+import { createPhaseMeasure } from "../utils/performance.ts";
 
 type UIRefreshActions = {
   createOptionsModal: () => void;
@@ -18,14 +20,17 @@ type UIRefreshDependencies = {
   getUiSurface: () => GameUiSurfacePort;
   getActions: () => UIRefreshActions;
   getPhases: () => UIRefreshPhases;
+  diagnostics?: TickDiagnostics | undefined;
 };
 
 export function createUIRefresh({
   getUiSurface,
   getActions,
   getPhases,
+  diagnostics,
 }: UIRefreshDependencies) {
   function updateUI() {
+    const measure = createPhaseMeasure(diagnostics);
     const uiSurface = getUiSurface();
     // Don't touch DOM when the tab is in the background
     if (!uiSurface.isPageVisible()) {
@@ -48,27 +53,38 @@ export function createUIRefresh({
     let resetScrollPositionRequired = false;
     const currentScrollPosition = uiSurface.readScrollTop();
 
-    createOptionsModal();
-    updateOptionsUI();
-    updatePrestigeInTopBar();
+    measure("updateUI.createOptionsModal", () => createOptionsModal());
+    measure("updateUI.updateOptionsUI", () => updateOptionsUI());
+    measure("updateUI.updatePrestigeInTopBar", () => updatePrestigeInTopBar());
 
-    const { scriptNode, created } = ensureAutomationContainer();
+    const { scriptNode, created } = measure(
+      "updateUI.ensureAutomationContainer",
+      () => ensureAutomationContainer(),
+    );
     if (created) {
       resetScrollPositionRequired = true;
     }
-    if (repairRuntimeAdapters(scriptNode)) {
+    if (
+      measure("updateUI.repairRuntimeAdapters", () =>
+        repairRuntimeAdapters(scriptNode),
+      )
+    ) {
       resetScrollPositionRequired = true;
     }
 
-    updateSoulGemRate();
-    renderPreviousGameStats();
+    measure("updateUI.updateSoulGemRate", () => updateSoulGemRate());
+    measure("updateUI.renderPreviousGameStats", () =>
+      renderPreviousGameStats(),
+    );
 
     if (resetScrollPositionRequired) {
       // Leave the scroll position where it was before all our updates to the UI above
       uiSurface.resetScrollTop(currentScrollPosition);
     }
 
-    updateTotalDaysInTopBar();
+    measure("updateUI.updateTotalDaysInTopBar", () =>
+      updateTotalDaysInTopBar(),
+    );
   }
 
   return { updateUI };

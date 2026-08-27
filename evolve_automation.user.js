@@ -11643,18 +11643,25 @@ Only continue if you trust the source. Injected code:
     getUpdateCraftCost,
     getResourcesPerClick,
     getTicksPerSecond,
-    getHaveTech
+    getHaveTech,
+    diagnostics
   }) {
     function updateScriptData() {
-      let WarManager = getWarManager(), resources = getResources();
-      WarManager.updateGarrison(), WarManager.updateHell();
-      for (let id in resources)
-        resources[id].updateData();
-      getUpdateCraftCost()(), getMarketManager().updateData(), getBuildingManager().updateBuildings();
-      let state = getState();
-      state.globalProductionModifier = 1;
-      for (let mod of Object.values(getGame().breakdown.p.Global ?? {}))
-        state.globalProductionModifier *= 1 + (parseFloat(mod) || 0) / 100;
+      let measure = createPhaseMeasure(diagnostics), WarManager = getWarManager(), resources = getResources();
+      measure("updateScriptData.war", () => {
+        WarManager.updateGarrison(), WarManager.updateHell();
+      }), measure("updateScriptData.resourceData", () => {
+        for (let id in resources)
+          resources[id].updateData();
+      }), measure("updateScriptData.craftCost", () => getUpdateCraftCost()()), measure("updateScriptData.market", () => getMarketManager().updateData()), measure(
+        "updateScriptData.updateBuildings",
+        () => getBuildingManager().updateBuildings()
+      ), measure("updateScriptData.productionModifier", () => {
+        let state = getState();
+        state.globalProductionModifier = 1;
+        for (let mod of Object.values(getGame().breakdown.p.Global ?? {}))
+          state.globalProductionModifier *= 1 + (parseFloat(mod) || 0) / 100;
+      });
     }
     function finalizeScriptData() {
       let settings = getSettings(), game = getGame(), resources = getResources(), buildings = getBuildings();
@@ -11710,7 +11717,8 @@ Only continue if you trust the source. Injected code:
     getResourcesPerClick,
     getTicksPerSecond,
     getHaveTech,
-    testSurface
+    testSurface,
+    diagnostics
   }) {
     let getTestContext = getTestContextReader(testSurface), context = () => getTestContext("scriptData");
     return createScriptDataLifecycle({
@@ -11734,7 +11742,8 @@ Only continue if you trust the source. Injected code:
         getResourcesPerClick()
       ),
       getTicksPerSecond: () => readContextAction(context(), "ticksPerSecond", getTicksPerSecond()),
-      getHaveTech: () => readContextAction(context(), "haveTech", getHaveTech())
+      getHaveTech: () => readContextAction(context(), "haveTech", getHaveTech()),
+      diagnostics
     });
   }
 
@@ -18909,10 +18918,11 @@ Only continue if you trust the source. Injected code:
   function createUIRefresh({
     getUiSurface,
     getActions,
-    getPhases
+    getPhases,
+    diagnostics
   }) {
     function updateUI() {
-      let uiSurface = getUiSurface();
+      let measure = createPhaseMeasure(diagnostics), uiSurface = getUiSurface();
       if (!uiSurface.isPageVisible())
         return;
       let {
@@ -18926,9 +18936,21 @@ Only continue if you trust the source. Injected code:
         updateSoulGemRate,
         renderPreviousGameStats
       } = getPhases(), resetScrollPositionRequired = !1, currentScrollPosition = uiSurface.readScrollTop();
-      createOptionsModal(), updateOptionsUI(), updatePrestigeInTopBar();
-      let { scriptNode, created } = ensureAutomationContainer();
-      created && (resetScrollPositionRequired = !0), repairRuntimeAdapters(scriptNode) && (resetScrollPositionRequired = !0), updateSoulGemRate(), renderPreviousGameStats(), resetScrollPositionRequired && uiSurface.resetScrollTop(currentScrollPosition), updateTotalDaysInTopBar();
+      measure("updateUI.createOptionsModal", () => createOptionsModal()), measure("updateUI.updateOptionsUI", () => updateOptionsUI()), measure("updateUI.updatePrestigeInTopBar", () => updatePrestigeInTopBar());
+      let { scriptNode, created } = measure(
+        "updateUI.ensureAutomationContainer",
+        () => ensureAutomationContainer()
+      );
+      created && (resetScrollPositionRequired = !0), measure(
+        "updateUI.repairRuntimeAdapters",
+        () => repairRuntimeAdapters(scriptNode)
+      ) && (resetScrollPositionRequired = !0), measure("updateUI.updateSoulGemRate", () => updateSoulGemRate()), measure(
+        "updateUI.renderPreviousGameStats",
+        () => renderPreviousGameStats()
+      ), resetScrollPositionRequired && uiSurface.resetScrollTop(currentScrollPosition), measure(
+        "updateUI.updateTotalDaysInTopBar",
+        () => updateTotalDaysInTopBar()
+      );
     }
     return { updateUI };
   }
@@ -19793,9 +19815,10 @@ Only continue if you trust the source. Injected code:
   function runStateUpdate({
     reader,
     controls: controls4,
-    clock
+    clock,
+    diagnostics
   }) {
-    let goalSnapshot = reader.sampleGoalTransition(), transition = planGoalTransition(goalSnapshot);
+    let measure = createPhaseMeasure(diagnostics), goalSnapshot = reader.sampleGoalTransition(), transition = planGoalTransition(goalSnapshot);
     switch (transition.kind) {
       case "force-evolution":
         controls4.setGoal("Evolution");
@@ -19812,8 +19835,17 @@ Only continue if you trust the source. Injected code:
       case "proceed":
         break;
     }
-    controls4.resetResourceAccumulators(), controls4.applyStorageUnitValues(), controls4.runPlanningPasses(), controls4.resetTooltips();
-    let refresh = reader.sampleRefresh(), money = computeMoneyWindow(refresh.moneyIncomes, refresh.moneyRate);
+    measure(
+      "updateState.resetResourceAccumulators",
+      () => controls4.resetResourceAccumulators()
+    ), measure(
+      "updateState.applyStorageUnitValues",
+      () => controls4.applyStorageUnitValues()
+    ), measure("updateState.runPlanningPasses", () => controls4.runPlanningPasses()), controls4.resetTooltips();
+    let refresh = measure(
+      "updateState.sampleRefresh",
+      () => reader.sampleRefresh()
+    ), money = computeMoneyWindow(refresh.moneyIncomes, refresh.moneyRate);
     controls4.applyMoneyWindow(money.incomes, money.median), controls4.applyAstroSign(), controls4.applyTowerSize(computeTowerSize(refresh.pillars));
     let stabilise = evaluateStabilise(
       refresh.currentExotic,
@@ -19822,7 +19854,13 @@ Only continue if you trust the source. Injected code:
     controls4.applyStabilise(
       stabilise.stabilised ? clock.nowMs() : void 0,
       stabilise.lastExoticMass
-    ), controls4.cacheSpaceDockOptions(), controls4.updateActiveTargets();
+    ), measure(
+      "updateState.cacheSpaceDockOptions",
+      () => controls4.cacheSpaceDockOptions()
+    ), measure(
+      "updateState.updateActiveTargets",
+      () => controls4.updateActiveTargets()
+    );
   }
 
   // src/adapters/evolve/state-update.ts
@@ -19891,7 +19929,20 @@ Only continue if you trust the source. Injected code:
         storage.crateValue = poly.crateValue(), storage.containerValue = poly.containerValue();
       },
       runPlanningPasses() {
-        dependencies.updatePriorityTargets(), dependencies.updateProjects(), dependencies.calculateRequiredStorages(), dependencies.prioritizeDemandedResources();
+        let measure = createPhaseMeasure(dependencies.diagnostics);
+        measure(
+          "updateState.runPlanningPasses.updatePriorityTargets",
+          () => dependencies.updatePriorityTargets()
+        ), measure(
+          "updateState.runPlanningPasses.updateProjects",
+          () => dependencies.updateProjects()
+        ), measure(
+          "updateState.runPlanningPasses.calculateRequiredStorages",
+          () => dependencies.calculateRequiredStorages()
+        ), measure(
+          "updateState.runPlanningPasses.prioritizeDemandedResources",
+          () => dependencies.prioritizeDemandedResources()
+        );
       },
       resetTooltips() {
         dependencies.getState().tooltips = {};
@@ -19970,6 +20021,7 @@ Only continue if you trust the source. Injected code:
     isTechnology,
     isProject,
     clock,
+    diagnostics,
     testSurface,
     setTestContext,
     makeStateUpdateTargets
@@ -20006,9 +20058,10 @@ Only continue if you trust the source. Injected code:
       updateProjects,
       calculateRequiredStorages: () => activeHelpers().calculateRequiredStorages(),
       prioritizeDemandedResources: () => activeHelpers().prioritizeDemandedResources(),
-      updateActiveTargets: () => activeTargets.updateActiveTargets()
+      updateActiveTargets: () => activeTargets.updateActiveTargets(),
+      diagnostics
     });
-    return { updateState: () => runStateUpdate({ reader, controls: controls4, clock }) };
+    return { updateState: () => runStateUpdate({ reader, controls: controls4, clock, diagnostics }) };
   }
 
   // src/adapters/browser/clock.ts
@@ -52113,6 +52166,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGovernor: () => getGovernor(),
       shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney()
     }), { updateScriptData, finalizeScriptData } = createScriptDataLifecycleControl({
+      diagnostics,
       getSettings: () => settings,
       getState: () => state,
       getGame: () => game,
@@ -52227,6 +52281,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, game = context.game, resources = context.resources, poly = context.poly;
       }
     }), { updateState } = createStateUpdateControl({
+      diagnostics,
       getJQuery: () => $,
       getGame: () => game,
       getState: () => state,
@@ -52730,6 +52785,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getActions: () => getTestContext("uiRefresh")?.actions ?? uiRefreshActions
       },
       uiRefresh: {
+        diagnostics,
         getUiSurface: () => gameUiSurface,
         getActions: () => getTestContext("uiRefresh")?.actions ?? uiRefreshActions
       }

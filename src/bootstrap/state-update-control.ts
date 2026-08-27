@@ -50,6 +50,7 @@ interface StateUpdateControlDependencies {
   readonly isTechnology: ActiveTargetsDependencies["isTechnology"];
   readonly isProject: ActiveTargetsDependencies["isProject"];
   readonly clock: Parameters<typeof runStateUpdate>[0]["clock"];
+  readonly diagnostics: Parameters<typeof runStateUpdate>[0]["diagnostics"];
   readonly testSurface: RuntimeTestSurface | undefined;
   readonly setTestContext: (context: unknown) => void;
   readonly makeStateUpdateTargets: () => unknown;
@@ -77,6 +78,7 @@ export function createStateUpdateControl({
   isTechnology,
   isProject,
   clock,
+  diagnostics,
   testSurface,
   setTestContext,
   makeStateUpdateTargets,
@@ -123,8 +125,10 @@ export function createStateUpdateControl({
     prioritizeDemandedResources: () =>
       activeHelpers().prioritizeDemandedResources(),
     updateActiveTargets: () => activeTargets.updateActiveTargets(),
+    diagnostics,
   });
-  const updateState = () => runStateUpdate({ reader, controls, clock });
+  const updateState = () =>
+    runStateUpdate({ reader, controls, clock, diagnostics });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.add({
       updateState,

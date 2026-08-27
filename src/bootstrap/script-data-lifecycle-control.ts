@@ -54,6 +54,7 @@ interface ScriptDataLifecycleControlDependencies extends Omit<
   readonly getTicksPerSecond: LifecycleDependencies["getTicksPerSecond"];
   readonly getHaveTech: LifecycleDependencies["getHaveTech"];
   readonly testSurface: RuntimeTestSurface | undefined;
+  readonly diagnostics: LifecycleDependencies["diagnostics"];
 }
 
 export function createScriptDataLifecycleControl({
@@ -75,6 +76,7 @@ export function createScriptDataLifecycleControl({
   getTicksPerSecond,
   getHaveTech,
   testSurface,
+  diagnostics,
 }: ScriptDataLifecycleControlDependencies) {
   const getTestContext = getTestContextReader(testSurface);
   const context = () => getTestContext("scriptData");
@@ -113,6 +115,7 @@ export function createScriptDataLifecycleControl({
     getTicksPerSecond: () =>
       readContextAction(context(), "ticksPerSecond", getTicksPerSecond()),
     getHaveTech: () => readContextAction(context(), "haveTech", getHaveTech()),
+    diagnostics,
   });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)
     testSurface?.add({
