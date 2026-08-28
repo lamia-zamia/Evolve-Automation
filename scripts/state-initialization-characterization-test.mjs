@@ -91,12 +91,10 @@ const game = {
   },
 };
 const preambleTrace = [];
-let lumberRace = false;
 let technologies = new Set();
 const actions = {
   updateCraftCost: () => preambleTrace.push(["craft"]),
   updateTabs: (force) => preambleTrace.push(["tabs", force]),
-  isLumberRace: () => lumberRace,
   haveTech: (id, level) =>
     technologies.has(level === undefined ? id : `${id}:${level}`),
 };
@@ -129,10 +127,16 @@ assert.equal(finalBuildings.MoonBase.overridePowered, undefined);
 assert.equal(finalBuildings.Windmill.overridePowered, -1);
 assert.equal(finalBuildings.ProximaElysaniteSphere.overridePowered, -18);
 
-assert.deepEqual({ ...resources.Crates.cost }, { Stone: 200 });
-lumberRace = true;
+// Evolve's own crate() picks the resource from the race traits directly; see
+// domain/economy/storage/crate-cost.ts.
 assert.deepEqual({ ...resources.Crates.cost }, { Plywood: 10 });
-game.global.race.warlord = true;
+game.global.race.kindling_kindred = true;
+assert.deepEqual({ ...resources.Crates.cost }, { Stone: 200 });
+delete game.global.race.kindling_kindred;
+game.global.race.smoldering = true;
+assert.deepEqual({ ...resources.Crates.cost }, { Chrysotile: 200 });
+// iron_wood overrides the resource on its own -- warlord is not part of the game's rule.
+delete game.global.race.smoldering;
 game.global.race.iron_wood = true;
 assert.deepEqual({ ...resources.Crates.cost }, { Lumber: 200 });
 
@@ -145,7 +149,6 @@ function evaluateConsumptions() {
 }
 
 game.global.race = { universe: "standard" };
-lumberRace = false;
 technologies = new Set();
 finalBuildings.TauRedWomlingFarm.autoStateSmart = false;
 finalBuildings.TauRedWomlingLab.autoStateSmart = false;

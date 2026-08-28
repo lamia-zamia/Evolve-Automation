@@ -2043,9 +2043,6 @@ export function startEvolveRuntimeComposition(
       updateCraftCost,
     getUpdateTabs: () =>
       getTestContext("stateInitialization")?.actions?.updateTabs ?? updateTabs,
-    getIsLumberRace: () =>
-      getTestContext("stateInitialization")?.actions?.isLumberRace ??
-      isLumberRace,
     getHaveTech: () =>
       getTestContext("stateInitialization")?.actions?.haveTech ?? haveTech,
     log: (message) => runtimeEnvironment.log(message),

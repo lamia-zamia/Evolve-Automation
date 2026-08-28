@@ -85,7 +85,6 @@ const { initialiseState } = createStateInitialization({
   getProjects: () => context.projects,
   getUpdateCraftCost: () => context.updateCraftCost,
   getUpdateTabs: () => context.updateTabs,
-  getIsLumberRace: () => context.isLumberRace,
   getHaveTech: () => context.haveTech,
   log: (message) => logs.push(message),
 });
@@ -97,15 +96,15 @@ assert.deepEqual(traces, [
   ["first", "tabs", false],
 ]);
 assert.equal(firstContext.JobManager.craftingJobs[0].id, "firstCraft");
-assert.deepEqual({ ...firstContext.resources.Crates.cost }, { Stone: 200 });
-
-firstContext.isLumberRace = () => true;
 assert.deepEqual({ ...firstContext.resources.Crates.cost }, { Plywood: 10 });
-firstContext.game.global.race = {
-  universe: "standard",
-  warlord: true,
-  iron_wood: true,
-};
+
+firstContext.game.global.race = { universe: "standard", smoldering: true };
+assert.deepEqual(
+  { ...firstContext.resources.Crates.cost },
+  { Chrysotile: 200 },
+);
+// iron_wood overrides the resource on its own -- warlord is not part of the game's rule.
+firstContext.game.global.race = { universe: "standard", iron_wood: true };
 assert.deepEqual({ ...firstContext.resources.Crates.cost }, { Lumber: 200 });
 
 const lunaConsumption = firstContext.consumptions.find(

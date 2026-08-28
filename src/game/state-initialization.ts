@@ -1,3 +1,5 @@
+import { crateCost } from "../domain/economy/storage/crate-cost.ts";
+
 /**
  * A resource entity. This module routes them into building consumption and
  * support, and writes the crate and container cost bags.
@@ -280,7 +282,6 @@ type StateInitializationDependencies = {
   getProjects: () => ProjectCatalog;
   getUpdateCraftCost: () => () => void;
   getUpdateTabs: () => (redraw: boolean) => void;
-  getIsLumberRace: () => () => unknown;
   getHaveTech: () => (id: string, level?: number) => unknown;
   log: (message: string) => void;
 };
@@ -295,13 +296,11 @@ export function createStateInitialization({
   getProjects,
   getUpdateCraftCost,
   getUpdateTabs,
-  getIsLumberRace,
   getHaveTech,
   log,
 }: StateInitializationDependencies) {
   const updateCraftCost = () => getUpdateCraftCost()();
   const updateTabs = (redraw: boolean) => getUpdateTabs()(redraw);
-  const isLumberRace = () => getIsLumberRace()();
   const haveTech = (id: string, level?: number) => getHaveTech()(id, level);
 
   function initialiseState() {
@@ -313,12 +312,14 @@ export function createStateInitialization({
 
     // Lets set our crate / container resource requirements
     Object.defineProperty(getResources().Crates, "cost", {
-      get: () =>
-        getGame().global.race["warlord"] && getGame().global.race["iron_wood"]
-          ? { Lumber: 200 }
-          : isLumberRace()
-            ? { Plywood: 10 }
-            : { Stone: 200 },
+      get: () => {
+        const race = getGame().global.race;
+        return crateCost({
+          smoldering: Boolean(race["smoldering"]),
+          kindlingKindred: Boolean(race["kindling_kindred"]),
+          ironWood: Boolean(race["iron_wood"]),
+        });
+      },
     });
     getResources().Containers.cost["Steel"] = 125;
 

@@ -12239,6 +12239,11 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/domain/economy/storage/crate-cost.ts
+  function crateCost(race2) {
+    return race2.ironWood ? Object.freeze({ Lumber: 200 }) : race2.smoldering ? Object.freeze({ Chrysotile: 200 }) : race2.kindlingKindred ? Object.freeze({ Stone: 200 }) : Object.freeze({ Plywood: 10 });
+  }
+
   // src/game/state-initialization.ts
   function createStateInitialization({
     getGame,
@@ -12250,15 +12255,21 @@ Only continue if you trust the source. Injected code:
     getProjects,
     getUpdateCraftCost,
     getUpdateTabs,
-    getIsLumberRace,
     getHaveTech,
     log
   }) {
-    let updateCraftCost = () => getUpdateCraftCost()(), updateTabs = (redraw) => getUpdateTabs()(redraw), isLumberRace = () => getIsLumberRace()(), haveTech = (id, level) => getHaveTech()(id, level);
+    let updateCraftCost = () => getUpdateCraftCost()(), updateTabs = (redraw) => getUpdateTabs()(redraw), haveTech = (id, level) => getHaveTech()(id, level);
     function initialiseState() {
       let JobManager = getJobManager(), crafter = getCrafter();
       updateCraftCost(), updateTabs(!1), Object.defineProperty(getResources().Crates, "cost", {
-        get: () => getGame().global.race.warlord && getGame().global.race.iron_wood ? { Lumber: 200 } : isLumberRace() ? { Plywood: 10 } : { Stone: 200 }
+        get: () => {
+          let race2 = getGame().global.race;
+          return crateCost({
+            smoldering: !!race2.smoldering,
+            kindlingKindred: !!race2.kindling_kindred,
+            ironWood: !!race2.iron_wood
+          });
+        }
       }), getResources().Containers.cost.Steel = 125, JobManager.craftingJobs = Object.values(crafter), getBuildings().Banquet.gameMax = getGame().global.stats.achieve.endless_hunger?.l ?? 0, getBuildings().RedTerraformer.gameMax = 100, getBuildings().RedAtmoTerraformer.gameMax = 1, getBuildings().RedTerraform.gameMax = 1, getBuildings().GasSpaceDock.gameMax = 1, getBuildings().DwarfWorldController.gameMax = 1, getBuildings().GasSpaceDockShipSegment.gameMax = 100, getBuildings().ProximaDyson.gameMax = 100, getBuildings().BlackholeStellarEngine.gameMax = 100, getBuildings().DwarfWorldCollider.gameMax = 1859, getBuildings().DwarfShipyard.gameMax = 1, getBuildings().DwarfMassRelay.gameMax = 100, getBuildings().DwarfMassRelayComplete.gameMax = 1, getBuildings().TitanAI.gameMax = 100, getBuildings().TitanAIComplete.gameMax = 1, getBuildings().TritonFOB.gameMax = 1, getBuildings().SunJumpGate.gameMax = 100, getBuildings().TauJumpGate.gameMax = 100, getBuildings().TauAlienOutpost.gameMax = 1, getBuildings().TauStarRingworld.gameMax = 1e3, getBuildings().TauStarMatrix.gameMax = 1, getBuildings().TauGas2AlienStation.gameMax = 100, getBuildings().TauGas2AlienSpaceStation.gameMax = 1, getBuildings().TauGas2MatrioshkaBrain.gameMax = 1e3, getBuildings().TauGas2IgnitionDevice.gameMax = 10, getBuildings().ProximaDysonSphere.gameMax = 100, getBuildings().ProximaOrichalcumSphere.gameMax = 100, getBuildings().ProximaElysaniteSphere.gameMax = 1e3, getBuildings().BlackholeStargate.gameMax = 200, getBuildings().BlackholeStargateComplete.gameMax = 1, getBuildings().SiriusSpaceElevator.gameMax = 100, getBuildings().SiriusGravityDome.gameMax = 100, getBuildings().SiriusAscensionMachine.gameMax = 100, getBuildings().SiriusAscensionTrigger.gameMax = 1, getBuildings().WastelandThrone.gameMax = 0, getBuildings().RuinsWarVault.gameMax = 1, getBuildings().BadlandsCodex.gameMax = 0, getBuildings().PitSoulForge.gameMax = 1, getBuildings().PitSoulCapacitor.gameMax = 40, getBuildings().PitAbsorptionChamber.gameMax = 100, getBuildings().GateEastTower.gameMax = 1, getBuildings().GateWestTower.gameMax = 1, getBuildings().RuinsVault.gameMax = 2, getBuildings().LakeOven.gameMax = 100, getBuildings().LakeOvenComplete.gameMax = 1, getBuildings().SpireBridge.gameMax = 10, getBuildings().SpireEdenicGate.gameMax = 1, getBuildings().AsphodelMechStation.gameMax = 10, getBuildings().AsphodelRuneGate.gameMax = 100, getBuildings().ElysiumFireSupportBase.gameMax = 101, getBuildings().ElysiumNorthPier.gameMax = 10, getBuildings().ElysiumRushmore.gameMax = 1, getBuildings().ElysiumReincarnation.gameMax = 1, getBuildings().IsleSouthPier.gameMax = 10, getBuildings().IsleSoulCompactor.gameMax = 1, getBuildings().PalaceInfuser.gameMax = 25, getBuildings().PalaceConduit.gameMax = 25, getBuildings().PalaceTomb.gameMax = 10, getBuildings().GorddonEmbassy.gameMax = 1, getBuildings().Alien1Consulate.gameMax = 1, getProjects().LaunchFacility.gameMax = 1, getProjects().ManaSyphon.gameMax = 80, getBuildings().CoalPower.addResourceConsumption(
         () => getGame().global.race.universe === "magic" ? getResources().Mana : getResources().Coal,
         () => getGame().global.race.environmentalist ? 0 : getGame().global.race.universe === "magic" ? 0.05 : 0.65
@@ -51875,7 +51886,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getProjects: () => projects,
       getUpdateCraftCost: () => getTestContext("stateInitialization")?.actions?.updateCraftCost ?? updateCraftCost,
       getUpdateTabs: () => getTestContext("stateInitialization")?.actions?.updateTabs ?? updateTabs,
-      getIsLumberRace: () => getTestContext("stateInitialization")?.actions?.isLumberRace ?? isLumberRace,
       getHaveTech: () => getTestContext("stateInitialization")?.actions?.haveTech ?? haveTech,
       log: (message) => runtimeEnvironment.log(message),
       testSurface,
