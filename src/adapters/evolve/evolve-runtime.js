@@ -3160,6 +3160,7 @@ export function startEvolveRuntimeComposition(
     getMarketManager: () => MarketManager,
     getGovernor: () => getGovernor(),
     shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney(),
+    diagnostics,
   });
 
   if (TEST_SURFACE_ENABLED)

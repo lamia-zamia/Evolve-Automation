@@ -21692,7 +21692,7 @@ Only continue if you trust the source. Injected code:
     ];
   }
   function readTradeRoutesInput(dependencies) {
-    let resources = requireRecord(dependencies.getResources(), "resources"), manager = requireRecord(
+    let tally = createCountTally(dependencies.diagnostics), resources = requireRecord(dependencies.getResources(), "resources"), manager = requireRecord(
       dependencies.getMarketManager(),
       "MarketManager"
     ), game = requireRecord(dependencies.getGame(), "game"), race2 = requireRecord(
@@ -21701,6 +21701,7 @@ Only continue if you trust the source. Injected code:
     ), priorityListRaw = manager.priorityList;
     if (!Array.isArray(priorityListRaw))
       throw new TypeError("MarketManager.priorityList must be an array");
+    tally.count("tradeRoutes.priorityList", priorityListRaw.length);
     let [maxTradeRoutes, unmanagedTradeRoutes] = readMaxTradeRoutes(manager);
     return Object.freeze({
       settings: readSettings2(dependencies.getSettings()),
@@ -21723,24 +21724,30 @@ Only continue if you trust the source. Injected code:
     getResources,
     getMarketManager,
     getGovernor,
-    shouldSaveInflationMoney: shouldSaveInflationMoney2
+    shouldSaveInflationMoney: shouldSaveInflationMoney2,
+    diagnostics
   }) {
     function adjustTradeRoutes() {
-      let result2 = planTradeRoutes(
-        readTradeRoutesInput({
-          getSettings,
-          getGame,
-          getResources,
-          getMarketManager,
-          getGovernor,
-          shouldSaveInflationMoney: shouldSaveInflationMoney2
-        })
-      ), resources = getResources(), marketManager = getMarketManager();
-      for (let operation2 of result2.operations) {
-        let resource2 = resources[operation2.resourceId];
-        operation2.kind === "zero" ? marketManager.zeroTradeRoutes(resource2) : operation2.kind === "add" ? marketManager.addTradeRoutes(resource2, operation2.count) : marketManager.removeTradeRoutes(resource2, operation2.count);
-      }
-      resources.Money.rateOfChange = result2.moneyRate;
+      let measure = createPhaseMeasure(diagnostics), input = readTradeRoutesInput({
+        getSettings,
+        getGame,
+        getResources,
+        getMarketManager,
+        getGovernor,
+        shouldSaveInflationMoney: shouldSaveInflationMoney2,
+        diagnostics
+      }), result2 = measure(
+        "autoMarket.tradeRoutes.plan",
+        () => planTradeRoutes(input)
+      );
+      measure("autoMarket.tradeRoutes.apply", () => {
+        let resources = getResources(), marketManager = getMarketManager();
+        for (let operation2 of result2.operations) {
+          let resource2 = resources[operation2.resourceId];
+          operation2.kind === "zero" ? marketManager.zeroTradeRoutes(resource2) : operation2.kind === "add" ? marketManager.addTradeRoutes(resource2, operation2.count) : marketManager.removeTradeRoutes(resource2, operation2.count);
+        }
+        resources.Money.rateOfChange = result2.moneyRate;
+      });
     }
     return { adjustTradeRoutes };
   }
@@ -52698,7 +52705,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getResources: () => resources,
       getMarketManager: () => MarketManager,
       getGovernor: () => getGovernor(),
-      shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney()
+      shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney(),
+      diagnostics
     }), { updateScriptData, finalizeScriptData } = createScriptDataLifecycleControl({
       diagnostics,
       getSettings: () => settings,

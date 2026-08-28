@@ -12,6 +12,8 @@ import {
   requireRecord,
   type UnknownRecord,
 } from "../../../validation.ts";
+import type { PhaseTimingSink } from "../../../../utils/performance.ts";
+import { createCountTally } from "../../../../utils/performance.ts";
 
 export interface TradeRoutesReaderDependencies {
   readonly getSettings: () => unknown;
@@ -20,6 +22,7 @@ export interface TradeRoutesReaderDependencies {
   readonly getMarketManager: () => unknown;
   readonly getGovernor: () => unknown;
   readonly shouldSaveInflationMoney: () => boolean;
+  readonly diagnostics?: PhaseTimingSink | undefined;
 }
 
 function readResourceView(value: unknown, index: number): TradeResourceView {
@@ -112,6 +115,7 @@ function readMaxTradeRoutes(manager: UnknownRecord): [number, number] {
 export function readTradeRoutesInput(
   dependencies: TradeRoutesReaderDependencies,
 ): TradeRoutesInput {
+  const tally = createCountTally(dependencies.diagnostics);
   const resources = requireRecord(dependencies.getResources(), "resources");
   const manager = requireRecord(
     dependencies.getMarketManager(),
@@ -127,6 +131,7 @@ export function readTradeRoutesInput(
   if (!Array.isArray(priorityListRaw)) {
     throw new TypeError("MarketManager.priorityList must be an array");
   }
+  tally.count("tradeRoutes.priorityList", priorityListRaw.length);
   const [maxTradeRoutes, unmanagedTradeRoutes] = readMaxTradeRoutes(manager);
 
   return Object.freeze({
