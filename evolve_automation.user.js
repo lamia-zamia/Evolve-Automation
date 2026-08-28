@@ -7545,6 +7545,21 @@ Only continue if you trust the source. Injected code:
           scouts
         };
       },
+      countByClassIn(containerId, className) {
+        let container = byId(containerId);
+        if (!isRecord(container))
+          return 0;
+        let getElementsByClassName = readProperty(
+          container,
+          "getElementsByClassName"
+        );
+        if (typeof getElementsByClassName != "function")
+          return 0;
+        let found = Reflect.apply(getElementsByClassName, container, [
+          className
+        ]), length = isRecord(found) ? readProperty(found, "length") : 0;
+        return typeof length == "number" ? length : 0;
+      },
       isLabCreateAvailable() {
         return isRecord(queryLabButton());
       },
@@ -19191,17 +19206,16 @@ Only continue if you trust the source. Injected code:
     getState,
     getGame,
     getJQuery,
+    getUiSurface,
     getActions
   }) {
     function repairRuntimeAdapters(scriptNode) {
-      let settingsRaw = getSettingsRaw(), state = getState(), game = getGame(), jquery = getJQuery(), actions = getActions(), reordered = scriptNode.next().length > 0;
-      if (reordered && scriptNode.parent().append(scriptNode), settingsRaw.activeTargetsUI && jquery("#active_targets-wrapper").length === 0 && actions.buildActiveTargetsUI(), settingsRaw.buildPlannerUI && jquery("#script_planner-wrapper").length === 0 && actions.buildBuildPlannerUI(), settingsRaw.showSettings && jquery("#script_settings").length === 0 && actions.buildScriptSettings(), settingsRaw.autoCraft && jquery("#resources .ea-craft-toggle").length === 0 && actions.createCraftToggles(), settingsRaw.autoBuild) {
-        let currentBuildingToggles = jquery(
-          "#mTabCivil .ea-building-toggle"
-        ).length;
+      let settingsRaw = getSettingsRaw(), state = getState(), game = getGame(), jquery = getJQuery(), countIn = getUiSurface().countByClassIn, actions = getActions(), reordered = scriptNode.next().length > 0;
+      if (reordered && scriptNode.parent().append(scriptNode), settingsRaw.activeTargetsUI && jquery("#active_targets-wrapper").length === 0 && actions.buildActiveTargetsUI(), settingsRaw.buildPlannerUI && jquery("#script_planner-wrapper").length === 0 && actions.buildBuildPlannerUI(), settingsRaw.showSettings && jquery("#script_settings").length === 0 && actions.buildScriptSettings(), settingsRaw.autoCraft && countIn("resources", "ea-craft-toggle") === 0 && actions.createCraftToggles(), settingsRaw.autoBuild) {
+        let currentBuildingToggles = countIn("mTabCivil", "ea-building-toggle");
         (currentBuildingToggles === 0 || currentBuildingToggles !== state.buildingToggles) && actions.createBuildingToggles();
       }
-      return settingsRaw.autoStorage && game.global.settings.showStorage && jquery("#resStorage .ea-storage-toggle").length === 0 && actions.createStorageToggles(), settingsRaw.autoMarket && game.global.settings.showMarket && jquery("#market .ea-market-toggle").length === 0 && actions.createMarketToggles(), settingsRaw.autoEject && game.global.settings.showEjector && jquery("#resEjector .ea-eject-toggle").length === 0 && actions.createEjectToggles(), settingsRaw.autoSupply && game.global.settings.showCargo && jquery("#resCargo .ea-supply-toggle").length === 0 && actions.createSupplyToggles(), settingsRaw.autoARPA && game.global.settings.showGenetics && jquery("#arpaPhysics .ea-arpa-toggle").length === 0 && actions.createArpaToggles(), settingsRaw.autoMech && game.global.settings.showMechLab && jquery("#mechList .ea-mech-info").length < jquery("#mechList .mechRow").length && actions.createMechInfo(), getSettings().hellTurnOffLogMessages && (game.global.portal.fortress?.notify === "Yes" && jquery("#fort .b-checkbox").eq(0).click(), game.global.portal.fortress?.s_ntfy === "Yes" && jquery("#fort .b-checkbox").eq(1).click()), reordered;
+      return settingsRaw.autoStorage && game.global.settings.showStorage && countIn("resStorage", "ea-storage-toggle") === 0 && actions.createStorageToggles(), settingsRaw.autoMarket && game.global.settings.showMarket && countIn("market", "ea-market-toggle") === 0 && actions.createMarketToggles(), settingsRaw.autoEject && game.global.settings.showEjector && countIn("resEjector", "ea-eject-toggle") === 0 && actions.createEjectToggles(), settingsRaw.autoSupply && game.global.settings.showCargo && countIn("resCargo", "ea-supply-toggle") === 0 && actions.createSupplyToggles(), settingsRaw.autoARPA && game.global.settings.showGenetics && countIn("arpaPhysics", "ea-arpa-toggle") === 0 && actions.createArpaToggles(), settingsRaw.autoMech && game.global.settings.showMechLab && countIn("mechList", "ea-mech-info") < countIn("mechList", "mechRow") && actions.createMechInfo(), getSettings().hellTurnOffLogMessages && (game.global.portal.fortress?.notify === "Yes" && jquery("#fort .b-checkbox").eq(0).click(), game.global.portal.fortress?.s_ntfy === "Yes" && jquery("#fort .b-checkbox").eq(1).click()), reordered;
     }
     return { repairRuntimeAdapters };
   }
@@ -53273,6 +53287,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getState: () => state,
         getGame: () => game,
         getJQuery: () => $,
+        getUiSurface: () => gameUiSurface,
         getActions: () => getTestContext("uiRefresh")?.actions ?? uiRefreshActions
       },
       automationContainer: {

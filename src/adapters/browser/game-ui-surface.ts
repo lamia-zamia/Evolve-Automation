@@ -145,6 +145,25 @@ export function createGameUiSurface({
       };
     },
 
+    countByClassIn(containerId: string, className: string): number {
+      const container = byId(containerId);
+      if (!isRecord(container)) {
+        return 0;
+      }
+      const getElementsByClassName = readProperty(
+        container,
+        "getElementsByClassName",
+      );
+      if (typeof getElementsByClassName !== "function") {
+        return 0;
+      }
+      const found = Reflect.apply(getElementsByClassName, container, [
+        className,
+      ]);
+      const length = isRecord(found) ? readProperty(found, "length") : 0;
+      return typeof length === "number" ? length : 0;
+    },
+
     isLabCreateAvailable(): boolean {
       return isRecord(queryLabButton());
     },

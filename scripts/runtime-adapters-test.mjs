@@ -19,16 +19,30 @@ const actionNames = [
 function makeContext(enabled = true) {
   const trace = [];
   const lengths = new Map();
+  const counts = new Map();
+  const asked = [];
   const jquery = (selector) => ({
     length: lengths.get(selector) ?? 0,
     next: () => ({ length: 0 }),
     parent: () => ({ append() {} }),
     eq: (index) => ({ click: () => trace.push(`click:${index}`) }),
   });
+  // The repair pass counts its own nodes inside a named container rather than
+  // running a descendant selector; the surface reports 0 for an absent one.
+  const uiSurface = {
+    countByClassIn(containerId, className) {
+      const key = `${containerId} ${className}`;
+      asked.push(key);
+      return counts.get(key) ?? 0;
+    },
+  };
   return {
     trace,
     lengths,
+    counts,
+    asked,
     jquery,
+    uiSurface,
     settings: { hellTurnOffLogMessages: enabled },
     settingsRaw: Object.fromEntries(
       [
@@ -66,14 +80,15 @@ function makeContext(enabled = true) {
 }
 
 let context = makeContext();
-context.lengths.set("#mechList .ea-mech-info", 1);
-context.lengths.set("#mechList .mechRow", 2);
+context.counts.set("mechList ea-mech-info", 1);
+context.counts.set("mechList mechRow", 2);
 const { repairRuntimeAdapters } = createRuntimeAdapters({
   getSettings: () => context.settings,
   getSettingsRaw: () => context.settingsRaw,
   getState: () => context.state,
   getGame: () => context.game,
   getJQuery: () => context.jquery,
+  getUiSurface: () => context.uiSurface,
   getActions: () => context.actions,
 });
 
@@ -101,8 +116,24 @@ assert.equal(stale.trace.length, actionNames.length + 2);
 // A nonzero but stale building-toggle count still triggers repair when it differs from state.
 context = makeContext(false);
 context.settingsRaw.autoBuild = true;
-context.lengths.set("#mTabCivil .ea-building-toggle", 1);
+context.counts.set("mTabCivil ea-building-toggle", 1);
 repairRuntimeAdapters({ ...scriptNode, next: () => ({ length: 0 }) });
 assert.deepEqual(context.trace, ["createBuildingToggles"]);
+
+// The panels are counted by container and class, never by descendant selector:
+// a `#container .class` lookup re-parses and re-walks the subtree every tick.
+context = makeContext();
+repairRuntimeAdapters({ ...scriptNode, next: () => ({ length: 0 }) });
+assert.deepEqual(context.asked, [
+  "resources ea-craft-toggle",
+  "mTabCivil ea-building-toggle",
+  "resStorage ea-storage-toggle",
+  "market ea-market-toggle",
+  "resEjector ea-eject-toggle",
+  "resCargo ea-supply-toggle",
+  "arpaPhysics ea-arpa-toggle",
+  "mechList ea-mech-info",
+  "mechList mechRow",
+]);
 
 console.log("Runtime adapter module tests passed");

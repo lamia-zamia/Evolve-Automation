@@ -28,6 +28,15 @@ export interface GameUiSurfacePort {
   resetScrollTop(value: number): void;
   /** The player's current mech-stats selections, for one calculation. */
   readMechStatsInputs(): GameMechStatsInput;
+  /**
+   * How many elements carrying `className` sit inside the element with id
+   * `containerId`, or 0 when no such container exists. The UI repair pass asks
+   * this once per script-owned panel every tick to notice a redraw that
+   * destroyed its nodes, so it is a count rather than a selector: a descendant
+   * selector re-parses and re-walks the whole subtree, which measured 6-11x
+   * dearer than a class lookup scoped to the container.
+   */
+  countByClassIn(containerId: string, className: string): number;
   /** True when the celestial lab has rendered its create button. */
   isLabCreateAvailable(): boolean;
   /** Click the celestial lab's create button. No-op when it is absent. */

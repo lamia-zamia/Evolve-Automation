@@ -4268,6 +4268,7 @@ export function startEvolveRuntimeComposition(
       getState: () => state,
       getGame: () => game,
       getJQuery: () => $,
+      getUiSurface: () => gameUiSurface,
       getActions: () =>
         getTestContext("uiRefresh")?.actions ?? uiRefreshActions,
     },

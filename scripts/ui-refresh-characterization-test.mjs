@@ -3,6 +3,10 @@ import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
 const stored = new Map();
 const selectorLengths = new Map();
+// The repair pass counts its own nodes inside a named container instead of
+// running a `#container .class` selector, so the document stub answers those
+// counts and the jQuery trace no longer carries them.
+const classCounts = new Map();
 const nextLengths = new Map();
 const handlers = new Map();
 let jqueryTrace = [];
@@ -91,7 +95,11 @@ const document = {
   documentElement: { scrollTop: 0 },
   body: { scrollTop: 0 },
   querySelector: () => null,
-  getElementById: () => null,
+  getElementById: (id) => ({
+    getElementsByClassName: (className) => ({
+      length: classCounts.get(`${id} ${className}`) ?? 0,
+    }),
+  }),
   addEventListener: (type, handler) => {
     if (type === "scroll") scrollListeners.push(handler);
   },
@@ -232,6 +240,7 @@ function baseContext(overrides = {}) {
 function resetDom() {
   jqueryTrace = [];
   selectorLengths.clear();
+  classCounts.clear();
   nextLengths.clear();
   handlers.clear();
   document.hidden = false;
@@ -358,18 +367,11 @@ for (const selector of [
   "#active_targets-wrapper",
   "#script_planner-wrapper",
   "#script_settings",
-  "#resources .ea-craft-toggle",
-  "#mTabCivil .ea-building-toggle",
-  "#resStorage .ea-storage-toggle",
-  "#market .ea-market-toggle",
-  "#resEjector .ea-eject-toggle",
-  "#resCargo .ea-supply-toggle",
-  "#arpaPhysics .ea-arpa-toggle",
 ]) {
   selectorLengths.set(selector, 0);
 }
-selectorLengths.set("#mechList .ea-mech-info", 1);
-selectorLengths.set("#mechList .mechRow", 2);
+classCounts.set("mechList ea-mech-info", 1);
+classCounts.set("mechList mechRow", 2);
 selectorLengths.set("#statsPanel .cstat", 1);
 scrollTo(120, 30);
 stored.set(

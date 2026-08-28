@@ -109,4 +109,21 @@ const bare = createGameUiSurface({ getDocument: () => ({}) });
 assert.equal(bare.isLabCreateAvailable(), false);
 bare.clickLabCreate();
 
+// Counting the script's own nodes goes through the container's class lookup,
+// not a descendant selector, and reports 0 rather than throwing when the
+// container, the method, or a sane length is missing.
+inputs["mTabCivil"] = {
+  getElementsByClassName: (className) => ({
+    length: className === "ea-building-toggle" ? 51 : 0,
+  }),
+};
+assert.equal(surface.countByClassIn("mTabCivil", "ea-building-toggle"), 51);
+assert.equal(surface.countByClassIn("mTabCivil", "ea-craft-toggle"), 0);
+assert.equal(surface.countByClassIn("absent", "ea-building-toggle"), 0);
+inputs["noMethod"] = {};
+assert.equal(surface.countByClassIn("noMethod", "ea-building-toggle"), 0);
+inputs["oddLength"] = { getElementsByClassName: () => ({ length: "51" }) };
+assert.equal(surface.countByClassIn("oddLength", "ea-building-toggle"), 0);
+assert.equal(bare.countByClassIn("mTabCivil", "ea-building-toggle"), 0);
+
 console.log("Game UI surface tests passed");
