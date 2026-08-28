@@ -164,6 +164,7 @@ const { updateUI } = createUIRefresh({
 });
 updateUI();
 assert.deepEqual(measured(), [
+  "updateUI.readScrollTop",
   "updateUI.createOptionsModal",
   "updateUI.updateOptionsUI",
   "updateUI.updatePrestigeInTopBar",

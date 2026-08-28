@@ -7506,6 +7506,21 @@ Only continue if you trust the source. Injected code:
     function scrollElement(property) {
       return readProperty(documentSurface(), property);
     }
+    function readScrollTopLive() {
+      let documentElement = scrollElement("documentElement"), body = scrollElement("body"), fromDocumentElement = isRecord(documentElement) ? readProperty(documentElement, "scrollTop") : void 0, fromBody = isRecord(body) ? readProperty(body, "scrollTop") : void 0, value = fromDocumentElement || fromBody;
+      return typeof value == "number" ? value : 0;
+    }
+    let observedScrollTop = null;
+    function observeScroll() {
+      let doc = documentSurface(), addEventListener = readProperty(doc, "addEventListener");
+      typeof addEventListener == "function" && Reflect.apply(addEventListener, doc, [
+        "scroll",
+        () => {
+          observedScrollTop = readScrollTopLive();
+        },
+        { passive: !0 }
+      ]);
+    }
     function queryLabButton() {
       let doc = documentSurface(), querySelector = readProperty(doc, "querySelector");
       return typeof querySelector != "function" ? null : Reflect.apply(querySelector, doc, [LAB_CREATE_BUTTON]);
@@ -7515,12 +7530,11 @@ Only continue if you trust the source. Injected code:
         return readProperty(documentSurface(), "hidden") !== !0;
       },
       readScrollTop() {
-        let documentElement = scrollElement("documentElement"), body = scrollElement("body"), fromDocumentElement = isRecord(documentElement) ? readProperty(documentElement, "scrollTop") : void 0, fromBody = isRecord(body) ? readProperty(body, "scrollTop") : void 0, value = fromDocumentElement || fromBody;
-        return typeof value == "number" ? value : 0;
+        return observedScrollTop === null && (observedScrollTop = readScrollTopLive(), observeScroll()), observedScrollTop;
       },
       resetScrollTop(value) {
         let documentElement = scrollElement("documentElement"), body = scrollElement("body");
-        isRecord(documentElement) && (documentElement.scrollTop = value), isRecord(body) && (body.scrollTop = value);
+        isRecord(documentElement) && (documentElement.scrollTop = value), isRecord(body) && (body.scrollTop = value), observedScrollTop = value;
       },
       readMechStatsInputs() {
         let scoutsElement = byId(MECH_STATS_SCOUTS_ID), scouts = isRecord(scoutsElement) && typeof scoutsElement.value == "string" ? scoutsElement.value : "";
@@ -19246,7 +19260,10 @@ Only continue if you trust the source. Injected code:
         repairRuntimeAdapters,
         updateSoulGemRate,
         renderPreviousGameStats
-      } = getPhases(), resetScrollPositionRequired = !1, currentScrollPosition = uiSurface.readScrollTop();
+      } = getPhases(), resetScrollPositionRequired = !1, currentScrollPosition = measure(
+        "updateUI.readScrollTop",
+        () => uiSurface.readScrollTop()
+      );
       measure("updateUI.createOptionsModal", () => createOptionsModal()), measure("updateUI.updateOptionsUI", () => updateOptionsUI()), measure("updateUI.updatePrestigeInTopBar", () => updatePrestigeInTopBar());
       let { scriptNode, created } = measure(
         "updateUI.ensureAutomationContainer",

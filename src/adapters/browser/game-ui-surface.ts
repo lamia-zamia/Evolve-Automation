@@ -52,6 +52,50 @@ export function createGameUiSurface({
     return readProperty(documentSurface(), property);
   }
 
+  /**
+   * The page's live scroll offset. Reading `scrollTop` makes the browser flush
+   * pending style and layout, and the refresh asks for it once per tick after a
+   * whole automation pass has dirtied the DOM, so this read pays for that flush:
+   * 1.28 ms/tick measured on a day-338 000 save, for a value only used on the
+   * rare tick that recreates the script's own container. `readScrollTop` seeds
+   * the cache with one such read and then lets the page report its own scrolling.
+   */
+  function readScrollTopLive(): number {
+    const documentElement = scrollElement("documentElement");
+    const body = scrollElement("body");
+    const fromDocumentElement = isRecord(documentElement)
+      ? readProperty(documentElement, "scrollTop")
+      : undefined;
+    const fromBody = isRecord(body)
+      ? readProperty(body, "scrollTop")
+      : undefined;
+    const value = fromDocumentElement || fromBody;
+    return typeof value === "number" ? value : 0;
+  }
+
+  /**
+   * `null` until the first `readScrollTop`, which seeds it and subscribes. Scroll
+   * events are dispatched from the rendering steps, where layout is already
+   * clean, so refreshing the cache there costs no flush. Element scrolling does
+   * not bubble, so this listener only sees the document's own scrollport.
+   */
+  let observedScrollTop: number | null = null;
+
+  function observeScroll(): void {
+    const doc = documentSurface();
+    const addEventListener = readProperty(doc, "addEventListener");
+    if (typeof addEventListener !== "function") {
+      return;
+    }
+    Reflect.apply(addEventListener, doc, [
+      "scroll",
+      () => {
+        observedScrollTop = readScrollTopLive();
+      },
+      { passive: true },
+    ]);
+  }
+
   function queryLabButton(): unknown {
     const doc = documentSurface();
     const querySelector = readProperty(doc, "querySelector");
@@ -67,16 +111,11 @@ export function createGameUiSurface({
     },
 
     readScrollTop(): number {
-      const documentElement = scrollElement("documentElement");
-      const body = scrollElement("body");
-      const fromDocumentElement = isRecord(documentElement)
-        ? readProperty(documentElement, "scrollTop")
-        : undefined;
-      const fromBody = isRecord(body)
-        ? readProperty(body, "scrollTop")
-        : undefined;
-      const value = fromDocumentElement || fromBody;
-      return typeof value === "number" ? value : 0;
+      if (observedScrollTop === null) {
+        observedScrollTop = readScrollTopLive();
+        observeScroll();
+      }
+      return observedScrollTop;
     },
 
     resetScrollTop(value: number): void {
@@ -88,6 +127,7 @@ export function createGameUiSurface({
       if (isRecord(body)) {
         body["scrollTop"] = value;
       }
+      observedScrollTop = value;
     },
 
     readMechStatsInputs(): GameMechStatsInput {

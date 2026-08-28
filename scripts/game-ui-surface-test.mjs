@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createGameUiSurface } from "../src/adapters/browser/game-ui-surface.ts";
 
 const inputs = {};
+const listeners = [];
 let hidden = false;
 const documentElement = { scrollTop: 0 };
 const body = { scrollTop: 0 };
@@ -11,6 +12,9 @@ const documentStub = {
     return hidden;
   },
   getElementById: (id) => inputs[id],
+  addEventListener: (type, handler, options) => {
+    listeners.push({ type, handler, options });
+  },
   querySelector: (selector) =>
     selector === "#celestialLab .create button" ? labButton : null,
   documentElement,
@@ -29,19 +33,41 @@ assert.equal(surface.isPageVisible(), false);
 hidden = undefined;
 assert.equal(surface.isPageVisible(), true);
 
-// Scroll reads the document element, or the body when it is zero.
+// The first scroll read is live: the document element, or the body when it is
+// zero. It also subscribes, once, to the document's own scrolling.
 documentElement.scrollTop = 200;
 body.scrollTop = 10;
 assert.equal(surface.readScrollTop(), 200);
-documentElement.scrollTop = 0;
-assert.equal(surface.readScrollTop(), 10);
-documentElement.scrollTop = 20;
-assert.equal(surface.readScrollTop(), 20);
+assert.equal(listeners.length, 1);
+assert.equal(listeners[0].type, "scroll");
+assert.equal(listeners[0].options.passive, true);
 
-// Reset writes both element and body.
+// Later reads answer from the cache rather than forcing another layout flush,
+// so a scroll the page never reported is not observed.
+documentElement.scrollTop = 999;
+assert.equal(surface.readScrollTop(), 200);
+assert.equal(listeners.length, 1);
+
+// The page reporting a scroll refreshes the cache, body fallback included.
+listeners[0].handler();
+assert.equal(surface.readScrollTop(), 999);
+documentElement.scrollTop = 0;
+listeners[0].handler();
+assert.equal(surface.readScrollTop(), 10);
+
+// Reset writes both element and body, and is itself a known scroll position.
 surface.resetScrollTop(77);
 assert.equal(documentElement.scrollTop, 77);
 assert.equal(body.scrollTop, 77);
+assert.equal(surface.readScrollTop(), 77);
+
+// A document that cannot be subscribed to still answers, from the live read.
+const bareDocument = {
+  documentElement: { scrollTop: 42 },
+  body: { scrollTop: 0 },
+};
+const bareSurface = createGameUiSurface({ getDocument: () => bareDocument });
+assert.equal(bareSurface.readScrollTop(), 42);
 
 // The mech-stats selection reads the five ids; absent inputs read as unchanged.
 inputs.script_mechStatsSpecial = { checked: true };

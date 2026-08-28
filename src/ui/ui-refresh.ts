@@ -51,7 +51,9 @@ export function createUIRefresh({
     } = getPhases();
 
     let resetScrollPositionRequired = false;
-    const currentScrollPosition = uiSurface.readScrollTop();
+    const currentScrollPosition = measure("updateUI.readScrollTop", () =>
+      uiSurface.readScrollTop(),
+    );
 
     measure("updateUI.createOptionsModal", () => createOptionsModal());
     measure("updateUI.updateOptionsUI", () => updateOptionsUI());

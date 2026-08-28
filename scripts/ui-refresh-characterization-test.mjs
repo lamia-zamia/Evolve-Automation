@@ -82,13 +82,26 @@ function jquery(selector) {
 }
 jquery.isEmptyObject = (object) => Object.keys(object).length === 0;
 
+// The surface caches the scroll offset and refreshes it from the page's own
+// scroll events, so the stub reports scrolling the way a browser does:
+// `scrollTo` writes the offsets and then notifies the listeners.
+const scrollListeners = [];
 const document = {
   hidden: false,
   documentElement: { scrollTop: 0 },
   body: { scrollTop: 0 },
   querySelector: () => null,
   getElementById: () => null,
+  addEventListener: (type, handler) => {
+    if (type === "scroll") scrollListeners.push(handler);
+  },
 };
+
+function scrollTo(documentElementTop, bodyTop) {
+  document.documentElement.scrollTop = documentElementTop;
+  document.body.scrollTop = bodyTop;
+  for (const handler of scrollListeners) handler();
+}
 
 const { hooks } = await loadCharacterizationBundle({
   console,
@@ -222,8 +235,7 @@ function resetDom() {
   nextLengths.clear();
   handlers.clear();
   document.hidden = false;
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
+  scrollTo(0, 0);
 }
 
 // Hidden tabs are a complete short-circuit before action or DOM resolution.
@@ -359,8 +371,7 @@ for (const selector of [
 selectorLengths.set("#mechList .ea-mech-info", 1);
 selectorLengths.set("#mechList .mechRow", 2);
 selectorLengths.set("#statsPanel .cstat", 1);
-document.documentElement.scrollTop = 120;
-document.body.scrollTop = 30;
+scrollTo(120, 30);
 stored.set(
   "evolveBak",
   JSON.stringify({
