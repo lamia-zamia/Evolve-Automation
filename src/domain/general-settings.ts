@@ -66,6 +66,12 @@ const generalSettingsReadModel: GeneralSettingsReadModel = Object.freeze({
       label: "Schedule script ticks",
       hint: "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently.",
     }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "exposeGating",
+      label: "Skip the game's debug refresh between script ticks",
+      hint: "The game deep-copies its whole state every game tick so the script can read it, which the script only needs on the ticks it actually works. When enabled the copy is skipped on the other ticks, saving a few percent of the game's main-thread time at a higher tick rate. Anything else reading the game's debug data - another script, or the browser console - sees data up to one script tick old.",
+    }),
     Object.freeze({ kind: "header", label: "Prioritization" }),
     Object.freeze({
       kind: "toggle",

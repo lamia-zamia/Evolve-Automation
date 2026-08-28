@@ -99,6 +99,7 @@ assert.deepEqual(domTrace, [
 assert.deepEqual(actionTrace, [
   "number:tickRate",
   "toggle:tickSchedule",
+  "toggle:exposeGating",
   "header:Prioritization",
   "toggle:useDemanded",
   "toggle:researchRequest",
@@ -134,6 +135,7 @@ assert.deepEqual(actionTrace, [
   "updateSettingsFromState",
   "number:tickRate",
   "toggle:tickSchedule",
+  "toggle:exposeGating",
   "header:Prioritization",
   "toggle:useDemanded",
   "toggle:researchRequest",

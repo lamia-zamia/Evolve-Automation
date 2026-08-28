@@ -2409,6 +2409,7 @@ Only continue if you trust the source. Injected code:
         autoPrestige: !1,
         tickRate: 4,
         tickSchedule: !1,
+        exposeGating: !1,
         researchRequest: !0,
         researchRequestSpace: !1,
         missionRequest: !0,
@@ -19872,7 +19873,8 @@ Only continue if you trust the source. Injected code:
           // The script owns and initializes its own tick counter; combat/hell.ts requires it too.
           scriptTick: requireNumber(state.scriptTick, "state.scriptTick"),
           tickRate: coerceNumber(settings.tickRate),
-          accelerated: !!gameSettings.at
+          accelerated: !!gameSettings.at,
+          exposeGating: !!settings.exposeGating
         };
       },
       sampleAutomation() {
@@ -19929,6 +19931,9 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({
       markGameTickConsumed() {
         dependencies.getState().gameTicked = !1;
+      },
+      syncPeriodGate(rate) {
+        return dependencies.getPeriodGate().sync(rate);
       },
       setScriptTick(scriptTick) {
         dependencies.getState().scriptTick = scriptTick;
@@ -20006,8 +20011,11 @@ Only continue if you trust the source. Injected code:
   function advanceScriptTick(current) {
     return current < Number.MAX_SAFE_INTEGER ? current + 1 : 1;
   }
+  function effectiveTickRate(tickRate, accelerated) {
+    return accelerated ? tickRate * 2 : tickRate;
+  }
   function isThrottledTick(scriptTick, tickRate, accelerated) {
-    return scriptTick % (accelerated ? tickRate * 2 : tickRate) !== 0;
+    return scriptTick % effectiveTickRate(tickRate, accelerated) !== 0;
   }
   function advanceStateLog(current, interval) {
     let next = current + 1;
@@ -20026,7 +20034,9 @@ Only continue if you trust the source. Injected code:
       return !1;
     controls4.markGameTickConsumed();
     let scriptTick = advanceScriptTick(preamble.scriptTick);
-    if (controls4.setScriptTick(scriptTick), isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated))
+    if (controls4.setScriptTick(scriptTick), !controls4.syncPeriodGate(
+      preamble.exposeGating ? effectiveTickRate(preamble.tickRate, preamble.accelerated) : 0
+    ) && isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated))
       return !1;
     let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs(), measure = createPhaseMeasure(profiling), finishProfile = () => {
       profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance("tick", profiling.nowMs() - workStartedAtMs), profiling.flushPerformance());
@@ -20367,6 +20377,142 @@ Only continue if you trust the source. Injected code:
   // src/adapters/browser/clock.ts
   function createBrowserClock() {
     return Object.freeze({ nowMs: () => Date.now() });
+  }
+
+  // src/domain/period-gate.ts
+  var initialPeriodGateState = Object.freeze({
+    period: 0,
+    closed: !1
+  });
+  function pulsePeriodGate(state, rate) {
+    if (!Number.isFinite(rate) || rate < 2)
+      return initialPeriodGateState;
+    let period = state.period + 1 >= rate ? 0 : state.period + 1;
+    return Object.freeze({ period, closed: period !== 0 });
+  }
+  function consumePeriodGate(state) {
+    return state.closed ? {
+      state: Object.freeze({ period: state.period, closed: !1 }),
+      exposed: !1
+    } : { state, exposed: !0 };
+  }
+
+  // src/adapters/browser/period-gate.ts
+  var pulseResources = Object.freeze([
+    "Money",
+    "Knowledge",
+    "Food"
+  ]);
+  function overrideProperty(owner, key, makeAccessors) {
+    let original = Object.getOwnPropertyDescriptor(owner, key);
+    if (original === void 0 || original.configurable !== !0)
+      return;
+    let getter = original.get, setter = original.set, stored = original.value, accessors = makeAccessors({
+      read: () => getter === void 0 ? stored : Reflect.apply(getter, owner, []),
+      write: (value) => {
+        setter === void 0 ? stored = value : Reflect.apply(setter, owner, [value]);
+      }
+    });
+    return Object.defineProperty(owner, key, {
+      configurable: !0,
+      enumerable: original.enumerable === !0,
+      get: accessors.get,
+      set: accessors.set
+    }), () => {
+      Object.defineProperty(
+        owner,
+        key,
+        getter === void 0 && setter === void 0 ? {
+          configurable: !0,
+          enumerable: original.enumerable === !0,
+          writable: original.writable === !0,
+          value: stored
+        } : original
+      );
+    };
+  }
+  function createPeriodGate({
+    getMainVue,
+    getVueById
+  }) {
+    let state = initialPeriodGateState, rate = 0, suspended = !1, pulses = 0, pulsesAtLastSync = -1, restore;
+    function findPulseResource() {
+      for (let name of pulseResources) {
+        let data = readProperty(getVueById(`res${name}`), "$data");
+        if (typeof data != "object" || data === null || !("diff" in data))
+          continue;
+        let resourceRate = readProperty(data, "rate");
+        if (typeof resourceRate == "number" && (resourceRate > 0 || readProperty(data, "max") === -1))
+          return data;
+      }
+    }
+    function defineSaveGuard(settings) {
+      let original = Object.getOwnPropertyDescriptor(settings, "toJSON");
+      return Object.defineProperty(settings, "toJSON", {
+        configurable: !0,
+        enumerable: !1,
+        writable: !0,
+        value: function() {
+          let previous = suspended;
+          suspended = !0;
+          try {
+            return { ...this };
+          } finally {
+            suspended = previous;
+          }
+        }
+      }), () => {
+        original === void 0 ? Reflect.deleteProperty(settings, "toJSON") : Object.defineProperty(settings, "toJSON", original);
+      };
+    }
+    function uninstall() {
+      restore?.(), restore = void 0, pulsesAtLastSync = -1;
+    }
+    function install() {
+      let settings = readProperty(getMainVue(), "s");
+      if (typeof settings != "object" || settings === null)
+        return !1;
+      let resource2 = findPulseResource();
+      if (resource2 === void 0)
+        return !1;
+      let restoreExpose = overrideProperty(
+        settings,
+        "expose",
+        ({ read, write }) => ({
+          get: () => {
+            let player = read();
+            if (suspended || player !== !0)
+              return player;
+            let consumed = consumePeriodGate(state);
+            return state = consumed.state, consumed.exposed;
+          },
+          set: write
+        })
+      );
+      if (restoreExpose === void 0)
+        return !1;
+      let restoreDiff = overrideProperty(
+        resource2,
+        "diff",
+        ({ read, write }) => ({
+          get: read,
+          set: (value) => {
+            write(value), pulses += 1, state = pulsePeriodGate(state, rate);
+          }
+        })
+      );
+      if (restoreDiff === void 0)
+        return restoreExpose(), !1;
+      let restoreSaveGuard = defineSaveGuard(settings);
+      return state = initialPeriodGateState, pulses = 0, restore = () => {
+        restoreSaveGuard(), restoreDiff(), restoreExpose(), state = initialPeriodGateState;
+      }, !0;
+    }
+    return Object.freeze({
+      sync(nextRate) {
+        return !Number.isFinite(nextRate) || nextRate < 2 ? (uninstall(), !1) : (rate = nextRate, restore !== void 0 && pulses === pulsesAtLastSync && uninstall(), restore === void 0 && !install() ? !1 : (pulsesAtLastSync = pulses, !0));
+      }
+    });
   }
 
   // src/adapters/browser/random.ts
@@ -42091,6 +42237,12 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         label: "Schedule script ticks",
         hint: "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently."
       }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "exposeGating",
+        label: "Skip the game's debug refresh between script ticks",
+        hint: "The game deep-copies its whole state every game tick so the script can read it, which the script only needs on the ticks it actually works. When enabled the copy is skipped on the other ticks, saving a few percent of the game's main-thread time at a higher tick rate. Anything else reading the game's debug data - another script, or the browser console - sees data up to one script tick old."
+      }),
       Object.freeze({ kind: "header", label: "Prioritization" }),
       Object.freeze({
         kind: "toggle",
@@ -52834,7 +52986,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       autoMutateTrait,
       updateBuildPlanner,
       recordStateSnapshot
-    }, { automate } = createTickRunner({
+    }, periodGate = createPeriodGate({
+      getMainVue: () => getMainVue(),
+      getVueById: (id) => getVueById(id)
+    }), { automate } = createTickRunner({
       reader: {
         getSettings: () => settings,
         getState: () => state,
@@ -52846,7 +53001,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getResources: () => resources,
         getNaniteManager: () => NaniteManager,
         getSupplyManager: () => SupplyManager,
-        getEjectManager: () => EjectManager
+        getEjectManager: () => EjectManager,
+        getPeriodGate: () => periodGate
       },
       controllers: tickControllers,
       getTestControllers: () => tickTestControllers,

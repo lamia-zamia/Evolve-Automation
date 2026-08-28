@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   shouldStartTick,
   advanceScriptTick,
+  effectiveTickRate,
   isThrottledTick,
   advanceStateLog,
 } from "../src/domain/tick.ts";
@@ -35,6 +36,9 @@ assert.equal(advanceScriptTick(0), 1);
 assert.equal(advanceScriptTick(41), 42);
 assert.equal(advanceScriptTick(Number.MAX_SAFE_INTEGER), 1);
 
+assert.equal(effectiveTickRate(3, false), 3);
+assert.equal(effectiveTickRate(3, true), 6);
+
 assert.equal(isThrottledTick(3, 3, false), false);
 assert.equal(isThrottledTick(4, 3, false), true);
 assert.equal(isThrottledTick(3, 3, true), true); // divisor doubled to 6
@@ -64,6 +68,13 @@ assert.equal(preamble.gameTicked, true);
 assert.equal(preamble.scriptTick, 4);
 assert.equal(preamble.tickRate, 2);
 assert.equal(preamble.accelerated, false);
+assert.equal(preamble.exposeGating, false);
+assert.equal(
+  makeReader({
+    settings: { tickRate: 2, exposeGating: 1 },
+  }).samplePreamble().exposeGating,
+  true,
+);
 
 // Lenient coercions: non-string goal -> "", truthy accelerated flag, boolean gating fields.
 const odd = makeReader({
@@ -137,11 +148,13 @@ const diagnosticReader = {
     scriptTick: 0,
     tickRate: 1,
     accelerated: false,
+    exposeGating: false,
   }),
   sampleAutomation: () => ({ masterScriptToggle: false, goal: "Standard" }),
 };
 const diagnosticControls = {
   markGameTickConsumed() {},
+  syncPeriodGate: () => false,
   setScriptTick() {},
   updateScriptData() {},
   updateOverrides() {},
@@ -176,5 +189,96 @@ assert.deepEqual(measuredPhases, [
   "tick",
   "flush",
 ]);
+
+// The period gate takes over throttling: the tick hands it the effective rate and stops applying
+// its own, so a script tick that the rate would have skipped still does work.
+const gateRates = [];
+function runGatedTick({
+  exposeGating,
+  gated,
+  scriptTick,
+  tickRate,
+  accelerated,
+}) {
+  let worked = false;
+  const result = runTick({
+    reader: {
+      samplePreamble: () => ({
+        goal: "Standard",
+        forcedUpdate: false,
+        gameTicked: true,
+        scriptTick,
+        tickRate,
+        accelerated,
+        exposeGating,
+      }),
+      sampleAutomation: () => ({ masterScriptToggle: false, goal: "Standard" }),
+    },
+    controls: {
+      markGameTickConsumed() {},
+      setScriptTick() {},
+      syncPeriodGate: (rate) => {
+        gateRates.push(rate);
+        return gated;
+      },
+      updateScriptData() {
+        worked = true;
+      },
+      updateOverrides() {},
+      finalizeScriptData() {},
+      updateTabs: () => false,
+      updateState() {},
+      updateUI() {},
+      keyManagerReset() {},
+    },
+  });
+  return { result, worked };
+}
+
+// Gate off: the rate handed over is 0 and the tick throttles itself as before.
+assert.deepEqual(
+  runGatedTick({
+    exposeGating: false,
+    gated: false,
+    scriptTick: 2,
+    tickRate: 4,
+    accelerated: false,
+  }),
+  { result: false, worked: false },
+);
+// Gate on: the rate is the effective one, and the tick no longer throttles.
+assert.deepEqual(
+  runGatedTick({
+    exposeGating: true,
+    gated: true,
+    scriptTick: 2,
+    tickRate: 4,
+    accelerated: false,
+  }),
+  { result: true, worked: true },
+);
+// Requested but not installed - a live surface the gate could not reach - falls back to the throttle.
+assert.deepEqual(
+  runGatedTick({
+    exposeGating: true,
+    gated: false,
+    scriptTick: 2,
+    tickRate: 4,
+    accelerated: false,
+  }),
+  { result: false, worked: false },
+);
+// Accelerated time doubles the periods a working tick covers.
+assert.deepEqual(
+  runGatedTick({
+    exposeGating: true,
+    gated: true,
+    scriptTick: 8,
+    tickRate: 4,
+    accelerated: true,
+  }),
+  { result: true, worked: true },
+);
+assert.deepEqual(gateRates, [0, 4, 4, 8]);
 
 console.log("Tick orchestration slice tests passed");

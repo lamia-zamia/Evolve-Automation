@@ -29,15 +29,27 @@ export function advanceScriptTick(current: number): number {
 }
 
 /**
- * Whether this script tick is throttled (does no automation work). Under the game's accelerated time
- * the effective rate is doubled, so the same tickRate runs half as often.
+ * Game periods per working script tick. Under the game's accelerated time the game runs its period
+ * loop twice as often, so the same tickRate covers twice the periods.
+ */
+export function effectiveTickRate(
+  tickRate: number,
+  accelerated: boolean,
+): number {
+  return accelerated ? tickRate * 2 : tickRate;
+}
+
+/**
+ * Whether this script tick is throttled (does no automation work). Not consulted while the period
+ * gate is installed: there the game itself only wakes the script on working periods, and applying
+ * this as well would compose the two rates.
  */
 export function isThrottledTick(
   scriptTick: number,
   tickRate: number,
   accelerated: boolean,
 ): boolean {
-  return scriptTick % (accelerated ? tickRate * 2 : tickRate) !== 0;
+  return scriptTick % effectiveTickRate(tickRate, accelerated) !== 0;
 }
 
 /**

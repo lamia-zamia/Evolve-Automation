@@ -64,6 +64,11 @@ assert.deepEqual(
   [
     { kind: "number", key: "tickRate", label: "Script tick rate" },
     { kind: "toggle", key: "tickSchedule", label: "Schedule script ticks" },
+    {
+      kind: "toggle",
+      key: "exposeGating",
+      label: "Skip the game's debug refresh between script ticks",
+    },
     { kind: "header", key: undefined, label: "Prioritization" },
     {
       kind: "toggle",

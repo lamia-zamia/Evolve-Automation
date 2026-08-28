@@ -55,8 +55,8 @@ const stateDigest = createHash("sha256")
 
 assert.equal(
   stateDigest,
-  "ca74f693b17a777d3fb96317dce2e01bcca408d2869d55773aa2b59e79fdb27a",
+  "27037a825275fe1c9ffc1023e6712191a0e75f2e7c073c7561d07f5cb612008e",
 );
-assert.equal(Object.keys(settingsRaw).length, 126);
+assert.equal(Object.keys(settingsRaw).length, 127);
 
 console.log("Reset settings bundled characterization tests passed");

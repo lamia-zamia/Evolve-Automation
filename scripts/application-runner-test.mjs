@@ -17,6 +17,7 @@ const reader = {
 };
 const controls = {
   markGameTickConsumed: () => calls.push("consume"),
+  syncPeriodGate: () => false,
   setScriptTick: () => calls.push("script-tick"),
   setPlannerFreshTick: () => calls.push("planner-fresh"),
   setStateLogTick: () => calls.push("state-log"),

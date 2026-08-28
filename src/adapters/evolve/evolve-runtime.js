@@ -134,6 +134,7 @@ import { createToggleControls } from "../../bootstrap/toggle-controls.ts";
 import { createTickRunner as createTickCompositionControl } from "../../bootstrap/tick-runner.ts";
 import { createStateUpdateControl } from "../../bootstrap/state-update-control.ts";
 import { createBrowserClock as createBrowserClockControl } from "../../adapters/browser/clock.ts";
+import { createPeriodGate as createPeriodGateControl } from "../../adapters/browser/period-gate.ts";
 import { createBrowserRandomSource as createBrowserRandomSourceControl } from "../../adapters/browser/random.ts";
 import { createUserscriptEnvironment as createUserscriptEnvironmentControl } from "../../adapters/userscript/environment.ts";
 import { createBuildingWeightingControl } from "../../bootstrap/building-weighting-control.ts";
@@ -3797,6 +3798,13 @@ export function startEvolveRuntimeComposition(
     recordStateSnapshot,
   };
 
+  // Suppresses the game's per-period deep clone of its own state on the periods the script skips.
+  // Opt-in, and inert until the setting turns it on.
+  const periodGate = createPeriodGateControl({
+    getMainVue: () => getMainVue(),
+    getVueById: (id) => getVueById(id),
+  });
+
   const { automate } = createTickCompositionControl({
     reader: {
       getSettings: () => settings,
@@ -3810,6 +3818,7 @@ export function startEvolveRuntimeComposition(
       getNaniteManager: () => NaniteManager,
       getSupplyManager: () => SupplyManager,
       getEjectManager: () => EjectManager,
+      getPeriodGate: () => periodGate,
     },
     controllers: tickControllers,
     getTestControllers: () => tickTestControllers,

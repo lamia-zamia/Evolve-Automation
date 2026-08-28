@@ -7,6 +7,8 @@ export interface TickPreambleSnapshot extends TickStartSnapshot {
   readonly tickRate: number;
   /** game.global.settings.at — the game's accelerated-time flag. */
   readonly accelerated: boolean;
+  /** Whether the player asked the game to skip its debug clone on non-working periods. */
+  readonly exposeGating: boolean;
 }
 
 /**
@@ -77,6 +79,11 @@ export interface TickDiagnostics extends PhaseTimingSink {
 export interface TickControls {
   /** Consumes the game-ticked flag so one game tick drives at most one automation pass. */
   markGameTickConsumed(): void;
+  /**
+   * Installs, retunes, or removes the period gate at the given periods-per-working-tick rate, and
+   * reports whether it is installed. While it is, it owns throttling and the tick must not throttle.
+   */
+  syncPeriodGate(rate: number): boolean;
   setScriptTick(scriptTick: number): void;
   setPlannerFreshTick(scriptTick: number): void;
   setStateLogTick(stateLogTick: number): void;
