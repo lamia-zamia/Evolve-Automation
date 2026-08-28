@@ -4,8 +4,10 @@
 // expose `setLoc(region, index)` for any ship by index, while the armada
 // exposes `add()`/`sub()` and each call moves `keyMultiplier()` ships. Building
 // while the yard sorts its list would land the new ship off the expected
-// position, so the sort checkbox is toggled around the build. Replace all of it
-// when the Vue 3 update exposes fleet controls directly.
+// position, so the sort checkbox is toggled around the build. The shipyard
+// component's `s` is the game's own shipyard object, which is the only way to
+// see what a build actually did. Replace all of it when the Vue 3 update
+// exposes fleet controls directly.
 
 import type {
   GameFleetBuildRequest,
@@ -25,9 +27,6 @@ export interface GameFleetControlsDependencies {
    */
   readonly clickSteps: (count: number) => Iterable<unknown>;
 
-  /** The live shipyard the ship rows were rendered from. */
-  readonly getGame: () => unknown;
-
   /** jQuery, whose selection the sort checkbox is walked through. */
   readonly getJQuery: () => (selector: string) => {
     eq(index: number): { click(): void };
@@ -35,30 +34,29 @@ export interface GameFleetControlsDependencies {
 }
 
 /**
- * The shipyard's sort checkbox sits next to the fleet-details checkbox, so the
- * sort state the build-around toggle depends on lives on the live shipyard.
+ * The shipyard the component was rendered from, which is the game's own object
+ * rather than a copy of it. `game.global` is a whole-state deep clone the game
+ * rebuilds once a period, so its ship list neither grows when a build appends a
+ * ship nor shrinks when one is lost; only this object answers either question
+ * during a cycle. The sort flag the build-around toggle depends on lives on it
+ * too.
  */
 function readShipyard(
-  getGame: () => unknown,
-): { sort: boolean; ships: unknown[] } | null {
-  const game = getGame();
-  const global = isRecord(game) ? game["global"] : undefined;
-  const space = isRecord(global) ? global["space"] : undefined;
-  const yard = isRecord(space) ? space["shipyard"] : undefined;
-  if (!isRecord(yard)) {
-    return null;
-  }
-  const ships = yard["ships"];
-  if (!Array.isArray(ships)) {
-    return null;
-  }
-  return { sort: yard["sort"] === true, ships };
+  view: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const yard = view["s"];
+  return isRecord(yard) ? yard : null;
+}
+
+/** The shipyard's ship count, or null while the list has not been built yet. */
+function readShipCount(yard: Record<string, unknown> | null): number | null {
+  const ships = yard === null ? undefined : yard["ships"];
+  return Array.isArray(ships) ? ships.length : null;
 }
 
 export function createGameFleetControls({
   getVueById,
   clickSteps,
-  getGame,
   getJQuery,
 }: GameFleetControlsDependencies): GameFleetControlsPort {
   function step(
@@ -142,20 +140,30 @@ export function createGameFleetControls({
         view.build,
         `${request.elementId} Vue view.build`,
       );
-      const yard = readShipyard(getGame);
-      const sort = yard !== null && yard.sort;
+      const yard = readShipyard(view);
+      const sort = yard !== null && yard["sort"] === true;
       if (sort) {
         toggleSort(request.elementId);
       }
+      const countBefore = readShipCount(yard);
       Reflect.apply(build, view, []);
-      if (yard !== null) {
+      const countAfter = readShipCount(yard);
+      // The game appends a built ship to the end of its list, but a cost it
+      // cannot pay at the click queues the order instead and appends nothing.
+      // Parking then reads past the end of the list, which throws inside the
+      // game's own `setLoc`, so the count has to say a ship was built.
+      if (
+        countBefore !== null &&
+        countAfter !== null &&
+        countAfter > countBefore
+      ) {
         const shipRow = getVueById("shipReg0");
         if (isRecord(shipRow) && typeof shipRow.setLoc === "function") {
           const setLoc = requireFunction(
             shipRow.setLoc,
             "shipReg0 Vue view.setLoc",
           );
-          Reflect.apply(setLoc, shipRow, [request.region, yard.ships.length]);
+          Reflect.apply(setLoc, shipRow, [request.region, countAfter - 1]);
         }
       }
       if (sort) {

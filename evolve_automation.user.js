@@ -9720,17 +9720,17 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/browser/game-fleet-controls.ts
-  function readShipyard(getGame) {
-    let game = getGame(), global = isRecord(game) ? game.global : void 0, space = isRecord(global) ? global.space : void 0, yard = isRecord(space) ? space.shipyard : void 0;
-    if (!isRecord(yard))
-      return null;
-    let ships = yard.ships;
-    return Array.isArray(ships) ? { sort: yard.sort === !0, ships } : null;
+  function readShipyard(view) {
+    let yard = view.s;
+    return isRecord(yard) ? yard : null;
+  }
+  function readShipCount(yard) {
+    let ships = yard === null ? void 0 : yard.ships;
+    return Array.isArray(ships) ? ships.length : null;
   }
   function createGameFleetControls({
     getVueById,
     clickSteps,
-    getGame,
     getJQuery
   }) {
     function step(elementId, method, args, count2) {
@@ -9792,15 +9792,19 @@ Only continue if you trust the source. Injected code:
         let build = requireFunction(
           view.build,
           `${request.elementId} Vue view.build`
-        ), yard = readShipyard(getGame), sort = yard !== null && yard.sort;
-        if (sort && toggleSort(request.elementId), Reflect.apply(build, view, []), yard !== null) {
+        ), yard = readShipyard(view), sort = yard !== null && yard.sort === !0;
+        sort && toggleSort(request.elementId);
+        let countBefore = readShipCount(yard);
+        Reflect.apply(build, view, []);
+        let countAfter = readShipCount(yard);
+        if (countBefore !== null && countAfter !== null && countAfter > countBefore) {
           let shipRow = getVueById("shipReg0");
           if (isRecord(shipRow) && typeof shipRow.setLoc == "function") {
             let setLoc = requireFunction(
               shipRow.setLoc,
               "shipReg0 Vue view.setLoc"
             );
-            Reflect.apply(setLoc, shipRow, [request.region, yard.ships.length]);
+            Reflect.apply(setLoc, shipRow, [request.region, countAfter - 1]);
           }
         }
         return sort && toggleSort(request.elementId), !0;
@@ -10307,7 +10311,6 @@ Only continue if you trust the source. Injected code:
     }), fleetControls = createGameFleetControls({
       getVueById,
       clickSteps,
-      getGame,
       getJQuery
     }), garrisonControls = createGameGarrisonControls({
       getVueById,

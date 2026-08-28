@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createGameFleetControls } from "../src/adapters/browser/game-fleet-controls.ts";
 
 let views = {};
-let game;
+let yard;
 const requestedViews = [];
 const requestedSteps = [];
 const jqueryClicks = [];
@@ -16,7 +16,6 @@ const controls = createGameFleetControls({
     requestedSteps.push(count);
     return Array.from({ length: stepsPerRequest }, (_value, index) => index);
   },
-  getGame: () => game,
   getJQuery: () => (selector) => ({
     eq: (index) => ({
       click: () => jqueryClicks.push([selector, index]),
@@ -24,13 +23,9 @@ const controls = createGameFleetControls({
   }),
 });
 
-game = {
-  global: {
-    space: {
-      shipyard: { sort: false, ships: [{ name: "A" }] },
-    },
-  },
-};
+// The component carries the game's own shipyard object, which is what a build
+// appends to. `game.global` is a per-period clone and never sees the append.
+yard = { sort: false, ships: [{ name: "A" }] };
 
 // A panel the game has not rendered answers nothing, and the click multipliers
 // and sort checkbox are never touched for a request that cannot be performed.
@@ -105,8 +100,14 @@ const shipPlans = {
   },
   build() {
     calls.push({ method: "build" });
+    if (buildAppends) {
+      yard.ships?.push({ name: "New" });
+    }
   },
+  s: undefined,
 };
+// A build the game cannot pay for queues the order and appends nothing.
+let buildAppends = true;
 const calls = [];
 views["shipPlans"] = shipPlans;
 requestedViews.length = 0;
@@ -158,9 +159,10 @@ assert.deepEqual(calls, [
 assert.equal(controls.hasShipPower("shipPlans"), false);
 
 // Building a ship with a sort-toggle toggles the checkbox around the build and
-// parks the new ship at the end of the live list.
-game.global.space.shipyard.sort = true;
-game.global.space.shipyard.ships = [{ name: "A" }, { name: "B" }];
+// parks the ship the build appended, which is the list's new last index.
+shipPlans.s = yard;
+yard.sort = true;
+yard.ships = [{ name: "A" }, { name: "B" }];
 shipPlans.powerText = () => "has-text-success";
 calls.length = 0;
 jqueryClicks.length = 0;
@@ -180,6 +182,7 @@ views["shipReg0"] = {
     locationCalls.push(args);
   },
 };
+yard.ships = [{ name: "A" }, { name: "B" }];
 calls.length = 0;
 jqueryClicks.length = 0;
 assert.equal(
@@ -192,9 +195,27 @@ assert.deepEqual(jqueryClicks, [
   ["#shipPlans .b-checkbox", 1],
 ]);
 
+// A build the game only queues appends no ship, so there is no ship to park and
+// no index to read past the end of the list with.
+buildAppends = false;
+yard.ships = [{ name: "A" }, { name: "B" }];
+locationCalls.length = 0;
+jqueryClicks.length = 0;
+assert.equal(
+  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
+  true,
+);
+assert.deepEqual(locationCalls, []);
+assert.deepEqual(jqueryClicks, [
+  ["#shipPlans .b-checkbox", 1],
+  ["#shipPlans .b-checkbox", 1],
+]);
+buildAppends = true;
+
 // A shipyard that sorts nothing needs no toggle, and building still parks the
 // ship; a missing ship row just skips the parking read.
-game.global.space.shipyard.sort = false;
+yard.sort = false;
+yard.ships = [{ name: "A" }, { name: "B" }];
 locationCalls.length = 0;
 jqueryClicks.length = 0;
 assert.equal(
@@ -204,6 +225,7 @@ assert.equal(
 assert.deepEqual(locationCalls, [["spc_red", 2]]);
 assert.deepEqual(jqueryClicks, []);
 delete views["shipReg0"];
+yard.ships = [{ name: "A" }, { name: "B" }];
 locationCalls.length = 0;
 assert.equal(
   controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
@@ -211,15 +233,43 @@ assert.equal(
 );
 assert.deepEqual(locationCalls, []);
 
-// A shipyard list that has not rendered yet still allows the build click.
-game.global.space.shipyard.ships = undefined;
+// A shipyard list that has not rendered yet still allows the build click, and a
+// component that carries no shipyard at all neither toggles nor parks.
+views["shipReg0"] = {
+  setLoc(...args) {
+    locationCalls.push(args);
+  },
+};
+yard.ships = undefined;
+yard.sort = true;
 calls.length = 0;
+locationCalls.length = 0;
+jqueryClicks.length = 0;
 assert.equal(
   controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
   true,
 );
 assert.deepEqual(calls, [{ method: "build" }]);
-game.global.space.shipyard.ships = [{ name: "A" }];
+assert.deepEqual(locationCalls, []);
+assert.deepEqual(jqueryClicks, [
+  ["#shipPlans .b-checkbox", 1],
+  ["#shipPlans .b-checkbox", 1],
+]);
+shipPlans.s = undefined;
+calls.length = 0;
+locationCalls.length = 0;
+jqueryClicks.length = 0;
+assert.equal(
+  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
+  true,
+);
+assert.deepEqual(calls, [{ method: "build" }]);
+assert.deepEqual(locationCalls, []);
+assert.deepEqual(jqueryClicks, []);
+delete views["shipReg0"];
+shipPlans.s = yard;
+yard.ships = [{ name: "A" }];
+yard.sort = false;
 
 // A control without a build answer refuses without toggling the sort checkbox.
 views["shipPlans"] = { setVal() {} };

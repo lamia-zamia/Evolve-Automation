@@ -56,6 +56,8 @@ const yard = {
   ],
   sort: true,
 };
+// The panel's own shipyard, which is the object the game builds into.
+const liveYard = { ships: [...yard.ships], sort: true };
 const game = {
   global: {
     tech: { syndicate: 1, piracy: 1 },
@@ -106,7 +108,13 @@ const shipPlansVue = {
   },
   setVal: (...args) => trace.push(["set", ...args]),
   powerText: () => "has-text-success",
-  build: () => trace.push(["build"]),
+  build: () => {
+    trace.push(["build"]);
+    // The game appends the finished ship to its own list, which the panel
+    // carries; `game.global` is a per-period clone and never sees it.
+    liveYard.ships.push({ name: "New" });
+  },
+  s: liveYard,
 };
 vueById.shipPlans = shipPlansVue;
 vueById.shipReg0 = {

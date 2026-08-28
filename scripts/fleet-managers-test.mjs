@@ -72,6 +72,9 @@ const explorer = {
 };
 game.global.space.shipyard = { blueprint: { ...explorer }, ships: [] };
 game.global.tech.syndicate = 1;
+// `game.global` is a per-period clone; the panel carries the game's own
+// shipyard, and a build appends the finished ship to that list.
+const liveYard = { sort: false, ships: [] };
 vueById.shipPlans = {
   avail: (...args) => {
     trace.push(["avail", ...args]);
@@ -79,7 +82,11 @@ vueById.shipPlans = {
   },
   setVal: (...args) => trace.push(["set", ...args]),
   powerText: () => "has-text-danger",
-  build: () => trace.push(["build"]),
+  build: () => {
+    trace.push(["build"]);
+    liveYard.ships?.push({ name: "New" });
+  },
+  s: liveYard,
 };
 assert.equal(FleetManagerOuter.initFleet(), true);
 
@@ -125,10 +132,8 @@ vueById.shipPlans.powerText = () => "has-text-success";
 vueById.shipReg0 = {
   setLoc: (...args) => trace.push(["location", ...args]),
 };
-game.global.space.shipyard.sort = true;
-game.global.space.shipyard.ships = [
-  { ...fighter, name: "A", location: "spc_red" },
-];
+liveYard.sort = true;
+liveYard.ships = [{ ...fighter, name: "A", location: "spc_red" }];
 resources.Alloy.currentQuantity = 10;
 trace.length = 0;
 assert.equal(FleetManagerOuter.build(fighter, "spc_red"), true);
@@ -144,7 +149,8 @@ assert.deepEqual(trace, [
 
 // A yard that sorts nothing needs no toggle, and a yard with no ship list yet
 // still builds without a parking read.
-game.global.space.shipyard.sort = false;
+liveYard.sort = false;
+liveYard.ships = [{ ...fighter, name: "A", location: "spc_red" }];
 resources.Alloy.currentQuantity = 10;
 trace.length = 0;
 assert.equal(FleetManagerOuter.build(fighter, "spc_red"), true);
@@ -154,7 +160,7 @@ assert.deepEqual(trace, [
   ["build"],
   ["location", "spc_red", 1],
 ]);
-game.global.space.shipyard.ships = undefined;
+liveYard.ships = undefined;
 trace.length = 0;
 assert.equal(FleetManagerOuter.build(fighter, "spc_red"), true);
 assert.deepEqual(trace, [
