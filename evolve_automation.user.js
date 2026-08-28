@@ -21741,6 +21741,7 @@ Only continue if you trust the source. Injected code:
         () => planTradeRoutes(input)
       );
       measure("autoMarket.tradeRoutes.apply", () => {
+        createCountTally(diagnostics).count("tradeRoutes.operations", result2.operations.length);
         let resources = getResources(), marketManager = getMarketManager();
         for (let operation2 of result2.operations) {
           let resource2 = resources[operation2.resourceId];

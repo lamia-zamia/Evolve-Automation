@@ -1,6 +1,9 @@
 import { planTradeRoutes } from "../../domain/economy/market/trade-routes.ts";
 import type { PhaseTimingSink } from "../../utils/performance.ts";
-import { createPhaseMeasure } from "../../utils/performance.ts";
+import {
+  createCountTally,
+  createPhaseMeasure,
+} from "../../utils/performance.ts";
 import { readTradeRoutesInput } from "./economy/market/trade-routes.ts";
 
 interface TradeResource {
@@ -51,6 +54,8 @@ export function createTradeRoutes({
       planTradeRoutes(input),
     );
     measure("autoMarket.tradeRoutes.apply", () => {
+      const tally = createCountTally(diagnostics);
+      tally.count("tradeRoutes.operations", result.operations.length);
       const resources = getResources();
       const marketManager = getMarketManager();
       for (const operation of result.operations) {
