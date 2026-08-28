@@ -12,11 +12,14 @@ import type {
   StorageAllocationReader,
   StorageExpansionRequester,
 } from "../ports/storage-allocation.ts";
+import type { TickDiagnostics } from "../ports/tick.ts";
+import { createPhaseMeasure } from "../utils/performance.ts";
 
 export interface StorageAllocationDependencies {
   readonly reader: StorageAllocationReader;
   readonly executor: DecisionExecutor<ApplyStorageAllocationDecision>;
   readonly expansion: StorageExpansionRequester;
+  readonly diagnostics?: TickDiagnostics | undefined;
 }
 
 const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
@@ -34,11 +37,19 @@ export function createStorageAllocationAutomation(
   let state = EMPTY_STORAGE_ALLOCATION_STATE;
   return Object.freeze({
     run(): CommandExecutionOutcome {
-      const rawPlan = planStorageAllocation(dependencies.reader.read());
+      const measure = createPhaseMeasure(dependencies.diagnostics);
+      const input = measure("autoStorage.read", () =>
+        dependencies.reader.read(),
+      );
+      const rawPlan = measure("autoStorage.plan", () =>
+        planStorageAllocation(input),
+      );
       if (rawPlan === null) return SUCCEEDED;
       if (
         rawPlan.storageToBuild > 0 &&
-        dependencies.expansion.expand(rawPlan.storageToBuild)
+        measure("autoStorage.expand", () =>
+          dependencies.expansion.expand(rawPlan.storageToBuild),
+        )
       ) {
         return SUCCEEDED;
       }
@@ -48,7 +59,12 @@ export function createStorageAllocationAutomation(
       // it, and the game drops the difference, so build it instead. State is left
       // untouched so the same grant is retried once the unit exists.
       const unfunded = unfundedStorageCapacity(finalized.decision);
-      if (unfunded > 0 && dependencies.expansion.expand(unfunded)) {
+      if (
+        unfunded > 0 &&
+        measure("autoStorage.expand", () =>
+          dependencies.expansion.expand(unfunded),
+        )
+      ) {
         return SUCCEEDED;
       }
       const outcome = dependencies.executor.execute(finalized.decision);

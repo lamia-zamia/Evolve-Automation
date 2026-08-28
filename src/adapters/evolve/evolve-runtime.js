@@ -2853,6 +2853,7 @@ export function startEvolveRuntimeComposition(
           getResources: () => resources,
         },
         tradeRoutes: { adjust: () => adjustTradeRoutes() },
+        diagnostics,
       },
       galaxyMarket: {
         getManager: () => GalaxyTradeManager,
@@ -3004,6 +3005,7 @@ export function startEvolveRuntimeComposition(
             log: (message) => runtimeEnvironment.log(message),
           },
           expand: expandStorage,
+          diagnostics,
         },
       },
     });

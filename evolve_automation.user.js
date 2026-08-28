@@ -20091,7 +20091,7 @@ Only continue if you trust the source. Injected code:
     if (s.goal === "Evolution")
       return s.autoEvolution && measure("autoEvolution", () => controls4.autoEvolution()), finishProfile(), !0;
     if ((s.buildingAlwaysClick || s.autoBuild) && measure("autoGatherResources", () => controls4.autoGatherResources()), s.autoMarket && measure("autoMarket", () => controls4.autoMarket()), s.autoHell && measure("autoHell", () => controls4.autoHell()), s.autoGalaxyMarket && controls4.autoGalaxyMarket(), s.autoMiningDroid && controls4.autoMiningDroid(), s.autoGraphenePlant && controls4.autoGraphenePlant(), s.autoAlchemy && controls4.autoAlchemy(), s.autoPylon && controls4.autoPylon(), s.autoQuarry && controls4.autoQuarry(), s.autoMine && controls4.autoMine(), s.autoExtractor && controls4.autoExtractor(), s.autoSmelter && controls4.autoSmelter(), s.autoStorage && measure("autoStorage", () => controls4.autoStorage()), s.autoReplicator && controls4.autoReplicator(), (!s.autoTrigger || !controls4.autoTrigger()) && (s.autoResearch && measure("autoResearch", () => controls4.autoResearch()), (s.autoBuild || s.autoARPA) && (measure("autoBuild", () => controls4.autoBuild()), controls4.setPlannerFreshTick(scriptTick))), s.autoFactory && controls4.autoFactory(), s.autoJobs ? measure("autoJobs", () => controls4.autoJobs()) : s.autoCraftsmen && measure("autoJobs", () => controls4.autoJobs(!0)), s.autoFleet && (s.truepath ? measure("autoFleetOuter", () => controls4.autoFleetOuter()) : measure("autoFleet", () => controls4.autoFleet())), s.autoMech && measure("autoMech", () => controls4.autoMech()), s.autoGenetics && controls4.autoGenetics(), s.autoMinorTrait && controls4.autoMinorTrait(), s.autoCraft && measure("autoCraft", () => controls4.autoCraft()), s.autoFight && measure("autoFight", () => {
-      controls4.autoMerc(), controls4.autoSpy(), controls4.autoBattle();
+      controls4.autoMerc(), measure("autoFight.spy", () => controls4.autoSpy()), measure("autoFight.battle", () => controls4.autoBattle());
     }), s.autoTax && controls4.autoTax(), s.autoGovernment && measure("autoGovernment", () => controls4.autoGovernment()), s.autoNanite && controls4.consumeNanite(), s.autoSupply && controls4.consumeSupply(), s.autoEject && controls4.consumeEject(), s.autoPower && measure("autoPower", () => controls4.autoPower()), controls4.isPrestigeAllowed() && measure("autoPrestige", () => controls4.autoPrestige()), s.autoMinorTrait && (controls4.autoShapeshift(), controls4.autoPsychic(), controls4.autoOcularPowers(), controls4.autoWish()), s.autoMutateTraits && controls4.autoMutateTrait(), measure("updateBuildPlanner", () => controls4.updateBuildPlanner()), s.stateLogEnabled) {
       let { next, record } = advanceStateLog(
         s.stateLogTick,
@@ -35953,11 +35953,23 @@ Only continue if you trust the source. Injected code:
     let state = EMPTY_STORAGE_ALLOCATION_STATE;
     return Object.freeze({
       run() {
-        let rawPlan = planStorageAllocation(dependencies.reader.read());
-        if (rawPlan === null || rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild))
+        let measure = createPhaseMeasure(dependencies.diagnostics), input = measure(
+          "autoStorage.read",
+          () => dependencies.reader.read()
+        ), rawPlan = measure(
+          "autoStorage.plan",
+          () => planStorageAllocation(input)
+        );
+        if (rawPlan === null || rawPlan.storageToBuild > 0 && measure(
+          "autoStorage.expand",
+          () => dependencies.expansion.expand(rawPlan.storageToBuild)
+        ))
           return SUCCEEDED20;
         let finalized = finalizeStorageAllocation(rawPlan, state), unfunded = unfundedStorageCapacity(finalized.decision);
-        if (unfunded > 0 && dependencies.expansion.expand(unfunded))
+        if (unfunded > 0 && measure(
+          "autoStorage.expand",
+          () => dependencies.expansion.expand(unfunded)
+        ))
           return SUCCEEDED20;
         let outcome = dependencies.executor.execute(finalized.decision);
         return outcome.status === "succeeded" && (state = finalized.nextState), outcome;
@@ -35976,7 +35988,8 @@ Only continue if you trust the source. Injected code:
     }), automation = createStorageAllocationAutomation({
       reader: adapter.reader,
       executor: adapter.executor,
-      expansion: { expand: dependencies.expand }
+      expansion: { expand: dependencies.expand },
+      diagnostics: dependencies.diagnostics
     });
     return Object.freeze({ autoStorage: () => automation.run() });
   }
@@ -36472,23 +36485,30 @@ Only continue if you trust the source. Injected code:
     status: "succeeded"
   });
   function runMarketAutomation(dependencies, bulkSell = !1, ignoreSellRatio = !1) {
-    let gate = dependencies.reader.readGate();
-    if (!gate.unlocked || (dependencies.tradeRoutes.adjust(), gate.noTrade))
+    let measure = createPhaseMeasure(dependencies.diagnostics), tally = createCountTally(dependencies.diagnostics), gate = dependencies.reader.readGate();
+    if (!gate.unlocked || (measure(
+      "autoMarket.adjustTradeRoutes",
+      () => dependencies.tradeRoutes.adjust()
+    ), gate.noTrade))
       return SUCCEEDED22;
     let session = dependencies.reader.readSession(), outcome = SUCCEEDED22;
     for (let index = 0; ; index++) {
-      let sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
+      let sellInput = measure(
+        "autoMarket.readSell",
+        () => dependencies.reader.readSell(index, ignoreSellRatio)
+      );
       if (sellInput === null)
         break;
+      tally.count("autoMarket.resources");
       let sell = planMarketSell(sellInput);
-      if (sell !== null && (outcome = dependencies.executor.execute(sell), outcome.status !== "succeeded"))
+      if (sell !== null && (tally.count("autoMarket.sells"), outcome = dependencies.executor.execute(sell), outcome.status !== "succeeded"))
         break;
       if (bulkSell === !0 || !sellInput.eligible)
         continue;
       let buy = planMarketBuy(
         dependencies.reader.readBuy(index, session.minimumMoneyAllowed)
       );
-      if (buy !== null && (outcome = dependencies.executor.execute(buy), outcome.status !== "succeeded"))
+      if (buy !== null && (tally.count("autoMarket.buys"), outcome = dependencies.executor.execute(buy), outcome.status !== "succeeded"))
         break;
     }
     let restore = dependencies.executor.execute({
@@ -36505,7 +36525,8 @@ Only continue if you trust the source. Injected code:
         {
           reader: createMarketReader(dependencies.reader),
           executor: createMarketCommandExecutor(dependencies.executor),
-          tradeRoutes: dependencies.tradeRoutes
+          tradeRoutes: dependencies.tradeRoutes,
+          diagnostics: dependencies.diagnostics
         },
         bulkSell,
         ignoreSellRatio
@@ -52479,7 +52500,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
             getManager: () => MarketManager,
             getResources: () => resources
           },
-          tradeRoutes: { adjust: () => adjustTradeRoutes() }
+          tradeRoutes: { adjust: () => adjustTradeRoutes() },
+          diagnostics
         },
         galaxyMarket: {
           getManager: () => GalaxyTradeManager,
@@ -52591,7 +52613,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
             getFleetManagerOuter: () => FleetManagerOuter,
             log: (message) => runtimeEnvironment.log(message)
           },
-          expand: expandStorage
+          expand: expandStorage,
+          diagnostics
         }
       }
     }), {

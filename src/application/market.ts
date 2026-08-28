@@ -6,11 +6,14 @@ import {
 } from "../domain/economy/market/market.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { MarketReader, TradeRouteAdjuster } from "../ports/market.ts";
+import type { TickDiagnostics } from "../ports/tick.ts";
+import { createCountTally, createPhaseMeasure } from "../utils/performance.ts";
 
 export interface MarketAutomationDependencies {
   readonly reader: MarketReader;
   readonly executor: DecisionExecutor<MarketDecision>;
   readonly tradeRoutes: TradeRouteAdjuster;
+  readonly diagnostics?: TickDiagnostics | undefined;
 }
 
 const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
@@ -22,11 +25,15 @@ export function runMarketAutomation(
   bulkSell = false,
   ignoreSellRatio = false,
 ): CommandExecutionOutcome {
+  const measure = createPhaseMeasure(dependencies.diagnostics);
+  const tally = createCountTally(dependencies.diagnostics);
   const gate = dependencies.reader.readGate();
   if (!gate.unlocked) {
     return SUCCEEDED;
   }
-  dependencies.tradeRoutes.adjust();
+  measure("autoMarket.adjustTradeRoutes", () =>
+    dependencies.tradeRoutes.adjust(),
+  );
   if (gate.noTrade) {
     return SUCCEEDED;
   }
@@ -34,12 +41,16 @@ export function runMarketAutomation(
   const session = dependencies.reader.readSession();
   let outcome: CommandExecutionOutcome = SUCCEEDED;
   for (let index = 0; ; index++) {
-    const sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
+    const sellInput = measure("autoMarket.readSell", () =>
+      dependencies.reader.readSell(index, ignoreSellRatio),
+    );
     if (sellInput === null) {
       break;
     }
+    tally.count("autoMarket.resources");
     const sell = planMarketSell(sellInput);
     if (sell !== null) {
+      tally.count("autoMarket.sells");
       outcome = dependencies.executor.execute(sell);
       if (outcome.status !== "succeeded") {
         break;
@@ -52,6 +63,7 @@ export function runMarketAutomation(
       dependencies.reader.readBuy(index, session.minimumMoneyAllowed),
     );
     if (buy !== null) {
+      tally.count("autoMarket.buys");
       outcome = dependencies.executor.execute(buy);
       if (outcome.status !== "succeeded") {
         break;

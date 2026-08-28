@@ -184,8 +184,8 @@ export function runTick({
   if (s.autoFight) {
     measure("autoFight", () => {
       controls.autoMerc();
-      controls.autoSpy(); // Can unoccupy foreign power in rare occasions, without caching back new status, but such desync should not cause any harm
-      controls.autoBattle(); // Invalidates garrison, and adds unaccounted amount of resources after attack
+      measure("autoFight.spy", () => controls.autoSpy()); // Can unoccupy foreign power in rare occasions, without caching back new status, but such desync should not cause any harm
+      measure("autoFight.battle", () => controls.autoBattle()); // Invalidates garrison, and adds unaccounted amount of resources after attack
     });
   }
   if (s.autoTax) {
