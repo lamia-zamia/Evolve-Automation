@@ -7283,10 +7283,7 @@ Only continue if you trust the source. Injected code:
       `${path}.isUnlocked()`
     );
     mark("unlocked");
-    let autoBuildEnabled = !!record.autoBuildEnabled, smartManaged = callBoolean(record, "isSmartManaged", path), count2 = requireNumber(record.count, `${path}.count`), stateOffCount = requireNumber(
-      record.stateOffCount,
-      `${path}.stateOffCount`
-    );
+    let autoBuildEnabled = unlocked2 && !!record.autoBuildEnabled, smartManaged = unlocked2 && callBoolean(record, "isSmartManaged", path), count2 = unlocked2 ? requireNumber(record.count, `${path}.count`) : 0, stateOffCount = unlocked2 ? requireNumber(record.stateOffCount, `${path}.stateOffCount`) : 0;
     mark("flags");
     let affordable2 = unlocked2 && callBoolean(record, "isAffordable", path, !0);
     mark("affordable");
@@ -7318,7 +7315,9 @@ Only continue if you trust the source. Injected code:
       autoBuildEnabled,
       smartManaged,
       count: count2,
-      autoMax: requireNumber(record.autoMax, `${path}.autoMax`),
+      // `autoMax` reads a setting and compares it against `gameMax`. Neutral for
+      // a locked candidate is 0: it has none built and is to build none.
+      autoMax: unlocked2 ? requireNumber(record.autoMax, `${path}.autoMax`) : 0,
       // `_weighting` forwards the building's own weight setting, which the
       // defaults write for every catalog building, so it is always a number.
       baseWeight: requireNumber(record._weighting, `${path}._weighting`),

@@ -98,13 +98,33 @@ assert.equal(read({ resourceKey: "Horseshoe" }).producedResource, "Horseshoe");
 
 // A locked building has no game `definition`, so `powered`, `isAffordable()`
 // and the three consumption answers cannot be evaluated on it and its `cost` is
-// whatever it held before it locked. The `locked` rule zeroes such a candidate
-// before any rule reads them.
+// whatever it held before it locked. The settings- and instance-backed answers
+// could be read but are not, because they are the expensive ones and the
+// `locked` rule zeroes such a candidate before any rule reads any of them.
 class LockedWrapper extends BuildingWrapper {
   get powered() {
     throw new Error("powered read on a locked building");
   }
   set powered(_value) {}
+  get autoBuildEnabled() {
+    throw new Error("autoBuildEnabled read on a locked building");
+  }
+  set autoBuildEnabled(_value) {}
+  get count() {
+    throw new Error("count read on a locked building");
+  }
+  set count(_value) {}
+  get stateOffCount() {
+    throw new Error("stateOffCount read on a locked building");
+  }
+  set stateOffCount(_value) {}
+  get autoMax() {
+    throw new Error("autoMax read on a locked building");
+  }
+  set autoMax(_value) {}
+  isSmartManaged() {
+    throw new Error("smart management read on a locked building");
+  }
   isAffordable() {
     throw new Error("affordability read on a locked building");
   }
@@ -128,10 +148,18 @@ assert.deepEqual({ ...locked.cost }, {});
 assert.equal(locked.missingConsumption, null);
 assert.equal(locked.missingSupport, null);
 assert.equal(locked.uselessSupport, null);
-// The identity and the cheap wrapper reads are still taken while locked.
+// Guarded to neutral rather than sampled: none of these is read on a candidate
+// the `locked` rule has already zeroed.
+assert.equal(locked.autoBuildEnabled, false);
+assert.equal(locked.smartManaged, false);
+assert.equal(locked.count, 0);
+assert.equal(locked.stateOffCount, 0);
+assert.equal(locked.autoMax, 0);
+// The identity and the cheap own-property reads are still taken while locked.
 assert.equal(locked.id, "Factory");
-assert.equal(locked.count, 3);
-assert.equal(locked.stateOffCount, 1);
+assert.equal(locked.name, "Factory");
+assert.equal(locked.tab, "city");
+assert.equal(locked.baseWeight, 100);
 
 // The settings-backed answers are absent until that building's toggle is first
 // written, so they keep the game's truthiness test.
@@ -246,12 +274,13 @@ assert.deepEqual(
 );
 
 // A locked candidate still emits every mark, so the totals stay comparable
-// across a capture, but the segments it skips must cost nothing: the four
-// guarded answers are never asked of it.
+// across a capture, but the segments it skips must cost nothing: none of the
+// guarded answers is asked of it.
 const lockedTiming = timings();
 const asked = [];
 const lockedWrapper = new BuildingWrapper({ unlocked: false });
 for (const name of [
+  "isSmartManaged",
   "isAffordable",
   "getMissingConsumption",
   "getMissingSupport",
@@ -263,11 +292,7 @@ for (const name of [
   };
 }
 readWeightingCandidate(lockedWrapper, lockedTiming.sink);
-assert.deepEqual(
-  asked,
-  [],
-  "a locked candidate skips the four guarded answers",
-);
+assert.deepEqual(asked, [], "a locked candidate skips every guarded answer");
 assert.equal(lockedTiming.recorded.length, 8);
 
 console.log("Building weighting candidate adapter tests passed");

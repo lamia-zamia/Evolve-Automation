@@ -54,13 +54,25 @@ const readCost = (
  * Projects one live building wrapper into the immutable candidate the weighting
  * rules read.
  *
- * Four answers are only sampled while the building is unlocked. A locked
+ * Only `id`, `unlocked`, `baseWeight` and the wrapper's own plain properties
+ * are sampled unconditionally. Every answer that costs a settings lookup, a
+ * game-state walk or a `definition` read is taken only while the building is
+ * unlocked, and reported as neutral otherwise.
+ *
+ * That is safe because of where the `locked` rule sits: it is second in the
+ * rule list, the only rule ahead of it reads the phase snapshot alone, and it
+ * zeroes the weight, which stops the loop. So no rule and no `describe` call
+ * ever reads a locked candidate's other fields. `weighting-policy-test.mjs`
+ * pins that ordering; if a rule is ever inserted ahead of `locked`, or `locked`
+ * stops zeroing, that test fails and this guard has to be revisited.
+ *
+ * Some of the guarded answers cannot be taken at all while locked: a locked
  * building has no `definition`, so `powered` and `isAffordable()` throw on it
  * and its consumption rates cannot be evaluated, and `cost` still holds
  * whatever it held before the building locked because
- * `updateResourceRequirements` returns early. The `locked` rule zeroes such a
- * candidate before any rule reads them, so they are reported as neutral rather
- * than sampled.
+ * `updateResourceRequirements` returns early. The rest are guarded for cost
+ * alone: on a late-game save 353 of 404 candidates are locked, and the four
+ * `flags` answers were the dominant field of the weighting sample.
  *
  * `timing` is the caller's already-resolved sink: `undefined` unless the
  * diagnostics toggle was on when the weighting phase began. When present, each
@@ -102,15 +114,16 @@ export function readWeightingCandidate(
   mark("unlocked");
 
   // `autoBuildEnabled` chains on `settings["bat" + binding]` and
-  // `isSmartManaged()` on two more settings, none of which exist until that
-  // building's toggle is first written. Both keep the game's truthiness test.
-  const autoBuildEnabled = Boolean(record["autoBuildEnabled"]);
-  const smartManaged = callBoolean(record, "isSmartManaged", path);
-  const count = requireNumber(record["count"], `${path}.count`);
-  const stateOffCount = requireNumber(
-    record["stateOffCount"],
-    `${path}.stateOffCount`,
-  );
+  // `isSmartManaged()` on two more settings plus its own `isUnlocked()`, none
+  // of which exist until that building's toggle is first written. Both keep the
+  // game's truthiness test. `count` walks `isMission()` and the game instance,
+  // and `stateOffCount` walks `hasState()` and the instance again.
+  const autoBuildEnabled = unlocked && Boolean(record["autoBuildEnabled"]);
+  const smartManaged = unlocked && callBoolean(record, "isSmartManaged", path);
+  const count = unlocked ? requireNumber(record["count"], `${path}.count`) : 0;
+  const stateOffCount = unlocked
+    ? requireNumber(record["stateOffCount"], `${path}.stateOffCount`)
+    : 0;
   mark("flags");
 
   // `isAffordable()` forwards the game's own `checkAffordable`, which keeps
@@ -161,7 +174,9 @@ export function readWeightingCandidate(
     autoBuildEnabled,
     smartManaged,
     count,
-    autoMax: requireNumber(record["autoMax"], `${path}.autoMax`),
+    // `autoMax` reads a setting and compares it against `gameMax`. Neutral for
+    // a locked candidate is 0: it has none built and is to build none.
+    autoMax: unlocked ? requireNumber(record["autoMax"], `${path}.autoMax`) : 0,
     // `_weighting` forwards the building's own weight setting, which the
     // defaults write for every catalog building, so it is always a number.
     baseWeight: requireNumber(record["_weighting"], `${path}._weighting`),

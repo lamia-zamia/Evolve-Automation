@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import {
+  decideBuildingWeighting,
+  selectActiveWeightingRules,
+} from "../src/domain/progression/build/building-weighting-decision.ts";
 import { createBuildingWeightingPolicy } from "../src/domain/progression/build/building-weighting-rules.ts";
 
 // Every configured weighting multiplier arrives through the snapshot, so the
@@ -1706,6 +1710,33 @@ assert.equal(
 assert.equal(
   slaveRule.match(otherBuilding, snapshotOf({ slavePensFull: true })),
   undefined,
+);
+
+// ---------- The prefix the locked-candidate guard depends on ----------
+// `readWeightingCandidate` reports every expensive field as neutral while a
+// building is locked, on the strength of the `locked` rule zeroing the weight
+// before any rule can read one. Pin that: decide a locked candidate that
+// throws on every field but the three the loop legitimately reads.
+const lockedProbe = new Proxy(
+  { id: "Mine", unlocked: false, baseWeight: 100 },
+  {
+    get(target, property) {
+      if (property in target) return target[property];
+      throw new Error(`a locked candidate was asked for ${String(property)}`);
+    },
+  },
+);
+const lockedSnapshot = snapshotOf({ autoBuildEnabled: true });
+const lockedDecision = decideBuildingWeighting(
+  selectActiveWeightingRules(policy.weightingRules, lockedSnapshot),
+  lockedProbe,
+  lockedSnapshot,
+);
+assert.equal(lockedDecision.weight, 0);
+assert.equal(
+  lockedDecision.zeroedBy,
+  "locked",
+  "a locked candidate is zeroed by the locked rule and by nothing earlier",
 );
 
 console.log("Weighting policy module tests passed");
