@@ -22,6 +22,7 @@ export function createStorageAllocationControl(dependencies: {
   const adapter = createStorageAllocationAdapter({
     ...dependencies.adapter,
     readDebugEnabled: () => debug.readEnabled(),
+    diagnostics: dependencies.diagnostics,
   });
   const automation = createStorageAllocationAutomation({
     reader: adapter.reader,

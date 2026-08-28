@@ -8,6 +8,8 @@ import type {
 } from "../../../../domain/economy/storage/storage-allocation.ts";
 import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { StorageAllocationReader } from "../../../../ports/storage-allocation.ts";
+import type { PhaseTimingSink } from "../../../../utils/performance.ts";
+import { createPhaseMeasure } from "../../../../utils/performance.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
   callBoolean,
@@ -42,6 +44,7 @@ export interface StorageAllocationAdapterDependencies {
   readonly getFleetManagerOuter: () => unknown;
   readonly readDebugEnabled: () => boolean;
   readonly log: (message: string) => void;
+  readonly diagnostics?: PhaseTimingSink | undefined;
 }
 
 function resourceId(resource: UnknownRecord, path: string): string {
@@ -117,6 +120,7 @@ export function createStorageAllocationAdapter(
 
   const reader: StorageAllocationReader = Object.freeze({
     read(): StorageAllocationInput {
+      const measure = createPhaseMeasure(dependencies.diagnostics);
       const manager = requireRecord(
         dependencies.getStorageManager(),
         "StorageManager",
@@ -415,10 +419,15 @@ export function createStorageAllocationAdapter(
         Object.freeze({
           kind: "building",
           enabled: true,
-          targets: readArray(
-            buildingManager["priorityList"],
-            "BuildingManager.priorityList",
-            true,
+          // 63% of `autoStorage.read` and the same 404-building walk four other
+          // phases make; the mark is what a shared building snapshot would be
+          // measured against. See docs/perf.md B19.
+          targets: measure("autoStorage.read.buildings", () =>
+            readArray(
+              buildingManager["priorityList"],
+              "BuildingManager.priorityList",
+              true,
+            ),
           ),
         }),
         Object.freeze({

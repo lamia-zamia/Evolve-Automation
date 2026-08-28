@@ -35223,7 +35223,7 @@ Only continue if you trust the source. Injected code:
   function createStorageAllocationAdapter(dependencies) {
     let session = null, lastLogged = /* @__PURE__ */ new Set(), reader = Object.freeze({
       read() {
-        let manager = requireRecord(
+        let measure = createPhaseMeasure(dependencies.diagnostics), manager = requireRecord(
           dependencies.getStorageManager(),
           "StorageManager"
         ), game = requireRecord(dependencies.getGame(), "game"), settings = requireRecord(dependencies.getSettings(), "settings"), state = requireRecord(dependencies.getState(), "state"), resources = requireRecord(dependencies.getResources(), "resources"), buildingManager = requireRecord(
@@ -35443,10 +35443,16 @@ Only continue if you trust the source. Injected code:
           Object.freeze({
             kind: "building",
             enabled: !0,
-            targets: readArray2(
-              buildingManager.priorityList,
-              "BuildingManager.priorityList",
-              !0
+            // 63% of `autoStorage.read` and the same 404-building walk four other
+            // phases make; the mark is what a shared building snapshot would be
+            // measured against. See docs/perf.md B19.
+            targets: measure(
+              "autoStorage.read.buildings",
+              () => readArray2(
+                buildingManager.priorityList,
+                "BuildingManager.priorityList",
+                !0
+              )
             )
           }),
           Object.freeze({
@@ -35995,7 +36001,8 @@ Only continue if you trust the source. Injected code:
   function createStorageAllocationControl(dependencies) {
     let debug = createStorageDebugSource(dependencies.debug.getWindow), adapter = createStorageAllocationAdapter({
       ...dependencies.adapter,
-      readDebugEnabled: () => debug.readEnabled()
+      readDebugEnabled: () => debug.readEnabled(),
+      diagnostics: dependencies.diagnostics
     }), automation = createStorageAllocationAutomation({
       reader: adapter.reader,
       executor: adapter.executor,
