@@ -178,6 +178,12 @@ const weightingSettingsReadModel: WeightingSettingsReadModel = Object.freeze({
         "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
       settingName: "buildingWeightingRetirementPrep",
     }),
+    Object.freeze({
+      target: "Matrix cure preparation",
+      condition:
+        "Tau Disease Labs while a Matrix run still needs the plague cure",
+      settingName: "buildingWeightingMatrixCure",
+    }),
   ]),
 });
 

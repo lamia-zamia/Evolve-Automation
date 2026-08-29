@@ -2552,6 +2552,7 @@ Only continue if you trust the source. Injected code:
         buildingWeightingBananaObjective: 2,
         buildingWeightingInflationMoney: 2,
         buildingWeightingRetirementPrep: 10,
+        buildingWeightingMatrixCure: 10,
         buildingWeightingTruepathDigsite: 10
       }
     };
@@ -8981,7 +8982,8 @@ Only continue if you trust the source. Injected code:
       ),
       buildingWeightingRetirementPrep: weight(
         "buildingWeightingRetirementPrep"
-      )
+      ),
+      buildingWeightingMatrixCure: weight("buildingWeightingMatrixCure")
     }), readAssignedEjectorCapacity = () => {
       let assigned = getAssignedEjectorCapacity();
       return assigned === void 0 ? 0 : requireNumber(assigned, "getAssignedEjectorCapacity()");
@@ -9281,6 +9283,9 @@ Only continue if you trust the source. Injected code:
           getRetirementPreparationMissing(),
           "getRetirementPreparationMissing()"
         ).length > 0,
+        // `focus_cure` is absent until the fork is taken, and level 3 is the
+        // point the filled cure grants; past it the labs stop driving progress.
+        matrixCurePreparationIncomplete: truepathRace && prestigeType === "matrix" && !researched("focus_cure", 3),
         guardDreadedActive: requireBoolean(
           isAchievementGuardActive2("guardDreaded"),
           'isAchievementGuardActive("guardDreaded")'
@@ -20798,7 +20803,7 @@ Only continue if you trust the source. Injected code:
     factories: 18,
     scienceLabs: 11,
     graphene: 2e8
-  }, inflationMoneyStorageBuildings = [
+  }, MATRIX_CURE_LABS = 11, inflationMoneyStorageBuildings = [
     "Bank",
     "Casino",
     "HellSpaceCasino",
@@ -21183,6 +21188,16 @@ Only continue if you trust the source. Injected code:
         multiplier: (snapshot) => snapshot.weights.buildingWeightingRetirementPrep
       },
       {
+        // The first lab is the only grant of `disease 2`, which every remaining
+        // Matrix technology depends on, and the labs after it set how fast the
+        // cure behind `focus_cure 3` fills.
+        id: "matrix-cure-preparation",
+        enabled: (snapshot) => snapshot.matrixCurePreparationIncomplete,
+        match: (candidate) => isBuilding(candidate, "TauDiseaseLab") && candidate.count < MATRIX_CURE_LABS ? MATRIX_CURE_LABS : void 0,
+        describe: (target, candidate) => `Matrix cure: build ${target} ${candidate.name}`,
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingMatrixCure
+      },
+      {
         // Red Spaceport unlocks unification research. Let an active unification
         // achievement build this prerequisite so Red Dead can release afterward.
         id: "achievement-guard",
@@ -21329,8 +21344,10 @@ Only continue if you trust the source. Injected code:
           snapshot.knowledgeRequiredByTechs,
           snapshot.knowledgeRequiredByBuildTargets
         ) <= snapshot.knowledgeCapacity,
-        // We want Wardenclyffe for morale; first beacon required for progress
-        match: (candidate) => candidate.knowledge && !isBuilding(candidate, "Wardenclyffe") && (!isBuilding(candidate, "StargateTelemetryBeacon") || candidate.count > 0),
+        // We want Wardenclyffe for morale; first beacon required for progress.
+        // A Tau Disease Lab the Matrix cure still needs is wanted for the tech it
+        // grants, not for its Knowledge, so this rule must not bury it.
+        match: (candidate, snapshot) => candidate.knowledge && !isBuilding(candidate, "Wardenclyffe") && !(snapshot.matrixCurePreparationIncomplete && isBuilding(candidate, "TauDiseaseLab") && candidate.count < MATRIX_CURE_LABS) && (!isBuilding(candidate, "StargateTelemetryBeacon") || candidate.count > 0),
         describe: () => "No need for more knowledge",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessKnowledge
       },
@@ -43585,6 +43602,11 @@ If script is allowed to reassign non-empty storage it might waste time producing
         target: "Retirement preparation",
         condition: "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
         settingName: "buildingWeightingRetirementPrep"
+      }),
+      Object.freeze({
+        target: "Matrix cure preparation",
+        condition: "Tau Disease Labs while a Matrix run still needs the plague cure",
+        settingName: "buildingWeightingMatrixCure"
       })
     ])
   });

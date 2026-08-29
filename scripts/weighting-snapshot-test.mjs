@@ -44,6 +44,7 @@ const WEIGHT_NAMES = [
   "buildingWeightingBananaObjective",
   "buildingWeightingInflationMoney",
   "buildingWeightingRetirementPrep",
+  "buildingWeightingMatrixCure",
 ];
 const defaultGates = () => ({
   getWeightingMultiplier: () => 0,
@@ -210,6 +211,7 @@ assert.equal(empty.bananaColliderObjectiveComplete, false);
 assert.equal(empty.inflationAssistActive, false);
 assert.equal(empty.inflationMoneyReachable, false);
 assert.equal(empty.retirementPreparationIncomplete, false);
+assert.equal(empty.matrixCurePreparationIncomplete, false);
 assert.equal(empty.guardDreadedActive, false);
 assert.equal(empty.guardEnergeticActive, false);
 assert.equal(empty.guardRedDeadActive, false);
@@ -812,6 +814,29 @@ assert.equal(preparationReads, 1);
 gates = countedPreparation(["20 Fusion Generator"]);
 assert.equal(read().retirementPreparationIncomplete, true);
 assert.equal(preparationReads, 2);
+
+// Matrix cure preparation runs until `focus_cure` reaches 3, and only for a
+// True Path run whose configured prestige is the Matrix ending.
+const matrixCureGates = (prestige, cureLevel) => ({
+  ...defaultGates(),
+  hasRaceTrait: (trait) => trait === "truepath",
+  getPrestigeType: () => prestige,
+  isTechResearched: (research, level) =>
+    research === "focus_cure" && cureLevel >= level,
+});
+gates = matrixCureGates("matrix", 0);
+assert.equal(read().matrixCurePreparationIncomplete, true);
+gates = matrixCureGates("matrix", 2);
+assert.equal(read().matrixCurePreparationIncomplete, true);
+gates = matrixCureGates("matrix", 3);
+assert.equal(read().matrixCurePreparationIncomplete, false);
+gates = matrixCureGates("retire", 0);
+assert.equal(read().matrixCurePreparationIncomplete, false);
+gates = {
+  ...matrixCureGates("matrix", 0),
+  hasRaceTrait: () => undefined,
+};
+assert.equal(read().matrixCurePreparationIncomplete, false);
 
 // The Test Launch chance is only sampled for a True Path run. Every foreign
 // government the player does not control adds one saboteur, and `occ`, `anx`,

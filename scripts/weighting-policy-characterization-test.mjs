@@ -96,6 +96,7 @@ assert.deepEqual(
     "banana-republic-objective",
     "inflation-money",
     "retirement-preparation",
+    "matrix-cure-preparation",
     "achievement-guard",
     "non-operating-city-buildings",
     "non-operating-buildings",
@@ -155,7 +156,7 @@ assert.deepEqual(
     ships: bindings(policy.galaxyCombatShips),
   },
   {
-    rules: 73,
+    rules: 74,
     authority: [
       "city-garrison",
       "city-temple",

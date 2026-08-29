@@ -48,7 +48,8 @@ export type BuildingWeightName =
   | "buildingWeightingAuthority"
   | "buildingWeightingBananaObjective"
   | "buildingWeightingInflationMoney"
-  | "buildingWeightingRetirementPrep";
+  | "buildingWeightingRetirementPrep"
+  | "buildingWeightingMatrixCure";
 
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
@@ -311,6 +312,12 @@ export type BuildingWeightingSnapshot = {
   readonly inflationMoneyReachable: boolean;
   /** Retirement assist is active and at least one preparation target is short. */
   readonly retirementPreparationIncomplete: boolean;
+  /**
+   * A Matrix-goal True Path run still needs Tau Disease Labs. The first one is
+   * the only grant of `disease 2`, and the cure that `focus_cure 3` waits on
+   * fills at a rate set by how many labs are running.
+   */
+  readonly matrixCurePreparationIncomplete: boolean;
   readonly guardDreadedActive: boolean;
   readonly guardEnergeticActive: boolean;
   readonly guardRedDeadActive: boolean;

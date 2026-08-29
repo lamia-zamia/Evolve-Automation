@@ -342,6 +342,7 @@ export function createWeightingSnapshotReader({
       buildingWeightingRetirementPrep: weight(
         "buildingWeightingRetirementPrep",
       ),
+      buildingWeightingMatrixCure: weight("buildingWeightingMatrixCure"),
     });
 
   // Nothing can be assigned before the first Mass Ejector exists.
@@ -835,6 +836,12 @@ export function createWeightingSnapshotReader({
           getRetirementPreparationMissing(),
           "getRetirementPreparationMissing()",
         ).length > 0,
+      // `focus_cure` is absent until the fork is taken, and level 3 is the
+      // point the filled cure grants; past it the labs stop driving progress.
+      matrixCurePreparationIncomplete:
+        truepathRace &&
+        prestigeType === "matrix" &&
+        !researched("focus_cure", 3),
       guardDreadedActive: requireBoolean(
         isAchievementGuardActive("guardDreaded"),
         'isAchievementGuardActive("guardDreaded")',

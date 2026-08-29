@@ -114,6 +114,7 @@ const snapshotOf = ({ weights = {}, ...overrides } = {}) =>
     inflationAssistActive: false,
     inflationMoneyReachable: false,
     retirementPreparationIncomplete: false,
+    matrixCurePreparationIncomplete: false,
     guardDreadedActive: false,
     guardEnergeticActive: false,
     guardRedDeadActive: false,
@@ -188,7 +189,7 @@ const policy = createBuildingWeightingPolicy({
   nextRandomUnit: () => 0.5,
 });
 
-assert.equal(policy.weightingRules.length, 73);
+assert.equal(policy.weightingRules.length, 74);
 assert.equal(
   policy.weightingRules.every(
     (rule) =>
@@ -355,18 +356,51 @@ assert.equal(
 // Wardenclyffe is kept for morale, and the first Telemetry Beacon for progress.
 const knowledgeBuilding = (id, count = 0) =>
   named(id, { knowledge: true, count });
-assert.equal(uselessKnowledgeRule.match(knowledgeBuilding("Library")), true);
 assert.equal(
-  uselessKnowledgeRule.match(knowledgeBuilding("Wardenclyffe")),
-  false,
-);
-assert.equal(
-  uselessKnowledgeRule.match(knowledgeBuilding("StargateTelemetryBeacon")),
-  false,
-);
-assert.equal(
-  uselessKnowledgeRule.match(knowledgeBuilding("StargateTelemetryBeacon", 1)),
+  uselessKnowledgeRule.match(knowledgeBuilding("Library"), emptySnapshot),
   true,
+);
+assert.equal(
+  uselessKnowledgeRule.match(knowledgeBuilding("Wardenclyffe"), emptySnapshot),
+  false,
+);
+assert.equal(
+  uselessKnowledgeRule.match(
+    knowledgeBuilding("StargateTelemetryBeacon"),
+    emptySnapshot,
+  ),
+  false,
+);
+assert.equal(
+  uselessKnowledgeRule.match(
+    knowledgeBuilding("StargateTelemetryBeacon", 1),
+    emptySnapshot,
+  ),
+  true,
+);
+// A Disease Lab the Matrix cure still needs is wanted for the tech it grants,
+// so the knowledge rule must leave it alone until the plan is met.
+const matrixCureSnapshot = snapshotOf({
+  matrixCurePreparationIncomplete: true,
+});
+assert.equal(
+  uselessKnowledgeRule.match(knowledgeBuilding("TauDiseaseLab"), emptySnapshot),
+  true,
+);
+assert.equal(
+  uselessKnowledgeRule.match(
+    knowledgeBuilding("TauDiseaseLab"),
+    matrixCureSnapshot,
+  ),
+  false,
+);
+assert.equal(
+  uselessKnowledgeRule.match(
+    knowledgeBuilding("TauDiseaseLab", 11),
+    matrixCureSnapshot,
+  ),
+  true,
+  "the exemption ends once the cure plan is built",
 );
 assert.equal(
   needfulKnowledgeRule.match(knowledgeBuilding("Wardenclyffe")),
@@ -610,6 +644,21 @@ assert.equal(retirementRule.match(otherBuilding), undefined);
 assert.equal(
   retirementRule.describe(20, fusionGenerator),
   "Retirement preparation: build 20 TauFusionGenerator",
+);
+
+const matrixCureRule = ruleById("matrix-cure-preparation");
+assert.equal(matrixCureRule.enabled(emptySnapshot), false);
+assert.equal(matrixCureRule.enabled(matrixCureSnapshot), true);
+const diseaseLab = named("TauDiseaseLab", { count: 0 });
+assert.equal(matrixCureRule.match(diseaseLab), 11);
+assert.equal(
+  matrixCureRule.match(named("TauDiseaseLab", { count: 11 })),
+  undefined,
+);
+assert.equal(matrixCureRule.match(otherBuilding), undefined);
+assert.equal(
+  matrixCureRule.describe(11, diseaseLab),
+  "Matrix cure: build 11 TauDiseaseLab",
 );
 
 const bananaRule = ruleById("banana-republic-objective");

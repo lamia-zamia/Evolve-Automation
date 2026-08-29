@@ -257,6 +257,7 @@ export function computeWeightingDefaults(): ResetPlan {
       buildingWeightingBananaObjective: 2,
       buildingWeightingInflationMoney: 2,
       buildingWeightingRetirementPrep: 10,
+      buildingWeightingMatrixCure: 10,
       buildingWeightingTruepathDigsite: 10,
     },
   };

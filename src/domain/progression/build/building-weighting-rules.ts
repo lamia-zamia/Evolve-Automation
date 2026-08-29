@@ -169,6 +169,13 @@ const RETIREMENT_PREP = {
   scienceLabs: 11,
   graphene: 200e6,
 };
+/**
+ * Tau Disease Labs a Matrix run builds toward. The cure that gates
+ * `focus_cure 3` fills at `curve(labs / 100) / 5` per game tick, so one lab is
+ * two orders of magnitude slower than a handful; the target matches the
+ * Retirement science-lab plan because the same 1.25x cost curve limits both.
+ */
+const MATRIX_CURE_LABS = 11;
 const inflationMoneyStorageBuildings: readonly NamedBuilding[] = [
   "Bank",
   "Casino",
@@ -680,6 +687,21 @@ export function createBuildingWeightingPolicy({
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingRetirementPrep,
     }),
+    weightingRule<number>({
+      // The first lab is the only grant of `disease 2`, which every remaining
+      // Matrix technology depends on, and the labs after it set how fast the
+      // cure behind `focus_cure 3` fills.
+      id: "matrix-cure-preparation",
+      enabled: (snapshot) => snapshot.matrixCurePreparationIncomplete,
+      match: (candidate) =>
+        isBuilding(candidate, "TauDiseaseLab") &&
+        candidate.count < MATRIX_CURE_LABS
+          ? MATRIX_CURE_LABS
+          : undefined,
+      describe: (target, candidate) =>
+        `Matrix cure: build ${target} ${candidate.name}`,
+      multiplier: (snapshot) => snapshot.weights.buildingWeightingMatrixCure,
+    }),
     weightingRule<string>({
       // Red Spaceport unlocks unification research. Let an active unification
       // achievement build this prerequisite so Red Dead can release afterward.
@@ -923,10 +945,17 @@ export function createBuildingWeightingPolicy({
           snapshot.knowledgeRequiredByTechs,
           snapshot.knowledgeRequiredByBuildTargets,
         ) <= snapshot.knowledgeCapacity,
-      // We want Wardenclyffe for morale; first beacon required for progress
-      match: (candidate) =>
+      // We want Wardenclyffe for morale; first beacon required for progress.
+      // A Tau Disease Lab the Matrix cure still needs is wanted for the tech it
+      // grants, not for its Knowledge, so this rule must not bury it.
+      match: (candidate, snapshot) =>
         candidate.knowledge &&
         !isBuilding(candidate, "Wardenclyffe") &&
+        !(
+          snapshot.matrixCurePreparationIncomplete &&
+          isBuilding(candidate, "TauDiseaseLab") &&
+          candidate.count < MATRIX_CURE_LABS
+        ) &&
         (!isBuilding(candidate, "StargateTelemetryBeacon") ||
           candidate.count > 0),
       describe: () => "No need for more knowledge",

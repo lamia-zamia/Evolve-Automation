@@ -18,12 +18,9 @@ assert.equal(
   ).condition,
   "Vacuum Collapse",
 );
-assert.equal(readModel.rules.length, 28);
+assert.equal(readModel.rules.length, 29);
 assert.equal(readModel.rules[0].settingName, "buildingWeightingNew");
-assert.equal(
-  readModel.rules.at(-1).settingName,
-  "buildingWeightingRetirementPrep",
-);
+assert.equal(readModel.rules.at(-1).settingName, "buildingWeightingMatrixCure");
 
 const trace = [];
 let document = { documentElement: { scrollTop: 0 }, body: { scrollTop: 21 } };
