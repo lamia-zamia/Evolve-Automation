@@ -66,8 +66,14 @@ export function calculateKnowledgeRequirements(
   // the cheapest figure look satisfied and silently retires the
   // "need more knowledge" build rule for as long as that technology stays
   // unaffordable.
+  //
+  // A technology with no Knowledge cost at all is not waiting on Knowledge
+  // either, and it is the worse case: it drives the minimum to 0, which is
+  // below every capacity, so the rule can never fire again. The unification
+  // pair costs nothing until a foreign power is ready, and it sits in the
+  // unlocked list for the whole mid-game.
   const reachable = input.techKnowledgeCosts.filter(
-    (tech) => tech.otherCostsAffordable,
+    (tech) => tech.otherCostsAffordable && tech.knowledgeCost > 0,
   );
   const cheapestTechKnowledge =
     reachable.length > 0

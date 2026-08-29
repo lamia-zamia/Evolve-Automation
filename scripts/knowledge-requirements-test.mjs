@@ -85,4 +85,22 @@ assert.deepEqual(
   },
 );
 
+// A technology with no Knowledge cost is not waiting on Knowledge capacity.
+// Counting it drives the cheapest figure to 0, which is below every capacity,
+// so "need more knowledge" could never fire again. tech-unification2 and
+// tech-unite report an empty cost until a foreign power is ready and sit in
+// the unlocked list for the whole mid-game.
+assert.deepEqual(
+  calculateKnowledgeRequirements({
+    techKnowledgeCosts: [tech(0), tech(220000), tech(135000, false)],
+    reservedTargets: [],
+    buildCandidates: [],
+  }),
+  {
+    knowledgeRequiredByTechs: 220000,
+    cheapestTechKnowledge: 220000,
+    knowledgeRequiredByBuildTargets: 0,
+  },
+);
+
 console.log("Knowledge requirements domain tests passed");

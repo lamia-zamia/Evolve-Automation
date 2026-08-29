@@ -3827,7 +3827,7 @@ Only continue if you trust the source. Injected code:
       0,
       ...input.techKnowledgeCosts.map((tech) => tech.knowledgeCost)
     ), reachable = input.techKnowledgeCosts.filter(
-      (tech) => tech.otherCostsAffordable
+      (tech) => tech.otherCostsAffordable && tech.knowledgeCost > 0
     ), cheapestTechKnowledge = reachable.length > 0 ? Math.min(...reachable.map((tech) => tech.knowledgeCost)) : 0, buildKnowledgeCosts = [];
     for (let target of input.reservedTargets)
       reserveBuildCost(buildKnowledgeCosts, target);
