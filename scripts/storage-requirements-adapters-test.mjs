@@ -79,6 +79,48 @@ input = readStorageRequirementsInput(
 );
 assert.equal(input.requestLists.length, 4);
 
+// A technology short of a non-Knowledge resource is not waiting on Knowledge
+// capacity, so it is excluded from the cheapest-Knowledge figure while a
+// technology whose other costs are covered is kept.
+input = readStorageRequirementsInput(
+  deps({
+    getState: () => ({
+      unlockedTechs: [
+        { cost: { Knowledge: 50, Money: 30000 } },
+        { cost: { Knowledge: 900 } },
+      ],
+      queuedTargetsAll: [],
+      triggerTargets: [],
+    }),
+    getResources: () => ({
+      Knowledge: { ...resource(100), currentQuantity: 100 },
+      Money: { ...resource(1), currentQuantity: 12 },
+    }),
+  }),
+);
+assert.deepEqual(
+  input.knowledge.techKnowledgeCosts.map((tech) => [
+    tech.knowledgeCost,
+    tech.otherCostsAffordable,
+  ]),
+  [
+    [50, false],
+    [900, true],
+  ],
+);
+
+// A cost naming a resource with no wrapper stays lenient.
+input = readStorageRequirementsInput(
+  deps({
+    getState: () => ({
+      unlockedTechs: [{ cost: { Knowledge: 10, Unobtainium: 5 } }],
+      queuedTargetsAll: [],
+      triggerTargets: [],
+    }),
+  }),
+);
+assert.equal(input.knowledge.techKnowledgeCosts[0].otherCostsAffordable, true);
+
 // Assists active surface their reserves.
 input = readStorageRequirementsInput(
   deps({
@@ -106,7 +148,7 @@ input = readStorageRequirementsInput(
   }),
 );
 assert.deepEqual(input.requestLists[1], [{ costs: [] }]); // techs list, empty costs
-assert.equal(input.knowledge.techKnowledgeCosts[0], 0);
+assert.equal(input.knowledge.techKnowledgeCosts[0].knowledgeCost, 0);
 assert.equal(input.knowledge.buildCandidates[0].autoBuildable, false);
 assert.equal(input.knowledge.buildCandidates[0].weighting, 3);
 

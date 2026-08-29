@@ -1,6 +1,7 @@
 import type {
   KnowledgeBuildCandidate,
   KnowledgeRequirementsInput,
+  KnowledgeTechCost,
 } from "../../../../domain/knowledge-requirements.ts";
 import type {
   StorageRequestCost,
@@ -63,6 +64,34 @@ function knowledgeCostOf(target: UnknownRecord): number {
   if (typeof cost !== "object" || cost === null) return 0;
   const value = (cost as UnknownRecord)["Knowledge"];
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Whether every non-Knowledge cost of a target is already covered.
+ *
+ * Lazily absent data stays lenient: a target without a cost record, or a cost
+ * naming a resource the script has no wrapper for, counts as covered so a
+ * technology is never dropped from the cheapest-Knowledge figure on missing
+ * data alone.
+ */
+function otherCostsAffordable(
+  target: UnknownRecord,
+  resources: UnknownRecord,
+): boolean {
+  const cost = target["cost"];
+  if (typeof cost !== "object" || cost === null) return true;
+  const costs = cost as UnknownRecord;
+  for (const resourceId in costs) {
+    if (resourceId === "Knowledge") continue;
+    const amount = costs[resourceId];
+    if (typeof amount !== "number" || !Number.isFinite(amount)) continue;
+    const resource = resources[resourceId];
+    if (typeof resource !== "object" || resource === null) continue;
+    const quantity = (resource as UnknownRecord)["currentQuantity"];
+    if (typeof quantity !== "number" || !Number.isFinite(quantity)) continue;
+    if (quantity < amount) return false;
+  }
+  return true;
 }
 
 function isKnowledgeProducer(target: UnknownRecord): boolean {
@@ -232,6 +261,10 @@ export function readStorageRequirementsInput(
     dependencies.getFleetManagerOuter(),
     "FleetManagerOuter",
   );
+  const resourceRecord = requireRecord(
+    dependencies.getResources(),
+    "resources",
+  );
 
   const [
     unlockedTechs,
@@ -300,9 +333,17 @@ export function readStorageRequirementsInput(
     `${READ_PREFIX}knowledge`,
     () => ({
       techKnowledgeCosts: [
-        ...unlockedTechs.map((tech) => knowledgeCostOf(tech)),
+        ...unlockedTechs.map((tech): KnowledgeTechCost => ({
+          knowledgeCost: knowledgeCostOf(tech),
+          otherCostsAffordable: otherCostsAffordable(tech, resourceRecord),
+        })),
         ...(optionalPredicate(embassy, "isAutoBuildable")
-          ? [fleetEmbassyKnowledge]
+          ? [
+              {
+                knowledgeCost: fleetEmbassyKnowledge,
+                otherCostsAffordable: true,
+              },
+            ]
           : []),
       ],
       reservedTargets: [...queuedTargetsAll, ...triggerTargets].map(
@@ -331,7 +372,7 @@ export function readStorageRequirementsInput(
     requestLists: Object.freeze(requestLists),
     knowledge,
     resources: measure(`${READ_PREFIX}resources`, () =>
-      Object.freeze(readResources(dependencies.getResources())),
+      Object.freeze(readResources(resourceRecord)),
     ),
     inflationMoney: dependencies.isInflationAssistActive()
       ? requireNumber(

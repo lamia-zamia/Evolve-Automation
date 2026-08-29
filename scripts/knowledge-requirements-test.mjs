@@ -8,6 +8,10 @@ const reserved = (knowledgeCost, extra = {}) => ({
   isKnowledge: false,
   ...extra,
 });
+const tech = (knowledgeCost, otherCostsAffordable = true) => ({
+  knowledgeCost,
+  otherCostsAffordable,
+});
 const candidate = (knowledgeCost, weighting, extra = {}) => ({
   knowledgeCost,
   weighting,
@@ -19,7 +23,7 @@ const candidate = (knowledgeCost, weighting, extra = {}) => ({
 // Exact characterized values (mirrors the bundled storage-requirements scenario).
 assert.deepEqual(
   calculateKnowledgeRequirements({
-    techKnowledgeCosts: [100, 50],
+    techKnowledgeCosts: [tech(100), tech(50)],
     reservedTargets: [reserved(80), reserved(0)],
     buildCandidates: [
       candidate(200, 5),
@@ -46,6 +50,38 @@ assert.deepEqual(
     knowledgeRequiredByTechs: 0,
     cheapestTechKnowledge: 0,
     knowledgeRequiredByBuildTargets: 42,
+  },
+);
+
+// A technology blocked on a non-Knowledge cost still sets the maximum reserve
+// but must not answer the cheapest figure: the "need more knowledge" build rule
+// reads that figure, and a permanently unaffordable cheap-in-Knowledge tech
+// would otherwise retire the rule for the rest of the run.
+assert.deepEqual(
+  calculateKnowledgeRequirements({
+    techKnowledgeCosts: [tech(4950, false), tech(18500), tech(25000)],
+    reservedTargets: [],
+    buildCandidates: [],
+  }),
+  {
+    knowledgeRequiredByTechs: 25000,
+    cheapestTechKnowledge: 18500,
+    knowledgeRequiredByBuildTargets: 0,
+  },
+);
+
+// No reachable technology leaves the cheapest figure at zero, so the rule stays
+// off rather than chasing capacity nothing is waiting for.
+assert.deepEqual(
+  calculateKnowledgeRequirements({
+    techKnowledgeCosts: [tech(4950, false)],
+    reservedTargets: [],
+    buildCandidates: [],
+  }),
+  {
+    knowledgeRequiredByTechs: 4950,
+    cheapestTechKnowledge: 0,
+    knowledgeRequiredByBuildTargets: 0,
   },
 );
 

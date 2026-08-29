@@ -3823,7 +3823,12 @@ Only continue if you trust the source. Injected code:
     target.isTechnology || target.isKnowledge || target.knowledgeCost > 0 && costs.push(target.knowledgeCost);
   }
   function calculateKnowledgeRequirements(input) {
-    let knowledgeRequiredByTechs = Math.max(0, ...input.techKnowledgeCosts), cheapestTechKnowledge = input.techKnowledgeCosts.length > 0 ? Math.min(...input.techKnowledgeCosts) : 0, buildKnowledgeCosts = [];
+    let knowledgeRequiredByTechs = Math.max(
+      0,
+      ...input.techKnowledgeCosts.map((tech) => tech.knowledgeCost)
+    ), reachable = input.techKnowledgeCosts.filter(
+      (tech) => tech.otherCostsAffordable
+    ), cheapestTechKnowledge = reachable.length > 0 ? Math.min(...reachable.map((tech) => tech.knowledgeCost)) : 0, buildKnowledgeCosts = [];
     for (let target of input.reservedTargets)
       reserveBuildCost(buildKnowledgeCosts, target);
     let topTarget = null;
@@ -4224,6 +4229,22 @@ Only continue if you trust the source. Injected code:
     let value = cost.Knowledge;
     return typeof value == "number" && Number.isFinite(value) ? value : 0;
   }
+  function otherCostsAffordable(target, resources) {
+    let cost = target.cost;
+    if (typeof cost != "object" || cost === null) return !0;
+    let costs = cost;
+    for (let resourceId3 in costs) {
+      if (resourceId3 === "Knowledge") continue;
+      let amount = costs[resourceId3];
+      if (typeof amount != "number" || !Number.isFinite(amount)) continue;
+      let resource2 = resources[resourceId3];
+      if (typeof resource2 != "object" || resource2 === null) continue;
+      let quantity = resource2.currentQuantity;
+      if (!(typeof quantity != "number" || !Number.isFinite(quantity)) && quantity < amount)
+        return !1;
+    }
+    return !0;
+  }
   function isKnowledgeProducer(target) {
     let is = target.is;
     return typeof is == "object" && is !== null && !!is.knowledge;
@@ -4307,6 +4328,9 @@ Only continue if you trust the source. Injected code:
     ), fleetManagerOuter = requireRecord(
       dependencies.getFleetManagerOuter(),
       "FleetManagerOuter"
+    ), resourceRecord = requireRecord(
+      dependencies.getResources(),
+      "resources"
     ), [
       unlockedTechs,
       queuedTargetsAll,
@@ -4351,8 +4375,16 @@ Only continue if you trust the source. Injected code:
       `${READ_PREFIX}knowledge`,
       () => ({
         techKnowledgeCosts: [
-          ...unlockedTechs.map((tech) => knowledgeCostOf(tech)),
-          ...optionalPredicate(embassy, "isAutoBuildable") ? [fleetEmbassyKnowledge] : []
+          ...unlockedTechs.map((tech) => ({
+            knowledgeCost: knowledgeCostOf(tech),
+            otherCostsAffordable: otherCostsAffordable(tech, resourceRecord)
+          })),
+          ...optionalPredicate(embassy, "isAutoBuildable") ? [
+            {
+              knowledgeCost: fleetEmbassyKnowledge,
+              otherCostsAffordable: !0
+            }
+          ] : []
         ],
         reservedTargets: [...queuedTargetsAll, ...triggerTargets].map(
           (target) => ({
@@ -4378,7 +4410,7 @@ Only continue if you trust the source. Injected code:
       knowledge,
       resources: measure(
         `${READ_PREFIX}resources`,
-        () => Object.freeze(readResources(dependencies.getResources()))
+        () => Object.freeze(readResources(resourceRecord))
       ),
       inflationMoney: dependencies.isInflationAssistActive() ? requireNumber(
         dependencies.getInflationChallengeMoney(),

@@ -7,6 +7,17 @@ export interface KnowledgeReservedTarget {
   readonly isKnowledge: boolean;
 }
 
+export interface KnowledgeTechCost {
+  readonly knowledgeCost: number;
+  /**
+   * Whether every non-Knowledge cost of the technology is already paid for.
+   * A technology still short of Money, Steel or any other material is not
+   * waiting on Knowledge capacity, so it must not answer "how much Knowledge
+   * capacity does the cheapest reachable technology need".
+   */
+  readonly otherCostsAffordable: boolean;
+}
+
 export interface KnowledgeBuildCandidate {
   readonly knowledgeCost: number;
   readonly isKnowledge: boolean;
@@ -15,8 +26,8 @@ export interface KnowledgeBuildCandidate {
 }
 
 export interface KnowledgeRequirementsInput {
-  /** Knowledge costs of every currently unlocked tech, plus any embassy reserve. */
-  readonly techKnowledgeCosts: readonly number[];
+  /** Every currently unlocked tech, plus any embassy reserve. */
+  readonly techKnowledgeCosts: readonly Readonly<KnowledgeTechCost>[];
   /** Queued and triggered targets whose Knowledge must be reserved. */
   readonly reservedTargets: readonly Readonly<KnowledgeReservedTarget>[];
   /** Building and project priority-list entries; the single highest-weighted
@@ -39,16 +50,28 @@ function reserveBuildCost(
 }
 
 /**
- * Pure Knowledge-storage planning: the most expensive tech, the cheapest tech,
- * and the most expensive build target that must have its Knowledge reserved.
+ * Pure Knowledge-storage planning: the most expensive tech, the cheapest tech
+ * that only Knowledge capacity still blocks, and the most expensive build
+ * target that must have its Knowledge reserved.
  */
 export function calculateKnowledgeRequirements(
   input: Readonly<KnowledgeRequirementsInput>,
 ): KnowledgeRequirements {
-  const knowledgeRequiredByTechs = Math.max(0, ...input.techKnowledgeCosts);
+  const knowledgeRequiredByTechs = Math.max(
+    0,
+    ...input.techKnowledgeCosts.map((tech) => tech.knowledgeCost),
+  );
+  // Only technologies whose other costs are already covered can be released by
+  // more Knowledge capacity. Counting one that is short of Money or Steel makes
+  // the cheapest figure look satisfied and silently retires the
+  // "need more knowledge" build rule for as long as that technology stays
+  // unaffordable.
+  const reachable = input.techKnowledgeCosts.filter(
+    (tech) => tech.otherCostsAffordable,
+  );
   const cheapestTechKnowledge =
-    input.techKnowledgeCosts.length > 0
-      ? Math.min(...input.techKnowledgeCosts)
+    reachable.length > 0
+      ? Math.min(...reachable.map((tech) => tech.knowledgeCost))
       : 0;
 
   const buildKnowledgeCosts: number[] = [];
