@@ -122,6 +122,35 @@ export function createGamePageShell({
     );
   }
 
+  /** Visits modal roots added directly or inside an already-built subtree. */
+  function forEachAddedModal(
+    node: unknown,
+    visit: (modal: { readonly style: { display: string } }) => void,
+  ): void {
+    if (isModalElement(node)) {
+      visit(node);
+      return;
+    }
+    if (!isRecord(node)) {
+      return;
+    }
+    const querySelectorAll = readProperty(node, "querySelectorAll");
+    if (typeof querySelectorAll !== "function") {
+      return;
+    }
+    const descendants = Reflect.apply(querySelectorAll, node, [".modal"]);
+    const forEach = readProperty(descendants, "forEach");
+    if (typeof forEach === "function" && isRecord(descendants)) {
+      Reflect.apply(forEach, descendants, [
+        (descendant: unknown) => {
+          if (isModalElement(descendant)) {
+            visit(descendant);
+          }
+        },
+      ]);
+    }
+  }
+
   return Object.freeze({
     mountObservers(): void {
       observeNode(byId("main"), getTooltipObserver());
@@ -136,15 +165,14 @@ export function createGamePageShell({
           }
           for (const bodyMutation of bodyMutations) {
             forEachAddedNode(bodyMutation, (node) => {
-              if (!isModalElement(node)) {
-                return;
-              }
-              const modal = getModal();
-              if (modal.isAwaitingScriptModal()) {
-                modal.captureScriptModal(node);
-              } else {
-                observeNode(node, getTooltipObserver());
-              }
+              forEachAddedModal(node, (modalElement) => {
+                const modal = getModal();
+                if (modal.isAwaitingScriptModal()) {
+                  modal.captureScriptModal(modalElement);
+                } else {
+                  observeNode(modalElement, getTooltipObserver());
+                }
+              });
             });
           }
         },

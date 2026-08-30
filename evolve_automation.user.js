@@ -7474,6 +7474,23 @@ Only continue if you trust the source. Injected code:
       let classList = readProperty(node, "classList"), contains = isRecord(classList) ? readProperty(classList, "contains") : void 0;
       return typeof contains == "function" && !!Reflect.apply(contains, classList, ["modal"]);
     }
+    function forEachAddedModal(node, visit) {
+      if (isModalElement(node)) {
+        visit(node);
+        return;
+      }
+      if (!isRecord(node))
+        return;
+      let querySelectorAll = readProperty(node, "querySelectorAll");
+      if (typeof querySelectorAll != "function")
+        return;
+      let descendants = Reflect.apply(querySelectorAll, node, [".modal"]), forEach = readProperty(descendants, "forEach");
+      typeof forEach == "function" && isRecord(descendants) && Reflect.apply(forEach, descendants, [
+        (descendant) => {
+          isModalElement(descendant) && visit(descendant);
+        }
+      ]);
+    }
     return Object.freeze({
       mountObservers() {
         observeNode(byId("main"), getTooltipObserver()), observeNode(
@@ -7482,10 +7499,10 @@ Only continue if you trust the source. Injected code:
             if (Array.isArray(bodyMutations))
               for (let bodyMutation of bodyMutations)
                 forEachAddedNode(bodyMutation, (node) => {
-                  if (!isModalElement(node))
-                    return;
-                  let modal = getModal();
-                  modal.isAwaitingScriptModal() ? modal.captureScriptModal(node) : observeNode(node, getTooltipObserver());
+                  forEachAddedModal(node, (modalElement) => {
+                    let modal = getModal();
+                    modal.isAwaitingScriptModal() ? modal.captureScriptModal(modalElement) : observeNode(modalElement, getTooltipObserver());
+                  });
                 });
           },
           { subtree: !0 }

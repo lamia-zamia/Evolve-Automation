@@ -191,6 +191,23 @@ bodyObserver.callback([{ addedNodes: [scriptModal] }]);
 // The shell hands a script-opened modal to the adapter and observes nothing itself.
 assert.deepEqual(context.gameModal.captured, [scriptModal]);
 assert.notEqual(observers.at(-1).target, scriptModal);
+// Vue may append an already-built wrapper whose subtree contains the modal.
+// The body observer must discover that nested modal because no later child
+// mutation is guaranteed after the wrapper enters the document.
+const nestedScriptModal = {
+  nodeType: 1,
+  classList: { contains: () => true },
+  style: {},
+};
+const modalWrapper = {
+  nodeType: 1,
+  classList: { contains: () => false },
+  querySelectorAll: (selector) =>
+    selector === ".modal" ? [nestedScriptModal] : [],
+};
+context.gameModal.awaiting = true;
+bodyObserver.callback([{ addedNodes: [modalWrapper] }]);
+assert.deepEqual(context.gameModal.captured, [scriptModal, nestedScriptModal]);
 const userModal = {
   nodeType: 1,
   classList: { contains: () => true },
