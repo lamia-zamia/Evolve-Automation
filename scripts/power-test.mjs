@@ -1133,4 +1133,29 @@ assert.deepEqual(warningSource.readWarnedBuildingDomIds(), ["one", ""]);
   );
 }
 
+// WarManager.hellAssigned mirrors game.global.portal.fortress.assigned, which
+// the game does not write until soldiers are first assigned there. A fortress
+// that exists but was never staffed must not reject the whole power cycle.
+{
+  const fixture = makeFixture({
+    buildings: [{ id: "attractor", binding: "portal-attractor", count: 1 }],
+  });
+  const [attractorBuilding] = fixture.managed;
+  fixture.buildings.BadlandsAttractor = attractorBuilding;
+  fixture.game.global.portal = { fortress: { threat: 90 } };
+  fixture.settings.hellAttractorBottomThreat = 50;
+  fixture.settings.hellAttractorTopThreat = 100;
+
+  const readWith = (war) =>
+    createPowerAdapter(
+      adapterDependencies(fixture, { getWarManager: () => war }),
+    ).reader.readCycle();
+
+  const uninitialized = readWith({});
+  assert.equal(uninitialized.buildings[0].rule.kind, "badlands-attractor");
+  assert.equal(uninitialized.buildings[0].rule.hellAssigned, 0);
+
+  assert.equal(readWith({ hellAssigned: 7 }).buildings[0].rule.hellAssigned, 7);
+}
+
 console.log("Power domain, adapters, and application tests passed");

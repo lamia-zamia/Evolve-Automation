@@ -33596,7 +33596,12 @@ Only continue if you trust the source. Injected code:
         ),
         bottomThreat: readNumberSetting(settings, "hellAttractorBottomThreat"),
         topThreat: readNumberSetting(settings, "hellAttractorTopThreat"),
-        hellAssigned: finiteProperty(war, "hellAssigned", "WarManager")
+        // `WarManager.hellAssigned` mirrors `game.global.portal.fortress.assigned`,
+        // which the game does not write until soldiers are first assigned. A
+        // fortress that exists but has never been staffed leaves it undefined, so
+        // read it as leniently as the hell adapter does rather than rejecting the
+        // whole power cycle.
+        hellAssigned: war.hellAssigned === void 0 ? 0 : finiteProperty(war, "hellAssigned", "WarManager")
       });
     if (identity(buildings, "TouristCenter", building3)) {
       let money = namedRecord(resources, "Money", "resources");
