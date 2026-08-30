@@ -23846,7 +23846,10 @@ Only continue if you trust the source. Injected code:
             Math.min(availableEmployees, job.uncappedBreakpoints[pass])
           ));
         }
-        if (job.kind === "entertainer" && (jobsToAssign = Math.min(jobsToAssign, authority.cap)), index === defaultIndex && input.minimumDefault > 0 && (requiredWorkers[index] = requiredWorkers[index] + Math.min(availableWorkers, input.minimumDefault), availableWorkers -= requiredWorkers[index], jobsToAssign -= requiredWorkers[index]), jobsToAssign > 0 && job.serves) {
+        if (typeof job.storageBackedMinimum == "number" && (jobsToAssign = Math.max(
+          jobsToAssign,
+          Math.min(availableEmployees, job.storageBackedMinimum)
+        )), job.kind === "entertainer" && (jobsToAssign = Math.min(jobsToAssign, authority.cap)), index === defaultIndex && input.minimumDefault > 0 && (requiredWorkers[index] = requiredWorkers[index] + Math.min(availableWorkers, input.minimumDefault), availableWorkers -= requiredWorkers[index], jobsToAssign -= requiredWorkers[index]), jobsToAssign > 0 && job.serves) {
           let servants = Math.min(
             availableServants,
             Math.floor(jobsToAssign / input.servantModifier)
@@ -24012,11 +24015,31 @@ Only continue if you trust the source. Injected code:
   function jobCount(job, path) {
     return requireNumber(job.count, `${path}.count`);
   }
+  function storageBackedFloor(dependencies, job, jobs, global) {
+    if (job === jobs.Banker && technology(dependencies, "banking", 7))
+      return requireNumber(job.workers, "job.workers");
+    if (job === jobs.Priest) {
+      let genes = requireRecord(global.genes, "game.global.genes"), civic = requireRecord(global.civic, "game.global.civic"), priest = requireRecord(civic.priest, "game.global.civic.priest");
+      if (optionalNumber2(genes.ancients, "game.global.genes.ancients") >= 2 && priest.display)
+        return requireNumber(job.workers, "job.workers");
+    }
+    return null;
+  }
   function jobSmartMaximum(dependencies, job, kind, jobs, game, settings, buildings, resources, state, smart, coalDisabled, minersDisabled, demonicLumber) {
-    if (!smart) return { maximum: null, farmerMinimum: null };
-    let global = requireRecord(game.global, "game.global"), race2 = requireRecord(global.race, "game.global.race"), tech = requireRecord(global.tech, "game.global.tech"), count2 = jobCount(job, "job"), maximum = null, farmerMinimum = null;
+    let global = requireRecord(game.global, "game.global"), race2 = requireRecord(global.race, "game.global.race"), tech = requireRecord(global.tech, "game.global.tech"), storageFloor = storageBackedFloor(dependencies, job, jobs, global);
+    if (!smart)
+      return {
+        maximum: null,
+        farmerMinimum: null,
+        storageBackedMinimum: storageFloor
+      };
+    let count2 = jobCount(job, "job"), maximum = null, farmerMinimum = null, storageBackedMinimum = storageFloor;
     if (kind === "miner" && race2.warlord)
-      return { maximum: null, farmerMinimum: null };
+      return {
+        maximum: null,
+        farmerMinimum: null,
+        storageBackedMinimum: storageFloor
+      };
     if (kind === "farmer" || kind === "hunter") {
       if (race2.artifical || race2.unfathomable)
         maximum = 0, farmerMinimum = 0;
@@ -24212,7 +24235,7 @@ Only continue if you trust the source. Injected code:
         (resourceNumber(resources, "Population", "currentQuantity") / 100 * requireNumber(dependencies.getFoodConsume(), "getFoodConsume") - threshold) / meditator
       ) + 1;
     }
-    return maximum !== null && !Number.isFinite(maximum) && (maximum = maximum > 0 ? Number.MAX_SAFE_INTEGER : 0), { maximum, farmerMinimum };
+    return maximum !== null && !Number.isFinite(maximum) && (maximum = maximum > 0 ? Number.MAX_SAFE_INTEGER : 0), { maximum, farmerMinimum, storageBackedMinimum };
   }
   function unavailableInput2(craftOnly) {
     return Object.freeze({
@@ -24292,7 +24315,7 @@ Only continue if you trust the source. Injected code:
         if (!Array.isArray(rawCrafting))
           throw new TypeError("JobManager.craftingJobs must be an array");
         let jobInputs = rawJobs.map((job, token2) => {
-          let kind = identityKind(job, jobs), flags = requireRecord(job.is, `jobList[${token2}].is`), crafting = !!dependencies.isCraftingJob(job), smart = !!job.isSmartEnabled, demonicLumber = kind === "hunter" && demonLumber, smartMaximum = crafting ? { maximum: null, farmerMinimum: null } : jobSmartMaximum(
+          let kind = identityKind(job, jobs), flags = requireRecord(job.is, `jobList[${token2}].is`), crafting = !!dependencies.isCraftingJob(job), smart = !!job.isSmartEnabled, demonicLumber = kind === "hunter" && demonLumber, smartMaximum = crafting ? { maximum: null, farmerMinimum: null, storageBackedMinimum: null } : jobSmartMaximum(
             dependencies,
             job,
             kind,
@@ -24339,6 +24362,7 @@ Only continue if you trust the source. Injected code:
             uncappedBreakpoints: Object.freeze(uncappedBreakpoints),
             smartMaximum: smartMaximum.maximum,
             farmerMinimum: smartMaximum.farmerMinimum,
+            storageBackedMinimum: smartMaximum.storageBackedMinimum,
             demonicLumber,
             warlordMiner: kind === "miner" && !!race2.warlord
           });

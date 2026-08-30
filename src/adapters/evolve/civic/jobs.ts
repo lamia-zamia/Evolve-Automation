@@ -71,6 +71,7 @@ interface JobsSession {
 interface SmartMaximum {
   readonly maximum: number | null;
   readonly farmerMinimum: number | null;
+  readonly storageBackedMinimum: number | null;
 }
 
 function optionalNumber(value: unknown, path: string, fallback = 0): number {
@@ -200,6 +201,40 @@ function jobCount(job: UnknownRecord, path: string): number {
   return requireNumber(job["count"], `${path}.count`);
 }
 
+/**
+ * Floor for a job whose worker count carries resource storage capacity.
+ *
+ * Reassigning such a worker lowers the resource maximum, and the game clamps
+ * the stored amount down to the new maximum: the workers come back, the
+ * resource does not. Returning the live count holds the job where it is;
+ * growth above it still comes from the ordinary breakpoint and split passes.
+ */
+function storageBackedFloor(
+  dependencies: JobsAdapterDependencies,
+  job: UnknownRecord,
+  jobs: UnknownRecord,
+  global: UnknownRecord,
+): number | null {
+  // From Banking 7 each Banker adds Money capacity.
+  if (job === jobs["Banker"] && technology(dependencies, "banking", 7)) {
+    return requireNumber(job["workers"], "job.workers");
+  }
+  // With Ancient Priests each Priest scales the Ziggurat and Temple
+  // multipliers, which raise resource maximums as well as production.
+  if (job === jobs["Priest"]) {
+    const genes = requireRecord(global["genes"], "game.global.genes");
+    const civic = requireRecord(global["civic"], "game.global.civic");
+    const priest = requireRecord(civic["priest"], "game.global.civic.priest");
+    if (
+      optionalNumber(genes["ancients"], "game.global.genes.ancients") >= 2 &&
+      Boolean(priest["display"])
+    ) {
+      return requireNumber(job["workers"], "job.workers");
+    }
+  }
+  return null;
+}
+
 function jobSmartMaximum(
   dependencies: JobsAdapterDependencies,
   job: UnknownRecord,
@@ -215,16 +250,29 @@ function jobSmartMaximum(
   minersDisabled: boolean,
   demonicLumber: boolean,
 ): SmartMaximum {
-  if (!smart) return { maximum: null, farmerMinimum: null };
   const global = requireRecord(game["global"], "game.global");
   const race = requireRecord(global["race"], "game.global.race");
   const tech = requireRecord(global["tech"], "game.global.tech");
+  // Storage-backed floors are decided before the `smart` gate: Priest is not a
+  // smart job, but its worker count still carries resource maximums.
+  const storageFloor = storageBackedFloor(dependencies, job, jobs, global);
+  if (!smart)
+    return {
+      maximum: null,
+      farmerMinimum: null,
+      storageBackedMinimum: storageFloor,
+    };
   const count = jobCount(job, "job");
   let maximum: number | null = null;
   let farmerMinimum: number | null = null;
+  const storageBackedMinimum: number | null = storageFloor;
 
   if (kind === "miner" && race["warlord"]) {
-    return { maximum: null, farmerMinimum: null };
+    return {
+      maximum: null,
+      farmerMinimum: null,
+      storageBackedMinimum: storageFloor,
+    };
   }
 
   if (kind === "farmer" || kind === "hunter") {
@@ -627,7 +675,7 @@ function jobSmartMaximum(
   if (maximum !== null && !Number.isFinite(maximum)) {
     maximum = maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
   }
-  return { maximum, farmerMinimum };
+  return { maximum, farmerMinimum, storageBackedMinimum };
 }
 
 function unavailableInput(craftOnly: boolean): Readonly<JobsCycleInput> {
@@ -749,7 +797,7 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
         const smart = Boolean(job["isSmartEnabled"]);
         const demonicLumber = kind === "hunter" && demonLumber;
         const smartMaximum = crafting
-          ? { maximum: null, farmerMinimum: null }
+          ? { maximum: null, farmerMinimum: null, storageBackedMinimum: null }
           : jobSmartMaximum(
               dependencies,
               job,
@@ -807,6 +855,7 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
           uncappedBreakpoints: Object.freeze(uncappedBreakpoints),
           smartMaximum: smartMaximum.maximum,
           farmerMinimum: smartMaximum.farmerMinimum,
+          storageBackedMinimum: smartMaximum.storageBackedMinimum,
           demonicLumber,
           warlordMiner: kind === "miner" && Boolean(race["warlord"]),
         });

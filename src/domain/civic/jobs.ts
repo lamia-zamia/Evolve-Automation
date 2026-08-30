@@ -30,6 +30,14 @@ export interface JobsJobInput {
   readonly uncappedBreakpoints: readonly [number, number, number];
   readonly smartMaximum: number | null;
   readonly farmerMinimum: number | null;
+  /**
+   * Floor for a job whose worker count *is* storage capacity for a resource.
+   * Shedding such a worker lowers that resource's maximum, and the game
+   * truncates the stored amount to the new maximum, so the reassignment is
+   * reversible but the destroyed resource is not. `null` for every job whose
+   * workers carry no capacity.
+   */
+  readonly storageBackedMinimum: number | null;
   readonly demonicLumber: boolean;
   readonly warlordMiner: boolean;
 }
@@ -497,6 +505,16 @@ export function planJobs(
             Math.min(availableEmployees, job.uncappedBreakpoints[pass]!),
           );
         }
+      }
+      // A storage-backed job is floored before any cap below, because the
+      // capacity it carries is what holds the resource already banked. Split
+      // jobs are skipped in pass 2 and keep their pass-1 allocation, so the
+      // floor has to land in the passes they do run.
+      if (typeof job.storageBackedMinimum === "number") {
+        jobsToAssign = Math.max(
+          jobsToAssign,
+          Math.min(availableEmployees, job.storageBackedMinimum),
+        );
       }
       if (job.kind === "entertainer") {
         jobsToAssign = Math.min(jobsToAssign, authority.cap);
