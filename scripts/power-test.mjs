@@ -1055,4 +1055,82 @@ assert.deepEqual(warningSource.readWarnedBuildingDomIds(), ["one", ""]);
   assert.equal(cycleFor("40%").civilianPopulation, 1000);
 }
 
+// Two structures may share the game's short id while having distinct Vue
+// bindings: the Alpha Graphene Plant (interstellar-g_factory) and the Titan
+// Graphene Plant (space-g_factory) are both `g_factory`, and a True Path run
+// owns both from Titan onward. Keying the managed-power map by id rejected that
+// save outright, which killed autoPower for the rest of the run.
+{
+  const cycle = createPowerAdapter(
+    adapterDependencies(
+      makeFixture({
+        buildings: [
+          {
+            id: "g_factory",
+            binding: "interstellar-g_factory",
+            count: 2,
+            powered: 1,
+          },
+          {
+            id: "g_factory",
+            binding: "space-g_factory",
+            count: 2,
+            powered: 1,
+          },
+        ],
+      }),
+    ),
+  ).reader.readCycle();
+
+  assert.equal(cycle.buildings.length, 2);
+  assert.deepEqual(
+    cycle.buildings.map((entry) => entry.binding),
+    ["interstellar-g_factory", "space-g_factory"],
+  );
+  assert.deepEqual(
+    cycle.buildings.map((entry) => entry.id),
+    ["g_factory", "g_factory"],
+  );
+}
+
+// The domain applies the same identity rule: two same-id buildings plan fine.
+{
+  const plan = planPowerCycle(
+    domainCycle({
+      buildings: Object.freeze([
+        domainBuilding("g_factory", {
+          binding: "interstellar-g_factory",
+          count: 2,
+          powered: 1,
+        }),
+        domainBuilding("g_factory", {
+          binding: "space-g_factory",
+          count: 2,
+          powered: 1,
+        }),
+      ]),
+    }),
+    EMPTY_POWER_AUTOMATION_STATE,
+  );
+  assert.ok(plan.decision !== null);
+}
+
+// A genuinely duplicated binding is still a broken game model and must throw.
+{
+  assert.throws(
+    () =>
+      createPowerAdapter(
+        adapterDependencies(
+          makeFixture({
+            buildings: [
+              { id: "a", binding: "city-dup", count: 1, powered: 1 },
+              { id: "b", binding: "city-dup", count: 1, powered: 1 },
+            ],
+          }),
+        ),
+      ).reader.readCycle(),
+    /duplicate managed power binding city-dup/,
+  );
+}
+
 console.log("Power domain, adapters, and application tests passed");

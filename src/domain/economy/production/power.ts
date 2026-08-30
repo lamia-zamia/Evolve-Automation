@@ -325,6 +325,13 @@ export type PowerOperation =
   | {
       readonly kind: "set-description";
       readonly buildingId: string;
+      /**
+       * The building's unique Vue binding. `buildingId` is the game's short
+       * structure id, which repeats across regions - the Alpha and Titan
+       * Graphene Plants are both `g_factory` - so only the binding identifies
+       * one building.
+       */
+      readonly binding: string;
       readonly expected: string;
       readonly value: string;
     }
@@ -928,19 +935,21 @@ export function planPowerCycle(
   }
 
   const operations: PowerOperation[] = [];
-  const descriptionByBuildingId = new Map<string, string>();
+  const descriptionByBinding = new Map<string, string>();
   const appendDescription = (
     buildingId: string,
+    binding: string,
     expected: string,
     value: string,
   ) => {
     operations.push({
       kind: "set-description",
       buildingId,
+      binding,
       expected,
       value,
     });
-    descriptionByBuildingId.set(buildingId, value);
+    descriptionByBinding.set(binding, value);
   };
   const resources = new Map<string, MutableResource>();
   for (const resource of input.resources) {
@@ -953,9 +962,14 @@ export function planPowerCycle(
       incomeAdjusted: resource.incomeAdjusted,
     });
   }
-  const buildingIds = new Set(input.buildings.map((building) => building.id));
-  if (buildingIds.size !== input.buildings.length) {
-    throw new TypeError("duplicate power building id");
+  // Identity is the Vue binding, not the game's short structure id. Ids repeat
+  // across regions - the Alpha and Titan Graphene Plants are both `g_factory` -
+  // and a True Path run owns both from Titan onward.
+  const buildingBindings = new Set(
+    input.buildings.map((building) => building.binding),
+  );
+  if (buildingBindings.size !== input.buildings.length) {
+    throw new TypeError("duplicate power building binding");
   }
   const oscillations: Record<string, MutableOscillationEntry> =
     Object.fromEntries(
@@ -1088,6 +1102,7 @@ export function planPowerCycle(
     ) {
       appendDescription(
         building.id,
+        building.binding,
         building.extraDescription,
         `Missing ${Math.ceil(
           building.powered - availablePower,
@@ -1121,7 +1136,7 @@ export function planPowerCycle(
     }
 
     let description =
-      descriptionByBuildingId.get(building.id) ?? building.extraDescription;
+      descriptionByBinding.get(building.binding) ?? building.extraDescription;
     for (const consumption of building.consumptions) {
       const resource = mapValue(
         resources,
@@ -1162,7 +1177,7 @@ export function planPowerCycle(
         maximum = Math.min(maximum, supported);
         if (missingProducer[resource.input.id]) {
           const value = `Make sure all ${resource.input.title} producers are above consumers in buildings list!<br>${description}`;
-          appendDescription(building.id, description, value);
+          appendDescription(building.id, building.binding, description, value);
           description = value;
         }
       } else if (missingProducer[resource.input.id] && consumption.rate < 0) {
@@ -1328,10 +1343,11 @@ export function planPowerCycle(
       maximumCamps,
     );
     const purifierDescription =
-      descriptionByBuildingId.get(spire.purifier.buildingId) ??
+      descriptionByBinding.get(spire.purifier.binding) ??
       spire.purifierDescription;
     appendDescription(
       spire.purifier.buildingId,
+      spire.purifier.binding,
       purifierDescription,
       `Supported Supplies: ${Math.floor(bestSupplies)}<br>${purifierDescription}`,
     );

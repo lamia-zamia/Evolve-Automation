@@ -34042,16 +34042,14 @@ Only continue if you trust the source. Injected code:
           namedRecord(buildings, "SpireBaseCamp", "buildings"),
           "isSmartManaged",
           "buildings.SpireBaseCamp"
-        ), neededShipsValue = fleet.neededShips, neededShips = typeof neededShipsValue == "object" && neededShipsValue !== null ? requireRecord(neededShipsValue, "FleetManager.neededShips") : null, seenBuildings = /* @__PURE__ */ new Map(), seenBindings = /* @__PURE__ */ new Set(), registerCommandable = (id, building3) => {
-          seenBuildings.has(id) || seenBuildings.set(id, building3);
+        ), neededShipsValue = fleet.neededShips, neededShips = typeof neededShipsValue == "object" && neededShipsValue !== null ? requireRecord(neededShipsValue, "FleetManager.neededShips") : null, seenBuildings = /* @__PURE__ */ new Map(), registerCommandable = (binding, building3) => {
+          seenBuildings.has(binding) || seenBuildings.set(binding, building3);
         }, globalState = requireRecord(game.global, "game.global"), inputs = managedRecords.map(
           (building3, index) => {
             let path = `BuildingManager state list[${index}]`, id = buildingId(building3, path), binding = buildingBinding(building3, path);
-            if (seenBuildings.has(id))
-              throw new TypeError(`duplicate managed power building ${id}`);
-            if (seenBindings.has(binding))
+            if (seenBuildings.has(binding))
               throw new TypeError(`duplicate managed power binding ${binding}`);
-            seenBuildings.set(id, building3), seenBindings.add(binding);
+            seenBuildings.set(binding, building3);
             let rawConsumptions = building3.consumption;
             if (!Array.isArray(rawConsumptions))
               throw new TypeError(`${path}.consumption must be an array`);
@@ -34151,7 +34149,13 @@ Only continue if you trust the source. Injected code:
             lakeTransport,
             "buildings.LakeTransport"
           );
-          return registerCommandable(biremeIdValue, lakeBireme), registerCommandable(transportIdValue, lakeTransport), Object.freeze({
+          return registerCommandable(
+            buildingBinding(lakeBireme, "buildings.LakeBireme"),
+            lakeBireme
+          ), registerCommandable(
+            buildingBinding(lakeTransport, "buildings.LakeTransport"),
+            lakeTransport
+          ), Object.freeze({
             enabled: !0,
             bloodSpireLevel: blood.spire === void 0 ? 0 : requireNumber(blood.spire, "game.global.blood.spire"),
             biremeId: biremeIdValue,
@@ -34369,9 +34373,7 @@ Only continue if you trust the source. Injected code:
       readStateOn(binding) {
         if (session === null)
           throw new Error("power cycle must be read before state-on resampling");
-        let building3 = [...session.buildings.values()].find(
-          (candidate) => candidate._vueBinding === binding
-        );
+        let building3 = session.buildings.get(binding);
         if (building3 === void 0)
           throw new TypeError(`power building binding ${binding} is missing`);
         return finiteProperty(
@@ -34396,7 +34398,7 @@ Only continue if you trust the source. Injected code:
         return null;
       for (let index = 0; index < decision2.expectedBuildings.length; index++) {
         let expected = decision2.expectedBuildings[index], actual = session.ordered[index], current = currentValue[index];
-        if (expected === void 0 || actual === void 0 || current === void 0 || session.buildings.get(actual.id) !== current || expected.id !== actual.id || expected.binding !== actual.binding)
+        if (expected === void 0 || actual === void 0 || current === void 0 || session.buildings.get(actual.binding) !== current || expected.id !== actual.id || expected.binding !== actual.binding)
           return null;
       }
       return session;
@@ -34428,34 +34430,34 @@ Only continue if you trust the source. Injected code:
             break;
           }
           case "set-description": {
-            let building3 = active.buildings.get(operation2.buildingId);
+            let building3 = active.buildings.get(operation2.binding);
             if (building3 === void 0)
-              return `building ${operation2.buildingId} missing`;
-            if ((descriptions.get(operation2.buildingId) ?? requireString(
+              return `building ${operation2.binding} missing`;
+            if ((descriptions.get(operation2.binding) ?? requireString(
               building3.extraDescription,
-              `building ${operation2.buildingId}.extraDescription`
+              `building ${operation2.binding}.extraDescription`
             )) !== operation2.expected)
-              return `building ${operation2.buildingId} description changed`;
-            descriptions.set(operation2.buildingId, operation2.value);
+              return `building ${operation2.binding} description changed`;
+            descriptions.set(operation2.binding, operation2.value);
             break;
           }
           case "adjust-building": {
-            let building3 = active.buildings.get(operation2.buildingId);
+            let building3 = active.buildings.get(operation2.binding);
             if (building3 === void 0)
-              return `building ${operation2.buildingId} missing`;
-            if (buildingBinding(building3, `building ${operation2.buildingId}`) !== operation2.binding)
-              return `building ${operation2.buildingId} binding changed`;
-            let current = buildingStates.get(operation2.buildingId) ?? finiteProperty(
+              return `building ${operation2.binding} missing`;
+            if (buildingBinding(building3, `building ${operation2.binding}`) !== operation2.binding)
+              return `building ${operation2.binding} binding changed`;
+            let current = buildingStates.get(operation2.binding) ?? finiteProperty(
               building3,
               "stateOnCount",
-              `building ${operation2.buildingId}`
+              `building ${operation2.binding}`
             );
             if (current !== operation2.expectedStateOn)
-              return `building ${operation2.buildingId} state changed`;
+              return `building ${operation2.binding} state changed`;
             requireFunction(
               building3.tryAdjustState,
               `building ${operation2.buildingId}.tryAdjustState`
-            ), buildingStates.set(operation2.buildingId, current + operation2.amount);
+            ), buildingStates.set(operation2.binding, current + operation2.amount);
             break;
           }
           case "set-mech-save-supply":
@@ -34506,17 +34508,17 @@ Only continue if you trust the source. Injected code:
             break;
           case "set-description":
             Reflect.set(
-              active.buildings.get(operation2.buildingId),
+              active.buildings.get(operation2.binding),
               "extraDescription",
               operation2.value
             );
             break;
           case "adjust-building": {
-            let building3 = active.buildings.get(operation2.buildingId);
+            let building3 = active.buildings.get(operation2.binding);
             Reflect.apply(
               requireFunction(
                 building3.tryAdjustState,
-                `building ${operation2.buildingId}.tryAdjustState`
+                `building ${operation2.binding}.tryAdjustState`
               ),
               building3,
               [operation2.amount]
@@ -34890,13 +34892,14 @@ Only continue if you trust the source. Injected code:
   function planPowerCycle(input, state) {
     if (!input.powerUnlocked || input.buildings.length === 0)
       return Object.freeze({ decision: null, nextState: state });
-    let operations = [], descriptionByBuildingId = /* @__PURE__ */ new Map(), appendDescription = (buildingId2, expected, value) => {
+    let operations = [], descriptionByBinding = /* @__PURE__ */ new Map(), appendDescription = (buildingId2, binding, expected, value) => {
       operations.push({
         kind: "set-description",
         buildingId: buildingId2,
+        binding,
         expected,
         value
-      }), descriptionByBuildingId.set(buildingId2, value);
+      }), descriptionByBinding.set(binding, value);
     }, resources = /* @__PURE__ */ new Map();
     for (let resource2 of input.resources) {
       if (resources.has(resource2.id))
@@ -34907,8 +34910,10 @@ Only continue if you trust the source. Injected code:
         incomeAdjusted: resource2.incomeAdjusted
       });
     }
-    if (new Set(input.buildings.map((building3) => building3.id)).size !== input.buildings.length)
-      throw new TypeError("duplicate power building id");
+    if (new Set(
+      input.buildings.map((building3) => building3.binding)
+    ).size !== input.buildings.length)
+      throw new TypeError("duplicate power building binding");
     let oscillations = Object.fromEntries(
       Object.entries(state.oscillations).map(([key, value]) => [
         key,
@@ -34967,6 +34972,7 @@ Only continue if you trust the source. Injected code:
       ));
       if ((building3.rule.kind === "ascension-trigger" || building3.rule.kind === "terraformer") && availablePower < building3.powered && appendDescription(
         building3.id,
+        building3.binding,
         building3.extraDescription,
         `Missing ${Math.ceil(
           building3.powered - availablePower
@@ -34990,7 +34996,7 @@ Only continue if you trust the source. Injected code:
           );
         input.settings.autoFleet && building3.fleetMaximum !== null && (maximum = Math.min(maximum, building3.fleetMaximum));
       }
-      let description = descriptionByBuildingId.get(building3.id) ?? building3.extraDescription;
+      let description = descriptionByBinding.get(building3.binding) ?? building3.extraDescription;
       for (let consumption of building3.consumptions) {
         let resource2 = mapValue(
           resources,
@@ -35018,7 +35024,7 @@ Only continue if you trust the source. Injected code:
           let supported = resource2.rate / consumption.rate;
           if (resource2.input.supportKind === "womlings-support" && (supported = Math.ceil(supported)), maximum = Math.min(maximum, supported), missingProducer[resource2.input.id]) {
             let value = `Make sure all ${resource2.input.title} producers are above consumers in buildings list!<br>${description}`;
-            appendDescription(building3.id, description, value), description = value;
+            appendDescription(building3.id, building3.binding, description, value), description = value;
           }
         } else missingProducer[resource2.input.id] && consumption.rate < 0 && missingProducer[resource2.input.id]--;
       }
@@ -35099,9 +35105,10 @@ Only continue if you trust the source. Injected code:
         spireSupport,
         maximumPorts,
         maximumCamps
-      ), purifierDescription = descriptionByBuildingId.get(spire.purifier.buildingId) ?? spire.purifierDescription;
+      ), purifierDescription = descriptionByBinding.get(spire.purifier.binding) ?? spire.purifierDescription;
       appendDescription(
         spire.purifier.buildingId,
+        spire.purifier.binding,
         purifierDescription,
         `Supported Supplies: ${Math.floor(bestSupplies)}<br>${purifierDescription}`
       );

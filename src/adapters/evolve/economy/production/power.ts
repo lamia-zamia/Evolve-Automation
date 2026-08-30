@@ -1144,15 +1144,21 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
         typeof neededShipsValue === "object" && neededShipsValue !== null
           ? requireRecord(neededShipsValue, "FleetManager.neededShips")
           : null;
+      // Keyed by `_vueBinding`, which is unique. The game's short structure id
+      // is not: the Alpha Graphene Plant (`interstellar-g_factory`) and the
+      // Titan Graphene Plant (`space-g_factory`) are both `g_factory`, and a
+      // True Path run owns both from Titan onward.
       const seenBuildings = new Map<string, UnknownRecord>();
-      const seenBindings = new Set<string>();
       // Buildings the domain adjusts directly (lake bireme/transport, spire
       // mech/port/camp/purifier) may be absent from managedStatePriorityList
       // (e.g. count 0 while still smart-managed). Register each so the command
-      // executor can resolve it by id even though it is not in the managed list.
-      const registerCommandable = (id: string, building: UnknownRecord) => {
-        if (!seenBuildings.has(id)) {
-          seenBuildings.set(id, building);
+      // executor can resolve it even though it is not in the managed list.
+      const registerCommandable = (
+        binding: string,
+        building: UnknownRecord,
+      ) => {
+        if (!seenBuildings.has(binding)) {
+          seenBuildings.set(binding, building);
         }
       };
       const globalState = requireRecord(game["global"], "game.global");
@@ -1161,14 +1167,10 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
           const path = `BuildingManager state list[${index}]`;
           const id = buildingId(building, path);
           const binding = buildingBinding(building, path);
-          if (seenBuildings.has(id)) {
-            throw new TypeError(`duplicate managed power building ${id}`);
-          }
-          if (seenBindings.has(binding)) {
+          if (seenBuildings.has(binding)) {
             throw new TypeError(`duplicate managed power binding ${binding}`);
           }
-          seenBuildings.set(id, building);
-          seenBindings.add(binding);
+          seenBuildings.set(binding, building);
           const rawConsumptions = building["consumption"];
           if (!Array.isArray(rawConsumptions)) {
             throw new TypeError(`${path}.consumption must be an array`);
@@ -1312,8 +1314,14 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
               lakeTransport,
               "buildings.LakeTransport",
             );
-            registerCommandable(biremeIdValue, lakeBireme);
-            registerCommandable(transportIdValue, lakeTransport);
+            registerCommandable(
+              buildingBinding(lakeBireme, "buildings.LakeBireme"),
+              lakeBireme,
+            );
+            registerCommandable(
+              buildingBinding(lakeTransport, "buildings.LakeTransport"),
+              lakeTransport,
+            );
             return Object.freeze({
               enabled: true,
               bloodSpireLevel:
@@ -1607,9 +1615,7 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
       if (session === null) {
         throw new Error("power cycle must be read before state-on resampling");
       }
-      const building = [...session.buildings.values()].find(
-        (candidate) => candidate["_vueBinding"] === binding,
-      );
+      const building = session.buildings.get(binding);
       if (building === undefined) {
         throw new TypeError(`power building binding ${binding} is missing`);
       }
@@ -1652,7 +1658,7 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
         expected === undefined ||
         actual === undefined ||
         current === undefined ||
-        session.buildings.get(actual.id) !== current ||
+        session.buildings.get(actual.binding) !== current ||
         expected.id !== actual.id ||
         expected.binding !== actual.binding
       ) {
@@ -1704,43 +1710,43 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
           break;
         }
         case "set-description": {
-          const building = active.buildings.get(operation.buildingId);
+          const building = active.buildings.get(operation.binding);
           if (building === undefined)
-            return `building ${operation.buildingId} missing`;
+            return `building ${operation.binding} missing`;
           const current =
-            descriptions.get(operation.buildingId) ??
+            descriptions.get(operation.binding) ??
             requireString(
               building["extraDescription"],
-              `building ${operation.buildingId}.extraDescription`,
+              `building ${operation.binding}.extraDescription`,
             );
           if (current !== operation.expected)
-            return `building ${operation.buildingId} description changed`;
-          descriptions.set(operation.buildingId, operation.value);
+            return `building ${operation.binding} description changed`;
+          descriptions.set(operation.binding, operation.value);
           break;
         }
         case "adjust-building": {
-          const building = active.buildings.get(operation.buildingId);
+          const building = active.buildings.get(operation.binding);
           if (building === undefined)
-            return `building ${operation.buildingId} missing`;
+            return `building ${operation.binding} missing`;
           if (
-            buildingBinding(building, `building ${operation.buildingId}`) !==
+            buildingBinding(building, `building ${operation.binding}`) !==
             operation.binding
           )
-            return `building ${operation.buildingId} binding changed`;
+            return `building ${operation.binding} binding changed`;
           const current =
-            buildingStates.get(operation.buildingId) ??
+            buildingStates.get(operation.binding) ??
             finiteProperty(
               building,
               "stateOnCount",
-              `building ${operation.buildingId}`,
+              `building ${operation.binding}`,
             );
           if (current !== operation.expectedStateOn)
-            return `building ${operation.buildingId} state changed`;
+            return `building ${operation.binding} state changed`;
           requireFunction(
             building["tryAdjustState"],
             `building ${operation.buildingId}.tryAdjustState`,
           );
-          buildingStates.set(operation.buildingId, current + operation.amount);
+          buildingStates.set(operation.binding, current + operation.amount);
           break;
         }
         case "set-mech-save-supply":
@@ -1801,17 +1807,17 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
           break;
         case "set-description":
           Reflect.set(
-            active.buildings.get(operation.buildingId)!,
+            active.buildings.get(operation.binding)!,
             "extraDescription",
             operation.value,
           );
           break;
         case "adjust-building": {
-          const building = active.buildings.get(operation.buildingId)!;
+          const building = active.buildings.get(operation.binding)!;
           Reflect.apply(
             requireFunction(
               building["tryAdjustState"],
-              `building ${operation.buildingId}.tryAdjustState`,
+              `building ${operation.binding}.tryAdjustState`,
             ),
             building,
             [operation.amount],
