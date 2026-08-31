@@ -1012,6 +1012,10 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
               craftResource["id"],
               `craftingJobs[${index}].resource.id`,
             );
+            // Diagnostics must name the same requirement the weighting came
+            // from, so this walks the ordered list with the identical
+            // cumulative-claim rule rather than its own comparison.
+            let claimed = 0;
             const driving = unlocked.find((candidate) => {
               const record = requireRecord(
                 candidate,
@@ -1022,7 +1026,9 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
                 "unlocked building cost",
               );
               const amount = cost[resourceId];
-              return typeof amount === "number" && amount > current;
+              if (typeof amount !== "number") return false;
+              claimed += amount;
+              return claimed > current;
             });
             if (driving === undefined) {
               driver = `no building×${craftWeight}`;

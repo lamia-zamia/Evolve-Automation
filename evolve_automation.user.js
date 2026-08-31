@@ -7216,11 +7216,16 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/domain/economy/resources/resource-weighting.ts
-  function findRequiredResourceWeight(orderedRequirements, resource2) {
-    return orderedRequirements.find((requirement) => {
+  function findRequiredResourceRequirement(orderedRequirements, resource2) {
+    let claimed = 0;
+    for (let requirement of orderedRequirements) {
       let requiredQuantity = requirement.cost[resource2.id];
-      return requiredQuantity !== void 0 && requiredQuantity > resource2.currentQuantity;
-    })?.weighting;
+      if (requiredQuantity !== void 0 && (claimed += requiredQuantity, claimed > resource2.currentQuantity))
+        return requirement;
+    }
+  }
+  function findRequiredResourceWeight(orderedRequirements, resource2) {
+    return findRequiredResourceRequirement(orderedRequirements, resource2)?.weighting;
   }
 
   // src/domain/combat/foreign-achievements.ts
@@ -24505,7 +24510,7 @@ Only continue if you trust the source. Injected code:
               ), resourceId3 = requireString(
                 craftResource.id,
                 `craftingJobs[${index}].resource.id`
-              ), driving = unlocked2.find((candidate) => {
+              ), claimed = 0, driving = unlocked2.find((candidate) => {
                 let record = requireRecord(
                   candidate,
                   "state.unlockedBuildings entry"
@@ -24513,7 +24518,7 @@ Only continue if you trust the source. Injected code:
                   record.cost,
                   "unlocked building cost"
                 )[resourceId3];
-                return typeof amount == "number" && amount > current;
+                return typeof amount != "number" ? !1 : (claimed += amount, claimed > current);
               });
               if (driving === void 0)
                 driver = `no building×${craftWeight}`;

@@ -34,6 +34,31 @@ const cases = [
     expected: undefined,
   },
   {
+    // The real stall: Mythril held 19,920, the Titan Spaceport needed 19,149,
+    // and the higher-priority Cargo Yard needed another 12,000. Comparing each
+    // requirement against the gross stock in isolation says "covered", so the
+    // craft weighting went to zero and no craftsman was ever assigned - while
+    // the build planner, which preserves the Cargo Yard's share, could not
+    // spend it either. Requirements have to be measured against what is left
+    // after the higher-priority ones ahead of them.
+    name: "counts a requirement short once higher-priority claims are counted",
+    requirements: [
+      { cost: { Mythril: 12000 }, weighting: 300 },
+      { cost: { Mythril: 19149 }, weighting: 100 },
+    ],
+    resource: { id: "Mythril", currentQuantity: 19920 },
+    expected: 100,
+  },
+  {
+    name: "still reports no shortage when the stock covers every claim",
+    requirements: [
+      { cost: { Mythril: 12000 }, weighting: 300 },
+      { cost: { Mythril: 19149 }, weighting: 100 },
+    ],
+    resource: { id: "Mythril", currentQuantity: 31149 },
+    expected: undefined,
+  },
+  {
     name: "returns no weighting for an empty requirement list",
     requirements: [],
     resource: { id: "Iron", currentQuantity: 0 },
