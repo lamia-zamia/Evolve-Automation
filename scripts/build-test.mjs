@@ -684,9 +684,14 @@ world = runScenario("estimation cached before unlock yields NaN slack", () => {
     unlocked: () => w.trace.some((e) => e[0] === "click"),
   });
   makeResource(w, "Polymer", { quantity: 90, rate: 1 });
+  // Cement, not Polymer, is what the outpost is waiting on. Polymer has to
+  // keep its slack, or the factory is delayed on the bottleneck rule and never
+  // clicks - and it is that click which unlocks Elerium and sets up the stale
+  // cached estimation this scenario exists to cover.
+  makeResource(w, "Cement", { quantity: 0, rate: 1 });
   makeTarget(w, "space-outpost", {
     weighting: 15,
-    cost: { Elerium: 100, Polymer: 100 },
+    cost: { Elerium: 100, Polymer: 100, Cement: 200 },
   });
   makeTarget(w, "city-factory", { weighting: 10, cost: { Polymer: 60 } });
   makeTarget(w, "city-foundry", { weighting: 5, cost: { Elerium: 40 } });
@@ -967,6 +972,213 @@ assert.deepEqual(
   assert.deepEqual(plan.state.affordable, { a: false });
   assert.deepEqual(plan.state.estimations.a.perResource, { Stone: 20 });
   assert.equal(plan.state.estimations.a.total, 20);
+}
+
+// A competitor's bottleneck slack is conceded in proportion to how much more
+// the competitor is worth, not in full to every candidate that asks.
+//
+// Measured on the day-41,140 Matrix checkpoint: the weighting-300 Dwarf
+// Shipyard needs 250,000 Iridium and 650,000 Titanium; Titanium is its
+// bottleneck at 3,883 time units while Iridium only needs 648, so the raw
+// slack is (3883 - 648) x 78.38 = 253,559 Iridium. A weighting-1 Navigation
+// Beacon wanting 146,958 fits inside that, and was allowed - every candidate,
+// every tick, so the Shipyard was never affordable in 8,000 replayed days.
+{
+  const shipyardSetup = Object.freeze({
+    ...setup,
+    candidates: Object.freeze([
+      Object.freeze({
+        key: "space-shipyard",
+        weighting: 300,
+        cost: Object.freeze({ Iridium: 250000, Titanium: 650000 }),
+        ignored: false,
+      }),
+      Object.freeze({
+        key: "space-nav_beacon",
+        weighting: 1,
+        cost: Object.freeze({ Iridium: 146958 }),
+        ignored: false,
+      }),
+    ]),
+  });
+  const sample = Object.freeze({
+    affordability: Object.freeze({ "space-shipyard": false }),
+    resources: Object.freeze({
+      Iridium: Object.freeze({
+        unlocked: true,
+        currentQuantity: 199221,
+        rateOfChange: 78.38,
+        storageRatio: 0.04,
+        storageRequired: 0,
+      }),
+      Titanium: Object.freeze({
+        unlocked: true,
+        currentQuantity: 128338,
+        rateOfChange: 135,
+        storageRatio: 0.01,
+        storageRequired: 0,
+      }),
+    }),
+  });
+  const plan = planBuildCompetition(
+    shipyardSetup,
+    1,
+    sample,
+    initialBuildLoopState(),
+  );
+  assert.equal(plan.kind, "delay");
+  assert.equal(plan.annotation.otherKey, "space-shipyard");
+  assert.equal(plan.annotation.resourceId, "Iridium");
+}
+
+// A purchase small enough to stay inside its share of the slack still goes
+// ahead, so a top-priority target does not freeze every cheap building that
+// happens to touch one of its resources.
+{
+  const smallSetup = Object.freeze({
+    ...setup,
+    candidates: Object.freeze([
+      Object.freeze({
+        key: "space-shipyard",
+        weighting: 300,
+        cost: Object.freeze({ Iridium: 250000, Titanium: 650000 }),
+        ignored: false,
+      }),
+      Object.freeze({
+        key: "small",
+        weighting: 100,
+        cost: Object.freeze({ Iridium: 400 }),
+        ignored: false,
+      }),
+    ]),
+  });
+  const sample = Object.freeze({
+    affordability: Object.freeze({ "space-shipyard": false }),
+    resources: Object.freeze({
+      Iridium: Object.freeze({
+        unlocked: true,
+        currentQuantity: 199221,
+        rateOfChange: 78.38,
+        storageRatio: 0.04,
+        storageRequired: 0,
+      }),
+      Titanium: Object.freeze({
+        unlocked: true,
+        currentQuantity: 128338,
+        rateOfChange: 135,
+        storageRatio: 0.01,
+        storageRequired: 0,
+      }),
+    }),
+  });
+  const plan = planBuildCompetition(
+    smallSetup,
+    1,
+    sample,
+    initialBuildLoopState(),
+  );
+  assert.equal(plan.kind, "build");
+}
+
+// The cost-gap tolerance does not apply to the resource the competitor is
+// actually waiting on. Measured on the same checkpoint: with Iridium already
+// covered, Titanium is the Shipyard's bottleneck, and a weighting-100 Mars
+// Spaceport wanting 132,884 of it was released by the cost gap alone
+// (650,000 / 132,884 = 4.9 against a weighting ratio of 3), every tick.
+{
+  const bottleneckSetup = Object.freeze({
+    ...setup,
+    candidates: Object.freeze([
+      Object.freeze({
+        key: "space-shipyard",
+        weighting: 300,
+        cost: Object.freeze({ Iridium: 250000, Titanium: 650000 }),
+        ignored: false,
+      }),
+      Object.freeze({
+        key: "space-spaceport",
+        weighting: 100,
+        cost: Object.freeze({ Titanium: 132884 }),
+        ignored: false,
+      }),
+    ]),
+  });
+  const sample = Object.freeze({
+    affordability: Object.freeze({ "space-shipyard": false }),
+    resources: Object.freeze({
+      Iridium: Object.freeze({
+        unlocked: true,
+        currentQuantity: 559450,
+        rateOfChange: 78.38,
+        storageRatio: 0.1,
+        storageRequired: 0,
+      }),
+      Titanium: Object.freeze({
+        unlocked: true,
+        currentQuantity: 16601,
+        rateOfChange: 135,
+        storageRatio: 0.01,
+        storageRequired: 0,
+      }),
+    }),
+  });
+  const plan = planBuildCompetition(
+    bottleneckSetup,
+    1,
+    sample,
+    initialBuildLoopState(),
+  );
+  assert.equal(plan.kind, "delay");
+  assert.equal(plan.annotation.resourceId, "Titanium");
+}
+
+// The cost gap still releases a candidate on a resource the competitor is not
+// waiting on, so a disproportionately expensive target does not freeze
+// everything that merely shares one of its cheaper resources.
+{
+  const sideResourceSetup = Object.freeze({
+    ...setup,
+    candidates: Object.freeze([
+      Object.freeze({
+        key: "space-shipyard",
+        weighting: 300,
+        cost: Object.freeze({ Iridium: 250000, Titanium: 650000 }),
+        ignored: false,
+      }),
+      Object.freeze({
+        key: "cheap",
+        weighting: 100,
+        cost: Object.freeze({ Iridium: 60000 }),
+        ignored: false,
+      }),
+    ]),
+  });
+  const sample = Object.freeze({
+    affordability: Object.freeze({ "space-shipyard": false }),
+    resources: Object.freeze({
+      Iridium: Object.freeze({
+        unlocked: true,
+        currentQuantity: 240000,
+        rateOfChange: 78.38,
+        storageRatio: 0.05,
+        storageRequired: 0,
+      }),
+      Titanium: Object.freeze({
+        unlocked: true,
+        currentQuantity: 16601,
+        rateOfChange: 135,
+        storageRatio: 0.01,
+        storageRequired: 0,
+      }),
+    }),
+  });
+  const plan = planBuildCompetition(
+    sideResourceSetup,
+    1,
+    sample,
+    initialBuildLoopState(),
+  );
+  assert.equal(plan.kind, "build");
 }
 
 // A click report without a click leaves the loop state untouched.

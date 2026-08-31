@@ -475,20 +475,46 @@ export function planBuildCompetition(
       if (resource.currentQuantity >= otherQuantity + thisQuantity) {
         continue;
       }
-      // Spending inside the competitor's bottleneck slack won't delay it.
+      // Spending inside the competitor's bottleneck slack won't delay it - but
+      // only once. The slack is projected from the competitor's wait on its
+      // slowest resource, and every candidate on every tick is measured against
+      // that same projection, so conceding it in full hands the whole of it out
+      // repeatedly and the competitor is delayed forever. Measured on the
+      // day-41,140 Matrix checkpoint: a weighting-1 Navigation Beacon was
+      // allowed 146,958 Iridium of the weighting-300 Dwarf Shipyard's 250,000,
+      // and the Shipyard was still unaffordable 8,000 game days later.
+      //
+      // Conceding a share inversely proportional to the weighting gap keeps the
+      // rule's purpose - a cheap purchase that genuinely cannot matter still
+      // goes ahead - while a candidate worth a fraction of the competitor can no
+      // longer take a comparable bite out of it.
+      //
       // A locked-at-estimation-time resource yields NaN, failing the check
       // exactly like the legacy `total - undefined` arithmetic.
       const perResource = estimation.perResource[resourceId];
       if (
-        thisQuantity <=
+        thisQuantity * weightDiffRatio <=
         (estimation.total - (perResource ?? Number.NaN)) * resource.rateOfChange
       ) {
         continue;
       }
-      // Below the weighting threshold the cost gap is tolerated.
-      const costDiffRatio = otherQuantity / thisQuantity;
-      if (costDiffRatio >= weightDiffRatio) {
-        continue;
+      // Below the weighting threshold the cost gap is tolerated - but not on
+      // the resource the competitor is actually waiting on. There the gap
+      // argument is exactly backwards: the more the competitor needs, the more
+      // freely everything else is allowed to take it, so a target costing more
+      // than `weightDiffRatio` times its rivals can never be reached. Measured
+      // on the day-41,140 Matrix checkpoint, this alone released every
+      // weighting-100 Titanium consumer against the weighting-300 Dwarf
+      // Shipyard (650,000 / 132,884 = 4.9 over a ratio of 3), every tick.
+      //
+      // A resource the competitor is not bottlenecked on keeps the tolerance,
+      // so a disproportionately expensive target still cannot freeze everything
+      // that merely shares one of its cheaper resources.
+      if (perResource === undefined || perResource < estimation.total) {
+        const costDiffRatio = otherQuantity / thisQuantity;
+        if (costDiffRatio >= weightDiffRatio) {
+          continue;
+        }
       }
       return finish({
         kind: "delay",
