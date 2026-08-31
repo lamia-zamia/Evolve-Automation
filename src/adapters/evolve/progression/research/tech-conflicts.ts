@@ -1,4 +1,5 @@
 import type { TechConflictInput } from "../../../../domain/progression/research/tech-conflicts.ts";
+import { WHITEHOLE_RESET_LEVEL } from "../../../../domain/progression/prestige/prestige.ts";
 import type { Clock } from "../../../../ports/clock.ts";
 import { isNonArrayRecord, isNonNegativeNumber } from "../../../validation.ts";
 
@@ -185,6 +186,18 @@ export function readTechConflictInput(
       itemId === "tech-stabilize_blackhole" ? dependencies.clock.nowMs() : 0;
     if (!isNonNegativeNumber(nowMs)) return unavailable("invalid-clock");
 
+    // `tech.whitehole` is absent until the stellar engine first goes unstable
+    // and is deleted again on every stabilization, so a missing key is the
+    // normal state rather than a malformed one.
+    const rawWhitehole = isNonArrayRecord(global)
+      ? isNonArrayRecord(global["tech"])
+        ? global["tech"]["whitehole"]
+        : undefined
+      : undefined;
+    const whiteholeResetInterrupted =
+      Number(rawWhitehole ?? 0) >= WHITEHOLE_RESET_LEVEL &&
+      rawState["whiteholeResetStarted"] !== true;
+
     let bananaRepublic = false;
     let cultOfPersonality = false;
     let pacifist = false;
@@ -285,7 +298,11 @@ export function readTechConflictInput(
         soulGems: soulGems["currentQuantity"],
         maximumKnowledge: knowledge["maxQuantity"],
       }),
-      stabilization: Object.freeze({ lastAtMs, nowMs }),
+      stabilization: Object.freeze({
+        lastAtMs,
+        nowMs,
+        whiteholeResetInterrupted,
+      }),
       race: Object.freeze({
         species: race["species"],
         gods: race["gods"],

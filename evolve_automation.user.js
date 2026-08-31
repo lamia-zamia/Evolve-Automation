@@ -2097,6 +2097,8 @@ Only continue if you trust the source. Injected code:
         return conflict({ code: "unification-disabled" });
     }
     if (itemId === "tech-stabilize_blackhole") {
+      if (input.stabilization.whiteholeResetInterrupted)
+        return null;
       if (!settings.stabilizeBlackhole)
         return conflict({ code: "stabilization-disabled" });
       if (settings.prestigeType === "whitehole")
@@ -2134,6 +2136,80 @@ Only continue if you trust the source. Injected code:
         return conflict({ code: "theology-path" });
     }
     return null;
+  }
+
+  // src/domain/progression/prestige/prestige.ts
+  var WITCH_ASCENSION_ACT = [
+    { kind: "reset-modifier-keys" },
+    { kind: "log-prestige" },
+    { kind: "absorption-chamber-action" },
+    { kind: "set-goal", goal: "GameOverMan" }
+  ];
+  function tryReset(goal, check, act) {
+    return check ? goal !== "Reset" ? [{ kind: "set-goal", goal: "Reset" }] : act : [];
+  }
+  function planPrestige(input) {
+    let { goal, branch } = input;
+    switch (branch.type) {
+      case "noop":
+        return [];
+      case "mad": {
+        let act = [];
+        return branch.armed && act.push({ kind: "arm-mad" }), (!branch.waitForPopulation || branch.currentSoldiers >= branch.maxSoldiers && branch.currentPopulation >= branch.maxPopulation && branch.currentSoldiers + branch.currentPopulation >= branch.requiredPopulation) && act.push(
+          { kind: "set-goal", goal: "GameOverMan" },
+          { kind: "log-prestige" },
+          { kind: "launch-mad" }
+        ), tryReset(goal, branch.eligible, act);
+      }
+      case "bioseed": {
+        let act = branch.launchUnlocked ? [{ kind: "click-building", id: "GasSpaceDockLaunch" }] : branch.prepUnlocked ? [{ kind: "click-building", id: "GasSpaceDockPrepForLaunch" }] : [{ kind: "cache-building-options", id: "GasSpaceDock" }];
+        return tryReset(goal, branch.eligible, act);
+      }
+      case "cataclysm": {
+        let act = [];
+        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push(
+          { kind: "log-prestige" },
+          { kind: "click-tech", id: "tech-dial_it_to_11" }
+        ), tryReset(goal, branch.eligible, act);
+      }
+      case "whitehole": {
+        if (branch.whiteholeLevel >= 4)
+          return [];
+        let act = [];
+        branch.exoticInfusionReady && act.push({ kind: "log-prestige" });
+        for (let id of [
+          "tech-infusion_confirm",
+          "tech-infusion_check",
+          "tech-exotic_infusion"
+        ])
+          act.push({ kind: "click-tech", id });
+        return branch.confirmReady && act.push({ kind: "mark-whitehole-reset-started" }), tryReset(goal, branch.eligible, act);
+      }
+      case "apocalypse":
+        return tryReset(goal, branch.eligible, [
+          { kind: "log-prestige" },
+          { kind: "click-tech", id: "tech-protocol66" },
+          { kind: "click-tech", id: "tech-protocol66a" }
+        ]);
+      case "ascension":
+        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
+          { kind: "reset-modifier-keys" },
+          { kind: "click-building", id: "SiriusAscend" }
+        ]);
+      case "demonic":
+        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
+          { kind: "log-prestige" },
+          {
+            kind: "click-tech",
+            id: branch.fasting ? "tech-final_ingredient" : "tech-demonic_infusion"
+          }
+        ]);
+      case "building-reset":
+        return tryReset(goal, branch.unlocked, [
+          { kind: "reset-modifier-keys" },
+          { kind: "click-building", id: branch.building }
+        ]);
+    }
   }
 
   // src/adapters/evolve/progression/research/tech-conflicts.ts
@@ -2215,7 +2291,7 @@ Only continue if you trust the source. Injected code:
         return unavailable7("invalid-game-state", "alevel");
       let nowMs = itemId === "tech-stabilize_blackhole" ? dependencies.clock.nowMs() : 0;
       if (!isNonNegativeNumber(nowMs)) return unavailable7("invalid-clock");
-      let bananaRepublic = !1, cultOfPersonality = !1, pacifist = !1;
+      let rawWhitehole = isNonArrayRecord(global) && isNonArrayRecord(global.tech) ? global.tech.whitehole : void 0, whiteholeResetInterrupted = Number(rawWhitehole ?? 0) >= 4 && rawState.whiteholeResetStarted !== !0, bananaRepublic = !1, cultOfPersonality = !1, pacifist = !1;
       if ((itemId === "tech-unification2" || itemId === "tech-unite") && (bananaRepublic = readBooleanResult(
         dependencies.guardBananaRepublicActive()
       ), cultOfPersonality = readBooleanResult(
@@ -2280,7 +2356,11 @@ Only continue if you trust the source. Injected code:
           soulGems: soulGems.currentQuantity,
           maximumKnowledge: knowledge.maxQuantity
         }),
-        stabilization: Object.freeze({ lastAtMs, nowMs }),
+        stabilization: Object.freeze({
+          lastAtMs,
+          nowMs,
+          whiteholeResetInterrupted
+        }),
         race: Object.freeze({
           species: race2.species,
           gods: race2.gods,
@@ -4675,7 +4755,12 @@ Only continue if you trust the source. Injected code:
       filterRegExp: null,
       evolutionTarget: null,
       whiteholeLastStabilise: 0,
-      whiteholeLastExoticMass: 0
+      whiteholeLastExoticMass: 0,
+      // Set when this page session commits `tech-infusion_confirm`. It is
+      // deliberately not persisted: a fresh page with the reset grant already
+      // applied is exactly the interrupted-reset state the prestige branch
+      // repairs.
+      whiteholeResetStarted: !1
     };
   }
 
@@ -18015,6 +18100,12 @@ Only continue if you trust the source. Injected code:
         "game.global"
       ).race,
       "game.global.race"
+    ), techGrants = () => requireRecord(
+      requireRecord(
+        requireRecord(dependencies.getGame(), "game").global,
+        "game.global"
+      ).tech,
+      "game.global.tech"
     ), madBranch = (settings) => {
       let madVue = dependencies.getVueById("mad"), display = typeof madVue == "object" && madVue !== null ? !!madVue.display : !1, armed = typeof madVue == "object" && madVue !== null ? !!madVue.armed : !1, eligible = display && !!dependencies.getHaveTech()("mad"), war = requireRecord(dependencies.getWarManager(), "WarManager"), population = requireRecord(
         requireRecord(dependencies.getResources(), "resources").Population,
@@ -18065,7 +18156,13 @@ Only continue if you trust the source. Injected code:
             branch = {
               type: "whitehole",
               eligible: eligibility.isWhiteholePrestigeAvailable(),
-              exoticInfusionReady: techBool("tech-exotic_infusion", "isUnlocked") && techBool("tech-exotic_infusion", "isAffordable")
+              exoticInfusionReady: techBool("tech-exotic_infusion", "isUnlocked") && techBool("tech-exotic_infusion", "isAffordable"),
+              // `tech.whitehole` is absent until the stellar engine first goes
+              // unstable, and the game deletes it again when the hole is
+              // stabilized, so the missing key is the normal state rather than a
+              // malformed one.
+              whiteholeLevel: coerceNumber(techGrants().whitehole),
+              confirmReady: techBool("tech-infusion_confirm", "isClickable")
             };
             break;
           case "apocalypse":
@@ -18180,81 +18277,14 @@ Only continue if you trust the source. Injected code:
           case "load-queued-settings":
             dependencies.loadQueuedSettings();
             return;
+          case "mark-whitehole-reset-started": {
+            let state = requireRecord(dependencies.getState(), "state");
+            state.whiteholeResetStarted = !0;
+            return;
+          }
         }
       }
     });
-  }
-
-  // src/domain/progression/prestige/prestige.ts
-  var WITCH_ASCENSION_ACT = [
-    { kind: "reset-modifier-keys" },
-    { kind: "log-prestige" },
-    { kind: "absorption-chamber-action" },
-    { kind: "set-goal", goal: "GameOverMan" }
-  ];
-  function tryReset(goal, check, act) {
-    return check ? goal !== "Reset" ? [{ kind: "set-goal", goal: "Reset" }] : act : [];
-  }
-  function planPrestige(input) {
-    let { goal, branch } = input;
-    switch (branch.type) {
-      case "noop":
-        return [];
-      case "mad": {
-        let act = [];
-        return branch.armed && act.push({ kind: "arm-mad" }), (!branch.waitForPopulation || branch.currentSoldiers >= branch.maxSoldiers && branch.currentPopulation >= branch.maxPopulation && branch.currentSoldiers + branch.currentPopulation >= branch.requiredPopulation) && act.push(
-          { kind: "set-goal", goal: "GameOverMan" },
-          { kind: "log-prestige" },
-          { kind: "launch-mad" }
-        ), tryReset(goal, branch.eligible, act);
-      }
-      case "bioseed": {
-        let act = branch.launchUnlocked ? [{ kind: "click-building", id: "GasSpaceDockLaunch" }] : branch.prepUnlocked ? [{ kind: "click-building", id: "GasSpaceDockPrepForLaunch" }] : [{ kind: "cache-building-options", id: "GasSpaceDock" }];
-        return tryReset(goal, branch.eligible, act);
-      }
-      case "cataclysm": {
-        let act = [];
-        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push(
-          { kind: "log-prestige" },
-          { kind: "click-tech", id: "tech-dial_it_to_11" }
-        ), tryReset(goal, branch.eligible, act);
-      }
-      case "whitehole": {
-        let act = [];
-        branch.exoticInfusionReady && act.push({ kind: "log-prestige" });
-        for (let id of [
-          "tech-infusion_confirm",
-          "tech-infusion_check",
-          "tech-exotic_infusion"
-        ])
-          act.push({ kind: "click-tech", id });
-        return tryReset(goal, branch.eligible, act);
-      }
-      case "apocalypse":
-        return tryReset(goal, branch.eligible, [
-          { kind: "log-prestige" },
-          { kind: "click-tech", id: "tech-protocol66" },
-          { kind: "click-tech", id: "tech-protocol66a" }
-        ]);
-      case "ascension":
-        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
-          { kind: "reset-modifier-keys" },
-          { kind: "click-building", id: "SiriusAscend" }
-        ]);
-      case "demonic":
-        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
-          { kind: "log-prestige" },
-          {
-            kind: "click-tech",
-            id: branch.fasting ? "tech-final_ingredient" : "tech-demonic_infusion"
-          }
-        ]);
-      case "building-reset":
-        return tryReset(goal, branch.unlocked, [
-          { kind: "reset-modifier-keys" },
-          { kind: "click-building", id: branch.building }
-        ]);
-    }
   }
 
   // src/application/prestige.ts

@@ -20,7 +20,8 @@ export type PrestigeCommand =
   | { readonly kind: "click-tech"; readonly id: string }
   | { readonly kind: "reset-modifier-keys" }
   | { readonly kind: "absorption-chamber-action" }
-  | { readonly kind: "load-queued-settings" };
+  | { readonly kind: "load-queued-settings" }
+  | { readonly kind: "mark-whitehole-reset-started" };
 
 /**
  * Discriminated snapshot of the selected prestige branch. `noop` covers the
@@ -56,6 +57,10 @@ export type PrestigeBranch =
       readonly type: "whitehole";
       readonly eligible: boolean;
       readonly exoticInfusionReady: boolean;
+      /** Sampled `game.global.tech.whitehole`; 0 while the grant is absent. */
+      readonly whiteholeLevel: number;
+      /** `tech-infusion_confirm` is offered and affordable right now. */
+      readonly confirmReady: boolean;
     }
   | { readonly type: "apocalypse"; readonly eligible: boolean }
   | {
@@ -80,6 +85,9 @@ export interface PrestigeInput {
   readonly goal: string;
   readonly branch: PrestigeBranch;
 }
+
+/** `tech.whitehole` once `tech-infusion_confirm` has committed the reset. */
+export const WHITEHOLE_RESET_LEVEL = 4;
 
 /** The witch-hunter ascension/demonic act is identical for both types. */
 const WITCH_ASCENSION_ACT: readonly PrestigeCommand[] = [
@@ -158,6 +166,25 @@ export function planPrestige(input: PrestigeInput): readonly PrestigeCommand[] {
     }
 
     case "whitehole": {
+      // `tech-infusion_confirm` is the only thing that raises whitehole to
+      // WHITEHOLE_RESET_LEVEL, and it does so from an action that deliberately
+      // reports failure: the game keeps the entry mounted and resets the page
+      // from a four-second animation timer instead. The entry therefore stays
+      // offered and affordable after a successful buy, so an unguarded branch
+      // buys it again on the next cycle and pays its Knowledge and Soul Gems
+      // for nothing. Stop as soon as the grant lands.
+      //
+      // A page reload inside that animation window leaves the grant applied
+      // with no reset. Every infusion entry is then already granted, so none is
+      // offered and whitehole eligibility goes false for the rest of the run.
+      // Nothing here can undo that: the exposed `game.global` is a copy the
+      // game rebuilds each loop, so the script can only recover through the
+      // game's own controls. The research slice takes it from here by allowing
+      // `tech-stabilize_blackhole`, which clears the grant and lets the
+      // blackhole rebuild into a fresh infusion chain.
+      if (branch.whiteholeLevel >= WHITEHOLE_RESET_LEVEL) {
+        return [];
+      }
       const act: PrestigeCommand[] = [];
       if (branch.exoticInfusionReady) {
         act.push({ kind: "log-prestige" });
@@ -168,6 +195,9 @@ export function planPrestige(input: PrestigeInput): readonly PrestigeCommand[] {
         "tech-exotic_infusion",
       ]) {
         act.push({ kind: "click-tech", id });
+      }
+      if (branch.confirmReady) {
+        act.push({ kind: "mark-whitehole-reset-started" });
       }
       return tryReset(goal, branch.eligible, act);
     }

@@ -21,6 +21,12 @@ export interface TechConflictInput {
   readonly stabilization: {
     readonly lastAtMs: number | null;
     readonly nowMs: number;
+    /**
+     * The whitehole reset grant is applied but its reset never ran, and this
+     * page session is not the one that committed it. Only a page reload inside
+     * the game's four-second reset animation produces that combination.
+     */
+    readonly whiteholeResetInterrupted: boolean;
   };
   readonly race: {
     readonly species: string;
@@ -188,6 +194,16 @@ export function findTechConflict(
   }
 
   if (itemId === "tech-stabilize_blackhole") {
+    // An interrupted whitehole reset leaves every infusion entry granted and
+    // therefore unoffered, so the prestige branch can never fire again.
+    // Stabilizing is the only control the game still offers: it clears the
+    // grant and folds the accumulated exotic mass into the blackhole, and the
+    // engine re-offers the infusion chain once exotic rebuilds. Take it
+    // whatever the stabilization settings say, since the alternative is a run
+    // that never resets again.
+    if (input.stabilization.whiteholeResetInterrupted) {
+      return null;
+    }
     if (!settings.stabilizeBlackhole) {
       return conflict({ code: "stabilization-disabled" });
     }

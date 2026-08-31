@@ -21,7 +21,11 @@ function makeInput(overrides = {}) {
       alienGiftKnowledge: 1_000_000,
     },
     resources: { soulGems: 100, maximumKnowledge: 500 },
-    stabilization: { lastAtMs: null, nowMs: 1_000_000 },
+    stabilization: {
+      lastAtMs: null,
+      nowMs: 1_000_000,
+      whiteholeResetInterrupted: false,
+    },
     race: { species: "human", gods: "none", achievementLevel: 1 },
     guards: {
       bananaRepublic: false,
@@ -108,6 +112,24 @@ assert.equal(code("tech-unification2"), "unification-disabled");
 assert.equal(code("tech-unification2", { guards: { pacifist: true } }), null);
 
 assert.equal(code("tech-stabilize_blackhole"), "stabilization-disabled");
+// An interrupted whitehole reset leaves stabilizing as the only control that
+// can still restart the infusion chain, so it overrides every stabilization
+// setting rather than leaving the run unable to prestige at all.
+assert.equal(
+  code("tech-stabilize_blackhole", {
+    settings: {
+      stabilizeBlackhole: false,
+      prestigeType: "whitehole",
+      stabilizationCooldownSeconds: 3600,
+    },
+    stabilization: {
+      lastAtMs: 1_000_000,
+      nowMs: 1_001_000,
+      whiteholeResetInterrupted: true,
+    },
+  }),
+  null,
+);
 assert.equal(
   code("tech-stabilize_blackhole", {
     settings: { stabilizeBlackhole: true, prestigeType: "whitehole" },

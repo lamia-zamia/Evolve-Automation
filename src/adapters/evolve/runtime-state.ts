@@ -63,5 +63,11 @@ export function createInitialRuntimeState() {
 
     whiteholeLastStabilise: 0,
     whiteholeLastExoticMass: 0,
+
+    // Set when this page session commits `tech-infusion_confirm`. It is
+    // deliberately not persisted: a fresh page with the reset grant already
+    // applied is exactly the interrupted-reset state the prestige branch
+    // repairs.
+    whiteholeResetStarted: false,
   };
 }

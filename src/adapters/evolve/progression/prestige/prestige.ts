@@ -67,6 +67,15 @@ export function createPrestigeReader(
       "game.global.race",
     );
 
+  const techGrants = (): Record<PropertyKey, unknown> =>
+    requireRecord(
+      requireRecord(
+        requireRecord(dependencies.getGame(), "game")["global"],
+        "game.global",
+      )["tech"],
+      "game.global.tech",
+    );
+
   const madBranch = (
     settings: Record<PropertyKey, unknown>,
   ): PrestigeBranch => {
@@ -142,6 +151,12 @@ export function createPrestigeReader(
             exoticInfusionReady:
               techBool("tech-exotic_infusion", "isUnlocked") &&
               techBool("tech-exotic_infusion", "isAffordable"),
+            // `tech.whitehole` is absent until the stellar engine first goes
+            // unstable, and the game deletes it again when the hole is
+            // stabilized, so the missing key is the normal state rather than a
+            // malformed one.
+            whiteholeLevel: coerceNumber(techGrants()["whitehole"]),
+            confirmReady: techBool("tech-infusion_confirm", "isClickable"),
           };
           break;
         case "apocalypse":
@@ -284,6 +299,14 @@ export function createPrestigeCommandExecutor(
         case "load-queued-settings":
           dependencies.loadQueuedSettings();
           return;
+        case "mark-whitehole-reset-started": {
+          // Records, for this page session only, that the reset has been
+          // committed. The research slice reads it to tell an animating reset
+          // apart from one a page reload interrupted.
+          const state = requireRecord(dependencies.getState(), "state");
+          state["whiteholeResetStarted"] = true;
+          return;
+        }
       }
     },
   });

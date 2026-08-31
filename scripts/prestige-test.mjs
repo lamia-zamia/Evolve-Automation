@@ -24,6 +24,10 @@ function buildFixture(scenario) {
     enumerable: true,
   });
 
+  if (scenario.resetStarted) {
+    state.whiteholeResetStarted = true;
+  }
+
   const settings = {
     prestigeType: scenario.prestigeType,
     prestigeMADWait: scenario.madWait ?? false,
@@ -31,12 +35,17 @@ function buildFixture(scenario) {
     autoEvolution: scenario.autoEvolution ?? false,
   };
 
+  const tech = {};
+  if (scenario.whiteholeLevel !== undefined) {
+    tech.whitehole = scenario.whiteholeLevel;
+  }
   const game = {
     global: {
       race: {
         witch_hunter: scenario.witchHunter ?? false,
         fasting: scenario.fasting ?? false,
       },
+      tech,
     },
   };
 
@@ -97,7 +106,10 @@ function buildFixture(scenario) {
       isAffordable: () => Boolean(scenario.exoticAffordable),
       click: () => trace.push(["clickTech", "tech-exotic_infusion"]),
     },
-    "tech-infusion_confirm": clickTech("tech-infusion_confirm"),
+    "tech-infusion_confirm": {
+      isClickable: () => Boolean(scenario.confirmClickable),
+      click: () => trace.push(["clickTech", "tech-infusion_confirm"]),
+    },
     "tech-infusion_check": clickTech("tech-infusion_check"),
     "tech-protocol66": clickTech("tech-protocol66"),
     "tech-protocol66a": clickTech("tech-protocol66a"),
@@ -116,6 +128,7 @@ function buildFixture(scenario) {
   return {
     trace,
     state,
+    tech,
     settings,
     game,
     resources,
@@ -166,11 +179,11 @@ function runModern(scenario) {
       loadQueuedSettings: f.loadQueuedSettings,
     }),
   });
-  return f.trace;
+  return f;
 }
 
 function dualRun(name, scenario, expected) {
-  const modern = runModern(scenario);
+  const modern = runModern(scenario).trace;
   if (expected !== undefined) {
     assert.deepEqual(modern, expected, `${name}: unexpected trace`);
   }
@@ -322,6 +335,56 @@ dualRun(
     ["clickTech", "tech-infusion_check"],
     ["clickTech", "tech-exotic_infusion"],
   ],
+);
+
+// The confirmation entry stays mounted and affordable after a successful buy,
+// because its action reports failure and resets the page from a timer. Mark the
+// reset as started so the next cycle does not buy it a second time.
+{
+  const first = runModern({
+    prestigeType: "whitehole",
+    eligible: true,
+    goal: "Reset",
+    whiteholeLevel: 3,
+    confirmClickable: true,
+  });
+  assert.deepEqual(
+    first.trace,
+    [
+      ["clickTech", "tech-infusion_confirm"],
+      ["clickTech", "tech-infusion_check"],
+      ["clickTech", "tech-exotic_infusion"],
+    ],
+    "whitehole confirmation: unexpected trace",
+  );
+  assert.equal(
+    first.state.whiteholeResetStarted,
+    true,
+    "whitehole confirmation: reset should be marked as started",
+  );
+}
+
+dualRun(
+  "whitehole stops buying the confirmation once the grant lands",
+  {
+    prestigeType: "whitehole",
+    eligible: true,
+    goal: "Reset",
+    whiteholeLevel: 4,
+    exoticUnlocked: true,
+    exoticAffordable: true,
+    confirmClickable: true,
+  },
+  [],
+);
+
+// A page reload inside the animation window leaves the grant applied with no
+// reset, and every infusion entry then reads as already granted. Nothing here
+// can undo it: the exposed game state is a copy the game rebuilds each loop.
+dualRun(
+  "whitehole stays quiet after an interrupted reset",
+  { prestigeType: "whitehole", eligible: false, whiteholeLevel: 4 },
+  [],
 );
 
 // Apocalypse
