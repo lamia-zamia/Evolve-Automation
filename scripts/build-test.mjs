@@ -1181,6 +1181,50 @@ assert.deepEqual(
   assert.equal(plan.kind, "build");
 }
 
+// A marginal share of the bottleneck resource still goes ahead. A competitor's
+// requirement can be unreachable rather than merely expensive, and reserving it
+// stops everything that shares the resource: the day-10,340 University wanted
+// 89,055,453 Money against a city whose buildings each wanted well under a
+// hundredth of that, and the run stalled at 66 technologies for 5,000 days.
+{
+  const universitySetup = Object.freeze({
+    ...setup,
+    candidates: Object.freeze([
+      Object.freeze({
+        key: "city-university",
+        weighting: 5,
+        cost: Object.freeze({ Money: 89055453 }),
+        ignored: false,
+      }),
+      Object.freeze({
+        key: "city-wharf",
+        weighting: 1,
+        cost: Object.freeze({ Money: 991149 }),
+        ignored: false,
+      }),
+    ]),
+  });
+  const sample = Object.freeze({
+    affordability: Object.freeze({ "city-university": false }),
+    resources: Object.freeze({
+      Money: Object.freeze({
+        unlocked: true,
+        currentQuantity: 2000000,
+        rateOfChange: 500,
+        storageRatio: 0.2,
+        storageRequired: 0,
+      }),
+    }),
+  });
+  const plan = planBuildCompetition(
+    universitySetup,
+    1,
+    sample,
+    initialBuildLoopState(),
+  );
+  assert.equal(plan.kind, "build");
+}
+
 // A click report without a click leaves the loop state untouched.
 {
   const state = initialBuildLoopState();

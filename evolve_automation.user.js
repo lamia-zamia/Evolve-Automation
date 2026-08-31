@@ -37814,7 +37814,10 @@ Only continue if you trust the source. Injected code:
         if (otherQuantity === void 0 || resource2.currentQuantity >= otherQuantity + thisQuantity)
           continue;
         let perResource = estimation.perResource[resourceId3];
-        if (!(thisQuantity * weightDiffRatio <= (estimation.total - (perResource ?? Number.NaN)) * resource2.rateOfChange) && !((perResource === void 0 || perResource < estimation.total) && otherQuantity / thisQuantity >= weightDiffRatio))
+        if (thisQuantity * weightDiffRatio <= (estimation.total - (perResource ?? Number.NaN)) * resource2.rateOfChange)
+          continue;
+        let bottleneck = perResource !== void 0 && perResource >= estimation.total;
+        if (!(otherQuantity / thisQuantity >= (bottleneck ? Math.max(weightDiffRatio, 20) : weightDiffRatio)))
           return finish({
             kind: "delay",
             annotation: Object.freeze({
