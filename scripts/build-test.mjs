@@ -1080,56 +1080,54 @@ assert.deepEqual(
   assert.equal(plan.kind, "build");
 }
 
-// The cost-gap tolerance does not apply to the resource the competitor is
-// actually waiting on. Measured on the same checkpoint: with Iridium already
-// covered, Titanium is the Shipyard's bottleneck, and a weighting-100 Mars
-// Spaceport wanting 132,884 of it was released by the cost gap alone
-// (650,000 / 132,884 = 4.9 against a weighting ratio of 3), every tick.
+// A very expensive higher-weighted target must not indefinitely suppress a
+// lower-weighted production building on the resource it is bottlenecked on.
+//
+// This scenario replaces one that asserted the opposite. Requiring a larger
+// cost gap on the competitor's bottleneck resource blocked exactly this pair on
+// the start-to-Matrix run: ARPA LHC is built in 1% segments and is permanently
+// its own Titanium bottleneck, and the Gas Moon Mining Outpost - the game's only
+// Neutronium producer - was delayed 1,986 times in 2,000 game days at a cost gap
+// of 4.68 over a weighting ratio of 2.50. Neutronium income fell to +0.22/day,
+// `long_range_probes` never afforded its 3,000, `outer` never unlocked, and the
+// run finished 9 technologies short of the unmodified rule.
 {
-  const bottleneckSetup = Object.freeze({
+  const megaprojectSetup = Object.freeze({
     ...setup,
     candidates: Object.freeze([
       Object.freeze({
-        key: "space-shipyard",
-        weighting: 300,
-        cost: Object.freeze({ Iridium: 250000, Titanium: 650000 }),
+        key: "arpalhc",
+        weighting: 250,
+        cost: Object.freeze({ Titanium: 205807 }),
         ignored: false,
       }),
       Object.freeze({
-        key: "space-spaceport",
+        key: "space-outpost",
         weighting: 100,
-        cost: Object.freeze({ Titanium: 132884 }),
+        cost: Object.freeze({ Titanium: 43984 }),
         ignored: false,
       }),
     ]),
   });
   const sample = Object.freeze({
-    affordability: Object.freeze({ "space-shipyard": false }),
+    affordability: Object.freeze({ arpalhc: false }),
     resources: Object.freeze({
-      Iridium: Object.freeze({
-        unlocked: true,
-        currentQuantity: 559450,
-        rateOfChange: 78.38,
-        storageRatio: 0.1,
-        storageRequired: 0,
-      }),
       Titanium: Object.freeze({
         unlocked: true,
-        currentQuantity: 16601,
-        rateOfChange: 135,
+        currentQuantity: 128816,
+        rateOfChange: 151,
         storageRatio: 0.01,
         storageRequired: 0,
       }),
     }),
   });
   const plan = planBuildCompetition(
-    bottleneckSetup,
+    megaprojectSetup,
     1,
     sample,
     initialBuildLoopState(),
   );
-  assert.equal(plan.kind, "delay");
-  assert.equal(plan.annotation.resourceId, "Titanium");
+  assert.equal(plan.kind, "build");
 }
 
 // The cost gap still releases a candidate on a resource the competitor is not

@@ -157,23 +157,6 @@ export interface BuildClickApplication {
   readonly state: BuildLoopState;
 }
 
-/**
- * On the resource a higher-weighted competitor is actually waiting for, the
- * cost gap alone releases a candidate only once the candidate wants a genuinely
- * marginal share of what the competitor needs.
- *
- * The two populations this separates were measured on the Matrix save, and they
- * are three orders of magnitude apart. Purchases that must be stopped: the
- * weighting-100 Mars Spaceport, Mining Outpost, GPS Network, Iridium Mine and
- * Factory each take between a fifth and a quarter of the weighting-300 Dwarf
- * Shipyard's 650,000 Titanium - cost gaps of 4.6 to 5.6 - which is why the
- * Shipyard was never affordable. Purchases that must not be stopped: a Money
- * requirement can be unreachable rather than merely expensive, and reserving it
- * halts everything. The day-10,340 University wanted 89,055,453 Money, and the
- * whole city queued behind it at cost gaps of 90 to 1,625.
- */
-const BOTTLENECK_COST_GAP = 20;
-
 const SKIP_NEEDS: BuildSampleNeeds = Object.freeze({ kind: "skip" });
 const PROCEED: BuildConflictPlan = Object.freeze({ kind: "proceed" });
 
@@ -515,27 +498,27 @@ export function planBuildCompetition(
       ) {
         continue;
       }
-      // Below the weighting threshold the cost gap is tolerated - but not on
-      // the resource the competitor is actually waiting on. There the gap
-      // argument is exactly backwards: the more the competitor needs, the more
-      // freely everything else is allowed to take it, so a target costing more
-      // than `weightDiffRatio` times its rivals can never be reached. Measured
-      // on the day-41,140 Matrix checkpoint, this alone released every
-      // weighting-100 Titanium consumer against the weighting-300 Dwarf
-      // Shipyard (650,000 / 132,884 = 4.9 over a ratio of 3), every tick.
+      // Below the weighting threshold the cost gap is tolerated.
       //
-      // A resource the competitor is not bottlenecked on keeps the plain
-      // tolerance, so a disproportionately expensive target still cannot freeze
-      // everything that merely shares one of its cheaper resources.
-      const bottleneck =
-        perResource !== undefined && perResource >= estimation.total;
+      // Removed - do not reintroduce: a larger required gap on the resource the
+      // competitor is bottlenecked on (`Math.max(weightDiffRatio, 20)`). It
+      // behaved exactly as designed and the design was wrong. ARPA LHC is built
+      // in 1% segments, so it is a effectively bottomless Titanium sink that is
+      // always its own bottleneck; the floor therefore let it reserve Titanium
+      // against the whole economy indefinitely. Measured on the start-to-Matrix
+      // run: the Gas Moon Mining Outpost (Titanium 43,984 against the LHC's
+      // 205,807 - a gap of 4.68 over a weighting ratio of 2.50) was delayed
+      // 1,986 times in 2,000 game days. The Outpost is the game's only
+      // Neutronium producer, so the run held 1 Outpost and 2 Worker Drones
+      // instead of 5 and 19, Neutronium income was +0.22/day instead of +3.78,
+      // `long_range_probes` never afforded its 3,000 Neutronium, `outer` never
+      // unlocked, and the run finished 9 technologies short. Delay decisions
+      // rose 46% overall, so the suppression was systemic and not specific to
+      // one region. No threshold fixes this: the quantity that matters is how
+      // much a purchase actually delays the competitor relative to how long
+      // that competitor already has to wait, which a cost ratio cannot express.
       const costDiffRatio = otherQuantity / thisQuantity;
-      if (
-        costDiffRatio >=
-        (bottleneck
-          ? Math.max(weightDiffRatio, BOTTLENECK_COST_GAP)
-          : weightDiffRatio)
-      ) {
+      if (costDiffRatio >= weightDiffRatio) {
         continue;
       }
       return finish({
