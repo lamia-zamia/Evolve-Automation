@@ -1223,13 +1223,95 @@ assert.deepEqual(
   assert.equal(plan.kind, "build");
 }
 
+// A competitor's bottleneck slack is spent, not re-offered whole to every
+// candidate. Two identical candidates each fit inside the projection on their
+// own; the second must not, because the first already bought its share.
+{
+  const slackSetup = Object.freeze({
+    ...setup,
+    candidates: Object.freeze([
+      Object.freeze({
+        key: "competitor",
+        weighting: 300,
+        cost: Object.freeze({ Iridium: 200000, Titanium: 600000 }),
+        ignored: false,
+      }),
+      Object.freeze({
+        key: "first",
+        weighting: 100,
+        cost: Object.freeze({ Iridium: 150000 }),
+        ignored: false,
+      }),
+      Object.freeze({
+        key: "second",
+        weighting: 100,
+        cost: Object.freeze({ Iridium: 150000 }),
+        ignored: false,
+      }),
+    ]),
+  });
+  // Titanium is the bottleneck at 6,000 time units, Iridium needs 1,000, so the
+  // projected Iridium slack is (6000 - 1000) x 100 = 500,000. Each candidate
+  // wants 150,000, which scaled by the weighting ratio of 3 is 450,000 - inside
+  // the projection once, and twice over only if the projection is re-offered.
+  const sample = Object.freeze({
+    affordability: Object.freeze({ competitor: false }),
+    resources: Object.freeze({
+      Iridium: Object.freeze({
+        unlocked: true,
+        currentQuantity: 100000,
+        rateOfChange: 100,
+        storageRatio: 0.1,
+        storageRequired: 0,
+      }),
+      Titanium: Object.freeze({
+        unlocked: true,
+        currentQuantity: 0,
+        rateOfChange: 100,
+        storageRatio: 0.01,
+        storageRequired: 0,
+      }),
+    }),
+  });
+  const first = planBuildCompetition(
+    slackSetup,
+    1,
+    sample,
+    initialBuildLoopState(),
+  );
+  assert.equal(first.kind, "build");
+  const applied = applyBuildClickResult(
+    slackSetup,
+    1,
+    { clicked: true, amountBuilt: 1, mission: false, consumption: [] },
+    first.state,
+  );
+  assert.equal(applied.state.slackSpent.Iridium, 150000);
+  const second = planBuildCompetition(slackSetup, 2, sample, applied.state);
+  assert.equal(second.kind, "delay");
+  assert.equal(second.annotation.resourceId, "Iridium");
+  // Without the purchase drawn down, the same candidate is released again.
+  assert.equal(
+    planBuildCompetition(slackSetup, 2, sample, first.state).kind,
+    "build",
+  );
+  // A bulk purchase is charged for every building it bought, not just one.
+  const bulk = applyBuildClickResult(
+    slackSetup,
+    1,
+    { clicked: true, amountBuilt: 4, mission: false, consumption: [] },
+    first.state,
+  );
+  assert.equal(bulk.state.slackSpent.Iridium, 600000);
+}
+
 // A click report without a click leaves the loop state untouched.
 {
   const state = initialBuildLoopState();
   const applied = applyBuildClickResult(
     setup,
     0,
-    { clicked: false, mission: false, consumption: [] },
+    { clicked: false, amountBuilt: 0, mission: false, consumption: [] },
     state,
   );
   assert.equal(applied.stop, false);

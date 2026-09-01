@@ -101,6 +101,20 @@ export interface BuildLoopState {
   readonly estimations: Readonly<Record<string, BuildEstimation>>;
   /** Legacy consumptionsUsed marks by resource id. */
   readonly consumptionsUsed: Readonly<Record<string, true>>;
+  /**
+   * Units of each resource already bought out of a competitor's bottleneck
+   * slack this cycle.
+   *
+   * An estimation is computed once per competitor and never invalidated within
+   * a cycle, and the slack derived from it is a projection over the
+   * competitor's remaining wait rather than a quantity anybody holds. Measured
+   * against the raw projection, every candidate is offered the whole of it, so
+   * the concession is handed out once per candidate per tick and the competitor
+   * is delayed by the aggregate however small each individual bite was. Spending
+   * is therefore drawn down here and the remainder is what later candidates are
+   * measured against.
+   */
+  readonly slackSpent: Readonly<Record<string, number>>;
 }
 
 export type BuildAnnotation =
@@ -146,6 +160,12 @@ export type BuildCompetitionPlan = {
 
 export interface BuildClickReport {
   readonly clicked: boolean;
+  /**
+   * Buildings actually bought by the click. `buildingsBulkBuild` repeats the
+   * purchase up to its configured maximum, so one click can cover several, and
+   * the slack drawdown has to charge for all of them.
+   */
+  readonly amountBuilt: number;
   /** Sampled after the click, matching the legacy post-click reads. */
   readonly mission: boolean;
   readonly consumption: readonly BuildConsumptionView[];
@@ -165,6 +185,7 @@ export function initialBuildLoopState(): BuildLoopState {
     affordable: Object.freeze({}),
     estimations: Object.freeze({}),
     consumptionsUsed: Object.freeze({}),
+    slackSpent: Object.freeze({}),
   });
 }
 
@@ -405,6 +426,7 @@ export function planBuildCompetition(
         affordable: Object.freeze(affordable),
         estimations: Object.freeze(estimations),
         consumptionsUsed: state.consumptionsUsed,
+        slackSpent: state.slackSpent,
       }),
     });
 
@@ -494,7 +516,9 @@ export function planBuildCompetition(
       const perResource = estimation.perResource[resourceId];
       if (
         thisQuantity * weightDiffRatio <=
-        (estimation.total - (perResource ?? Number.NaN)) * resource.rateOfChange
+        (estimation.total - (perResource ?? Number.NaN)) *
+          resource.rateOfChange -
+          (state.slackSpent[resourceId] ?? 0)
       ) {
         continue;
       }
@@ -566,12 +590,24 @@ export function applyBuildClickResult(
   for (const key of Object.keys(state.affordable)) {
     affordable[key] = false;
   }
+  // The purchase is drawn out of every competitor's slack on the resources it
+  // spent, so the next candidate is measured against what is left rather than
+  // against the same projection this one was.
+  // Unit price rises with every purchase, so charging the pre-click cost for
+  // each one understates a bulk buy slightly. That is the same approximation
+  // `Building.spendBuildCost(amountBuilt)` already makes for its own books.
+  const slackSpent: Record<string, number> = { ...state.slackSpent };
+  const built = Math.max(1, report.amountBuilt);
+  for (const [resourceId, quantity] of Object.entries(candidate.cost)) {
+    slackSpent[resourceId] = (slackSpent[resourceId] ?? 0) + quantity * built;
+  }
   return Object.freeze({
     stop: false,
     state: Object.freeze({
       affordable: Object.freeze(affordable),
       estimations: state.estimations,
       consumptionsUsed: Object.freeze(consumptionsUsed),
+      slackSpent: Object.freeze(slackSpent),
     }),
   });
 }

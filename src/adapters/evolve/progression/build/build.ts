@@ -400,6 +400,7 @@ export function createBuildAdapter(
             "executeClick requires an active build cycle",
           ),
           clicked: false,
+          amountBuilt: 0,
           mission: false,
           consumption: EMPTY_CONSUMPTION,
         });
@@ -409,6 +410,7 @@ export function createBuildAdapter(
         return Object.freeze({
           outcome: staleTarget(decision.index, decision.key),
           clicked: false,
+          amountBuilt: 0,
           mission: false,
           consumption: EMPTY_CONSUMPTION,
         });
@@ -416,11 +418,16 @@ export function createBuildAdapter(
       const path = `buildList[${decision.index}]`;
       // autoBuild is the one caller that may cover several of the same
       // building in a tick; the entity decides whether the setting allows it.
+      // The live count is the only honest record of what a bulk purchase built,
+      // which is what the slack drawdown has to be charged for.
+      const countBefore = Number(entity["count"]);
       const clicked = Boolean(callMethod(entity, "click", path, [true]));
+      const countAfter = Number(entity["count"]);
       if (!clicked) {
         return Object.freeze({
           outcome: SUCCEEDED,
           clicked: false,
+          amountBuilt: 0,
           mission: false,
           consumption: EMPTY_CONSUMPTION,
         });
@@ -429,6 +436,12 @@ export function createBuildAdapter(
       return Object.freeze({
         outcome: SUCCEEDED,
         clicked: true,
+        amountBuilt: Math.max(
+          1,
+          Number.isFinite(countAfter - countBefore)
+            ? countAfter - countBefore
+            : 1,
+        ),
         mission: Boolean(callMethod(entity, "isMission", path)),
         consumption: sampleConsumption(entity, path),
       });

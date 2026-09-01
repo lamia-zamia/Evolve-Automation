@@ -37630,6 +37630,7 @@ Only continue if you trust the source. Injected code:
               "executeClick requires an active build cycle"
             ),
             clicked: !1,
+            amountBuilt: 0,
             mission: !1,
             consumption: EMPTY_CONSUMPTION
           });
@@ -37638,20 +37639,26 @@ Only continue if you trust the source. Injected code:
           return Object.freeze({
             outcome: staleTarget(decision2.index, decision2.key),
             clicked: !1,
+            amountBuilt: 0,
             mission: !1,
             consumption: EMPTY_CONSUMPTION
           });
-        let path = `buildList[${decision2.index}]`;
-        return !callMethod(entity, "click", path, [!0]) ? Object.freeze({
-          outcome: SUCCEEDED,
-          clicked: !1,
-          mission: !1,
-          consumption: EMPTY_CONSUMPTION
-        }) : Object.freeze({
+        let path = `buildList[${decision2.index}]`, countBefore = Number(entity.count), clicked = !!callMethod(entity, "click", path, [!0]), countAfter = Number(entity.count);
+        return Object.freeze(clicked ? {
           outcome: SUCCEEDED,
           clicked: !0,
+          amountBuilt: Math.max(
+            1,
+            Number.isFinite(countAfter - countBefore) ? countAfter - countBefore : 1
+          ),
           mission: !!callMethod(entity, "isMission", path),
           consumption: sampleConsumption(entity, path)
+        } : {
+          outcome: SUCCEEDED,
+          clicked: !1,
+          amountBuilt: 0,
+          mission: !1,
+          consumption: EMPTY_CONSUMPTION
         });
       }
     });
@@ -37664,7 +37671,8 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({
       affordable: Object.freeze({}),
       estimations: Object.freeze({}),
-      consumptionsUsed: Object.freeze({})
+      consumptionsUsed: Object.freeze({}),
+      slackSpent: Object.freeze({})
     });
   }
   function candidateAt(setup, index) {
@@ -37777,7 +37785,8 @@ Only continue if you trust the source. Injected code:
       state: Object.freeze({
         affordable: Object.freeze(affordable2),
         estimations: Object.freeze(estimations),
-        consumptionsUsed: state.consumptionsUsed
+        consumptionsUsed: state.consumptionsUsed,
+        slackSpent: state.slackSpent
       })
     }), build = () => finish({
       kind: "build",
@@ -37814,7 +37823,7 @@ Only continue if you trust the source. Injected code:
         if (otherQuantity === void 0 || resource2.currentQuantity >= otherQuantity + thisQuantity)
           continue;
         let perResource = estimation.perResource[resourceId3];
-        if (!(thisQuantity * weightDiffRatio <= (estimation.total - (perResource ?? Number.NaN)) * resource2.rateOfChange || otherQuantity / thisQuantity >= weightDiffRatio))
+        if (!(thisQuantity * weightDiffRatio <= (estimation.total - (perResource ?? Number.NaN)) * resource2.rateOfChange - (state.slackSpent[resourceId3] ?? 0) || otherQuantity / thisQuantity >= weightDiffRatio))
           return finish({
             kind: "delay",
             annotation: Object.freeze({
@@ -37841,12 +37850,16 @@ Only continue if you trust the source. Injected code:
     let affordable2 = {};
     for (let key of Object.keys(state.affordable))
       affordable2[key] = !1;
+    let slackSpent = { ...state.slackSpent }, built = Math.max(1, report.amountBuilt);
+    for (let [resourceId3, quantity] of Object.entries(candidate.cost))
+      slackSpent[resourceId3] = (slackSpent[resourceId3] ?? 0) + quantity * built;
     return Object.freeze({
       stop: !1,
       state: Object.freeze({
         affordable: Object.freeze(affordable2),
         estimations: state.estimations,
-        consumptionsUsed: Object.freeze(consumptionsUsed)
+        consumptionsUsed: Object.freeze(consumptionsUsed),
+        slackSpent: Object.freeze(slackSpent)
       })
     });
   }
