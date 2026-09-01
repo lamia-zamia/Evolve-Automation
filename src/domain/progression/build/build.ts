@@ -101,20 +101,6 @@ export interface BuildLoopState {
   readonly estimations: Readonly<Record<string, BuildEstimation>>;
   /** Legacy consumptionsUsed marks by resource id. */
   readonly consumptionsUsed: Readonly<Record<string, true>>;
-  /**
-   * Units of each resource already bought out of a competitor's bottleneck
-   * slack this cycle.
-   *
-   * An estimation is computed once per competitor and never invalidated within
-   * a cycle, and the slack derived from it is a projection over the
-   * competitor's remaining wait rather than a quantity anybody holds. Measured
-   * against the raw projection, every candidate is offered the whole of it, so
-   * the concession is handed out once per candidate per tick and the competitor
-   * is delayed by the aggregate however small each individual bite was. Spending
-   * is therefore drawn down here and the remainder is what later candidates are
-   * measured against.
-   */
-  readonly slackSpent: Readonly<Record<string, number>>;
 }
 
 export type BuildAnnotation =
@@ -160,12 +146,6 @@ export type BuildCompetitionPlan = {
 
 export interface BuildClickReport {
   readonly clicked: boolean;
-  /**
-   * Buildings actually bought by the click. `buildingsBulkBuild` repeats the
-   * purchase up to its configured maximum, so one click can cover several, and
-   * the slack drawdown has to charge for all of them.
-   */
-  readonly amountBuilt: number;
   /** Sampled after the click, matching the legacy post-click reads. */
   readonly mission: boolean;
   readonly consumption: readonly BuildConsumptionView[];
@@ -185,7 +165,6 @@ export function initialBuildLoopState(): BuildLoopState {
     affordable: Object.freeze({}),
     estimations: Object.freeze({}),
     consumptionsUsed: Object.freeze({}),
-    slackSpent: Object.freeze({}),
   });
 }
 
@@ -426,7 +405,6 @@ export function planBuildCompetition(
         affordable: Object.freeze(affordable),
         estimations: Object.freeze(estimations),
         consumptionsUsed: state.consumptionsUsed,
-        slackSpent: state.slackSpent,
       }),
     });
 
@@ -478,6 +456,20 @@ export function planBuildCompetition(
       cacheEstimation(other.key, estimation);
     }
 
+    // How much later this purchase would leave the competitor, measured rather
+    // than inferred. The competitor finishes when its slowest resource arrives,
+    // so its completion time is `estimation.total`; spending `thisQuantity` of a
+    // resource it also needs pushes that resource's arrival out by
+    // `thisQuantity / rateOfChange`, and the competitor is delayed only if that
+    // pushes the resource past whatever is currently slowest.
+    //
+    // This replaces a bottleneck-slack test and a cost-ratio test, both of which
+    // were proxies for this quantity and both of which failed in measured runs.
+    // A ratio of two costs cannot express interference because it is blind to
+    // rate: 100,000 Money and 100,000 Iridium are not comparable claims, whereas
+    // "adds thirteen days" means the same thing everywhere.
+    let after = estimation.total;
+    let worstResourceId = "";
     for (const [resourceId, thisQuantity] of Object.entries(candidate.cost)) {
       const resource = resourceViewOf(sample, resourceId);
 
@@ -497,64 +489,52 @@ export function planBuildCompetition(
       if (resource.currentQuantity >= otherQuantity + thisQuantity) {
         continue;
       }
-      // Spending inside the competitor's bottleneck slack won't delay it - but
-      // only once. The slack is projected from the competitor's wait on its
-      // slowest resource, and every candidate on every tick is measured against
-      // that same projection, so conceding it in full hands the whole of it out
-      // repeatedly and the competitor is delayed forever. Measured on the
-      // day-41,140 Matrix checkpoint: a weighting-1 Navigation Beacon was
-      // allowed 146,958 Iridium of the weighting-300 Dwarf Shipyard's 250,000,
-      // and the Shipyard was still unaffordable 8,000 game days later.
-      //
-      // Conceding a share inversely proportional to the weighting gap keeps the
-      // rule's purpose - a cheap purchase that genuinely cannot matter still
-      // goes ahead - while a candidate worth a fraction of the competitor can no
-      // longer take a comparable bite out of it.
-      //
-      // A locked-at-estimation-time resource yields NaN, failing the check
-      // exactly like the legacy `total - undefined` arithmetic.
       const perResource = estimation.perResource[resourceId];
-      if (
-        thisQuantity * weightDiffRatio <=
-        (estimation.total - (perResource ?? Number.NaN)) *
-          resource.rateOfChange -
-          (state.slackSpent[resourceId] ?? 0)
-      ) {
+      // A resource with no positive rate was assumed available when the
+      // estimation was built (craftables and such). Keep that assumption here
+      // rather than reading a zero rate as an infinite delay, which would freeze
+      // every candidate that shares a craftable with a competitor.
+      if (perResource === undefined || resource.rateOfChange <= 0) {
         continue;
       }
-      // Below the weighting threshold the cost gap is tolerated.
+      const arrival = perResource + thisQuantity / resource.rateOfChange;
+      if (arrival > after) {
+        after = arrival;
+        worstResourceId = resourceId;
+      }
+    }
+
+    if (worstResourceId !== "") {
+      const addedDelay = after - estimation.total;
+      // Spending inside the competitor's genuine slack costs it nothing, and
+      // unlike the rule this replaces the concession cannot be handed out
+      // repeatedly: the estimations are dropped after every click, so the next
+      // candidate is measured against the holdings this purchase actually left.
       //
-      // Removed - do not reintroduce: a larger required gap on the resource the
-      // competitor is bottlenecked on (`Math.max(weightDiffRatio, 20)`). It
-      // behaved exactly as designed and the design was wrong. ARPA LHC is built
-      // in 1% segments, so it is a effectively bottomless Titanium sink that is
-      // always its own bottleneck; the floor therefore let it reserve Titanium
-      // against the whole economy indefinitely. Measured on the start-to-Matrix
-      // run: the Gas Moon Mining Outpost (Titanium 43,984 against the LHC's
-      // 205,807 - a gap of 4.68 over a weighting ratio of 2.50) was delayed
-      // 1,986 times in 2,000 game days. The Outpost is the game's only
-      // Neutronium producer, so the run held 1 Outpost and 2 Worker Drones
-      // instead of 5 and 19, Neutronium income was +0.22/day instead of +3.78,
-      // `long_range_probes` never afforded its 3,000 Neutronium, `outer` never
-      // unlocked, and the run finished 9 technologies short. Delay decisions
-      // rose 46% overall, so the suppression was systemic and not specific to
-      // one region. No threshold fixes this: the quantity that matters is how
-      // much a purchase actually delays the competitor relative to how long
-      // that competitor already has to wait, which a cost ratio cannot express.
-      const costDiffRatio = otherQuantity / thisQuantity;
-      if (costDiffRatio >= weightDiffRatio) {
-        continue;
+      // Otherwise the delay is weighed against how long the competitor already
+      // has to wait. Taking a target from 100 days to 150 is serious; taking one
+      // from 10,000 to 10,050 is not, and only the second describes a segmented
+      // megaproject like ARPA LHC - which is exactly the case a cost ratio got
+      // backwards. A competitor worth `k` times the candidate tolerates
+      // `1 / (k - 1)` of proportional delay, so protection tightens as the gap
+      // widens and dissolves continuously into no protection at all as the
+      // weightings converge, matching the loop's own tie threshold above.
+      const relativeDelay =
+        estimation.total > 0
+          ? addedDelay / estimation.total
+          : Number.POSITIVE_INFINITY;
+      if (addedDelay > 0 && relativeDelay > 1 / (weightDiffRatio - 1)) {
+        return finish({
+          kind: "delay",
+          annotation: Object.freeze({
+            kind: "competitor",
+            index,
+            key: candidate.key,
+            otherKey: other.key,
+            resourceId: worstResourceId,
+          }),
+        });
       }
-      return finish({
-        kind: "delay",
-        annotation: Object.freeze({
-          kind: "competitor",
-          index,
-          key: candidate.key,
-          otherKey: other.key,
-          resourceId,
-        }),
-      });
     }
   }
   return build();
@@ -590,24 +570,17 @@ export function applyBuildClickResult(
   for (const key of Object.keys(state.affordable)) {
     affordable[key] = false;
   }
-  // The purchase is drawn out of every competitor's slack on the resources it
-  // spent, so the next candidate is measured against what is left rather than
-  // against the same projection this one was.
-  // Unit price rises with every purchase, so charging the pre-click cost for
-  // each one understates a bulk buy slightly. That is the same approximation
-  // `Building.spendBuildCost(amountBuilt)` already makes for its own books.
-  const slackSpent: Record<string, number> = { ...state.slackSpent };
-  const built = Math.max(1, report.amountBuilt);
-  for (const [resourceId, quantity] of Object.entries(candidate.cost)) {
-    slackSpent[resourceId] = (slackSpent[resourceId] ?? 0) + quantity * built;
-  }
   return Object.freeze({
     stop: false,
     state: Object.freeze({
       affordable: Object.freeze(affordable),
-      estimations: state.estimations,
+      // The purchase moved the resource levels every estimation was derived
+      // from, so they are recomputed against what is actually left. This is
+      // what stops one projection being offered whole to every later candidate:
+      // interference is measured from live holdings, not from a snapshot taken
+      // before anybody had spent anything.
+      estimations: Object.freeze({}),
       consumptionsUsed: Object.freeze(consumptionsUsed),
-      slackSpent: Object.freeze(slackSpent),
     }),
   });
 }

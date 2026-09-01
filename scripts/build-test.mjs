@@ -672,40 +672,44 @@ runScenario("estimations persist across candidates and clicks", () => {
   return w;
 });
 
-// A resource locked while a competitor's estimation was cached but unlocked
-// by a later click has no per-resource estimate; the NaN slack arithmetic
-// must fail the budget check and fall through to the cost-ratio gate,
-// exactly like the legacy `total - undefined` arithmetic.
-world = runScenario("estimation cached before unlock yields NaN slack", () => {
-  const w = makeWorld();
-  makeResource(w, "Elerium", {
-    quantity: 50,
-    rate: 100,
-    unlocked: () => w.trace.some((e) => e[0] === "click"),
-  });
-  makeResource(w, "Polymer", { quantity: 90, rate: 1 });
-  // Cement, not Polymer, is what the outpost is waiting on. Polymer has to
-  // keep its slack, or the factory is delayed on the bottleneck rule and never
-  // clicks - and it is that click which unlocks Elerium and sets up the stale
-  // cached estimation this scenario exists to cover.
-  makeResource(w, "Cement", { quantity: 0, rate: 1 });
-  makeTarget(w, "space-outpost", {
-    weighting: 15,
-    cost: { Elerium: 100, Polymer: 100, Cement: 200 },
-  });
-  makeTarget(w, "city-factory", { weighting: 10, cost: { Polymer: 60 } });
-  makeTarget(w, "city-foundry", { weighting: 5, cost: { Elerium: 40 } });
-  return w;
-});
+// A resource locked when a competitor's estimation was built, then unlocked by
+// a later click, used to leave that estimation permanently stale and drive the
+// decision through NaN arithmetic. Estimations are now dropped after every
+// click, so the competitor is re-measured against the unlocked resource and the
+// later candidate is judged on real numbers.
+world = runScenario(
+  "a click re-measures competitors against unlocked resources",
+  () => {
+    const w = makeWorld();
+    makeResource(w, "Elerium", {
+      quantity: 50,
+      rate: 100,
+      unlocked: () => w.trace.some((e) => e[0] === "click"),
+    });
+    makeResource(w, "Polymer", { quantity: 90, rate: 1 });
+    // Cement, not Polymer, is what the outpost is waiting on, so neither the
+    // factory's Polymer nor the foundry's Elerium moves the outpost's completion
+    // and both go ahead. It is the factory's click that unlocks Elerium, which is
+    // the re-measurement this scenario exists to cover.
+    makeResource(w, "Cement", { quantity: 0, rate: 1 });
+    makeTarget(w, "space-outpost", {
+      weighting: 15,
+      cost: { Elerium: 100, Polymer: 100, Cement: 200 },
+    });
+    makeTarget(w, "city-factory", { weighting: 10, cost: { Polymer: 60 } });
+    makeTarget(w, "city-foundry", { weighting: 5, cost: { Elerium: 40 } });
+    return w;
+  },
+);
 assert.deepEqual(
   world.trace.filter((e) => e[0] === "click"),
-  [["click", "city-factory"]],
+  [
+    ["click", "city-factory"],
+    ["click", "city-foundry"],
+  ],
 );
-assert.equal(
-  world.buildings[2].extraDescription,
-  'Conflicts with <span class="has-text-info">space-outpost</span> for ' +
-    '<span class="has-text-info">Elerium</span><br>',
-);
+// Neither purchase delays the outpost, so neither is annotated as a conflict.
+assert.equal(world.buildings[2].extraDescription, "");
 
 // Lazily-initialized resource fields flow through comparisons as NaN.
 runScenario("missing numeric resource fields stay lenient", () => {
@@ -961,28 +965,51 @@ assert.deepEqual(
     sample,
     initialBuildLoopState(),
   );
-  assert.equal(plan.kind, "delay");
-  assert.deepEqual(plan.annotation, {
+  // The locked Alloy contributes nothing, so Stone alone sets the competitor's
+  // 20-unit wait, and buying 40 Stone doubles it. At a weighting gap of only
+  // 1.6 that is tolerated: a competitor worth `k` times the candidate accepts
+  // `1 / (k - 1)` proportional delay, which is 1.67 here.
+  assert.equal(plan.kind, "build");
+  assert.deepEqual(plan.state.affordable, { a: false });
+  assert.deepEqual(plan.state.estimations.a.perResource, { Stone: 20 });
+  assert.equal(plan.state.estimations.a.total, 20);
+
+  // The same doubling against a competitor worth eight times the candidate is
+  // refused, because its allowance is 0.14.
+  const widerGap = Object.freeze({
+    ...lockedSetup,
+    candidates: Object.freeze([
+      lockedSetup.candidates[0],
+      Object.freeze({ ...lockedSetup.candidates[1], weighting: 1 }),
+    ]),
+  });
+  const refused = planBuildCompetition(
+    widerGap,
+    1,
+    sample,
+    initialBuildLoopState(),
+  );
+  assert.equal(refused.kind, "delay");
+  assert.deepEqual(refused.annotation, {
     kind: "competitor",
     index: 1,
     key: "b",
     otherKey: "a",
     resourceId: "Stone",
   });
-  assert.deepEqual(plan.state.affordable, { a: false });
-  assert.deepEqual(plan.state.estimations.a.perResource, { Stone: 20 });
-  assert.equal(plan.state.estimations.a.total, 20);
 }
 
-// A competitor's bottleneck slack is conceded in proportion to how much more
-// the competitor is worth, not in full to every candidate that asks.
+// Spending a resource the competitor is not waiting on costs it nothing, and
+// the protection comes from re-measuring once it has been spent.
 //
 // Measured on the day-41,140 Matrix checkpoint: the weighting-300 Dwarf
-// Shipyard needs 250,000 Iridium and 650,000 Titanium; Titanium is its
-// bottleneck at 3,883 time units while Iridium only needs 648, so the raw
-// slack is (3883 - 648) x 78.38 = 253,559 Iridium. A weighting-1 Navigation
-// Beacon wanting 146,958 fits inside that, and was allowed - every candidate,
-// every tick, so the Shipyard was never affordable in 8,000 replayed days.
+// Shipyard needs 250,000 Iridium and 650,000 Titanium, and Titanium is its
+// bottleneck at 3,864 time units against Iridium's 648. One weighting-1
+// Navigation Beacon taking 146,958 Iridium leaves Titanium slowest, so it
+// genuinely does not delay the Shipyard and goes ahead. The original defect was
+// that the same answer was then given to every candidate on every tick against
+// an estimation nobody ever updated. Estimations are dropped after each click,
+// so the next beacon is measured against the Iridium the first one left.
 {
   const shipyardSetup = Object.freeze({
     ...setup,
@@ -1026,9 +1053,31 @@ assert.deepEqual(
     sample,
     initialBuildLoopState(),
   );
-  assert.equal(plan.kind, "delay");
-  assert.equal(plan.annotation.otherKey, "space-shipyard");
-  assert.equal(plan.annotation.resourceId, "Iridium");
+  assert.equal(plan.kind, "build");
+
+  // After that purchase Iridium is down to 52,263 and has become the slower of
+  // the two, so a second beacon adds 533 time units to a 3,864-unit wait. A
+  // competitor worth 300 times the candidate tolerates 1/299 of that, so it is
+  // refused - the concession is not repeatable.
+  const afterPurchase = Object.freeze({
+    ...sample,
+    resources: Object.freeze({
+      ...sample.resources,
+      Iridium: Object.freeze({
+        ...sample.resources.Iridium,
+        currentQuantity: 199221 - 146958,
+      }),
+    }),
+  });
+  const second = planBuildCompetition(
+    shipyardSetup,
+    1,
+    afterPurchase,
+    initialBuildLoopState(),
+  );
+  assert.equal(second.kind, "delay");
+  assert.equal(second.annotation.otherKey, "space-shipyard");
+  assert.equal(second.annotation.resourceId, "Iridium");
 }
 
 // A purchase small enough to stay inside its share of the slack still goes
@@ -1223,86 +1272,48 @@ assert.deepEqual(
   assert.equal(plan.kind, "build");
 }
 
-// A competitor's bottleneck slack is spent, not re-offered whole to every
-// candidate. Two identical candidates each fit inside the projection on their
-// own; the second must not, because the first already bought its share.
+// A click drops every cached estimation, because the holdings they were derived
+// from have moved. This is the mechanism the beacon scenario above relies on:
+// without it the same projection is offered to every later candidate.
 {
-  const slackSetup = Object.freeze({
+  const clickSetup = Object.freeze({
     ...setup,
     candidates: Object.freeze([
       Object.freeze({
-        key: "competitor",
-        weighting: 300,
-        cost: Object.freeze({ Iridium: 200000, Titanium: 600000 }),
-        ignored: false,
-      }),
-      Object.freeze({
-        key: "first",
-        weighting: 100,
-        cost: Object.freeze({ Iridium: 150000 }),
-        ignored: false,
-      }),
-      Object.freeze({
-        key: "second",
-        weighting: 100,
-        cost: Object.freeze({ Iridium: 150000 }),
+        key: "a",
+        weighting: 5,
+        cost: Object.freeze({ Alloy: 10 }),
         ignored: false,
       }),
     ]),
   });
-  // Titanium is the bottleneck at 6,000 time units, Iridium needs 1,000, so the
-  // projected Iridium slack is (6000 - 1000) x 100 = 500,000. Each candidate
-  // wants 150,000, which scaled by the weighting ratio of 3 is 450,000 - inside
-  // the projection once, and twice over only if the projection is re-offered.
-  const sample = Object.freeze({
-    affordability: Object.freeze({ competitor: false }),
-    resources: Object.freeze({
-      Iridium: Object.freeze({
-        unlocked: true,
-        currentQuantity: 100000,
-        rateOfChange: 100,
-        storageRatio: 0.1,
-        storageRequired: 0,
-      }),
-      Titanium: Object.freeze({
-        unlocked: true,
-        currentQuantity: 0,
-        rateOfChange: 100,
-        storageRatio: 0.01,
-        storageRequired: 0,
+  const before = Object.freeze({
+    affordable: Object.freeze({ a: true }),
+    estimations: Object.freeze({
+      other: Object.freeze({
+        perResource: Object.freeze({ Alloy: 7 }),
+        total: 7,
       }),
     }),
+    consumptionsUsed: Object.freeze({}),
   });
-  const first = planBuildCompetition(
-    slackSetup,
-    1,
-    sample,
-    initialBuildLoopState(),
-  );
-  assert.equal(first.kind, "build");
   const applied = applyBuildClickResult(
-    slackSetup,
-    1,
-    { clicked: true, amountBuilt: 1, mission: false, consumption: [] },
-    first.state,
+    clickSetup,
+    0,
+    { clicked: true, mission: false, consumption: [] },
+    before,
   );
-  assert.equal(applied.state.slackSpent.Iridium, 150000);
-  const second = planBuildCompetition(slackSetup, 2, sample, applied.state);
-  assert.equal(second.kind, "delay");
-  assert.equal(second.annotation.resourceId, "Iridium");
-  // Without the purchase drawn down, the same candidate is released again.
+  assert.deepEqual(applied.state.estimations, {});
+  // A report without a click leaves them alone.
   assert.equal(
-    planBuildCompetition(slackSetup, 2, sample, first.state).kind,
-    "build",
+    applyBuildClickResult(
+      clickSetup,
+      0,
+      { clicked: false, mission: false, consumption: [] },
+      before,
+    ).state.estimations,
+    before.estimations,
   );
-  // A bulk purchase is charged for every building it bought, not just one.
-  const bulk = applyBuildClickResult(
-    slackSetup,
-    1,
-    { clicked: true, amountBuilt: 4, mission: false, consumption: [] },
-    first.state,
-  );
-  assert.equal(bulk.state.slackSpent.Iridium, 600000);
 }
 
 // A click report without a click leaves the loop state untouched.
