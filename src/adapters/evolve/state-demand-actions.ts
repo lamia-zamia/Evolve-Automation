@@ -32,7 +32,6 @@ interface DemandState {
     cause: string;
     cost: Record<string, number>;
   }[];
-  savingCommitment: { name: string; deadlineDay: number } | null;
 }
 
 interface StorageRequirementsActionDependencies {

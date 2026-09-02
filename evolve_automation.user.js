@@ -3759,7 +3759,7 @@ Only continue if you trust the source. Injected code:
       resources[request.resourceId].requestQuantity(request.amount);
     for (let index of result2.removedMissionIndices)
       state.missionBuildingList.splice(index, 1);
-    state.savingCommitment = result2.savingCommitment === null ? null : { ...result2.savingCommitment }, result2.savingConflict !== null && state.conflictTargets.push({
+    result2.savingConflict !== null && state.conflictTargets.push({
       name: result2.savingConflict.name,
       cause: "Saving",
       cost: { ...result2.savingConflict.cost }
@@ -3840,34 +3840,6 @@ Only continue if you trust the source. Injected code:
     });
   }
 
-  // src/domain/economy/resources/saving-schedule.ts
-  var EMPTY = Object.freeze({
-    commitment: null,
-    holds: Object.freeze({})
-  });
-  function planSavingSchedule(input) {
-    let eta = 0, hasDeficit = !1;
-    for (let cost of input.costs)
-      if (!(cost.amount <= cost.currentQuantity)) {
-        if (hasDeficit = !0, cost.ratePerDay <= 0) return EMPTY;
-        eta = Math.max(eta, (cost.amount - cost.currentQuantity) / cost.ratePerDay);
-      }
-    if (!hasDeficit) return EMPTY;
-    let proposed = input.currentDay + eta, previous = input.previous, deadlineDay = previous !== null && previous.name === input.name && input.currentDay < previous.deadlineDay ? Math.min(previous.deadlineDay, proposed) : proposed, daysLeft = Math.max(0, deadlineDay - input.currentDay), holds = {};
-    for (let cost of input.costs) {
-      if (cost.ratePerDay <= 0) continue;
-      let hold = Math.min(
-        cost.amount,
-        cost.amount - cost.ratePerDay * daysLeft
-      );
-      hold > 0 && (holds[cost.resourceId] = hold);
-    }
-    return Object.freeze({
-      commitment: Object.freeze({ name: input.name, deadlineDay }),
-      holds: Object.freeze(holds)
-    });
-  }
-
   // src/domain/economy/resources/demand-prioritization.ts
   function projectDoubles(target) {
     return target.isProject && target.progress !== null && target.progress < 99;
@@ -3894,17 +3866,10 @@ Only continue if you trust the source. Injected code:
       for (let cost of task.costs)
         request(cost.resourceId, cost.amount * multiplier);
     }
-    let savingSchedule = null;
-    if (input.savingTarget !== null) {
+    let savingCost = {};
+    if (input.savingTarget !== null)
       for (let cost of input.savingTarget.costs)
-        request(cost.resourceId, cost.amount);
-      savingSchedule = planSavingSchedule({
-        name: input.savingTarget.name,
-        costs: input.savingTarget.costs,
-        currentDay: input.currentDay,
-        previous: input.savingCommitment
-      });
-    }
+        request(cost.resourceId, cost.amount), savingCost[cost.resourceId] = cost.amount;
     if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req") && request("Money", input.spyPurchaseMoney), settings.autoFleet && input.fleet.nextShipAffordable && settings.prioritizeOuterFleet.includes("req"))
       for (let cost of input.fleet.nextShipCost)
         request(cost.resourceId, cost.amount);
@@ -3926,10 +3891,9 @@ Only continue if you trust the source. Injected code:
             );
     }
     return Object.freeze({
-      savingCommitment: savingSchedule?.commitment ?? null,
-      savingConflict: savingSchedule === null || savingSchedule.commitment === null || Object.keys(savingSchedule.holds).length === 0 ? null : Object.freeze({
-        name: savingSchedule.commitment.name,
-        cost: savingSchedule.holds
+      savingConflict: input.savingTarget === null ? null : Object.freeze({
+        name: input.savingTarget.name,
+        cost: Object.freeze(savingCost)
       }),
       requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
       removedMissionIndices: Object.freeze(removedMissionIndices)
@@ -4035,7 +3999,6 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/economy/resources/demand-prioritization.ts
-  var GAME_SECONDS_PER_DAY = 5;
   function readCosts(value, path) {
     if (typeof value != "object" || value === null) return [];
     let record = value, costs = [];
@@ -4066,47 +4029,7 @@ Only continue if you trust the source. Injected code:
       return readTarget(record, `${path}[${index}]`, isProject);
     });
   }
-  function readCurrentDay(game) {
-    let global = requireRecord(
-      requireRecord(game, "game").global,
-      "game.global"
-    );
-    return requireNumber(
-      requireRecord(global.stats, "game.global.stats").days,
-      "game.global.stats.days"
-    );
-  }
-  function readSavingCommitment(state) {
-    if (!isRecord(state)) return null;
-    let stored = state.savingCommitment;
-    if (!isRecord(stored)) return null;
-    let name = stored.name, deadlineDay = stored.deadlineDay;
-    return typeof name != "string" || typeof deadlineDay != "number" || !Number.isFinite(deadlineDay) ? null : Object.freeze({ name, deadlineDay });
-  }
-  function readSavingCosts(value, path, resources) {
-    let costs = [];
-    for (let cost of readCosts(value, path)) {
-      let resource2 = resources[cost.resourceId];
-      isRecord(resource2) && costs.push(
-        Object.freeze({
-          resourceId: cost.resourceId,
-          amount: cost.amount,
-          currentQuantity: requireNumber(
-            resource2.currentQuantity,
-            `resources.${cost.resourceId}.currentQuantity`
-          ),
-          // The game reports production per second and one game day is five
-          // seconds (twenty game ticks), measured against the headless clock.
-          ratePerDay: requireNumber(
-            resource2.rateOfChange,
-            `resources.${cost.resourceId}.rateOfChange`
-          ) * GAME_SECONDS_PER_DAY
-        })
-      );
-    }
-    return costs;
-  }
-  function readSavingTarget(manager, resources) {
+  function readSavingTarget(manager) {
     let record = requireRecord(manager, "BuildingManager"), list = requireFunction(
       record.managedPriorityList,
       "BuildingManager.managedPriorityList"
@@ -4128,9 +4051,7 @@ Only continue if you trust the source. Injected code:
       if (callBoolean(candidate.record, "isAffordable", path, !0) && !callBoolean(candidate.record, "isAffordable", path))
         return Object.freeze({
           name: requireString(candidate.record.title, `${path}.title`),
-          costs: Object.freeze(
-            readSavingCosts(candidate.record.cost, `${path}.cost`, resources)
-          )
+          costs: Object.freeze(readCosts(candidate.record.cost, `${path}.cost`))
         });
     }
     return null;
@@ -4294,12 +4215,7 @@ Only continue if you trust the source. Injected code:
       triggerTargets: Object.freeze(
         targetList(state.triggerTargets, "state.triggerTargets", isProject)
       ),
-      savingTarget: readSavingTarget(
-        dependencies.getBuildingManager(),
-        requireRecord(dependencies.getResources(), "resources")
-      ),
-      currentDay: readCurrentDay(dependencies.getGame()),
-      savingCommitment: readSavingCommitment(dependencies.getState()),
+      savingTarget: readSavingTarget(dependencies.getBuildingManager()),
       missions: Object.freeze(
         readMissions(
           state.missionBuildingList,
@@ -26437,13 +26353,13 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/domain/economy/production/alchemy.ts
-  var EMPTY2 = Object.freeze({
+  var EMPTY = Object.freeze({
     decrease: Object.freeze([]),
     increase: Object.freeze([])
   });
   function planAlchemy(input) {
     if (!input.unlocked)
-      return EMPTY2;
+      return EMPTY;
     let adjust = /* @__PURE__ */ new Map();
     for (let res of input.resources)
       adjust.set(res.id, res.currentCount * -1);
@@ -29087,7 +29003,7 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/domain/economy/production/pylon.ts
-  var EMPTY3 = Object.freeze({
+  var EMPTY2 = Object.freeze({
     decrease: Object.freeze([]),
     increase: Object.freeze([]),
     manaRateAdjustment: null
@@ -29103,7 +29019,7 @@ Only continue if you trust the source. Injected code:
   }
   function planPylon(input) {
     if (!input.initialised)
-      return EMPTY3;
+      return EMPTY2;
     let adjustments = /* @__PURE__ */ new Map();
     for (let spell of input.spells)
       adjustments.set(spell.id, 0);

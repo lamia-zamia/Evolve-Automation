@@ -111,9 +111,7 @@ hooks.setDemandPrioritizationTestContext({
   state,
   resources,
   buildings,
-  game: {
-    global: { race: { species: "human" }, tech: {}, stats: { days: 1_000 } },
-  },
+  game: { global: { race: { species: "human" }, tech: {} } },
   crafter: { Sheet: { resource: crafterResource } },
   SpyManager: { purchaseMoney: 500 },
   FleetManagerOuter: {
@@ -172,9 +170,7 @@ hooks.setDemandPrioritizationTestContext({
       stateOnCount: 0,
     },
   },
-  game: {
-    global: { race: { species: "human" }, tech: {}, stats: { days: 1_000 } },
-  },
+  game: { global: { race: { species: "human" }, tech: {} } },
   crafter: {},
   SpyManager: { purchaseMoney: 0 },
   FleetManagerOuter: { nextShipAffordable: false, nextShipCost: {} },
@@ -220,13 +216,7 @@ hooks.setDemandPrioritizationTestContext({
       stateOnCount: 0,
     },
   },
-  game: {
-    global: {
-      race: { truepath: true },
-      tech: { titan_ai_core: 1 },
-      stats: { days: 1_000 },
-    },
-  },
+  game: { global: { race: { truepath: true }, tech: { titan_ai_core: 1 } } },
   crafter: {},
   SpyManager: { purchaseMoney: 0 },
   FleetManagerOuter: { nextShipAffordable: false, nextShipCost: {} },
