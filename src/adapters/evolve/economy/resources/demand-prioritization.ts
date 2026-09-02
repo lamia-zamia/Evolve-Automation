@@ -7,6 +7,7 @@ import type {
   DemandMission,
   DemandPrioritizationInput,
   DemandPrioritizationSettings,
+  DemandSavingTarget,
   DemandTarget,
   DemandTech,
 } from "../../../../domain/economy/resources/demand-prioritization.ts";
@@ -17,12 +18,14 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../../validation.ts";
 
 export interface DemandPrioritizationReaderDependencies {
   readonly getSettings: () => unknown;
   readonly getState: () => unknown;
+  readonly getBuildingManager: () => unknown;
   readonly getGame: () => unknown;
   readonly getResources: () => unknown;
   readonly getBuildings: () => unknown;
@@ -85,6 +88,59 @@ function targetList(
     const record = requireRecord(entry, `${path}[${index}]`);
     return readTarget(record, `${path}[${index}]`, isProject);
   });
+}
+
+/**
+ * The highest weighted candidate the build loop wants and cannot yet afford.
+ *
+ * The candidate list comes from the building manager rather than
+ * `state.unlockedBuildings`, which `updatePriorityTargets` clears immediately
+ * before this pass runs and autoBuild only republishes afterwards. Each
+ * candidate's `weighting` is therefore the previous tick's; the ordering
+ * changes slowly and a one-tick lag only delays a demand by one tick.
+ *
+ * Projects are deliberately not candidates. autoARPA buys them one segment at a
+ * time, so a project reads as unaffordable for the tick after each segment
+ * without being blocked on anything, and `cost` on a project is the whole
+ * remaining project - demanding that would park the run's entire income behind
+ * a target that is already progressing.
+ *
+ * "Cannot afford" uses the same pair of checks the build queue uses for
+ * `maximumAffordable`: storage must be able to hold the cost at all, and the
+ * cost must not be met right now. A target storage can never hold is not
+ * something to save for.
+ */
+function readSavingTarget(manager: unknown): DemandSavingTarget | null {
+  const record = requireRecord(manager, "BuildingManager");
+  const list = requireFunction(
+    record["managedPriorityList"],
+    "BuildingManager.managedPriorityList",
+  );
+  const entries: unknown = Reflect.apply(list, record, []);
+  if (!Array.isArray(entries)) {
+    throw new TypeError(
+      "BuildingManager.managedPriorityList() must return an array",
+    );
+  }
+  const candidates = entries.map((entry, index) => {
+    const path = `BuildingManager.managedPriorityList()[${index}]`;
+    const candidate = requireRecord(entry, path);
+    return {
+      record: candidate,
+      weighting: requireNumber(candidate["weighting"], `${path}.weighting`),
+    };
+  });
+  candidates.sort((left, right) => right.weighting - left.weighting);
+  for (const candidate of candidates) {
+    const path = "saving candidate";
+    if (!callBoolean(candidate.record, "isAffordable", path, true)) continue;
+    if (callBoolean(candidate.record, "isAffordable", path)) continue;
+    return Object.freeze({
+      name: requireString(candidate.record["title"], `${path}.title`),
+      costs: Object.freeze(readCosts(candidate.record["cost"], `${path}.cost`)),
+    });
+  }
+  return null;
 }
 
 function readMissions(
@@ -305,6 +361,7 @@ export function readDemandPrioritizationInput(
     triggerTargets: Object.freeze(
       targetList(state["triggerTargets"], "state.triggerTargets", isProject),
     ),
+    savingTarget: readSavingTarget(dependencies.getBuildingManager()),
     missions: Object.freeze(
       readMissions(
         state["missionBuildingList"],

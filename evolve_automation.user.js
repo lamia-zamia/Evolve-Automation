@@ -3759,6 +3759,11 @@ Only continue if you trust the source. Injected code:
       resources[request.resourceId].requestQuantity(request.amount);
     for (let index of result2.removedMissionIndices)
       state.missionBuildingList.splice(index, 1);
+    result2.savingConflict !== null && state.conflictTargets.push({
+      name: result2.savingConflict.name,
+      cause: "Saving",
+      cost: { ...result2.savingConflict.cost }
+    });
   }
 
   // src/domain/progression/truepath/ai-apocalypse.ts
@@ -3861,6 +3866,10 @@ Only continue if you trust the source. Injected code:
       for (let cost of task.costs)
         request(cost.resourceId, cost.amount * multiplier);
     }
+    let savingCost = {};
+    if (input.savingTarget !== null)
+      for (let cost of input.savingTarget.costs)
+        request(cost.resourceId, cost.amount), savingCost[cost.resourceId] = cost.amount;
     if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req") && request("Money", input.spyPurchaseMoney), settings.autoFleet && input.fleet.nextShipAffordable && settings.prioritizeOuterFleet.includes("req"))
       for (let cost of input.fleet.nextShipCost)
         request(cost.resourceId, cost.amount);
@@ -3882,6 +3891,10 @@ Only continue if you trust the source. Injected code:
             );
     }
     return Object.freeze({
+      savingConflict: input.savingTarget === null ? null : Object.freeze({
+        name: input.savingTarget.name,
+        cost: Object.freeze(savingCost)
+      }),
       requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
       removedMissionIndices: Object.freeze(removedMissionIndices)
     });
@@ -4015,6 +4028,33 @@ Only continue if you trust the source. Injected code:
       let record = requireRecord(entry, `${path}[${index}]`);
       return readTarget(record, `${path}[${index}]`, isProject);
     });
+  }
+  function readSavingTarget(manager) {
+    let record = requireRecord(manager, "BuildingManager"), list = requireFunction(
+      record.managedPriorityList,
+      "BuildingManager.managedPriorityList"
+    ), entries = Reflect.apply(list, record, []);
+    if (!Array.isArray(entries))
+      throw new TypeError(
+        "BuildingManager.managedPriorityList() must return an array"
+      );
+    let candidates = entries.map((entry, index) => {
+      let path = `BuildingManager.managedPriorityList()[${index}]`, candidate = requireRecord(entry, path);
+      return {
+        record: candidate,
+        weighting: requireNumber(candidate.weighting, `${path}.weighting`)
+      };
+    });
+    candidates.sort((left, right) => right.weighting - left.weighting);
+    for (let candidate of candidates) {
+      let path = "saving candidate";
+      if (callBoolean(candidate.record, "isAffordable", path, !0) && !callBoolean(candidate.record, "isAffordable", path))
+        return Object.freeze({
+          name: requireString(candidate.record.title, `${path}.title`),
+          costs: Object.freeze(readCosts(candidate.record.cost, `${path}.cost`))
+        });
+    }
+    return null;
   }
   function readMissions(value, blackhole, isProject) {
     if (!Array.isArray(value))
@@ -4175,6 +4215,7 @@ Only continue if you trust the source. Injected code:
       triggerTargets: Object.freeze(
         targetList(state.triggerTargets, "state.triggerTargets", isProject)
       ),
+      savingTarget: readSavingTarget(dependencies.getBuildingManager()),
       missions: Object.freeze(
         readMissions(
           state.missionBuildingList,
@@ -4603,6 +4644,7 @@ Only continue if you trust the source. Injected code:
   function createDemandPrioritizationAction({
     getSettings,
     getState,
+    getBuildingManager,
     getGame,
     getResources,
     getBuildings,
@@ -4624,6 +4666,7 @@ Only continue if you trust the source. Injected code:
         readDemandPrioritizationInput({
           getSettings,
           getState,
+          getBuildingManager,
           getGame,
           getResources,
           getBuildings,
@@ -51580,6 +51623,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }), { prioritizeDemandedResources } = createDemandPrioritizationAction({
       getSettings: () => settings,
       getState: () => state,
+      getBuildingManager: () => BuildingManager,
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,

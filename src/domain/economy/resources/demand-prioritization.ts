@@ -113,6 +113,15 @@ export interface DemandPrioritizationInput {
   readonly retirementGraphene: number | null;
   readonly queuedTargets: readonly DemandTarget[];
   readonly triggerTargets: readonly DemandTarget[];
+  /**
+   * The build target the automation is currently saving for: the highest
+   * weighted candidate it wants but cannot yet afford. Without it only queued
+   * and trigger targets can express demand, so an ordinary weighted target -
+   * however expensive - never tells crafting, market or storage that it is
+   * accumulating, and its costs are spent by cheaper candidates as they arrive.
+   * Null when every wanted candidate is affordable.
+   */
+  readonly savingTarget: DemandSavingTarget | null;
   /** In `missionBuildingList` order; indices in the result align with this. */
   readonly missions: readonly DemandMission[];
   readonly unlockedTechs: readonly DemandTech[];
@@ -125,8 +134,24 @@ export interface DemandPrioritizationInput {
   readonly factoryProductions: readonly DemandFactoryProduction[];
 }
 
+/** The build target being saved for, named so its reservation can say why. */
+export interface DemandSavingTarget {
+  readonly name: string;
+  readonly costs: readonly DemandCost[];
+}
+
 export interface DemandPrioritizationResult {
   readonly requests: readonly DemandRequest[];
+  /**
+   * Cost reservation for the saving target, or null when nothing is being saved
+   * for. Requesting a quantity only tells crafting, market and storage to hold
+   * a resource; it does not stop the build loop spending it, so without this a
+   * target whose cost is produced rather than crafted never accumulates.
+   */
+  readonly savingConflict: {
+    readonly name: string;
+    readonly cost: Readonly<Record<string, number>>;
+  } | null;
   /** Indices to splice from `missionBuildingList`, descending (splice-safe). */
   readonly removedMissionIndices: readonly number[];
 }
@@ -208,6 +233,17 @@ export function planDemandPrioritization(
     }
   }
 
+  // Additive rather than part of `prioritizedTasks`: an explicit queue still
+  // decides what the fallback research request does, and requests are combined
+  // by maximum, so saving for a target can only raise a demand, never lower one.
+  const savingCost: Record<string, number> = {};
+  if (input.savingTarget !== null) {
+    for (const cost of input.savingTarget.costs) {
+      request(cost.resourceId, cost.amount);
+      savingCost[cost.resourceId] = cost.amount;
+    }
+  }
+
   if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req")) {
     request("Money", input.spyPurchaseMoney);
   }
@@ -268,6 +304,13 @@ export function planDemandPrioritization(
   }
 
   return Object.freeze({
+    savingConflict:
+      input.savingTarget === null
+        ? null
+        : Object.freeze({
+            name: input.savingTarget.name,
+            cost: Object.freeze(savingCost),
+          }),
     requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
     removedMissionIndices: Object.freeze(removedMissionIndices),
   });

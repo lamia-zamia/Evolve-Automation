@@ -25,6 +25,8 @@ function baseDeps(overrides = {}) {
   };
   const deps = {
     getSettings: () => overrides.settings ?? baseSettings,
+    getBuildingManager: () =>
+      overrides.buildingManager ?? { managedPriorityList: () => [] },
     getState: () =>
       overrides.state ?? {
         queuedTargets: [],
@@ -395,6 +397,59 @@ function baseDeps(overrides = {}) {
       `expected throw: ${label}`,
     );
   }
+}
+
+{
+  // The saving target is the highest weighted candidate the build loop wants
+  // and cannot afford yet. It comes from the building manager, because
+  // updatePriorityTargets clears state.unlockedBuildings just before this pass,
+  // and because a project is bought a segment at a time rather than saved for.
+  const candidate = (weighting, cost, affordableNow, storable = true) => ({
+    weighting,
+    cost,
+    title: "candidate" + weighting,
+    isAffordable: (max) => (max === true ? storable : affordableNow),
+  });
+  const managerOf = (...entries) => ({ managedPriorityList: () => entries });
+  const savingTargetFor = (buildingManager) =>
+    readDemandPrioritizationInput(baseDeps({ buildingManager })).savingTarget;
+
+  // Highest weighting first, regardless of the manager's own list order, and an
+  // affordable leader is skipped for the first unaffordable candidate.
+  assert.deepEqual(
+    savingTargetFor(
+      managerOf(
+        candidate(100, { Coal: 5 }, false),
+        candidate(300, { Titanium: 650000 }, false),
+        candidate(310, { Coal: 10 }, true),
+      ),
+    ),
+    {
+      name: "candidate300",
+      costs: [{ resourceId: "Titanium", amount: 650000 }],
+    },
+  );
+
+  // A cost storage can never hold is not something to save for.
+  assert.deepEqual(
+    savingTargetFor(
+      managerOf(
+        candidate(300, { Titanium: 1e9 }, false, false),
+        candidate(100, { Coal: 5 }, false),
+      ),
+    ),
+    { name: "candidate100", costs: [{ resourceId: "Coal", amount: 5 }] },
+  );
+
+  // Everything affordable, and an empty list, both mean nothing to save for.
+  assert.equal(
+    savingTargetFor(managerOf(candidate(100, { Coal: 1 }, true))),
+    null,
+  );
+  assert.equal(savingTargetFor(managerOf()), null);
+
+  // A manager that does not answer with a list is a contract violation.
+  assert.throws(() => savingTargetFor({ managedPriorityList: () => null }));
 }
 
 console.log("Demand prioritization adapter contract tests passed");

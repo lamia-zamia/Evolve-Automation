@@ -12,6 +12,11 @@ interface StateDemandState {
   cheapestTechKnowledge: number;
   knowledgeRequiredByBuildTargets: number;
   missionBuildingList: unknown[];
+  conflictTargets: {
+    name: string;
+    cause: string;
+    cost: Record<string, number>;
+  }[];
 }
 
 /** Apply pure storage planning results to the live game resource catalog and state. */
@@ -46,5 +51,14 @@ export function applyDemandPrioritizationResult(
   }
   for (const index of result.removedMissionIndices) {
     state.missionBuildingList.splice(index, 1);
+  }
+  // updatePriorityTargets clears conflictTargets earlier in the same planning
+  // pass, so this reservation survives until the build loop reads it.
+  if (result.savingConflict !== null) {
+    state.conflictTargets.push({
+      name: result.savingConflict.name,
+      cause: "Saving",
+      cost: { ...result.savingConflict.cost },
+    });
   }
 }

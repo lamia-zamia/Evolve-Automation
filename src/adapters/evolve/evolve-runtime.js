@@ -1295,6 +1295,7 @@ export function startEvolveRuntimeComposition(
     createDemandPrioritizationActionControl({
       getSettings: () => settings,
       getState: () => state,
+      getBuildingManager: () => BuildingManager,
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,

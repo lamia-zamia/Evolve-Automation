@@ -27,6 +27,11 @@ interface DemandState {
   cheapestTechKnowledge: number;
   knowledgeRequiredByBuildTargets: number;
   missionBuildingList: unknown[];
+  conflictTargets: {
+    name: string;
+    cause: string;
+    cost: Record<string, number>;
+  }[];
 }
 
 interface StorageRequirementsActionDependencies {
@@ -49,6 +54,7 @@ interface StorageRequirementsActionDependencies {
 interface DemandPrioritizationActionDependencies {
   readonly getSettings: () => unknown;
   readonly getState: () => unknown;
+  readonly getBuildingManager: () => unknown;
   readonly getGame: () => unknown;
   readonly getResources: () => Record<string, ResourceState>;
   readonly getBuildings: () => unknown;
@@ -130,6 +136,7 @@ export function createStorageRequirementsAction({
 export function createDemandPrioritizationAction({
   getSettings,
   getState,
+  getBuildingManager,
   getGame,
   getResources,
   getBuildings,
@@ -153,6 +160,7 @@ export function createDemandPrioritizationAction({
       readDemandPrioritizationInput({
         getSettings,
         getState,
+        getBuildingManager,
         getGame,
         getResources,
         getBuildings,
