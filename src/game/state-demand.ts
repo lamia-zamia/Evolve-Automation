@@ -17,6 +17,7 @@ interface StateDemandState {
     cause: string;
     cost: Record<string, number>;
   }[];
+  savingCommitment: { name: string; deadlineDay: number } | null;
 }
 
 /** Apply pure storage planning results to the live game resource catalog and state. */
@@ -52,6 +53,10 @@ export function applyDemandPrioritizationResult(
   for (const index of result.removedMissionIndices) {
     state.missionBuildingList.splice(index, 1);
   }
+  // Carried across ticks so the target's deadline is a promise the planner
+  // remembers rather than a fresh estimate that its own spending can push back.
+  state.savingCommitment =
+    result.savingCommitment === null ? null : { ...result.savingCommitment };
   // updatePriorityTargets clears conflictTargets earlier in the same planning
   // pass, so this reservation survives until the build loop reads it.
   if (result.savingConflict !== null) {

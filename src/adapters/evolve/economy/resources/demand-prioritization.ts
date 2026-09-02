@@ -11,9 +11,14 @@ import type {
   DemandTarget,
   DemandTech,
 } from "../../../../domain/economy/resources/demand-prioritization.ts";
+import type {
+  SavingCommitment,
+  SavingCost,
+} from "../../../../domain/economy/resources/saving-schedule.ts";
 import { planTruepathAiApocalypse } from "../../../../domain/progression/truepath/ai-apocalypse.ts";
 import {
   callBoolean,
+  isRecord,
   requireBoolean,
   requireFunction,
   requireNumber,
@@ -21,6 +26,9 @@ import {
   requireString,
   type UnknownRecord,
 } from "../../../validation.ts";
+
+/** One game day is twenty game ticks, and the game reports rates per second. */
+const GAME_SECONDS_PER_DAY = 5;
 
 export interface DemandPrioritizationReaderDependencies {
   readonly getSettings: () => unknown;
@@ -110,7 +118,70 @@ function targetList(
  * cost must not be met right now. A target storage can never hold is not
  * something to save for.
  */
-function readSavingTarget(manager: unknown): DemandSavingTarget | null {
+/** Game day; the saving schedule ages its commitment against this clock. */
+function readCurrentDay(game: unknown): number {
+  const global = requireRecord(
+    requireRecord(game, "game")["global"],
+    "game.global",
+  );
+  return requireNumber(
+    requireRecord(global["stats"], "game.global.stats")["days"],
+    "game.global.stats.days",
+  );
+}
+
+/**
+ * The commitment the previous tick stored. It is absent on the first tick and
+ * whenever the game state has been reloaded, which correctly re-establishes the
+ * deadline from the current estimate rather than an inherited one.
+ */
+function readSavingCommitment(state: unknown): SavingCommitment | null {
+  if (!isRecord(state)) return null;
+  const stored = state["savingCommitment"];
+  if (!isRecord(stored)) return null;
+  const name = stored["name"];
+  const deadlineDay = stored["deadlineDay"];
+  if (typeof name !== "string" || typeof deadlineDay !== "number") return null;
+  if (!Number.isFinite(deadlineDay)) return null;
+  return Object.freeze({ name, deadlineDay });
+}
+
+function readSavingCosts(
+  value: unknown,
+  path: string,
+  resources: UnknownRecord,
+): SavingCost[] {
+  const costs: SavingCost[] = [];
+  for (const cost of readCosts(value, path)) {
+    const resource = resources[cost.resourceId];
+    // A cost naming a resource the catalog has not created yet contributes no
+    // schedule: it has neither a quantity to hold nor a rate to plan against.
+    if (!isRecord(resource)) continue;
+    costs.push(
+      Object.freeze({
+        resourceId: cost.resourceId,
+        amount: cost.amount,
+        currentQuantity: requireNumber(
+          resource["currentQuantity"],
+          `resources.${cost.resourceId}.currentQuantity`,
+        ),
+        // The game reports production per second and one game day is five
+        // seconds (twenty game ticks), measured against the headless clock.
+        ratePerDay:
+          requireNumber(
+            resource["rateOfChange"],
+            `resources.${cost.resourceId}.rateOfChange`,
+          ) * GAME_SECONDS_PER_DAY,
+      }),
+    );
+  }
+  return costs;
+}
+
+function readSavingTarget(
+  manager: unknown,
+  resources: UnknownRecord,
+): DemandSavingTarget | null {
   const record = requireRecord(manager, "BuildingManager");
   const list = requireFunction(
     record["managedPriorityList"],
@@ -137,7 +208,9 @@ function readSavingTarget(manager: unknown): DemandSavingTarget | null {
     if (callBoolean(candidate.record, "isAffordable", path)) continue;
     return Object.freeze({
       name: requireString(candidate.record["title"], `${path}.title`),
-      costs: Object.freeze(readCosts(candidate.record["cost"], `${path}.cost`)),
+      costs: Object.freeze(
+        readSavingCosts(candidate.record["cost"], `${path}.cost`, resources),
+      ),
     });
   }
   return null;
@@ -361,7 +434,12 @@ export function readDemandPrioritizationInput(
     triggerTargets: Object.freeze(
       targetList(state["triggerTargets"], "state.triggerTargets", isProject),
     ),
-    savingTarget: readSavingTarget(dependencies.getBuildingManager()),
+    savingTarget: readSavingTarget(
+      dependencies.getBuildingManager(),
+      requireRecord(dependencies.getResources(), "resources"),
+    ),
+    currentDay: readCurrentDay(dependencies.getGame()),
+    savingCommitment: readSavingCommitment(dependencies.getState()),
     missions: Object.freeze(
       readMissions(
         state["missionBuildingList"],

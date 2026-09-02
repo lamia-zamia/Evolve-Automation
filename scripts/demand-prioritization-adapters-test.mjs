@@ -20,8 +20,18 @@ const baseSettings = {
 
 function baseDeps(overrides = {}) {
   const resources = overrides.resources ?? {
-    Titanium: { id: "Titanium", maxQuantity: 100 },
-    Coal: { id: "Coal", maxQuantity: 1000 },
+    Titanium: {
+      id: "Titanium",
+      maxQuantity: 100,
+      currentQuantity: 50_000,
+      rateOfChange: 100,
+    },
+    Coal: {
+      id: "Coal",
+      maxQuantity: 1000,
+      currentQuantity: 0,
+      rateOfChange: 1,
+    },
   };
   const deps = {
     getSettings: () => overrides.settings ?? baseSettings,
@@ -35,7 +45,9 @@ function baseDeps(overrides = {}) {
         unlockedTechs: [],
       },
     getGame: () =>
-      overrides.game ?? { global: { race: { truepath: false }, tech: {} } },
+      overrides.game ?? {
+        global: { race: { truepath: false }, tech: {}, stats: { days: 1_000 } },
+      },
     getResources: () => resources,
     getBuildings: () =>
       overrides.buildings ?? {
@@ -87,7 +99,11 @@ function baseDeps(overrides = {}) {
     baseDeps({
       settings: { ...baseSettings, prestigeType: "apocalypse" },
       game: {
-        global: { race: { truepath: true }, tech: { titan_ai_core: 3 } },
+        global: {
+          race: { truepath: true },
+          tech: { titan_ai_core: 3 },
+          stats: { days: 1_000 },
+        },
       },
       buildings: {
         BlackholeJumpShip: null,
@@ -120,7 +136,11 @@ function baseDeps(overrides = {}) {
   const input = readDemandPrioritizationInput(
     baseDeps({
       game: {
-        global: { race: { truepath: true }, tech: { titan_ai_core: 3 } },
+        global: {
+          race: { truepath: true },
+          tech: { titan_ai_core: 3 },
+          stats: { days: 1_000 },
+        },
       },
     }),
   );
@@ -426,7 +446,15 @@ function baseDeps(overrides = {}) {
     ),
     {
       name: "candidate300",
-      costs: [{ resourceId: "Titanium", amount: 650000 }],
+      costs: [
+        {
+          resourceId: "Titanium",
+          amount: 650000,
+          currentQuantity: 50_000,
+          // rateOfChange 100/s x 5 seconds per game day.
+          ratePerDay: 500,
+        },
+      ],
     },
   );
 
@@ -438,7 +466,18 @@ function baseDeps(overrides = {}) {
         candidate(100, { Coal: 5 }, false),
       ),
     ),
-    { name: "candidate100", costs: [{ resourceId: "Coal", amount: 5 }] },
+    {
+      name: "candidate100",
+      costs: [
+        {
+          resourceId: "Coal",
+          amount: 5,
+          currentQuantity: 0,
+          // rateOfChange 1/s x 5 seconds per game day.
+          ratePerDay: 5,
+        },
+      ],
+    },
   );
 
   // Everything affordable, and an empty list, both mean nothing to save for.

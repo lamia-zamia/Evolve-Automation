@@ -1,4 +1,9 @@
 import { isTruepathAiResourceResearch } from "../../progression/truepath/ai-apocalypse.ts";
+import {
+  planSavingSchedule,
+  type SavingCommitment,
+  type SavingCost,
+} from "./saving-schedule.ts";
 
 /**
  * Pure equivalent of the legacy `prioritizeDemandedResources`. It replays the
@@ -122,6 +127,10 @@ export interface DemandPrioritizationInput {
    * Null when every wanted candidate is affordable.
    */
   readonly savingTarget: DemandSavingTarget | null;
+  /** Game day, used to age the saving target's completion commitment. */
+  readonly currentDay: number;
+  /** The saving commitment carried over from the previous tick, or null. */
+  readonly savingCommitment: SavingCommitment | null;
   /** In `missionBuildingList` order; indices in the result align with this. */
   readonly missions: readonly DemandMission[];
   readonly unlockedTechs: readonly DemandTech[];
@@ -137,7 +146,7 @@ export interface DemandPrioritizationInput {
 /** The build target being saved for, named so its reservation can say why. */
 export interface DemandSavingTarget {
   readonly name: string;
-  readonly costs: readonly DemandCost[];
+  readonly costs: readonly SavingCost[];
 }
 
 export interface DemandPrioritizationResult {
@@ -152,6 +161,8 @@ export interface DemandPrioritizationResult {
     readonly name: string;
     readonly cost: Readonly<Record<string, number>>;
   } | null;
+  /** The commitment to carry into the next tick, or null when not saving. */
+  readonly savingCommitment: SavingCommitment | null;
   /** Indices to splice from `missionBuildingList`, descending (splice-safe). */
   readonly removedMissionIndices: readonly number[];
 }
@@ -236,12 +247,22 @@ export function planDemandPrioritization(
   // Additive rather than part of `prioritizedTasks`: an explicit queue still
   // decides what the fallback research request does, and requests are combined
   // by maximum, so saving for a target can only raise a demand, never lower one.
-  const savingCost: Record<string, number> = {};
+  //
+  // Demand asks for the whole cost; the reservation only holds what the
+  // target's schedule needs today. The two are deliberately different: telling
+  // crafting and market to work toward the full cost is free, whereas
+  // withholding the full cost from every other build is what starves them.
+  let savingSchedule = null;
   if (input.savingTarget !== null) {
     for (const cost of input.savingTarget.costs) {
       request(cost.resourceId, cost.amount);
-      savingCost[cost.resourceId] = cost.amount;
     }
+    savingSchedule = planSavingSchedule({
+      name: input.savingTarget.name,
+      costs: input.savingTarget.costs,
+      currentDay: input.currentDay,
+      previous: input.savingCommitment,
+    });
   }
 
   if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req")) {
@@ -304,12 +325,15 @@ export function planDemandPrioritization(
   }
 
   return Object.freeze({
+    savingCommitment: savingSchedule?.commitment ?? null,
     savingConflict:
-      input.savingTarget === null
+      savingSchedule === null ||
+      savingSchedule.commitment === null ||
+      Object.keys(savingSchedule.holds).length === 0
         ? null
         : Object.freeze({
-            name: input.savingTarget.name,
-            cost: Object.freeze(savingCost),
+            name: savingSchedule.commitment.name,
+            cost: savingSchedule.holds,
           }),
     requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
     removedMissionIndices: Object.freeze(removedMissionIndices),
