@@ -4029,23 +4029,31 @@ Only continue if you trust the source. Injected code:
       return readTarget(record, `${path}[${index}]`, isProject);
     });
   }
-  function readSavingTarget(manager) {
-    let record = requireRecord(manager, "BuildingManager"), list = requireFunction(
-      record.managedPriorityList,
-      "BuildingManager.managedPriorityList"
-    ), entries = Reflect.apply(list, record, []);
-    if (!Array.isArray(entries))
-      throw new TypeError(
-        "BuildingManager.managedPriorityList() must return an array"
-      );
-    let candidates = entries.map((entry, index) => {
-      let path = `BuildingManager.managedPriorityList()[${index}]`, candidate = requireRecord(entry, path);
-      return {
-        record: candidate,
-        weighting: requireNumber(candidate.weighting, `${path}.weighting`)
-      };
-    });
-    candidates.sort((left, right) => right.weighting - left.weighting);
+  function readProgressionTargets(buildingManager, projectManager) {
+    let candidates = [];
+    for (let [manager, label] of [
+      [buildingManager, "BuildingManager"],
+      [projectManager, "ProjectManager"]
+    ]) {
+      let record = requireRecord(manager, label), list = requireFunction(
+        record.managedPriorityList,
+        `${label}.managedPriorityList`
+      ), entries = Reflect.apply(list, record, []);
+      if (!Array.isArray(entries))
+        throw new TypeError(
+          `${label}.managedPriorityList() must return an array`
+        );
+      entries.forEach((entry, index) => {
+        let path = `${label}.managedPriorityList()[${index}]`, candidate = requireRecord(entry, path);
+        candidates.push({
+          record: candidate,
+          weighting: requireNumber(candidate.weighting, `${path}.weighting`)
+        });
+      });
+    }
+    return candidates.sort((left, right) => right.weighting - left.weighting), candidates;
+  }
+  function readSavingTarget(candidates) {
     for (let candidate of candidates) {
       let path = "saving candidate";
       if (callBoolean(candidate.record, "isAffordable", path, !0) && !callBoolean(candidate.record, "isAffordable", path))
@@ -4215,7 +4223,12 @@ Only continue if you trust the source. Injected code:
       triggerTargets: Object.freeze(
         targetList(state.triggerTargets, "state.triggerTargets", isProject)
       ),
-      savingTarget: readSavingTarget(dependencies.getBuildingManager()),
+      savingTarget: readSavingTarget(
+        readProgressionTargets(
+          dependencies.getBuildingManager(),
+          dependencies.getProjectManager()
+        )
+      ),
       missions: Object.freeze(
         readMissions(
           state.missionBuildingList,
@@ -4645,6 +4658,7 @@ Only continue if you trust the source. Injected code:
     getSettings,
     getState,
     getBuildingManager,
+    getProjectManager,
     getGame,
     getResources,
     getBuildings,
@@ -4667,6 +4681,7 @@ Only continue if you trust the source. Injected code:
           getSettings,
           getState,
           getBuildingManager,
+          getProjectManager,
           getGame,
           getResources,
           getBuildings,
@@ -51624,6 +51639,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSettings: () => settings,
       getState: () => state,
       getBuildingManager: () => BuildingManager,
+      getProjectManager: () => ProjectManager,
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,

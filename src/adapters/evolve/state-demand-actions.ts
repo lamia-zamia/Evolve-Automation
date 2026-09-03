@@ -55,6 +55,7 @@ interface DemandPrioritizationActionDependencies {
   readonly getSettings: () => unknown;
   readonly getState: () => unknown;
   readonly getBuildingManager: () => unknown;
+  readonly getProjectManager: () => unknown;
   readonly getGame: () => unknown;
   readonly getResources: () => Record<string, ResourceState>;
   readonly getBuildings: () => unknown;
@@ -137,6 +138,7 @@ export function createDemandPrioritizationAction({
   getSettings,
   getState,
   getBuildingManager,
+  getProjectManager,
   getGame,
   getResources,
   getBuildings,
@@ -161,6 +163,7 @@ export function createDemandPrioritizationAction({
         getSettings,
         getState,
         getBuildingManager,
+        getProjectManager,
         getGame,
         getResources,
         getBuildings,

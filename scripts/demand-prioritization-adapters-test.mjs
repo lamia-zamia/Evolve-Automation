@@ -27,6 +27,8 @@ function baseDeps(overrides = {}) {
     getSettings: () => overrides.settings ?? baseSettings,
     getBuildingManager: () =>
       overrides.buildingManager ?? { managedPriorityList: () => [] },
+    getProjectManager: () =>
+      overrides.projectManager ?? { managedPriorityList: () => [] },
     getState: () =>
       overrides.state ?? {
         queuedTargets: [],
@@ -401,9 +403,9 @@ function baseDeps(overrides = {}) {
 
 {
   // The saving target is the highest weighted candidate the build loop wants
-  // and cannot afford yet. It comes from the building manager, because
-  // updatePriorityTargets clears state.unlockedBuildings just before this pass,
-  // and because a project is bought a segment at a time rather than saved for.
+  // and cannot afford yet, taken from the building and project managers
+  // together, because updatePriorityTargets clears state.unlockedBuildings just
+  // before this pass runs.
   const candidate = (weighting, cost, affordableNow, storable = true) => ({
     weighting,
     cost,
@@ -411,8 +413,9 @@ function baseDeps(overrides = {}) {
     isAffordable: (max) => (max === true ? storable : affordableNow),
   });
   const managerOf = (...entries) => ({ managedPriorityList: () => entries });
-  const savingTargetFor = (buildingManager) =>
-    readDemandPrioritizationInput(baseDeps({ buildingManager })).savingTarget;
+  const savingTargetFor = (buildingManager, projectManager) =>
+    readDemandPrioritizationInput(baseDeps({ buildingManager, projectManager }))
+      .savingTarget;
 
   // Highest weighting first, regardless of the manager's own list order, and an
   // affordable leader is skipped for the first unaffordable candidate.
@@ -448,8 +451,65 @@ function baseDeps(overrides = {}) {
   );
   assert.equal(savingTargetFor(managerOf()), null);
 
-  // A manager that does not answer with a list is a contract violation.
+  // A manager that does not answer with a list is a contract violation, for
+  // either manager.
   assert.throws(() => savingTargetFor({ managedPriorityList: () => null }));
+  assert.throws(() =>
+    savingTargetFor(managerOf(), { managedPriorityList: () => null }),
+  );
+
+  // Regression: ARPA Launch Facility is the sole grant of tech.space, and its
+  // next step needs six resources at once. Observed failure was launch_facility
+  // parked at 50/100 while lower weighted spending continued indefinitely,
+  // because projects could not be saving targets at all. Its measured weighting
+  // led the LHC's by roughly twenty to one, so selection has to pick it on
+  // weighting alone - no project-specific priority.
+  const launchFacility = candidate(
+    3500,
+    {
+      Money: 700000,
+      Knowledge: 175000,
+      Cement: 52500,
+      Oil: 7000,
+      Sheet_Metal: 5250,
+      Alloy: 8750,
+    },
+    false,
+  );
+  launchFacility.title = "Launch Facility";
+  const lhc = candidate(175, { Money: 90000, Knowledge: 45000 }, true);
+  lhc.title = "Large Hadron Collider";
+  const target = savingTargetFor(
+    managerOf(candidate(100, { Coal: 5 }, false)),
+    managerOf(lhc, launchFacility),
+  );
+  assert.equal(target.name, "Launch Facility");
+  // The reserved cost is the next step's chunk exactly as the project reports
+  // it, not the whole remaining project.
+  assert.deepEqual(target.costs, [
+    { resourceId: "Money", amount: 700000 },
+    { resourceId: "Knowledge", amount: 175000 },
+    { resourceId: "Cement", amount: 52500 },
+    { resourceId: "Oil", amount: 7000 },
+    { resourceId: "Sheet_Metal", amount: 5250 },
+    { resourceId: "Alloy", amount: 8750 },
+  ]);
+
+  // A project that can afford its next step is progressing, not starved.
+  assert.equal(
+    savingTargetFor(managerOf(), managerOf(candidate(3500, { Oil: 10 }, true))),
+    null,
+  );
+
+  // Projects hold no privileged rank: a higher weighted unaffordable building
+  // still wins, so existing weighting policy keeps deciding.
+  assert.equal(
+    savingTargetFor(
+      managerOf(candidate(9000, { Coal: 5 }, false)),
+      managerOf(launchFacility),
+    ).name,
+    "candidate9000",
+  );
 }
 
 console.log("Demand prioritization adapter contract tests passed");

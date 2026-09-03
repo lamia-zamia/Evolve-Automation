@@ -1296,6 +1296,7 @@ export function startEvolveRuntimeComposition(
       getSettings: () => settings,
       getState: () => state,
       getBuildingManager: () => BuildingManager,
+      getProjectManager: () => ProjectManager,
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
