@@ -6,6 +6,8 @@ let yard;
 const requestedViews = [];
 const requestedSteps = [];
 const jqueryClicks = [];
+const dispatchClicks = [];
+let dispatchButtons = {};
 let stepsPerRequest = 1;
 const controls = createGameFleetControls({
   getVueById: (elementId) => {
@@ -16,6 +18,12 @@ const controls = createGameFleetControls({
     requestedSteps.push(count);
     return Array.from({ length: stepsPerRequest }, (_value, index) => index);
   },
+  getDocument: () => ({
+    querySelector: (selector) =>
+      dispatchButtons[selector] === true
+        ? { click: () => dispatchClicks.push(selector) }
+        : null,
+  }),
   getJQuery: () => (selector) => ({
     eq: (index) => ({
       click: () => jqueryClicks.push([selector, index]),
@@ -44,10 +52,10 @@ assert.equal(
   false,
 );
 assert.equal(controls.hasShipPower("shipPlans"), false);
-assert.equal(
-  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
-  false,
-);
+assert.deepEqual(controls.buildShip({ elementId: "shipPlans" }), {
+  actionable: false,
+  builtIndex: null,
+});
 assert.equal(
   controls.addShips({
     elementId: "fleet",
@@ -159,125 +167,96 @@ assert.deepEqual(calls, [
 assert.equal(controls.hasShipPower("shipPlans"), false);
 
 // Building a ship with a sort-toggle toggles the checkbox around the build and
-// parks the ship the build appended, which is the list's new last index.
+// reports the appended ship's index, which is the list's new last position.
 shipPlans.s = yard;
 yard.sort = true;
 yard.ships = [{ name: "A" }, { name: "B" }];
 shipPlans.powerText = () => "has-text-success";
 calls.length = 0;
 jqueryClicks.length = 0;
-assert.equal(
-  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
-  true,
-);
+assert.deepEqual(controls.buildShip({ elementId: "shipPlans" }), {
+  actionable: true,
+  builtIndex: 2,
+});
 assert.deepEqual(calls, [{ method: "build" }]);
 assert.deepEqual(jqueryClicks, [
   ["#shipPlans .b-checkbox", 1],
   ["#shipPlans .b-checkbox", 1],
 ]);
-assert.deepEqual(requestedViews.slice(-2), ["shipPlans", "shipReg0"]);
-let locationCalls = [];
-views["shipReg0"] = {
-  setLoc(...args) {
-    locationCalls.push(args);
-  },
-};
-yard.ships = [{ name: "A" }, { name: "B" }];
-calls.length = 0;
-jqueryClicks.length = 0;
-assert.equal(
-  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
-  true,
-);
-assert.deepEqual(locationCalls, [["spc_red", 2]]);
-assert.deepEqual(jqueryClicks, [
-  ["#shipPlans .b-checkbox", 1],
-  ["#shipPlans .b-checkbox", 1],
-]);
 
-// A build the game only queues appends no ship, so there is no ship to park and
-// no index to read past the end of the list with.
+// A build the game only queues appends no ship, so there is no index to read
+// past the end of the list with.
 buildAppends = false;
 yard.ships = [{ name: "A" }, { name: "B" }];
-locationCalls.length = 0;
 jqueryClicks.length = 0;
-assert.equal(
-  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
-  true,
-);
-assert.deepEqual(locationCalls, []);
+assert.deepEqual(controls.buildShip({ elementId: "shipPlans" }), {
+  actionable: true,
+  builtIndex: null,
+});
 assert.deepEqual(jqueryClicks, [
   ["#shipPlans .b-checkbox", 1],
   ["#shipPlans .b-checkbox", 1],
 ]);
 buildAppends = true;
 
-// A shipyard that sorts nothing needs no toggle, and building still parks the
-// ship; a missing ship row just skips the parking read.
+// A shipyard that sorts nothing needs no toggle.
 yard.sort = false;
 yard.ships = [{ name: "A" }, { name: "B" }];
-locationCalls.length = 0;
 jqueryClicks.length = 0;
-assert.equal(
-  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
-  true,
-);
-assert.deepEqual(locationCalls, [["spc_red", 2]]);
+assert.deepEqual(controls.buildShip({ elementId: "shipPlans" }), {
+  actionable: true,
+  builtIndex: 2,
+});
 assert.deepEqual(jqueryClicks, []);
-delete views["shipReg0"];
-yard.ships = [{ name: "A" }, { name: "B" }];
-locationCalls.length = 0;
-assert.equal(
-  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
-  true,
-);
-assert.deepEqual(locationCalls, []);
 
 // A shipyard list that has not rendered yet still allows the build click, and a
-// component that carries no shipyard at all neither toggles nor parks.
-views["shipReg0"] = {
-  setLoc(...args) {
-    locationCalls.push(args);
-  },
-};
+// component that carries no shipyard at all neither toggles nor reports a ship.
 yard.ships = undefined;
 yard.sort = true;
 calls.length = 0;
-locationCalls.length = 0;
 jqueryClicks.length = 0;
-assert.equal(
-  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
-  true,
-);
+assert.deepEqual(controls.buildShip({ elementId: "shipPlans" }), {
+  actionable: true,
+  builtIndex: null,
+});
 assert.deepEqual(calls, [{ method: "build" }]);
-assert.deepEqual(locationCalls, []);
 assert.deepEqual(jqueryClicks, [
   ["#shipPlans .b-checkbox", 1],
   ["#shipPlans .b-checkbox", 1],
 ]);
 shipPlans.s = undefined;
 calls.length = 0;
-locationCalls.length = 0;
 jqueryClicks.length = 0;
-assert.equal(
-  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
-  true,
-);
+assert.deepEqual(controls.buildShip({ elementId: "shipPlans" }), {
+  actionable: true,
+  builtIndex: null,
+});
 assert.deepEqual(calls, [{ method: "build" }]);
-assert.deepEqual(locationCalls, []);
 assert.deepEqual(jqueryClicks, []);
-delete views["shipReg0"];
 shipPlans.s = yard;
 yard.ships = [{ name: "A" }];
 yard.sort = false;
 
+// A dispatch names the ship row that opens the window, and sends the ship by
+// clicking the destination the window classes with the region. A window that
+// does not offer the region performs no click.
+assert.equal(controls.dispatchTrigger(4), "#ship4loc");
+dispatchButtons = { "#modalBox .shipDispatch button.spc_red": true };
+dispatchClicks.length = 0;
+assert.equal(controls.dispatchShip({ index: 4, region: "spc_red" }), true);
+assert.deepEqual(dispatchClicks, ["#modalBox .shipDispatch button.spc_red"]);
+dispatchClicks.length = 0;
+assert.equal(controls.dispatchShip({ index: 4, region: "spc_titan" }), false);
+assert.deepEqual(dispatchClicks, []);
+dispatchButtons = {};
+
 // A control without a build answer refuses without toggling the sort checkbox.
 views["shipPlans"] = { setVal() {} };
 jqueryClicks.length = 0;
-assert.equal(
-  controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
-  false,
-);
+assert.deepEqual(controls.buildShip({ elementId: "shipPlans" }), {
+  actionable: false,
+  builtIndex: null,
+});
 assert.deepEqual(jqueryClicks, []);
 
 // The piracy armada moves one ship per click step with the component receiver.
@@ -365,7 +344,7 @@ views["shipPlans"] = {
   },
 };
 assert.throws(
-  () => controls.buildShip({ elementId: "shipPlans", region: "spc_red" }),
+  () => controls.buildShip({ elementId: "shipPlans" }),
   /shipyard exploded/,
 );
 

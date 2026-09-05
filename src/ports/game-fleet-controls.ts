@@ -41,12 +41,36 @@ export interface GameFleetStepRequest {
   readonly count: number;
 }
 
-/** Building one ship of the configured blueprint and parking it in a region. */
+/** Building one ship of the configured blueprint. */
 export interface GameFleetBuildRequest {
   /** The element the game gives this panel's control. */
   readonly elementId: string;
+}
 
-  /** The region the built ship is assigned to. */
+/** What a build attempt did. */
+export interface GameFleetBuildResult {
+  /** Whether the build control was actionable at all. */
+  readonly actionable: boolean;
+
+  /**
+   * The new ship's position in the shipyard's own list, or null when no ship
+   * was appended. A cost the yard cannot pay queues the order instead of
+   * building, and a queued order appends nothing.
+   */
+  readonly builtIndex: number | null;
+}
+
+/**
+ * Sending one built ship to a region. The game offers no direct call for this:
+ * a ship row opens a dispatch window listing its reachable regions, and the
+ * region's own control performs the move. So a dispatch is a modal interaction,
+ * not a method call, and the caller drives it through the modal port.
+ */
+export interface GameFleetDispatchRequest {
+  /** The ship's position in the shipyard's own list. */
+  readonly index: number;
+
+  /** The region the ship is sent to, as the game names it. */
   readonly region: string;
 }
 
@@ -73,10 +97,19 @@ export interface GameFleetControlsPort {
   hasShipPower(elementId: string): boolean;
 
   /**
-   * Builds one ship of the configured blueprint and assigns it to the region.
-   * False means the control was not actionable.
+   * Builds one ship of the configured blueprint. A built ship starts at the
+   * shipyard and is sent onward with `dispatchShip`.
    */
-  buildShip(request: GameFleetBuildRequest): boolean;
+  buildShip(request: GameFleetBuildRequest): GameFleetBuildResult;
+
+  /** The control that opens the dispatch window for the ship at `index`. */
+  dispatchTrigger(index: number): string;
+
+  /**
+   * Sends the ship to the region from inside its open dispatch window. False
+   * means the window did not offer that destination.
+   */
+  dispatchShip(request: GameFleetDispatchRequest): boolean;
 
   /**
    * Moves ships from the gateway to the region, one click step at a time.

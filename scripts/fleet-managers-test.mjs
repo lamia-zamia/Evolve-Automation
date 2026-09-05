@@ -11,8 +11,15 @@ let haveTech = () => false;
 let vueById = {};
 const trace = [];
 
+let dispatchOffers = {};
 const fleetControls = createGameFleetControls({
   getVueById: (id) => vueById[id],
+  getDocument: () => ({
+    querySelector: (selector) =>
+      dispatchOffers[selector] === true
+        ? { click: () => trace.push(["dispatch-click", selector]) }
+        : null,
+  }),
   clickSteps: (count) => Array.from({ length: Math.max(0, count) }),
   getGame: () => game,
   getJQuery: () => (selector) => ({
@@ -30,7 +37,18 @@ const { FleetManagerOuter, FleetManager } = createFleetManagers({
   getPoly: () => poly,
   getHaveTech: () => haveTech,
   fleetControls,
+  gameModal: {
+    isOpen: () => modalOpen,
+    canOpen: () => true,
+    isAwaitingScriptModal: () => false,
+    captureScriptModal: () => {},
+    open: (request) => {
+      trace.push(["modal-open", request.triggerSelector, request.title]);
+      request.action();
+    },
+  },
 });
+let modalOpen = false;
 
 game = {
   global: {
@@ -126,12 +144,9 @@ assert.deepEqual(trace, [
   ["set", "weapon", "railgun"],
 ]);
 
-// With power in order the build lands with the sort checkbox toggled around it
-// and the built ship parked at the end of the list.
+// With power in order the build lands with the sort checkbox toggled around it,
+// and the built ship is queued for dispatch rather than moved by a direct call.
 vueById.shipPlans.powerText = () => "has-text-success";
-vueById.shipReg0 = {
-  setLoc: (...args) => trace.push(["location", ...args]),
-};
 liveYard.sort = true;
 liveYard.ships = [{ ...fighter, name: "A", location: "spc_red" }];
 resources.Alloy.currentQuantity = 10;
@@ -143,31 +158,89 @@ assert.deepEqual(trace, [
   ["set", "weapon", "railgun"],
   ["jquery", "#shipPlans .b-checkbox", 1],
   ["build"],
-  ["location", "spc_red", 1],
   ["jquery", "#shipPlans .b-checkbox", 1],
 ]);
+assert.deepEqual(FleetManagerOuter._pendingDispatch, {
+  index: 1,
+  region: "spc_red",
+  attempts: 0,
+});
+
+// The dispatch runs on a later tick, once the period clone carries the ship:
+// it opens that ship's window and clicks the region the window offers.
+const savedShipyard = game.global.space.shipyard;
+game.global.space.shipyard = {
+  blueprint: savedShipyard.blueprint,
+  ships: [
+    { ...fighter, name: "A", location: "spc_red" },
+    { ...fighter, name: "Nomad", location: "spc_dwarf" },
+  ],
+};
+dispatchOffers = { "#modalBox .shipDispatch button.spc_red": true };
+trace.length = 0;
+FleetManagerOuter.dispatchPendingShip();
+assert.deepEqual(trace, [
+  ["modal-open", "#ship1loc", "outer_shipyard_dispatch"],
+  ["dispatch-click", "#modalBox .shipDispatch button.spc_red"],
+]);
+assert.equal(FleetManagerOuter._pendingDispatch.attempts, 1);
+
+// Once the ship reports the region the request is done and drives nothing more.
+game.global.space.shipyard.ships[1].location = "spc_red";
+trace.length = 0;
+FleetManagerOuter.dispatchPendingShip();
+assert.deepEqual(trace, []);
+assert.equal(FleetManagerOuter._pendingDispatch, null);
+
+// A window that never takes is abandoned rather than retried forever, and an
+// open modal defers the attempt without spending the budget.
+game.global.space.shipyard.ships[1].location = "spc_dwarf";
+FleetManagerOuter._pendingDispatch = {
+  index: 1,
+  region: "spc_red",
+  attempts: 0,
+};
+modalOpen = true;
+trace.length = 0;
+FleetManagerOuter.dispatchPendingShip();
+assert.deepEqual(trace, []);
+assert.equal(FleetManagerOuter._pendingDispatch.attempts, 0);
+modalOpen = false;
+for (let attempt = 0; attempt < 40; attempt++) {
+  FleetManagerOuter.dispatchPendingShip();
+}
+assert.equal(FleetManagerOuter._pendingDispatch, null);
+dispatchOffers = {};
+game.global.space.shipyard = savedShipyard;
 
 // A yard that sorts nothing needs no toggle, and a yard with no ship list yet
-// still builds without a parking read.
+// still builds without queueing a dispatch.
 liveYard.sort = false;
 liveYard.ships = [{ ...fighter, name: "A", location: "spc_red" }];
 resources.Alloy.currentQuantity = 10;
 trace.length = 0;
+FleetManagerOuter._pendingDispatch = null;
 assert.equal(FleetManagerOuter.build(fighter, "spc_red"), true);
 assert.deepEqual(trace, [
   ["set", "class", "corvette"],
   ["set", "weapon", "railgun"],
   ["build"],
-  ["location", "spc_red", 1],
 ]);
+assert.deepEqual(FleetManagerOuter._pendingDispatch, {
+  index: 1,
+  region: "spc_red",
+  attempts: 0,
+});
 liveYard.ships = undefined;
 trace.length = 0;
+FleetManagerOuter._pendingDispatch = null;
 assert.equal(FleetManagerOuter.build(fighter, "spc_red"), true);
 assert.deepEqual(trace, [
   ["set", "class", "corvette"],
   ["set", "weapon", "railgun"],
   ["build"],
 ]);
+assert.equal(FleetManagerOuter._pendingDispatch, null);
 
 // The piracy panel keeps its technology gate, and moves one ship per click
 // step through the real adapter.

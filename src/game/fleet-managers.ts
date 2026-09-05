@@ -1,4 +1,5 @@
 import type { GameFleetControlsPort } from "../ports/game-fleet-controls.ts";
+import type { GameModalPort } from "../ports/game-modal.ts";
 
 /** A ship design: one part per blueprint dimension, plus the game's own name. */
 type ShipBlueprint = Record<string, string>;
@@ -15,6 +16,8 @@ type ShipParts = {
 
 /** A ship the game has built and parked. */
 type Ship = ShipParts & {
+  /** The game names each ship as it is built; its dispatch window is titled with it. */
+  name: string;
   location: string;
   transit: number;
   fueled: boolean;
@@ -51,7 +54,7 @@ type GameSurface = {
     };
   };
   actions: { space: Record<string, { info: SpaceActionInfo }> };
-  loc(key: string): string;
+  loc(key: string, args?: readonly unknown[]): string;
 };
 
 type SettingsSurface = Record<string, unknown>;
@@ -73,12 +76,21 @@ type PolySurface = {
 
 type HaveTech = (id: string, level?: number) => unknown;
 
+/** How many ticks a queued dispatch may keep trying before it is abandoned. */
+const DISPATCH_ATTEMPT_LIMIT = 30;
+
 /** The piracy rating of one region, broken down. */
 type SyndicateRating = { p: number; r: number; s: number };
 
 type FleetManagerOuterShape = {
   _fleetElementId: string;
   _explorerBlueprint: ShipBlueprint;
+  /** A built ship waiting for its dispatch window, retried until it arrives. */
+  _pendingDispatch: {
+    index: number;
+    region: string;
+    attempts: number;
+  } | null;
 
   nextShipName: string | null;
   nextShipCost: Record<string, number> | null;
@@ -106,6 +118,7 @@ type FleetManagerOuterShape = {
   getMissingResource(ship: ShipBlueprint): string | null;
   avail(ship: ShipBlueprint): boolean;
   build(ship: ShipBlueprint, region: string): boolean;
+  dispatchPendingShip(): void;
   getShipAttackPower(ship: ShipParts): number;
   shipCount(loc: string, template: ShipParts): number;
   syndicate(
@@ -132,6 +145,7 @@ type FleetManagerDependencies = {
   getPoly: () => PolySurface;
   getHaveTech: () => HaveTech;
   fleetControls: GameFleetControlsPort;
+  gameModal: GameModalPort;
 };
 
 export function createFleetManagers({
@@ -142,11 +156,13 @@ export function createFleetManagers({
   getPoly,
   getHaveTech,
   fleetControls,
+  gameModal,
 }: FleetManagerDependencies) {
   const haveTech: HaveTech = (...args) => getHaveTech()(...args);
 
   const FleetManagerOuter: FleetManagerOuterShape = {
     _fleetElementId: "shipPlans",
+    _pendingDispatch: null,
     _explorerBlueprint: {
       class: "explorer",
       armor: "neutronium",
@@ -293,6 +309,7 @@ export function createFleetManagers({
         return false;
       }
 
+      this.dispatchPendingShip();
       return fleetControls.isRendered(this._fleetElementId);
     },
 
@@ -395,9 +412,58 @@ export function createFleetManagers({
         resources[res]!.currentQuantity -= cost[res]!;
       }
 
-      return fleetControls.buildShip({
+      const result = fleetControls.buildShip({
         elementId: this._fleetElementId,
-        region,
+      });
+      if (result.builtIndex !== null) {
+        // The game builds every ship at the shipyard and offers no direct call
+        // to move one, so the region is reached through the dispatch window.
+        // `initFleet` drives the request on later ticks: the new ship is not in
+        // `game.global` yet, that being a clone this period's build cannot grow.
+        this._pendingDispatch = {
+          index: result.builtIndex,
+          region,
+          attempts: 0,
+        };
+      }
+      return result.actionable;
+    },
+
+    /**
+     * Drives one queued dispatch. It gives up once the ship reports the region,
+     * and once the attempt budget runs out — the window can be unopenable for
+     * reasons this manager cannot see, and a request that can never complete
+     * must not block later ones forever.
+     */
+    dispatchPendingShip() {
+      const pending = this._pendingDispatch;
+      if (pending === null) {
+        return;
+      }
+      if (pending.attempts >= DISPATCH_ATTEMPT_LIMIT) {
+        this._pendingDispatch = null;
+        return;
+      }
+      const game = getGame();
+      const ship = game.global.space.shipyard?.ships?.[pending.index];
+      if (ship !== undefined && ship.location === pending.region) {
+        this._pendingDispatch = null;
+        return;
+      }
+      // A modal the player or another feature owns keeps the request queued.
+      if (ship === undefined || gameModal.isOpen()) {
+        return;
+      }
+      pending.attempts += 1;
+      gameModal.open({
+        triggerSelector: fleetControls.dispatchTrigger(pending.index),
+        title: game.loc("outer_shipyard_dispatch", [ship.name]),
+        action: () => {
+          fleetControls.dispatchShip({
+            index: pending.index,
+            region: pending.region,
+          });
+        },
       });
     },
 

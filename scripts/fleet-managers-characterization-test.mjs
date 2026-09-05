@@ -117,9 +117,6 @@ const shipPlansVue = {
   s: liveYard,
 };
 vueById.shipPlans = shipPlansVue;
-vueById.shipReg0 = {
-  setLoc: (...args) => trace.push(["location", ...args]),
-};
 vueById.fleet = {
   add: (...args) => trace.push(["add", ...args]),
   sub: (...args) => trace.push(["sub", ...args]),
@@ -198,7 +195,6 @@ FleetManager.subShip("spc_red", "corvette", 1);
 assert.deepEqual(JSON.parse(JSON.stringify(trace)), [
   ["jquery-click", "#shipPlans .b-checkbox", 1],
   ["build"],
-  ["location", "spc_red", 1],
   ["jquery-click", "#shipPlans .b-checkbox", 1],
   ["add", "spc_red", "corvette"],
   ["add", "spc_red", "corvette"],

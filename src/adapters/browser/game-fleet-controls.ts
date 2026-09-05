@@ -1,24 +1,41 @@
-// TRANSITIONAL: the Vue 2 page renders the outer shipyard (`shipPlans`) and the
-// piracy armada (`fleet`) as tracked elements. The shipyard's component exposes
-// `avail()`/`setVal()`/`powerText()`/`build()` and its ship rows (`shipRegN`)
-// expose `setLoc(region, index)` for any ship by index, while the armada
-// exposes `add()`/`sub()` and each call moves `keyMultiplier()` ships. Building
-// while the yard sorts its list would land the new ship off the expected
-// position, so the sort checkbox is toggled around the build. The shipyard
-// component's `s` is the game's own shipyard object, which is the only way to
-// see what a build actually did. Replace all of it when the Vue 3 update
-// exposes fleet controls directly.
+// TRANSITIONAL: the page renders the outer shipyard (`shipPlans`) and the piracy
+// armada (`fleet`) as tracked elements. The shipyard's component exposes
+// `avail()`/`setVal()`/`powerText()`/`build()`, while the armada exposes
+// `add()`/`sub()` and each call moves `keyMultiplier()` ships. Building while
+// the yard sorts its list would land the new ship off the expected position, so
+// the sort checkbox is toggled around the build. The shipyard component's `s` is
+// the game's own shipyard object, which is the only way to see what a build
+// actually did. Replace all of it when the game exposes fleet controls directly.
+//
+// A built ship is sent onward through the game's dispatch window: the ship row's
+// own control opens it, and it renders one button per reachable region carrying
+// that region's name as a class. The direct `setLoc(region, index)` call the
+// 1.4.x rows carried no longer exists.
 
 import type {
   GameFleetBuildRequest,
+  GameFleetBuildResult,
   GameFleetControlsPort,
+  GameFleetDispatchRequest,
   GameFleetPartRequest,
   GameFleetStepRequest,
 } from "../../ports/game-fleet-controls.ts";
 import { isRecord, requireFunction } from "../validation.ts";
 
+const NOT_ACTIONABLE: GameFleetBuildResult = Object.freeze({
+  actionable: false,
+  builtIndex: null,
+});
+
+/** The subset of the page the dispatch window is driven through. */
+interface FleetDocument {
+  querySelector(selector: string): { click?: () => void } | null;
+}
+
 export interface GameFleetControlsDependencies {
   readonly getVueById: (elementId: string) => unknown;
+
+  readonly getDocument: () => FleetDocument;
 
   /**
    * One element per component call the game needs to move `count` ships. The
@@ -56,6 +73,7 @@ function readShipCount(yard: Record<string, unknown> | null): number | null {
 
 export function createGameFleetControls({
   getVueById,
+  getDocument,
   clickSteps,
   getJQuery,
 }: GameFleetControlsDependencies): GameFleetControlsPort {
@@ -131,10 +149,10 @@ export function createGameFleetControls({
       return typeof text === "string" && !text.includes("danger");
     },
 
-    buildShip(request: GameFleetBuildRequest): boolean {
+    buildShip(request: GameFleetBuildRequest): GameFleetBuildResult {
       const view = getVueById(request.elementId);
       if (!isRecord(view) || typeof view.build !== "function") {
-        return false;
+        return NOT_ACTIONABLE;
       }
       const build = requireFunction(
         view.build,
@@ -148,27 +166,31 @@ export function createGameFleetControls({
       const countBefore = readShipCount(yard);
       Reflect.apply(build, view, []);
       const countAfter = readShipCount(yard);
-      // The game appends a built ship to the end of its list, but a cost it
-      // cannot pay at the click queues the order instead and appends nothing.
-      // Parking then reads past the end of the list, which throws inside the
-      // game's own `setLoc`, so the count has to say a ship was built.
-      if (
-        countBefore !== null &&
-        countAfter !== null &&
-        countAfter > countBefore
-      ) {
-        const shipRow = getVueById("shipReg0");
-        if (isRecord(shipRow) && typeof shipRow.setLoc === "function") {
-          const setLoc = requireFunction(
-            shipRow.setLoc,
-            "shipReg0 Vue view.setLoc",
-          );
-          Reflect.apply(setLoc, shipRow, [request.region, countAfter - 1]);
-        }
-      }
       if (sort) {
         toggleSort(request.elementId);
       }
+      // A cost the yard cannot pay at the click queues the order instead of
+      // appending a ship, so the count is what says a build happened. Reading
+      // past the end of the list would dispatch a ship that does not exist.
+      const built =
+        countBefore !== null && countAfter !== null && countAfter > countBefore;
+      return { actionable: true, builtIndex: built ? countAfter! - 1 : null };
+    },
+
+    dispatchTrigger(index: number): string {
+      return `#ship${index}loc`;
+    },
+
+    dispatchShip(request: GameFleetDispatchRequest): boolean {
+      // Each destination button carries its region as a class, so the region
+      // names the control without depending on the order the window lists them.
+      const destination = getDocument().querySelector(
+        `#modalBox .shipDispatch button.${request.region}`,
+      );
+      if (typeof destination?.click !== "function") {
+        return false;
+      }
+      destination.click();
       return true;
     },
 

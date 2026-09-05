@@ -7938,11 +7938,13 @@ Only continue if you trust the source. Injected code:
     getBuildings,
     getPoly,
     getHaveTech,
-    fleetControls
+    fleetControls,
+    gameModal
   }) {
     let haveTech = (...args) => getHaveTech()(...args);
     return { FleetManagerOuter: {
       _fleetElementId: "shipPlans",
+      _pendingDispatch: null,
       _explorerBlueprint: {
         class: "explorer",
         armor: "neutronium",
@@ -8043,7 +8045,7 @@ Only continue if you trust the source. Injected code:
       },
       initFleet() {
         let game = getGame();
-        return !game.global.tech.syndicate || !Object.hasOwn(game.global.space.shipyard ?? {}, "blueprint") ? !1 : fleetControls.isRendered(this._fleetElementId);
+        return !game.global.tech.syndicate || !Object.hasOwn(game.global.space.shipyard ?? {}, "blueprint") ? !1 : (this.dispatchPendingShip(), fleetControls.isRendered(this._fleetElementId));
       },
       getFighterBlueprint() {
         let settings = getSettings();
@@ -8099,10 +8101,44 @@ Only continue if you trust the source. Injected code:
         let cost = poly.shipCosts(ship);
         for (let res in cost)
           resources[res].currentQuantity -= cost[res];
-        return fleetControls.buildShip({
-          elementId: this._fleetElementId,
-          region
+        let result2 = fleetControls.buildShip({
+          elementId: this._fleetElementId
         });
+        return result2.builtIndex !== null && (this._pendingDispatch = {
+          index: result2.builtIndex,
+          region,
+          attempts: 0
+        }), result2.actionable;
+      },
+      /**
+       * Drives one queued dispatch. It gives up once the ship reports the region,
+       * and once the attempt budget runs out — the window can be unopenable for
+       * reasons this manager cannot see, and a request that can never complete
+       * must not block later ones forever.
+       */
+      dispatchPendingShip() {
+        let pending = this._pendingDispatch;
+        if (pending === null)
+          return;
+        if (pending.attempts >= 30) {
+          this._pendingDispatch = null;
+          return;
+        }
+        let game = getGame(), ship = game.global.space.shipyard?.ships?.[pending.index];
+        if (ship !== void 0 && ship.location === pending.region) {
+          this._pendingDispatch = null;
+          return;
+        }
+        ship === void 0 || gameModal.isOpen() || (pending.attempts += 1, gameModal.open({
+          triggerSelector: fleetControls.dispatchTrigger(pending.index),
+          title: game.loc("outer_shipyard_dispatch", [ship.name]),
+          action: () => {
+            fleetControls.dispatchShip({
+              index: pending.index,
+              region: pending.region
+            });
+          }
+        }));
       },
       getShipAttackPower(ship) {
         return Math.round(
@@ -9922,6 +9958,10 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/browser/game-fleet-controls.ts
+  var NOT_ACTIONABLE = Object.freeze({
+    actionable: !1,
+    builtIndex: null
+  });
   function readShipyard(view) {
     let yard = view.s;
     return isRecord(yard) ? yard : null;
@@ -9932,6 +9972,7 @@ Only continue if you trust the source. Injected code:
   }
   function createGameFleetControls({
     getVueById,
+    getDocument,
     clickSteps,
     getJQuery
   }) {
@@ -9990,7 +10031,7 @@ Only continue if you trust the source. Injected code:
       buildShip(request) {
         let view = getVueById(request.elementId);
         if (!isRecord(view) || typeof view.build != "function")
-          return !1;
+          return NOT_ACTIONABLE;
         let build = requireFunction(
           view.build,
           `${request.elementId} Vue view.build`
@@ -9999,17 +10040,16 @@ Only continue if you trust the source. Injected code:
         let countBefore = readShipCount(yard);
         Reflect.apply(build, view, []);
         let countAfter = readShipCount(yard);
-        if (countBefore !== null && countAfter !== null && countAfter > countBefore) {
-          let shipRow = getVueById("shipReg0");
-          if (isRecord(shipRow) && typeof shipRow.setLoc == "function") {
-            let setLoc = requireFunction(
-              shipRow.setLoc,
-              "shipReg0 Vue view.setLoc"
-            );
-            Reflect.apply(setLoc, shipRow, [request.region, countAfter - 1]);
-          }
-        }
-        return sort && toggleSort(request.elementId), !0;
+        return sort && toggleSort(request.elementId), { actionable: !0, builtIndex: countBefore !== null && countAfter !== null && countAfter > countBefore ? countAfter - 1 : null };
+      },
+      dispatchTrigger(index) {
+        return `#ship${index}loc`;
+      },
+      dispatchShip(request) {
+        let destination = getDocument().querySelector(
+          `#modalBox .shipDispatch button.${request.region}`
+        );
+        return typeof destination?.click != "function" ? !1 : (destination.click(), !0);
       },
       addShips(request) {
         return stepShip(request, "add");
@@ -10485,6 +10525,7 @@ Only continue if you trust the source. Injected code:
     getGame,
     getJQuery,
     callVueMethod,
+    getFleetDocument,
     getMechListDocument,
     getSortable,
     getPageSortable,
@@ -10511,6 +10552,7 @@ Only continue if you trust the source. Injected code:
       clickSteps
     }), fleetControls = createGameFleetControls({
       getVueById,
+      getDocument: getFleetDocument,
       clickSteps,
       getJQuery
     }), garrisonControls = createGameGarrisonControls({
@@ -51759,6 +51801,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getJQuery: () => $,
       callVueMethod,
+      getFleetDocument: () => runtimeEnvironment.document,
       getMechListDocument: () => runtimeEnvironment.document,
       getSortable: () => runtimeEnvironment.Sortable,
       getPageSortable: () => win.Sortable,
@@ -52002,7 +52045,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getBuildings: () => buildings,
         getPoly: () => poly,
         getHaveTech: () => haveTech,
-        fleetControls
+        fleetControls,
+        gameModal
       },
       mech: {
         getGame: () => game,

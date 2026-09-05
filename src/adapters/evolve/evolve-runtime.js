@@ -1449,6 +1449,7 @@ export function startEvolveRuntimeComposition(
     getGame: () => game,
     getJQuery: () => $,
     callVueMethod,
+    getFleetDocument: () => runtimeEnvironment.document,
     getMechListDocument: () => runtimeEnvironment.document,
     getSortable: () => runtimeEnvironment.Sortable,
     getPageSortable: () => win.Sortable,
@@ -1802,6 +1803,7 @@ export function startEvolveRuntimeComposition(
         getPoly: () => poly,
         getHaveTech: () => haveTech,
         fleetControls,
+        gameModal,
       },
       mech: {
         getGame: () => game,
