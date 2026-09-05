@@ -16,7 +16,7 @@ export interface TabRefreshGame {
 
 /** The Vue instance behind the game's main column, which owns tab rendering. */
 export interface TabRefreshMainVue {
-  s: { civTabs: number; tabLoad: boolean };
+  s: { civTabs: number; tabLoad: boolean; animated?: boolean };
   toggleTabLoad: () => void;
 }
 
@@ -134,12 +134,26 @@ export function createTabRefresh({
 
     if (update && state.tabHash !== oldHash) {
       const mainVue = getMainVue();
-      mainVue.s.civTabs = 7;
-      mainVue.s.tabLoad = false;
-      mainVue.toggleTabLoad();
-      mainVue.s.tabLoad = true;
-      mainVue.toggleTabLoad();
-      mainVue.s.civTabs = game.global.settings.civTabs;
+      const animated = mainVue.s.animated;
+      try {
+        // The Vue 3 game defers animated panel teardown for 300 ms. This redraw clears and
+        // recreates every panel synchronously, so leaving animations enabled lets the old delayed
+        // teardown erase the freshly rebuilt content when its timer fires (especially after a
+        // background-tab transition in Firefox).
+        mainVue.s.animated = false;
+        mainVue.s.civTabs = 7;
+        mainVue.s.tabLoad = false;
+        mainVue.toggleTabLoad();
+        mainVue.s.tabLoad = true;
+        mainVue.toggleTabLoad();
+        mainVue.s.civTabs = game.global.settings.civTabs;
+      } finally {
+        if (animated === undefined) {
+          delete mainVue.s.animated;
+        } else {
+          mainVue.s.animated = animated;
+        }
+      }
       return true;
     } else {
       return false;

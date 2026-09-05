@@ -19123,8 +19123,13 @@ Only continue if you trust the source. Injected code:
       (haveTech("eris", 2) ? 1 : 0) + // Eris scanning
       (haveTech("titan_ai_core") ? 1 : 0) + // AI core built, drones unlocked
       (haveTech("tauceti") ? 1 : 0)), game.global.race.shapeshifter && (state.tabHash += (game.global.race.ss_genus ?? "none").split("").reduce((a, b) => (a = (a << 5) - a + b.charCodeAt(0), a & a), 0)), update && state.tabHash !== oldHash) {
-        let mainVue = getMainVue();
-        return mainVue.s.civTabs = 7, mainVue.s.tabLoad = !1, mainVue.toggleTabLoad(), mainVue.s.tabLoad = !0, mainVue.toggleTabLoad(), mainVue.s.civTabs = game.global.settings.civTabs, !0;
+        let mainVue = getMainVue(), animated = mainVue.s.animated;
+        try {
+          mainVue.s.animated = !1, mainVue.s.civTabs = 7, mainVue.s.tabLoad = !1, mainVue.toggleTabLoad(), mainVue.s.tabLoad = !0, mainVue.toggleTabLoad(), mainVue.s.civTabs = game.global.settings.civTabs;
+        } finally {
+          animated === void 0 ? delete mainVue.s.animated : mainVue.s.animated = animated;
+        }
+        return !0;
       } else
         return !1;
     }

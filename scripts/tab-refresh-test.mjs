@@ -33,7 +33,7 @@ function makeContext(overrides = {}) {
 let context = makeContext();
 let mainVueLookups = 0;
 const mainVue = {
-  s: { civTabs: 9, tabLoad: true },
+  s: { civTabs: 9, tabLoad: true, animated: true },
   toggles: [],
   toggleTabLoad() {
     this.toggles.push(this.s.tabLoad);
@@ -81,6 +81,47 @@ assert.equal(mainVueLookups, 1);
 assert.deepEqual(mainVue.toggles, [false, true]);
 assert.equal(mainVue.s.tabLoad, true);
 assert.equal(mainVue.s.civTabs, 2);
+assert.equal(mainVue.s.animated, true);
+
+// A delayed animated teardown from the first toggle must not be able to erase the rebuilt panels.
+let panelContent = "existing";
+const animatedRedraw = {
+  s: { civTabs: 9, tabLoad: true, animated: true },
+  toggleTabLoad() {
+    if (!this.s.tabLoad && this.s.animated) {
+      setTimeout(() => {
+        panelContent = "";
+      }, 300);
+    } else {
+      panelContent = "rebuilt";
+    }
+  },
+};
+const animatedContext = makeContext({
+  state: { tabHash: 0 },
+  game: {
+    global: {
+      race: {},
+      settings: { civTabs: 2, showMarket: true },
+      galaxy: {},
+      space: {},
+      tauceti: {},
+      tech: {},
+    },
+  },
+});
+const { updateTabs: updateAnimatedTabs } = createTabRefresh({
+  getState: () => animatedContext.state,
+  getGame: () => animatedContext.game,
+  getBuildings: () => animatedContext.buildings,
+  getResources: () => animatedContext.resources,
+  getHaveTech: () => animatedContext.haveTech,
+  getMainVue: () => animatedRedraw,
+});
+assert.equal(updateAnimatedTabs(true), true);
+assert.equal(animatedRedraw.s.animated, true);
+await new Promise((resolve) => setTimeout(resolve, 350));
+assert.equal(panelContent, "rebuilt");
 
 // An unchanged hash is the common case: no lookup, no redraw.
 mainVue.toggles.length = 0;
