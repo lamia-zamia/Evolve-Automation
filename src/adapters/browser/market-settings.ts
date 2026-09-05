@@ -1,3 +1,4 @@
+import type { TableSorter } from "./table-sorter.ts";
 import type {
   MarketSettingsControl,
   MarketSettingsReadModel,
@@ -10,22 +11,13 @@ import {
   type SettingsContentNode,
 } from "./settings-section.ts";
 
-interface SortableOptions {
-  readonly items: string;
-  readonly helper: unknown;
-  readonly update: () => void;
-}
-
 interface JQueryNode extends SettingsContentNode {
+  /** The element itself, which the table sorter attaches to. */
+  readonly 0: unknown;
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
   next(): JQueryNode;
-  sortable(options: SortableOptions): JQueryNode;
-  sortable(
-    command: "toArray",
-    options: { readonly attribute: string },
-  ): readonly string[];
 }
 
 type JQuery = (selector: string) => JQueryNode;
@@ -58,7 +50,7 @@ export interface MarketSettingsBrowserActions {
     title?: string,
     className?: string,
   ) => unknown;
-  readonly getSorterHelper: () => unknown;
+  readonly getTableSorter: () => TableSorter;
 }
 
 interface MarketSettingsBrowserDependencies {
@@ -190,13 +182,10 @@ export function createMarketSettingsBrowserAdapter({
     }
     tableBodyNode.append(jquery(rows));
     for (const row of readModel.rows) renderMarketRow(row, actions, jquery);
-    tableBodyNode.sortable({
+    actions.getTableSorter().attach(tableBodyNode[0], {
       items: "tr:not(.unsortable)",
-      helper: actions.getSorterHelper(),
-      update: () => {
-        const resourceIds = tableBodyNode.sortable("toArray", {
-          attribute: "value",
-        });
+      attribute: "value",
+      onOrderChanged: (resourceIds) => {
         intents.handle({ type: "reorder-market-resources", resourceIds });
       },
     });

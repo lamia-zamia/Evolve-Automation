@@ -1,8 +1,7 @@
 // TRANSITIONAL: the Vue 2 page shell mounts the automation's long-lived
 // mutation observers on `#main`, `body`, and `#msgQueueLog`, marks readiness
-// with `#queueColumn`, and carries jQuery UI as a CDN script tag when the
-// page arrived without it. Replace the observer mounts and the readiness
-// marker with the Vue 3 update's lifecycle hooks and bundled UI.
+// with `#queueColumn`. Replace the observer mounts and the readiness marker
+// with the Vue 3 update's lifecycle hooks and bundled UI.
 
 import type { GameModalPort } from "../../ports/game-modal.ts";
 import type { GamePageShellPort } from "../../ports/game-page-shell.ts";
@@ -25,9 +24,6 @@ export interface GamePageShellDependencies {
 
   /** The modal port the shell routes newly-mounted `.modal` elements through. */
   readonly getModal: () => GameModalPort;
-
-  /** The jQuery function whose `.ui` presence decides the UI injection. */
-  readonly getJQuery: () => unknown;
 }
 
 export function createGamePageShell({
@@ -37,7 +33,6 @@ export function createGamePageShell({
   getTooltipObserver,
   getLogFilter,
   getModal,
-  getJQuery,
 }: GamePageShellDependencies): GamePageShellPort {
   /** One element lookup by id through the page's document. */
   function byId(id: string): unknown {
@@ -183,40 +178,6 @@ export function createGamePageShell({
 
     isPageReady(): boolean {
       return byId("queueColumn") !== null;
-    },
-
-    needsJQueryUi(): boolean {
-      const jquery = getJQuery();
-      return !readProperty(jquery, "ui");
-    },
-
-    loadJQueryUi(handlers: {
-      readonly onLoaded: () => void;
-      readonly onFailed: () => void;
-    }): void {
-      const { onLoaded, onFailed } = handlers;
-      const documentValue = requireRecord(getDocument(), "document");
-      const createElement = readProperty(documentValue, "createElement");
-      const body = readProperty(documentValue, "body");
-      const appendChild = isRecord(body)
-        ? readProperty(body, "appendChild")
-        : undefined;
-      if (
-        typeof createElement !== "function" ||
-        typeof appendChild !== "function"
-      ) {
-        onFailed();
-        return;
-      }
-      const script = Reflect.apply(createElement, documentValue, ["script"]);
-      if (!isRecord(script)) {
-        onFailed();
-        return;
-      }
-      script["src"] = "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js";
-      script["onload"] = onLoaded;
-      script["onerror"] = onFailed;
-      Reflect.apply(appendChild, body, [script]);
     },
   });
 }

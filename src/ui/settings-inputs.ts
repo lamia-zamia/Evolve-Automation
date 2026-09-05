@@ -1,3 +1,7 @@
+import type {
+  Autocomplete,
+  AutocompleteInput,
+} from "../adapters/browser/autocomplete.ts";
 // The value inputs shared by the settings pages, the override editor, and the trigger editor.
 // Each builds one node and reports an edit through its callback; nothing here writes settings.
 
@@ -42,6 +46,7 @@ export type SettingsInputOptions =
 export type SettingsInputCallback = (value: unknown) => void;
 
 interface SettingsInputsDependencies {
+  readonly getAutocomplete: () => Autocomplete;
   readonly getJQuery: () => JQuery;
   readonly getRealNumber: () => (amountText: string) => number;
 }
@@ -64,6 +69,7 @@ export interface SettingsInputs {
 }
 
 export function createSettingsInputs({
+  getAutocomplete,
   getJQuery,
   getRealNumber,
 }: SettingsInputsDependencies): SettingsInputs {
@@ -169,7 +175,7 @@ export function createSettingsInputs({
 
     // Event handler
     const onChange = function (
-      this: EditableInput,
+      this: AutocompleteInput,
       event: AutocompleteEvent,
       ui: AutocompleteUi,
     ) {
@@ -203,17 +209,14 @@ export function createSettingsInputs({
       }
     };
 
-    listNode.autocomplete({
+    const autocomplete = getAutocomplete();
+    autocomplete.attach(listNode[0], {
       minLength: 2,
-      delay: 0,
       source: function (
         request: { term: string },
         response: (items: AutocompleteItem[]) => void,
       ) {
-        const matcher = new RegExp(
-          $.ui.autocomplete.escapeRegex(request.term),
-          "i",
-        );
+        const matcher = new RegExp(autocomplete.escapeRegex(request.term), "i");
         response(
           Object.values(list)
             .filter((item) => matcher.test(String(item[name])))

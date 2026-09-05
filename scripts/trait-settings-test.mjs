@@ -4,14 +4,20 @@ import { createTraitSettingsBrowserAdapter } from "../src/adapters/browser/trait
 import { createTraitSettingsEvolveAdapter } from "../src/adapters/evolve/traits/trait-settings.ts";
 import { createTraitSettingsIntentHandler } from "../src/application/trait-settings.ts";
 
+const tableSorter = {
+  attach(element, options) {
+    sortableHandlers.set(element, options.onOrderChanged);
+  },
+  readOrder: () => [],
+};
+
 let settingsRaw = { imitateRace: "human" };
 let state = { evolutionTarget: "first" };
 let document = {
   documentElement: { scrollTop: 0 },
   body: { scrollTop: 19 },
 };
-let sorterHelper = "sorter:first";
-let sortableIds = [];
+let sortableIds;
 let minorSorts = 0;
 let mutableSorts = 0;
 let trace = [];
@@ -65,14 +71,7 @@ function makeNode(label) {
       trace.push(`prop:${label}:${name}:${value}`);
       return this;
     },
-    sortable(arg) {
-      if (typeof arg === "string") {
-        return sortableIds;
-      }
-      sortableHandlers.set(label, arg.update);
-      trace.push(`sorter:${label}:${arg.helper}`);
-      return this;
-    },
+    0: label,
   };
 }
 
@@ -135,7 +134,7 @@ const traitSettings = createTraitSettingsBrowserAdapter({
   getDocument: () => document,
   getJQuery: () => (value) => makeNode(String(value)),
   intents: { handle: (intent) => intents.handle(intent) },
-  getSorterHelper: () => sorterHelper,
+  getTableSorter: () => tableSorter,
   buildSettingsSection: (...args) => {
     sectionRegistration = args;
     trace.push(`section:${args[0]}:${args[1]}`);
@@ -186,7 +185,6 @@ assert.ok(trace.includes("tableInput:ocularPower_p_fear"));
 assert.ok(trace.includes("tableToggle:mTrait_smart"));
 assert.ok(trace.includes("tableToggle:mutableTrait_purge_frail"));
 assert.ok(trace.includes("tableToggle:mutableTrait_reset_frail"));
-assert.ok(trace.includes("sorter:#script_minorTraitTableBody:sorter:first"));
 assert.equal(document.documentElement.scrollTop, 19);
 assert.equal(document.body.scrollTop, 19);
 
@@ -196,7 +194,7 @@ assert.equal(state.evolutionTarget, null);
 
 settingsRaw = { imitateRace: "human" };
 sortableIds = ["smart"];
-sortableHandlers.get("#script_minorTraitTableBody")();
+sortableHandlers.get("#script_minorTraitTableBody")(sortableIds);
 assert.equal(settingsRaw.mTrait_p_smart, 0);
 assert.equal(minorSorts, 1);
 
@@ -206,14 +204,12 @@ MutableTraitManager = {
   ...MutableTraitManager,
   sortByPriority: () => (mutableSorts += 10),
 };
-sortableHandlers.get("#script_mutateTraitTableBody")();
+sortableHandlers.get("#script_mutateTraitTableBody")(sortableIds);
 assert.equal(settingsRaw.mutableTrait_p_frail, 0);
 assert.equal(mutableSorts, 10);
 
-sorterHelper = "sorter:second";
 trace = [];
 traitSettings.updateTraitSettingsContent();
-assert.ok(trace.includes("sorter:#script_minorTraitTableBody:sorter:second"));
 
 const switch1 = makeNode("switch1");
 const switch2 = makeNode("switch2");

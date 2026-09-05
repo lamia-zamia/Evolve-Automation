@@ -4,6 +4,13 @@ import { createProductionSettingsBrowserAdapter } from "../src/adapters/browser/
 import { createProductionSettingsEvolveAdapter } from "../src/adapters/evolve/economy/production/production-settings.ts";
 import { createProductionSettingsIntentHandler } from "../src/application/production-settings.ts";
 
+const tableSorter = {
+  attach(_element, options) {
+    sortableUpdate = options.onOrderChanged;
+  },
+  readOrder: () => [],
+};
+
 let settingsRaw = { overrides: {} };
 let document = {
   documentElement: { scrollTop: 0 },
@@ -36,9 +43,8 @@ let replicatorManager = {
     Iron: { id: "Iron", resource: { id: "Iron", name: "Iron" } },
   },
 };
-let sorterHelper = "sorter:first";
 let sortableUpdate;
-let sortableIds = ["coal"];
+let sortableIds;
 let sectionRegistration;
 let trace = [];
 
@@ -60,14 +66,7 @@ function makeNode(label) {
     next() {
       return makeNode(`${label}>next`);
     },
-    sortable(arg) {
-      if (typeof arg === "string") {
-        return sortableIds;
-      }
-      sortableUpdate = arg.update;
-      trace.push(`sortableHelper:${arg.helper}`);
-      return this;
-    },
+    0: "node",
   };
 }
 
@@ -102,7 +101,7 @@ const productionSettings = createProductionSettingsBrowserAdapter({
   addTableToggle: (_node, key) => trace.push(`tableToggle:${key}`),
   addTableInput: (_node, key) => trace.push(`tableInput:${key}`),
   buildTableLabel: (note) => ({ label: `label:${note}` }),
-  getSorterHelper: () => sorterHelper,
+  getTableSorter: () => tableSorter,
 });
 intents = createProductionSettingsIntentHandler({
   writer: {
@@ -155,13 +154,12 @@ assert.ok(!trace.includes("tableInput:foundry_w_Quantium"));
 assert.ok(trace.includes("tableToggle:production_Alloy"));
 assert.ok(trace.includes("tableInput:droid_pr_Coal"));
 assert.ok(trace.includes("tableInput:replicator_p_Iron"));
-assert.ok(trace.includes("sortableHelper:sorter:first"));
 assert.equal(document.documentElement.scrollTop, 17);
 assert.equal(document.body.scrollTop, 17);
 
 settingsRaw = { overrides: {} };
 sortableIds = ["wood", "coal"];
-sortableUpdate();
+sortableUpdate(sortableIds);
 assert.equal(settingsRaw.smelter_fuel_p_wood, 0);
 assert.equal(settingsRaw.smelter_fuel_p_coal, 1);
 assert.equal(trace.at(-1), "persist");
@@ -171,7 +169,6 @@ factoryManager = {
     Polymer: { resource: { id: "Polymer", name: "Polymer" } },
   },
 };
-sorterHelper = "sorter:second";
 trace = [];
 productionSettings.updateProductionTableFactory(makeNode("factory-root"));
 assert.ok(trace.includes("tableToggle:production_Polymer"));
@@ -179,7 +176,6 @@ assert.ok(!trace.includes("tableToggle:production_Alloy"));
 
 trace = [];
 productionSettings.updateProductionTableSmelter(makeNode("smelter-root"));
-assert.ok(trace.includes("sortableHelper:sorter:second"));
 
 trace = [];
 productionSettings.buildProductionSettings();

@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 import { createStorageSettingsBrowserAdapter } from "../src/adapters/browser/storage-settings.ts";
 import { createStorageSettingsReadModel } from "../src/domain/economy/storage/storage-settings.ts";
 
+const tableSorter = {
+  attach(_element, options) {
+    sortableOptions = options;
+  },
+  readOrder: () => [],
+};
+
 let document = {
   documentElement: { scrollTop: 0 },
   body: { scrollTop: 25 },
@@ -48,11 +55,7 @@ const tableBody = {
     trace.push(`append:table-body:${String(content).slice(0, 12)}`);
     return tableBody;
   },
-  sortable(...args) {
-    if (args[0] === "toArray") return ["Coal", "Iron"];
-    sortableOptions = args[0];
-    return tableBody;
-  },
+  0: "node",
 };
 
 function makeContentNode(selector) {
@@ -72,11 +75,7 @@ function makeContentNode(selector) {
     next() {
       return this;
     },
-    sortable(...args) {
-      if (args[0] === "toArray") return ["Coal", "Iron"];
-      sortableOptions = args[0];
-      return this;
-    },
+    0: "node",
   };
 }
 
@@ -104,9 +103,7 @@ const actions = {
   buildTableLabel(label) {
     return `label:${label}`;
   },
-  getSorterHelper() {
-    return "helper";
-  },
+  getTableSorter: () => tableSorter,
 };
 
 let intents = [];
@@ -139,7 +136,7 @@ assert.deepEqual(
 assert.equal(document.documentElement.scrollTop, 25);
 assert.equal(document.body.scrollTop, 25);
 assert.equal(sortableOptions.items, "tr:not(.unsortable)");
-sortableOptions.update();
+sortableOptions.onOrderChanged(["Coal", "Iron"]);
 assert.deepEqual(intents, [
   { type: "reorder-storage-resources", resourceIds: ["Coal", "Iron"] },
 ]);

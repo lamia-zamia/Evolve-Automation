@@ -1,3 +1,4 @@
+import type { TableSorter } from "./table-sorter.ts";
 import {
   type JobSettingsBreakpoint,
   type JobSettingsControl,
@@ -12,14 +13,14 @@ import {
 } from "./settings-section.ts";
 
 interface JQueryNode extends SettingsContentNode {
+  /** The element itself, which the table sorter attaches to. */
+  readonly 0: unknown;
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
   addClass(className: string): JQueryNode;
   next(): JQueryNode;
   on(events: string, handler: () => void): JQueryNode;
-  sortable(options: unknown): JQueryNode;
-  sortable(method: string, options: unknown): string[];
 }
 
 type JQuery = (selector: string) => JQueryNode;
@@ -56,7 +57,7 @@ export interface JobSettingsBrowserActions {
     node: JQueryNode,
     settingName: string,
   ) => JQueryNode;
-  readonly getSorterHelper: () => unknown;
+  readonly getTableSorter: () => TableSorter;
   readonly confirm: (message: string) => boolean;
 }
 
@@ -158,13 +159,10 @@ export function createJobSettingsBrowserAdapter({
       jobElement.append(jquery('<span class="script-lastcolumn"></span>'));
     }
 
-    tableBodyNode.sortable({
+    actions.getTableSorter().attach(tableBodyNode[0], {
       items: "tr:not(.unsortable)",
-      helper: actions.getSorterHelper(),
-      update: () => {
-        const sortedIds = tableBodyNode.sortable("toArray", {
-          attribute: "value",
-        });
+      attribute: "value",
+      onOrderChanged: (sortedIds) => {
         intents.handle({ type: "reorder-jobs", jobIds: sortedIds });
       },
     });

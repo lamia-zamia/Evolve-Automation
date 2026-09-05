@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
+const tableSorter = {
+  attach(_element, options) {
+    sortableHandlers.push(options.onOrderChanged);
+  },
+  readOrder: () => [],
+};
+
 const handlers = [];
 const sortableHandlers = [];
 const trace = [];
@@ -41,11 +48,7 @@ function makeNode(label) {
       handlers.push({ label, event, handler });
       return node;
     },
-    sortable(first) {
-      if (typeof first === "string") return ["city", "transport"];
-      sortableHandlers.push(first.update);
-      return node;
-    },
+    0: "node",
     ready() {
       return node;
     },
@@ -127,7 +130,7 @@ const actions = {
     return makeNode("label");
   },
   confirm: () => true,
-  getSorterHelper: () => "helper",
+  getTableSorter: () => tableSorter,
 };
 
 hooks.setBuildingSettingsTestContext({
@@ -167,7 +170,7 @@ handlers
   .handler();
 assert.equal(settingsRaw.bld_p_city, 0);
 assert.equal(settingsRaw.bld_p_transport, 1);
-sortableHandlers.at(-1)();
+sortableHandlers.at(-1)(["city", "transport"]);
 assert.equal(trace.includes("sort"), true);
 
 console.log("Building settings bundled characterization tests passed");

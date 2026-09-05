@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
+const tableSorter = {
+  attach() {},
+  readOrder: () => [],
+};
+
 const trace = [];
 const { hooks, sandbox } = await loadCharacterizationBundle({
   console,
@@ -43,9 +48,7 @@ const { hooks, sandbox } = await loadCharacterizationBundle({
     on() {
       return this;
     },
-    sortable() {
-      return [];
-    },
+    0: "node",
     ready() {
       return this;
     },
@@ -73,7 +76,7 @@ hooks.setTriggerSettingsTestContext({
   actions: {
     buildSettingsSection: (...args) => trace.push(["build", args[0], args[1]]),
     buildInputNode: () => sandbox.$(),
-    sorterHelper: () => {},
+    tableSorter,
   },
   resetTriggerSettings: (value) => trace.push(["reset", value]),
   updateSettingsFromState: () => trace.push("persist"),
@@ -96,7 +99,7 @@ hooks.setTriggerSettingsTestContext({
   actions: {
     buildSettingsSection: (...args) => registration.push(args),
     buildInputNode: () => sandbox.$(),
-    sorterHelper: () => {},
+    tableSorter,
   },
   resetTriggerSettings: (value) => trace.push(["reset", value]),
   updateSettingsFromState: () => trace.push("persist"),

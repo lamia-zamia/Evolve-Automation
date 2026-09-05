@@ -7,6 +7,13 @@ import {
   createMarketSettingsWriter,
 } from "../src/adapters/evolve/economy/market/market-settings.ts";
 
+const tableSorter = {
+  attach(_element, options) {
+    sortableOptions = options;
+  },
+  readOrder: () => [],
+};
+
 const resources = {
   Iron: { id: "Iron", name: "Iron" },
   Coal: { id: "Coal", name: "Coal" },
@@ -76,11 +83,7 @@ const sharedNode = {
   next() {
     return this;
   },
-  sortable(...args) {
-    if (args[0] === "toArray") return ["Coal", "Iron"];
-    sortableOptions = args[0];
-    return this;
-  },
+  0: "node",
 };
 const actions = {
   buildSettingsSection(...args) {
@@ -110,9 +113,7 @@ const actions = {
     labelColors.push(className);
     return label;
   },
-  getSorterHelper() {
-    return "helper";
-  },
+  getTableSorter: () => tableSorter,
 };
 const intents = [];
 const browser = createMarketSettingsBrowserAdapter({
@@ -162,7 +163,7 @@ assert.deepEqual(labelColors, [
   "has-text-danger",
 ]);
 assert.equal(scroll.documentElement.scrollTop, 12);
-sortableOptions.update();
+sortableOptions.onOrderChanged(["Coal", "Iron"]);
 assert.deepEqual(intents, [
   { type: "reorder-market-resources", resourceIds: ["Coal", "Iron"] },
 ]);

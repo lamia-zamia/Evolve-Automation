@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 import { createBuildingSettingsBrowserAdapter } from "../src/adapters/browser/building-settings.ts";
 import { createBuildingSettingsReadModel } from "../src/domain/progression/build/building-settings.ts";
 
+const tableSorter = {
+  attach(_element, options) {
+    sortableHandlers.push(options.onOrderChanged);
+  },
+  readOrder: () => [],
+};
+
 const trace = [];
 const handlers = [];
 const sortableHandlers = [];
@@ -54,11 +61,7 @@ function makeNode(label) {
       handlers.push({ label, event, handler });
       return node;
     },
-    sortable(first) {
-      if (typeof first === "string") return ["city", "transport"];
-      sortableHandlers.push(first.update);
-      return node;
-    },
+    0: "node",
     label,
   };
   return node;
@@ -129,7 +132,7 @@ const actions = {
     return makeNode(`label:${label}`);
   },
   confirm: () => true,
-  getSorterHelper: () => "helper",
+  getTableSorter: () => tableSorter,
 };
 const intents = [];
 const settings = createBuildingSettingsBrowserAdapter({
@@ -179,7 +182,7 @@ assert.deepEqual(intents, [{ type: "reset-building-settings" }]);
 handlers
   .find((entry) => entry.label === "#script_resetBuildingsPriority")
   .handler();
-sortableHandlers.at(-1)();
+sortableHandlers.at(-1)(["city", "transport"]);
 assert.deepEqual(intents.slice(-2), [
   { type: "reset-building-priorities" },
   { type: "reorder-buildings", buildingIds: ["city", "transport"] },

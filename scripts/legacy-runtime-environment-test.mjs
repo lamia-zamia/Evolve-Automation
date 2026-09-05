@@ -28,7 +28,6 @@ const globalObject = {
   Blob: BlobConstructor,
   MutationObserver: class MutationObserver {},
   ResizeObserver: class ResizeObserver {},
-  HTMLElement: class HTMLElement {},
   KeyboardEvent: class KeyboardEvent {},
   Node: class Node {},
   Sortable: class Sortable {},
@@ -72,7 +71,6 @@ assert.deepEqual(new environment.BlobConstructor(["payload"]).parts, [
 ]);
 assert.equal(typeof environment.MutationObserver, "function");
 assert.equal(typeof environment.ResizeObserver, "function");
-assert.equal(typeof environment.HTMLElement, "function");
 assert.equal(typeof environment.KeyboardEvent, "function");
 assert.equal(typeof environment.Node, "function");
 assert.equal(typeof environment.Sortable, "function");

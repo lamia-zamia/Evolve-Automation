@@ -240,22 +240,9 @@ assert.deepEqual(trace.splice(-2), [
   ["schedule", "mainAutoEvolveScript", 100],
 ]);
 
-// Missing jQuery UI injects the dependency and preserves the wrapped callback name.
 game.global.settings.tabLoad = true;
-jquery.ui = undefined;
-mainAutoEvolveScript();
-const appended = trace.at(-1)[1];
-assert.equal(trace.at(-1)[0], "append");
-assert.equal(
-  appended.src,
-  "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js",
-);
-assert.equal(appended.onload.name, "mainAutoEvolveScript");
-appended.onerror();
-assert.match(trace.at(-1)[1], /Can't load jQuery UI/);
 
 // Successful Firefox-style sandbox bootstrap exports both breakdown callbacks.
-jquery.ui = {};
 const pageWindow = { evolve: game };
 context.userscriptEnvironment = {
   pageWindow,

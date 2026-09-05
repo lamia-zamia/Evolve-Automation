@@ -428,6 +428,7 @@ export function startEvolveRuntimeComposition(
       persistence: { save: () => updateSettingsFromState() },
     },
     settingsInputs: {
+      getAutocomplete: () => autocomplete,
       getJQuery: () => $,
       getRealNumber: () => getRealNumber,
     },
@@ -447,9 +448,10 @@ export function startEvolveRuntimeComposition(
       getCheckCustom: () => checkCustom,
       getOverrideKey: () => overrideKey,
       getOpenOptionsModal: () => openOptionsModal,
-      getSorterHelper: () => sorterHelper,
+      getTableSorter: () => tableSorter,
     },
     settingsControls: {
+      getAutocomplete: () => autocomplete,
       getJQuery: () => $,
       getSettingsRaw: () => settingsRaw,
       getRealNumber: () => getRealNumber,
@@ -500,7 +502,7 @@ export function startEvolveRuntimeComposition(
     addTableToggle,
     addStandardHeading,
     buildTableLabel,
-    getSorterHelper: () => sorterHelper,
+    getTableSorter: () => tableSorter,
   };
   const {
     productionSettingsBrowserAdapter,
@@ -541,7 +543,7 @@ export function startEvolveRuntimeComposition(
         addTableInput,
         addTableToggle,
         buildTableLabel,
-        getSorterHelper: () => sorterHelper,
+        getTableSorter: () => tableSorter,
       },
       getStorageManager: () => StorageManager,
       getSettingsRaw: () => settingsRaw,
@@ -582,7 +584,7 @@ export function startEvolveRuntimeComposition(
         addTableInput,
         addTableToggle,
         addToggleCallbacks,
-        getSorterHelper: () => sorterHelper,
+        getTableSorter: () => tableSorter,
         confirm: (...args) => runtimeEnvironment.confirm(...args),
       },
       getBasicJob: () => BasicJob,
@@ -616,7 +618,7 @@ export function startEvolveRuntimeComposition(
         addToggleCallbacks,
         buildTableLabel,
         confirm: (...args) => runtimeEnvironment.confirm(...args),
-        getSorterHelper: () => sorterHelper,
+        getTableSorter: () => tableSorter,
       },
       getBuildingManager: () => BuildingManager,
       getBuildingIds: () => buildingIds,
@@ -643,7 +645,7 @@ export function startEvolveRuntimeComposition(
         addTableInput,
         addTableToggle,
         buildTableLabel,
-        getSorterHelper: () => sorterHelper,
+        getTableSorter: () => tableSorter,
       },
       getProjectManager: () => ProjectManager,
       getSettingsRaw: () => settingsRaw,
@@ -983,8 +985,8 @@ export function startEvolveRuntimeComposition(
         addStandardHeading,
         addSettingsSelect,
         addSettingsToggle,
-        get sorterHelper() {
-          return sorterHelper;
+        get tableSorter() {
+          return tableSorter;
         },
       },
       getGame: () => game,
@@ -1020,8 +1022,8 @@ export function startEvolveRuntimeComposition(
       actions: {
         buildSettingsSection,
         buildInputNode,
-        get sorterHelper() {
-          return sorterHelper;
+        get tableSorter() {
+          return tableSorter;
         },
       },
       getTriggerManager: () => TriggerManager,
@@ -1108,8 +1110,8 @@ export function startEvolveRuntimeComposition(
         addTableInput,
         buildTableLabel,
         openOverrideModal,
-        get sorterHelper() {
-          return sorterHelper;
+        get tableSorter() {
+          return tableSorter;
         },
       },
       getFleetManagerOuter: () => FleetManagerOuter,
@@ -1176,7 +1178,7 @@ export function startEvolveRuntimeComposition(
         addTableInput: (...args) => addTableInput(...args),
         addTableToggle: (...args) => addTableToggle(...args),
         buildTableLabel: (...args) => buildTableLabel(...args),
-        getSorterHelper: () => sorterHelper,
+        getTableSorter: () => tableSorter,
       },
       getMarketManager: () => MarketManager,
       getResources: () => resources,
@@ -1992,7 +1994,6 @@ export function startEvolveRuntimeComposition(
     getTooltipObserver: () => tooltipObserverCallback,
     getLogFilter: () => filterLog,
     getModal: () => gameModal,
-    getJQuery: () => $,
   });
   KeyManager = initialKeyManager;
   GameLog = initialGameLog;
@@ -4143,18 +4144,17 @@ export function startEvolveRuntimeComposition(
       },
     }));
 
-  const { calculateMechStats, sorterHelper } = createUiSupportControl({
-    getUiSurface: () => gameUiSurface,
-    getMechJQuery: () => $,
-    getSortJQuery: () => $,
-    getMechManager: () => MechManager,
-    getPoly: () => poly,
-    getGame: () => game,
-    average,
-    isHTMLElement: (value) =>
-      runtimeEnvironment.HTMLElement !== undefined &&
-      value instanceof runtimeEnvironment.HTMLElement,
-  });
+  const { calculateMechStats, autocomplete, tableSorter } =
+    createUiSupportControl({
+      getUiSurface: () => gameUiSurface,
+      getMechJQuery: () => $,
+      getMechManager: () => MechManager,
+      getPoly: () => poly,
+      getGame: () => game,
+      getSortable: () => runtimeEnvironment.Sortable,
+      getDocument: () => runtimeEnvironment.document,
+      average,
+    });
 
   if (TEST_SURFACE_ENABLED)
     registerTestPart(() => ({
@@ -4190,7 +4190,7 @@ export function startEvolveRuntimeComposition(
     getMutationCostMultipliers: () => mutationCostMultipliers,
     getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getSorterHelper: () => sorterHelper,
+    getTableSorter: () => tableSorter,
     buildSettingsSection,
     addStandardHeading,
     addSettingsSelect,
@@ -4436,7 +4436,7 @@ export function startEvolveRuntimeComposition(
           createStorageToggles,
           removeStorageToggles,
         },
-        sorterHelper,
+        tableSorter,
         gameRates: {
           ticksPerSecond,
           getHealingRate,

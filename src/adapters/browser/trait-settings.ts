@@ -1,3 +1,4 @@
+import type { TableSorter } from "./table-sorter.ts";
 import { type TraitSettingsReadModel } from "../../domain/traits/trait-settings.ts";
 import type { TraitSettingsIntentHandler } from "../../ports/trait-settings.ts";
 import {
@@ -11,7 +12,7 @@ interface TraitSettingsDependencies {
   getDocument: () => ScrollDocument;
   getJQuery: () => JQuery;
   intents: TraitSettingsIntentHandler;
-  getSorterHelper: () => unknown;
+  getTableSorter: () => TableSorter;
   buildSettingsSection: (
     sectionId: string,
     sectionName: string,
@@ -44,6 +45,8 @@ interface TraitSettingsDependencies {
 }
 
 interface JQueryNode extends SettingsContentNode {
+  /** The element itself, which the table sorter attaches to. */
+  readonly 0: unknown;
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(value: unknown): JQueryNode;
@@ -54,8 +57,6 @@ interface JQueryNode extends SettingsContentNode {
   next(): JQueryNode;
   html(value: unknown): JQueryNode;
   prop(name: string, value?: unknown): boolean | JQueryNode;
-  sortable(options: Record<string, unknown>): JQueryNode;
-  sortable(command: string, options: Record<string, unknown>): string[];
 }
 
 type JQuery = (value: unknown) => JQueryNode;
@@ -76,7 +77,7 @@ export function createTraitSettingsBrowserAdapter({
   getReadModel,
   getDocument,
   getJQuery,
-  getSorterHelper,
+  getTableSorter,
   intents,
   buildSettingsSection,
   addStandardHeading,
@@ -346,13 +347,10 @@ export function createTraitSettingsBrowserAdapter({
       addTableInput(minorTraitElement, "mTrait_w_" + trait.id);
     }
 
-    tableBodyNode.sortable({
+    getTableSorter().attach(tableBodyNode[0], {
       items: "tr:not(.unsortable)",
-      helper: getSorterHelper(),
-      update: function () {
-        let minorTraitNames = tableBodyNode.sortable("toArray", {
-          attribute: "value",
-        });
+      attribute: "value",
+      onOrderChanged: (minorTraitNames) => {
         intents.handle({
           type: "reorder-minor-traits",
           traitIds: minorTraitNames,
@@ -440,13 +438,10 @@ export function createTraitSettingsBrowserAdapter({
       }
     }
 
-    mutateTraitTableBodyNode.sortable({
+    getTableSorter().attach(mutateTraitTableBodyNode[0], {
       items: "tr:not(.unsortable)",
-      helper: getSorterHelper(),
-      update: function () {
-        let mutableTraitNames = mutateTraitTableBodyNode.sortable("toArray", {
-          attribute: "value",
-        });
+      attribute: "value",
+      onOrderChanged: (mutableTraitNames) => {
         intents.handle({
           type: "reorder-mutable-traits",
           traitIds: mutableTraitNames,

@@ -1,3 +1,7 @@
+import type {
+  Autocomplete,
+  AutocompleteInput,
+} from "../adapters/browser/autocomplete.ts";
 // The controls a settings page is built from. Each writes its setting through the raw settings bag
 // and reports a modifier-held click to the override editor.
 
@@ -14,6 +18,7 @@ import type { OverrideModalEvent } from "./override-editor.ts";
 import type { ObjectList, SelectOptionSource } from "./settings-inputs.ts";
 
 interface SettingsControlsDependencies {
+  readonly getAutocomplete: () => Autocomplete;
   readonly getJQuery: () => JQuery;
   readonly getSettingsRaw: () => StoredSettings;
   readonly getRealNumber: () => (amountText: string) => number;
@@ -69,6 +74,7 @@ export interface SettingsControls {
 }
 
 export function createSettingsControls({
+  getAutocomplete,
   getJQuery,
   getSettingsRaw,
   getRealNumber,
@@ -296,7 +302,7 @@ export function createSettingsControls({
     };
 
     const onChange = function (
-      this: EditableInput,
+      this: AutocompleteInput,
       event: AutocompleteEvent,
       ui: AutocompleteUi,
     ) {
@@ -322,17 +328,14 @@ export function createSettingsControls({
       }
     };
 
-    listBlock.find("input").autocomplete({
+    const autocomplete = getAutocomplete();
+    autocomplete.attach(listBlock.find("input")[0], {
       minLength: 2,
-      delay: 0,
       source: function (
         request: { term: string },
         response: (items: AutocompleteItem[]) => void,
       ) {
-        const matcher = new RegExp(
-          $.ui.autocomplete.escapeRegex(request.term),
-          "i",
-        );
+        const matcher = new RegExp(autocomplete.escapeRegex(request.term), "i");
         response(
           Object.values(list)
             .filter((item) => matcher.test(String(item.name)))

@@ -24,7 +24,6 @@ export interface GameLifecycleControlDependencies {
   readonly getTooltipObserver: PageShellDependencies["getTooltipObserver"];
   readonly getLogFilter: PageShellDependencies["getLogFilter"];
   readonly getModal: PageShellDependencies["getModal"];
-  readonly getJQuery: PageShellDependencies["getJQuery"];
 }
 
 export function createGameLifecycleControl({
@@ -41,7 +40,6 @@ export function createGameLifecycleControl({
   getTooltipObserver,
   getLogFilter,
   getModal,
-  getJQuery,
 }: GameLifecycleControlDependencies) {
   const gameKeyboardHandlers = createGameKeyboardHandlers({
     getWin,
@@ -63,7 +61,6 @@ export function createGameLifecycleControl({
     getTooltipObserver,
     getLogFilter,
     getModal,
-    getJQuery,
   });
   const gameUiSurface = createGameUiSurface({
     getDocument,

@@ -1,3 +1,4 @@
+import type { TableSorter } from "./table-sorter.ts";
 import {
   type EvolutionSettingsControl,
   type EvolutionSettingsReadModel,
@@ -9,6 +10,8 @@ import {
   type SettingsContentNode,
 } from "./settings-section.ts";
 interface JQueryNode extends SettingsContentNode {
+  /** The element itself, which the table sorter attaches to. */
+  readonly 0: unknown;
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -16,10 +19,6 @@ interface JQueryNode extends SettingsContentNode {
   val(value?: unknown): JQueryNode | unknown;
   html(content?: unknown): JQueryNode | unknown;
   on(events: string, dataOrHandler: unknown, handler?: unknown): JQueryNode;
-  sortable(
-    option: string | Record<string, unknown>,
-    value?: unknown,
-  ): JQueryNode | string[];
 }
 type JQuery = (selector: string) => JQueryNode;
 type Action = () => void;
@@ -44,7 +43,7 @@ export interface EvolutionSettingsBrowserActions {
     label: string,
     hint: string,
   ) => unknown;
-  readonly sorterHelper: unknown;
+  readonly tableSorter: TableSorter;
 }
 interface EvolutionSettingsBrowserDependencies {
   readonly getDocument: () => ScrollDocument;
@@ -178,16 +177,14 @@ export function createEvolutionSettingsBrowserAdapter({
         }),
       );
     }
-    body.sortable({
+    actions.tableSorter.attach(body[0], {
       items: "tr:not(.unsortable)",
-      helper: actions.sorterHelper,
-      update: () => {
-        const ids = body.sortable("toArray", { attribute: "value" });
-        if (Array.isArray(ids))
-          intents.handle({
-            type: "reorder-evolutions",
-            indexes: ids.map((id) => Number(id)),
-          });
+      attribute: "value",
+      onOrderChanged: (ids) => {
+        intents.handle({
+          type: "reorder-evolutions",
+          indexes: ids.map((id) => Number(id)),
+        });
       },
     });
   }

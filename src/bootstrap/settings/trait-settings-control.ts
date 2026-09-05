@@ -1,3 +1,4 @@
+import type { TableSorter } from "../../adapters/browser/table-sorter.ts";
 import { createTraitSettingsIntentHandler } from "../../application/trait-settings.ts";
 import { createTraitSettingsBrowserAdapter } from "../../adapters/browser/trait-settings.ts";
 import { createTraitSettingsEvolveAdapter } from "../../adapters/evolve/traits/trait-settings.ts";
@@ -52,7 +53,7 @@ interface TraitSettingsControlDependencies {
   readonly getOcularPowerData: () => unknown;
   readonly getWishData: () => unknown;
   readonly getMutationCostMultipliers: () => unknown;
-  readonly getSorterHelper: () => unknown;
+  readonly getTableSorter: () => TableSorter;
   readonly buildSettingsSection: BrowserDependencies["buildSettingsSection"];
   readonly addStandardHeading: BrowserDependencies["addStandardHeading"];
   readonly addSettingsSelect: BrowserDependencies["addSettingsSelect"];
@@ -83,7 +84,7 @@ export function createTraitSettingsControl({
   getOcularPowerData,
   getWishData,
   getMutationCostMultipliers,
-  getSorterHelper,
+  getTableSorter,
   buildSettingsSection,
   addStandardHeading,
   addSettingsSelect,
@@ -129,7 +130,7 @@ export function createTraitSettingsControl({
     intents: {
       handle: (intent) => intentHandler.handle(intent),
     },
-    getSorterHelper,
+    getTableSorter,
     buildSettingsSection,
     addStandardHeading,
     addSettingsSelect,

@@ -1,3 +1,4 @@
+import type { TableSorter } from "./table-sorter.ts";
 import {
   type ProductionSettingsControl,
   type ProductionSettingsReadModel,
@@ -10,12 +11,12 @@ import {
 } from "./settings-section.ts";
 
 interface JQueryNode extends SettingsContentNode {
+  /** The element itself, which the table sorter attaches to. */
+  readonly 0: unknown;
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(value: unknown): JQueryNode;
   next(): JQueryNode;
-  sortable(options: Record<string, unknown>): JQueryNode;
-  sortable(command: string, options: Record<string, unknown>): string[];
 }
 
 type JQuery = (value: unknown) => JQueryNode;
@@ -54,7 +55,7 @@ interface ProductionSettingsDependencies {
   addTableToggle: (node: JQueryNode, settingKey: string) => void;
   addTableInput: (node: JQueryNode, settingKey: string) => void;
   buildTableLabel: (note: string) => unknown;
-  getSorterHelper: () => unknown;
+  getTableSorter: () => TableSorter;
 }
 
 export interface ProductionSettingsBrowserAdapter {
@@ -80,7 +81,7 @@ export function createProductionSettingsBrowserAdapter({
   addTableToggle,
   addTableInput,
   buildTableLabel,
-  getSorterHelper,
+  getTableSorter,
 }: ProductionSettingsDependencies): ProductionSettingsBrowserAdapter {
   function buildProductionSettings(): void {
     const readModel = getReadModel();
@@ -196,13 +197,10 @@ export function createProductionSettingsBrowserAdapter({
       productionElement.append(buildTableLabel(fuel.id));
     }
 
-    tableBodyNode.sortable({
+    getTableSorter().attach(tableBodyNode[0], {
       items: "tr:not(.unsortable)",
-      helper: getSorterHelper(),
-      update: function () {
-        const fuelIds = tableBodyNode.sortable("toArray", {
-          attribute: "value",
-        });
+      attribute: "value",
+      onOrderChanged: (fuelIds) => {
         intents.handle({ type: "reorder-smelter-fuels", fuelIds });
       },
     });

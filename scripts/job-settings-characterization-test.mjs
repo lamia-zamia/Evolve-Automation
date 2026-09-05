@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
+const tableSorter = {
+  attach(element, options) {
+    domHandlers.set(`${element}:sortable`, options.onOrderChanged);
+  },
+  readOrder: () => [],
+};
+
 const domHandlers = new Map();
 const domTrace = [];
 
@@ -30,13 +37,7 @@ function makeNode(label) {
     ready() {
       return node;
     },
-    sortable(first) {
-      if (typeof first === "string") {
-        return ["forager", "smelter", "unemployed"];
-      }
-      domHandlers.set(`${label}:sortable`, first.update);
-      return node;
-    },
+    0: label,
   };
   return node;
 }
@@ -120,7 +121,7 @@ const actions = {
     trace.push(`callbacks:${settingName}`);
     return node;
   },
-  getSorterHelper: () => "helper",
+  getTableSorter: () => tableSorter,
   confirm: () => true,
 };
 
@@ -156,7 +157,11 @@ assert.equal(settingsRaw.job_p_unemployed, 0);
 assert.equal(settingsRaw.job_p_forager, 1);
 assert.equal(settingsRaw.job_p_smelter, 2);
 
-domHandlers.get("#script_jobTableBody:sortable")();
+domHandlers.get("#script_jobTableBody:sortable")([
+  "forager",
+  "smelter",
+  "unemployed",
+]);
 assert.equal(manager.priorityList.length, 3);
 assert.equal(settingsRaw.job_p_forager, 0);
 assert.equal(settingsRaw.job_p_smelter, 1);

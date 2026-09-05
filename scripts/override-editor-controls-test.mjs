@@ -5,10 +5,17 @@ import { createOverrideConditionControls } from "../src/ui/override-condition-co
 import { createOverrideEditorControls } from "../src/ui/override-editor.ts";
 import { createSettingsInputs } from "../src/ui/settings-inputs.ts";
 
+const tableSorter = {
+  attach(_element, options) {
+    sortableConfigs.push(options);
+  },
+  readOrder: () => [],
+};
+
 const trace = [];
 const handlers = [];
 const sortableConfigs = [];
-let sortableOrder = [];
+let sortableOrder;
 
 const overrideEdits = [];
 let conditionCount = 1;
@@ -68,13 +75,7 @@ function makeNode(label) {
     autocomplete() {
       return node;
     },
-    sortable(...args) {
-      if (typeof args[0] === "object") {
-        sortableConfigs.push(args[0]);
-        return node;
-      }
-      return sortableOrder;
-    },
+    0: "node",
     prop(name, value) {
       trace.push(`prop:${label}:${name}:${value}`);
       return node;
@@ -152,7 +153,7 @@ const editor = createOverrideEditorControls({
     trace.push(`modal:${title}`);
     build(makeNode("modal"));
   },
-  getSorterHelper: () => "helper",
+  getTableSorter: () => tableSorter,
   buildInputNode,
 });
 
@@ -195,7 +196,7 @@ assert.ok(trace.includes("addClass:.script_bg_autoBuild:inactive-row"));
 
 // Dragging a row reports the new stored order as numbers.
 sortableOrder = ["1", "0"];
-sortableConfigs.at(-1).update.call({});
+sortableConfigs.at(-1).onOrderChanged(sortableOrder);
 assert.deepEqual(overrideEdits.at(-1), {
   kind: "reorder-conditions",
   settingKey: "autoBuild",

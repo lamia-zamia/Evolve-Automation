@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 import { createProjectSettingsBrowserAdapter } from "../src/adapters/browser/project-settings.ts";
 import { createProjectSettingsReadModel } from "../src/domain/progression/research/project-settings.ts";
 
+const tableSorter = {
+  attach(_element, options) {
+    sortableOptions = options;
+  },
+  readOrder: () => [],
+};
+
 let document = {
   documentElement: { scrollTop: 0 },
   body: { scrollTop: 25 },
@@ -57,11 +64,7 @@ const tableBody = {
   next() {
     return tableBody;
   },
-  sortable(...args) {
-    if (args[0] === "toArray") return ["Beta", "Alpha"];
-    sortableOptions = args[0];
-    return tableBody;
-  },
+  0: "node",
 };
 
 function makeContentNode(selector) {
@@ -81,11 +84,7 @@ function makeContentNode(selector) {
     next() {
       return this;
     },
-    sortable(...args) {
-      if (args[0] === "toArray") return ["Beta", "Alpha"];
-      sortableOptions = args[0];
-      return this;
-    },
+    0: "node",
   };
 }
 
@@ -116,9 +115,7 @@ const actions = {
   buildTableLabel(label) {
     return `label:${label}`;
   },
-  getSorterHelper() {
-    return "helper";
-  },
+  getTableSorter: () => tableSorter,
 };
 
 let intents = [];
@@ -147,7 +144,7 @@ assert.deepEqual(
 assert.equal(document.documentElement.scrollTop, 25);
 assert.equal(document.body.scrollTop, 25);
 assert.equal(sortableOptions.items, "tr:not(.unsortable)");
-sortableOptions.update();
+sortableOptions.onOrderChanged(["Beta", "Alpha"]);
 assert.deepEqual(intents, [
   { type: "reorder-projects", projectIds: ["Beta", "Alpha"] },
 ]);

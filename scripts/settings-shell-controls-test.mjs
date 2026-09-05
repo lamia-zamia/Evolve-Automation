@@ -91,10 +91,6 @@ function makeNode(label, length = 1) {
     end() {
       return node;
     },
-    autocomplete(options) {
-      autocompleteOptions.push(options);
-      return node;
-    },
   };
   return node;
 }
@@ -111,7 +107,6 @@ function jquery(value) {
   }
   return node;
 }
-jquery.ui = { autocomplete: { escapeRegex: (value) => value } };
 
 let settingsRaw = { overrides: {}, amount: 1, enabled: false };
 const controlContext = {
@@ -121,6 +116,12 @@ const controlContext = {
   updateSettingsFromState: () => trace.push("persist"),
 };
 const controls = createSettingsControls({
+  getAutocomplete: () => ({
+    attach(_element, options) {
+      autocompleteOptions.push(options);
+    },
+    escapeRegex: (value) => value,
+  }),
   getJQuery: () => controlContext.$,
   getSettingsRaw: () => controlContext.settingsRaw,
   getRealNumber: () => controlContext.getRealNumber,

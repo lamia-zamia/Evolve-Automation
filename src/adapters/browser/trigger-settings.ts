@@ -1,3 +1,4 @@
+import type { TableSorter } from "./table-sorter.ts";
 import {
   normalizeTriggerValue,
   type TriggerSettingsInput,
@@ -15,6 +16,8 @@ import {
 } from "./settings-section.ts";
 
 interface JQueryNode extends SettingsContentNode {
+  /** The element itself, which the table sorter attaches to. */
+  readonly 0: unknown;
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
@@ -22,10 +25,6 @@ interface JQueryNode extends SettingsContentNode {
   eq(index: number): JQueryNode;
   val(value?: unknown): JQueryNode | unknown;
   on(events: string, handler: (event?: unknown) => void): JQueryNode;
-  sortable(
-    option: string | Record<string, unknown>,
-    value?: unknown,
-  ): JQueryNode | string[];
 }
 type JQuery = (selector: string) => JQueryNode;
 type Action = () => void;
@@ -43,7 +42,7 @@ export interface TriggerSettingsBrowserActions {
     value: TriggerValue,
     onChange: (value: unknown) => void,
   ) => unknown;
-  readonly sorterHelper: unknown;
+  readonly tableSorter: TableSorter;
 }
 
 interface TriggerSettingsBrowserDependencies {
@@ -285,16 +284,14 @@ export function createTriggerSettingsBrowserAdapter({
       .join("");
     body.append(getJQuery()(rows));
     for (const row of model.rows) buildRow(row, model);
-    body.sortable({
+    getActions().tableSorter.attach(body[0], {
       items: "tr:not(.unsortable)",
-      helper: getActions().sorterHelper,
-      update: () => {
-        const ids = body.sortable("toArray", { attribute: "value" });
-        if (Array.isArray(ids))
-          intents.handle({
-            type: "reorder-triggers",
-            seqs: ids.map((id) => Number(id)),
-          });
+      attribute: "value",
+      onOrderChanged: (ids) => {
+        intents.handle({
+          type: "reorder-triggers",
+          seqs: ids.map((id) => Number(id)),
+        });
       },
     });
   }

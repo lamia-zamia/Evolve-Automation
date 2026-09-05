@@ -38,7 +38,7 @@ export function registerRuntimeSupportTestSurface(testSurface, registration) {
 
   const {
     finalInlineUiBoundaries,
-    sorterHelper,
+    tableSorter,
     gameRates,
     getCostConflict,
     numberFormatting,
@@ -58,7 +58,7 @@ export function registerRuntimeSupportTestSurface(testSurface, registration) {
     finalInlineUiBoundaries,
     setFinalInlineUiBoundariesTestContext: setters.finalInlineUiBoundaries,
   });
-  testSurface.add({ sorterHelper });
+  testSurface.add({ tableSorter });
   testSurface.add({
     gameRates,
     setGameRateTestContext: setters.gameRates,

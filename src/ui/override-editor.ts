@@ -1,3 +1,4 @@
+import type { TableSorter } from "../adapters/browser/table-sorter.ts";
 // The override editor: the modal a setting opens, the condition table inside it, the drag order,
 // and the disabled inputs that show the setting's effective value. Every change it makes to stored
 // settings is a typed intent handled elsewhere.
@@ -40,7 +41,7 @@ interface OverrideEditorControlsDependencies {
     title: string,
     buildOptions: (modal: JQueryNode) => void,
   ) => void;
-  readonly getSorterHelper: () => unknown;
+  readonly getTableSorter: () => TableSorter;
   readonly buildInputNode: (
     type: string,
     options: SettingsInputOptions,
@@ -80,7 +81,7 @@ export function createOverrideEditorControls({
   getCheckCustom,
   getOverrideKey,
   getOpenOptionsModal,
-  getSorterHelper,
+  getTableSorter,
   buildInputNode,
 }: OverrideEditorControlsDependencies): OverrideEditorControls {
   const $ = getJQuery();
@@ -268,13 +269,10 @@ export function createOverrideEditorControls({
       );
     }
 
-    tableBodyNode.sortable({
+    getTableSorter().attach(tableBodyNode[0], {
       items: "tr:not(.unsortable)",
-      helper: getSorterHelper(),
-      update: () => {
-        const newOrder = tableBodyNode.sortable("toArray", {
-          attribute: "value",
-        }) as string[];
+      attribute: "value",
+      onOrderChanged: (newOrder) => {
         overrideEditor.applyEdit({
           kind: "reorder-conditions",
           settingKey: settingName,

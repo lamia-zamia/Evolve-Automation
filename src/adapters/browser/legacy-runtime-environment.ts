@@ -20,7 +20,6 @@ export interface LegacyRuntimeEnvironment {
   readonly repeat: RuntimeFunction;
   readonly MutationObserver: unknown;
   readonly ResizeObserver: unknown;
-  readonly HTMLElement: unknown;
   readonly KeyboardEvent: unknown;
   readonly Node: unknown;
   readonly Sortable: unknown;
@@ -99,7 +98,6 @@ export function createLegacyRuntimeEnvironment(
     repeat: bindFunction(globalObject, "setInterval", noOperation),
     MutationObserver: readProperty(globalObject, "MutationObserver"),
     ResizeObserver: readProperty(globalObject, "ResizeObserver"),
-    HTMLElement: readProperty(globalObject, "HTMLElement"),
     KeyboardEvent: readProperty(globalObject, "KeyboardEvent"),
     Node: readProperty(globalObject, "Node"),
     Sortable: readProperty(globalObject, "Sortable"),

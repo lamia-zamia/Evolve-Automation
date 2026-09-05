@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
+const tableSorter = {
+  attach(_element, options) {
+    sortableOptions = options;
+  },
+  readOrder: () => [],
+};
+
 const domTrace = [];
 const actionTrace = [];
 let sectionRegistration;
@@ -9,11 +16,7 @@ const sortableBody = {
   append() {
     return sortableBody;
   },
-  sortable(...args) {
-    if (args[0] === "toArray") return ["Coal", "Iron"];
-    sortableOptions = args[0];
-    return sortableBody;
-  },
+  0: "node",
 };
 
 function makeNode(selector) {
@@ -35,11 +38,7 @@ function makeNode(selector) {
     next() {
       return this;
     },
-    sortable(...args) {
-      if (args[0] === "toArray") return ["Coal", "Iron"];
-      sortableOptions = args[0];
-      return this;
-    },
+    0: "node",
   };
 }
 
@@ -113,7 +112,7 @@ hooks.setStorageSettingsTestContext({
       actionTrace.push(`label:${label}`);
       return `label:${label}`;
     },
-    getSorterHelper: () => "helper",
+    getTableSorter: () => tableSorter,
   },
   resetStorageSettings(reset) {
     actionTrace.push(`resetStorageSettings:${reset}`);
@@ -156,7 +155,7 @@ assert.deepEqual(actionTrace, [
 assert.equal(document.documentElement.scrollTop, 46);
 assert.equal(document.body.scrollTop, 46);
 
-sortableOptions.update();
+sortableOptions.onOrderChanged(["Coal", "Iron"]);
 assert.deepEqual(settingsRaw, {
   res_storage_p_Coal: 0,
   res_storage_p_Iron: 1,

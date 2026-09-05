@@ -3,6 +3,14 @@ import assert from "node:assert/strict";
 import { createJobSettingsBrowserAdapter } from "../src/adapters/browser/job-settings.ts";
 import { createJobSettingsReadModel } from "../src/domain/civic/job-settings.ts";
 
+const tableSorter = {
+  attach(element, options) {
+    handlers.set(`${element}:sortable`, options.onOrderChanged);
+    trace.push(`sortable:${element}`);
+  },
+  readOrder: () => [],
+};
+
 const trace = [];
 let document = { documentElement: { scrollTop: 0 }, body: { scrollTop: 18 } };
 const handlers = new Map();
@@ -33,12 +41,7 @@ function makeNode(selector) {
       trace.push(`on:${selector}:${events}`);
       return node;
     },
-    sortable(options) {
-      if (typeof options === "string") return ["forager", "smelter"];
-      handlers.set(`${selector}:sortable`, options.update);
-      trace.push(`sortable:${selector}`);
-      return node;
-    },
+    0: selector,
   };
   return node;
 }
@@ -100,7 +103,7 @@ const actions = {
     trace.push(`callbacks:${settingName}`);
     return node;
   },
-  getSorterHelper: () => "helper",
+  getTableSorter: () => tableSorter,
   confirm: (message) => {
     trace.push(`confirm:${message}`);
     return true;
@@ -153,7 +156,7 @@ actions.registration[2]();
 assert.deepEqual(intents, [{ type: "reset-job-settings" }]);
 
 handlers.get("#script_resetJobsPriority")();
-handlers.get("#script_jobTableBody:sortable")();
+handlers.get("#script_jobTableBody:sortable")(["forager", "smelter"]);
 assert.deepEqual(intents, [
   { type: "reset-job-settings" },
   { type: "reset-job-priorities" },

@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
+const tableSorter = {
+  attach() {},
+  readOrder: () => [],
+};
+
 const trace = [];
 let registration;
 
@@ -10,9 +15,6 @@ function makeNode() {
     apply: () => proxy,
     get(_target, property) {
       if (property === "length") return 0;
-      if (property === "sortable") {
-        return (...args) => (args[0] === "toArray" ? [] : proxy);
-      }
       return () => proxy;
     },
   });
@@ -82,9 +84,7 @@ hooks.setMarketSettingsTestContext({
     buildTableLabel() {
       return "label";
     },
-    getSorterHelper() {
-      return "helper";
-    },
+    getTableSorter: () => tableSorter,
   },
   resetMarketSettings: (value) => trace.push(`reset:${value}`),
   updateSettingsFromState: () => trace.push("persist"),

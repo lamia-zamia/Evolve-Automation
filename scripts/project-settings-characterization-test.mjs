@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
+const tableSorter = {
+  attach(_element, options) {
+    sortableOptions = options;
+  },
+  readOrder: () => [],
+};
+
 const domTrace = [];
 const actionTrace = [];
 let sectionRegistration;
@@ -18,11 +25,7 @@ const sortableBody = {
   next() {
     return sortableBody;
   },
-  sortable(...args) {
-    if (args[0] === "toArray") return ["Beta", "Alpha"];
-    sortableOptions = args[0];
-    return sortableBody;
-  },
+  0: "node",
 };
 
 function makeNode(selector) {
@@ -44,11 +47,7 @@ function makeNode(selector) {
     next() {
       return this;
     },
-    sortable(...args) {
-      if (args[0] === "toArray") return ["Beta", "Alpha"];
-      sortableOptions = args[0];
-      return this;
-    },
+    0: "node",
   };
 }
 
@@ -125,7 +124,7 @@ hooks.setProjectSettingsTestContext({
       actionTrace.push(`label:${label}`);
       return `label:${label}`;
     },
-    getSorterHelper: () => "helper",
+    getTableSorter: () => tableSorter,
   },
   resetProjectSettings(reset) {
     actionTrace.push(`resetProjectSettings:${reset}`);
@@ -161,7 +160,7 @@ assert.deepEqual(actionTrace, [
 assert.equal(document.documentElement.scrollTop, 46);
 assert.equal(document.body.scrollTop, 46);
 
-sortableOptions.update();
+sortableOptions.onOrderChanged(["Beta", "Alpha"]);
 assert.deepEqual(settingsRaw, { arpa_p_Beta: 0, arpa_p_Alpha: 1 });
 assert.deepEqual(actionTrace.slice(-2), [
   "sortByPriority",

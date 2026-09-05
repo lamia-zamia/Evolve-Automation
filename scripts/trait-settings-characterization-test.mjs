@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 
+const Sortable = {
+  create(element, options) {
+    sortableHandlers.set(element.label, () => options.onUpdate());
+    return { destroy() {} };
+  },
+  get: () => null,
+};
+
 const handlers = new Map();
 const sortableHandlers = new Map();
 const properties = new Map();
@@ -116,12 +124,14 @@ function makeWrapper(label, parent = null) {
       trace.push(`prop:${label}:${name}:${value}`);
       return this;
     },
-    sortable(arg) {
-      if (typeof arg === "string") {
-        return sortableIds;
-      }
-      sortableHandlers.set(label, arg.update);
-      return this;
+    0: {
+      label,
+      get children() {
+        return sortableIds.map((id) => ({
+          matches: () => true,
+          getAttribute: () => id,
+        }));
+      },
     },
     remove() {
       return this;
@@ -150,6 +160,7 @@ const document = {
 };
 const stored = new Map();
 const { hooks } = await loadCharacterizationBundle({
+  Sortable,
   console,
   document,
   localStorage: {

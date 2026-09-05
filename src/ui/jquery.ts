@@ -1,3 +1,9 @@
+export type {
+  AutocompleteEvent,
+  AutocompleteItem,
+  AutocompleteUi,
+} from "../adapters/browser/autocomplete.ts";
+
 /**
  * The jQuery surface the settings UI uses, as narrow structural types.
  *
@@ -18,26 +24,13 @@ export interface DelegatedEvent<TData> {
   readonly data: TData;
 }
 
-/** One suggestion of an autocomplete input: what it shows and what it stores. */
-export interface AutocompleteItem {
-  label: string;
-  value: unknown;
-}
-
-export interface AutocompleteUi {
-  item: AutocompleteItem | null;
-}
-
-export interface AutocompleteEvent {
-  preventDefault(): void;
-}
-
 export interface JQueryNode {
+  /** The element itself, which the table sorter attaches to. */
+  readonly 0: unknown;
   addClass(className: string): JQueryNode;
   append(content: unknown): JQueryNode;
   appendTo(target: JQueryNode): JQueryNode;
   attr(name: string): string | undefined;
-  autocomplete(options: Record<string, unknown>): JQueryNode;
   children(): JQueryNode;
   empty(): JQueryNode;
   end(): JQueryNode;
@@ -60,10 +53,6 @@ export interface JQueryNode {
   ): JQueryNode;
   prop(name: string, value: unknown): JQueryNode;
   removeClass(className: string): JQueryNode;
-  sortable(
-    option: string | Record<string, unknown>,
-    value?: unknown,
-  ): JQueryNode | string[];
   text(value: unknown): JQueryNode;
   toggleClass(className: string, state: boolean): JQueryNode;
   val(value: unknown): JQueryNode;
@@ -71,5 +60,4 @@ export interface JQueryNode {
 
 export interface JQuery {
   (target: string | JQueryNode): JQueryNode;
-  readonly ui: { readonly autocomplete: { escapeRegex(term: string): string } };
 }

@@ -107,28 +107,4 @@ assert.equal(shell.isPageReady(), false);
 elements.queueColumn = {};
 assert.equal(shell.isPageReady(), true);
 
-// jQuery UI is injected only when the page's jQuery lacks a UI plugin.
-jquery = {};
-assert.equal(shell.needsJQueryUi(), true);
-shell.loadJQueryUi({
-  onLoaded: () => trace.push(["loaded"]),
-  onFailed: () => trace.push(["failed"]),
-});
-assert.equal(injected.length, 1);
-assert.equal(
-  injected[0].src,
-  "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js",
-);
-assert.equal(typeof injected[0].onload, "function");
-jquery.ui = {};
-assert.equal(shell.needsJQueryUi(), false);
-
-// A document without createElement/appendChild reports failure instead of throwing.
-documentValue = {};
-shell.loadJQueryUi({
-  onLoaded: () => trace.push(["loaded"]),
-  onFailed: () => trace.push(["failed"]),
-});
-assert.deepEqual(trace.splice(-1), [["failed"]]);
-
 console.log("Game page shell tests passed");

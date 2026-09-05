@@ -1,3 +1,4 @@
+import type { TableSorter } from "./table-sorter.ts";
 import {
   type FleetSettingsControl,
   type FleetSettingsReadModel,
@@ -10,14 +11,12 @@ import {
 } from "./settings-section.ts";
 
 interface JQueryNode extends SettingsContentNode {
+  /** The element itself, which the table sorter attaches to. */
+  readonly 0: unknown;
   empty(): JQueryNode;
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
   next(): JQueryNode;
-  sortable(
-    option: string | Record<string, unknown>,
-    value?: unknown,
-  ): JQueryNode | string[];
   toggleClass(name: string, value: boolean): JQueryNode;
   on(events: string, dataOrHandler: unknown, handler?: unknown): JQueryNode;
 }
@@ -57,7 +56,7 @@ export interface FleetSettingsBrowserActions {
   readonly addTableInput: (node: JQueryNode, setting: string) => unknown;
   readonly buildTableLabel: (label: string) => unknown;
   readonly openOverrideModal: (event: unknown) => void;
-  readonly sorterHelper: unknown;
+  readonly tableSorter: TableSorter;
 }
 interface FleetSettingsBrowserDependencies {
   readonly getDocument: () => ScrollDocument;
@@ -210,17 +209,15 @@ export function createFleetSettingsBrowserAdapter({
         actions.buildTableLabel(region.label),
       );
     }
-    body.sortable({
+    actions.tableSorter.attach(body[0], {
       items: "tr:not(.unsortable)",
-      helper: actions.sorterHelper,
-      update: () => {
-        const ids = body.sortable("toArray", { attribute: "value" });
-        if (Array.isArray(ids))
-          intents.handle({
-            type: "reorder-andromeda-regions",
-            secondaryPrefix: prefix,
-            regionIds: ids,
-          });
+      attribute: "value",
+      onOrderChanged: (ids) => {
+        intents.handle({
+          type: "reorder-andromeda-regions",
+          secondaryPrefix: prefix,
+          regionIds: ids,
+        });
       },
     });
   }

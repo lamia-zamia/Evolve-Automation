@@ -331,18 +331,6 @@ export function createScriptBootstrap({
       return;
     }
 
-    // Make sure we have jQuery UI even if script was injected without *monkey
-    if (getPageShell().needsJQueryUi()) {
-      getPageShell().loadJQueryUi({
-        onLoaded: mainAutoEvolveScript,
-        onFailed: () =>
-          actions.alert(
-            "Can't load jQuery UI. Check browser console for details.",
-          ),
-      });
-      return;
-    }
-
     // Dealing with userscript sandbox
     // With our @grant none we usually try to run in the page context. This is normally bad for userscripts (can be detected by the page etc)
     // but this is perfect since the game has debug mode built in on purpose just for us. We get the best possible performance too and there

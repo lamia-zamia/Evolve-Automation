@@ -326,17 +326,22 @@ export function createScriptRuntimeUI({
                 left: 0;
                 cursor: default;
                 z-index: 10000 !important;
+                margin: 0;
+                padding: 0;
+                list-style: none;
+                max-height: 240px;
+                overflow-y: auto;
+                border: 1px solid #999;
             }
 
-            .ui-helper-hidden-accessible {
-                border: 0;
-                clip: rect(0 0 0 0);
-                height: 1px;
-                margin: -1px;
-                overflow: hidden;
-                padding: 0;
-                position: absolute;
-                width: 1px;
+            .ui-autocomplete .ui-menu-item {
+                padding: 2px 6px;
+                white-space: nowrap;
+            }
+
+            .ui-autocomplete .ui-menu-item:hover,
+            .ui-autocomplete .ui-menu-item.ui-state-active {
+                background-color: #333;
             }
 
             .selectable span {

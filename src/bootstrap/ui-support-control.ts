@@ -1,29 +1,31 @@
+import { createAutocomplete } from "../adapters/browser/autocomplete.ts";
+import { createTableSorter } from "../adapters/browser/table-sorter.ts";
 import { createMechStats } from "../ui/mech-stats.ts";
-import { createSortHelper } from "../ui/sort-helper.ts";
 
 type MechStatsDependencies = Parameters<typeof createMechStats>[0];
-type SortHelperDependencies = Parameters<typeof createSortHelper>[0];
+type TableSorterDependencies = Parameters<typeof createTableSorter>[0];
+type AutocompleteDependencies = Parameters<typeof createAutocomplete>[0];
 
 export interface UiSupportControlDependencies {
   readonly getUiSurface: MechStatsDependencies["getUiSurface"];
   readonly getMechJQuery: MechStatsDependencies["getJQuery"];
-  readonly getSortJQuery: SortHelperDependencies["getJQuery"];
+  readonly getSortable: TableSorterDependencies["getSortable"];
+  readonly getDocument: AutocompleteDependencies["getDocument"];
   readonly getMechManager: () => unknown;
   readonly getPoly: () => unknown;
   readonly getGame: () => unknown;
   readonly average: MechStatsDependencies["average"];
-  readonly isHTMLElement: SortHelperDependencies["isHTMLElement"];
 }
 
 export function createUiSupportControl({
   getUiSurface,
   getMechJQuery,
-  getSortJQuery,
+  getSortable,
+  getDocument,
   getMechManager,
   getPoly,
   getGame,
   average,
-  isHTMLElement,
 }: UiSupportControlDependencies) {
   const mechStats = createMechStats({
     getUiSurface,
@@ -33,10 +35,8 @@ export function createUiSupportControl({
     getGame: getGame as MechStatsDependencies["getGame"],
     average,
   });
-  const sortHelper = createSortHelper({
-    getJQuery: getSortJQuery,
-    isHTMLElement,
-  });
+  const tableSorter = createTableSorter({ getSortable });
+  const autocomplete = createAutocomplete({ getDocument });
 
-  return Object.freeze({ ...mechStats, ...sortHelper });
+  return Object.freeze({ ...mechStats, autocomplete, tableSorter });
 }
