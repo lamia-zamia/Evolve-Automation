@@ -1,4 +1,3 @@
-import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
 import type { GamePageShellPort } from "../ports/game-page-shell.ts";
 
 type ScriptFunction = (...args: unknown[]) => unknown;
@@ -42,7 +41,6 @@ type UserscriptEnvironment = {
   pageWindow: PageWindow;
   exportToPage: <T>(fn: T) => T;
 };
-type JQuerySurface = { noConflict: () => void };
 type StateSurface = {
   missionBuildingList: Building[];
   warnDebug: boolean;
@@ -103,11 +101,9 @@ type ScriptBootstrapDependencies = {
   getCrafter: () => Record<string, Job>;
   getTriggerManager: () => { priorityList: Trigger[] };
   getCheckActions: () => boolean;
-  getJQuery: () => JQuerySurface;
   getWindow: () => PageWindow;
   getUserscriptEnvironment: () => UserscriptEnvironment;
   getWin: () => PageWindow;
-  getGameKeyboardHandlers: () => GameKeyboardHandlersPort;
   getPageShell: () => GamePageShellPort;
   getNeedSandboxBypass: () => boolean;
   getPoly: () => PolySurface;
@@ -133,11 +129,9 @@ export function createScriptBootstrap({
   getCrafter,
   getTriggerManager,
   getCheckActions,
-  getJQuery,
   getWindow,
   getUserscriptEnvironment,
   getWin,
-  getGameKeyboardHandlers,
   getPageShell,
   getNeedSandboxBypass,
   getPoly,
@@ -161,7 +155,6 @@ export function createScriptBootstrap({
   let crafter: Record<string, Job>;
   let TriggerManager: { priorityList: Trigger[] };
   let checkActions: boolean;
-  let $: JQuerySurface;
   let window: PageWindow;
   let userscriptEnvironment: UserscriptEnvironment;
   let win: PageWindow;
@@ -186,7 +179,6 @@ export function createScriptBootstrap({
     crafter = getCrafter();
     TriggerManager = getTriggerManager();
     checkActions = getCheckActions();
-    $ = getJQuery();
     window = getWindow();
     userscriptEnvironment = getUserscriptEnvironment();
     win = getWin();
@@ -291,12 +283,7 @@ export function createScriptBootstrap({
       win = userscriptEnvironment.pageWindow;
     } else {
       win = window;
-      // Commit the resolved window so the keyboard-handler port reads the page's
-      // jQuery rather than the sandbox's original copy.
       commitContext();
-      if (!getGameKeyboardHandlers().hasKeydownBinding()) {
-        $.noConflict();
-      }
     }
     game = win.evolve;
     commitContext();

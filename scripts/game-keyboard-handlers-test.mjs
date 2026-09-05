@@ -1,16 +1,7 @@
 import assert from "node:assert/strict";
 import { createGameKeyboardHandlers } from "../src/adapters/browser/game-keyboard-handlers.ts";
 
-let events;
-let win;
-let needBypass = false;
-const cloned = [];
 const dispatched = [];
-const played = [];
-const cloneIntoPage = (value) => {
-  cloned.push(value);
-  return value;
-};
 class KeyboardEventStub {
   constructor(type, init) {
     this.type = type;
@@ -22,85 +13,52 @@ const documentStub = {
 };
 
 const handlers = createGameKeyboardHandlers({
-  getWin: () => win,
   getDocument: () => documentStub,
   getKeyboardEvent: () => KeyboardEventStub,
-  getNeedSandboxBypass: () => needBypass,
-  cloneIntoPage,
 });
 
-// A page with no registered bindings falls back to synthetic keyboard events.
-win = { document: documentStub, $: { _data: () => ({ events: {} }) } };
-const direct = handlers.readGameKeyboardHandlers();
-assert.equal(direct.moveAll, null);
-direct.keyDown({ key: "Shift" });
-direct.keyUp({ key: "Shift" });
+// The game keeps its listeners natively at 1.5.0, so a real event on the document is the only way
+// to reach them and there is no combined modifier binding left to replay.
+const keyboard = handlers.readGameKeyboardHandlers();
+assert.equal(keyboard.moveAll, null);
+keyboard.keyDown({ key: "Shift" });
+keyboard.keyUp({ key: "Shift" });
 assert.equal(dispatched.length, 2);
 assert.equal(dispatched[0].type, "keydown");
 assert.equal(dispatched[0].key, "Shift");
 assert.equal(dispatched[1].type, "keyup");
 assert.equal(dispatched[1].key, "Shift");
-assert.deepEqual(cloned, []);
 
-// The same fallback applies when the window carries no jQuery at all.
-win = {};
-const bare = handlers.readGameKeyboardHandlers();
-bare.keyDown({ key: "Alt" });
-assert.equal(dispatched.at(-1).type, "keydown");
-assert.equal(dispatched.at(-1).key, "Alt");
-assert.equal(handlers.hasKeydownBinding(), false);
+// The bindings are resolved per call rather than cached, so a document swapped in later is the one
+// that receives the events.
+const laterDispatched = [];
+const swapped = createGameKeyboardHandlers({
+  getDocument: () => ({
+    dispatchEvent: (event) => laterDispatched.push(event),
+  }),
+  getKeyboardEvent: () => KeyboardEventStub,
+});
+swapped.readGameKeyboardHandlers().keyDown({ key: "Alt" });
+assert.equal(laterDispatched.length, 1);
+assert.equal(laterDispatched[0].key, "Alt");
 
-// The page-shell query reports whether the page's jQuery carries the binding.
-events = { keydown: [{ handler: () => {} }] };
-win = { $: { _data: () => ({ events }) } };
-assert.equal(handlers.hasKeydownBinding(), true);
-events.keydown = [];
-assert.equal(handlers.hasKeydownBinding(), false);
-
-// A page with both key bindings but no combined binding replays each key.
-events = {
-  keydown: [{ handler: (event) => played.push(["down", event.key]) }],
-  keyup: [{ handler: (event) => played.push(["up", event.key]) }],
-};
-win = { $: { _data: () => ({ events }) } };
-needBypass = false;
-const separate = handlers.readGameKeyboardHandlers();
-assert.equal(separate.moveAll, null);
-separate.keyDown({ key: "Control" });
-separate.keyUp({ key: "Control" });
-assert.deepEqual(played, [
-  ["down", "Control"],
-  ["up", "Control"],
-]);
-
-// A mounted combined binding replays the modifier chord.
-events.mousemove = [
-  { handler: (event) => played.push(["chord", event.metaKey]) },
-];
-const chord = handlers.readGameKeyboardHandlers();
-assert.equal(typeof chord.moveAll, "function");
-chord.moveAll({ metaKey: true });
-assert.deepEqual(played.at(-1), ["chord", true]);
-
-// The sandbox bypass clones each synthetic event into the page first.
-needBypass = true;
-const bypassed = handlers.readGameKeyboardHandlers();
-bypassed.keyDown({ key: "Shift" });
-bypassed.moveAll({ shiftKey: true });
-assert.equal(cloned.length, 2);
-assert.equal(cloned[0].key, "Shift");
-assert.deepEqual(cloned[1], { shiftKey: true });
-
-// A key binding the game never registered replays as null, never through the
-// synthetic fallback, once the page did register a combined binding.
-events = {
-  keydown: [{ handler: (event) => played.push(["down", event.key]) }],
-  mousemove: [{ handler: (event) => played.push(["moved", event]) }],
-};
-needBypass = false;
-const partial = handlers.readGameKeyboardHandlers();
-assert.equal(typeof partial.keyDown, "function");
-assert.equal(partial.keyUp, null);
-assert.equal(typeof partial.moveAll, "function");
+// A page that exposes no dispatcher, and one with no KeyboardEvent, stay quiet rather than throw.
+{
+  const quiet = createGameKeyboardHandlers({
+    getDocument: () => ({}),
+    getKeyboardEvent: () => KeyboardEventStub,
+  });
+  assert.doesNotThrow(() =>
+    quiet.readGameKeyboardHandlers().keyDown({ key: "Control" }),
+  );
+  const unconstructable = createGameKeyboardHandlers({
+    getDocument: () => documentStub,
+    getKeyboardEvent: () => undefined,
+  });
+  assert.doesNotThrow(() =>
+    unconstructable.readGameKeyboardHandlers().keyUp({ key: "Control" }),
+  );
+  assert.equal(dispatched.length, 2);
+}
 
 console.log("Game keyboard handlers tests passed");

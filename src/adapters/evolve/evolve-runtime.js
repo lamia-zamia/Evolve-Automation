@@ -1975,17 +1975,13 @@ export function startEvolveRuntimeComposition(
 
   let KeyManager, GameLog;
   const {
-    gameKeyboardHandlers,
     KeyManager: initialKeyManager,
     GameLog: initialGameLog,
     gamePageShell,
     gameUiSurface,
   } = createGameLifecycleControl({
-    getWin: () => win,
     getDocument: () => runtimeEnvironment.document,
     getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
-    getNeedSandboxBypass: () => needSandboxBypass,
-    cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value),
     getGame: () => game,
     getSettings: () => settings,
     getPoly: () => poly,
@@ -3560,11 +3556,9 @@ export function startEvolveRuntimeComposition(
       getCrafter: () => crafter,
       getTriggerManager: () => TriggerManager,
       getCheckActions: () => checkActions,
-      getJQuery: () => $,
       getWindow: () => runtimeEnvironment.window,
       getUserscriptEnvironment: () => userscriptEnvironment,
       getWin: () => win,
-      getGameKeyboardHandlers: () => gameKeyboardHandlers,
       getPageShell: () => gamePageShell,
       getNeedSandboxBypass: () => needSandboxBypass,
       getPoly: () => poly,

@@ -1,5 +1,5 @@
 import type { BrowserDiagnostics } from "../browser/diagnostics.ts";
-import type { JQueryGlobal } from "../browser/jquery.ts";
+import type { DomQuery } from "../browser/dom.ts";
 import type { LegacyRuntimeEnvironment } from "../browser/legacy-runtime-environment.ts";
 
 /**
@@ -8,7 +8,7 @@ import type { LegacyRuntimeEnvironment } from "../browser/legacy-runtime-environ
  * application contracts do not escape into the game surface.
  */
 export declare function startEvolveRuntime(
-  jquery: JQueryGlobal,
+  dom: DomQuery,
   diagnostics: BrowserDiagnostics,
   environment: LegacyRuntimeEnvironment,
 ): void;

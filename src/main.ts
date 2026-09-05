@@ -1,10 +1,10 @@
 import { createBrowserDiagnostics } from "./adapters/browser/diagnostics.ts";
 import { startEvolveRuntime } from "./adapters/evolve/evolve-runtime.js";
-import { readJQueryGlobal } from "./adapters/browser/jquery.ts";
+import { createBrowserDomQuery } from "./adapters/browser/dom.ts";
 import { createLegacyRuntimeEnvironment } from "./adapters/browser/legacy-runtime-environment.ts";
 
 startEvolveRuntime(
-  readJQueryGlobal(globalThis),
+  createBrowserDomQuery(globalThis),
   createBrowserDiagnostics(globalThis),
   createLegacyRuntimeEnvironment(globalThis),
 );

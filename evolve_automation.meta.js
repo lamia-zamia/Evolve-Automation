@@ -16,5 +16,4 @@
 // @match        https://pmotschmann.github.io/Evolve/
 // @match        https://evolvebeta.github.io/Evolve/
 // @grant        none
-// @require      https://code.jquery.com/jquery-3.7.1.min.js
 // ==/UserScript==

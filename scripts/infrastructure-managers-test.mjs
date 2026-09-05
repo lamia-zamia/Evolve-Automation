@@ -5,8 +5,6 @@ import { createInfrastructureManagers } from "../src/game/infrastructure-manager
 let game;
 let settings;
 let poly;
-let win;
-let needSandboxBypass = false;
 const trace = [];
 const documentStub = {
   dispatchEvent: (event) => trace.push(["dispatch", event.type, event.key]),
@@ -19,14 +17,8 @@ class KeyboardEventStub {
 }
 
 const gameKeyboardHandlers = createGameKeyboardHandlers({
-  getWin: () => win,
   getDocument: () => documentStub,
   getKeyboardEvent: () => KeyboardEventStub,
-  getNeedSandboxBypass: () => needSandboxBypass,
-  cloneIntoPage: (value) => {
-    trace.push(["clone", value.key ?? "all"]);
-    return value;
-  },
 });
 
 const { KeyManager, GameLog } = createInfrastructureManagers({
@@ -46,9 +38,7 @@ game = {
 };
 settings = { logEnabled: false, log_special: true };
 poly = { messageQueue: (...args) => trace.push(["message", ...args]) };
-win = { document: documentStub, $: { _data: () => ({ events: {} }) } };
-
-// No jQuery handlers uses synthetic keyboard events and mKeys=false selects none.
+// Synthetic keyboard events with mKeys=false selects no modifier handling at all.
 KeyManager.init();
 KeyManager.reset();
 assert.equal(KeyManager._mode, "none");
@@ -70,14 +60,7 @@ assert.deepEqual(trace.splice(0), [
   ["dispatch", "keyup", "Alt"],
 ]);
 
-// Firefox sandbox path clones key events and uses the live handlers.
-const events = {
-  keydown: [{ handler: (event) => trace.push(["down", event.key]) }],
-  keyup: [{ handler: (event) => trace.push(["up", event.key]) }],
-  mousemove: [{ handler: (event) => trace.push(["all", event.shiftKey]) }],
-};
-win.$._data = () => ({ events });
-needSandboxBypass = true;
+// The game exposes no combined modifier binding, so distinct mappings drive each key on its own.
 KeyManager.init();
 game.global.settings.keyMap = {
   x100: "Shift",
@@ -85,11 +68,12 @@ game.global.settings.keyMap = {
   x10: "Alt",
 };
 KeyManager.reset();
-assert.equal(KeyManager._mode, "all");
+assert.equal(KeyManager._mode, "each");
 KeyManager.set(true, false, false);
 assert.deepEqual(trace.splice(0), [
-  ["clone", "all"],
-  ["all", true],
+  ["dispatch", "keydown", "Shift"],
+  ["dispatch", "keyup", "Control"],
+  ["dispatch", "keyup", "Alt"],
 ]);
 
 // Log settings and compatibility object resolve live on each call.

@@ -11,11 +11,8 @@ type PageShellDependencies = Parameters<typeof createGamePageShell>[0];
 type UiSurfaceDependencies = Parameters<typeof createGameUiSurface>[0];
 
 export interface GameLifecycleControlDependencies {
-  readonly getWin: KeyboardDependencies["getWin"];
   readonly getDocument: KeyboardDependencies["getDocument"];
   readonly getKeyboardEvent: KeyboardDependencies["getKeyboardEvent"];
-  readonly getNeedSandboxBypass: KeyboardDependencies["getNeedSandboxBypass"];
-  readonly cloneIntoPage: KeyboardDependencies["cloneIntoPage"];
   readonly getGame: InfrastructureDependencies["getGame"];
   readonly getSettings: InfrastructureDependencies["getSettings"];
   readonly getPoly: InfrastructureDependencies["getPoly"];
@@ -27,11 +24,8 @@ export interface GameLifecycleControlDependencies {
 }
 
 export function createGameLifecycleControl({
-  getWin,
   getDocument,
   getKeyboardEvent,
-  getNeedSandboxBypass,
-  cloneIntoPage,
   getGame,
   getSettings,
   getPoly,
@@ -42,11 +36,8 @@ export function createGameLifecycleControl({
   getModal,
 }: GameLifecycleControlDependencies) {
   const gameKeyboardHandlers = createGameKeyboardHandlers({
-    getWin,
     getDocument,
     getKeyboardEvent,
-    getNeedSandboxBypass,
-    cloneIntoPage,
   });
   const { KeyManager, GameLog } = createInfrastructureManagers({
     getGame,
@@ -67,7 +58,6 @@ export function createGameLifecycleControl({
   } as UiSurfaceDependencies);
 
   return Object.freeze({
-    gameKeyboardHandlers,
     KeyManager,
     GameLog,
     gamePageShell,

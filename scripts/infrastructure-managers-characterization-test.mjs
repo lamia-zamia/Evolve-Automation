@@ -41,15 +41,7 @@ const { hooks } = await loadCharacterizationBundle({
 
 const { KeyManager, GameLog } = hooks.infrastructureManagers;
 const gameModal = hooks.gameModal;
-const keyEvents = {
-  keydown: [{ handler: (event) => trace.push(["down", event.key]) }],
-  keyup: [{ handler: (event) => trace.push(["up", event.key]) }],
-  mousemove: [{ handler: (event) => trace.push(["all", { ...event }]) }],
-};
-const win = {
-  document: documentStub,
-  $: { _data: () => ({ events: keyEvents }) },
-};
+const win = { document: documentStub };
 const game = {
   global: {
     settings: {
@@ -111,7 +103,7 @@ delete elements.modalBoxTitle;
 
 KeyManager.init();
 KeyManager.reset();
-assert.equal(KeyManager._mode, "all");
+assert.equal(KeyManager._mode, "each");
 assert.deepEqual([...KeyManager.click(26_360)], [1_360, 360, 110, 10, 0]);
 KeyManager.finish();
 
@@ -124,12 +116,18 @@ assert.deepEqual(JSON.parse(JSON.stringify(trace)), [
   ["open-click"],
   ["callback"],
   ["close-click"],
-  ["all", { shiftKey: true, ctrlKey: true, altKey: true }],
-  ["all", { shiftKey: true, ctrlKey: false, altKey: true }],
-  ["all", { shiftKey: false, ctrlKey: true, altKey: true }],
-  ["all", { shiftKey: true, ctrlKey: false, altKey: false }],
-  ["all", { shiftKey: false, ctrlKey: false, altKey: true }],
-  ["all", { shiftKey: false, ctrlKey: false, altKey: false }],
+  ["dispatch", "keydown", "Shift"],
+  ["dispatch", "keydown", "Control"],
+  ["dispatch", "keydown", "Alt"],
+  ["dispatch", "keyup", "Control"],
+  ["dispatch", "keyup", "Shift"],
+  ["dispatch", "keydown", "Control"],
+  ["dispatch", "keydown", "Shift"],
+  ["dispatch", "keyup", "Control"],
+  ["dispatch", "keyup", "Alt"],
+  ["dispatch", "keyup", "Shift"],
+  ["dispatch", "keydown", "Alt"],
+  ["dispatch", "keyup", "Alt"],
   ["message", "hello", "info", false, ["tag"]],
   ["message", "careful", "warning", false, ["tag"]],
   ["message", "danger", "danger", false, ["tag"]],
