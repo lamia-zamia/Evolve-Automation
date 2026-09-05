@@ -38,6 +38,7 @@ export interface GameControlSetDependencies {
   readonly getGame: GarrisonDependencies["getGame"];
   readonly getJQuery: FleetDependencies["getJQuery"];
   readonly callVueMethod: GarrisonDependencies["callVueMethod"];
+  readonly getMechListDocument: MechListDependencies["getDocument"];
   readonly getSortable: MechListDependencies["getSortable"];
   readonly getPageSortable: MechListDependencies["getPageSortable"];
   readonly isSandboxBypass: MechListDependencies["isSandboxBypass"];
@@ -54,6 +55,7 @@ export function createGameControlSet({
   getGame,
   getJQuery,
   callVueMethod,
+  getMechListDocument,
   getSortable,
   getPageSortable,
   isSandboxBypass,
@@ -109,6 +111,7 @@ export function createGameControlSet({
   const mechControls = createGameMechControls({ getVueById });
   const mechListControls = createGameMechListControls({
     getVueById,
+    getDocument: getMechListDocument,
     getSortable,
     getPageSortable,
     isSandboxBypass,

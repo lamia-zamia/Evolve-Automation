@@ -118,13 +118,13 @@ function jquery(selector) {
     text: (content) => browserTrace.push(`text:${content}`),
   };
 }
+const listElement = { children: { 0: mechNode, length: 1 } };
 const browserAdapter = createMechInfoBrowserAdapter({
   getDocument: () => ({
     createElement: () => ({}),
-    getElementById: () => "mech-list",
+    getElementById: () => listElement,
   }),
   getJQuery: () => jquery,
-  getVueById: () => ({ _vnode: { children: [{ elm: mechNode }] } }),
   reader: {
     ensureLabActive: () => true,
     readItems: () => [{ text: "typed note" }],
@@ -132,12 +132,14 @@ const browserAdapter = createMechInfoBrowserAdapter({
   observer: {
     disconnect: () => browserTrace.push("disconnect"),
     observe: (target, options) =>
-      browserTrace.push(`observe:${target}:${options.childList}`),
+      browserTrace.push(
+        `observe:${target === listElement}:${options.childList}`,
+      ),
   },
 });
 browserAdapter.createMechInfo();
 assert.ok(browserTrace.includes("insert:typed note"));
-assert.ok(browserTrace.includes("observe:mech-list:true"));
+assert.ok(browserTrace.includes("observe:true:true"));
 firstHasInfo = true;
 browserAdapter.createMechInfo();
 assert.ok(browserTrace.includes("text:typed note"));

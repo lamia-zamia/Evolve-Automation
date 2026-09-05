@@ -477,8 +477,6 @@ export function startEvolveRuntimeComposition(
       getNiceNumber(value),
     getMechInfoDocument: () => runtimeEnvironment.document,
     getMechInfoJQuery: () => $,
-    getMechInfoVueById: (id) =>
-      getTestContext("mechInfo")?.getVueById?.(id) ?? getVueById(id),
     getResourceToggleGame: () => getTestContext("resourceToggle")?.game ?? game,
     getSettingsRaw: () =>
       getTestContext("resourceToggle")?.settingsRaw ?? settingsRaw,
@@ -1451,6 +1449,7 @@ export function startEvolveRuntimeComposition(
     getGame: () => game,
     getJQuery: () => $,
     callVueMethod,
+    getMechListDocument: () => runtimeEnvironment.document,
     getSortable: () => runtimeEnvironment.Sortable,
     getPageSortable: () => win.Sortable,
     isSandboxBypass: () => needSandboxBypass,

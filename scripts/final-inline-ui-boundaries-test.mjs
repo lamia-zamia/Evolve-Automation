@@ -168,13 +168,15 @@ const { reader: mechInfoReader, observer: mechInfoObserver } =
 const mechUI = createMechInfoBrowserAdapter({
   getDocument: () => ({
     createElement: () => ({}),
-    getElementById: () => ({ id: "mechList" }),
+    getElementById: () => ({
+      id: "mechList",
+      children: { 0: mechNode, length: 1 },
+    }),
   }),
   getJQuery: () => (value) =>
     String(value).includes("draggable")
       ? makeNode(String(value), 0)
       : makeNode(String(value)),
-  getVueById: () => ({ _vnode: { children: [{ elm: mechNode }] } }),
   reader: mechInfoReader,
   observer: mechInfoObserver,
 });

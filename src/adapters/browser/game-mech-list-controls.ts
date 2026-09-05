@@ -10,10 +10,23 @@ import type {
   GameMechListControlsPort,
   GameMechScrapRequest,
 } from "../../ports/game-mech-list-controls.ts";
-import { isRecord, readProperty } from "../validation.ts";
+import { isRecord } from "../validation.ts";
+
+/** The subset of the page this adapter touches. */
+interface MechListDocument {
+  getElementById(elementId: string): unknown;
+}
 
 export interface GameMechListControlsDependencies {
   readonly getVueById: (elementId: string) => unknown;
+
+  /**
+   * Resolves the list element the game mounts Sortable on. The component
+   * proxy's `$el` cannot stand in for it: the panel's root is a `v-for`
+   * fragment, so Vue 3 answers `$el` with the fragment's text anchor and
+   * `Sortable.get` misses.
+   */
+  readonly getDocument: () => MechListDocument;
 
   /** The Sortable the script's own realm can drive the list with. */
   readonly getSortable: () => unknown;
@@ -39,6 +52,7 @@ function hasScrapMethod(
 
 export function createGameMechListControls({
   getVueById,
+  getDocument,
   getSortable,
   getPageSortable,
   isSandboxBypass,
@@ -59,11 +73,7 @@ export function createGameMechListControls({
     },
 
     dragMech(request: GameMechDragRequest): boolean {
-      const view = getVueById(request.elementId);
-      if (!isRecord(view)) {
-        return false;
-      }
-      const element = readProperty(view, "$el");
+      const element = getDocument().getElementById(request.elementId);
       if (typeof element !== "object" || element === null) {
         return false;
       }

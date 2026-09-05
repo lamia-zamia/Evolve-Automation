@@ -20,7 +20,6 @@ export interface MechResourceUiControlDependencies {
   readonly getNiceNumber: (value: number) => string | number;
   readonly getMechInfoDocument: MechBrowserDependencies["getDocument"];
   readonly getMechInfoJQuery: MechBrowserDependencies["getJQuery"];
-  readonly getMechInfoVueById: MechBrowserDependencies["getVueById"];
   readonly getResourceToggleGame: () => unknown;
   readonly getSettingsRaw: () => unknown;
   readonly getMarketManager: () => unknown;
@@ -35,7 +34,6 @@ export function createMechResourceUiControl({
   getNiceNumber,
   getMechInfoDocument,
   getMechInfoJQuery,
-  getMechInfoVueById,
   getResourceToggleGame,
   getSettingsRaw,
   getMarketManager,
@@ -51,7 +49,6 @@ export function createMechResourceUiControl({
   const mechInfoBrowser = createMechInfoBrowserAdapter({
     getDocument: getMechInfoDocument,
     getJQuery: getMechInfoJQuery,
-    getVueById: getMechInfoVueById,
     reader: mechInfo.reader,
     observer: mechInfo.observer,
   });

@@ -31,7 +31,6 @@ interface MechList {
 export interface MechInfoBrowserDependencies {
   readonly getDocument: () => unknown;
   readonly getJQuery: () => unknown;
-  readonly getVueById: (id: string) => unknown;
   readonly reader: MechInfoReader;
   readonly observer: MechInfoObserver;
 }
@@ -94,20 +93,18 @@ function readMechNode(value: unknown, path: string): MechNode {
   };
 }
 
+// The rows are read from the list element's own children instead of from Vue
+// internals. Vue 3 mounts into `#mechList` and the panel's root is a `v-for`
+// fragment, so its component proxy exposes no `_vnode` and its `$el` is the
+// fragment's text anchor rather than the panel. The rendered `.mechRow` divs
+// are the element's element children under either Vue version.
 function readMechList(value: unknown): MechList {
   const list = requireRecord(value, "mechList");
-  const vnode = requireRecord(list["_vnode"], "mechList._vnode");
-  const children = vnode["children"];
-  if (!Array.isArray(children)) {
-    throw new TypeError("mechList._vnode.children must be an array");
-  }
+  const children = readArrayLike(list["children"], "mechList.children");
   return Object.freeze({
     children: Object.freeze(
       children.map((child, index) =>
-        readMechNode(
-          child && requireRecord(child, `mechList child ${index}`)["elm"],
-          `mechList child ${index}.elm`,
-        ),
+        readMechNode(child, `mechList child ${index}`),
       ),
     ),
   });
@@ -116,7 +113,6 @@ function readMechList(value: unknown): MechList {
 export function createMechInfoBrowserAdapter({
   getDocument,
   getJQuery,
-  getVueById,
   reader,
   observer,
 }: MechInfoBrowserDependencies): MechInfoBrowserAdapter {
@@ -133,8 +129,6 @@ export function createMechInfoBrowserAdapter({
     if (!reader.ensureLabActive()) return;
 
     observer.disconnect();
-    const list = readMechList(getVueById("mechList"));
-    const items = reader.readItems(list.children.length);
     const document = requireRecord(getDocument(), "document");
     const getElementById = requireFunction(
       document["getElementById"],
@@ -144,6 +138,9 @@ export function createMechInfoBrowserAdapter({
       document["createElement"],
       "document.createElement",
     );
+    const listElement = Reflect.apply(getElementById, document, ["mechList"]);
+    const list = readMechList(listElement);
+    const items = reader.readItems(list.children.length);
 
     for (let index = 0; index < list.children.length; index += 1) {
       const node = list.children[index];
@@ -163,10 +160,7 @@ export function createMechInfoBrowserAdapter({
       }
     }
 
-    observer.observe(
-      Reflect.apply(getElementById, document, ["mechList"]),
-      Object.freeze({ childList: true }),
-    );
+    observer.observe(listElement, Object.freeze({ childList: true }));
   }
 
   function removeMechInfo(): void {

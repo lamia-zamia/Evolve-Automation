@@ -4,6 +4,7 @@ import { loadCharacterizationBundle } from "./characterization-harness.mjs";
 const trace = [];
 const selectorLengths = new Map();
 let inserted;
+let listElement = { id: "mech-list" };
 
 function makeNode(label) {
   const target = function () {};
@@ -49,7 +50,7 @@ const document = {
     inserted = note;
     return note;
   },
-  getElementById: () => ({ id: "mech-list" }),
+  getElementById: () => listElement,
 };
 const storageValues = new Map();
 const { hooks } = await loadCharacterizationBundle({
@@ -103,10 +104,10 @@ hooks.setMechInfoTestContext({
       observe: (...args) => observerTrace.push(`observe:${args.length}`),
     },
   },
-  getVueById: () => ({ _vnode: { children: [{ elm: mechNode }] } }),
   getNiceNumber: (value) => `nice:${value}`,
 });
 
+listElement = { id: "mech-list", children: { 0: mechNode, length: 1 } };
 selectorLengths.set("#mechList .mechRow[draggable=true]", 0);
 hooks.mechInfo.createMechInfo();
 assert.equal(inserted.innerHTML, "50%, nice:10 /s | ");

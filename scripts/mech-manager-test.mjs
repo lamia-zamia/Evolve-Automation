@@ -13,6 +13,7 @@ let needSandboxBypass = false;
 let win;
 let Sortable;
 let vueById = {};
+let elementById = {};
 let observerCallback;
 const trace = [];
 
@@ -32,6 +33,7 @@ const { MechManager } = createMechManager({
   getMechListControls: () =>
     createGameMechListControls({
       getVueById: (id) => vueById[id],
+      getDocument: () => ({ getElementById: (id) => elementById[id] }),
       getSortable: () => Sortable,
       getPageSortable: () => win.Sortable,
       isSandboxBypass: () => needSandboxBypass,
@@ -153,7 +155,8 @@ buildings.SpireMechBay.count = 1;
 assert.equal(MechManager.initLab(), false);
 
 vueById.mechAssembly = {};
-vueById.mechList = { $el: {} };
+vueById.mechList = {};
+elementById.mechList = { id: "mechList" };
 MechManager.updateSpire();
 MechManager.bestSize = ["small"];
 MechManager.bestMech.small = { size: "small", power: 1 };

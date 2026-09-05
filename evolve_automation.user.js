@@ -10159,6 +10159,7 @@ Only continue if you trust the source. Injected code:
   }
   function createGameMechListControls({
     getVueById,
+    getDocument,
     getSortable,
     getPageSortable,
     isSandboxBypass,
@@ -10173,10 +10174,7 @@ Only continue if you trust the source. Injected code:
         return hasScrapMethod(view) ? (Reflect.apply(view.scrap, view, [request.mechId]), !0) : !1;
       },
       dragMech(request) {
-        let view = getVueById(request.elementId);
-        if (!isRecord(view))
-          return !1;
-        let element = readProperty(view, "$el");
+        let element = getDocument().getElementById(request.elementId);
         if (typeof element != "object" || element === null)
           return !1;
         let sortable = isSandboxBypass() ? getPageSortable() : getSortable();
@@ -10487,6 +10485,7 @@ Only continue if you trust the source. Injected code:
     getGame,
     getJQuery,
     callVueMethod,
+    getMechListDocument,
     getSortable,
     getPageSortable,
     isSandboxBypass,
@@ -10522,6 +10521,7 @@ Only continue if you trust the source. Injected code:
       callVueMethod
     }), mechControls = createGameMechControls({ getVueById }), mechListControls = createGameMechListControls({
       getVueById,
+      getDocument: getMechListDocument,
       getSortable,
       getPageSortable,
       isSandboxBypass,
@@ -45856,16 +45856,11 @@ If script is allowed to reassign non-empty storage it might waste time producing
     };
   }
   function readMechList(value) {
-    let list = requireRecord(value, "mechList"), children = requireRecord(list._vnode, "mechList._vnode").children;
-    if (!Array.isArray(children))
-      throw new TypeError("mechList._vnode.children must be an array");
+    let list = requireRecord(value, "mechList"), children = readArrayLike(list.children, "mechList.children");
     return Object.freeze({
       children: Object.freeze(
         children.map(
-          (child, index) => readMechNode(
-            child && requireRecord(child, `mechList child ${index}`).elm,
-            `mechList child ${index}.elm`
-          )
+          (child, index) => readMechNode(child, `mechList child ${index}`)
         )
       )
     });
@@ -45873,7 +45868,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
   function createMechInfoBrowserAdapter({
     getDocument,
     getJQuery,
-    getVueById,
     reader,
     observer
   }) {
@@ -45887,13 +45881,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
     function createMechInfo() {
       if (query("#mechList .mechRow[draggable=true]").length > 0 || !reader.ensureLabActive()) return;
       observer.disconnect();
-      let list = readMechList(getVueById("mechList")), items = reader.readItems(list.children.length), document = requireRecord(getDocument(), "document"), getElementById = requireFunction(
+      let document = requireRecord(getDocument(), "document"), getElementById = requireFunction(
         document.getElementById,
         "document.getElementById"
       ), createElement = requireFunction(
         document.createElement,
         "document.createElement"
-      );
+      ), listElement = Reflect.apply(getElementById, document, ["mechList"]), list = readMechList(listElement), items = reader.readItems(list.children.length);
       for (let index = 0; index < list.children.length; index += 1) {
         let node = list.children[index], item = items[index];
         if (!node || !item) continue;
@@ -45908,10 +45902,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           note.className = "ea-mech-info", note.innerHTML = item.text, node.insertBefore(note, node.firstChild);
         }
       }
-      observer.observe(
-        Reflect.apply(getElementById, document, ["mechList"]),
-        Object.freeze({ childList: !0 })
-      );
+      observer.observe(listElement, Object.freeze({ childList: !0 }));
     }
     function removeMechInfo() {
       observer.disconnect(), query("#mechList .ea-mech-info").remove();
@@ -46252,7 +46243,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     getNiceNumber,
     getMechInfoDocument,
     getMechInfoJQuery,
-    getMechInfoVueById,
     getResourceToggleGame,
     getSettingsRaw,
     getMarketManager,
@@ -46267,7 +46257,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     }), mechInfoBrowser = createMechInfoBrowserAdapter({
       getDocument: getMechInfoDocument,
       getJQuery: getMechInfoJQuery,
-      getVueById: getMechInfoVueById,
       reader: mechInfo.reader,
       observer: mechInfo.observer
     }), resourceToggleReader = createResourceToggleEvolveAdapter({
@@ -50968,7 +50957,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getNiceNumber: (value) => getTestContext("mechInfo")?.getNiceNumber?.(value) ?? getNiceNumber(value),
       getMechInfoDocument: () => runtimeEnvironment.document,
       getMechInfoJQuery: () => $,
-      getMechInfoVueById: (id) => getTestContext("mechInfo")?.getVueById?.(id) ?? getVueById(id),
       getResourceToggleGame: () => getTestContext("resourceToggle")?.game ?? game,
       getSettingsRaw: () => getTestContext("resourceToggle")?.settingsRaw ?? settingsRaw,
       getMarketManager: () => getTestContext("resourceToggle")?.MarketManager ?? MarketManager,
@@ -51771,6 +51759,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getJQuery: () => $,
       callVueMethod,
+      getMechListDocument: () => runtimeEnvironment.document,
       getSortable: () => runtimeEnvironment.Sortable,
       getPageSortable: () => win.Sortable,
       isSandboxBypass: () => needSandboxBypass,

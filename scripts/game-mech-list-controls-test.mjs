@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { createGameMechListControls } from "../src/adapters/browser/game-mech-list-controls.ts";
 
 let views = {};
+let elements = {};
 let sandboxSortable;
 let pageSortable;
 let cloned = [];
 const usedSortables = [];
 const controls = createGameMechListControls({
   getVueById: (elementId) => views[elementId],
+  getDocument: () => ({ getElementById: (elementId) => elements[elementId] }),
   getSortable: () => {
     usedSortables.push("sandbox");
     return sandboxSortable;
@@ -66,23 +68,23 @@ views["mechList"] = undefined;
 
 // A drag is refused whenever any part of the chain is missing, without
 // touching the event handler.
-views["mechList"] = { $el: {} };
+elements["mechList"] = {};
 sandboxSortable = { get: () => ({ options: { onEnd() {} } }) };
 assert.equal(
   controls.dragMech({ elementId: "mechList", oldIndex: 0, newIndex: 1 }),
   true,
 );
-views["mechList"] = {};
+elements["mechList"] = undefined;
 assert.equal(
   controls.dragMech({ elementId: "mechList", oldIndex: 0, newIndex: 1 }),
   false,
 );
-views["mechList"] = { $el: null };
+elements["mechList"] = null;
 assert.equal(
   controls.dragMech({ elementId: "mechList", oldIndex: 0, newIndex: 1 }),
   false,
 );
-views["mechList"] = { $el: {} };
+elements["mechList"] = {};
 sandboxSortable = { get: "not a function" };
 assert.equal(
   controls.dragMech({ elementId: "mechList", oldIndex: 0, newIndex: 1 }),
@@ -98,7 +100,7 @@ assert.equal(
   controls.dragMech({ elementId: "mechList", oldIndex: 0, newIndex: 1 }),
   false,
 );
-views["mechList"] = undefined;
+elements["mechList"] = undefined;
 sandboxSortable = undefined;
 
 // A drag drives the script realm's Sortable with the list element when the
@@ -107,7 +109,7 @@ const events = [];
 const element = { kind: "mech-list-element" };
 sandboxSortable = fakeSortable(events);
 usedSortables.length = 0;
-views["mechList"] = { $el: element };
+elements["mechList"] = element;
 assert.equal(
   controls.dragMech({ elementId: "mechList", oldIndex: 3, newIndex: 1 }),
   true,
@@ -125,6 +127,7 @@ assert.deepEqual(usedSortables, ["sandbox"]);
 // page, preserving the synthetic handler functions.
 const bypassControls = createGameMechListControls({
   getVueById: (elementId) => views[elementId],
+  getDocument: () => ({ getElementById: (elementId) => elements[elementId] }),
   getSortable: () => {
     throw new Error("must not reach the sandbox Sortable");
   },
@@ -162,11 +165,11 @@ sandboxSortable = {
     },
   }),
 };
-views["mechList"] = { $el: element };
+elements["mechList"] = element;
 assert.throws(
   () => controls.dragMech({ elementId: "mechList", oldIndex: 0, newIndex: 1 }),
   /reorder exploded/,
 );
-views["mechList"] = undefined;
+elements["mechList"] = undefined;
 
 console.log("Game mech list controls adapter tests passed");
