@@ -253,11 +253,16 @@ export function createSettingsShell({
       ' <button id="script_settingsImport" class="button">Import Script Settings</button>',
     );
 
+    // Buefy 3 puts the game's `<b-input id="importExport">` id on the wrapper div rather than on
+    // the control, so the text lives in a nested textarea. `$("#importExport").val()` reads "" off
+    // that div and both buttons silently do nothing. Upstream made the same move in `index.js`.
+    const importExportField = () => $("#importExport textarea");
+
     $("#script_settingsImport").on("click", () => {
-      const str = $("#importExport").val();
+      const str = importExportField().val();
       if (str.length > 0) {
         if (importSettings(str)) {
-          $("#importExport").val("");
+          importExportField().val("");
         }
       }
     });
@@ -267,8 +272,8 @@ export function createSettingsShell({
     );
 
     $("#script_settingsExport").on("click", () => {
-      $("#importExport").val(exportSettings());
-      $("#importExport").select();
+      importExportField().val(exportSettings());
+      importExportField().select();
       getDocument().execCommand("copy");
     });
 

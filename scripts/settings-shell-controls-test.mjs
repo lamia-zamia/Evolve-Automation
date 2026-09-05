@@ -390,8 +390,9 @@ const clickOn = (labelSuffix) =>
     (entry) => entry.label.endsWith(labelSuffix) && entry.args[0] === "click",
   ).args[1];
 
-// Import reads the game's box, and clears it only when the settings were accepted.
-jquery("#importExport").val('{"a":1}');
+// Import reads the textarea nested inside the game's box - Buefy 3 puts the id on the wrapper -
+// and clears it only when the settings were accepted.
+jquery("#importExport textarea").val('{"a":1}');
 let imported = null;
 shellContext.importSettings = (value) => {
   imported = value;
@@ -399,20 +400,20 @@ shellContext.importSettings = (value) => {
 };
 clickOn("#script_settingsImport")();
 assert.equal(imported, '{"a":1}');
-assert.equal(jquery("#importExport").val(), "");
+assert.equal(jquery("#importExport textarea").val(), "");
 
 // A rejected import leaves the box alone so the text can be corrected.
 shellContext.importSettings = (value) => {
   imported = value;
   return false;
 };
-jquery("#importExport").val('{"b":2}');
+jquery("#importExport textarea").val('{"b":2}');
 clickOn("#script_settingsImport")();
 assert.equal(imported, '{"b":2}');
-assert.equal(jquery("#importExport").val(), '{"b":2}');
+assert.equal(jquery("#importExport textarea").val(), '{"b":2}');
 
 // An empty box imports nothing.
-jquery("#importExport").val("");
+jquery("#importExport textarea").val("");
 shellContext.importSettings = () => {
   throw new Error("must not import an empty box");
 };
@@ -421,8 +422,8 @@ clickOn("#script_settingsImport")();
 // Export writes the box and copies it.
 trace.length = 0;
 clickOn("#script_settingsExport")();
-assert.equal(jquery("#importExport").val(), "{}");
-assert.ok(trace.includes("select:#importExport"));
+assert.equal(jquery("#importExport textarea").val(), "{}");
+assert.ok(trace.includes("select:#importExport textarea"));
 assert.ok(trace.includes("execCommand:copy"));
 
 // The file button downloads the raw settings, pretty printed, under the configured name.

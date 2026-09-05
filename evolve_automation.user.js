@@ -47079,13 +47079,15 @@ If script is allowed to reassign non-empty storage it might waste time producing
       );
       importExportBase.after(importExportNode), importExportNode.append(
         ' <button id="script_settingsImport" class="button">Import Script Settings</button>'
-      ), $("#script_settingsImport").on("click", () => {
-        let str = $("#importExport").val();
-        str.length > 0 && importSettings(str) && $("#importExport").val("");
+      );
+      let importExportField = () => $("#importExport textarea");
+      $("#script_settingsImport").on("click", () => {
+        let str = importExportField().val();
+        str.length > 0 && importSettings(str) && importExportField().val("");
       }), importExportNode.append(
         ' <button id="script_settingsExport" class="button">Export Script Settings</button>'
       ), $("#script_settingsExport").on("click", () => {
-        $("#importExport").val(exportSettings()), $("#importExport").select(), getDocument().execCommand("copy");
+        importExportField().val(exportSettings()), importExportField().select(), getDocument().execCommand("copy");
       }), importExportNode.append(
         ' <button id="script_settingsFile" class="button">Script Settings as File</button>'
       ), $("#script_settingsFile").on("click", () => {
