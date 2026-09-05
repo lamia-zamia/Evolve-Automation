@@ -103,11 +103,11 @@ const SAVING_BUSY_BUILDINGS = [
   ["GasMining", "Helium_3", "space_gas_mining_title"],
   ["GasMoonOilExtractor", "Oil", "space_gas_moon_oil_extractor_title"],
 ] as const;
-const KUIPER_BUSY_BUILDINGS = [
-  ["KuiperOrichalcum", "Orichalcum"],
-  ["KuiperUranium", "Uranium"],
-  ["KuiperNeutronium", "Neutronium"],
-  ["KuiperElerium", "Elerium"],
+const MAKEMAKE_BUSY_BUILDINGS = [
+  ["MakemakeOrichalcum", "Orichalcum"],
+  ["MakemakeUranium", "Uranium"],
+  ["MakemakeNeutronium", "Neutronium"],
+  ["MakemakeElerium", "Elerium"],
 ] as const;
 const BELT_BUSY_BUILDINGS = [
   ["BeltIridiumShip", "Iridium"],
@@ -490,7 +490,7 @@ function readBuildingRule(
       });
     }
   }
-  for (const [buildingName, resourceName] of KUIPER_BUSY_BUILDINGS) {
+  for (const [buildingName, resourceName] of MAKEMAKE_BUSY_BUILDINGS) {
     if (identity(buildings, buildingName, building)) {
       const resource = namedRecord(resources, resourceName, "resources");
       const title = registry.register(
@@ -505,7 +505,7 @@ function readBuildingRule(
           registry,
           resource,
           `resources.${resourceName}`,
-          "space_kuiper_mine",
+          "space_makemake_mine",
           [title],
         ),
       });

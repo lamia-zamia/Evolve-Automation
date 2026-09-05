@@ -391,11 +391,11 @@ export function createBuildingStateInitialization({
     priorityList.push(buildings.TritonFOB);
     priorityList.push(buildings.TritonLander);
     //priorityList.push(buildings.TritonCrashedShip);
-    priorityList.push(buildings.KuiperMission);
-    priorityList.push(buildings.KuiperOrichalcum);
-    priorityList.push(buildings.KuiperUranium);
-    priorityList.push(buildings.KuiperNeutronium);
-    priorityList.push(buildings.KuiperElerium);
+    priorityList.push(buildings.MakemakeMission);
+    priorityList.push(buildings.MakemakeOrichalcum);
+    priorityList.push(buildings.MakemakeUranium);
+    priorityList.push(buildings.MakemakeNeutronium);
+    priorityList.push(buildings.MakemakeElerium);
     priorityList.push(buildings.ErisMission);
     priorityList.push(buildings.ErisDrone);
     priorityList.push(buildings.ErisTank);

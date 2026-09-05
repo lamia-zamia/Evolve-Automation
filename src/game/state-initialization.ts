@@ -110,10 +110,10 @@ type StateBuildingId =
   | "HellGeothermal"
   | "IsleSoulCompactor"
   | "IsleSouthPier"
-  | "KuiperElerium"
-  | "KuiperNeutronium"
-  | "KuiperOrichalcum"
-  | "KuiperUranium"
+  | "MakemakeElerium"
+  | "MakemakeNeutronium"
+  | "MakemakeOrichalcum"
+  | "MakemakeUranium"
   | "LakeBireme"
   | "LakeHarbor"
   | "LakeOven"
@@ -608,7 +608,7 @@ export function createStateInitialization({
       getResources().Helium_3,
       getResources().Deuterium,
     ];
-    getBuildings().KuiperElerium.produces = [getResources().Elerium];
+    getBuildings().MakemakeElerium.produces = [getResources().Elerium];
     getBuildings().EnceladusWaterFreighter.produces = [getResources().Water];
 
     // Init consumptions
@@ -830,16 +830,19 @@ export function createStateInitialization({
     );
     getBuildings().TritonLander.addResourceConsumption(getResources().Oil, 50);
 
-    getBuildings().KuiperOrichalcum.addResourceConsumption(
+    getBuildings().MakemakeOrichalcum.addResourceConsumption(
       getResources().Oil,
       200,
     );
-    getBuildings().KuiperUranium.addResourceConsumption(getResources().Oil, 60);
-    getBuildings().KuiperNeutronium.addResourceConsumption(
+    getBuildings().MakemakeUranium.addResourceConsumption(
       getResources().Oil,
       60,
     );
-    getBuildings().KuiperElerium.addResourceConsumption(
+    getBuildings().MakemakeNeutronium.addResourceConsumption(
+      getResources().Oil,
+      60,
+    );
+    getBuildings().MakemakeElerium.addResourceConsumption(
       getResources().Oil,
       125,
     );

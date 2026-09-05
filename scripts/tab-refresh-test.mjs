@@ -101,7 +101,7 @@ context = makeContext({
       tech: {},
     },
   },
-  haveTech: (tech, level = 1) => tech === "kuiper" && level === 1,
+  haveTech: (tech, level = 1) => tech === "makemake" && level === 1,
 });
 assert.equal(updateTabs(false), false);
 assert.equal(context.state.tabHash, 2);

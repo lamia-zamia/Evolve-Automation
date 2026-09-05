@@ -170,14 +170,14 @@ assert.equal(
       titan: 3,
       enceladus: 2,
       triton: 2,
-      kuiper: 1,
+      makemake: 1,
       eris: 2,
       titan_ai_core: 1,
       tauceti: 1,
     },
   }).tabHash,
   // 1 (tab) + 10 (component tiers)
-  // + 7 (enceladus, triton, kuiper, eris, eris scanning, ai core, tauceti)
+  // + 7 (enceladus, triton, makemake, eris, eris scanning, ai core, tauceti)
   1 + 10 + 7,
 );
 // Enceladus syndicate needs both titan 3 and enceladus 2.

@@ -947,38 +947,38 @@ export function createEntityCatalogs({
       "crashed_ship",
       "spc_triton",
     ),
-    KuiperMission: new Action(
-      "Kuiper Mission",
+    MakemakeMission: new Action(
+      "Makemake Mission",
       "space",
-      "kuiper_mission",
-      "spc_kuiper",
+      "makemake_mission",
+      "spc_makemake",
     ),
-    KuiperOrichalcum: new Action(
-      "Kuiper Orichalcum Mine",
+    MakemakeOrichalcum: new Action(
+      "Makemake Orichalcum Mine",
       "space",
       "orichalcum_mine",
-      "spc_kuiper",
+      "spc_makemake",
       { smart: true },
     ),
-    KuiperUranium: new Action(
-      "Kuiper Uranium Mine",
+    MakemakeUranium: new Action(
+      "Makemake Uranium Mine",
       "space",
       "uranium_mine",
-      "spc_kuiper",
+      "spc_makemake",
       { smart: true },
     ),
-    KuiperNeutronium: new Action(
-      "Kuiper Neutronium Mine",
+    MakemakeNeutronium: new Action(
+      "Makemake Neutronium Mine",
       "space",
       "neutronium_mine",
-      "spc_kuiper",
+      "spc_makemake",
       { smart: true },
     ),
-    KuiperElerium: new Action(
-      "Kuiper Elerium Mine",
+    MakemakeElerium: new Action(
+      "Makemake Elerium Mine",
       "space",
       "elerium_mine",
-      "spc_kuiper",
+      "spc_makemake",
       { smart: true },
     ),
     ErisMission: new Action(

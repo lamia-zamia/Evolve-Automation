@@ -116,7 +116,7 @@ export function createTabRefresh({
         (game.global.tech.syard_sensor ?? 0) +
         (haveTech("titan", 3) && haveTech("enceladus", 2) ? 1 : 0) + // Enceladus syndicate
         (haveTech("triton", 2) ? 1 : 0) + // Triton syndicate
-        (haveTech("kuiper") ? 1 : 0) + // Kuiper syndicate
+        (haveTech("makemake") ? 1 : 0) + // Makemake syndicate
         (haveTech("eris") ? 1 : 0) + // Eris syndicate
         (haveTech("eris", 2) ? 1 : 0) + // Eris scanning
         (haveTech("titan_ai_core") ? 1 : 0) + // AI core built, drones unlocked

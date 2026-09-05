@@ -320,7 +320,7 @@ export function computeFleetDefaults(): ResetPlan {
   setOuterRegion("spc_titan", 5, 0.9, 1); // Adamantite
   setOuterRegion("spc_enceladus", 3, 0.9, 1); // Quantium
   setOuterRegion("spc_triton", 10, 0.95, 2); // Encrypted data
-  setOuterRegion("spc_kuiper", 5, 0.9, 2); // Orichalcum
+  setOuterRegion("spc_makemake", 5, 0.9, 2); // Orichalcum
   setOuterRegion("spc_eris", 100, 0.01, 1); // Encrypted data
 
   return { def };

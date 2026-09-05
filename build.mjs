@@ -21,6 +21,19 @@ const userscriptOutputPath = path.join(
 );
 const watch = process.argv.includes("--watch");
 
+// The released metadata block carries one @match per supported host. The local
+// build serves a single origin, so every @match collapses into the localhost one.
+function replaceFirstMatchWithLocalhost() {
+  let replaced = false;
+  return () => {
+    if (replaced) {
+      return "";
+    }
+    replaced = true;
+    return "// @match        http://localhost:4400/*\n";
+  };
+}
+
 const sourceMetadata = (await readFile(metadataPath, "utf8")).trimEnd();
 const metadata = local
   ? sourceMetadata
@@ -34,10 +47,7 @@ const metadata = local
       )
       .replace(/^\/\/ @downloadURL.*\r?\n/m, "")
       .replace(/^\/\/ @updateURL.*\r?\n/m, "")
-      .replace(
-        /^\/\/ @match\s+.*$/m,
-        "// @match        http://localhost:4400/*",
-      )
+      .replace(/^\/\/ @match.*\r?\n/gm, replaceFirstMatchWithLocalhost())
   : sourceMetadata;
 if (
   !metadata.startsWith("// ==UserScript==") ||

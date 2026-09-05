@@ -218,7 +218,7 @@ assert.deepEqual(
     produces: 6,
     overrides: 9,
     fingerprint:
-      "e2492fe3013b67ce5ef87fe9b005bb1b129758a121580c60079fd7f970d0f186",
+      "8d68c6e758bc9f2d2bdca15302d5d7cdb92806350ca9ab523671baadec255a84",
   },
 );
 

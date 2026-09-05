@@ -216,7 +216,7 @@ export function createFleetManagers({
       "spc_titan",
       "spc_enceladus",
       "spc_triton",
-      "spc_kuiper",
+      "spc_makemake",
       "spc_eris",
     ],
 
@@ -531,7 +531,7 @@ export function createFleetManagers({
             : game.actions.space[region]!.info.syndicate_cap!();
           break;
         case "spc_triton":
-        case "spc_kuiper":
+        case "spc_makemake":
         case "spc_eris":
           divisor = game.actions.space[region]!.info.syndicate_cap!();
           break;
