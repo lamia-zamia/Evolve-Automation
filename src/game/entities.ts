@@ -1059,6 +1059,41 @@ export function createEntityClasses({
       }
     }
 
+    /**
+     * The id the game actually renders this action's element under.
+     *
+     * `_vueBinding` cannot serve: it doubles as the prefix of every persisted
+     * per-action setting key (`bat…`, `bld_w_…`, `bld_m_…`), so it has to stay
+     * `<tab>-<id>` whatever the page calls the element. The game builds most
+     * ids the same way, but not all of them: 1.5.0 creates Gather Food and
+     * Gather Stone through `buildTemplate(key, region)` without the region
+     * argument its other call sites pass, so their live ids are
+     * `undefined-food` and `undefined-stone`. Looking them up as `city-food`
+     * resolves to nothing, no Stone can be gathered, the first Rock Quarry is
+     * never affordable, and a fresh run deadlocks in the first hundred days.
+     *
+     * Reading the id off the game's own definition fixes that for any such
+     * mismatch and keeps working once upstream passes the region again. Only a
+     * non-empty string is cached, so an action whose definition does not
+     * declare one (ARPA projects mostly do not) keeps the constructed binding.
+     */
+    get elementId() {
+      if (this._elementId !== undefined) return this._elementId;
+      // Deliberately not `this.definition`: that getter indexes without a
+      // guard, and this one is on the `isUnlocked()` path, where a throw is a
+      // whole-script outage rather than one dead action.
+      const group =
+        this._location !== ""
+          ? readGame().actions?.[this._tab]?.[this._location]
+          : readGame().actions?.[this._tab];
+      const declared = group?.[this._id]?.id;
+      if (typeof declared === "string" && declared !== "") {
+        this._elementId = declared;
+        return declared;
+      }
+      return this._vueBinding;
+    }
+
     get instance() {
       return readGame().global[this._tab][this._id];
     }
@@ -1087,7 +1122,7 @@ export function createEntityClasses({
 
     /** Runs the game's own control without the clickability guards of click(). */
     activate() {
-      return readActionControls().activate(this._vueBinding);
+      return readActionControls().activate(this.elementId);
     }
 
     /* That's a right(ish) way to do, but compared to hardcoded numbers it's a performance tax for... nothing really, as i'll still need to manually declare a lot of things for each new building, and it's already declared for all existing ones. I'll put it on hold for now.
@@ -1118,7 +1153,7 @@ export function createEntityClasses({
       ) {
         return false;
       }
-      return readActionControls().isRendered(this._vueBinding);
+      return readActionControls().isRendered(this.elementId);
     }
 
     isSwitchable() {
@@ -1268,7 +1303,7 @@ export function createEntityClasses({
         return true;
       }
       // False means the game withdrew the control after the clickability check.
-      return actionControls.activate(this._vueBinding);
+      return actionControls.activate(this.elementId);
     }
 
     // A purchase raises this action's own price, and the bulk loop in `click`
@@ -1607,7 +1642,7 @@ export function createEntityClasses({
       }
 
       const request = {
-        elementId: this._vueBinding,
+        elementId: this.elementId,
         count: Math.abs(adjustCount),
       };
       return adjustCount > 0
@@ -1671,7 +1706,7 @@ export function createEntityClasses({
     }
 
     isUnlocked() {
-      return readFeatureVisibility().isVisible("#" + this._vueBinding);
+      return readFeatureVisibility().isVisible("#" + this.elementId);
     }
   }
 
@@ -1724,11 +1759,11 @@ export function createEntityClasses({
 
   class ModalAction extends Action {
     isOptionsCached() {
-      return readActionControls().isCaptured(this._vueBinding);
+      return readActionControls().isCaptured(this.elementId);
     }
 
     cacheOptions() {
-      readActionControls().capture(this._vueBinding);
+      readActionControls().capture(this.elementId);
     }
 
     isUnlocked() {
@@ -1841,7 +1876,7 @@ export function createEntityClasses({
 
       if (
         !readProjectControls().build({
-          elementId: this._vueBinding,
+          elementId: this.elementId,
           projectId: this.id,
           steps: this.currentStep,
           skipTabRedraw,

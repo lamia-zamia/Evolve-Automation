@@ -689,6 +689,42 @@ assert.deepEqual(definitionCalls, []);
 assert.deepEqual(actionCalls, ["action"]);
 actionTooltip = noTooltip;
 
+// The game does not always render an action under `<tab>-<id>`: 1.5.0 builds
+// Gather Food and Gather Stone without the region argument, so they render as
+// `undefined-food` / `undefined-stone`. Every DOM lookup follows the id the
+// definition declares, while the persisted per-action setting keys stay on the
+// constructed binding — they are player data and cannot move.
+mineDefinition.refresh = false;
+context.settings.performanceHackAvoidDrawTech = false;
+const renamedDefinition = { id: "undefined-gather", action: () => true };
+context.game.actions.city.gather = renamedDefinition;
+context.game.global.city.gather = { count: 0 };
+const gatherView = { action: () => actionCalls.push("gather") };
+context.getVueById = (id) =>
+  id === "undefined-gather" ? gatherView : undefined;
+const gather = new classes.Action("Gather", "city", "gather", "");
+assert.equal(gather._vueBinding, "city-gather");
+assert.equal(gather.elementId, "undefined-gather");
+assert.equal(gather.isUnlocked(), true, "declared id must drive isRendered");
+context.settings["batcity-gather"] = true;
+assert.equal(gather.autoBuildEnabled, true, "settings keys keep the binding");
+actionCalls.length = 0;
+gather.cost = {};
+assert.equal(gather.activate(), true);
+assert.deepEqual(actionCalls, ["gather"]);
+// An action whose definition declares no id keeps the constructed binding, and
+// the fallback is never cached in place of a later real id.
+const plainDefinition = { action: () => true };
+context.game.actions.city.plain = plainDefinition;
+const plain = new classes.Action("Plain", "city", "plain", "");
+assert.equal(plain.elementId, "city-plain");
+plainDefinition.id = "city-renamed";
+assert.equal(plain.elementId, "city-renamed");
+delete context.game.actions.city.gather;
+delete context.game.actions.city.plain;
+delete context.game.global.city.gather;
+context.getVueById = (id) => (id === "city-mine" ? mineView : undefined);
+
 // A multi-segmented building holds every multiplier key for its one click, so
 // the game itself covers as many segments as the click can afford. Every other
 // building releases them, and the setting alone decides which happens.

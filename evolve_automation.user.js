@@ -16022,6 +16022,29 @@ Only continue if you trust the source. Injected code:
       get definition() {
         return this._location !== "" ? readGame().actions[this._tab][this._location][this._id] : readGame().actions[this._tab][this._id];
       }
+      /**
+       * The id the game actually renders this action's element under.
+       *
+       * `_vueBinding` cannot serve: it doubles as the prefix of every persisted
+       * per-action setting key (`bat…`, `bld_w_…`, `bld_m_…`), so it has to stay
+       * `<tab>-<id>` whatever the page calls the element. The game builds most
+       * ids the same way, but not all of them: 1.5.0 creates Gather Food and
+       * Gather Stone through `buildTemplate(key, region)` without the region
+       * argument its other call sites pass, so their live ids are
+       * `undefined-food` and `undefined-stone`. Looking them up as `city-food`
+       * resolves to nothing, no Stone can be gathered, the first Rock Quarry is
+       * never affordable, and a fresh run deadlocks in the first hundred days.
+       *
+       * Reading the id off the game's own definition fixes that for any such
+       * mismatch and keeps working once upstream passes the region again. Only a
+       * non-empty string is cached, so an action whose definition does not
+       * declare one (ARPA projects mostly do not) keeps the constructed binding.
+       */
+      get elementId() {
+        if (this._elementId !== void 0) return this._elementId;
+        let declared = (this._location !== "" ? readGame().actions?.[this._tab]?.[this._location] : readGame().actions?.[this._tab])?.[this._id]?.id;
+        return typeof declared == "string" && declared !== "" ? (this._elementId = declared, declared) : this._vueBinding;
+      }
       get instance() {
         return readGame().global[this._tab][this._id];
       }
@@ -16038,7 +16061,7 @@ Only continue if you trust the source. Injected code:
       }
       /** Runs the game's own control without the clickability guards of click(). */
       activate() {
-        return readActionControls().activate(this._vueBinding);
+        return readActionControls().activate(this.elementId);
       }
       /* That's a right(ish) way to do, but compared to hardcoded numbers it's a performance tax for... nothing really, as i'll still need to manually declare a lot of things for each new building, and it's already declared for all existing ones. I'll put it on hold for now.
           get gameMax() {
@@ -16049,7 +16072,7 @@ Only continue if you trust the source. Injected code:
         return this._autoMax >= 0 && this._autoMax <= this.gameMax ? this._autoMax : this.gameMax;
       }
       isUnlocked() {
-        return this._tab === "city" && !readGame().global.settings.showCity || this._tab === "space" && !readGame().global.settings.showSpace && !readGame().global.settings.showOuter || this._tab === "interstellar" && !readGame().global.settings.showDeep || this._tab === "portal" && !readGame().global.settings.showPortal || this._tab === "galaxy" && !readGame().global.settings.showGalactic || this._tab === "tauceti" && !readGame().global.settings.showTau || this._tab === "eden" && !readGame().global.settings.showEden ? !1 : readActionControls().isRendered(this._vueBinding);
+        return this._tab === "city" && !readGame().global.settings.showCity || this._tab === "space" && !readGame().global.settings.showSpace && !readGame().global.settings.showOuter || this._tab === "interstellar" && !readGame().global.settings.showDeep || this._tab === "portal" && !readGame().global.settings.showPortal || this._tab === "galaxy" && !readGame().global.settings.showGalactic || this._tab === "tauceti" && !readGame().global.settings.showTau || this._tab === "eden" && !readGame().global.settings.showEden ? !1 : readActionControls().isRendered(this.elementId);
       }
       isSwitchable() {
         return Object.hasOwn(this.definition, "powered") || Object.hasOwn(this.definition, "switchable");
@@ -16112,7 +16135,7 @@ Only continue if you trust the source. Injected code:
       // One press of the game's own build control.
       runBuildClick() {
         let actionControls = readActionControls();
-        return readSettings3().performanceHackAvoidDrawTech && this.definition.refresh && this.count > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !readGame().global.race.inflation && !actionControls.isTooltipShown() ? (this.definition.action(), !0) : actionControls.activate(this._vueBinding);
+        return readSettings3().performanceHackAvoidDrawTech && this.definition.refresh && this.count > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !readGame().global.race.inflation && !actionControls.isTooltipShown() ? (this.definition.action(), !0) : actionControls.activate(this.elementId);
       }
       // A purchase raises this action's own price, and the bulk loop in `click`
       // re-checks `isClickable` between presses, so the snapshot cannot outlive
@@ -16244,7 +16267,7 @@ Only continue if you trust the source. Injected code:
         if (adjustCount === 0 || !this.hasState())
           return !1;
         let request = {
-          elementId: this._vueBinding,
+          elementId: this.elementId,
           count: Math.abs(adjustCount)
         };
         return adjustCount > 0 ? readActionControls().powerOn(request) : readActionControls().powerOff(request);
@@ -16279,7 +16302,7 @@ Only continue if you trust the source. Injected code:
         super("", "evolution", id, "");
       }
       isUnlocked() {
-        return readFeatureVisibility().isVisible("#" + this._vueBinding);
+        return readFeatureVisibility().isVisible("#" + this.elementId);
       }
     }
     class SpaceDock extends Action {
@@ -16299,10 +16322,10 @@ Only continue if you trust the source. Injected code:
     }
     class ModalAction extends Action {
       isOptionsCached() {
-        return readActionControls().isCaptured(this._vueBinding);
+        return readActionControls().isCaptured(this.elementId);
       }
       cacheOptions() {
-        readActionControls().capture(this._vueBinding);
+        readActionControls().capture(this.elementId);
       }
       isUnlocked() {
         return readGame().global.settings.showSpace ? this.isOptionsCached() : !1;
@@ -16367,7 +16390,7 @@ Only continue if you trust the source. Injected code:
         readClickMultipliers().clear();
         let skipTabRedraw = readSettings3().performanceHackAvoidDrawTech && rank >= 10 && !(this.id === "syphon" && rank >= 79);
         if (!readProjectControls().build({
-          elementId: this._vueBinding,
+          elementId: this.elementId,
           projectId: this.id,
           steps: this.currentStep,
           skipTabRedraw
