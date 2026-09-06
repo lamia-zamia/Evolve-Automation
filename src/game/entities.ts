@@ -2478,6 +2478,14 @@ export function createEntityClasses({
             return readGame().global.stats.achieve["obsolete"]?.l >= 5 ? 1 : 0;
           case "eldritch":
             return readGame().global.stats.achieve["nightmare"]?.mg ? 1 : 0;
+          case "primordial":
+            // 1.5.0. Like synthetic and eldritch, the genus action's own
+            // condition() gates it on an achievement rather than on the biome,
+            // so without Living Extinction it never renders and the race cannot
+            // be evolved anywhere.
+            return readGame().global.stats.achieve["living_extinction"]?.l
+              ? 1
+              : 0;
           case undefined: // Nonexistent custom
             return 0;
           default:

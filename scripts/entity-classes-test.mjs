@@ -465,6 +465,26 @@ context.game.global.stats.achieve = {};
 assert.equal(nephilim.getHabitability(), 0);
 assert.equal(beholder.getHabitability(), 0);
 
+// The 1.5.0 primordial genus (Raptors, Rexicus) is gated on the Living Extinction achievement, not
+// on the biome. Regression: it fell through to the default habitability of 1, so auto target
+// selection committed to Raptors on a save without the achievement, the genus action never
+// rendered, and evolution stalled at "Attempting evolution of Raptors" forever.
+context.game = {
+  global: {
+    stats: { achieve: {} },
+    blood: { unbound: 0 },
+    city: { biome: "grassland" },
+  },
+  races: { raptors: { type: "primordial" } },
+};
+const raptors = new classes.Race("raptors");
+assert.equal(raptors.getHabitability(), 0);
+context.game.global.stats.achieve = { living_extinction: { l: 1 } };
+assert.equal(raptors.getHabitability(), 1);
+// The achievement is recorded per universe; another universe's entry does not unlock it.
+context.game.global.stats.achieve = { living_extinction: { mg: 5 } };
+assert.equal(raptors.getHabitability(), 0);
+
 // Purge gating tolerates the lazily absent race bags. `iTraits` and `ss_traits`
 // only exist once the game has granted an inherited or subspecies trait.
 context.game = {

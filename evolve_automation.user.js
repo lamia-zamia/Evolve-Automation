@@ -12768,6 +12768,10 @@ Only continue if you trust the source. Injected code:
         eldritch: [e.sentience, e.eldritch, ...bilateralSymmetry],
         aquatic: [e.sentience, e.aquatic, ...bilateralSymmetry],
         insectoid: [e.sentience, e.athropods, ...bilateralSymmetry],
+        // 1.5.0 content: Raptors and Rexicus. `bilateral_symmetry` grants
+        // `evo_primordial` alongside the other animalia genera, and the branch is
+        // gated on the Living Extinction achievement rather than on the tree.
+        primordial: [e.sentience, e.primordial, ...bilateralSymmetry],
         humanoid: [e.sentience, e.humanoid, ...mammals],
         giant: [e.sentience, e.gigantism, ...mammals],
         small: [e.sentience, e.dwarfism, ...mammals],
@@ -16671,6 +16675,8 @@ Only continue if you trust the source. Injected code:
               return readGame().global.stats.achieve.obsolete?.l >= 5 ? 1 : 0;
             case "eldritch":
               return readGame().global.stats.achieve.nightmare?.mg ? 1 : 0;
+            case "primordial":
+              return readGame().global.stats.achieve.living_extinction?.l ? 1 : 0;
             case void 0:
               return 0;
             default:

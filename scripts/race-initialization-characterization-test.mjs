@@ -169,9 +169,9 @@ assert.deepEqual(
     actions: 39,
     races: 7,
     imitations: 7,
-    sludgeGenera: 19,
+    sludgeGenera: 20,
     trace: 53,
-    hash: "e03537d8e339d13053b8280e60e39e37d63a11b17f7105fcfae05a429fee584f",
+    hash: "d2130d7812140b37b87a64b45a287d462a720ec419ac6dd0babaa1654a81cd66",
   },
 );
 

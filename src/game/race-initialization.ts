@@ -32,6 +32,7 @@ type EvolutionId =
   | "phagocytosis"
   | "poikilohydric"
   | "polar"
+  | "primordial"
   | "sand"
   | "sentience"
   | "sexual_reproduction"
@@ -93,6 +94,10 @@ export function createRaceInitialization({
       eldritch: [e.sentience, e.eldritch, ...bilateralSymmetry],
       aquatic: [e.sentience, e.aquatic, ...bilateralSymmetry],
       insectoid: [e.sentience, e.athropods, ...bilateralSymmetry],
+      // 1.5.0 content: Raptors and Rexicus. `bilateral_symmetry` grants
+      // `evo_primordial` alongside the other animalia genera, and the branch is
+      // gated on the Living Extinction achievement rather than on the tree.
+      primordial: [e.sentience, e.primordial, ...bilateralSymmetry],
       humanoid: [e.sentience, e.humanoid, ...mammals],
       giant: [e.sentience, e.gigantism, ...mammals],
       small: [e.sentience, e.dwarfism, ...mammals],
