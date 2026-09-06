@@ -39,6 +39,9 @@ const mainVue = {
   toggleTabLoad() {
     this.toggles.push(this.s.tabLoad);
   },
+  $nextTick(callback) {
+    callback();
+  },
 };
 
 const { updateTabs } = createTabRefresh({
@@ -98,6 +101,9 @@ const animatedRedraw = {
       panelContent = "rebuilt";
     }
   },
+  $nextTick(callback) {
+    callback();
+  },
 };
 const animatedContext = makeContext({
   state: { tabHash: 0 },
@@ -126,6 +132,50 @@ assert.equal(animatedRedraw.s.animated, true);
 await new Promise((resolve) => setTimeout(resolve, 350));
 assert.equal(panelContent, "rebuilt");
 
+// Vue must complete the off-state render before the rebuild: a stale render queued by the first
+// toggle would otherwise clear the content created by the second toggle.
+let renderContent = "existing";
+const queuedRedraw = {
+  s: { civTabs: 9, tabLoad: true, animated: true },
+  toggleTabLoad() {
+    if (!this.s.tabLoad) {
+      queueMicrotask(() => {
+        renderContent = "";
+      });
+    } else {
+      renderContent = "rebuilt";
+    }
+  },
+  $nextTick(callback) {
+    queueMicrotask(callback);
+  },
+};
+const queuedContext = makeContext({
+  state: { tabHash: 0 },
+  game: {
+    global: {
+      race: {},
+      settings: { civTabs: 2, showMarket: true },
+      galaxy: {},
+      space: {},
+      tauceti: {},
+      tech: {},
+    },
+  },
+});
+const { updateTabs: updateQueuedTabs } = createTabRefresh({
+  getState: () => queuedContext.state,
+  getGame: () => queuedContext.game,
+  getBuildings: () => queuedContext.buildings,
+  getResources: () => queuedContext.resources,
+  getHaveTech: () => queuedContext.haveTech,
+  isPageVisible: () => queuedContext.isPageVisible(),
+  getMainVue: () => queuedRedraw,
+});
+assert.equal(updateQueuedTabs(true), true);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.equal(renderContent, "rebuilt");
+
 // A hidden-page redraw is deferred without advancing the hash, so the first visible tick retries
 // the rebuild instead of leaving the game panels empty after Firefox resumes the tab.
 let hiddenPageVisible = false;
@@ -148,6 +198,9 @@ const hiddenMainVue = {
   toggles: [],
   toggleTabLoad() {
     this.toggles.push(this.s.tabLoad);
+  },
+  $nextTick(callback) {
+    callback();
   },
 };
 const { updateTabs: updateHiddenTabs } = createTabRefresh({

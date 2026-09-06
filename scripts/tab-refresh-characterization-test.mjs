@@ -41,6 +41,9 @@ function makeContext({
       this.toggleTabLoads += 1;
       this.trace.push(`toggleTabLoad:${this.s.tabLoad}`);
     },
+    $nextTick(callback) {
+      callback();
+    },
   };
   const state = { tabHash };
 
