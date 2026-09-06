@@ -19077,11 +19077,11 @@ Only continue if you trust the source. Injected code:
     getBuildings,
     getResources,
     getHaveTech,
+    isPageVisible,
     getMainVue
   }) {
     function updateTabs(update) {
-      let state = getState(), game = getGame(), buildings = getBuildings(), resources = getResources(), haveTech = getHaveTech(), oldHash = state.tabHash;
-      if (state.tabHash = 0 + // Not really a hash, but it should never go down, that's enough to track unlocks. (Except market after mutation in terrifying, 1000 weight should prevent all possible issues)
+      let state = getState(), game = getGame(), buildings = getBuildings(), resources = getResources(), haveTech = getHaveTech(), oldHash = state.tabHash, nextHash = 0 + // Not really a hash, but it should never go down, that's enough to track unlocks. (Except market after mutation in terrifying, 1000 weight should prevent all possible issues)
       (game.global.race.smoldering && buildings.RockQuarry.count ? 1 : 0) + // Chrysotile production
       (game.global.race.shapeshifter ? 1 : 0) + // Shifter UI
       (game.global.race.servants ? 1 : 0) + // Servants UI
@@ -19115,14 +19115,17 @@ Only continue if you trust the source. Injected code:
       (game.global.tech.psychic ?? 0) + // Psychic powers
       ((game.global.tech.edenic ?? 0) >= 1 ? 1 : 0) + // Spire floor 50 Eden access
       ((game.global.tech.isle ?? 0) >= 3 ? 1 : 0) + // Edenic north/south piers -> spirit syphon tech
-      ((game.global.tech.palace ?? 0) >= 4 ? 1 : 0), game.global.settings.showShipYard && (state.tabHash += 1 + (game.global.tech.syard_class ?? 0) + // Tiers of unlocked components
+      ((game.global.tech.palace ?? 0) >= 4 ? 1 : 0);
+      if (game.global.settings.showShipYard && (nextHash += 1 + (game.global.tech.syard_class ?? 0) + // Tiers of unlocked components
       (game.global.tech.syard_power ?? 0) + (game.global.tech.syard_weapon ?? 0) + (game.global.tech.syard_armor ?? 0) + (game.global.tech.syard_engine ?? 0) + (game.global.tech.syard_sensor ?? 0) + (haveTech("titan", 3) && haveTech("enceladus", 2) ? 1 : 0) + // Enceladus syndicate
       (haveTech("triton", 2) ? 1 : 0) + // Triton syndicate
       (haveTech("makemake") ? 1 : 0) + // Makemake syndicate
       (haveTech("eris") ? 1 : 0) + // Eris syndicate
       (haveTech("eris", 2) ? 1 : 0) + // Eris scanning
       (haveTech("titan_ai_core") ? 1 : 0) + // AI core built, drones unlocked
-      (haveTech("tauceti") ? 1 : 0)), game.global.race.shapeshifter && (state.tabHash += (game.global.race.ss_genus ?? "none").split("").reduce((a, b) => (a = (a << 5) - a + b.charCodeAt(0), a & a), 0)), update && state.tabHash !== oldHash) {
+      (haveTech("tauceti") ? 1 : 0)), game.global.race.shapeshifter && (nextHash += (game.global.race.ss_genus ?? "none").split("").reduce((a, b) => (a = (a << 5) - a + b.charCodeAt(0), a & a), 0)), update && nextHash !== oldHash && !isPageVisible())
+        return !1;
+      if (state.tabHash = nextHash, update && state.tabHash !== oldHash) {
         let mainVue = getMainVue(), animated = mainVue.s.animated;
         try {
           mainVue.s.animated = !1, mainVue.s.civTabs = 7, mainVue.s.tabLoad = !1, mainVue.toggleTabLoad(), mainVue.s.tabLoad = !0, mainVue.toggleTabLoad(), mainVue.s.civTabs = game.global.settings.civTabs;
@@ -19143,6 +19146,7 @@ Only continue if you trust the source. Injected code:
     getBuildings,
     getResources,
     getHaveTech,
+    isPageVisible,
     getMainVue,
     testSurface,
     setTestContext
@@ -19153,6 +19157,7 @@ Only continue if you trust the source. Injected code:
       getBuildings,
       getResources,
       getHaveTech,
+      isPageVisible,
       getMainVue
     });
   }
@@ -53034,6 +53039,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBuildings: () => buildings,
       getResources: () => resources,
       getHaveTech: () => haveTech,
+      isPageVisible: () => gameUiSurface.isPageVisible(),
       getMainVue,
       testSurface,
       setTestContext(context) {

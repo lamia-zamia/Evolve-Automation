@@ -39,6 +39,7 @@ export interface TabRefreshDependencies {
   getBuildings: () => TabRefreshBuildings;
   getResources: () => TabRefreshResources;
   getHaveTech: () => (tech: string, level?: number) => boolean;
+  isPageVisible: () => boolean;
   getMainVue: () => TabRefreshMainVue;
 }
 
@@ -49,6 +50,7 @@ export function createTabRefresh({
   getBuildings,
   getResources,
   getHaveTech,
+  isPageVisible,
   getMainVue,
 }: TabRefreshDependencies) {
   /**
@@ -67,7 +69,7 @@ export function createTabRefresh({
     const haveTech = getHaveTech();
 
     const oldHash = state.tabHash;
-    state.tabHash =
+    let nextHash =
       0 + // Not really a hash, but it should never go down, that's enough to track unlocks. (Except market after mutation in terrifying, 1000 weight should prevent all possible issues)
       (game.global.race["smoldering"] && buildings.RockQuarry.count ? 1 : 0) + // Chrysotile production
       (game.global.race["shapeshifter"] ? 1 : 0) + // Shifter UI
@@ -106,7 +108,7 @@ export function createTabRefresh({
 
     if (game.global.settings.showShipYard) {
       // TP Ship Yard
-      state.tabHash +=
+      nextHash +=
         1 +
         (game.global.tech.syard_class ?? 0) + // Tiers of unlocked components
         (game.global.tech.syard_power ?? 0) +
@@ -124,13 +126,21 @@ export function createTabRefresh({
     }
 
     if (game.global.race["shapeshifter"]) {
-      state.tabHash += (game.global.race.ss_genus ?? "none")
+      nextHash += (game.global.race.ss_genus ?? "none")
         .split("")
         .reduce((a, b) => {
           a = (a << 5) - a + b.charCodeAt(0);
           return a & a;
         }, 0);
     }
+
+    if (update && nextHash !== oldHash && !isPageVisible()) {
+      // Vue's full tab rebuild is not safe while Firefox has parked the page. Keep the old hash so
+      // the first visible tick retries the redraw instead of leaving panels empty on resume.
+      return false;
+    }
+
+    state.tabHash = nextHash;
 
     if (update && state.tabHash !== oldHash) {
       const mainVue = getMainVue();

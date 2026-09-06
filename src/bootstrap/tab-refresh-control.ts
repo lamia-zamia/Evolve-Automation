@@ -21,6 +21,7 @@ export function createTabRefreshControl({
   getBuildings,
   getResources,
   getHaveTech,
+  isPageVisible,
   getMainVue,
   testSurface,
   setTestContext,
@@ -31,6 +32,7 @@ export function createTabRefreshControl({
     getBuildings,
     getResources,
     getHaveTech,
+    isPageVisible,
     getMainVue,
   });
   if (globalThis.__EA_TEST_SURFACE_ENABLED__)

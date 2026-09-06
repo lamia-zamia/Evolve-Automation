@@ -24,6 +24,7 @@ function makeContext(overrides = {}) {
       Containers: { isUnlocked: () => false },
     },
     haveTech: () => false,
+    isPageVisible: () => true,
     ...overrides,
   };
 }
@@ -46,6 +47,7 @@ const { updateTabs } = createTabRefresh({
   getBuildings: () => context.buildings,
   getResources: () => context.resources,
   getHaveTech: () => context.haveTech,
+  isPageVisible: () => context.isPageVisible(),
   getMainVue: () => {
     mainVueLookups += 1;
     return mainVue;
@@ -116,12 +118,54 @@ const { updateTabs: updateAnimatedTabs } = createTabRefresh({
   getBuildings: () => animatedContext.buildings,
   getResources: () => animatedContext.resources,
   getHaveTech: () => animatedContext.haveTech,
+  isPageVisible: () => animatedContext.isPageVisible(),
   getMainVue: () => animatedRedraw,
 });
 assert.equal(updateAnimatedTabs(true), true);
 assert.equal(animatedRedraw.s.animated, true);
 await new Promise((resolve) => setTimeout(resolve, 350));
 assert.equal(panelContent, "rebuilt");
+
+// A hidden-page redraw is deferred without advancing the hash, so the first visible tick retries
+// the rebuild instead of leaving the game panels empty after Firefox resumes the tab.
+let hiddenPageVisible = false;
+const hiddenContext = makeContext({
+  state: { tabHash: 0 },
+  game: {
+    global: {
+      race: {},
+      settings: { civTabs: 2, showMarket: true },
+      galaxy: {},
+      space: {},
+      tauceti: {},
+      tech: {},
+    },
+  },
+  isPageVisible: () => hiddenPageVisible,
+});
+const hiddenMainVue = {
+  s: { civTabs: 2, tabLoad: true, animated: true },
+  toggles: [],
+  toggleTabLoad() {
+    this.toggles.push(this.s.tabLoad);
+  },
+};
+const { updateTabs: updateHiddenTabs } = createTabRefresh({
+  getState: () => hiddenContext.state,
+  getGame: () => hiddenContext.game,
+  getBuildings: () => hiddenContext.buildings,
+  getResources: () => hiddenContext.resources,
+  getHaveTech: () => hiddenContext.haveTech,
+  isPageVisible: () => hiddenContext.isPageVisible(),
+  getMainVue: () => hiddenMainVue,
+});
+assert.equal(updateHiddenTabs(true), false);
+assert.equal(hiddenContext.state.tabHash, 0);
+assert.deepEqual(hiddenMainVue.toggles, []);
+hiddenPageVisible = true;
+assert.equal(updateHiddenTabs(true), true);
+assert.equal(hiddenContext.state.tabHash, 1000);
+assert.deepEqual(hiddenMainVue.toggles, [false, true]);
 
 // An unchanged hash is the common case: no lookup, no redraw.
 mainVue.toggles.length = 0;

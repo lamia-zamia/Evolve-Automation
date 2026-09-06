@@ -3358,6 +3358,7 @@ export function startEvolveRuntimeComposition(
     getBuildings: () => buildings,
     getResources: () => resources,
     getHaveTech: () => haveTech,
+    isPageVisible: () => gameUiSurface.isPageVisible(),
     getMainVue,
     testSurface,
     setTestContext(context) {
