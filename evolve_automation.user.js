@@ -19147,21 +19147,15 @@ Only continue if you trust the source. Injected code:
       (haveTech("tauceti") ? 1 : 0)), game.global.race.shapeshifter && (nextHash += (game.global.race.ss_genus ?? "none").split("").reduce((a, b) => (a = (a << 5) - a + b.charCodeAt(0), a & a), 0)), update && nextHash !== oldHash && !isPageVisible())
         return !1;
       if (state.tabHash = nextHash, update && state.tabHash !== oldHash) {
-        let mainVue = getMainVue(), animated = mainVue.s.animated, restoreAnimated = () => {
-          animated === void 0 ? delete mainVue.s.animated : mainVue.s.animated = animated;
+        let mainVue = getMainVue(), animated = mainVue.s.animated, civTabs = mainVue.s.civTabs, restoreSettings = () => {
+          mainVue.s.civTabs = civTabs, mainVue.s.tabLoad = !0, animated === void 0 ? delete mainVue.s.animated : mainVue.s.animated = animated;
         };
         try {
-          mainVue.s.animated = !1, mainVue.s.civTabs = 7, mainVue.s.tabLoad = !1, mainVue.toggleTabLoad(), mainVue.$nextTick(() => {
-            try {
-              mainVue.s.tabLoad = !0, mainVue.toggleTabLoad(), mainVue.s.civTabs = game.global.settings.civTabs;
-            } finally {
-              restoreAnimated();
-            }
-          });
-        } catch (error) {
-          throw restoreAnimated(), error;
+          mainVue.s.animated = !1, mainVue.s.tabLoad = !1, mainVue.s.civTabs = 7, mainVue.toggleTabLoad();
+        } finally {
+          restoreSettings();
         }
-        return !0;
+        return mainVue.toggleTabLoad(), !0;
       } else
         return !1;
     }

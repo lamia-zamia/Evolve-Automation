@@ -36,11 +36,10 @@ let mainVueLookups = 0;
 const mainVue = {
   s: { civTabs: 9, tabLoad: true, animated: true },
   toggles: [],
+  seen: [],
   toggleTabLoad() {
     this.toggles.push(this.s.tabLoad);
-  },
-  $nextTick(callback) {
-    callback();
+    this.seen.push({ ...this.s });
   },
 };
 
@@ -78,14 +77,21 @@ assert.equal(updateTabs(false), false);
 assert.equal(context.state.tabHash, 1000);
 assert.equal(mainVueLookups, 0);
 
-// A changed hash under update=true redraws: the game is parked on the hidden tab 7, tab preloading
-// is cycled off and on to rebuild the DOM, then the player's own tab is restored from settings.
+// A changed hash under update=true redraws: the clear pass runs parked on the panel-less tab 7 with
+// preloading and animation off, and the redraw pass runs with every borrowed setting already back
+// at its entry value, so the render those writes trigger cannot discard the freshly drawn panels.
 context.state.tabHash = 0;
 assert.equal(updateTabs(true), true);
 assert.equal(mainVueLookups, 1);
 assert.deepEqual(mainVue.toggles, [false, true]);
+assert.deepEqual(mainVue.seen, [
+  { civTabs: 7, tabLoad: false, animated: false },
+  { civTabs: 9, tabLoad: true, animated: true },
+]);
 assert.equal(mainVue.s.tabLoad, true);
-assert.equal(mainVue.s.civTabs, 2);
+// Restored from the live Vue instance, not from the game snapshot's civTabs (2): the snapshot is a
+// per-tick clone, and the game moves the tab itself - sentience() switches to tab 1 mid-tick.
+assert.equal(mainVue.s.civTabs, 9);
 assert.equal(mainVue.s.animated, true);
 
 // A delayed animated teardown from the first toggle must not be able to erase the rebuilt panels.
@@ -100,9 +106,6 @@ const animatedRedraw = {
     } else {
       panelContent = "rebuilt";
     }
-  },
-  $nextTick(callback) {
-    callback();
   },
 };
 const animatedContext = makeContext({
@@ -132,22 +135,31 @@ assert.equal(animatedRedraw.s.animated, true);
 await new Promise((resolve) => setTimeout(resolve, 350));
 assert.equal(panelContent, "rebuilt");
 
-// Vue must complete the off-state render before the rebuild: a stale render queued by the first
-// toggle would otherwise clear the content created by the second toggle.
+// The panels are redrawn only once the borrowed settings are back, so the render Vue runs for those
+// writes sees the tab tree it already had. A panel that re-renders whenever it observes a setting
+// still in its borrowed state must not be able to drop what the redraw put in it.
 let renderContent = "existing";
 const queuedRedraw = {
   s: { civTabs: 9, tabLoad: true, animated: true },
   toggleTabLoad() {
     if (!this.s.tabLoad) {
-      queueMicrotask(() => {
-        renderContent = "";
-      });
-    } else {
-      renderContent = "rebuilt";
+      renderContent = "";
+      return;
     }
-  },
-  $nextTick(callback) {
-    queueMicrotask(callback);
+    renderContent = "rebuilt";
+    // The panels the redraw pass mounts render against the settings as they stand at that moment.
+    // Vue patches them again on the next flush; if anything the script borrowed has moved since,
+    // Buefy replaces the panel elements and their contents go with them.
+    const mounted = { ...this.s };
+    queueMicrotask(() => {
+      if (
+        mounted.civTabs !== this.s.civTabs ||
+        mounted.tabLoad !== this.s.tabLoad ||
+        mounted.animated !== this.s.animated
+      ) {
+        renderContent = "";
+      }
+    });
   },
 };
 const queuedContext = makeContext({
@@ -198,9 +210,6 @@ const hiddenMainVue = {
   toggles: [],
   toggleTabLoad() {
     this.toggles.push(this.s.tabLoad);
-  },
-  $nextTick(callback) {
-    callback();
   },
 };
 const { updateTabs: updateHiddenTabs } = createTabRefresh({

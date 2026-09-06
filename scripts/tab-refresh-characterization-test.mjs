@@ -39,10 +39,9 @@ function makeContext({
     trace: [],
     toggleTabLoad() {
       this.toggleTabLoads += 1;
-      this.trace.push(`toggleTabLoad:${this.s.tabLoad}`);
-    },
-    $nextTick(callback) {
-      callback();
+      this.trace.push(
+        `toggleTabLoad:${this.s.tabLoad}:civTabs${this.s.civTabs}:animated${this.s.animated}`,
+      );
     },
   };
   const state = { tabHash };
@@ -209,14 +208,20 @@ assert.equal(observed.redrawn, false);
 assert.equal(observed.tabHash, 1000);
 assert.equal(observed.toggleTabLoads, 0);
 
-// update=true with a changed hash forces the game to redraw every tab: civTabs is parked on the
-// hidden tab 7, tab preloading is toggled off and back on, then the player's tab is restored.
+// update=true with a changed hash forces the game to redraw every tab. The clear pass is parked on
+// the panel-less tab 7 with preloading and animation off; the redraw pass runs with all three back
+// where they started, so the render Vue queues for those writes redraws the same tab tree.
+// civTabs comes back as the live Vue instance's 1, not the game snapshot's 3 - the snapshot is a
+// per-tick clone and the game moves the tab itself.
 const redraw = run({ gameSettings: { showMarket: true }, tabHash: 5 }, true);
 assert.equal(redraw.redrawn, true);
 assert.equal(redraw.toggleTabLoads, 2);
-assert.deepEqual(redraw.trace, ["toggleTabLoad:false", "toggleTabLoad:true"]);
+assert.deepEqual(redraw.trace, [
+  "toggleTabLoad:false:civTabs7:animatedfalse",
+  "toggleTabLoad:true:civTabs1:animatedundefined",
+]);
 assert.equal(redraw.tabLoad, true);
-assert.equal(redraw.civTabs, 3);
+assert.equal(redraw.civTabs, 1);
 
 // An unchanged hash is the common case and must not redraw anything.
 const unchanged = run(

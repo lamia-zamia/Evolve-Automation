@@ -18,7 +18,6 @@ export interface TabRefreshGame {
 export interface TabRefreshMainVue {
   s: { civTabs: number; tabLoad: boolean; animated?: boolean };
   toggleTabLoad: () => void;
-  $nextTick: (callback: () => void) => void;
 }
 
 /** The three buildings whose count unlocks a tab or a tab's contents. */
@@ -146,33 +145,37 @@ export function createTabRefresh({
     if (update && state.tabHash !== oldHash) {
       const mainVue = getMainVue();
       const animated = mainVue.s.animated;
-      const restoreAnimated = () => {
+      const civTabs = mainVue.s.civTabs;
+      const restoreSettings = () => {
+        mainVue.s.civTabs = civTabs;
+        mainVue.s.tabLoad = true;
         if (animated === undefined) {
           delete mainVue.s.animated;
         } else {
           mainVue.s.animated = animated;
         }
       };
+      // The whole sequence stays synchronous, and every setting it borrows is back at its entry
+      // value before the panels are redrawn. Both halves of that matter under Vue 3 / Buefy 3:
+      //
+      // - A tab tree that renders with a value the script only meant to hold briefly gets patched
+      //   again when that value goes back, and Buefy replaces the panel elements rather than their
+      //   contents. Anything drawn into the old ones - the game's own city panel included - is
+      //   dropped, which leaves the Civilization tab blank and stops the game.
+      // - Panel teardown is deferred behind a 300 ms slide whenever `animated` is on, so the clear
+      //   pass has to run with it off or the timers fire after the redraw and empty the panels
+      //   that pass just filled.
       try {
-        // Disable animated teardown and let Vue finish the off-state render before rebuilding. The
-        // synchronous off/on sequence can otherwise leave the newly mounted panels empty.
         mainVue.s.animated = false;
-        mainVue.s.civTabs = 7;
         mainVue.s.tabLoad = false;
+        // Tab 7 (Settings) owns no lazily-drawn panel, so this clears every panel and draws none.
+        mainVue.s.civTabs = 7;
         mainVue.toggleTabLoad();
-        mainVue["$nextTick"](() => {
-          try {
-            mainVue.s.tabLoad = true;
-            mainVue.toggleTabLoad();
-            mainVue.s.civTabs = game.global.settings.civTabs;
-          } finally {
-            restoreAnimated();
-          }
-        });
-      } catch (error) {
-        restoreAnimated();
-        throw error;
+      } finally {
+        restoreSettings();
       }
+      // Redraws every panel from scratch, including the ones just unlocked.
+      mainVue.toggleTabLoad();
       return true;
     } else {
       return false;
