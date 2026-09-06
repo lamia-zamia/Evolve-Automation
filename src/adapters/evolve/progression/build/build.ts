@@ -12,6 +12,7 @@ import type {
   BuildResourceView,
   BuildSampleRequest,
 } from "../../../../domain/progression/build/build.ts";
+import type { KnowledgeGateLevels } from "../../../../domain/progression/build/building-weighting.ts";
 import type {
   BuildClickResult,
   BuildExecutor,
@@ -21,6 +22,7 @@ import type { TickDiagnostics } from "../../../../ports/tick.ts";
 import { createPhaseMeasure } from "../../../../utils/performance.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  isRecord,
   requireArray,
   requireFunction,
   requireNumber,
@@ -60,6 +62,49 @@ function callMethod(
     target,
     args,
   );
+}
+
+/**
+ * Knowledge-cap gate levels for this cycle. The tech/build numbers are
+ * computed by the storage planner earlier in the tick; the capacity is read
+ * leniently because Knowledge does not exist before the first library, and an
+ * unreadable maximum must disable the bypass rather than fail the cycle.
+ */
+function readKnowledgeGate(
+  state: UnknownRecord,
+  rawResources: unknown,
+): KnowledgeGateLevels {
+  let knowledgeCapacity = Number.NaN;
+  if (isRecord(rawResources)) {
+    const knowledge = rawResources["Knowledge"];
+    if (isRecord(knowledge)) {
+      const capacity = Number(knowledge["maxQuantity"]);
+      if (Number.isFinite(capacity)) {
+        knowledgeCapacity = capacity;
+      }
+    }
+  }
+  return Object.freeze({
+    cheapestTechKnowledge: requireNumber(
+      state["cheapestTechKnowledge"],
+      "state.cheapestTechKnowledge",
+    ),
+    knowledgeRequiredByBuildTargets: requireNumber(
+      state["knowledgeRequiredByBuildTargets"],
+      "state.knowledgeRequiredByBuildTargets",
+    ),
+    knowledgeCapacity,
+  });
+}
+
+/**
+ * Whether the entity raises the Knowledge cap. Uses the catalog's own
+ * truthiness test like the weighting sample, so a functional flag (Mass
+ * Driver, gated on tech) counts the same in both phases.
+ */
+function readKnowledgeFlag(entity: UnknownRecord): boolean {
+  const flags = entity["is"];
+  return isRecord(flags) && Boolean(flags["knowledge"]);
 }
 
 const UNAVAILABLE_CONFLICT: BuildConflictView = Object.freeze({
@@ -204,6 +249,10 @@ export function createBuildAdapter(
               cost: Object.freeze(cost),
               ignored:
                 queuedTargetSet.has(entity) || triggerTargetSet.has(entity),
+              // Lenient where the weighting sample is strict: every managed
+              // entity reaches this list, including ones whose `is` bag the
+              // conflict sampler never touches.
+              knowledge: readKnowledgeFlag(entity),
             });
           }),
       );
@@ -221,6 +270,10 @@ export function createBuildAdapter(
             : "onePerTick";
 
       cycle = Object.freeze({ entities: Object.freeze(entities), byKey });
+      const knowledgeGate = measure(
+        "autoBuild.beginCycle.readKnowledgeGate",
+        () => readKnowledgeGate(state, dependencies.getResources()),
+      );
       return Object.freeze({
         candidates: Object.freeze(candidates),
         consumptionMode,
@@ -229,6 +282,7 @@ export function createBuildAdapter(
         saveWhiteholeGems:
           settings["prestigeType"] === "whitehole" &&
           Boolean(settings["prestigeWhiteholeSaveGems"]),
+        knowledgeGate,
       });
     },
 

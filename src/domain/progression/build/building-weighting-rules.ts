@@ -5,6 +5,7 @@ import type {
   MechSupplySavingReason,
   SacrificeBlockedReason,
 } from "./building-weighting.ts";
+import { isKnowledgeGated } from "./building-weighting.ts";
 
 const SACRIFICE_BLOCKED_NOTES: Readonly<
   Record<SacrificeBlockedReason, string>
@@ -964,9 +965,7 @@ export function createBuildingWeightingPolicy({
     }),
     weightingRule({
       id: "need-more-knowledge",
-      enabled: (snapshot) =>
-        snapshot.cheapestTechKnowledge > snapshot.knowledgeCapacity ||
-        snapshot.knowledgeRequiredByBuildTargets > snapshot.knowledgeCapacity,
+      enabled: (snapshot) => isKnowledgeGated(snapshot),
       match: (candidate) => candidate.knowledge,
       describe: () => "Need more knowledge",
       multiplier: (snapshot) =>

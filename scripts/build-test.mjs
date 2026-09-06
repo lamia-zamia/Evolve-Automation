@@ -48,6 +48,7 @@ function makeTarget(
     cost = {},
     consumption = [],
     important = false,
+    knowledge = false,
     mission = false,
     title = key,
     affordable, // optional override; default derives from resources
@@ -60,7 +61,7 @@ function makeTarget(
     title,
     weighting,
     cost,
-    is: { important },
+    is: { important, knowledge },
     consumption: consumption.map(({ resource, rate }) => ({
       resource: { _id: resource },
       rate,
@@ -107,7 +108,13 @@ function makeWorld({ settings = {}, conflicts = {} } = {}) {
       prestigeWhiteholeSaveGems: false,
       ...settings,
     },
-    state: { queuedTargets: [], triggerTargets: [], unlockedBuildings: [] },
+    state: {
+      queuedTargets: [],
+      triggerTargets: [],
+      unlockedBuildings: [],
+      cheapestTechKnowledge: 0,
+      knowledgeRequiredByBuildTargets: 0,
+    },
   };
   world.BuildingManager = {
     updateWeighting: () => world.trace.push(["weighting", "buildings"]),
@@ -187,6 +194,7 @@ assert.deepEqual(
     "autoBuild.beginCycle.sortCandidates",
     "autoBuild.beginCycle.publishCandidates",
     "autoBuild.beginCycle.normalizeCandidates",
+    "autoBuild.beginCycle.readKnowledgeGate",
     "autoBuild.beginCycle",
     "autoBuild.sampleNeeds",
     "autoBuild.sampleCandidate",
@@ -373,6 +381,133 @@ runScenario("important candidates bypass conflicts", () => {
   });
   return w;
 });
+
+// A Knowledge-gated run raises its cap past a mere saving reservation: the
+// gated research blocks everything behind it, including whatever is saved for.
+world = runScenario(
+  "knowledge producers bypass saving conflicts while gated",
+  () => {
+    const w = makeWorld({
+      conflicts: {
+        "city-library": {
+          status: "conflict",
+          targetNames: ["Pylon"],
+          resourceNames: ["Crystal"],
+          targetCause: "Saving",
+        },
+      },
+    });
+    makeResource(w, "Crystal", { quantity: 1400 });
+    makeResource(w, "Knowledge", { quantity: 3990 });
+    w.resources.Knowledge.maxQuantity = 3990;
+    w.state.cheapestTechKnowledge = 4050;
+    makeTarget(w, "city-library", {
+      weighting: 500,
+      cost: { Crystal: 6 },
+      knowledge: true,
+    });
+    return w;
+  },
+);
+assert.deepEqual(
+  world.trace.filter((e) => e[0] === "click"),
+  [["click", "city-library"]],
+);
+
+// Outside the gate the reservation holds, so cheaper candidates cannot spend
+// what the saving target is accumulating.
+world = runScenario(
+  "knowledge producers respect saving conflicts when ungated",
+  () => {
+    const w = makeWorld({
+      conflicts: {
+        "city-library": {
+          status: "conflict",
+          targetNames: ["Pylon"],
+          resourceNames: ["Crystal"],
+          targetCause: "Saving",
+        },
+      },
+    });
+    makeResource(w, "Crystal", { quantity: 1400 });
+    makeResource(w, "Knowledge", { quantity: 3990 });
+    w.resources.Knowledge.maxQuantity = 3990;
+    w.state.cheapestTechKnowledge = 3000;
+    makeTarget(w, "city-library", {
+      weighting: 500,
+      cost: { Crystal: 6 },
+      knowledge: true,
+    });
+    return w;
+  },
+);
+assert.deepEqual(
+  world.trace.filter((e) => e[0] === "click"),
+  [],
+);
+
+// Queue and trigger targets are explicit commitments: the gate does not
+// release Knowledge producers past them.
+world = runScenario(
+  "knowledge producers respect queue conflicts while gated",
+  () => {
+    const w = makeWorld({
+      conflicts: {
+        "city-library": {
+          status: "conflict",
+          targetNames: ["Moon Base"],
+          resourceNames: ["Crystal"],
+          targetCause: "Queue",
+        },
+      },
+    });
+    makeResource(w, "Crystal", { quantity: 1400 });
+    makeResource(w, "Knowledge", { quantity: 3990 });
+    w.resources.Knowledge.maxQuantity = 3990;
+    w.state.cheapestTechKnowledge = 4050;
+    makeTarget(w, "city-library", {
+      weighting: 500,
+      cost: { Crystal: 6 },
+      knowledge: true,
+    });
+    return w;
+  },
+);
+assert.deepEqual(
+  world.trace.filter((e) => e[0] === "click"),
+  [],
+);
+
+// Ordinary candidates gain nothing from the gate: only cap-raising buildings
+// bypass the saving reservation.
+world = runScenario(
+  "ordinary candidates respect saving conflicts while gated",
+  () => {
+    const w = makeWorld({
+      conflicts: {
+        "city-sawmill": {
+          status: "conflict",
+          targetNames: ["Pylon"],
+          resourceNames: ["Crystal"],
+          targetCause: "Saving",
+        },
+      },
+    });
+    makeResource(w, "Crystal", { quantity: 1400 });
+    makeResource(w, "Knowledge", { quantity: 3990 });
+    w.resources.Knowledge.maxQuantity = 3990;
+    w.state.cheapestTechKnowledge = 4050;
+    makeTarget(w, "city-sawmill", {
+      weighting: 100,
+      cost: { Crystal: 6 },
+    });
+    return w;
+  },
+);
+assert.deepEqual(
+  world.trace.filter((e) => e[0] === "click"),
+  [],
+);
 
 world = runScenario("unavailable reservation data skips for safety", () => {
   const w = makeWorld({

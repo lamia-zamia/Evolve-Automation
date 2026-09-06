@@ -9,6 +9,13 @@
  * affordability cache, build-time estimations, used-consumption marks) lives
  * in an immutable BuildLoopState owned by these planners.
  */
+import {
+  isKnowledgeGated,
+  type KnowledgeGateLevels,
+} from "./building-weighting.ts";
+
+/** `cause` a cost reservation carries when it guards the saving target. */
+const SAVING_CONFLICT_CAUSE = "Saving";
 
 export type BuildConsumptionMode = "perResource" | "unlimited" | "onePerTick";
 
@@ -20,6 +27,8 @@ export interface BuildCandidateView {
   readonly cost: Readonly<Record<string, number>>;
   /** Whether the candidate is a queued or trigger target this cycle. */
   readonly ignored: boolean;
+  /** Legacy `building.is.knowledge`: building it raises the Knowledge cap. */
+  readonly knowledge: boolean;
 }
 
 export interface BuildCycleSetup {
@@ -30,6 +39,8 @@ export interface BuildCycleSetup {
   readonly ignoreZeroRate: boolean;
   /** prestigeType is whitehole and Soul Gem saving is enabled. */
   readonly saveWhiteholeGems: boolean;
+  /** Knowledge-cap gate levels at the start of this cycle. */
+  readonly knowledgeGate: KnowledgeGateLevels;
 }
 
 export interface BuildConsumptionView {
@@ -269,6 +280,18 @@ export function planBuildConflict(
 ): BuildConflictPlan {
   const candidate = candidateAt(setup, index);
   if (sample.conflict === null || sample.important) {
+    return PROCEED;
+  }
+  // A Knowledge-gated run must be able to raise its cap: a Knowledge producer
+  // never waits on a mere saving reservation for a more-wanted candidate,
+  // because the gated research blocks everything behind it too. Queue and
+  // trigger targets are explicit commitments and still block.
+  if (
+    candidate.knowledge &&
+    !sample.conflict.unavailable &&
+    sample.conflict.targetCause === SAVING_CONFLICT_CAUSE &&
+    isKnowledgeGated(setup.knowledgeGate)
+  ) {
     return PROCEED;
   }
   const conflict = sample.conflict;

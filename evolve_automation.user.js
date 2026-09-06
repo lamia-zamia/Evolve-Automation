@@ -20934,6 +20934,11 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/domain/progression/build/building-weighting.ts
+  function isKnowledgeGated(levels) {
+    return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
+  }
+
   // src/domain/progression/build/building-weighting-rules.ts
   var SACRIFICE_BLOCKED_NOTES = {
     windless: "Parasites sacrificed only during windy weather",
@@ -21604,7 +21609,7 @@ Only continue if you trust the source. Injected code:
       },
       {
         id: "need-more-knowledge",
-        enabled: (snapshot) => snapshot.cheapestTechKnowledge > snapshot.knowledgeCapacity || snapshot.knowledgeRequiredByBuildTargets > snapshot.knowledgeCapacity,
+        enabled: (snapshot) => isKnowledgeGated(snapshot),
         match: (candidate) => candidate.knowledge,
         describe: () => "Need more knowledge",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedfulKnowledge
@@ -37570,6 +37575,31 @@ Only continue if you trust the source. Injected code:
       args
     );
   }
+  function readKnowledgeGate(state, rawResources) {
+    let knowledgeCapacity = Number.NaN;
+    if (isRecord(rawResources)) {
+      let knowledge = rawResources.Knowledge;
+      if (isRecord(knowledge)) {
+        let capacity = Number(knowledge.maxQuantity);
+        Number.isFinite(capacity) && (knowledgeCapacity = capacity);
+      }
+    }
+    return Object.freeze({
+      cheapestTechKnowledge: requireNumber(
+        state.cheapestTechKnowledge,
+        "state.cheapestTechKnowledge"
+      ),
+      knowledgeRequiredByBuildTargets: requireNumber(
+        state.knowledgeRequiredByBuildTargets,
+        "state.knowledgeRequiredByBuildTargets"
+      ),
+      knowledgeCapacity
+    });
+  }
+  function readKnowledgeFlag(entity) {
+    let flags = entity.is;
+    return isRecord(flags) && !!flags.knowledge;
+  }
   var UNAVAILABLE_CONFLICT = Object.freeze({
     unavailable: !0,
     targetNames: Object.freeze([]),
@@ -37671,16 +37701,26 @@ Only continue if you trust the source. Injected code:
                 `${path}.weighting`
               ),
               cost: Object.freeze(cost),
-              ignored: queuedTargetSet.has(entity) || triggerTargetSet.has(entity)
+              ignored: queuedTargetSet.has(entity) || triggerTargetSet.has(entity),
+              // Lenient where the weighting sample is strict: every managed
+              // entity reaches this list, including ones whose `is` bag the
+              // conflict sampler never touches.
+              knowledge: readKnowledgeFlag(entity)
             });
           })
         ), settings = requireRecord(dependencies.getSettings(), "settings"), rawMode = settings.buildingConsumptionCheck, consumptionMode = rawMode === "perResource" ? "perResource" : rawMode === "unlimited" ? "unlimited" : "onePerTick";
-        return cycle = Object.freeze({ entities: Object.freeze(entities), byKey }), Object.freeze({
+        cycle = Object.freeze({ entities: Object.freeze(entities), byKey });
+        let knowledgeGate = measure(
+          "autoBuild.beginCycle.readKnowledgeGate",
+          () => readKnowledgeGate(state, dependencies.getResources())
+        );
+        return Object.freeze({
           candidates: Object.freeze(candidates),
           consumptionMode,
           buildIfStorageFull: !!settings.buildingBuildIfStorageFull,
           ignoreZeroRate: !!settings.buildingsIgnoreZeroRate,
-          saveWhiteholeGems: settings.prestigeType === "whitehole" && !!settings.prestigeWhiteholeSaveGems
+          saveWhiteholeGems: settings.prestigeType === "whitehole" && !!settings.prestigeWhiteholeSaveGems,
+          knowledgeGate
         });
       },
       sampleCandidate(index, request) {
@@ -37826,7 +37866,7 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/domain/progression/build/build.ts
-  var SKIP_NEEDS = Object.freeze({ kind: "skip" }), PROCEED = Object.freeze({ kind: "proceed" });
+  var SAVING_CONFLICT_CAUSE = "Saving", SKIP_NEEDS = Object.freeze({ kind: "skip" }), PROCEED = Object.freeze({ kind: "proceed" });
   function initialBuildLoopState() {
     return Object.freeze({
       affordable: Object.freeze({}),
@@ -37889,7 +37929,7 @@ Only continue if you trust the source. Injected code:
   }
   function planBuildConflict(setup, index, sample) {
     let candidate = candidateAt(setup, index);
-    if (sample.conflict === null || sample.important)
+    if (sample.conflict === null || sample.important || candidate.knowledge && !sample.conflict.unavailable && sample.conflict.targetCause === SAVING_CONFLICT_CAUSE && isKnowledgeGated(setup.knowledgeGate))
       return PROCEED;
     let conflict2 = sample.conflict, text = conflict2.unavailable ? "Cost reservation data unavailable; skipped for safety<br>" : `Conflicts with ${conflict2.targetNames.map(highlight).join(", ")} for ${conflict2.resourceNames.map(highlight).join(", ")} (${conflict2.targetCause})<br>`;
     return Object.freeze({

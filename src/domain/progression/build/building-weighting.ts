@@ -148,6 +148,34 @@ export type PrestigeRoute =
   "bioseed" | "whitehole" | "vacuum" | "ascension" | "terraform" | "other";
 
 /**
+ * The Knowledge-cap gate levels both the weighting rules and the build loop
+ * read. The same three numbers feed the `need-more-knowledge` rule and the
+ * build conflict bypass, so the two stay in sync by construction.
+ */
+export interface KnowledgeGateLevels {
+  /** Cheapest Knowledge cost among unlocked techs that only capacity blocks. */
+  readonly cheapestTechKnowledge: number;
+  /** Knowledge reserved by queued/triggered targets and the top build target. */
+  readonly knowledgeRequiredByBuildTargets: number;
+  /** Max Knowledge, which every knowledge requirement above is compared against. */
+  readonly knowledgeCapacity: number;
+}
+
+/**
+ * Whether the run is waiting on Knowledge capacity: the cheapest reachable
+ * research (or a build target's reserved Knowledge) does not fit in the cap.
+ * Mirrors the `need-more-knowledge` weighting rule's enabled condition.
+ */
+export function isKnowledgeGated(
+  levels: Readonly<KnowledgeGateLevels>,
+): boolean {
+  return (
+    levels.cheapestTechKnowledge > levels.knowledgeCapacity ||
+    levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity
+  );
+}
+
+/**
  * Script state and phase-constant game gates that the building-weighting rules
  * read, sampled and frozen once per weighting phase.
  *
