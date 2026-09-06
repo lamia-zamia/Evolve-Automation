@@ -53713,6 +53713,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       (node) => node.nodeType === 1
     );
   }
+  function splitClassNames(className) {
+    return className.split(/\s+/).filter((name) => name.length > 0);
+  }
   function looksLikeMarkup(value) {
     return value.trimStart().startsWith("<");
   }
@@ -53805,16 +53808,19 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }
     // --- classes, attributes, and properties -------------------------------------------------
     addClass(className) {
-      for (let element of this.elements) element.classList.add(className);
+      let names = splitClassNames(className);
+      for (let element of this.elements) element.classList.add(...names);
       return this;
     }
     removeClass(className) {
-      for (let element of this.elements) element.classList.remove(className);
+      let names = splitClassNames(className);
+      for (let element of this.elements) element.classList.remove(...names);
       return this;
     }
     toggleClass(className, state) {
+      let names = splitClassNames(className);
       for (let element of this.elements)
-        element.classList.toggle(className, state);
+        for (let name of names) element.classList.toggle(name, state);
       return this;
     }
     hasClass(className) {

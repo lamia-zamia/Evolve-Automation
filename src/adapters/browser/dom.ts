@@ -63,6 +63,11 @@ function parseHtml(document: Document, markup: string): Element[] {
   );
 }
 
+// jQuery accepts a space-separated class list; DOMTokenList throws on whitespace.
+function splitClassNames(className: string): string[] {
+  return className.split(/\s+/).filter((name) => name.length > 0);
+}
+
 function looksLikeMarkup(value: string): boolean {
   return value.trimStart().startsWith("<");
 }
@@ -208,18 +213,21 @@ export class DomList {
   // --- classes, attributes, and properties -------------------------------------------------
 
   addClass(className: string): DomList {
-    for (const element of this.elements) element.classList.add(className);
+    const names = splitClassNames(className);
+    for (const element of this.elements) element.classList.add(...names);
     return this;
   }
 
   removeClass(className: string): DomList {
-    for (const element of this.elements) element.classList.remove(className);
+    const names = splitClassNames(className);
+    for (const element of this.elements) element.classList.remove(...names);
     return this;
   }
 
   toggleClass(className: string, state?: boolean): DomList {
+    const names = splitClassNames(className);
     for (const element of this.elements) {
-      element.classList.toggle(className, state);
+      for (const name of names) element.classList.toggle(name, state);
     }
     return this;
   }

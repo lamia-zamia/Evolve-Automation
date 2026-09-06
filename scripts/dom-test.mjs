@@ -53,11 +53,21 @@ class TestElement {
     this.offsetHeight = 10;
     this.listeners = [];
     const classes = new Set();
+    // DOMTokenList is variadic and rejects empty or whitespace-bearing tokens.
+    const checkToken = (name) => {
+      if (name === "") throw new Error("The token provided must not be empty.");
+      if (/\s/.test(name)) {
+        throw new Error("The token provided contains HTML space characters.");
+      }
+      return name;
+    };
     this.classList = {
-      add: (name) => classes.add(name),
-      remove: (name) => classes.delete(name),
+      add: (...names) => names.forEach((name) => classes.add(checkToken(name))),
+      remove: (...names) =>
+        names.forEach((name) => classes.delete(checkToken(name))),
       contains: (name) => classes.has(name),
       toggle: (name, force) => {
+        checkToken(name);
         const wanted = force === undefined ? !classes.has(name) : force;
         if (wanted) classes.add(name);
         else classes.delete(name);
@@ -357,6 +367,16 @@ function setUp() {
 
   $("#field").addClass("a").toggleClass("b", true).toggleClass("a", false);
   assert.deepEqual($("#field")[0].classList.values(), ["b"]);
+
+  // jQuery semantics: space-separated lists apply to every named class.
+  $("#field").addClass("c d");
+  assert.deepEqual($("#field")[0].classList.values(), ["b", "c", "d"]);
+  $("#field").removeClass("b  d");
+  assert.deepEqual($("#field")[0].classList.values(), ["c"]);
+  $("#field").toggleClass("c e", true);
+  assert.deepEqual($("#field")[0].classList.values(), ["c", "e"]);
+  $("#field").removeClass("");
+  assert.deepEqual($("#field")[0].classList.values(), ["c", "e"]);
 
   $("#field").css("backgroundColor", "red");
   assert.equal($("#field")[0].style["background-color"], "red");
