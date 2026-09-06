@@ -16,4 +16,5 @@
 // @match        https://pmotschmann.github.io/Evolve/
 // @match        https://evolvebeta.github.io/Evolve/
 // @grant        none
+// @run-at       document-start
 // ==/UserScript==
