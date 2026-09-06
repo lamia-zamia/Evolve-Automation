@@ -227,6 +227,31 @@ assert.equal(technology.click(), false);
 researchElements["#tech-mad > .button:not(.precog)"] = {};
 assert.equal(technology.isUnlocked(), true);
 
+// 1.5.0 gives mutually exclusive research variants one shared element id, so a
+// lookup entry keeps its variant keys and reads the one this run qualifies for.
+context.game = {
+  global: { tech: { core: 1 }, resource: {}, race: {} },
+  actions: {
+    tech: {
+      smelt_perk: { title: "Smelting", reqs: { smelting: 6, space: 3 } },
+      smelt_iceage: { title: "Smelting", reqs: { core: 1 } },
+    },
+  },
+};
+const variantTech = new classes.Technology("smelt_perk", "tech-smelt_perk", [
+  "smelt_perk",
+  "smelt_iceage",
+]);
+assert.equal(variantTech._vueBinding, "tech-smelt_perk");
+assert.equal(variantTech.definition, context.game.actions.tech.smelt_iceage);
+// Both qualify: the game draws in catalog order and a DOM read resolves the
+// first element with that id.
+context.game.global.tech = { smelting: 6, space: 3, core: 1 };
+assert.equal(variantTech.definition, context.game.actions.tech.smelt_perk);
+// Neither qualifies yet, so the first variant stands in.
+context.game.global.tech = {};
+assert.equal(variantTech.definition, context.game.actions.tech.smelt_perk);
+
 context.game = {
   global: {
     civic: {

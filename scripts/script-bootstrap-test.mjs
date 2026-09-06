@@ -21,8 +21,10 @@ class Observer {
   }
 }
 class Technology {
-  constructor(id) {
+  constructor(id, binding, variantIds) {
     this.id = id;
+    this.binding = binding;
+    this.variantIds = variantIds;
   }
 }
 const jquery = () => ({});
@@ -174,8 +176,35 @@ const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
 elements.main = {};
 elements.msgQueueLog = {};
 elements.modalBox = {};
-context.game = { actions: { tech: {} } };
+context.game = {
+  actions: {
+    tech: {
+      mad: { id: "tech-mad" },
+      smelt_perk: { id: "tech-smelt_perk" },
+      smelt_iceage: { id: "tech-smelt_perk" },
+    },
+  },
+};
 initialiseScript();
+// Technologies are keyed by the action id, and catalog entries sharing one are
+// kept together instead of overwriting each other.
+assert.deepEqual(Object.keys(context.techIds), ["tech-mad", "tech-smelt_perk"]);
+assert.deepEqual(
+  { ...context.techIds["tech-mad"] },
+  {
+    id: "mad",
+    binding: "tech-mad",
+    variantIds: ["mad"],
+  },
+);
+assert.deepEqual(
+  { ...context.techIds["tech-smelt_perk"] },
+  {
+    id: "smelt_perk",
+    binding: "tech-smelt_perk",
+    variantIds: ["smelt_perk", "smelt_iceage"],
+  },
+);
 const bodyObserver = observers.find(
   ({ target }) => target === documentStub.body,
 );

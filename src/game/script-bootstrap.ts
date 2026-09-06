@@ -86,7 +86,11 @@ type PolySurface = {
   ) => unknown;
   shipCosts: (blueprint: unknown) => unknown;
 };
-type Technology = new (id: string) => unknown;
+type Technology = new (
+  id: string,
+  binding?: string,
+  variantIds?: readonly string[],
+) => unknown;
 type ScriptBootstrapDependencies = {
   getGame: () => GameSurface | null;
   getTechIds: () => Lookup;
@@ -218,11 +222,23 @@ export function createScriptBootstrap({
   function initialiseScriptImpl() {
     const actions = getScriptBootstrapActions();
     // Init objects and lookup tables
+    // Technologies are keyed by the action id every DOM read and game queue
+    // uses. Several catalog entries can share one, so each lookup entry keeps
+    // its variant keys and resolves its definition when it is read.
+    const techVariants = new Map<string, string[]>();
     for (let [key, action] of Object.entries(game!.actions.tech) as [
       string,
       { id: string },
     ][]) {
-      techIds[action.id] = new Technology(key);
+      const variants = techVariants.get(action.id) ?? [];
+      variants.push(key);
+      techVariants.set(action.id, variants);
+    }
+    for (const [binding, variants] of techVariants) {
+      const primary = variants[0];
+      if (primary !== undefined) {
+        techIds[binding] = new Technology(primary, binding, variants);
+      }
     }
     for (let building of Object.values(buildings)) {
       buildingIds[building._vueBinding] = building;

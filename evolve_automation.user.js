@@ -8671,9 +8671,15 @@ Only continue if you trust the source. Injected code:
       return Object.defineProperty(wrapped, "name", { value: name }), wrapped;
     }
     function initialiseScriptImpl() {
-      let actions = getScriptBootstrapActions();
-      for (let [key, action] of Object.entries(game.actions.tech))
-        techIds[action.id] = new Technology(key);
+      let actions = getScriptBootstrapActions(), techVariants = /* @__PURE__ */ new Map();
+      for (let [key, action] of Object.entries(game.actions.tech)) {
+        let variants = techVariants.get(action.id) ?? [];
+        variants.push(key), techVariants.set(action.id, variants);
+      }
+      for (let [binding, variants] of techVariants) {
+        let primary = variants[0];
+        primary !== void 0 && (techIds[binding] = new Technology(primary, binding, variants));
+      }
       for (let building3 of Object.values(buildings))
         buildingIds[building3._vueBinding] = building3, building3.isMission() && building3 !== buildings.BlackholeJumpShip && building3 !== buildings.PitAssaultForge && state.missionBuildingList.push(building3);
       for (let project of Object.values(projects))
@@ -15470,6 +15476,12 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/game/entities.ts
+  function techRequirementsMet(definition, researched) {
+    let reqs = definition.reqs;
+    return typeof reqs != "object" || reqs === null ? !1 : Object.entries(reqs).every(
+      ([name, level]) => (researched[name] ?? 0) >= level
+    );
+  }
   function createEntityClasses({
     readArpaIds,
     readBuildingIds,
@@ -16404,8 +16416,8 @@ Only continue if you trust the source. Injected code:
         fusion_generator: "True Path",
         replicator: "Lone Survivor"
       };
-      constructor(id) {
-        this._id = id, this._vueBinding = "tech-" + id, this.cost = {};
+      constructor(id, binding = "tech-" + id, variantIds = [id]) {
+        this._id = id, this._vueBinding = binding, this._variantIds = variantIds, this.cost = {};
       }
       get id() {
         return this._id;
@@ -16414,7 +16426,16 @@ Only continue if you trust the source. Injected code:
         return readResearchControls().isOffered(this._vueBinding);
       }
       get definition() {
-        return readGame().actions.tech[this._id];
+        let catalog = readGame().actions.tech;
+        if (this._variantIds.length < 2)
+          return catalog[this._id];
+        let researched = readGame().global.tech;
+        for (let variantId of this._variantIds) {
+          let definition = catalog[variantId];
+          if (definition && techRequirementsMet(definition, researched))
+            return definition;
+        }
+        return catalog[this._id];
       }
       get title() {
         let def = this.definition, title = typeof def.title == "function" ? def.title() : def.title;

@@ -14,6 +14,24 @@ type Loose = ReturnType<typeof JSON.parse>;
 type LooseRecord = Record<PropertyKey, Loose>;
 type LooseFunction = (...args: Loose[]) => Loose;
 
+/**
+ * Whether every researched-tech requirement of an action definition is met.
+ * A computed `reqs` function needs the game's own action arguments, so such a
+ * definition is treated as undecidable here rather than guessed at.
+ */
+function techRequirementsMet(
+  definition: LooseRecord,
+  researched: LooseRecord,
+): boolean {
+  const reqs: Loose = definition["reqs"];
+  if (typeof reqs !== "object" || reqs === null) {
+    return false;
+  }
+  return Object.entries(reqs as LooseRecord).every(
+    ([name, level]) => (researched[name] ?? 0) >= level,
+  );
+}
+
 interface EntityClassesDependencies {
   readArpaIds: () => LooseRecord;
   readBuildingIds: () => LooseRecord;
@@ -1894,10 +1912,14 @@ export function createEntityClasses({
       replicator: "Lone Survivor",
     };
 
-    constructor(id: Loose) {
+    constructor(id: Loose, binding: Loose = "tech-" + id, variantIds = [id]) {
       this._id = id;
 
-      this._vueBinding = "tech-" + id;
+      // Several catalog entries can share one action id (1.5.0 gives
+      // iridium_smelting_perk and iridium_smelting_iceage the same one), so the
+      // binding comes from the action instead of the catalog key.
+      this._vueBinding = binding;
+      this._variantIds = variantIds;
 
       this.cost = {};
     }
@@ -1911,7 +1933,22 @@ export function createEntityClasses({
     }
 
     get definition() {
-      return readGame().actions.tech[this._id];
+      const catalog = readGame().actions.tech;
+      if (this._variantIds.length < 2) {
+        return catalog[this._id];
+      }
+      // Variants sharing one element id are mutually exclusive in practice.
+      // The game draws them in catalog order, and every DOM read resolves the
+      // first element with that id, so the first qualifying variant is the one
+      // actually rendered behind this binding.
+      const researched = readGame().global.tech;
+      for (const variantId of this._variantIds) {
+        const definition = catalog[variantId];
+        if (definition && techRequirementsMet(definition, researched)) {
+          return definition;
+        }
+      }
+      return catalog[this._id];
     }
 
     get title() {
