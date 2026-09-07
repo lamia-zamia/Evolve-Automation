@@ -25,6 +25,7 @@ import type {
   OfferedProject,
 } from "../../../../ports/game-project-catalog.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
+import type { CapturedProjectContextReader } from "./captured-project-context.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
@@ -34,6 +35,8 @@ export interface CapturedProjectDependencies {
   readonly catalog: GameProjectCatalog;
   readonly resources: GameResourceSource;
   readonly controls: GameControlRegistry;
+  /** What the prestige plan, challenge and race say about projects this run. */
+  readonly context: CapturedProjectContextReader;
   /** Persisted script settings are external input and are normalized here. */
   readonly readSettings: () => unknown;
 }
@@ -123,7 +126,7 @@ function queuedIds(root: unknown): ReadonlySet<string> {
 export function createCapturedProjectSource(
   dependencies: CapturedProjectDependencies,
 ): ConstructionCandidateSource {
-  const { rootState, catalog, resources, controls, readSettings } =
+  const { rootState, catalog, resources, controls, context, readSettings } =
     dependencies;
   let cycle: ReadonlyMap<string, CycleProject> = new Map();
 
@@ -163,6 +166,7 @@ export function createCapturedProjectSource(
         settings: readCapturedProjectSettings(settings, offered),
         projects: offered,
         capacities: Object.freeze(capacities),
+        context: context.readContext(),
       })) {
         entries.set(project.elementId, {
           project,

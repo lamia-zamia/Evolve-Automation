@@ -12,11 +12,16 @@ import { createCapturedActionCostReader } from "../adapters/evolve/captured-acti
 import { createCapturedCostConflictReader } from "../adapters/evolve/captured-cost-conflict.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
 import { createCapturedTabDiscovery } from "../adapters/evolve/captured-tab-discovery.ts";
-import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
+import {
+  createCapturedRaceTraitSource,
+  createCapturedResourceSource,
+  createCapturedTechSource,
+} from "../adapters/evolve/captured-world-state.ts";
 import { createCapturedBuildSource } from "../adapters/evolve/progression/build/captured-build.ts";
 import type { CapturedBuildTarget } from "../adapters/evolve/progression/build/captured-build.ts";
 import { createCapturedConstructionAdapter } from "../adapters/evolve/progression/construction/captured-construction.ts";
 import { createCapturedProjectCatalog } from "../adapters/evolve/progression/research/captured-project-catalog.ts";
+import { createCapturedProjectContextReader } from "../adapters/evolve/progression/research/captured-project-context.ts";
 import { createCapturedProjectSource } from "../adapters/evolve/progression/research/captured-project.ts";
 import { runBuildAutomation } from "../application/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
@@ -120,6 +125,12 @@ export function createCapturedConstructionControl(
         catalog,
         resources,
         controls,
+        context: createCapturedProjectContextReader({
+          traits: createCapturedRaceTraitSource(rootState),
+          tech: createCapturedTechSource(rootState),
+          resources,
+          readSettings,
+        }),
         readSettings,
       }),
     ]),

@@ -7,7 +7,11 @@ import {
   readCapturedProjectSettings,
 } from "../src/adapters/evolve/progression/research/captured-project.ts";
 import { runBuildAutomation } from "../src/application/build.ts";
-import { planProjects } from "../src/domain/progression/research/project.ts";
+import {
+  NO_PROJECT_CONTEXT,
+  planProjects,
+} from "../src/domain/progression/research/project.ts";
+import { createCapturedProjectContextReader } from "../src/adapters/evolve/progression/research/captured-project-context.ts";
 
 const offered = (id, overrides = {}) => ({
   elementId: `arpa${id}`,
@@ -53,6 +57,7 @@ const offered = (id, overrides = {}) => ({
       Money: { unlocked: true, maximum: 30 },
       Knowledge: { unlocked: true, maximum: 100 },
     },
+    context: NO_PROJECT_CONTEXT,
   });
   assert.ok(Math.abs(planned[0].weighting - 120) < 1e-9);
   assert.deepEqual(
@@ -118,6 +123,7 @@ function makeAdapter({
   queue = [],
   catalog = undefined,
   settings = undefined,
+  context = NO_PROJECT_CONTEXT,
 } = {}) {
   if (catalog === undefined) {
     catalog = [offered("lhc", { rank: 1, progress, generation: 2 })];
@@ -203,6 +209,7 @@ function makeAdapter({
         },
         resources,
         controls,
+        context: { readContext: () => context },
         readSettings: () => settings,
       }),
     ],
@@ -288,6 +295,217 @@ function makeAdapter({
   assert.equal(runBuildAutomation(failed.adapter).status, "succeeded");
   assert.deepEqual(failed.calls, []);
   assert.equal(failed.reads(), 1);
+}
+
+// --- the run context: gates that are about the run, not about one project ------------------------
+
+// The pure planner applies each override in the game's own order: exclusion and the maximum first,
+// then the multiplier, then optional progress scaling.
+{
+  const settings = {
+    enabled: true,
+    stepPercent: 1,
+    scaleWeighting: false,
+    targets: [
+      {
+        projectId: "syphon",
+        enabled: true,
+        priority: 0,
+        maximum: 2,
+        weighting: 10,
+      },
+    ],
+  };
+  const projects = [offered("syphon", { rank: 2, cost: { Money: 10 } })];
+  const capacities = { Money: { unlocked: true, maximum: 1000 } };
+  const plan = (context) =>
+    planProjects({ settings, projects, capacities, context });
+
+  assert.deepEqual(plan(NO_PROJECT_CONTEXT), [], "the maximum still applies");
+  assert.deepEqual(
+    plan({ suppressed: true, overrides: { syphon: { ignoreMaximum: true } } }),
+    [],
+    "a suppressed run builds nothing at all",
+  );
+  assert.equal(
+    plan({ suppressed: false, overrides: { syphon: { ignoreMaximum: true } } })
+      .length,
+    1,
+    "the prestige plan builds past the configured maximum",
+  );
+  assert.deepEqual(
+    plan({
+      suppressed: false,
+      overrides: { syphon: { ignoreMaximum: true, excluded: true } },
+    }),
+    [],
+    "a project this run does not want is not built at any weighting",
+  );
+  assert.equal(
+    plan({
+      suppressed: false,
+      overrides: { syphon: { ignoreMaximum: true, weightMultiplier: 10 } },
+    })[0].weighting,
+    100,
+  );
+  assert.deepEqual(
+    plan({
+      suppressed: false,
+      overrides: { syphon: { ignoreMaximum: true, weightMultiplier: 0 } },
+    }),
+    [],
+    "a multiplier that zeroes the weighting drops the candidate",
+  );
+}
+
+/** Trait, tech and resource samples that answer for exactly what they are asked. */
+function makeWorld({ traits = {}, tech = {}, manaRate = 0 } = {}) {
+  return {
+    traits: {
+      readRaceTraits: (ids) => ({
+        ranks: new Map([...ids].map((id) => [id, Number(traits[id] ?? 0)])),
+      }),
+    },
+    tech: {
+      readTech: (ids) => ({
+        levels: new Map([...ids].map((id) => [id, Number(tech[id] ?? 0)])),
+      }),
+    },
+    resources: {
+      readResources: (ids) => ({
+        resources: new Map(
+          [...ids].map((id) => [
+            id,
+            {
+              unlocked: true,
+              amount: 0,
+              max: 0,
+              rateOfChange: id === "Mana" ? manaRate : 0,
+              storageRatio: 0,
+            },
+          ]),
+        ),
+      }),
+    },
+  };
+}
+
+function readContext(world, settings) {
+  return createCapturedProjectContextReader({
+    ...world,
+    readSettings: () => settings,
+  }).readContext();
+}
+
+// Pre-MAD suppression follows the game's own early-game rule, and only when asked for.
+{
+  const early = makeWorld();
+  assert.equal(readContext(early, {}).suppressed, false, "off by default");
+  assert.equal(
+    readContext(early, { prestigeMADIgnoreArpa: true }).suppressed,
+    true,
+  );
+  assert.equal(
+    readContext(makeWorld({ tech: { mad: 1 } }), {
+      prestigeMADIgnoreArpa: true,
+    }).suppressed,
+    false,
+    "MAD is researched, so the run is past the early game",
+  );
+  assert.equal(
+    readContext(makeWorld({ traits: { cataclysm: 1 } }), {
+      prestigeMADIgnoreArpa: true,
+    }).suppressed,
+    false,
+    "a start that begins past MAD is never early",
+  );
+  // The true-path family is measured by high_tech instead, and MAD says nothing about it.
+  assert.equal(
+    readContext(makeWorld({ traits: { truepath: 1 }, tech: { mad: 1 } }), {
+      prestigeMADIgnoreArpa: true,
+    }).suppressed,
+    true,
+  );
+  assert.equal(
+    readContext(
+      makeWorld({ traits: { truepath: 1 }, tech: { high_tech: 7 } }),
+      { prestigeMADIgnoreArpa: true },
+    ).suppressed,
+    false,
+  );
+}
+
+// The Mana Syphon is the one project the prestige plan overrides.
+{
+  const plain = makeWorld();
+  assert.deepEqual(readContext(plain, {}).overrides, {});
+
+  assert.deepEqual(
+    readContext(plain, { autoPrestige: true, prestigeType: "vacuum" })
+      .overrides,
+    { syphon: { ignoreMaximum: true } },
+    "a Vacuum Collapse is reached by building Syphons past their maximum",
+  );
+  assert.deepEqual(
+    readContext(plain, { autoPrestige: false, prestigeType: "vacuum" })
+      .overrides,
+    {},
+    "with auto prestige off the vacuum plan is not being pursued",
+  );
+
+  assert.deepEqual(
+    readContext(makeWorld({ traits: { witch_hunter: 1 } }), {
+      prestigeBioseedConstruct: true,
+      prestigeType: "bioseed",
+    }).overrides,
+    { syphon: { excluded: true } },
+    "a witch hunter building for a bioseed does not want Syphons",
+  );
+  assert.deepEqual(
+    readContext(makeWorld({ traits: { witch_hunter: 1 } }), {
+      prestigeBioseedConstruct: true,
+      prestigeType: "vacuum",
+    }).overrides,
+    {},
+    "under a vacuum plan the Syphon is exactly what is wanted",
+  );
+}
+
+// The final Vacuum Collapse stage is decided by Mana regeneration, not by Syphon count.
+{
+  const ready = makeWorld({ manaRate: 12 });
+  assert.deepEqual(
+    readContext(ready, { autoPrestige: true, prestigeType: "vacuum" })
+      .overrides,
+    { syphon: { ignoreMaximum: true, weightMultiplier: 10 } },
+  );
+  assert.deepEqual(
+    readContext(makeWorld({ manaRate: 4 }), {
+      autoPrestige: true,
+      prestigeType: "vacuum",
+    }).overrides,
+    { syphon: { ignoreMaximum: true } },
+    "below the required regeneration the run is still producing Mana",
+  );
+  assert.deepEqual(
+    readContext(ready, {
+      autoPrestige: true,
+      prestigeType: "vacuum",
+      prestigeVacuumMana: 20,
+      buildingWeightingVacuumCollapse: 3,
+    }).overrides,
+    { syphon: { ignoreMaximum: true } },
+    "the player's own requirement and multiplier are used",
+  );
+  assert.deepEqual(
+    readContext(makeWorld({ manaRate: 25 }), {
+      autoPrestige: true,
+      prestigeType: "vacuum",
+      prestigeVacuumMana: 20,
+      buildingWeightingVacuumCollapse: 3,
+    }).overrides,
+    { syphon: { ignoreMaximum: true, weightMultiplier: 3 } },
+  );
 }
 
 console.log("captured project tests passed");

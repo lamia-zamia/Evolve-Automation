@@ -29,10 +29,36 @@ export interface ProjectCapacityView {
   readonly maximum: number;
 }
 
+/** What the run itself says about one project, over and above its own settings. */
+export interface ProjectOverride {
+  /** Build past the configured maximum, e.g. a Mana Syphon under a Vacuum Collapse. */
+  readonly ignoreMaximum?: boolean;
+  /** Not wanted in this run at all, whatever its own settings say. */
+  readonly excluded?: boolean;
+  /** Scales the planned weighting; applied before optional progress scaling. */
+  readonly weightMultiplier?: number;
+}
+
+/**
+ * The run context every project is judged in. It is state of the run rather than of any project —
+ * prestige plan, challenge, race — so it is sampled once and handed in, not looked up per project.
+ */
+export interface ProjectContext {
+  /** No project is built at all, e.g. projects ignored before MAD. */
+  readonly suppressed: boolean;
+  readonly overrides: Readonly<Record<string, Readonly<ProjectOverride>>>;
+}
+
+export const NO_PROJECT_CONTEXT: ProjectContext = Object.freeze({
+  suppressed: false,
+  overrides: Object.freeze({}),
+});
+
 export interface ProjectPlanningInput {
   readonly settings: Readonly<ProjectAutomationSettings>;
   readonly projects: readonly Readonly<ProjectOffer>[];
   readonly capacities: Readonly<Record<string, Readonly<ProjectCapacityView>>>;
+  readonly context: Readonly<ProjectContext>;
 }
 
 export interface PlannedProject {
@@ -76,7 +102,9 @@ function stepCapacity(
 export function planProjects(
   input: Readonly<ProjectPlanningInput>,
 ): readonly Readonly<PlannedProject>[] {
-  if (!input.settings.enabled) return Object.freeze([]);
+  if (!input.settings.enabled || input.context.suppressed) {
+    return Object.freeze([]);
+  }
 
   const targets = new Map(
     input.settings.targets.map((target) => [target.projectId, target] as const),
@@ -87,11 +115,15 @@ export function planProjects(
   }[] = [];
   for (const [order, offered] of input.projects.entries()) {
     const target = targets.get(offered.projectId);
+    const override = input.context.overrides[offered.projectId];
     if (
       target === undefined ||
       !target.enabled ||
       target.weighting <= 0 ||
-      (target.maximum >= 0 && offered.rank >= target.maximum)
+      override?.excluded === true ||
+      (target.maximum >= 0 &&
+        offered.rank >= target.maximum &&
+        override?.ignoreMaximum !== true)
     ) {
       continue;
     }
@@ -108,6 +140,11 @@ export function planProjects(
       cost[resourceId] = price * steps;
     }
     let weighting = target.weighting * steps;
+    const multiplier = override?.weightMultiplier;
+    if (multiplier !== undefined && Number.isFinite(multiplier)) {
+      weighting *= multiplier;
+    }
+    if (weighting <= 0) continue;
     if (input.settings.scaleWeighting) {
       weighting /= 1 - offered.progress / 100;
     }
