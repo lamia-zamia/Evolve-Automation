@@ -341,4 +341,55 @@ function discoveryFor(page) {
   assert.equal(page.settings.animated, true);
 }
 
+// --- observing the panel while it is drawn ----------------------------------
+
+{
+  // The observer runs once, with the panel mounted, before anything is restored.
+  const page = makePage({ civTabs: 4 });
+  const seen = [];
+  const result = discoveryFor(page).discover(mainTab(2), () => {
+    seen.push({
+      mounted: [...page.mounted].sort(),
+      civTabs: page.settings.civTabs,
+      animated: page.settings.animated,
+    });
+  });
+  assert.equal(result.outcome.status, "succeeded");
+  assert.equal(seen.length, 1);
+  assert.deepEqual(seen[0].mounted, ["civ-farmer", "foundry", "mTabCivic"]);
+  assert.equal(seen[0].civTabs, 2);
+  assert.equal(seen[0].animated, false);
+  // And afterwards the player is back with only their own tab.
+  assert.deepEqual([...page.mounted].sort(), ["mTabResource", "resTrade"]);
+  assert.equal(page.settings.animated, true);
+}
+
+{
+  // A throwing observer is reported and still does not cost the player their tab.
+  const page = makePage({ civTabs: 4 });
+  const result = discoveryFor(page).discover(mainTab(2), () => {
+    throw new Error("reader exploded");
+  });
+  assert.equal(result.outcome.status, "rejected");
+  assert.equal(result.outcome.failure.code, "tab-observer-failed");
+  assert.equal(page.settings.civTabs, 4);
+  assert.equal(page.settings.animated, true);
+  assert.deepEqual([...page.mounted].sort(), ["mTabResource", "resTrade"]);
+  // The controls it did bind are still reported.
+  assert.deepEqual(
+    [...result.discovered],
+    ["mTabCivic", "civ-farmer", "foundry"],
+  );
+}
+
+{
+  // A pass that never drew does not run the observer.
+  const page = makePage({ civTabs: 4, tabLoad: true });
+  let ran = false;
+  discoveryFor(page).discover(mainTab(2), () => {
+    ran = true;
+  });
+  assert.equal(ran, false);
+}
+
 console.log("captured-tab-discovery ok");

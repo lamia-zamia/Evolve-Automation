@@ -32,6 +32,13 @@ export interface GameTabDiscovery {
   /**
    * Draws the panel `path` names, then restores the tabs the player was on. Succeeds with no
    * discoveries when the game is already showing every tab.
+   *
+   * `whileDrawn` runs once with the panel mounted, which is the only moment its rendered detail —
+   * costs, affordability classes, document order — is both present and freshly computed. It runs
+   * inside the pass, so it must not wait, and throwing from it does not skip the restore.
    */
-  discover(path: readonly Readonly<TabDiscoveryStep>[]): TabDiscoveryResult;
+  discover(
+    path: readonly Readonly<TabDiscoveryStep>[],
+    whileDrawn?: () => void,
+  ): TabDiscoveryResult;
 }

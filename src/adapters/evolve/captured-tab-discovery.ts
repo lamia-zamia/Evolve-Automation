@@ -84,7 +84,10 @@ export function createCapturedTabDiscovery(
   const { rootState, controls } = dependencies;
 
   return Object.freeze({
-    discover(path: readonly Readonly<TabDiscoveryStep>[]): TabDiscoveryResult {
+    discover(
+      path: readonly Readonly<TabDiscoveryStep>[],
+      whileDrawn?: () => void,
+    ): TabDiscoveryResult {
       const first = path[0];
       if (first === undefined) {
         return failure("empty-tab-path", "a discovery path names no panel");
@@ -150,6 +153,7 @@ export function createCapturedTabDiscovery(
       const playerAnimation = settings["animated"];
       let stepFailure: TabDiscoveryResult | undefined;
       let restoreFailure: string | undefined;
+      let observerFailure: string | undefined;
       try {
         settings["animated"] = false;
         for (const step of path) {
@@ -179,6 +183,15 @@ export function createCapturedTabDiscovery(
             break;
           }
         }
+        if (stepFailure === undefined && whileDrawn !== undefined) {
+          // The only moment the panel’s rendered detail is both present and freshly computed.
+          // An observer that throws is its own problem; it must not cost the player their tab.
+          try {
+            whileDrawn();
+          } catch (error) {
+            observerFailure = String(error);
+          }
+        }
       } finally {
         for (const [setting, value] of playerTabs) settings[setting] = value;
         restoreFailure = restorePlayerView();
@@ -193,9 +206,11 @@ export function createCapturedTabDiscovery(
         // The draw worked and the way back did not: the discovered controls are real, and leaving
         // someone on a tab they did not choose is not a detail to swallow.
         outcome:
-          restoreFailure === undefined
-            ? SUCCEEDED
-            : rejected("tab-restore-failed", restoreFailure),
+          observerFailure !== undefined
+            ? rejected("tab-observer-failed", observerFailure)
+            : restoreFailure === undefined
+              ? SUCCEEDED
+              : rejected("tab-restore-failed", restoreFailure),
         discovered: Object.freeze(discovered),
       });
     },
