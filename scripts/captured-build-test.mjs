@@ -7,14 +7,20 @@ import { createCapturedBuildControl } from "../src/bootstrap/captured-build-cont
  * `buildQueue.setData`, and one `action()` per building that pays and increments exactly as the
  * game's does. Nothing here renders, so every call exercises the torn-down-panel path.
  */
-function makePage({ buildings, resources, queue = [] }) {
+function makePage({
+  buildings,
+  resources,
+  queue = [],
+  queueDisplay = false,
+  buyAnyQueued = false,
+}) {
   const root = {
-    settings: { expose: false, tabLoad: false },
+    settings: { expose: false, tabLoad: false, qAny: buyAnyQueued },
     race: { species: "human" },
     stats: { days: 100 },
     resource: {},
     city: {},
-    queue: { queue: [...queue] },
+    queue: { display: queueDisplay, queue: [...queue] },
   };
   for (const [id, resource] of Object.entries(resources)) {
     root.resource[id] = { display: true, max: -1, diff: 0, ...resource };
@@ -99,7 +105,12 @@ function makePage({ buildings, resources, queue = [] }) {
   };
 }
 
-function target(id, weighting, maximum = Number.MAX_SAFE_INTEGER) {
+function target(
+  id,
+  weighting,
+  maximum = Number.MAX_SAFE_INTEGER,
+  important = false,
+) {
   return {
     key: `city-${id}`,
     elementId: `city-${id}`,
@@ -107,16 +118,31 @@ function target(id, weighting, maximum = Number.MAX_SAFE_INTEGER) {
     id,
     weighting,
     maximum,
+    important,
   };
 }
 
-function policy(targets) {
+function policy(targets, overrides = {}) {
   return () => ({
     targets,
+    respectReservations: true,
     consumptionMode: "onePerTick",
     buildIfStorageFull: false,
     ignoreZeroRate: false,
+    ...overrides,
   });
+}
+
+/** A queue entry as the game stores it: an id the cost oracle resolves, plus its label. */
+function queued(id, label = id) {
+  const separator = id.indexOf("-");
+  return {
+    id,
+    action: id.slice(0, separator),
+    type: id.slice(separator + 1),
+    label,
+    q: 1,
+  };
 }
 
 // --- a real purchase, with the panel never rendered -------------------------------------------------
@@ -333,6 +359,157 @@ function policy(targets) {
   assert.deepEqual(page.clicks, []);
   assert.equal(
     skipped.some(([key]) => key === "city-farm"),
+    true,
+  );
+}
+
+// --- the player’s queue reserves what it is saving for ------------------------------------------
+
+/** One managed farm at 200 Money, a visible queue, and whatever the caller wants reserved. */
+function reservationPage(options = {}) {
+  return makePage({
+    buildings: {
+      farm: { count: 0, priceAt: () => ({ Money: 200 }) },
+      warehouse: { count: 0, priceAt: () => ({ Money: 400 }) },
+      mine: { count: 0, priceAt: () => ({ Money: 450 }) },
+    },
+    resources: { Money: { amount: 500, max: 1000 } },
+    queueDisplay: true,
+    ...options,
+  });
+}
+
+{
+  // 400 reserved out of 500 held leaves 100, and the farm wants 200.
+  const page = reservationPage({
+    queue: [queued("city-warehouse", "Warehouse")],
+  });
+  const control = createCapturedBuildControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)]),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.equal(page.root.resource.Money.amount, 500);
+  // The probe entry is gone and the player’s own queue is untouched.
+  assert.deepEqual(
+    page.root.queue.queue.map((entry) => entry.id),
+    ["city-warehouse"],
+  );
+}
+
+{
+  // The same page with reservations switched off is a purchase.
+  const page = reservationPage({
+    queue: [queued("city-warehouse", "Warehouse")],
+  });
+  const control = createCapturedBuildControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)], { respectReservations: false }),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["city-farm"]);
+}
+
+{
+  // An important building spends through the reservation.
+  const page = reservationPage({
+    queue: [queued("city-warehouse", "Warehouse")],
+  });
+  const control = createCapturedBuildControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50, Number.MAX_SAFE_INTEGER, true)]),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["city-farm"]);
+}
+
+{
+  // A hidden queue is not being bought from, so it reserves nothing.
+  const page = reservationPage({
+    queue: [queued("city-warehouse", "Warehouse")],
+    queueDisplay: false,
+  });
+  const control = createCapturedBuildControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)]),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["city-farm"]);
+}
+
+{
+  // With qAny off the game works strictly down the queue, so only the head entry reserves. The
+  // cheap head leaves room for the farm; the expensive second entry is not being saved for.
+  const page = reservationPage({
+    queue: [queued("city-farm", "Farm"), queued("city-mine", "Mine")],
+  });
+  const control = createCapturedBuildControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("warehouse", 50)]),
+  });
+  // Buying the 400 warehouse out of 700 leaves 300, which still covers the 200 head reservation.
+  page.root.resource.Money.amount = 700;
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["city-warehouse"]);
+}
+
+{
+  // With qAny on the game buys whichever queued item it can, so every entry reserves.
+  const page = reservationPage({
+    queue: [queued("city-farm", "Farm"), queued("city-mine", "Mine")],
+    buyAnyQueued: true,
+  });
+  page.root.resource.Money.amount = 700;
+  const control = createCapturedBuildControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("warehouse", 50)]),
+  });
+  // Same 700 and the same warehouse as the qAny-off case above; the only difference is that the
+  // 450 mine is now being saved for too, and 300 left does not cover it.
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+}
+
+{
+  // A reservation nothing could ever store is one the game has written off; reserving it would
+  // stall every build sharing the resource.
+  const page = reservationPage({
+    queue: [queued("city-warehouse", "Warehouse")],
+  });
+  page.root.resource.Money.max = 300;
+  const control = createCapturedBuildControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)]),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["city-farm"]);
+}
+
+{
+  // A queued item the cost oracle cannot price is reported, and spending is skipped rather than
+  // proceeding as though nothing were reserved.
+  const page = reservationPage({
+    queue: [queued("city-unknown_structure", "Mystery")],
+  });
+  const skipped = [];
+  const control = createCapturedBuildControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)]),
+    onSkipped: (key, reason) => skipped.push([key, reason]),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.equal(
+    skipped.some(([key]) => key === "city-unknown_structure"),
     true,
   );
 }

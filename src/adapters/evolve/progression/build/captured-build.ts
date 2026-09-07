@@ -12,9 +12,9 @@
  *
  * - **Weighting** is the caller's configured per-building weighting, not the dynamic weighting
  *   engine. The engine is a separate port of its own; the planners only need a total order.
- * - **Cost conflicts** are reported as absent. Queue and trigger reservations live in the
- *   compatibility runtime, and inventing a reservation here would delay builds for reasons no
- *   policy decided.
+ * - **Cost conflicts** cover the player’s build queue only. Trigger, purchase, and challenge
+ *   reservations are still script-side commitments this slice does not read, so a candidate can
+ *   pass the gate on a reservation the compatibility runtime would have raised.
  * - **Consumption** is reported as empty, so the per-tick consumption gate never fires. The
  *   support/upkeep catalog it reads is script-side and not part of this slice.
  * - **`storageRequired`** is 0. It is only read as "this resource is capped and nothing is saving
@@ -42,11 +42,14 @@ import type {
   BuildReader,
 } from "../../../../ports/build.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
+import type { CostReservationSource } from "../../../../ports/game-cost-reservations.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type { ResourceView } from "../../../../domain/game-world.ts";
 import { canAfford, resourceView } from "../../../../domain/game-world.ts";
+import type { CostConflictResource } from "../../../../domain/cost-conflicts.ts";
+import { findCostConflict } from "../../../../domain/cost-conflicts.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
@@ -63,10 +66,14 @@ export interface CapturedBuildTarget {
   readonly weighting: number;
   /** Stop building at this count. `Number.MAX_SAFE_INTEGER` for no limit. */
   readonly maximum: number;
+  /** The caller’s "build this regardless" setting; it bypasses the cost-conflict gate. */
+  readonly important: boolean;
 }
 
 export interface CapturedBuildPolicy {
   readonly targets: readonly CapturedBuildTarget[];
+  /** Whether an existing commitment holds its resources back from these builds. */
+  readonly respectReservations: boolean;
   readonly consumptionMode: BuildConsumptionMode;
   readonly buildIfStorageFull: boolean;
   readonly ignoreZeroRate: boolean;
@@ -75,6 +82,7 @@ export interface CapturedBuildPolicy {
 export interface CapturedBuildDependencies {
   readonly rootState: GameRootStateSource;
   readonly resources: GameResourceSource;
+  readonly reservations: CostReservationSource;
   readonly controls: GameControlRegistry;
   readonly costs: GameActionCostReader;
   readonly readPolicy: () => CapturedBuildPolicy;
@@ -145,7 +153,8 @@ function toBuildResourceView(view: Readonly<ResourceView>): BuildResourceView {
 export function createCapturedBuildAdapter(
   dependencies: CapturedBuildDependencies,
 ): CapturedBuildAdapter {
-  const { rootState, resources, controls, costs, readPolicy } = dependencies;
+  const { rootState, resources, reservations, controls, costs, readPolicy } =
+    dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
   let cycle: readonly CycleCandidate[] | null = null;
 
@@ -232,8 +241,63 @@ export function createCapturedBuildAdapter(
       return Object.freeze(sample);
     },
 
-    sampleConflict(): BuildConflictSample {
-      return NO_CONFLICT;
+    sampleConflict(index: number): BuildConflictSample {
+      const candidate = candidateAt(index);
+      if (candidate === null) {
+        throw new TypeError(`no build candidate at index ${index}`);
+      }
+      const important = candidate.target.important;
+      if (!readPolicy().respectReservations) {
+        return Object.freeze({ conflict: null, important });
+      }
+      const sample = reservations.readReservations();
+      if (sample.unavailable) {
+        // Something is saving and the reservation could not be priced. Skipping on incomplete
+        // data is the safe half of the trade; spending is not recoverable.
+        return Object.freeze({
+          conflict: Object.freeze({
+            unavailable: true,
+            targetNames: Object.freeze([]),
+            resourceNames: Object.freeze([]),
+            targetCause: "",
+          }),
+          important,
+        });
+      }
+      if (sample.targets.length === 0) return NO_CONFLICT;
+
+      const actionCost = candidate.view.cost;
+      const wanted = new Set<string>(Object.keys(actionCost));
+      for (const target of sample.targets) {
+        for (const id of Object.keys(target.cost)) wanted.add(id);
+      }
+      const held = resources.readResources(wanted);
+      if (held === undefined) return NO_CONFLICT;
+      const conflictResources: Record<string, CostConflictResource> = {};
+      for (const id of wanted) {
+        // The game’s display names are localized strings this slice has no captured route to, so
+        // a reservation reports the resource id it reserved.
+        conflictResources[id] = Object.freeze({
+          name: id,
+          currentQuantity: resourceView(held, id).amount,
+        });
+      }
+      const conflict = findCostConflict({
+        actionCost,
+        reservedTargets: sample.targets,
+        resources: Object.freeze(conflictResources),
+      });
+      return conflict === null
+        ? Object.freeze({ conflict: null, important })
+        : Object.freeze({
+            conflict: Object.freeze({
+              unavailable: false,
+              targetNames: conflict.targetNames,
+              resourceNames: conflict.resourceNames,
+              targetCause: conflict.targetCause,
+            }),
+            important,
+          });
     },
 
     sampleCompetition(
