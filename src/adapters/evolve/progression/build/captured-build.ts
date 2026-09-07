@@ -21,6 +21,7 @@ import type {
 } from "../../../../ports/construction-candidates.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
@@ -46,6 +47,7 @@ export interface CapturedBuildDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly costs: GameActionCostReader;
+  readonly resources: GameResourceSource;
   readonly readTargets: () => readonly Readonly<CapturedBuildTarget>[];
   /** Reports a candidate that could not be evaluated. It is dropped, never guessed at. */
   readonly onSkipped?: (key: string, reason: string) => void;
@@ -67,13 +69,47 @@ function readBuilding(
   return isRecord(building) ? building : undefined;
 }
 
-function readQueuedIds(root: unknown): ReadonlySet<string> {
-  const entries = readProperty(readProperty(root, "queue"), "queue");
+function isMaximumAffordable(
+  resources: GameResourceSource,
+  cost: Readonly<Record<string, number>>,
+): boolean {
+  const sample = resources.readResources(Object.keys(cost));
+  if (sample === undefined) return false;
+  for (const [id, amount] of Object.entries(cost)) {
+    if (amount <= 0) continue;
+    const resource = sample.resources.get(id);
+    if (resource === undefined) return false;
+    if (resource.max >= 0 && resource.max < amount) return false;
+  }
+  return true;
+}
+
+function readQueuedIds(
+  root: unknown,
+  candidates: readonly Readonly<CycleCandidate>[],
+  resources: GameResourceSource,
+): ReadonlySet<string> {
+  const queue = readProperty(root, "queue");
+  if (!readProperty(queue, "display")) return new Set();
+  const entries = readProperty(queue, "queue");
   if (!Array.isArray(entries)) return new Set();
+  const byElementId = new Map(
+    candidates.map((entry) => [entry.target.elementId, entry]),
+  );
+  const buyAny = Boolean(readProperty(readProperty(root, "settings"), "qAny"));
   const ids = new Set<string>();
   for (const entry of entries) {
     const id = readProperty(entry, "id");
-    if (typeof id === "string") ids.add(id);
+    if (typeof id === "string") {
+      const candidate = byElementId.get(id);
+      if (
+        candidate !== undefined &&
+        isMaximumAffordable(resources, candidate.candidate.cost)
+      ) {
+        ids.add(id);
+      }
+    }
+    if (!buyAny) break;
   }
   return ids;
 }
@@ -81,7 +117,7 @@ function readQueuedIds(root: unknown): ReadonlySet<string> {
 export function createCapturedBuildSource(
   dependencies: CapturedBuildDependencies,
 ): ConstructionCandidateSource {
-  const { rootState, controls, costs, readTargets } = dependencies;
+  const { rootState, controls, costs, resources, readTargets } = dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
   let cycle: ReadonlyMap<string, CycleCandidate> = new Map();
 
@@ -90,7 +126,6 @@ export function createCapturedBuildSource(
 
     beginCycle(): readonly Readonly<ConstructionCandidate>[] {
       const root = rootState.readRoot();
-      const queued = readQueuedIds(root);
       const entries = new Map<string, CycleCandidate>();
       for (const target of readTargets()) {
         const building = readBuilding(root, target);
@@ -110,15 +145,21 @@ export function createCapturedBuildSource(
             key: target.key,
             weighting: target.weighting,
             cost,
-            ignored: queued.has(target.elementId),
+            ignored: false,
             knowledge: false,
             important: target.important,
           }),
         });
       }
+      const queued = readQueuedIds(root, [...entries.values()], resources);
       cycle = entries;
       return Object.freeze(
-        [...entries.values()].map((entry) => entry.candidate),
+        [...entries.values()].map((entry) =>
+          Object.freeze({
+            ...entry.candidate,
+            ignored: queued.has(entry.target.elementId),
+          }),
+        ),
       );
     },
 

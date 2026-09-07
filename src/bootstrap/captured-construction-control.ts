@@ -142,6 +142,7 @@ export function createCapturedConstructionControl(
         rootState,
         controls,
         costs,
+        resources,
         readTargets: () => readPolicy().buildings,
         ...(onSkipped === undefined ? {} : { onSkipped }),
       }),

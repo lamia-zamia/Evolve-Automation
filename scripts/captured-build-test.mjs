@@ -314,6 +314,7 @@ function queued(id, label = id) {
     },
     resources: { Money: { amount: 500 } },
     queue: [{ id: "city-mine" }],
+    queueDisplay: true,
   });
   const skipped = [];
   const control = makeControl({
@@ -335,6 +336,40 @@ function queued(id, label = id) {
   assert.deepEqual(skipped, [
     ["city-not_a_building", "not present in game state"],
   ]);
+}
+
+// A hidden queue does not block captured construction, and ordered queues only block their first
+// entry. These are the same queue visibility and qAny gates used by the game's own queue loop.
+{
+  const hidden = makePage({
+    buildings: { farm: { count: 0, priceAt: () => ({ Money: 10 }) } },
+    resources: { Money: { amount: 500 } },
+    queue: [{ id: "city-farm" }],
+  });
+  const hiddenControl = makeControl({
+    rootState: hidden.rootState,
+    controls: hidden.registry,
+    readPolicy: policy([target("farm", 50)]),
+  });
+  assert.equal(hiddenControl.runCycle().status, "succeeded");
+  assert.deepEqual(hidden.clicks, ["city-farm"]);
+
+  const ordered = makePage({
+    buildings: {
+      first: { count: 0, priceAt: () => ({ Money: 10 }) },
+      second: { count: 0, priceAt: () => ({ Money: 10 }) },
+    },
+    resources: { Money: { amount: 500 } },
+    queue: [{ id: "city-first" }, { id: "city-second" }],
+    queueDisplay: true,
+  });
+  const orderedControl = makeControl({
+    rootState: ordered.rootState,
+    controls: ordered.registry,
+    readPolicy: policy([target("first", 50), target("second", 40)]),
+  });
+  assert.equal(orderedControl.runCycle().status, "succeeded");
+  assert.deepEqual(ordered.clicks, ["city-second"]);
 }
 
 // --- a control the game never built is reported, never read as "locked" -------------------------------------
