@@ -44,6 +44,9 @@ import type {
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
+import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
+import type { ResourceView } from "../../../../domain/game-world.ts";
+import { canAfford, resourceView } from "../../../../domain/game-world.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
@@ -71,6 +74,7 @@ export interface CapturedBuildPolicy {
 
 export interface CapturedBuildDependencies {
   readonly rootState: GameRootStateSource;
+  readonly resources: GameResourceSource;
   readonly controls: GameControlRegistry;
   readonly costs: GameActionCostReader;
   readonly readPolicy: () => CapturedBuildPolicy;
@@ -119,53 +123,29 @@ function readQueuedIds(root: unknown): ReadonlySet<string> {
   return ids;
 }
 
-function resourceView(root: unknown, resourceId: string): BuildResourceView {
-  const resource = readProperty(readProperty(root, "resource"), resourceId);
-  if (!isRecord(resource)) {
-    // An unknown cost key is not a stored resource (`Morale`, `Army`, and friends). Reporting it
-    // as locked keeps it out of the competition arithmetic instead of feeding it NaN.
-    return Object.freeze({
-      unlocked: false,
-      currentQuantity: 0,
-      rateOfChange: 0,
-      storageRatio: 0,
-      storageRequired: 0,
-    });
-  }
-  const amount = Number(resource["amount"]);
-  const max = Number(resource["max"]);
+/** A cost key that names no stored resource (`Morale`, `Army`) has nothing to report. */
+const LOCKED_BUILD_RESOURCE: BuildResourceView = Object.freeze({
+  unlocked: false,
+  currentQuantity: 0,
+  rateOfChange: 0,
+  storageRatio: 0,
+  storageRequired: 0,
+});
+
+function toBuildResourceView(view: Readonly<ResourceView>): BuildResourceView {
   return Object.freeze({
-    unlocked: Boolean(resource["display"]),
-    currentQuantity: amount,
-    rateOfChange: Number(resource["diff"]),
-    // The game stores an uncapped resource as max -1; it is never near its ceiling.
-    storageRatio: max > 0 ? amount / max : 0,
+    unlocked: view.unlocked,
+    currentQuantity: view.amount,
+    rateOfChange: view.rateOfChange,
+    storageRatio: view.storageRatio,
     storageRequired: 0,
   });
-}
-
-/**
- * Affordable means the game's own prices are covered by what the game says is held. A cost key
- * that names no stored resource cannot be checked here, and the candidate is reported as not
- * affordable rather than bought on an assumption.
- */
-function isAffordable(
-  root: unknown,
-  cost: Readonly<Record<string, number>>,
-): boolean {
-  for (const [resourceId, amount] of Object.entries(cost)) {
-    if (amount <= 0) continue;
-    const resource = readProperty(readProperty(root, "resource"), resourceId);
-    if (!isRecord(resource)) return false;
-    if (!(Number(resource["amount"]) >= amount)) return false;
-  }
-  return true;
 }
 
 export function createCapturedBuildAdapter(
   dependencies: CapturedBuildDependencies,
 ): CapturedBuildAdapter {
-  const { rootState, controls, costs, readPolicy } = dependencies;
+  const { rootState, resources, controls, costs, readPolicy } = dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
   let cycle: readonly CycleCandidate[] | null = null;
 
@@ -177,6 +157,16 @@ export function createCapturedBuildAdapter(
   function candidateFor(index: number, key: string): CycleCandidate | null {
     const candidate = candidateAt(index);
     return candidate !== null && candidate.view.key === key ? candidate : null;
+  }
+
+  /**
+   * Affordable means the game's own prices are covered by what the game says is held, sampled for
+   * exactly the cost keys in question. Before the root is captured there are no holdings to
+   * compare against, so nothing is affordable.
+   */
+  function affordable(cost: Readonly<Record<string, number>>): boolean {
+    const sample = resources.readResources(Object.keys(cost));
+    return sample !== undefined && canAfford(sample, cost);
   }
 
   const reader: BuildReader = Object.freeze({
@@ -234,10 +224,7 @@ export function createCapturedBuildAdapter(
         consumption?: readonly never[];
       } = {};
       if (request.needAffordability) {
-        sample.affordable = isAffordable(
-          rootState.readRoot(),
-          candidate.view.cost,
-        );
+        sample.affordable = affordable(candidate.view.cost);
       }
       if (request.needConsumption) {
         sample.consumption = NO_CONSUMPTION;
@@ -256,25 +243,40 @@ export function createCapturedBuildAdapter(
       if (candidateAt(index) === null) {
         throw new TypeError(`no build candidate at index ${index}`);
       }
-      const root = rootState.readRoot();
       const byKey = new Map(
         (cycle ?? []).map((entry) => [entry.view.key, entry.view] as const),
       );
-      const affordability: Record<string, boolean> = {};
+      // One sample covers every resource the request asks about and every resource the compared
+      // costs name, so the competition arithmetic reads one consistent set of holdings.
+      const wanted = new Set<string>(request.resourceIds);
+      const compared: {
+        readonly key: string;
+        readonly cost: Readonly<Record<string, number>>;
+      }[] = [];
       for (const key of request.affordabilityKeys) {
         const other = byKey.get(key);
         if (other === undefined) {
           throw new TypeError(`unknown build candidate ${key}`);
         }
-        affordability[key] = isAffordable(root, other.cost);
+        compared.push({ key, cost: other.cost });
+        for (const id of Object.keys(other.cost)) wanted.add(id);
       }
-      const resources: Record<string, BuildResourceView> = {};
-      for (const resourceId of request.resourceIds) {
-        resources[resourceId] = resourceView(root, resourceId);
+      const sample = resources.readResources(wanted);
+      const affordability: Record<string, boolean> = {};
+      for (const entry of compared) {
+        affordability[entry.key] =
+          sample !== undefined && canAfford(sample, entry.cost);
+      }
+      const resourceViews: Record<string, BuildResourceView> = {};
+      for (const id of request.resourceIds) {
+        resourceViews[id] =
+          sample === undefined
+            ? LOCKED_BUILD_RESOURCE
+            : toBuildResourceView(resourceView(sample, id));
       }
       return Object.freeze({
         affordability: Object.freeze(affordability),
-        resources: Object.freeze(resources),
+        resources: Object.freeze(resourceViews),
       });
     },
   });

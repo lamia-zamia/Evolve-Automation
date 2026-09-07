@@ -10,6 +10,7 @@
 import { runBuildAutomation } from "../application/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
+import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
 import {
   createCapturedBuildAdapter,
   type CapturedBuildPolicy,
@@ -45,6 +46,7 @@ export function createCapturedBuildControl(
 ): CapturedBuildControl {
   const { rootState, controls, readPolicy, diagnostics } = dependencies;
   const onSkipped = dependencies.onSkipped;
+  const resources = createCapturedResourceSource(rootState);
   const costs = createCapturedActionCostReader({
     rootState,
     controls,
@@ -52,6 +54,7 @@ export function createCapturedBuildControl(
   });
   const { reader, executor } = createCapturedBuildAdapter({
     rootState,
+    resources,
     controls,
     costs,
     readPolicy,
