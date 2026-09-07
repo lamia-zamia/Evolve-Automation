@@ -359,7 +359,12 @@ function makeAdapter({
 }
 
 /** Trait, tech and resource samples that answer for exactly what they are asked. */
-function makeWorld({ traits = {}, tech = {}, manaRate = 0 } = {}) {
+function makeWorld({
+  traits = {},
+  tech = {},
+  manaRate = 0,
+  achievements = { stars: {}, banana: {} },
+} = {}) {
   return {
     traits: {
       readRaceTraits: (ids) => ({
@@ -383,6 +388,22 @@ function makeWorld({ traits = {}, tech = {}, manaRate = 0 } = {}) {
               rateOfChange: id === "Mana" ? manaRate : 0,
               storageRatio: 0,
             },
+          ]),
+        ),
+      }),
+    },
+    achievements: {
+      readAchievementState: (achievementIds, bananaObjectiveIds) => ({
+        stars: new Map(
+          [...achievementIds].map((id) => [
+            id,
+            Number(achievements.stars[id] ?? 0),
+          ]),
+        ),
+        bananaObjectives: new Map(
+          [...bananaObjectiveIds].map((id) => [
+            id,
+            Boolean(achievements.banana[id]),
           ]),
         ),
       }),
@@ -506,6 +527,58 @@ function readContext(world, settings) {
     }).overrides,
     { syphon: { ignoreMaximum: true, weightMultiplier: 3 } },
   );
+}
+
+// Achievement-gated project multipliers are sampled only for the relevant run.
+{
+  const banana = readContext(
+    makeWorld({
+      traits: { banana: 1 },
+      achievements: { stars: {}, banana: { b5: false } },
+    }),
+    {
+      achievementGuards: true,
+      guardBananaRepublic: true,
+      buildingWeightingBananaObjective: 3,
+    },
+  );
+  assert.deepEqual(banana.overrides, {
+    monument: { weightMultiplier: 3 },
+  });
+
+  const complete = readContext(
+    makeWorld({
+      traits: { banana: 1 },
+      achievements: { stars: {}, banana: { b5: true } },
+    }),
+    { achievementGuards: true, guardBananaRepublic: true },
+  );
+  assert.deepEqual(complete.overrides, {});
+}
+
+{
+  const inflation = readContext(
+    makeWorld({
+      traits: { inflation: 1, no_plasmid: 1 },
+      achievements: { stars: { wheelbarrow: 1 }, banana: {} },
+    }),
+    {
+      inflationChallengeAssist: true,
+      buildingWeightingInflationMoney: 4,
+    },
+  );
+  assert.deepEqual(inflation.overrides, {
+    stock_exchange: { weightMultiplier: 4 },
+  });
+
+  const earned = readContext(
+    makeWorld({
+      traits: { inflation: 1, no_plasmid: 1 },
+      achievements: { stars: { wheelbarrow: 2 }, banana: {} },
+    }),
+    { inflationChallengeAssist: true },
+  );
+  assert.deepEqual(earned.overrides, {});
 }
 
 console.log("captured project tests passed");

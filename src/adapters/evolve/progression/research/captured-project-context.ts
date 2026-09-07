@@ -5,13 +5,15 @@
  * Every input is either a persisted script setting or a captured world-state sample, so this is
  * one cheap read per cycle with no panel, no clone and no game global.
  *
- * Two weighting multipliers the legacy path also applied are deliberately absent: the Banana
- * Republic Monument boost and the inflation-challenge Stock Exchange boost. Both are keyed on
- * achievement stars, which live behind the game's `poly` module and have no captured reader yet.
- * They scale the weighting of a project the player already enabled, so their absence changes the
- * order of two wanted purchases rather than spending anything unwanted.
+ * The project context samples the two run-level achievement gates only when their settings and
+ * race flags make them relevant. They scale projects the player already enabled; they do not
+ * create a new candidate.
  */
 
+import {
+  achievementStar,
+  bananaObjectiveComplete,
+} from "../../../../domain/game-achievements.ts";
 import {
   hasTech,
   hasTrait,
@@ -33,6 +35,7 @@ import type {
   GameResourceSource,
   GameTechSource,
 } from "../../../../ports/game-world-state.ts";
+import type { GameAchievementSource } from "../../../../ports/game-achievement-state.ts";
 import { isNonArrayRecord } from "../../../validation.ts";
 
 /** The game's own id for the Mana Syphon, the one project the prestige plan overrides. */
@@ -53,11 +56,21 @@ const EARLY_GAME_TRAITS = Object.freeze([
 ]);
 const EARLY_GAME_TECH = Object.freeze(["mad", "high_tech"]);
 const SYPHON_TRAITS = Object.freeze(["witch_hunter"]);
+const ACHIEVEMENT_LEVEL_TRAITS = Object.freeze([
+  "no_plasmid",
+  "no_trade",
+  "no_craft",
+  "no_crispr",
+  "weak_mastery",
+  "nerfed",
+  "badgenes",
+]);
 
 export interface CapturedProjectContextDependencies {
   readonly traits: GameRaceTraitSource;
   readonly tech: GameTechSource;
   readonly resources: GameResourceSource;
+  readonly achievements: GameAchievementSource;
   /** Persisted script settings; external input, normalized here. */
   readonly readSettings: () => unknown;
 }
@@ -94,10 +107,18 @@ function finite(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function achievementLevel(traits: Readonly<RaceTraitSample>): number {
+  let level = 1;
+  for (const trait of ACHIEVEMENT_LEVEL_TRAITS) {
+    if (hasTrait(traits, trait)) level++;
+  }
+  return Math.min(level, 5);
+}
+
 export function createCapturedProjectContextReader(
   dependencies: CapturedProjectContextDependencies,
 ): CapturedProjectContextReader {
-  const { traits, tech, resources, readSettings } = dependencies;
+  const { traits, tech, resources, achievements, readSettings } = dependencies;
 
   return Object.freeze({
     readContext(): ProjectContext {
@@ -159,6 +180,53 @@ export function createCapturedProjectContextReader(
       const overrides: Record<string, Readonly<ProjectOverride>> = {};
       if (Object.keys(syphon).length > 0) {
         overrides[MANA_SYPHON] = Object.freeze(syphon);
+      }
+      const bananaGuardEnabled =
+        settings["achievementGuards"] === true &&
+        settings["guardBananaRepublic"] === true;
+      const inflationAssistEnabled =
+        settings["inflationChallengeAssist"] === true;
+      if (bananaGuardEnabled || inflationAssistEnabled) {
+        const raceTraits = traits.readRaceTraits([
+          "banana",
+          "inflation",
+          ...ACHIEVEMENT_LEVEL_TRAITS,
+        ]);
+        if (raceTraits !== undefined) {
+          const bananaRace =
+            bananaGuardEnabled && hasTrait(raceTraits, "banana");
+          const inflationRun =
+            inflationAssistEnabled && hasTrait(raceTraits, "inflation");
+          const achievementState = achievements.readAchievementState(
+            inflationRun ? ["wheelbarrow"] : [],
+            bananaRace ? ["b5"] : [],
+          );
+          if (achievementState !== undefined) {
+            if (
+              bananaRace &&
+              !bananaObjectiveComplete(achievementState, "b5")
+            ) {
+              overrides.monument = Object.freeze({
+                weightMultiplier: finite(
+                  settings["buildingWeightingBananaObjective"],
+                  1,
+                ),
+              });
+            }
+            if (
+              inflationRun &&
+              achievementStar(achievementState, "wheelbarrow") <
+                achievementLevel(raceTraits)
+            ) {
+              overrides.stock_exchange = Object.freeze({
+                weightMultiplier: finite(
+                  settings["buildingWeightingInflationMoney"],
+                  1,
+                ),
+              });
+            }
+          }
+        }
       }
       return Object.freeze({
         suppressed,

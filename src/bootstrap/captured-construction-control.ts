@@ -9,6 +9,7 @@
  */
 
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
+import { createCapturedAchievementSource } from "../adapters/evolve/captured-achievement-state.ts";
 import { createCapturedCostConflictReader } from "../adapters/evolve/captured-cost-conflict.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
 import { createCapturedTabDiscovery } from "../adapters/evolve/captured-tab-discovery.ts";
@@ -153,6 +154,7 @@ export function createCapturedConstructionControl(
           traits: createCapturedRaceTraitSource(rootState),
           tech: createCapturedTechSource(rootState),
           resources,
+          achievements: createCapturedAchievementSource(rootState),
           readSettings,
         }),
         readSettings,
