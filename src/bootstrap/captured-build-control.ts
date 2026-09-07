@@ -10,6 +10,7 @@
 import { runBuildAutomation } from "../application/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
+import { createCapturedCostConflictReader } from "../adapters/evolve/captured-cost-conflict.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
 import {
@@ -59,10 +60,14 @@ export function createCapturedBuildControl(
     costs,
     ...(onSkipped === undefined ? {} : { onUnavailable: onSkipped }),
   });
+  const conflicts = createCapturedCostConflictReader({
+    resources,
+    reservations,
+  });
   const { reader, executor } = createCapturedBuildAdapter({
     rootState,
     resources,
-    reservations,
+    conflicts,
     controls,
     costs,
     readPolicy,

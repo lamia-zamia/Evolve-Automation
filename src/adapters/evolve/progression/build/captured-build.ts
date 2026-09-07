@@ -42,14 +42,12 @@ import type {
   BuildReader,
 } from "../../../../ports/build.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
-import type { CostReservationSource } from "../../../../ports/game-cost-reservations.ts";
+import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type { ResourceView } from "../../../../domain/game-world.ts";
 import { canAfford, resourceView } from "../../../../domain/game-world.ts";
-import type { CostConflictResource } from "../../../../domain/cost-conflicts.ts";
-import { findCostConflict } from "../../../../domain/cost-conflicts.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
@@ -82,7 +80,7 @@ export interface CapturedBuildPolicy {
 export interface CapturedBuildDependencies {
   readonly rootState: GameRootStateSource;
   readonly resources: GameResourceSource;
-  readonly reservations: CostReservationSource;
+  readonly conflicts: CapturedCostConflictReader;
   readonly controls: GameControlRegistry;
   readonly costs: GameActionCostReader;
   readonly readPolicy: () => CapturedBuildPolicy;
@@ -153,7 +151,7 @@ function toBuildResourceView(view: Readonly<ResourceView>): BuildResourceView {
 export function createCapturedBuildAdapter(
   dependencies: CapturedBuildDependencies,
 ): CapturedBuildAdapter {
-  const { rootState, resources, reservations, controls, costs, readPolicy } =
+  const { rootState, resources, conflicts, controls, costs, readPolicy } =
     dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
   let cycle: readonly CycleCandidate[] | null = null;
@@ -250,8 +248,9 @@ export function createCapturedBuildAdapter(
       if (!readPolicy().respectReservations) {
         return Object.freeze({ conflict: null, important });
       }
-      const sample = reservations.readReservations();
-      if (sample.unavailable) {
+      const evaluated = conflicts.evaluate(candidate.view.cost);
+      if (evaluated.status === "none") return NO_CONFLICT;
+      if (evaluated.status === "unavailable") {
         // Something is saving and the reservation could not be priced. Skipping on incomplete
         // data is the safe half of the trade; spending is not recoverable.
         return Object.freeze({
@@ -264,40 +263,15 @@ export function createCapturedBuildAdapter(
           important,
         });
       }
-      if (sample.targets.length === 0) return NO_CONFLICT;
-
-      const actionCost = candidate.view.cost;
-      const wanted = new Set<string>(Object.keys(actionCost));
-      for (const target of sample.targets) {
-        for (const id of Object.keys(target.cost)) wanted.add(id);
-      }
-      const held = resources.readResources(wanted);
-      if (held === undefined) return NO_CONFLICT;
-      const conflictResources: Record<string, CostConflictResource> = {};
-      for (const id of wanted) {
-        // The game’s display names are localized strings this slice has no captured route to, so
-        // a reservation reports the resource id it reserved.
-        conflictResources[id] = Object.freeze({
-          name: id,
-          currentQuantity: resourceView(held, id).amount,
-        });
-      }
-      const conflict = findCostConflict({
-        actionCost,
-        reservedTargets: sample.targets,
-        resources: Object.freeze(conflictResources),
+      return Object.freeze({
+        conflict: Object.freeze({
+          unavailable: false,
+          targetNames: evaluated.conflict.targetNames,
+          resourceNames: evaluated.conflict.resourceNames,
+          targetCause: evaluated.conflict.targetCause,
+        }),
+        important,
       });
-      return conflict === null
-        ? Object.freeze({ conflict: null, important })
-        : Object.freeze({
-            conflict: Object.freeze({
-              unavailable: false,
-              targetNames: conflict.targetNames,
-              resourceNames: conflict.resourceNames,
-              targetCause: conflict.targetCause,
-            }),
-            important,
-          });
     },
 
     sampleCompetition(

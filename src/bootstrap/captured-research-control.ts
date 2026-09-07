@@ -1,0 +1,92 @@
+/**
+ * Composes the captured research slice: page capture in, one research cycle out.
+ *
+ * Input from the game's own research panel, decision by the existing pure planner, execution
+ * through one captured game method. Like the build slice it is **not on the production tick**: the
+ * compatibility runtime still owns autoResearch until the replacement covers enough behaviour to
+ * cut over, and the two take no dependency on each other.
+ */
+
+import { runResearchAutomation } from "../application/research.ts";
+import type { CommandExecutionOutcome } from "../domain/commands.ts";
+import { createCapturedCostConflictReader } from "../adapters/evolve/captured-cost-conflict.ts";
+import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
+import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
+import { createCapturedTabDiscovery } from "../adapters/evolve/captured-tab-discovery.ts";
+import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
+import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
+import { createCapturedResearchAdapter } from "../adapters/evolve/progression/research/captured-research.ts";
+import type { GameControlRegistry } from "../ports/game-control-registry.ts";
+import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
+import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import type { TickDiagnostics } from "../ports/tick.ts";
+
+export interface CapturedResearchControlDependencies {
+  readonly rootState: GameRootStateSource;
+  readonly controls: GameControlRegistry;
+  readonly drawnActions: GameDrawnActionsReader;
+  readonly diagnostics?: TickDiagnostics | undefined;
+  /** Reports a catalog or price the capture could not supply. */
+  readonly onUnavailable?: (reason: string) => void;
+}
+
+export interface CapturedResearchControl {
+  /** Runs one research cycle. Safe to call before the game has created its state. */
+  runCycle(): CommandExecutionOutcome;
+}
+
+const NOT_CAPTURED: CommandExecutionOutcome = Object.freeze({
+  status: "rejected",
+  failure: Object.freeze({
+    code: "game-state-not-captured",
+    message: "the game root has not been captured yet",
+  }),
+});
+
+export function createCapturedResearchControl(
+  dependencies: CapturedResearchControlDependencies,
+): CapturedResearchControl {
+  const { rootState, controls, drawnActions, diagnostics } = dependencies;
+  const onUnavailable = dependencies.onUnavailable;
+  const resources = createCapturedResourceSource(rootState);
+  const catalog = createCapturedTechCatalog({
+    rootState,
+    discovery: createCapturedTabDiscovery({ rootState, controls }),
+    drawnActions,
+    ...(onUnavailable === undefined ? {} : { onUnavailable }),
+  });
+  const reservations = createCapturedQueueReservationSource({
+    rootState,
+    resources,
+    costs: createCapturedActionCostReader({
+      rootState,
+      controls,
+      ...(onUnavailable === undefined
+        ? {}
+        : {
+            onUnavailable: (id: string, reason: string) =>
+              onUnavailable(`${id}: ${reason}`),
+          }),
+    }),
+    ...(onUnavailable === undefined
+      ? {}
+      : {
+          onUnavailable: (id: string, reason: string) =>
+            onUnavailable(`${id}: ${reason}`),
+        }),
+  });
+  const { reader, executor } = createCapturedResearchAdapter({
+    rootState,
+    catalog,
+    resources,
+    conflicts: createCapturedCostConflictReader({ resources, reservations }),
+    controls,
+  });
+
+  return Object.freeze({
+    runCycle(): CommandExecutionOutcome {
+      if (rootState.readRoot() === undefined) return NOT_CAPTURED;
+      return runResearchAutomation({ reader, executor, diagnostics });
+    },
+  });
+}
