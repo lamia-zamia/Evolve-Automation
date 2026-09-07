@@ -14,6 +14,7 @@
  * engine. The engine is a separate port of its own; the planners only need a total order.
  */
 
+import type { BuildConsumptionView } from "../../../../domain/progression/build/build.ts";
 import type { BuildClickResult } from "../../../../ports/build.ts";
 import type {
   ConstructionCandidate,
@@ -41,6 +42,8 @@ export interface CapturedBuildTarget {
   readonly maximum: number;
   /** The caller's "build this regardless" setting; it bypasses the cost-conflict gate. */
   readonly important: boolean;
+  /** Script-sampled upkeep/support entries, when per-resource consumption checks are enabled. */
+  readonly consumption?: readonly Readonly<BuildConsumptionView>[];
 }
 
 export interface CapturedBuildDependencies {
@@ -148,6 +151,9 @@ export function createCapturedBuildSource(
             ignored: false,
             knowledge: false,
             important: target.important,
+            ...(target.consumption === undefined
+              ? {}
+              : { consumption: target.consumption }),
           }),
         });
       }

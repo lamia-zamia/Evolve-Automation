@@ -55,6 +55,10 @@ export interface CapturedConstructionControlDependencies {
   readonly scriptReservations?: CostReservationSource;
   /** Script-computed Knowledge requirements combined with captured capacity. */
   readonly readKnowledgeGate?: () => KnowledgeGateLevels;
+  /** Script storage-planner values, keyed by captured resource id. */
+  readonly readStorageRequired?: (
+    resourceIds: readonly string[],
+  ) => Readonly<Record<string, number>> | undefined;
   /**
    * The technologies the game is offering, which is the only captured route to a technology's
    * price. Supply it to make the player's research queue reserve what it is saving for; without it
@@ -98,6 +102,7 @@ export function createCapturedConstructionControl(
   const readOfferedTechs = dependencies.readOfferedTechs;
   const scriptReservations = dependencies.scriptReservations;
   const readKnowledgeGate = dependencies.readKnowledgeGate;
+  const readStorageRequired = dependencies.readStorageRequired;
   // The offered-technology catalog is asked for at most once per cycle, and only if something in
   // the cycle actually needs it. Every candidate consults the same reservations, so without this
   // the cycle would pay for one discovery pass per candidate.
@@ -176,6 +181,7 @@ export function createCapturedConstructionControl(
     conflicts,
     readOptions: readPolicy,
     ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
+    ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
   });
 
   return Object.freeze({

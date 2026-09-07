@@ -13,6 +13,8 @@ import { isRecord } from "../validation.ts";
 export interface ScriptBuildGateDependencies {
   readonly getState: () => unknown;
   readonly resources: GameResourceSource;
+  /** The script's resource wrapper map, whose storage planner values are not in the game root. */
+  readonly getResources?: () => unknown;
 }
 
 function readNumber(value: unknown): number {
@@ -37,5 +39,26 @@ export function createScriptKnowledgeGateReader(
         : Number.NaN,
       knowledgeCapacity: capacity === undefined ? Number.NaN : capacity,
     });
+  };
+}
+
+/** Reads finite storage requirements without exposing the mutable resource wrapper map. */
+export function createScriptStorageRequirementReader(
+  dependencies: Pick<ScriptBuildGateDependencies, "getResources">,
+): (
+  resourceIds: readonly string[],
+) => Readonly<Record<string, number>> | undefined {
+  return (resourceIds) => {
+    const resources = dependencies.getResources?.();
+    if (!isRecord(resources)) return undefined;
+    const values: Record<string, number> = {};
+    for (const id of resourceIds) {
+      const resource = resources[id];
+      if (!isRecord(resource)) return undefined;
+      const value = Number(resource["storageRequired"]);
+      if (!Number.isFinite(value)) return undefined;
+      values[id] = value;
+    }
+    return Object.freeze(values);
   };
 }

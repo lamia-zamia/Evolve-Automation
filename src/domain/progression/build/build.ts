@@ -29,6 +29,8 @@ export interface BuildCandidateView {
   readonly ignored: boolean;
   /** Legacy `building.is.knowledge`: building it raises the Knowledge cap. */
   readonly knowledge: boolean;
+  /** Candidate upkeep/support entries used by the per-resource consumption gate. */
+  readonly consumption?: readonly Readonly<BuildConsumptionView>[];
 }
 
 export interface BuildCycleSetup {

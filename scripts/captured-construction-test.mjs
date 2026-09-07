@@ -44,7 +44,7 @@ function makeSource(family, candidates, holdings, bought) {
         outcome: { status: "succeeded" },
         clicked: true,
         mission: false,
-        consumption: [],
+        consumption: candidate.consumption ?? [],
       };
     },
   };
@@ -86,6 +86,8 @@ function makeCycle({
   conflict = { status: "none" },
   respectReservations = true,
   knowledgeGate,
+  storageRequired,
+  consumptionMode = "unlimited",
 } = {}) {
   const bought = [];
   const adapter = createCapturedConstructionAdapter({
@@ -98,8 +100,11 @@ function makeCycle({
     ...(knowledgeGate === undefined
       ? {}
       : { readKnowledgeGate: () => knowledgeGate }),
+    ...(storageRequired === undefined
+      ? {}
+      : { readStorageRequired: () => storageRequired }),
     readOptions: () => ({
-      consumptionMode: "unlimited",
+      consumptionMode,
       buildIfStorageFull: false,
       ignoreZeroRate: false,
       respectReservations,
@@ -107,6 +112,54 @@ function makeCycle({
     }),
   });
   return { adapter, bought, holdings };
+}
+
+// Per-resource consumption is sampled from the managed candidate and is remembered after the
+// purchase, so a later candidate consuming the same resource waits in perResource mode.
+{
+  const cycle = makeCycle({
+    city: [
+      {
+        key: "first",
+        weighting: 20,
+        cost: { Money: 1 },
+        consumption: [{ resourceId: "Food", nonNegativeRate: true }],
+      },
+      {
+        key: "second",
+        weighting: 10,
+        cost: { Money: 1 },
+        consumption: [{ resourceId: "Food", nonNegativeRate: true }],
+      },
+    ],
+    holdings: { Money: 100 },
+    consumptionMode: "perResource",
+  });
+  assert.equal(runBuildAutomation(cycle.adapter).status, "succeeded");
+  assert.deepEqual(cycle.bought, ["first"]);
+}
+
+// A known storage requirement makes a nearly full resource non-contended; absent requirements
+// remain unknown and keep the lower-weighted candidate waiting.
+{
+  const makeStorageCycle = (readStorageRequired) =>
+    makeCycle({
+      city: [
+        { key: "expensive", weighting: 90, cost: { Money: 100000 } },
+        { key: "cheap", weighting: 10, cost: { Money: 20 } },
+      ],
+      holdings: { Money: 99900 },
+      ...(readStorageRequired === undefined
+        ? {}
+        : { storageRequired: readStorageRequired }),
+    });
+  const unknown = makeStorageCycle(undefined);
+  assert.equal(runBuildAutomation(unknown.adapter).status, "succeeded");
+  assert.deepEqual(unknown.bought, []);
+
+  const known = makeStorageCycle({ Money: 900 });
+  assert.equal(runBuildAutomation(known.adapter).status, "succeeded");
+  assert.deepEqual(known.bought, ["cheap"]);
 }
 
 // A Knowledge-raising building may spend through a lower-priority saving target when the

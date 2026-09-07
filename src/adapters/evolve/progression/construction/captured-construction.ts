@@ -6,18 +6,14 @@
  * affordability, cost conflicts, resource competition — is asked here, over one live sample, so a
  * building and a project compete against each other exactly as two buildings do.
  *
- * What this cycle deliberately does not model yet, and why it is safe to leave out rather than
- * approximate:
- *
- * - **Consumption** is reported as empty, so the per-tick consumption gate never fires. The
- *   support/upkeep catalog it reads is script-side and not part of the captured surface.
- * - **`storageRequired`** is 0. It is only read as "this resource is capped and nothing is saving
- *   it for storage", and a capped resource is genuinely not contended.
- * - **Knowledge-cap gating** is off (zero gate levels), so the Knowledge branch of the conflict
- *   planner stays inert rather than guessing which buildings raise the cap.
+ * Optional script-derived inputs stay explicit at this boundary: managed candidates may carry
+ * validated consumption entries, storage requirements may be supplied by the storage planner, and
+ * Knowledge-cap requirements may be supplied by the Knowledge gate reader. If a caller omits one,
+ * the cycle leaves that gate unknown rather than guessing from the upstream root.
  */
 
 import type {
+  BuildConsumptionView,
   BuildAnnotation,
   BuildCandidateSample,
   BuildClickDecision,
@@ -53,6 +49,10 @@ export interface CapturedConstructionDependencies {
   readonly readOptions: () => ConstructionCycleOptions;
   /** Optional script-computed Knowledge requirements; absent means no gate is applied. */
   readonly readKnowledgeGate?: () => KnowledgeGateLevels;
+  /** Script storage-planner values; missing ids remain unknown rather than treated as capped. */
+  readonly readStorageRequired?: (
+    resourceIds: readonly string[],
+  ) => Readonly<Record<string, number>> | undefined;
 }
 
 export interface CapturedConstructionAdapter {
@@ -65,7 +65,9 @@ interface CycleEntry {
   readonly source: ConstructionCandidateSource;
 }
 
-const NO_CONSUMPTION = Object.freeze([]);
+const NO_CONSUMPTION: readonly Readonly<BuildConsumptionView>[] = Object.freeze(
+  [],
+);
 const ZERO_KNOWLEDGE_GATE = Object.freeze({
   cheapestTechKnowledge: 0,
   knowledgeRequiredByBuildTargets: 0,
@@ -78,16 +80,19 @@ const LOCKED_RESOURCE: BuildResourceView = Object.freeze({
   currentQuantity: 0,
   rateOfChange: 0,
   storageRatio: 0,
-  storageRequired: 0,
+  storageRequired: Number.NaN,
 });
 
-function toBuildResourceView(view: Readonly<ResourceView>): BuildResourceView {
+function toBuildResourceView(
+  view: Readonly<ResourceView>,
+  storageRequired: number,
+): BuildResourceView {
   return Object.freeze({
     unlocked: view.unlocked,
     currentQuantity: view.amount,
     rateOfChange: view.rateOfChange,
     storageRatio: view.storageRatio,
-    storageRequired: 0,
+    storageRequired,
   });
 }
 
@@ -96,6 +101,7 @@ export function createCapturedConstructionAdapter(
 ): CapturedConstructionAdapter {
   const { sources, resources, conflicts, readOptions } = dependencies;
   const readKnowledgeGate = dependencies.readKnowledgeGate;
+  const readStorageRequired = dependencies.readStorageRequired;
   let cycle: readonly CycleEntry[] = Object.freeze([]);
   let respectReservations = true;
 
@@ -161,13 +167,13 @@ export function createCapturedConstructionAdapter(
       const { candidate } = entryAt(index);
       const sample: {
         affordable?: boolean;
-        consumption?: readonly never[];
+        consumption?: readonly Readonly<BuildConsumptionView>[];
       } = {};
       if (request.needAffordability) {
         sample.affordable = affordable(candidate.cost);
       }
       if (request.needConsumption) {
-        sample.consumption = NO_CONSUMPTION;
+        sample.consumption = candidate.consumption ?? NO_CONSUMPTION;
       }
       return Object.freeze(sample);
     },
@@ -230,6 +236,7 @@ export function createCapturedConstructionAdapter(
         for (const id of Object.keys(cost)) wanted.add(id);
       }
       const sample = resources.readResources(wanted);
+      const storageRequired = readStorageRequired?.(request.resourceIds);
       const affordability: Record<string, boolean> = {};
       for (const entry of compared) {
         affordability[entry.key] =
@@ -240,7 +247,10 @@ export function createCapturedConstructionAdapter(
         resourceViews[id] =
           sample === undefined
             ? LOCKED_RESOURCE
-            : toBuildResourceView(resourceView(sample, id));
+            : toBuildResourceView(
+                resourceView(sample, id),
+                storageRequired?.[id] ?? Number.NaN,
+              );
       }
       return Object.freeze({
         affordability: Object.freeze(affordability),
