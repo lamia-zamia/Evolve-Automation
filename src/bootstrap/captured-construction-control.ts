@@ -35,6 +35,7 @@ import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+import type { KnowledgeGateLevels } from "../domain/progression/build/building-weighting.ts";
 
 /** Everything the caller configures for one cycle, across both families. */
 export interface CapturedConstructionPolicy extends ConstructionCycleOptions {
@@ -52,6 +53,8 @@ export interface CapturedConstructionControlDependencies {
   readonly readSettings: () => unknown;
   /** Script-derived commitments outside the captured game root. */
   readonly scriptReservations?: CostReservationSource;
+  /** Script-computed Knowledge requirements combined with captured capacity. */
+  readonly readKnowledgeGate?: () => KnowledgeGateLevels;
   /**
    * The technologies the game is offering, which is the only captured route to a technology's
    * price. Supply it to make the player's research queue reserve what it is saving for; without it
@@ -94,6 +97,7 @@ export function createCapturedConstructionControl(
   const onSkipped = dependencies.onSkipped;
   const readOfferedTechs = dependencies.readOfferedTechs;
   const scriptReservations = dependencies.scriptReservations;
+  const readKnowledgeGate = dependencies.readKnowledgeGate;
   // The offered-technology catalog is asked for at most once per cycle, and only if something in
   // the cycle actually needs it. Every candidate consults the same reservations, so without this
   // the cycle would pay for one discovery pass per candidate.
@@ -171,6 +175,7 @@ export function createCapturedConstructionControl(
     resources,
     conflicts,
     readOptions: readPolicy,
+    ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
   });
 
   return Object.freeze({

@@ -85,6 +85,7 @@ function makeCycle({
   holdings = {},
   conflict = { status: "none" },
   respectReservations = true,
+  knowledgeGate,
 } = {}) {
   const bought = [];
   const adapter = createCapturedConstructionAdapter({
@@ -94,6 +95,9 @@ function makeCycle({
     ],
     resources: makeResources(holdings),
     conflicts: { evaluate: () => conflict },
+    ...(knowledgeGate === undefined
+      ? {}
+      : { readKnowledgeGate: () => knowledgeGate }),
     readOptions: () => ({
       consumptionMode: "unlimited",
       buildIfStorageFull: false,
@@ -103,6 +107,58 @@ function makeCycle({
     }),
   });
   return { adapter, bought, holdings };
+}
+
+// A Knowledge-raising building may spend through a lower-priority saving target when the
+// storage planner has proved that Knowledge capacity is the blocking resource.
+{
+  const conflict = {
+    status: "conflict",
+    conflict: {
+      targetNames: ["Queued research"],
+      resourceNames: ["Money"],
+      targetCause: "Saving",
+    },
+  };
+  const gated = makeCycle({
+    city: [
+      {
+        key: "library",
+        weighting: 10,
+        knowledge: true,
+        cost: { Money: 10 },
+      },
+    ],
+    holdings: { Money: 100 },
+    conflict,
+    knowledgeGate: {
+      cheapestTechKnowledge: 500,
+      knowledgeRequiredByBuildTargets: 0,
+      knowledgeCapacity: 100,
+    },
+  });
+  assert.equal(runBuildAutomation(gated.adapter).status, "succeeded");
+  assert.deepEqual(gated.bought, ["library"]);
+
+  const ungated = makeCycle({
+    city: [
+      {
+        key: "library",
+        weighting: 10,
+        knowledge: true,
+        cost: { Money: 10 },
+      },
+    ],
+    holdings: { Money: 100 },
+    conflict,
+    knowledgeGate: {
+      cheapestTechKnowledge: 50,
+      knowledgeRequiredByBuildTargets: 0,
+      knowledgeCapacity: 100,
+    },
+  });
+  assert.equal(runBuildAutomation(ungated.adapter).status, "succeeded");
+  assert.deepEqual(ungated.bought, []);
 }
 
 // --- one weighting order across both families ---------------------------------------------------

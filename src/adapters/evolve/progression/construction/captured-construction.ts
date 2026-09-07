@@ -41,6 +41,7 @@ import type {
   ConstructionCycleOptions,
 } from "../../../../ports/construction-candidates.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
+import type { KnowledgeGateLevels } from "../../../../domain/progression/build/building-weighting.ts";
 import { stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
 
@@ -50,6 +51,8 @@ export interface CapturedConstructionDependencies {
   readonly resources: GameResourceSource;
   readonly conflicts: CapturedCostConflictReader;
   readonly readOptions: () => ConstructionCycleOptions;
+  /** Optional script-computed Knowledge requirements; absent means no gate is applied. */
+  readonly readKnowledgeGate?: () => KnowledgeGateLevels;
 }
 
 export interface CapturedConstructionAdapter {
@@ -92,6 +95,7 @@ export function createCapturedConstructionAdapter(
   dependencies: CapturedConstructionDependencies,
 ): CapturedConstructionAdapter {
   const { sources, resources, conflicts, readOptions } = dependencies;
+  const readKnowledgeGate = dependencies.readKnowledgeGate;
   let cycle: readonly CycleEntry[] = Object.freeze([]);
   let respectReservations = true;
 
@@ -146,7 +150,7 @@ export function createCapturedConstructionAdapter(
         buildIfStorageFull: options.buildIfStorageFull,
         ignoreZeroRate: options.ignoreZeroRate,
         saveWhiteholeGems: options.saveWhiteholeGems,
-        knowledgeGate: ZERO_KNOWLEDGE_GATE,
+        knowledgeGate: readKnowledgeGate?.() ?? ZERO_KNOWLEDGE_GATE,
       });
     },
 
