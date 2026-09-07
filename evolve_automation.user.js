@@ -51611,6 +51611,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     return Object.freeze({
       family: "city",
       beginCycle() {
+        dependencies.ensureControls?.();
         let root = rootState.readRoot(), entries = /* @__PURE__ */ new Map();
         for (let target of readTargets()) {
           let building3 = readBuilding3(root, target);
@@ -52274,6 +52275,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           costs,
           resources,
           readTargets: () => readPolicy().buildings,
+          ...dependencies.ensureBuildControls === void 0 ? {} : { ensureControls: dependencies.ensureBuildControls },
           ...onSkipped === void 0 ? {} : { onSkipped }
         }),
         createCapturedProjectSource({
@@ -52487,7 +52489,40 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       controls: controls4,
       mountSuppression,
       panels
-    }), offered = createCapturedTechCatalog({
+    }), buildControlsDiscoveryAttempted = !1, ensureBuildControls = () => {
+      if (buildControlsDiscoveryAttempted || controls4.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      buildControlsDiscoveryAttempted = !0;
+      let main = Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 1
+      }), spaceTabControl = SUB_TAB_CONTROLS.spaceTabs;
+      if (spaceTabControl === void 0) {
+        onSkipped?.("build-discovery", "space-tab control is unavailable");
+        return;
+      }
+      let paths = [
+        Object.freeze([main]),
+        ...Array.from(
+          { length: 9 },
+          (_, index) => Object.freeze([
+            main,
+            Object.freeze({
+              setting: "spaceTabs",
+              control: spaceTabControl,
+              index: index + 1
+            })
+          ])
+        )
+      ];
+      for (let path of paths) {
+        let result2 = discovery.discover(path);
+        result2.outcome.status !== "succeeded" && onSkipped?.(
+          "build-discovery",
+          result2.outcome.failure?.message ?? result2.outcome.status
+        );
+      }
+    }, offered = createCapturedTechCatalog({
       rootState,
       discovery,
       drawnActions,
@@ -52511,6 +52546,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       drawnProjects,
       readPolicy,
       readSettings: readSettings3,
+      ensureBuildControls,
       scriptReservations,
       readKnowledgeGate: readKnowledgeGate2,
       readStorageRequired,

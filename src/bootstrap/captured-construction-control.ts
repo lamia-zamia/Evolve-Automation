@@ -48,6 +48,8 @@ export interface CapturedConstructionControlDependencies {
   readonly mountSuppression: GameMountSuppression;
   readonly panels: GamePanelWorkspace;
   readonly drawnProjects: GameDrawnProjectsReader;
+  /** Optional one-time discovery of the game's Civilization action controls. */
+  readonly ensureBuildControls?: () => void;
   readonly readPolicy: () => CapturedConstructionPolicy;
   /** Persisted A.R.P.A. settings, normalized at the adapter boundary. */
   readonly readSettings: () => unknown;
@@ -160,6 +162,9 @@ export function createCapturedConstructionControl(
         costs,
         resources,
         readTargets: () => readPolicy().buildings,
+        ...(dependencies.ensureBuildControls === undefined
+          ? {}
+          : { ensureControls: dependencies.ensureBuildControls }),
         ...(onSkipped === undefined ? {} : { onSkipped }),
       }),
       createCapturedProjectSource({

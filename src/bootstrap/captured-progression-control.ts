@@ -7,7 +7,12 @@
  */
 
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
-import { createCapturedTabDiscovery } from "../adapters/evolve/captured-tab-discovery.ts";
+import {
+  createCapturedTabDiscovery,
+  MAIN_TAB_CONTROL,
+  MAIN_TAB_SETTING,
+  SUB_TAB_CONTROLS,
+} from "../adapters/evolve/captured-tab-discovery.ts";
 import {
   createScriptKnowledgeGateReader,
   createScriptStorageRequirementReader,
@@ -72,6 +77,44 @@ export function createCapturedProgressionControl(
     mountSuppression,
     panels,
   });
+  let buildControlsDiscoveryAttempted = false;
+  const ensureBuildControls = () => {
+    if (buildControlsDiscoveryAttempted) return;
+    if (controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    buildControlsDiscoveryAttempted = true;
+    const main = Object.freeze({
+      setting: MAIN_TAB_SETTING,
+      control: MAIN_TAB_CONTROL,
+      index: 1,
+    });
+    const spaceTabControl = SUB_TAB_CONTROLS.spaceTabs;
+    if (spaceTabControl === undefined) {
+      onSkipped?.("build-discovery", "space-tab control is unavailable");
+      return;
+    }
+    const paths = [
+      Object.freeze([main]),
+      ...Array.from({ length: 9 }, (_, index) =>
+        Object.freeze([
+          main,
+          Object.freeze({
+            setting: "spaceTabs",
+            control: spaceTabControl,
+            index: index + 1,
+          }),
+        ]),
+      ),
+    ];
+    for (const path of paths) {
+      const result = discovery.discover(path);
+      if (result.outcome.status !== "succeeded") {
+        onSkipped?.(
+          "build-discovery",
+          result.outcome.failure?.message ?? result.outcome.status,
+        );
+      }
+    }
+  };
   const offered = createCapturedTechCatalog({
     rootState,
     discovery,
@@ -101,6 +144,7 @@ export function createCapturedProgressionControl(
     drawnProjects,
     readPolicy,
     readSettings,
+    ensureBuildControls,
     scriptReservations,
     readKnowledgeGate,
     readStorageRequired,

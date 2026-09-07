@@ -54,6 +54,8 @@ export interface CapturedBuildDependencies {
   readonly costs: GameActionCostReader;
   readonly resources: GameResourceSource;
   readonly readTargets: () => readonly Readonly<CapturedBuildTarget>[];
+  /** Ensures the game has built the relevant action controls before target sampling. */
+  readonly ensureControls?: () => void;
   /** Reports a candidate that could not be evaluated. It is dropped, never guessed at. */
   readonly onSkipped?: (key: string, reason: string) => void;
 }
@@ -130,6 +132,7 @@ export function createCapturedBuildSource(
     family: "city",
 
     beginCycle(): readonly Readonly<ConstructionCandidate>[] {
+      dependencies.ensureControls?.();
       const root = rootState.readRoot();
       const entries = new Map<string, CycleCandidate>();
       for (const target of readTargets()) {
