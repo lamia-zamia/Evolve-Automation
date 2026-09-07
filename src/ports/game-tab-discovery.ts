@@ -41,6 +41,17 @@ export interface TabDiscoveryOptions {
    * the player is not on is always drawn.
    */
   readonly isPanelDrawn?: () => boolean;
+  /**
+   * Containers the draw fills that this pass never reads, so they can be dropped before the game
+   * spends anything filling them. The game creates them partway through its own draw, so they are
+   * named by the component whose binding is the first moment they exist.
+   */
+  readonly discard?: {
+    /** The selector the game binds immediately before it fills the containers. */
+    readonly afterBinding: string;
+    /** Element ids inside the drawn panel. Anything outside it is refused. */
+    readonly containers: readonly string[];
+  };
 }
 
 export interface GameTabDiscovery {

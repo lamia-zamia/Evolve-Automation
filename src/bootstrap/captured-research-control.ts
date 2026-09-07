@@ -19,6 +19,7 @@ import { createCapturedResearchAdapter } from "../adapters/evolve/progression/re
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
+import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 
@@ -27,6 +28,7 @@ export interface CapturedResearchControlDependencies {
   readonly controls: GameControlRegistry;
   readonly drawnActions: GameDrawnActionsReader;
   readonly mountSuppression: GameMountSuppression;
+  readonly panels: GamePanelWorkspace;
   readonly diagnostics?: TickDiagnostics | undefined;
   /** Reports a catalog or price the capture could not supply. */
   readonly onUnavailable?: (reason: string) => void;
@@ -48,8 +50,14 @@ const NOT_CAPTURED: CommandExecutionOutcome = Object.freeze({
 export function createCapturedResearchControl(
   dependencies: CapturedResearchControlDependencies,
 ): CapturedResearchControl {
-  const { rootState, controls, drawnActions, mountSuppression, diagnostics } =
-    dependencies;
+  const {
+    rootState,
+    controls,
+    drawnActions,
+    mountSuppression,
+    panels,
+    diagnostics,
+  } = dependencies;
   const onUnavailable = dependencies.onUnavailable;
   const resources = createCapturedResourceSource(rootState);
   const catalog = createCapturedTechCatalog({
@@ -58,6 +66,7 @@ export function createCapturedResearchControl(
       rootState,
       controls,
       mountSuppression,
+      panels,
     }),
     drawnActions,
     controls,

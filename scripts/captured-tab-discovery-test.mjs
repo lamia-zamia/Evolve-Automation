@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   createCapturedTabDiscovery,
   MAIN_TAB_CONTROL,
+  MAIN_TAB_PANELS,
   MAIN_TAB_SETTING,
   SUB_TAB_CONTROLS,
 } from "../src/adapters/evolve/captured-tab-discovery.ts";
@@ -50,24 +51,76 @@ function makePage({
   tabLoad = false,
   panels = PANELS,
   subPanels = SUB_PANELS,
+  boundDuringDraw = [],
 } = {}) {
   const settings = { civTabs, spaceTabs, animated, tabLoad };
   // Scoped mount suppression, the way the capture provides it: nesting counted, and always
-  // unwound, so a draw can report whether it happened inside a scope.
+  // unwound, so a draw can report whether it happened inside a scope. The scope's bind observer
+  // fires for whatever the draw declares it binds.
   const suppression = {
     available: true,
     depth: 0,
     scopes: 0,
-    withoutMounting(draw) {
+    bound: [],
+    withoutMounting(draw, scope = {}) {
       suppression.depth += 1;
       suppression.scopes += 1;
+      suppression.scopeSeen = scope;
       try {
         return draw();
       } finally {
         suppression.depth -= 1;
       }
     },
+    bind(selector) {
+      suppression.bound.push(selector);
+      suppression.scopeSeen?.onComponentBound?.(selector);
+    },
   };
+
+  /**
+   * The document half. A kept panel is out of the game's reach, so a draw does not tear its
+   * controls down; a scratched panel is where the draw's own output goes and is dropped whole.
+   */
+  const workspaceLog = { opens: [], discards: [], releases: 0 };
+  let openable = true;
+  let intact = true;
+  let keptPanel;
+  const panelWorkspace = {
+    open({ keep, scratch }) {
+      if (!openable || (keep !== undefined && keep === scratch))
+        return undefined;
+      workspaceLog.opens.push({ keep, scratch });
+      keptPanel = keep;
+      return {
+        discard(elementId) {
+          workspaceLog.discards.push(elementId);
+          return true;
+        },
+        release() {
+          workspaceLog.releases += 1;
+          keptPanel = undefined;
+          // Everything the draw produced goes with the container it went into.
+          for (const id of [...mounted]) {
+            if (panelOf(id) === scratch) mounted.delete(id);
+          }
+        },
+        isIntact: () => intact,
+      };
+    },
+  };
+  /** Which controls belong to a panel, so a kept one can be left alone. */
+  function panelOf(id) {
+    for (const [index, ids] of Object.entries(panels)) {
+      if ((ids ?? []).includes(id)) return MAIN_TAB_PANELS[Number(index)];
+    }
+    for (const [control, group] of Object.entries(subPanels)) {
+      for (const ids of Object.values(group)) {
+        if (ids.includes(id)) return control;
+      }
+    }
+    return undefined;
+  }
   const root = { settings };
   const controls = new Map();
   const mounted = new Set();
@@ -104,12 +157,17 @@ function makePage({
   function drawTab(control, index) {
     swaps.push([control, index, suppression.depth > 0]);
     for (const id of [...mounted]) {
+      // A panel the workspace is keeping is not in the document, so the draw cannot clear it.
+      if (keptPanel !== undefined && panelOf(id) === keptPanel) continue;
       if (settings.animated) {
         // The game retains the outgoing panel behind a timer for the slide.
         pendingClears.push(id);
       } else {
         mounted.delete(id);
       }
+    }
+    if (suppression.depth > 0) {
+      for (const selector of boundDuringDraw) suppression.bind(selector);
     }
     if (control === MAIN_TAB_CONTROL) {
       mount(panels[index]);
@@ -150,6 +208,14 @@ function makePage({
     controls,
     registry,
     suppression,
+    panels: panelWorkspace,
+    workspaceLog,
+    setOpenable: (value) => {
+      openable = value;
+    },
+    setIntact: (value) => {
+      intact = value;
+    },
     mounted,
     pendingClears,
     swaps,
@@ -172,6 +238,7 @@ function discoveryFor(page) {
     rootState: page.rootState,
     controls: page.registry,
     mountSuppression: page.suppression,
+    panels: page.panels,
   });
 }
 
@@ -186,12 +253,18 @@ function discoveryFor(page) {
     [...result.discovered],
     ["mTabCivic", "civ-farmer", "foundry"],
   );
-  // Out to the discovered tab and straight back to the player's own.
-  assert.deepEqual(page.mainSwaps(), [2, 4]);
+  // Out to the discovered tab and no way back: the player's panel was never destroyed, so there
+  // is nothing to rebuild.
+  assert.deepEqual(page.mainSwaps(), [2]);
   assert.equal(page.settings.civTabs, 4);
-  // Only the player's tab is left mounted; the discovered controls stay captured regardless.
+  // Their panel is still mounted, as it was throughout; the discovered controls stay captured.
   assert.deepEqual([...page.mounted].sort(), ["mTabResource", "resTrade"]);
   assert.equal(page.controls.has("civ-farmer"), true);
+  // The workspace kept their panel and gave the draw somewhere else to go.
+  assert.deepEqual(page.workspaceLog.opens, [
+    { keep: "mTabResource", scratch: "mTabCivic" },
+  ]);
+  assert.equal(page.workspaceLog.releases, 1);
 }
 
 {
@@ -211,7 +284,7 @@ function discoveryFor(page) {
     [...withSubTab.discovered],
     ["space-spaceport", "space-moon_base"],
   );
-  // Both levels are back where the player left them.
+  // Both levels are back where the player left them, and their panel never moved.
   assert.equal(page.settings.civTabs, 4);
   assert.equal(page.settings.spaceTabs, 0);
   assert.deepEqual([...page.mounted].sort(), ["mTabResource", "resTrade"]);
@@ -361,6 +434,7 @@ function discoveryFor(page) {
       available: true,
       withoutMounting: (draw) => draw(),
     },
+    panels: { open: () => undefined },
   }).discover(mainTab(1));
   assert.equal(result.outcome.failure.code, "game-state-not-captured");
 }
@@ -397,17 +471,16 @@ function discoveryFor(page) {
   assert.equal(result.outcome.failure.code, "tab-draw-failed");
   assert.equal(page.settings.civTabs, 4);
   assert.equal(page.settings.animated, true);
-  assert.deepEqual(page.mainSwaps(), [4]);
+  // The workspace is released whether or not the draw worked.
+  assert.equal(page.workspaceLog.releases, 1);
+  assert.deepEqual([...page.mounted].sort(), ["mTabResource", "resTrade"]);
 }
 
 {
-  // The draw worked and the way back did not: the controls are real and the report says so.
+  // The draw worked and the document did not come back the way it went: the controls are real and
+  // the report says so rather than swallowing it.
   const page = makePage({ civTabs: 4 });
-  const inner = page.registry.invoke;
-  page.registry.invoke = (handle, method, args) =>
-    args[0] === 4
-      ? { ok: false, reason: "threw", detail: "loadTab exploded" }
-      : inner(handle, method, args);
+  page.setIntact(false);
   const result = discoveryFor(page).discover(mainTab(2));
   assert.equal(result.outcome.status, "rejected");
   assert.equal(result.outcome.failure.code, "tab-restore-failed");
@@ -416,6 +489,36 @@ function discoveryFor(page) {
     ["mTabCivic", "civ-farmer", "foundry"],
   );
   assert.equal(page.settings.animated, true);
+}
+
+{
+  // No workspace to be had — the path draws into the panel the player is on — so the pass falls
+  // back to what it always did: draw, then redraw the player's own tab.
+  const page = makePage({ civTabs: 4 });
+  page.setOpenable(false);
+  const result = discoveryFor(page).discover(mainTab(2));
+  assert.equal(result.outcome.status, "succeeded");
+  assert.deepEqual(page.mainSwaps(), [2, 4]);
+  assert.equal(page.settings.civTabs, 4);
+  assert.deepEqual([...page.mounted].sort(), ["mTabResource", "resTrade"]);
+  assert.deepEqual(page.workspaceLog.opens, []);
+}
+
+{
+  // And the fallback still reports a restore it could not make.
+  const page = makePage({ civTabs: 4 });
+  page.setOpenable(false);
+  const inner = page.registry.invoke;
+  page.registry.invoke = (handle, method, args) =>
+    args[0] === 4
+      ? { ok: false, reason: "threw", detail: "loadTab exploded" }
+      : inner(handle, method, args);
+  const result = discoveryFor(page).discover(mainTab(2));
+  assert.equal(result.outcome.failure.code, "tab-restore-failed");
+  assert.deepEqual(
+    [...result.discovered],
+    ["mTabCivic", "civ-farmer", "foundry"],
+  );
 }
 
 // --- observing the panel while it is drawn ----------------------------------
@@ -435,7 +538,14 @@ function discoveryFor(page) {
   });
   assert.equal(result.outcome.status, "succeeded");
   assert.equal(seen.length, 1);
-  assert.deepEqual(seen[0].mounted, ["civ-farmer", "foundry", "mTabCivic"]);
+  // The drawn panel is there — and so is the player's own, which was never torn down.
+  assert.deepEqual(seen[0].mounted, [
+    "civ-farmer",
+    "foundry",
+    "mTabCivic",
+    "mTabResource",
+    "resTrade",
+  ]);
   assert.equal(seen[0].civTabs, 2);
   assert.equal(seen[0].animated, false);
   // And afterwards the player is back with only their own tab.
@@ -492,9 +602,51 @@ function discoveryFor(page) {
   assert.equal(page.suppression.scopes, 1);
   assert.equal(depthWhileDrawn, 1);
   assert.equal(page.suppression.depth, 0);
-  // Two drawing steps inside the scope; the restoring swap outside it.
+  // Both drawing steps happened inside the scope, and nothing was drawn outside it.
   assert.equal(page.suppressedDraws(), 2);
+  assert.equal(page.swaps.length, 2);
+}
+
+{
+  // The fallback's restoring swap is a real render and must not be suppressed.
+  const page = makePage({ civTabs: 4 });
+  page.setOpenable(false);
+  discoveryFor(page).discover(mainTab(2));
+  assert.equal(page.suppressedDraws(), 1);
   assert.deepEqual(page.swaps.at(-1).slice(1), [4, false]);
+}
+
+// --- content the pass never reads --------------------------------------------
+
+{
+  // The game creates its containers and fills them in one call, so the one it must not fill is
+  // named by the component it binds in between.
+  const page = makePage({
+    civTabs: 4,
+    boundDuringDraw: ["#resContent", "#other"],
+  });
+  const result = discoveryFor(page).discover(mainTab(2), {
+    discard: { afterBinding: "#resContent", containers: ["oldTech", "spare"] },
+  });
+  assert.equal(result.outcome.status, "succeeded");
+  assert.deepEqual(page.workspaceLog.discards, ["oldTech", "spare"]);
+}
+
+{
+  // Nothing is discarded for a component the caller did not name.
+  const page = makePage({ civTabs: 4, boundDuringDraw: ["#somethingElse"] });
+  discoveryFor(page).discover(mainTab(2), {
+    discard: { afterBinding: "#resContent", containers: ["oldTech"] },
+  });
+  assert.deepEqual(page.workspaceLog.discards, []);
+}
+
+{
+  // A pass that asks for no discards installs no observer to run.
+  const page = makePage({ civTabs: 4, boundDuringDraw: ["#resContent"] });
+  discoveryFor(page).discover(mainTab(2));
+  assert.deepEqual(page.workspaceLog.discards, []);
+  assert.deepEqual(page.suppression.bound, ["#resContent"]);
 }
 
 {

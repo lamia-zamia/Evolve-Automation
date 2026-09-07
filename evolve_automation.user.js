@@ -54252,7 +54252,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let isRootCandidate = options2.isRootCandidate ?? isGameRootShape, reportError = options2.onCaptureError ?? (() => {
     }), existingDescriptor = Object.getOwnPropertyDescriptor(pageWindow, "Vue"), existingMarker = readMarker(readProperty(readProperty(pageWindow, "Vue"), "reactive")) ?? readMarker(existingDescriptor?.get);
     if (existingMarker?.capture !== void 0) return existingMarker.capture;
-    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls4 = /* @__PURE__ */ new Map(), captureOrder = [], createAppHooked = !1, suppressionDepth = 0, restoreVue;
+    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls4 = /* @__PURE__ */ new Map(), captureOrder = [], createAppHooked = !1, suppressionScopes = [], restoreVue;
     function notifyRootReplaced() {
       for (let listener of [...rootListeners])
         try {
@@ -54335,7 +54335,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         } catch (error) {
           reportError("createApp", String(error));
         }
-        return suppressionDepth > 0 && !stopped ? createDisposableApp() : Reflect.apply(original, this, args);
+        if (suppressionScopes.length === 0 || stopped)
+          return Reflect.apply(original, this, args);
+        let selector = readProperty(args[0], "el");
+        if (typeof selector == "string")
+          for (let scope of suppressionScopes)
+            try {
+              scope.onComponentBound?.(selector);
+            } catch (error) {
+              reportError("component-bound", String(error));
+            }
+        return createDisposableApp();
       });
       restoreCreateApp !== void 0 && (restores.push(restoreCreateApp), createAppHooked = !0), restoreVue = () => {
         for (let restore of restores) restore();
@@ -54419,16 +54429,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       get available() {
         return createAppHooked && !stopped;
       },
-      withoutMounting(draw) {
+      withoutMounting(draw, scope = {}) {
         if (!createAppHooked || stopped)
           throw new Error(
             "Vue.createApp is not wrapped, so mounting cannot be suppressed"
           );
-        suppressionDepth += 1;
+        suppressionScopes.push(scope);
         try {
           return draw();
         } finally {
-          suppressionDepth -= 1;
+          suppressionScopes.pop();
         }
       }
     }), capture = Object.freeze({

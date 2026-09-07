@@ -24,8 +24,8 @@ export interface GameTechCatalog {
    * The offered technologies in the game's order, or `undefined` when the catalog could not be
    * read. Never a stale answer: a catalog that could not be refreshed is no catalog.
    *
-   * Read it once per application cycle and pass the result down: the snapshot describes the cycle
-   * that took it, and an implementation is free to answer a later call from the same pass.
+   * Each call asks the game afresh. Read it once per application cycle and pass the result down —
+   * it describes that cycle and no later one.
    */
   readOffered(): readonly Readonly<OfferedTech>[] | undefined;
 }

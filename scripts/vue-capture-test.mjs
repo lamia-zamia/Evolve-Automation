@@ -348,7 +348,10 @@ listenerCapture.uninstall();
 
 {
   const suppressPage = {};
-  const suppressCapture = installVueCapture(suppressPage);
+  const suppressFaults = [];
+  const suppressCapture = installVueCapture(suppressPage, {
+    onCaptureError: (stage, detail) => suppressFaults.push([stage, detail]),
+  });
   assert.equal(
     suppressCapture.mountSuppression.available,
     false,
@@ -468,6 +471,54 @@ listenerCapture.uninstall();
     bind("#tech-f", { action: () => 1 });
   });
   assert.equal(realApps.length, 4);
+
+  // The scope can watch what the game binds inside it, which is the only handle on the middle of
+  // a draw: the game creates a panel's containers and fills them in one call.
+  const boundInside = [];
+  suppressCapture.mountSuppression.withoutMounting(
+    () => {
+      bind("#resContent", { label_f: () => "old" });
+      bind("#tech-mining", { action: () => 1 });
+    },
+    { onComponentBound: (selector) => boundInside.push(selector) },
+  );
+  assert.deepEqual(boundInside, ["#resContent", "#tech-mining"]);
+  assert.equal(realApps.length, 4, "watching is not mounting");
+
+  // A nested scope's observer does not miss what the outer one sees, and neither throws at the game.
+  const outer = [];
+  const inner = [];
+  const watched = suppressCapture;
+  watched.mountSuppression.withoutMounting(
+    () => {
+      bind("#outerOnly", { action: () => 1 });
+      watched.mountSuppression.withoutMounting(
+        () => {
+          bind("#nested", { action: () => 1 });
+        },
+        { onComponentBound: (selector) => inner.push(selector) },
+      );
+    },
+    {
+      onComponentBound: (selector) => {
+        outer.push(selector);
+        throw new Error("observer exploded");
+      },
+    },
+  );
+  assert.deepEqual(outer, ["#outerOnly", "#nested"]);
+  assert.deepEqual(inner, ["#nested"]);
+  assert.equal(
+    realApps.length,
+    4,
+    "a throwing observer still suppressed the mount",
+  );
+  assert.deepEqual(
+    suppressFaults.map(([stage]) => stage),
+    ["component-bound", "component-bound"],
+  );
+  // And the controls it was watching were captured all the same.
+  assert.notEqual(watched.controls.resolve("nested"), undefined);
 
   suppressCapture.uninstall();
   assert.equal(suppressCapture.mountSuppression.available, false);

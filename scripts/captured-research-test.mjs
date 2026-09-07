@@ -97,6 +97,9 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
     withoutMounting: (draw) => draw(),
   };
 
+  /** The document half: this page has no panels to move, so the draw runs the ordinary way. */
+  const panels = { open: () => undefined };
+
   const unavailable = [];
   return {
     root,
@@ -113,6 +116,7 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
       controls: registry,
       drawnActions,
       mountSuppression,
+      panels,
       onUnavailable: (reason) => unavailable.push(reason),
     }),
   };
@@ -311,6 +315,7 @@ const SMELTING = {
     },
     drawnActions: { read: () => [], exists: () => false },
     mountSuppression: { available: true, withoutMounting: (draw) => draw() },
+    panels: { open: () => undefined },
   });
   const outcome = control.runCycle();
   assert.equal(outcome.status, "rejected");

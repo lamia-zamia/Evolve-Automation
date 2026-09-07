@@ -15,6 +15,15 @@
  * The scope is deliberately small: the player's own view is rebuilt with real Vue, outside it.
  */
 
+export interface MountSuppressionScope {
+  /**
+   * Called with each component selector the game binds inside the scope. It is the only handle on
+   * the middle of a draw: the game creates a panel's containers and fills them in one synchronous
+   * call, so a container the caller does not want filled can only be named once it exists.
+   */
+  readonly onComponentBound?: ((selector: string) => void) | undefined;
+}
+
 export interface GameMountSuppression {
   /**
    * False when nothing can be suppressed — no Vue was ever hooked, or the capture has been
@@ -26,5 +35,5 @@ export interface GameMountSuppression {
    * returning, including when `draw` throws. Scopes nest; mounting resumes when the outermost one
    * ends. Throws when `available` is false.
    */
-  withoutMounting<T>(draw: () => T): T;
+  withoutMounting<T>(draw: () => T, scope?: Readonly<MountSuppressionScope>): T;
 }

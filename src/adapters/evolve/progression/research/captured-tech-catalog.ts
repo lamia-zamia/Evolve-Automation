@@ -10,19 +10,13 @@
  * the game's own offer order — era, then ascending Knowledge cost — which is the same source of
  * truth the compatibility runtime reads, only without needing the tab to stay open.
  *
- * A pass is not cheap — 50 ms on an early save and 126 ms on a late one, measured on the 1.5.0
- * page — because the game rebuilds the player's own panel on the way back. So the result is cached
- * and refreshed when the offered set can have changed. Two things retire it:
- *
- * - `global.tech`: levels only ever rise and keys are only ever added, so the entry count and level
- *   sum move together on any grant and both fall on a reset;
- * - the offered controls themselves: if the game has rebound one since the pass, the panel was
- *   redrawn and the offer set it produced is not the one held here.
- *
- * That still does not cover everything `drawTech` consults — a trait or path change that alters
- * `checkTechQualifications` without granting anything, an arbitrary `condition()`, research-queue
- * prediction — so a cached catalog can be one grant behind. It is a heuristic kept for its cost and
- * not a final contract; the snapshot the caller acts on lives for one application cycle either way.
+ * **Every call asks the game again.** There is no cross-tick cache and there does not need to be:
+ * the pass keeps the player's panel instead of rebuilding it and drops the half of the draw nobody
+ * reads, which measured 8 ms on an early save and 14 ms on a late one — and 1.5 ms when the player
+ * is already on Research. A cache would have to be a heuristic, because the offered set depends on
+ * `checkTechPath`, arbitrary action `condition()` functions, research-queue prediction and adjusted
+ * prices, none of which a signature over `global.tech` covers. Take the snapshot once per
+ * application cycle and let it die with that cycle.
  */
 
 import type {
@@ -37,7 +31,6 @@ import {
   MAIN_TAB_CONTROL,
   MAIN_TAB_SETTING,
 } from "../../captured-tab-discovery.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
 
 /** The Research tab's index in the game's main tab list. */
 const RESEARCH_TAB_INDEX = 3;
@@ -50,6 +43,18 @@ const OFFERED_TECH_SELECTOR = "#tech .action";
  * around it, so its presence says the Research panel is there whether or not Vue mounted anything.
  */
 const RESEARCH_PANEL_SELECTOR = "#tech";
+
+/**
+ * `drawTech` fills two lists and this reads one. The already-granted half is the larger by far —
+ * 194 entries against 6 offers on a late save — and dropping its container before the game reaches
+ * it turns every one of those appends into a discarded element. `#resContent` is the component
+ * `loadTab` binds between creating the two containers and calling `drawTech`, which is the only
+ * moment `#oldTech` exists and is still empty.
+ */
+const UNREAD_RESEARCH_CONTENT = Object.freeze({
+  afterBinding: "#resContent",
+  containers: Object.freeze(["oldTech"]),
+});
 
 const RESEARCH_TAB_PATH = Object.freeze([
   Object.freeze({
@@ -68,59 +73,23 @@ export interface CapturedTechCatalogDependencies {
   readonly onUnavailable?: (reason: string) => void;
 }
 
-/**
- * A signature of `global.tech` that changes on every grant. Tech levels only rise and keys are
- * only added, so count and sum move together in one direction, and a reset drops both.
- */
-function techSignature(root: unknown): string {
-  const tech = readProperty(root, "tech");
-  if (!isRecord(tech)) return "none";
-  let count = 0;
-  let total = 0;
-  for (const key of Object.keys(tech)) {
-    count += 1;
-    const level = Number(tech[key]);
-    if (Number.isFinite(level)) total += level;
-  }
-  return `${count}:${total}`;
-}
-
 export function createCapturedTechCatalog(
   dependencies: CapturedTechCatalogDependencies,
 ): GameTechCatalog {
   const { rootState, discovery, drawnActions, controls } = dependencies;
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
-  let cachedSignature: string | undefined;
-  let cached: readonly Readonly<OfferedTech>[] | undefined;
-
-  /** Every held offer still belongs to the binding the game has now. */
-  function stillBound(offers: readonly Readonly<OfferedTech>[]): boolean {
-    return offers.every(
-      (offer) =>
-        (controls.resolve(offer.elementId)?.generation ?? 0) ===
-        offer.generation,
-    );
-  }
 
   return Object.freeze({
     readOffered(): readonly Readonly<OfferedTech>[] | undefined {
-      const root = rootState.readRoot();
-      if (root === undefined) {
+      if (rootState.readRoot() === undefined) {
         reportUnavailable("the game root has not been captured yet");
         return undefined;
-      }
-      const signature = techSignature(root);
-      if (
-        cached !== undefined &&
-        signature === cachedSignature &&
-        stillBound(cached)
-      ) {
-        return cached;
       }
 
       let drawn: readonly Readonly<OfferedTech>[] | undefined;
       const result = discovery.discover(RESEARCH_TAB_PATH, {
         isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
+        discard: UNREAD_RESEARCH_CONTENT,
         whileDrawn: () => {
           drawn = Object.freeze(
             drawnActions.read(OFFERED_TECH_SELECTOR).map((action) =>
@@ -139,8 +108,6 @@ export function createCapturedTechCatalog(
       if (result.outcome.status !== "succeeded" || drawn === undefined) {
         // A catalog that could not be read is not a catalog: acting on an earlier offer set would
         // spend on a technology the game may already have granted.
-        cached = undefined;
-        cachedSignature = undefined;
         reportUnavailable(
           result.outcome.status === "succeeded"
             ? "the research panel was drawn but read nothing"
@@ -148,9 +115,7 @@ export function createCapturedTechCatalog(
         );
         return undefined;
       }
-      cached = drawn;
-      cachedSignature = signature;
-      return cached;
+      return drawn;
     },
   });
 }

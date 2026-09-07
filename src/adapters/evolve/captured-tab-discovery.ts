@@ -11,12 +11,16 @@
  * unless `settings.spaceTabs` selects it; one pass over Civics captured all 34 job controls plus
  * the foundry, government, tax rates, garrison and foreign panels.
  *
- * Two things keep the pass from costing what a real tab switch costs. **Temporary components are
+ * Three things keep the pass from costing what a real tab switch costs. **Temporary components are
  * not mounted**: the game evaluates its offer rules and writes its markup before it calls `vBind`,
  * so the draw is authoritative without a Vue tree behind it, and the capture still records the
  * game-owned closures from the component options. **The panel already in front of the player is
  * observed where it stands**, because drawing the tab someone is looking at, to put them back on
- * the tab they are already on, is two redraws that produce what was there to begin with.
+ * the tab they are already on, is two redraws that produce what was there to begin with. And
+ * **the player's panel is kept rather than destroyed**: a workspace stands it aside for the length
+ * of the draw, where `loadTab` cannot find it to clear it, so there is nothing to rebuild and no
+ * restoring `swapTab` at all. Where a workspace cannot be opened — a path into the player's own
+ * main panel — the pass falls back to the redraw, which is what it always did.
  *
  * `settings.animated` is switched off for the pass, and that is what keeps it a pass rather than a
  * visible detour. With it on, `clearTabPanels` retains each outgoing panel behind a 300 ms
@@ -29,6 +33,10 @@
 
 import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
 import type { GameMountSuppression } from "../../ports/game-mount-suppression.ts";
+import type {
+  GamePanelWorkspace,
+  PanelWorkspace,
+} from "../../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import type {
   GameTabDiscovery,
@@ -62,12 +70,27 @@ export const SUB_TAB_CONTROLS: Readonly<Record<string, string>> = Object.freeze(
   },
 );
 
+/**
+ * `index.js:mainTabPanel` — the panel each main tab draws into. Evolution and the tabs with no
+ * panel of their own are deliberately absent: a pass that cannot name the panel it must protect
+ * does not run, rather than clearing something it cannot put back.
+ */
+export const MAIN_TAB_PANELS: Readonly<Record<number, string>> = Object.freeze({
+  1: "mTabCivil",
+  2: "mTabCivic",
+  3: "mTabResearch",
+  4: "mTabResource",
+  5: "mTabArpa",
+  6: "mTabStats",
+});
+
 const NOTHING: readonly string[] = Object.freeze([]);
 
 export interface CapturedTabDiscoveryDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly mountSuppression: GameMountSuppression;
+  readonly panels: GamePanelWorkspace;
 }
 
 function failure(code: string, message: string): TabDiscoveryResult {
@@ -103,14 +126,14 @@ function isValidStep(step: unknown): boolean {
 export function createCapturedTabDiscovery(
   dependencies: CapturedTabDiscoveryDependencies,
 ): GameTabDiscovery {
-  const { rootState, controls, mountSuppression } = dependencies;
+  const { rootState, controls, mountSuppression, panels } = dependencies;
 
   return Object.freeze({
     discover(
       path: readonly Readonly<TabDiscoveryStep>[],
       options: Readonly<TabDiscoveryOptions> = {},
     ): TabDiscoveryResult {
-      const { whileDrawn, isPanelDrawn } = options;
+      const { whileDrawn, isPanelDrawn, discard } = options;
       const first = path[0];
       if (first === undefined) {
         return failure("empty-tab-path", "a discovery path names no panel");
@@ -195,6 +218,28 @@ export function createCapturedTabDiscovery(
         return restore.ok ? undefined : (restore.detail ?? restore.reason);
       }
 
+      // The player's own panel, stood aside for the draw. `loadTab` finds its panels through the
+      // document, so one that is not in it is one the draw can neither clear nor rebuild — and the
+      // target panel becomes a disposable container whose whole output is dropped by one removal.
+      const discardScope =
+        discard === undefined
+          ? {}
+          : {
+              onComponentBound: (selector: string) => {
+                if (selector !== discard.afterBinding) return;
+                for (const container of discard.containers) {
+                  workspace?.discard(container);
+                }
+              },
+            };
+      const playerPanel =
+        MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1];
+      const targetPanel = MAIN_TAB_PANELS[first.index];
+      let workspace: PanelWorkspace | undefined;
+      if (targetPanel !== undefined) {
+        workspace = panels.open({ keep: playerPanel, scratch: targetPanel });
+      }
+
       const before = new Set(controls.capturedElementIds());
       const playerAnimation = settings["animated"];
       let stepFailure: TabDiscoveryResult | undefined;
@@ -202,8 +247,8 @@ export function createCapturedTabDiscovery(
       let observerFailure: string | undefined;
       try {
         settings["animated"] = false;
-        // Only the target draw. The player's own panel is rebuilt by the restore below, outside
-        // this scope, with real Vue.
+        // Only the target draw. Where the player's panel had to be redrawn instead of kept, that
+        // rebuild happens in the restore below, outside this scope, with real Vue.
         mountSuppression.withoutMounting(() => {
           for (const step of path) {
             // Each step is drawn by the one before it, so its control is resolved at its turn: a
@@ -241,10 +286,17 @@ export function createCapturedTabDiscovery(
               observerFailure = String(error);
             }
           }
-        });
+        }, discardScope);
       } finally {
         for (const [setting, value] of playerTabs) settings[setting] = value;
-        restoreFailure = restorePlayerView();
+        if (workspace === undefined) {
+          restoreFailure = restorePlayerView();
+        } else {
+          workspace.release();
+          if (!workspace.isIntact()) {
+            restoreFailure = "the workspace could not put the panels back";
+          }
+        }
         settings["animated"] = playerAnimation;
       }
 

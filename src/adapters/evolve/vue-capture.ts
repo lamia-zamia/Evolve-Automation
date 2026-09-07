@@ -25,7 +25,10 @@ import type {
   GameControlRegistry,
   GameControlResult,
 } from "../../ports/game-control-registry.ts";
-import type { GameMountSuppression } from "../../ports/game-mount-suppression.ts";
+import type {
+  GameMountSuppression,
+  MountSuppressionScope,
+} from "../../ports/game-mount-suppression.ts";
 import { isRecord, readProperty } from "../validation.ts";
 
 type AnyFunction = (this: unknown, ...args: unknown[]) => unknown;
@@ -172,7 +175,7 @@ export function installVueCapture(
   const captureOrder: string[] = [];
 
   let createAppHooked = false;
-  let suppressionDepth = 0;
+  const suppressionScopes: Array<Readonly<MountSuppressionScope>> = [];
 
   let restoreVue: (() => void) | undefined;
 
@@ -308,8 +311,20 @@ export function installVueCapture(
         }
         // Recording happens either way: the selector and the game-owned closures come from the
         // options, so a control discovered inside a suppressed scope is as callable as any other.
-        if (suppressionDepth > 0 && !stopped) return createDisposableApp();
-        return Reflect.apply(original, this, args);
+        if (suppressionScopes.length === 0 || stopped) {
+          return Reflect.apply(original, this, args);
+        }
+        const selector = readProperty(args[0], "el");
+        if (typeof selector === "string") {
+          for (const scope of suppressionScopes) {
+            try {
+              scope.onComponentBound?.(selector);
+            } catch (error) {
+              reportError("component-bound", String(error));
+            }
+          }
+        }
+        return createDisposableApp();
       };
     });
     if (restoreCreateApp !== undefined) {
@@ -424,17 +439,20 @@ export function installVueCapture(
     get available(): boolean {
       return createAppHooked && !stopped;
     },
-    withoutMounting<T>(draw: () => T): T {
+    withoutMounting<T>(
+      draw: () => T,
+      scope: Readonly<MountSuppressionScope> = {},
+    ): T {
       if (!createAppHooked || stopped) {
         throw new Error(
           "Vue.createApp is not wrapped, so mounting cannot be suppressed",
         );
       }
-      suppressionDepth += 1;
+      suppressionScopes.push(scope);
       try {
         return draw();
       } finally {
-        suppressionDepth -= 1;
+        suppressionScopes.pop();
       }
     },
   });

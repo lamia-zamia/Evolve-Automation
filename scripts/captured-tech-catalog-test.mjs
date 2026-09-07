@@ -104,6 +104,7 @@ function makePage({ offered = [[]], generations = {} } = {}) {
   const root = { tech: { primitive: 3 }, settings: { civTabs: 4 } };
   const passes = [];
   const panelChecks = [];
+  const discards = [];
   let drawn = [];
   let failure;
 
@@ -113,6 +114,7 @@ function makePage({ offered = [[]], generations = {} } = {}) {
       if (options.isPanelDrawn !== undefined) {
         panelChecks.push(options.isPanelDrawn());
       }
+      if (options.discard !== undefined) discards.push(options.discard);
       if (failure !== undefined) {
         return { outcome: failure, discovered: [] };
       }
@@ -152,6 +154,7 @@ function makePage({ offered = [[]], generations = {} } = {}) {
       generations[elementId] = (generations[elementId] ?? 0) + 1;
     },
     panelChecks,
+    discards,
     reasons,
     isDrawn: () => drawn.length > 0,
     fail(outcome) {
@@ -186,12 +189,9 @@ function makePage({ offered = [[]], generations = {} } = {}) {
   // The path is the Research tab, with no sub-tab step.
   assert.deepEqual(page.passes, [[[MAIN_TAB_SETTING, MAIN_TAB_CONTROL, 3]]]);
 
-  // Nothing granted and nothing rebound: the held catalog answers and the panel is not drawn again.
-  assert.equal(page.catalog.readOffered(), first);
-  assert.equal(page.passes.length, 1);
-
-  // A grant changes the offered set, so the next read draws again.
-  page.root.tech.mining = 1;
+  // Every read asks the game again. Nothing is held across cycles, so a change no signature over
+  // `global.tech` could have seen — a trait change, an arbitrary `condition()`, a redrawn panel —
+  // is picked up like any other.
   const second = page.catalog.readOffered();
   assert.deepEqual(
     second.map((tech) => tech.elementId),
@@ -201,47 +201,13 @@ function makePage({ offered = [[]], generations = {} } = {}) {
 }
 
 {
-  // A level rising on a tech already held is a grant too.
-  const page = makePage({
-    offered: [
-      [element("tech-a", { Knowledge: 1 })],
-      [element("tech-b", { Knowledge: 2 })],
-    ],
-  });
-  assert.equal(page.catalog.readOffered()[0].elementId, "tech-a");
-  page.root.tech.primitive = 4;
-  assert.equal(page.catalog.readOffered()[0].elementId, "tech-b");
-  assert.equal(page.passes.length, 2);
-}
-
-{
-  // A reset empties the tech bag, which the signature notices.
-  const page = makePage({
-    offered: [
-      [element("tech-a", { Knowledge: 1 })],
-      [element("tech-club", { Knowledge: 5 })],
-    ],
-  });
-  assert.equal(page.catalog.readOffered()[0].elementId, "tech-a");
-  delete page.root.tech.primitive;
-  assert.equal(page.catalog.readOffered()[0].elementId, "tech-club");
-  assert.equal(page.passes.length, 2);
-}
-
-{
-  // The game redrew the research panel without granting anything, so the offers held here were
-  // decided by a draw that has been superseded. The signature cannot see that; the binding can.
-  const page = makePage({
-    offered: [
-      [element("tech-a", { Knowledge: 1 })],
-      [element("tech-b", { Knowledge: 2 })],
-    ],
-    generations: { "tech-a": 1, "tech-b": 1 },
-  });
-  assert.equal(page.catalog.readOffered()[0].elementId, "tech-a");
-  page.rebind("tech-a");
-  assert.equal(page.catalog.readOffered()[0].elementId, "tech-b");
-  assert.equal(page.passes.length, 2);
+  // The already-granted half of the panel is never read, so the pass is told to drop its container
+  // the moment the game has made it — which is when it binds the component between the two.
+  const page = makePage({ offered: [[element("tech-a", { Knowledge: 1 })]] });
+  page.catalog.readOffered();
+  assert.deepEqual(page.discards, [
+    { afterBinding: "#resContent", containers: ["oldTech"] },
+  ]);
 }
 
 {
@@ -261,8 +227,7 @@ function makePage({ offered = [[]], generations = {} } = {}) {
   assert.deepEqual(page.panelChecks, []);
   page.catalog.readOffered();
   assert.deepEqual(page.panelChecks, [false]);
-  // Once the panel has been drawn, the same check answers true on the next refresh.
-  page.root.tech.mining = 1;
+  // Once the panel has been drawn, the same check answers true on the next read.
   page.catalog.readOffered();
   assert.deepEqual(page.panelChecks, [false, true]);
 }
@@ -272,7 +237,6 @@ function makePage({ offered = [[]], generations = {} } = {}) {
   // on a technology the game may already have granted.
   const page = makePage({ offered: [[element("tech-a", { Knowledge: 1 })]] });
   assert.equal(page.catalog.readOffered().length, 1);
-  page.root.tech.mining = 1;
   page.fail({
     status: "rejected",
     failure: { code: "tab-control-missing", message: "no captured control" },
