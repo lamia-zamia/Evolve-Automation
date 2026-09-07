@@ -181,9 +181,10 @@ vue.createApp({ el: "#emptyMethods", methods: {} });
 vue.createApp({ methods: { orphan: () => 1 } });
 vue.createApp("not-an-options-object");
 
+// A compound selector keeps its whole text: the leading id does not name what was bound.
 assert.deepEqual(capture.controls.capturedElementIds(), [
   "city-farm",
-  "mainColumn div.content",
+  "#mainColumn div.content",
 ]);
 
 const farm = capture.controls.resolve("city-farm");

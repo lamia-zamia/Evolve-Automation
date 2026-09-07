@@ -31,6 +31,9 @@ type AnyFunction = (this: unknown, ...args: unknown[]) => unknown;
 
 const CAPTURE_MARKER = Symbol.for("evolve-automation.vue-capture");
 
+/** A bare `#name` selector: no descendant, class, or attribute part. */
+const BARE_ID = /^#[\w-]+$/;
+
 export interface VueCapture {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
@@ -173,8 +176,10 @@ export function installVueCapture(
     }
     if (Object.keys(methods).length === 0) return;
 
-    // The game declares selectors, not ids; only `#id` forms name a control we can address.
-    const elementId = elementSelector.startsWith("#")
+    // The game declares selectors, not ids. A bare `#id` is addressed by that id; anything else
+    // (`#mainColumn div.content`, `#popper > div`) keeps its whole selector as its name, because
+    // the leading id alone does not say which element was bound.
+    const elementId = BARE_ID.test(elementSelector)
       ? elementSelector.slice(1)
       : elementSelector;
     const existing = controls.get(elementId);

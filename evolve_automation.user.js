@@ -54195,7 +54195,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/adapters/evolve/vue-capture.ts
-  var CAPTURE_MARKER = /* @__PURE__ */ Symbol.for("evolve-automation.vue-capture");
+  var CAPTURE_MARKER = /* @__PURE__ */ Symbol.for("evolve-automation.vue-capture"), BARE_ID = /^#[\w-]+$/;
   function asFunction(value) {
     return typeof value == "function" ? value : void 0;
   }
@@ -54259,7 +54259,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         method !== void 0 && (methods[key] = method);
       }
       if (Object.keys(methods).length === 0) return;
-      let elementId = elementSelector.startsWith("#") ? elementSelector.slice(1) : elementSelector, existing = controls4.get(elementId);
+      let elementId = BARE_ID.test(elementSelector) ? elementSelector.slice(1) : elementSelector, existing = controls4.get(elementId);
       if (existing === void 0) {
         captureOrder.push(elementId), controls4.set(elementId, {
           elementId,
