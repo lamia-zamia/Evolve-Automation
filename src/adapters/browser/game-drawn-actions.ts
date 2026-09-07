@@ -120,5 +120,8 @@ export function createGameDrawnActionsReader({
       }
       return Object.freeze(actions);
     },
+    exists(selector: string): boolean {
+      return getDocument().querySelectorAll(selector).length > 0;
+    },
   });
 }

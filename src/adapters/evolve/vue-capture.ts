@@ -25,11 +25,38 @@ import type {
   GameControlRegistry,
   GameControlResult,
 } from "../../ports/game-control-registry.ts";
+import type { GameMountSuppression } from "../../ports/game-mount-suppression.ts";
 import { isRecord, readProperty } from "../validation.ts";
 
 type AnyFunction = (this: unknown, ...args: unknown[]) => unknown;
 
 const CAPTURE_MARKER = Symbol.for("evolve-automation.vue-capture");
+
+/**
+ * Marks a disposable app handed to `vBind` in place of a real one, so a browser check can tell a
+ * temporary app that outlived its scope from one the game mounted for the player.
+ */
+export const DISPOSABLE_APP_MARKER = Symbol.for(
+  "evolve-automation.disposable-vue-app",
+);
+
+/**
+ * Everything `vBind` does with what `Vue.createApp` returns: `use(Buefy.default)` unless the bind
+ * opts out, `mount(el)` whose result it keeps as `el.__vue_proxy__`, and `unmount()` when
+ * `unmountApp` tears the panel down. Its update path reaches for `_instance`/`_container` first and
+ * falls back to that stored proxy, so the proxy answers `$forceUpdate` and the redraw is a no-op
+ * rather than a warning.
+ */
+function createDisposableApp(): Record<PropertyKey, unknown> {
+  const proxy = { $forceUpdate: () => {} };
+  const app: Record<PropertyKey, unknown> = {
+    use: () => app,
+    mount: () => proxy,
+    unmount: () => {},
+  };
+  app[DISPOSABLE_APP_MARKER] = true;
+  return app;
+}
 
 /** A bare `#name` selector: no descendant, class, or attribute part. */
 const BARE_ID = /^#[\w-]+$/;
@@ -37,6 +64,7 @@ const BARE_ID = /^#[\w-]+$/;
 export interface VueCapture {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly mountSuppression: GameMountSuppression;
   /** True when the Vue methods are wrapped; false for an inert capture with no Vue to hook. */
   readonly installed: boolean;
   /** Restores every wrapped Vue method and stops recording. Idempotent. */
@@ -104,6 +132,14 @@ function inertCapture(): VueCapture {
       invoke: () => ({ ok: false, reason: "unknown-control" }) as const,
       capturedElementIds: () => [],
     }),
+    mountSuppression: Object.freeze({
+      available: false,
+      withoutMounting: () => {
+        throw new Error(
+          "no Vue was captured, so mounting cannot be suppressed",
+        );
+      },
+    }),
     uninstall: () => {},
   });
 }
@@ -134,6 +170,9 @@ export function installVueCapture(
 
   const controls = new Map<string, CapturedControl>();
   const captureOrder: string[] = [];
+
+  let createAppHooked = false;
+  let suppressionDepth = 0;
 
   let restoreVue: (() => void) | undefined;
 
@@ -267,10 +306,16 @@ export function installVueCapture(
         } catch (error) {
           reportError("createApp", String(error));
         }
+        // Recording happens either way: the selector and the game-owned closures come from the
+        // options, so a control discovered inside a suppressed scope is as callable as any other.
+        if (suppressionDepth > 0 && !stopped) return createDisposableApp();
         return Reflect.apply(original, this, args);
       };
     });
-    if (restoreCreateApp !== undefined) restores.push(restoreCreateApp);
+    if (restoreCreateApp !== undefined) {
+      restores.push(restoreCreateApp);
+      createAppHooked = true;
+    }
 
     restoreVue = () => {
       for (const restore of restores) restore();
@@ -375,10 +420,30 @@ export function installVueCapture(
     capturedElementIds: () => Object.freeze([...captureOrder]),
   });
 
+  const mountSuppression: GameMountSuppression = Object.freeze({
+    get available(): boolean {
+      return createAppHooked && !stopped;
+    },
+    withoutMounting<T>(draw: () => T): T {
+      if (!createAppHooked || stopped) {
+        throw new Error(
+          "Vue.createApp is not wrapped, so mounting cannot be suppressed",
+        );
+      }
+      suppressionDepth += 1;
+      try {
+        return draw();
+      } finally {
+        suppressionDepth -= 1;
+      }
+    },
+  });
+
   const capture: VueCapture = Object.freeze({
     installed: true,
     rootState,
     controls: registry,
+    mountSuppression,
     uninstall() {
       stopped = true;
       marker.capture = undefined;

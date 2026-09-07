@@ -11,6 +11,13 @@
  * unless `settings.spaceTabs` selects it; one pass over Civics captured all 34 job controls plus
  * the foundry, government, tax rates, garrison and foreign panels.
  *
+ * Two things keep the pass from costing what a real tab switch costs. **Temporary components are
+ * not mounted**: the game evaluates its offer rules and writes its markup before it calls `vBind`,
+ * so the draw is authoritative without a Vue tree behind it, and the capture still records the
+ * game-owned closures from the component options. **The panel already in front of the player is
+ * observed where it stands**, because drawing the tab someone is looking at, to put them back on
+ * the tab they are already on, is two redraws that produce what was there to begin with.
+ *
  * `settings.animated` is switched off for the pass, and that is what keeps it a pass rather than a
  * visible detour. With it on, `clearTabPanels` retains each outgoing panel behind a 300 ms
  * `setTimeout` for the slide, so the same out-and-back leaves the discovered tab mounted and
@@ -21,9 +28,11 @@
  */
 
 import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
+import type { GameMountSuppression } from "../../ports/game-mount-suppression.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import type {
   GameTabDiscovery,
+  TabDiscoveryOptions,
   TabDiscoveryResult,
   TabDiscoveryStep,
 } from "../../ports/game-tab-discovery.ts";
@@ -58,6 +67,7 @@ const NOTHING: readonly string[] = Object.freeze([]);
 export interface CapturedTabDiscoveryDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly mountSuppression: GameMountSuppression;
 }
 
 function failure(code: string, message: string): TabDiscoveryResult {
@@ -65,6 +75,18 @@ function failure(code: string, message: string): TabDiscoveryResult {
     outcome: rejected(code, message),
     discovered: NOTHING,
   });
+}
+
+/** Observing a panel that is already there discovers nothing: the game bound it when it drew it. */
+function observed(whileDrawn: (() => void) | undefined): TabDiscoveryResult {
+  if (whileDrawn !== undefined) {
+    try {
+      whileDrawn();
+    } catch (error) {
+      return failure("tab-observer-failed", String(error));
+    }
+  }
+  return Object.freeze({ outcome: SUCCEEDED, discovered: NOTHING });
 }
 
 function isValidStep(step: unknown): boolean {
@@ -81,13 +103,14 @@ function isValidStep(step: unknown): boolean {
 export function createCapturedTabDiscovery(
   dependencies: CapturedTabDiscoveryDependencies,
 ): GameTabDiscovery {
-  const { rootState, controls } = dependencies;
+  const { rootState, controls, mountSuppression } = dependencies;
 
   return Object.freeze({
     discover(
       path: readonly Readonly<TabDiscoveryStep>[],
-      whileDrawn?: () => void,
+      options: Readonly<TabDiscoveryOptions> = {},
     ): TabDiscoveryResult {
+      const { whileDrawn, isPanelDrawn } = options;
       const first = path[0];
       if (first === undefined) {
         return failure("empty-tab-path", "a discovery path names no panel");
@@ -105,10 +128,25 @@ export function createCapturedTabDiscovery(
           "the game has not created its settings yet",
         );
       }
-      // With Preload Tab Content on, every panel is already mounted and `swapTab` draws nothing.
-      // There is nothing to discover and no reason to touch the player's view.
-      if (settings["tabLoad"]) {
-        return Object.freeze({ outcome: SUCCEEDED, discovered: NOTHING });
+      // The panel is in front of the player already — every step names the tab their own settings
+      // select, or Preload Tab Content has mounted all of them. The game keeps that panel current
+      // itself, so there is nothing to draw and no reason to touch their view.
+      const preloaded = settings["tabLoad"] === true;
+      if (
+        preloaded ||
+        path.every((step) => settings[step.setting] === step.index)
+      ) {
+        if (isPanelDrawn === undefined || isPanelDrawn()) {
+          return observed(whileDrawn);
+        }
+        // Preload Tab Content draws every panel once and `swapTab` redraws nothing, so a panel
+        // that is missing under it cannot be recovered by a pass.
+        if (preloaded) {
+          return failure(
+            "panel-not-drawn",
+            "every tab is preloaded but the panel is not there",
+          );
+        }
       }
 
       const playerTabs = new Map<string, number>();
@@ -129,6 +167,14 @@ export function createCapturedTabDiscovery(
         return failure(
           "tab-control-missing",
           `no captured control for ${first.control}`,
+        );
+      }
+      if (!mountSuppression.available) {
+        // A pass that mounts what it draws is a full off-tab Vue render on the automation tick.
+        // Report it and discover nothing rather than quietly paying for one.
+        return failure(
+          "mount-suppression-unavailable",
+          "temporary component mounting cannot be suppressed",
         );
       }
 
@@ -156,42 +202,46 @@ export function createCapturedTabDiscovery(
       let observerFailure: string | undefined;
       try {
         settings["animated"] = false;
-        for (const step of path) {
-          // Each step is drawn by the one before it, so its control is resolved at its turn: a
-          // sub-tab component does not exist until its main tab has been built.
-          const handle = controls.resolve(step.control);
-          if (handle === undefined) {
-            stepFailure = failure(
-              "tab-control-missing",
-              `no captured control for ${step.control}`,
-            );
-            break;
+        // Only the target draw. The player's own panel is rebuilt by the restore below, outside
+        // this scope, with real Vue.
+        mountSuppression.withoutMounting(() => {
+          for (const step of path) {
+            // Each step is drawn by the one before it, so its control is resolved at its turn: a
+            // sub-tab component does not exist until its main tab has been built.
+            const handle = controls.resolve(step.control);
+            if (handle === undefined) {
+              stepFailure = failure(
+                "tab-control-missing",
+                `no captured control for ${step.control}`,
+              );
+              break;
+            }
+            // The game's tab components write this through their own `v-model`; called directly,
+            // the caller owns it.
+            settings[step.setting] = step.index;
+            const swap = controls.invoke(handle, "swapTab", [step.index]);
+            if (!swap.ok) {
+              const detail = swap.detail ?? swap.reason;
+              stepFailure = Object.freeze({
+                outcome:
+                  swap.reason === "stale-control"
+                    ? stale("stale-tab-control", detail)
+                    : rejected("tab-draw-failed", detail),
+                discovered: NOTHING,
+              });
+              break;
+            }
           }
-          // The game's tab components write this through their own `v-model`; called directly,
-          // the caller owns it.
-          settings[step.setting] = step.index;
-          const swap = controls.invoke(handle, "swapTab", [step.index]);
-          if (!swap.ok) {
-            const detail = swap.detail ?? swap.reason;
-            stepFailure = Object.freeze({
-              outcome:
-                swap.reason === "stale-control"
-                  ? stale("stale-tab-control", detail)
-                  : rejected("tab-draw-failed", detail),
-              discovered: NOTHING,
-            });
-            break;
+          if (stepFailure === undefined && whileDrawn !== undefined) {
+            // The only moment the panel’s rendered detail is both present and freshly computed.
+            // An observer that throws is its own problem; it must not cost the player their tab.
+            try {
+              whileDrawn();
+            } catch (error) {
+              observerFailure = String(error);
+            }
           }
-        }
-        if (stepFailure === undefined && whileDrawn !== undefined) {
-          // The only moment the panel’s rendered detail is both present and freshly computed.
-          // An observer that throws is its own problem; it must not cost the player their tab.
-          try {
-            whileDrawn();
-          } catch (error) {
-            observerFailure = String(error);
-          }
-        }
+        });
       } finally {
         for (const [setting, value] of playerTabs) settings[setting] = value;
         restoreFailure = restorePlayerView();

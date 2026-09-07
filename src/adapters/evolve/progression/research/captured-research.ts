@@ -2,15 +2,15 @@
  * Research on the captured page surface: the game's own offer list in, the existing pure research
  * planner deciding, one captured game method out.
  *
- * The offered technologies and their prices come from `GameTechCatalog`, which is the game's own
- * `drawTech` output. Prices there are a snapshot taken when the panel was last drawn, and that is
- * the right shape for them — a tech's price changes only when the game's own cost inputs change —
- * but **affordability is recomputed every read** against live holdings, because Knowledge moves
- * every tick.
+ * The offered technologies and their prices are one snapshot of the game's own `drawTech` output,
+ * taken when the cycle began and belonging to that cycle alone. Prices in it are a snapshot and
+ * that is the right shape for them — a tech's price changes only when the game's own cost inputs
+ * change — but **affordability is recomputed every read** against live holdings, because Knowledge
+ * moves every tick.
  *
  * `runAction` reports nothing a caller can use, so a research is confirmed by the only thing that
- * proves it: the game's tech state moved. That also matches how the catalog decides to refresh, so
- * a successful research is picked up on the next read without an explicit invalidation.
+ * proves it: the game's tech state moved. Nothing here carries over between cycles; whether the
+ * next snapshot costs a fresh pass is the catalog's business, not this adapter's.
  */
 
 import type {
@@ -26,10 +26,7 @@ import type {
 } from "../../../../ports/research.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
-import type {
-  GameTechCatalog,
-  OfferedTech,
-} from "../../../../ports/game-tech-catalog.ts";
+import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
@@ -37,7 +34,8 @@ import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 
 export interface CapturedResearchDependencies {
   readonly rootState: GameRootStateSource;
-  readonly catalog: GameTechCatalog;
+  /** This cycle's offered technologies, or `undefined` when the catalog could not be read. */
+  readonly offered: readonly Readonly<OfferedTech>[] | undefined;
   readonly resources: GameResourceSource;
   readonly conflicts: CapturedCostConflictReader;
   readonly controls: GameControlRegistry;
@@ -76,11 +74,7 @@ function executionResult(
 export function createCapturedResearchAdapter(
   dependencies: CapturedResearchDependencies,
 ): CapturedResearchAdapter {
-  const { rootState, catalog, resources, conflicts, controls } = dependencies;
-
-  function offeredAt(index: number): Readonly<OfferedTech> | undefined {
-    return catalog.readOffered()?.[index];
-  }
+  const { rootState, offered, resources, conflicts, controls } = dependencies;
 
   function isAffordable(cost: Readonly<Record<string, number>>): boolean {
     const sample = resources.readResources(Object.keys(cost));
@@ -94,7 +88,6 @@ export function createCapturedResearchAdapter(
           "research start index must be a non-negative integer",
         );
       }
-      const offered = catalog.readOffered();
       // No catalog is not "nothing is researchable": it is "this tick cannot tell", and the
       // catalog has already reported why. Planning on an empty list simply researches nothing.
       if (offered === undefined) return NOTHING_OFFERED;
@@ -122,14 +115,18 @@ export function createCapturedResearchAdapter(
 
   const executor: ResearchCommandExecutor = Object.freeze({
     execute(decision: Readonly<ResearchDecision>): ResearchExecutionResult {
-      const tech = offeredAt(decision.index);
+      const tech = offered?.[decision.index];
       if (tech === undefined || tech.elementId !== decision.techId) {
         return executionResult(
-          stale("stale-research-target", "the offered research list changed", {
-            techId: decision.techId,
-            index: decision.index,
-            actualTechId: tech?.elementId ?? null,
-          }),
+          stale(
+            "stale-research-target",
+            "the decision names no offer of this cycle",
+            {
+              techId: decision.techId,
+              index: decision.index,
+              actualTechId: tech?.elementId ?? null,
+            },
+          ),
           false,
         );
       }
@@ -141,6 +138,18 @@ export function createCapturedResearchAdapter(
           rejected(
             "research-control-missing",
             `no captured control for ${decision.techId}`,
+          ),
+          false,
+        );
+      }
+      if (handle.generation !== tech.generation) {
+        // The game redrew this action after the snapshot was taken, so what it offers now was
+        // decided by predicates this cycle never saw. The old closure would still click.
+        return executionResult(
+          stale(
+            "stale-research-control",
+            `${decision.techId} generation ${tech.generation}, current ${handle.generation}`,
+            { techId: decision.techId },
           ),
           false,
         );

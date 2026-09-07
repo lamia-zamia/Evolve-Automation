@@ -28,17 +28,28 @@ export interface TabDiscoveryResult {
   readonly discovered: readonly string[];
 }
 
+export interface TabDiscoveryOptions {
+  /**
+   * Runs once with the panel drawn, which is the only moment its rendered detail — ids, costs,
+   * document order — is both present and freshly computed. It runs inside the pass, so it must not
+   * wait, and throwing from it does not skip the restore.
+   */
+  readonly whileDrawn?: () => void;
+  /**
+   * Answers whether the panel this path names is drawn right now. It is consulted only when the
+   * game is already showing that panel, to decide whether the pass can be skipped entirely; a path
+   * the player is not on is always drawn.
+   */
+  readonly isPanelDrawn?: () => boolean;
+}
+
 export interface GameTabDiscovery {
   /**
-   * Draws the panel `path` names, then restores the tabs the player was on. Succeeds with no
-   * discoveries when the game is already showing every tab.
-   *
-   * `whileDrawn` runs once with the panel mounted, which is the only moment its rendered detail —
-   * costs, affordability classes, document order — is both present and freshly computed. It runs
-   * inside the pass, so it must not wait, and throwing from it does not skip the restore.
+   * Observes the panel `path` names, drawing it and restoring the tabs the player was on when it
+   * is not the panel already in front of them.
    */
   discover(
     path: readonly Readonly<TabDiscoveryStep>[],
-    whileDrawn?: () => void,
+    options?: Readonly<TabDiscoveryOptions>,
   ): TabDiscoveryResult;
 }

@@ -23,4 +23,9 @@ export interface DrawnAction {
 export interface GameDrawnActionsReader {
   /** Action elements currently matching `selector`, in document order. */
   read(selector: string): readonly Readonly<DrawnAction>[];
+  /**
+   * Whether anything matches `selector` right now. Answers "is this panel drawn" without paying to
+   * read what is in it, which is what decides whether a panel has to be drawn at all.
+   */
+  exists(selector: string): boolean;
 }

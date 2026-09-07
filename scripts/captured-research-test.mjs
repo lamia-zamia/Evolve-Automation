@@ -88,6 +88,13 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
         id: entry.id,
         cost: Object.freeze({ ...entry.cost }),
       })),
+    exists: () => root.settings.civTabs === 3,
+  };
+
+  /** The scope the discovery draw runs in; the page never mounts a temporary component. */
+  const mountSuppression = {
+    available: true,
+    withoutMounting: (draw) => draw(),
   };
 
   const unavailable = [];
@@ -105,6 +112,7 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
       },
       controls: registry,
       drawnActions,
+      mountSuppression,
       onUnavailable: (reason) => unavailable.push(reason),
     }),
   };
@@ -255,6 +263,27 @@ const SMELTING = {
 }
 
 {
+  // The game redrew the action between the snapshot and the click. The old closure would still
+  // run, and it belongs to an offer decided by predicates this cycle never saw.
+  const page = makePage({
+    offered: [THEOLOGY],
+    resources: { Knowledge: { amount: 1000 } },
+  });
+  const innerResolve = page.registry.resolve;
+  let resolved = 0;
+  page.registry.resolve = (elementId) => {
+    const handle = innerResolve(elementId);
+    if (elementId !== "tech-theology" || resolved++ === 0) return handle;
+    return { ...handle, generation: handle.generation + 1 };
+  };
+  const outcome = page.control.runCycle();
+  assert.equal(outcome.status, "stale");
+  assert.equal(outcome.failure.code, "stale-research-control");
+  assert.deepEqual(page.clicks, []);
+  assert.equal(page.root.resource.Knowledge.amount, 1000);
+}
+
+{
   // Without the main-tab control there is no way to draw the panel, so there is no catalog — and
   // the reason is reported rather than read as "nothing to research".
   const page = makePage({
@@ -280,7 +309,8 @@ const SMELTING = {
       capturedElementIds: () => [],
       invoke: () => ({ ok: false, reason: "unknown-control" }),
     },
-    drawnActions: { read: () => [] },
+    drawnActions: { read: () => [], exists: () => false },
+    mountSuppression: { available: true, withoutMounting: (draw) => draw() },
   });
   const outcome = control.runCycle();
   assert.equal(outcome.status, "rejected");

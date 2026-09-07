@@ -344,4 +344,147 @@ assert.deepEqual(
 );
 listenerCapture.uninstall();
 
+// --- scoped mount suppression --------------------------------------------------------------------
+
+{
+  const suppressPage = {};
+  const suppressCapture = installVueCapture(suppressPage);
+  assert.equal(
+    suppressCapture.mountSuppression.available,
+    false,
+    "there is nothing to suppress before the page's Vue arrives",
+  );
+
+  const realApps = [];
+  const suppressVue = makeVue();
+  suppressVue.createApp = (options) => {
+    const app = {
+      options,
+      used: [],
+      mountedOn: undefined,
+      unmounted: false,
+      use(plugin) {
+        app.used.push(plugin);
+        return app;
+      },
+      mount(el) {
+        app.mountedOn = el;
+        return { $forceUpdate: () => {} };
+      },
+      unmount() {
+        app.unmounted = true;
+      },
+    };
+    realApps.push(app);
+    return app;
+  };
+  suppressPage.Vue = suppressVue;
+  assert.equal(suppressCapture.mountSuppression.available, true);
+
+  // What `vBind` does with the app it is handed, inside the scope and out.
+  function bind(el, methods) {
+    const app = suppressPage.Vue.createApp({ el, methods });
+    const usedResult = app.use({ name: "Buefy" });
+    const proxy = app.mount({ id: el });
+    return { app, usedResult, proxy };
+  }
+
+  const before = bind("#city-farm", { action: () => "built" });
+  assert.equal(
+    realApps.length,
+    1,
+    "outside the scope Vue mounts as it always did",
+  );
+
+  const clicks = [];
+  const inside = suppressCapture.mountSuppression.withoutMounting(() =>
+    bind("#tech-mining", { action: () => clicks.push("tech-mining") }),
+  );
+
+  // Nothing was compiled or mounted, and `vBind` still got everything it reads back.
+  assert.equal(realApps.length, 1, "the temporary component never reached Vue");
+  assert.equal(
+    inside.usedResult,
+    inside.app,
+    "use() chains, the way Vue's does",
+  );
+  assert.notEqual(
+    inside.proxy,
+    undefined,
+    "mount() answers a proxy to store on the element",
+  );
+  assert.equal(typeof inside.proxy.$forceUpdate, "function");
+  assert.equal(
+    inside.app[Symbol.for("evolve-automation.disposable-vue-app")],
+    true,
+  );
+  assert.doesNotThrow(() => inside.app.unmount());
+
+  // The point of the scope: the game-owned closures are recorded exactly as they are outside it.
+  const mining = suppressCapture.controls.resolve("tech-mining");
+  assert.equal(mining.generation, 1);
+  assert.deepEqual(suppressCapture.controls.invoke(mining, "action"), {
+    ok: true,
+    value: 1,
+  });
+  assert.deepEqual(clicks, ["tech-mining"]);
+
+  // And the scope ended with it: what comes after is the page's own Vue again.
+  bind("#mTabResource", { swapTab: (tab) => tab });
+  assert.equal(realApps.length, 2);
+  assert.equal(realApps[1].options.el, "#mTabResource");
+  assert.equal(before.app.unmounted, false);
+
+  // Nesting: mounting resumes when the outermost scope ends, not the first.
+  suppressCapture.mountSuppression.withoutMounting(() => {
+    suppressCapture.mountSuppression.withoutMounting(() => {
+      bind("#tech-a", { action: () => 1 });
+    });
+    bind("#tech-b", { action: () => 1 });
+  });
+  assert.equal(realApps.length, 2, "both nested draws stayed unmounted");
+  bind("#tech-c", { action: () => 1 });
+  assert.equal(realApps.length, 3);
+
+  // An exception unwinds the scope rather than leaving the page unable to mount.
+  assert.throws(
+    () =>
+      suppressCapture.mountSuppression.withoutMounting(() => {
+        throw new Error("draw exploded");
+      }),
+    /draw exploded/,
+  );
+  bind("#tech-d", { action: () => 1 });
+  assert.equal(realApps.length, 4);
+
+  // A second copy of the script joins the live capture, so it shares the one scope instead of
+  // opening a second one over the same Vue.
+  const rejoined = installVueCapture(suppressPage);
+  assert.equal(rejoined.mountSuppression, suppressCapture.mountSuppression);
+  rejoined.mountSuppression.withoutMounting(() => {
+    suppressCapture.mountSuppression.withoutMounting(() => {
+      bind("#tech-e", { action: () => 1 });
+    });
+    bind("#tech-f", { action: () => 1 });
+  });
+  assert.equal(realApps.length, 4);
+
+  suppressCapture.uninstall();
+  assert.equal(suppressCapture.mountSuppression.available, false);
+  assert.throws(
+    () => suppressCapture.mountSuppression.withoutMounting(() => 1),
+    /cannot be suppressed/,
+  );
+}
+
+{
+  // No page at all: an inert capture says so rather than pretending it suppressed anything.
+  const inert = installVueCapture(undefined);
+  assert.equal(inert.mountSuppression.available, false);
+  assert.throws(
+    () => inert.mountSuppression.withoutMounting(() => 1),
+    /cannot be suppressed/,
+  );
+}
+
 console.log("vue-capture ok");

@@ -54195,7 +54195,20 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/adapters/evolve/vue-capture.ts
-  var CAPTURE_MARKER = /* @__PURE__ */ Symbol.for("evolve-automation.vue-capture"), BARE_ID = /^#[\w-]+$/;
+  var CAPTURE_MARKER = /* @__PURE__ */ Symbol.for("evolve-automation.vue-capture"), DISPOSABLE_APP_MARKER = /* @__PURE__ */ Symbol.for(
+    "evolve-automation.disposable-vue-app"
+  );
+  function createDisposableApp() {
+    let proxy = { $forceUpdate: () => {
+    } }, app = {
+      use: () => app,
+      mount: () => proxy,
+      unmount: () => {
+      }
+    };
+    return app[DISPOSABLE_APP_MARKER] = !0, app;
+  }
+  var BARE_ID = /^#[\w-]+$/;
   function asFunction(value) {
     return typeof value == "function" ? value : void 0;
   }
@@ -54222,6 +54235,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         invoke: () => ({ ok: !1, reason: "unknown-control" }),
         capturedElementIds: () => []
       }),
+      mountSuppression: Object.freeze({
+        available: !1,
+        withoutMounting: () => {
+          throw new Error(
+            "no Vue was captured, so mounting cannot be suppressed"
+          );
+        }
+      }),
       uninstall: () => {
       }
     });
@@ -54231,7 +54252,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let isRootCandidate = options2.isRootCandidate ?? isGameRootShape, reportError = options2.onCaptureError ?? (() => {
     }), existingDescriptor = Object.getOwnPropertyDescriptor(pageWindow, "Vue"), existingMarker = readMarker(readProperty(readProperty(pageWindow, "Vue"), "reactive")) ?? readMarker(existingDescriptor?.get);
     if (existingMarker?.capture !== void 0) return existingMarker.capture;
-    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls4 = /* @__PURE__ */ new Map(), captureOrder = [], restoreVue;
+    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls4 = /* @__PURE__ */ new Map(), captureOrder = [], createAppHooked = !1, suppressionDepth = 0, restoreVue;
     function notifyRootReplaced() {
       for (let listener of [...rootListeners])
         try {
@@ -54314,9 +54335,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         } catch (error) {
           reportError("createApp", String(error));
         }
-        return Reflect.apply(original, this, args);
+        return suppressionDepth > 0 && !stopped ? createDisposableApp() : Reflect.apply(original, this, args);
       });
-      restoreCreateApp !== void 0 && restores.push(restoreCreateApp), restoreVue = () => {
+      restoreCreateApp !== void 0 && (restores.push(restoreCreateApp), createAppHooked = !0), restoreVue = () => {
         for (let restore of restores) restore();
       };
     }
@@ -54394,10 +54415,27 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       },
       capturedElementIds: () => Object.freeze([...captureOrder])
+    }), mountSuppression = Object.freeze({
+      get available() {
+        return createAppHooked && !stopped;
+      },
+      withoutMounting(draw) {
+        if (!createAppHooked || stopped)
+          throw new Error(
+            "Vue.createApp is not wrapped, so mounting cannot be suppressed"
+          );
+        suppressionDepth += 1;
+        try {
+          return draw();
+        } finally {
+          suppressionDepth -= 1;
+        }
+      }
     }), capture = Object.freeze({
       installed: !0,
       rootState,
       controls: registry,
+      mountSuppression,
       uninstall() {
         stopped = !0, marker.capture = void 0, rootListeners.clear(), restoreVue?.(), restoreVue = void 0;
       }
@@ -54516,6 +54554,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       rootState: vue.rootState,
       controls: vue.controls,
       periods: worker.periods,
+      mountSuppression: vue.mountSuppression,
       isComplete: () => vue.rootState.readRoot() !== void 0 && worker.isCaptured(),
       uninstall() {
         isRecord(pageWindow) && pageWindow[PAGE_CAPTURE_MARKER] === capture && delete pageWindow[PAGE_CAPTURE_MARKER], vue.uninstall(), worker.uninstall();

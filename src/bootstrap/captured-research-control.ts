@@ -18,6 +18,7 @@ import { createCapturedTechCatalog } from "../adapters/evolve/progression/resear
 import { createCapturedResearchAdapter } from "../adapters/evolve/progression/research/captured-research.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
+import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 
@@ -25,6 +26,7 @@ export interface CapturedResearchControlDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly drawnActions: GameDrawnActionsReader;
+  readonly mountSuppression: GameMountSuppression;
   readonly diagnostics?: TickDiagnostics | undefined;
   /** Reports a catalog or price the capture could not supply. */
   readonly onUnavailable?: (reason: string) => void;
@@ -46,13 +48,19 @@ const NOT_CAPTURED: CommandExecutionOutcome = Object.freeze({
 export function createCapturedResearchControl(
   dependencies: CapturedResearchControlDependencies,
 ): CapturedResearchControl {
-  const { rootState, controls, drawnActions, diagnostics } = dependencies;
+  const { rootState, controls, drawnActions, mountSuppression, diagnostics } =
+    dependencies;
   const onUnavailable = dependencies.onUnavailable;
   const resources = createCapturedResourceSource(rootState);
   const catalog = createCapturedTechCatalog({
     rootState,
-    discovery: createCapturedTabDiscovery({ rootState, controls }),
+    discovery: createCapturedTabDiscovery({
+      rootState,
+      controls,
+      mountSuppression,
+    }),
     drawnActions,
+    controls,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });
   const reservations = createCapturedQueueReservationSource({
@@ -75,17 +83,23 @@ export function createCapturedResearchControl(
             onUnavailable(`${id}: ${reason}`),
         }),
   });
-  const { reader, executor } = createCapturedResearchAdapter({
-    rootState,
-    catalog,
+  const conflicts = createCapturedCostConflictReader({
     resources,
-    conflicts: createCapturedCostConflictReader({ resources, reservations }),
-    controls,
+    reservations,
   });
 
   return Object.freeze({
     runCycle(): CommandExecutionOutcome {
       if (rootState.readRoot() === undefined) return NOT_CAPTURED;
+      // One offered-technology snapshot per cycle: read, plan and execute all see the same list,
+      // and it goes out of scope with the cycle rather than ageing into the next one.
+      const { reader, executor } = createCapturedResearchAdapter({
+        rootState,
+        offered: catalog.readOffered(),
+        resources,
+        conflicts,
+        controls,
+      });
       return runResearchAutomation({ reader, executor, diagnostics });
     },
   });

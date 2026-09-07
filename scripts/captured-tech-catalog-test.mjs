@@ -96,28 +96,33 @@ function documentOf(elements) {
 // --- the catalog -----------------------------------------------------------
 
 /**
- * A stand-in for the page: a tech bag whose signature drives refreshes, and a discovery pass that
- * draws the next offer set in `offered` and counts how often it ran. The last entry repeats, so a
- * cached read that draws nothing is visible as a pass that never happened.
+ * A stand-in for the page: a discovery pass that draws the next offer set in `offered` and records
+ * how often it ran and what it was asked. The last entry repeats, so a read that skipped the draw
+ * shows up as a pass that never happened.
  */
-function makePage({ tech = { primitive: 3 }, offered = [[]] } = {}) {
-  const root = { tech, settings: { civTabs: 4, animated: true } };
+function makePage({ offered = [[]], generations = {} } = {}) {
+  const root = { tech: { primitive: 3 }, settings: { civTabs: 4 } };
   const passes = [];
+  const panelChecks = [];
   let drawn = [];
   let failure;
 
   const discovery = {
-    discover(path, whileDrawn) {
+    discover(path, options = {}) {
       passes.push(path.map((step) => [step.setting, step.control, step.index]));
+      if (options.isPanelDrawn !== undefined) {
+        panelChecks.push(options.isPanelDrawn());
+      }
       if (failure !== undefined) {
         return { outcome: failure, discovered: [] };
       }
       drawn = offered[Math.min(passes.length - 1, offered.length - 1)] ?? [];
-      if (whileDrawn !== undefined) whileDrawn();
+      if (options.whileDrawn !== undefined) options.whileDrawn();
       return { outcome: { status: "succeeded" }, discovered: [] };
     },
   };
 
+  const reasons = [];
   const catalog = createCapturedTechCatalog({
     rootState: {
       readRoot: () => root,
@@ -128,15 +133,27 @@ function makePage({ tech = { primitive: 3 }, offered = [[]] } = {}) {
     drawnActions: createGameDrawnActionsReader({
       getDocument: () => documentOf(drawn),
     }),
+    controls: {
+      resolve: (elementId) =>
+        generations[elementId] === undefined
+          ? undefined
+          : { elementId, generation: generations[elementId], methods: [] },
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => Object.keys(generations),
+    },
     onUnavailable: (reason) => reasons.push(reason),
   });
 
-  const reasons = [];
   return {
     root,
     catalog,
     passes,
+    rebind: (elementId) => {
+      generations[elementId] = (generations[elementId] ?? 0) + 1;
+    },
+    panelChecks,
     reasons,
+    isDrawn: () => drawn.length > 0,
     fail(outcome) {
       failure = outcome;
     },
@@ -145,7 +162,6 @@ function makePage({ tech = { primitive: 3 }, offered = [[]] } = {}) {
 
 {
   const page = makePage({
-    tech: { primitive: 3 },
     offered: [
       [
         element("tech-theology", { Knowledge: 900 }),
@@ -153,6 +169,7 @@ function makePage({ tech = { primitive: 3 }, offered = [[]] } = {}) {
       ],
       [element("tech-smelting", { Knowledge: 9000 })],
     ],
+    generations: { "tech-theology": 4, "tech-mining": 1 },
   });
 
   const first = page.catalog.readOffered();
@@ -161,10 +178,15 @@ function makePage({ tech = { primitive: 3 }, offered = [[]] } = {}) {
     ["tech-theology", "tech-mining"],
   );
   assert.deepEqual(first[0].cost, { Knowledge: 900 });
+  // Which binding of the control each offer belongs to.
+  assert.deepEqual(
+    first.map((tech) => tech.generation),
+    [4, 1],
+  );
   // The path is the Research tab, with no sub-tab step.
   assert.deepEqual(page.passes, [[[MAIN_TAB_SETTING, MAIN_TAB_CONTROL, 3]]]);
 
-  // Nothing granted: the cached catalog answers and the panel is not drawn again.
+  // Nothing granted and nothing rebound: the held catalog answers and the panel is not drawn again.
   assert.equal(page.catalog.readOffered(), first);
   assert.equal(page.passes.length, 1);
 
@@ -181,7 +203,6 @@ function makePage({ tech = { primitive: 3 }, offered = [[]] } = {}) {
 {
   // A level rising on a tech already held is a grant too.
   const page = makePage({
-    tech: { primitive: 3 },
     offered: [
       [element("tech-a", { Knowledge: 1 })],
       [element("tech-b", { Knowledge: 2 })],
@@ -196,7 +217,6 @@ function makePage({ tech = { primitive: 3 }, offered = [[]] } = {}) {
 {
   // A reset empties the tech bag, which the signature notices.
   const page = makePage({
-    tech: { primitive: 3 },
     offered: [
       [element("tech-a", { Knowledge: 1 })],
       [element("tech-club", { Knowledge: 5 })],
@@ -205,15 +225,52 @@ function makePage({ tech = { primitive: 3 }, offered = [[]] } = {}) {
   assert.equal(page.catalog.readOffered()[0].elementId, "tech-a");
   delete page.root.tech.primitive;
   assert.equal(page.catalog.readOffered()[0].elementId, "tech-club");
+  assert.equal(page.passes.length, 2);
+}
+
+{
+  // The game redrew the research panel without granting anything, so the offers held here were
+  // decided by a draw that has been superseded. The signature cannot see that; the binding can.
+  const page = makePage({
+    offered: [
+      [element("tech-a", { Knowledge: 1 })],
+      [element("tech-b", { Knowledge: 2 })],
+    ],
+    generations: { "tech-a": 1, "tech-b": 1 },
+  });
+  assert.equal(page.catalog.readOffered()[0].elementId, "tech-a");
+  page.rebind("tech-a");
+  assert.equal(page.catalog.readOffered()[0].elementId, "tech-b");
+  assert.equal(page.passes.length, 2);
+}
+
+{
+  // An action the game drew but never bound a control for is offered at generation 0, which no
+  // live control can match.
+  const page = makePage({
+    offered: [[element("tech-a", { Knowledge: 1 })]],
+    generations: {},
+  });
+  assert.equal(page.catalog.readOffered()[0].generation, 0);
+}
+
+{
+  // The pass is given a way to tell whether the Research panel is already there, so it can skip
+  // drawing one the player is looking at.
+  const page = makePage({ offered: [[element("tech-a", { Knowledge: 1 })]] });
+  assert.deepEqual(page.panelChecks, []);
+  page.catalog.readOffered();
+  assert.deepEqual(page.panelChecks, [false]);
+  // Once the panel has been drawn, the same check answers true on the next refresh.
+  page.root.tech.mining = 1;
+  page.catalog.readOffered();
+  assert.deepEqual(page.panelChecks, [false, true]);
 }
 
 {
   // A pass that failed leaves no catalog at all. Answering from the previous offer set would spend
   // on a technology the game may already have granted.
-  const page = makePage({
-    tech: { primitive: 3 },
-    offered: [[element("tech-a", { Knowledge: 1 })]],
-  });
+  const page = makePage({ offered: [[element("tech-a", { Knowledge: 1 })]] });
   assert.equal(page.catalog.readOffered().length, 1);
   page.root.tech.mining = 1;
   page.fail({
@@ -227,7 +284,7 @@ function makePage({ tech = { primitive: 3 }, offered = [[]] } = {}) {
 {
   // The game drew the panel and there was nothing in it: an empty offer set is a real answer, not
   // a failure.
-  const page = makePage({ tech: { primitive: 3 }, offered: [[]] });
+  const page = makePage({ offered: [[]] });
   assert.deepEqual(page.catalog.readOffered(), []);
   assert.deepEqual(page.reasons, []);
 }
@@ -245,7 +302,12 @@ function makePage({ tech = { primitive: 3 }, offered = [[]] } = {}) {
         throw new Error("must not draw without a root");
       },
     },
-    drawnActions: { read: () => [] },
+    drawnActions: { read: () => [], exists: () => false },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => [],
+    },
   });
   assert.equal(catalog.readOffered(), undefined);
 }

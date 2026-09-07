@@ -52,6 +52,22 @@ function makePage({
   subPanels = SUB_PANELS,
 } = {}) {
   const settings = { civTabs, spaceTabs, animated, tabLoad };
+  // Scoped mount suppression, the way the capture provides it: nesting counted, and always
+  // unwound, so a draw can report whether it happened inside a scope.
+  const suppression = {
+    available: true,
+    depth: 0,
+    scopes: 0,
+    withoutMounting(draw) {
+      suppression.depth += 1;
+      suppression.scopes += 1;
+      try {
+        return draw();
+      } finally {
+        suppression.depth -= 1;
+      }
+    },
+  };
   const root = { settings };
   const controls = new Map();
   const mounted = new Set();
@@ -86,7 +102,7 @@ function makePage({
   }
 
   function drawTab(control, index) {
-    swaps.push([control, index]);
+    swaps.push([control, index, suppression.depth > 0]);
     for (const id of [...mounted]) {
       if (settings.animated) {
         // The game retains the outgoing panel behind a timer for the slide.
@@ -133,9 +149,12 @@ function makePage({
     settings,
     controls,
     registry,
+    suppression,
     mounted,
     pendingClears,
     swaps,
+    suppressedDraws: () =>
+      swaps.filter(([, , suppressed]) => suppressed).length,
     mainSwaps: () =>
       swaps
         .filter(([control]) => control === MAIN_TAB_CONTROL)
@@ -152,6 +171,7 @@ function discoveryFor(page) {
   return createCapturedTabDiscovery({
     rootState: page.rootState,
     controls: page.registry,
+    mountSuppression: page.suppression,
   });
 }
 
@@ -223,15 +243,50 @@ function discoveryFor(page) {
 }
 
 {
-  // Discovering the tab the player is already on still draws and restores; the pass has no
-  // special case for it, and a redraw of the tab already shown is what the game does anyway.
+  // The panel the player is already looking at is observed where it stands. Drawing it to put
+  // them back on the tab they never left is two redraws that produce what was there anyway.
   const page = makePage({ civTabs: 2 });
-  const result = discoveryFor(page).discover(mainTab(2));
+  let mountedWhenSeen;
+  const result = discoveryFor(page).discover(mainTab(2), {
+    whileDrawn: () => {
+      mountedWhenSeen = [...page.mounted].sort();
+    },
+  });
   assert.equal(result.outcome.status, "succeeded");
-  assert.deepEqual(page.mainSwaps(), [2, 2]);
+  assert.deepEqual(page.swaps, []);
+  assert.equal(page.suppression.scopes, 0);
   assert.equal(page.settings.civTabs, 2);
-  // Everything on that tab was already captured, so the pass discovered nothing new.
+  assert.equal(page.settings.animated, true);
+  assert.deepEqual(mountedWhenSeen, ["civ-farmer", "foundry", "mTabCivic"]);
+  // The game bound those controls when it drew them, so the pass makes nothing newly available.
   assert.deepEqual([...result.discovered], []);
+}
+
+{
+  // Every step has to match: the main tab alone being right is not the panel being right.
+  const page = makePage({ civTabs: 1, spaceTabs: 0 });
+  const result = discoveryFor(page).discover(subTab(1, "spaceTabs", 1));
+  assert.equal(result.outcome.status, "succeeded");
+  assert.equal(page.swaps.length > 0, true);
+  assert.equal(page.settings.spaceTabs, 0);
+}
+
+{
+  // The player is on the tab but the panel is not there. A redraw is exactly the recovery, so the
+  // pass runs after all.
+  const page = makePage({ civTabs: 2 });
+  page.mounted.clear();
+  let seen = 0;
+  const result = discoveryFor(page).discover(mainTab(2), {
+    isPanelDrawn: () => page.mounted.has("civ-farmer"),
+    whileDrawn: () => {
+      seen += 1;
+    },
+  });
+  assert.equal(result.outcome.status, "succeeded");
+  assert.equal(seen, 1);
+  assert.deepEqual(page.mainSwaps(), [2, 2]);
+  assert.equal(page.mounted.has("civ-farmer"), true);
 }
 
 {
@@ -247,13 +302,31 @@ function discoveryFor(page) {
 // --- when the pass must not run ---------------------------------------------
 
 {
-  // Preload Tab Content on: everything is already mounted, so nothing is touched.
+  // Preload Tab Content on: every panel is already mounted, so the observer reads the one it
+  // wants where it stands and the player's view is never touched.
   const page = makePage({ civTabs: 4, tabLoad: true });
-  const result = discoveryFor(page).discover(mainTab(2));
+  let seen = 0;
+  const result = discoveryFor(page).discover(mainTab(2), {
+    whileDrawn: () => {
+      seen += 1;
+    },
+  });
   assert.equal(result.outcome.status, "succeeded");
+  assert.equal(seen, 1);
   assert.deepEqual([...result.discovered], []);
   assert.deepEqual(page.swaps, []);
   assert.equal(page.settings.civTabs, 4);
+}
+
+{
+  // Preloaded, and the panel is still not there: `swapTab` redraws nothing under that setting, so
+  // there is no pass that could recover it.
+  const page = makePage({ civTabs: 4, tabLoad: true });
+  const result = discoveryFor(page).discover(mainTab(2), {
+    isPanelDrawn: () => false,
+  });
+  assert.equal(result.outcome.failure.code, "panel-not-drawn");
+  assert.deepEqual(page.swaps, []);
 }
 
 {
@@ -283,6 +356,10 @@ function discoveryFor(page) {
       resolve: () => undefined,
       capturedElementIds: () => [],
       invoke: () => ({ ok: false }),
+    },
+    mountSuppression: {
+      available: true,
+      withoutMounting: (draw) => draw(),
     },
   }).discover(mainTab(1));
   assert.equal(result.outcome.failure.code, "game-state-not-captured");
@@ -347,12 +424,14 @@ function discoveryFor(page) {
   // The observer runs once, with the panel mounted, before anything is restored.
   const page = makePage({ civTabs: 4 });
   const seen = [];
-  const result = discoveryFor(page).discover(mainTab(2), () => {
-    seen.push({
-      mounted: [...page.mounted].sort(),
-      civTabs: page.settings.civTabs,
-      animated: page.settings.animated,
-    });
+  const result = discoveryFor(page).discover(mainTab(2), {
+    whileDrawn: () => {
+      seen.push({
+        mounted: [...page.mounted].sort(),
+        civTabs: page.settings.civTabs,
+        animated: page.settings.animated,
+      });
+    },
   });
   assert.equal(result.outcome.status, "succeeded");
   assert.equal(seen.length, 1);
@@ -367,8 +446,10 @@ function discoveryFor(page) {
 {
   // A throwing observer is reported and still does not cost the player their tab.
   const page = makePage({ civTabs: 4 });
-  const result = discoveryFor(page).discover(mainTab(2), () => {
-    throw new Error("reader exploded");
+  const result = discoveryFor(page).discover(mainTab(2), {
+    whileDrawn: () => {
+      throw new Error("reader exploded");
+    },
   });
   assert.equal(result.outcome.status, "rejected");
   assert.equal(result.outcome.failure.code, "tab-observer-failed");
@@ -383,13 +464,85 @@ function discoveryFor(page) {
 }
 
 {
-  // A pass that never drew does not run the observer.
-  const page = makePage({ civTabs: 4, tabLoad: true });
-  let ran = false;
-  discoveryFor(page).discover(mainTab(2), () => {
-    ran = true;
+  // An observer that throws on the fast path is reported the same way, and nothing was moved.
+  const page = makePage({ civTabs: 2 });
+  const result = discoveryFor(page).discover(mainTab(2), {
+    whileDrawn: () => {
+      throw new Error("reader exploded");
+    },
   });
-  assert.equal(ran, false);
+  assert.equal(result.outcome.failure.code, "tab-observer-failed");
+  assert.deepEqual(page.swaps, []);
+  assert.equal(page.settings.animated, true);
+}
+
+// --- the draw does not mount what it draws ----------------------------------
+
+{
+  // One scope, covering every step of the draw and the observer, and closed before the player's
+  // own view is rebuilt: that restore is a real render and must not be suppressed.
+  const page = makePage({ civTabs: 4, spaceTabs: 0 });
+  let depthWhileDrawn;
+  const result = discoveryFor(page).discover(subTab(1, "spaceTabs", 1), {
+    whileDrawn: () => {
+      depthWhileDrawn = page.suppression.depth;
+    },
+  });
+  assert.equal(result.outcome.status, "succeeded");
+  assert.equal(page.suppression.scopes, 1);
+  assert.equal(depthWhileDrawn, 1);
+  assert.equal(page.suppression.depth, 0);
+  // Two drawing steps inside the scope; the restoring swap outside it.
+  assert.equal(page.suppressedDraws(), 2);
+  assert.deepEqual(page.swaps.at(-1).slice(1), [4, false]);
+}
+
+{
+  // A draw that fails still leaves mounting restored.
+  const page = makePage({ civTabs: 4 });
+  const inner = page.registry.invoke;
+  page.registry.invoke = (handle, method, args) =>
+    args[0] === 2
+      ? { ok: false, reason: "threw", detail: "loadTab exploded" }
+      : inner(handle, method, args);
+  discoveryFor(page).discover(mainTab(2));
+  assert.equal(page.suppression.depth, 0);
+}
+
+{
+  // An observer that throws leaves mounting restored too.
+  const page = makePage({ civTabs: 4 });
+  discoveryFor(page).discover(mainTab(2), {
+    whileDrawn: () => {
+      throw new Error("reader exploded");
+    },
+  });
+  assert.equal(page.suppression.depth, 0);
+}
+
+{
+  // Nothing to suppress with: the pass reports it rather than paying for a full off-tab render on
+  // an automation tick.
+  const page = makePage({ civTabs: 4 });
+  page.suppression.available = false;
+  const result = discoveryFor(page).discover(mainTab(2));
+  assert.equal(result.outcome.failure.code, "mount-suppression-unavailable");
+  assert.deepEqual(page.swaps, []);
+  assert.equal(page.settings.civTabs, 4);
+}
+
+{
+  // The panel already in front of the player needs no suppression, so it is still observed.
+  const page = makePage({ civTabs: 2 });
+  page.suppression.available = false;
+  let seen = 0;
+  const result = discoveryFor(page).discover(mainTab(2), {
+    whileDrawn: () => {
+      seen += 1;
+    },
+  });
+  assert.equal(result.outcome.status, "succeeded");
+  assert.equal(seen, 1);
 }
 
 console.log("captured-tab-discovery ok");

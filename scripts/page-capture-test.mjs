@@ -116,6 +116,11 @@ assert.deepEqual(
   "the rejoined capture shares the live period source",
 );
 assert.deepEqual(periods, [1, 2]);
+assert.equal(
+  rejoined.mountSuppression,
+  capture.mountSuppression,
+  "and the one scope over the page's Vue, not a second one",
+);
 
 capture.uninstall();
 worker.dispatch({ loop: "main", periods: 1 });
@@ -130,6 +135,7 @@ const bare = installPageCapture({});
 assert.equal(bare.isComplete(), false);
 assert.equal(bare.rootState.readRoot(), undefined);
 assert.deepEqual(bare.controls.capturedElementIds(), []);
+assert.equal(bare.mountSuppression.available, false);
 bare.periods.subscribe(() => assert.fail("nothing to notify"));
 bare.uninstall();
 
