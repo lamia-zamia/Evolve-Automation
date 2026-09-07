@@ -3797,6 +3797,19 @@ export function startEvolveRuntimeComposition(
     },
   });
 
+  const runProgressionBuild = () => {
+    if (pageCapture?.isComplete() && capturedProgression !== undefined) {
+      return capturedProgression.runConstructionCycle();
+    }
+    return autoBuild();
+  };
+  const runProgressionResearch = () => {
+    if (pageCapture?.isComplete() && capturedProgression !== undefined) {
+      return capturedProgression.runResearchCycle();
+    }
+    return autoResearch();
+  };
+
   let tickTestControllers;
   const tickControllers = {
     updateScriptData,
@@ -3821,8 +3834,8 @@ export function startEvolveRuntimeComposition(
     autoStorage,
     autoReplicator,
     autoTrigger,
-    autoResearch,
-    autoBuild,
+    autoResearch: runProgressionResearch,
+    autoBuild: runProgressionBuild,
     autoFactory,
     autoJobs,
     autoFleetOuter,

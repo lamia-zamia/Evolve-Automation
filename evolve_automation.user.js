@@ -55268,7 +55268,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setTestContext(context) {
         "settingsRaw" in context && (settingsRaw = context.settingsRaw), "settings" in context && (settings = context.settings), "state" in context && (state = context.state), "game" in context && (game = context.game), "poly" in context && (poly = context.poly), "resources" in context && (resources = context.resources), "races" in context && (races = context.races), "win" in context && (win = context.win);
       }
-    }), tickTestControllers, tickControllers = {
+    }), runProgressionBuild = () => pageCapture2?.isComplete() && capturedProgression !== void 0 ? capturedProgression.runConstructionCycle() : autoBuild(), runProgressionResearch = () => pageCapture2?.isComplete() && capturedProgression !== void 0 ? capturedProgression.runResearchCycle() : autoResearch(), tickTestControllers, tickControllers = {
       updateScriptData,
       updateOverrides,
       finalizeScriptData,
@@ -55291,8 +55291,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       autoStorage,
       autoReplicator,
       autoTrigger,
-      autoResearch,
-      autoBuild,
+      autoResearch: runProgressionResearch,
+      autoBuild: runProgressionBuild,
       autoFactory,
       autoJobs,
       autoFleetOuter,

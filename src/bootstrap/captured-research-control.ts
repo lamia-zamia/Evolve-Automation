@@ -2,9 +2,8 @@
  * Composes the captured research slice: page capture in, one research cycle out.
  *
  * Input from the game's own research panel, decision by the existing pure planner, execution
- * through one captured game method. Like the build slice it is **not on the production tick**: the
- * compatibility runtime still owns autoResearch until the replacement covers enough behaviour to
- * cut over, and the two take no dependency on each other.
+ * through one captured game method. The runtime selects it only after document-start capture is
+ * complete; late-loaded pages retain the compatibility fallback.
  */
 
 import { runResearchAutomation } from "../application/research.ts";

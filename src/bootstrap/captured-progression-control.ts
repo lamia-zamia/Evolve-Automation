@@ -1,9 +1,10 @@
 /**
- * Dormant production composition for the captured build and research families.
+ * Production composition for the captured build and research families.
  *
- * This seam owns the adapter assembly but does not choose when the legacy tick should call either
- * family. That cutover remains a replay decision. The composition deliberately shares the offered
- * technology reader so a construction reservation sample and a research plan describe one draw.
+ * This seam owns the adapter assembly for the captured tick path. The runtime selects it only after
+ * document-start capture is complete and retains the compatibility controllers as a late-load
+ * fallback. The composition deliberately shares the offered technology reader so a construction
+ * reservation sample and a research plan describe one draw.
  */
 
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";

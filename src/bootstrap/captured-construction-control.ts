@@ -3,9 +3,8 @@
  * weighting order, sharing one set of holdings and one set of queue reservations.
  *
  * This is the whole vertical — validated input from the captured root, the existing pure planners,
- * captured game commands — with no dependency on the compatibility runtime. It is not on the
- * production tick yet; the compatibility runtime still owns autoBuild until the replacement covers
- * enough behaviour to cut over.
+ * captured game commands — with no dependency on the compatibility runtime. The runtime selects it
+ * only after document-start capture is complete; late-loaded pages retain the compatibility fallback.
  */
 
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
