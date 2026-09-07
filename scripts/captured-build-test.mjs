@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createCapturedBuildControl } from "../src/bootstrap/captured-build-control.ts";
+import { createCapturedConstructionControl } from "../src/bootstrap/captured-construction-control.ts";
 
 /**
  * A stand-in for the captured page: a game root, the game's own escalating prices behind
@@ -124,12 +124,42 @@ function target(
 
 function policy(targets, overrides = {}) {
   return () => ({
-    targets,
+    buildings: targets,
     respectReservations: true,
     consumptionMode: "onePerTick",
     buildIfStorageFull: false,
     ignoreZeroRate: false,
     ...overrides,
+  });
+}
+
+/**
+ * A.R.P.A. is switched off for every case here, so each of these must stay unused: with
+ * `autoARPA` false the cycle must never reach for a discovery pass, which is the most expensive
+ * thing in it.
+ */
+function noProjects() {
+  const unused = (name) => () => {
+    throw new Error(`${name} used while A.R.P.A. automation is off`);
+  };
+  return {
+    readSettings: () => ({}),
+    mountSuppression: {
+      available: true,
+      withoutMounting: unused("withoutMounting"),
+    },
+    panels: { open: unused("open") },
+    drawnProjects: {
+      read: unused("read"),
+      exists: unused("exists"),
+    },
+  };
+}
+
+function makeControl(dependencies) {
+  return createCapturedConstructionControl({
+    ...noProjects(),
+    ...dependencies,
   });
 }
 
@@ -158,7 +188,7 @@ function queued(id, label = id) {
     resources: { Money: { amount: 500 }, Lumber: { amount: 500 } },
   });
   const skipped = [];
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("basic_housing", 100)]),
@@ -190,7 +220,7 @@ function queued(id, label = id) {
     buildings: { farm: { count: 0, priceAt: () => ({ Money: 1000 }) } },
     resources: { Money: { amount: 10 } },
   });
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("farm", 50)]),
@@ -210,7 +240,7 @@ function queued(id, label = id) {
     },
     resources: { Money: { amount: 300, max: 1000, diff: 10 } },
   });
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("wardenclyffe", 90), target("farm", 10)]),
@@ -255,7 +285,7 @@ function queued(id, label = id) {
     queue: [{ id: "city-mine" }],
   });
   const skipped = [];
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([
@@ -284,7 +314,7 @@ function queued(id, label = id) {
     resources: { Money: { amount: 500 } },
   });
   page.controls.delete("city-farm");
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("farm", 50)]),
@@ -302,7 +332,7 @@ function queued(id, label = id) {
     buildings: { farm: { count: 0, priceAt: () => ({ Money: 10 }) } },
     resources: { Money: { amount: 500 } },
   });
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: {
       ...page.registry,
@@ -322,7 +352,7 @@ function queued(id, label = id) {
 // --- before the game has state ---------------------------------------------------------------------------------
 
 {
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: {
       readRoot: () => undefined,
       isReactivitySuppressed: () => false,
@@ -349,7 +379,7 @@ function queued(id, label = id) {
   });
   page.controls.delete("buildQueue");
   const skipped = [];
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("farm", 50)]),
@@ -384,7 +414,7 @@ function reservationPage(options = {}) {
   const page = reservationPage({
     queue: [queued("city-warehouse", "Warehouse")],
   });
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("farm", 50)]),
@@ -404,7 +434,7 @@ function reservationPage(options = {}) {
   const page = reservationPage({
     queue: [queued("city-warehouse", "Warehouse")],
   });
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("farm", 50)], { respectReservations: false }),
@@ -418,7 +448,7 @@ function reservationPage(options = {}) {
   const page = reservationPage({
     queue: [queued("city-warehouse", "Warehouse")],
   });
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("farm", 50, Number.MAX_SAFE_INTEGER, true)]),
@@ -433,7 +463,7 @@ function reservationPage(options = {}) {
     queue: [queued("city-warehouse", "Warehouse")],
     queueDisplay: false,
   });
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("farm", 50)]),
@@ -448,7 +478,7 @@ function reservationPage(options = {}) {
   const page = reservationPage({
     queue: [queued("city-farm", "Farm"), queued("city-mine", "Mine")],
   });
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("warehouse", 50)]),
@@ -466,7 +496,7 @@ function reservationPage(options = {}) {
     buyAnyQueued: true,
   });
   page.root.resource.Money.amount = 700;
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("warehouse", 50)]),
@@ -484,7 +514,7 @@ function reservationPage(options = {}) {
     queue: [queued("city-warehouse", "Warehouse")],
   });
   page.root.resource.Money.max = 300;
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("farm", 50)]),
@@ -500,7 +530,7 @@ function reservationPage(options = {}) {
     queue: [queued("city-unknown_structure", "Mystery")],
   });
   const skipped = [];
-  const control = createCapturedBuildControl({
+  const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("farm", 50)]),

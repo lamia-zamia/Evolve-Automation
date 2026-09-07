@@ -1,68 +1,49 @@
-/** Captured A.R.P.A. planning and execution over one exact project catalog snapshot. */
+/**
+ * A.R.P.A. projects as one family of the captured construction cycle.
+ *
+ * The catalog is read once per cycle, so the candidates the planner sees, the prices it compares,
+ * and the control the executor invokes all come from the same snapshot. Affordability, cost
+ * conflicts and resource competition belong to the shared cycle, so a project competes with a city
+ * building on the same terms.
+ */
 
-import type {
-  BuildAnnotation,
-  BuildCandidateSample,
-  BuildClickDecision,
-  BuildCompetitionRequest,
-  BuildCompetitionSample,
-  BuildConflictSample,
-  BuildCycleSetup,
-  BuildResourceView,
-  BuildSampleRequest,
-} from "../../../../domain/progression/build/build.ts";
 import {
   planProjects,
+  type PlannedProject,
   type ProjectAutomationSettings,
   type ProjectCapacityView,
 } from "../../../../domain/progression/research/project.ts";
-import { canAfford, resourceView } from "../../../../domain/game-world.ts";
+import { resourceView } from "../../../../domain/game-world.ts";
+import type { BuildClickResult } from "../../../../ports/build.ts";
 import type {
-  BuildClickResult,
-  BuildExecutor,
-  BuildReader,
-} from "../../../../ports/build.ts";
+  ConstructionCandidate,
+  ConstructionCandidateSource,
+} from "../../../../ports/construction-candidates.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
-import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
+import type {
+  GameProjectCatalog,
+  OfferedProject,
+} from "../../../../ports/game-project-catalog.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedProjectDependencies {
   readonly rootState: GameRootStateSource;
-  readonly offered: readonly Readonly<OfferedProject>[] | undefined;
+  readonly catalog: GameProjectCatalog;
   readonly resources: GameResourceSource;
-  readonly conflicts: CapturedCostConflictReader;
   readonly controls: GameControlRegistry;
   /** Persisted script settings are external input and are normalized here. */
   readonly readSettings: () => unknown;
 }
 
-export interface CapturedProjectAdapter {
-  readonly reader: BuildReader;
-  readonly executor: BuildExecutor;
-}
-
 interface CycleProject {
-  readonly project: Readonly<ReturnType<typeof planProjects>[number]>;
-  readonly view: BuildCycleSetup["candidates"][number];
+  readonly project: Readonly<PlannedProject>;
+  readonly candidate: Readonly<ConstructionCandidate>;
 }
 
 const NO_CONSUMPTION = Object.freeze([]);
-const ZERO_KNOWLEDGE_GATE = Object.freeze({
-  cheapestTechKnowledge: 0,
-  knowledgeRequiredByBuildTargets: 0,
-  knowledgeCapacity: 0,
-});
-const LOCKED_RESOURCE: BuildResourceView = Object.freeze({
-  unlocked: false,
-  currentQuantity: 0,
-  rateOfChange: 0,
-  storageRatio: 0,
-  storageRequired: 0,
-});
 
 function finiteSetting(
   settings: Record<PropertyKey, unknown>,
@@ -71,6 +52,15 @@ function finiteSetting(
 ): number {
   const value = Number(settings[key]);
   return Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * Whether the caller wants projects automated at all, read without the catalog. Answering this
+ * first keeps a discovery pass — the most expensive thing in the cycle — off the tick of every
+ * player who leaves A.R.P.A. automation switched off.
+ */
+export function isProjectAutomationEnabled(value: unknown): boolean {
+  return Boolean(readProperty(value, "autoARPA"));
 }
 
 /** Normalize missing/corrupt imported settings before they enter the pure planner. */
@@ -130,175 +120,76 @@ function queuedIds(root: unknown): ReadonlySet<string> {
   return ids;
 }
 
-function buildResource(
-  view: ReturnType<typeof resourceView>,
-): BuildResourceView {
-  return Object.freeze({
-    unlocked: view.unlocked,
-    currentQuantity: view.amount,
-    rateOfChange: view.rateOfChange,
-    storageRatio: view.storageRatio,
-    storageRequired: 0,
-  });
-}
-
-export function createCapturedProjectAdapter(
+export function createCapturedProjectSource(
   dependencies: CapturedProjectDependencies,
-): CapturedProjectAdapter {
-  const { rootState, offered, resources, conflicts, controls, readSettings } =
+): ConstructionCandidateSource {
+  const { rootState, catalog, resources, controls, readSettings } =
     dependencies;
-  let cycle: readonly CycleProject[] = Object.freeze([]);
+  let cycle: ReadonlyMap<string, CycleProject> = new Map();
 
-  const reader: BuildReader = Object.freeze({
-    beginCycle(): BuildCycleSetup {
-      if (offered === undefined) {
-        cycle = Object.freeze([]);
-      } else {
-        const resourceIds = new Set(
-          offered.flatMap((project) => Object.keys(project.cost)),
-        );
-        const sample = resources.readResources(resourceIds);
-        const capacities: Record<string, ProjectCapacityView> = {};
-        if (sample !== undefined) {
-          for (const id of resourceIds) {
-            const view = resourceView(sample, id);
-            capacities[id] = Object.freeze({
-              unlocked: view.unlocked,
-              maximum: view.max,
-            });
-          }
-        }
-        const queued = queuedIds(rootState.readRoot());
-        cycle = Object.freeze(
-          planProjects({
-            settings: readCapturedProjectSettings(readSettings(), offered),
-            projects: offered,
-            capacities: Object.freeze(capacities),
-          }).map((project) =>
-            Object.freeze({
-              project,
-              view: Object.freeze({
-                key: project.elementId,
-                weighting: project.weighting,
-                cost: project.cost,
-                ignored: queued.has(project.elementId),
-                knowledge: false,
-              }),
-            }),
-          ),
-        );
+  return Object.freeze({
+    family: "arpa",
+
+    beginCycle(): readonly Readonly<ConstructionCandidate>[] {
+      const settings = readSettings();
+      if (!isProjectAutomationEnabled(settings)) {
+        cycle = new Map();
+        return Object.freeze([]);
       }
-      return Object.freeze({
-        candidates: Object.freeze(cycle.map((entry) => entry.view)),
-        consumptionMode: "unlimited",
-        buildIfStorageFull: false,
-        ignoreZeroRate: false,
-        saveWhiteholeGems: false,
-        knowledgeGate: ZERO_KNOWLEDGE_GATE,
-      });
-    },
-
-    sampleCandidate(
-      index: number,
-      request: Readonly<BuildSampleRequest>,
-    ): BuildCandidateSample {
-      const candidate = cycle[index];
-      if (candidate === undefined)
-        throw new TypeError(`no project candidate at index ${index}`);
-      const sample = resources.readResources(
-        Object.keys(candidate.project.cost),
+      const offered = catalog.readProjects();
+      if (offered === undefined) {
+        // A discovery pass that failed leaves no catalog. Planning from the previous one would
+        // spend against prices and offers the game may already have moved past.
+        cycle = new Map();
+        return Object.freeze([]);
+      }
+      const resourceIds = new Set(
+        offered.flatMap((project) => Object.keys(project.cost)),
       );
-      return Object.freeze({
-        ...(request.needAffordability
-          ? {
-              affordable:
-                sample !== undefined &&
-                canAfford(sample, candidate.project.cost),
-            }
-          : {}),
-        ...(request.needConsumption ? { consumption: NO_CONSUMPTION } : {}),
-      });
-    },
-
-    sampleConflict(index: number): BuildConflictSample {
-      const candidate = cycle[index];
-      if (candidate === undefined)
-        throw new TypeError(`no project candidate at index ${index}`);
-      const result = conflicts.evaluate(candidate.project.cost);
-      if (result.status === "none")
-        return Object.freeze({ conflict: null, important: false });
-      if (result.status === "unavailable") {
-        return Object.freeze({
-          conflict: Object.freeze({
-            unavailable: true,
-            targetNames: Object.freeze([]),
-            resourceNames: Object.freeze([]),
-            targetCause: "",
+      const sample = resources.readResources(resourceIds);
+      const capacities: Record<string, ProjectCapacityView> = {};
+      if (sample !== undefined) {
+        for (const id of resourceIds) {
+          const view = resourceView(sample, id);
+          capacities[id] = Object.freeze({
+            unlocked: view.unlocked,
+            maximum: view.max,
+          });
+        }
+      }
+      const queued = queuedIds(rootState.readRoot());
+      const entries = new Map<string, CycleProject>();
+      for (const project of planProjects({
+        settings: readCapturedProjectSettings(settings, offered),
+        projects: offered,
+        capacities: Object.freeze(capacities),
+      })) {
+        entries.set(project.elementId, {
+          project,
+          candidate: Object.freeze({
+            key: project.elementId,
+            weighting: project.weighting,
+            cost: project.cost,
+            ignored: queued.has(project.elementId),
+            knowledge: false,
+            important: false,
           }),
-          important: false,
         });
       }
-      return Object.freeze({
-        conflict: Object.freeze({
-          unavailable: false,
-          targetNames: result.conflict.targetNames,
-          resourceNames: result.conflict.resourceNames,
-          targetCause: result.conflict.targetCause,
-        }),
-        important: false,
-      });
-    },
-
-    sampleCompetition(
-      index: number,
-      request: Readonly<BuildCompetitionRequest>,
-    ): BuildCompetitionSample {
-      if (cycle[index] === undefined)
-        throw new TypeError(`no project candidate at index ${index}`);
-      const byKey = new Map(
-        cycle.map((entry) => [entry.view.key, entry.project.cost] as const),
+      cycle = entries;
+      return Object.freeze(
+        [...entries.values()].map((entry) => entry.candidate),
       );
-      const wanted = new Set(request.resourceIds);
-      for (const key of request.affordabilityKeys) {
-        for (const id of Object.keys(byKey.get(key) ?? {})) wanted.add(id);
-      }
-      const sample = resources.readResources(wanted);
-      const affordability: Record<string, boolean> = {};
-      for (const key of request.affordabilityKeys) {
-        const cost = byKey.get(key);
-        if (cost === undefined)
-          throw new TypeError(`unknown project candidate ${key}`);
-        affordability[key] = sample !== undefined && canAfford(sample, cost);
-      }
-      const views: Record<string, BuildResourceView> = {};
-      for (const id of request.resourceIds) {
-        views[id] =
-          sample === undefined
-            ? LOCKED_RESOURCE
-            : buildResource(resourceView(sample, id));
-      }
-      return Object.freeze({
-        affordability: Object.freeze(affordability),
-        resources: Object.freeze(views),
-      });
-    },
-  });
-
-  const executor: BuildExecutor = Object.freeze({
-    annotate(annotation: Readonly<BuildAnnotation>) {
-      return cycle[annotation.index]?.view.key === annotation.key
-        ? SUCCEEDED
-        : stale("stale-project-target", "project candidate list changed");
     },
 
-    executeClick(decision: Readonly<BuildClickDecision>): BuildClickResult {
-      const candidate = cycle[decision.index];
+    execute(key: string): BuildClickResult {
       const base = {
         clicked: false,
         mission: false,
         consumption: NO_CONSUMPTION,
       } as const;
-      if (candidate === undefined || candidate.view.key !== decision.key) {
+      const candidate = cycle.get(key);
+      if (candidate === undefined) {
         return Object.freeze({
           outcome: stale(
             "stale-project-target",
@@ -374,6 +265,4 @@ export function createCapturedProjectAdapter(
       });
     },
   });
-
-  return Object.freeze({ reader, executor });
 }

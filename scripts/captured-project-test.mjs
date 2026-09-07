@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 
+import { createCapturedConstructionAdapter } from "../src/adapters/evolve/progression/construction/captured-construction.ts";
 import {
-  createCapturedProjectAdapter,
+  createCapturedProjectSource,
+  isProjectAutomationEnabled,
   readCapturedProjectSettings,
 } from "../src/adapters/evolve/progression/research/captured-project.ts";
 import { runBuildAutomation } from "../src/application/build.ts";
@@ -114,7 +116,21 @@ function makeAdapter({
   generation = 2,
   conflict = { status: "none" },
   queue = [],
+  catalog = undefined,
+  settings = undefined,
 } = {}) {
+  if (catalog === undefined) {
+    catalog = [offered("lhc", { rank: 1, progress, generation: 2 })];
+  }
+  settings ??= {
+    autoARPA: true,
+    arpaStep: 5,
+    arpaScaleWeighting: true,
+    arpa_lhc: true,
+    arpa_p_lhc: 0,
+    arpa_m_lhc: -1,
+    arpa_w_lhc: 2,
+  };
   const root = {
     arpa: { lhc: { rank: 1, complete: progress } },
     resource: { Money: { display: true, amount: 1000, max: 1000, diff: 10 } },
@@ -174,23 +190,32 @@ function makeAdapter({
       };
     },
   };
-  const adapter = createCapturedProjectAdapter({
-    rootState,
-    offered: [offered("lhc", { rank: 1, progress, generation: 2 })],
+  let catalogReads = 0;
+  const adapter = createCapturedConstructionAdapter({
+    sources: [
+      createCapturedProjectSource({
+        rootState,
+        catalog: {
+          readProjects() {
+            catalogReads++;
+            return catalog ?? undefined;
+          },
+        },
+        resources,
+        controls,
+        readSettings: () => settings,
+      }),
+    ],
     resources,
     conflicts: { evaluate: () => conflict },
-    controls,
-    readSettings: () => ({
-      autoARPA: true,
-      arpaStep: 5,
-      arpaScaleWeighting: true,
-      arpa_lhc: true,
-      arpa_p_lhc: 0,
-      arpa_m_lhc: -1,
-      arpa_w_lhc: 2,
+    readOptions: () => ({
+      consumptionMode: "unlimited",
+      buildIfStorageFull: false,
+      ignoreZeroRate: false,
+      respectReservations: true,
     }),
   });
-  return { adapter, root, calls };
+  return { adapter, root, calls, reads: () => catalogReads };
 }
 
 // The captured row's build method advances the sampled project and no redraw method is involved.
@@ -242,6 +267,27 @@ function makeAdapter({
     "stale-project-state",
   );
   assert.deepEqual(moved.calls, []);
+}
+
+// With A.R.P.A. automation off the cycle never reaches for the catalog, so no player who leaves
+// the feature alone pays for a discovery pass.
+{
+  const off = makeAdapter({ settings: { autoARPA: false } });
+  assert.equal(runBuildAutomation(off.adapter).status, "succeeded");
+  assert.equal(off.reads(), 0);
+  assert.deepEqual(off.calls, []);
+  assert.equal(isProjectAutomationEnabled({ autoARPA: false }), false);
+  assert.equal(isProjectAutomationEnabled(undefined), false);
+  assert.equal(isProjectAutomationEnabled({ autoARPA: 1 }), true);
+}
+
+// A discovery pass that failed leaves no catalog: nothing is offered, and nothing is planned from
+// the previous cycle's offers.
+{
+  const failed = makeAdapter({ catalog: null });
+  assert.equal(runBuildAutomation(failed.adapter).status, "succeeded");
+  assert.deepEqual(failed.calls, []);
+  assert.equal(failed.reads(), 1);
 }
 
 console.log("captured project tests passed");
