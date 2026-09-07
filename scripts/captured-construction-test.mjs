@@ -99,6 +99,7 @@ function makeCycle({
       buildIfStorageFull: false,
       ignoreZeroRate: false,
       respectReservations,
+      saveWhiteholeGems: false,
     }),
   });
   return { adapter, bought, holdings };

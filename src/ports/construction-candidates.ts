@@ -26,6 +26,8 @@ export interface ConstructionCycleOptions {
   readonly ignoreZeroRate: boolean;
   /** Whether an existing commitment holds its resources back from these purchases. */
   readonly respectReservations: boolean;
+  /** White-hole prestige runs stop after a purchase that consumes Soul Gems. */
+  readonly saveWhiteholeGems: boolean;
 }
 
 export interface ConstructionCandidateSource {

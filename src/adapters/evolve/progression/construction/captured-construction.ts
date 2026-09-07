@@ -15,7 +15,6 @@
  *   it for storage", and a capped resource is genuinely not contended.
  * - **Knowledge-cap gating** is off (zero gate levels), so the Knowledge branch of the conflict
  *   planner stays inert rather than guessing which buildings raise the cap.
- * - **Soul Gem saving** is off; the whitehole prestige state behind it has no captured reader yet.
  */
 
 import type {
@@ -146,7 +145,7 @@ export function createCapturedConstructionAdapter(
         consumptionMode: options.consumptionMode,
         buildIfStorageFull: options.buildIfStorageFull,
         ignoreZeroRate: options.ignoreZeroRate,
-        saveWhiteholeGems: false,
+        saveWhiteholeGems: options.saveWhiteholeGems,
         knowledgeGate: ZERO_KNOWLEDGE_GATE,
       });
     },

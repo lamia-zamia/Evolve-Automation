@@ -134,8 +134,34 @@ function policy(targets, overrides = {}) {
     consumptionMode: "onePerTick",
     buildIfStorageFull: false,
     ignoreZeroRate: false,
+    saveWhiteholeGems: false,
     ...overrides,
   });
+}
+
+// --- white-hole Soul Gem saving stops the cycle after the purchase ------------------------------------------
+
+{
+  const page = makePage({
+    buildings: {
+      gem_structure: { count: 0, priceAt: () => ({ Soul_Gem: 1 }) },
+      later: { count: 0, priceAt: () => ({ Money: 1 }) },
+    },
+    resources: { Soul_Gem: { amount: 2 }, Money: { amount: 2 } },
+  });
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("gem_structure", 50), target("later", 40)], {
+      saveWhiteholeGems: true,
+    }),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    ["city-gem_structure"],
+    "a Soul Gem purchase ends the white-hole construction cycle",
+  );
 }
 
 /**
