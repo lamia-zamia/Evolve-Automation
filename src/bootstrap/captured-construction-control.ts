@@ -31,6 +31,7 @@ import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
+import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
@@ -49,6 +50,8 @@ export interface CapturedConstructionControlDependencies {
   readonly readPolicy: () => CapturedConstructionPolicy;
   /** Persisted A.R.P.A. settings, normalized at the adapter boundary. */
   readonly readSettings: () => unknown;
+  /** Script-derived commitments outside the captured game root. */
+  readonly scriptReservations?: CostReservationSource;
   /**
    * The technologies the game is offering, which is the only captured route to a technology's
    * price. Supply it to make the player's research queue reserve what it is saving for; without it
@@ -90,6 +93,7 @@ export function createCapturedConstructionControl(
   } = dependencies;
   const onSkipped = dependencies.onSkipped;
   const readOfferedTechs = dependencies.readOfferedTechs;
+  const scriptReservations = dependencies.scriptReservations;
   // The offered-technology catalog is asked for at most once per cycle, and only if something in
   // the cycle actually needs it. Every candidate consults the same reservations, so without this
   // the cycle would pay for one discovery pass per candidate.
@@ -119,6 +123,9 @@ export function createCapturedConstructionControl(
   const conflicts = createCapturedCostConflictReader({
     resources,
     reservations,
+    ...(scriptReservations === undefined
+      ? {}
+      : { additionalReservations: scriptReservations }),
   });
   const catalog = createCapturedProjectCatalog({
     rootState,

@@ -30,6 +30,8 @@ const UNAVAILABLE: CapturedCostConflict = Object.freeze({
 export interface CapturedCostConflictDependencies {
   readonly resources: GameResourceSource;
   readonly reservations: CostReservationSource;
+  /** Script-owned commitments not represented by the captured game root. */
+  readonly additionalReservations?: CostReservationSource;
 }
 
 export interface CapturedCostConflictReader {
@@ -40,17 +42,20 @@ export function createCapturedCostConflictReader(
   dependencies: CapturedCostConflictDependencies,
 ): CapturedCostConflictReader {
   const { resources, reservations } = dependencies;
+  const additionalReservations = dependencies.additionalReservations;
 
   return Object.freeze({
     evaluate(cost: Readonly<Record<string, number>>): CapturedCostConflict {
       const sample = reservations.readReservations();
-      if (sample.unavailable) return UNAVAILABLE;
-      if (sample.targets.length === 0) return NONE;
+      const additional = additionalReservations?.readReservations();
+      if (sample.unavailable || additional?.unavailable) return UNAVAILABLE;
+      const targets = [...sample.targets, ...(additional?.targets ?? [])];
+      if (targets.length === 0) return NONE;
 
       // One holdings sample covers the action's own cost and every reserved cost, so the
       // arithmetic reads one consistent set of numbers.
       const wanted = new Set<string>(Object.keys(cost));
-      for (const target of sample.targets) {
+      for (const target of targets) {
         for (const id of Object.keys(target.cost)) wanted.add(id);
       }
       const held = resources.readResources(wanted);
@@ -66,7 +71,7 @@ export function createCapturedCostConflictReader(
       }
       const conflict = findCostConflict({
         actionCost: cost,
-        reservedTargets: sample.targets,
+        reservedTargets: targets,
         resources: Object.freeze(holdings),
       });
       return conflict === null
