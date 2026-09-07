@@ -30,6 +30,9 @@ export interface CapturedResearchControlDependencies {
   readonly drawnActions: GameDrawnActionsReader;
   readonly mountSuppression: GameMountSuppression;
   readonly panels: GamePanelWorkspace;
+  /** Optional shared offer snapshot source supplied by a surrounding composition root. */
+  readonly readOfferedTechs?: () =>
+    readonly Readonly<OfferedTech>[] | undefined;
   readonly diagnostics?: TickDiagnostics | undefined;
   /** Reports a catalog or price the capture could not supply. */
   readonly onUnavailable?: (reason: string) => void;
@@ -60,6 +63,7 @@ export function createCapturedResearchControl(
     diagnostics,
   } = dependencies;
   const onUnavailable = dependencies.onUnavailable;
+  const sharedReadOfferedTechs = dependencies.readOfferedTechs;
   const resources = createCapturedResourceSource(rootState);
   const catalog = createCapturedTechCatalog({
     rootState,
@@ -107,7 +111,10 @@ export function createCapturedResearchControl(
       if (rootState.readRoot() === undefined) return NOT_CAPTURED;
       // One offered-technology snapshot per cycle: read, plan and execute all see the same list,
       // and it goes out of scope with the cycle rather than ageing into the next one.
-      offeredThisCycle = catalog.readOffered();
+      offeredThisCycle =
+        sharedReadOfferedTechs === undefined
+          ? catalog.readOffered()
+          : sharedReadOfferedTechs();
       try {
         const { reader, executor } = createCapturedResearchAdapter({
           rootState,

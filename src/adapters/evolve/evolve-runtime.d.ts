@@ -1,6 +1,7 @@
 import type { BrowserDiagnostics } from "../browser/diagnostics.ts";
 import type { DomQuery } from "../browser/dom.ts";
 import type { LegacyRuntimeEnvironment } from "../browser/legacy-runtime-environment.ts";
+import type { PageCapture } from "./page-capture.ts";
 
 /**
  * Evolve production compatibility boundary. The current Vue 2 integration is
@@ -11,4 +12,5 @@ export declare function startEvolveRuntime(
   dom: DomQuery,
   diagnostics: BrowserDiagnostics,
   environment: LegacyRuntimeEnvironment,
+  pageCapture?: PageCapture,
 ): void;

@@ -817,10 +817,10 @@ Only continue if you trust the source. Injected code:
       let parts = readGameParts(rawGame);
       if (!parts) return starUnavailable("invalid-game-state");
       if (!isNonArrayRecord(rawPoly)) return starUnavailable("invalid-universe");
-      let universeAffix = rawPoly.universeAffix;
-      if (typeof universeAffix != "function")
+      let universeAffix2 = rawPoly.universeAffix;
+      if (typeof universeAffix2 != "function")
         return starUnavailable("invalid-universe");
-      let affix = universeAffix.call(rawPoly, universe);
+      let affix = universeAffix2.call(rawPoly, universe);
       if (typeof affix != "string") return starUnavailable("invalid-universe");
       let rawAchievements = parts.stats.achieve;
       if (!isNonArrayRecord(rawAchievements))
@@ -1035,10 +1035,10 @@ Only continue if you trust the source. Injected code:
       let stats = readStats(rawGame);
       if (!stats) return unavailable("invalid-game-state");
       if (!isNonArrayRecord(rawPoly)) return unavailable("invalid-universe");
-      let universeAffix = rawPoly.universeAffix;
-      if (typeof universeAffix != "function")
+      let universeAffix2 = rawPoly.universeAffix;
+      if (typeof universeAffix2 != "function")
         return unavailable("invalid-universe");
-      let universe = universeAffix.call(rawPoly);
+      let universe = universeAffix2.call(rawPoly);
       if (typeof universe != "string") return unavailable("invalid-universe");
       let rawBanana = stats.banana;
       if (!isNonArrayRecord(rawBanana))
@@ -1163,14 +1163,14 @@ Only continue if you trust the source. Injected code:
       let inflationRun = Object.hasOwn(race2, "inflation") && race2.inflation !== !1, alevel = rawGame.alevel;
       if (typeof alevel != "function")
         return unavailable2("invalid-game-state", "alevel");
-      let achievementLevel2 = alevel.call(rawGame);
-      return isNonNegativeNumber(achievementLevel2) ? isNonNegativeNumber(rawWheelbarrowStar) ? Object.freeze({
+      let achievementLevel3 = alevel.call(rawGame);
+      return isNonNegativeNumber(achievementLevel3) ? isNonNegativeNumber(rawWheelbarrowStar) ? Object.freeze({
         status: "ready",
         input: Object.freeze({
           assistEnabled: assist === !0,
           inflationRun,
           wheelbarrowStar: rawWheelbarrowStar,
-          achievementLevel: achievementLevel2
+          achievementLevel: achievementLevel3
         })
       }) : unavailable2("invalid-achievement", "wheelbarrow") : unavailable2("invalid-game-state", "alevel");
     } catch {
@@ -2286,8 +2286,8 @@ Only continue if you trust the source. Injected code:
       let global = rawGame.global, alevel = rawGame.alevel, race2 = isNonArrayRecord(global) ? global.race : void 0;
       if (!isNonArrayRecord(race2) || typeof race2.species != "string" || typeof race2.gods != "string" || typeof alevel != "function")
         return unavailable7("invalid-game-state");
-      let achievementLevel2 = alevel.call(rawGame);
-      if (!isNonNegativeNumber(achievementLevel2))
+      let achievementLevel3 = alevel.call(rawGame);
+      if (!isNonNegativeNumber(achievementLevel3))
         return unavailable7("invalid-game-state", "alevel");
       let nowMs = itemId === "tech-stabilize_blackhole" ? dependencies.clock.nowMs() : 0;
       if (!isNonNegativeNumber(nowMs)) return unavailable7("invalid-clock");
@@ -2332,7 +2332,7 @@ Only continue if you trust the source. Injected code:
               return unavailable7("invalid-external-result", "fanatAchievements");
             let unlocked2 = dependencies.isAchievementUnlocked(
               rawCombination.achieve,
-              achievementLevel2
+              achievementLevel3
             );
             if (typeof unlocked2 != "boolean")
               return unavailable7("invalid-external-result", "achievement");
@@ -2364,7 +2364,7 @@ Only continue if you trust the source. Injected code:
         race: Object.freeze({
           species: race2.species,
           gods: race2.gods,
-          achievementLevel: achievementLevel2
+          achievementLevel: achievementLevel3
         }),
         guards: Object.freeze({
           bananaRepublic,
@@ -3111,8 +3111,8 @@ Only continue if you trust the source. Injected code:
     let forced = {};
     return activeTasks.storageTaskActive && (forced.autoStorage = !1), activeTasks.trashTaskActive && (forced.autoEject = !1), activeTasks.taxTaskActive && (forced.autoTax = !1), forced;
   }
-  function describeOverrideFailure(failure2) {
-    return `Condition ${failure2.conditionNumber} for setting ${failure2.settingKey} invalid! Fix or remove it. (${describeFailureReason(failure2.reason)})`;
+  function describeOverrideFailure(failure3) {
+    return `Condition ${failure3.conditionNumber} for setting ${failure3.settingKey} invalid! Fix or remove it. (${describeFailureReason(failure3.reason)})`;
   }
   function describeFailureReason(reason) {
     switch (reason.kind) {
@@ -4928,15 +4928,15 @@ Only continue if you trust the source. Injected code:
   }) {
     return {
       sampleEvaluator() {
-        let checkTypes = getCheckTypes(), checkCompare = getCheckCompare(), checkCustom = getCheckCustom(), sampled = /* @__PURE__ */ new Map();
+        let checkTypes = getCheckTypes(), checkCompare = getCheckCompare(), checkCustom = getCheckCustom(), sampled3 = /* @__PURE__ */ new Map();
         return {
           hasOperandType: (operandType) => !!checkTypes[operandType],
           readOperand: (operandType, argument) => {
             let checkType = checkTypes[operandType];
             if (!checkType)
               throw new Error(`${operandType} variable not found`);
-            let reads = sampled.get(operandType);
-            reads || (reads = /* @__PURE__ */ new Map(), sampled.set(operandType, reads));
+            let reads = sampled3.get(operandType);
+            reads || (reads = /* @__PURE__ */ new Map(), sampled3.set(operandType, reads));
             let read = reads.get(argument);
             if (!read) {
               try {
@@ -4982,8 +4982,8 @@ Only continue if you trust the source. Injected code:
         if (failures.length === 0 || getGameModal().isOpen())
           return;
         let gameLog = getGameLog(), shown = Object.values(getGame().global.lastMsg.all);
-        for (let failure2 of failures) {
-          let message = describeOverrideFailure(failure2);
+        for (let failure3 of failures) {
+          let message = describeOverrideFailure(failure3);
           shown.some((entry) => entry.m === message) || gameLog.logDanger("special", message, ["events", "major_events"]);
         }
       }
@@ -8768,7 +8768,7 @@ Only continue if you trust the source. Injected code:
     readWeightingSnapshot,
     readWeightingCandidate: readWeightingCandidate2,
     describeBuildingWeighting,
-    isEarlyGame,
+    isEarlyGame: isEarlyGame2,
     getIsPrestigeAllowed,
     getBananaRepublicObjectiveComplete,
     getInflationChallengeAssistActive,
@@ -8865,7 +8865,7 @@ Only continue if you trust the source. Injected code:
       updateWeighting() {
         let settings = getSettings(), projects = getProjects(), state = getState(), game = getGame(), queuedTargetSet = new Set(state.queuedTargets), triggerTargetSet = new Set(state.triggerTargets), isPrestigeAllowed2 = getIsPrestigeAllowed(), bananaRepublicObjectiveComplete = getBananaRepublicObjectiveComplete(), inflationChallengeAssistActive = getInflationChallengeAssistActive();
         for (let project of this.priorityList)
-          project.weighting = project._weighting * project.currentStep, project.isUnlocked() || (project.weighting = 0, project.extraDescription = "Locked<br>"), (!project.autoBuildEnabled || !settings.autoARPA) && (project.weighting = 0, project.extraDescription = "AutoBuild disabled<br>"), project.count >= project.autoMax && (project !== projects.ManaSyphon || !isPrestigeAllowed2("vacuum")) && (project.weighting = 0, project.extraDescription = "Maximum amount reached<br>"), settings.prestigeMADIgnoreArpa && isEarlyGame() && (project.weighting = 0, project.extraDescription = "Projects ignored Pre-MAD<br>"), queuedTargetSet.has(project) && (project.weighting = 0, project.extraDescription = "Queued project, processing...<br>"), triggerTargetSet.has(project) && (project.weighting = 0, project.extraDescription = "Active trigger, processing...<br>"), project.isAffordable(!0) || (project.weighting = 0, project.extraDescription = "Not enough storage<br>"), project === projects.ManaSyphon && settings.prestigeBioseedConstruct && settings.prestigeType !== "vacuum" && game.global.race.witch_hunter && (project.weighting = 0, project.extraDescription = "Not needed for current prestige<br>"), project === projects.ManaSyphon && isVacuumSyphonStage() && project.weighting > 0 && (project.weighting *= settings.buildingWeightingVacuumCollapse ?? 10, project.extraDescription += "Vacuum Collapse Mana Syphon multiplier<br>"), project.weighting > 0 && settings.achievementGuards && settings.guardBananaRepublic && game.global.race.banana && project === projects.Monument && !bananaRepublicObjectiveComplete("b5") && (project.weighting *= settings.buildingWeightingBananaObjective, project.extraDescription += "Banana Republic objective<br>"), project.weighting > 0 && inflationChallengeAssistActive() && project === projects.StockExchange && (project.weighting *= settings.buildingWeightingInflationMoney, project.extraDescription += "Inflation challenge Money helper<br>"), settings.arpaScaleWeighting && (project.weighting /= 1 - 0.01 * project.progress), project.weighting > 0 && (project.extraDescription = `AutoARPA weighting: ${getNiceNumber(
+          project.weighting = project._weighting * project.currentStep, project.isUnlocked() || (project.weighting = 0, project.extraDescription = "Locked<br>"), (!project.autoBuildEnabled || !settings.autoARPA) && (project.weighting = 0, project.extraDescription = "AutoBuild disabled<br>"), project.count >= project.autoMax && (project !== projects.ManaSyphon || !isPrestigeAllowed2("vacuum")) && (project.weighting = 0, project.extraDescription = "Maximum amount reached<br>"), settings.prestigeMADIgnoreArpa && isEarlyGame2() && (project.weighting = 0, project.extraDescription = "Projects ignored Pre-MAD<br>"), queuedTargetSet.has(project) && (project.weighting = 0, project.extraDescription = "Queued project, processing...<br>"), triggerTargetSet.has(project) && (project.weighting = 0, project.extraDescription = "Active trigger, processing...<br>"), project.isAffordable(!0) || (project.weighting = 0, project.extraDescription = "Not enough storage<br>"), project === projects.ManaSyphon && settings.prestigeBioseedConstruct && settings.prestigeType !== "vacuum" && game.global.race.witch_hunter && (project.weighting = 0, project.extraDescription = "Not needed for current prestige<br>"), project === projects.ManaSyphon && isVacuumSyphonStage() && project.weighting > 0 && (project.weighting *= settings.buildingWeightingVacuumCollapse ?? 10, project.extraDescription += "Vacuum Collapse Mana Syphon multiplier<br>"), project.weighting > 0 && settings.achievementGuards && settings.guardBananaRepublic && game.global.race.banana && project === projects.Monument && !bananaRepublicObjectiveComplete("b5") && (project.weighting *= settings.buildingWeightingBananaObjective, project.extraDescription += "Banana Republic objective<br>"), project.weighting > 0 && inflationChallengeAssistActive() && project === projects.StockExchange && (project.weighting *= settings.buildingWeightingInflationMoney, project.extraDescription += "Inflation challenge Money helper<br>"), settings.arpaScaleWeighting && (project.weighting /= 1 - 0.01 * project.progress), project.weighting > 0 && (project.extraDescription = `AutoARPA weighting: ${getNiceNumber(
             project.weighting
           )} (${project.currentStep}%)<br>${project.extraDescription}`);
       },
@@ -17884,11 +17884,11 @@ Only continue if you trust the source. Injected code:
       let technology2 = getGame().global.tech[research];
       return technology2 && technology2 >= level;
     }
-    function isEarlyGame() {
+    function isEarlyGame2() {
       let race2 = getGame().global.race;
       return race2.cataclysm || race2.orbit_decayed || race2.lone_survivor || race2.warlord ? !1 : race2.truepath || race2.sludge || race2.ultra_sludge ? !haveTech("high_tech", 7) : !haveTech("mad");
     }
-    return { getGovernor, haveTask, haveTech, isEarlyGame };
+    return { getGovernor, haveTask, haveTech, isEarlyGame: isEarlyGame2 };
   }
 
   // src/game/shrine-intelligence.ts
@@ -24928,13 +24928,13 @@ Only continue if you trust the source. Injected code:
           );
         let workerRemovals = [], workerAdditions = [], servantRemovals = [], servantAdditions = [];
         for (let assignment of decision2.assignments) {
-          let job = active.rawJobs[assignment.jobToken], sampled = active.input.jobs[assignment.jobToken];
-          if (job === void 0 || sampled === void 0)
+          let job = active.rawJobs[assignment.jobToken], sampled3 = active.input.jobs[assignment.jobToken];
+          if (job === void 0 || sampled3 === void 0)
             return rejected(
               "unknown-job-token",
               "Jobs decision contains an unknown job token"
             );
-          let workerDelta = assignment.workers - sampled.workers;
+          let workerDelta = assignment.workers - sampled3.workers;
           if (workerDelta < 0 ? (requireFunction(
             job.removeWorkers,
             `jobList[${assignment.jobToken}].removeWorkers`
@@ -24942,7 +24942,7 @@ Only continue if you trust the source. Injected code:
             job.addWorkers,
             `jobList[${assignment.jobToken}].addWorkers`
           ), workerAdditions.push([job, workerDelta])), active.input.manageServants) {
-            let servantDelta = assignment.servants - sampled.servants;
+            let servantDelta = assignment.servants - sampled3.servants;
             servantDelta < 0 ? (requireFunction(
               job.removeServants,
               `jobList[${assignment.jobToken}].removeServants`
@@ -25124,13 +25124,13 @@ Only continue if you trust the source. Injected code:
       }
     }), executor = Object.freeze({
       hire(decision2) {
-        let active = session, sampled = lastState;
-        if (active === null || sampled === null)
+        let active = session, sampled3 = lastState;
+        if (active === null || sampled3 === null)
           return stale(
             "mercenary-session-missing",
             "mercenary session is missing"
           );
-        if (!Number.isFinite(decision2.expectedSoldiers) || !Number.isFinite(decision2.expectedCost) || !Number.isFinite(decision2.expectedMoneyCurrent) || !Number.isFinite(decision2.expectedMoneySpare) || !decisionMatchesState(decision2, sampled))
+        if (!Number.isFinite(decision2.expectedSoldiers) || !Number.isFinite(decision2.expectedCost) || !Number.isFinite(decision2.expectedMoneyCurrent) || !Number.isFinite(decision2.expectedMoneySpare) || !decisionMatchesState(decision2, sampled3))
           return rejected(
             "invalid-mercenary-decision",
             "mercenary decision does not match the sampled state"
@@ -25479,21 +25479,21 @@ Only continue if you trust the source. Injected code:
       }
     }), executor = Object.freeze({
       execute(decision2) {
-        let active = session, sampled = sample;
-        if (active === null || sampled === null)
+        let active = session, sampled3 = sample;
+        if (active === null || sampled3 === null)
           return stale("spy-session-missing", "spy session is missing");
         if (dependencies.getSpyManager() !== active.manager || active.manager.foreignActive !== active.foreigns || active.manager.isForeignUnlocked === !0 !== active.foreignUnlocked)
           return stale("spy-manager-changed", "spy manager state changed");
-        let expected = sampled.kind === "training" ? planSpyTraining(sampled.input) : planSpyEspionage(sampled.input);
+        let expected = sampled3.kind === "training" ? planSpyTraining(sampled3.input) : planSpyEspionage(sampled3.input);
         if (expected === null || !decisionMatches(expected, decision2))
           return rejected(
             "invalid-spy-decision",
             "spy decision does not match the sampled plan"
           );
-        if (sampled.kind === "training" && !governmentMatchesTraining(sampled) || sampled.kind === "espionage" && !governmentMatchesEspionage(sampled))
+        if (sampled3.kind === "training" && !governmentMatchesTraining(sampled3) || sampled3.kind === "espionage" && !governmentMatchesEspionage(sampled3))
           return stale("spy-foreign-changed", "foreign government state changed");
         if (sample = null, decision2.kind === "train-spy") {
-          if (sampled.kind !== "training")
+          if (sampled3.kind !== "training")
             return rejected("invalid-spy-phase", "spy training phase changed");
           let gameLog = requireRecord(dependencies.getGameLog(), "GameLog"), logSuccess = requireFunction(
             gameLog.logSuccess,
@@ -25508,7 +25508,7 @@ Only continue if you trust the source. Injected code:
             "spy training panel is no longer available"
           );
         }
-        if (sampled.kind !== "espionage")
+        if (sampled3.kind !== "espionage")
           return rejected("invalid-spy-phase", "spy espionage phase changed");
         if (decision2.kind === "release-foreign") {
           let warManager = requireRecord(
@@ -25518,7 +25518,7 @@ Only continue if you trust the source. Injected code:
             warManager.release,
             "WarManager.release"
           );
-          return Reflect.apply(release, warManager, [decision2.governmentId]), sampled.foreign.released = !0, SUCCEEDED;
+          return Reflect.apply(release, warManager, [decision2.governmentId]), sampled3.foreign.released = !0, SUCCEEDED;
         }
         if (decision2.kind === "perform-espionage") {
           let performEspionage = requireFunction(
@@ -26423,7 +26423,7 @@ Only continue if you trust the source. Injected code:
       settings.magicAlchemyManaUse,
       "settings.magicAlchemyManaUse"
     ));
-    let magicFullmetalHelper = !!settings.magicFullmetalHelper, universeMagic = !1, alchemyTech = 0, fullmetalStar = 0, achievementLevel2 = 0, fullmetalEnabled = !1;
+    let magicFullmetalHelper = !!settings.magicFullmetalHelper, universeMagic = !1, alchemyTech = 0, fullmetalStar = 0, achievementLevel3 = 0, fullmetalEnabled = !1;
     if (magicFullmetalHelper && (universeMagic = requireRecord(
       requireRecord(game.global, "game.global").race,
       "game.global.race"
@@ -26433,10 +26433,10 @@ Only continue if you trust the source. Injected code:
         "fullmetal achievement star"
       );
       let alevel = requireFunction(game.alevel, "game.alevel");
-      achievementLevel2 = requireNumber(
+      achievementLevel3 = requireNumber(
         Reflect.apply(alevel, game, []),
         "game.alevel()"
-      ), fullmetalStar < achievementLevel2 && (manaCurrentQuantity = requireNumber(
+      ), fullmetalStar < achievementLevel3 && (manaCurrentQuantity = requireNumber(
         mana.currentQuantity,
         "resources.Mana.currentQuantity"
       ), manaCurrentQuantity >= 1 && (crystalDemanded && (crystalCurrentQuantity = requireNumber(
@@ -26458,7 +26458,7 @@ Only continue if you trust the source. Injected code:
       universeMagic,
       alchemyTech,
       fullmetalStar,
-      achievementLevel: achievementLevel2,
+      achievementLevel: achievementLevel3,
       resources: freezeResources(sampledResources)
     });
   }
@@ -33939,16 +33939,16 @@ Only continue if you trust the source. Injected code:
       });
     }
     if (identity(buildings, "SpireWaygate", building3)) {
-      let prestigeType = readStringSetting(settings, "prestigeType"), universeAffix = Reflect.apply(
+      let prestigeType = readStringSetting(settings, "prestigeType"), universeAffix2 = Reflect.apply(
         requireFunction(poly.universeAffix, "poly.universeAffix"),
         poly,
         []
       );
-      if (typeof universeAffix != "string")
+      if (typeof universeAffix2 != "string")
         throw new TypeError("poly.universeAffix() must be a string");
       let stats = recordAt(game, ["global", "stats", "spire"], "game"), spireStats = requireRecord(
-        stats[universeAffix] ?? {},
-        `game.global.stats.spire.${universeAffix}`
+        stats[universeAffix2] ?? {},
+        `game.global.stats.spire.${universeAffix2}`
       );
       return Object.freeze({
         kind: "spire-waygate",
@@ -34783,8 +34783,8 @@ Only continue if you trust the source. Injected code:
               "power-session-changed",
               "Power planning session changed"
             );
-          let failure2 = preflightOperations(active, decision2.operations);
-          return failure2 !== null ? stale("power-precondition-changed", failure2) : (applyOperations(active, decision2.operations), SUCCEEDED);
+          let failure3 = preflightOperations(active, decision2.operations);
+          return failure3 !== null ? stale("power-precondition-changed", failure3) : (applyOperations(active, decision2.operations), SUCCEEDED);
         }
         if (decision2.kind !== "shutdown-warned-building")
           return rejected("invalid-power-decision", "Unsupported power decision");
@@ -35681,7 +35681,7 @@ Only continue if you trust the source. Injected code:
           label,
           unlocked: !0,
           autoBuildEnabled: !0
-        }), readTarget3 = (value, path, filterBuildable = !1) => {
+        }), readTarget4 = (value, path, filterBuildable = !1) => {
           let target = requireRecord(value, path), unlocked2 = filterBuildable ? callBoolean(target, "isUnlocked", path) : !0, autoBuildEnabled = filterBuildable ? unlocked2 && !!target.autoBuildEnabled : !0;
           return Object.freeze({
             costs: !filterBuildable || autoBuildEnabled ? readCosts4(target, path, resources, register) : Object.freeze([]),
@@ -35695,7 +35695,7 @@ Only continue if you trust the source. Injected code:
             throw new TypeError(`${path} must be an array`);
           return Object.freeze(
             value.map(
-              (target, index) => readTarget3(target, `${path}[${index}]`, filterBuildable)
+              (target, index) => readTarget4(target, `${path}[${index}]`, filterBuildable)
             )
           );
         }, assignExtra = !!settings.storageAssignExtra, noTrade = assignExtra ? !!requireRecord(
@@ -35748,7 +35748,7 @@ Only continue if you trust the source. Injected code:
             kind: "fleet",
             enabled: fleetEnabled,
             targets: Object.freeze(fleetEnabled ? [
-              readTarget3(
+              readTarget4(
                 {
                   cost: requireRecord(
                     fleet.nextShipCost,
@@ -38025,12 +38025,12 @@ Only continue if you trust the source. Injected code:
       if (weightDiffRatio < 10) {
         let otherAffordable = affordable2[other.key];
         if (otherAffordable === void 0) {
-          let sampled = sample.affordability[other.key];
-          if (sampled === void 0)
+          let sampled3 = sample.affordability[other.key];
+          if (sampled3 === void 0)
             throw new TypeError(
               `affordability sample missing for competitor ${other.key}`
             );
-          otherAffordable = sampled, cacheAffordable(other.key, otherAffordable);
+          otherAffordable = sampled3, cacheAffordable(other.key, otherAffordable);
         }
         if (otherAffordable)
           continue;
@@ -50848,11 +50848,1852 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     };
   }
 
-  // src/adapters/evolve/evolve-runtime.js
-  function startEvolveRuntime($, diagnostics, runtimeEnvironment) {
-    startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment);
+  // src/domain/game-world.ts
+  var ABSENT_RESOURCE = Object.freeze({
+    unlocked: !1,
+    amount: 0,
+    max: 0,
+    rateOfChange: 0,
+    storageRatio: 0
+  });
+  function sampled(values, id, kind) {
+    let value = values.get(id);
+    if (value === void 0)
+      throw new TypeError(`${kind} ${id} was not sampled`);
+    return value;
   }
-  function startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment, testSurface, registerRuntimeSupportTestSurface) {
+  function techLevel2(sample, id) {
+    return sampled(sample.levels, id, "tech");
+  }
+  function hasTech(sample, id, level = 1) {
+    return techLevel2(sample, id) >= level;
+  }
+  function traitRank(sample, trait2) {
+    return sampled(sample.ranks, trait2, "trait");
+  }
+  function hasTrait(sample, trait2) {
+    return traitRank(sample, trait2) > 0;
+  }
+  function resourceView(sample, id) {
+    return sampled(sample.resources, id, "resource");
+  }
+  function canAfford2(sample, cost) {
+    for (let [id, amount] of Object.entries(cost))
+      if (!(amount <= 0) && !(resourceView(sample, id).amount >= amount))
+        return !1;
+    return !0;
+  }
+
+  // src/adapters/evolve/captured-world-state.ts
+  function readCounter(owner, key) {
+    let value = Number(readProperty(owner, key));
+    return Number.isFinite(value) ? value : 0;
+  }
+  function readRank(value) {
+    return typeof value == "number" ? Number.isFinite(value) ? value : 0 : value === !0 ? 1 : 0;
+  }
+  function readResourceView2(resource2) {
+    if (!isRecord(resource2)) return ABSENT_RESOURCE;
+    let amount = Number(resource2.amount), max = Number(resource2.max);
+    return Object.freeze({
+      unlocked: !!resource2.display,
+      amount,
+      max,
+      rateOfChange: Number(resource2.diff),
+      // An uncapped resource is stored as max -1, and is never near a ceiling.
+      storageRatio: max > 0 ? amount / max : 0
+    });
+  }
+  function createCapturedTechSource(rootState) {
+    return Object.freeze({
+      readTech(ids) {
+        let root = rootState.readRoot();
+        if (root === void 0) return;
+        let tech = readProperty(root, "tech"), levels = /* @__PURE__ */ new Map();
+        for (let id of ids)
+          levels.set(id, readCounter(tech, id));
+        return Object.freeze({ levels });
+      }
+    });
+  }
+  function createCapturedRaceTraitSource(rootState) {
+    return Object.freeze({
+      readRaceTraits(traits) {
+        let root = rootState.readRoot();
+        if (root === void 0) return;
+        let race2 = readProperty(root, "race"), ranks = /* @__PURE__ */ new Map();
+        for (let trait2 of traits)
+          ranks.set(trait2, readRank(readProperty(race2, trait2)));
+        return Object.freeze({ ranks });
+      }
+    });
+  }
+  function createCapturedResourceSource(rootState) {
+    return Object.freeze({
+      readResources(ids) {
+        let root = rootState.readRoot();
+        if (root === void 0) return;
+        let resource2 = readProperty(root, "resource"), resources = /* @__PURE__ */ new Map();
+        for (let id of ids)
+          resources.set(id, readResourceView2(readProperty(resource2, id)));
+        return Object.freeze({ resources });
+      }
+    });
+  }
+
+  // src/adapters/evolve/captured-tab-discovery.ts
+  var MAIN_TAB_CONTROL = "#mainColumn div.content", MAIN_TAB_SETTING = "civTabs", SUB_TAB_CONTROLS = Object.freeze(
+    {
+      spaceTabs: "mTabCivil",
+      govTabs: "mTabCivic",
+      marketTabs: "mTabResource"
+    }
+  ), MAIN_TAB_PANELS = Object.freeze({
+    1: "mTabCivil",
+    2: "mTabCivic",
+    3: "mTabResearch",
+    4: "mTabResource",
+    5: "mTabArpa",
+    6: "mTabStats"
+  }), NOTHING = Object.freeze([]);
+  function failure2(code, message) {
+    return Object.freeze({
+      outcome: rejected(code, message),
+      discovered: NOTHING
+    });
+  }
+  function observed(whileDrawn) {
+    if (whileDrawn !== void 0)
+      try {
+        whileDrawn();
+      } catch (error) {
+        return failure2("tab-observer-failed", String(error));
+      }
+    return Object.freeze({ outcome: SUCCEEDED, discovered: NOTHING });
+  }
+  function isValidStep(step) {
+    let index = readProperty(step, "index");
+    return typeof readProperty(step, "setting") == "string" && typeof readProperty(step, "control") == "string" && typeof index == "number" && Number.isSafeInteger(index) && index >= 0;
+  }
+  function createCapturedTabDiscovery(dependencies) {
+    let { rootState, controls: controls4, mountSuppression, panels } = dependencies;
+    return Object.freeze({
+      discover(path, options2 = {}) {
+        let { whileDrawn, isPanelDrawn, discard } = options2, first = path[0];
+        if (first === void 0)
+          return failure2("empty-tab-path", "a discovery path names no panel");
+        if (!path.every(isValidStep))
+          return failure2(
+            "invalid-tab-step",
+            "a discovery step needs a setting, a control, and a non-negative index"
+          );
+        let settings = readProperty(rootState.readRoot(), "settings");
+        if (!isRecord(settings))
+          return failure2(
+            "game-state-not-captured",
+            "the game has not created its settings yet"
+          );
+        let preloaded = settings.tabLoad === !0;
+        if (preloaded || path.every((step) => settings[step.setting] === step.index)) {
+          if (isPanelDrawn === void 0 || isPanelDrawn())
+            return observed(whileDrawn);
+          if (preloaded)
+            return failure2(
+              "panel-not-drawn",
+              "every tab is preloaded but the panel is not there"
+            );
+        }
+        let playerTabs = /* @__PURE__ */ new Map();
+        for (let step of path) {
+          let current = settings[step.setting];
+          if (typeof current != "number" || !Number.isFinite(current))
+            return failure2(
+              "unknown-player-tab",
+              `the game has not recorded settings.${step.setting}`
+            );
+          playerTabs.has(step.setting) || playerTabs.set(step.setting, current);
+        }
+        if (controls4.resolve(first.control) === void 0)
+          return failure2(
+            "tab-control-missing",
+            `no captured control for ${first.control}`
+          );
+        if (!mountSuppression.available)
+          return failure2(
+            "mount-suppression-unavailable",
+            "temporary component mounting cannot be suppressed"
+          );
+        let outermost = { control: first.control, setting: first.setting };
+        function restorePlayerView() {
+          let handle = controls4.resolve(outermost.control);
+          if (handle === void 0)
+            return `no captured control for ${outermost.control}`;
+          let restore = controls4.invoke(handle, "swapTab", [
+            playerTabs.get(outermost.setting)
+          ]);
+          return restore.ok ? void 0 : restore.detail ?? restore.reason;
+        }
+        let discardScope = discard === void 0 ? {} : {
+          onComponentBound: (selector) => {
+            if (selector === discard.afterBinding)
+              for (let container of discard.containers)
+                workspace?.discard(container);
+          }
+        }, playerPanel = MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1], targetPanel = MAIN_TAB_PANELS[first.index], workspace;
+        targetPanel !== void 0 && (workspace = panels.open({ keep: playerPanel, scratch: targetPanel }));
+        let before = new Set(controls4.capturedElementIds()), playerAnimation = settings.animated, stepFailure, restoreFailure, observerFailure;
+        try {
+          settings.animated = !1, mountSuppression.withoutMounting(() => {
+            for (let step of path) {
+              let handle = controls4.resolve(step.control);
+              if (handle === void 0) {
+                stepFailure = failure2(
+                  "tab-control-missing",
+                  `no captured control for ${step.control}`
+                );
+                break;
+              }
+              settings[step.setting] = step.index;
+              let swap = controls4.invoke(handle, "swapTab", [step.index]);
+              if (!swap.ok) {
+                let detail = swap.detail ?? swap.reason;
+                stepFailure = Object.freeze({
+                  outcome: swap.reason === "stale-control" ? stale("stale-tab-control", detail) : rejected("tab-draw-failed", detail),
+                  discovered: NOTHING
+                });
+                break;
+              }
+            }
+            if (stepFailure === void 0 && whileDrawn !== void 0)
+              try {
+                whileDrawn();
+              } catch (error) {
+                observerFailure = String(error);
+              }
+          }, discardScope);
+        } finally {
+          for (let [setting, value] of playerTabs) settings[setting] = value;
+          workspace === void 0 ? restoreFailure = restorePlayerView() : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back")), settings.animated = playerAnimation;
+        }
+        if (stepFailure !== void 0) return stepFailure;
+        let discovered = controls4.capturedElementIds().filter((id) => !before.has(id));
+        return Object.freeze({
+          // The draw worked and the way back did not: the discovered controls are real, and leaving
+          // someone on a tab they did not choose is not a detail to swallow.
+          outcome: observerFailure !== void 0 ? rejected("tab-observer-failed", observerFailure) : restoreFailure === void 0 ? SUCCEEDED : rejected("tab-restore-failed", restoreFailure),
+          discovered: Object.freeze(discovered)
+        });
+      }
+    });
+  }
+
+  // src/adapters/evolve/script-build-gates.ts
+  function readNumber2(value) {
+    let number = Number(value);
+    return Number.isFinite(number) ? number : Number.NaN;
+  }
+  function createScriptKnowledgeGateReader(dependencies) {
+    return () => {
+      let state = dependencies.getState(), capacity = dependencies.resources.readResources(["Knowledge"])?.resources.get("Knowledge")?.max;
+      return Object.freeze({
+        cheapestTechKnowledge: isRecord(state) ? readNumber2(state.cheapestTechKnowledge) : Number.NaN,
+        knowledgeRequiredByBuildTargets: isRecord(state) ? readNumber2(state.knowledgeRequiredByBuildTargets) : Number.NaN,
+        knowledgeCapacity: capacity === void 0 ? Number.NaN : capacity
+      });
+    };
+  }
+  function createScriptStorageRequirementReader(dependencies) {
+    return (resourceIds) => {
+      let resources = dependencies.getResources?.();
+      if (!isRecord(resources)) return;
+      let values = {};
+      for (let id of resourceIds) {
+        let resource2 = resources[id];
+        if (!isRecord(resource2)) return;
+        let value = Number(resource2.storageRequired);
+        if (!Number.isFinite(value)) return;
+        values[id] = value;
+      }
+      return Object.freeze(values);
+    };
+  }
+
+  // src/adapters/evolve/script-cost-reservations.ts
+  var NO_RESERVATIONS = Object.freeze({
+    targets: Object.freeze([]),
+    unavailable: !1
+  }), UNAVAILABLE = Object.freeze({
+    targets: Object.freeze([]),
+    unavailable: !0
+  }), QUEUE_CAUSES = /* @__PURE__ */ new Set(["Queue", "Research queue"]);
+  function readCost4(value) {
+    if (!isRecord(value)) return;
+    let cost = {};
+    for (let [resourceId3, rawAmount] of Object.entries(value)) {
+      if (!isFiniteNumber(rawAmount) || rawAmount <= 0) return;
+      cost[resourceId3] = rawAmount;
+    }
+    return Object.freeze(cost);
+  }
+  function createScriptCostReservationSource(dependencies) {
+    return Object.freeze({
+      readReservations() {
+        let state = dependencies.getState();
+        if (!isRecord(state) || !Array.isArray(state.conflictTargets))
+          return UNAVAILABLE;
+        let targets = [];
+        for (let rawTarget of state.conflictTargets) {
+          if (!isRecord(rawTarget))
+            return UNAVAILABLE;
+          let name = rawTarget.name, cause = rawTarget.cause;
+          if (typeof name != "string" || typeof cause != "string")
+            return UNAVAILABLE;
+          if (QUEUE_CAUSES.has(cause)) {
+            if (name === "Queue data unavailable") return UNAVAILABLE;
+            continue;
+          }
+          let cost = readCost4(rawTarget.cost);
+          if (cost === void 0)
+            return UNAVAILABLE;
+          targets.push(Object.freeze({ name, cause, cost }));
+        }
+        return targets.length === 0 ? NO_RESERVATIONS : Object.freeze({
+          targets: Object.freeze(targets),
+          unavailable: !1
+        });
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/build/script-build-policy.ts
+  function callMethod2(record, name, path) {
+    let method = requireFunction(record[name], `${path}.${name}`);
+    return Reflect.apply(method, record, []);
+  }
+  function readConsumption(record, path) {
+    return Object.freeze(
+      requireArray(record.consumption, `${path}.consumption`).map(
+        (raw, index) => {
+          let entryPath = `${path}.consumption[${index}]`, entry = requireRecord(raw, entryPath), resource2 = requireRecord(
+            entry.resource,
+            `${entryPath}.resource`
+          );
+          return Object.freeze({
+            resourceId: requireNonEmptyString(
+              resource2._id,
+              `${entryPath}.resource._id`
+            ),
+            nonNegativeRate: Number(entry.rate) >= 0
+          });
+        }
+      )
+    );
+  }
+  function readTarget3(raw, index) {
+    let path = `BuildingManager.managedPriorityList()[${index}]`, record = requireRecord(raw, path), candidate = readWeightingCandidate(record), flags = requireRecord(record.is, `${path}.is`), definition = readProperty(record, "definition"), declaredRegion = readProperty(definition, "region"), region = typeof declaredRegion == "string" && declaredRegion.length > 0 ? declaredRegion : candidate.tab;
+    return Object.freeze({
+      key: candidate.id,
+      elementId: requireNonEmptyString(
+        readProperty(record, "elementId"),
+        `${path}.elementId`
+      ),
+      region: requireNonEmptyString(region, `${path}.region`),
+      id: candidate.actionId,
+      weighting: requireNumber(record.weighting, `${path}.weighting`),
+      maximum: candidate.autoMax,
+      knowledge: candidate.knowledge,
+      important: !!flags.important,
+      consumption: readConsumption(record, path)
+    });
+  }
+  function readOptions3(settings) {
+    let rawMode = settings.buildingConsumptionCheck;
+    return Object.freeze({
+      consumptionMode: rawMode === "perResource" ? "perResource" : rawMode === "unlimited" ? "unlimited" : "onePerTick",
+      buildIfStorageFull: !!settings.buildingBuildIfStorageFull,
+      ignoreZeroRate: !!settings.buildingsIgnoreZeroRate,
+      // Reservation enforcement is the captured construction contract's safe default; the legacy
+      // build settings have no separate opt-out for it.
+      respectReservations: !0,
+      saveWhiteholeGems: settings.prestigeType === "whitehole" && !!settings.prestigeWhiteholeSaveGems
+    });
+  }
+  function createScriptBuildPolicyReader({
+    getBuildingManager,
+    getSettings,
+    onSkipped
+  }) {
+    return () => {
+      let manager = requireRecord(getBuildingManager(), "BuildingManager");
+      callMethod2(manager, "updateWeighting", "BuildingManager");
+      let managed = requireArray(
+        callMethod2(manager, "managedPriorityList", "BuildingManager"),
+        "BuildingManager.managedPriorityList()"
+      ), buildings = [];
+      for (let [index, raw] of managed.entries())
+        try {
+          buildings.push(readTarget3(raw, index));
+        } catch (error) {
+          let key = String(readProperty(raw, "catalogKey") ?? index);
+          onSkipped?.(key, String(error));
+        }
+      return Object.freeze({
+        buildings: Object.freeze(buildings),
+        ...readOptions3(requireRecord(getSettings(), "settings"))
+      });
+    };
+  }
+
+  // src/adapters/evolve/progression/research/captured-tech-catalog.ts
+  var RESEARCH_TAB_INDEX = 3, OFFERED_TECH_SELECTOR = "#tech .action", RESEARCH_PANEL_SELECTOR = "#tech", UNREAD_RESEARCH_CONTENT = Object.freeze({
+    afterBinding: "#resContent",
+    containers: Object.freeze(["oldTech"])
+  }), RESEARCH_TAB_PATH = Object.freeze([
+    Object.freeze({
+      setting: MAIN_TAB_SETTING,
+      control: MAIN_TAB_CONTROL,
+      index: RESEARCH_TAB_INDEX
+    })
+  ]);
+  function createCapturedTechCatalog(dependencies) {
+    let { rootState, discovery, drawnActions, controls: controls4 } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    });
+    return Object.freeze({
+      readOffered() {
+        if (rootState.readRoot() === void 0) {
+          reportUnavailable("the game root has not been captured yet");
+          return;
+        }
+        let drawn, result2 = discovery.discover(RESEARCH_TAB_PATH, {
+          isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
+          discard: UNREAD_RESEARCH_CONTENT,
+          whileDrawn: () => {
+            drawn = Object.freeze(
+              drawnActions.read(OFFERED_TECH_SELECTOR).map(
+                (action) => Object.freeze({
+                  elementId: action.id,
+                  cost: action.cost,
+                  // Which binding of this control the offer belongs to. The game rebinds an action
+                  // every time it draws it, and a superseded closure keeps working, so recording the
+                  // generation here is what lets the executor refuse one from an older draw.
+                  generation: controls4.resolve(action.id)?.generation ?? 0
+                })
+              )
+            );
+          }
+        });
+        if (result2.outcome.status !== "succeeded" || drawn === void 0) {
+          reportUnavailable(
+            result2.outcome.status === "succeeded" ? "the research panel was drawn but read nothing" : result2.outcome.failure?.message ?? result2.outcome.status
+          );
+          return;
+        }
+        return drawn;
+      }
+    });
+  }
+
+  // src/adapters/evolve/captured-action-costs.ts
+  var QUEUE_ELEMENT_ID = "buildQueue", COST_PREFIX = "res";
+  function readQueueArray(rootState) {
+    let queue = readProperty(rootState.readRoot(), "queue"), entries = readProperty(queue, "queue");
+    return Array.isArray(entries) ? entries : void 0;
+  }
+  function probeEntry(actionId) {
+    let separator = actionId.indexOf("-"), type = separator === -1 ? actionId : actionId.slice(separator + 1), action = separator === -1 ? actionId : actionId.slice(0, separator);
+    return {
+      id: actionId,
+      action,
+      type,
+      label: actionId,
+      cna: !1,
+      time: 0,
+      t_max: 0,
+      q: 1,
+      qs: 1,
+      bres: !1
+    };
+  }
+  function parseCosts(value) {
+    if (!isRecord(value)) return;
+    let costs = {};
+    for (let key of Object.keys(value)) {
+      let amount = value[key];
+      if (typeof amount != "number" || !Number.isFinite(amount)) continue;
+      let name = key.startsWith(`${COST_PREFIX}-`) ? key.slice(COST_PREFIX.length + 1) : key;
+      name.length > 0 && (costs[name] = amount);
+    }
+    return Object.freeze(costs);
+  }
+  function createCapturedActionCostReader(dependencies) {
+    let { rootState, controls: controls4 } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    });
+    return Object.freeze({
+      readCost(actionId) {
+        let handle = controls4.resolve(QUEUE_ELEMENT_ID);
+        if (handle === void 0) {
+          reportUnavailable(actionId, "build queue control not captured");
+          return;
+        }
+        let entries = readQueueArray(rootState);
+        if (entries === void 0) {
+          reportUnavailable(actionId, "game queue unavailable");
+          return;
+        }
+        let index = entries.length;
+        entries.push(probeEntry(actionId));
+        let result2;
+        try {
+          result2 = controls4.invoke(handle, "setData", [index, COST_PREFIX]);
+        } finally {
+          entries.length > index && entries.splice(index, entries.length - index);
+        }
+        if (!result2.ok) {
+          reportUnavailable(actionId, `${result2.reason}: ${result2.detail ?? ""}`);
+          return;
+        }
+        let costs = parseCosts(result2.value);
+        if (costs === void 0) {
+          reportUnavailable(actionId, "cost result was not a record");
+          return;
+        }
+        return costs;
+      }
+    });
+  }
+
+  // src/adapters/evolve/captured-achievement-state.ts
+  function universeAffix(universe) {
+    if (typeof universe == "string")
+      switch (universe) {
+        case "evil":
+          return "e";
+        case "antimatter":
+          return "a";
+        case "heavy":
+          return "h";
+        case "micro":
+          return "m";
+        case "magic":
+          return "mg";
+        default:
+          return "l";
+      }
+  }
+  function createCapturedAchievementSource(rootState) {
+    return Object.freeze({
+      readAchievementState(achievementIds, bananaObjectiveIds) {
+        let achievementIdsList = [...achievementIds], bananaObjectiveIdsList = [...bananaObjectiveIds], root = rootState.readRoot();
+        if (root === void 0) return;
+        let stats = readProperty(root, "stats"), race2 = readProperty(root, "race");
+        if (!isNonArrayRecord(stats) || !isNonArrayRecord(race2)) return;
+        let affix = universeAffix(readProperty(race2, "universe"));
+        if (affix === void 0) return;
+        let stars = /* @__PURE__ */ new Map(), achievements = readProperty(stats, "achieve");
+        if (!isNonArrayRecord(achievements)) return;
+        for (let id of achievementIdsList) {
+          let achievement = readProperty(achievements, id);
+          if (achievement == null) {
+            stars.set(id, 0);
+            continue;
+          }
+          if (!isNonArrayRecord(achievement)) return;
+          let star = readProperty(achievement, affix);
+          if (star == null)
+            stars.set(id, 0);
+          else if (typeof star == "number" && Number.isFinite(star) && star >= 0)
+            stars.set(id, star);
+          else
+            return;
+        }
+        let objectives = /* @__PURE__ */ new Map(), banana = readProperty(stats, "banana");
+        if (!(!isNonArrayRecord(banana) && bananaObjectiveIdsList.length > 0)) {
+          for (let id of bananaObjectiveIdsList) {
+            let objective = readProperty(banana, id);
+            if (!isNonArrayRecord(objective)) return;
+            let complete = readProperty(objective, affix);
+            if (typeof complete != "boolean") return;
+            objectives.set(id, complete);
+          }
+          return Object.freeze({
+            stars: Object.freeze(stars),
+            bananaObjectives: Object.freeze(objectives)
+          });
+        }
+      }
+    });
+  }
+
+  // src/adapters/evolve/captured-cost-conflict.ts
+  var NONE = Object.freeze({ status: "none" }), UNAVAILABLE2 = Object.freeze({
+    status: "unavailable"
+  });
+  function createCapturedCostConflictReader(dependencies) {
+    let { resources, reservations } = dependencies, additionalReservations = dependencies.additionalReservations;
+    return Object.freeze({
+      evaluate(cost) {
+        let sample = reservations.readReservations(), additional = additionalReservations?.readReservations();
+        if (sample.unavailable || additional?.unavailable) return UNAVAILABLE2;
+        let targets = [...sample.targets, ...additional?.targets ?? []];
+        if (targets.length === 0) return NONE;
+        let wanted = new Set(Object.keys(cost));
+        for (let target of targets)
+          for (let id of Object.keys(target.cost)) wanted.add(id);
+        let held = resources.readResources(wanted);
+        if (held === void 0) return NONE;
+        let holdings = {};
+        for (let id of wanted)
+          holdings[id] = Object.freeze({
+            name: id,
+            currentQuantity: resourceView(held, id).amount
+          });
+        let conflict2 = findCostConflict({
+          actionCost: cost,
+          reservedTargets: targets,
+          resources: Object.freeze(holdings)
+        });
+        return conflict2 === null ? NONE : Object.freeze({ status: "conflict", conflict: conflict2 });
+      }
+    });
+  }
+
+  // src/adapters/evolve/captured-queue-reservations.ts
+  var NO_RESERVATIONS2 = Object.freeze({
+    targets: Object.freeze([]),
+    unavailable: !1
+  }), QUEUE_CAUSE = "Queue", RESEARCH_QUEUE_CAUSE = "Research queue";
+  function readQueueEntries(root, name) {
+    let queue = readProperty(root, name);
+    if (!readProperty(queue, "display") || readProperty(queue, "pause")) return;
+    let entries = readProperty(queue, "queue");
+    return Array.isArray(entries) ? entries : void 0;
+  }
+  function readQueuedItems(root) {
+    let entries = readQueueEntries(root, "queue");
+    if (entries === void 0) return;
+    let items = [];
+    for (let entry of entries) {
+      let id = readProperty(entry, "id");
+      if (typeof id != "string" || id.length === 0) continue;
+      let label = readProperty(entry, "label");
+      items.push({
+        id,
+        label: typeof label == "string" ? label : id,
+        requirementsMet: !0
+      });
+    }
+    return items;
+  }
+  function readQueuedResearch(root) {
+    if (!readProperty(readProperty(root, "tech"), "r_queue")) return;
+    let entries = readQueueEntries(root, "r_queue");
+    if (entries === void 0) return;
+    let items = [];
+    for (let entry of entries) {
+      let id = readProperty(entry, "id");
+      if (typeof id != "string" || id.length === 0 || readProperty(entry, "cna") === !0) continue;
+      let label = readProperty(entry, "label");
+      items.push({
+        id,
+        label: typeof label == "string" ? label : id,
+        requirementsMet: readProperty(entry, "req") === !0
+      });
+    }
+    return items;
+  }
+  function couldBeStored(resources, cost) {
+    let sample = resources.readResources(Object.keys(cost));
+    if (sample === void 0) return !1;
+    for (let [id, amount] of Object.entries(cost)) {
+      if (amount <= 0) continue;
+      let view = sample.resources.get(id);
+      if (view !== void 0 && view.max > 0 && view.max < amount)
+        return !1;
+    }
+    return !0;
+  }
+  function createCapturedQueueReservationSource(dependencies) {
+    let { rootState, resources, costs } = dependencies, readOfferedTechs = dependencies.readOfferedTechs, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    });
+    function reserving(items, buyAnyQueued) {
+      let eligible = items.filter((item) => item.requirementsMet);
+      return buyAnyQueued ? eligible : eligible.slice(0, 1);
+    }
+    return Object.freeze({
+      readReservations() {
+        let root = rootState.readRoot();
+        if (root === void 0) return NO_RESERVATIONS2;
+        let settings = readProperty(root, "settings"), targets = [], unavailable10 = !1;
+        function reserve(item, cause, cost, reason) {
+          if (cost === void 0) {
+            reportUnavailable(item.id, reason), unavailable10 = !0;
+            return;
+          }
+          couldBeStored(resources, cost) && targets.push(
+            Object.freeze({
+              name: item.label,
+              cause,
+              cost: Object.freeze({ ...cost })
+            })
+          );
+        }
+        for (let item of reserving(
+          readQueuedItems(root) ?? [],
+          !!readProperty(settings, "qAny")
+        ))
+          reserve(
+            item,
+            QUEUE_CAUSE,
+            costs.readCost(item.id),
+            "queued item could not be priced"
+          );
+        if (readOfferedTechs !== void 0) {
+          let queued = reserving(
+            readQueuedResearch(root) ?? [],
+            !!readProperty(settings, "qAny_res")
+          );
+          if (queued.length > 0) {
+            let offered = readOfferedTechs(), prices = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech.cost]));
+            for (let item of queued)
+              reserve(
+                item,
+                RESEARCH_QUEUE_CAUSE,
+                prices?.get(item.id),
+                prices === void 0 ? "offered technologies could not be read" : "queued technology is not currently offered"
+              );
+          }
+        }
+        return targets.length === 0 && !unavailable10 ? NO_RESERVATIONS2 : Object.freeze({
+          targets: Object.freeze(targets),
+          unavailable: unavailable10
+        });
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/build/captured-build.ts
+  var NO_CONSUMPTION = Object.freeze([]);
+  function readBuilding3(root, target) {
+    let region = readProperty(root, target.region), building3 = readProperty(region, target.id);
+    return isRecord(building3) ? building3 : void 0;
+  }
+  function isMaximumAffordable(resources, cost) {
+    let sample = resources.readResources(Object.keys(cost));
+    if (sample === void 0) return !1;
+    for (let [id, amount] of Object.entries(cost)) {
+      if (amount <= 0) continue;
+      let resource2 = sample.resources.get(id);
+      if (resource2 === void 0 || resource2.max >= 0 && resource2.max < amount) return !1;
+    }
+    return !0;
+  }
+  function readQueuedIds(root, candidates, resources) {
+    let queue = readProperty(root, "queue");
+    if (!readProperty(queue, "display")) return /* @__PURE__ */ new Set();
+    let entries = readProperty(queue, "queue");
+    if (!Array.isArray(entries)) return /* @__PURE__ */ new Set();
+    let byElementId = new Map(
+      candidates.map((entry) => [entry.target.elementId, entry])
+    ), buyAny = !!readProperty(readProperty(root, "settings"), "qAny"), ids = /* @__PURE__ */ new Set();
+    for (let entry of entries) {
+      let id = readProperty(entry, "id");
+      if (typeof id == "string") {
+        let candidate = byElementId.get(id);
+        candidate !== void 0 && isMaximumAffordable(resources, candidate.candidate.cost) && ids.add(id);
+      }
+      if (!buyAny) break;
+    }
+    return ids;
+  }
+  function createCapturedBuildSource(dependencies) {
+    let { rootState, controls: controls4, costs, resources, readTargets } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
+    }), cycle = /* @__PURE__ */ new Map();
+    return Object.freeze({
+      family: "city",
+      beginCycle() {
+        let root = rootState.readRoot(), entries = /* @__PURE__ */ new Map();
+        for (let target of readTargets()) {
+          let building3 = readBuilding3(root, target);
+          if (building3 === void 0) {
+            reportSkipped(target.key, "not present in game state");
+            continue;
+          }
+          if (Number(building3.count) >= target.maximum) continue;
+          let cost = costs.readCost(target.elementId);
+          if (cost === void 0) {
+            reportSkipped(target.key, "cost unavailable");
+            continue;
+          }
+          entries.set(target.key, {
+            target,
+            candidate: Object.freeze({
+              key: target.key,
+              weighting: target.weighting,
+              cost,
+              ignored: !1,
+              knowledge: target.knowledge ?? !1,
+              important: target.important,
+              ...target.consumption === void 0 ? {} : { consumption: target.consumption }
+            })
+          });
+        }
+        let queued = readQueuedIds(root, [...entries.values()], resources);
+        return cycle = entries, Object.freeze(
+          [...entries.values()].map(
+            (entry) => Object.freeze({
+              ...entry.candidate,
+              ignored: queued.has(entry.target.elementId)
+            })
+          )
+        );
+      },
+      execute(key) {
+        let base = {
+          clicked: !1,
+          mission: !1,
+          consumption: NO_CONSUMPTION
+        }, candidate = cycle.get(key);
+        if (candidate === void 0)
+          return Object.freeze({
+            outcome: stale("stale-build-target", "build candidate list changed", {
+              key
+            }),
+            ...base
+          });
+        let handle = controls4.resolve(candidate.target.elementId);
+        if (handle === void 0)
+          return Object.freeze({
+            outcome: rejected(
+              "build-control-missing",
+              `no captured control for ${candidate.target.elementId}`
+            ),
+            ...base
+          });
+        let before = Number(
+          readProperty(
+            readBuilding3(rootState.readRoot(), candidate.target),
+            "count"
+          )
+        ), result2 = controls4.invoke(handle, "action");
+        if (!result2.ok)
+          return Object.freeze({
+            outcome: result2.reason === "stale-control" ? stale("stale-build-control", result2.detail ?? result2.reason, {
+              key
+            }) : rejected("build-click-failed", result2.detail ?? result2.reason),
+            ...base
+          });
+        let after = Number(
+          readProperty(
+            readBuilding3(rootState.readRoot(), candidate.target),
+            "count"
+          )
+        );
+        return Object.freeze({
+          outcome: SUCCEEDED,
+          clicked: after > before,
+          mission: !1,
+          consumption: NO_CONSUMPTION
+        });
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/construction/captured-construction.ts
+  var NO_CONSUMPTION2 = Object.freeze(
+    []
+  ), ZERO_KNOWLEDGE_GATE = Object.freeze({
+    cheapestTechKnowledge: 0,
+    knowledgeRequiredByBuildTargets: 0,
+    knowledgeCapacity: 0
+  }), LOCKED_RESOURCE = Object.freeze({
+    unlocked: !1,
+    currentQuantity: 0,
+    rateOfChange: 0,
+    storageRatio: 0,
+    storageRequired: Number.NaN
+  });
+  function toBuildResourceView(view, storageRequired) {
+    return Object.freeze({
+      unlocked: view.unlocked,
+      currentQuantity: view.amount,
+      rateOfChange: view.rateOfChange,
+      storageRatio: view.storageRatio,
+      storageRequired
+    });
+  }
+  function createCapturedConstructionAdapter(dependencies) {
+    let { sources, resources, conflicts, readOptions: readOptions4 } = dependencies, readKnowledgeGate2 = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0;
+    function entryAt(index) {
+      let entry = cycle[index];
+      if (entry === void 0)
+        throw new TypeError(`no construction candidate at index ${index}`);
+      return entry;
+    }
+    function entryFor(index, key) {
+      let entry = cycle[index];
+      return entry !== void 0 && entry.candidate.key === key ? entry : null;
+    }
+    function affordable2(cost) {
+      let sample = resources.readResources(Object.keys(cost));
+      return sample !== void 0 && canAfford2(sample, cost);
+    }
+    let reader = Object.freeze({
+      beginCycle() {
+        let options2 = readOptions4();
+        respectReservations = options2.respectReservations;
+        let entries = [], owners = /* @__PURE__ */ new Map();
+        for (let source of sources)
+          for (let candidate of source.beginCycle()) {
+            let owner = owners.get(candidate.key);
+            if (owner !== void 0)
+              throw new TypeError(
+                `${source.family} and ${owner} both offer construction candidate ${candidate.key}`
+              );
+            owners.set(candidate.key, source.family), entries.push({ candidate, source });
+          }
+        return entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting), cycle = Object.freeze(entries), Object.freeze({
+          candidates: Object.freeze(entries.map((entry) => entry.candidate)),
+          consumptionMode: options2.consumptionMode,
+          buildIfStorageFull: options2.buildIfStorageFull,
+          ignoreZeroRate: options2.ignoreZeroRate,
+          saveWhiteholeGems: options2.saveWhiteholeGems,
+          knowledgeGate: readKnowledgeGate2?.() ?? ZERO_KNOWLEDGE_GATE
+        });
+      },
+      sampleCandidate(index, request) {
+        let { candidate } = entryAt(index), sample = {};
+        return request.needAffordability && (sample.affordable = affordable2(candidate.cost)), request.needConsumption && (sample.consumption = candidate.consumption ?? NO_CONSUMPTION2), Object.freeze(sample);
+      },
+      sampleConflict(index) {
+        let { candidate } = entryAt(index), important = candidate.important;
+        if (!respectReservations)
+          return Object.freeze({ conflict: null, important });
+        let evaluated = conflicts.evaluate(candidate.cost);
+        return evaluated.status === "none" ? Object.freeze({ conflict: null, important }) : evaluated.status === "unavailable" ? Object.freeze({
+          conflict: Object.freeze({
+            unavailable: !0,
+            targetNames: Object.freeze([]),
+            resourceNames: Object.freeze([]),
+            targetCause: ""
+          }),
+          important
+        }) : Object.freeze({
+          conflict: Object.freeze({
+            unavailable: !1,
+            targetNames: evaluated.conflict.targetNames,
+            resourceNames: evaluated.conflict.resourceNames,
+            targetCause: evaluated.conflict.targetCause
+          }),
+          important
+        });
+      },
+      sampleCompetition(index, request) {
+        entryAt(index);
+        let byKey = new Map(
+          cycle.map((entry) => [entry.candidate.key, entry.candidate.cost])
+        ), wanted = new Set(request.resourceIds), compared = [];
+        for (let key of request.affordabilityKeys) {
+          let cost = byKey.get(key);
+          if (cost === void 0)
+            throw new TypeError(`unknown construction candidate ${key}`);
+          compared.push({ key, cost });
+          for (let id of Object.keys(cost)) wanted.add(id);
+        }
+        let sample = resources.readResources(wanted), storageRequired = readStorageRequired?.(request.resourceIds), affordability = {};
+        for (let entry of compared)
+          affordability[entry.key] = sample !== void 0 && canAfford2(sample, entry.cost);
+        let resourceViews = {};
+        for (let id of request.resourceIds)
+          resourceViews[id] = sample === void 0 ? LOCKED_RESOURCE : toBuildResourceView(
+            resourceView(sample, id),
+            storageRequired?.[id] ?? Number.NaN
+          );
+        return Object.freeze({
+          affordability: Object.freeze(affordability),
+          resources: Object.freeze(resourceViews)
+        });
+      }
+    }), executor = Object.freeze({
+      annotate(annotation) {
+        return entryFor(annotation.index, annotation.key) === null ? stale(
+          "stale-construction-target",
+          "construction candidate list changed",
+          { key: annotation.key, index: annotation.index }
+        ) : SUCCEEDED;
+      },
+      executeClick(decision2) {
+        let entry = entryFor(decision2.index, decision2.key);
+        return entry === null ? Object.freeze({
+          outcome: stale(
+            "stale-construction-target",
+            "construction candidate list changed",
+            { key: decision2.key, index: decision2.index }
+          ),
+          clicked: !1,
+          mission: !1,
+          consumption: NO_CONSUMPTION2
+        }) : entry.source.execute(decision2.key);
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/adapters/evolve/progression/research/captured-project-catalog.ts
+  var ARPA_PANEL_SELECTOR = "#arpaPhysics", PROJECT_SELECTOR = "#arpaPhysics .arpaProject", ARPA_TAB_PATH = Object.freeze([
+    Object.freeze({
+      setting: MAIN_TAB_SETTING,
+      control: MAIN_TAB_CONTROL,
+      index: 5
+    })
+  ]);
+  function createCapturedProjectCatalog(dependencies) {
+    let { rootState, discovery, drawnProjects, controls: controls4 } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    });
+    return Object.freeze({
+      readProjects() {
+        let root = rootState.readRoot();
+        if (root === void 0) {
+          reportUnavailable("the game root has not been captured yet");
+          return;
+        }
+        let game = requireNonArrayRecord(root, "game root"), resources = requireNonArrayRecord(
+          game.resource,
+          "game.resource"
+        ), arpa = requireNonArrayRecord(game.arpa, "game.arpa"), projects, result2 = discovery.discover(ARPA_TAB_PATH, {
+          isPanelDrawn: () => drawnProjects.exists(ARPA_PANEL_SELECTOR),
+          whileDrawn: () => {
+            let drawn = drawnProjects.read(
+              PROJECT_SELECTOR,
+              Object.keys(resources)
+            );
+            drawn !== void 0 && (projects = Object.freeze(
+              drawn.map((project) => {
+                let state = requireNonArrayRecord(
+                  arpa[project.projectId],
+                  `game.arpa.${project.projectId}`
+                );
+                return Object.freeze({
+                  ...project,
+                  rank: requireCount(
+                    state.rank,
+                    `game.arpa.${project.projectId}.rank`
+                  ),
+                  progress: requireCount(
+                    state.complete,
+                    `game.arpa.${project.projectId}.complete`
+                  ),
+                  generation: controls4.resolve(project.elementId)?.generation ?? 0
+                });
+              })
+            ));
+          }
+        });
+        if (result2.outcome.status !== "succeeded" || projects === void 0) {
+          reportUnavailable(
+            result2.outcome.status === "succeeded" ? "the project panel could not supply exact costs" : result2.outcome.failure?.message ?? result2.outcome.status
+          );
+          return;
+        }
+        return projects;
+      }
+    });
+  }
+
+  // src/domain/game-achievements.ts
+  function sampled2(values, id, kind) {
+    let value = values.get(id);
+    if (value === void 0)
+      throw new TypeError(`${kind} ${id} was not sampled`);
+    return value;
+  }
+  function achievementStar(sample, id) {
+    return sampled2(sample.stars, id, "achievement");
+  }
+  function bananaObjectiveComplete(sample, id) {
+    return sampled2(sample.bananaObjectives, id, "banana objective");
+  }
+
+  // src/adapters/evolve/progression/research/captured-project-context.ts
+  var MANA_SYPHON = "syphon", EARLY_GAME_TRAITS = Object.freeze([
+    "cataclysm",
+    "orbit_decayed",
+    "lone_survivor",
+    "warlord",
+    "truepath",
+    "sludge",
+    "ultra_sludge"
+  ]), EARLY_GAME_TECH = Object.freeze(["mad", "high_tech"]), SYPHON_TRAITS = Object.freeze(["witch_hunter"]), ACHIEVEMENT_LEVEL_TRAITS = Object.freeze([
+    "no_plasmid",
+    "no_trade",
+    "no_craft",
+    "no_crispr",
+    "weak_mastery",
+    "nerfed",
+    "badgenes"
+  ]);
+  function isEarlyGame(traits, tech) {
+    return hasTrait(traits, "cataclysm") || hasTrait(traits, "orbit_decayed") || hasTrait(traits, "lone_survivor") || hasTrait(traits, "warlord") ? !1 : hasTrait(traits, "truepath") || hasTrait(traits, "sludge") || hasTrait(traits, "ultra_sludge") ? !hasTech(tech, "high_tech", 7) : !hasTech(tech, "mad");
+  }
+  function finite(value, fallback) {
+    let parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  function achievementLevel2(traits) {
+    let level = 1;
+    for (let trait2 of ACHIEVEMENT_LEVEL_TRAITS)
+      hasTrait(traits, trait2) && level++;
+    return Math.min(level, 5);
+  }
+  function createCapturedProjectContextReader(dependencies) {
+    let { traits, tech, resources, achievements, readSettings: readSettings3 } = dependencies;
+    return Object.freeze({
+      readContext() {
+        let raw = readSettings3(), settings = isNonArrayRecord(raw) ? raw : {}, prestigeType = String(settings.prestigeType ?? ""), suppressed = !1;
+        if (settings.prestigeMADIgnoreArpa === !0) {
+          let traitSample = traits.readRaceTraits(EARLY_GAME_TRAITS), techSample = tech.readTech(EARLY_GAME_TECH);
+          suppressed = traitSample === void 0 || techSample === void 0 || isEarlyGame(traitSample, techSample);
+        }
+        let syphon = {};
+        settings.autoPrestige === !0 && prestigeType === "vacuum" && (syphon.ignoreMaximum = !0);
+        let syphonTraits = traits.readRaceTraits(SYPHON_TRAITS);
+        settings.prestigeBioseedConstruct === !0 && prestigeType !== "vacuum" && syphonTraits !== void 0 && hasTrait(syphonTraits, "witch_hunter") && (syphon.excluded = !0);
+        let mana = resources.readResources(["Mana"]);
+        mana !== void 0 && isVacuumCollapseManaStageReady({
+          prestigeType,
+          manaRate: resourceView(mana, "Mana").rateOfChange,
+          requiredManaRate: finite(
+            settings.prestigeVacuumMana,
+            10
+          )
+        }) && (syphon.weightMultiplier = finite(
+          settings.buildingWeightingVacuumCollapse,
+          10
+        ));
+        let overrides = {};
+        Object.keys(syphon).length > 0 && (overrides[MANA_SYPHON] = Object.freeze(syphon));
+        let bananaGuardEnabled = settings.achievementGuards === !0 && settings.guardBananaRepublic === !0, inflationAssistEnabled = settings.inflationChallengeAssist === !0;
+        if (bananaGuardEnabled || inflationAssistEnabled) {
+          let raceTraits = traits.readRaceTraits([
+            "banana",
+            "inflation",
+            ...ACHIEVEMENT_LEVEL_TRAITS
+          ]);
+          if (raceTraits !== void 0) {
+            let bananaRace = bananaGuardEnabled && hasTrait(raceTraits, "banana"), inflationRun = inflationAssistEnabled && hasTrait(raceTraits, "inflation"), achievementState = achievements.readAchievementState(
+              inflationRun ? ["wheelbarrow"] : [],
+              bananaRace ? ["b5"] : []
+            );
+            achievementState !== void 0 && (bananaRace && !bananaObjectiveComplete(achievementState, "b5") && (overrides.monument = Object.freeze({
+              weightMultiplier: finite(
+                settings.buildingWeightingBananaObjective,
+                1
+              )
+            })), inflationRun && achievementStar(achievementState, "wheelbarrow") < achievementLevel2(raceTraits) && (overrides.stock_exchange = Object.freeze({
+              weightMultiplier: finite(
+                settings.buildingWeightingInflationMoney,
+                1
+              )
+            })));
+          }
+        }
+        return Object.freeze({
+          suppressed,
+          overrides: Object.freeze(overrides)
+        });
+      }
+    });
+  }
+
+  // src/domain/progression/research/project.ts
+  var NO_PROJECT_CONTEXT = Object.freeze({
+    suppressed: !1,
+    overrides: Object.freeze({})
+  });
+  function stepCapacity(project, capacities) {
+    let capacity = Number.MAX_SAFE_INTEGER;
+    for (let [resourceId3, price] of Object.entries(project.cost)) {
+      let resource2 = capacities[resourceId3];
+      if (resource2 === void 0 || !resource2.unlocked || !Number.isFinite(price) || price <= 0)
+        return 0;
+      resource2.maximum >= 0 && (capacity = Math.min(capacity, Math.floor(resource2.maximum / price)));
+    }
+    return capacity;
+  }
+  function planProjects(input) {
+    if (!input.settings.enabled || input.context.suppressed)
+      return Object.freeze([]);
+    let targets = new Map(
+      input.settings.targets.map((target) => [target.projectId, target])
+    ), planned = [];
+    for (let [order, offered] of input.projects.entries()) {
+      let target = targets.get(offered.projectId), override = input.context.overrides[offered.projectId];
+      if (target === void 0 || !target.enabled || target.weighting <= 0 || override?.excluded === !0 || target.maximum >= 0 && offered.rank >= target.maximum && override?.ignoreMaximum !== !0)
+        continue;
+      let desired = Math.min(
+        input.settings.stepPercent,
+        100 - offered.progress
+      ), steps = Math.min(desired, stepCapacity(offered, input.capacities));
+      if (!Number.isSafeInteger(steps) || steps < 1) continue;
+      let cost = {};
+      for (let [resourceId3, price] of Object.entries(offered.cost))
+        cost[resourceId3] = price * steps;
+      let weighting = target.weighting * steps, multiplier = override?.weightMultiplier;
+      multiplier !== void 0 && Number.isFinite(multiplier) && (weighting *= multiplier), !(weighting <= 0) && (input.settings.scaleWeighting && (weighting /= 1 - offered.progress / 100), planned.push({
+        order,
+        project: Object.freeze({
+          elementId: offered.elementId,
+          projectId: offered.projectId,
+          generation: offered.generation,
+          rank: offered.rank,
+          progress: offered.progress,
+          steps,
+          weighting,
+          cost: Object.freeze(cost)
+        })
+      }));
+    }
+    return planned.sort((left, right) => {
+      let weight = right.project.weighting - left.project.weighting;
+      if (weight !== 0) return weight;
+      let leftPriority = targets.get(left.project.projectId)?.priority ?? left.order, rightPriority = targets.get(right.project.projectId)?.priority ?? right.order;
+      return leftPriority - rightPriority || left.order - right.order;
+    }), Object.freeze(planned.map((entry) => entry.project));
+  }
+
+  // src/adapters/evolve/progression/research/captured-project.ts
+  var NO_CONSUMPTION3 = Object.freeze([]);
+  function finiteSetting(settings, key, fallback) {
+    let value = Number(settings[key]);
+    return Number.isFinite(value) ? value : fallback;
+  }
+  function isProjectAutomationEnabled(value) {
+    return !!readProperty(value, "autoARPA");
+  }
+  function readCapturedProjectSettings(value, projects) {
+    let settings = isNonArrayRecord(value) ? value : {}, rawStep = finiteSetting(settings, "arpaStep", 1), stepPercent = Math.max(1, Math.min(100, Math.floor(rawStep)));
+    return Object.freeze({
+      enabled: !!settings.autoARPA,
+      stepPercent,
+      scaleWeighting: !!settings.arpaScaleWeighting,
+      targets: Object.freeze(
+        projects.map(
+          (project, index) => Object.freeze({
+            projectId: project.projectId,
+            enabled: !!settings[`arpa_${project.projectId}`],
+            priority: finiteSetting(
+              settings,
+              `arpa_p_${project.projectId}`,
+              index
+            ),
+            maximum: finiteSetting(settings, `arpa_m_${project.projectId}`, -1),
+            weighting: finiteSetting(settings, `arpa_w_${project.projectId}`, 0)
+          })
+        )
+      )
+    });
+  }
+  function projectState(root, id) {
+    let state = readProperty(readProperty(root, "arpa"), id);
+    if (!isNonArrayRecord(state)) return;
+    let rank = Number(state.rank), progress = Number(state.complete);
+    return Number.isSafeInteger(rank) && rank >= 0 && Number.isSafeInteger(progress) && progress >= 0 ? { rank, progress } : void 0;
+  }
+  function queuedIds(root) {
+    let queue = readProperty(readProperty(root, "queue"), "queue");
+    if (!Array.isArray(queue)) return /* @__PURE__ */ new Set();
+    let ids = /* @__PURE__ */ new Set();
+    for (let entry of queue) {
+      let id = readProperty(entry, "id");
+      typeof id == "string" && ids.add(id);
+    }
+    return ids;
+  }
+  function createCapturedProjectSource(dependencies) {
+    let { rootState, catalog, resources, controls: controls4, context, readSettings: readSettings3 } = dependencies, cycle = /* @__PURE__ */ new Map();
+    return Object.freeze({
+      family: "arpa",
+      beginCycle() {
+        let settings = readSettings3();
+        if (!isProjectAutomationEnabled(settings))
+          return cycle = /* @__PURE__ */ new Map(), Object.freeze([]);
+        let offered = catalog.readProjects();
+        if (offered === void 0)
+          return cycle = /* @__PURE__ */ new Map(), Object.freeze([]);
+        let resourceIds = new Set(
+          offered.flatMap((project) => Object.keys(project.cost))
+        ), sample = resources.readResources(resourceIds), capacities = {};
+        if (sample !== void 0)
+          for (let id of resourceIds) {
+            let view = resourceView(sample, id);
+            capacities[id] = Object.freeze({
+              unlocked: view.unlocked,
+              maximum: view.max
+            });
+          }
+        let queued = queuedIds(rootState.readRoot()), entries = /* @__PURE__ */ new Map();
+        for (let project of planProjects({
+          settings: readCapturedProjectSettings(settings, offered),
+          projects: offered,
+          capacities: Object.freeze(capacities),
+          context: context.readContext()
+        }))
+          entries.set(project.elementId, {
+            project,
+            candidate: Object.freeze({
+              key: project.elementId,
+              weighting: project.weighting,
+              cost: project.cost,
+              ignored: queued.has(project.elementId),
+              knowledge: !1,
+              important: !1
+            })
+          });
+        return cycle = entries, Object.freeze(
+          [...entries.values()].map((entry) => entry.candidate)
+        );
+      },
+      execute(key) {
+        let base = {
+          clicked: !1,
+          mission: !1,
+          consumption: NO_CONSUMPTION3
+        }, candidate = cycle.get(key);
+        if (candidate === void 0)
+          return Object.freeze({
+            outcome: stale(
+              "stale-project-target",
+              "project candidate list changed"
+            ),
+            ...base
+          });
+        let handle = controls4.resolve(candidate.project.elementId);
+        if (handle === void 0)
+          return Object.freeze({
+            outcome: rejected(
+              "project-control-missing",
+              `no captured control for ${candidate.project.elementId}`
+            ),
+            ...base
+          });
+        if (handle.generation !== candidate.project.generation)
+          return Object.freeze({
+            outcome: stale(
+              "stale-project-control",
+              `${candidate.project.elementId} was redrawn`
+            ),
+            ...base
+          });
+        let before = projectState(
+          rootState.readRoot(),
+          candidate.project.projectId
+        );
+        if (before === void 0 || before.rank !== candidate.project.rank || before.progress !== candidate.project.progress)
+          return Object.freeze({
+            outcome: stale(
+              "stale-project-state",
+              `${candidate.project.projectId} moved after sampling`
+            ),
+            ...base
+          });
+        let result2 = controls4.invoke(handle, "build", [
+          candidate.project.projectId,
+          candidate.project.steps
+        ]);
+        if (!result2.ok)
+          return Object.freeze({
+            outcome: result2.reason === "stale-control" ? stale("stale-project-control", result2.detail ?? result2.reason) : rejected(
+              "project-build-failed",
+              result2.detail ?? result2.reason
+            ),
+            ...base
+          });
+        let after = projectState(
+          rootState.readRoot(),
+          candidate.project.projectId
+        ), clicked = after !== void 0 && (after.rank > before.rank || after.progress > before.progress);
+        return Object.freeze({
+          outcome: SUCCEEDED,
+          clicked,
+          mission: !1,
+          consumption: NO_CONSUMPTION3
+        });
+      }
+    });
+  }
+
+  // src/bootstrap/captured-construction-control.ts
+  var NOT_CAPTURED = Object.freeze({
+    status: "rejected",
+    failure: Object.freeze({
+      code: "game-state-not-captured",
+      message: "the game root has not been captured yet"
+    })
+  });
+  function createCapturedConstructionControl(dependencies) {
+    let {
+      rootState,
+      controls: controls4,
+      mountSuppression,
+      panels,
+      drawnProjects,
+      readPolicy,
+      readSettings: readSettings3,
+      diagnostics
+    } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate2 = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
+      rootState,
+      controls: controls4,
+      ...onSkipped === void 0 ? {} : { onUnavailable: onSkipped }
+    }), reservations = createCapturedQueueReservationSource({
+      rootState,
+      resources,
+      costs,
+      ...readOfferedTechs === void 0 ? {} : { readOfferedTechs: readOfferedTechsOnce },
+      ...onSkipped === void 0 ? {} : { onUnavailable: onSkipped }
+    }), conflicts = createCapturedCostConflictReader({
+      resources,
+      reservations,
+      ...scriptReservations === void 0 ? {} : { additionalReservations: scriptReservations }
+    }), catalog = createCapturedProjectCatalog({
+      rootState,
+      discovery: createCapturedTabDiscovery({
+        rootState,
+        controls: controls4,
+        mountSuppression,
+        panels
+      }),
+      drawnProjects,
+      controls: controls4,
+      ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) }
+    }), { reader, executor } = createCapturedConstructionAdapter({
+      // City buildings first, matching the game's own list order, so a project only outranks a
+      // building by weighting rather than by being sampled first.
+      sources: Object.freeze([
+        createCapturedBuildSource({
+          rootState,
+          controls: controls4,
+          costs,
+          resources,
+          readTargets: () => readPolicy().buildings,
+          ...onSkipped === void 0 ? {} : { onSkipped }
+        }),
+        createCapturedProjectSource({
+          rootState,
+          catalog,
+          resources,
+          controls: controls4,
+          context: createCapturedProjectContextReader({
+            traits: createCapturedRaceTraitSource(rootState),
+            tech: createCapturedTechSource(rootState),
+            resources,
+            achievements: createCapturedAchievementSource(rootState),
+            readSettings: readSettings3
+          }),
+          readSettings: readSettings3
+        })
+      ]),
+      resources,
+      conflicts,
+      readOptions: readPolicy,
+      ...readKnowledgeGate2 === void 0 ? {} : { readKnowledgeGate: readKnowledgeGate2 },
+      ...readStorageRequired === void 0 ? {} : { readStorageRequired }
+    });
+    return Object.freeze({
+      runCycle() {
+        if (rootState.readRoot() === void 0) return NOT_CAPTURED;
+        offeredThisCycle = void 0;
+        try {
+          return runBuildAutomation({ reader, executor, diagnostics });
+        } finally {
+          offeredThisCycle = void 0;
+        }
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/research/captured-research.ts
+  var NOTHING_OFFERED = Object.freeze({
+    techs: Object.freeze([])
+  });
+  function techState(root) {
+    let tech = readProperty(root, "tech");
+    if (!isRecord(tech)) return "none";
+    let parts = [];
+    for (let key of Object.keys(tech).sort())
+      parts.push(`${key}:${String(tech[key])}`);
+    return parts.join(",");
+  }
+  function executionResult3(outcome, researched) {
+    return Object.freeze({ outcome, researched });
+  }
+  function createCapturedResearchAdapter(dependencies) {
+    let { rootState, offered, resources, conflicts, controls: controls4 } = dependencies;
+    function isAffordable(cost) {
+      let sample = resources.readResources(Object.keys(cost));
+      return sample !== void 0 && canAfford2(sample, cost);
+    }
+    let reader = Object.freeze({
+      read(startIndex) {
+        if (!Number.isSafeInteger(startIndex) || startIndex < 0)
+          throw new TypeError(
+            "research start index must be a non-negative integer"
+          );
+        if (offered === void 0) return NOTHING_OFFERED;
+        let techs = [];
+        for (let index = startIndex; index < offered.length; index++) {
+          let tech = offered[index];
+          if (tech === void 0) continue;
+          let affordable2 = isAffordable(tech.cost), view = Object.freeze({
+            index,
+            id: tech.elementId,
+            affordable: affordable2,
+            // Match the legacy gate: what a reservation is saving for only matters for something
+            // that could otherwise be bought right now.
+            hasCostConflict: affordable2 && conflicts.evaluate(tech.cost).status !== "none"
+          });
+          if (techs.push(view), view.affordable && !view.hasCostConflict) break;
+        }
+        return Object.freeze({ techs: Object.freeze(techs) });
+      }
+    }), executor = Object.freeze({
+      execute(decision2) {
+        let tech = offered?.[decision2.index];
+        if (tech === void 0 || tech.elementId !== decision2.techId)
+          return executionResult3(
+            stale(
+              "stale-research-target",
+              "the decision names no offer of this cycle",
+              {
+                techId: decision2.techId,
+                index: decision2.index,
+                actualTechId: tech?.elementId ?? null
+              }
+            ),
+            !1
+          );
+        let handle = controls4.resolve(decision2.techId);
+        if (handle === void 0)
+          return executionResult3(
+            rejected(
+              "research-control-missing",
+              `no captured control for ${decision2.techId}`
+            ),
+            !1
+          );
+        if (handle.generation !== tech.generation)
+          return executionResult3(
+            stale(
+              "stale-research-control",
+              `${decision2.techId} generation ${tech.generation}, current ${handle.generation}`,
+              { techId: decision2.techId }
+            ),
+            !1
+          );
+        let before = techState(rootState.readRoot()), result2 = controls4.invoke(handle, "action");
+        return result2.ok ? executionResult3(
+          SUCCEEDED,
+          techState(rootState.readRoot()) !== before
+        ) : executionResult3(
+          result2.reason === "stale-control" ? stale("stale-research-control", result2.detail ?? result2.reason, {
+            techId: decision2.techId
+          }) : rejected("research-click-failed", result2.detail ?? result2.reason),
+          !1
+        );
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/bootstrap/captured-research-control.ts
+  var NOT_CAPTURED2 = Object.freeze({
+    status: "rejected",
+    failure: Object.freeze({
+      code: "game-state-not-captured",
+      message: "the game root has not been captured yet"
+    })
+  });
+  function createCapturedResearchControl(dependencies) {
+    let {
+      rootState,
+      controls: controls4,
+      drawnActions,
+      mountSuppression,
+      panels,
+      diagnostics
+    } = dependencies, onUnavailable = dependencies.onUnavailable, sharedReadOfferedTechs = dependencies.readOfferedTechs, resources = createCapturedResourceSource(rootState), catalog = createCapturedTechCatalog({
+      rootState,
+      discovery: createCapturedTabDiscovery({
+        rootState,
+        controls: controls4,
+        mountSuppression,
+        panels
+      }),
+      drawnActions,
+      controls: controls4,
+      ...onUnavailable === void 0 ? {} : { onUnavailable }
+    }), offeredThisCycle, reservations = createCapturedQueueReservationSource({
+      rootState,
+      resources,
+      readOfferedTechs: () => offeredThisCycle,
+      costs: createCapturedActionCostReader({
+        rootState,
+        controls: controls4,
+        ...onUnavailable === void 0 ? {} : {
+          onUnavailable: (id, reason) => onUnavailable(`${id}: ${reason}`)
+        }
+      }),
+      ...onUnavailable === void 0 ? {} : {
+        onUnavailable: (id, reason) => onUnavailable(`${id}: ${reason}`)
+      }
+    }), conflicts = createCapturedCostConflictReader({
+      resources,
+      reservations
+    });
+    return Object.freeze({
+      runCycle() {
+        if (rootState.readRoot() === void 0) return NOT_CAPTURED2;
+        offeredThisCycle = sharedReadOfferedTechs === void 0 ? catalog.readOffered() : sharedReadOfferedTechs();
+        try {
+          let { reader, executor } = createCapturedResearchAdapter({
+            rootState,
+            offered: offeredThisCycle,
+            resources,
+            conflicts,
+            controls: controls4
+          });
+          return runResearchAutomation({ reader, executor, diagnostics });
+        } finally {
+          offeredThisCycle = void 0;
+        }
+      }
+    });
+  }
+
+  // src/bootstrap/captured-progression-control.ts
+  function createCapturedProgressionControl(dependencies) {
+    let {
+      rootState,
+      controls: controls4,
+      mountSuppression,
+      panels,
+      drawnActions,
+      drawnProjects,
+      getBuildingManager,
+      readSettings: readSettings3,
+      getState,
+      getResources,
+      diagnostics
+    } = dependencies, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
+      rootState,
+      controls: controls4,
+      mountSuppression,
+      panels
+    }), offered = createCapturedTechCatalog({
+      rootState,
+      discovery,
+      drawnActions,
+      controls: controls4,
+      ...onUnavailable === void 0 ? {} : { onUnavailable }
+    }), readPolicy = createScriptBuildPolicyReader({
+      getBuildingManager,
+      getSettings: readSettings3,
+      ...onSkipped === void 0 ? {} : { onSkipped }
+    }), scriptReservations = createScriptCostReservationSource({ getState }), readKnowledgeGate2 = createScriptKnowledgeGateReader({
+      getState,
+      resources,
+      getResources
+    }), readStorageRequired = createScriptStorageRequirementReader({
+      getResources
+    }), construction = createCapturedConstructionControl({
+      rootState,
+      controls: controls4,
+      mountSuppression,
+      panels,
+      drawnProjects,
+      readPolicy,
+      readSettings: readSettings3,
+      scriptReservations,
+      readKnowledgeGate: readKnowledgeGate2,
+      readStorageRequired,
+      readOfferedTechs: () => offered.readOffered(),
+      ...onSkipped === void 0 ? {} : { onSkipped },
+      diagnostics
+    }), research = createCapturedResearchControl({
+      rootState,
+      controls: controls4,
+      drawnActions,
+      mountSuppression,
+      panels,
+      readOfferedTechs: () => offered.readOffered(),
+      ...onUnavailable === void 0 ? {} : { onUnavailable },
+      diagnostics
+    });
+    return Object.freeze({
+      runConstructionCycle: () => construction.runCycle(),
+      runResearchCycle: () => research.runCycle()
+    });
+  }
+
+  // src/adapters/browser/game-drawn-actions.ts
+  var DATA_PREFIX = "data-", RESOURCE_CLASS_PREFIX = "res-";
+  function collect(element, markup) {
+    let attributes = element.attributes;
+    if (attributes !== void 0)
+      for (let index = 0; index < attributes.length; index++) {
+        let attribute = attributes[index];
+        if (attribute === void 0) continue;
+        let { name, value } = attribute;
+        if (name === "class") {
+          for (let token of value.split(/\s+/))
+            if (token.startsWith(RESOURCE_CLASS_PREFIX)) {
+              let resource2 = token.slice(RESOURCE_CLASS_PREFIX.length);
+              resource2.length > 0 && markup.names.add(resource2);
+            }
+        } else name.startsWith(DATA_PREFIX) && markup.amounts.set(name.slice(DATA_PREFIX.length), value);
+      }
+  }
+  function readCost5(element) {
+    let markup = { names: /* @__PURE__ */ new Set(), amounts: /* @__PURE__ */ new Map() };
+    collect(element, markup);
+    let descendants = element.querySelectorAll?.("*");
+    if (descendants !== void 0)
+      for (let index = 0; index < descendants.length; index++) {
+        let descendant = descendants[index];
+        descendant !== void 0 && collect(descendant, markup);
+      }
+    let cost = {};
+    for (let resource2 of markup.names) {
+      let raw = markup.amounts.get(resource2.toLowerCase());
+      if (raw === void 0) continue;
+      let amount = Number(raw);
+      Number.isFinite(amount) && amount > 0 && (cost[resource2] = amount);
+    }
+    return cost;
+  }
+  function createGameDrawnActionsReader({
+    getDocument
+  }) {
+    return Object.freeze({
+      read(selector) {
+        let elements = getDocument().querySelectorAll(selector), actions = [];
+        for (let index = 0; index < elements.length; index++) {
+          let element = elements[index], id = element?.id;
+          element === void 0 || typeof id != "string" || id.length === 0 || actions.push(
+            Object.freeze({ id, cost: Object.freeze(readCost5(element)) })
+          );
+        }
+        return Object.freeze(actions);
+      },
+      exists(selector) {
+        return getDocument().querySelectorAll(selector).length > 0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-drawn-projects.ts
+  function collectCost(popper, resources) {
+    let cost = {}, elements = [
+      popper,
+      ...Array.from(popper.querySelectorAll?.("*") ?? [])
+    ];
+    for (let element of elements)
+      for (let attribute of Array.from(element.attributes ?? [])) {
+        if (!attribute.name.startsWith("data-")) continue;
+        let resource2 = resources.get(attribute.name.slice(5).toLowerCase()), amount = Number(attribute.value);
+        resource2 !== void 0 && Number.isFinite(amount) && amount > 0 && (cost[resource2] = amount);
+      }
+    return cost;
+  }
+  function createGameDrawnProjectsReader({
+    getDocument,
+    createMouseEvent
+  }) {
+    return Object.freeze({
+      read(selector, resourceNames) {
+        let document = getDocument();
+        if (document.querySelectorAll("#popper").length > 0) return;
+        let resources = new Map(
+          resourceNames.map((name) => [name.toLowerCase(), name])
+        ), projects = [];
+        for (let row of Array.from(document.querySelectorAll(selector))) {
+          let elementId = row.id, button = row.querySelector?.(".buy .x1") ?? null;
+          if (typeof elementId != "string" || !elementId.startsWith("arpa") || elementId.length === 4 || button === null || typeof button.dispatchEvent != "function")
+            return;
+          button.dispatchEvent(createMouseEvent("mouseover"));
+          try {
+            let poppers = Array.from(document.querySelectorAll("#popper"));
+            if (poppers.length !== 1) return;
+            let cost = collectCost(poppers[0], resources);
+            if (Object.keys(cost).length === 0) return;
+            projects.push(
+              Object.freeze({
+                elementId,
+                projectId: elementId.slice(4),
+                cost: Object.freeze(cost)
+              })
+            );
+          } finally {
+            button.dispatchEvent(createMouseEvent("mouseout"));
+          }
+          if (document.querySelectorAll("#popper").length > 0) return;
+        }
+        return Object.freeze(projects);
+      },
+      exists(selector) {
+        return getDocument().querySelectorAll(selector).length > 0;
+      }
+    });
+  }
+
+  // src/adapters/browser/game-panel-workspace.ts
+  function locate(document, id) {
+    let element = document.getElementById(id), parent = element?.parentNode;
+    if (!(element == null || parent === null || parent === void 0))
+      return { element, parent, nextSibling: element.nextSibling };
+  }
+  function createGamePanelWorkspace({
+    getDocument
+  }) {
+    return Object.freeze({
+      open(request) {
+        let { keep, scratch: scratchId } = request;
+        if (keep !== void 0 && keep === scratchId) return;
+        let document = getDocument(), target = locate(document, scratchId);
+        if (target === void 0) return;
+        let kept = keep === void 0 ? void 0 : locate(document, keep);
+        if (keep !== void 0 && kept === void 0) return;
+        let scratch = document.createElement("div");
+        scratch.id = scratchId, kept?.element.remove(), target.parent.replaceChild(scratch, target.element);
+        let released = !1;
+        return Object.freeze({
+          discard(elementId) {
+            if (released) return !1;
+            let element = getDocument().getElementById(elementId);
+            return element == null || !scratch.contains(element) ? !1 : (element.remove(), !0);
+          },
+          release() {
+            released || (released = !0, target.parent.replaceChild(target.element, scratch), kept !== void 0 && kept.parent.insertBefore(kept.element, kept.nextSibling));
+          },
+          isIntact() {
+            let document2 = getDocument();
+            return released ? document2.getElementById(scratchId) === target.element && (keep === void 0 || document2.getElementById(keep) === kept?.element) : document2.getElementById(scratchId) === scratch;
+          }
+        });
+      }
+    });
+  }
+
+  // src/adapters/evolve/evolve-runtime.js
+  function startEvolveRuntime($, diagnostics, runtimeEnvironment, pageCapture2) {
+    startEvolveRuntimeComposition(
+      $,
+      diagnostics,
+      runtimeEnvironment,
+      void 0,
+      void 0,
+      pageCapture2
+    );
+  }
+  function startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment, testSurface, registerRuntimeSupportTestSurface, pageCapture2) {
     "use strict";
     let getTestContext = () => {
     }, setTestContext = () => {
@@ -51718,7 +53559,33 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readHighPopulationPercent: () => traitVal("high_pop", 1, 100),
       readAuthorityPolicyView,
       readAuthorityQuantity
-    }), { normalizeProperties, addProps } = createPropertyHelpers({
+    }), capturedProgression;
+    pageCapture2 !== void 0 && (capturedProgression = createCapturedProgressionControl({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      mountSuppression: pageCapture2.mountSuppression,
+      panels: createGamePanelWorkspace({
+        getDocument: () => runtimeEnvironment.document
+      }),
+      drawnActions: createGameDrawnActionsReader({
+        getDocument: () => runtimeEnvironment.document
+      }),
+      drawnProjects: createGameDrawnProjectsReader({
+        getDocument: () => runtimeEnvironment.document,
+        createMouseEvent: (type) => {
+          let MouseEventConstructor = runtimeEnvironment.MouseEvent;
+          if (typeof MouseEventConstructor != "function")
+            throw new Error("MouseEvent is unavailable");
+          return new MouseEventConstructor(type);
+        }
+      }),
+      getBuildingManager: () => BuildingManager,
+      readSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      diagnostics
+    }));
+    let { normalizeProperties, addProps } = createPropertyHelpers({
       getSettings: () => settings
     }), { getCostConflict } = createCostConflict({
       getState: () => state,
@@ -51742,7 +53609,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getResources: () => resources,
         getBuildings: () => buildings,
         getStorageManager: () => StorageManager,
-        isEarlyGame: () => isEarlyGame(),
+        isEarlyGame: () => isEarlyGame2(),
         isLumberRace: () => isLumberRace()
       },
       debug: {
@@ -51782,7 +53649,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getFleetManagerOuter: () => FleetManagerOuter,
       getJobManager: () => JobManager,
       getFactoryManager: () => FactoryManager,
-      getIsEarlyGame: () => isEarlyGame(),
+      getIsEarlyGame: () => isEarlyGame2(),
       isProject: (object) => object instanceof Project,
       isInflationAssistActive: () => inflationChallengeAssistActive(),
       isRetirementAssistActive: () => retirementChallengeAssistActive(),
@@ -51813,7 +53680,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGovernor,
       haveTask,
       haveTech,
-      isEarlyGame,
+      isEarlyGame: isEarlyGame2,
       isHungryRace,
       isDemonRace,
       isLumberRace,
@@ -52260,7 +54127,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getMechSupplySavingReason: () => mechSupplySavingReason(),
         isWomlingStatEarned: (stat) => womlingStatEarned(stat)
       },
-      isEarlyGame,
+      isEarlyGame: isEarlyGame2,
       getIsPrestigeAllowed: () => isPrestigeAllowed2,
       getBananaRepublicObjectiveComplete: () => bananaRepublicObjectiveComplete,
       getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
@@ -54160,6 +56027,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       MutationObserver: readProperty(globalObject, "MutationObserver"),
       ResizeObserver: readProperty(globalObject, "ResizeObserver"),
       KeyboardEvent: readProperty(globalObject, "KeyboardEvent"),
+      MouseEvent: readProperty(globalObject, "MouseEvent"),
       Node: readProperty(globalObject, "Node"),
       Sortable: readProperty(globalObject, "Sortable"),
       alert: bindFunction(globalObject, "alert", noOperation),
@@ -54579,12 +56447,15 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/main.ts
-  installPageCapture(createUserscriptEnvironment(globalThis).pageWindow);
+  var pageCapture = installPageCapture(
+    createUserscriptEnvironment(globalThis).pageWindow
+  );
   whenDocumentReady(globalThis, () => {
     startEvolveRuntime(
       createBrowserDomQuery(globalThis),
       createBrowserDiagnostics(globalThis),
-      createLegacyRuntimeEnvironment(globalThis)
+      createLegacyRuntimeEnvironment(globalThis),
+      pageCapture
     );
   });
 })();

@@ -7,12 +7,15 @@ import { installPageCapture } from "./adapters/evolve/page-capture.ts";
 import { createUserscriptEnvironment } from "./adapters/userscript/environment.ts";
 
 // Must happen at document-start, before the page's Vue script and the game module run.
-installPageCapture(createUserscriptEnvironment(globalThis).pageWindow);
+const pageCapture = installPageCapture(
+  createUserscriptEnvironment(globalThis).pageWindow,
+);
 
 whenDocumentReady(globalThis, () => {
   startEvolveRuntime(
     createBrowserDomQuery(globalThis),
     createBrowserDiagnostics(globalThis),
     createLegacyRuntimeEnvironment(globalThis),
+    pageCapture,
   );
 });

@@ -40,6 +40,8 @@ export interface CapturedBuildTarget {
   readonly weighting: number;
   /** Stop building at this count. `Number.MAX_SAFE_INTEGER` for no limit. */
   readonly maximum: number;
+  /** Whether the building raises the Knowledge capacity used by the planner gate. */
+  readonly knowledge?: boolean;
   /** The caller's "build this regardless" setting; it bypasses the cost-conflict gate. */
   readonly important: boolean;
   /** Script-sampled upkeep/support entries, when per-resource consumption checks are enabled. */
@@ -149,7 +151,7 @@ export function createCapturedBuildSource(
             weighting: target.weighting,
             cost,
             ignored: false,
-            knowledge: false,
+            knowledge: target.knowledge ?? false,
             important: target.important,
             ...(target.consumption === undefined
               ? {}

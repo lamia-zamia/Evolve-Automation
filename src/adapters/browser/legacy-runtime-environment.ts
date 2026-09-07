@@ -21,6 +21,7 @@ export interface LegacyRuntimeEnvironment {
   readonly MutationObserver: unknown;
   readonly ResizeObserver: unknown;
   readonly KeyboardEvent: unknown;
+  readonly MouseEvent: unknown;
   readonly Node: unknown;
   readonly Sortable: unknown;
   readonly alert: RuntimeFunction;
@@ -99,6 +100,7 @@ export function createLegacyRuntimeEnvironment(
     MutationObserver: readProperty(globalObject, "MutationObserver"),
     ResizeObserver: readProperty(globalObject, "ResizeObserver"),
     KeyboardEvent: readProperty(globalObject, "KeyboardEvent"),
+    MouseEvent: readProperty(globalObject, "MouseEvent"),
     Node: readProperty(globalObject, "Node"),
     Sortable: readProperty(globalObject, "Sortable"),
     alert: bindFunction(globalObject, "alert", noOperation),

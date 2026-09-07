@@ -1,0 +1,126 @@
+/**
+ * Dormant production composition for the captured build and research families.
+ *
+ * This seam owns the adapter assembly but does not choose when the legacy tick should call either
+ * family. That cutover remains a replay decision. The composition deliberately shares the offered
+ * technology reader so a construction reservation sample and a research plan describe one draw.
+ */
+
+import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
+import { createCapturedTabDiscovery } from "../adapters/evolve/captured-tab-discovery.ts";
+import {
+  createScriptKnowledgeGateReader,
+  createScriptStorageRequirementReader,
+} from "../adapters/evolve/script-build-gates.ts";
+import { createScriptCostReservationSource } from "../adapters/evolve/script-cost-reservations.ts";
+import { createScriptBuildPolicyReader } from "../adapters/evolve/progression/build/script-build-policy.ts";
+import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
+import { createCapturedConstructionControl } from "./captured-construction-control.ts";
+import { createCapturedResearchControl } from "./captured-research-control.ts";
+import type { CommandExecutionOutcome } from "../domain/commands.ts";
+import type { GameControlRegistry } from "../ports/game-control-registry.ts";
+import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
+import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
+import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
+import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
+import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import type { TickDiagnostics } from "../ports/tick.ts";
+
+export interface CapturedProgressionControlDependencies {
+  readonly rootState: GameRootStateSource;
+  readonly controls: GameControlRegistry;
+  readonly mountSuppression: GameMountSuppression;
+  readonly panels: GamePanelWorkspace;
+  readonly drawnActions: GameDrawnActionsReader;
+  readonly drawnProjects: GameDrawnProjectsReader;
+  readonly getBuildingManager: () => unknown;
+  readonly readSettings: () => unknown;
+  readonly getState: () => unknown;
+  readonly getResources: () => unknown;
+  readonly diagnostics?: TickDiagnostics | undefined;
+  readonly onSkipped?: (key: string, reason: string) => void;
+  readonly onUnavailable?: (reason: string) => void;
+}
+
+export interface CapturedProgressionControl {
+  readonly runConstructionCycle: () => CommandExecutionOutcome;
+  readonly runResearchCycle: () => CommandExecutionOutcome;
+}
+
+export function createCapturedProgressionControl(
+  dependencies: CapturedProgressionControlDependencies,
+): CapturedProgressionControl {
+  const {
+    rootState,
+    controls,
+    mountSuppression,
+    panels,
+    drawnActions,
+    drawnProjects,
+    getBuildingManager,
+    readSettings,
+    getState,
+    getResources,
+    diagnostics,
+  } = dependencies;
+  const onSkipped = dependencies.onSkipped;
+  const onUnavailable = dependencies.onUnavailable;
+  const resources = createCapturedResourceSource(rootState);
+  const discovery = createCapturedTabDiscovery({
+    rootState,
+    controls,
+    mountSuppression,
+    panels,
+  });
+  const offered = createCapturedTechCatalog({
+    rootState,
+    discovery,
+    drawnActions,
+    controls,
+    ...(onUnavailable === undefined ? {} : { onUnavailable }),
+  });
+  const readPolicy = createScriptBuildPolicyReader({
+    getBuildingManager,
+    getSettings: readSettings,
+    ...(onSkipped === undefined ? {} : { onSkipped }),
+  });
+  const scriptReservations = createScriptCostReservationSource({ getState });
+  const readKnowledgeGate = createScriptKnowledgeGateReader({
+    getState,
+    resources,
+    getResources,
+  });
+  const readStorageRequired = createScriptStorageRequirementReader({
+    getResources,
+  });
+  const construction = createCapturedConstructionControl({
+    rootState,
+    controls,
+    mountSuppression,
+    panels,
+    drawnProjects,
+    readPolicy,
+    readSettings,
+    scriptReservations,
+    readKnowledgeGate,
+    readStorageRequired,
+    readOfferedTechs: () => offered.readOffered(),
+    ...(onSkipped === undefined ? {} : { onSkipped }),
+    diagnostics,
+  });
+  const research = createCapturedResearchControl({
+    rootState,
+    controls,
+    drawnActions,
+    mountSuppression,
+    panels,
+    readOfferedTechs: () => offered.readOffered(),
+    ...(onUnavailable === undefined ? {} : { onUnavailable }),
+    diagnostics,
+  });
+
+  return Object.freeze({
+    runConstructionCycle: () => construction.runCycle(),
+    runResearchCycle: () => research.runCycle(),
+  });
+}

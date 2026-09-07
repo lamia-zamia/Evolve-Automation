@@ -182,9 +182,25 @@ import { createSettingsEditorControl } from "../../bootstrap/settings-editor-con
 import { createCoreSettingsPanelControl } from "../../bootstrap/core-settings-panel-control.ts";
 import { createOverrideCatalog as createOverrideCatalogControl } from "../../settings/override-catalog.ts";
 import { createScriptRuntimeUI as createScriptRuntimeUiControl } from "../../ui/script-runtime.ts";
+import { createCapturedProgressionControl } from "../../bootstrap/captured-progression-control.ts";
+import { createGameDrawnActionsReader } from "../browser/game-drawn-actions.ts";
+import { createGameDrawnProjectsReader } from "../browser/game-drawn-projects.ts";
+import { createGamePanelWorkspace } from "../browser/game-panel-workspace.ts";
 
-export function startEvolveRuntime($, diagnostics, runtimeEnvironment) {
-  startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment);
+export function startEvolveRuntime(
+  $,
+  diagnostics,
+  runtimeEnvironment,
+  pageCapture,
+) {
+  startEvolveRuntimeComposition(
+    $,
+    diagnostics,
+    runtimeEnvironment,
+    undefined,
+    undefined,
+    pageCapture,
+  );
 }
 
 export function startEvolveRuntimeComposition(
@@ -193,6 +209,7 @@ export function startEvolveRuntimeComposition(
   runtimeEnvironment,
   testSurface,
   registerRuntimeSupportTestSurface,
+  pageCapture,
 ) {
   "use strict";
   const TEST_SURFACE_ENABLED = globalThis.__EA_TEST_SURFACE_ENABLED__ === true;
@@ -1232,6 +1249,41 @@ export function startEvolveRuntimeComposition(
         settings = context.settings;
         resources = context.resources;
       },
+    }));
+
+  let capturedProgression;
+  if (pageCapture !== undefined) {
+    capturedProgression = createCapturedProgressionControl({
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+      mountSuppression: pageCapture.mountSuppression,
+      panels: createGamePanelWorkspace({
+        getDocument: () => runtimeEnvironment.document,
+      }),
+      drawnActions: createGameDrawnActionsReader({
+        getDocument: () => runtimeEnvironment.document,
+      }),
+      drawnProjects: createGameDrawnProjectsReader({
+        getDocument: () => runtimeEnvironment.document,
+        createMouseEvent: (type) => {
+          const MouseEventConstructor = runtimeEnvironment.MouseEvent;
+          if (typeof MouseEventConstructor !== "function") {
+            throw new Error("MouseEvent is unavailable");
+          }
+          return new MouseEventConstructor(type);
+        },
+      }),
+      getBuildingManager: () => BuildingManager,
+      readSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      diagnostics,
+    });
+  }
+
+  if (TEST_SURFACE_ENABLED)
+    registerTestPart(() => ({
+      capturedProgression,
     }));
 
   const { normalizeProperties, addProps } = createPropertyHelpersControl({
