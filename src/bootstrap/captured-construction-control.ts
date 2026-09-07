@@ -31,6 +31,7 @@ import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 
 /** Everything the caller configures for one cycle, across both families. */
@@ -47,6 +48,14 @@ export interface CapturedConstructionControlDependencies {
   readonly readPolicy: () => CapturedConstructionPolicy;
   /** Persisted A.R.P.A. settings, normalized at the adapter boundary. */
   readonly readSettings: () => unknown;
+  /**
+   * The technologies the game is offering, which is the only captured route to a technology's
+   * price. Supply it to make the player's research queue reserve what it is saving for; without it
+   * this cycle cannot see that commitment and does not model it. It is asked for only when that
+   * queue actually has an entry waiting, so an unused research queue costs nothing.
+   */
+  readonly readOfferedTechs?: () =>
+    readonly Readonly<OfferedTech>[] | undefined;
   readonly diagnostics?: TickDiagnostics | undefined;
   /** Reports a candidate, price, or catalog the capture could not supply. */
   readonly onSkipped?: (key: string, reason: string) => void;
@@ -79,6 +88,18 @@ export function createCapturedConstructionControl(
     diagnostics,
   } = dependencies;
   const onSkipped = dependencies.onSkipped;
+  const readOfferedTechs = dependencies.readOfferedTechs;
+  // The offered-technology catalog is asked for at most once per cycle, and only if something in
+  // the cycle actually needs it. Every candidate consults the same reservations, so without this
+  // the cycle would pay for one discovery pass per candidate.
+  let offeredThisCycle:
+    | { readonly value: readonly Readonly<OfferedTech>[] | undefined }
+    | undefined;
+  const readOfferedTechsOnce = ():
+    readonly Readonly<OfferedTech>[] | undefined => {
+    offeredThisCycle ??= { value: readOfferedTechs?.() };
+    return offeredThisCycle.value;
+  };
   const resources = createCapturedResourceSource(rootState);
   const costs = createCapturedActionCostReader({
     rootState,
@@ -89,6 +110,9 @@ export function createCapturedConstructionControl(
     rootState,
     resources,
     costs,
+    ...(readOfferedTechs === undefined
+      ? {}
+      : { readOfferedTechs: readOfferedTechsOnce }),
     ...(onSkipped === undefined ? {} : { onUnavailable: onSkipped }),
   });
   const conflicts = createCapturedCostConflictReader({
@@ -142,7 +166,12 @@ export function createCapturedConstructionControl(
   return Object.freeze({
     runCycle(): CommandExecutionOutcome {
       if (rootState.readRoot() === undefined) return NOT_CAPTURED;
-      return runBuildAutomation({ reader, executor, diagnostics });
+      offeredThisCycle = undefined;
+      try {
+        return runBuildAutomation({ reader, executor, diagnostics });
+      } finally {
+        offeredThisCycle = undefined;
+      }
     },
   });
 }

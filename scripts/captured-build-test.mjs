@@ -13,6 +13,7 @@ function makePage({
   queue = [],
   queueDisplay = false,
   buyAnyQueued = false,
+  researchQueue,
 }) {
   const root = {
     settings: { expose: false, tabLoad: false, qAny: buyAnyQueued },
@@ -20,7 +21,11 @@ function makePage({
     stats: { days: 100 },
     resource: {},
     city: {},
+    tech: researchQueue === undefined ? {} : { r_queue: 1 },
     queue: { display: queueDisplay, queue: [...queue] },
+    ...(researchQueue === undefined
+      ? {}
+      : { r_queue: { display: true, pause: false, queue: researchQueue } }),
   };
   for (const [id, resource] of Object.entries(resources)) {
     root.resource[id] = { display: true, max: -1, diff: 0, ...resource };
@@ -391,6 +396,75 @@ function queued(id, label = id) {
     skipped.some(([key]) => key === "city-farm"),
     true,
   );
+}
+
+// --- the research queue reserves too, and costs one catalog read per cycle ----------------------
+
+{
+  // Three managed buildings and two queued technologies. Every candidate asks the same conflict
+  // question, so a catalog read per candidate would be six discovery passes for one cycle.
+  const page = makePage({
+    buildings: {
+      farm: { count: 0, priceAt: () => ({ Money: 200 }) },
+      mine: { count: 0, priceAt: () => ({ Money: 200 }) },
+      warehouse: { count: 0, priceAt: () => ({ Money: 200 }) },
+    },
+    resources: { Money: { amount: 500, max: 1000 } },
+    researchQueue: [
+      { id: "tech-mining", label: "Mining", req: true, cna: false },
+      { id: "tech-smelting", label: "Smelting", req: true, cna: false },
+    ],
+  });
+  const reads = [];
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([
+      target("farm", 50),
+      target("mine", 40),
+      target("warehouse", 30),
+    ]),
+    readOfferedTechs: () => {
+      reads.push("read");
+      return [
+        { elementId: "tech-mining", cost: { Money: 400 }, generation: 1 },
+        { elementId: "tech-smelting", cost: { Money: 900 }, generation: 1 },
+      ];
+    },
+  });
+
+  assert.equal(control.runCycle().status, "succeeded");
+  // 400 reserved for the queue head out of 500 held leaves 100, and every building wants 200.
+  assert.deepEqual(page.clicks, []);
+  assert.equal(reads.length, 1, "one catalog read for the whole cycle");
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.equal(
+    reads.length,
+    2,
+    "and one for the next cycle, never a stale answer",
+  );
+}
+
+{
+  // The same page with nothing waiting in the research queue never asks for the catalog.
+  const page = makePage({
+    buildings: { farm: { count: 0, priceAt: () => ({ Money: 200 }) } },
+    resources: { Money: { amount: 500, max: 1000 } },
+    researchQueue: [],
+  });
+  const reads = [];
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)]),
+    readOfferedTechs: () => {
+      reads.push("read");
+      return [];
+    },
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["city-farm"]);
+  assert.deepEqual(reads, []);
 }
 
 // --- the player’s queue reserves what it is saving for ------------------------------------------

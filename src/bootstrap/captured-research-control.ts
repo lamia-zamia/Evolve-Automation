@@ -21,6 +21,7 @@ import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 
 export interface CapturedResearchControlDependencies {
@@ -72,9 +73,13 @@ export function createCapturedResearchControl(
     controls,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });
+  // One catalog read per cycle serves the planner and the research queue's own reservations; the
+  // cycle stores it here before either asks.
+  let offeredThisCycle: readonly Readonly<OfferedTech>[] | undefined;
   const reservations = createCapturedQueueReservationSource({
     rootState,
     resources,
+    readOfferedTechs: () => offeredThisCycle,
     costs: createCapturedActionCostReader({
       rootState,
       controls,
@@ -102,14 +107,19 @@ export function createCapturedResearchControl(
       if (rootState.readRoot() === undefined) return NOT_CAPTURED;
       // One offered-technology snapshot per cycle: read, plan and execute all see the same list,
       // and it goes out of scope with the cycle rather than ageing into the next one.
-      const { reader, executor } = createCapturedResearchAdapter({
-        rootState,
-        offered: catalog.readOffered(),
-        resources,
-        conflicts,
-        controls,
-      });
-      return runResearchAutomation({ reader, executor, diagnostics });
+      offeredThisCycle = catalog.readOffered();
+      try {
+        const { reader, executor } = createCapturedResearchAdapter({
+          rootState,
+          offered: offeredThisCycle,
+          resources,
+          conflicts,
+          controls,
+        });
+        return runResearchAutomation({ reader, executor, diagnostics });
+      } finally {
+        offeredThisCycle = undefined;
+      }
     },
   });
 }

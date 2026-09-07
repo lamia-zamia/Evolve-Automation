@@ -3,32 +3,75 @@ import assert from "node:assert/strict";
 import { createCapturedQueueReservationSource } from "../src/adapters/evolve/captured-queue-reservations.ts";
 import { createCapturedResourceSource } from "../src/adapters/evolve/captured-world-state.ts";
 
-/** Prices any id present in `prices`; anything else is unpriceable, as the game's own oracle is. */
-function makeSource(root, prices = {}, onUnavailable) {
+/**
+ * Prices any id present in `prices`; anything else is unpriceable, as the game's own oracle is.
+ * `research` wires the offered-technology source: absent means the caller cannot price technology,
+ * `{ offered: undefined }` means the catalog read failed. `reads` counts how often it was asked.
+ */
+function makeSource(root, prices = {}, onUnavailable, research) {
   const rootState = {
     readRoot: () => root,
     isReactivitySuppressed: () => false,
     subscribeRootReplaced: () => () => {},
   };
-  return createCapturedQueueReservationSource({
+  const reads = [];
+  const source = createCapturedQueueReservationSource({
     rootState,
     resources: createCapturedResourceSource(rootState),
     costs: { readCost: (id) => prices[id] },
+    ...(research === undefined
+      ? {}
+      : {
+          readOfferedTechs: () => {
+            reads.push(1);
+            return research.offered;
+          },
+        }),
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });
+  return {
+    readReservations: () => source.readReservations(),
+    catalogReads: reads,
+  };
 }
 
 function makeRoot({
   display = true,
+  pause = false,
   qAny = false,
   queue = [],
   resources = {},
+  research,
 }) {
   const resource = {};
   for (const [id, view] of Object.entries(resources)) {
     resource[id] = { display: true, amount: 0, max: -1, diff: 0, ...view };
   }
-  return { settings: { qAny }, queue: { display, queue }, resource };
+  const root = {
+    settings: { qAny, qAny_res: research?.qAnyRes ?? false },
+    queue: { display, pause, queue },
+    resource,
+    tech: {},
+  };
+  if (research !== undefined) {
+    if (research.unlocked !== false) root.tech.r_queue = 1;
+    root.r_queue = {
+      display: research.display ?? true,
+      pause: research.pause ?? false,
+      queue: research.queue ?? [],
+    };
+  }
+  return root;
+}
+
+/** A research-queue entry as the game maintains it, with its written-back judgements. */
+function queuedTech(type, { req = true, cna = false } = {}) {
+  return { id: `tech-${type}`, action: "tech", type, label: type, req, cna };
+}
+
+/** One offered technology as the catalog reports it. */
+function offeredTech(type, cost) {
+  return { elementId: `tech-${type}`, cost, generation: 1 };
 }
 
 const PRICES = {
@@ -164,6 +207,221 @@ for (const [label, root] of [
   assert.deepEqual(reported, [
     ["city-mystery", "queued item could not be priced"],
   ]);
+}
+
+// --- a paused queue is not being bought from --------------------------------
+
+{
+  const sample = makeSource(
+    makeRoot({
+      pause: true,
+      queue: [{ id: "city-warehouse", label: "Warehouse" }],
+      resources: { Money: { amount: 1000 } },
+    }),
+    PRICES,
+  ).readReservations();
+  assert.deepEqual([...sample.targets], []);
+  assert.equal(sample.unavailable, false);
+}
+
+// --- the research queue ------------------------------------------------------
+
+const OFFERED = [
+  offeredTech("mining", { Knowledge: 100 }),
+  offeredTech("smelting", { Knowledge: 200, Money: 50 }),
+];
+
+{
+  // Strictly down the queue: the first entry whose requirements the game says are met.
+  const source = makeSource(
+    makeRoot({
+      resources: { Knowledge: { amount: 500 }, Money: { amount: 500 } },
+      research: { queue: [queuedTech("mining"), queuedTech("smelting")] },
+    }),
+    PRICES,
+    undefined,
+    { offered: OFFERED },
+  );
+  const sample = source.readReservations();
+  assert.deepEqual(
+    [...sample.targets],
+    [
+      {
+        name: "mining",
+        cause: "Research queue",
+        cost: { Knowledge: 100 },
+      },
+    ],
+  );
+  assert.equal(sample.unavailable, false);
+  assert.equal(source.catalogReads.length, 1);
+}
+
+{
+  // `qAny_res` is the game's own "buy whichever queued research you can".
+  const sample = makeSource(
+    makeRoot({
+      resources: { Knowledge: { amount: 500 }, Money: { amount: 500 } },
+      research: {
+        qAnyRes: true,
+        queue: [queuedTech("mining"), queuedTech("smelting")],
+      },
+    }),
+    PRICES,
+    undefined,
+    { offered: OFFERED },
+  ).readReservations();
+  assert.deepEqual(
+    sample.targets.map((entry) => entry.name),
+    ["mining", "smelting"],
+  );
+}
+
+{
+  // The game skips an entry whose requirements are not met and keeps scanning, so the entry
+  // behind it is the one being saved for.
+  const sample = makeSource(
+    makeRoot({
+      resources: { Knowledge: { amount: 500 }, Money: { amount: 500 } },
+      research: {
+        queue: [queuedTech("mining", { req: false }), queuedTech("smelting")],
+      },
+    }),
+    PRICES,
+    undefined,
+    { offered: OFFERED },
+  ).readReservations();
+  assert.deepEqual(
+    sample.targets.map((entry) => entry.name),
+    ["smelting"],
+  );
+}
+
+{
+  // An entry the game itself wrote off as never affordable reserves nothing and does not stop
+  // the scan either.
+  const sample = makeSource(
+    makeRoot({
+      resources: { Knowledge: { amount: 500 }, Money: { amount: 500 } },
+      research: {
+        queue: [queuedTech("mining", { cna: true }), queuedTech("smelting")],
+      },
+    }),
+    PRICES,
+    undefined,
+    { offered: OFFERED },
+  ).readReservations();
+  assert.deepEqual(
+    sample.targets.map((entry) => entry.name),
+    ["smelting"],
+  );
+}
+
+for (const [label, research] of [
+  ["hidden", { display: false, queue: [queuedTech("mining")] }],
+  ["paused", { pause: true, queue: [queuedTech("mining")] }],
+  ["locked", { unlocked: false, queue: [queuedTech("mining")] }],
+  ["empty", { queue: [] }],
+  ["nothing researchable", { queue: [queuedTech("mining", { req: false })] }],
+]) {
+  const source = makeSource(
+    makeRoot({ resources: { Knowledge: { amount: 500 } }, research }),
+    PRICES,
+    undefined,
+    { offered: OFFERED },
+  );
+  const sample = source.readReservations();
+  assert.deepEqual([...sample.targets], [], label);
+  assert.equal(sample.unavailable, false, label);
+  // A discovery pass is the expensive part; nothing waiting must never buy one.
+  assert.equal(source.catalogReads.length, 0, label);
+}
+
+{
+  // A caller with no way to price technology does not model the research queue at all, rather
+  // than reporting every cycle unavailable and buying nothing.
+  const sample = makeSource(
+    makeRoot({
+      resources: { Knowledge: { amount: 500 } },
+      research: { queue: [queuedTech("mining")] },
+    }),
+    PRICES,
+  ).readReservations();
+  assert.deepEqual([...sample.targets], []);
+  assert.equal(sample.unavailable, false);
+}
+
+{
+  // A catalog that could not be read leaves a real commitment unpriced, which is unavailable.
+  const reported = [];
+  const sample = makeSource(
+    makeRoot({
+      resources: { Knowledge: { amount: 500 } },
+      research: { queue: [queuedTech("mining")] },
+    }),
+    PRICES,
+    (id, reason) => reported.push([id, reason]),
+    { offered: undefined },
+  ).readReservations();
+  assert.deepEqual([...sample.targets], []);
+  assert.equal(sample.unavailable, true);
+  assert.deepEqual(reported, [
+    ["tech-mining", "offered technologies could not be read"],
+  ]);
+}
+
+{
+  // A queued technology the game is no longer offering cannot be priced either.
+  const reported = [];
+  const sample = makeSource(
+    makeRoot({
+      resources: { Knowledge: { amount: 500 } },
+      research: { queue: [queuedTech("theology")] },
+    }),
+    PRICES,
+    (id, reason) => reported.push([id, reason]),
+    { offered: OFFERED },
+  ).readReservations();
+  assert.equal(sample.unavailable, true);
+  assert.deepEqual(reported, [
+    ["tech-theology", "queued technology is not currently offered"],
+  ]);
+}
+
+{
+  // Both queues reserve at once, each under its own cause.
+  const sample = makeSource(
+    makeRoot({
+      queue: [{ id: "city-warehouse", label: "Warehouse" }],
+      resources: { Money: { amount: 1000 }, Knowledge: { amount: 500 } },
+      research: { queue: [queuedTech("mining")] },
+    }),
+    PRICES,
+    undefined,
+    { offered: OFFERED },
+  ).readReservations();
+  assert.deepEqual(
+    sample.targets.map((entry) => [entry.name, entry.cause]),
+    [
+      ["Warehouse", "Queue"],
+      ["mining", "Research queue"],
+    ],
+  );
+}
+
+{
+  // A research cost no storage could ever hold is one the game has written off.
+  const sample = makeSource(
+    makeRoot({
+      resources: { Knowledge: { amount: 10, max: 50 } },
+      research: { queue: [queuedTech("mining")] },
+    }),
+    PRICES,
+    undefined,
+    { offered: OFFERED },
+  ).readReservations();
+  assert.deepEqual([...sample.targets], []);
+  assert.equal(sample.unavailable, false);
 }
 
 console.log("captured-queue-reservations ok");
