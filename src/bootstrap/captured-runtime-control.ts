@@ -1,4 +1,5 @@
 import { createCapturedProgressionControl } from "./captured-progression-control.ts";
+import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
@@ -77,6 +78,11 @@ export function startCapturedRuntime({
     }),
     diagnostics,
   });
+  const gatherResources = createCapturedGatherResourcesControl({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+  });
 
   const runCycle = () => {
     const settings = readStoredSettings(storage);
@@ -87,6 +93,12 @@ export function startCapturedRuntime({
       return;
     }
     try {
+      if (
+        isEnabled(settings, "autoBuild") ||
+        isEnabled(settings, "buildingAlwaysClick")
+      ) {
+        gatherResources();
+      }
       if (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) {
         progression.runConstructionCycle();
       }

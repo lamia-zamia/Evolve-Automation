@@ -1277,8 +1277,8 @@ Only continue if you trust the source. Injected code:
       let rawGraphene = rawResources.Graphene;
       if (!isNonArrayRecord(rawGraphene))
         return unavailable3("invalid-resource", "Graphene");
-      let grapheneName = rawGraphene.name, currentQuantity = rawGraphene.currentQuantity, maxQuantity = rawGraphene.maxQuantity;
-      return typeof grapheneName != "string" ? unavailable3("invalid-resource", "Graphene.name") : isNonNegativeNumber(currentQuantity) ? isNonNegativeNumber(maxQuantity) ? Object.freeze({
+      let grapheneName = rawGraphene.name, currentQuantity2 = rawGraphene.currentQuantity, maxQuantity = rawGraphene.maxQuantity;
+      return typeof grapheneName != "string" ? unavailable3("invalid-resource", "Graphene.name") : isNonNegativeNumber(currentQuantity2) ? isNonNegativeNumber(maxQuantity) ? Object.freeze({
         status: "ready",
         input: Object.freeze({
           fusionGenerators: Object.freeze(fusionGenerators),
@@ -1286,7 +1286,7 @@ Only continue if you trust the source. Injected code:
           scienceLabs: Object.freeze(scienceLabs),
           graphene: Object.freeze({
             name: grapheneName,
-            currentQuantity,
+            currentQuantity: currentQuantity2,
             maxQuantity
           }),
           thresholds: Object.freeze({ ...rawThresholds })
@@ -1970,14 +1970,14 @@ Only continue if you trust the source. Injected code:
         let rawResource = gameResources[resourceId3];
         if (!isRecord(rawResource))
           return unavailable6("invalid-resource", resourceId3);
-        let currentQuantity = rawResource.amount, rateOfChange = rawResource.diff;
-        if (!isFiniteNumber(currentQuantity) || !isFiniteNumber(rateOfChange))
+        let currentQuantity2 = rawResource.amount, rateOfChange = rawResource.diff;
+        if (!isFiniteNumber(currentQuantity2) || !isFiniteNumber(rateOfChange))
           return unavailable6("invalid-resource", resourceId3);
         requirements.push(
           Object.freeze({
             resourceId: resourceId3,
             costPerSegment,
-            currentQuantity,
+            currentQuantity: currentQuantity2,
             rateOfChange
           })
         );
@@ -7380,8 +7380,8 @@ Only continue if you trust the source. Injected code:
         let rawResource = rawResources[resourceId3];
         if (!isNonArrayRecord(rawResource) || typeof rawResource.title != "string" || typeof rawResource.isUnlocked != "function")
           return unavailableLimit("invalid-resource", resourceId3);
-        let currentQuantity = rawResource.currentQuantity, maximumQuantity = rawResource.maxQuantity, income = rawResource.income;
-        if (!isFiniteNumber(currentQuantity) || !isFiniteNumber(maximumQuantity) || !isFiniteNumber(income))
+        let currentQuantity2 = rawResource.currentQuantity, maximumQuantity = rawResource.maxQuantity, income = rawResource.income;
+        if (!isFiniteNumber(currentQuantity2) || !isFiniteNumber(maximumQuantity) || !isFiniteNumber(income))
           return unavailableLimit("invalid-resource", resourceId3);
         let unlocked2 = rawResource.isUnlocked.call(rawResource);
         if (typeof unlocked2 != "boolean")
@@ -7391,7 +7391,7 @@ Only continue if you trust the source. Injected code:
             resourceId: resourceId3,
             resourceTitle: rawResource.title,
             requiredQuantity,
-            currentQuantity,
+            currentQuantity: currentQuantity2,
             maximumQuantity,
             income,
             unlocked: unlocked2
@@ -23292,7 +23292,7 @@ Only continue if you trust the source. Injected code:
           let materialPath = `${path}.cost.${resourceId3}`, costPerCraft = readPositiveCost(cost[resourceId3], materialPath), resource2 = requireRecord(
             session.resources[resourceId3],
             `resources.${resourceId3}`
-          ), currentQuantity = requireNumber(
+          ), currentQuantity2 = requireNumber(
             resource2.currentQuantity,
             `resources.${resourceId3}.currentQuantity`
           ), maxQuantity = requireNumber(
@@ -23304,7 +23304,7 @@ Only continue if you trust the source. Injected code:
           ), base = {
             resourceId: resourceId3,
             costPerCraft,
-            currentQuantity,
+            currentQuantity: currentQuantity2,
             maxQuantity,
             craftPreserve
           };
@@ -23312,7 +23312,7 @@ Only continue if you trust the source. Injected code:
             let thresholdPreserve = requireNumber(
               craftable.craftPreserve,
               `${path}.craftPreserve`
-            ), availableQuantity = currentQuantity < maxQuantity * (thresholdPreserve + 0.05) ? currentQuantity : requireNumber(
+            ), availableQuantity = currentQuantity2 < maxQuantity * (thresholdPreserve + 0.05) ? currentQuantity2 : requireNumber(
               resource2.spareQuantity,
               `resources.${resourceId3}.spareQuantity`
             );
@@ -23356,7 +23356,7 @@ Only continue if you trust the source. Injected code:
             resource2.storageRequired,
             `resources.${resourceId3}.storageRequired`
           );
-          if (currentQuantity < resourceRequired && !callBoolean(resource2, "isCapped", `resources.${resourceId3}`)) {
+          if (currentQuantity2 < resourceRequired && !callBoolean(resource2, "isCapped", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
@@ -26362,13 +26362,13 @@ Only continue if you trust the source. Injected code:
             requestedQuantity,
             maxQuantity,
             isFood
-          }, isCraftable = callBoolean(raw, "isCraftable", path), currentQuantity = requireNumber(
+          }, isCraftable = callBoolean(raw, "isCraftable", path), currentQuantity2 = requireNumber(
             raw.currentQuantity,
             `${path}.currentQuantity`
           ), storageRatio = requireNumber(
             raw.storageRatio,
             `${path}.storageRatio`
-          ), effectiveHungry = hungryRace ?? !0, craftableMaximum = isCraftable && currentQuantity > storageRequired * storageShift ? callNumber(manager, "maxConsumeCraftable", "ConsumeManager", raw) : null, ratioMaximums = ratios.map((ratio) => {
+          ), effectiveHungry = hungryRace ?? !0, craftableMaximum = isCraftable && currentQuantity2 > storageRequired * storageShift ? callNumber(manager, "maxConsumeCraftable", "ConsumeManager", raw) : null, ratioMaximums = ratios.map((ratio) => {
             if (isCraftable)
               return null;
             let keepRatio = calculateConsumeKeepRatio(
@@ -26395,7 +26395,7 @@ Only continue if you trust the source. Injected code:
               demanded,
               ...keepView,
               isCraftable,
-              currentQuantity,
+              currentQuantity: currentQuantity2,
               storageRatio,
               craftableMaximum,
               ratioMaximums: Object.freeze(ratioMaximums)
@@ -27190,7 +27190,7 @@ Only continue if you trust the source. Injected code:
               atomicMass: 1,
               exotic: !1
             });
-          let currentQuantity = requireNonNegative(
+          let currentQuantity2 = requireNonNegative(
             resource2.currentQuantity,
             `resources.${candidate.productionId}.currentQuantity`
           ), atomicMass = priorityPlan.scoreMode === "mass" ? requirePositive(
@@ -27199,7 +27199,7 @@ Only continue if you trust the source. Injected code:
           ) : 1;
           return Object.freeze({
             productionId: candidate.productionId,
-            currentQuantity,
+            currentQuantity: currentQuantity2,
             atomicMass,
             exotic: priorityPlan.scoreMode === "mass" && (resource2 === allResources?.Elerium || resource2 === allResources?.Infernite)
           });
@@ -28117,11 +28117,11 @@ Only continue if you trust the source. Injected code:
       nanoTube: productions.NanoTube
     });
   }
-  function readBuildingWeight(buildings, resourceId3, currentQuantity) {
+  function readBuildingWeight(buildings, resourceId3, currentQuantity2) {
     for (let index = 0; index < buildings.length; index++) {
       let path = `state.unlockedBuildings[${index}]`, building3 = requireRecord(buildings[index], path), required = requireRecord(building3.cost, `${path}.cost`)[resourceId3];
       if (required === void 0) continue;
-      if (requireNumber(required, `${path}.cost.${resourceId3}`) > currentQuantity)
+      if (requireNumber(required, `${path}.cost.${resourceId3}`) > currentQuantity2)
         return requireNumber(building3.weighting, `${path}.weighting`);
     }
     return 100;
@@ -28216,7 +28216,7 @@ Only continue if you trust the source. Injected code:
           let path = `FactoryManager.Productions[${index}]`, production = identity2.value, output = requireRecord(
             production.resource,
             `${path}.resource`
-          ), currentQuantity = requireNumber(
+          ), currentQuantity2 = requireNumber(
             output.currentQuantity,
             `${path}.resource.currentQuantity`
           ), storageRequired = requireNumber(
@@ -28228,7 +28228,7 @@ Only continue if you trust the source. Injected code:
             path,
             production,
             output,
-            currentQuantity,
+            currentQuantity: currentQuantity2,
             storageRequired,
             unlocked: unlocked2,
             enabled,
@@ -28238,7 +28238,7 @@ Only continue if you trust the source. Injected code:
             buildingWeight: weightingMode === "buildings" && unlockedBuildings.length > 0 ? readBuildingWeight(
               unlockedBuildings,
               identity2.outputResourceId,
-              currentQuantity
+              currentQuantity2
             ) : 100
           };
         }), maximum = requireCount(
@@ -36219,7 +36219,7 @@ Only continue if you trust the source. Injected code:
         ), moneyCurrent = requireNumber(
           session.money.currentQuantity,
           "resources.Money.currentQuantity"
-        ), currentQuantity = requireNumber(
+        ), currentQuantity2 = requireNumber(
           resource2.currentQuantity,
           `${path}.currentQuantity`
         ), maxQuantity = requireNumber(
@@ -36244,7 +36244,7 @@ Only continue if you trust the source. Injected code:
             "MarketManager",
             resource2
           ),
-          currentQuantity,
+          currentQuantity: currentQuantity2,
           maxQuantity,
           income: usesIncome ? requireNumber(resource2.income, `${path}.income`) : 0,
           ticksPerSecond: ticks,
@@ -36928,11 +36928,11 @@ Only continue if you trust the source. Injected code:
           Furs: emptyResource,
           Mana: emptyResource
         }, readNeededResource = (id) => {
-          let resource2 = readResource2(registry, id), currentQuantity = readQuantity(resource2, id), maxQuantity = id === "Mana" ? 0 : requireNumber(
+          let resource2 = readResource2(registry, id), currentQuantity2 = readQuantity(resource2, id), maxQuantity = id === "Mana" ? 0 : requireNumber(
             resource2.maxQuantity,
             `resources.${id}.maxQuantity`
           );
-          resourceRecords[id] = resource2, initialQuantities[id] = currentQuantity, resourceInput[id] = Object.freeze({ currentQuantity, maxQuantity });
+          resourceRecords[id] = resource2, initialQuantities[id] = currentQuantity2, resourceInput[id] = Object.freeze({ currentQuantity: currentQuantity2, maxQuantity });
         };
         (clickable.food && !fasting || clickable.slaughter) && readNeededResource("Food"), (clickable.lumber || clickable.slaughter) && readNeededResource("Lumber"), clickable.stone && readNeededResource("Stone"), clickable.chrysotile && readNeededResource("Chrysotile"), clickable.slaughter && readNeededResource("Furs"), (foodConjuring || materialConjuring) && readNeededResource("Mana");
         let fursUnlocked = clickable.slaughter && resourceRecords.Furs !== void 0 ? callBoolean(resourceRecords.Furs, "isUnlocked", "resources.Furs") : !1;
@@ -52370,6 +52370,229 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
   }
 
+  // src/adapters/evolve/economy/resources/captured-gather-resources.ts
+  var ACTION_ORDER2 = Object.freeze([
+    "food",
+    "lumber",
+    "stone",
+    "chrysotile",
+    "slaughter"
+  ]), CONTROL_IDS = Object.freeze({
+    // DeadSpace's two buildTemplate call sites still declare these ids with an undefined region.
+    // The action's own selector is authoritative, so accept both upstream shapes.
+    food: Object.freeze(["city-food", "undefined-food"]),
+    lumber: Object.freeze(["city-lumber"]),
+    stone: Object.freeze(["city-stone", "undefined-stone"]),
+    chrysotile: Object.freeze(["city-chrysotile"]),
+    slaughter: Object.freeze(["city-slaughter"])
+  }), DEFAULT_CLICK_LIMIT = 50;
+  function numberValue(value) {
+    return Number(value);
+  }
+  function readResource5(root, id) {
+    let resource2 = readProperty(readProperty(root, "resource"), id);
+    return Object.freeze({
+      // Resources are lazily populated by the game; Number(undefined) preserves the existing
+      // planner's NaN comparison behavior instead of inventing an unlocked resource.
+      currentQuantity: numberValue(readProperty(resource2, "amount")),
+      maxQuantity: numberValue(readProperty(resource2, "max"))
+    });
+  }
+  function readTechLevel(root, id) {
+    return numberValue(readProperty(readProperty(root, "tech"), id));
+  }
+  function readStrongMultiplier(root) {
+    let rank = readProperty(readProperty(root, "race"), "strong");
+    switch (rank === !0 ? 1 : numberValue(rank)) {
+      case 0.1:
+        return 2;
+      case 0.25:
+        return 2;
+      case 0.5:
+        return 3;
+      case 1:
+        return 4;
+      case 2:
+        return 5;
+      case 3:
+        return 6;
+      case 4:
+        return 7;
+      default:
+        return 1;
+    }
+  }
+  function readControl(controls4, actionId) {
+    return CONTROL_IDS[actionId].find((elementId) => {
+      let handle = controls4.resolve(elementId);
+      return handle !== void 0 && handle.methods.includes("action");
+    });
+  }
+  function emptyInput7() {
+    let empty = Object.freeze({ currentQuantity: 0, maxQuantity: 0 });
+    return Object.freeze({
+      stopped: !0,
+      resourcesPerClick: 1,
+      clickLimit: 0,
+      fasting: !1,
+      soulEater: !1,
+      primitive: !1,
+      foodConjuring: !1,
+      materialConjuring: !1,
+      fursUnlocked: !1,
+      clickable: Object.freeze({
+        food: !1,
+        lumber: !1,
+        stone: !1,
+        chrysotile: !1,
+        slaughter: !1
+      }),
+      resources: Object.freeze({
+        Food: empty,
+        Lumber: empty,
+        Stone: empty,
+        Chrysotile: empty,
+        Furs: empty,
+        Mana: empty
+      })
+    });
+  }
+  function currentQuantity(root, resourceId3) {
+    return readResource5(root, resourceId3).currentQuantity;
+  }
+  function assignmentsMatch(root, assignments, useQuantity) {
+    return assignments.every((assignment) => {
+      let actual = currentQuantity(root, assignment.resourceId), expected = useQuantity ? assignment.quantity : assignment.expectedQuantity;
+      return actual === expected;
+    });
+  }
+  function readClickLimit(settings, onSkipped) {
+    let value = settings.buildingClickPerTick;
+    if (value === void 0) return DEFAULT_CLICK_LIMIT;
+    if (typeof value == "number" && Number.isSafeInteger(value) && value >= 0)
+      return value;
+    onSkipped(
+      "gather",
+      "buildingClickPerTick is not a non-negative safe integer"
+    );
+  }
+  function createCapturedGatherResourcesAdapter({
+    rootState,
+    controls: controls4,
+    readSettings: readSettings3,
+    onSkipped
+  }) {
+    let reportSkipped = onSkipped ?? (() => {
+    }), session, reader = Object.freeze({
+      read() {
+        let root = rootState.readRoot(), settingsValue = readSettings3();
+        if (!isRecord(root) || !isRecord(settingsValue))
+          return session = void 0, emptyInput7();
+        let clickLimit = readClickLimit(settingsValue, reportSkipped);
+        if (clickLimit === void 0)
+          return session = void 0, emptyInput7();
+        let resources = Object.freeze({
+          Food: readResource5(root, "Food"),
+          Lumber: readResource5(root, "Lumber"),
+          Stone: readResource5(root, "Stone"),
+          Chrysotile: readResource5(root, "Chrysotile"),
+          Furs: readResource5(root, "Furs"),
+          Mana: readResource5(root, "Mana")
+        }), race2 = readProperty(root, "race"), city = readProperty(root, "city"), populationResource = readResource5(root, "Population"), quarry = readProperty(city, "rock_quarry"), stopped = !(settingsValue.buildingAlwaysClick === !0) && populationResource.currentQuantity > 15 && (numberValue(readProperty(quarry, "count")) > 0 || !!readProperty(race2, "sappy")), controlsByAction = Object.freeze({
+          food: readControl(controls4, "food"),
+          lumber: readControl(controls4, "lumber"),
+          stone: readControl(controls4, "stone"),
+          chrysotile: readControl(controls4, "chrysotile"),
+          slaughter: readControl(controls4, "slaughter")
+        }), furs = readProperty(readProperty(root, "resource"), "Furs"), input = Object.freeze({
+          stopped,
+          resourcesPerClick: readStrongMultiplier(root) * (readProperty(readProperty(root, "genes"), "enhance") ? 2 : 1),
+          clickLimit,
+          fasting: !!readProperty(race2, "fasting"),
+          soulEater: !!readProperty(race2, "soul_eater"),
+          primitive: readTechLevel(root, "primitive") >= 1,
+          foodConjuring: readTechLevel(root, "conjuring") >= 1,
+          materialConjuring: readTechLevel(root, "conjuring") >= 2,
+          fursUnlocked: !!readProperty(furs, "display"),
+          clickable: Object.freeze({
+            food: controlsByAction.food !== void 0,
+            lumber: controlsByAction.lumber !== void 0,
+            stone: controlsByAction.stone !== void 0,
+            chrysotile: controlsByAction.chrysotile !== void 0,
+            slaughter: controlsByAction.slaughter !== void 0
+          }),
+          resources
+        });
+        return session = Object.freeze({ root }), input;
+      }
+    }), executor = Object.freeze({
+      execute(decision2) {
+        let active = session;
+        if (active === void 0)
+          return stale(
+            "gather-session-missing",
+            "gather read session is missing"
+          );
+        if (rootState.readRoot() !== active.root)
+          return stale("gather-root-changed", "captured game root changed");
+        let previousIndex = -1;
+        for (let operation2 of decision2.operations) {
+          let actionIndex = ACTION_ORDER2.indexOf(operation2.actionId);
+          if (actionIndex <= previousIndex || !Number.isFinite(operation2.amount) || !Number.isSafeInteger(Math.ceil(operation2.amount)))
+            return rejected(
+              "invalid-gather-operation",
+              "gather operations must be finite and ordered"
+            );
+          if (previousIndex = actionIndex, !assignmentsMatch(rootState.readRoot(), operation2.beforeAction, !1))
+            return stale(
+              "gather-quantity-changed",
+              `gather inputs changed before ${operation2.actionId}`
+            );
+          if ((operation2.amount > 0 ? Math.ceil(operation2.amount) : 0) > 0) {
+            let elementId = readControl(controls4, operation2.actionId);
+            if (elementId === void 0)
+              return rejected(
+                "gather-control-missing",
+                `no captured control for ${operation2.actionId}`
+              );
+            let handle = controls4.resolve(elementId);
+            if (handle === void 0)
+              return stale(
+                "gather-control-stale",
+                `captured control disappeared for ${operation2.actionId}`
+              );
+            for (let index = 0; index < operation2.amount; index += 1) {
+              let result2 = controls4.invoke(handle, "action");
+              if (!result2.ok)
+                return result2.reason === "stale-control" ? stale("gather-control-stale", result2.detail ?? result2.reason) : rejected(
+                  "gather-click-failed",
+                  result2.detail ?? result2.reason
+                );
+            }
+          }
+          if (!assignmentsMatch(rootState.readRoot(), operation2.afterAction, !0))
+            return stale(
+              "gather-result-changed",
+              `gather result differed for ${operation2.actionId}`
+            );
+        }
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/bootstrap/captured-gather-resources-control.ts
+  function createCapturedGatherResourcesControl(dependencies) {
+    let adapter = createCapturedGatherResourcesAdapter(dependencies);
+    return () => {
+      runGatherResourcesAutomation({
+        reader: adapter.reader,
+        executor: adapter.executor
+      });
+    };
+  }
+
   // src/bootstrap/captured-runtime-control.ts
   function readStoredSettings(storageValue) {
     if (!isRecord(storageValue)) return {};
@@ -52416,11 +52639,15 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         createMouseEvent: (type) => new mouseEvent(type)
       }),
       diagnostics
+    }), gatherResources = createCapturedGatherResourcesControl({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage)
     }), runCycle = () => {
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }
