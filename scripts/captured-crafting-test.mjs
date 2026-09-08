@@ -25,7 +25,7 @@ function createWorld(overrides = {}) {
         diff: 400,
       },
       Iron: { name: "Iron", display: true, amount: 500, max: 1000, diff: 10 },
-      Plywood: { name: "Plywood", display: true, amount: 0, max: -1, diff: 0 },
+      Plywood: { name: "Plywood", display: true, amount: 5, max: -1, diff: 0 },
       Scarletite: {
         name: "Scarletite",
         display: true,
@@ -81,6 +81,14 @@ function createWorld(overrides = {}) {
   );
   let settings = overrides.settings ?? {};
   let periods = 1;
+  const demanded = new Set(overrides.demanded ?? []);
+  const required = overrides.storageRequired ?? {};
+  const requested = overrides.requested ?? {};
+  const demand = {
+    isDemanded: (id) => demanded.has(id),
+    requestedQuantity: (id) => requested[id] ?? 0,
+    storageRequired: (id) => required[id] ?? 1,
+  };
   const dependencies = {
     rootState: { readRoot: () => root },
     controls,
@@ -93,6 +101,7 @@ function createWorld(overrides = {}) {
     }),
     readSettings: () => settings,
     readPeriods: () => periods,
+    readDemand: () => demand,
   };
   return {
     root,
@@ -107,13 +116,14 @@ function createWorld(overrides = {}) {
   };
 }
 
-// A material at its storage cap is crafted from one period of its income, not from the stockpile.
+// An undemanded material above its storage requirement is crafted from one period of its income,
+// not from the stockpile.
 {
   const world = createWorld();
   assert.deepEqual(world.run(), { status: "succeeded" });
   assert.deepEqual(world.calls, [{ resourceId: "Plywood", volume: 1 }]);
   assert.equal(world.root.resource.Lumber.amount, 900);
-  assert.equal(world.root.resource.Plywood.amount, 1);
+  assert.equal(world.root.resource.Plywood.amount, 6);
 }
 
 // The reported period count scales the income budget.
@@ -126,13 +136,67 @@ function createWorld(overrides = {}) {
   assert.equal(world.root.resource.Lumber.amount, 800);
 }
 
-// A material below its storage cap is blocked: manual crafting never eats a stockpile.
+// A material below its storage cap is still crafted from income, which the at-cap gate used to
+// refuse.
 {
   const world = createWorld();
   world.root.resource.Lumber.amount = 999;
   assert.deepEqual(world.run(), { status: "succeeded" });
+  assert.deepEqual(world.calls, [{ resourceId: "Plywood", volume: 1 }]);
+  assert.equal(world.root.resource.Lumber.amount, 899);
+}
+
+// A material something else is accumulating is blocked outright.
+{
+  const world = createWorld({ demanded: ["Lumber"] });
+  assert.deepEqual(world.run(), { status: "succeeded" });
   assert.deepEqual(world.calls, []);
-  assert.equal(world.root.resource.Lumber.amount, 999);
+  assert.equal(world.root.resource.Lumber.amount, 1000);
+}
+
+// A material the plan needs more of in storage than the player holds is blocked too, unless it is
+// already at its cap and cannot hold more.
+{
+  const below = createWorld({ storageRequired: { Lumber: 5000 } });
+  below.root.resource.Lumber.amount = 999;
+  assert.deepEqual(below.run(), { status: "succeeded" });
+  assert.deepEqual(below.calls, []);
+
+  const capped = createWorld({ storageRequired: { Lumber: 5000 } });
+  assert.deepEqual(capped.run(), { status: "succeeded" });
+  assert.deepEqual(capped.calls, [{ resourceId: "Plywood", volume: 1 }]);
+}
+
+// A demanded craftable spends its material's spare quantity rather than one period of income.
+{
+  const world = createWorld({
+    demanded: ["Plywood"],
+    requested: { Lumber: 400 },
+  });
+  world.root.resource.Lumber.diff = 4;
+  assert.deepEqual(world.run(), { status: "succeeded" });
+  // 1000 held less 400 spoken for, over a cost of 100.
+  assert.deepEqual(world.calls, [{ resourceId: "Plywood", volume: 6 }]);
+}
+
+// A craftable the player has none of is below the script's own baseline requirement, so the first
+// units come from spare material rather than from income.
+{
+  const world = createWorld({ requested: { Lumber: 400 } });
+  world.root.resource.Plywood.amount = 0;
+  assert.deepEqual(world.run(), { status: "succeeded" });
+  assert.deepEqual(world.calls, [{ resourceId: "Plywood", volume: 6 }]);
+}
+
+// A craftable the plan wants more of in storage spends spare quantity as well.
+{
+  const world = createWorld({
+    storageRequired: { Plywood: 500 },
+    requested: { Lumber: 700 },
+  });
+  world.root.resource.Lumber.diff = 4;
+  assert.deepEqual(world.run(), { status: "succeeded" });
+  assert.deepEqual(world.calls, [{ resourceId: "Plywood", volume: 3 }]);
 }
 
 // Only resources whose craft-all button the game actually rendered are candidates.

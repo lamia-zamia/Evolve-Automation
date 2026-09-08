@@ -1,16 +1,19 @@
 /**
  * Bounded manual crafting through the captured `res<Resource>` rows.
  *
- * The pure craft policy is reused unchanged. What this adapter can feed it is narrower than the
- * legacy reader was: DeadSpace keeps the script-side demand model (spare quantities, required
- * storage, usefulness ratios) outside the captured root, so no material can be classified as
- * demanded, required, or prioritized here.
+ * The pure craft policy is reused unchanged, and it is now fed the demand model it was written for
+ * rather than a stand-in for it. A material something else is accumulating blocks the craft; one the
+ * player has less of than the plan needs stored blocks it too; a craftable that is itself demanded
+ * spends its material's spare quantity; and everything else trickles from the income of the periods
+ * just completed. This replaces the at-cap gate that stood in while no demand model existed, which
+ * only ever converted overflow.
  *
- * The bounded substitute is deliberately conservative: a material is only offered to the policy
- * while it sits at its storage cap, where its income is otherwise being thrown away, and the
- * policy's income mode then limits the craft to the income of the periods just completed. Manual
- * crafting therefore converts overflow and never eats a stockpile. Materials below their cap are
- * reported as blocked, which the policy already handles.
+ * One legacy check has no captured input and is left out: the usefulness ratio that compared a
+ * material against the craftable it feeds. Its absence makes crafting slightly more permissive, and
+ * the demand and storage checks around it still bound what can be spent. The captured demand sample
+ * is also narrower than the legacy one — it sees the player's queues and the construction cycle's
+ * saving target, not every weighted build target — so a material wanted only by an ordinary
+ * weighted candidate can still be crafted from.
  *
  * Candidates come from the root and the page rather than from a copied recipe catalog: a resource
  * is manually craftable when the game gives it an uncapped row and renders its own craft-all
@@ -34,6 +37,7 @@ import {
   CRAFT_ROW_PREFIX,
   type CapturedCraftCosts,
 } from "./captured-craft-costs.ts";
+import type { CapturedDemandSample } from "../resources/captured-resource-demand.ts";
 
 /** The game's worker period is 250 ms, so four game periods complete per second. */
 const PERIODS_PER_SECOND = 4;
@@ -44,6 +48,9 @@ const UNCAPPED_MAXIMUM = -1;
 /** `<span id="inc<Resource>A">` wraps the craft-all button the game renders for that row. */
 const CRAFT_ALL_BUTTON_PREFIX = "inc";
 const CRAFT_ALL_BUTTON_SUFFIX = "A";
+
+/** The script's own headroom above the preserve threshold before spare quantity is used instead. */
+const DEMAND_HEADROOM = 0.05;
 
 /** Tolerated floating-point drift when confirming what the game actually spent. */
 const SPEND_EPSILON = 1e-6;
@@ -61,12 +68,21 @@ export interface CapturedCraftingDependencies {
   readonly readSettings: () => unknown;
   /** Game periods completed since the last run, as the game reported them. */
   readonly readPeriods: () => number;
+  /** The cycle's demand sample, shared with the other features that read it. */
+  readonly readDemand: () => CapturedDemandSample;
 }
 
 interface CraftingSession {
   readonly root: unknown;
   readonly candidates: readonly string[];
   readonly ticksPerSecond: number;
+  readonly demand: CapturedDemandSample;
+}
+
+/** The two questions about the craftable itself that decide how its materials are judged. */
+interface CraftableDemandView {
+  readonly craftableDemanded: boolean;
+  readonly craftableBelowRequirement: boolean;
 }
 
 function finite(value: unknown): number | undefined {
@@ -132,7 +148,7 @@ function readCandidates(
 
 function readMaterials(
   dependencies: CapturedCraftingDependencies,
-  session: CraftingSession,
+  session: CraftingSession & CraftableDemandView,
   craftableId: string,
 ): readonly CraftMaterialView[] | undefined {
   const costs = dependencies.costs.read(craftableId);
@@ -162,16 +178,39 @@ function readMaterials(
       maxQuantity,
       craftPreserve: preserve,
     };
+    const capped = maxQuantity > 0 && currentQuantity >= maxQuantity;
+    const spareQuantity =
+      currentQuantity - session.demand.requestedQuantity(resourceId);
     materials.push(
       Object.freeze(
-        maxQuantity > 0 && currentQuantity >= maxQuantity
+        session.craftableDemanded
           ? {
               ...base,
-              mode: "income" as const,
-              rateOfChange,
-              ticksPerSecond: session.ticksPerSecond,
+              mode: "demanded" as const,
+              // Below the preserve threshold the whole holding is available; above it, only what
+              // nothing else has spoken for.
+              availableQuantity:
+                currentQuantity < maxQuantity * (preserve + DEMAND_HEADROOM)
+                  ? currentQuantity
+                  : spareQuantity,
             }
-          : { ...base, mode: "blocked" as const },
+          : session.demand.isDemanded(resourceId)
+            ? { ...base, mode: "blocked" as const }
+            : session.craftableBelowRequirement
+              ? {
+                  ...base,
+                  mode: "required" as const,
+                  availableQuantity: spareQuantity,
+                }
+              : currentQuantity < session.demand.storageRequired(resourceId) &&
+                  !capped
+                ? { ...base, mode: "blocked" as const }
+                : {
+                    ...base,
+                    mode: "income" as const,
+                    rateOfChange,
+                    ticksPerSecond: session.ticksPerSecond,
+                  },
       ),
     );
   }
@@ -196,6 +235,7 @@ export function createCapturedCraftReader(
       const periods = finite(dependencies.readPeriods());
       session = Object.freeze({
         root,
+        demand: dependencies.readDemand(),
         candidates: readCandidates(dependencies, root),
         ticksPerSecond:
           periods !== undefined && periods >= 1
@@ -212,7 +252,23 @@ export function createCapturedCraftReader(
       if (session === null || index >= session.candidates.length) return null;
       const craftableId = session.candidates[index];
       if (craftableId === undefined) return null;
-      const materials = readMaterials(dependencies, session, craftableId);
+      const craftable = readProperty(
+        readProperty(session.root, "resource"),
+        craftableId,
+      );
+      const craftableAmount = finite(readProperty(craftable, "amount")) ?? 0;
+      const materials = readMaterials(
+        dependencies,
+        {
+          ...session,
+          craftableDemanded: session.demand.isDemanded(craftableId),
+          // A craftable the plan wants more of in storage is worth spending spare materials on,
+          // rather than only the income they happen to be producing.
+          craftableBelowRequirement:
+            craftableAmount < session.demand.storageRequired(craftableId),
+        },
+        craftableId,
+      );
       // An unreadable recipe leaves the resource alone for this run; it never guesses a cost.
       if (materials === undefined) {
         return Object.freeze({

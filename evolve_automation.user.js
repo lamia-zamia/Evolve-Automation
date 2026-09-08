@@ -6214,7 +6214,7 @@
   }
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
-  var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", SPEND_EPSILON = 1e-6;
+  var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
   function finite8(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
@@ -6261,15 +6261,25 @@
         currentQuantity: currentQuantity2,
         maxQuantity,
         craftPreserve: preserve
-      };
+      }, capped = maxQuantity > 0 && currentQuantity2 >= maxQuantity, spareQuantity = currentQuantity2 - session.demand.requestedQuantity(resourceId);
       materials.push(
         Object.freeze(
-          maxQuantity > 0 && currentQuantity2 >= maxQuantity ? {
+          session.craftableDemanded ? {
+            ...base,
+            mode: "demanded",
+            // Below the preserve threshold the whole holding is available; above it, only what
+            // nothing else has spoken for.
+            availableQuantity: currentQuantity2 < maxQuantity * (preserve + DEMAND_HEADROOM) ? currentQuantity2 : spareQuantity
+          } : session.demand.isDemanded(resourceId) ? { ...base, mode: "blocked" } : session.craftableBelowRequirement ? {
+            ...base,
+            mode: "required",
+            availableQuantity: spareQuantity
+          } : currentQuantity2 < session.demand.storageRequired(resourceId) && !capped ? { ...base, mode: "blocked" } : {
             ...base,
             mode: "income",
             rateOfChange,
             ticksPerSecond: session.ticksPerSecond
-          } : { ...base, mode: "blocked" }
+          }
         )
       );
     }
@@ -6282,6 +6292,7 @@
         let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite8(dependencies.readPeriods());
         return session = Object.freeze({
           root,
+          demand: dependencies.readDemand(),
           candidates: readCandidates(dependencies, root),
           ticksPerSecond: periods !== void 0 && periods >= 1 ? PERIODS_PER_SECOND / periods : PERIODS_PER_SECOND
         }), Object.freeze({
@@ -6293,7 +6304,20 @@
         if (session === null || index >= session.candidates.length) return null;
         let craftableId = session.candidates[index];
         if (craftableId === void 0) return null;
-        let materials = readMaterials(dependencies, session, craftableId);
+        let craftable = readProperty(
+          readProperty(session.root, "resource"),
+          craftableId
+        ), craftableAmount = finite8(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
+          dependencies,
+          {
+            ...session,
+            craftableDemanded: session.demand.isDemanded(craftableId),
+            // A craftable the plan wants more of in storage is worth spending spare materials on,
+            // rather than only the income they happen to be producing.
+            craftableBelowRequirement: craftableAmount < session.demand.storageRequired(craftableId)
+          },
+          craftableId
+        );
         return Object.freeze(materials === void 0 ? {
           index,
           craftableId: null,
@@ -6637,7 +6661,8 @@
       }),
       getDocument: () => document,
       readSettings: () => readStoredSettings(storage),
-      readPeriods: () => completedPeriods
+      readPeriods: () => completedPeriods,
+      readDemand: () => readDemand()
     }, craft = Object.freeze({
       reader: createCapturedCraftReader(craftDependencies),
       executor: createCapturedCraftExecutor(craftDependencies)

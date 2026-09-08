@@ -228,6 +228,7 @@ export function startCapturedRuntime({
     getDocument: () => document,
     readSettings: () => readStoredSettings(storage),
     readPeriods: () => completedPeriods,
+    readDemand: () => readDemand(),
   };
   const craft = Object.freeze({
     reader: createCapturedCraftReader(craftDependencies),
