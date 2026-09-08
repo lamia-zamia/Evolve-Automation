@@ -3350,7 +3350,7 @@
       getState,
       resources,
       ...getResources === void 0 ? {} : { getResources }
-    }), readStorageRequired = getResources === void 0 ? void 0 : createScriptStorageRequirementReader({ getResources }), construction = createCapturedConstructionControl({
+    }), readStorageRequired = getResources === void 0 ? dependencies.readCapturedStorageRequired : createScriptStorageRequirementReader({ getResources }), construction = createCapturedConstructionControl({
       rootState,
       controls,
       mountSuppression,
@@ -5563,6 +5563,70 @@
     });
   }
 
+  // src/domain/economy/storage/storage-requirements.ts
+  function planStorageRequirements(input) {
+    let bufferMult = input.storageAssignExtra ? 1.03 : 1, acc = /* @__PURE__ */ new Map();
+    for (let resource of input.resources)
+      acc.set(resource.id, {
+        maxCost: resource.maxCost,
+        storageRequired: resource.storageRequired,
+        maxQuantity: resource.maxQuantity,
+        hasStorage: resource.hasStorage,
+        autoSellEnabled: resource.autoSellEnabled,
+        autoSellRatio: resource.autoSellRatio
+      });
+    function requestStorageFor(list) {
+      for (let target of list) {
+        let storageSuffient = !0;
+        for (let cost of target.costs) {
+          let resource = acc.get(cost.resourceId);
+          resource !== void 0 && (resource.maxCost = Math.max(cost.amount, resource.maxCost), resource.maxQuantity < cost.amount && !resource.hasStorage && (storageSuffient = !1));
+        }
+        if (storageSuffient)
+          for (let cost of target.costs) {
+            let resource = acc.get(cost.resourceId);
+            if (resource === void 0) continue;
+            let assumeCost = cost.amount * bufferMult;
+            resource.maxQuantity < assumeCost && !resource.hasStorage && (assumeCost = (cost.amount + resource.maxQuantity) / 2), resource.storageRequired = Math.max(
+              assumeCost,
+              resource.storageRequired
+            );
+          }
+      }
+    }
+    for (let list of input.requestLists)
+      requestStorageFor(list);
+    if (input.inflationMoney !== null) {
+      let money = acc.get("Money");
+      money !== void 0 && (money.maxCost = Math.max(money.maxCost, input.inflationMoney), money.storageRequired = Math.max(
+        money.storageRequired,
+        input.inflationMoney
+      ));
+    }
+    if (input.retirementGraphene !== null) {
+      let graphene = acc.get("Graphene");
+      graphene !== void 0 && (graphene.maxCost = Math.max(graphene.maxCost, input.retirementGraphene), graphene.storageRequired = Math.max(
+        graphene.storageRequired,
+        input.retirementGraphene
+      ));
+    }
+    if (input.storageAssignExtra && !input.noTrade && input.autoMarket)
+      for (let resource of acc.values())
+        resource.autoSellEnabled && resource.autoSellRatio > 0 && (resource.storageRequired /= resource.autoSellRatio);
+    let resources = input.resources.map((resource) => {
+      let state = acc.get(resource.id);
+      return Object.freeze({
+        id: resource.id,
+        maxCost: state === void 0 ? resource.maxCost : state.maxCost,
+        storageRequired: state === void 0 ? resource.storageRequired : state.storageRequired
+      });
+    });
+    return Object.freeze({
+      resources: Object.freeze(resources),
+      knowledge: calculateKnowledgeRequirements(input.knowledge)
+    });
+  }
+
   // src/domain/progression/truepath/ai-apocalypse.ts
   var AI_RESOURCE_RESEARCH_IDS = /* @__PURE__ */ new Set([
     "tech-ai_optimizations",
@@ -5635,9 +5699,10 @@
   }
 
   // src/adapters/evolve/economy/resources/captured-resource-demand.ts
-  var EMPTY_SAMPLE2 = Object.freeze({
+  var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
     requestedQuantity: () => 0,
-    isDemanded: () => !1
+    isDemanded: () => !1,
+    storageRequired: () => NO_STORAGE_REQUIREMENT
   });
   function settingString(settings, key, fallback) {
     let value = settings[key];
@@ -5707,15 +5772,35 @@
       )
     );
   }
+  function readStorageResources(resources, settings) {
+    let states = [];
+    for (let id of Object.keys(resources)) {
+      let resource = resources[id], maximum = finite6(readProperty(resource, "max"));
+      if (maximum === void 0) continue;
+      let ratio = finite6(settings[`res_sell_r_${id}`]);
+      states.push(
+        Object.freeze({
+          id,
+          maxQuantity: maximum >= 0 ? maximum : Number.MAX_SAFE_INTEGER,
+          maxCost: 0,
+          storageRequired: NO_STORAGE_REQUIREMENT,
+          hasStorage: readProperty(resource, "stackable") === !0,
+          autoSellEnabled: settings[`sell${id}`] === !0,
+          autoSellRatio: ratio !== void 0 && ratio > 0 ? ratio : 0
+        })
+      );
+    }
+    return Object.freeze(states);
+  }
   function createCapturedResourceDemand(dependencies) {
     return Object.freeze({
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
-        if (!isRecord(resources)) return EMPTY_SAMPLE2;
+        if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
         let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null;
-        if (queued.length === 0 && saving === null) return EMPTY_SAMPLE2;
-        let result = planDemandPrioritization({
-          settings: readSettingsInput(dependencies.readSettings()),
+        if (queued.length === 0 && saving === null) return EMPTY_DEMAND_SAMPLE;
+        let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, savingCosts = saving === null ? null : toCosts(saving.cost), result = planDemandPrioritization({
+          settings: readSettingsInput(settingsValue),
           // Only reachable through the research fallback, which has no technologies to offer in this
           // bounded sample and therefore returns the same empty list either way.
           isEarlyGame: !1,
@@ -5725,10 +5810,7 @@
           retirementGraphene: null,
           queuedTargets: toTargets(queued),
           triggerTargets: Object.freeze([]),
-          savingTarget: saving === null ? null : Object.freeze({
-            name: saving.name,
-            costs: toCosts(saving.cost)
-          }),
+          savingTarget: saving === null || savingCosts === null ? null : Object.freeze({ name: saving.name, costs: savingCosts }),
           missions: Object.freeze([]),
           unlockedTechs: Object.freeze([]),
           spyPurchaseMoney: 0,
@@ -5759,7 +5841,33 @@
             maximum === void 0 || maximum < 0 ? amount : Math.min(amount, maximum)
           );
         }
+        let storage = planStorageRequirements({
+          storageAssignExtra: settings.storageAssignExtra !== !1,
+          autoMarket: settings.autoMarket === !0,
+          noTrade: !!readProperty(readProperty(root, "race"), "terrifying"),
+          // The same commitments the demand pass just used, in the same order.
+          requestLists: Object.freeze([
+            toTargets(queued),
+            Object.freeze(savingCosts === null ? [] : [Object.freeze({ costs: savingCosts })])
+          ]),
+          // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
+          // the offered catalog; this pass would have to draw one of its own to answer it.
+          knowledge: Object.freeze({
+            techKnowledgeCosts: Object.freeze([]),
+            reservedTargets: Object.freeze([]),
+            buildCandidates: Object.freeze([])
+          }),
+          resources: readStorageResources(resources, settings),
+          inflationMoney: null,
+          retirementGraphene: null
+        }), required = new Map(
+          storage.resources.map((resource) => [
+            resource.id,
+            resource.storageRequired
+          ])
+        );
         return Object.freeze({
+          storageRequired: (resourceId) => required.get(resourceId) ?? NO_STORAGE_REQUIREMENT,
           requestedQuantity: (resourceId) => requested.get(resourceId) ?? 0,
           isDemanded: (resourceId) => {
             let wanted = requested.get(resourceId);
@@ -6455,7 +6563,7 @@
       }
     }, panels = createGamePanelWorkspace({ getDocument: () => document }), reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
-    }, progression = createCapturedProgressionControl({
+    }, readDemand = () => EMPTY_DEMAND_SAMPLE, progression = createCapturedProgressionControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       mountSuppression: pageCapture2.mountSuppression,
@@ -6513,11 +6621,13 @@
         })
       }),
       readSettings: () => readStoredSettings(storage)
-    }), demandThisCycle, ratios = createCapturedProductionRatios({
+    }), demandThisCycle;
+    readDemand = () => demandThisCycle ??= demand.sample();
+    let ratios = createCapturedProductionRatios({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage),
-      readDemand: () => demandThisCycle ??= demand.sample()
+      readDemand: () => readDemand()
     }), completedPeriods = 1, craftDependencies = {
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,

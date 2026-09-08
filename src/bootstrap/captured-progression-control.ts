@@ -56,6 +56,14 @@ export interface CapturedProgressionControlDependencies {
   readonly getBuildingManager?: () => unknown;
   readonly getState?: () => unknown;
   readonly getResources?: () => unknown;
+  /**
+   * Captured storage requirements, from the same commitments the demand sample plans over. Absent
+   * for a caller with no demand sample; the cycle then leaves storage requirements unknown, which
+   * is not the same as zero.
+   */
+  readonly readCapturedStorageRequired?: (
+    resourceIds: readonly string[],
+  ) => Readonly<Record<string, number>> | undefined;
   readonly diagnostics?: TickDiagnostics | undefined;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly onUnavailable?: (reason: string) => void;
@@ -236,7 +244,7 @@ export function createCapturedProgressionControl(
         });
   const readStorageRequired =
     getResources === undefined
-      ? undefined
+      ? dependencies.readCapturedStorageRequired
       : createScriptStorageRequirementReader({ getResources });
   const construction = createCapturedConstructionControl({
     rootState,

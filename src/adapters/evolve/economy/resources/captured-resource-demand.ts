@@ -17,6 +17,8 @@
  * nothing wants, so every consumer degrades the same way the bounded slices already do.
  */
 
+import { planStorageRequirements } from "../../../../domain/economy/storage/storage-requirements.ts";
+import type { StorageResourceState } from "../../../../domain/economy/storage/storage-requirements.ts";
 import {
   planDemandPrioritization,
   type DemandCost,
@@ -45,6 +47,12 @@ export interface CapturedDemandSample {
   requestedQuantity(resourceId: string): number;
   /** The script's `isDemanded`: something wants more of this than the player currently has. */
   isDemanded(resourceId: string): boolean;
+  /**
+   * How much storage the same commitments need for a resource, which is a different question from
+   * how much of it is wanted now: a target is only reachable if its cost fits in storage at all.
+   * 1 for a resource nothing is saving for, matching the script's own baseline.
+   */
+  storageRequired(resourceId: string): number;
 }
 
 export interface CapturedResourceDemand {
@@ -52,9 +60,13 @@ export interface CapturedResourceDemand {
   sample(): CapturedDemandSample;
 }
 
-const EMPTY_SAMPLE: CapturedDemandSample = Object.freeze({
+const NO_STORAGE_REQUIREMENT = 1;
+
+/** Nothing is committed, so nothing is demanded and one unit of storage is required. */
+export const EMPTY_DEMAND_SAMPLE: CapturedDemandSample = Object.freeze({
   requestedQuantity: () => 0,
   isDemanded: () => false,
+  storageRequired: () => NO_STORAGE_REQUIREMENT,
 });
 
 function settingString(
@@ -155,6 +167,36 @@ function toTargets(
   );
 }
 
+/**
+ * Every resource the game has created, at the script's own per-cycle baseline: nothing has been
+ * requested yet, and one unit of storage is required. `hasStorage` is the game's own `stackable`
+ * flag, which is what decides whether a cost too large for current storage can still be planned for.
+ */
+function readStorageResources(
+  resources: Record<PropertyKey, unknown>,
+  settings: Record<PropertyKey, unknown>,
+): readonly StorageResourceState[] {
+  const states: StorageResourceState[] = [];
+  for (const id of Object.keys(resources)) {
+    const resource = resources[id];
+    const maximum = finite(readProperty(resource, "max"));
+    if (maximum === undefined) continue;
+    const ratio = finite(settings[`res_sell_r_${id}`]);
+    states.push(
+      Object.freeze({
+        id,
+        maxQuantity: maximum >= 0 ? maximum : Number.MAX_SAFE_INTEGER,
+        maxCost: 0,
+        storageRequired: NO_STORAGE_REQUIREMENT,
+        hasStorage: readProperty(resource, "stackable") === true,
+        autoSellEnabled: settings[`sell${id}`] === true,
+        autoSellRatio: ratio !== undefined && ratio > 0 ? ratio : 0,
+      }),
+    );
+  }
+  return Object.freeze(states);
+}
+
 export function createCapturedResourceDemand(
   dependencies: CapturedResourceDemandDependencies,
 ): CapturedResourceDemand {
@@ -162,13 +204,16 @@ export function createCapturedResourceDemand(
     sample(): CapturedDemandSample {
       const root = dependencies.rootState.readRoot();
       const resources = readProperty(root, "resource");
-      if (!isRecord(resources)) return EMPTY_SAMPLE;
+      if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
       const queued = dependencies.reservations.readReservations().targets;
       const saving = dependencies.construction?.readSavingTarget() ?? null;
-      if (queued.length === 0 && saving === null) return EMPTY_SAMPLE;
+      if (queued.length === 0 && saving === null) return EMPTY_DEMAND_SAMPLE;
+      const settingsValue = dependencies.readSettings();
+      const settings = isRecord(settingsValue) ? settingsValue : {};
+      const savingCosts = saving === null ? null : toCosts(saving.cost);
 
       const result = planDemandPrioritization({
-        settings: readSettingsInput(dependencies.readSettings()),
+        settings: readSettingsInput(settingsValue),
         // Only reachable through the research fallback, which has no technologies to offer in this
         // bounded sample and therefore returns the same empty list either way.
         isEarlyGame: false,
@@ -179,12 +224,9 @@ export function createCapturedResourceDemand(
         queuedTargets: toTargets(queued),
         triggerTargets: Object.freeze([]),
         savingTarget:
-          saving === null
+          saving === null || savingCosts === null
             ? null
-            : Object.freeze({
-                name: saving.name,
-                costs: toCosts(saving.cost),
-              }),
+            : Object.freeze({ name: saving.name, costs: savingCosts }),
         missions: Object.freeze([]),
         unlockedTechs: Object.freeze([]),
         spyPurchaseMoney: 0,
@@ -222,7 +264,40 @@ export function createCapturedResourceDemand(
         );
       }
 
+      const storage = planStorageRequirements({
+        storageAssignExtra: settings["storageAssignExtra"] !== false,
+        autoMarket: settings["autoMarket"] === true,
+        noTrade: Boolean(
+          readProperty(readProperty(root, "race"), "terrifying"),
+        ),
+        // The same commitments the demand pass just used, in the same order.
+        requestLists: Object.freeze([
+          toTargets(queued),
+          savingCosts === null
+            ? Object.freeze([])
+            : Object.freeze([Object.freeze({ costs: savingCosts })]),
+        ]),
+        // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
+        // the offered catalog; this pass would have to draw one of its own to answer it.
+        knowledge: Object.freeze({
+          techKnowledgeCosts: Object.freeze([]),
+          reservedTargets: Object.freeze([]),
+          buildCandidates: Object.freeze([]),
+        }),
+        resources: readStorageResources(resources, settings),
+        inflationMoney: null,
+        retirementGraphene: null,
+      });
+      const required = new Map(
+        storage.resources.map((resource) => [
+          resource.id,
+          resource.storageRequired,
+        ]),
+      );
+
       return Object.freeze({
+        storageRequired: (resourceId: string) =>
+          required.get(resourceId) ?? NO_STORAGE_REQUIREMENT,
         requestedQuantity: (resourceId: string) =>
           requested.get(resourceId) ?? 0,
         isDemanded: (resourceId: string) => {

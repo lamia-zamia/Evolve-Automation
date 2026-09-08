@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 
 const root = {
+  race: {},
   resource: {
-    Stone: { amount: 100, max: 1000 },
-    Lumber: { amount: 900, max: 1000 },
-    Money: { amount: 0, max: 500 },
-    Plywood: { amount: 0, max: -1 },
+    Stone: { amount: 100, max: 1000, stackable: true },
+    Lumber: { amount: 900, max: 1000, stackable: true },
+    Money: { amount: 0, max: 500, stackable: false },
+    Plywood: { amount: 0, max: -1, stackable: false },
   },
 };
 
@@ -117,6 +118,63 @@ function withTargets(targets, settings = {}, saving = null) {
 {
   const sample = withTargets([], {}, null).sample();
   assert.equal(sample.isDemanded("Stone"), false);
+}
+
+// Storage requirements come from the same commitments: a queued cost the player can store raises
+// the requirement, and the 3% buffer the script asks for is applied.
+{
+  const sample = withTargets([
+    { name: "Cottage", cause: "Queue", cost: { Stone: 400 } },
+  ]).sample();
+  assert.equal(sample.storageRequired("Stone"), 412);
+  // Nothing is saving for Lumber, so it keeps the script's own baseline of one.
+  assert.equal(sample.storageRequired("Lumber"), 1);
+}
+
+// A stackable resource can always grow into the cost, so the buffer applies whatever the cost is.
+{
+  const sample = withTargets([
+    { name: "Bank", cause: "Queue", cost: { Stone: 2000 } },
+  ]).sample();
+  assert.equal(sample.storageRequired("Stone"), 2060);
+}
+
+// A resource with no crates or containers cannot grow past its cap, so a cost the buffer would push
+// over it is planned for half way instead of demanding the impossible.
+{
+  const sample = withTargets([
+    { name: "Bank", cause: "Queue", cost: { Money: 490 } },
+  ]).sample();
+  assert.equal(sample.storageRequired("Money"), 495);
+}
+
+// A cost that resource's storage can never hold takes the whole target out of the plan, rather than
+// reserving storage for the parts of it that would fit.
+{
+  const sample = withTargets([
+    { name: "Bank", cause: "Queue", cost: { Money: 900, Stone: 100 } },
+  ]).sample();
+  assert.equal(sample.storageRequired("Stone"), 1);
+  assert.equal(sample.storageRequired("Money"), 1);
+}
+
+// The saving target contributes its own storage requirement.
+{
+  const sample = withTargets(
+    [],
+    {},
+    {
+      name: "city-cottage",
+      cost: { Stone: 200 },
+    },
+  ).sample();
+  assert.equal(sample.storageRequired("Stone"), 206);
+}
+
+// Nothing committed at all leaves every resource at the baseline.
+{
+  const sample = withTargets([]).sample();
+  assert.equal(sample.storageRequired("Stone"), 1);
 }
 
 console.log("Captured resource-demand adapter tests passed");

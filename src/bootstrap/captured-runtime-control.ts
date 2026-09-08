@@ -20,7 +20,11 @@ import {
   createCapturedGrapheneAutomation,
   GRAPHENE_CONTROL,
 } from "../adapters/evolve/economy/production/captured-graphene.ts";
-import { createCapturedResourceDemand } from "../adapters/evolve/economy/resources/captured-resource-demand.ts";
+import {
+  createCapturedResourceDemand,
+  EMPTY_DEMAND_SAMPLE,
+  type CapturedDemandSample,
+} from "../adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
@@ -130,6 +134,10 @@ export function startCapturedRuntime({
     reported.add(message);
     logError(message);
   };
+  // The demand sample both reads the construction cycle's observations and answers its storage
+  // question, so one of the two has to be late-bound. This one is, with a real empty sample until
+  // the cycle exists, rather than a mutable object either side could hold a stale reference to.
+  let readDemand: () => CapturedDemandSample = () => EMPTY_DEMAND_SAMPLE;
   const progression = createCapturedProgressionControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -201,12 +209,13 @@ export function startCapturedRuntime({
     }),
     readSettings: () => readStoredSettings(storage),
   });
-  let demandThisCycle: ReturnType<typeof demand.sample> | undefined;
+  let demandThisCycle: CapturedDemandSample | undefined;
+  readDemand = () => (demandThisCycle ??= demand.sample());
   const ratios = createCapturedProductionRatios({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
-    readDemand: () => (demandThisCycle ??= demand.sample()),
+    readDemand: () => readDemand(),
   });
   let completedPeriods = 1;
   const craftDependencies = {
