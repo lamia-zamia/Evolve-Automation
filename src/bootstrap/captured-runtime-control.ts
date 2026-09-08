@@ -1,4 +1,5 @@
 import { createCapturedProgressionControl } from "./captured-progression-control.ts";
+import { runCraftAutomation } from "../application/craft.ts";
 import { runJobsAutomation } from "../application/jobs.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { createCapturedTaxControl } from "./captured-tax-control.ts";
@@ -19,6 +20,12 @@ import {
   createCapturedGrapheneAutomation,
   GRAPHENE_CONTROL,
 } from "../adapters/evolve/economy/production/captured-graphene.ts";
+import { createCapturedCraftCosts } from "../adapters/evolve/economy/production/captured-craft-costs.ts";
+import {
+  createCapturedCraftExecutor,
+  createCapturedCraftReader,
+  type CraftingDocument,
+} from "../adapters/evolve/economy/production/captured-crafting.ts";
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
@@ -43,7 +50,8 @@ type DrawnProjectsDocument = ReturnType<
 >;
 type CapturedDocument = WorkspaceDocument &
   DrawnActionsDocument &
-  DrawnProjectsDocument;
+  DrawnProjectsDocument &
+  CraftingDocument;
 
 export interface CapturedRuntimeControlDependencies {
   readonly pageCapture: PageCapture;
@@ -78,6 +86,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoMiningDroid: false,
   autoGraphenePlant: false,
   autoAlchemy: false,
+  autoCraft: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -150,6 +159,22 @@ export function startCapturedRuntime({
   const graphene = createCapturedGrapheneAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+  });
+  let completedPeriods = 1;
+  const craftDependencies = {
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    costs: createCapturedCraftCosts({
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+    }),
+    getDocument: () => document,
+    readSettings: () => readStoredSettings(storage),
+    readPeriods: () => completedPeriods,
+  };
+  const craft = Object.freeze({
+    reader: createCapturedCraftReader(craftDependencies),
+    executor: createCapturedCraftExecutor(craftDependencies),
   });
   const civicDiscovery = createCapturedTabDiscovery({
     rootState: pageCapture.rootState,
@@ -350,6 +375,9 @@ export function startCapturedRuntime({
         ensureCivicControls();
         runJobsAutomation(craftsmen, true);
       }
+      if (isEnabled(settings, "autoCraft")) {
+        runCraftAutomation(craft);
+      }
       if (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) {
         progression.runConstructionCycle();
       }
@@ -361,5 +389,8 @@ export function startCapturedRuntime({
     }
   };
 
-  return pageCapture.periods.subscribe(() => runCycle());
+  return pageCapture.periods.subscribe((period) => {
+    completedPeriods = period.periods;
+    runCycle();
+  });
 }

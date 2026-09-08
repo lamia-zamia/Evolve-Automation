@@ -3153,6 +3153,69 @@
     });
   }
 
+  // src/domain/economy/production/craft.ts
+  function shouldRunCraft(input) {
+    return input.populationUnlocked && !input.noCraft;
+  }
+  function planCraft(input) {
+    if (!input.unlocked || !input.autoCraftEnabled || input.craftableId === null || input.materials.length === 0)
+      return null;
+    let affordableAmount = Number.MAX_SAFE_INTEGER;
+    for (let material of input.materials) {
+      if (affordableAmount = Math.min(
+        affordableAmount,
+        Math.ceil(
+          (material.currentQuantity - material.maxQuantity * material.craftPreserve) / material.costPerCraft
+        )
+      ), material.mode === "blocked")
+        return null;
+      material.mode === "demanded" || material.mode === "required" ? affordableAmount = Math.min(
+        affordableAmount,
+        material.availableQuantity / material.costPerCraft
+      ) : material.mode === "income" && (affordableAmount = Math.min(
+        affordableAmount,
+        Math.ceil(
+          material.rateOfChange / material.ticksPerSecond / material.costPerCraft
+        )
+      ));
+    }
+    let count = Math.floor(affordableAmount);
+    return count < 1 ? null : Object.freeze({
+      index: input.index,
+      craftableId: input.craftableId,
+      count,
+      spend: Object.freeze(
+        input.materials.map(
+          (material) => Object.freeze({
+            resourceId: material.resourceId,
+            expectedCurrentQuantity: material.currentQuantity,
+            amount: material.costPerCraft * count
+          })
+        )
+      )
+    });
+  }
+
+  // src/application/craft.ts
+  var SUCCEEDED4 = Object.freeze({
+    status: "succeeded"
+  });
+  function runCraftAutomation(dependencies) {
+    if (!shouldRunCraft(dependencies.reader.readGate()))
+      return SUCCEEDED4;
+    for (let index = 0; ; index++) {
+      let candidate = dependencies.reader.readCandidate(index);
+      if (candidate === null)
+        return SUCCEEDED4;
+      let decision = planCraft(candidate);
+      if (decision === null)
+        continue;
+      let outcome = dependencies.executor.execute(decision);
+      if (outcome.status !== "succeeded")
+        return outcome;
+    }
+  }
+
   // src/domain/civic/jobs.ts
   function createJobIndex(input) {
     let index = /* @__PURE__ */ new Map();
@@ -3425,12 +3488,12 @@
   }
 
   // src/application/jobs.ts
-  var SUCCEEDED4 = Object.freeze({
+  var SUCCEEDED5 = Object.freeze({
     status: "succeeded"
   });
   function runJobsAutomation(dependencies, craftOnly = !1) {
     let decision = planJobs(dependencies.reader.readCycle(craftOnly));
-    return decision === null ? SUCCEEDED4 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED5 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/economy/resources/captured-gather-resources.ts
@@ -3751,12 +3814,12 @@
   }
 
   // src/application/gather-resources.ts
-  var SUCCEEDED5 = Object.freeze({
+  var SUCCEEDED6 = Object.freeze({
     status: "succeeded"
   });
   function runGatherResourcesAutomation(dependencies) {
     let decision = planGatherResources(dependencies.reader.read());
-    return decision === null ? SUCCEEDED5 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED6 : dependencies.executor.execute(decision);
   }
 
   // src/bootstrap/captured-gather-resources-control.ts
@@ -5271,6 +5334,198 @@
     });
   }
 
+  // src/adapters/evolve/economy/production/captured-craft-costs.ts
+  var CRAFT_ROW_PREFIX = "res", COST_ENTRY = /<div>([^<]*)<\/div>/g;
+  function resolveResourceId(root, name) {
+    let resources = readProperty(root, "resource");
+    if (!isRecord(resources)) return;
+    let match, ambiguous = !1, displayed, displayedAmbiguous = !1;
+    for (let id of Object.keys(resources)) {
+      let resource = resources[id];
+      readProperty(resource, "name") === name && (match === void 0 ? match = id : ambiguous = !0, readProperty(resource, "display") === !0 && (displayed === void 0 ? displayed = id : displayedAmbiguous = !0));
+    }
+    return displayed !== void 0 ? displayedAmbiguous ? void 0 : displayed : ambiguous ? void 0 : match;
+  }
+  function createCapturedCraftCosts({
+    rootState,
+    controls
+  }) {
+    return Object.freeze({
+      read(resourceId) {
+        let handle = controls.resolve(`${CRAFT_ROW_PREFIX}${resourceId}`);
+        if (handle === void 0) return;
+        let result = controls.invoke(handle, "craftCost", [resourceId, 1]);
+        if (!result.ok || typeof result.value != "string") return;
+        let root = rootState.readRoot(), costs = /* @__PURE__ */ new Map();
+        for (let entry of result.value.matchAll(COST_ENTRY)) {
+          let text = entry[1] ?? "", separator = text.lastIndexOf(" ");
+          if (separator <= 0) return;
+          let amount = Number(text.slice(separator + 1));
+          if (!Number.isFinite(amount) || amount <= 0) return;
+          let id = resolveResourceId(root, text.slice(0, separator));
+          if (id === void 0 || costs.has(id)) return;
+          costs.set(id, amount);
+        }
+        return costs.size > 0 ? costs : void 0;
+      }
+    });
+  }
+
+  // src/adapters/evolve/economy/production/captured-crafting.ts
+  var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", SPEND_EPSILON = 1e-6;
+  function finite6(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readSettingsRecord(value) {
+    return isRecord(value) ? value : {};
+  }
+  function craftEnabled(settings, id) {
+    let value = settings[`craft${id}`];
+    return typeof value == "boolean" ? value : !0;
+  }
+  function craftPreserve(settings, id) {
+    let value = finite6(settings[`foundry_p_${id}`]);
+    return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
+  }
+  function craftAllButtonRendered(getDocument, id) {
+    let element = getDocument().getElementById(
+      `${CRAFT_ALL_BUTTON_PREFIX}${id}${CRAFT_ALL_BUTTON_SUFFIX}`
+    );
+    return element != null;
+  }
+  function readCandidates(dependencies, root) {
+    let resources = readProperty(root, "resource");
+    if (!isRecord(resources)) return [];
+    let settings = readSettingsRecord(dependencies.readSettings()), candidates = [];
+    for (let id of Object.keys(resources)) {
+      let resource = resources[id];
+      readProperty(resource, "max") !== UNCAPPED_MAXIMUM || readProperty(resource, "display") !== !0 || !craftEnabled(settings, id) || dependencies.controls.resolve(`${CRAFT_ROW_PREFIX}${id}`) === void 0 || !craftAllButtonRendered(dependencies.getDocument, id) || candidates.push(id);
+    }
+    return Object.freeze(candidates);
+  }
+  function readMaterials(dependencies, session, craftableId) {
+    let costs = dependencies.costs.read(craftableId);
+    if (costs === void 0) return;
+    let resources = readProperty(session.root, "resource");
+    if (!isRecord(resources)) return;
+    let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
+    for (let [resourceId, costPerCraft] of costs) {
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite6(readProperty(resource, "amount")), maxQuantity = finite6(readProperty(resource, "max")), rateOfChange = finite6(readProperty(resource, "diff"));
+      if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
+        return;
+      let base = {
+        resourceId,
+        costPerCraft,
+        currentQuantity: currentQuantity2,
+        maxQuantity,
+        craftPreserve: preserve
+      };
+      materials.push(
+        Object.freeze(
+          maxQuantity > 0 && currentQuantity2 >= maxQuantity ? {
+            ...base,
+            mode: "income",
+            rateOfChange,
+            ticksPerSecond: session.ticksPerSecond
+          } : { ...base, mode: "blocked" }
+        )
+      );
+    }
+    return Object.freeze(materials);
+  }
+  function createCapturedCraftReader(dependencies) {
+    let session = null;
+    return Object.freeze({
+      readGate() {
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite6(dependencies.readPeriods());
+        return session = Object.freeze({
+          root,
+          candidates: readCandidates(dependencies, root),
+          ticksPerSecond: periods !== void 0 && periods >= 1 ? PERIODS_PER_SECOND / periods : PERIODS_PER_SECOND
+        }), Object.freeze({
+          populationUnlocked: readProperty(citizens, "display") === !0,
+          noCraft: !!readProperty(race, "no_craft")
+        });
+      },
+      readCandidate(index) {
+        if (session === null || index >= session.candidates.length) return null;
+        let craftableId = session.candidates[index];
+        if (craftableId === void 0) return null;
+        let materials = readMaterials(dependencies, session, craftableId);
+        return Object.freeze(materials === void 0 ? {
+          index,
+          craftableId: null,
+          unlocked: !0,
+          autoCraftEnabled: !1,
+          materials: Object.freeze([])
+        } : {
+          index,
+          craftableId,
+          unlocked: !0,
+          autoCraftEnabled: !0,
+          materials
+        });
+      }
+    });
+  }
+  function createCapturedCraftExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision) {
+        if (!Number.isSafeInteger(decision.count) || decision.count < 1)
+          return rejected(
+            "invalid-craft-count",
+            "craft count must be a positive safe integer"
+          );
+        let handle = dependencies.controls.resolve(
+          `${CRAFT_ROW_PREFIX}${decision.craftableId}`
+        );
+        if (handle === void 0)
+          return stale(
+            "craft-control-missing",
+            "captured craft row is unavailable",
+            { craftableId: decision.craftableId }
+          );
+        let resources = readProperty(
+          dependencies.rootState.readRoot(),
+          "resource"
+        );
+        for (let spend of decision.spend) {
+          let actual = finite6(
+            readProperty(readProperty(resources, spend.resourceId), "amount")
+          );
+          if (actual !== spend.expectedCurrentQuantity)
+            return stale(
+              "stale-craft-material",
+              "craft material amount changed",
+              {
+                resourceId: spend.resourceId,
+                expected: spend.expectedCurrentQuantity,
+                actual: actual ?? null
+              }
+            );
+        }
+        let result = dependencies.controls.invoke(handle, "craft", [
+          decision.craftableId,
+          decision.count
+        ]);
+        if (!result.ok)
+          return rejected("craft-control-failed", result.detail ?? result.reason);
+        for (let spend of decision.spend) {
+          let actual = finite6(
+            readProperty(readProperty(resources, spend.resourceId), "amount")
+          );
+          if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
+            return stale("craft-overspent", "craft spent more than planned", {
+              resourceId: spend.resourceId,
+              planned: spend.amount,
+              actual: actual ?? null
+            });
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
   // src/adapters/browser/game-drawn-actions.ts
   var DATA_PREFIX = "data-", RESOURCE_CLASS_PREFIX = "res-";
   function collect(element, markup) {
@@ -5442,7 +5697,8 @@
     autoTax: !1,
     autoMiningDroid: !1,
     autoGraphenePlant: !1,
-    autoAlchemy: !1
+    autoAlchemy: !1,
+    autoCraft: !1
   });
   function isEnabled(settings, key) {
     let value = settings[key];
@@ -5501,6 +5757,19 @@
     }), graphene = createCapturedGrapheneAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
+    }), completedPeriods = 1, craftDependencies = {
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      costs: createCapturedCraftCosts({
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls
+      }),
+      getDocument: () => document,
+      readSettings: () => readStoredSettings(storage),
+      readPeriods: () => completedPeriods
+    }, craft = Object.freeze({
+      reader: createCapturedCraftReader(craftDependencies),
+      executor: createCapturedCraftExecutor(craftDependencies)
     }), civicDiscovery = createCapturedTabDiscovery({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -5592,12 +5861,14 @@
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }
     };
-    return pageCapture2.periods.subscribe(() => runCycle());
+    return pageCapture2.periods.subscribe((period) => {
+      completedPeriods = period.periods, runCycle();
+    });
   }
 
   // src/main.ts
