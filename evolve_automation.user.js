@@ -1568,14 +1568,25 @@
       otherCostsAffordable: sample !== void 0 && canAfford(sample, others)
     });
   }
+  function finiteRequirement(value) {
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
   function createCapturedKnowledgeGateReader({
     rootState,
     resources,
-    readLastOfferedTechs
+    readLastOfferedTechs,
+    readBuildRequirement
   }) {
     return () => {
       let capacity = knowledgeCapacity(rootState), offered = readLastOfferedTechs();
-      if (capacity === void 0 || offered === void 0) return OPEN_GATE;
+      if (capacity === void 0) return OPEN_GATE;
+      let buildRequirement = finiteRequirement(readBuildRequirement());
+      if (offered === void 0)
+        return Object.freeze({
+          cheapestTechKnowledge: 0,
+          knowledgeRequiredByBuildTargets: buildRequirement,
+          knowledgeCapacity: capacity
+        });
       let techKnowledgeCosts = [];
       for (let tech of offered) {
         let cost = techCost(resources, tech);
@@ -1588,7 +1599,7 @@
       });
       return Object.freeze({
         cheapestTechKnowledge: requirements.cheapestTechKnowledge,
-        knowledgeRequiredByBuildTargets: 0,
+        knowledgeRequiredByBuildTargets: buildRequirement,
         knowledgeCapacity: capacity
       });
     };
@@ -2051,7 +2062,7 @@
     });
   }
   function createCapturedConstructionAdapter(dependencies) {
-    let { sources, resources, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, savingTarget = null, cycleSavingTarget = null;
+    let { sources, resources, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, savingTarget = null, cycleSavingTarget = null, knowledgeRequirement = 0;
     function entryAt(index) {
       let entry = cycle[index];
       if (entry === void 0)
@@ -2083,7 +2094,14 @@
               );
             owners.set(candidate.key, source.family), entries.push({ candidate, source });
           }
-        return entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting), cycle = Object.freeze(entries), savingTarget = cycleSavingTarget, cycleSavingTarget = null, Object.freeze({
+        entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting), cycle = Object.freeze(entries), savingTarget = cycleSavingTarget, cycleSavingTarget = null, knowledgeRequirement = 0;
+        for (let entry of entries) {
+          if (entry.candidate.knowledge) continue;
+          let cost = entry.candidate.cost.Knowledge;
+          knowledgeRequirement = typeof cost == "number" && Number.isFinite(cost) ? cost : 0;
+          break;
+        }
+        return Object.freeze({
           candidates: Object.freeze(entries.map((entry) => entry.candidate)),
           consumptionMode: options.consumptionMode,
           buildIfStorageFull: options.buildIfStorageFull,
@@ -2170,8 +2188,9 @@
     return Object.freeze({
       reader,
       executor,
-      savingTarget: Object.freeze({
-        readSavingTarget: () => savingTarget
+      observations: Object.freeze({
+        readSavingTarget: () => savingTarget,
+        readKnowledgeRequirement: () => knowledgeRequirement
       })
     });
   }
@@ -2910,7 +2929,7 @@
       drawnProjects,
       controls,
       ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) }
-    }), { reader, executor, savingTarget } = createCapturedConstructionAdapter({
+    }), { reader, executor, observations } = createCapturedConstructionAdapter({
       // City buildings first, matching the game's own list order, so a project only outranks a
       // building by weighting rather than by being sampled first.
       sources: Object.freeze([
@@ -2954,7 +2973,7 @@
           offeredThisCycle = void 0;
         }
       },
-      savingTarget
+      observations
     });
   }
 
@@ -3154,6 +3173,9 @@
   var NO_RESERVATIONS3 = Object.freeze({
     targets: Object.freeze([]),
     unavailable: !1
+  }), NO_OBSERVATIONS = Object.freeze({
+    readSavingTarget: () => null,
+    readKnowledgeRequirement: () => 0
   });
   function combineReservations(first, second) {
     return Object.freeze({
@@ -3235,9 +3257,9 @@
       getBuildingManager,
       getSettings: readSettings,
       ...onSkipped === void 0 ? {} : { onSkipped }
-    }), readSaving = () => null, savingReservations = Object.freeze({
+    }), readObservations = () => NO_OBSERVATIONS, savingReservations = Object.freeze({
       readReservations() {
-        let target = readSaving();
+        let target = readObservations().readSavingTarget();
         return target === null ? NO_RESERVATIONS3 : Object.freeze({
           unavailable: !1,
           targets: Object.freeze([
@@ -3252,7 +3274,8 @@
     }), stateReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), scriptReservations = stateReservations === void 0 ? savingReservations : combineReservations(stateReservations, savingReservations), readKnowledgeGate = getState === void 0 ? createCapturedKnowledgeGateReader({
       rootState,
       resources,
-      readLastOfferedTechs: () => lastOffered
+      readLastOfferedTechs: () => lastOffered,
+      readBuildRequirement: () => readObservations().readKnowledgeRequirement()
     }) : createScriptKnowledgeGateReader({
       getState,
       resources,
@@ -3282,10 +3305,10 @@
       ...onUnavailable === void 0 ? {} : { onUnavailable },
       diagnostics
     });
-    return readSaving = () => construction.savingTarget.readSavingTarget(), Object.freeze({
+    return readObservations = () => construction.observations, Object.freeze({
       runConstructionCycle: () => construction.runCycle(),
       runResearchCycle: () => research.runCycle(),
-      savingTarget: construction.savingTarget
+      observations: construction.observations
     });
   }
 
@@ -5619,7 +5642,7 @@
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
         if (!isRecord(resources)) return EMPTY_SAMPLE2;
-        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.savingTarget?.readSavingTarget() ?? null;
+        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null;
         if (queued.length === 0 && saving === null) return EMPTY_SAMPLE2;
         let result = planDemandPrioritization({
           settings: readSettingsInput(dependencies.readSettings()),
@@ -6410,7 +6433,7 @@
       controls: pageCapture2.controls
     }), demand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
-      savingTarget: progression.savingTarget,
+      construction: progression.observations,
       reservations: createCapturedQueueReservationSource({
         rootState: pageCapture2.rootState,
         resources: createCapturedResourceSource(pageCapture2.rootState),

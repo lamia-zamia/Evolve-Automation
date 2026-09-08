@@ -17,7 +17,10 @@ function withTargets(targets, settings = {}, saving = null) {
     reservations: {
       readReservations: () => ({ targets, unavailable: false }),
     },
-    savingTarget: { readSavingTarget: () => saving },
+    construction: {
+      readSavingTarget: () => saving,
+      readKnowledgeRequirement: () => 0,
+    },
     readSettings: () => settings,
   });
 }

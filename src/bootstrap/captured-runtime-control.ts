@@ -190,7 +190,7 @@ export function startCapturedRuntime({
   // offered-technology catalog, and that discovery pass belongs to the construction cycle.
   const demand = createCapturedResourceDemand({
     rootState: pageCapture.rootState,
-    savingTarget: progression.savingTarget,
+    construction: progression.observations,
     reservations: createCapturedQueueReservationSource({
       rootState: pageCapture.rootState,
       resources: createCapturedResourceSource(pageCapture.rootState),

@@ -28,8 +28,7 @@ import { createCapturedResearchControl } from "./captured-research-control.ts";
 import { SAVING_CONFLICT_CAUSE } from "../domain/progression/build/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
-import type { SavingTarget } from "../ports/game-saving-target.ts";
-import type { SavingTargetSource } from "../ports/game-saving-target.ts";
+import type { ConstructionObservations } from "../ports/game-construction-observations.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
 import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
@@ -66,12 +65,18 @@ export interface CapturedProgressionControl {
   readonly runConstructionCycle: () => CommandExecutionOutcome;
   readonly runResearchCycle: () => CommandExecutionOutcome;
   /** What the last construction cycle was saving for, for the features that read demand. */
-  readonly savingTarget: SavingTargetSource;
+  readonly observations: ConstructionObservations;
 }
 
 const NO_RESERVATIONS = Object.freeze({
   targets: Object.freeze([]),
   unavailable: false,
+});
+
+/** Before the construction cycle exists there is nothing to observe. */
+const NO_OBSERVATIONS: ConstructionObservations = Object.freeze({
+  readSavingTarget: () => null,
+  readKnowledgeRequirement: () => 0,
 });
 
 /** Both sets are in force at once; either being unpriceable makes the whole set incomplete. */
@@ -186,10 +191,12 @@ export function createCapturedProgressionControl(
   // candidates that arrive first spend exactly the resources it is accumulating. It is the previous
   // cycle's judgement, so the target itself is never blocked by it once it becomes affordable —
   // the cycle that finds it affordable stops naming it.
-  let readSaving: () => SavingTarget | null = () => null;
+  // Late-bound because the cycle both reads these observations and produces them; the reader is a
+  // closure rather than a mutable object so nothing can hold a stale reference to one.
+  let readObservations: () => ConstructionObservations = () => NO_OBSERVATIONS;
   const savingReservations: CostReservationSource = Object.freeze({
     readReservations() {
-      const target = readSaving();
+      const target = readObservations().readSavingTarget();
       return target === null
         ? NO_RESERVATIONS
         : Object.freeze({
@@ -218,6 +225,8 @@ export function createCapturedProgressionControl(
           rootState,
           resources,
           readLastOfferedTechs: () => lastOffered,
+          readBuildRequirement: () =>
+            readObservations().readKnowledgeRequirement(),
         })
       : createScriptKnowledgeGateReader({
           getState,
@@ -255,11 +264,11 @@ export function createCapturedProgressionControl(
     diagnostics,
   });
 
-  readSaving = () => construction.savingTarget.readSavingTarget();
+  readObservations = () => construction.observations;
 
   return Object.freeze({
     runConstructionCycle: () => construction.runCycle(),
     runResearchCycle: () => research.runCycle(),
-    savingTarget: construction.savingTarget,
+    observations: construction.observations,
   });
 }

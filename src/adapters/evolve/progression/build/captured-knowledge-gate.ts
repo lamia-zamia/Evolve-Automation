@@ -11,9 +11,9 @@
  * research queue's. With neither in use no catalog is ever read and the gate stays open, which is
  * the behaviour that existed before it.
  *
- * Only the technology half is captured. `knowledgeRequiredByBuildTargets` — the Knowledge a queued
- * or top-weighted build target reserves — stays zero until build candidates are sampled for it; it
- * can only leave the gate open, never close it wrongly.
+ * Both halves the gate compares against capacity are captured: the cheapest technology only capacity
+ * blocks, and the Knowledge the cycle's own highest-weighted non-Knowledge candidate needs. Queued
+ * targets do not yet contribute their Knowledge, which can only leave the gate open.
  */
 
 import {
@@ -41,6 +41,8 @@ export interface CapturedKnowledgeGateDependencies {
   /** The most recent offered-technology catalog, or undefined when none has been read. */
   readonly readLastOfferedTechs: () =>
     readonly Readonly<OfferedTech>[] | undefined;
+  /** Knowledge the construction cycle's top non-Knowledge candidate needs. */
+  readonly readBuildRequirement: () => number;
 }
 
 function knowledgeCapacity(rootState: GameRootStateSource): number | undefined {
@@ -72,15 +74,28 @@ function techCost(
   });
 }
 
+function finiteRequirement(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 export function createCapturedKnowledgeGateReader({
   rootState,
   resources,
   readLastOfferedTechs,
+  readBuildRequirement,
 }: CapturedKnowledgeGateDependencies): () => KnowledgeGateLevels {
   return () => {
     const capacity = knowledgeCapacity(rootState);
     const offered = readLastOfferedTechs();
-    if (capacity === undefined || offered === undefined) return OPEN_GATE;
+    if (capacity === undefined) return OPEN_GATE;
+    const buildRequirement = finiteRequirement(readBuildRequirement());
+    if (offered === undefined) {
+      return Object.freeze({
+        cheapestTechKnowledge: 0,
+        knowledgeRequiredByBuildTargets: buildRequirement,
+        knowledgeCapacity: capacity,
+      });
+    }
     const techKnowledgeCosts: KnowledgeTechCost[] = [];
     for (const tech of offered) {
       const cost = techCost(resources, tech);
@@ -93,7 +108,7 @@ export function createCapturedKnowledgeGateReader({
     });
     return Object.freeze({
       cheapestTechKnowledge: requirements.cheapestTechKnowledge,
-      knowledgeRequiredByBuildTargets: 0,
+      knowledgeRequiredByBuildTargets: buildRequirement,
       knowledgeCapacity: capacity,
     });
   };

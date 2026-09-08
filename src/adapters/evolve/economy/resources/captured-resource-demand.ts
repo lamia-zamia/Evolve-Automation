@@ -25,7 +25,7 @@ import {
 } from "../../../../domain/economy/resources/demand-prioritization.ts";
 import type { ReservedCostTarget } from "../../../../domain/cost-conflicts.ts";
 import type { CostReservationSource } from "../../../../ports/game-cost-reservations.ts";
-import type { SavingTargetSource } from "../../../../ports/game-saving-target.ts";
+import type { ConstructionObservations } from "../../../../ports/game-construction-observations.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
@@ -33,10 +33,10 @@ export interface CapturedResourceDemandDependencies {
   readonly rootState: GameRootStateSource;
   readonly reservations: CostReservationSource;
   /**
-   * The construction cycle's saving target. Absent for a caller with no construction cycle to
-   * observe, which then simply sees no implicit commitment.
+   * What the construction cycle observed. Absent for a caller with no construction cycle to watch,
+   * which then simply sees no implicit commitment.
    */
-  readonly savingTarget?: SavingTargetSource;
+  readonly construction?: ConstructionObservations;
   readonly readSettings: () => unknown;
 }
 
@@ -164,7 +164,7 @@ export function createCapturedResourceDemand(
       const resources = readProperty(root, "resource");
       if (!isRecord(resources)) return EMPTY_SAMPLE;
       const queued = dependencies.reservations.readReservations().targets;
-      const saving = dependencies.savingTarget?.readSavingTarget() ?? null;
+      const saving = dependencies.construction?.readSavingTarget() ?? null;
       if (queued.length === 0 && saving === null) return EMPTY_SAMPLE;
 
       const result = planDemandPrioritization({

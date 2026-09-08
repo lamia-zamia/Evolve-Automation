@@ -390,14 +390,14 @@ function runCycle(cycle) {
     ],
     holdings: { Money: 100 },
   });
-  assert.equal(cycle.adapter.savingTarget.readSavingTarget(), null);
+  assert.equal(cycle.adapter.observations.readSavingTarget(), null);
   runCycle(cycle);
   // The cheaper candidate was still bought; saving for a target does not stop the cycle here.
   assert.deepEqual(cycle.bought, ["city-farm"]);
   // The judgement belongs to the finished cycle, so the next one publishes it.
-  assert.equal(cycle.adapter.savingTarget.readSavingTarget(), null);
+  assert.equal(cycle.adapter.observations.readSavingTarget(), null);
   runCycle(cycle);
-  assert.deepEqual(cycle.adapter.savingTarget.readSavingTarget(), {
+  assert.deepEqual(cycle.adapter.observations.readSavingTarget(), {
     name: "city-bank",
     cost: { Money: 5000 },
   });
@@ -411,7 +411,7 @@ function runCycle(cycle) {
   });
   runCycle(cycle);
   runCycle(cycle);
-  assert.equal(cycle.adapter.savingTarget.readSavingTarget(), null);
+  assert.equal(cycle.adapter.observations.readSavingTarget(), null);
 }
 
 // Everything affordable is nothing to save for.
@@ -422,7 +422,49 @@ function runCycle(cycle) {
   });
   runCycle(cycle);
   runCycle(cycle);
-  assert.equal(cycle.adapter.savingTarget.readSavingTarget(), null);
+  assert.equal(cycle.adapter.observations.readSavingTarget(), null);
+}
+
+// The Knowledge requirement is the top-weighted candidate that does not itself raise the cap, and
+// it describes the cycle that just began rather than the previous one.
+{
+  const cycle = makeCycle({
+    city: [
+      {
+        key: "city-library",
+        weighting: 400,
+        knowledge: true,
+        cost: { Knowledge: 9000 },
+      },
+      {
+        key: "city-bank",
+        weighting: 300,
+        cost: { Money: 5000, Knowledge: 2500 },
+      },
+      { key: "city-farm", weighting: 20, cost: { Money: 50, Knowledge: 100 } },
+    ],
+    holdings: { Money: 100, Knowledge: 0 },
+  });
+  cycle.adapter.reader.beginCycle();
+  assert.equal(cycle.adapter.observations.readKnowledgeRequirement(), 2500);
+}
+
+// A cycle whose candidates all raise the cap, or need no Knowledge, requires none.
+{
+  const cycle = makeCycle({
+    city: [
+      {
+        key: "city-library",
+        weighting: 400,
+        knowledge: true,
+        cost: { Knowledge: 9000 },
+      },
+      { key: "city-farm", weighting: 20, cost: { Money: 50 } },
+    ],
+    holdings: { Money: 100 },
+  });
+  cycle.adapter.reader.beginCycle();
+  assert.equal(cycle.adapter.observations.readKnowledgeRequirement(), 0);
 }
 
 console.log("captured construction ok");

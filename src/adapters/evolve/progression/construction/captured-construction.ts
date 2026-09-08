@@ -43,8 +43,8 @@ import type {
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type {
   SavingTarget,
-  SavingTargetSource,
-} from "../../../../ports/game-saving-target.ts";
+  ConstructionObservations,
+} from "../../../../ports/game-construction-observations.ts";
 import type { KnowledgeGateLevels } from "../../../../domain/progression/build/building-weighting.ts";
 import { stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
@@ -70,7 +70,7 @@ export interface CapturedConstructionAdapter {
    * What the last cycle turned out to be saving for. It is a by-product of the affordability the
    * cycle already sampled, in the same weighting order, so it costs nothing extra to observe.
    */
-  readonly savingTarget: SavingTargetSource;
+  readonly observations: ConstructionObservations;
 }
 
 interface CycleEntry {
@@ -119,6 +119,7 @@ export function createCapturedConstructionAdapter(
   let respectReservations = true;
   let savingTarget: SavingTarget | null = null;
   let cycleSavingTarget: SavingTarget | null = null;
+  let knowledgeRequirement = 0;
 
   function entryAt(index: number): CycleEntry {
     const entry = cycle[index];
@@ -181,6 +182,17 @@ export function createCapturedConstructionAdapter(
       // The finished cycle's judgement stays readable while the new one is still being sampled.
       savingTarget = cycleSavingTarget;
       cycleSavingTarget = null;
+      // The Knowledge requirement needs only the sorted list, so it describes this cycle. Only the
+      // highest-weighted candidate that does not itself raise the cap counts: a Knowledge building
+      // is the answer to a capacity shortage, not evidence of one.
+      knowledgeRequirement = 0;
+      for (const entry of entries) {
+        if (entry.candidate.knowledge) continue;
+        const cost = entry.candidate.cost["Knowledge"];
+        knowledgeRequirement =
+          typeof cost === "number" && Number.isFinite(cost) ? cost : 0;
+        break;
+      }
       return Object.freeze({
         candidates: Object.freeze(entries.map((entry) => entry.candidate)),
         consumptionMode: options.consumptionMode,
@@ -324,8 +336,9 @@ export function createCapturedConstructionAdapter(
   return Object.freeze({
     reader,
     executor,
-    savingTarget: Object.freeze({
+    observations: Object.freeze({
       readSavingTarget: (): SavingTarget | null => savingTarget,
+      readKnowledgeRequirement: (): number => knowledgeRequirement,
     }),
   });
 }

@@ -41,11 +41,12 @@ const resources = {
   },
 };
 
-function gateFor(offered) {
+function gateFor(offered, buildRequirement = 0) {
   return createCapturedKnowledgeGateReader({
     rootState: { readRoot: () => root },
     resources,
     readLastOfferedTechs: () => offered,
+    readBuildRequirement: () => buildRequirement,
   })();
 }
 
@@ -87,14 +88,31 @@ function gateFor(offered) {
   assert.equal(isKnowledgeGated(gate), true);
 }
 
-// No catalog has been read: the gate stays open rather than buying a discovery pass.
+// No catalog has been read: the technology half reports nothing rather than buying a discovery
+// pass, and the build half still answers.
 {
   const gate = gateFor(undefined);
   assert.deepEqual(gate, {
     cheapestTechKnowledge: 0,
     knowledgeRequiredByBuildTargets: 0,
-    knowledgeCapacity: 0,
+    knowledgeCapacity: 1000,
   });
+  assert.equal(isKnowledgeGated(gate), false);
+}
+
+// A build target whose Knowledge cost storage cannot hold closes the gate on its own.
+{
+  const gate = gateFor(undefined, 6000);
+  assert.equal(gate.knowledgeRequiredByBuildTargets, 6000);
+  assert.equal(isKnowledgeGated(gate), true);
+}
+
+// A build requirement capacity already covers changes nothing.
+{
+  const gate = gateFor(
+    [{ elementId: "tech-a", cost: { Knowledge: 800 }, generation: 1 }],
+    500,
+  );
   assert.equal(isKnowledgeGated(gate), false);
 }
 

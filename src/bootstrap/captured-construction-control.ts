@@ -26,7 +26,7 @@ import { createCapturedProjectContextReader } from "../adapters/evolve/progressi
 import { createCapturedProjectSource } from "../adapters/evolve/progression/research/captured-project.ts";
 import { runBuildAutomation } from "../application/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import type { SavingTargetSource } from "../ports/game-saving-target.ts";
+import type { ConstructionObservations } from "../ports/game-construction-observations.ts";
 import type { ConstructionCycleOptions } from "../ports/construction-candidates.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
@@ -79,7 +79,7 @@ export interface CapturedConstructionControl {
   /** Runs one construction cycle. Safe to call before the game has created its state. */
   runCycle(): CommandExecutionOutcome;
   /** What the last completed cycle was saving for, for the features that read demand. */
-  readonly savingTarget: SavingTargetSource;
+  readonly observations: ConstructionObservations;
 }
 
 const NOT_CAPTURED: CommandExecutionOutcome = Object.freeze({
@@ -155,7 +155,7 @@ export function createCapturedConstructionControl(
       ? {}
       : { onUnavailable: (reason: string) => onSkipped("arpa", reason) }),
   });
-  const { reader, executor, savingTarget } = createCapturedConstructionAdapter({
+  const { reader, executor, observations } = createCapturedConstructionAdapter({
     // City buildings first, matching the game's own list order, so a project only outranks a
     // building by weighting rather than by being sampled first.
     sources: Object.freeze([
@@ -202,6 +202,6 @@ export function createCapturedConstructionControl(
         offeredThisCycle = undefined;
       }
     },
-    savingTarget,
+    observations,
   });
 }
