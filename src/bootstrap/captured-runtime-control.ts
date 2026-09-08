@@ -28,8 +28,9 @@ type CapturedDocument = WorkspaceDocument &
 
 export interface CapturedRuntimeControlDependencies {
   readonly pageCapture: PageCapture;
-  readonly document: CapturedDocument;
-  readonly mouseEvent: new (type: "mouseover" | "mouseout") => unknown;
+  /** Browser adapter output; the feature readers narrow it at their own boundaries. */
+  readonly document: unknown;
+  readonly mouseEvent: unknown;
   readonly storage: unknown;
   readonly diagnostics?: TickDiagnostics | undefined;
   readonly logError?: (message: string) => void;
@@ -65,12 +66,19 @@ function isEnabled(settings: Record<string, unknown>, key: string): boolean {
 /** Starts the captured runtime from completed game periods, without a debug clone or game object. */
 export function startCapturedRuntime({
   pageCapture,
-  document,
-  mouseEvent,
+  document: documentValue,
+  mouseEvent: mouseEventValue,
   storage,
   diagnostics,
   logError = () => {},
 }: CapturedRuntimeControlDependencies): () => void {
+  const document = documentValue as CapturedDocument;
+  const mouseEvent =
+    typeof mouseEventValue === "function"
+      ? (mouseEventValue as new (type: "mouseover" | "mouseout") => unknown)
+      : class {
+          constructor(_type: "mouseover" | "mouseout") {}
+        };
   const panels = createGamePanelWorkspace({ getDocument: () => document });
   const progression = createCapturedProgressionControl({
     rootState: pageCapture.rootState,

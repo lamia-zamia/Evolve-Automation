@@ -9,10 +9,10 @@ const read = (relativePath) =>
   fs.readFileSync(path.join(root, relativePath), "utf8");
 
 const main = read("src/main.ts");
-assert.doesNotMatch(main, /bootstrap/);
 assert.doesNotMatch(main, /__EA_TEST_HOOKS__/);
 assert.doesNotMatch(main, /captureTestSurface/);
-assert.match(main, /startEvolveRuntime\(/);
+assert.match(main, /startCapturedRuntime\(/);
+assert.doesNotMatch(main, /evolve-runtime/);
 
 assert.equal(
   fs.existsSync(path.join(sourceRoot, "automation", "dependencies.ts")),
