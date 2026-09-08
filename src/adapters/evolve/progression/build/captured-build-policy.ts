@@ -12,6 +12,7 @@ import {
   applyNewBuildingWeighting,
   applyNeedMoreStorageWeighting,
   applyNonOperatingCityWeighting,
+  applyUselessMeditationWeighting,
   applyUselessHousingWeighting,
   applyUnusedStorageWeighting,
 } from "../../../../domain/progression/build/building-weighting.ts";
@@ -119,6 +120,23 @@ function readHousingUnderused(root: unknown): boolean | undefined {
   return maximum > 50 && amount / maximum < 0.9;
 }
 
+function readUselessMeditation(root: unknown): boolean | undefined {
+  const race = readProperty(root, "race");
+  const zen = readProperty(readProperty(root, "resource"), "Zen");
+  if (!isRecord(zen)) return undefined;
+  const amount = zen["amount"];
+  const maximum = zen["max"];
+  if (
+    typeof amount !== "number" ||
+    !Number.isFinite(amount) ||
+    typeof maximum !== "number" ||
+    !Number.isFinite(maximum)
+  ) {
+    return undefined;
+  }
+  return Boolean(readProperty(race, "calm")) && amount < maximum;
+}
+
 function readTarget(
   settings: Record<PropertyKey, unknown>,
   city: Record<PropertyKey, unknown>,
@@ -126,6 +144,7 @@ function readTarget(
   unusedStorageParts: boolean,
   storagePartsAllAssigned: boolean,
   housingUnderused: boolean,
+  uselessMeditation: boolean,
   onSkipped: (key: string, reason: string) => void,
 ): Readonly<CapturedBuildTarget> | undefined {
   if (!elementId.startsWith("city-") || elementId.length === "city-".length) {
@@ -195,6 +214,14 @@ function readTarget(
     onSkipped(binding, "housing weighting is not finite");
     return undefined;
   }
+  const meditationWeighting =
+    id === "meditation"
+      ? readFiniteSetting(settings, "buildingWeightingZenUseless", 1)
+      : 1;
+  if (meditationWeighting === undefined) {
+    onSkipped(binding, "meditation weighting is not finite");
+    return undefined;
+  }
   const onValue = readProperty(state, "on");
   const on =
     typeof onValue === "number" && Number.isFinite(onValue)
@@ -212,16 +239,21 @@ function readTarget(
     id,
     weighting: applyNonOperatingCityWeighting(
       applyNeedMoreStorageWeighting(
-        applyUselessHousingWeighting(
-          applyUnusedStorageWeighting(
-            applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+        applyUselessMeditationWeighting(
+          applyUselessHousingWeighting(
+            applyUnusedStorageWeighting(
+              applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+              id,
+              unusedStorageParts,
+              storageWeighting,
+            ),
             id,
-            unusedStorageParts,
-            storageWeighting,
+            housingUnderused,
+            housingWeighting,
           ),
           id,
-          housingUnderused,
-          housingWeighting,
+          uselessMeditation,
+          meditationWeighting,
         ),
         id,
         storagePartsAllAssigned,
@@ -259,6 +291,7 @@ export function createCapturedBuildPolicyReader({
           storageParts?.unused ?? false,
           storageParts?.allAssigned ?? false,
           readHousingUnderused(root) ?? false,
+          readUselessMeditation(root) ?? false,
           reportSkipped,
         );
         if (target !== undefined) buildings.push(target);

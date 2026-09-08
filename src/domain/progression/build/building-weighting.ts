@@ -134,6 +134,18 @@ export function applyUselessHousingWeighting(
     : baseWeight;
 }
 
+/** Applies the calm-race Zen-cap rule to the city meditation action. */
+export function applyUselessMeditationWeighting(
+  baseWeight: number,
+  buildingId: string,
+  zenBelowCap: boolean,
+  multiplier: number,
+): number {
+  return zenBelowCap && buildingId === "meditation"
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
 /**

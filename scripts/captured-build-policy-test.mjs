@@ -368,4 +368,40 @@ assert.equal(
   "population at ninety percent capacity keeps housing neutral",
 );
 
+const meditationReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({
+      race: { calm: true },
+      city: { meditation: { count: 1 }, farm: { count: 1 } },
+      resource: {
+        Crates: { amount: 10, max: 10, display: true },
+        Containers: { amount: 10, max: 10, display: true },
+        Zen: { amount: 2, max: 10, display: true },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["city-meditation", "city-farm"],
+  },
+  getSettings: () => ({
+    "batcity-meditation": true,
+    "batcity-farm": true,
+    "bld_w_city-meditation": 10,
+    "bld_w_city-farm": 10,
+    buildingWeightingZenUseless: 0.1,
+  }),
+});
+assert.deepEqual(
+  meditationReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "meditation", weighting: 1 },
+    { id: "farm", weighting: 10 },
+  ],
+  "calm races with room below the Zen cap deprioritize meditation",
+);
+
 console.log("captured-build-policy ok");

@@ -1301,6 +1301,9 @@
   function applyUselessHousingWeighting(baseWeight, buildingId, housingUnderused, multiplier) {
     return housingUnderused && CURRENT_CITY_HOUSING.includes(buildingId) ? baseWeight * multiplier : baseWeight;
   }
+  function applyUselessMeditationWeighting(baseWeight, buildingId, zenBelowCap, multiplier) {
+    return zenBelowCap && buildingId === "meditation" ? baseWeight * multiplier : baseWeight;
+  }
   function isKnowledgeGated(levels) {
     return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
   }
@@ -1346,7 +1349,14 @@
     if (!(typeof amount != "number" || !Number.isFinite(amount) || typeof maximum != "number" || !Number.isFinite(maximum)))
       return maximum > 50 && amount / maximum < 0.9;
   }
-  function readTarget2(settings, city, elementId, unusedStorageParts, storagePartsAllAssigned, housingUnderused, onSkipped) {
+  function readUselessMeditation(root) {
+    let race = readProperty(root, "race"), zen = readProperty(readProperty(root, "resource"), "Zen");
+    if (!isRecord(zen)) return;
+    let amount = zen.amount, maximum = zen.max;
+    if (!(typeof amount != "number" || !Number.isFinite(amount) || typeof maximum != "number" || !Number.isFinite(maximum)))
+      return !!readProperty(race, "calm") && amount < maximum;
+  }
+  function readTarget2(settings, city, elementId, unusedStorageParts, storagePartsAllAssigned, housingUnderused, uselessMeditation, onSkipped) {
     if (!elementId.startsWith("city-") || elementId.length === 5)
       return;
     let binding = elementId;
@@ -1401,6 +1411,11 @@
       onSkipped(binding, "housing weighting is not finite");
       return;
     }
+    let meditationWeighting = id === "meditation" ? readFiniteSetting(settings, "buildingWeightingZenUseless", 1) : 1;
+    if (meditationWeighting === void 0) {
+      onSkipped(binding, "meditation weighting is not finite");
+      return;
+    }
     let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
@@ -1413,16 +1428,21 @@
       id,
       weighting: applyNonOperatingCityWeighting(
         applyNeedMoreStorageWeighting(
-          applyUselessHousingWeighting(
-            applyUnusedStorageWeighting(
-              applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+          applyUselessMeditationWeighting(
+            applyUselessHousingWeighting(
+              applyUnusedStorageWeighting(
+                applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+                id,
+                unusedStorageParts,
+                storageWeighting
+              ),
               id,
-              unusedStorageParts,
-              storageWeighting
+              housingUnderused,
+              housingWeighting
             ),
             id,
-            housingUnderused,
-            housingWeighting
+            uselessMeditation,
+            meditationWeighting
           ),
           id,
           storagePartsAllAssigned,
@@ -1456,6 +1476,7 @@
             storageParts?.unused ?? !1,
             storageParts?.allAssigned ?? !1,
             readHousingUnderused(root) ?? !1,
+            readUselessMeditation(root) ?? !1,
             reportSkipped
           );
           target !== void 0 && buildings.push(target);
