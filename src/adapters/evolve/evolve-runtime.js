@@ -125,7 +125,6 @@ import { createStateLogControl } from "../../bootstrap/state-log-control.ts";
 import { createPrestigeAutomationCompositionControl } from "../../bootstrap/prestige-automation-composition-control.ts";
 import { createLogFilterControl } from "../../bootstrap/log-filter-control.ts";
 import { createUiSupportControl } from "../../bootstrap/ui-support-control.ts";
-import { createTabRefreshControl } from "../../bootstrap/tab-refresh-control.ts";
 import { createRuntimeUiCompositionControl } from "../../bootstrap/runtime-ui-composition-control.ts";
 import { createStateLogSettingsIntentHandler as createStateLogSettingsIntentControl } from "../../application/state-log-settings.ts";
 import { createInterfaceSettingsIntentHandler as createInterfaceSettingsIntentControl } from "../../application/interface-settings.ts";
@@ -2091,8 +2090,6 @@ export function startEvolveRuntimeComposition(
     getUpdateCraftCost: () =>
       getTestContext("stateInitialization")?.actions?.updateCraftCost ??
       updateCraftCost,
-    getUpdateTabs: () =>
-      getTestContext("stateInitialization")?.actions?.updateTabs ?? updateTabs,
     getHaveTech: () =>
       getTestContext("stateInitialization")?.actions?.haveTech ?? haveTech,
     log: (message) => runtimeEnvironment.log(message),
@@ -3402,25 +3399,6 @@ export function startEvolveRuntimeComposition(
       },
     }));
 
-  const { updateTabs } = createTabRefreshControl({
-    getState: () => state,
-    getGame: () => game,
-    getBuildings: () => buildings,
-    getResources: () => resources,
-    getHaveTech: () => haveTech,
-    isPageVisible: () => gameUiSurface.isPageVisible(),
-    getMainVue,
-    testSurface,
-    setTestContext(context) {
-      state = context.state;
-      game = context.game;
-      buildings = context.buildings;
-      resources = context.resources;
-      haveTech = context.haveTech;
-      win = context.win;
-    },
-  });
-
   const { getMultiSegmentedTimeLeft } = createTargetTimingDisplayControl({
     getGame: () => game,
     getTimeFormat: () => (seconds) => poly.timeFormat(seconds),
@@ -3813,7 +3791,6 @@ export function startEvolveRuntimeComposition(
     updateScriptData,
     updateOverrides,
     finalizeScriptData,
-    updateTabs,
     updateState,
     updateUI: () => updateUI(),
     autoEvolution,

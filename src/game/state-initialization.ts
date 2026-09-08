@@ -281,7 +281,6 @@ type StateInitializationDependencies = {
   setBuildings: (buildings: Record<string, BuildingEntity>) => void;
   getProjects: () => ProjectCatalog;
   getUpdateCraftCost: () => () => void;
-  getUpdateTabs: () => (redraw: boolean) => void;
   getHaveTech: () => (id: string, level?: number) => unknown;
   log: (message: string) => void;
 };
@@ -295,12 +294,10 @@ export function createStateInitialization({
   setBuildings,
   getProjects,
   getUpdateCraftCost,
-  getUpdateTabs,
   getHaveTech,
   log,
 }: StateInitializationDependencies) {
   const updateCraftCost = () => getUpdateCraftCost()();
-  const updateTabs = (redraw: boolean) => getUpdateTabs()(redraw);
   const haveTech = (id: string, level?: number) => getHaveTech()(id, level);
 
   function initialiseState() {
@@ -308,7 +305,6 @@ export function createStateInitialization({
     const crafter = getCrafter();
 
     updateCraftCost();
-    updateTabs(false);
 
     // Lets set our crate / container resource requirements
     Object.defineProperty(getResources().Crates, "cost", {

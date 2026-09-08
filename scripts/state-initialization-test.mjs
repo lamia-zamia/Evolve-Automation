@@ -65,7 +65,6 @@ function makeContext(label) {
     buildings,
     projects: lazyCatalog((id) => ({ id: `${label}:${id}` })),
     updateCraftCost: () => traces.push([label, "craft"]),
-    updateTabs: (force) => traces.push([label, "tabs", force]),
     isLumberRace: () => false,
     haveTech: () => false,
     consumptions,
@@ -84,17 +83,13 @@ const { initialiseState } = createStateInitialization({
   setBuildings: (buildings) => (context.buildings = buildings),
   getProjects: () => context.projects,
   getUpdateCraftCost: () => context.updateCraftCost,
-  getUpdateTabs: () => context.updateTabs,
   getHaveTech: () => context.haveTech,
   log: (message) => logs.push(message),
 });
 
 initialiseState();
 const firstContext = context;
-assert.deepEqual(traces, [
-  ["first", "craft"],
-  ["first", "tabs", false],
-]);
+assert.deepEqual(traces, [["first", "craft"]]);
 assert.equal(firstContext.JobManager.craftingJobs[0].id, "firstCraft");
 assert.deepEqual({ ...firstContext.resources.Crates.cost }, { Plywood: 10 });
 
@@ -130,10 +125,7 @@ assert.equal(womlingConsumption.amount(), 2);
 
 context = makeContext("second");
 initialiseState();
-assert.deepEqual(traces.slice(-2), [
-  ["second", "craft"],
-  ["second", "tabs", false],
-]);
+assert.deepEqual(traces.at(-1), ["second", "craft"]);
 assert.equal(context.JobManager.craftingJobs[0].id, "secondCraft");
 assert.equal(context.resources.Containers.cost.Steel, 125);
 assert.equal(firstContext.JobManager.craftingJobs[0].id, "firstCraft");

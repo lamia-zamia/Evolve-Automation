@@ -27,7 +27,6 @@ const CONTROLLERS = [
   "updateScriptData",
   "updateOverrides",
   "finalizeScriptData",
-  "updateTabs",
   "updateState",
   "updateUI",
   "autoEvolution",
@@ -123,8 +122,8 @@ const EjectManager = { id: "Eject" };
 
 /**
  * Drives one automate() call with recording controllers.
- * `results` overrides what a controller returns (updateTabs and autoTrigger both gate the rest
- * of the tick, isPrestigeAllowed gates autoPrestige).
+ * `results` overrides what a controller returns (autoTrigger gates the rest of the tick, and
+ * isPrestigeAllowed gates autoPrestige).
  */
 function runTick({
   settings = {},
@@ -235,18 +234,6 @@ assert.equal(
   1,
 );
 
-// Data is refreshed before anything reads it, and settings overrides land between the two halves
-// of the refresh. A tab redraw abandons the rest of the tick: the freshly rebuilt tabs replace the
-// DOM nodes the automation would have clicked.
-const redrawn = runTick({ results: { updateTabs: true } });
-assert.deepEqual(redrawn.calls, [
-  "updateScriptData",
-  "updateOverrides",
-  "finalizeScriptData",
-  "updateTabs(true)",
-]);
-assert.deepEqual(redrawn.keyManagerCalls, []);
-
 // With the master toggle off the script still refreshes its data and redraws its own UI, but takes
 // no action on the player's behalf. KeyManager is reset but never finished, so no keys are released.
 const observing = runTick({ settings: { masterScriptToggle: false } });
@@ -254,7 +241,6 @@ assert.deepEqual(observing.calls, [
   "updateScriptData",
   "updateOverrides",
   "finalizeScriptData",
-  "updateTabs(true)",
   "updateState",
   "updateUI",
 ]);
@@ -277,7 +263,6 @@ assert.deepEqual(full.calls, [
   "updateScriptData",
   "updateOverrides",
   "finalizeScriptData",
-  "updateTabs(true)",
   "updateState",
   "updateUI",
   "autoGatherResources",

@@ -99,7 +99,6 @@ export interface TickControllerBag {
   updateScriptData: () => void;
   updateOverrides: () => void;
   finalizeScriptData: () => void;
-  updateTabs: (update: boolean) => boolean;
   updateState: () => void;
   updateUI: () => void;
   autoEvolution: () => void;
@@ -194,7 +193,6 @@ export function createTickControls(
     updateScriptData: () => c().updateScriptData(),
     updateOverrides: () => c().updateOverrides(),
     finalizeScriptData: () => c().finalizeScriptData(),
-    updateTabs: () => c().updateTabs(true),
     updateState: () => c().updateState(),
     updateUI: () => c().updateUI(),
     keyManagerReset: () => dependencies.getKeyManager().reset(),

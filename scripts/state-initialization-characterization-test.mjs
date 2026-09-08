@@ -94,7 +94,6 @@ const preambleTrace = [];
 let technologies = new Set();
 const actions = {
   updateCraftCost: () => preambleTrace.push(["craft"]),
-  updateTabs: (force) => preambleTrace.push(["tabs", force]),
   haveTech: (id, level) =>
     technologies.has(level === undefined ? id : `${id}:${level}`),
 };
@@ -111,7 +110,7 @@ hooks.initialiseState();
 
 const finalContext = hooks.getStateInitializationTestContext();
 const finalBuildings = finalContext.buildings;
-assert.deepEqual(preambleTrace, [["craft"], ["tabs", false]]);
+assert.deepEqual(preambleTrace, [["craft"]]);
 assert.deepEqual(Array.from(JobManager.craftingJobs), [
   crafter.Plywood,
   crafter.Brick,

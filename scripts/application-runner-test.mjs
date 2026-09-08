@@ -24,7 +24,6 @@ const controls = {
   updateScriptData: () => calls.push("script-data"),
   updateOverrides: () => calls.push("overrides"),
   finalizeScriptData: () => calls.push("finalize"),
-  updateTabs: () => false,
   updateState: () => calls.push("legacy-update-state"),
   updateUI: () => calls.push("ui"),
   keyManagerReset: () => calls.push("key-reset"),

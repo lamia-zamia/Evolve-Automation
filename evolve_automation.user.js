@@ -12438,14 +12438,13 @@ Only continue if you trust the source. Injected code:
     setBuildings,
     getProjects,
     getUpdateCraftCost,
-    getUpdateTabs,
     getHaveTech,
     log
   }) {
-    let updateCraftCost = () => getUpdateCraftCost()(), updateTabs = (redraw) => getUpdateTabs()(redraw), haveTech = (id, level) => getHaveTech()(id, level);
+    let updateCraftCost = () => getUpdateCraftCost()(), haveTech = (id, level) => getHaveTech()(id, level);
     function initialiseState() {
       let JobManager = getJobManager(), crafter = getCrafter();
-      updateCraftCost(), updateTabs(!1), Object.defineProperty(getResources().Crates, "cost", {
+      updateCraftCost(), Object.defineProperty(getResources().Crates, "cost", {
         get: () => {
           let race2 = getGame().global.race;
           return crateCost({
@@ -19095,100 +19094,6 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({ ...mechStats, autocomplete, tableSorter });
   }
 
-  // src/ui/tab-refresh.ts
-  function createTabRefresh({
-    getState,
-    getGame,
-    getBuildings,
-    getResources,
-    getHaveTech,
-    isPageVisible,
-    getMainVue
-  }) {
-    function updateTabs(update) {
-      let state = getState(), game = getGame(), buildings = getBuildings(), resources = getResources(), haveTech = getHaveTech(), oldHash = state.tabHash, nextHash = 0 + // Not really a hash, but it should never go down, that's enough to track unlocks. (Except market after mutation in terrifying, 1000 weight should prevent all possible issues)
-      (game.global.race.smoldering && buildings.RockQuarry.count ? 1 : 0) + // Chrysotile production
-      (game.global.race.shapeshifter ? 1 : 0) + // Shifter UI
-      (game.global.race.servants ? 1 : 0) + // Servants UI
-      (game.global.settings.showMarket ? 1e3 : 0) + // Market tab unlocked
-      (game.global.galaxy.trade ? 1 : 0) + // Galaxy trades unlocked
-      (game.global.settings.showEjector ? 1 : 0) + // Ejector tab unlocked
-      (game.global.settings.showCargo ? 1 : 0) + // Supply tab unlocked
-      (game.global.tech.alchemy ?? 0) + // Basic & advanced transmutations
-      (game.global.tech.queue ? 1 : 0) + // Queue unlocked
-      (game.global.tech.r_queue ? 1 : 0) + // Research queue unlocked
-      (game.global.tech.govern ? 1 : 0) + // Government unlocked
-      ((game.global.tech.spy ?? 0) >= 2 ? 1 : 0) + // SpyOp governor task
-      (game.global.tech.trade ? 1 : 0) + // Trade Routes unlocked
-      (resources.Crates.isUnlocked() ? 1 : 0) + // Crates in storage tab
-      (resources.Containers.isUnlocked() ? 1 : 0) + // Containers in storage tab
-      ((game.global.tech.m_smelting ?? 0) >= 2 ? 1 : 0) + // TP Iridium smelting
-      (game.global.tech.irid_smelting ? 1 : 0) + // Iridium smelting
-      (buildings.TitanQuarters.count > 0 ? 1 : 0) + // Titan Mine unlocked
-      (game.global.race.orbit_decayed ? 1 : 0) + // City tab gone
-      (game.global.tech.womling_tech ?? 0) + // Womling techs
-      (game.global.tech.focus_cure ?? 0) + // Cure techs
-      (game.global.tech.isolation ? 1 : 0) + // Solar tabs gone
-      (game.global.tech.m_ignite ? 1 : 0) + // Ignition Device built
-      (buildings.TauStarRingworld.count >= 1e3 ? 1 : 0) + // Ringworld built
-      ((game.global.tech.tau_gas2 ?? 0) >= 5 ? 1 : 0) + // Alien Space Station built
-      (game.global.tech.replicator ? 1 : 0) + // Matter Replicator unlocked
-      ((game.global.tauceti.tau_factory?.count ?? 0) > 0 ? 1 : 0) + // Factory built in lone survivor
-      ((game.global.space.g_factory?.count ?? 0) > 0 ? 1 : 0) + // Graphene plant built in lone survivor
-      ((game.global.tauceti.mining_ship?.count ?? 0) > 0 ? 1 : 0) + // Extractor ship built
-      (game.global.tech.psychicthrall ?? 0) + // Psychic powers
-      (game.global.tech.psychic ?? 0) + // Psychic powers
-      ((game.global.tech.edenic ?? 0) >= 1 ? 1 : 0) + // Spire floor 50 Eden access
-      ((game.global.tech.isle ?? 0) >= 3 ? 1 : 0) + // Edenic north/south piers -> spirit syphon tech
-      ((game.global.tech.palace ?? 0) >= 4 ? 1 : 0);
-      if (game.global.settings.showShipYard && (nextHash += 1 + (game.global.tech.syard_class ?? 0) + // Tiers of unlocked components
-      (game.global.tech.syard_power ?? 0) + (game.global.tech.syard_weapon ?? 0) + (game.global.tech.syard_armor ?? 0) + (game.global.tech.syard_engine ?? 0) + (game.global.tech.syard_sensor ?? 0) + (haveTech("titan", 3) && haveTech("enceladus", 2) ? 1 : 0) + // Enceladus syndicate
-      (haveTech("triton", 2) ? 1 : 0) + // Triton syndicate
-      (haveTech("makemake") ? 1 : 0) + // Makemake syndicate
-      (haveTech("eris") ? 1 : 0) + // Eris syndicate
-      (haveTech("eris", 2) ? 1 : 0) + // Eris scanning
-      (haveTech("titan_ai_core") ? 1 : 0) + // AI core built, drones unlocked
-      (haveTech("tauceti") ? 1 : 0)), game.global.race.shapeshifter && (nextHash += (game.global.race.ss_genus ?? "none").split("").reduce((a, b) => (a = (a << 5) - a + b.charCodeAt(0), a & a), 0)), update && nextHash !== oldHash && !isPageVisible())
-        return !1;
-      if (state.tabHash = nextHash, update && state.tabHash !== oldHash) {
-        let mainVue = getMainVue(), animated = mainVue.s.animated, civTabs = mainVue.s.civTabs, restoreSettings = () => {
-          mainVue.s.civTabs = civTabs, mainVue.s.tabLoad = !0, animated === void 0 ? delete mainVue.s.animated : mainVue.s.animated = animated;
-        };
-        try {
-          mainVue.s.animated = !1, mainVue.s.tabLoad = !1, mainVue.s.civTabs = 7, mainVue.toggleTabLoad();
-        } finally {
-          restoreSettings();
-        }
-        return mainVue.toggleTabLoad(), !0;
-      } else
-        return !1;
-    }
-    return { updateTabs };
-  }
-
-  // src/bootstrap/tab-refresh-control.ts
-  function createTabRefreshControl({
-    getState,
-    getGame,
-    getBuildings,
-    getResources,
-    getHaveTech,
-    isPageVisible,
-    getMainVue,
-    testSurface,
-    setTestContext
-  }) {
-    return createTabRefresh({
-      getState,
-      getGame,
-      getBuildings,
-      getResources,
-      getHaveTech,
-      isPageVisible,
-      getMainVue
-    });
-  }
-
   // src/ui/automation-container.ts
   function createAutomationContainer({
     getSettingsRaw,
@@ -20244,7 +20149,6 @@ Only continue if you trust the source. Injected code:
       updateScriptData: () => c().updateScriptData(),
       updateOverrides: () => c().updateOverrides(),
       finalizeScriptData: () => c().finalizeScriptData(),
-      updateTabs: () => c().updateTabs(!0),
       updateState: () => c().updateState(),
       updateUI: () => c().updateUI(),
       keyManagerReset: () => dependencies.getKeyManager().reset(),
@@ -20333,9 +20237,7 @@ Only continue if you trust the source. Injected code:
     let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs(), measure = createPhaseMeasure(profiling), finishProfile = () => {
       profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance("tick", profiling.nowMs() - workStartedAtMs), profiling.flushPerformance());
     };
-    if (measure("updateScriptData", () => controls4.updateScriptData()), measure("updateOverrides", () => controls4.updateOverrides()), measure("finalizeScriptData", () => controls4.finalizeScriptData()), measure("updateTabs", () => controls4.updateTabs()))
-      return finishProfile(), !0;
-    measure("updateState", () => (updateState ?? controls4.updateState)()), measure("updateUI", () => controls4.updateUI()), controls4.keyManagerReset();
+    measure("updateScriptData", () => controls4.updateScriptData()), measure("updateOverrides", () => controls4.updateOverrides()), measure("finalizeScriptData", () => controls4.finalizeScriptData()), measure("updateState", () => (updateState ?? controls4.updateState)()), measure("updateUI", () => controls4.updateUI()), controls4.keyManagerReset();
     let s = reader.sampleAutomation();
     if (!s.masterScriptToggle)
       return finishProfile(), !0;
@@ -54021,7 +53923,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setBuildings: (value) => buildings = value,
       getProjects: () => projects,
       getUpdateCraftCost: () => getTestContext("stateInitialization")?.actions?.updateCraftCost ?? updateCraftCost,
-      getUpdateTabs: () => getTestContext("stateInitialization")?.actions?.updateTabs ?? updateTabs,
       getHaveTech: () => getTestContext("stateInitialization")?.actions?.haveTech ?? haveTech,
       log: (message) => runtimeEnvironment.log(message),
       testSurface,
@@ -54846,18 +54747,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addEvolutionSetting: () => addEvolutionSetting(),
       updateSettingsFromState: () => updateSettingsFromState(),
       getTestActions: () => getTestContext("evolutionResult")?.actions
-    }), { updateTabs } = createTabRefreshControl({
-      getState: () => state,
-      getGame: () => game,
-      getBuildings: () => buildings,
-      getResources: () => resources,
-      getHaveTech: () => haveTech,
-      isPageVisible: () => gameUiSurface.isPageVisible(),
-      getMainVue,
-      testSurface,
-      setTestContext(context) {
-        state = context.state, game = context.game, buildings = context.buildings, resources = context.resources, haveTech = context.haveTech, win = context.win;
-      }
     }), { getMultiSegmentedTimeLeft } = createTargetTimingDisplay({
       getGame: () => game,
       getTimeFormat: () => (seconds) => poly.timeFormat(seconds),
@@ -55089,7 +54978,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateScriptData,
       updateOverrides,
       finalizeScriptData,
-      updateTabs,
       updateState,
       updateUI: () => updateUI(),
       autoEvolution,

@@ -61,12 +61,6 @@ export function runTick({
   measure("updateOverrides", () => controls.updateOverrides()); // Apply settings overrides as soon as possible
   measure("finalizeScriptData", () => controls.finalizeScriptData()); // Second part of updating data, applying settings
 
-  // Redraw tabs once they unlocked
-  if (measure("updateTabs", () => controls.updateTabs())) {
-    finishProfile();
-    return true;
-  }
-
   measure("updateState", () => (updateState ?? controls.updateState)());
   measure("updateUI", () => controls.updateUI());
   controls.keyManagerReset();

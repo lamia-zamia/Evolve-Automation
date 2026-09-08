@@ -71,8 +71,8 @@ export interface TickDiagnostics extends PhaseTimingSink {
 
 /**
  * The tick's effectful surface: the script's controllers, the key manager, the consumption managers,
- * and the tick bookkeeping writes. The runner owns the order these are called in; updateTabs,
- * autoTrigger, and isPrestigeAllowed return the booleans the runner branches on.
+ * and the tick bookkeeping writes. The runner owns the order these are called in; autoTrigger and
+ * isPrestigeAllowed return the booleans the runner branches on.
  */
 export interface TickControls {
   /** Consumes the game-ticked flag so one game tick drives at most one automation pass. */
@@ -86,8 +86,6 @@ export interface TickControls {
   updateScriptData(): void;
   updateOverrides(): void;
   finalizeScriptData(): void;
-  /** Redraws tabs that just unlocked; a redraw abandons the rest of the tick. */
-  updateTabs(): boolean;
   updateState(): void;
   updateUI(): void;
   keyManagerReset(): void;
