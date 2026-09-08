@@ -6230,6 +6230,9 @@
         getDocument: () => document,
         createMouseEvent: (type) => new mouseEvent(type)
       }),
+      // Without this the captured build policy sees no settings, so no building is ever managed and
+      // autoBuild silently builds nothing.
+      readSettings: () => readStoredSettings(storage),
       diagnostics
     }), gatherResources = createCapturedGatherResourcesControl({
       rootState: pageCapture2.rootState,
