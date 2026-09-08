@@ -786,6 +786,14 @@
         return !1;
     return !0;
   }
+  function canEverAfford(sample, cost) {
+    for (let [id, amount] of Object.entries(cost)) {
+      if (amount <= 0) continue;
+      let max = resourceView(sample, id).max;
+      if (max > 0 && max < amount) return !1;
+    }
+    return !0;
+  }
 
   // src/adapters/evolve/captured-world-state.ts
   function readCounter(owner, key) {
@@ -1962,7 +1970,7 @@
     });
   }
   function createCapturedConstructionAdapter(dependencies) {
-    let { sources, resources, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0;
+    let { sources, resources, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, savingTarget = null, cycleSavingTarget = null;
     function entryAt(index) {
       let entry = cycle[index];
       if (entry === void 0)
@@ -1973,9 +1981,12 @@
       let entry = cycle[index];
       return entry !== void 0 && entry.candidate.key === key ? entry : null;
     }
-    function affordable(cost) {
+    function affordable(key, cost) {
       let sample = resources.readResources(Object.keys(cost));
-      return sample !== void 0 && canAfford(sample, cost);
+      return sample === void 0 ? !1 : canAfford(sample, cost) ? !0 : (cycleSavingTarget === null && canEverAfford(sample, cost) && (cycleSavingTarget = Object.freeze({
+        name: key,
+        cost: Object.freeze({ ...cost })
+      })), !1);
     }
     let reader = Object.freeze({
       beginCycle() {
@@ -1991,7 +2002,7 @@
               );
             owners.set(candidate.key, source.family), entries.push({ candidate, source });
           }
-        return entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting), cycle = Object.freeze(entries), Object.freeze({
+        return entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting), cycle = Object.freeze(entries), savingTarget = cycleSavingTarget, cycleSavingTarget = null, Object.freeze({
           candidates: Object.freeze(entries.map((entry) => entry.candidate)),
           consumptionMode: options.consumptionMode,
           buildIfStorageFull: options.buildIfStorageFull,
@@ -2002,7 +2013,7 @@
       },
       sampleCandidate(index, request) {
         let { candidate } = entryAt(index), sample = {};
-        return request.needAffordability && (sample.affordable = affordable(candidate.cost)), request.needConsumption && (sample.consumption = candidate.consumption ?? NO_CONSUMPTION2), Object.freeze(sample);
+        return request.needAffordability && (sample.affordable = affordable(candidate.key, candidate.cost)), request.needConsumption && (sample.consumption = candidate.consumption ?? NO_CONSUMPTION2), Object.freeze(sample);
       },
       sampleConflict(index) {
         let { candidate } = entryAt(index), important = candidate.important;
@@ -2075,7 +2086,13 @@
         }) : entry.source.execute(decision.key);
       }
     });
-    return Object.freeze({ reader, executor });
+    return Object.freeze({
+      reader,
+      executor,
+      savingTarget: Object.freeze({
+        readSavingTarget: () => savingTarget
+      })
+    });
   }
 
   // src/adapters/evolve/progression/research/captured-project-catalog.ts
@@ -2812,7 +2829,7 @@
       drawnProjects,
       controls,
       ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) }
-    }), { reader, executor } = createCapturedConstructionAdapter({
+    }), { reader, executor, savingTarget } = createCapturedConstructionAdapter({
       // City buildings first, matching the game's own list order, so a project only outranks a
       // building by weighting rather than by being sampled first.
       sources: Object.freeze([
@@ -2855,7 +2872,8 @@
         } finally {
           offeredThisCycle = void 0;
         }
-      }
+      },
+      savingTarget
     });
   }
 
@@ -3149,7 +3167,8 @@
     });
     return Object.freeze({
       runConstructionCycle: () => construction.runCycle(),
-      runResearchCycle: () => research.runCycle()
+      runResearchCycle: () => research.runCycle(),
+      savingTarget: construction.savingTarget
     });
   }
 
@@ -5459,18 +5478,21 @@
       productionFactoryMinIngredients: finite6(settings.productionFactoryMinIngredients) ?? 0
     });
   }
+  function toCosts(cost) {
+    return Object.freeze(
+      Object.entries(cost).flatMap(([resourceId, amount]) => {
+        let value = finite6(amount);
+        return value === void 0 ? [] : [Object.freeze({ resourceId, amount: value })];
+      })
+    );
+  }
   function toTargets(targets) {
     return Object.freeze(
       targets.map(
         (target) => Object.freeze({
           isProject: !1,
           progress: null,
-          costs: Object.freeze(
-            Object.entries(target.cost).flatMap(([resourceId, amount]) => {
-              let value = finite6(amount);
-              return value === void 0 ? [] : [Object.freeze({ resourceId, amount: value })];
-            })
-          )
+          costs: toCosts(target.cost)
         })
       )
     );
@@ -5480,8 +5502,8 @@
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
         if (!isRecord(resources)) return EMPTY_SAMPLE2;
-        let queued = dependencies.reservations.readReservations().targets;
-        if (queued.length === 0) return EMPTY_SAMPLE2;
+        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.savingTarget?.readSavingTarget() ?? null;
+        if (queued.length === 0 && saving === null) return EMPTY_SAMPLE2;
         let result = planDemandPrioritization({
           settings: readSettingsInput(dependencies.readSettings()),
           // Only reachable through the research fallback, which has no technologies to offer in this
@@ -5493,7 +5515,10 @@
           retirementGraphene: null,
           queuedTargets: toTargets(queued),
           triggerTargets: Object.freeze([]),
-          savingTarget: null,
+          savingTarget: saving === null ? null : Object.freeze({
+            name: saving.name,
+            costs: toCosts(saving.cost)
+          }),
           missions: Object.freeze([]),
           unlockedTechs: Object.freeze([]),
           spyPurchaseMoney: 0,
@@ -6264,6 +6289,7 @@
       controls: pageCapture2.controls
     }), demand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
+      savingTarget: progression.savingTarget,
       reservations: createCapturedQueueReservationSource({
         rootState: pageCapture2.rootState,
         resources: createCapturedResourceSource(pageCapture2.rootState),

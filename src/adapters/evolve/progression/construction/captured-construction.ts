@@ -24,7 +24,11 @@ import type {
   BuildResourceView,
   BuildSampleRequest,
 } from "../../../../domain/progression/build/build.ts";
-import { canAfford, resourceView } from "../../../../domain/game-world.ts";
+import {
+  canAfford,
+  canEverAfford,
+  resourceView,
+} from "../../../../domain/game-world.ts";
 import type { ResourceView } from "../../../../domain/game-world.ts";
 import type {
   BuildClickResult,
@@ -37,6 +41,10 @@ import type {
   ConstructionCycleOptions,
 } from "../../../../ports/construction-candidates.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
+import type {
+  SavingTarget,
+  SavingTargetSource,
+} from "../../../../ports/game-saving-target.ts";
 import type { KnowledgeGateLevels } from "../../../../domain/progression/build/building-weighting.ts";
 import { stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
@@ -58,6 +66,11 @@ export interface CapturedConstructionDependencies {
 export interface CapturedConstructionAdapter {
   readonly reader: BuildReader;
   readonly executor: BuildExecutor;
+  /**
+   * What the last cycle turned out to be saving for. It is a by-product of the affordability the
+   * cycle already sampled, in the same weighting order, so it costs nothing extra to observe.
+   */
+  readonly savingTarget: SavingTargetSource;
 }
 
 interface CycleEntry {
@@ -104,6 +117,8 @@ export function createCapturedConstructionAdapter(
   const readStorageRequired = dependencies.readStorageRequired;
   let cycle: readonly CycleEntry[] = Object.freeze([]);
   let respectReservations = true;
+  let savingTarget: SavingTarget | null = null;
+  let cycleSavingTarget: SavingTarget | null = null;
 
   function entryAt(index: number): CycleEntry {
     const entry = cycle[index];
@@ -123,9 +138,22 @@ export function createCapturedConstructionAdapter(
    * exactly the cost keys in question. Before the root is captured there are no holdings to
    * compare against, so nothing is affordable.
    */
-  function affordable(cost: Readonly<Record<string, number>>): boolean {
+  function affordable(
+    key: string,
+    cost: Readonly<Record<string, number>>,
+  ): boolean {
     const sample = resources.readResources(Object.keys(cost));
-    return sample !== undefined && canAfford(sample, cost);
+    if (sample === undefined) return false;
+    if (canAfford(sample, cost)) return true;
+    // The first candidate of the cycle that is wanted, storable and unaffordable is the one the
+    // cycle is saving for. A cost storage can never hold is not something to save for.
+    if (cycleSavingTarget === null && canEverAfford(sample, cost)) {
+      cycleSavingTarget = Object.freeze({
+        name: key,
+        cost: Object.freeze({ ...cost }),
+      });
+    }
+    return false;
   }
 
   const reader: BuildReader = Object.freeze({
@@ -150,6 +178,9 @@ export function createCapturedConstructionAdapter(
       // families were given in, on ties.
       entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting);
       cycle = Object.freeze(entries);
+      // The finished cycle's judgement stays readable while the new one is still being sampled.
+      savingTarget = cycleSavingTarget;
+      cycleSavingTarget = null;
       return Object.freeze({
         candidates: Object.freeze(entries.map((entry) => entry.candidate)),
         consumptionMode: options.consumptionMode,
@@ -170,7 +201,7 @@ export function createCapturedConstructionAdapter(
         consumption?: readonly Readonly<BuildConsumptionView>[];
       } = {};
       if (request.needAffordability) {
-        sample.affordable = affordable(candidate.cost);
+        sample.affordable = affordable(candidate.key, candidate.cost);
       }
       if (request.needConsumption) {
         sample.consumption = candidate.consumption ?? NO_CONSUMPTION;
@@ -290,5 +321,11 @@ export function createCapturedConstructionAdapter(
     },
   });
 
-  return Object.freeze({ reader, executor });
+  return Object.freeze({
+    reader,
+    executor,
+    savingTarget: Object.freeze({
+      readSavingTarget: (): SavingTarget | null => savingTarget,
+    }),
+  });
 }

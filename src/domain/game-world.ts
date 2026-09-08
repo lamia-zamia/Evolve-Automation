@@ -150,6 +150,24 @@ export function canAfford(
   return true;
 }
 
+/**
+ * Whether storage could ever hold `cost`, which is the question behind saving for something rather
+ * than affording it now. An uncapped resource (`max` below zero) and one the game has not created
+ * yet both pass: neither is a known ceiling, and refusing to save on an unknown would stall a
+ * target the player can in fact reach.
+ */
+export function canEverAfford(
+  sample: Readonly<ResourceSample>,
+  cost: Readonly<Record<string, number>>,
+): boolean {
+  for (const [id, amount] of Object.entries(cost)) {
+    if (amount <= 0) continue;
+    const max = resourceView(sample, id).max;
+    if (max > 0 && max < amount) return false;
+  }
+  return true;
+}
+
 export function isFeatureVisible(
   sample: Readonly<GameSettingsSample>,
   feature: string,

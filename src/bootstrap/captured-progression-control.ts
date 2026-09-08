@@ -25,6 +25,7 @@ import { createCapturedBuildPolicyReader } from "../adapters/evolve/progression/
 import { createCapturedConstructionControl } from "./captured-construction-control.ts";
 import { createCapturedResearchControl } from "./captured-research-control.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
+import type { SavingTargetSource } from "../ports/game-saving-target.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
 import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
@@ -52,6 +53,8 @@ export interface CapturedProgressionControlDependencies {
 export interface CapturedProgressionControl {
   readonly runConstructionCycle: () => CommandExecutionOutcome;
   readonly runResearchCycle: () => CommandExecutionOutcome;
+  /** What the last construction cycle was saving for, for the features that read demand. */
+  readonly savingTarget: SavingTargetSource;
 }
 
 export function createCapturedProgressionControl(
@@ -184,5 +187,6 @@ export function createCapturedProgressionControl(
   return Object.freeze({
     runConstructionCycle: () => construction.runCycle(),
     runResearchCycle: () => research.runCycle(),
+    savingTarget: construction.savingTarget,
   });
 }

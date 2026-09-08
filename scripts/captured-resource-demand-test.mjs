@@ -11,12 +11,13 @@ const root = {
   },
 };
 
-function withTargets(targets, settings = {}) {
+function withTargets(targets, settings = {}, saving = null) {
   return createCapturedResourceDemand({
     rootState: { readRoot: () => root },
     reservations: {
       readReservations: () => ({ targets, unavailable: false }),
     },
+    savingTarget: { readSavingTarget: () => saving },
     readSettings: () => settings,
   });
 }
@@ -81,6 +82,37 @@ function withTargets(targets, settings = {}) {
     },
     readSettings: () => ({}),
   }).sample();
+  assert.equal(sample.isDemanded("Stone"), false);
+}
+
+// The construction cycle's saving target demands its cost even with nothing queued, and does so
+// whatever the queue setting says, because it is not the player's queue.
+{
+  const sample = withTargets(
+    [],
+    { prioritizeQueue: "save" },
+    {
+      name: "city-cottage",
+      cost: { Stone: 700 },
+    },
+  ).sample();
+  assert.equal(sample.requestedQuantity("Stone"), 700);
+  assert.equal(sample.isDemanded("Stone"), true);
+}
+
+// Queue and saving demands combine by maximum, like every other request.
+{
+  const sample = withTargets(
+    [{ name: "Lodge", cause: "Queue", cost: { Stone: 800 } }],
+    {},
+    { name: "city-cottage", cost: { Stone: 300 } },
+  ).sample();
+  assert.equal(sample.requestedQuantity("Stone"), 800);
+}
+
+// Nothing queued and nothing being saved for is no demand at all.
+{
+  const sample = withTargets([], {}, null).sample();
   assert.equal(sample.isDemanded("Stone"), false);
 }
 

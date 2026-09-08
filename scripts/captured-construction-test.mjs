@@ -114,6 +114,13 @@ function makeCycle({
   return { adapter, bought, holdings };
 }
 
+function runCycle(cycle) {
+  return runBuildAutomation({
+    reader: cycle.adapter.reader,
+    executor: cycle.adapter.executor,
+  });
+}
+
 // Per-resource consumption is sampled from the managed candidate and is remembered after the
 // purchase, so a later candidate consuming the same resource waits in perResource mode.
 {
@@ -371,6 +378,51 @@ function makeCycle({
     "stale-construction-target",
   );
   assert.deepEqual(cycle.bought, ["arpalhc"]);
+}
+
+// The cycle reports what it turned out to be saving for: the highest-weighted candidate it wanted,
+// could eventually store, and could not afford. It becomes readable once that cycle has finished.
+{
+  const cycle = makeCycle({
+    city: [
+      { key: "city-bank", weighting: 30, cost: { Money: 5000 } },
+      { key: "city-farm", weighting: 20, cost: { Money: 50 } },
+    ],
+    holdings: { Money: 100 },
+  });
+  assert.equal(cycle.adapter.savingTarget.readSavingTarget(), null);
+  runCycle(cycle);
+  // The cheaper candidate was still bought; saving for a target does not stop the cycle here.
+  assert.deepEqual(cycle.bought, ["city-farm"]);
+  // The judgement belongs to the finished cycle, so the next one publishes it.
+  assert.equal(cycle.adapter.savingTarget.readSavingTarget(), null);
+  runCycle(cycle);
+  assert.deepEqual(cycle.adapter.savingTarget.readSavingTarget(), {
+    name: "city-bank",
+    cost: { Money: 5000 },
+  });
+}
+
+// A cost storage can never hold is not something to save for.
+{
+  const cycle = makeCycle({
+    city: [{ key: "city-bank", weighting: 30, cost: { Money: 250000 } }],
+    holdings: { Money: 100 },
+  });
+  runCycle(cycle);
+  runCycle(cycle);
+  assert.equal(cycle.adapter.savingTarget.readSavingTarget(), null);
+}
+
+// Everything affordable is nothing to save for.
+{
+  const cycle = makeCycle({
+    city: [{ key: "city-farm", weighting: 20, cost: { Money: 50 } }],
+    holdings: { Money: 100000 },
+  });
+  runCycle(cycle);
+  runCycle(cycle);
+  assert.equal(cycle.adapter.savingTarget.readSavingTarget(), null);
 }
 
 console.log("captured construction ok");

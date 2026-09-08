@@ -8,9 +8,10 @@
  *
  * This sample is deliberately narrow. It carries the player's own build and research queues, priced
  * through the game's own cost code by the existing captured reservation source, which already
- * applies the game's rule for which queue entries it is saving for. It carries nothing else yet: no
- * script triggers, no saving target, no missions, no crafters, no factory or fleet demand. Those
- * either belong to features this runtime has not migrated or are decided later in the same cycle.
+ * applies the game's rule for which queue entries it is saving for, and the construction cycle's own
+ * saving target — the highest-weighted candidate it wants but cannot yet afford, observed from the
+ * cycle that has already run. It carries nothing else yet: no script triggers, no missions, no
+ * crafters, no factory or fleet demand. Those belong to features this runtime has not migrated.
  *
  * A missing part of the model can only leave a resource looking undemanded, never demand something
  * nothing wants, so every consumer degrades the same way the bounded slices already do.
@@ -18,17 +19,24 @@
 
 import {
   planDemandPrioritization,
+  type DemandCost,
   type DemandPrioritizationSettings,
   type DemandTarget,
 } from "../../../../domain/economy/resources/demand-prioritization.ts";
 import type { ReservedCostTarget } from "../../../../domain/cost-conflicts.ts";
 import type { CostReservationSource } from "../../../../ports/game-cost-reservations.ts";
+import type { SavingTargetSource } from "../../../../ports/game-saving-target.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedResourceDemandDependencies {
   readonly rootState: GameRootStateSource;
   readonly reservations: CostReservationSource;
+  /**
+   * The construction cycle's saving target. Absent for a caller with no construction cycle to
+   * observe, which then simply sees no implicit commitment.
+   */
+  readonly savingTarget?: SavingTargetSource;
   readonly readSettings: () => unknown;
 }
 
@@ -120,6 +128,19 @@ function readSettingsInput(
  * would pay, not whether the entry is an A.R.P.A. project part-way through, so no target claims the
  * project cost doubling; an under-stated demand is the safe direction here.
  */
+function toCosts(
+  cost: Readonly<Record<string, number | undefined>>,
+): readonly DemandCost[] {
+  return Object.freeze(
+    Object.entries(cost).flatMap(([resourceId, amount]) => {
+      const value = finite(amount);
+      return value === undefined
+        ? []
+        : [Object.freeze({ resourceId, amount: value })];
+    }),
+  );
+}
+
 function toTargets(
   targets: readonly Readonly<ReservedCostTarget>[],
 ): readonly DemandTarget[] {
@@ -128,14 +149,7 @@ function toTargets(
       Object.freeze({
         isProject: false,
         progress: null,
-        costs: Object.freeze(
-          Object.entries(target.cost).flatMap(([resourceId, amount]) => {
-            const value = finite(amount);
-            return value === undefined
-              ? []
-              : [Object.freeze({ resourceId, amount: value })];
-          }),
-        ),
+        costs: toCosts(target.cost),
       }),
     ),
   );
@@ -150,7 +164,8 @@ export function createCapturedResourceDemand(
       const resources = readProperty(root, "resource");
       if (!isRecord(resources)) return EMPTY_SAMPLE;
       const queued = dependencies.reservations.readReservations().targets;
-      if (queued.length === 0) return EMPTY_SAMPLE;
+      const saving = dependencies.savingTarget?.readSavingTarget() ?? null;
+      if (queued.length === 0 && saving === null) return EMPTY_SAMPLE;
 
       const result = planDemandPrioritization({
         settings: readSettingsInput(dependencies.readSettings()),
@@ -163,7 +178,13 @@ export function createCapturedResourceDemand(
         retirementGraphene: null,
         queuedTargets: toTargets(queued),
         triggerTargets: Object.freeze([]),
-        savingTarget: null,
+        savingTarget:
+          saving === null
+            ? null
+            : Object.freeze({
+                name: saving.name,
+                costs: toCosts(saving.cost),
+              }),
         missions: Object.freeze([]),
         unlockedTechs: Object.freeze([]),
         spyPurchaseMoney: 0,
