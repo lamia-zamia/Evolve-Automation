@@ -3,7 +3,7 @@
  *
  * Input from the game's own research panel, decision by the existing pure planner, execution
  * through one captured game method. The runtime selects it only after document-start capture is
- * complete; late-loaded pages retain the compatibility fallback.
+ * complete; callers that cannot provide that capture reject before touching the game-facing readers.
  */
 
 import { runResearchAutomation } from "../application/research.ts";

@@ -3,7 +3,7 @@
  * controls and the capture picks them up.
  *
  * The game's main-tab component is bound at startup under the selector `#mainColumn div.content`,
- * and its `swapTab(index)` calls `loadTab(index)` whenever Preload Tab Content is off. `loadTab`
+ * and its `swapTab(index)` calls `loadTab(index)` whenever background panels are not retained. `loadTab`
  * draws that tab's panels — Civics builds jobs, the foundry, government, tax rates, the garrison
  * and foreign powers in one go — but several panels are gated a second time on their sub-tab, so a
  * path of steps is what actually names a panel. Measured against the 1.5.0 page: one pass over the

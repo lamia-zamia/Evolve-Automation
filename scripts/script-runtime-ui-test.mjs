@@ -3,10 +3,6 @@ import assert from "node:assert/strict";
 import { createScriptRuntimeUI } from "../src/ui/script-runtime.ts";
 
 const trace = [];
-let state = { forcedUpdate: false };
-let game = {
-  updateDebugData: () => trace.push(`update:${state.forcedUpdate}`),
-};
 const listeners = new Map();
 const win = {
   addEventListener: (name, callback) => listeners.set(name, callback),
@@ -58,8 +54,6 @@ const warned = [];
 const runtime = createScriptRuntimeUI({
   getJQuery: () => jquery,
   getDocument: () => document,
-  getState: () => state,
-  getGame: () => game,
   getWin: () => win,
   getCreateOptionsModal: () => () => trace.push("modal"),
   getOpenOptionsModal: () => (title, builder) => {
@@ -71,16 +65,6 @@ const runtime = createScriptRuntimeUI({
   getScriptVersionExtra: () => "test",
   getScriptVersion: () => "3.3.2-test",
 });
-
-runtime.updateDebugData();
-assert.deepEqual(trace, ["update:true"]);
-assert.equal(state.forcedUpdate, false);
-state = { forcedUpdate: false };
-game = {
-  updateDebugData: () => trace.push(`replacement:${state.forcedUpdate}`),
-};
-runtime.updateDebugData();
-assert.equal(trace.at(-1), "replacement:true");
 
 runtime.addScriptStyle();
 assert.ok(styleText.length > 10_000);

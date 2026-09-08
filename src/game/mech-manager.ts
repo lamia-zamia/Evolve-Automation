@@ -156,7 +156,6 @@ type MechManagerDependencies = {
   getBuildings: () => BuildingsSurface;
   getPoly: () => PolySurface;
   getGameLog: () => GameLogSurface;
-  getUpdateDebugData: () => (...args: unknown[]) => void;
   getCreateMechInfo: () => (...args: unknown[]) => void;
   getMechControls: () => GameMechControlsPort;
   getMechListControls: () => GameMechListControlsPort;
@@ -172,7 +171,6 @@ export function createMechManager({
   getBuildings,
   getPoly,
   getGameLog,
-  getUpdateDebugData,
   getCreateMechInfo,
   getMechControls,
   getMechListControls,
@@ -188,7 +186,6 @@ export function createMechManager({
   let GameLog: GameLogSurface;
 
   const k_combinations = kCombinations;
-  const updateDebugData = (...args: unknown[]) => getUpdateDebugData()(...args);
   const createMechInfo = (...args: unknown[]) => getCreateMechInfo()(...args);
 
   function refreshContext() {
@@ -451,7 +448,6 @@ export function createMechManager({
     },
 
     mechObserver: createMutationObserver(() => {
-      updateDebugData(); // Observer can be can be called at any time, make sure we have actual data
       createMechInfo();
     }),
 

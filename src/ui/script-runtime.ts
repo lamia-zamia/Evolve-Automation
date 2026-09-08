@@ -48,8 +48,6 @@ interface ScriptRuntimeWindow {
 interface ScriptRuntimeUIDependencies {
   getJQuery: () => (target: string) => ScriptRuntimeNode;
   getDocument: () => ScriptRuntimeDocument;
-  getState: () => { forcedUpdate: boolean };
-  getGame: () => { updateDebugData(): void };
   getWin: () => ScriptRuntimeWindow;
   getCreateOptionsModal: () => () => void;
   getOpenOptionsModal: () => (
@@ -63,8 +61,6 @@ interface ScriptRuntimeUIDependencies {
 export function createScriptRuntimeUI({
   getJQuery,
   getDocument,
-  getState,
-  getGame,
   getWin,
   getCreateOptionsModal,
   getOpenOptionsModal,
@@ -77,12 +73,6 @@ export function createScriptRuntimeUI({
     title: string,
     builder: (node: ScriptRuntimeNode) => void,
   ) => getOpenOptionsModal()(title, builder);
-  function updateDebugData() {
-    getState().forcedUpdate = true;
-    getGame().updateDebugData();
-    getState().forcedUpdate = false;
-  }
-
   function addScriptStyle() {
     // background = @html-background, alt = @market-item-background, hover = (alt - 0x111111), border = @primary-border, primary = @primary-color
     let cssData = {
@@ -638,7 +628,6 @@ export function createScriptRuntimeUI({
   }
 
   return {
-    updateDebugData,
     addScriptStyle,
     checkIgnoredError,
     displayScriptWarningNode,

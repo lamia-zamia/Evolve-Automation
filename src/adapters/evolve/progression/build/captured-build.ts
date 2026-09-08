@@ -2,8 +2,8 @@
  * City construction as one family of the captured construction cycle.
  *
  * Everything here comes from the page capture — the live root for counts, the game's own cost code
- * for prices, the game's own `action()` closure for the purchase. Nothing reads `window.evolve`,
- * and nothing asks whether a panel is rendered: a captured control keeps working after its tab is
+ * for prices, the game's own `action()` closure for the purchase. Nothing asks whether a panel is
+ * rendered: a captured control keeps working after its tab is
  * torn down, which is the whole point of the slice.
  *
  * Affordability, cost conflicts and resource competition are not decided here. They belong to the

@@ -46,7 +46,6 @@ type AutomationContainerActions = {
   removeEjectToggles: () => void;
   createSupplyToggles: () => void;
   removeSupplyToggles: () => void;
-  updateDebugData: () => void;
   updateScriptData: () => void;
   finalizeScriptData: () => void;
   autoMarket: (bulkSell?: boolean, ignoreSellRatio?: boolean) => void;
@@ -93,7 +92,6 @@ export function createAutomationContainer({
       removeEjectToggles,
       createSupplyToggles,
       removeSupplyToggles,
-      updateDebugData,
       updateScriptData,
       finalizeScriptData,
       autoMarket,
@@ -350,7 +348,6 @@ export function createAutomationContainer({
         '<a class="button is-dark is-small" id="bulk-sell"><span>Bulk Sell</span></a>',
       );
       $("#bulk-sell").on("mouseup", function () {
-        updateDebugData();
         updateScriptData();
         finalizeScriptData();
         autoMarket(true, true);

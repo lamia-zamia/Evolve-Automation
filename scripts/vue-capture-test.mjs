@@ -31,7 +31,7 @@ function makeVue() {
 
 function makeRoot(days) {
   return {
-    settings: { expose: false, tabLoad: false },
+    settings: { expose: false },
     resource: { Food: { amount: 10 } },
     race: { species: "human" },
     stats: { days },

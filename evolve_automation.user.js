@@ -8164,7 +8164,6 @@ Only continue if you trust the source. Injected code:
     getBuildings,
     getPoly,
     getGameLog,
-    getUpdateDebugData,
     getCreateMechInfo,
     getMechControls,
     getMechListControls,
@@ -8172,7 +8171,7 @@ Only continue if you trust the source. Injected code:
     createMutationObserver,
     randomSource
   }) {
-    let game, settings, resources, buildings, poly, GameLog, k_combinations2 = kCombinations, updateDebugData = (...args) => getUpdateDebugData()(...args), createMechInfo = (...args) => getCreateMechInfo()(...args);
+    let game, settings, resources, buildings, poly, GameLog, k_combinations2 = kCombinations, createMechInfo = (...args) => getCreateMechInfo()(...args);
     function refreshContext() {
       game = getGame(), settings = getSettings(), resources = getResources(), buildings = getBuildings(), poly = getPoly(), GameLog = getGameLog();
     }
@@ -8391,7 +8390,7 @@ Only continue if you trust the source. Injected code:
         return 2e4 / Math.max(settings.mechCollectorValue, 1e-6);
       },
       mechObserver: createMutationObserver(() => {
-        updateDebugData(), createMechInfo();
+        createMechInfo();
       }),
       updateSpire() {
         let oldHash = this.stateHash;
@@ -8620,137 +8619,6 @@ Only continue if you trust the source. Injected code:
       ...fleetManagers,
       ...mechManager
     });
-  }
-
-  // src/game/script-bootstrap.ts
-  function createScriptBootstrap({
-    getGame,
-    getTechIds,
-    getTechnology,
-    getBuildings,
-    getBuildingIds,
-    getState,
-    getProjects,
-    getArpaIds,
-    getJobs,
-    getJobIds,
-    getCrafter,
-    getTriggerManager,
-    getCheckActions,
-    getWindow,
-    getUserscriptEnvironment,
-    getWin,
-    getPageShell,
-    getNeedSandboxBypass,
-    getPoly,
-    getSettings,
-    getSafeMode,
-    getActions,
-    setWin,
-    setGame,
-    setNeedSandboxBypass
-  }) {
-    let game, techIds, Technology, buildings, buildingIds, state, projects, arpaIds, jobs, jobIds, crafter, TriggerManager, checkActions, window, userscriptEnvironment, win, needSandboxBypass, poly, settings, safeMode, getScriptBootstrapActions = getActions;
-    function refreshContext() {
-      game = getGame(), techIds = getTechIds(), Technology = getTechnology(), buildings = getBuildings(), buildingIds = getBuildingIds(), state = getState(), projects = getProjects(), arpaIds = getArpaIds(), jobs = getJobs(), jobIds = getJobIds(), crafter = getCrafter(), TriggerManager = getTriggerManager(), checkActions = getCheckActions(), window = getWindow(), userscriptEnvironment = getUserscriptEnvironment(), win = getWin(), needSandboxBypass = getNeedSandboxBypass(), poly = getPoly(), settings = getSettings(), safeMode = getSafeMode();
-    }
-    function commitContext() {
-      setWin(win), setGame(game), setNeedSandboxBypass(needSandboxBypass);
-    }
-    let contextDepth = 0;
-    function withContext(fn, name) {
-      let wrapped = function(...args) {
-        let outermost = contextDepth === 0;
-        outermost && refreshContext(), contextDepth++;
-        try {
-          return fn.apply(this, args);
-        } finally {
-          contextDepth--, outermost && commitContext();
-        }
-      };
-      return Object.defineProperty(wrapped, "name", { value: name }), wrapped;
-    }
-    function initialiseScriptImpl() {
-      let actions = getScriptBootstrapActions(), techVariants = /* @__PURE__ */ new Map();
-      for (let [key, action] of Object.entries(game.actions.tech)) {
-        let variants = techVariants.get(action.id) ?? [];
-        variants.push(key), techVariants.set(action.id, variants);
-      }
-      for (let [binding, variants] of techVariants) {
-        let primary = variants[0];
-        primary !== void 0 && (techIds[binding] = new Technology(primary, binding, variants));
-      }
-      for (let building3 of Object.values(buildings))
-        buildingIds[building3._vueBinding] = building3, building3.isMission() && building3 !== buildings.BlackholeJumpShip && building3 !== buildings.PitAssaultForge && state.missionBuildingList.push(building3);
-      for (let project of Object.values(projects))
-        arpaIds[project._vueBinding] = project;
-      for (let job of Object.values(jobs))
-        jobIds[job._originalId] = job;
-      for (let job of Object.values(crafter))
-        jobIds[job._originalId] = job;
-      actions.updateStandAloneSettings(), actions.updateStateFromSettings(), actions.updateSettingsFromState(), TriggerManager.priorityList.forEach((trigger) => {
-        trigger.complete = !1;
-      }), checkActions && actions.verifyGameActions(), actions.buildFilterRegExp(), getPageShell().mountObservers();
-    }
-    function mainAutoEvolveScriptImpl() {
-      let actions = getScriptBootstrapActions();
-      if (!getPageShell().isPageReady()) {
-        actions.schedule(mainAutoEvolveScript, 100);
-        return;
-      }
-      if (userscriptEnvironment.capabilities.hasPageWindow ? win = userscriptEnvironment.pageWindow : (win = window, commitContext()), game = win.evolve, commitContext(), !game) {
-        state.warnDebug && (state.warnDebug = !1, actions.alert(
-          "You need to enable Debug Mode in settings for script to work"
-        )), actions.schedule(mainAutoEvolveScript, 100);
-        return;
-      }
-      if (!game.global?.race || !game.breakdown.p.consume) {
-        actions.schedule(mainAutoEvolveScript, 100);
-        return;
-      }
-      if (!game.global.settings.tabLoad) {
-        state.warnPreload && (state.warnPreload = !1, actions.alert(
-          "You need to enable Preload Tab Content in settings for script to work"
-        )), actions.schedule(mainAutoEvolveScript, 100);
-        return;
-      }
-      needSandboxBypass = userscriptEnvironment.capabilities.needsSandboxBridge, commitContext(), needSandboxBypass || (poly.adjustCosts = game.adjustCosts, poly.loc = game.loc, poly.messageQueue = game.messageQueue, poly.shipCosts = game.shipCosts), actions.addErrorHandler(), actions.addScriptStyle(), actions.keyManagerInit(), actions.initialiseState(), actions.initialiseRaces(), initialiseScript(), actions.updateOverrides();
-      let setCallback = (fn) => needSandboxBypass ? userscriptEnvironment.exportToPage(fn) : fn, breakdown = game.breakdown;
-      if (Object.defineProperty(game, "breakdown", {
-        get: setCallback(() => breakdown),
-        set: setCallback((v) => {
-          breakdown = v, state.gameTicked = !0, settings.tickSchedule ? actions.schedule(actions.automate) : actions.automate();
-        })
-      }), actions.repeat(actions.automateLab, 2500), win.importAutomationSettings = actions.importSettings, win.exportAutomationSettings = actions.exportSettings, win.eaExportStateLog = () => actions.triggerFileDownload(
-        JSON.stringify(state.stateLog ?? actions.loadStateLog()),
-        `evolve-statelog-manual-d${game.global.stats.days}.json`
-      ), safeMode) {
-        let msg = [
-          "Script safe mode is active to let you solve problems in your configuration.",
-          "The masterScriptToggle is always disabled in this mode, and your overrides don't get evaluated.",
-          "Fix the problems that required you to use this mode, then remove ?safemode from the URL to deactivate."
-        ].join(`
-`);
-        actions.displayScriptWarningNode("Safe mode active", msg, null), poly.messageQueue(msg, "warning", !0, ["events", "major_events"]);
-      }
-    }
-    let initialiseScript = withContext(
-      initialiseScriptImpl,
-      "initialiseScript"
-    ), mainAutoEvolveScript;
-    return mainAutoEvolveScript = withContext(
-      mainAutoEvolveScriptImpl,
-      "mainAutoEvolveScript"
-    ), { initialiseScript, mainAutoEvolveScript };
-  }
-
-  // src/bootstrap/script-bootstrap-control.ts
-  function createScriptBootstrapControl({
-    testSurface,
-    setTestContext,
-    ...dependencies
-  }) {
-    return createScriptBootstrap(dependencies);
   }
 
   // src/game/core-managers.ts
@@ -19124,7 +18992,6 @@ Only continue if you trust the source. Injected code:
         removeEjectToggles,
         createSupplyToggles,
         removeSupplyToggles,
-        updateDebugData,
         updateScriptData,
         finalizeScriptData,
         autoMarket
@@ -19319,7 +19186,7 @@ Only continue if you trust the source. Injected code:
         ), togglesNode.append(
           '<a class="button is-dark is-small" id="bulk-sell"><span>Bulk Sell</span></a>'
         ), $("#bulk-sell").on("mouseup", function() {
-          updateDebugData(), updateScriptData(), finalizeScriptData(), autoMarket(!0, !0);
+          updateScriptData(), finalizeScriptData(), autoMarket(!0, !0);
         });
       }
       return { scriptNode, created };
@@ -22120,7 +21987,7 @@ Only continue if you trust the source. Injected code:
     let manager = requireRecord(
       dependencies.getGovernmentManager(),
       "GovernmentManager"
-    ), settings = requireRecord(dependencies.getSettings(), "settings"), game = requireRecord(dependencies.getGame(), "game"), isEnabled = requireFunction(
+    ), settings = requireRecord(dependencies.getSettings(), "settings"), game = requireRecord(dependencies.getGame(), "game"), isEnabled2 = requireFunction(
       manager.isEnabled,
       "GovernmentManager.isEnabled"
     ), govSpace = requireString(settings.govSpace, "settings.govSpace"), govFinal = requireString(settings.govFinal, "settings.govFinal"), govInterim = requireString(
@@ -22129,7 +21996,7 @@ Only continue if you trust the source. Injected code:
     ), govGovernor = requireString(
       settings.govGovernor,
       "settings.govGovernor"
-    ), enabled = !!Reflect.apply(isEnabled, manager, []), guardAnarchist = !1, tradeFederationReady = !1, haveQFactory = !1, govSpaceUnlocked = !1, govFinalUnlocked = !1, govInterimUnlocked = !1;
+    ), enabled = !!Reflect.apply(isEnabled2, manager, []), guardAnarchist = !1, tradeFederationReady = !1, haveQFactory = !1, govSpaceUnlocked = !1, govFinalUnlocked = !1, govInterimUnlocked = !1;
     enabled && (guardAnarchist = dependencies.guardActive("guardAnarchist"), guardAnarchist || (settings.achievementGuards !== !1 && settings.guardTradeFederation !== !1 && !dependencies.isTradeFederationAchievementUnlocked() && hasTradeFederationRoutes(game) && (tradeFederationReady = governmentUnlocked(
       manager.Types,
       "federation",
@@ -22174,11 +22041,11 @@ Only continue if you trust the source. Injected code:
         "GovernmentManager"
       ), setGovernment;
       if (decision2.government !== null) {
-        let isEnabled = requireFunction(
+        let isEnabled2 = requireFunction(
           manager.isEnabled,
           "GovernmentManager.isEnabled"
         );
-        if (!Reflect.apply(isEnabled, manager, []))
+        if (!Reflect.apply(isEnabled2, manager, []))
           return stale(
             "government-disabled",
             "government automation became unavailable"
@@ -50044,8 +49911,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
   function createScriptRuntimeUI({
     getJQuery,
     getDocument,
-    getState,
-    getGame,
     getWin,
     getCreateOptionsModal,
     getOpenOptionsModal,
@@ -50053,9 +49918,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     getScriptVersion
   }) {
     let $ = (target) => getJQuery()(target), createOptionsModal = () => getCreateOptionsModal()(), openOptionsModal = (title, builder) => getOpenOptionsModal()(title, builder);
-    function updateDebugData() {
-      getState().forcedUpdate = !0, getGame().updateDebugData(), getState().forcedUpdate = !1;
-    }
     function addScriptStyle() {
       let cssData = {
         dark: {
@@ -50568,7 +50430,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       });
     }
     return {
-      updateDebugData,
       addScriptStyle,
       checkIgnoredError,
       displayScriptWarningNode,
@@ -52200,11 +52061,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       drawnActions,
       drawnProjects,
       getBuildingManager,
-      readSettings: readSettings3,
+      readSettings: readSettingsDependency,
       getState,
       getResources,
       diagnostics
-    } = dependencies, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
+    } = dependencies, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, readSettings3 = readSettingsDependency ?? (() => ({})), resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
       rootState,
       controls: controls4,
       mountSuppression,
@@ -52248,17 +52109,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       drawnActions,
       controls: controls4,
       ...onUnavailable === void 0 ? {} : { onUnavailable }
-    }), readPolicy = createScriptBuildPolicyReader({
+    }), readPolicy = getBuildingManager === void 0 ? () => Object.freeze({
+      buildings: Object.freeze([]),
+      consumptionMode: "onePerTick",
+      buildIfStorageFull: !1,
+      ignoreZeroRate: !1,
+      respectReservations: !0,
+      saveWhiteholeGems: !1
+    }) : createScriptBuildPolicyReader({
       getBuildingManager,
       getSettings: readSettings3,
       ...onSkipped === void 0 ? {} : { onSkipped }
-    }), scriptReservations = createScriptCostReservationSource({ getState }), readKnowledgeGate2 = createScriptKnowledgeGateReader({
+    }), scriptReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), readKnowledgeGate2 = getState === void 0 ? void 0 : createScriptKnowledgeGateReader({
       getState,
       resources,
-      getResources
-    }), readStorageRequired = createScriptStorageRequirementReader({
-      getResources
-    }), construction = createCapturedConstructionControl({
+      ...getResources === void 0 ? {} : { getResources }
+    }), readStorageRequired = getResources === void 0 ? void 0 : createScriptStorageRequirementReader({ getResources }), construction = createCapturedConstructionControl({
       rootState,
       controls: controls4,
       mountSuppression,
@@ -52267,9 +52133,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readPolicy,
       readSettings: readSettings3,
       ensureBuildControls,
-      scriptReservations,
-      readKnowledgeGate: readKnowledgeGate2,
-      readStorageRequired,
+      ...scriptReservations === void 0 ? {} : { scriptReservations },
+      ...readKnowledgeGate2 === void 0 ? {} : { readKnowledgeGate: readKnowledgeGate2 },
+      ...readStorageRequired === void 0 ? {} : { readStorageRequired },
       readOfferedTechs: () => offered.readOffered(),
       ...onSkipped === void 0 ? {} : { onSkipped },
       diagnostics
@@ -52438,8 +52304,77 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
   }
 
+  // src/bootstrap/captured-runtime-control.ts
+  function readStoredSettings(storageValue) {
+    if (!isRecord(storageValue)) return {};
+    let getItem = readProperty(storageValue, "getItem");
+    if (typeof getItem != "function") return {};
+    let raw = Reflect.apply(getItem, storageValue, ["settings"]);
+    if (typeof raw != "string") return {};
+    try {
+      let parsed = JSON.parse(raw);
+      return isRecord(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  var DEFAULT_SETTINGS = Object.freeze({
+    masterScriptToggle: !0,
+    autoBuild: !1,
+    autoARPA: !1,
+    autoResearch: !1
+  });
+  function isEnabled(settings, key) {
+    let value = settings[key];
+    return typeof value == "boolean" ? value : DEFAULT_SETTINGS[key] ?? !1;
+  }
+  function startCapturedRuntime({
+    pageCapture: pageCapture2,
+    document,
+    mouseEvent,
+    storage,
+    diagnostics,
+    logError = () => {
+    }
+  }) {
+    let progression = createCapturedProgressionControl({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      mountSuppression: pageCapture2.mountSuppression,
+      panels: createGamePanelWorkspace({ getDocument: () => document }),
+      drawnActions: createGameDrawnActionsReader({
+        getDocument: () => document
+      }),
+      drawnProjects: createGameDrawnProjectsReader({
+        getDocument: () => document,
+        createMouseEvent: (type) => new mouseEvent(type)
+      }),
+      diagnostics
+    }), runCycle = () => {
+      let settings = readStoredSettings(storage);
+      if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
+        try {
+          (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+        } catch (error) {
+          logError(String(error));
+        }
+    };
+    return pageCapture2.periods.subscribe(() => runCycle());
+  }
+
   // src/adapters/evolve/evolve-runtime.js
   function startEvolveRuntime($, diagnostics, runtimeEnvironment, pageCapture2) {
+    if (pageCapture2 !== void 0) {
+      startCapturedRuntime({
+        pageCapture: pageCapture2,
+        document: runtimeEnvironment.document,
+        mouseEvent: runtimeEnvironment.MouseEvent,
+        storage: runtimeEnvironment.storage,
+        diagnostics,
+        logError: (message) => runtimeEnvironment.error(message)
+      });
+      return;
+    }
     startEvolveRuntimeComposition(
       $,
       diagnostics,
@@ -53781,7 +53716,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getBuildings: () => buildings,
         getPoly: () => poly,
         getGameLog: () => GameLog,
-        getUpdateDebugData: () => updateDebugData,
         getCreateMechInfo: () => createMechInfo,
         getMechControls: () => mechControls,
         getMechListControls: () => mechListControls,
@@ -54819,66 +54753,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setTestContext(context) {
         settings = context.settings, settingsRaw = context.settingsRaw, state = context.state, game = context.game, resources = context.resources, buildings = context.buildings, StorageManager = context.StorageManager, ProjectManager = context.ProjectManager, TriggerManager = context.TriggerManager, poly = context.poly;
       }
-    }), getScriptBootstrapActions = () => getTestContext("scriptBootstrap")?.actions ?? {
-      updateStandAloneSettings,
-      updateStateFromSettings,
-      updateSettingsFromState,
-      verifyGameActions,
-      tooltipObserverCallback,
-      buildFilterRegExp,
-      filterLog,
-      schedule: (callback, delay) => runtimeEnvironment.schedule(callback, delay),
-      repeat: (callback, delay) => runtimeEnvironment.repeat(callback, delay),
-      alert: (message) => runtimeEnvironment.alert(message),
-      addErrorHandler,
-      addScriptStyle,
-      keyManagerInit: () => KeyManager.init(),
-      initialiseState,
-      initialiseRaces,
-      updateOverrides,
-      automate,
-      automateLab,
-      importSettings,
-      exportSettings,
-      loadStateLog,
-      triggerFileDownload,
-      displayScriptWarningNode
-    }, { initialiseScript, mainAutoEvolveScript } = createScriptBootstrapControl({
-      getGame: () => game,
-      getTechIds: () => techIds,
-      getTechnology: () => Technology,
-      getBuildings: () => buildings,
-      getBuildingIds: () => buildingIds,
-      getState: () => state,
-      getProjects: () => projects,
-      getArpaIds: () => arpaIds,
-      getJobs: () => jobs,
-      getJobIds: () => jobIds,
-      getCrafter: () => crafter,
-      getTriggerManager: () => TriggerManager,
-      getCheckActions: () => checkActions,
-      getWindow: () => runtimeEnvironment.window,
-      getUserscriptEnvironment: () => userscriptEnvironment,
-      getWin: () => win,
-      getPageShell: () => gamePageShell,
-      getNeedSandboxBypass: () => needSandboxBypass,
-      getPoly: () => poly,
-      getSettings: () => settings,
-      getSafeMode: () => safeMode,
-      getActions: getScriptBootstrapActions,
-      setWin: (value) => {
-        win = value;
-      },
-      setGame: (value) => {
-        game = value;
-      },
-      setNeedSandboxBypass: (value) => {
-        needSandboxBypass = value;
-      },
-      testSurface,
-      setTestContext(context) {
-        "game" in context && (game = context.game), "state" in context && (state = context.state), "settings" in context && (settings = context.settings), "techIds" in context && (techIds = context.techIds), "buildingIds" in context && (buildingIds = context.buildingIds), "arpaIds" in context && (arpaIds = context.arpaIds), "jobIds" in context && (jobIds = context.jobIds), "buildings" in context && (buildings = context.buildings), "projects" in context && (projects = context.projects), "jobs" in context && (jobs = context.jobs), "crafter" in context && (crafter = context.crafter), "TriggerManager" in context && (TriggerManager = context.TriggerManager), "gameModal" in context && (gameModal = context.gameModal), "KeyManager" in context && (KeyManager = context.KeyManager), "poly" in context && (poly = context.poly), "win" in context && (win = context.win), "safeMode" in context && (safeMode = context.safeMode), "checkActions" in context && (checkActions = context.checkActions), setTestContext("scriptBootstrap", context);
-      }
     }), { buildFilterRegExp, filterLog } = createLogFilterControl({
       getSettingsRaw: () => settingsRaw,
       getSettings: () => settings,
@@ -55040,7 +54914,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getTestControllers: () => tickTestControllers,
       diagnostics
     }), {
-      updateDebugData,
       addScriptStyle,
       checkIgnoredError,
       displayScriptWarningNode,
@@ -55048,8 +54921,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     } = createScriptRuntimeUI({
       getJQuery: () => $,
       getDocument: () => runtimeEnvironment.document,
-      getState: () => state,
-      getGame: () => game,
       getWin: () => win,
       getCreateOptionsModal: () => createOptionsModal,
       getOpenOptionsModal: () => openOptionsModal,
@@ -55248,7 +55119,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       removeSupplyToggles,
       buildActiveTargetsUI,
       buildBuildPlannerUI,
-      updateDebugData,
       updateScriptData,
       finalizeScriptData,
       autoMarket,
@@ -55310,7 +55180,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateUI,
       buildFilterRegExp
     };
-    ({ importSettings, exportSettings } = createSettingsTransfer({
+    return { importSettings, exportSettings } = createSettingsTransfer({
       getSettingsRaw: () => settingsRaw,
       setSettingsRaw: (value) => {
         settingsRaw = value;
@@ -55320,7 +55190,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getActions: () => getTestContext("settingsTransfer")?.actions ?? settingsTransferActions,
       confirmImport: (message) => runtimeEnvironment.confirm(message),
       logToConsole: (message) => runtimeEnvironment.log(message)
-    })), poly = createGameCompatibility({
+    }), poly = createGameCompatibility({
       getGame: () => game,
       getBuildings: () => buildings,
       getTraitVal: () => traitVal,
@@ -55330,10 +55200,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       normalizeProperties,
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       getDate: () => runtimeEnvironment.createDate()
-    });
-    let registerRuntimeSupportSurface = () => {
-    };
-    return $().ready(mainAutoEvolveScript), registerRuntimeSupportSurface(), testSurface?.finish() ?? {};
+    }), testSurface?.finish() ?? {};
   }
 
   // src/adapters/browser/dom-selector.ts

@@ -66,32 +66,20 @@ const { hooks } = await loadCharacterizationBundle({
 });
 
 assert.deepEqual(Object.keys(hooks.scriptRuntimeUI), [
-  "updateDebugData",
   "addScriptStyle",
   "checkIgnoredError",
   "displayScriptWarningNode",
   "addErrorHandler",
 ]);
-const state = { forcedUpdate: false };
-let forcedDuringUpdate = false;
 const listeners = new Map();
 const win = {
   addEventListener: (name, callback) => listeners.set(name, callback),
   Vue: { config: {} },
 };
 hooks.setScriptRuntimeUITestContext({
-  state,
-  game: {
-    updateDebugData: () => {
-      forcedDuringUpdate = state.forcedUpdate;
-    },
-  },
   win,
 });
 
-hooks.scriptRuntimeUI.updateDebugData();
-assert.equal(forcedDuringUpdate, true);
-assert.equal(state.forcedUpdate, false);
 assert.equal(hooks.scriptRuntimeUI.checkIgnoredError(new Error("x")), false);
 
 hooks.scriptRuntimeUI.addScriptStyle();

@@ -54,7 +54,7 @@ assert.equal(
 );
 
 const root = {
-  settings: { expose: false, tabLoad: false },
+  settings: { expose: false },
   resource: { Food: { amount: 1 } },
   race: { species: "human" },
   stats: { days: 14 },
@@ -98,7 +98,7 @@ assert.deepEqual(capture.controlUsage.readUsage(), [
   { elementId: "city-farm", method: "action", returned: 1, threw: 0 },
 ]);
 
-// Debug Mode is never involved: nothing here reads window.evolve.
+// The capture contract is independent of the legacy debug bridge.
 assert.equal(page.evolve, undefined);
 
 // --- a second copy of the script joins the live capture ------------------------------------------

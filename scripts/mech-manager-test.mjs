@@ -24,7 +24,6 @@ const { MechManager } = createMechManager({
   getBuildings: () => buildings,
   getPoly: () => poly,
   getGameLog: () => GameLog,
-  getUpdateDebugData: () => () => trace.push(["debug"]),
   getCreateMechInfo: () => () => trace.push(["info"]),
   getMechControls: () =>
     createGameMechControls({
@@ -143,7 +142,7 @@ Sortable = {
 
 // Observer dispatch is inert until invoked, then resolves the latest callbacks.
 observerCallback();
-assert.deepEqual(trace.splice(0), [["debug"], ["info"]]);
+assert.deepEqual(trace.splice(0), [["info"]]);
 
 // Initialization gates.
 game.global.race.warlord = true;

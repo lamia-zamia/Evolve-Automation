@@ -40,7 +40,7 @@ export interface OverrideOperandNamed {
 }
 
 /**
- * A game entry the editor offers by its Vue binding. `script-bootstrap.ts` keys the building and
+ * A game entry the editor offers by its Vue binding. The progression adapters key the building and
  * research bags by that same binding, so it is both the option's key and the value a condition
  * stores.
  */

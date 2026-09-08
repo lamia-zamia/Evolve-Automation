@@ -2,8 +2,8 @@
  * Production composition for the captured build and research families.
  *
  * This seam owns the adapter assembly for the captured tick path. The runtime selects it only after
- * document-start capture is complete and retains the compatibility controllers as a late-load
- * fallback. The composition deliberately shares the offered technology reader so a construction
+ * document-start capture is complete. The legacy composition remains available to characterization
+ * callers, but the normal entry point does not use it. The composition deliberately shares the offered technology reader so a construction
  * reservation sample and a research plan describe one draw.
  */
 
@@ -39,10 +39,10 @@ export interface CapturedProgressionControlDependencies {
   readonly panels: GamePanelWorkspace;
   readonly drawnActions: GameDrawnActionsReader;
   readonly drawnProjects: GameDrawnProjectsReader;
-  readonly getBuildingManager: () => unknown;
-  readonly readSettings: () => unknown;
-  readonly getState: () => unknown;
-  readonly getResources: () => unknown;
+  readonly getBuildingManager?: () => unknown;
+  readonly readSettings?: () => unknown;
+  readonly getState?: () => unknown;
+  readonly getResources?: () => unknown;
   readonly diagnostics?: TickDiagnostics | undefined;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly onUnavailable?: (reason: string) => void;
@@ -64,13 +64,14 @@ export function createCapturedProgressionControl(
     drawnActions,
     drawnProjects,
     getBuildingManager,
-    readSettings,
+    readSettings: readSettingsDependency,
     getState,
     getResources,
     diagnostics,
   } = dependencies;
   const onSkipped = dependencies.onSkipped;
   const onUnavailable = dependencies.onUnavailable;
+  const readSettings = readSettingsDependency ?? (() => ({}));
   const resources = createCapturedResourceSource(rootState);
   const discovery = createCapturedTabDiscovery({
     rootState,
@@ -123,20 +124,38 @@ export function createCapturedProgressionControl(
     controls,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });
-  const readPolicy = createScriptBuildPolicyReader({
-    getBuildingManager,
-    getSettings: readSettings,
-    ...(onSkipped === undefined ? {} : { onSkipped }),
-  });
-  const scriptReservations = createScriptCostReservationSource({ getState });
-  const readKnowledgeGate = createScriptKnowledgeGateReader({
-    getState,
-    resources,
-    getResources,
-  });
-  const readStorageRequired = createScriptStorageRequirementReader({
-    getResources,
-  });
+  const readPolicy =
+    getBuildingManager === undefined
+      ? () =>
+          Object.freeze({
+            buildings: Object.freeze([]),
+            consumptionMode: "onePerTick" as const,
+            buildIfStorageFull: false,
+            ignoreZeroRate: false,
+            respectReservations: true,
+            saveWhiteholeGems: false,
+          })
+      : createScriptBuildPolicyReader({
+          getBuildingManager,
+          getSettings: readSettings,
+          ...(onSkipped === undefined ? {} : { onSkipped }),
+        });
+  const scriptReservations =
+    getState === undefined
+      ? undefined
+      : createScriptCostReservationSource({ getState });
+  const readKnowledgeGate =
+    getState === undefined
+      ? undefined
+      : createScriptKnowledgeGateReader({
+          getState,
+          resources,
+          ...(getResources === undefined ? {} : { getResources }),
+        });
+  const readStorageRequired =
+    getResources === undefined
+      ? undefined
+      : createScriptStorageRequirementReader({ getResources });
   const construction = createCapturedConstructionControl({
     rootState,
     controls,
@@ -146,9 +165,9 @@ export function createCapturedProgressionControl(
     readPolicy,
     readSettings,
     ensureBuildControls,
-    scriptReservations,
-    readKnowledgeGate,
-    readStorageRequired,
+    ...(scriptReservations === undefined ? {} : { scriptReservations }),
+    ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
+    ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
     readOfferedTechs: () => offered.readOffered(),
     ...(onSkipped === undefined ? {} : { onSkipped }),
     diagnostics,

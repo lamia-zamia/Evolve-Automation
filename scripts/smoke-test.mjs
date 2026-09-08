@@ -3,15 +3,17 @@ import vm from "node:vm";
 
 const source = await readFile("evolve_automation.user.js", "utf8");
 const readyCallbacks = [];
-const jquery = () => ({
-  ready(callback) {
-    readyCallbacks.push(callback);
+const document = {
+  readyState: "loading",
+  addEventListener(type, callback) {
+    readyCallbacks.push([type, callback]);
   },
-});
+};
 
 const sandbox = {
   console,
   localStorage: { getItem: () => null },
+  document,
   MutationObserver: class {
     observe() {}
     disconnect() {}
@@ -20,7 +22,6 @@ const sandbox = {
   setTimeout,
   clearTimeout,
   structuredClone,
-  $: jquery,
 };
 sandbox.window = sandbox;
 sandbox.window.location = "https://pmotschmann.github.io/Evolve/";
@@ -30,8 +31,13 @@ vm.runInNewContext(source, sandbox, {
   timeout: 10_000,
 });
 
-if (readyCallbacks.length !== 1 || typeof readyCallbacks[0] !== "function") {
-  throw new Error("Userscript did not register exactly one ready callback");
+if (
+  readyCallbacks.some(
+    ([type, callback]) =>
+      type !== "DOMContentLoaded" || typeof callback !== "function",
+  )
+) {
+  throw new Error("Userscript registered a legacy ready callback");
 }
 
-console.log("Userscript initialization smoke test passed");
+console.log("Userscript legacy-bootstrap smoke test passed");

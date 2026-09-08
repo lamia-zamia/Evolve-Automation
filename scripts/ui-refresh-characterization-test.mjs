@@ -157,7 +157,6 @@ const actionNames = [
   "removeSupplyToggles",
   "buildActiveTargetsUI",
   "buildBuildPlannerUI",
-  "updateDebugData",
   "updateScriptData",
   "finalizeScriptData",
   "updateTotalDaysInTopBar",
@@ -351,8 +350,7 @@ handlers.get("#toggleSettingsCollapsed:click")();
 assert.equal(context.settingsRaw.toggleSettingsCollapsed, false);
 assert.deepEqual(context.actionTrace.slice(-1), ["updateSettingsFromState"]);
 handlers.get("#bulk-sell:mouseup")();
-assert.deepEqual(context.actionTrace.slice(-4), [
-  "updateDebugData",
+assert.deepEqual(context.actionTrace.slice(-3), [
   "updateScriptData",
   "finalizeScriptData",
   "autoMarket:true:true",

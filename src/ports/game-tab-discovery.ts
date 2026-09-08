@@ -1,7 +1,7 @@
 /**
  * Making the game build a tab's controls without leaving the player on that tab.
  *
- * With Preload Tab Content off, the game only ever mounts the tab it is showing, so a control the
+ * When the game only mounts the tab it is showing, a control the
  * automation has never seen rendered has never been captured. This is the one sanctioned way to
  * change that: ask the game to draw a tab, let it bind its own components, and put the player's
  * view back. It is a discovery pass, not a rendering strategy — nothing here keeps a tab mounted,

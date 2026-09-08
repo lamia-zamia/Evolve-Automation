@@ -9,7 +9,7 @@ import { createCapturedResearchControl } from "../src/bootstrap/captured-researc
  */
 function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
   const root = {
-    settings: { civTabs: 4, animated: true, tabLoad: false, qAny: false },
+    settings: { civTabs: 4, animated: true, qAny: false },
     race: { species: "human" },
     tech,
     resource: {},

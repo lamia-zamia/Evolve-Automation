@@ -16,7 +16,7 @@ function makePage({
   researchQueue,
 }) {
   const root = {
-    settings: { expose: false, tabLoad: false, qAny: buyAnyQueued },
+    settings: { expose: false, qAny: buyAnyQueued },
     race: { species: "human" },
     stats: { days: 100 },
     resource: {},

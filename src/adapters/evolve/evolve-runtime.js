@@ -102,7 +102,6 @@ import {
 import { readWeightingCandidate as readWeightingCandidateControl } from "../../adapters/evolve/progression/build/weighting-candidate.ts";
 import { createGameLifecycleControl } from "../../bootstrap/game-lifecycle-control.ts";
 import { createFleetMechManagerControl as createFleetMechManagerCompositionControl } from "../../bootstrap/fleet-mech-manager-control.ts";
-import { createScriptBootstrapControl } from "../../bootstrap/script-bootstrap-control.ts";
 import { createCoreManagerCompositionControl } from "../../bootstrap/core-manager-composition-control.ts";
 import { createGameControlSet } from "../../bootstrap/game-control-set.ts";
 import { createMechIntelligence as createMechIntelligenceControl } from "../../game/mech-intelligence.ts";
@@ -184,6 +183,7 @@ import { createCapturedProgressionControl } from "../../bootstrap/captured-progr
 import { createGameDrawnActionsReader } from "../browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../browser/game-panel-workspace.ts";
+import { startCapturedRuntime } from "../../bootstrap/captured-runtime-control.ts";
 
 export function startEvolveRuntime(
   $,
@@ -191,6 +191,17 @@ export function startEvolveRuntime(
   runtimeEnvironment,
   pageCapture,
 ) {
+  if (pageCapture !== undefined) {
+    startCapturedRuntime({
+      pageCapture,
+      document: runtimeEnvironment.document,
+      mouseEvent: runtimeEnvironment.MouseEvent,
+      storage: runtimeEnvironment.storage,
+      diagnostics,
+      logError: (message) => runtimeEnvironment.error(message),
+    });
+    return;
+  }
   startEvolveRuntimeComposition(
     $,
     diagnostics,
@@ -1863,7 +1874,6 @@ export function startEvolveRuntimeComposition(
         getBuildings: () => buildings,
         getPoly: () => poly,
         getGameLog: () => GameLog,
-        getUpdateDebugData: () => updateDebugData,
         getCreateMechInfo: () => createMechInfo,
         getMechControls: () => mechControls,
         getMechListControls: () => mechListControls,
@@ -3542,92 +3552,6 @@ export function startEvolveRuntimeComposition(
       },
     }));
 
-  const getScriptBootstrapActions = () =>
-    getTestContext("scriptBootstrap")?.actions ?? {
-      updateStandAloneSettings,
-      updateStateFromSettings,
-      updateSettingsFromState,
-      verifyGameActions,
-      tooltipObserverCallback,
-      buildFilterRegExp,
-      filterLog,
-      schedule: (callback, delay) =>
-        runtimeEnvironment.schedule(callback, delay),
-      repeat: (callback, delay) => runtimeEnvironment.repeat(callback, delay),
-      alert: (message) => runtimeEnvironment.alert(message),
-      addErrorHandler,
-      addScriptStyle,
-      keyManagerInit: () => KeyManager.init(),
-      initialiseState,
-      initialiseRaces,
-      updateOverrides,
-      automate,
-      automateLab,
-      importSettings,
-      exportSettings,
-      loadStateLog,
-      triggerFileDownload,
-      displayScriptWarningNode,
-    };
-
-  const { initialiseScript, mainAutoEvolveScript } =
-    createScriptBootstrapControl({
-      getGame: () => game,
-      getTechIds: () => techIds,
-      getTechnology: () => Technology,
-      getBuildings: () => buildings,
-      getBuildingIds: () => buildingIds,
-      getState: () => state,
-      getProjects: () => projects,
-      getArpaIds: () => arpaIds,
-      getJobs: () => jobs,
-      getJobIds: () => jobIds,
-      getCrafter: () => crafter,
-      getTriggerManager: () => TriggerManager,
-      getCheckActions: () => checkActions,
-      getWindow: () => runtimeEnvironment.window,
-      getUserscriptEnvironment: () => userscriptEnvironment,
-      getWin: () => win,
-      getPageShell: () => gamePageShell,
-      getNeedSandboxBypass: () => needSandboxBypass,
-      getPoly: () => poly,
-      getSettings: () => settings,
-      getSafeMode: () => safeMode,
-      getActions: getScriptBootstrapActions,
-      setWin: (value) => {
-        win = value;
-      },
-      setGame: (value) => {
-        game = value;
-      },
-      setNeedSandboxBypass: (value) => {
-        needSandboxBypass = value;
-      },
-      testSurface,
-      setTestContext(context) {
-        if ("game" in context) game = context.game;
-        if ("state" in context) state = context.state;
-        if ("settings" in context) settings = context.settings;
-        if ("techIds" in context) techIds = context.techIds;
-        if ("buildingIds" in context) buildingIds = context.buildingIds;
-        if ("arpaIds" in context) arpaIds = context.arpaIds;
-        if ("jobIds" in context) jobIds = context.jobIds;
-        if ("buildings" in context) buildings = context.buildings;
-        if ("projects" in context) projects = context.projects;
-        if ("jobs" in context) jobs = context.jobs;
-        if ("crafter" in context) crafter = context.crafter;
-        if ("TriggerManager" in context)
-          TriggerManager = context.TriggerManager;
-        if ("gameModal" in context) gameModal = context.gameModal;
-        if ("KeyManager" in context) KeyManager = context.KeyManager;
-        if ("poly" in context) poly = context.poly;
-        if ("win" in context) win = context.win;
-        if ("safeMode" in context) safeMode = context.safeMode;
-        if ("checkActions" in context) checkActions = context.checkActions;
-        setTestContext("scriptBootstrap", context);
-      },
-    });
-
   const { buildFilterRegExp, filterLog } = createLogFilterControl({
     getSettingsRaw: () => settingsRaw,
     getSettings: () => settings,
@@ -3873,7 +3797,6 @@ export function startEvolveRuntimeComposition(
     }));
 
   const {
-    updateDebugData,
     addScriptStyle,
     checkIgnoredError,
     displayScriptWarningNode,
@@ -3881,8 +3804,6 @@ export function startEvolveRuntimeComposition(
   } = createScriptRuntimeUiControl({
     getJQuery: () => $,
     getDocument: () => runtimeEnvironment.document,
-    getState: () => state,
-    getGame: () => game,
     getWin: () => win,
     getCreateOptionsModal: () => createOptionsModal,
     getOpenOptionsModal: () => openOptionsModal,
@@ -3893,7 +3814,6 @@ export function startEvolveRuntimeComposition(
   if (TEST_SURFACE_ENABLED)
     registerTestPart(() => ({
       scriptRuntimeUI: {
-        updateDebugData,
         addScriptStyle,
         checkIgnoredError,
         displayScriptWarningNode,
@@ -4265,7 +4185,6 @@ export function startEvolveRuntimeComposition(
     removeSupplyToggles,
     buildActiveTargetsUI,
     buildBuildPlannerUI,
-    updateDebugData,
     updateScriptData,
     finalizeScriptData,
     autoMarket,
@@ -4551,7 +4470,6 @@ export function startEvolveRuntimeComposition(
       });
   };
 
-  $().ready(mainAutoEvolveScript);
   registerRuntimeSupportSurface();
   return testSurface?.finish() ?? {};
 }
