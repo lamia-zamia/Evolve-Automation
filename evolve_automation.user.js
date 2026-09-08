@@ -4749,11 +4749,11 @@
         continue;
       let resource = readProperty(resources, id);
       if (!isRecord(resource)) continue;
-      let amount = finite3(resource.amount), maximum = finite3(resource.max), currentCount2 = finite3(alchemy[id]), display = resource.display, weighting = settingNumber2(settings, `res_alchemy_w_${id}`, 0);
-      amount === void 0 || maximum === void 0 || currentCount2 === void 0 || typeof display != "boolean" || weighting === void 0 || settings[`res_alchemy_${id}`] === !1 || resourceViews.push(
+      let amount = finite3(resource.amount), maximum = finite3(resource.max), currentCount3 = finite3(alchemy[id]), display = resource.display, weighting = settingNumber2(settings, `res_alchemy_w_${id}`, 0);
+      amount === void 0 || maximum === void 0 || currentCount3 === void 0 || typeof display != "boolean" || weighting === void 0 || settings[`res_alchemy_${id}`] === !1 || resourceViews.push(
         Object.freeze({
           id,
-          currentCount: currentCount2,
+          currentCount: currentCount3,
           weighting,
           isUseful: display && (maximum <= 0 || amount / maximum < 0.99),
           transmuteTier: 0,
@@ -4848,6 +4848,248 @@
             adjustment.expectedCurrentCount,
             adjustment.count,
             "addSpell"
+          );
+          if (outcome.status !== "succeeded") return outcome;
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
+  // src/domain/economy/production/mining-droid.ts
+  function planMiningDroidTargets(input) {
+    if (!input.initialised)
+      return null;
+    let priorityGroups = /* @__PURE__ */ new Map(), targets = new Map(
+      input.productions.map((production) => [production.id, 0])
+    );
+    for (let production of input.productions) {
+      if (production.weighting <= 0)
+        continue;
+      let priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
+      if (priority === 0)
+        continue;
+      let group = priorityGroups.get(priority) ?? [];
+      group.push(production), priorityGroups.set(priority, group);
+    }
+    let priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group), supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      let supplementaryIndex = priorityList.indexOf(supplementary);
+      priorityList.splice(supplementaryIndex, 1), priorityList[0]?.push(...supplementary);
+    }
+    let remaining = input.maximum;
+    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
+      let products = [...priorityList[groupIndex] ?? []].sort(
+        (left, right) => left.weighting - right.weighting
+      );
+      for (; remaining > 0; ) {
+        let beforeDistribution = remaining, totalWeight = products.reduce(
+          (sum, production) => sum + production.weighting,
+          0
+        );
+        for (let index = products.length - 1; index >= 0 && remaining > 0; index--) {
+          let production = products[index];
+          if (production === void 0)
+            continue;
+          let requested = Math.min(
+            remaining,
+            Math.max(
+              1,
+              Math.floor(
+                beforeDistribution / totalWeight * production.weighting
+              )
+            )
+          ), assigned = production.useful ? requested : 0;
+          assigned > 0 && (remaining -= assigned, targets.set(
+            production.id,
+            (targets.get(production.id) ?? 0) + assigned
+          )), assigned < requested && products.splice(index, 1);
+        }
+        if (beforeDistribution === remaining)
+          break;
+      }
+    }
+    return remaining > 0 ? null : Object.freeze(
+      input.productions.map(
+        (production) => Object.freeze({
+          productionId: production.id,
+          target: targets.get(production.id) ?? 0
+        })
+      )
+    );
+  }
+  function planMiningDroidAdjustments(targets, current) {
+    let currentById = new Map(
+      current.map((production) => [production.productionId, production.count])
+    );
+    return Object.freeze({
+      adjustments: Object.freeze(
+        targets.map((target) => {
+          let expectedCurrent = currentById.get(target.productionId) ?? 0;
+          return Object.freeze({
+            productionId: target.productionId,
+            expectedCurrent,
+            delta: target.target - expectedCurrent
+          });
+        })
+      )
+    });
+  }
+
+  // src/adapters/evolve/economy/production/captured-mining-droid.ts
+  var MINING_DROID_CONTROL = "iDroid", PRODUCTS = Object.freeze([
+    Object.freeze({
+      id: "adam",
+      resource: "Adamantite",
+      weighting: 15,
+      priority: 1
+    }),
+    Object.freeze({
+      id: "uran",
+      resource: "Uranium",
+      weighting: 5,
+      priority: -1
+    }),
+    Object.freeze({ id: "coal", resource: "Coal", weighting: 5, priority: -1 }),
+    Object.freeze({
+      id: "alum",
+      resource: "Aluminium",
+      weighting: 1,
+      priority: 1
+    })
+  ]);
+  function finite4(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function settingNumber3(settings, key, fallback) {
+    let value = settings[key];
+    return value === void 0 ? fallback : finite4(value);
+  }
+  function emptyInput4() {
+    return Object.freeze({
+      initialised: !1,
+      maximum: 0,
+      productions: Object.freeze([])
+    });
+  }
+  function readInput(dependencies) {
+    let root = dependencies.rootState.readRoot(), interstellar = readProperty(root, "interstellar"), droids = readProperty(interstellar, "mining_droid"), resources = readProperty(root, "resource"), control = dependencies.controls.resolve(MINING_DROID_CONTROL), maximum = finite4(readProperty(droids, "on")), count = finite4(readProperty(droids, "count"));
+    if (!isRecord(droids) || !isRecord(resources) || control === void 0 || maximum === void 0 || count === void 0 || count < 1 || maximum < 0)
+      return Object.freeze({ root, input: emptyInput4() });
+    let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, productions = [];
+    for (let product of PRODUCTS) {
+      let resource = readProperty(resources, product.resource), amount = finite4(readProperty(resource, "amount")), maximumResource = finite4(readProperty(resource, "max")), current = finite4(readProperty(droids, product.id)), display = readProperty(resource, "display"), weighting = settingNumber3(
+        settings,
+        `droid_w_${product.resource}`,
+        product.weighting
+      ), priority = settingNumber3(
+        settings,
+        `droid_pr_${product.resource}`,
+        product.priority
+      );
+      if (amount === void 0 || maximumResource === void 0 || current === void 0 || typeof display != "boolean" || weighting === void 0 || priority === void 0 || current < 0)
+        return Object.freeze({ root, input: emptyInput4() });
+      productions.push(
+        Object.freeze({
+          id: product.id,
+          weighting,
+          priority,
+          demanded: !1,
+          // DeadSpace removed the legacy isUseful/isDemanded resource contract. The bounded
+          // adapter treats a displayed row below capacity as useful and leaves demand ordering
+          // outside the captured contract.
+          useful: display && (maximumResource <= 0 || amount / maximumResource < 0.99)
+        })
+      );
+    }
+    return Object.freeze({
+      root,
+      input: Object.freeze({
+        initialised: !0,
+        maximum,
+        productions: Object.freeze(productions)
+      })
+    });
+  }
+  function currentCount2(root, id) {
+    return finite4(
+      readProperty(
+        readProperty(readProperty(root, "interstellar"), "mining_droid"),
+        id
+      )
+    );
+  }
+  function decisionMatches2(input, current, decision) {
+    let targets = planMiningDroidTargets(input);
+    return targets === null ? !1 : JSON.stringify(planMiningDroidAdjustments(targets, current)) === JSON.stringify(decision);
+  }
+  function executeAdjustment3(dependencies, root, id, expected, count, method) {
+    let handle = dependencies.controls.resolve(MINING_DROID_CONTROL);
+    if (handle === void 0)
+      return stale(
+        "mining-droid-control-missing",
+        "captured mining-droid control is unavailable"
+      );
+    for (let index = 0; index < count; index++) {
+      if (dependencies.rootState.readRoot() !== root)
+        return stale("mining-droid-root-changed", "captured game root changed");
+      if (currentCount2(root, id) !== expected + (method === "addItem" ? index : -index))
+        return stale(
+          "mining-droid-count-changed",
+          "mining-droid allocation changed"
+        );
+      let result = dependencies.controls.invoke(handle, method, [id]);
+      if (!result.ok)
+        return rejected(
+          "mining-droid-control-failed",
+          result.detail ?? result.reason
+        );
+    }
+    return SUCCEEDED;
+  }
+  function createCapturedMiningDroidAutomation(dependencies) {
+    return Object.freeze({
+      run() {
+        let session = readInput(dependencies), targets = planMiningDroidTargets(session.input);
+        if (targets === null) return SUCCEEDED;
+        let current = session.input.productions.map((production) => ({
+          productionId: production.id,
+          count: finite4(
+            readProperty(
+              readProperty(
+                readProperty(session.root, "interstellar"),
+                "mining_droid"
+              ),
+              production.id
+            )
+          ) ?? 0
+        })), decision = planMiningDroidAdjustments(targets, current);
+        if (!decisionMatches2(session.input, current, decision))
+          return rejected(
+            "invalid-mining-droid-decision",
+            "mining-droid decision changed during planning"
+          );
+        for (let adjustment of decision.adjustments) {
+          if (adjustment.delta >= 0) continue;
+          let outcome = executeAdjustment3(
+            dependencies,
+            session.root,
+            adjustment.productionId,
+            adjustment.expectedCurrent,
+            -adjustment.delta,
+            "subItem"
+          );
+          if (outcome.status !== "succeeded") return outcome;
+        }
+        for (let adjustment of decision.adjustments) {
+          if (adjustment.delta <= 0) continue;
+          let outcome = executeAdjustment3(
+            dependencies,
+            session.root,
+            adjustment.productionId,
+            adjustment.expectedCurrent,
+            adjustment.delta,
+            "addItem"
           );
           if (outcome.status !== "succeeded") return outcome;
         }
@@ -5025,6 +5267,7 @@
     autoARPA: !1,
     autoResearch: !1,
     autoTax: !1,
+    autoMiningDroid: !1,
     autoAlchemy: !1
   });
   function isEnabled(settings, key) {
@@ -5074,6 +5317,10 @@
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage)
     }), alchemy = createCapturedAlchemyAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage)
+    }), miningDroid = createCapturedMiningDroidAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage)
@@ -5129,11 +5376,29 @@
       result.outcome.status !== "succeeded" && logError(
         `alchemy discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
+    }, miningDroidDiscoveryAttempted = !1, ensureMiningDroidControls = () => {
+      if (pageCapture2.controls.resolve(MINING_DROID_CONTROL) !== void 0)
+        return;
+      let root = pageCapture2.rootState.readRoot(), interstellar = readProperty(root, "interstellar"), droids = readProperty(interstellar, "mining_droid"), count = readProperty(droids, "count");
+      if (typeof count != "number" || !Number.isFinite(count) || count < 1 || miningDroidDiscoveryAttempted || (miningDroidDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      if (govTabs === void 0) return;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 2
+        }),
+        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `mining-droid discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
     }, runCycle = () => {
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }

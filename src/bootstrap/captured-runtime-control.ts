@@ -11,6 +11,10 @@ import {
   ALCHEMY_CONTROL_PREFIX,
   createCapturedAlchemyAutomation,
 } from "../adapters/evolve/economy/production/captured-alchemy.ts";
+import {
+  createCapturedMiningDroidAutomation,
+  MINING_DROID_CONTROL,
+} from "../adapters/evolve/economy/production/captured-mining-droid.ts";
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
@@ -67,6 +71,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoARPA: false,
   autoResearch: false,
   autoTax: false,
+  autoMiningDroid: false,
   autoAlchemy: false,
 });
 
@@ -128,6 +133,11 @@ export function startCapturedRuntime({
     readSettings: () => readStoredSettings(storage),
   });
   const alchemy = createCapturedAlchemyAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+  });
+  const miningDroid = createCapturedMiningDroidAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
@@ -221,6 +231,40 @@ export function startCapturedRuntime({
       );
     }
   };
+  let miningDroidDiscoveryAttempted = false;
+  const ensureMiningDroidControls = () => {
+    if (pageCapture.controls.resolve(MINING_DROID_CONTROL) !== undefined)
+      return;
+    const root = pageCapture.rootState.readRoot();
+    const interstellar = readProperty(root, "interstellar");
+    const droids = readProperty(interstellar, "mining_droid");
+    const count = readProperty(droids, "count");
+    if (
+      typeof count !== "number" ||
+      !Number.isFinite(count) ||
+      count < 1 ||
+      miningDroidDiscoveryAttempted
+    ) {
+      return;
+    }
+    miningDroidDiscoveryAttempted = true;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    if (govTabs === undefined) return;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 2,
+      }),
+      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `mining-droid discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
 
   const runCycle = () => {
     const settings = readStoredSettings(storage);
@@ -240,6 +284,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoTax")) {
         ensureCivicControls();
         tax.autoTax();
+      }
+      if (isEnabled(settings, "autoMiningDroid")) {
+        ensureMiningDroidControls();
+        miningDroid.run();
       }
       if (isEnabled(settings, "autoAlchemy")) {
         ensureAlchemyControls();
