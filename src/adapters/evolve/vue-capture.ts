@@ -26,6 +26,10 @@ import type {
   GameControlResult,
 } from "../../ports/game-control-registry.ts";
 import type {
+  GameControlUsage,
+  GameControlUsageReader,
+} from "../../ports/game-control-usage.ts";
+import type {
   GameMountSuppression,
   MountSuppressionScope,
 } from "../../ports/game-mount-suppression.ts";
@@ -67,6 +71,7 @@ const BARE_ID = /^#[\w-]+$/;
 export interface VueCapture {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly controlUsage: GameControlUsageReader;
   readonly mountSuppression: GameMountSuppression;
   /** True when the Vue methods are wrapped; false for an inert capture with no Vue to hook. */
   readonly installed: boolean;
@@ -135,6 +140,7 @@ function inertCapture(): VueCapture {
       invoke: () => ({ ok: false, reason: "unknown-control" }) as const,
       capturedElementIds: () => [],
     }),
+    controlUsage: Object.freeze({ readUsage: () => [] }),
     mountSuppression: Object.freeze({
       available: false,
       withoutMounting: () => {
@@ -173,6 +179,7 @@ export function installVueCapture(
 
   const controls = new Map<string, CapturedControl>();
   const captureOrder: string[] = [];
+  const usage = new Map<string, GameControlUsage>();
 
   let createAppHooked = false;
   const suppressionScopes: Array<Readonly<MountSuppressionScope>> = [];
@@ -421,10 +428,24 @@ export function installVueCapture(
           detail: `${handle.elementId}.${method}`,
         };
       }
+      const usageKey = `${handle.elementId}\u0000${method}`;
+      const previous = usage.get(usageKey);
+      const record = (outcome: "returned" | "threw"): void => {
+        const next: GameControlUsage = Object.freeze({
+          elementId: handle.elementId,
+          method,
+          returned:
+            (previous?.returned ?? 0) + (outcome === "returned" ? 1 : 0),
+          threw: (previous?.threw ?? 0) + (outcome === "threw" ? 1 : 0),
+        });
+        usage.set(usageKey, next);
+      };
       try {
         const value = Reflect.apply(target, receiverFor(control), [...args]);
+        record("returned");
         return { ok: true, value };
       } catch (error) {
+        record("threw");
         return {
           ok: false,
           reason: "threw",
@@ -433,6 +454,10 @@ export function installVueCapture(
       }
     },
     capturedElementIds: () => Object.freeze([...captureOrder]),
+  });
+
+  const controlUsage: GameControlUsageReader = Object.freeze({
+    readUsage: () => Object.freeze([...usage.values()]),
   });
 
   const mountSuppression: GameMountSuppression = Object.freeze({
@@ -461,6 +486,7 @@ export function installVueCapture(
     installed: true,
     rootState,
     controls: registry,
+    controlUsage,
     mountSuppression,
     uninstall() {
       stopped = true;

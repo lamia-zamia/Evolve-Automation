@@ -9,6 +9,7 @@
  */
 
 import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
+import type { GameControlUsageReader } from "../../ports/game-control-usage.ts";
 import type { GameMountSuppression } from "../../ports/game-mount-suppression.ts";
 import type { GamePeriodSource } from "../../ports/game-period-source.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
@@ -22,6 +23,7 @@ import {
 export interface PageCapture {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly controlUsage: GameControlUsageReader;
   readonly periods: GamePeriodSource;
   /** Scoped suppression of temporary component mounting, for a discovery draw. */
   readonly mountSuppression: GameMountSuppression;
@@ -58,6 +60,7 @@ export function installPageCapture(
   const capture: PageCapture = Object.freeze({
     rootState: vue.rootState,
     controls: vue.controls,
+    controlUsage: vue.controlUsage,
     periods: worker.periods,
     mountSuppression: vue.mountSuppression,
     isComplete: () =>

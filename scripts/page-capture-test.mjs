@@ -94,6 +94,9 @@ assert.deepEqual(capture.controls.invoke(farm, "action"), {
   ok: true,
   value: "built",
 });
+assert.deepEqual(capture.controlUsage.readUsage(), [
+  { elementId: "city-farm", method: "action", returned: 1, threw: 0 },
+]);
 
 // Debug Mode is never involved: nothing here reads window.evolve.
 assert.equal(page.evolve, undefined);
@@ -135,6 +138,7 @@ const bare = installPageCapture({});
 assert.equal(bare.isComplete(), false);
 assert.equal(bare.rootState.readRoot(), undefined);
 assert.deepEqual(bare.controls.capturedElementIds(), []);
+assert.deepEqual(bare.controlUsage.readUsage(), []);
 assert.equal(bare.mountSuppression.available, false);
 bare.periods.subscribe(() => assert.fail("nothing to notify"));
 bare.uninstall();

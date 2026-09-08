@@ -56,6 +56,7 @@ assert.equal(absent.installed, false);
 assert.equal(absent.rootState.readRoot(), undefined);
 assert.equal(absent.controls.resolve("city-farm"), undefined);
 assert.deepEqual(absent.controls.capturedElementIds(), []);
+assert.deepEqual(absent.controlUsage.readUsage(), []);
 assert.deepEqual(
   absent.controls.invoke(
     { elementId: "city-farm", generation: 1, methods: [] },
@@ -206,6 +207,9 @@ assert.deepEqual(
 );
 assert.deepEqual(calls, [["farm", [{ isQueue: false }]]]);
 assert.equal(farmState.count, 4);
+assert.deepEqual(capture.controlUsage.readUsage(), [
+  { elementId: "city-farm", method: "action", returned: 1, threw: 0 },
+]);
 
 // `this` is a bag of self-bound siblings: no component data, no DOM node, no effect scope.
 assert.deepEqual(capture.controls.invoke(farm, "power_on"), {
@@ -221,6 +225,11 @@ const threw = capture.controls.invoke(farm, "boom");
 assert.equal(threw.ok, false);
 assert.equal(threw.reason, "threw");
 assert.match(threw.detail, /city-farm\.boom: Error: game threw/);
+assert.deepEqual(capture.controlUsage.readUsage(), [
+  { elementId: "city-farm", method: "action", returned: 1, threw: 0 },
+  { elementId: "city-farm", method: "power_on", returned: 1, threw: 0 },
+  { elementId: "city-farm", method: "boom", returned: 0, threw: 1 },
+]);
 
 assert.equal(capture.controls.resolve("city-mine"), undefined);
 
@@ -248,6 +257,11 @@ assert.deepEqual(capture.controls.invoke(redrawn, "action"), {
 });
 assert.equal(farmState.count, 5);
 assert.deepEqual(calls.at(-1), ["farm-2", []]);
+assert.deepEqual(capture.controlUsage.readUsage(), [
+  { elementId: "city-farm", method: "action", returned: 2, threw: 0 },
+  { elementId: "city-farm", method: "power_on", returned: 1, threw: 0 },
+  { elementId: "city-farm", method: "boom", returned: 0, threw: 1 },
+]);
 
 // --- duplicate installation --------------------------------------------------------------------
 

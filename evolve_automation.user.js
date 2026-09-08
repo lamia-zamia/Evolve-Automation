@@ -56139,6 +56139,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         invoke: () => ({ ok: !1, reason: "unknown-control" }),
         capturedElementIds: () => []
       }),
+      controlUsage: Object.freeze({ readUsage: () => [] }),
       mountSuppression: Object.freeze({
         available: !1,
         withoutMounting: () => {
@@ -56156,7 +56157,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let isRootCandidate = options2.isRootCandidate ?? isGameRootShape, reportError = options2.onCaptureError ?? (() => {
     }), existingDescriptor = Object.getOwnPropertyDescriptor(pageWindow, "Vue"), existingMarker = readMarker(readProperty(readProperty(pageWindow, "Vue"), "reactive")) ?? readMarker(existingDescriptor?.get);
     if (existingMarker?.capture !== void 0) return existingMarker.capture;
-    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls4 = /* @__PURE__ */ new Map(), captureOrder = [], createAppHooked = !1, suppressionScopes = [], restoreVue;
+    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls4 = /* @__PURE__ */ new Map(), captureOrder = [], usage = /* @__PURE__ */ new Map(), createAppHooked = !1, suppressionScopes = [], restoreVue;
     function notifyRootReplaced() {
       for (let listener of [...rootListeners])
         try {
@@ -56318,10 +56319,20 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
             reason: "unknown-method",
             detail: `${handle.elementId}.${method}`
           };
+        let usageKey = `${handle.elementId}\0${method}`, previous = usage.get(usageKey), record = (outcome) => {
+          let next = Object.freeze({
+            elementId: handle.elementId,
+            method,
+            returned: (previous?.returned ?? 0) + (outcome === "returned" ? 1 : 0),
+            threw: (previous?.threw ?? 0) + (outcome === "threw" ? 1 : 0)
+          });
+          usage.set(usageKey, next);
+        };
         try {
-          return { ok: !0, value: Reflect.apply(target, receiverFor(control), [...args]) };
+          let value = Reflect.apply(target, receiverFor(control), [...args]);
+          return record("returned"), { ok: !0, value };
         } catch (error) {
-          return {
+          return record("threw"), {
             ok: !1,
             reason: "threw",
             detail: `${handle.elementId}.${method}: ${String(error)}`
@@ -56329,6 +56340,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       },
       capturedElementIds: () => Object.freeze([...captureOrder])
+    }), controlUsage = Object.freeze({
+      readUsage: () => Object.freeze([...usage.values()])
     }), mountSuppression = Object.freeze({
       get available() {
         return createAppHooked && !stopped;
@@ -56349,6 +56362,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       installed: !0,
       rootState,
       controls: registry,
+      controlUsage,
       mountSuppression,
       uninstall() {
         stopped = !0, marker.capture = void 0, rootListeners.clear(), restoreVue?.(), restoreVue = void 0;
@@ -56467,6 +56481,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let vue = installVueCapture(pageWindow, options2), worker = installWorkerCapture(pageWindow, options2), capture = Object.freeze({
       rootState: vue.rootState,
       controls: vue.controls,
+      controlUsage: vue.controlUsage,
       periods: worker.periods,
       mountSuppression: vue.mountSuppression,
       isComplete: () => vue.rootState.readRoot() !== void 0 && worker.isCaptured(),
