@@ -1288,6 +1288,9 @@
   function applyUnusedStorageWeighting(baseWeight, buildingId, unusedStorageParts, multiplier) {
     return unusedStorageParts && (buildingId === "storage_yard" || buildingId === "warehouse") ? baseWeight * multiplier : baseWeight;
   }
+  function applyNeedMoreStorageWeighting(baseWeight, buildingId, storagePartsAllAssigned, multiplier) {
+    return storagePartsAllAssigned && buildingId === "shed" ? baseWeight * multiplier : baseWeight;
+  }
   function isKnowledgeGated(levels) {
     return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
   }
@@ -1315,14 +1318,18 @@
     ], ratios = [];
     for (let part of parts) {
       if (!isRecord(part)) return;
-      let amount = part.amount, maximum = part.max;
-      if (typeof amount != "number" || !Number.isFinite(amount) || typeof maximum != "number" || !Number.isFinite(maximum))
+      let amount = part.amount, maximum = part.max, display = part.display;
+      if (typeof amount != "number" || !Number.isFinite(amount) || typeof maximum != "number" || !Number.isFinite(maximum) || typeof display != "boolean")
         return;
       ratios.push(maximum > 0 ? amount / maximum : 0);
     }
-    return Object.freeze({ unused: ratios.some((ratio) => ratio < 1) });
+    let crates = parts[0], containers = parts[1];
+    return Object.freeze({
+      unused: ratios.some((ratio) => ratio < 1),
+      allAssigned: !!readProperty(crates, "display") && !!readProperty(containers, "display") && ratios.every((ratio) => ratio === 1)
+    });
   }
-  function readTarget2(settings, city, elementId, unusedStorageParts, onSkipped) {
+  function readTarget2(settings, city, elementId, unusedStorageParts, storagePartsAllAssigned, onSkipped) {
     if (!elementId.startsWith("city-") || elementId.length === 5)
       return;
     let binding = elementId;
@@ -1361,6 +1368,11 @@
       onSkipped(binding, "storage weighting is not finite");
       return;
     }
+    let needStorageWeighting = id === "shed" ? readFiniteSetting(settings, "buildingWeightingNeedStorage", 1) : 1;
+    if (needStorageWeighting === void 0) {
+      onSkipped(binding, "storage expansion weighting is not finite");
+      return;
+    }
     let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
@@ -1372,11 +1384,16 @@
       region: "city",
       id,
       weighting: applyNonOperatingCityWeighting(
-        applyUnusedStorageWeighting(
-          applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+        applyNeedMoreStorageWeighting(
+          applyUnusedStorageWeighting(
+            applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+            id,
+            unusedStorageParts,
+            storageWeighting
+          ),
           id,
-          unusedStorageParts,
-          storageWeighting
+          storagePartsAllAssigned,
+          needStorageWeighting
         ),
         count,
         on,
@@ -1404,6 +1421,7 @@
             city,
             elementId,
             storageParts?.unused ?? !1,
+            storageParts?.allAssigned ?? !1,
             reportSkipped
           );
           target !== void 0 && buildings.push(target);

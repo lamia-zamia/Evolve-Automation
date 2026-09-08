@@ -163,6 +163,7 @@ const storageSettings = {
   "bld_w_city-warehouse": 10,
   "bld_w_city-shed": 10,
   buildingWeightingCrateUseless: 0.1,
+  buildingWeightingNeedStorage: 2,
 };
 let storageRoot = {
   city: {
@@ -218,9 +219,9 @@ assert.deepEqual(
   [
     { id: "storage_yard", weighting: 10 },
     { id: "warehouse", weighting: 10 },
-    { id: "shed", weighting: 10 },
+    { id: "shed", weighting: 20 },
   ],
-  "full storage leaves both storage buildings at their base weight",
+  "full storage leaves storage buildings at base weight and favors the shed",
 );
 
 storageRoot.resource.Crates = { amount: 0, max: 0, display: false };
@@ -235,6 +236,30 @@ assert.equal(
   storageReader().buildings[0].weighting,
   10,
   "malformed storage data is neutral rather than guessed",
+);
+
+storageRoot = {
+  city: {
+    storage_yard: { count: 1 },
+    warehouse: { count: 1 },
+    shed: { count: 1 },
+  },
+  resource: {
+    Crates: { amount: 10, max: 10, display: true },
+    Containers: { amount: 10, max: 10, display: true },
+  },
+};
+assert.equal(
+  storageReader().buildings.find(({ id }) => id === "shed")?.weighting,
+  20,
+  "fully assigned storage makes the city shed useful",
+);
+
+storageRoot.resource.Containers = { amount: 10, max: 10, display: false };
+assert.equal(
+  storageReader().buildings.find(({ id }) => id === "shed")?.weighting,
+  10,
+  "a hidden storage pool does not trigger storage expansion",
 );
 
 const malformedStorageSettingReader = createCapturedBuildPolicyReader({

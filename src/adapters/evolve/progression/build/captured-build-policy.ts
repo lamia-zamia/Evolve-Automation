@@ -10,6 +10,7 @@
 
 import {
   applyNewBuildingWeighting,
+  applyNeedMoreStorageWeighting,
   applyNonOperatingCityWeighting,
   applyUnusedStorageWeighting,
 } from "../../../../domain/progression/build/building-weighting.ts";
@@ -64,6 +65,7 @@ function readOptions(
 
 interface CapturedStorageParts {
   readonly unused: boolean;
+  readonly allAssigned: boolean;
 }
 
 function readStorageParts(root: unknown): CapturedStorageParts | undefined {
@@ -77,17 +79,27 @@ function readStorageParts(root: unknown): CapturedStorageParts | undefined {
     if (!isRecord(part)) return undefined;
     const amount = part["amount"];
     const maximum = part["max"];
+    const display = part["display"];
     if (
       typeof amount !== "number" ||
       !Number.isFinite(amount) ||
       typeof maximum !== "number" ||
-      !Number.isFinite(maximum)
+      !Number.isFinite(maximum) ||
+      typeof display !== "boolean"
     ) {
       return undefined;
     }
     ratios.push(maximum > 0 ? amount / maximum : 0);
   }
-  return Object.freeze({ unused: ratios.some((ratio) => ratio < 1) });
+  const crates = parts[0];
+  const containers = parts[1];
+  return Object.freeze({
+    unused: ratios.some((ratio) => ratio < 1),
+    allAssigned:
+      Boolean(readProperty(crates, "display")) &&
+      Boolean(readProperty(containers, "display")) &&
+      ratios.every((ratio) => ratio === 1),
+  });
 }
 
 function readTarget(
@@ -95,6 +107,7 @@ function readTarget(
   city: Record<PropertyKey, unknown>,
   elementId: string,
   unusedStorageParts: boolean,
+  storagePartsAllAssigned: boolean,
   onSkipped: (key: string, reason: string) => void,
 ): Readonly<CapturedBuildTarget> | undefined {
   if (!elementId.startsWith("city-") || elementId.length === "city-".length) {
@@ -143,6 +156,14 @@ function readTarget(
     onSkipped(binding, "storage weighting is not finite");
     return undefined;
   }
+  const needStorageWeighting =
+    id === "shed"
+      ? readFiniteSetting(settings, "buildingWeightingNeedStorage", 1)
+      : 1;
+  if (needStorageWeighting === undefined) {
+    onSkipped(binding, "storage expansion weighting is not finite");
+    return undefined;
+  }
   const onValue = readProperty(state, "on");
   const on =
     typeof onValue === "number" && Number.isFinite(onValue)
@@ -159,11 +180,16 @@ function readTarget(
     region: "city",
     id,
     weighting: applyNonOperatingCityWeighting(
-      applyUnusedStorageWeighting(
-        applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+      applyNeedMoreStorageWeighting(
+        applyUnusedStorageWeighting(
+          applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+          id,
+          unusedStorageParts,
+          storageWeighting,
+        ),
         id,
-        unusedStorageParts,
-        storageWeighting,
+        storagePartsAllAssigned,
+        needStorageWeighting,
       ),
       count,
       on,
@@ -195,6 +221,7 @@ export function createCapturedBuildPolicyReader({
           city,
           elementId,
           storageParts?.unused ?? false,
+          storageParts?.allAssigned ?? false,
           reportSkipped,
         );
         if (target !== undefined) buildings.push(target);

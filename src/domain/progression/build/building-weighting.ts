@@ -101,6 +101,18 @@ export function applyUnusedStorageWeighting(
     : baseWeight;
 }
 
+/** Applies the captured storage-expansion rule to the city shed. */
+export function applyNeedMoreStorageWeighting(
+  baseWeight: number,
+  buildingId: string,
+  storagePartsAllAssigned: boolean,
+  multiplier: number,
+): number {
+  return storagePartsAllAssigned && buildingId === "shed"
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
 /**
