@@ -1,6 +1,8 @@
 import { createCapturedProgressionControl } from "./captured-progression-control.ts";
+import { runJobsAutomation } from "../application/jobs.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { createCapturedTaxControl } from "./captured-tax-control.ts";
+import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
@@ -105,6 +107,11 @@ export function startCapturedRuntime({
     readSettings: () => readStoredSettings(storage),
     nowMs: () => Date.now(),
   });
+  const craftsmen = createCapturedCraftsmenAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+  });
   const civicDiscovery = createCapturedTabDiscovery({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -148,6 +155,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoTax")) {
         ensureCivicControls();
         tax.autoTax();
+      }
+      if (isEnabled(settings, "autoCraftsmen")) {
+        ensureCivicControls();
+        runJobsAutomation(craftsmen, true);
       }
       if (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) {
         progression.runConstructionCycle();

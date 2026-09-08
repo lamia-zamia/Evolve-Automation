@@ -3030,6 +3030,286 @@
     });
   }
 
+  // src/domain/civic/jobs.ts
+  function createJobIndex(input) {
+    let index = /* @__PURE__ */ new Map();
+    for (let position = 0; position < input.jobs.length; position++) {
+      let token = input.jobs[position].token;
+      index.has(token) || index.set(token, position);
+    }
+    return index;
+  }
+  function indexOfToken(index, token) {
+    return token === null ? -1 : index.get(token) ?? -1;
+  }
+  function craftPlan(input, initialWorkers, initialCraftsmen, jobIndex) {
+    let workers = /* @__PURE__ */ new Map(), servants = /* @__PURE__ */ new Map(), availableWorkers = initialWorkers, availableCraftsmen = initialCraftsmen, totalCraftsmen = availableCraftsmen + input.skilledServantsMaximum * input.servantModifier, available = [], excluded = [];
+    if (!input.autoCraftsmen)
+      return {
+        workers,
+        servants,
+        availableWorkers,
+        availableCraftsmen,
+        craftWinner: null,
+        debugMessage: null
+      };
+    for (let craft of input.crafting) {
+      if (!craft.enabled) continue;
+      if (craft.buildingCapacity === null && !input.autoCraftWithoutBuilding) {
+        if (input.skilledServantsMaximum === 0) break;
+        availableWorkers += availableCraftsmen, totalCraftsmen -= availableCraftsmen, availableCraftsmen = 0;
+      }
+      let affordableAmount = Math.min(totalCraftsmen, craft.affordability);
+      if (craft.exclusion !== null && excluded.push(craft.exclusion), craft.buildingCapacity !== null) {
+        if (input.craftsmenMode === "servants") continue;
+        affordableAmount >= craft.buildingCapacity && (workers.set(craft.jobToken, craft.buildingCapacity), availableCraftsmen -= craft.buildingCapacity, totalCraftsmen -= craft.buildingCapacity);
+      } else if (affordableAmount >= totalCraftsmen)
+        available.push(craft);
+      else if (input.craftDebug && affordableAmount > 0) {
+        let job = input.jobs[indexOfToken(jobIndex, craft.jobToken)];
+        excluded.push(
+          `${job.id}(inputs:${affordableAmount.toFixed(1)}<${totalCraftsmen})`
+        );
+      }
+    }
+    let filtered = available, filter = "", demanded = filtered.filter((craft) => craft.demanded);
+    if (demanded.length > 0)
+      filtered = demanded, filter = "demanded";
+    else if (input.foundryWeighting === "demanded") {
+      let useful = filtered.filter((craft) => craft.useful);
+      useful.length > 0 && (filtered = useful, filter = "useful");
+    }
+    filtered = [...filtered].sort(
+      (left, right) => left.currentQuantity / left.weighting - right.currentQuantity / right.weighting
+    );
+    let shareWorkers = /* @__PURE__ */ new Map(), shareServants = /* @__PURE__ */ new Map();
+    if (filtered.length > 0) {
+      let winnerKey = filtered[0].currentQuantity / filtered[0].weighting, group = Number.isFinite(winnerKey) ? filtered.filter(
+        (craft) => craft.currentQuantity / craft.weighting <= winnerKey * 1.1
+      ) : [filtered[0]], remainingWorkers = availableCraftsmen, remainingServants = input.skilledServantsMaximum, remainingWeight = group.reduce(
+        (sum, craft) => sum + craft.weighting,
+        0
+      );
+      for (let craft of group) {
+        let share = remainingWeight > 0 ? craft.weighting / remainingWeight : 1, workerShare = Math.round(remainingWorkers * share), servantShare = Math.round(remainingServants * share);
+        shareWorkers.set(craft.jobToken, workerShare), shareServants.set(craft.jobToken, servantShare), remainingWorkers -= workerShare, remainingServants -= servantShare, remainingWeight -= craft.weighting;
+      }
+    }
+    for (let craft of input.crafting)
+      craft.buildingCapacity === null && (workers.set(craft.jobToken, shareWorkers.get(craft.jobToken) ?? 0), servants.set(craft.jobToken, shareServants.get(craft.jobToken) ?? 0));
+    filtered.length === 0 && (availableWorkers += availableCraftsmen);
+    let focus = [...shareWorkers.keys()].map((token) => input.jobs[indexOfToken(jobIndex, token)].id).join("+") || "none", debugMessage = null;
+    if (input.craftDebug && input.lastCraftWinner !== focus) {
+      let detail = filtered.map((craft) => {
+        let job = input.jobs[indexOfToken(jobIndex, craft.jobToken)], assigned = `→${shareWorkers.get(craft.jobToken) ?? 0}` + (input.skilledServantsMaximum > 0 ? `+${shareServants.get(craft.jobToken) ?? 0}s` : ""), key = (craft.currentQuantity / craft.weighting).toFixed(1);
+        return input.foundryWeighting === "buildings" ? `${job.id} q=${craft.currentQuantity.toFixed(0)} key=${key} (${craft.driver ?? "no building"})${assigned}` : `${job.id} q=${craft.currentQuantity.toFixed(0)} key=${key}${assigned}`;
+      }).join("; ");
+      debugMessage = `[craft] focus ${input.lastCraftWinner ?? "none"}⇒${focus}` + (filter ? ` filter=${filter}` : "") + ` | ${detail}` + (excluded.length > 0 ? ` | excluded: ${excluded.join(", ")}` : "");
+    }
+    return {
+      workers,
+      servants,
+      availableWorkers,
+      availableCraftsmen,
+      craftWinner: input.craftDebug ? focus : null,
+      debugMessage
+    };
+  }
+  function authorityMaximum(input, jobIndex) {
+    let authority = input.authority;
+    if (!authority.enabled)
+      return { cap: Number.MAX_SAFE_INTEGER, storedCap: null, debug: null };
+    let storedCap = authority.previousCap, debug = null, entertainerIndex = indexOfToken(jobIndex, input.entertainerToken), entertainer = input.jobs[entertainerIndex];
+    if (authority.moraleCeiling !== null && entertainer !== void 0) {
+      let limits = [];
+      if (authority.entertainerMorale > 0) {
+        let without = authority.moralePotential - entertainer.count * authority.entertainerMorale;
+        limits.push(
+          Math.floor(
+            (authority.moraleCeiling - without + 1e-9) / authority.entertainerMorale
+          )
+        );
+      }
+      if (authority.superstarMorale > 0) {
+        let without = authority.moraleMaximum - entertainer.count * authority.superstarMorale;
+        limits.push(
+          Math.floor(
+            (authority.moraleCeiling - without + 1e-9) / authority.superstarMorale
+          )
+        );
+      }
+      let calculated = limits.length === 0 ? entertainer.count : Math.max(0, ...limits);
+      storedCap = authority.current < 100 && authority.previousCap !== null ? Math.min(authority.previousCap, calculated) : calculated, authority.debug && storedCap !== authority.previousCap && (debug = `[authority] entertainers cap ${authority.previousCap ?? entertainer.count}→${storedCap} (amount=${authority.current.toFixed(1)}, morale=${authority.morale.toFixed(1)}→max=${authority.moraleCeiling.toFixed(1)})`);
+    }
+    return {
+      cap: storedCap ?? Number.MAX_SAFE_INTEGER,
+      storedCap,
+      debug
+    };
+  }
+  function planJobs(input) {
+    if (!input.available || input.jobs.length === 0) return null;
+    let jobIndex = createJobIndex(input), requiredWorkers = input.jobs.map(() => 0), requiredServants = input.jobs.map(() => 0), availableWorkers = input.jobs.reduce((sum, job) => sum + job.workers, 0), availableServants = input.manageServants ? input.servantsMaximum : 0, availableCraftsmen = input.craftsmenMaximum, farmerIndex = indexOfToken(jobIndex, input.farmerToken), hunterIndex = indexOfToken(jobIndex, input.hunterToken), defaultIndex = indexOfToken(jobIndex, input.defaultJobToken);
+    input.craftOnly ? (availableCraftsmen = availableWorkers, availableWorkers = 0, availableServants = 0) : input.autoCraftsmen && availableWorkers >= availableCraftsmen * (farmerIndex === -1 ? 1 : 2) ? availableWorkers -= availableCraftsmen : availableCraftsmen = 0;
+    let craft = craftPlan(
+      input,
+      availableWorkers,
+      availableCraftsmen,
+      jobIndex
+    );
+    availableWorkers = craft.availableWorkers;
+    for (let [token, count] of craft.workers) {
+      let index = indexOfToken(jobIndex, token);
+      index !== -1 && (requiredWorkers[index] = count);
+    }
+    for (let [token, count] of craft.servants) {
+      let index = indexOfToken(jobIndex, token);
+      index !== -1 && (requiredServants[index] = count);
+    }
+    let minerIndex = indexOfToken(jobIndex, input.minerToken);
+    input.reserveMiner && availableWorkers > 1 && minerIndex !== -1 && input.jobs[minerIndex].smart && (requiredWorkers[minerIndex] = 1, availableWorkers--);
+    let authority = authorityMaximum(input, jobIndex), minimumFarmers = 0, maximumSpaceMiners = 0, jobMaximums = input.jobs.map((job) => job.smartMaximum);
+    for (let pass = 0; pass < 3; pass++) {
+      for (let index = 0; index < input.jobs.length; index++) {
+        let job = input.jobs[index];
+        if (pass === 2 && job.split || job.crafting || input.hunterActsAsUnemployed && index === hunterIndex)
+          continue;
+        availableWorkers += requiredWorkers[index];
+        let currentEmployees = requiredWorkers[index], availableEmployees = availableWorkers;
+        requiredWorkers[index] = 0, job.serves && (currentEmployees += requiredServants[index] * input.servantModifier, availableServants += requiredServants[index], availableEmployees += availableServants * input.servantModifier, requiredServants[index] = 0);
+        let jobsToAssign = Math.min(
+          availableEmployees,
+          Math.max(currentEmployees, job.breakpoints[pass])
+        );
+        if (job.smart) {
+          if (job.kind === "farmer" || job.kind === "hunter") {
+            let maximum = jobMaximums[index] ?? Number.MAX_SAFE_INTEGER;
+            if (minimumFarmers = job.farmerMinimum ?? maximum, job.demonicLumber) {
+              let lumberIndex = indexOfToken(jobIndex, input.lumberjackToken), lumberBreakpoint = lumberIndex === -1 ? 0 : input.jobs[lumberIndex].breakpoints[pass];
+              jobsToAssign = Math.min(
+                availableEmployees,
+                Math.max(
+                  currentEmployees,
+                  minimumFarmers,
+                  Math.min(maximum, lumberBreakpoint)
+                )
+              );
+            } else
+              jobsToAssign = Math.min(jobsToAssign, minimumFarmers);
+          } else job.warlordMiner ? jobsToAssign = job.maximum : jobMaximums[index] !== null && (jobsToAssign = Math.min(jobsToAssign, jobMaximums[index]));
+          job.kind === "space-miner" && (maximumSpaceMiners = Math.max(
+            maximumSpaceMiners,
+            Math.min(availableEmployees, job.uncappedBreakpoints[pass])
+          ));
+        }
+        if (typeof job.storageBackedMinimum == "number" && (jobsToAssign = Math.max(
+          jobsToAssign,
+          Math.min(availableEmployees, job.storageBackedMinimum)
+        )), job.kind === "entertainer" && (jobsToAssign = Math.min(jobsToAssign, authority.cap)), index === defaultIndex && input.minimumDefault > 0 && (requiredWorkers[index] = requiredWorkers[index] + Math.min(availableWorkers, input.minimumDefault), availableWorkers -= requiredWorkers[index], jobsToAssign -= requiredWorkers[index]), jobsToAssign > 0 && job.serves) {
+          let servants = Math.min(
+            availableServants,
+            Math.floor(jobsToAssign / input.servantModifier)
+          );
+          requiredServants[index] = requiredServants[index] + servants, availableServants -= servants, jobsToAssign -= servants * input.servantModifier;
+        }
+        if (jobsToAssign > 0) {
+          let workers = Math.min(jobsToAssign, availableWorkers);
+          requiredWorkers[index] = requiredWorkers[index] + workers, availableWorkers -= workers;
+        }
+      }
+      if (availableWorkers <= 0 && availableServants <= 0) break;
+    }
+    let splitJobs = input.splitEntries.map((entry) => ({
+      entry,
+      index: indexOfToken(jobIndex, entry.jobToken)
+    })).filter(({ index }) => index !== -1);
+    if (splitJobs.length > 0) {
+      for (let { index } of splitJobs)
+        availableWorkers += requiredWorkers[index], requiredWorkers[index] = 0, availableServants += requiredServants[index], requiredServants[index] = 0;
+      if (splitJobs.some(({ index }) => index === defaultIndex) && input.minimumDefault > (requiredWorkers[defaultIndex] ?? 0)) {
+        let restored = Math.min(
+          availableWorkers,
+          input.minimumDefault - requiredWorkers[defaultIndex]
+        );
+        requiredWorkers[defaultIndex] += restored, availableWorkers -= restored;
+      }
+      let farmerIsSplit = splitJobs.some(({ index }) => index === farmerIndex), currentFarmers = (requiredWorkers[farmerIndex] ?? 0) + (requiredServants[farmerIndex] ?? 0) * input.servantModifier;
+      if (farmerIsSplit && minimumFarmers > currentFarmers) {
+        let missing = minimumFarmers - currentFarmers, servants = Math.min(
+          availableServants,
+          Math.floor(missing / input.servantModifier)
+        );
+        requiredServants[farmerIndex] += servants, availableServants -= servants, missing -= servants * input.servantModifier;
+        let workers = Math.min(availableWorkers, missing);
+        requiredWorkers[farmerIndex] += workers, availableWorkers -= workers;
+      }
+      let compare = (left, right) => (requiredWorkers[left.index] + requiredServants[left.index] * input.servantModifier) / left.entry.weighting - (requiredWorkers[right.index] + requiredServants[right.index] * input.servantModifier) / right.entry.weighting || left.index - right.index;
+      for (let pass = 0; pass < 3 && (availableWorkers > 0 || availableServants > 0); pass++) {
+        let remaining = [...splitJobs];
+        for (; availableWorkers + availableServants > 0 && remaining.length > 0; ) {
+          remaining.sort(compare);
+          let selected = remaining[0], total = requiredWorkers[selected.index] + requiredServants[selected.index] * input.servantModifier, breakpoint = selected.entry.breakpoints[pass] > 0 ? selected.entry.breakpoints[pass] : 0;
+          (pass === 2 || total < breakpoint) && !(total >= (jobMaximums[selected.index] ?? Number.MAX_SAFE_INTEGER)) ? availableServants > 0 ? (requiredServants[selected.index]++, availableServants--) : (requiredWorkers[selected.index]++, availableWorkers--) : remaining.shift();
+        }
+      }
+    }
+    let fallback = [
+      input.farmerToken,
+      input.lumberjackToken,
+      input.quarryToken,
+      input.crystalMinerToken,
+      input.scavengerToken
+    ];
+    for (; (availableWorkers > 0 || availableServants > 0) && fallback.length > 0; ) {
+      let index = indexOfToken(jobIndex, fallback.pop() ?? null);
+      if (index !== -1) {
+        let maximum = jobMaximums[index] ?? Number.MAX_SAFE_INTEGER, currentEmployees = requiredWorkers[index] + requiredServants[index] * input.servantModifier, remaining = Math.max(0, maximum - currentEmployees), servants = Math.min(
+          availableServants,
+          Math.floor(remaining / input.servantModifier)
+        );
+        requiredServants[index] += servants, availableServants -= servants, remaining -= servants * input.servantModifier;
+        let workers = Math.min(availableWorkers, remaining);
+        requiredWorkers[index] += workers, availableWorkers -= workers;
+      }
+    }
+    let entertainerIndex = indexOfToken(jobIndex, input.entertainerToken), selectedDefaultToken = null;
+    !input.craftOnly && input.setDefault && (selectedDefaultToken = input.defaultPreference.find((candidate) => {
+      let index = indexOfToken(jobIndex, candidate.allocationToken);
+      return candidate.requirement === "managed-with-workers" ? candidate.managed && index !== -1 && requiredWorkers[index] > 0 : candidate.requirement === "managed" ? candidate.managed : candidate.unlocked;
+    })?.jobToken ?? null);
+    let assignments = input.jobs.map(
+      (job, index) => Object.freeze({
+        jobToken: job.token,
+        workers: requiredWorkers[index],
+        servants: requiredServants[index]
+      })
+    );
+    return Object.freeze({
+      kind: "assign-jobs",
+      assignments: Object.freeze(assignments),
+      selectedDefaultToken,
+      moraleIncomeAdjusted: entertainerIndex !== -1 && requiredWorkers[entertainerIndex] !== input.jobs[entertainerIndex].count,
+      ironIncomeAdjusted: minerIndex !== -1 && requiredWorkers[minerIndex] !== input.jobs[minerIndex].count,
+      maximumSpaceMiners,
+      lastPopulationCount: input.population,
+      lastFarmerCount: farmerIndex === -1 ? 0 : requiredWorkers[farmerIndex] + requiredServants[farmerIndex] * input.servantModifier,
+      authorityEntertainerCap: authority.storedCap,
+      clearAuthorityEntertainerCap: !input.authority.enabled,
+      craftWinner: craft.craftWinner,
+      craftDebugMessage: craft.debugMessage,
+      authorityDebugMessage: authority.debug
+    });
+  }
+
+  // src/application/jobs.ts
+  var SUCCEEDED4 = Object.freeze({
+    status: "succeeded"
+  });
+  function runJobsAutomation(dependencies, craftOnly = !1) {
+    let decision = planJobs(dependencies.reader.readCycle(craftOnly));
+    return decision === null ? SUCCEEDED4 : dependencies.executor.execute(decision);
+  }
+
   // src/adapters/evolve/economy/resources/captured-gather-resources.ts
   var ACTION_ORDER = Object.freeze([
     "food",
@@ -3348,12 +3628,12 @@
   }
 
   // src/application/gather-resources.ts
-  var SUCCEEDED4 = Object.freeze({
+  var SUCCEEDED5 = Object.freeze({
     status: "succeeded"
   });
   function runGatherResourcesAutomation(dependencies) {
     let decision = planGatherResources(dependencies.reader.read());
-    return decision === null ? SUCCEEDED4 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED5 : dependencies.executor.execute(decision);
   }
 
   // src/bootstrap/captured-gather-resources-control.ts
@@ -3650,6 +3930,344 @@
     });
   }
 
+  // src/adapters/evolve/civic/captured-job-controls.ts
+  function callCount(controls, elementId, method, count, craftedResourceId) {
+    let handle = controls.resolve(elementId);
+    if (handle === void 0 || !Number.isFinite(count)) return !1;
+    let calls = Math.ceil(Math.max(count, 0)), args = craftedResourceId === void 0 ? void 0 : [craftedResourceId];
+    for (let index = 0; index < calls; index++)
+      if (!controls.invoke(handle, method, args).ok) return !1;
+    return !0;
+  }
+  function createCapturedJobControls({
+    controls
+  }) {
+    return Object.freeze({
+      assign({ elementId, count, craftedResourceId }) {
+        return callCount(controls, elementId, "add", count, craftedResourceId);
+      },
+      unassign({
+        elementId,
+        count,
+        craftedResourceId
+      }) {
+        return callCount(controls, elementId, "sub", count, craftedResourceId);
+      },
+      setDefault({ elementId, jobId }) {
+        let handle = controls.resolve(elementId);
+        return handle === void 0 ? !1 : controls.invoke(handle, "setDefault", [jobId]).ok;
+      }
+    });
+  }
+
+  // src/adapters/evolve/civic/captured-craftsmen.ts
+  var FOUNDRY_CONTROL = "foundry", FOUNDRY_PRODUCTS = [
+    "Plywood",
+    "Brick",
+    "Wrought_Iron",
+    "Sheet_Metal",
+    "Mythril",
+    "Aerogel",
+    "Nanoweave",
+    "Aerographene",
+    "Scarletite",
+    "Quantium",
+    "Super_Fuel",
+    "Thermite"
+  ], DEFAULT_PRODUCT_SETTING = !0, DEFAULT_WEIGHTING = 1;
+  function finiteNumber(value, fallback) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function settingBoolean(settings, key) {
+    let value = settings[key];
+    return typeof value == "boolean" ? value : DEFAULT_PRODUCT_SETTING;
+  }
+  function productEnabled(settings, id) {
+    return settingBoolean(settings, `craft${id}`) && settingBoolean(settings, `job_${id}`);
+  }
+  function productWeighting(settings, id) {
+    let value = settings[`foundry_w_${id}`];
+    return finiteNumber(value, DEFAULT_WEIGHTING) > 0 ? finiteNumber(value, DEFAULT_WEIGHTING) : DEFAULT_WEIGHTING;
+  }
+  function readFoundry(root) {
+    let city = readProperty(root, "city"), foundry = readProperty(city, "foundry");
+    return isRecord(foundry) ? foundry : void 0;
+  }
+  function readProducts(root) {
+    let foundry = readFoundry(root), resources = readProperty(root, "resource");
+    return foundry === void 0 || !isRecord(resources) ? [] : FOUNDRY_PRODUCTS.flatMap((id) => {
+      let resource = readProperty(resources, id), workers = readProperty(foundry, id);
+      return isRecord(resource) && typeof workers == "number" && Number.isFinite(workers) && workers >= 0 ? [{ id, workers }] : [];
+    });
+  }
+  function readCycleInput(root, settingsValue) {
+    let samples = readProducts(root);
+    if (samples.length === 0) return;
+    let settings = isRecord(settingsValue) ? settingsValue : {}, resources = readProperty(root, "resource"), jobs = samples.map(
+      (sample, token) => Object.freeze({
+        token,
+        id: sample.id,
+        kind: "other",
+        workers: sample.workers,
+        servants: 0,
+        count: sample.workers,
+        maximum: Number.MAX_SAFE_INTEGER,
+        managed: !0,
+        unlocked: !0,
+        smart: !1,
+        crafting: !0,
+        serves: !1,
+        split: !1,
+        isDefault: !1,
+        breakpoints: [0, 0, 0],
+        uncappedBreakpoints: [0, 0, 0],
+        smartMaximum: null,
+        farmerMinimum: null,
+        storageBackedMinimum: null,
+        demonicLumber: !1,
+        warlordMiner: !1
+      })
+    ), crafting = samples.map((sample, jobToken) => {
+      let resource = readProperty(resources, sample.id);
+      return Object.freeze({
+        jobToken,
+        enabled: productEnabled(settings, sample.id),
+        buildingCapacity: null,
+        // Recipe costs are not present in the captured root. Because this bounded slice only
+        // redistributes current assignments, it must not use a guessed cap to pull workers in.
+        affordability: Number.MAX_SAFE_INTEGER,
+        demanded: !1,
+        useful: !1,
+        currentQuantity: finiteNumber(readProperty(resource, "amount"), 0),
+        weighting: productWeighting(settings, sample.id),
+        driver: null,
+        exclusion: null
+      });
+    }), input = Object.freeze({
+      available: !0,
+      craftOnly: !0,
+      hunterActsAsUnemployed: !1,
+      autoCraftsmen: !0,
+      autoCraftWithoutBuilding: !0,
+      craftsmenMode: "other",
+      foundryWeighting: "other",
+      manageServants: !1,
+      setDefault: !1,
+      servantModifier: 1,
+      servantsMaximum: 0,
+      skilledServantsMaximum: 0,
+      craftsmenMaximum: samples.reduce((sum, sample) => sum + sample.workers, 0),
+      minimumDefault: 0,
+      reserveMiner: !1,
+      defaultJobToken: null,
+      hunterToken: null,
+      farmerToken: null,
+      lumberjackToken: null,
+      quarryToken: null,
+      crystalMinerToken: null,
+      scavengerToken: null,
+      foragerToken: null,
+      entertainerToken: null,
+      minerToken: null,
+      population: 0,
+      craftDebug: !1,
+      lastCraftWinner: null,
+      authority: Object.freeze({
+        enabled: !1,
+        current: 0,
+        morale: 0,
+        moralePotential: 0,
+        moraleMaximum: 0,
+        moraleCeiling: null,
+        entertainerMorale: 0,
+        superstarMorale: 0,
+        previousCap: null,
+        debug: !1
+      }),
+      jobs: Object.freeze(jobs),
+      crafting: Object.freeze(crafting),
+      splitEntries: Object.freeze([]),
+      defaultPreference: Object.freeze([])
+    });
+    return Object.freeze({ input, samples: Object.freeze(samples) });
+  }
+  function decisionsMatch(left, right) {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+  function samplesMatch(root, samples) {
+    let current = readProducts(root);
+    return current.length === samples.length && current.every(
+      (sample, index) => sample.id === samples[index].id && sample.workers === samples[index].workers
+    );
+  }
+  function createExecutor(dependencies, sessionRef) {
+    let controls = createCapturedJobControls({
+      controls: dependencies.controls
+    });
+    return Object.freeze({
+      execute(decision) {
+        let session = sessionRef.value;
+        if (session === void 0)
+          return stale(
+            "craftsmen-session-missing",
+            "craftsmen read session is missing"
+          );
+        if (dependencies.rootState.readRoot() !== session.root)
+          return stale("craftsmen-root-changed", "captured game root changed");
+        if (!samplesMatch(session.root, session.samples))
+          return stale("craftsmen-state-changed", "foundry assignments changed");
+        if (!decisionsMatch(planJobs(session.input), decision))
+          return rejected(
+            "invalid-craftsmen-decision",
+            "craftsmen decision does not match the sampled plan"
+          );
+        if (dependencies.controls.resolve(FOUNDRY_CONTROL) === void 0)
+          return rejected(
+            "foundry-control-missing",
+            "no captured control for foundry"
+          );
+        for (let assignment of decision.assignments) {
+          let sample = session.samples[assignment.jobToken];
+          if (sample === void 0)
+            return rejected(
+              "unknown-craftsmen-token",
+              "craftsmen decision contains an unknown token"
+            );
+          let delta = assignment.workers - sample.workers;
+          if (delta < 0 && !controls.unassign({
+            elementId: FOUNDRY_CONTROL,
+            count: -delta,
+            craftedResourceId: sample.id
+          }))
+            return rejected(
+              "foundry-control-failed",
+              `could not unassign ${sample.id} craftsmen`
+            );
+        }
+        for (let assignment of decision.assignments) {
+          let sample = session.samples[assignment.jobToken], delta = assignment.workers - sample.workers;
+          if (delta > 0 && !controls.assign({
+            elementId: FOUNDRY_CONTROL,
+            count: delta,
+            craftedResourceId: sample.id
+          }))
+            return rejected(
+              "foundry-control-failed",
+              `could not assign ${sample.id} craftsmen`
+            );
+        }
+        return sessionRef.value = void 0, SUCCEEDED;
+      }
+    });
+  }
+  function createCapturedCraftsmenAutomation(dependencies) {
+    let sessionRef = {
+      value: void 0
+    }, executor = createExecutor(dependencies, sessionRef), reader = Object.freeze({
+      readCycle() {
+        if (dependencies.controls.resolve(FOUNDRY_CONTROL) === void 0)
+          return sessionRef.value = void 0, Object.freeze({
+            available: !1,
+            craftOnly: !0,
+            hunterActsAsUnemployed: !1,
+            autoCraftsmen: !0,
+            autoCraftWithoutBuilding: !0,
+            craftsmenMode: "other",
+            foundryWeighting: "other",
+            manageServants: !1,
+            setDefault: !1,
+            servantModifier: 1,
+            servantsMaximum: 0,
+            skilledServantsMaximum: 0,
+            craftsmenMaximum: 0,
+            minimumDefault: 0,
+            reserveMiner: !1,
+            defaultJobToken: null,
+            hunterToken: null,
+            farmerToken: null,
+            lumberjackToken: null,
+            quarryToken: null,
+            crystalMinerToken: null,
+            scavengerToken: null,
+            foragerToken: null,
+            entertainerToken: null,
+            minerToken: null,
+            population: 0,
+            craftDebug: !1,
+            lastCraftWinner: null,
+            authority: Object.freeze({
+              enabled: !1,
+              current: 0,
+              morale: 0,
+              moralePotential: 0,
+              moraleMaximum: 0,
+              moraleCeiling: null,
+              entertainerMorale: 0,
+              superstarMorale: 0,
+              previousCap: null,
+              debug: !1
+            }),
+            jobs: Object.freeze([]),
+            crafting: Object.freeze([]),
+            splitEntries: Object.freeze([]),
+            defaultPreference: Object.freeze([])
+          });
+        let root = dependencies.rootState.readRoot(), sampled3 = readCycleInput(root, dependencies.readSettings());
+        return sampled3 === void 0 ? (sessionRef.value = void 0, Object.freeze({
+          available: !1,
+          craftOnly: !0,
+          hunterActsAsUnemployed: !1,
+          autoCraftsmen: !0,
+          autoCraftWithoutBuilding: !0,
+          craftsmenMode: "other",
+          foundryWeighting: "other",
+          manageServants: !1,
+          setDefault: !1,
+          servantModifier: 1,
+          servantsMaximum: 0,
+          skilledServantsMaximum: 0,
+          craftsmenMaximum: 0,
+          minimumDefault: 0,
+          reserveMiner: !1,
+          defaultJobToken: null,
+          hunterToken: null,
+          farmerToken: null,
+          lumberjackToken: null,
+          quarryToken: null,
+          crystalMinerToken: null,
+          scavengerToken: null,
+          foragerToken: null,
+          entertainerToken: null,
+          minerToken: null,
+          population: 0,
+          craftDebug: !1,
+          lastCraftWinner: null,
+          authority: Object.freeze({
+            enabled: !1,
+            current: 0,
+            morale: 0,
+            moralePotential: 0,
+            moraleMaximum: 0,
+            moraleCeiling: null,
+            entertainerMorale: 0,
+            superstarMorale: 0,
+            previousCap: null,
+            debug: !1
+          }),
+          jobs: Object.freeze([]),
+          crafting: Object.freeze([]),
+          splitEntries: Object.freeze([]),
+          defaultPreference: Object.freeze([])
+        })) : (sessionRef.value = Object.freeze({
+          root,
+          input: sampled3.input,
+          samples: sampled3.samples
+        }), sampled3.input);
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
   // src/adapters/browser/game-drawn-actions.ts
   var DATA_PREFIX = "data-", RESOURCE_CLASS_PREFIX = "res-";
   function collect(element, markup) {
@@ -3858,6 +4476,10 @@
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage),
       nowMs: () => Date.now()
+    }), craftsmen = createCapturedCraftsmenAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage)
     }), civicDiscovery = createCapturedTabDiscovery({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -3880,7 +4502,7 @@
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }
