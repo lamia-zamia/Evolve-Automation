@@ -20,6 +20,12 @@ import {
   createCapturedGrapheneAutomation,
   GRAPHENE_CONTROL,
 } from "../adapters/evolve/economy/production/captured-graphene.ts";
+import {
+  createCapturedProductionRatios,
+  MINING_SHIP_CONTROL,
+  QUARRY_CONTROL,
+  TITAN_MINE_CONTROL,
+} from "../adapters/evolve/economy/resources/captured-production-ratios.ts";
 import { createCapturedCraftCosts } from "../adapters/evolve/economy/production/captured-craft-costs.ts";
 import {
   createCapturedCraftExecutor,
@@ -87,6 +93,9 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoGraphenePlant: false,
   autoAlchemy: false,
   autoCraft: false,
+  autoQuarry: false,
+  autoMine: false,
+  autoExtractor: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -159,6 +168,11 @@ export function startCapturedRuntime({
   const graphene = createCapturedGrapheneAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+  });
+  const ratios = createCapturedProductionRatios({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
   });
   let completedPeriods = 1;
   const craftDependencies = {
@@ -336,6 +350,42 @@ export function startCapturedRuntime({
     }
   };
 
+  let ratioDiscoveryAttempted = false;
+  /** The three ratio sliders share the industry panel the droid and graphene plants render into. */
+  const ensureRatioControls = (control: string, unlocked: boolean) => {
+    if (
+      !unlocked ||
+      ratioDiscoveryAttempted ||
+      pageCapture.controls.resolve(control) !== undefined ||
+      pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined
+    ) {
+      return;
+    }
+    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    if (govTabs === undefined) return;
+    ratioDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 2,
+      }),
+      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `production-ratio discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+  const structureCount = (region: string, id: string): number => {
+    const value = readProperty(
+      readProperty(readProperty(pageCapture.rootState.readRoot(), region), id),
+      "count",
+    );
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  };
+
   const runCycle = () => {
     const settings = readStoredSettings(storage);
     if (
@@ -362,6 +412,32 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoGraphenePlant")) {
         ensureGrapheneControls();
         graphene.run();
+      }
+      if (isEnabled(settings, "autoQuarry")) {
+        ensureRatioControls(
+          QUARRY_CONTROL,
+          Boolean(
+            readProperty(
+              readProperty(pageCapture.rootState.readRoot(), "race"),
+              "smoldering",
+            ),
+          ) && structureCount("city", "rock_quarry") >= 1,
+        );
+        ratios.quarry();
+      }
+      if (isEnabled(settings, "autoMine")) {
+        ensureRatioControls(
+          TITAN_MINE_CONTROL,
+          structureCount("space", "titan_mine") >= 1,
+        );
+        ratios.titanMine();
+      }
+      if (isEnabled(settings, "autoExtractor")) {
+        ensureRatioControls(
+          MINING_SHIP_CONTROL,
+          structureCount("tauceti", "mining_ship") >= 1,
+        );
+        ratios.miningShip();
       }
       if (isEnabled(settings, "autoAlchemy")) {
         ensureAlchemyControls();

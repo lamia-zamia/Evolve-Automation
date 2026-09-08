@@ -12,6 +12,15 @@ function fullnessWeight(demanded: boolean, storageRatio: number): number {
   return demanded ? MAX : 100 - storageRatio * 100;
 }
 
+/**
+ * Both sides of a split can weigh nothing, when every resource it feeds is full and none is
+ * demanded. There is no ratio to prefer then, so the split is left where the player put it rather
+ * than divided by a zero total.
+ */
+function hasSignal(first: number, second: number): boolean {
+  return first + second > 0;
+}
+
 export interface QuarryRatioInput {
   readonly initialised: boolean;
   readonly currentRatio: number;
@@ -51,6 +60,9 @@ export function planQuarryRatio(
     );
   }
   chrysotileWeigth *= input.chrysotileWeight;
+  if (!hasSignal(chrysotileWeigth, stoneWeigth)) {
+    return null;
+  }
   const newRatio = Math.round(
     (chrysotileWeigth / (chrysotileWeigth + stoneWeigth)) * 100,
   );
@@ -85,6 +97,9 @@ export function planMineRatio(
     input.aluminiumStorageRatio,
   );
   adamantiteWeigth *= input.adamantiteWeight;
+  if (!hasSignal(adamantiteWeigth, aluminiumWeight)) {
+    return null;
+  }
   const newRatio = Math.round(
     (adamantiteWeigth / (adamantiteWeigth + aluminiumWeight)) * 100,
   );
@@ -122,21 +137,26 @@ export function planExtractorRatios(
     return Object.freeze([]);
   }
   return Object.freeze(
-    input.productions.map((prod) => {
+    input.productions.flatMap((prod) => {
       const res1Weight = fullnessWeight(
         prod.res1Demanded,
         prod.res1StorageRatio,
       );
       const res2Weight =
         fullnessWeight(prod.res2Demanded, prod.res2StorageRatio) * prod.weight;
+      if (!hasSignal(res1Weight, res2Weight)) {
+        return [];
+      }
       const newRatio = Math.round(
         (res2Weight / (res1Weight + res2Weight)) * 100,
       );
-      return Object.freeze({
-        id: prod.id,
-        expectedCurrentRatio: prod.currentRatio,
-        delta: newRatio - prod.currentRatio,
-      });
+      return [
+        Object.freeze({
+          id: prod.id,
+          expectedCurrentRatio: prod.currentRatio,
+          delta: newRatio - prod.currentRatio,
+        }),
+      ];
     }),
   );
 }

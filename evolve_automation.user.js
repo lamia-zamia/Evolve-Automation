@@ -5334,6 +5334,294 @@
     });
   }
 
+  // src/domain/economy/resources/resource-ratios.ts
+  var MAX = Number.MAX_SAFE_INTEGER;
+  function fullnessWeight(demanded, storageRatio2) {
+    return demanded ? MAX : 100 - storageRatio2 * 100;
+  }
+  function hasSignal(first, second) {
+    return first + second > 0;
+  }
+  function planQuarryRatio(input) {
+    if (!input.initialised)
+      return null;
+    let chrysotileWeigth = fullnessWeight(
+      input.chrysotileDemanded,
+      input.chrysotileStorageRatio
+    ), stoneWeigth = fullnessWeight(
+      input.stoneDemanded,
+      input.stoneStorageRatio
+    );
+    if (input.hasMetalRefinery && (stoneWeigth = Math.max(
+      stoneWeigth,
+      fullnessWeight(input.aluminiumDemanded, input.aluminiumStorageRatio)
+    )), chrysotileWeigth *= input.chrysotileWeight, !hasSignal(chrysotileWeigth, stoneWeigth))
+      return null;
+    let newRatio = Math.round(
+      chrysotileWeigth / (chrysotileWeigth + stoneWeigth) * 100
+    );
+    return Object.freeze({
+      expectedCurrentRatio: input.currentRatio,
+      delta: newRatio - input.currentRatio
+    });
+  }
+  function planMineRatio(input) {
+    if (!input.initialised)
+      return null;
+    let adamantiteWeigth = fullnessWeight(
+      input.adamantiteDemanded,
+      input.adamantiteStorageRatio
+    ), aluminiumWeight = fullnessWeight(
+      input.aluminiumDemanded,
+      input.aluminiumStorageRatio
+    );
+    if (adamantiteWeigth *= input.adamantiteWeight, !hasSignal(adamantiteWeigth, aluminiumWeight))
+      return null;
+    let newRatio = Math.round(
+      adamantiteWeigth / (adamantiteWeigth + aluminiumWeight) * 100
+    );
+    return Object.freeze({
+      expectedCurrentRatio: input.currentRatio,
+      delta: newRatio - input.currentRatio
+    });
+  }
+  function planExtractorRatios(input) {
+    return input.initialised ? Object.freeze(
+      input.productions.flatMap((prod) => {
+        let res1Weight = fullnessWeight(
+          prod.res1Demanded,
+          prod.res1StorageRatio
+        ), res2Weight = fullnessWeight(prod.res2Demanded, prod.res2StorageRatio) * prod.weight;
+        if (!hasSignal(res1Weight, res2Weight))
+          return [];
+        let newRatio = Math.round(
+          res2Weight / (res1Weight + res2Weight) * 100
+        );
+        return [
+          Object.freeze({
+            id: prod.id,
+            expectedCurrentRatio: prod.currentRatio,
+            delta: newRatio - prod.currentRatio
+          })
+        ];
+      })
+    ) : Object.freeze([]);
+  }
+
+  // src/adapters/evolve/economy/resources/captured-production-ratios.ts
+  var QUARRY_CONTROL = "iQuarry", TITAN_MINE_CONTROL = "iTMine", MINING_SHIP_CONTROL = "iMiningShip", RARE_EXTRACTION_TECH_LEVEL = 5, MINING_SHIP_TECH_LEVEL = 4, EXTRACTOR_SPECS = Object.freeze([
+    Object.freeze({ id: "common", first: "Iron", second: "Aluminium" }),
+    Object.freeze({ id: "uncommon", first: "Iridium", second: "Neutronium" }),
+    Object.freeze({ id: "rare", first: "Orichalcum", second: "Elerium" })
+  ]);
+  function finite6(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function settingNumber4(settings, key, fallback) {
+    if (!isRecord(settings)) return fallback;
+    let value = settings[key];
+    return value === void 0 ? fallback : finite6(value);
+  }
+  function storageRatio(root, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId), amount = finite6(readProperty(resource, "amount")), maximum = finite6(readProperty(resource, "max"));
+    if (!(amount === void 0 || maximum === void 0))
+      return maximum > 0 ? amount / maximum : 0;
+  }
+  function structureCount(root, region, id) {
+    return finite6(
+      readProperty(readProperty(readProperty(root, region), id), "count")
+    );
+  }
+  function techLevel2(root, id) {
+    return finite6(readProperty(readProperty(root, "tech"), id)) ?? 0;
+  }
+  var EMPTY_QUARRY = Object.freeze({
+    initialised: !1,
+    currentRatio: 0,
+    chrysotileDemanded: !1,
+    chrysotileStorageRatio: 0,
+    stoneDemanded: !1,
+    stoneStorageRatio: 0,
+    hasMetalRefinery: !1,
+    aluminiumDemanded: !1,
+    aluminiumStorageRatio: 0,
+    chrysotileWeight: 0
+  }), EMPTY_MINE = Object.freeze({
+    initialised: !1,
+    currentRatio: 0,
+    adamantiteDemanded: !1,
+    adamantiteStorageRatio: 0,
+    aluminiumDemanded: !1,
+    aluminiumStorageRatio: 0,
+    adamantiteWeight: 0
+  }), EMPTY_EXTRACTOR = Object.freeze({
+    initialised: !1,
+    productions: Object.freeze([])
+  });
+  function readQuarryInput(dependencies, root) {
+    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite6(readProperty(quarry, "asbestos")), count = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber4(
+      dependencies.readSettings(),
+      "productionChrysotileWeight",
+      2
+    );
+    return !readProperty(race, "smoldering") || dependencies.controls.resolve(QUARRY_CONTROL) === void 0 || currentRatio === void 0 || count === void 0 || count < 1 || chrysotileStorageRatio === void 0 || stoneStorageRatio === void 0 || aluminiumStorageRatio === void 0 || chrysotileWeight === void 0 ? EMPTY_QUARRY : Object.freeze({
+      initialised: !0,
+      currentRatio,
+      chrysotileDemanded: !1,
+      chrysotileStorageRatio,
+      stoneDemanded: !1,
+      stoneStorageRatio,
+      hasMetalRefinery: (structureCount(root, "city", "metal_refinery") ?? 0) > 0,
+      aluminiumDemanded: !1,
+      aluminiumStorageRatio,
+      chrysotileWeight
+    });
+  }
+  function readMineInput(dependencies, root) {
+    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite6(readProperty(mine, "ratio")), count = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber4(
+      dependencies.readSettings(),
+      "productionAdamantiteWeight",
+      1
+    );
+    return dependencies.controls.resolve(TITAN_MINE_CONTROL) === void 0 || currentRatio === void 0 || count === void 0 || count < 1 || adamantiteStorageRatio === void 0 || aluminiumStorageRatio === void 0 || adamantiteWeight === void 0 ? EMPTY_MINE : Object.freeze({
+      initialised: !0,
+      currentRatio,
+      adamantiteDemanded: !1,
+      adamantiteStorageRatio,
+      aluminiumDemanded: !1,
+      aluminiumStorageRatio,
+      adamantiteWeight
+    });
+  }
+  function readExtractorInput(dependencies, root) {
+    let ship = readProperty(readProperty(root, "tauceti"), "mining_ship"), count = finite6(readProperty(ship, "count")), roidTech = techLevel2(root, "tau_roid");
+    if (!isRecord(ship) || dependencies.controls.resolve(MINING_SHIP_CONTROL) === void 0 || roidTech < MINING_SHIP_TECH_LEVEL || count === void 0 || count < 1)
+      return EMPTY_EXTRACTOR;
+    let settings = dependencies.readSettings(), productions = [];
+    for (let spec of EXTRACTOR_SPECS) {
+      if (spec.id === "rare" && roidTech < RARE_EXTRACTION_TECH_LEVEL) continue;
+      let currentRatio = finite6(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber4(settings, `productionExtWeight_${spec.id}`, 1);
+      if (currentRatio === void 0 || res1StorageRatio === void 0 || res2StorageRatio === void 0 || weight === void 0)
+        return EMPTY_EXTRACTOR;
+      productions.push(
+        Object.freeze({
+          id: spec.id,
+          res1Demanded: !1,
+          res1StorageRatio,
+          res2Demanded: !1,
+          res2StorageRatio,
+          weight,
+          currentRatio
+        })
+      );
+    }
+    return productions.length === 0 ? EMPTY_EXTRACTOR : Object.freeze({
+      initialised: !0,
+      productions: Object.freeze(productions)
+    });
+  }
+  function applyAdjustment(dependencies, root, target, adjustment) {
+    if (!Number.isSafeInteger(adjustment.delta))
+      return rejected(
+        "invalid-production-ratio-adjustment",
+        "production ratio adjustment must be a safe integer"
+      );
+    if (adjustment.delta === 0) return SUCCEEDED;
+    let handle = dependencies.controls.resolve(target.control);
+    if (handle === void 0)
+      return stale(
+        "production-ratio-control-missing",
+        `captured ${target.name} control is unavailable`
+      );
+    let method = adjustment.delta > 0 ? "add" : "sub", args = target.id === void 0 ? [] : [target.id], steps = Math.abs(adjustment.delta);
+    for (let index = 0; index < steps; index++) {
+      if (dependencies.rootState.readRoot() !== root)
+        return stale(
+          "production-ratio-root-changed",
+          "captured game root changed"
+        );
+      let expected = adjustment.expectedCurrentRatio + (adjustment.delta > 0 ? index : -index);
+      if (target.readCurrent(root) !== expected)
+        return stale("stale-production-ratio", "production ratio changed", {
+          manager: target.name,
+          expected,
+          actual: target.readCurrent(root) ?? null
+        });
+      let result = dependencies.controls.invoke(handle, method, args);
+      if (!result.ok)
+        return rejected(
+          "production-ratio-control-failed",
+          result.detail ?? result.reason
+        );
+    }
+    return SUCCEEDED;
+  }
+  function createCapturedProductionRatios(dependencies) {
+    return Object.freeze({
+      quarry() {
+        let root = dependencies.rootState.readRoot(), adjustment = planQuarryRatio(readQuarryInput(dependencies, root));
+        return adjustment === null ? SUCCEEDED : applyAdjustment(
+          dependencies,
+          root,
+          {
+            control: QUARRY_CONTROL,
+            name: "quarry",
+            readCurrent: (current) => finite6(
+              readProperty(
+                readProperty(readProperty(current, "city"), "rock_quarry"),
+                "asbestos"
+              )
+            )
+          },
+          adjustment
+        );
+      },
+      titanMine() {
+        let root = dependencies.rootState.readRoot(), adjustment = planMineRatio(readMineInput(dependencies, root));
+        return adjustment === null ? SUCCEEDED : applyAdjustment(
+          dependencies,
+          root,
+          {
+            control: TITAN_MINE_CONTROL,
+            name: "titan mine",
+            readCurrent: (current) => finite6(
+              readProperty(
+                readProperty(readProperty(current, "space"), "titan_mine"),
+                "ratio"
+              )
+            )
+          },
+          adjustment
+        );
+      },
+      miningShip() {
+        let root = dependencies.rootState.readRoot(), adjustments = planExtractorRatios(
+          readExtractorInput(dependencies, root)
+        );
+        for (let adjustment of adjustments) {
+          let outcome = applyAdjustment(
+            dependencies,
+            root,
+            {
+              control: MINING_SHIP_CONTROL,
+              name: `mining ship ${adjustment.id}`,
+              id: adjustment.id,
+              readCurrent: (current) => finite6(
+                readProperty(
+                  readProperty(readProperty(current, "tauceti"), "mining_ship"),
+                  adjustment.id
+                )
+              )
+            },
+            adjustment
+          );
+          if (outcome.status !== "succeeded") return outcome;
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
   // src/adapters/evolve/economy/production/captured-craft-costs.ts
   var CRAFT_ROW_PREFIX = "res", COST_ENTRY = /<div>([^<]*)<\/div>/g;
   function resolveResourceId(root, name) {
@@ -5373,7 +5661,7 @@
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
   var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", SPEND_EPSILON = 1e-6;
-  function finite6(value) {
+  function finite7(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readSettingsRecord(value) {
@@ -5384,7 +5672,7 @@
     return typeof value == "boolean" ? value : !0;
   }
   function craftPreserve(settings, id) {
-    let value = finite6(settings[`foundry_p_${id}`]);
+    let value = finite7(settings[`foundry_p_${id}`]);
     return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
   }
   function craftAllButtonRendered(getDocument, id) {
@@ -5410,7 +5698,7 @@
     if (!isRecord(resources)) return;
     let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
     for (let [resourceId, costPerCraft] of costs) {
-      let resource = readProperty(resources, resourceId), currentQuantity2 = finite6(readProperty(resource, "amount")), maxQuantity = finite6(readProperty(resource, "max")), rateOfChange = finite6(readProperty(resource, "diff"));
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite7(readProperty(resource, "amount")), maxQuantity = finite7(readProperty(resource, "max")), rateOfChange = finite7(readProperty(resource, "diff"));
       if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
         return;
       let base = {
@@ -5437,7 +5725,7 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite6(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite7(dependencies.readPeriods());
         return session = Object.freeze({
           root,
           candidates: readCandidates(dependencies, root),
@@ -5490,7 +5778,7 @@
           "resource"
         );
         for (let spend of decision.spend) {
-          let actual = finite6(
+          let actual = finite7(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
@@ -5511,7 +5799,7 @@
         if (!result.ok)
           return rejected("craft-control-failed", result.detail ?? result.reason);
         for (let spend of decision.spend) {
-          let actual = finite6(
+          let actual = finite7(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
@@ -5698,7 +5986,10 @@
     autoMiningDroid: !1,
     autoGraphenePlant: !1,
     autoAlchemy: !1,
-    autoCraft: !1
+    autoCraft: !1,
+    autoQuarry: !1,
+    autoMine: !1,
+    autoExtractor: !1
   });
   function isEnabled(settings, key) {
     let value = settings[key];
@@ -5757,6 +6048,10 @@
     }), graphene = createCapturedGrapheneAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
+    }), ratios = createCapturedProductionRatios({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage)
     }), completedPeriods = 1, craftDependencies = {
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -5807,8 +6102,8 @@
     }, alchemyDiscoveryAttempted = !1, ensureAlchemyControls = () => {
       if (pageCapture2.controls.capturedElementIds().some((id) => id.startsWith(ALCHEMY_CONTROL_PREFIX)))
         return;
-      let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), techLevel2 = readProperty(tech, "alchemy");
-      if (typeof techLevel2 != "number" || !Number.isFinite(techLevel2) || techLevel2 < 1 || alchemyDiscoveryAttempted || (alchemyDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), techLevel3 = readProperty(tech, "alchemy");
+      if (typeof techLevel3 != "number" || !Number.isFinite(techLevel3) || techLevel3 < 1 || alchemyDiscoveryAttempted || (alchemyDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
       let marketTabs = SUB_TAB_CONTROLS.marketTabs;
       if (marketTabs === void 0) return;
       let result = civicDiscovery.discover([
@@ -5857,11 +6152,46 @@
       result.outcome.status !== "succeeded" && logError(
         `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
+    }, ratioDiscoveryAttempted = !1, ensureRatioControls = (control, unlocked) => {
+      if (!unlocked || ratioDiscoveryAttempted || pageCapture2.controls.resolve(control) !== void 0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
+        return;
+      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      if (govTabs === void 0) return;
+      ratioDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 2
+        }),
+        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `production-ratio discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
+    }, structureCount2 = (region, id) => {
+      let value = readProperty(
+        readProperty(readProperty(pageCapture2.rootState.readRoot(), region), id),
+        "count"
+      );
+      return typeof value == "number" && Number.isFinite(value) ? value : 0;
     }, runCycle = () => {
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
+            QUARRY_CONTROL,
+            !!readProperty(
+              readProperty(pageCapture2.rootState.readRoot(), "race"),
+              "smoldering"
+            ) && structureCount2("city", "rock_quarry") >= 1
+          ), ratios.quarry()), isEnabled(settings, "autoMine") && (ensureRatioControls(
+            TITAN_MINE_CONTROL,
+            structureCount2("space", "titan_mine") >= 1
+          ), ratios.titanMine()), isEnabled(settings, "autoExtractor") && (ensureRatioControls(
+            MINING_SHIP_CONTROL,
+            structureCount2("tauceti", "mining_ship") >= 1
+          ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }
