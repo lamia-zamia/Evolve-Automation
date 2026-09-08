@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createCapturedKnowledgeGateReader } from "../src/adapters/evolve/progression/build/captured-knowledge-gate.ts";
+import { createCapturedKnowledgeReader } from "../src/adapters/evolve/progression/build/captured-knowledge-gate.ts";
 import { isKnowledgeGated } from "../src/domain/progression/build/building-weighting.ts";
 
 const root = {
@@ -41,13 +41,17 @@ const resources = {
   },
 };
 
-function gateFor(offered, buildRequirement = 0) {
-  return createCapturedKnowledgeGateReader({
+function sampleFor(offered, buildRequirement = 0) {
+  return createCapturedKnowledgeReader({
     rootState: { readRoot: () => root },
     resources,
     readLastOfferedTechs: () => offered,
     readBuildRequirement: () => buildRequirement,
   })();
+}
+
+function gateFor(offered, buildRequirement = 0) {
+  return sampleFor(offered, buildRequirement).levels;
 }
 
 // The cheapest technology that only Knowledge capacity blocks closes the gate.
@@ -134,4 +138,21 @@ function gateFor(offered, buildRequirement = 0) {
   assert.equal(isKnowledgeGated(gate), false);
 }
 
-console.log("Captured knowledge-gate reader tests passed");
+// The weighting half reports the most expensive technology offered, which is what decides whether
+// more Knowledge storage is wanted at all.
+{
+  const sample = sampleFor([
+    { elementId: "tech-a", cost: { Knowledge: 1500 }, generation: 1 },
+    { elementId: "tech-b", cost: { Knowledge: 4000 }, generation: 1 },
+  ]);
+  assert.equal(sample.knowledgeRequiredByTechs, 4000);
+}
+
+// With no catalog read nothing is known to be wanted, and the sample says so rather than reporting
+// a satisfied requirement.
+{
+  const sample = sampleFor(undefined);
+  assert.equal(sample.knowledgeRequiredByTechs, 0);
+}
+
+console.log("Captured knowledge reader tests passed");

@@ -9,6 +9,7 @@
  */
 
 import {
+  applyNeedfulKnowledgeWeighting,
   applyNewBuildingWeighting,
   applyNeedMoreStorageWeighting,
   applyNonOperatingCityWeighting,
@@ -16,7 +17,10 @@ import {
   applyUselessHousingWeighting,
   applyVacuumCollapseWeighting,
   applyUnusedStorageWeighting,
+  applyUselessKnowledgeWeighting,
+  isKnowledgeGated,
 } from "../../../../domain/progression/build/building-weighting.ts";
+import type { CapturedKnowledgeSample } from "./captured-knowledge-gate.ts";
 import type { ConstructionCycleOptions } from "../../../../ports/construction-candidates.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
@@ -28,7 +32,24 @@ export interface CapturedBuildPolicyDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly getSettings: () => unknown;
+  /** What this cycle knows about Knowledge, shared with the build planner's own gate. */
+  readonly readKnowledge: () => CapturedKnowledgeSample;
   readonly onSkipped?: (key: string, reason: string) => void;
+}
+
+/**
+ * The run-wide answers the rules read, sampled once per cycle. They are questions about the run
+ * rather than about a candidate, so one sample applies to every target in the cycle.
+ */
+interface CityRuleContext {
+  readonly unusedStorageParts: boolean;
+  readonly storagePartsAllAssigned: boolean;
+  readonly housingUnderused: boolean;
+  readonly uselessMeditation: boolean;
+  /** Research cannot proceed until Knowledge capacity grows. */
+  readonly knowledgeGated: boolean;
+  /** Capacity already covers every Knowledge cost the run knows it wants. */
+  readonly knowledgeSufficient: boolean;
 }
 
 const UNLIMITED = Number.MAX_SAFE_INTEGER;
@@ -151,14 +172,95 @@ function readUselessMeditation(root: unknown): boolean | undefined {
   return Boolean(readProperty(race, "calm")) && amount < maximum;
 }
 
+interface CityWeightingInput {
+  readonly base: number;
+  readonly id: string;
+  readonly count: number;
+  readonly on: number | undefined;
+  readonly context: Readonly<CityRuleContext>;
+  readonly prestigeRoute: string;
+  readonly raisesKnowledgeCap: boolean;
+  readonly multipliers: Readonly<{
+    newBuilding: number;
+    unusedStorage: number;
+    uselessHousing: number;
+    uselessMeditation: number;
+    vacuumCollapse: number;
+    needMoreStorage: number;
+    nonOperating: number;
+    needfulKnowledge: number;
+    uselessKnowledge: number;
+  }>;
+}
+
+/**
+ * The captured city rules, applied in sequence. Each is a multiplier, so the order is immaterial;
+ * the sequence is written out rather than nested so that adding a rule stays a one-line change.
+ */
+function cityWeighting(input: Readonly<CityWeightingInput>): number {
+  const { id, context, multipliers } = input;
+  let weight = applyNewBuildingWeighting(
+    input.base,
+    input.count,
+    multipliers.newBuilding,
+  );
+  weight = applyUnusedStorageWeighting(
+    weight,
+    id,
+    context.unusedStorageParts,
+    multipliers.unusedStorage,
+  );
+  weight = applyUselessHousingWeighting(
+    weight,
+    id,
+    context.housingUnderused,
+    multipliers.uselessHousing,
+  );
+  weight = applyUselessMeditationWeighting(
+    weight,
+    id,
+    context.uselessMeditation,
+    multipliers.uselessMeditation,
+  );
+  weight = applyVacuumCollapseWeighting(
+    weight,
+    id,
+    input.prestigeRoute,
+    multipliers.vacuumCollapse,
+  );
+  weight = applyNeedMoreStorageWeighting(
+    weight,
+    id,
+    context.storagePartsAllAssigned,
+    multipliers.needMoreStorage,
+  );
+  weight = applyNonOperatingCityWeighting(
+    weight,
+    input.count,
+    input.on,
+    multipliers.nonOperating,
+    id === "mill" || id === "banquet",
+  );
+  weight = applyNeedfulKnowledgeWeighting(
+    weight,
+    input.raisesKnowledgeCap,
+    context.knowledgeGated,
+    multipliers.needfulKnowledge,
+  );
+  return applyUselessKnowledgeWeighting(
+    weight,
+    id,
+    input.raisesKnowledgeCap,
+    context.knowledgeSufficient,
+    multipliers.uselessKnowledge,
+  );
+}
+
 function readTarget(
   settings: Record<PropertyKey, unknown>,
   city: Record<PropertyKey, unknown>,
   elementId: string,
-  unusedStorageParts: boolean,
-  storagePartsAllAssigned: boolean,
-  housingUnderused: boolean,
-  uselessMeditation: boolean,
+  context: Readonly<CityRuleContext>,
   onSkipped: (key: string, reason: string) => void,
 ): Readonly<CapturedBuildTarget> | undefined {
   if (!elementId.startsWith("city-") || elementId.length === "city-".length) {
@@ -244,6 +346,21 @@ function readTarget(
     onSkipped(binding, "vacuum-collapse weighting is not finite");
     return undefined;
   }
+  const raisesKnowledgeCap = KNOWLEDGE_BUILDINGS.has(id);
+  const needfulKnowledgeWeighting = raisesKnowledgeCap
+    ? readFiniteSetting(settings, "buildingWeightingNeedfulKnowledge", 1)
+    : 1;
+  if (needfulKnowledgeWeighting === undefined) {
+    onSkipped(binding, "needful-knowledge weighting is not finite");
+    return undefined;
+  }
+  const uselessKnowledgeWeighting = raisesKnowledgeCap
+    ? readFiniteSetting(settings, "buildingWeightingUselessKnowledge", 1)
+    : 1;
+  if (uselessKnowledgeWeighting === undefined) {
+    onSkipped(binding, "useless-knowledge weighting is not finite");
+    return undefined;
+  }
   const onValue = readProperty(state, "on");
   const on =
     typeof onValue === "number" && Number.isFinite(onValue)
@@ -259,44 +376,28 @@ function readTarget(
     elementId,
     region: "city",
     id,
-    weighting: applyNonOperatingCityWeighting(
-      applyNeedMoreStorageWeighting(
-        applyVacuumCollapseWeighting(
-          applyUselessMeditationWeighting(
-            applyUselessHousingWeighting(
-              applyUnusedStorageWeighting(
-                applyNewBuildingWeighting(
-                  weighting,
-                  count,
-                  newBuildingWeighting,
-                ),
-                id,
-                unusedStorageParts,
-                storageWeighting,
-              ),
-              id,
-              housingUnderused,
-              housingWeighting,
-            ),
-            id,
-            uselessMeditation,
-            meditationWeighting,
-          ),
-          id,
-          settings["prestigeType"] === "vacuum" ? "vacuum" : "other",
-          vacuumWeighting,
-        ),
-        id,
-        storagePartsAllAssigned,
-        needStorageWeighting,
-      ),
+    weighting: cityWeighting({
+      base: weighting,
+      id,
       count,
       on,
-      nonOperatingWeighting,
-      id === "mill" || id === "banquet",
-    ),
+      context,
+      prestigeRoute: settings["prestigeType"] === "vacuum" ? "vacuum" : "other",
+      raisesKnowledgeCap,
+      multipliers: {
+        newBuilding: newBuildingWeighting,
+        unusedStorage: storageWeighting,
+        uselessHousing: housingWeighting,
+        uselessMeditation: meditationWeighting,
+        vacuumCollapse: vacuumWeighting,
+        needMoreStorage: needStorageWeighting,
+        nonOperating: nonOperatingWeighting,
+        needfulKnowledge: needfulKnowledgeWeighting,
+        uselessKnowledge: uselessKnowledgeWeighting,
+      },
+    }),
     maximum: maximum >= 0 ? maximum : UNLIMITED,
-    knowledge: KNOWLEDGE_BUILDINGS.has(id),
+    knowledge: raisesKnowledgeCap,
     important: false,
   });
 }
@@ -305,6 +406,7 @@ export function createCapturedBuildPolicyReader({
   rootState,
   controls,
   getSettings,
+  readKnowledge,
   onSkipped,
 }: CapturedBuildPolicyDependencies): () => ScriptBuildPolicy {
   const reportSkipped = onSkipped ?? (() => {});
@@ -313,6 +415,22 @@ export function createCapturedBuildPolicyReader({
     const root = rootState.readRoot();
     const city = readProperty(root, "city");
     const storageParts = readStorageParts(root);
+    const knowledge = readKnowledge();
+    const context: CityRuleContext = Object.freeze({
+      unusedStorageParts: storageParts?.unused ?? false,
+      storagePartsAllAssigned: storageParts?.allAssigned ?? false,
+      housingUnderused: readHousingUnderused(root) ?? false,
+      uselessMeditation: readUselessMeditation(root) ?? false,
+      knowledgeGated: isKnowledgeGated(knowledge.levels),
+      // Nothing known to want is not the same as wanting nothing: with no catalog read yet every
+      // figure is zero, and the rule would penalize Knowledge buildings on no evidence.
+      knowledgeSufficient:
+        knowledge.levels.knowledgeCapacity > 0 &&
+        Math.max(
+          knowledge.knowledgeRequiredByTechs,
+          knowledge.levels.knowledgeRequiredByBuildTargets,
+        ) <= knowledge.levels.knowledgeCapacity,
+    });
     const buildings: Readonly<CapturedBuildTarget>[] = [];
     if (isRecord(settings) && isRecord(city)) {
       for (const elementId of controls.capturedElementIds()) {
@@ -320,10 +438,7 @@ export function createCapturedBuildPolicyReader({
           settings,
           city,
           elementId,
-          storageParts?.unused ?? false,
-          storageParts?.allAssigned ?? false,
-          readHousingUnderused(root) ?? false,
-          readUselessMeditation(root) ?? false,
+          context,
           reportSkipped,
         );
         if (target !== undefined) buildings.push(target);

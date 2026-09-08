@@ -59,6 +59,40 @@ export type BuildingWeightName =
  * multiplied by the configured "new building" weight, while an existing
  * building keeps its configured base weight.
  */
+/**
+ * Applies the captured "research is capacity-blocked" rule. A building that raises the Knowledge cap
+ * is the way out of that block, so it is promoted while the block lasts.
+ */
+export function applyNeedfulKnowledgeWeighting(
+  baseWeight: number,
+  raisesKnowledgeCap: boolean,
+  knowledgeGated: boolean,
+  multiplier: number,
+): number {
+  return raisesKnowledgeCap && knowledgeGated
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
+/**
+ * Applies the captured "capacity already covers everything wanted" rule, the mirror of the rule
+ * above. `wardenclyffe` is excluded because the script keeps building it for morale rather than for
+ * its Knowledge, exactly as the legacy rule does.
+ */
+export function applyUselessKnowledgeWeighting(
+  baseWeight: number,
+  buildingId: string,
+  raisesKnowledgeCap: boolean,
+  knowledgeSufficient: boolean,
+  multiplier: number,
+): number {
+  return raisesKnowledgeCap &&
+    knowledgeSufficient &&
+    buildingId !== "wardenclyffe"
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
 export function applyNewBuildingWeighting(
   baseWeight: number,
   count: number,

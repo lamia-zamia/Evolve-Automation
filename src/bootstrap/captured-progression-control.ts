@@ -22,7 +22,7 @@ import { createScriptCostReservationSource } from "../adapters/evolve/script-cos
 import { createScriptBuildPolicyReader } from "../adapters/evolve/progression/build/script-build-policy.ts";
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
 import { createCapturedBuildPolicyReader } from "../adapters/evolve/progression/build/captured-build-policy.ts";
-import { createCapturedKnowledgeGateReader } from "../adapters/evolve/progression/build/captured-knowledge-gate.ts";
+import { createCapturedKnowledgeReader } from "../adapters/evolve/progression/build/captured-knowledge-gate.ts";
 import { createCapturedConstructionControl } from "./captured-construction-control.ts";
 import { createCapturedResearchControl } from "./captured-research-control.ts";
 import { SAVING_CONFLICT_CAUSE } from "../domain/progression/build/build.ts";
@@ -174,12 +174,19 @@ export function createCapturedProgressionControl(
     controls,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });
+  const readKnowledge = createCapturedKnowledgeReader({
+    rootState,
+    resources,
+    readLastOfferedTechs: () => lastOffered,
+    readBuildRequirement: () => readObservations().readKnowledgeRequirement(),
+  });
   const readPolicy =
     getBuildingManager === undefined
       ? createCapturedBuildPolicyReader({
           rootState,
           controls,
           getSettings: readSettings,
+          readKnowledge,
           ...(onSkipped === undefined ? {} : { onSkipped }),
         })
       : createScriptBuildPolicyReader({
@@ -221,13 +228,7 @@ export function createCapturedProgressionControl(
       : combineReservations(stateReservations, savingReservations);
   const readKnowledgeGate =
     getState === undefined
-      ? createCapturedKnowledgeGateReader({
-          rootState,
-          resources,
-          readLastOfferedTechs: () => lastOffered,
-          readBuildRequirement: () =>
-            readObservations().readKnowledgeRequirement(),
-        })
+      ? () => readKnowledge().levels
       : createScriptKnowledgeGateReader({
           getState,
           resources,

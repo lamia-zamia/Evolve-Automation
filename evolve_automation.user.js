@@ -1287,6 +1287,12 @@
   }
 
   // src/domain/progression/build/building-weighting.ts
+  function applyNeedfulKnowledgeWeighting(baseWeight, raisesKnowledgeCap, knowledgeGated, multiplier) {
+    return raisesKnowledgeCap && knowledgeGated ? baseWeight * multiplier : baseWeight;
+  }
+  function applyUselessKnowledgeWeighting(baseWeight, buildingId, raisesKnowledgeCap, knowledgeSufficient, multiplier) {
+    return raisesKnowledgeCap && knowledgeSufficient && buildingId !== "wardenclyffe" ? baseWeight * multiplier : baseWeight;
+  }
   function applyNewBuildingWeighting(baseWeight, count, multiplier) {
     return count === 0 ? baseWeight * multiplier : baseWeight;
   }
@@ -1372,7 +1378,57 @@
     if (!(typeof amount != "number" || !Number.isFinite(amount) || typeof maximum != "number" || !Number.isFinite(maximum)))
       return !!readProperty(race, "calm") && amount < maximum;
   }
-  function readTarget2(settings, city, elementId, unusedStorageParts, storagePartsAllAssigned, housingUnderused, uselessMeditation, onSkipped) {
+  function cityWeighting(input) {
+    let { id, context, multipliers } = input, weight = applyNewBuildingWeighting(
+      input.base,
+      input.count,
+      multipliers.newBuilding
+    );
+    return weight = applyUnusedStorageWeighting(
+      weight,
+      id,
+      context.unusedStorageParts,
+      multipliers.unusedStorage
+    ), weight = applyUselessHousingWeighting(
+      weight,
+      id,
+      context.housingUnderused,
+      multipliers.uselessHousing
+    ), weight = applyUselessMeditationWeighting(
+      weight,
+      id,
+      context.uselessMeditation,
+      multipliers.uselessMeditation
+    ), weight = applyVacuumCollapseWeighting(
+      weight,
+      id,
+      input.prestigeRoute,
+      multipliers.vacuumCollapse
+    ), weight = applyNeedMoreStorageWeighting(
+      weight,
+      id,
+      context.storagePartsAllAssigned,
+      multipliers.needMoreStorage
+    ), weight = applyNonOperatingCityWeighting(
+      weight,
+      input.count,
+      input.on,
+      multipliers.nonOperating,
+      id === "mill" || id === "banquet"
+    ), weight = applyNeedfulKnowledgeWeighting(
+      weight,
+      input.raisesKnowledgeCap,
+      context.knowledgeGated,
+      multipliers.needfulKnowledge
+    ), applyUselessKnowledgeWeighting(
+      weight,
+      id,
+      input.raisesKnowledgeCap,
+      context.knowledgeSufficient,
+      multipliers.uselessKnowledge
+    );
+  }
+  function readTarget2(settings, city, elementId, context, onSkipped) {
     if (!elementId.startsWith("city-") || elementId.length === 5)
       return;
     let binding = elementId;
@@ -1437,6 +1493,16 @@
       onSkipped(binding, "vacuum-collapse weighting is not finite");
       return;
     }
+    let raisesKnowledgeCap = KNOWLEDGE_BUILDINGS.has(id), needfulKnowledgeWeighting = raisesKnowledgeCap ? readFiniteSetting(settings, "buildingWeightingNeedfulKnowledge", 1) : 1;
+    if (needfulKnowledgeWeighting === void 0) {
+      onSkipped(binding, "needful-knowledge weighting is not finite");
+      return;
+    }
+    let uselessKnowledgeWeighting = raisesKnowledgeCap ? readFiniteSetting(settings, "buildingWeightingUselessKnowledge", 1) : 1;
+    if (uselessKnowledgeWeighting === void 0) {
+      onSkipped(binding, "useless-knowledge weighting is not finite");
+      return;
+    }
     let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
@@ -1447,44 +1513,28 @@
       elementId,
       region: "city",
       id,
-      weighting: applyNonOperatingCityWeighting(
-        applyNeedMoreStorageWeighting(
-          applyVacuumCollapseWeighting(
-            applyUselessMeditationWeighting(
-              applyUselessHousingWeighting(
-                applyUnusedStorageWeighting(
-                  applyNewBuildingWeighting(
-                    weighting,
-                    count,
-                    newBuildingWeighting
-                  ),
-                  id,
-                  unusedStorageParts,
-                  storageWeighting
-                ),
-                id,
-                housingUnderused,
-                housingWeighting
-              ),
-              id,
-              uselessMeditation,
-              meditationWeighting
-            ),
-            id,
-            settings.prestigeType === "vacuum" ? "vacuum" : "other",
-            vacuumWeighting
-          ),
-          id,
-          storagePartsAllAssigned,
-          needStorageWeighting
-        ),
+      weighting: cityWeighting({
+        base: weighting,
+        id,
         count,
         on,
-        nonOperatingWeighting,
-        id === "mill" || id === "banquet"
-      ),
+        context,
+        prestigeRoute: settings.prestigeType === "vacuum" ? "vacuum" : "other",
+        raisesKnowledgeCap,
+        multipliers: {
+          newBuilding: newBuildingWeighting,
+          unusedStorage: storageWeighting,
+          uselessHousing: housingWeighting,
+          uselessMeditation: meditationWeighting,
+          vacuumCollapse: vacuumWeighting,
+          needMoreStorage: needStorageWeighting,
+          nonOperating: nonOperatingWeighting,
+          needfulKnowledge: needfulKnowledgeWeighting,
+          uselessKnowledge: uselessKnowledgeWeighting
+        }
+      }),
       maximum: maximum >= 0 ? maximum : UNLIMITED,
-      knowledge: KNOWLEDGE_BUILDINGS.has(id),
+      knowledge: raisesKnowledgeCap,
       important: !1
     });
   }
@@ -1492,22 +1542,32 @@
     rootState,
     controls,
     getSettings,
+    readKnowledge,
     onSkipped
   }) {
     let reportSkipped = onSkipped ?? (() => {
     });
     return () => {
-      let settings = getSettings(), root = rootState.readRoot(), city = readProperty(root, "city"), storageParts = readStorageParts(root), buildings = [];
+      let settings = getSettings(), root = rootState.readRoot(), city = readProperty(root, "city"), storageParts = readStorageParts(root), knowledge = readKnowledge(), context = Object.freeze({
+        unusedStorageParts: storageParts?.unused ?? !1,
+        storagePartsAllAssigned: storageParts?.allAssigned ?? !1,
+        housingUnderused: readHousingUnderused(root) ?? !1,
+        uselessMeditation: readUselessMeditation(root) ?? !1,
+        knowledgeGated: isKnowledgeGated(knowledge.levels),
+        // Nothing known to want is not the same as wanting nothing: with no catalog read yet every
+        // figure is zero, and the rule would penalize Knowledge buildings on no evidence.
+        knowledgeSufficient: knowledge.levels.knowledgeCapacity > 0 && Math.max(
+          knowledge.knowledgeRequiredByTechs,
+          knowledge.levels.knowledgeRequiredByBuildTargets
+        ) <= knowledge.levels.knowledgeCapacity
+      }), buildings = [];
       if (isRecord(settings) && isRecord(city))
         for (let elementId of controls.capturedElementIds()) {
           let target = readTarget2(
             settings,
             city,
             elementId,
-            storageParts?.unused ?? !1,
-            storageParts?.allAssigned ?? !1,
-            readHousingUnderused(root) ?? !1,
-            readUselessMeditation(root) ?? !1,
+            context,
             reportSkipped
           );
           target !== void 0 && buildings.push(target);
@@ -1547,6 +1607,9 @@
     cheapestTechKnowledge: 0,
     knowledgeRequiredByBuildTargets: 0,
     knowledgeCapacity: 0
+  }), NOTHING_KNOWN = Object.freeze({
+    levels: OPEN_GATE,
+    knowledgeRequiredByTechs: 0
   });
   function knowledgeCapacity(rootState) {
     let maximum = readProperty(
@@ -1571,7 +1634,7 @@
   function finiteRequirement(value) {
     return Number.isFinite(value) && value > 0 ? value : 0;
   }
-  function createCapturedKnowledgeGateReader({
+  function createCapturedKnowledgeReader({
     rootState,
     resources,
     readLastOfferedTechs,
@@ -1579,13 +1642,16 @@
   }) {
     return () => {
       let capacity = knowledgeCapacity(rootState), offered = readLastOfferedTechs();
-      if (capacity === void 0) return OPEN_GATE;
+      if (capacity === void 0) return NOTHING_KNOWN;
       let buildRequirement = finiteRequirement(readBuildRequirement());
       if (offered === void 0)
         return Object.freeze({
-          cheapestTechKnowledge: 0,
-          knowledgeRequiredByBuildTargets: buildRequirement,
-          knowledgeCapacity: capacity
+          knowledgeRequiredByTechs: 0,
+          levels: Object.freeze({
+            cheapestTechKnowledge: 0,
+            knowledgeRequiredByBuildTargets: buildRequirement,
+            knowledgeCapacity: capacity
+          })
         });
       let techKnowledgeCosts = [];
       for (let tech of offered) {
@@ -1598,9 +1664,12 @@
         buildCandidates: Object.freeze([])
       });
       return Object.freeze({
-        cheapestTechKnowledge: requirements.cheapestTechKnowledge,
-        knowledgeRequiredByBuildTargets: buildRequirement,
-        knowledgeCapacity: capacity
+        knowledgeRequiredByTechs: requirements.knowledgeRequiredByTechs,
+        levels: Object.freeze({
+          cheapestTechKnowledge: requirements.cheapestTechKnowledge,
+          knowledgeRequiredByBuildTargets: buildRequirement,
+          knowledgeCapacity: capacity
+        })
       });
     };
   }
@@ -3248,10 +3317,16 @@
       drawnActions,
       controls,
       ...onUnavailable === void 0 ? {} : { onUnavailable }
+    }), readKnowledge = createCapturedKnowledgeReader({
+      rootState,
+      resources,
+      readLastOfferedTechs: () => lastOffered,
+      readBuildRequirement: () => readObservations().readKnowledgeRequirement()
     }), readPolicy = getBuildingManager === void 0 ? createCapturedBuildPolicyReader({
       rootState,
       controls,
       getSettings: readSettings,
+      readKnowledge,
       ...onSkipped === void 0 ? {} : { onSkipped }
     }) : createScriptBuildPolicyReader({
       getBuildingManager,
@@ -3271,12 +3346,7 @@
           ])
         });
       }
-    }), stateReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), scriptReservations = stateReservations === void 0 ? savingReservations : combineReservations(stateReservations, savingReservations), readKnowledgeGate = getState === void 0 ? createCapturedKnowledgeGateReader({
-      rootState,
-      resources,
-      readLastOfferedTechs: () => lastOffered,
-      readBuildRequirement: () => readObservations().readKnowledgeRequirement()
-    }) : createScriptKnowledgeGateReader({
+    }), stateReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), scriptReservations = stateReservations === void 0 ? savingReservations : combineReservations(stateReservations, savingReservations), readKnowledgeGate = getState === void 0 ? () => readKnowledge().levels : createScriptKnowledgeGateReader({
       getState,
       resources,
       ...getResources === void 0 ? {} : { getResources }

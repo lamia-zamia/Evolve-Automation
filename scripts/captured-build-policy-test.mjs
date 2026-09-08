@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import { createCapturedBuildPolicyReader } from "../src/adapters/evolve/progression/build/captured-build-policy.ts";
 
 const skipped = [];
+/** Nothing is known about Knowledge, so neither Knowledge rule applies. */
+const openKnowledge = {
+  knowledgeRequiredByTechs: 0,
+  levels: {
+    cheapestTechKnowledge: 0,
+    knowledgeRequiredByBuildTargets: 0,
+    knowledgeCapacity: 0,
+  },
+};
 const settings = {
   "batcity-farm": true,
   "bld_w_city-farm": 37,
@@ -43,6 +52,7 @@ const reader = createCapturedBuildPolicyReader({
     ],
   },
   getSettings: () => settings,
+  readKnowledge: () => openKnowledge,
   onSkipped: (key, reason) => skipped.push({ key, reason }),
 });
 
@@ -80,6 +90,7 @@ assert.deepEqual(skipped, [
 ]);
 
 const neutralMissingMultiplierReader = createCapturedBuildPolicyReader({
+  readKnowledge: () => openKnowledge,
   rootState: {
     readRoot: () => ({ city: { farm: { count: 0 } } }),
     isReactivitySuppressed: () => false,
@@ -102,6 +113,7 @@ assert.equal(
 );
 
 const absentSettingsReader = createCapturedBuildPolicyReader({
+  readKnowledge: () => openKnowledge,
   rootState: {
     readRoot: () => ({ city: { farm: { count: 2 } } }),
     isReactivitySuppressed: () => false,
@@ -117,6 +129,7 @@ const absentSettingsReader = createCapturedBuildPolicyReader({
 assert.deepEqual(absentSettingsReader().buildings, []);
 
 const nonOperatingReader = createCapturedBuildPolicyReader({
+  readKnowledge: () => openKnowledge,
   rootState: {
     readRoot: () => ({
       city: {
@@ -179,6 +192,7 @@ let storageRoot = {
   },
 };
 const storageReader = createCapturedBuildPolicyReader({
+  readKnowledge: () => openKnowledge,
   rootState: {
     readRoot: () => storageRoot,
     isReactivitySuppressed: () => false,
@@ -265,6 +279,7 @@ assert.equal(
 );
 
 const malformedStorageSettingReader = createCapturedBuildPolicyReader({
+  readKnowledge: () => openKnowledge,
   rootState: {
     readRoot: () => ({
       city: { storage_yard: { count: 1 } },
@@ -294,6 +309,7 @@ assert.deepEqual(
 );
 
 const housingReader = createCapturedBuildPolicyReader({
+  readKnowledge: () => openKnowledge,
   rootState: {
     readRoot: () => ({
       city: {
@@ -348,6 +364,7 @@ const fullPopulationRoot = {
   },
 };
 const fullPopulationReader = createCapturedBuildPolicyReader({
+  readKnowledge: () => openKnowledge,
   rootState: {
     readRoot: () => fullPopulationRoot,
     isReactivitySuppressed: () => false,
@@ -371,6 +388,7 @@ assert.equal(
 );
 
 const meditationReader = createCapturedBuildPolicyReader({
+  readKnowledge: () => openKnowledge,
   rootState: {
     readRoot: () => ({
       race: { calm: true },
@@ -423,6 +441,7 @@ const vacuumReader = createCapturedBuildPolicyReader({
     invoke: () => ({ ok: false, reason: "unknown-control" }),
     capturedElementIds: () => ["city-pylon", "city-farm"],
   },
+  readKnowledge: () => openKnowledge,
   getSettings: () => ({
     "batcity-pylon": true,
     "batcity-farm": true,
@@ -469,6 +488,7 @@ assert.deepEqual(
         "city-farm",
       ],
     },
+    readKnowledge: () => openKnowledge,
     getSettings: () => ({
       "batcity-university": true,
       "batcity-library": true,
@@ -489,6 +509,150 @@ assert.deepEqual(
       { id: "biolab", knowledge: true },
       { id: "farm", knowledge: false },
     ],
+  );
+}
+
+// Research blocked on capacity promotes every Knowledge building, including wardenclyffe.
+{
+  const gatedKnowledge = {
+    knowledgeRequiredByTechs: 9000,
+    levels: {
+      cheapestTechKnowledge: 9000,
+      knowledgeRequiredByBuildTargets: 0,
+      knowledgeCapacity: 4000,
+    },
+  };
+  const reader = createCapturedBuildPolicyReader({
+    readKnowledge: () => gatedKnowledge,
+    rootState: {
+      readRoot: () => ({
+        city: {
+          university: { count: 3 },
+          wardenclyffe: { count: 1 },
+          farm: { count: 4 },
+        },
+      }),
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => [
+        "city-university",
+        "city-wardenclyffe",
+        "city-farm",
+      ],
+    },
+    getSettings: () => ({
+      "batcity-university": true,
+      "batcity-wardenclyffe": true,
+      "batcity-farm": true,
+      "bld_w_city-university": 10,
+      "bld_w_city-wardenclyffe": 10,
+      "bld_w_city-farm": 10,
+      buildingWeightingNeedfulKnowledge: 5,
+      buildingWeightingUselessKnowledge: 0.01,
+    }),
+  });
+  assert.deepEqual(
+    reader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+    [
+      { id: "university", weighting: 50 },
+      { id: "wardenclyffe", weighting: 50 },
+      { id: "farm", weighting: 10 },
+    ],
+  );
+}
+
+// Capacity that already covers everything wanted demotes them instead — except wardenclyffe, which
+// the script keeps building for morale.
+{
+  const sufficientKnowledge = {
+    knowledgeRequiredByTechs: 3000,
+    levels: {
+      cheapestTechKnowledge: 3000,
+      knowledgeRequiredByBuildTargets: 0,
+      knowledgeCapacity: 4000,
+    },
+  };
+  const reader = createCapturedBuildPolicyReader({
+    readKnowledge: () => sufficientKnowledge,
+    rootState: {
+      readRoot: () => ({
+        city: {
+          university: { count: 3 },
+          wardenclyffe: { count: 1 },
+          farm: { count: 4 },
+        },
+      }),
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => [
+        "city-university",
+        "city-wardenclyffe",
+        "city-farm",
+      ],
+    },
+    getSettings: () => ({
+      "batcity-university": true,
+      "batcity-wardenclyffe": true,
+      "batcity-farm": true,
+      "bld_w_city-university": 10,
+      "bld_w_city-wardenclyffe": 10,
+      "bld_w_city-farm": 10,
+      buildingWeightingNeedfulKnowledge: 5,
+      buildingWeightingUselessKnowledge: 0.01,
+    }),
+  });
+  assert.deepEqual(
+    reader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+    [
+      { id: "university", weighting: 0.1 },
+      { id: "wardenclyffe", weighting: 10 },
+      { id: "farm", weighting: 10 },
+    ],
+  );
+}
+
+// A build target needing more Knowledge than capacity keeps the "no more knowledge" rule off, even
+// when every offered technology fits.
+{
+  const wantedByBuild = {
+    knowledgeRequiredByTechs: 3000,
+    levels: {
+      cheapestTechKnowledge: 3000,
+      knowledgeRequiredByBuildTargets: 9000,
+      knowledgeCapacity: 4000,
+    },
+  };
+  const reader = createCapturedBuildPolicyReader({
+    readKnowledge: () => wantedByBuild,
+    rootState: {
+      readRoot: () => ({ city: { university: { count: 3 } } }),
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => ["city-university"],
+    },
+    getSettings: () => ({
+      "batcity-university": true,
+      "bld_w_city-university": 10,
+      buildingWeightingNeedfulKnowledge: 5,
+      buildingWeightingUselessKnowledge: 0.01,
+    }),
+  });
+  // Gated by the build target, so the needful rule applies and the useless one does not.
+  assert.deepEqual(
+    reader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+    [{ id: "university", weighting: 50 }],
   );
 }
 

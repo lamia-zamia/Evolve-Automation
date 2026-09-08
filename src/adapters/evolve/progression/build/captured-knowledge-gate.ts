@@ -1,8 +1,8 @@
 /**
  * The Knowledge-capacity gate, from the captured research catalog.
  *
- * The gate answers one question the build cycle asks: is research currently blocked by Knowledge
- * storage rather than by anything else? When it is, a Knowledge building is allowed past a saving
+ * It answers two questions. The gate one, which the build cycle asks: is research currently blocked
+ * by Knowledge storage rather than by anything else? When it is, a Knowledge building is allowed past a saving
  * conflict, because the thing being saved for cannot be reached until capacity grows. Without the
  * gate that allowance never applies and an expensive saving target can starve research indefinitely.
  *
@@ -33,6 +33,22 @@ const OPEN_GATE: KnowledgeGateLevels = Object.freeze({
   cheapestTechKnowledge: 0,
   knowledgeRequiredByBuildTargets: 0,
   knowledgeCapacity: 0,
+});
+
+/** What one cycle knows about Knowledge: the gate the build planner reads, and the weighting half. */
+export interface CapturedKnowledgeSample {
+  readonly levels: KnowledgeGateLevels;
+  /**
+   * The most expensive technology currently offered. The weighting rules compare it against
+   * capacity to decide whether more Knowledge storage is wanted at all; 0 when no catalog has been
+   * read, which reads as "nothing known to want", the same as the open gate.
+   */
+  readonly knowledgeRequiredByTechs: number;
+}
+
+const NOTHING_KNOWN: CapturedKnowledgeSample = Object.freeze({
+  levels: OPEN_GATE,
+  knowledgeRequiredByTechs: 0,
 });
 
 export interface CapturedKnowledgeGateDependencies {
@@ -78,22 +94,25 @@ function finiteRequirement(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-export function createCapturedKnowledgeGateReader({
+export function createCapturedKnowledgeReader({
   rootState,
   resources,
   readLastOfferedTechs,
   readBuildRequirement,
-}: CapturedKnowledgeGateDependencies): () => KnowledgeGateLevels {
+}: CapturedKnowledgeGateDependencies): () => CapturedKnowledgeSample {
   return () => {
     const capacity = knowledgeCapacity(rootState);
     const offered = readLastOfferedTechs();
-    if (capacity === undefined) return OPEN_GATE;
+    if (capacity === undefined) return NOTHING_KNOWN;
     const buildRequirement = finiteRequirement(readBuildRequirement());
     if (offered === undefined) {
       return Object.freeze({
-        cheapestTechKnowledge: 0,
-        knowledgeRequiredByBuildTargets: buildRequirement,
-        knowledgeCapacity: capacity,
+        knowledgeRequiredByTechs: 0,
+        levels: Object.freeze({
+          cheapestTechKnowledge: 0,
+          knowledgeRequiredByBuildTargets: buildRequirement,
+          knowledgeCapacity: capacity,
+        }),
       });
     }
     const techKnowledgeCosts: KnowledgeTechCost[] = [];
@@ -107,9 +126,12 @@ export function createCapturedKnowledgeGateReader({
       buildCandidates: Object.freeze([]),
     });
     return Object.freeze({
-      cheapestTechKnowledge: requirements.cheapestTechKnowledge,
-      knowledgeRequiredByBuildTargets: buildRequirement,
-      knowledgeCapacity: capacity,
+      knowledgeRequiredByTechs: requirements.knowledgeRequiredByTechs,
+      levels: Object.freeze({
+        cheapestTechKnowledge: requirements.cheapestTechKnowledge,
+        knowledgeRequiredByBuildTargets: buildRequirement,
+        knowledgeCapacity: capacity,
+      }),
     });
   };
 }
