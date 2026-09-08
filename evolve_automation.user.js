@@ -1320,7 +1320,12 @@
   }
 
   // src/adapters/evolve/progression/build/captured-build-policy.ts
-  var UNLIMITED = Number.MAX_SAFE_INTEGER;
+  var UNLIMITED = Number.MAX_SAFE_INTEGER, KNOWLEDGE_BUILDINGS = /* @__PURE__ */ new Set([
+    "university",
+    "library",
+    "wardenclyffe",
+    "biolab"
+  ]);
   function readFiniteSetting(settings, key, defaultValue) {
     let value = settings[key];
     return value === void 0 ? defaultValue : typeof value == "number" && Number.isFinite(value) ? value : void 0;
@@ -1479,6 +1484,7 @@
         id === "mill" || id === "banquet"
       ),
       maximum: maximum >= 0 ? maximum : UNLIMITED,
+      knowledge: KNOWLEDGE_BUILDINGS.has(id),
       important: !1
     });
   }
@@ -1509,6 +1515,81 @@
       return Object.freeze({
         buildings: Object.freeze(buildings),
         ...readOptions2(isRecord(settings) ? settings : {})
+      });
+    };
+  }
+
+  // src/domain/knowledge-requirements.ts
+  function reserveBuildCost(costs, target) {
+    target.isTechnology || target.isKnowledge || target.knowledgeCost > 0 && costs.push(target.knowledgeCost);
+  }
+  function calculateKnowledgeRequirements(input) {
+    let knowledgeRequiredByTechs = Math.max(
+      0,
+      ...input.techKnowledgeCosts.map((tech) => tech.knowledgeCost)
+    ), reachable = input.techKnowledgeCosts.filter(
+      (tech) => tech.otherCostsAffordable && tech.knowledgeCost > 0
+    ), cheapestTechKnowledge = reachable.length > 0 ? Math.min(...reachable.map((tech) => tech.knowledgeCost)) : 0, buildKnowledgeCosts = [];
+    for (let target of input.reservedTargets)
+      reserveBuildCost(buildKnowledgeCosts, target);
+    let topTarget = null;
+    for (let candidate of input.buildCandidates)
+      !candidate.autoBuildable || candidate.isKnowledge || (!topTarget || candidate.weighting > topTarget.weighting) && (topTarget = candidate);
+    return topTarget && topTarget.knowledgeCost > 0 && buildKnowledgeCosts.push(topTarget.knowledgeCost), {
+      knowledgeRequiredByTechs,
+      cheapestTechKnowledge,
+      knowledgeRequiredByBuildTargets: Math.max(0, ...buildKnowledgeCosts)
+    };
+  }
+
+  // src/adapters/evolve/progression/build/captured-knowledge-gate.ts
+  var KNOWLEDGE = "Knowledge", OPEN_GATE = Object.freeze({
+    cheapestTechKnowledge: 0,
+    knowledgeRequiredByBuildTargets: 0,
+    knowledgeCapacity: 0
+  });
+  function knowledgeCapacity(rootState) {
+    let maximum = readProperty(
+      readProperty(readProperty(rootState.readRoot(), "resource"), KNOWLEDGE),
+      "max"
+    );
+    return typeof maximum == "number" && Number.isFinite(maximum) && maximum > 0 ? maximum : void 0;
+  }
+  function techCost(resources, tech) {
+    let knowledge = tech.cost[KNOWLEDGE];
+    if (typeof knowledge != "number" || !Number.isFinite(knowledge))
+      return;
+    let others = {};
+    for (let [id, amount] of Object.entries(tech.cost))
+      id !== KNOWLEDGE && (others[id] = amount);
+    let sample = resources.readResources(Object.keys(others));
+    return Object.freeze({
+      knowledgeCost: knowledge,
+      otherCostsAffordable: sample !== void 0 && canAfford(sample, others)
+    });
+  }
+  function createCapturedKnowledgeGateReader({
+    rootState,
+    resources,
+    readLastOfferedTechs
+  }) {
+    return () => {
+      let capacity = knowledgeCapacity(rootState), offered = readLastOfferedTechs();
+      if (capacity === void 0 || offered === void 0) return OPEN_GATE;
+      let techKnowledgeCosts = [];
+      for (let tech of offered) {
+        let cost = techCost(resources, tech);
+        cost !== void 0 && techKnowledgeCosts.push(cost);
+      }
+      let requirements = calculateKnowledgeRequirements({
+        techKnowledgeCosts: Object.freeze(techKnowledgeCosts),
+        reservedTargets: Object.freeze([]),
+        buildCandidates: Object.freeze([])
+      });
+      return Object.freeze({
+        cheapestTechKnowledge: requirements.cheapestTechKnowledge,
+        knowledgeRequiredByBuildTargets: 0,
+        knowledgeCapacity: capacity
       });
     };
   }
@@ -3136,6 +3217,9 @@
           result.outcome.failure?.message ?? result.outcome.status
         );
       }
+    }, lastOffered, readOfferedTechs = () => {
+      let value = offered.readOffered();
+      return value !== void 0 && (lastOffered = value), value;
     }, offered = createCapturedTechCatalog({
       rootState,
       discovery,
@@ -3165,7 +3249,11 @@
           ])
         });
       }
-    }), stateReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), scriptReservations = stateReservations === void 0 ? savingReservations : combineReservations(stateReservations, savingReservations), readKnowledgeGate = getState === void 0 ? void 0 : createScriptKnowledgeGateReader({
+    }), stateReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), scriptReservations = stateReservations === void 0 ? savingReservations : combineReservations(stateReservations, savingReservations), readKnowledgeGate = getState === void 0 ? createCapturedKnowledgeGateReader({
+      rootState,
+      resources,
+      readLastOfferedTechs: () => lastOffered
+    }) : createScriptKnowledgeGateReader({
       getState,
       resources,
       ...getResources === void 0 ? {} : { getResources }
@@ -3179,9 +3267,9 @@
       readSettings,
       ensureBuildControls,
       scriptReservations,
-      ...readKnowledgeGate === void 0 ? {} : { readKnowledgeGate },
+      readKnowledgeGate,
       ...readStorageRequired === void 0 ? {} : { readStorageRequired },
-      readOfferedTechs: () => offered.readOffered(),
+      readOfferedTechs,
       ...onSkipped === void 0 ? {} : { onSkipped },
       diagnostics
     }), research = createCapturedResearchControl({
@@ -3190,7 +3278,7 @@
       drawnActions,
       mountSuppression,
       panels,
-      readOfferedTechs: () => offered.readOffered(),
+      readOfferedTechs,
       ...onUnavailable === void 0 ? {} : { onUnavailable },
       diagnostics
     });

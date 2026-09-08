@@ -22,6 +22,7 @@ import { createScriptCostReservationSource } from "../adapters/evolve/script-cos
 import { createScriptBuildPolicyReader } from "../adapters/evolve/progression/build/script-build-policy.ts";
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
 import { createCapturedBuildPolicyReader } from "../adapters/evolve/progression/build/captured-build-policy.ts";
+import { createCapturedKnowledgeGateReader } from "../adapters/evolve/progression/build/captured-knowledge-gate.ts";
 import { createCapturedConstructionControl } from "./captured-construction-control.ts";
 import { createCapturedResearchControl } from "./captured-research-control.ts";
 import { SAVING_CONFLICT_CAUSE } from "../domain/progression/build/build.ts";
@@ -35,6 +36,7 @@ import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 
 export interface CapturedProgressionControlDependencies {
@@ -152,6 +154,14 @@ export function createCapturedProgressionControl(
       }
     }
   };
+  // The catalog a discovery pass already paid for, shared with the Knowledge gate so it never buys
+  // one of its own. It is the last catalog read, which may be the previous cycle's.
+  let lastOffered: readonly Readonly<OfferedTech>[] | undefined;
+  const readOfferedTechs = () => {
+    const value = offered.readOffered();
+    if (value !== undefined) lastOffered = value;
+    return value;
+  };
   const offered = createCapturedTechCatalog({
     rootState,
     discovery,
@@ -204,7 +214,11 @@ export function createCapturedProgressionControl(
       : combineReservations(stateReservations, savingReservations);
   const readKnowledgeGate =
     getState === undefined
-      ? undefined
+      ? createCapturedKnowledgeGateReader({
+          rootState,
+          resources,
+          readLastOfferedTechs: () => lastOffered,
+        })
       : createScriptKnowledgeGateReader({
           getState,
           resources,
@@ -224,9 +238,9 @@ export function createCapturedProgressionControl(
     readSettings,
     ensureBuildControls,
     scriptReservations,
-    ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
+    readKnowledgeGate,
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
-    readOfferedTechs: () => offered.readOffered(),
+    readOfferedTechs,
     ...(onSkipped === undefined ? {} : { onSkipped }),
     diagnostics,
   });
@@ -236,7 +250,7 @@ export function createCapturedProgressionControl(
     drawnActions,
     mountSuppression,
     panels,
-    readOfferedTechs: () => offered.readOffered(),
+    readOfferedTechs,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
     diagnostics,
   });

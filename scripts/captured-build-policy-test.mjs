@@ -55,6 +55,7 @@ assert.deepEqual(reader(), {
       id: "farm",
       weighting: 37,
       maximum: 12,
+      knowledge: false,
       important: false,
     },
     {
@@ -64,6 +65,7 @@ assert.deepEqual(reader(), {
       id: "cottage",
       weighting: 111,
       maximum: Number.MAX_SAFE_INTEGER,
+      knowledge: false,
       important: false,
     },
   ],
@@ -438,5 +440,56 @@ assert.deepEqual(
   ],
   "vacuum-collapse weighting deprioritizes the captured city pylon",
 );
+
+// The Knowledge-cap buildings are marked, so the planner's Knowledge gate can tell which candidate
+// answers a capacity shortage.
+{
+  const knowledgeReader = createCapturedBuildPolicyReader({
+    rootState: {
+      readRoot: () => ({
+        city: {
+          university: { count: 3 },
+          library: { count: 2 },
+          wardenclyffe: { count: 1 },
+          biolab: { count: 1 },
+          farm: { count: 4 },
+        },
+      }),
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => [
+        "city-university",
+        "city-library",
+        "city-wardenclyffe",
+        "city-biolab",
+        "city-farm",
+      ],
+    },
+    getSettings: () => ({
+      "batcity-university": true,
+      "batcity-library": true,
+      "batcity-wardenclyffe": true,
+      "batcity-biolab": true,
+      "batcity-farm": true,
+    }),
+  });
+  assert.deepEqual(
+    knowledgeReader().buildings.map(({ id, knowledge }) => ({
+      id,
+      knowledge,
+    })),
+    [
+      { id: "university", knowledge: true },
+      { id: "library", knowledge: true },
+      { id: "wardenclyffe", knowledge: true },
+      { id: "biolab", knowledge: true },
+      { id: "farm", knowledge: false },
+    ],
+  );
+}
 
 console.log("captured-build-policy ok");

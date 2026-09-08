@@ -33,6 +33,19 @@ export interface CapturedBuildPolicyDependencies {
 
 const UNLIMITED = Number.MAX_SAFE_INTEGER;
 
+/**
+ * The city buildings whose effect raises `resource.Knowledge.max` in DeadSpace, verified against
+ * `actions.city` at the reference commit. The planner's Knowledge gate needs to know which
+ * candidates answer a capacity shortage; the upstream effect that says so runs inside the game's
+ * own module and has no captured route. Later regions have their own and are not in this sample.
+ */
+const KNOWLEDGE_BUILDINGS: ReadonlySet<string> = new Set([
+  "university",
+  "library",
+  "wardenclyffe",
+  "biolab",
+]);
+
 function readFiniteSetting(
   settings: Record<PropertyKey, unknown>,
   key: string,
@@ -283,6 +296,7 @@ function readTarget(
       id === "mill" || id === "banquet",
     ),
     maximum: maximum >= 0 ? maximum : UNLIMITED,
+    knowledge: KNOWLEDGE_BUILDINGS.has(id),
     important: false,
   });
 }
