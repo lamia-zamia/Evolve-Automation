@@ -460,6 +460,88 @@ assert.deepEqual(
   "vacuum-collapse weighting deprioritizes the captured city pylon",
 );
 
+let powerRoot = {
+  city: {
+    mill: { count: 1, on: 1 },
+    coal_power: { count: 1, on: 1 },
+    farm: { count: 1 },
+    power: 10,
+    power_total: -100,
+    powered: true,
+  },
+};
+const powerSettings = {
+  "batcity-mill": true,
+  "batcity-coal_power": true,
+  "batcity-farm": true,
+  "bld_w_city-mill": 10,
+  "bld_w_city-coal_power": 10,
+  "bld_w_city-farm": 10,
+  buildingWeightingNeedfulPowerPlant: 3,
+  buildingWeightingUselessPowerPlant: 0.1,
+};
+const powerReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => powerRoot,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["city-mill", "city-coal_power", "city-farm"],
+  },
+  readKnowledge: () => openKnowledge,
+  getSettings: () => powerSettings,
+});
+assert.deepEqual(
+  powerReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "mill", weighting: 30 },
+    { id: "coal_power", weighting: 30 },
+    { id: "farm", weighting: 10 },
+  ],
+  "a power deficit promotes current city power producers",
+);
+powerRoot = {
+  city: {
+    mill: { count: 1, on: 1 },
+    coal_power: { count: 1, on: 1 },
+    farm: { count: 1 },
+    power: 120,
+    power_total: -100,
+    powered: true,
+  },
+};
+assert.deepEqual(
+  powerReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "mill", weighting: 10 },
+    { id: "coal_power", weighting: 1 },
+    { id: "farm", weighting: 10 },
+  ],
+  "surplus power demotes producers except Mill",
+);
+powerRoot = {
+  city: {
+    mill: { count: 1, on: 1 },
+    coal_power: { count: 1, on: 1 },
+    farm: { count: 1 },
+    power: "120",
+    power_total: -100,
+    powered: true,
+  },
+};
+assert.deepEqual(
+  powerReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "mill", weighting: 10 },
+    { id: "coal_power", weighting: 10 },
+    { id: "farm", weighting: 10 },
+  ],
+  "invalid power state leaves producer weighting neutral",
+);
+
 // The Knowledge-cap buildings are marked, so the planner's Knowledge gate can tell which candidate
 // answers a capacity shortage.
 {

@@ -3,9 +3,8 @@
  *
  * This is intentionally the small bridge between page capture and the existing construction
  * contract: the game decides which city controls exist, while persisted script settings decide
- * which of those controls are managed, their configured order weight, and their cap. The first
- * captured dynamic rule boosts a managed building with no copies; the broader production sample
- * remains a separate migration.
+ * which of those controls are managed, their configured order weight, and their cap. Dynamic rules
+ * use only state and current DeadSpace ids that the captured surface can validate.
  */
 
 import {
@@ -13,6 +12,7 @@ import {
   applyNewBuildingWeighting,
   applyNeedMoreStorageWeighting,
   applyNonOperatingCityWeighting,
+  applyPowerPlantWeighting,
   applyUselessMeditationWeighting,
   applyUselessHousingWeighting,
   applyVacuumCollapseWeighting,
@@ -50,6 +50,9 @@ interface CityRuleContext {
   readonly knowledgeGated: boolean;
   /** Capacity already covers every Knowledge cost the run knows it wants. */
   readonly knowledgeSufficient: boolean;
+  readonly powerUnlocked: boolean;
+  readonly powerSurplus: number;
+  readonly unpoweredPowerDemand: number;
 }
 
 const UNLIMITED = Number.MAX_SAFE_INTEGER;
@@ -172,6 +175,32 @@ function readUselessMeditation(root: unknown): boolean | undefined {
   return Boolean(readProperty(race, "calm")) && amount < maximum;
 }
 
+interface CapturedPowerState {
+  readonly unlocked: boolean;
+  readonly surplus: number;
+  readonly demand: number;
+}
+
+function readPowerState(root: unknown): CapturedPowerState | undefined {
+  const city = readProperty(root, "city");
+  if (!isRecord(city)) return undefined;
+  const unlocked = readProperty(city, "powered");
+  const surplus = readProperty(city, "power");
+  const rawDemand = readProperty(city, "power_total");
+  if (
+    typeof unlocked !== "boolean" ||
+    typeof surplus !== "number" ||
+    !Number.isFinite(surplus) ||
+    typeof rawDemand !== "number" ||
+    !Number.isFinite(rawDemand)
+  ) {
+    return undefined;
+  }
+  // DeadSpace stores power capacity as a negative `city.power_total`; the policy compares it
+  // with the positive current Power surplus. Future AI-colonist demand is not visible here.
+  return Object.freeze({ unlocked, surplus, demand: -rawDemand });
+}
+
 interface CityWeightingInput {
   readonly base: number;
   readonly id: string;
@@ -190,6 +219,8 @@ interface CityWeightingInput {
     nonOperating: number;
     needfulKnowledge: number;
     uselessKnowledge: number;
+    needfulPower: number;
+    uselessPower: number;
   }>;
 }
 
@@ -203,6 +234,15 @@ function cityWeighting(input: Readonly<CityWeightingInput>): number {
     input.base,
     input.count,
     multipliers.newBuilding,
+  );
+  weight = applyPowerPlantWeighting(
+    weight,
+    id,
+    context.powerUnlocked,
+    context.powerSurplus,
+    context.unpoweredPowerDemand,
+    multipliers.needfulPower,
+    multipliers.uselessPower,
   );
   weight = applyUnusedStorageWeighting(
     weight,
@@ -361,6 +401,27 @@ function readTarget(
     onSkipped(binding, "useless-knowledge weighting is not finite");
     return undefined;
   }
+  const powerPlant = [
+    "mill",
+    "windmill",
+    "coal_power",
+    "oil_power",
+    "fission_power",
+  ].includes(id);
+  const needfulPowerWeighting = powerPlant
+    ? readFiniteSetting(settings, "buildingWeightingNeedfulPowerPlant", 1)
+    : 1;
+  if (needfulPowerWeighting === undefined) {
+    onSkipped(binding, "needful-power weighting is not finite");
+    return undefined;
+  }
+  const uselessPowerWeighting = powerPlant
+    ? readFiniteSetting(settings, "buildingWeightingUselessPowerPlant", 1)
+    : 1;
+  if (uselessPowerWeighting === undefined) {
+    onSkipped(binding, "useless-power weighting is not finite");
+    return undefined;
+  }
   const onValue = readProperty(state, "on");
   const on =
     typeof onValue === "number" && Number.isFinite(onValue)
@@ -394,6 +455,8 @@ function readTarget(
         nonOperating: nonOperatingWeighting,
         needfulKnowledge: needfulKnowledgeWeighting,
         uselessKnowledge: uselessKnowledgeWeighting,
+        needfulPower: needfulPowerWeighting,
+        uselessPower: uselessPowerWeighting,
       },
     }),
     maximum: maximum >= 0 ? maximum : UNLIMITED,
@@ -415,6 +478,7 @@ export function createCapturedBuildPolicyReader({
     const root = rootState.readRoot();
     const city = readProperty(root, "city");
     const storageParts = readStorageParts(root);
+    const power = readPowerState(root);
     const knowledge = readKnowledge();
     const context: CityRuleContext = Object.freeze({
       unusedStorageParts: storageParts?.unused ?? false,
@@ -430,6 +494,9 @@ export function createCapturedBuildPolicyReader({
           knowledge.knowledgeRequiredByTechs,
           knowledge.levels.knowledgeRequiredByBuildTargets,
         ) <= knowledge.levels.knowledgeCapacity,
+      powerUnlocked: power?.unlocked ?? false,
+      powerSurplus: power?.surplus ?? 0,
+      unpoweredPowerDemand: power?.demand ?? 0,
     });
     const buildings: Readonly<CapturedBuildTarget>[] = [];
     if (isRecord(settings) && isRecord(city)) {

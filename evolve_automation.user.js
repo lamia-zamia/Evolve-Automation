@@ -1296,6 +1296,16 @@
   function applyNewBuildingWeighting(baseWeight, count, multiplier) {
     return count === 0 ? baseWeight * multiplier : baseWeight;
   }
+  var CURRENT_CITY_POWER_PLANTS = /* @__PURE__ */ new Set([
+    "mill",
+    "windmill",
+    "coal_power",
+    "oil_power",
+    "fission_power"
+  ]);
+  function applyPowerPlantWeighting(baseWeight, buildingId, powerUnlocked, powerSurplus, unpoweredPowerDemand, needfulMultiplier, uselessMultiplier) {
+    return !powerUnlocked || !CURRENT_CITY_POWER_PLANTS.has(buildingId) ? baseWeight : powerSurplus < unpoweredPowerDemand ? baseWeight * needfulMultiplier : powerSurplus > unpoweredPowerDemand && buildingId !== "mill" ? baseWeight * uselessMultiplier : baseWeight;
+  }
   function applyNonOperatingCityWeighting(baseWeight, count, on, multiplier, excluded) {
     return !excluded && on !== void 0 && count - on > 0 ? baseWeight * multiplier : baseWeight;
   }
@@ -1378,13 +1388,28 @@
     if (!(typeof amount != "number" || !Number.isFinite(amount) || typeof maximum != "number" || !Number.isFinite(maximum)))
       return !!readProperty(race, "calm") && amount < maximum;
   }
+  function readPowerState(root) {
+    let city = readProperty(root, "city");
+    if (!isRecord(city)) return;
+    let unlocked = readProperty(city, "powered"), surplus = readProperty(city, "power"), rawDemand = readProperty(city, "power_total");
+    if (!(typeof unlocked != "boolean" || typeof surplus != "number" || !Number.isFinite(surplus) || typeof rawDemand != "number" || !Number.isFinite(rawDemand)))
+      return Object.freeze({ unlocked, surplus, demand: -rawDemand });
+  }
   function cityWeighting(input) {
     let { id, context, multipliers } = input, weight = applyNewBuildingWeighting(
       input.base,
       input.count,
       multipliers.newBuilding
     );
-    return weight = applyUnusedStorageWeighting(
+    return weight = applyPowerPlantWeighting(
+      weight,
+      id,
+      context.powerUnlocked,
+      context.powerSurplus,
+      context.unpoweredPowerDemand,
+      multipliers.needfulPower,
+      multipliers.uselessPower
+    ), weight = applyUnusedStorageWeighting(
       weight,
       id,
       context.unusedStorageParts,
@@ -1503,6 +1528,22 @@
       onSkipped(binding, "useless-knowledge weighting is not finite");
       return;
     }
+    let powerPlant = [
+      "mill",
+      "windmill",
+      "coal_power",
+      "oil_power",
+      "fission_power"
+    ].includes(id), needfulPowerWeighting = powerPlant ? readFiniteSetting(settings, "buildingWeightingNeedfulPowerPlant", 1) : 1;
+    if (needfulPowerWeighting === void 0) {
+      onSkipped(binding, "needful-power weighting is not finite");
+      return;
+    }
+    let uselessPowerWeighting = powerPlant ? readFiniteSetting(settings, "buildingWeightingUselessPowerPlant", 1) : 1;
+    if (uselessPowerWeighting === void 0) {
+      onSkipped(binding, "useless-power weighting is not finite");
+      return;
+    }
     let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
@@ -1530,7 +1571,9 @@
           needMoreStorage: needStorageWeighting,
           nonOperating: nonOperatingWeighting,
           needfulKnowledge: needfulKnowledgeWeighting,
-          uselessKnowledge: uselessKnowledgeWeighting
+          uselessKnowledge: uselessKnowledgeWeighting,
+          needfulPower: needfulPowerWeighting,
+          uselessPower: uselessPowerWeighting
         }
       }),
       maximum: maximum >= 0 ? maximum : UNLIMITED,
@@ -1548,7 +1591,7 @@
     let reportSkipped = onSkipped ?? (() => {
     });
     return () => {
-      let settings = getSettings(), root = rootState.readRoot(), city = readProperty(root, "city"), storageParts = readStorageParts(root), knowledge = readKnowledge(), context = Object.freeze({
+      let settings = getSettings(), root = rootState.readRoot(), city = readProperty(root, "city"), storageParts = readStorageParts(root), power = readPowerState(root), knowledge = readKnowledge(), context = Object.freeze({
         unusedStorageParts: storageParts?.unused ?? !1,
         storagePartsAllAssigned: storageParts?.allAssigned ?? !1,
         housingUnderused: readHousingUnderused(root) ?? !1,
@@ -1559,7 +1602,10 @@
         knowledgeSufficient: knowledge.levels.knowledgeCapacity > 0 && Math.max(
           knowledge.knowledgeRequiredByTechs,
           knowledge.levels.knowledgeRequiredByBuildTargets
-        ) <= knowledge.levels.knowledgeCapacity
+        ) <= knowledge.levels.knowledgeCapacity,
+        powerUnlocked: power?.unlocked ?? !1,
+        powerSurplus: power?.surplus ?? 0,
+        unpoweredPowerDemand: power?.demand ?? 0
       }), buildings = [];
       if (isRecord(settings) && isRecord(city))
         for (let elementId of controls.capturedElementIds()) {

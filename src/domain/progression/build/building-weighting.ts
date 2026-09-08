@@ -52,7 +52,7 @@ export type BuildingWeightName =
   | "buildingWeightingMatrixCure";
 
 /**
- * Applies the first captured-only weighting rule to a managed building.
+ * Applies the captured-only weighting rules to a managed building.
  *
  * The full weighting decider needs a much larger game snapshot. This small
  * rule is independent of that snapshot: a managed building with no copies is
@@ -99,6 +99,35 @@ export function applyNewBuildingWeighting(
   multiplier: number,
 ): number {
   return count === 0 ? baseWeight * multiplier : baseWeight;
+}
+
+const CURRENT_CITY_POWER_PLANTS = new Set([
+  "mill",
+  "windmill",
+  "coal_power",
+  "oil_power",
+  "fission_power",
+]);
+
+/** Applies the upstream energy-need rules to current DeadSpace city power producers. */
+export function applyPowerPlantWeighting(
+  baseWeight: number,
+  buildingId: string,
+  powerUnlocked: boolean,
+  powerSurplus: number,
+  unpoweredPowerDemand: number,
+  needfulMultiplier: number,
+  uselessMultiplier: number,
+): number {
+  if (!powerUnlocked || !CURRENT_CITY_POWER_PLANTS.has(buildingId)) {
+    return baseWeight;
+  }
+  if (powerSurplus < unpoweredPowerDemand) {
+    return baseWeight * needfulMultiplier;
+  }
+  return powerSurplus > unpoweredPowerDemand && buildingId !== "mill"
+    ? baseWeight * uselessMultiplier
+    : baseWeight;
 }
 
 /**
