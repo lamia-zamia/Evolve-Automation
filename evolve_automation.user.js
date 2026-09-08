@@ -1291,6 +1291,16 @@
   function applyNeedMoreStorageWeighting(baseWeight, buildingId, storagePartsAllAssigned, multiplier) {
     return storagePartsAllAssigned && buildingId === "shed" ? baseWeight * multiplier : baseWeight;
   }
+  var CURRENT_CITY_HOUSING = [
+    "basic_housing",
+    "cottage",
+    "apartment",
+    "lodge",
+    "slave_pen"
+  ];
+  function applyUselessHousingWeighting(baseWeight, buildingId, housingUnderused, multiplier) {
+    return housingUnderused && CURRENT_CITY_HOUSING.includes(buildingId) ? baseWeight * multiplier : baseWeight;
+  }
   function isKnowledgeGated(levels) {
     return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
   }
@@ -1329,7 +1339,14 @@
       allAssigned: !!readProperty(crates, "display") && !!readProperty(containers, "display") && ratios.every((ratio) => ratio === 1)
     });
   }
-  function readTarget2(settings, city, elementId, unusedStorageParts, storagePartsAllAssigned, onSkipped) {
+  function readHousingUnderused(root) {
+    let population = readProperty(readProperty(root, "resource"), "Population");
+    if (!isRecord(population)) return;
+    let amount = population.amount, maximum = population.max;
+    if (!(typeof amount != "number" || !Number.isFinite(amount) || typeof maximum != "number" || !Number.isFinite(maximum)))
+      return maximum > 50 && amount / maximum < 0.9;
+  }
+  function readTarget2(settings, city, elementId, unusedStorageParts, storagePartsAllAssigned, housingUnderused, onSkipped) {
     if (!elementId.startsWith("city-") || elementId.length === 5)
       return;
     let binding = elementId;
@@ -1373,6 +1390,17 @@
       onSkipped(binding, "storage expansion weighting is not finite");
       return;
     }
+    let housingWeighting = [
+      "basic_housing",
+      "cottage",
+      "apartment",
+      "lodge",
+      "slave_pen"
+    ].includes(id) ? readFiniteSetting(settings, "buildingWeightingUselessHousing", 1) : 1;
+    if (housingWeighting === void 0) {
+      onSkipped(binding, "housing weighting is not finite");
+      return;
+    }
     let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
@@ -1385,11 +1413,16 @@
       id,
       weighting: applyNonOperatingCityWeighting(
         applyNeedMoreStorageWeighting(
-          applyUnusedStorageWeighting(
-            applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+          applyUselessHousingWeighting(
+            applyUnusedStorageWeighting(
+              applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+              id,
+              unusedStorageParts,
+              storageWeighting
+            ),
             id,
-            unusedStorageParts,
-            storageWeighting
+            housingUnderused,
+            housingWeighting
           ),
           id,
           storagePartsAllAssigned,
@@ -1422,6 +1455,7 @@
             elementId,
             storageParts?.unused ?? !1,
             storageParts?.allAssigned ?? !1,
+            readHousingUnderused(root) ?? !1,
             reportSkipped
           );
           target !== void 0 && buildings.push(target);

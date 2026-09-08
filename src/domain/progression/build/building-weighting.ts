@@ -113,6 +113,27 @@ export function applyNeedMoreStorageWeighting(
     : baseWeight;
 }
 
+const CURRENT_CITY_HOUSING = [
+  "basic_housing",
+  "cottage",
+  "apartment",
+  "lodge",
+  "slave_pen",
+] as const;
+
+/** Applies the captured housing-underuse rule to current city housing actions. */
+export function applyUselessHousingWeighting(
+  baseWeight: number,
+  buildingId: string,
+  housingUnderused: boolean,
+  multiplier: number,
+): number {
+  return housingUnderused &&
+    (CURRENT_CITY_HOUSING as readonly string[]).includes(buildingId)
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
 /**

@@ -291,4 +291,81 @@ assert.deepEqual(
   "malformed storage weighting is rejected like other configured weights",
 );
 
+const housingReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({
+      city: {
+        basic_housing: { count: 1 },
+        cottage: { count: 1 },
+        unrelated: { count: 1 },
+      },
+      resource: {
+        Crates: { amount: 10, max: 10, display: true },
+        Containers: { amount: 10, max: 10, display: true },
+        Population: { amount: 20, max: 100, display: true },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => [
+      "city-basic_housing",
+      "city-cottage",
+      "city-unrelated",
+    ],
+  },
+  getSettings: () => ({
+    "batcity-basic_housing": true,
+    "batcity-cottage": true,
+    "batcity-unrelated": true,
+    "bld_w_city-basic_housing": 10,
+    "bld_w_city-cottage": 10,
+    "bld_w_city-unrelated": 10,
+    buildingWeightingUselessHousing: 0.1,
+  }),
+});
+assert.deepEqual(
+  housingReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "basic_housing", weighting: 1 },
+    { id: "cottage", weighting: 1 },
+    { id: "unrelated", weighting: 10 },
+  ],
+  "underused population makes current housing candidates less useful",
+);
+
+const fullPopulationRoot = {
+  city: { basic_housing: { count: 1 } },
+  resource: {
+    Crates: { amount: 10, max: 10, display: true },
+    Containers: { amount: 10, max: 10, display: true },
+    Population: { amount: 90, max: 100, display: true },
+  },
+};
+const fullPopulationReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => fullPopulationRoot,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["city-basic_housing"],
+  },
+  getSettings: () => ({
+    "batcity-basic_housing": true,
+    "bld_w_city-basic_housing": 10,
+    buildingWeightingUselessHousing: 0.1,
+  }),
+});
+assert.equal(
+  fullPopulationReader().buildings[0].weighting,
+  10,
+  "population at ninety percent capacity keeps housing neutral",
+);
+
 console.log("captured-build-policy ok");
