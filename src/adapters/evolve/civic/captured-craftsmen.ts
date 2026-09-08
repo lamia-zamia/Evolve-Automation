@@ -65,11 +65,17 @@ interface CraftsmanState {
   readonly workers: number;
 }
 
+interface DefaultJobState {
+  readonly id: string;
+  readonly workers: number;
+}
+
 interface CraftsmenSession {
   readonly root: unknown;
   readonly input: JobsCycleInput;
   readonly samples: readonly CraftSample[];
   readonly workerPool: number;
+  readonly defaultJob: DefaultJobState | undefined;
 }
 
 function finiteNumber(value: unknown, fallback: number): number {
@@ -162,6 +168,21 @@ function readCraftsmanState(
   });
 }
 
+function readDefaultJobState(root: unknown): DefaultJobState | undefined {
+  const civic = readProperty(root, "civic");
+  if (!isRecord(civic)) return undefined;
+  // `civic.d_job` is filled during vars loading. A transient root can precede that initialization;
+  // craft-only redistribution stays lenient, while future default-job acquisition must require a
+  // complete state here before it can consume this pool.
+  const id = readProperty(civic, "d_job");
+  if (typeof id !== "string" || id.length === 0) return undefined;
+  const job = readProperty(civic, id);
+  const workers = readProperty(job, "workers");
+  if (typeof workers !== "number" || !Number.isFinite(workers) || workers < 0)
+    return undefined;
+  return Object.freeze({ id, workers });
+}
+
 function readAffordability(
   root: unknown,
   id: string,
@@ -198,6 +219,7 @@ function readCycleInput(
       readonly input: JobsCycleInput;
       readonly samples: readonly CraftSample[];
       readonly workerPool: number;
+      readonly defaultJob: DefaultJobState | undefined;
     }
   | undefined {
   const samples = readProducts(root);
@@ -301,6 +323,7 @@ function readCycleInput(
     input,
     samples: Object.freeze(samples),
     workerPool: craftsmen.workers,
+    defaultJob: readDefaultJobState(root),
   });
 }
 
@@ -353,6 +376,15 @@ function createExecutor(
       ).workers;
       if (currentWorkerPool !== session.workerPool)
         return stale("craftsmen-pool-changed", "craftsman worker pool changed");
+      const currentDefaultJob = readDefaultJobState(session.root);
+      if (
+        currentDefaultJob?.id !== session.defaultJob?.id ||
+        currentDefaultJob?.workers !== session.defaultJob?.workers
+      )
+        return stale(
+          "default-job-pool-changed",
+          "default job or its worker pool changed",
+        );
       if (!decisionsMatch(planJobs(session.input)!, decision))
         return rejected(
           "invalid-craftsmen-decision",
@@ -528,6 +560,7 @@ export function createCapturedCraftsmenAutomation(
         input: sampled.input,
         samples: sampled.samples,
         workerPool: sampled.workerPool,
+        defaultJob: sampled.defaultJob,
       });
       return sampled.input;
     },

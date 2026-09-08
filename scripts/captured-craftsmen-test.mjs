@@ -50,7 +50,11 @@ function makeRoot() {
         rcap: {},
       },
     },
-    civic: { craftsman: { workers: 2, max: 4 } },
+    civic: {
+      d_job: "unemployed",
+      unemployed: { workers: 5 },
+      craftsman: { workers: 2, max: 4 },
+    },
     resource: {
       Plywood: { amount: 100 },
       Brick: { amount: 0 },
@@ -165,6 +169,57 @@ const poolAdapter = createCapturedCraftsmenAutomation({
 const poolDecision = planJobs(poolAdapter.reader.readCycle(true));
 poolRoot.civic.craftsman.workers = 1;
 assert.equal(poolAdapter.executor.execute(poolDecision).status, "stale");
+
+const defaultJobRoot = makeRoot();
+const defaultJobControls = controlsFor(defaultJobRoot);
+const defaultJobAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(defaultJobRoot),
+  controls: defaultJobControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+});
+const defaultJobDecision = planJobs(defaultJobAdapter.reader.readCycle(true));
+defaultJobRoot.civic.unemployed.workers = 4;
+assert.equal(
+  defaultJobAdapter.executor.execute(defaultJobDecision).status,
+  "stale",
+);
+
+const defaultJobSelectionRoot = makeRoot();
+const defaultJobSelectionControls = controlsFor(defaultJobSelectionRoot);
+const defaultJobSelectionAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(defaultJobSelectionRoot),
+  controls: defaultJobSelectionControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+});
+const defaultJobSelectionDecision = planJobs(
+  defaultJobSelectionAdapter.reader.readCycle(true),
+);
+defaultJobSelectionRoot.civic.d_job = "farmer";
+defaultJobSelectionRoot.civic.farmer = { workers: 5 };
+assert.equal(
+  defaultJobSelectionAdapter.executor.execute(defaultJobSelectionDecision)
+    .status,
+  "stale",
+);
+
+const uninitializedRoot = makeRoot();
+delete uninitializedRoot.civic.d_job;
+const uninitializedControls = controlsFor(uninitializedRoot);
+const uninitializedAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(uninitializedRoot),
+  controls: uninitializedControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+});
+const uninitializedDecision = planJobs(
+  uninitializedAdapter.reader.readCycle(true),
+);
+assert.equal(
+  uninitializedAdapter.executor.execute(uninitializedDecision).status,
+  "succeeded",
+);
 
 const missingRoot = makeRoot();
 const missingControls = controlsFor(missingRoot, false);

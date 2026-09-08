@@ -4478,6 +4478,15 @@
       workers: workers >= 0 ? workers : assignedWorkers
     });
   }
+  function readDefaultJobState(root) {
+    let civic = readProperty(root, "civic");
+    if (!isRecord(civic)) return;
+    let id = readProperty(civic, "d_job");
+    if (typeof id != "string" || id.length === 0) return;
+    let job = readProperty(civic, id), workers = readProperty(job, "workers");
+    if (!(typeof workers != "number" || !Number.isFinite(workers) || workers < 0))
+      return Object.freeze({ id, workers });
+  }
   function readAffordability(root, id, costs) {
     let recipe = costs.read(id);
     if (recipe === void 0) return Number.MAX_SAFE_INTEGER;
@@ -4587,7 +4596,8 @@
     return Object.freeze({
       input,
       samples: Object.freeze(samples),
-      workerPool: craftsmen.workers
+      workerPool: craftsmen.workers,
+      defaultJob: readDefaultJobState(root)
     });
   }
   function decisionsMatch(left, right) {
@@ -4624,6 +4634,12 @@
           session.samples.reduce((sum, sample) => sum + sample.workers, 0)
         ).workers !== session.workerPool)
           return stale("craftsmen-pool-changed", "craftsman worker pool changed");
+        let currentDefaultJob = readDefaultJobState(session.root);
+        if (currentDefaultJob?.id !== session.defaultJob?.id || currentDefaultJob?.workers !== session.defaultJob?.workers)
+          return stale(
+            "default-job-pool-changed",
+            "default job or its worker pool changed"
+          );
         if (!decisionsMatch(planJobs(session.input), decision))
           return rejected(
             "invalid-craftsmen-decision",
@@ -4774,7 +4790,8 @@
           root,
           input: sampled3.input,
           samples: sampled3.samples,
-          workerPool: sampled3.workerPool
+          workerPool: sampled3.workerPool,
+          defaultJob: sampled3.defaultJob
         }), sampled3.input);
       }
     });
