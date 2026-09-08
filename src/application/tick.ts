@@ -1,7 +1,6 @@
 import {
   advanceScriptTick,
   advanceStateLog,
-  effectiveTickRate,
   isThrottledTick,
   shouldStartTick,
 } from "../domain/tick.ts";
@@ -43,17 +42,7 @@ export function runTick({
   controls.markGameTickConsumed();
   const scriptTick = advanceScriptTick(preamble.scriptTick);
   controls.setScriptTick(scriptTick);
-  // The gate suppresses the game's own wake-up on skipped periods, so the script is only called on
-  // working ones. Applying the tick's throttle as well would compose the two rates.
-  const periodGated = controls.syncPeriodGate(
-    preamble.exposeGating
-      ? effectiveTickRate(preamble.tickRate, preamble.accelerated)
-      : 0,
-  );
-  if (
-    !periodGated &&
-    isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated)
-  ) {
+  if (isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated)) {
     return false;
   }
 

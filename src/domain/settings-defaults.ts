@@ -106,7 +106,6 @@ export function computeGeneralDefaults(): ResetPlan {
       autoPrestige: false,
       tickRate: 4,
       tickSchedule: false,
-      exposeGating: false,
       researchRequest: true,
       researchRequestSpace: false,
       missionRequest: true,

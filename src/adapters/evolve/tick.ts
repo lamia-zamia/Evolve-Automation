@@ -4,7 +4,6 @@ import type {
   TickPreambleSnapshot,
   TickReader,
 } from "../../ports/tick.ts";
-import type { PeriodGate } from "../../ports/period-gate.ts";
 import { coerceNumber, requireNumber, requireRecord } from "../validation.ts";
 
 export interface TickReaderDependencies {
@@ -35,7 +34,6 @@ export function createTickReader(
         scriptTick: requireNumber(state["scriptTick"], "state.scriptTick"),
         tickRate: coerceNumber(settings["tickRate"]),
         accelerated: Boolean(gameSettings["at"]),
-        exposeGating: Boolean(settings["exposeGating"]),
       };
     },
 
@@ -169,7 +167,6 @@ export interface TickControlsDependencies {
   readonly getNaniteManager: () => unknown;
   readonly getSupplyManager: () => unknown;
   readonly getEjectManager: () => unknown;
-  readonly getPeriodGate: () => PeriodGate;
 }
 
 export function createTickControls(
@@ -179,9 +176,6 @@ export function createTickControls(
   return Object.freeze({
     markGameTickConsumed(): void {
       dependencies.getState().gameTicked = false;
-    },
-    syncPeriodGate(rate: number): boolean {
-      return dependencies.getPeriodGate().sync(rate);
     },
     setScriptTick(scriptTick: number): void {
       dependencies.getState().scriptTick = scriptTick;
