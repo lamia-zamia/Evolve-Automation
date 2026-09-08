@@ -8,7 +8,10 @@
  * remains a separate migration.
  */
 
-import { applyNewBuildingWeighting } from "../../../../domain/progression/build/building-weighting.ts";
+import {
+  applyNewBuildingWeighting,
+  applyNonOperatingCityWeighting,
+} from "../../../../domain/progression/build/building-weighting.ts";
 import type { ConstructionCycleOptions } from "../../../../ports/construction-candidates.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
@@ -93,6 +96,20 @@ function readTarget(
     onSkipped(binding, "new-building weighting is not finite");
     return undefined;
   }
+  const nonOperatingWeighting = readFiniteSetting(
+    settings,
+    "buildingWeightingNonOperatingCity",
+    1,
+  );
+  if (nonOperatingWeighting === undefined) {
+    onSkipped(binding, "non-operating-city weighting is not finite");
+    return undefined;
+  }
+  const onValue = readProperty(state, "on");
+  const on =
+    typeof onValue === "number" && Number.isFinite(onValue)
+      ? onValue
+      : undefined;
   const maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
   if (maximum === undefined) {
     onSkipped(binding, "configured maximum is not finite");
@@ -103,10 +120,12 @@ function readTarget(
     elementId,
     region: "city",
     id,
-    weighting: applyNewBuildingWeighting(
-      weighting,
+    weighting: applyNonOperatingCityWeighting(
+      applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
       count,
-      newBuildingWeighting,
+      on,
+      nonOperatingWeighting,
+      id === "mill" || id === "banquet",
     ),
     maximum: maximum >= 0 ? maximum : UNLIMITED,
     important: false,

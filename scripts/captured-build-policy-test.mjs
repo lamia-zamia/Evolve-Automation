@@ -8,6 +8,7 @@ const settings = {
   "bld_m_city-farm": 12,
   "batcity-cottage": true,
   "bld_w_city-cottage": 37,
+  buildingWeightingNonOperatingCity: 0.2,
   buildingWeightingNew: 3,
   "batcity-lumber": false,
   "batcity-bad": true,
@@ -21,7 +22,11 @@ const settings = {
 const reader = createCapturedBuildPolicyReader({
   rootState: {
     readRoot: () => ({
-      city: { farm: { count: 2 }, cottage: { count: 0 }, bad: {} },
+      city: {
+        farm: { count: 2 },
+        cottage: { count: 0 },
+        bad: {},
+      },
     }),
     isReactivitySuppressed: () => false,
     subscribeRootReplaced: () => () => {},
@@ -108,5 +113,46 @@ const absentSettingsReader = createCapturedBuildPolicyReader({
   getSettings: () => undefined,
 });
 assert.deepEqual(absentSettingsReader().buildings, []);
+
+const nonOperatingReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({
+      city: {
+        powered: { count: 3, on: 1 },
+        mill: { count: 3, on: 1 },
+        banquet: { count: 3, on: 1 },
+        stable: { count: 3, on: 3 },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => [
+      "city-powered",
+      "city-mill",
+      "city-banquet",
+      "city-stable",
+    ],
+  },
+  getSettings: () => ({
+    "batcity-powered": true,
+    "batcity-mill": true,
+    "batcity-banquet": true,
+    "batcity-stable": true,
+    "bld_w_city-powered": 10,
+    "bld_w_city-mill": 10,
+    "bld_w_city-banquet": 10,
+    "bld_w_city-stable": 10,
+    buildingWeightingNonOperatingCity: 0.2,
+  }),
+});
+const nonOperating = nonOperatingReader().buildings;
+assert.equal(nonOperating[0].weighting, 2);
+assert.equal(nonOperating[1].weighting, 10);
+assert.equal(nonOperating[2].weighting, 10);
+assert.equal(nonOperating[3].weighting, 10);
 
 console.log("captured-build-policy ok");

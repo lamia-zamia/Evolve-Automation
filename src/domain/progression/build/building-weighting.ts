@@ -67,6 +67,23 @@ export function applyNewBuildingWeighting(
   return count === 0 ? baseWeight * multiplier : baseWeight;
 }
 
+/**
+ * Applies the captured city rule for a switchable building with copies left
+ * turned off. Non-switchable buildings have no `on` sample and therefore keep
+ * their configured weight.
+ */
+export function applyNonOperatingCityWeighting(
+  baseWeight: number,
+  count: number,
+  on: number | undefined,
+  multiplier: number,
+  excluded: boolean,
+): number {
+  return !excluded && on !== undefined && count - on > 0
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
 /**

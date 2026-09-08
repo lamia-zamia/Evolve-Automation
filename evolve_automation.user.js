@@ -20563,6 +20563,9 @@ Only continue if you trust the source. Injected code:
   function applyNewBuildingWeighting(baseWeight, count2, multiplier) {
     return count2 === 0 ? baseWeight * multiplier : baseWeight;
   }
+  function applyNonOperatingCityWeighting(baseWeight, count2, on, multiplier, excluded) {
+    return !excluded && on !== void 0 && count2 - on > 0 ? baseWeight * multiplier : baseWeight;
+  }
   function isKnowledgeGated(levels) {
     return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
   }
@@ -50918,7 +50921,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       onSkipped(binding, "new-building weighting is not finite");
       return;
     }
-    let maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+    let nonOperatingWeighting = readFiniteSetting(
+      settings,
+      "buildingWeightingNonOperatingCity",
+      1
+    );
+    if (nonOperatingWeighting === void 0) {
+      onSkipped(binding, "non-operating-city weighting is not finite");
+      return;
+    }
+    let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
       return;
@@ -50928,10 +50940,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       elementId,
       region: "city",
       id,
-      weighting: applyNewBuildingWeighting(
-        weighting,
+      weighting: applyNonOperatingCityWeighting(
+        applyNewBuildingWeighting(weighting, count2, newBuildingWeighting),
         count2,
-        newBuildingWeighting
+        on,
+        nonOperatingWeighting,
+        id === "mill" || id === "banquet"
       ),
       maximum: maximum >= 0 ? maximum : UNLIMITED,
       important: !1
