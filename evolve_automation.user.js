@@ -35282,7 +35282,7 @@ Only continue if you trust the source. Injected code:
           label,
           unlocked: !0,
           autoBuildEnabled: !0
-        }), readTarget4 = (value, path, filterBuildable = !1) => {
+        }), readTarget5 = (value, path, filterBuildable = !1) => {
           let target = requireRecord(value, path), unlocked2 = filterBuildable ? callBoolean(target, "isUnlocked", path) : !0, autoBuildEnabled = filterBuildable ? unlocked2 && !!target.autoBuildEnabled : !0;
           return Object.freeze({
             costs: !filterBuildable || autoBuildEnabled ? readCosts4(target, path, resources, register) : Object.freeze([]),
@@ -35296,7 +35296,7 @@ Only continue if you trust the source. Injected code:
             throw new TypeError(`${path} must be an array`);
           return Object.freeze(
             value.map(
-              (target, index) => readTarget4(target, `${path}[${index}]`, filterBuildable)
+              (target, index) => readTarget5(target, `${path}[${index}]`, filterBuildable)
             )
           );
         }, assignExtra = !!settings.storageAssignExtra, noTrade = assignExtra ? !!requireRecord(
@@ -35349,7 +35349,7 @@ Only continue if you trust the source. Injected code:
             kind: "fleet",
             enabled: fleetEnabled,
             targets: Object.freeze(fleetEnabled ? [
-              readTarget4(
+              readTarget5(
                 {
                   cost: requireRecord(
                     fleet.nextShipCost,
@@ -50874,6 +50874,74 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
   }
 
+  // src/adapters/evolve/progression/build/captured-build-policy.ts
+  var UNLIMITED = Number.MAX_SAFE_INTEGER;
+  function readFiniteSetting(settings, key, defaultValue) {
+    let value = settings[key];
+    return value === void 0 ? defaultValue : typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readOptions4(settings) {
+    let rawMode = settings.buildingConsumptionCheck;
+    return Object.freeze({
+      consumptionMode: rawMode === "perResource" ? "perResource" : rawMode === "unlimited" ? "unlimited" : "onePerTick",
+      buildIfStorageFull: !!settings.buildingBuildIfStorageFull,
+      ignoreZeroRate: !!settings.buildingsIgnoreZeroRate,
+      respectReservations: !0,
+      saveWhiteholeGems: settings.prestigeType === "whitehole" && !!settings.prestigeWhiteholeSaveGems
+    });
+  }
+  function readTarget4(settings, city, elementId, onSkipped) {
+    if (!elementId.startsWith("city-") || elementId.length === 5)
+      return;
+    let binding = elementId;
+    if (settings[`bat${binding}`] !== !0) return;
+    let id = elementId.slice(5);
+    if (!isRecord(readProperty(city, id))) {
+      onSkipped(binding, "captured city state is unavailable");
+      return;
+    }
+    let weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);
+    if (weighting === void 0) {
+      onSkipped(binding, "configured weighting is not finite");
+      return;
+    }
+    let maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+    if (maximum === void 0) {
+      onSkipped(binding, "configured maximum is not finite");
+      return;
+    }
+    return Object.freeze({
+      key: binding,
+      elementId,
+      region: "city",
+      id,
+      weighting,
+      maximum: maximum >= 0 ? maximum : UNLIMITED,
+      important: !1
+    });
+  }
+  function createCapturedBuildPolicyReader({
+    rootState,
+    controls: controls4,
+    getSettings,
+    onSkipped
+  }) {
+    let reportSkipped = onSkipped ?? (() => {
+    });
+    return () => {
+      let settings = getSettings(), root = rootState.readRoot(), city = readProperty(root, "city"), buildings = [];
+      if (isRecord(settings) && isRecord(city))
+        for (let elementId of controls4.capturedElementIds()) {
+          let target = readTarget4(settings, city, elementId, reportSkipped);
+          target !== void 0 && buildings.push(target);
+        }
+      return Object.freeze({
+        buildings: Object.freeze(buildings),
+        ...readOptions4(isRecord(settings) ? settings : {})
+      });
+    };
+  }
+
   // src/adapters/evolve/captured-action-costs.ts
   var QUEUE_ELEMENT_ID = "buildQueue", COST_PREFIX = "res";
   function readQueueArray(rootState) {
@@ -51304,7 +51372,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
   }
   function createCapturedConstructionAdapter(dependencies) {
-    let { sources, resources, conflicts, readOptions: readOptions4 } = dependencies, readKnowledgeGate2 = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0;
+    let { sources, resources, conflicts, readOptions: readOptions5 } = dependencies, readKnowledgeGate2 = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0;
     function entryAt(index) {
       let entry = cycle[index];
       if (entry === void 0)
@@ -51321,7 +51389,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }
     let reader = Object.freeze({
       beginCycle() {
-        let options2 = readOptions4();
+        let options2 = readOptions5();
         respectReservations = options2.respectReservations;
         let entries = [], owners = /* @__PURE__ */ new Map();
         for (let source of sources)
@@ -52109,13 +52177,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       drawnActions,
       controls: controls4,
       ...onUnavailable === void 0 ? {} : { onUnavailable }
-    }), readPolicy = getBuildingManager === void 0 ? () => Object.freeze({
-      buildings: Object.freeze([]),
-      consumptionMode: "onePerTick",
-      buildIfStorageFull: !1,
-      ignoreZeroRate: !1,
-      respectReservations: !0,
-      saveWhiteholeGems: !1
+    }), readPolicy = getBuildingManager === void 0 ? createCapturedBuildPolicyReader({
+      rootState,
+      controls: controls4,
+      getSettings: readSettings3,
+      ...onSkipped === void 0 ? {} : { onSkipped }
     }) : createScriptBuildPolicyReader({
       getBuildingManager,
       getSettings: readSettings3,

@@ -21,6 +21,7 @@ import {
 import { createScriptCostReservationSource } from "../adapters/evolve/script-cost-reservations.ts";
 import { createScriptBuildPolicyReader } from "../adapters/evolve/progression/build/script-build-policy.ts";
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
+import { createCapturedBuildPolicyReader } from "../adapters/evolve/progression/build/captured-build-policy.ts";
 import { createCapturedConstructionControl } from "./captured-construction-control.ts";
 import { createCapturedResearchControl } from "./captured-research-control.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
@@ -126,15 +127,12 @@ export function createCapturedProgressionControl(
   });
   const readPolicy =
     getBuildingManager === undefined
-      ? () =>
-          Object.freeze({
-            buildings: Object.freeze([]),
-            consumptionMode: "onePerTick" as const,
-            buildIfStorageFull: false,
-            ignoreZeroRate: false,
-            respectReservations: true,
-            saveWhiteholeGems: false,
-          })
+      ? createCapturedBuildPolicyReader({
+          rootState,
+          controls,
+          getSettings: readSettings,
+          ...(onSkipped === undefined ? {} : { onSkipped }),
+        })
       : createScriptBuildPolicyReader({
           getBuildingManager,
           getSettings: readSettings,
