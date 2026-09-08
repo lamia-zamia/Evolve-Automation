@@ -3,10 +3,12 @@
  *
  * This is intentionally the small bridge between page capture and the existing construction
  * contract: the game decides which city controls exist, while persisted script settings decide
- * which of those controls are managed, their configured order weight, and their cap. Dynamic
- * weighting remains a separate migration because it needs the game's broader production sample.
+ * which of those controls are managed, their configured order weight, and their cap. The first
+ * captured dynamic rule boosts a managed building with no copies; the broader production sample
+ * remains a separate migration.
  */
 
+import { applyNewBuildingWeighting } from "../../../../domain/progression/build/building-weighting.ts";
 import type { ConstructionCycleOptions } from "../../../../ports/construction-candidates.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
@@ -70,13 +72,25 @@ function readTarget(
   // the reset settings and therefore remain outside this adapter's construction family.
   if (settings[`bat${binding}`] !== true) return undefined;
   const id = elementId.slice("city-".length);
-  if (!isRecord(readProperty(city, id))) {
+  const state = readProperty(city, id);
+  if (!isRecord(state)) {
     onSkipped(binding, "captured city state is unavailable");
     return undefined;
   }
   const weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);
   if (weighting === undefined) {
     onSkipped(binding, "configured weighting is not finite");
+    return undefined;
+  }
+  const count = readProperty(state, "count");
+  if (typeof count !== "number" || !Number.isFinite(count)) {
+    onSkipped(binding, "captured city count is not finite");
+    return undefined;
+  }
+  const newBuildingWeighting =
+    count === 0 ? readFiniteSetting(settings, "buildingWeightingNew", 1) : 1;
+  if (newBuildingWeighting === undefined) {
+    onSkipped(binding, "new-building weighting is not finite");
     return undefined;
   }
   const maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
@@ -89,7 +103,11 @@ function readTarget(
     elementId,
     region: "city",
     id,
-    weighting,
+    weighting: applyNewBuildingWeighting(
+      weighting,
+      count,
+      newBuildingWeighting,
+    ),
     maximum: maximum >= 0 ? maximum : UNLIMITED,
     important: false,
   });

@@ -20560,6 +20560,9 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/domain/progression/build/building-weighting.ts
+  function applyNewBuildingWeighting(baseWeight, count2, multiplier) {
+    return count2 === 0 ? baseWeight * multiplier : baseWeight;
+  }
   function isKnowledgeGated(levels) {
     return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
   }
@@ -50895,14 +50898,24 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       return;
     let binding = elementId;
     if (settings[`bat${binding}`] !== !0) return;
-    let id = elementId.slice(5);
-    if (!isRecord(readProperty(city, id))) {
+    let id = elementId.slice(5), state = readProperty(city, id);
+    if (!isRecord(state)) {
       onSkipped(binding, "captured city state is unavailable");
       return;
     }
     let weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);
     if (weighting === void 0) {
       onSkipped(binding, "configured weighting is not finite");
+      return;
+    }
+    let count2 = readProperty(state, "count");
+    if (typeof count2 != "number" || !Number.isFinite(count2)) {
+      onSkipped(binding, "captured city count is not finite");
+      return;
+    }
+    let newBuildingWeighting = count2 === 0 ? readFiniteSetting(settings, "buildingWeightingNew", 1) : 1;
+    if (newBuildingWeighting === void 0) {
+      onSkipped(binding, "new-building weighting is not finite");
       return;
     }
     let maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
@@ -50915,7 +50928,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       elementId,
       region: "city",
       id,
-      weighting,
+      weighting: applyNewBuildingWeighting(
+        weighting,
+        count2,
+        newBuildingWeighting
+      ),
       maximum: maximum >= 0 ? maximum : UNLIMITED,
       important: !1
     });

@@ -6,6 +6,9 @@ const settings = {
   "batcity-farm": true,
   "bld_w_city-farm": 37,
   "bld_m_city-farm": 12,
+  "batcity-cottage": true,
+  "bld_w_city-cottage": 37,
+  buildingWeightingNew: 3,
   "batcity-lumber": false,
   "batcity-bad": true,
   "bld_w_city-bad": "not-a-number",
@@ -17,7 +20,9 @@ const settings = {
 };
 const reader = createCapturedBuildPolicyReader({
   rootState: {
-    readRoot: () => ({ city: { farm: { count: 2 }, bad: {} } }),
+    readRoot: () => ({
+      city: { farm: { count: 2 }, cottage: { count: 0 }, bad: {} },
+    }),
     isReactivitySuppressed: () => false,
     subscribeRootReplaced: () => () => {},
   },
@@ -26,6 +31,7 @@ const reader = createCapturedBuildPolicyReader({
     invoke: () => ({ ok: false, reason: "unknown-control" }),
     capturedElementIds: () => [
       "city-farm",
+      "city-cottage",
       "city-lumber",
       "city-bad",
       "arpa-monument",
@@ -46,6 +52,15 @@ assert.deepEqual(reader(), {
       maximum: 12,
       important: false,
     },
+    {
+      key: "city-cottage",
+      elementId: "city-cottage",
+      region: "city",
+      id: "cottage",
+      weighting: 111,
+      maximum: Number.MAX_SAFE_INTEGER,
+      important: false,
+    },
   ],
   consumptionMode: "perResource",
   buildIfStorageFull: true,
@@ -56,6 +71,28 @@ assert.deepEqual(reader(), {
 assert.deepEqual(skipped, [
   { key: "city-bad", reason: "configured weighting is not finite" },
 ]);
+
+const neutralMissingMultiplierReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({ city: { farm: { count: 0 } } }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["city-farm"],
+  },
+  getSettings: () => ({
+    "batcity-farm": true,
+    "bld_w_city-farm": 7,
+  }),
+});
+assert.equal(
+  neutralMissingMultiplierReader().buildings[0].weighting,
+  7,
+  "an absent new-building multiplier is neutral",
+);
 
 const absentSettingsReader = createCapturedBuildPolicyReader({
   rootState: {

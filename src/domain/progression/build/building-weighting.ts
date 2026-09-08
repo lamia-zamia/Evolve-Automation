@@ -51,6 +51,22 @@ export type BuildingWeightName =
   | "buildingWeightingRetirementPrep"
   | "buildingWeightingMatrixCure";
 
+/**
+ * Applies the first captured-only weighting rule to a managed building.
+ *
+ * The full weighting decider needs a much larger game snapshot. This small
+ * rule is independent of that snapshot: a managed building with no copies is
+ * multiplied by the configured "new building" weight, while an existing
+ * building keeps its configured base weight.
+ */
+export function applyNewBuildingWeighting(
+  baseWeight: number,
+  count: number,
+  multiplier: number,
+): number {
+  return count === 0 ? baseWeight * multiplier : baseWeight;
+}
+
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
 /**
