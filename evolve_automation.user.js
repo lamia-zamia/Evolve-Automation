@@ -4391,6 +4391,259 @@
     return Object.freeze({ reader, executor });
   }
 
+  // src/domain/economy/production/pylon.ts
+  var EMPTY = Object.freeze({
+    decrease: Object.freeze([]),
+    increase: Object.freeze([]),
+    manaRateAdjustment: null
+  });
+  function manaCost(level) {
+    return level * (1.0025 ** level - 1);
+  }
+  function costStep(level) {
+    if (level === 0)
+      return 25e-4;
+    let cost = manaCost(level);
+    return (cost / level * 1.0025 + 25e-4) * (level + 1) - cost;
+  }
+  function planPylon(input) {
+    if (!input.initialised)
+      return EMPTY;
+    let adjustments = /* @__PURE__ */ new Map();
+    for (let spell of input.spells)
+      adjustments.set(spell.id, 0);
+    let manaToUse = input.manaRateOfChange * (input.manaStorageRatio > 0.99 ? 1 : input.ritualManaUse), usableMana = manaToUse, maxRituals = input.ritualSafe && input.witchHunter ? input.priestCount * (input.haveRoguemagic4 ? 4 : 1) : Number.MAX_SAFE_INTEGER, spellSorter = (a, b) => (adjustments.get(a.id) ?? 0) / a.weighting - (adjustments.get(b.id) ?? 0) / b.weighting || b.weighting - a.weighting, remainingSpells = input.spells.filter(
+      (spell) => spell.weighting > 0 && (!spell.isFactory || input.cementWorkerCount > 0)
+    ).sort(spellSorter);
+    spellsLoop: for (; remainingSpells.length > 0 && maxRituals > 0; ) {
+      let spell = remainingSpells.shift(), amount = adjustments.get(spell.id) ?? 0, cost = costStep(amount);
+      if (cost <= manaToUse) {
+        adjustments.set(spell.id, amount + 1), manaToUse -= cost, maxRituals--;
+        for (let i = remainingSpells.length - 1; i >= 0; i--)
+          if (spellSorter(spell, remainingSpells[i]) > 0) {
+            remainingSpells.splice(i + 1, 0, spell);
+            continue spellsLoop;
+          }
+        remainingSpells.unshift(spell);
+      }
+    }
+    let decrease = [], increase = [];
+    for (let spell of input.spells) {
+      let delta = (adjustments.get(spell.id) ?? 0) - spell.currentSpells;
+      delta < 0 && decrease.push(
+        Object.freeze({
+          id: spell.id,
+          expectedCurrentSpells: spell.currentSpells,
+          count: delta * -1
+        })
+      );
+    }
+    for (let spell of input.spells) {
+      let delta = (adjustments.get(spell.id) ?? 0) - spell.currentSpells;
+      delta > 0 && increase.push(
+        Object.freeze({
+          id: spell.id,
+          expectedCurrentSpells: spell.currentSpells,
+          count: delta
+        })
+      );
+    }
+    let manaSpent = usableMana - manaToUse;
+    return Object.freeze({
+      decrease: Object.freeze(decrease),
+      increase: Object.freeze(increase),
+      manaRateAdjustment: manaSpent === 0 ? null : Object.freeze({
+        expected: input.manaRateOfChange,
+        value: input.manaRateOfChange - manaSpent
+      })
+    });
+  }
+
+  // src/adapters/evolve/economy/production/captured-pylon.ts
+  var PYLON_CONTROL = "iPylon", SPELL_IDS = [
+    "farmer",
+    "miner",
+    "lumberjack",
+    "science",
+    "factory",
+    "army",
+    "hunting",
+    "crafting"
+  ], DEFAULT_SPELL_WEIGHTING = 100, DEFAULT_HUNTING_WEIGHTING = 10, DEFAULT_FARMER_WEIGHTING = 1;
+  function finite2(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function settingNumber(settings, key, fallback) {
+    let value = settings[key];
+    return value === void 0 ? fallback : finite2(value);
+  }
+  function emptyInput2() {
+    return Object.freeze({
+      initialised: !1,
+      manaRateOfChange: 0,
+      manaStorageRatio: 0,
+      ritualManaUse: 0,
+      ritualSafe: !1,
+      witchHunter: !1,
+      priestCount: 0,
+      haveRoguemagic4: !1,
+      cementWorkerCount: 0,
+      spells: Object.freeze([])
+    });
+  }
+  function readNonNegative(value) {
+    let result = finite2(value);
+    return result !== void 0 && result >= 0 ? result : 0;
+  }
+  function hasTrait2(race, key) {
+    return !!readProperty(race, key);
+  }
+  function spellAvailable(id, race, magic) {
+    switch (id) {
+      case "farmer":
+        return ![
+          "detritivore",
+          "carnivore",
+          "soul_eater",
+          "artifical",
+          "unfathomable",
+          "cataclysm",
+          "orbit_decayed"
+        ].some((trait) => hasTrait2(race, trait));
+      case "miner":
+        return !hasTrait2(race, "cataclysm");
+      case "lumberjack":
+        return ![
+          "kindling_kindred",
+          "smoldering",
+          "evil",
+          "cataclysm",
+          "orbit_decayed"
+        ].some((trait) => hasTrait2(race, trait));
+      case "factory":
+        return !hasTrait2(race, "flier");
+      case "crafting":
+        return magic >= 4;
+      default:
+        return !0;
+    }
+  }
+  function readPylonInput(dependencies) {
+    let root = dependencies.rootState.readRoot();
+    if (root === void 0)
+      return Object.freeze({ root, input: emptyInput2() });
+    let race = readProperty(root, "race"), tech = readProperty(root, "tech"), casting = readProperty(race, "casting"), resources = readProperty(root, "resource"), mana = readProperty(resources, "Mana"), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, magic = finite2(readProperty(tech, "magic")), manaAmount = finite2(readProperty(mana, "amount")), manaMaximum = finite2(readProperty(mana, "max")), manaRateOfChange = finite2(readProperty(mana, "diff"));
+    if (!isRecord(casting) || magic === void 0 || magic < 3 || manaAmount === void 0 || manaMaximum === void 0 || manaRateOfChange === void 0 || dependencies.controls.resolve(PYLON_CONTROL) === void 0)
+      return Object.freeze({ root, input: emptyInput2() });
+    let ritualManaUse = settingNumber(settings, "productionRitualManaUse", 0.5);
+    if (ritualManaUse === void 0)
+      return Object.freeze({ root, input: emptyInput2() });
+    let spells = [];
+    for (let id of SPELL_IDS) {
+      if (!spellAvailable(id, race, magic)) continue;
+      let currentSpells2 = finite2(readProperty(casting, id));
+      if (currentSpells2 === void 0 || currentSpells2 < 0) continue;
+      let fallback = id === "hunting" ? DEFAULT_HUNTING_WEIGHTING : id === "farmer" ? DEFAULT_FARMER_WEIGHTING : DEFAULT_SPELL_WEIGHTING, weighting = settingNumber(settings, `spell_w_${id}`, fallback);
+      if (weighting === void 0)
+        return Object.freeze({ root, input: emptyInput2() });
+      spells.push(
+        Object.freeze({
+          id,
+          weighting,
+          isFactory: id === "factory",
+          currentSpells: currentSpells2
+        })
+      );
+    }
+    let civic = readProperty(root, "civic"), priest = readProperty(civic, "priest"), cementWorker = readProperty(civic, "cement_worker"), techRoguemagic = finite2(readProperty(tech, "roguemagic")), ritualSafe = typeof settings.productionRitualSafe == "boolean" ? settings.productionRitualSafe : !0, witchHunter = !!readProperty(race, "witch_hunter");
+    return Object.freeze({
+      root,
+      input: Object.freeze({
+        initialised: !0,
+        manaRateOfChange,
+        manaStorageRatio: manaMaximum > 0 ? manaAmount / manaMaximum : 0,
+        ritualManaUse,
+        ritualSafe,
+        witchHunter,
+        priestCount: readNonNegative(readProperty(priest, "workers")),
+        haveRoguemagic4: (techRoguemagic ?? 0) >= 4,
+        cementWorkerCount: readNonNegative(readProperty(cementWorker, "workers")),
+        spells: Object.freeze(spells)
+      })
+    });
+  }
+  function currentSpells(root, id) {
+    let value = finite2(
+      readProperty(readProperty(readProperty(root, "race"), "casting"), id)
+    );
+    return value !== void 0 && value >= 0 ? value : void 0;
+  }
+  function manaRate(root) {
+    let mana = readProperty(readProperty(root, "resource"), "Mana");
+    return finite2(readProperty(mana, "diff"));
+  }
+  function decisionMatches(input, decision) {
+    return JSON.stringify(planPylon(input)) === JSON.stringify(decision);
+  }
+  function executeAdjustment(controls, rootState, root, id, expected, count, method) {
+    let handle = controls.resolve(PYLON_CONTROL);
+    if (handle === void 0)
+      return stale(
+        "pylon-control-missing",
+        "captured pylon control is unavailable"
+      );
+    for (let index = 0; index < count; index++) {
+      if (rootState.readRoot() !== root)
+        return stale("pylon-root-changed", "captured game root changed");
+      if (currentSpells(root, id) !== expected + (method === "addSpell" ? index : -index))
+        return stale("pylon-spell-changed", "ritual spell count changed");
+      let result = controls.invoke(handle, method, [id]);
+      if (!result.ok)
+        return rejected("pylon-control-failed", result.detail ?? result.reason);
+    }
+    return SUCCEEDED;
+  }
+  function createCapturedPylonAutomation(dependencies) {
+    return Object.freeze({
+      run() {
+        let session = readPylonInput(dependencies), decision = planPylon(session.input);
+        if (!session.input.initialised) return SUCCEEDED;
+        if (!decisionMatches(session.input, decision))
+          return rejected(
+            "invalid-pylon-decision",
+            "pylon decision changed during planning"
+          );
+        if (decision.manaRateAdjustment !== null && manaRate(session.root) !== decision.manaRateAdjustment.expected)
+          return stale("pylon-mana-changed", "Mana rate-of-change changed");
+        for (let adjustment of decision.decrease) {
+          let outcome = executeAdjustment(
+            dependencies.controls,
+            dependencies.rootState,
+            session.root,
+            adjustment.id,
+            adjustment.expectedCurrentSpells,
+            adjustment.count,
+            "subSpell"
+          );
+          if (outcome.status !== "succeeded") return outcome;
+        }
+        for (let adjustment of decision.increase) {
+          let outcome = executeAdjustment(
+            dependencies.controls,
+            dependencies.rootState,
+            session.root,
+            adjustment.id,
+            adjustment.expectedCurrentSpells,
+            adjustment.count,
+            "addSpell"
+          );
+          if (outcome.status !== "succeeded") return outcome;
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
   // src/adapters/browser/game-drawn-actions.ts
   var DATA_PREFIX = "data-", RESOURCE_CLASS_PREFIX = "res-";
   function collect(element, markup) {
@@ -4603,6 +4856,10 @@
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage)
+    }), pylon = createCapturedPylonAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage)
     }), civicDiscovery = createCapturedTabDiscovery({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -4621,11 +4878,27 @@
       result.outcome.status !== "succeeded" && logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
+    }, pylonDiscoveryAttempted = !1, ensurePylonControls = () => {
+      if (pageCapture2.controls.resolve(PYLON_CONTROL) !== void 0) return;
+      let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), magic = readProperty(tech, "magic");
+      if (typeof magic != "number" || !Number.isFinite(magic) || magic < 3 || pylonDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
+        return;
+      pylonDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 1
+        })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `pylon discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
     }, runCycle = () => {
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }

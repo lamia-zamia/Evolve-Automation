@@ -3,6 +3,10 @@ import { runJobsAutomation } from "../application/jobs.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { createCapturedTaxControl } from "./captured-tax-control.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
+import {
+  createCapturedPylonAutomation,
+  PYLON_CONTROL,
+} from "../adapters/evolve/economy/production/captured-pylon.ts";
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
@@ -112,6 +116,11 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
   });
+  const pylon = createCapturedPylonAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+  });
   const civicDiscovery = createCapturedTabDiscovery({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -136,6 +145,33 @@ export function startCapturedRuntime({
       );
     }
   };
+  let pylonDiscoveryAttempted = false;
+  const ensurePylonControls = () => {
+    if (pageCapture.controls.resolve(PYLON_CONTROL) !== undefined) return;
+    const root = pageCapture.rootState.readRoot();
+    const tech = readProperty(root, "tech");
+    const magic = readProperty(tech, "magic");
+    if (typeof magic !== "number" || !Number.isFinite(magic) || magic < 3) {
+      return;
+    }
+    if (pylonDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) {
+      return;
+    }
+    pylonDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 1,
+      }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `pylon discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
 
   const runCycle = () => {
     const settings = readStoredSettings(storage);
@@ -155,6 +191,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoTax")) {
         ensureCivicControls();
         tax.autoTax();
+      }
+      if (isEnabled(settings, "autoPylon")) {
+        ensurePylonControls();
+        pylon.run();
       }
       if (isEnabled(settings, "autoCraftsmen")) {
         ensureCivicControls();
