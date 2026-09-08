@@ -48,12 +48,11 @@ function makePage({
   civTabs = 4,
   spaceTabs = 0,
   animated = true,
-  tabLoad = false,
   panels = PANELS,
   subPanels = SUB_PANELS,
   boundDuringDraw = [],
 } = {}) {
-  const settings = { civTabs, spaceTabs, animated, tabLoad };
+  const settings = { civTabs, spaceTabs, animated };
   // Scoped mount suppression, the way the capture provides it: nesting counted, and always
   // unwound, so a draw can report whether it happened inside a scope. The scope's bind observer
   // fires for whatever the draw declares it binds.
@@ -197,7 +196,7 @@ function makePage({
         return { ok: false, reason: "stale-control", detail: "superseded" };
       }
       if (method !== "swapTab") return { ok: false, reason: "unknown-method" };
-      if (!settings.tabLoad) drawTab(handle.elementId, args[0]);
+      drawTab(handle.elementId, args[0]);
       return { ok: true, value: args[0] };
     },
   };
@@ -370,36 +369,6 @@ function discoveryFor(page) {
   const again = discovery.discover(mainTab(2));
   assert.deepEqual([...again.discovered], []);
   assert.equal(page.controls.get("civ-farmer").generation, 2);
-}
-
-// --- when the pass must not run ---------------------------------------------
-
-{
-  // Preload Tab Content on: every panel is already mounted, so the observer reads the one it
-  // wants where it stands and the player's view is never touched.
-  const page = makePage({ civTabs: 4, tabLoad: true });
-  let seen = 0;
-  const result = discoveryFor(page).discover(mainTab(2), {
-    whileDrawn: () => {
-      seen += 1;
-    },
-  });
-  assert.equal(result.outcome.status, "succeeded");
-  assert.equal(seen, 1);
-  assert.deepEqual([...result.discovered], []);
-  assert.deepEqual(page.swaps, []);
-  assert.equal(page.settings.civTabs, 4);
-}
-
-{
-  // Preloaded, and the panel is still not there: `swapTab` redraws nothing under that setting, so
-  // there is no pass that could recover it.
-  const page = makePage({ civTabs: 4, tabLoad: true });
-  const result = discoveryFor(page).discover(mainTab(2), {
-    isPanelDrawn: () => false,
-  });
-  assert.equal(result.outcome.failure.code, "panel-not-drawn");
-  assert.deepEqual(page.swaps, []);
 }
 
 {

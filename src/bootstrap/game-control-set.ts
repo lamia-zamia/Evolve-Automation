@@ -29,9 +29,6 @@ type ResearchDependencies = Parameters<typeof createGameResearchControls>[0];
 export interface GameControlSetDependencies {
   readonly getVueById: ActionDependencies["getVueById"];
   readonly getForeignVueById: ActionDependencies["getVueById"];
-  readonly getMainVue: Parameters<
-    typeof createGameProjectControls
-  >[0]["getMainVue"];
   readonly getDocument: ResearchDependencies["getDocument"];
   readonly getKeyManager: ClickMultiplierDependencies["getKeyManager"];
   readonly selectTooltip: ActionDependencies["selectTooltip"];
@@ -49,7 +46,6 @@ export interface GameControlSetDependencies {
 export function createGameControlSet({
   getVueById,
   getForeignVueById,
-  getMainVue,
   getDocument,
   getKeyManager,
   selectTooltip,
@@ -67,7 +63,7 @@ export function createGameControlSet({
   const clickSteps = (count: number) => clickMultipliers.steps(count);
   const clearClicks = () => clickMultipliers.clear();
 
-  const projectControls = createGameProjectControls({ getVueById, getMainVue });
+  const projectControls = createGameProjectControls({ getVueById });
   const researchControls = createGameResearchControls({
     getDocument,
     getVueById,

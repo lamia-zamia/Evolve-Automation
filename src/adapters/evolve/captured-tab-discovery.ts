@@ -152,23 +152,11 @@ export function createCapturedTabDiscovery(
         );
       }
       // The panel is in front of the player already — every step names the tab their own settings
-      // select, or Preload Tab Content has mounted all of them. The game keeps that panel current
-      // itself, so there is nothing to draw and no reason to touch their view.
-      const preloaded = settings["tabLoad"] === true;
-      if (
-        preloaded ||
-        path.every((step) => settings[step.setting] === step.index)
-      ) {
+      // select. The game keeps that panel current itself, so there is nothing to draw and no reason
+      // to touch their view.
+      if (path.every((step) => settings[step.setting] === step.index)) {
         if (isPanelDrawn === undefined || isPanelDrawn()) {
           return observed(whileDrawn);
-        }
-        // Preload Tab Content draws every panel once and `swapTab` redraws nothing, so a panel
-        // that is missing under it cannot be recovered by a pass.
-        if (preloaded) {
-          return failure(
-            "panel-not-drawn",
-            "every tab is preloaded but the panel is not there",
-          );
         }
       }
 

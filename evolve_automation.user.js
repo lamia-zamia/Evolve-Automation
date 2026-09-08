@@ -10271,39 +10271,18 @@ Only continue if you trust the source. Injected code:
 
   // src/adapters/browser/game-project-controls.ts
   function createGameProjectControls({
-    getVueById,
-    getMainVue
+    getVueById
   }) {
-    function readTabPreferences() {
-      let mainView = getMainVue();
-      if (!isRecord(mainView))
-        return;
-      let preferences = mainView.s;
-      return isRecord(preferences) ? preferences : void 0;
-    }
     return Object.freeze({
-      build({
-        elementId,
-        projectId,
-        steps,
-        skipTabRedraw
-      }) {
+      build({ elementId, projectId, steps }) {
         let view = getVueById(elementId);
         if (!isRecord(view) || typeof view.build != "function")
           return !1;
         let buildProject = requireFunction(
           view.build,
           `${elementId} Vue view.build`
-        ), purchase = () => Reflect.apply(buildProject, view, [projectId, steps]), preferences = skipTabRedraw ? readTabPreferences() : void 0;
-        if (preferences === void 0)
-          return purchase(), !0;
-        let restore = preferences.tabLoad;
-        try {
-          preferences.tabLoad = !1, purchase();
-        } finally {
-          preferences.tabLoad = restore;
-        }
-        return !0;
+        );
+        return Reflect.apply(buildProject, view, [projectId, steps]), !0;
       }
     });
   }
@@ -10449,7 +10428,6 @@ Only continue if you trust the source. Injected code:
   function createGameControlSet({
     getVueById,
     getForeignVueById,
-    getMainVue,
     getDocument,
     getKeyManager,
     selectTooltip,
@@ -10463,7 +10441,7 @@ Only continue if you trust the source. Injected code:
     isSandboxBypass,
     cloneIntoPage
   }) {
-    let clickMultipliers = createGameClickMultipliers({ getKeyManager }), clickSteps = (count2) => clickMultipliers.steps(count2), clearClicks = () => clickMultipliers.clear(), projectControls = createGameProjectControls({ getVueById, getMainVue }), researchControls = createGameResearchControls({
+    let clickMultipliers = createGameClickMultipliers({ getKeyManager }), clickSteps = (count2) => clickMultipliers.steps(count2), clearClicks = () => clickMultipliers.clear(), projectControls = createGameProjectControls({ getVueById }), researchControls = createGameResearchControls({
       getDocument,
       getVueById
     }), traitControls = createGameTraitControls({ getVueById }), jobControls = createGameJobControls({ getVueById, clickSteps }), actionControls = createGameActionControls({
@@ -16387,13 +16365,10 @@ Only continue if you trust the source. Injected code:
         if (!this.isClickable())
           return !1;
         let rank = this.count, reachedPercent = this.progress + this.currentStep;
-        readClickMultipliers().clear();
-        let skipTabRedraw = readSettings3().performanceHackAvoidDrawTech && rank >= 10 && !(this.id === "syphon" && rank >= 79);
-        if (!readProjectControls().build({
+        if (readClickMultipliers().clear(), !readProjectControls().build({
           elementId: this.elementId,
           projectId: this.id,
-          steps: this.currentStep,
-          skipTabRedraw
+          steps: this.currentStep
         }))
           return !1;
         for (let res in this.cost)
@@ -50844,16 +50819,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
             "game-state-not-captured",
             "the game has not created its settings yet"
           );
-        let preloaded = settings.tabLoad === !0;
-        if (preloaded || path.every((step) => settings[step.setting] === step.index)) {
-          if (isPanelDrawn === void 0 || isPanelDrawn())
-            return observed(whileDrawn);
-          if (preloaded)
-            return failure2(
-              "panel-not-drawn",
-              "every tab is preloaded but the panel is not there"
-            );
-        }
+        if (path.every((step) => settings[step.setting] === step.index) && (isPanelDrawn === void 0 || isPanelDrawn()))
+          return observed(whileDrawn);
         let playerTabs = /* @__PURE__ */ new Map();
         for (let step of path) {
           let current = settings[step.setting];
@@ -53652,7 +53619,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     } = createGameControlSet({
       getVueById: (id) => getVueById(id),
       getForeignVueById: (id) => getTestContext("foreignControls")?.getVueById?.(id) ?? getVueById(id),
-      getMainVue: () => getMainVue(),
       getDocument: () => runtimeEnvironment.document,
       getKeyManager: () => KeyManager,
       selectTooltip: () => $("#popper"),

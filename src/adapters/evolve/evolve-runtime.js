@@ -1495,7 +1495,6 @@ export function startEvolveRuntimeComposition(
     getVueById: (id) => getVueById(id),
     getForeignVueById: (id) =>
       getTestContext("foreignControls")?.getVueById?.(id) ?? getVueById(id),
-    getMainVue: () => getMainVue(),
     getDocument: () => runtimeEnvironment.document,
     getKeyManager: () => KeyManager,
     selectTooltip: () => $("#popper"),

@@ -153,12 +153,10 @@ visibleEvolutionSelectors.add("#evolution-bilateral_symmetry");
 assert.equal(bilateralSymmetry.isUnlocked(), true);
 
 const technologyActions = [];
-const observedTabLoads = [];
 const researchElements = { "#tech-mad > .button:not(.precog)": {} };
 const researchView = {
   action: () => {
     technologyActions.push("action");
-    observedTabLoads.push(context.mainVue.s.tabLoad);
   },
 };
 const researchViews = { "tech-mad": researchView };
@@ -187,23 +185,13 @@ context.game = {
 };
 context.resources = context.game.global.resource;
 context.settings = { performanceHackAvoidDrawTech: true };
-context.mainVue = { s: { civTabs: 2, tabLoad: true } };
 context.poly = { loc: () => "researched" };
 context.GameLog = { logSuccess: () => {} };
 const technology = new classes.Technology("mad");
 technology.cost = { Knowledge: 1 };
 assert.equal(technology.click(), true);
 assert.deepEqual(technologyActions, ["action"]);
-assert.deepEqual(
-  observedTabLoads,
-  [true],
-  "off-tab research keeps preloaded Vue content available for drawTech",
-);
-assert.equal(context.mainVue.s.tabLoad, true);
-
-context.mainVue.s.civTabs = 3;
 assert.equal(technology.click(), true);
-assert.deepEqual(observedTabLoads, [true, true]);
 assert.equal(context.resources.Knowledge.currentQuantity, 98);
 
 // A researched entry stays mounted and is recognized by its `.oldTech` marker.
@@ -571,7 +559,7 @@ project.currentStep = 5;
 project.cost = { Money: 120 };
 assert.equal(project.click(), true);
 assert.deepEqual(projectPurchases, [
-  { elementId: "arpalhc", projectId: "lhc", steps: 5, skipTabRedraw: false },
+  { elementId: "arpalhc", projectId: "lhc", steps: 5 },
 ]);
 assert.equal(context.resources.Money.currentQuantity, 380);
 assert.deepEqual(
@@ -585,13 +573,16 @@ assert.deepEqual(
   "the percentage is the one the purchase reached, not the one it left behind",
 );
 
-// The redraw suppression is asked for once the project is past its tenth rank,
-// and a purchase that finishes the project logs the completion instead.
+// A purchase that finishes the project logs the completion instead.
 context.game.global.arpa.lhc.rank = 10;
 context.game.global.arpa.lhc.complete = 96;
 projectLogs.length = 0;
 assert.equal(project.click(), true);
-assert.equal(projectPurchases.at(-1).skipTabRedraw, true);
+assert.deepEqual(projectPurchases.at(-1), {
+  elementId: "arpalhc",
+  projectId: "lhc",
+  steps: 5,
+});
 assert.deepEqual(projectLogs, [["construction", "Launch Facility"]]);
 
 // A control the game withdrew spends nothing and logs nothing.

@@ -1865,21 +1865,11 @@ export function createEntityClasses({
 
       readClickMultipliers().clear();
 
-      // This is a really bad lag hack. ARPAs make a very expensive drawTech() call on every build.
-      // After 10 ARPAs, this will never actually accomplish anything; AFAIK nothing needs more than 10 ARPAs.
-      // Luckily, drawTech() doesn't draw anything if preload tab content is off and we're not on research.
-      // So if we can, we briefly hack that off while buying an ARPA that won't change anything.
-      let skipTabRedraw =
-        readSettings().performanceHackAvoidDrawTech &&
-        rank >= 10 &&
-        !(this.id === "syphon" && rank >= 79);
-
       if (
         !readProjectControls().build({
           elementId: this.elementId,
           projectId: this.id,
           steps: this.currentStep,
-          skipTabRedraw,
         })
       ) {
         return false;

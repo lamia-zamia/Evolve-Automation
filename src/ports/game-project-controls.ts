@@ -8,13 +8,6 @@ export interface GameProjectBuildRequest {
 
   /** How many steps of the project to buy in this one call. */
   readonly steps: number;
-
-  /**
-   * True asks the page to skip the tab-content redraw the purchase triggers.
-   * A caller sets it only when that redraw cannot change anything a player can
-   * see, because the purchase is expensive to draw and cheap to repeat.
-   */
-  readonly skipTabRedraw: boolean;
 }
 
 /**
@@ -22,8 +15,8 @@ export interface GameProjectBuildRequest {
  *
  * A project is bought in steps rather than in whole units, so it is the one
  * action that cannot go through the ordinary build path. Callers above this
- * port describe the purchase; how the page performs it, and how a redraw is
- * suppressed, is this port's business.
+ * port describe the purchase; the adapter delegates it to the game's own
+ * mounted control.
  */
 export interface GameProjectControlsPort {
   /**
