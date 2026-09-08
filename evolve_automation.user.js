@@ -52593,6 +52593,214 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     };
   }
 
+  // src/adapters/evolve/civic/captured-tax.ts
+  var TAX_CONTROL = "tax_rates", DEFAULT_SETTINGS = Object.freeze({
+    requestedRate: -1,
+    minimumRate: 20,
+    minimumMorale: 105,
+    maximumMorale: 500,
+    manageAuthority: !1,
+    authorityTarget: 100
+  });
+  function capturedTaxFinite(value, fallback) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function capturedTaxBoolean(value, fallback) {
+    return typeof value == "boolean" ? value : fallback;
+  }
+  function rateForNoble(rank) {
+    switch (rank) {
+      case 0.1:
+        return [18, 20];
+      case 0.25:
+        return [15, 20];
+      case 0.5:
+        return [12, 20];
+      case 1:
+        return [10, 20];
+      case 2:
+        return [10, 24];
+      case 3:
+        return [10, 28];
+      case 4:
+        return [10, 30];
+      default:
+        return;
+    }
+  }
+  function readGovernorBackground(root) {
+    return typeof readProperty(
+      readProperty(readProperty(root, "race"), "governor"),
+      "g"
+    ) == "object" ? (() => {
+      let governor = readProperty(readProperty(root, "race"), "governor"), active = readProperty(governor, "g"), background = readProperty(active, "bg");
+      return typeof background == "string" ? background : void 0;
+    })() : void 0;
+  }
+  function readTaxCap(root) {
+    let tech = readProperty(root, "tech"), race2 = readProperty(root, "race"), genes = readProperty(root, "genes"), government = readProperty(readProperty(root, "civic"), "govern"), highTech = capturedTaxFinite(readProperty(tech, "high_tech"), 0), extreme = capturedTaxFinite(readProperty(tech, "currency"), 0) >= 5, terrifying = !!readProperty(race2, "terrifying"), noble = rateForNoble(readProperty(race2, "noble")), minimum = (extreme || terrifying) && noble === void 0 ? 0 : noble?.[0] ?? 10, maximum = 30;
+    (extreme || terrifying) && (maximum += 20);
+    let background = readGovernorBackground(root);
+    background === "noble" && (maximum += 20);
+    let wishStats = readProperty(race2, "wishStats");
+    if (maximum += capturedTaxFinite(readProperty(wishStats, "tax"), 0), noble !== void 0 && (maximum = noble[1]), readProperty(government, "type") === "oligarchy") {
+      let organizer = background === "bureaucrat", oligarchyCap = organizer ? 25 : highTech >= 12 ? 0 : highTech >= 2 ? 2 : 5;
+      capturedTaxFinite(readProperty(genes, "governor"), 0) >= 3 && (oligarchyCap += organizer ? 10 : 5), maximum += oligarchyCap;
+    }
+    return [minimum, maximum];
+  }
+  function readCapturedTaxSettings(value) {
+    return isRecord(value) ? Object.freeze({
+      requestedRate: capturedTaxFinite(
+        value.generalRequestedTaxRate,
+        DEFAULT_SETTINGS.requestedRate
+      ),
+      minimumRate: capturedTaxFinite(
+        value.generalMinimumTaxRate,
+        DEFAULT_SETTINGS.minimumRate
+      ),
+      minimumMorale: capturedTaxFinite(
+        value.generalMinimumMorale,
+        DEFAULT_SETTINGS.minimumMorale
+      ),
+      maximumMorale: capturedTaxFinite(
+        value.generalMaximumMorale,
+        DEFAULT_SETTINGS.maximumMorale
+      ),
+      manageAuthority: capturedTaxBoolean(
+        value.authorityManage,
+        DEFAULT_SETTINGS.manageAuthority
+      ),
+      authorityTarget: capturedTaxFinite(
+        value.generalMinimumAuthority,
+        DEFAULT_SETTINGS.authorityTarget
+      )
+    }) : DEFAULT_SETTINGS;
+  }
+  function capturedTaxResource(root, id) {
+    let value = readProperty(readProperty(root, "resource"), id);
+    return isRecord(value) ? value : void 0;
+  }
+  function capturedTaxQuantity(value, key) {
+    return capturedTaxFinite(readProperty(value, key), 0);
+  }
+  function capturedTaxDemanded(money, banana) {
+    if (banana) return !1;
+    let method = money.isDemanded;
+    return typeof method == "function" ? !!Reflect.apply(method, money, []) : !1;
+  }
+  function readCapturedTaxSnapshot(root, sequence, nowMs) {
+    let metadata = createSnapshotMetadata({
+      id: `captured-tax-${sequence}`,
+      capturedAtMs: nowMs
+    }), civic = readProperty(root, "civic"), taxes = readProperty(civic, "taxes"), morale = capturedTaxResource(root, "Morale"), money = capturedTaxResource(root, "Money"), authority = capturedTaxResource(root, "Authority");
+    if (!isRecord(taxes) || morale === void 0 || money === void 0 || authority === void 0)
+      return Object.freeze({
+        metadata,
+        status: "unavailable",
+        reason: "taxes-hidden"
+      });
+    if (taxes.display !== !0 || morale.incomeAdusted === !0)
+      return Object.freeze({
+        metadata,
+        status: "unavailable",
+        reason: morale.incomeAdusted === !0 ? "morale-already-adjusted" : "taxes-hidden"
+      });
+    let race2 = readProperty(root, "race"), caps = readTaxCap(root), amount = capturedTaxQuantity(money, "amount"), maximum = capturedTaxQuantity(money, "max");
+    return Object.freeze({
+      metadata,
+      status: "ready",
+      tax: Object.freeze({
+        currentRate: capturedTaxQuantity(taxes, "tax_rate"),
+        minimumRate: caps[0],
+        maximumRate: caps[1]
+      }),
+      morale: Object.freeze({
+        current: capturedTaxQuantity(morale, "amount"),
+        projected: capturedTaxFinite(morale.diff, 0),
+        maximum: capturedTaxQuantity(morale, "max")
+      }),
+      money: Object.freeze({
+        storageRatio: maximum > 0 ? amount / maximum : 0,
+        demanded: capturedTaxDemanded(
+          money,
+          !!readProperty(race2, "banana")
+        )
+      }),
+      authority: Object.freeze({
+        current: capturedTaxQuantity(authority, "amount"),
+        maximum: capturedTaxQuantity(authority, "max"),
+        unlocked: !!authority.display
+      }),
+      banana: !!readProperty(race2, "banana")
+    });
+  }
+  function createCapturedTaxAutomation({
+    rootState,
+    controls: controls4,
+    readSettings: readStoredSettings2,
+    nowMs
+  }) {
+    let sequence = 0, session, reader = Object.freeze({
+      readSnapshot() {
+        let root = rootState.readRoot();
+        if (sequence += 1, !isRecord(root))
+          return session = void 0, readCapturedTaxSnapshot({}, sequence, nowMs());
+        let snapshot = readCapturedTaxSnapshot(root, sequence, nowMs());
+        return session = snapshot.status === "ready" ? Object.freeze({ root }) : void 0, snapshot;
+      }
+    }), executor = Object.freeze({
+      execute(command) {
+        let active = session;
+        if (active === void 0)
+          return stale("tax-session-missing", "tax read session is missing");
+        if (rootState.readRoot() !== active.root)
+          return stale("tax-root-changed", "captured game root changed");
+        let taxes = readProperty(readProperty(active.root, "civic"), "taxes");
+        if (!isRecord(taxes) || capturedTaxQuantity(taxes, "tax_rate") !== command.expectedRate)
+          return stale("stale-tax-rate", "tax rate changed");
+        let handle = controls4.resolve(TAX_CONTROL);
+        if (handle === void 0)
+          return rejected(
+            "tax-control-missing",
+            "no captured control for tax_rates"
+          );
+        for (let batch of command.batches)
+          for (let operation2 of batch.operations) {
+            let method = operation2.direction === "increase" ? "add" : "sub";
+            for (let index = 0; index < operation2.count; index += 1) {
+              let result2 = controls4.invoke(handle, method);
+              if (!result2.ok)
+                return result2.reason === "stale-control" ? stale("tax-control-stale", result2.detail ?? result2.reason) : rejected(
+                  "tax-adjustment-failed",
+                  result2.detail ?? result2.reason
+                );
+            }
+          }
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({
+      reader,
+      executor,
+      runCycle() {
+        let snapshot = reader.readSnapshot(), commands = planTax(
+          snapshot,
+          readCapturedTaxSettings(readStoredSettings2)
+        );
+        commands.length > 0 && executor.execute(commands[0]);
+      }
+    });
+  }
+
+  // src/bootstrap/captured-tax-control.ts
+  function createCapturedTaxControl(dependencies) {
+    let automation = createCapturedTaxAutomation(dependencies);
+    return Object.freeze({
+      autoTax: automation.runCycle
+    });
+  }
+
   // src/bootstrap/captured-runtime-control.ts
   function readStoredSettings(storageValue) {
     if (!isRecord(storageValue)) return {};
@@ -52607,15 +52815,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       return {};
     }
   }
-  var DEFAULT_SETTINGS = Object.freeze({
+  var DEFAULT_SETTINGS2 = Object.freeze({
     masterScriptToggle: !0,
     autoBuild: !1,
     autoARPA: !1,
-    autoResearch: !1
+    autoResearch: !1,
+    autoTax: !1
   });
   function isEnabled(settings, key) {
     let value = settings[key];
-    return typeof value == "boolean" ? value : DEFAULT_SETTINGS[key] ?? !1;
+    return typeof value == "boolean" ? value : DEFAULT_SETTINGS2[key] ?? !1;
   }
   function startCapturedRuntime({
     pageCapture: pageCapture2,
@@ -52626,11 +52835,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     logError = () => {
     }
   }) {
-    let progression = createCapturedProgressionControl({
+    let panels = createGamePanelWorkspace({ getDocument: () => document }), progression = createCapturedProgressionControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       mountSuppression: pageCapture2.mountSuppression,
-      panels: createGamePanelWorkspace({ getDocument: () => document }),
+      panels,
       drawnActions: createGameDrawnActionsReader({
         getDocument: () => document
       }),
@@ -52643,11 +52852,34 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage)
-    }), runCycle = () => {
+    }), tax = createCapturedTaxControl({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage),
+      nowMs: () => Date.now()
+    }), civicDiscovery = createCapturedTabDiscovery({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      mountSuppression: pageCapture2.mountSuppression,
+      panels
+    }), civicControlsDiscoveryAttempted = !1, ensureCivicControls = () => {
+      if (civicControlsDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      civicControlsDiscoveryAttempted = !0;
+      let result2 = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 2
+        })
+      ]);
+      result2.outcome.status !== "succeeded" && logError(
+        `civic discovery skipped: ${result2.outcome.failure?.message ?? result2.outcome.status}`
+      );
+    }, runCycle = () => {
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }

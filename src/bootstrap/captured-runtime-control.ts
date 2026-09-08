@@ -1,8 +1,14 @@
 import { createCapturedProgressionControl } from "./captured-progression-control.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
+import { createCapturedTaxControl } from "./captured-tax-control.ts";
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
+import {
+  createCapturedTabDiscovery,
+  MAIN_TAB_CONTROL,
+  MAIN_TAB_SETTING,
+} from "../adapters/evolve/captured-tab-discovery.ts";
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
@@ -48,6 +54,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoBuild: false,
   autoARPA: false,
   autoResearch: false,
+  autoTax: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -64,11 +71,12 @@ export function startCapturedRuntime({
   diagnostics,
   logError = () => {},
 }: CapturedRuntimeControlDependencies): () => void {
+  const panels = createGamePanelWorkspace({ getDocument: () => document });
   const progression = createCapturedProgressionControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     mountSuppression: pageCapture.mountSuppression,
-    panels: createGamePanelWorkspace({ getDocument: () => document }),
+    panels,
     drawnActions: createGameDrawnActionsReader({
       getDocument: () => document,
     }),
@@ -83,6 +91,36 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
   });
+  const tax = createCapturedTaxControl({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    nowMs: () => Date.now(),
+  });
+  const civicDiscovery = createCapturedTabDiscovery({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    mountSuppression: pageCapture.mountSuppression,
+    panels,
+  });
+  let civicControlsDiscoveryAttempted = false;
+  const ensureCivicControls = () => {
+    if (civicControlsDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    civicControlsDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 2,
+      }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
 
   const runCycle = () => {
     const settings = readStoredSettings(storage);
@@ -98,6 +136,10 @@ export function startCapturedRuntime({
         isEnabled(settings, "buildingAlwaysClick")
       ) {
         gatherResources();
+      }
+      if (isEnabled(settings, "autoTax")) {
+        ensureCivicControls();
+        tax.autoTax();
       }
       if (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) {
         progression.runConstructionCycle();
