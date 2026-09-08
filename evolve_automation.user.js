@@ -5334,6 +5334,211 @@
     });
   }
 
+  // src/domain/progression/truepath/ai-apocalypse.ts
+  var AI_RESOURCE_RESEARCH_IDS = /* @__PURE__ */ new Set([
+    "tech-ai_optimizations",
+    "tech-synthetic_life",
+    "tech-protocol66",
+    "tech-protocol66a"
+  ]);
+  function isTruepathAiResourceResearch(id) {
+    return id !== null && AI_RESOURCE_RESEARCH_IDS.has(id);
+  }
+
+  // src/domain/economy/resources/demand-prioritization.ts
+  function projectDoubles(target) {
+    return target.isProject && target.progress !== null && target.progress < 99;
+  }
+  function planDemandPrioritization(input) {
+    let { settings, consumptionBalanceTarget: balance } = input, requests = [], removedMissionIndices = [], request = (resourceId, amount) => {
+      requests.push({ resourceId, amount });
+    };
+    input.inflationMoney !== null && request("Money", input.inflationMoney), input.retirementGraphene !== null && request("Graphene", input.retirementGraphene);
+    let prioritizedTasks = [];
+    if (settings.prioritizeQueue.includes("req") && prioritizedTasks.push(...input.queuedTargets), settings.prioritizeTriggers.includes("req") && prioritizedTasks.push(...input.triggerTargets), settings.missionRequest)
+      for (let i = input.missions.length - 1; i >= 0; i--) {
+        let mission = input.missions[i];
+        mission !== void 0 && (mission.isUnlocked && mission.autoBuildEnabled && (!mission.isBlackholeJumpShip || !settings.prestigeBioseedConstruct || settings.prestigeType !== "whitehole") ? prioritizedTasks.push(mission.target) : mission.isComplete && removedMissionIndices.push(i));
+      }
+    if (prioritizedTasks.length === 0) {
+      let apocalypseSelected = settings.prestigeType === "apocalypse", truepathAiResearch = apocalypseSelected ? input.unlockedTechs.filter(
+        (tech) => isTruepathAiResourceResearch(tech.id)
+      ) : [], researchRequestEnabled = input.isEarlyGame ? settings.researchRequest : settings.researchRequestSpace;
+      prioritizedTasks = truepathAiResearch.length > 0 ? truepathAiResearch.map((tech) => tech.target) : apocalypseSelected && input.truepathAiBuildingTarget !== null ? [input.truepathAiBuildingTarget] : researchRequestEnabled ? input.unlockedTechs.filter((tech) => tech.isAffordable).map((tech) => tech.target) : [];
+    }
+    for (let task of prioritizedTasks) {
+      let multiplier = projectDoubles(task) ? 2 : 1;
+      for (let cost of task.costs)
+        request(cost.resourceId, cost.amount * multiplier);
+    }
+    let savingCost = {};
+    if (input.savingTarget !== null)
+      for (let cost of input.savingTarget.costs)
+        request(cost.resourceId, cost.amount), savingCost[cost.resourceId] = cost.amount;
+    if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req") && request("Money", input.spyPurchaseMoney), settings.autoFleet && input.fleet.nextShipAffordable && settings.prioritizeOuterFleet.includes("req"))
+      for (let cost of input.fleet.nextShipCost)
+        request(cost.resourceId, cost.amount);
+    for (let crafter of input.crafters)
+      if ((settings.productionFactoryFocusMaterials || crafter.isDemanded) && crafter.isUnlocked)
+        for (let cost of crafter.costs) {
+          let minExpected = cost.materialMaxQuantity * crafter.craftPreserve + input.availableCrafters * 0.007142857142857143 * balance * cost.amount;
+          request(cost.resourceId, minExpected);
+        }
+    let { vitreloyPlant } = input, vitPlantCount = settings.autoPower && vitreloyPlant.autoStateEnabled ? vitreloyPlant.count : vitreloyPlant.stateOnCount;
+    if (vitPlantCount > 0 && request("Stanene", vitPlantCount * balance * 100), input.factoryCount > 0) {
+      let multiplier = input.factoryCount * balance, storageThreshold = settings.productionFactoryMinIngredients;
+      for (let production of input.factoryProductions)
+        if ((settings.productionFactoryFocusMaterials || production.isDemanded) && production.unlocked && production.enabled && production.weighting)
+          for (let cost of production.costs)
+            request(
+              cost.resourceId,
+              cost.quantity * multiplier + cost.minRateOfChange + storageThreshold * cost.resourceMaxQuantity
+            );
+    }
+    return Object.freeze({
+      savingConflict: input.savingTarget === null ? null : Object.freeze({
+        name: input.savingTarget.name,
+        cost: Object.freeze(savingCost)
+      }),
+      requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
+      removedMissionIndices: Object.freeze(removedMissionIndices)
+    });
+  }
+
+  // src/adapters/evolve/economy/resources/captured-resource-demand.ts
+  var EMPTY_SAMPLE2 = Object.freeze({
+    requestedQuantity: () => 0,
+    isDemanded: () => !1
+  });
+  function settingString(settings, key, fallback) {
+    let value = settings[key];
+    return typeof value == "string" ? value : fallback;
+  }
+  function settingBoolean2(settings, key, fallback) {
+    let value = settings[key];
+    return typeof value == "boolean" ? value : fallback;
+  }
+  function finite6(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readSettingsInput(settingsValue) {
+    let settings = isRecord(settingsValue) ? settingsValue : {};
+    return Object.freeze({
+      prioritizeQueue: settingString(settings, "prioritizeQueue", "savereq"),
+      prioritizeTriggers: settingString(
+        settings,
+        "prioritizeTriggers",
+        "savereq"
+      ),
+      missionRequest: settingBoolean2(settings, "missionRequest", !0),
+      prestigeBioseedConstruct: settingBoolean2(
+        settings,
+        "prestigeBioseedConstruct",
+        !1
+      ),
+      prestigeType: settingString(settings, "prestigeType", "none"),
+      researchRequest: settingBoolean2(settings, "researchRequest", !0),
+      researchRequestSpace: settingBoolean2(
+        settings,
+        "researchRequestSpace",
+        !1
+      ),
+      prioritizeUnify: settingString(settings, "prioritizeUnify", "savereq"),
+      autoFleet: settingBoolean2(settings, "autoFleet", !1),
+      prioritizeOuterFleet: settingString(
+        settings,
+        "prioritizeOuterFleet",
+        "ignore"
+      ),
+      productionFactoryFocusMaterials: settingBoolean2(
+        settings,
+        "productionFactoryFocusMaterials",
+        !1
+      ),
+      autoPower: settingBoolean2(settings, "autoPower", !1),
+      productionFactoryMinIngredients: finite6(settings.productionFactoryMinIngredients) ?? 0
+    });
+  }
+  function toTargets(targets) {
+    return Object.freeze(
+      targets.map(
+        (target) => Object.freeze({
+          isProject: !1,
+          progress: null,
+          costs: Object.freeze(
+            Object.entries(target.cost).flatMap(([resourceId, amount]) => {
+              let value = finite6(amount);
+              return value === void 0 ? [] : [Object.freeze({ resourceId, amount: value })];
+            })
+          )
+        })
+      )
+    );
+  }
+  function createCapturedResourceDemand(dependencies) {
+    return Object.freeze({
+      sample() {
+        let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
+        if (!isRecord(resources)) return EMPTY_SAMPLE2;
+        let queued = dependencies.reservations.readReservations().targets;
+        if (queued.length === 0) return EMPTY_SAMPLE2;
+        let result = planDemandPrioritization({
+          settings: readSettingsInput(dependencies.readSettings()),
+          // Only reachable through the research fallback, which has no technologies to offer in this
+          // bounded sample and therefore returns the same empty list either way.
+          isEarlyGame: !1,
+          consumptionBalanceTarget: 0,
+          truepathAiBuildingTarget: null,
+          inflationMoney: null,
+          retirementGraphene: null,
+          queuedTargets: toTargets(queued),
+          triggerTargets: Object.freeze([]),
+          savingTarget: null,
+          missions: Object.freeze([]),
+          unlockedTechs: Object.freeze([]),
+          spyPurchaseMoney: 0,
+          fleet: Object.freeze({
+            nextShipAffordable: !1,
+            nextShipCost: Object.freeze([])
+          }),
+          availableCrafters: 0,
+          crafters: Object.freeze([]),
+          vitreloyPlant: Object.freeze({
+            autoStateEnabled: !1,
+            count: 0,
+            stateOnCount: 0
+          }),
+          factoryCount: 0,
+          factoryProductions: Object.freeze([])
+        }), requested = /* @__PURE__ */ new Map();
+        for (let request of result.requests) {
+          let amount = finite6(request.amount);
+          if (amount === void 0) continue;
+          let current = requested.get(request.resourceId) ?? 0;
+          if (amount <= current) continue;
+          let maximum = finite6(
+            readProperty(readProperty(resources, request.resourceId), "max")
+          );
+          requested.set(
+            request.resourceId,
+            maximum === void 0 || maximum < 0 ? amount : Math.min(amount, maximum)
+          );
+        }
+        return Object.freeze({
+          requestedQuantity: (resourceId) => requested.get(resourceId) ?? 0,
+          isDemanded: (resourceId) => {
+            let wanted = requested.get(resourceId);
+            if (wanted === void 0) return !1;
+            let amount = finite6(
+              readProperty(readProperty(resources, resourceId), "amount")
+            );
+            return amount !== void 0 && wanted > amount;
+          }
+        });
+      }
+    });
+  }
+
   // src/domain/economy/resources/resource-ratios.ts
   var MAX = Number.MAX_SAFE_INTEGER;
   function fullnessWeight(demanded, storageRatio2) {
@@ -5414,26 +5619,26 @@
     Object.freeze({ id: "uncommon", first: "Iridium", second: "Neutronium" }),
     Object.freeze({ id: "rare", first: "Orichalcum", second: "Elerium" })
   ]);
-  function finite6(value) {
+  function finite7(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function settingNumber4(settings, key, fallback) {
     if (!isRecord(settings)) return fallback;
     let value = settings[key];
-    return value === void 0 ? fallback : finite6(value);
+    return value === void 0 ? fallback : finite7(value);
   }
   function storageRatio(root, resourceId) {
-    let resource = readProperty(readProperty(root, "resource"), resourceId), amount = finite6(readProperty(resource, "amount")), maximum = finite6(readProperty(resource, "max"));
+    let resource = readProperty(readProperty(root, "resource"), resourceId), amount = finite7(readProperty(resource, "amount")), maximum = finite7(readProperty(resource, "max"));
     if (!(amount === void 0 || maximum === void 0))
       return maximum > 0 ? amount / maximum : 0;
   }
   function structureCount(root, region, id) {
-    return finite6(
+    return finite7(
       readProperty(readProperty(readProperty(root, region), id), "count")
     );
   }
   function techLevel2(root, id) {
-    return finite6(readProperty(readProperty(root, "tech"), id)) ?? 0;
+    return finite7(readProperty(readProperty(root, "tech"), id)) ?? 0;
   }
   var EMPTY_QUARRY = Object.freeze({
     initialised: !1,
@@ -5459,56 +5664,62 @@
     productions: Object.freeze([])
   });
   function readQuarryInput(dependencies, root) {
-    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite6(readProperty(quarry, "asbestos")), count = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber4(
+    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite7(readProperty(quarry, "asbestos")), count = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber4(
       dependencies.readSettings(),
       "productionChrysotileWeight",
       2
     );
-    return !readProperty(race, "smoldering") || dependencies.controls.resolve(QUARRY_CONTROL) === void 0 || currentRatio === void 0 || count === void 0 || count < 1 || chrysotileStorageRatio === void 0 || stoneStorageRatio === void 0 || aluminiumStorageRatio === void 0 || chrysotileWeight === void 0 ? EMPTY_QUARRY : Object.freeze({
+    if (!readProperty(race, "smoldering") || dependencies.controls.resolve(QUARRY_CONTROL) === void 0 || currentRatio === void 0 || count === void 0 || count < 1 || chrysotileStorageRatio === void 0 || stoneStorageRatio === void 0 || aluminiumStorageRatio === void 0 || chrysotileWeight === void 0)
+      return EMPTY_QUARRY;
+    let demand = dependencies.readDemand();
+    return Object.freeze({
       initialised: !0,
       currentRatio,
-      chrysotileDemanded: !1,
+      chrysotileDemanded: demand.isDemanded("Chrysotile"),
       chrysotileStorageRatio,
-      stoneDemanded: !1,
+      stoneDemanded: demand.isDemanded("Stone"),
       stoneStorageRatio,
       hasMetalRefinery: (structureCount(root, "city", "metal_refinery") ?? 0) > 0,
-      aluminiumDemanded: !1,
+      aluminiumDemanded: demand.isDemanded("Aluminium"),
       aluminiumStorageRatio,
       chrysotileWeight
     });
   }
   function readMineInput(dependencies, root) {
-    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite6(readProperty(mine, "ratio")), count = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber4(
+    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite7(readProperty(mine, "ratio")), count = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber4(
       dependencies.readSettings(),
       "productionAdamantiteWeight",
       1
     );
-    return dependencies.controls.resolve(TITAN_MINE_CONTROL) === void 0 || currentRatio === void 0 || count === void 0 || count < 1 || adamantiteStorageRatio === void 0 || aluminiumStorageRatio === void 0 || adamantiteWeight === void 0 ? EMPTY_MINE : Object.freeze({
+    if (dependencies.controls.resolve(TITAN_MINE_CONTROL) === void 0 || currentRatio === void 0 || count === void 0 || count < 1 || adamantiteStorageRatio === void 0 || aluminiumStorageRatio === void 0 || adamantiteWeight === void 0)
+      return EMPTY_MINE;
+    let demand = dependencies.readDemand();
+    return Object.freeze({
       initialised: !0,
       currentRatio,
-      adamantiteDemanded: !1,
+      adamantiteDemanded: demand.isDemanded("Adamantite"),
       adamantiteStorageRatio,
-      aluminiumDemanded: !1,
+      aluminiumDemanded: demand.isDemanded("Aluminium"),
       aluminiumStorageRatio,
       adamantiteWeight
     });
   }
   function readExtractorInput(dependencies, root) {
-    let ship = readProperty(readProperty(root, "tauceti"), "mining_ship"), count = finite6(readProperty(ship, "count")), roidTech = techLevel2(root, "tau_roid");
+    let ship = readProperty(readProperty(root, "tauceti"), "mining_ship"), count = finite7(readProperty(ship, "count")), roidTech = techLevel2(root, "tau_roid");
     if (!isRecord(ship) || dependencies.controls.resolve(MINING_SHIP_CONTROL) === void 0 || roidTech < MINING_SHIP_TECH_LEVEL || count === void 0 || count < 1)
       return EMPTY_EXTRACTOR;
-    let settings = dependencies.readSettings(), productions = [];
+    let settings = dependencies.readSettings(), demand = dependencies.readDemand(), productions = [];
     for (let spec of EXTRACTOR_SPECS) {
       if (spec.id === "rare" && roidTech < RARE_EXTRACTION_TECH_LEVEL) continue;
-      let currentRatio = finite6(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber4(settings, `productionExtWeight_${spec.id}`, 1);
+      let currentRatio = finite7(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber4(settings, `productionExtWeight_${spec.id}`, 1);
       if (currentRatio === void 0 || res1StorageRatio === void 0 || res2StorageRatio === void 0 || weight === void 0)
         return EMPTY_EXTRACTOR;
       productions.push(
         Object.freeze({
           id: spec.id,
-          res1Demanded: !1,
+          res1Demanded: demand.isDemanded(spec.first),
           res1StorageRatio,
-          res2Demanded: !1,
+          res2Demanded: demand.isDemanded(spec.second),
           res2StorageRatio,
           weight,
           currentRatio
@@ -5566,7 +5777,7 @@
           {
             control: QUARRY_CONTROL,
             name: "quarry",
-            readCurrent: (current) => finite6(
+            readCurrent: (current) => finite7(
               readProperty(
                 readProperty(readProperty(current, "city"), "rock_quarry"),
                 "asbestos"
@@ -5584,7 +5795,7 @@
           {
             control: TITAN_MINE_CONTROL,
             name: "titan mine",
-            readCurrent: (current) => finite6(
+            readCurrent: (current) => finite7(
               readProperty(
                 readProperty(readProperty(current, "space"), "titan_mine"),
                 "ratio"
@@ -5606,7 +5817,7 @@
               control: MINING_SHIP_CONTROL,
               name: `mining ship ${adjustment.id}`,
               id: adjustment.id,
-              readCurrent: (current) => finite6(
+              readCurrent: (current) => finite7(
                 readProperty(
                   readProperty(readProperty(current, "tauceti"), "mining_ship"),
                   adjustment.id
@@ -5661,7 +5872,7 @@
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
   var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", SPEND_EPSILON = 1e-6;
-  function finite7(value) {
+  function finite8(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readSettingsRecord(value) {
@@ -5672,7 +5883,7 @@
     return typeof value == "boolean" ? value : !0;
   }
   function craftPreserve(settings, id) {
-    let value = finite7(settings[`foundry_p_${id}`]);
+    let value = finite8(settings[`foundry_p_${id}`]);
     return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
   }
   function craftAllButtonRendered(getDocument, id) {
@@ -5698,7 +5909,7 @@
     if (!isRecord(resources)) return;
     let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
     for (let [resourceId, costPerCraft] of costs) {
-      let resource = readProperty(resources, resourceId), currentQuantity2 = finite7(readProperty(resource, "amount")), maxQuantity = finite7(readProperty(resource, "max")), rateOfChange = finite7(readProperty(resource, "diff"));
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite8(readProperty(resource, "amount")), maxQuantity = finite8(readProperty(resource, "max")), rateOfChange = finite8(readProperty(resource, "diff"));
       if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
         return;
       let base = {
@@ -5725,7 +5936,7 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite7(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite8(dependencies.readPeriods());
         return session = Object.freeze({
           root,
           candidates: readCandidates(dependencies, root),
@@ -5778,7 +5989,7 @@
           "resource"
         );
         for (let spend of decision.spend) {
-          let actual = finite7(
+          let actual = finite8(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
@@ -5799,7 +6010,7 @@
         if (!result.ok)
           return rejected("craft-control-failed", result.detail ?? result.reason);
         for (let spend of decision.spend) {
-          let actual = finite7(
+          let actual = finite8(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
@@ -6048,10 +6259,22 @@
     }), graphene = createCapturedGrapheneAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
-    }), ratios = createCapturedProductionRatios({
+    }), demand = createCapturedResourceDemand({
+      rootState: pageCapture2.rootState,
+      reservations: createCapturedQueueReservationSource({
+        rootState: pageCapture2.rootState,
+        resources: createCapturedResourceSource(pageCapture2.rootState),
+        costs: createCapturedActionCostReader({
+          rootState: pageCapture2.rootState,
+          controls: pageCapture2.controls
+        })
+      }),
+      readSettings: () => readStoredSettings(storage)
+    }), demandThisCycle, ratios = createCapturedProductionRatios({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => readStoredSettings(storage),
+      readDemand: () => demandThisCycle ??= demand.sample()
     }), completedPeriods = 1, craftDependencies = {
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -6176,6 +6399,7 @@
       );
       return typeof value == "number" && Number.isFinite(value) ? value : 0;
     }, runCycle = () => {
+      demandThisCycle = void 0;
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {

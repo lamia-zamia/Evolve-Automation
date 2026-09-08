@@ -68,6 +68,10 @@ function createWorld(overrides = {}) {
       rootState: { readRoot: () => root },
       controls,
       readSettings: () => overrides.settings ?? {},
+      readDemand: () => ({
+        requestedQuantity: () => 0,
+        isDemanded: (id) => (overrides.demanded ?? []).includes(id),
+      }),
     }),
   };
 }
@@ -176,6 +180,22 @@ for (const world of [
   assert.deepEqual(world.calls, []);
 }
 
+// A demanded resource pins the split to it, whatever the storage ratios say.
+{
+  const world = createWorld({ demanded: ["Stone"] });
+  assert.deepEqual(world.automation.quarry(), { status: "succeeded" });
+  assert.equal(world.root.city.rock_quarry.asbestos, 0);
+  assert.ok(world.calls.every((call) => call.method === "sub"));
+}
+
+// Both sides demanded still divides by the configured weight rather than saturating.
+{
+  const world = createWorld({ demanded: ["Stone", "Chrysotile"] });
+  world.root.city.rock_quarry.asbestos = 20;
+  assert.deepEqual(world.automation.quarry(), { status: "succeeded" });
+  assert.equal(world.root.city.rock_quarry.asbestos, 67);
+}
+
 // A split that moves underneath the plan stops the run instead of being overwritten.
 {
   const world = createWorld();
@@ -199,6 +219,10 @@ for (const world of [
     rootState: { readRoot: () => world.root },
     controls,
     readSettings: () => ({}),
+    readDemand: () => ({
+      requestedQuantity: () => 0,
+      isDemanded: () => false,
+    }),
   });
   const outcome = automation.quarry();
   assert.equal(outcome.status, "stale");

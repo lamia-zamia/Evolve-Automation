@@ -5,11 +5,11 @@
  * `add`/`sub` methods, one click's worth per call, clamped by the game at 0 and 100. The mining
  * ship names its split (`common`, `uncommon`, `rare`); the other two have a single unnamed one.
  *
- * The pure ratio policies are reused unchanged. Their `demanded` inputs stay false: DeadSpace keeps
- * the script-side demand model outside the captured root, so allocation follows storage fullness
- * and the configured weights only, and never pins a split to a resource because something asked for
- * it. Each step is confirmed against the live root before the next one, so a split the player or
- * the game moves underneath the plan stops the run instead of being overwritten blind.
+ * The pure ratio policies are reused unchanged. Their `demanded` inputs come from the captured
+ * demand sample, which currently sees the player's own queues and nothing else, so a split pins to
+ * a queued resource and otherwise follows storage fullness and the configured weights. Each step is
+ * confirmed against the live root before the next one, so a split the player or the game moves
+ * underneath the plan stops the run instead of being overwritten blind.
  */
 
 import {
@@ -27,6 +27,7 @@ import type { GameControlRegistry } from "../../../../ports/game-control-registr
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
+import type { CapturedDemandSample } from "./captured-resource-demand.ts";
 
 export const QUARRY_CONTROL = "iQuarry";
 export const TITAN_MINE_CONTROL = "iTMine";
@@ -46,6 +47,8 @@ export interface CapturedProductionRatiosDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
+  /** The cycle's demand sample, shared with the other features that read it. */
+  readonly readDemand: () => CapturedDemandSample;
 }
 
 export interface CapturedProductionRatiosAutomation {
@@ -150,15 +153,16 @@ function readQuarryInput(
   ) {
     return EMPTY_QUARRY;
   }
+  const demand = dependencies.readDemand();
   return Object.freeze({
     initialised: true,
     currentRatio,
-    chrysotileDemanded: false,
+    chrysotileDemanded: demand.isDemanded("Chrysotile"),
     chrysotileStorageRatio,
-    stoneDemanded: false,
+    stoneDemanded: demand.isDemanded("Stone"),
     stoneStorageRatio,
     hasMetalRefinery: (structureCount(root, "city", "metal_refinery") ?? 0) > 0,
-    aluminiumDemanded: false,
+    aluminiumDemanded: demand.isDemanded("Aluminium"),
     aluminiumStorageRatio,
     chrysotileWeight,
   });
@@ -189,12 +193,13 @@ function readMineInput(
   ) {
     return EMPTY_MINE;
   }
+  const demand = dependencies.readDemand();
   return Object.freeze({
     initialised: true,
     currentRatio,
-    adamantiteDemanded: false,
+    adamantiteDemanded: demand.isDemanded("Adamantite"),
     adamantiteStorageRatio,
-    aluminiumDemanded: false,
+    aluminiumDemanded: demand.isDemanded("Aluminium"),
     aluminiumStorageRatio,
     adamantiteWeight,
   });
@@ -217,6 +222,7 @@ function readExtractorInput(
     return EMPTY_EXTRACTOR;
   }
   const settings = dependencies.readSettings();
+  const demand = dependencies.readDemand();
   const productions: ExtractorProductionInput[] = [];
   for (const spec of EXTRACTOR_SPECS) {
     if (spec.id === "rare" && roidTech < RARE_EXTRACTION_TECH_LEVEL) continue;
@@ -235,9 +241,9 @@ function readExtractorInput(
     productions.push(
       Object.freeze({
         id: spec.id,
-        res1Demanded: false,
+        res1Demanded: demand.isDemanded(spec.first),
         res1StorageRatio,
-        res2Demanded: false,
+        res2Demanded: demand.isDemanded(spec.second),
         res2StorageRatio,
         weight,
         currentRatio,

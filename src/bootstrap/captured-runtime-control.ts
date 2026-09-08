@@ -20,6 +20,10 @@ import {
   createCapturedGrapheneAutomation,
   GRAPHENE_CONTROL,
 } from "../adapters/evolve/economy/production/captured-graphene.ts";
+import { createCapturedResourceDemand } from "../adapters/evolve/economy/resources/captured-resource-demand.ts";
+import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
+import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
+import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
 import {
   createCapturedProductionRatios,
   MINING_SHIP_CONTROL,
@@ -169,10 +173,27 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
   });
+  // The demand sample is planned at most once per cycle and shared by everything that reads it.
+  // Its reservation source is the player's build queue only: pricing the research queue needs the
+  // offered-technology catalog, and that discovery pass belongs to the construction cycle.
+  const demand = createCapturedResourceDemand({
+    rootState: pageCapture.rootState,
+    reservations: createCapturedQueueReservationSource({
+      rootState: pageCapture.rootState,
+      resources: createCapturedResourceSource(pageCapture.rootState),
+      costs: createCapturedActionCostReader({
+        rootState: pageCapture.rootState,
+        controls: pageCapture.controls,
+      }),
+    }),
+    readSettings: () => readStoredSettings(storage),
+  });
+  let demandThisCycle: ReturnType<typeof demand.sample> | undefined;
   const ratios = createCapturedProductionRatios({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
+    readDemand: () => (demandThisCycle ??= demand.sample()),
   });
   let completedPeriods = 1;
   const craftDependencies = {
@@ -387,6 +408,7 @@ export function startCapturedRuntime({
   };
 
   const runCycle = () => {
+    demandThisCycle = undefined;
     const settings = readStoredSettings(storage);
     if (
       !pageCapture.isComplete() ||
