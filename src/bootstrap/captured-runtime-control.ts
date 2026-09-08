@@ -7,6 +7,10 @@ import {
   createCapturedPylonAutomation,
   PYLON_CONTROL,
 } from "../adapters/evolve/economy/production/captured-pylon.ts";
+import {
+  ALCHEMY_CONTROL_PREFIX,
+  createCapturedAlchemyAutomation,
+} from "../adapters/evolve/economy/production/captured-alchemy.ts";
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
@@ -14,6 +18,7 @@ import {
   createCapturedTabDiscovery,
   MAIN_TAB_CONTROL,
   MAIN_TAB_SETTING,
+  SUB_TAB_CONTROLS,
 } from "../adapters/evolve/captured-tab-discovery.ts";
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
@@ -62,6 +67,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoARPA: false,
   autoResearch: false,
   autoTax: false,
+  autoAlchemy: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -121,6 +127,11 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
   });
+  const alchemy = createCapturedAlchemyAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+  });
   const civicDiscovery = createCapturedTabDiscovery({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -172,6 +183,44 @@ export function startCapturedRuntime({
       );
     }
   };
+  let alchemyDiscoveryAttempted = false;
+  const ensureAlchemyControls = () => {
+    if (
+      pageCapture.controls
+        .capturedElementIds()
+        .some((id) => id.startsWith(ALCHEMY_CONTROL_PREFIX))
+    ) {
+      return;
+    }
+    const root = pageCapture.rootState.readRoot();
+    const tech = readProperty(root, "tech");
+    const techLevel = readProperty(tech, "alchemy");
+    if (
+      typeof techLevel !== "number" ||
+      !Number.isFinite(techLevel) ||
+      techLevel < 1 ||
+      alchemyDiscoveryAttempted
+    ) {
+      return;
+    }
+    alchemyDiscoveryAttempted = true;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    if (marketTabs === undefined) return;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 4,
+      }),
+      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 4 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `alchemy discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
 
   const runCycle = () => {
     const settings = readStoredSettings(storage);
@@ -191,6 +240,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoTax")) {
         ensureCivicControls();
         tax.autoTax();
+      }
+      if (isEnabled(settings, "autoAlchemy")) {
+        ensureAlchemyControls();
+        alchemy.run();
       }
       if (isEnabled(settings, "autoPylon")) {
         ensurePylonControls();

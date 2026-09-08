@@ -4644,6 +4644,218 @@
     });
   }
 
+  // src/domain/economy/production/alchemy.ts
+  var EMPTY2 = Object.freeze({
+    decrease: Object.freeze([]),
+    increase: Object.freeze([])
+  });
+  function planAlchemy(input) {
+    if (!input.unlocked)
+      return EMPTY2;
+    let adjust = /* @__PURE__ */ new Map();
+    for (let res of input.resources)
+      adjust.set(res.id, res.currentCount * -1);
+    if (!input.crystalDemanded) {
+      let activeList = input.resources.filter(
+        (res) => res.weighting > 0 && res.isUseful
+      ), totalWeighting = 0, currentTransmute = 0;
+      for (let res of activeList)
+        totalWeighting += res.weighting, currentTransmute += res.currentCount;
+      let manaAvailable = (currentTransmute + input.manaRateOfChange) * (!input.autoPylon && input.manaStorageRatio > 0.99 ? 1 : input.magicAlchemyManaUse), crystalAvailable = currentTransmute * 0.15 + input.crystalCurrentQuantity + input.crystalRateOfChange, maxTransmute = Math.floor(
+        Math.min(manaAvailable, crystalAvailable * (1 / 0.15))
+      );
+      for (let res of activeList)
+        adjust.set(
+          res.id,
+          (adjust.get(res.id) ?? 0) + Math.floor(maxTransmute * (res.weighting / totalWeighting))
+        );
+    }
+    if (input.magicFullmetalHelper && input.universeMagic && input.alchemyTech >= 2 && input.fullmetalStar < input.achievementLevel && input.manaCurrentQuantity >= 1 && input.crystalCurrentQuantity >= 0.15) {
+      let fullmetal = input.resources.find(
+        (res) => res.transmuteTier > 1 && !res.isBasic
+      );
+      fullmetal && adjust.set(
+        fullmetal.id,
+        Math.max(adjust.get(fullmetal.id) ?? 0, 1 - fullmetal.currentCount)
+      );
+    }
+    let decrease = [], increase = [];
+    for (let res of input.resources) {
+      let delta = adjust.get(res.id) ?? 0;
+      delta < 0 && decrease.push(
+        Object.freeze({
+          id: res.id,
+          expectedCurrentCount: res.currentCount,
+          count: delta * -1
+        })
+      );
+    }
+    for (let res of input.resources) {
+      let delta = adjust.get(res.id) ?? 0;
+      delta > 0 && increase.push(
+        Object.freeze({
+          id: res.id,
+          expectedCurrentCount: res.currentCount,
+          count: delta
+        })
+      );
+    }
+    return Object.freeze({
+      decrease: Object.freeze(decrease),
+      increase: Object.freeze(increase)
+    });
+  }
+
+  // src/adapters/evolve/economy/production/captured-alchemy.ts
+  var ALCHEMY_CONTROL_PREFIX = "alchemy";
+  function finite3(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function emptyInput3() {
+    return Object.freeze({
+      unlocked: !1,
+      crystalDemanded: !1,
+      manaRateOfChange: 0,
+      manaStorageRatio: 0,
+      manaCurrentQuantity: 0,
+      crystalCurrentQuantity: 0,
+      crystalRateOfChange: 0,
+      autoPylon: !1,
+      magicAlchemyManaUse: 0,
+      magicFullmetalHelper: !1,
+      universeMagic: !1,
+      alchemyTech: 0,
+      fullmetalStar: 0,
+      achievementLevel: 0,
+      resources: Object.freeze([])
+    });
+  }
+  function settingNumber2(settings, key, fallback) {
+    let value = settings[key];
+    return value === void 0 ? fallback : finite3(value);
+  }
+  function readAlchemyInput(dependencies) {
+    let root = dependencies.rootState.readRoot();
+    if (root === void 0)
+      return Object.freeze({ root, input: emptyInput3() });
+    let tech = readProperty(root, "tech"), alchemyTech = finite3(readProperty(tech, "alchemy")), race = readProperty(root, "race"), alchemy = readProperty(race, "alchemy"), resources = readProperty(root, "resource"), mana = readProperty(resources, "Mana"), crystal = readProperty(resources, "Crystal"), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, manaAmount = finite3(readProperty(mana, "amount")), manaMaximum = finite3(readProperty(mana, "max")), manaRateOfChange = finite3(readProperty(mana, "diff")), crystalAmount = finite3(readProperty(crystal, "amount")), crystalRateOfChange = finite3(readProperty(crystal, "diff"));
+    if (alchemyTech === void 0 || alchemyTech < 1 || !isRecord(alchemy) || !isRecord(resources) || manaAmount === void 0 || manaMaximum === void 0 || manaRateOfChange === void 0 || crystalAmount === void 0 || crystalRateOfChange === void 0 || dependencies.controls.capturedElementIds().every((id) => !id.startsWith(ALCHEMY_CONTROL_PREFIX)))
+      return Object.freeze({ root, input: emptyInput3() });
+    let resourceViews = [];
+    for (let controlId of dependencies.controls.capturedElementIds()) {
+      if (!controlId.startsWith(ALCHEMY_CONTROL_PREFIX)) continue;
+      let id = controlId.slice(ALCHEMY_CONTROL_PREFIX.length);
+      if (id.length === 0 || dependencies.controls.resolve(controlId) === void 0)
+        continue;
+      let resource = readProperty(resources, id);
+      if (!isRecord(resource)) continue;
+      let amount = finite3(resource.amount), maximum = finite3(resource.max), currentCount2 = finite3(alchemy[id]), display = resource.display, weighting = settingNumber2(settings, `res_alchemy_w_${id}`, 0);
+      amount === void 0 || maximum === void 0 || currentCount2 === void 0 || typeof display != "boolean" || weighting === void 0 || settings[`res_alchemy_${id}`] === !1 || resourceViews.push(
+        Object.freeze({
+          id,
+          currentCount: currentCount2,
+          weighting,
+          isUseful: display && (maximum <= 0 || amount / maximum < 0.99),
+          transmuteTier: 0,
+          isBasic: !1
+        })
+      );
+    }
+    let magicAlchemyManaUse = settingNumber2(
+      settings,
+      "magicAlchemyManaUse",
+      0.5
+    );
+    return Object.freeze(magicAlchemyManaUse === void 0 ? { root, input: emptyInput3() } : {
+      root,
+      input: Object.freeze({
+        unlocked: !0,
+        crystalDemanded: !1,
+        manaRateOfChange,
+        manaStorageRatio: manaMaximum > 0 ? manaAmount / manaMaximum : 0,
+        manaCurrentQuantity: manaAmount,
+        crystalCurrentQuantity: crystalAmount,
+        crystalRateOfChange,
+        autoPylon: settings.autoPylon === !0,
+        magicAlchemyManaUse,
+        magicFullmetalHelper: !1,
+        universeMagic: !0,
+        alchemyTech,
+        fullmetalStar: 0,
+        achievementLevel: 0,
+        resources: Object.freeze(resourceViews)
+      })
+    });
+  }
+  function currentCount(root, id) {
+    let alchemy = readProperty(readProperty(root, "race"), "alchemy");
+    return finite3(readProperty(alchemy, id));
+  }
+  function manaRate2(root) {
+    return finite3(
+      readProperty(readProperty(readProperty(root, "resource"), "Mana"), "diff")
+    );
+  }
+  function executeAdjustment2(dependencies, root, id, expected, count, method) {
+    let controlId = `${ALCHEMY_CONTROL_PREFIX}${id}`, handle = dependencies.controls.resolve(controlId);
+    if (handle === void 0)
+      return stale(
+        "alchemy-control-missing",
+        "captured alchemy control is unavailable"
+      );
+    for (let index = 0; index < count; index++) {
+      if (dependencies.rootState.readRoot() !== root)
+        return stale("alchemy-root-changed", "captured game root changed");
+      if (currentCount(root, id) !== expected + (method === "addSpell" ? index : -index))
+        return stale("alchemy-count-changed", "alchemy count changed");
+      let result = dependencies.controls.invoke(handle, method, [id]);
+      if (!result.ok)
+        return rejected("alchemy-control-failed", result.detail ?? result.reason);
+    }
+    return SUCCEEDED;
+  }
+  function sameDecision(input, decision) {
+    return JSON.stringify(planAlchemy(input)) === JSON.stringify(decision);
+  }
+  function createCapturedAlchemyAutomation(dependencies) {
+    return Object.freeze({
+      run() {
+        let session = readAlchemyInput(dependencies), decision = planAlchemy(session.input);
+        if (!session.input.unlocked) return SUCCEEDED;
+        if (!sameDecision(session.input, decision))
+          return rejected(
+            "invalid-alchemy-decision",
+            "alchemy decision changed during planning"
+          );
+        if (manaRate2(session.root) !== session.input.manaRateOfChange)
+          return stale("alchemy-mana-changed", "Mana rate-of-change changed");
+        for (let adjustment of decision.decrease) {
+          let outcome = executeAdjustment2(
+            dependencies,
+            session.root,
+            adjustment.id,
+            adjustment.expectedCurrentCount,
+            adjustment.count,
+            "subSpell"
+          );
+          if (outcome.status !== "succeeded") return outcome;
+        }
+        for (let adjustment of decision.increase) {
+          let outcome = executeAdjustment2(
+            dependencies,
+            session.root,
+            adjustment.id,
+            adjustment.expectedCurrentCount,
+            adjustment.count,
+            "addSpell"
+          );
+          if (outcome.status !== "succeeded") return outcome;
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
   // src/adapters/browser/game-drawn-actions.ts
   var DATA_PREFIX = "data-", RESOURCE_CLASS_PREFIX = "res-";
   function collect(element, markup) {
@@ -4812,7 +5024,8 @@
     autoBuild: !1,
     autoARPA: !1,
     autoResearch: !1,
-    autoTax: !1
+    autoTax: !1,
+    autoAlchemy: !1
   });
   function isEnabled(settings, key) {
     let value = settings[key];
@@ -4860,6 +5073,10 @@
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage)
+    }), alchemy = createCapturedAlchemyAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage)
     }), civicDiscovery = createCapturedTabDiscovery({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -4894,11 +5111,29 @@
       result.outcome.status !== "succeeded" && logError(
         `pylon discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
+    }, alchemyDiscoveryAttempted = !1, ensureAlchemyControls = () => {
+      if (pageCapture2.controls.capturedElementIds().some((id) => id.startsWith(ALCHEMY_CONTROL_PREFIX)))
+        return;
+      let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), techLevel2 = readProperty(tech, "alchemy");
+      if (typeof techLevel2 != "number" || !Number.isFinite(techLevel2) || techLevel2 < 1 || alchemyDiscoveryAttempted || (alchemyDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      if (marketTabs === void 0) return;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 4
+        }),
+        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 4 })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `alchemy discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
     }, runCycle = () => {
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }
