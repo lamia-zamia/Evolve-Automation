@@ -169,9 +169,14 @@ export function startCapturedRuntime({
     readSettings: () => readStoredSettings(storage),
     nowMs: () => Date.now(),
   });
+  const costs = createCapturedCraftCosts({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+  });
   const craftsmen = createCapturedCraftsmenAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+    costs,
     readSettings: () => readStoredSettings(storage),
   });
   const pylon = createCapturedPylonAutomation({
@@ -221,10 +226,7 @@ export function startCapturedRuntime({
   const craftDependencies = {
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    costs: createCapturedCraftCosts({
-      rootState: pageCapture.rootState,
-      controls: pageCapture.controls,
-    }),
+    costs,
     getDocument: () => document,
     readSettings: () => readStoredSettings(storage),
     readPeriods: () => completedPeriods,

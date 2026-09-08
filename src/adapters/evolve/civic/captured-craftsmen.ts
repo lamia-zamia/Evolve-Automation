@@ -1,10 +1,10 @@
 /**
  * Rebalances craftsmen already assigned to the upstream foundry.
  *
- * DeadSpace keeps the foundry recipe costs and production caps in module-local game state rather
- * than on the captured root. This adapter therefore deliberately does not acquire new craftsmen or
- * claim material affordability: it only redistributes the current foundry assignments through the
- * game's own `#foundry` control.
+ * DeadSpace keeps recipe costs outside the captured root, but persists the effective total and
+ * per-resource caps beside the foundry plus the current craftsman pool. The adapter uses those
+ * validated values to redistribute existing assignments; it still does not acquire new craftsmen
+ * from the default job pool.
  */
 
 import {
@@ -18,6 +18,7 @@ import type { GameControlRegistry } from "../../../ports/game-control-registry.t
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../validation.ts";
+import type { CapturedCraftCosts } from "../economy/production/captured-craft-costs.ts";
 import { createCapturedJobControls } from "./captured-job-controls.ts";
 
 const FOUNDRY_CONTROL = "foundry";
@@ -44,6 +45,7 @@ const DEFAULT_WEIGHTING = 1;
 export interface CapturedCraftsmenDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly costs: CapturedCraftCosts;
   readonly readSettings: () => unknown;
 }
 
@@ -55,12 +57,19 @@ export interface CapturedCraftsmenAutomation {
 interface CraftSample {
   readonly id: string;
   readonly workers: number;
+  readonly buildingCapacity: number | null;
+}
+
+interface CraftsmanState {
+  readonly maximum: number;
+  readonly workers: number;
 }
 
 interface CraftsmenSession {
   readonly root: unknown;
   readonly input: JobsCycleInput;
   readonly samples: readonly CraftSample[];
+  readonly workerPool: number;
 }
 
 function finiteNumber(value: unknown, fallback: number): number {
@@ -101,6 +110,17 @@ function readFoundry(root: unknown): Record<PropertyKey, unknown> | undefined {
   return isRecord(foundry) ? foundry : undefined;
 }
 
+function readProductionCapacity(
+  foundry: Record<PropertyKey, unknown>,
+  id: string,
+): number | null {
+  const caps = readProperty(foundry, "rcap");
+  const value = isRecord(caps) ? readProperty(caps, id) : undefined;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : null;
+}
+
 function readProducts(root: unknown): readonly CraftSample[] {
   const foundry = readFoundry(root);
   const resources = readProperty(root, "resource");
@@ -112,19 +132,83 @@ function readProducts(root: unknown): readonly CraftSample[] {
       typeof workers === "number" &&
       Number.isFinite(workers) &&
       workers >= 0
-      ? [{ id, workers }]
+      ? [{ id, workers, buildingCapacity: readProductionCapacity(foundry, id) }]
       : [];
   });
+}
+
+function readCraftsmanState(
+  root: unknown,
+  foundry: Record<PropertyKey, unknown>,
+  assignedWorkers: number,
+): CraftsmanState {
+  const civic = readProperty(root, "civic");
+  const craftsman = readProperty(civic, "craftsman");
+  const maximumValue = readProperty(foundry, "cap");
+  const fallbackMaximum = readProperty(craftsman, "max");
+  const workersValue = readProperty(craftsman, "workers");
+  const foundryWorkers = readProperty(foundry, "crafting");
+  const maximum = finiteNumber(
+    maximumValue,
+    finiteNumber(fallbackMaximum, assignedWorkers),
+  );
+  const workers = finiteNumber(
+    workersValue,
+    finiteNumber(foundryWorkers, assignedWorkers),
+  );
+  return Object.freeze({
+    maximum: maximum >= 0 ? maximum : assignedWorkers,
+    workers: workers >= 0 ? workers : assignedWorkers,
+  });
+}
+
+function readAffordability(
+  root: unknown,
+  id: string,
+  costs: CapturedCraftCosts,
+): number {
+  const recipe = costs.read(id);
+  if (recipe === undefined) return Number.MAX_SAFE_INTEGER;
+  const resources = readProperty(root, "resource");
+  if (!isRecord(resources)) return 0;
+  let affordability = Number.MAX_SAFE_INTEGER;
+  for (const [resourceId, cost] of recipe) {
+    const resource = readProperty(resources, resourceId);
+    const amount = readProperty(resource, "amount");
+    if (
+      typeof amount !== "number" ||
+      !Number.isFinite(amount) ||
+      amount < 0 ||
+      !Number.isFinite(cost) ||
+      cost <= 0
+    ) {
+      return 0;
+    }
+    affordability = Math.min(affordability, amount / cost);
+  }
+  return affordability;
 }
 
 function readCycleInput(
   root: unknown,
   settingsValue: unknown,
+  costs: CapturedCraftCosts,
 ):
-  | { readonly input: JobsCycleInput; readonly samples: readonly CraftSample[] }
+  | {
+      readonly input: JobsCycleInput;
+      readonly samples: readonly CraftSample[];
+      readonly workerPool: number;
+    }
   | undefined {
   const samples = readProducts(root);
   if (samples.length === 0) return undefined;
+  const foundry = readFoundry(root);
+  if (foundry === undefined) return undefined;
+  const assignedWorkers = samples.reduce(
+    (sum, sample) => sum + sample.workers,
+    0,
+  );
+  const craftsmen = readCraftsmanState(root, foundry, assignedWorkers);
   const settings = isRecord(settingsValue) ? settingsValue : {};
   const resources = readProperty(root, "resource");
   const jobs = samples.map((sample, token) =>
@@ -157,10 +241,8 @@ function readCycleInput(
     return Object.freeze({
       jobToken,
       enabled: productEnabled(settings, sample.id),
-      buildingCapacity: null,
-      // Recipe costs are not present in the captured root. Because this bounded slice only
-      // redistributes current assignments, it must not use a guessed cap to pull workers in.
-      affordability: Number.MAX_SAFE_INTEGER,
+      buildingCapacity: sample.buildingCapacity,
+      affordability: readAffordability(root, sample.id, costs),
       demanded: false,
       useful: false,
       currentQuantity: finiteNumber(readProperty(resource, "amount"), 0),
@@ -182,7 +264,7 @@ function readCycleInput(
     servantModifier: 1,
     servantsMaximum: 0,
     skilledServantsMaximum: 0,
-    craftsmenMaximum: samples.reduce((sum, sample) => sum + sample.workers, 0),
+    craftsmenMaximum: craftsmen.maximum,
     minimumDefault: 0,
     reserveMiner: false,
     defaultJobToken: null,
@@ -215,7 +297,11 @@ function readCycleInput(
     splitEntries: Object.freeze([]),
     defaultPreference: Object.freeze([]),
   });
-  return Object.freeze({ input, samples: Object.freeze(samples) });
+  return Object.freeze({
+    input,
+    samples: Object.freeze(samples),
+    workerPool: craftsmen.workers,
+  });
 }
 
 function decisionsMatch(
@@ -232,7 +318,8 @@ function samplesMatch(root: unknown, samples: readonly CraftSample[]): boolean {
     current.every(
       (sample, index) =>
         sample.id === samples[index]!.id &&
-        sample.workers === samples[index]!.workers,
+        sample.workers === samples[index]!.workers &&
+        sample.buildingCapacity === samples[index]!.buildingCapacity,
     )
   );
 }
@@ -256,6 +343,16 @@ function createExecutor(
         return stale("craftsmen-root-changed", "captured game root changed");
       if (!samplesMatch(session.root, session.samples))
         return stale("craftsmen-state-changed", "foundry assignments changed");
+      const foundry = readFoundry(session.root);
+      if (foundry === undefined)
+        return stale("craftsmen-state-changed", "foundry state disappeared");
+      const currentWorkerPool = readCraftsmanState(
+        session.root,
+        foundry,
+        session.samples.reduce((sum, sample) => sum + sample.workers, 0),
+      ).workers;
+      if (currentWorkerPool !== session.workerPool)
+        return stale("craftsmen-pool-changed", "craftsman worker pool changed");
       if (!decisionsMatch(planJobs(session.input)!, decision))
         return rejected(
           "invalid-craftsmen-decision",
@@ -372,7 +469,11 @@ export function createCapturedCraftsmenAutomation(
         });
       }
       const root = dependencies.rootState.readRoot();
-      const sampled = readCycleInput(root, dependencies.readSettings());
+      const sampled = readCycleInput(
+        root,
+        dependencies.readSettings(),
+        dependencies.costs,
+      );
       if (sampled === undefined) {
         sessionRef.value = undefined;
         return Object.freeze({
@@ -426,6 +527,7 @@ export function createCapturedCraftsmenAutomation(
         root,
         input: sampled.input,
         samples: sampled.samples,
+        workerPool: sampled.workerPool,
       });
       return sampled.input;
     },

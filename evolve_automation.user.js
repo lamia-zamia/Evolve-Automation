@@ -4454,17 +4454,53 @@
     let city = readProperty(root, "city"), foundry = readProperty(city, "foundry");
     return isRecord(foundry) ? foundry : void 0;
   }
+  function readProductionCapacity(foundry, id) {
+    let caps = readProperty(foundry, "rcap"), value = isRecord(caps) ? readProperty(caps, id) : void 0;
+    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : null;
+  }
   function readProducts(root) {
     let foundry = readFoundry(root), resources = readProperty(root, "resource");
     return foundry === void 0 || !isRecord(resources) ? [] : FOUNDRY_PRODUCTS.flatMap((id) => {
       let resource = readProperty(resources, id), workers = readProperty(foundry, id);
-      return isRecord(resource) && typeof workers == "number" && Number.isFinite(workers) && workers >= 0 ? [{ id, workers }] : [];
+      return isRecord(resource) && typeof workers == "number" && Number.isFinite(workers) && workers >= 0 ? [{ id, workers, buildingCapacity: readProductionCapacity(foundry, id) }] : [];
     });
   }
-  function readCycleInput(root, settingsValue) {
+  function readCraftsmanState(root, foundry, assignedWorkers) {
+    let civic = readProperty(root, "civic"), craftsman = readProperty(civic, "craftsman"), maximumValue = readProperty(foundry, "cap"), fallbackMaximum = readProperty(craftsman, "max"), workersValue = readProperty(craftsman, "workers"), foundryWorkers = readProperty(foundry, "crafting"), maximum = finiteNumber(
+      maximumValue,
+      finiteNumber(fallbackMaximum, assignedWorkers)
+    ), workers = finiteNumber(
+      workersValue,
+      finiteNumber(foundryWorkers, assignedWorkers)
+    );
+    return Object.freeze({
+      maximum: maximum >= 0 ? maximum : assignedWorkers,
+      workers: workers >= 0 ? workers : assignedWorkers
+    });
+  }
+  function readAffordability(root, id, costs) {
+    let recipe = costs.read(id);
+    if (recipe === void 0) return Number.MAX_SAFE_INTEGER;
+    let resources = readProperty(root, "resource");
+    if (!isRecord(resources)) return 0;
+    let affordability = Number.MAX_SAFE_INTEGER;
+    for (let [resourceId, cost] of recipe) {
+      let resource = readProperty(resources, resourceId), amount = readProperty(resource, "amount");
+      if (typeof amount != "number" || !Number.isFinite(amount) || amount < 0 || !Number.isFinite(cost) || cost <= 0)
+        return 0;
+      affordability = Math.min(affordability, amount / cost);
+    }
+    return affordability;
+  }
+  function readCycleInput(root, settingsValue, costs) {
     let samples = readProducts(root);
     if (samples.length === 0) return;
-    let settings = isRecord(settingsValue) ? settingsValue : {}, resources = readProperty(root, "resource"), jobs = samples.map(
+    let foundry = readFoundry(root);
+    if (foundry === void 0) return;
+    let assignedWorkers = samples.reduce(
+      (sum, sample) => sum + sample.workers,
+      0
+    ), craftsmen = readCraftsmanState(root, foundry, assignedWorkers), settings = isRecord(settingsValue) ? settingsValue : {}, resources = readProperty(root, "resource"), jobs = samples.map(
       (sample, token) => Object.freeze({
         token,
         id: sample.id,
@@ -4493,10 +4529,8 @@
       return Object.freeze({
         jobToken,
         enabled: productEnabled(settings, sample.id),
-        buildingCapacity: null,
-        // Recipe costs are not present in the captured root. Because this bounded slice only
-        // redistributes current assignments, it must not use a guessed cap to pull workers in.
-        affordability: Number.MAX_SAFE_INTEGER,
+        buildingCapacity: sample.buildingCapacity,
+        affordability: readAffordability(root, sample.id, costs),
         demanded: !1,
         useful: !1,
         currentQuantity: finiteNumber(readProperty(resource, "amount"), 0),
@@ -4517,7 +4551,7 @@
       servantModifier: 1,
       servantsMaximum: 0,
       skilledServantsMaximum: 0,
-      craftsmenMaximum: samples.reduce((sum, sample) => sum + sample.workers, 0),
+      craftsmenMaximum: craftsmen.maximum,
       minimumDefault: 0,
       reserveMiner: !1,
       defaultJobToken: null,
@@ -4550,7 +4584,11 @@
       splitEntries: Object.freeze([]),
       defaultPreference: Object.freeze([])
     });
-    return Object.freeze({ input, samples: Object.freeze(samples) });
+    return Object.freeze({
+      input,
+      samples: Object.freeze(samples),
+      workerPool: craftsmen.workers
+    });
   }
   function decisionsMatch(left, right) {
     return JSON.stringify(left) === JSON.stringify(right);
@@ -4558,7 +4596,7 @@
   function samplesMatch(root, samples) {
     let current = readProducts(root);
     return current.length === samples.length && current.every(
-      (sample, index) => sample.id === samples[index].id && sample.workers === samples[index].workers
+      (sample, index) => sample.id === samples[index].id && sample.workers === samples[index].workers && sample.buildingCapacity === samples[index].buildingCapacity
     );
   }
   function createExecutor(dependencies, sessionRef) {
@@ -4577,6 +4615,15 @@
           return stale("craftsmen-root-changed", "captured game root changed");
         if (!samplesMatch(session.root, session.samples))
           return stale("craftsmen-state-changed", "foundry assignments changed");
+        let foundry = readFoundry(session.root);
+        if (foundry === void 0)
+          return stale("craftsmen-state-changed", "foundry state disappeared");
+        if (readCraftsmanState(
+          session.root,
+          foundry,
+          session.samples.reduce((sum, sample) => sum + sample.workers, 0)
+        ).workers !== session.workerPool)
+          return stale("craftsmen-pool-changed", "craftsman worker pool changed");
         if (!decisionsMatch(planJobs(session.input), decision))
           return rejected(
             "invalid-craftsmen-decision",
@@ -4673,7 +4720,11 @@
             splitEntries: Object.freeze([]),
             defaultPreference: Object.freeze([])
           });
-        let root = dependencies.rootState.readRoot(), sampled3 = readCycleInput(root, dependencies.readSettings());
+        let root = dependencies.rootState.readRoot(), sampled3 = readCycleInput(
+          root,
+          dependencies.readSettings(),
+          dependencies.costs
+        );
         return sampled3 === void 0 ? (sessionRef.value = void 0, Object.freeze({
           available: !1,
           craftOnly: !0,
@@ -4722,7 +4773,8 @@
         })) : (sessionRef.value = Object.freeze({
           root,
           input: sampled3.input,
-          samples: sampled3.samples
+          samples: sampled3.samples,
+          workerPool: sampled3.workerPool
         }), sampled3.input);
       }
     });
@@ -6660,9 +6712,13 @@
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage),
       nowMs: () => Date.now()
+    }), costs = createCapturedCraftCosts({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls
     }), craftsmen = createCapturedCraftsmenAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
+      costs,
       readSettings: () => readStoredSettings(storage)
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
@@ -6701,10 +6757,7 @@
     }), completedPeriods = 1, craftDependencies = {
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      costs: createCapturedCraftCosts({
-        rootState: pageCapture2.rootState,
-        controls: pageCapture2.controls
-      }),
+      costs,
       getDocument: () => document,
       readSettings: () => readStoredSettings(storage),
       readPeriods: () => completedPeriods,
