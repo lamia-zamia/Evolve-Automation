@@ -84,6 +84,23 @@ export function applyNonOperatingCityWeighting(
     : baseWeight;
 }
 
+/**
+ * Applies the captured storage rule to the two current city storage actions.
+ * Both actions are intentionally treated as one choice: a deficit in either
+ * storage pool makes another yard or warehouse useful.
+ */
+export function applyUnusedStorageWeighting(
+  baseWeight: number,
+  buildingId: string,
+  unusedStorageParts: boolean,
+  multiplier: number,
+): number {
+  return unusedStorageParts &&
+    (buildingId === "storage_yard" || buildingId === "warehouse")
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
 /**

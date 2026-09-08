@@ -155,4 +155,115 @@ assert.equal(nonOperating[1].weighting, 10);
 assert.equal(nonOperating[2].weighting, 10);
 assert.equal(nonOperating[3].weighting, 10);
 
+const storageSettings = {
+  "batcity-storage_yard": true,
+  "batcity-warehouse": true,
+  "batcity-shed": true,
+  "bld_w_city-storage_yard": 10,
+  "bld_w_city-warehouse": 10,
+  "bld_w_city-shed": 10,
+  buildingWeightingCrateUseless: 0.1,
+};
+let storageRoot = {
+  city: {
+    storage_yard: { count: 1 },
+    warehouse: { count: 1 },
+    shed: { count: 1 },
+  },
+  resource: {
+    Crates: { amount: 2, max: 10, display: true },
+    Containers: { amount: 10, max: 10, display: true },
+  },
+};
+const storageReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => storageRoot,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => [
+      "city-storage_yard",
+      "city-warehouse",
+      "city-shed",
+    ],
+  },
+  getSettings: () => storageSettings,
+});
+assert.deepEqual(
+  storageReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "storage_yard", weighting: 1 },
+    { id: "warehouse", weighting: 1 },
+    { id: "shed", weighting: 10 },
+  ],
+  "a deficit in either storage pool makes both storage buildings useful",
+);
+
+storageRoot = {
+  city: {
+    storage_yard: { count: 1 },
+    warehouse: { count: 1 },
+    shed: { count: 1 },
+  },
+  resource: {
+    Crates: { amount: 10, max: 10, display: true },
+    Containers: { amount: 10, max: 10, display: true },
+  },
+};
+assert.deepEqual(
+  storageReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "storage_yard", weighting: 10 },
+    { id: "warehouse", weighting: 10 },
+    { id: "shed", weighting: 10 },
+  ],
+  "full storage leaves both storage buildings at their base weight",
+);
+
+storageRoot.resource.Crates = { amount: 0, max: 0, display: false };
+assert.equal(
+  storageReader().buildings[0].weighting,
+  1,
+  "a valid zero-cap storage pool deliberately counts as unused",
+);
+
+storageRoot.resource.Crates = { amount: "2", max: 10, display: true };
+assert.equal(
+  storageReader().buildings[0].weighting,
+  10,
+  "malformed storage data is neutral rather than guessed",
+);
+
+const malformedStorageSettingReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({
+      city: { storage_yard: { count: 1 } },
+      resource: {
+        Crates: { amount: 2, max: 10 },
+        Containers: { amount: 10, max: 10 },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["city-storage_yard"],
+  },
+  getSettings: () => ({
+    "batcity-storage_yard": true,
+    "bld_w_city-storage_yard": 10,
+    buildingWeightingCrateUseless: "bad",
+  }),
+});
+assert.deepEqual(
+  malformedStorageSettingReader().buildings,
+  [],
+  "malformed storage weighting is rejected like other configured weights",
+);
+
 console.log("captured-build-policy ok");

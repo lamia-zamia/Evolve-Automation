@@ -1285,6 +1285,9 @@
   function applyNonOperatingCityWeighting(baseWeight, count, on, multiplier, excluded) {
     return !excluded && on !== void 0 && count - on > 0 ? baseWeight * multiplier : baseWeight;
   }
+  function applyUnusedStorageWeighting(baseWeight, buildingId, unusedStorageParts, multiplier) {
+    return unusedStorageParts && (buildingId === "storage_yard" || buildingId === "warehouse") ? baseWeight * multiplier : baseWeight;
+  }
   function isKnowledgeGated(levels) {
     return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
   }
@@ -1305,7 +1308,21 @@
       saveWhiteholeGems: settings.prestigeType === "whitehole" && !!settings.prestigeWhiteholeSaveGems
     });
   }
-  function readTarget2(settings, city, elementId, onSkipped) {
+  function readStorageParts(root) {
+    let resource = readProperty(root, "resource"), parts = [
+      readProperty(resource, "Crates"),
+      readProperty(resource, "Containers")
+    ], ratios = [];
+    for (let part of parts) {
+      if (!isRecord(part)) return;
+      let amount = part.amount, maximum = part.max;
+      if (typeof amount != "number" || !Number.isFinite(amount) || typeof maximum != "number" || !Number.isFinite(maximum))
+        return;
+      ratios.push(maximum > 0 ? amount / maximum : 0);
+    }
+    return Object.freeze({ unused: ratios.some((ratio) => ratio < 1) });
+  }
+  function readTarget2(settings, city, elementId, unusedStorageParts, onSkipped) {
     if (!elementId.startsWith("city-") || elementId.length === 5)
       return;
     let binding = elementId;
@@ -1339,6 +1356,11 @@
       onSkipped(binding, "non-operating-city weighting is not finite");
       return;
     }
+    let storageWeighting = id === "storage_yard" || id === "warehouse" ? readFiniteSetting(settings, "buildingWeightingCrateUseless", 1) : 1;
+    if (storageWeighting === void 0) {
+      onSkipped(binding, "storage weighting is not finite");
+      return;
+    }
     let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
@@ -1350,7 +1372,12 @@
       region: "city",
       id,
       weighting: applyNonOperatingCityWeighting(
-        applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+        applyUnusedStorageWeighting(
+          applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+          id,
+          unusedStorageParts,
+          storageWeighting
+        ),
         count,
         on,
         nonOperatingWeighting,
@@ -1369,10 +1396,16 @@
     let reportSkipped = onSkipped ?? (() => {
     });
     return () => {
-      let settings = getSettings(), root = rootState.readRoot(), city = readProperty(root, "city"), buildings = [];
+      let settings = getSettings(), root = rootState.readRoot(), city = readProperty(root, "city"), storageParts = readStorageParts(root), buildings = [];
       if (isRecord(settings) && isRecord(city))
         for (let elementId of controls.capturedElementIds()) {
-          let target = readTarget2(settings, city, elementId, reportSkipped);
+          let target = readTarget2(
+            settings,
+            city,
+            elementId,
+            storageParts?.unused ?? !1,
+            reportSkipped
+          );
           target !== void 0 && buildings.push(target);
         }
       return Object.freeze({
