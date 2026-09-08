@@ -14,6 +14,7 @@ import {
   applyNonOperatingCityWeighting,
   applyUselessMeditationWeighting,
   applyUselessHousingWeighting,
+  applyVacuumCollapseWeighting,
   applyUnusedStorageWeighting,
 } from "../../../../domain/progression/build/building-weighting.ts";
 import type { ConstructionCycleOptions } from "../../../../ports/construction-candidates.ts";
@@ -222,6 +223,14 @@ function readTarget(
     onSkipped(binding, "meditation weighting is not finite");
     return undefined;
   }
+  const vacuumWeighting =
+    id === "pylon"
+      ? readFiniteSetting(settings, "buildingWeightingVacuumCollapse", 1)
+      : 1;
+  if (vacuumWeighting === undefined) {
+    onSkipped(binding, "vacuum-collapse weighting is not finite");
+    return undefined;
+  }
   const onValue = readProperty(state, "on");
   const on =
     typeof onValue === "number" && Number.isFinite(onValue)
@@ -239,21 +248,30 @@ function readTarget(
     id,
     weighting: applyNonOperatingCityWeighting(
       applyNeedMoreStorageWeighting(
-        applyUselessMeditationWeighting(
-          applyUselessHousingWeighting(
-            applyUnusedStorageWeighting(
-              applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+        applyVacuumCollapseWeighting(
+          applyUselessMeditationWeighting(
+            applyUselessHousingWeighting(
+              applyUnusedStorageWeighting(
+                applyNewBuildingWeighting(
+                  weighting,
+                  count,
+                  newBuildingWeighting,
+                ),
+                id,
+                unusedStorageParts,
+                storageWeighting,
+              ),
               id,
-              unusedStorageParts,
-              storageWeighting,
+              housingUnderused,
+              housingWeighting,
             ),
             id,
-            housingUnderused,
-            housingWeighting,
+            uselessMeditation,
+            meditationWeighting,
           ),
           id,
-          uselessMeditation,
-          meditationWeighting,
+          settings["prestigeType"] === "vacuum" ? "vacuum" : "other",
+          vacuumWeighting,
         ),
         id,
         storagePartsAllAssigned,

@@ -1304,6 +1304,9 @@
   function applyUselessMeditationWeighting(baseWeight, buildingId, zenBelowCap, multiplier) {
     return zenBelowCap && buildingId === "meditation" ? baseWeight * multiplier : baseWeight;
   }
+  function applyVacuumCollapseWeighting(baseWeight, buildingId, prestigeType, multiplier) {
+    return prestigeType === "vacuum" && buildingId === "pylon" ? baseWeight * multiplier : baseWeight;
+  }
   function isKnowledgeGated(levels) {
     return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
   }
@@ -1416,6 +1419,11 @@
       onSkipped(binding, "meditation weighting is not finite");
       return;
     }
+    let vacuumWeighting = id === "pylon" ? readFiniteSetting(settings, "buildingWeightingVacuumCollapse", 1) : 1;
+    if (vacuumWeighting === void 0) {
+      onSkipped(binding, "vacuum-collapse weighting is not finite");
+      return;
+    }
     let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
@@ -1428,21 +1436,30 @@
       id,
       weighting: applyNonOperatingCityWeighting(
         applyNeedMoreStorageWeighting(
-          applyUselessMeditationWeighting(
-            applyUselessHousingWeighting(
-              applyUnusedStorageWeighting(
-                applyNewBuildingWeighting(weighting, count, newBuildingWeighting),
+          applyVacuumCollapseWeighting(
+            applyUselessMeditationWeighting(
+              applyUselessHousingWeighting(
+                applyUnusedStorageWeighting(
+                  applyNewBuildingWeighting(
+                    weighting,
+                    count,
+                    newBuildingWeighting
+                  ),
+                  id,
+                  unusedStorageParts,
+                  storageWeighting
+                ),
                 id,
-                unusedStorageParts,
-                storageWeighting
+                housingUnderused,
+                housingWeighting
               ),
               id,
-              housingUnderused,
-              housingWeighting
+              uselessMeditation,
+              meditationWeighting
             ),
             id,
-            uselessMeditation,
-            meditationWeighting
+            settings.prestigeType === "vacuum" ? "vacuum" : "other",
+            vacuumWeighting
           ),
           id,
           storagePartsAllAssigned,

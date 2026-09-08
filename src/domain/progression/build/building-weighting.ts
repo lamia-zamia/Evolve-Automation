@@ -146,6 +146,18 @@ export function applyUselessMeditationWeighting(
     : baseWeight;
 }
 
+/** Applies the Vacuum Collapse mana-producer rule to the captured city pylon. */
+export function applyVacuumCollapseWeighting(
+  baseWeight: number,
+  buildingId: string,
+  prestigeType: string,
+  multiplier: number,
+): number {
+  return prestigeType === "vacuum" && buildingId === "pylon"
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
 /**

@@ -404,4 +404,39 @@ assert.deepEqual(
   "calm races with room below the Zen cap deprioritize meditation",
 );
 
+const vacuumReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({
+      city: { pylon: { count: 1 }, farm: { count: 1 } },
+      resource: {
+        Crates: { amount: 10, max: 10, display: true },
+        Containers: { amount: 10, max: 10, display: true },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["city-pylon", "city-farm"],
+  },
+  getSettings: () => ({
+    "batcity-pylon": true,
+    "batcity-farm": true,
+    "bld_w_city-pylon": 10,
+    "bld_w_city-farm": 10,
+    prestigeType: "vacuum",
+    buildingWeightingVacuumCollapse: 0.1,
+  }),
+});
+assert.deepEqual(
+  vacuumReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "pylon", weighting: 1 },
+    { id: "farm", weighting: 10 },
+  ],
+  "vacuum-collapse weighting deprioritizes the captured city pylon",
+);
+
 console.log("captured-build-policy ok");
