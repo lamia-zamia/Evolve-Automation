@@ -187,4 +187,82 @@ assert.equal(unsubscribeCount, 1);
   ]);
 }
 
+// What the cycle is saving for is held back from the cheaper candidates that arrive after it: the
+// expensive target is unaffordable, and the cheap one must not spend the money it is accumulating.
+{
+  const invoked = [];
+  const root = {
+    race: {},
+    tech: {},
+    city: { bank: { count: 0 }, farm: { count: 0 } },
+    space: {},
+    queue: { display: true, pause: false, queue: [] },
+    settings: {},
+    resource: {
+      Money: { amount: 600, max: 10000, display: true, diff: 0, name: "$" },
+    },
+  };
+  const prices = { "city-bank": 5000, "city-farm": 500 };
+  const handles = new Map(
+    ["buildQueue", "city-bank", "city-farm"].map((id) => [
+      id,
+      { elementId: id, generation: 1, methods: ["setData", "action"] },
+    ]),
+  );
+  let cycle;
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: {
+        resolve: (id) => handles.get(id),
+        invoke: (handle, method, args = []) => {
+          if (method === "setData") {
+            const entry = root.queue.queue[args[0]];
+            return { ok: true, value: { "res-Money": prices[entry.id] } };
+          }
+          invoked.push(handle.elementId);
+          return { ok: true, value: undefined };
+        },
+        capturedElementIds: () => [...handles.keys()],
+      },
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: { getElementById: () => null, querySelectorAll: () => [] },
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          autoBuild: true,
+          "batcity-bank": true,
+          "bld_w_city-bank": 300,
+          "batcity-farm": true,
+          "bld_w_city-farm": 100,
+        }),
+    },
+    logError: () => {},
+  });
+  // The first cycle has no reservation in force yet, so the cheap candidate is still bought.
+  cycle({ periods: 1 });
+  assert.deepEqual(invoked, ["city-farm"]);
+  // The bank is now the published saving target, and its cost holds the farm back.
+  cycle({ periods: 1 });
+  cycle({ periods: 1 });
+  stopCycle();
+  assert.deepEqual(invoked, ["city-farm"]);
+}
+
 console.log("captured-runtime-control ok");

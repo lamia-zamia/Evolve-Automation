@@ -15,7 +15,8 @@ import {
 } from "./building-weighting.ts";
 
 /** `cause` a cost reservation carries when it guards the saving target. */
-const SAVING_CONFLICT_CAUSE = "Saving";
+/** The cause a reservation carries when the cycle is accumulating for a target of its own. */
+export const SAVING_CONFLICT_CAUSE = "Saving";
 
 export type BuildConsumptionMode = "perResource" | "unlimited" | "onePerTick";
 

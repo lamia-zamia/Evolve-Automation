@@ -24,7 +24,10 @@ import { createCapturedTechCatalog } from "../adapters/evolve/progression/resear
 import { createCapturedBuildPolicyReader } from "../adapters/evolve/progression/build/captured-build-policy.ts";
 import { createCapturedConstructionControl } from "./captured-construction-control.ts";
 import { createCapturedResearchControl } from "./captured-research-control.ts";
+import { SAVING_CONFLICT_CAUSE } from "../domain/progression/build/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
+import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
+import type { SavingTarget } from "../ports/game-saving-target.ts";
 import type { SavingTargetSource } from "../ports/game-saving-target.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
@@ -62,6 +65,28 @@ export interface CapturedProgressionControl {
   readonly runResearchCycle: () => CommandExecutionOutcome;
   /** What the last construction cycle was saving for, for the features that read demand. */
   readonly savingTarget: SavingTargetSource;
+}
+
+const NO_RESERVATIONS = Object.freeze({
+  targets: Object.freeze([]),
+  unavailable: false,
+});
+
+/** Both sets are in force at once; either being unpriceable makes the whole set incomplete. */
+function combineReservations(
+  first: CostReservationSource,
+  second: CostReservationSource,
+): CostReservationSource {
+  return Object.freeze({
+    readReservations() {
+      const left = first.readReservations();
+      const right = second.readReservations();
+      return Object.freeze({
+        unavailable: left.unavailable || right.unavailable,
+        targets: Object.freeze([...left.targets, ...right.targets]),
+      });
+    },
+  });
 }
 
 export function createCapturedProgressionControl(
@@ -147,10 +172,36 @@ export function createCapturedProgressionControl(
           getSettings: readSettings,
           ...(onSkipped === undefined ? {} : { onSkipped }),
         });
-  const scriptReservations =
+  // The cycle's own saving target is a commitment like any other: without it in force, the cheaper
+  // candidates that arrive first spend exactly the resources it is accumulating. It is the previous
+  // cycle's judgement, so the target itself is never blocked by it once it becomes affordable —
+  // the cycle that finds it affordable stops naming it.
+  let readSaving: () => SavingTarget | null = () => null;
+  const savingReservations: CostReservationSource = Object.freeze({
+    readReservations() {
+      const target = readSaving();
+      return target === null
+        ? NO_RESERVATIONS
+        : Object.freeze({
+            unavailable: false,
+            targets: Object.freeze([
+              Object.freeze({
+                name: target.name,
+                cause: SAVING_CONFLICT_CAUSE,
+                cost: target.cost,
+              }),
+            ]),
+          });
+    },
+  });
+  const stateReservations =
     getState === undefined
       ? undefined
       : createScriptCostReservationSource({ getState });
+  const scriptReservations =
+    stateReservations === undefined
+      ? savingReservations
+      : combineReservations(stateReservations, savingReservations);
   const readKnowledgeGate =
     getState === undefined
       ? undefined
@@ -172,7 +223,7 @@ export function createCapturedProgressionControl(
     readPolicy,
     readSettings,
     ensureBuildControls,
-    ...(scriptReservations === undefined ? {} : { scriptReservations }),
+    scriptReservations,
     ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
     readOfferedTechs: () => offered.readOffered(),
@@ -189,6 +240,8 @@ export function createCapturedProgressionControl(
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
     diagnostics,
   });
+
+  readSaving = () => construction.savingTarget.readSavingTarget();
 
   return Object.freeze({
     runConstructionCycle: () => construction.runCycle(),

@@ -3070,6 +3070,21 @@
   }
 
   // src/bootstrap/captured-progression-control.ts
+  var NO_RESERVATIONS3 = Object.freeze({
+    targets: Object.freeze([]),
+    unavailable: !1
+  });
+  function combineReservations(first, second) {
+    return Object.freeze({
+      readReservations() {
+        let left = first.readReservations(), right = second.readReservations();
+        return Object.freeze({
+          unavailable: left.unavailable || right.unavailable,
+          targets: Object.freeze([...left.targets, ...right.targets])
+        });
+      }
+    });
+  }
   function createCapturedProgressionControl(dependencies) {
     let {
       rootState,
@@ -3136,7 +3151,21 @@
       getBuildingManager,
       getSettings: readSettings,
       ...onSkipped === void 0 ? {} : { onSkipped }
-    }), scriptReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), readKnowledgeGate = getState === void 0 ? void 0 : createScriptKnowledgeGateReader({
+    }), readSaving = () => null, savingReservations = Object.freeze({
+      readReservations() {
+        let target = readSaving();
+        return target === null ? NO_RESERVATIONS3 : Object.freeze({
+          unavailable: !1,
+          targets: Object.freeze([
+            Object.freeze({
+              name: target.name,
+              cause: SAVING_CONFLICT_CAUSE,
+              cost: target.cost
+            })
+          ])
+        });
+      }
+    }), stateReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), scriptReservations = stateReservations === void 0 ? savingReservations : combineReservations(stateReservations, savingReservations), readKnowledgeGate = getState === void 0 ? void 0 : createScriptKnowledgeGateReader({
       getState,
       resources,
       ...getResources === void 0 ? {} : { getResources }
@@ -3149,7 +3178,7 @@
       readPolicy,
       readSettings,
       ensureBuildControls,
-      ...scriptReservations === void 0 ? {} : { scriptReservations },
+      scriptReservations,
       ...readKnowledgeGate === void 0 ? {} : { readKnowledgeGate },
       ...readStorageRequired === void 0 ? {} : { readStorageRequired },
       readOfferedTechs: () => offered.readOffered(),
@@ -3165,7 +3194,7 @@
       ...onUnavailable === void 0 ? {} : { onUnavailable },
       diagnostics
     });
-    return Object.freeze({
+    return readSaving = () => construction.savingTarget.readSavingTarget(), Object.freeze({
       runConstructionCycle: () => construction.runCycle(),
       runResearchCycle: () => research.runCycle(),
       savingTarget: construction.savingTarget
