@@ -41,8 +41,15 @@ export interface CapturedProgressionControlDependencies {
   readonly panels: GamePanelWorkspace;
   readonly drawnActions: GameDrawnActionsReader;
   readonly drawnProjects: GameDrawnProjectsReader;
+  /** Persisted script settings. Required: without them nothing is managed and nothing is built. */
+  readonly readSettings: () => unknown;
+  /**
+   * Legacy script inputs. The captured path deliberately runs without all three: it plans its own
+   * build policy, has no script cost reservations, leaves the Knowledge gate ungated and leaves
+   * storage requirements unknown. Each absence is the conservative direction, and each is a feature
+   * still to migrate rather than missing wiring.
+   */
   readonly getBuildingManager?: () => unknown;
-  readonly readSettings?: () => unknown;
   readonly getState?: () => unknown;
   readonly getResources?: () => unknown;
   readonly diagnostics?: TickDiagnostics | undefined;
@@ -68,14 +75,13 @@ export function createCapturedProgressionControl(
     drawnActions,
     drawnProjects,
     getBuildingManager,
-    readSettings: readSettingsDependency,
+    readSettings,
     getState,
     getResources,
     diagnostics,
   } = dependencies;
   const onSkipped = dependencies.onSkipped;
   const onUnavailable = dependencies.onUnavailable;
-  const readSettings = readSettingsDependency ?? (() => ({}));
   const resources = createCapturedResourceSource(rootState);
   const discovery = createCapturedTabDiscovery({
     rootState,

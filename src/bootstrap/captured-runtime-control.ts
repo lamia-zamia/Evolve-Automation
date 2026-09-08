@@ -124,6 +124,12 @@ export function startCapturedRuntime({
           constructor(_type: "mouseover" | "mouseout") {}
         };
   const panels = createGamePanelWorkspace({ getDocument: () => document });
+  const reported = new Set<string>();
+  const reportOnce = (message: string) => {
+    if (reported.has(message)) return;
+    reported.add(message);
+    logError(message);
+  };
   const progression = createCapturedProgressionControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -136,9 +142,12 @@ export function startCapturedRuntime({
       getDocument: () => document,
       createMouseEvent: (type) => new mouseEvent(type),
     }),
-    // Without this the captured build policy sees no settings, so no building is ever managed and
-    // autoBuild silently builds nothing.
     readSettings: () => readStoredSettings(storage),
+    // Reported once per distinct reason: a candidate the cycle cannot price or a catalog it cannot
+    // read is otherwise dropped in silence, which is how a composition gap survives a whole session.
+    onSkipped: (key, reason) =>
+      reportOnce(`progression skipped ${key}: ${reason}`),
+    onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
     diagnostics,
   });
   const gatherResources = createCapturedGatherResourcesControl({

@@ -128,4 +128,63 @@ assert.equal(unsubscribeCount, 1);
   );
 }
 
+// A candidate the cycle cannot supply is reported, and reported once rather than every period.
+{
+  const reported = [];
+  const root = {
+    race: {},
+    tech: {},
+    city: {},
+    space: {},
+    queue: { display: true, pause: false, queue: [] },
+    settings: {},
+    resource: {},
+  };
+  let cycle;
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: {
+        resolve: () => undefined,
+        invoke: () => ({ ok: false, reason: "unknown-control" }),
+        capturedElementIds: () => ["city-cottage"],
+      },
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: { getElementById: () => null, querySelectorAll: () => [] },
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          autoBuild: true,
+          "batcity-cottage": true,
+        }),
+    },
+    logError: (message) => reported.push(message),
+  });
+  cycle({ periods: 1 });
+  cycle({ periods: 1 });
+  stopCycle();
+  const skipped = reported.filter((message) =>
+    message.includes("city-cottage"),
+  );
+  assert.deepEqual(skipped, [
+    "progression skipped city-cottage: captured city state is unavailable",
+  ]);
+}
+
 console.log("captured-runtime-control ok");

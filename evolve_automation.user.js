@@ -3079,11 +3079,11 @@
       drawnActions,
       drawnProjects,
       getBuildingManager,
-      readSettings: readSettingsDependency,
+      readSettings,
       getState,
       getResources,
       diagnostics
-    } = dependencies, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, readSettings = readSettingsDependency ?? (() => ({})), resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
+    } = dependencies, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
       rootState,
       controls,
       mountSuppression,
@@ -6243,7 +6243,9 @@
     let document = documentValue, mouseEvent = typeof mouseEventValue == "function" ? mouseEventValue : class {
       constructor(_type) {
       }
-    }, panels = createGamePanelWorkspace({ getDocument: () => document }), progression = createCapturedProgressionControl({
+    }, panels = createGamePanelWorkspace({ getDocument: () => document }), reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
+      reported.has(message) || (reported.add(message), logError(message));
+    }, progression = createCapturedProgressionControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       mountSuppression: pageCapture2.mountSuppression,
@@ -6255,9 +6257,11 @@
         getDocument: () => document,
         createMouseEvent: (type) => new mouseEvent(type)
       }),
-      // Without this the captured build policy sees no settings, so no building is ever managed and
-      // autoBuild silently builds nothing.
       readSettings: () => readStoredSettings(storage),
+      // Reported once per distinct reason: a candidate the cycle cannot price or a catalog it cannot
+      // read is otherwise dropped in silence, which is how a composition gap survives a whole session.
+      onSkipped: (key, reason) => reportOnce(`progression skipped ${key}: ${reason}`),
+      onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
       diagnostics
     }), gatherResources = createCapturedGatherResourcesControl({
       rootState: pageCapture2.rootState,
