@@ -15,6 +15,10 @@ import {
   createCapturedMiningDroidAutomation,
   MINING_DROID_CONTROL,
 } from "../adapters/evolve/economy/production/captured-mining-droid.ts";
+import {
+  createCapturedGrapheneAutomation,
+  GRAPHENE_CONTROL,
+} from "../adapters/evolve/economy/production/captured-graphene.ts";
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
@@ -72,6 +76,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoResearch: false,
   autoTax: false,
   autoMiningDroid: false,
+  autoGraphenePlant: false,
   autoAlchemy: false,
 });
 
@@ -141,6 +146,10 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
+  });
+  const graphene = createCapturedGrapheneAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
   });
   const civicDiscovery = createCapturedTabDiscovery({
     rootState: pageCapture.rootState,
@@ -265,6 +274,42 @@ export function startCapturedRuntime({
       );
     }
   };
+  let grapheneDiscoveryAttempted = false;
+  const ensureGrapheneControls = () => {
+    if (pageCapture.controls.resolve(GRAPHENE_CONTROL) !== undefined) return;
+    const root = pageCapture.rootState.readRoot();
+    const race = readProperty(root, "race");
+    const interstellar = readProperty(root, "interstellar");
+    const plant = readProperty(interstellar, "g_factory");
+    const count = readProperty(plant, "count");
+    if (
+      typeof count !== "number" ||
+      !Number.isFinite(count) ||
+      count < 1 ||
+      Boolean(readProperty(race, "truepath")) ||
+      Boolean(readProperty(race, "warlord")) ||
+      grapheneDiscoveryAttempted
+    ) {
+      return;
+    }
+    grapheneDiscoveryAttempted = true;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    if (govTabs === undefined) return;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 2,
+      }),
+      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
 
   const runCycle = () => {
     const settings = readStoredSettings(storage);
@@ -288,6 +333,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoMiningDroid")) {
         ensureMiningDroidControls();
         miningDroid.run();
+      }
+      if (isEnabled(settings, "autoGraphenePlant")) {
+        ensureGrapheneControls();
+        graphene.run();
       }
       if (isEnabled(settings, "autoAlchemy")) {
         ensureAlchemyControls();

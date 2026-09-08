@@ -5098,6 +5098,179 @@
     });
   }
 
+  // src/domain/economy/production/graphene.ts
+  function planGraphene(input) {
+    if (!input.initialised)
+      return Object.freeze([]);
+    let remainingPlants = input.maxOperating, fuelAdjust = [], sortedFuel = [...input.fuels].sort(
+      (a, b) => b.storageRatio < 0.995 || a.storageRatio < 0.995 ? b.storageRatio - a.storageRatio : b.rateOfChange - a.rateOfChange
+    );
+    for (let fuel of sortedFuel) {
+      if (remainingPlants === 0)
+        break;
+      if (!fuel.isUnlocked)
+        continue;
+      let currentFuelCount2 = fuel.currentFuelCount, maxFueledForConsumption = remainingPlants;
+      if (!input.grapheneUseful)
+        maxFueledForConsumption = 0;
+      else if (fuel.currentQuantity < maxFueledForConsumption * fuel.costQuantity * input.consumptionBalanceMin + fuel.costMinRateOfChange) {
+        let rateOfChange = fuel.rateOfChange + fuel.costQuantity * currentFuelCount2 - fuel.costMinRateOfChange, affordableAmount = Math.floor(rateOfChange / fuel.costQuantity);
+        maxFueledForConsumption = Math.max(
+          Math.min(maxFueledForConsumption, affordableAmount),
+          0
+        );
+      }
+      let deltaFuel = maxFueledForConsumption - currentFuelCount2;
+      deltaFuel !== 0 && fuelAdjust.push(
+        Object.freeze({
+          fuelId: fuel.id,
+          expectedCurrentFuelCount: currentFuelCount2,
+          delta: deltaFuel
+        })
+      ), remainingPlants -= currentFuelCount2 + deltaFuel;
+    }
+    return Object.freeze(fuelAdjust);
+  }
+
+  // src/adapters/evolve/economy/production/captured-graphene.ts
+  var GRAPHENE_CONTROL = "iGraphene", FUELS = Object.freeze([
+    Object.freeze({
+      id: "Lumber",
+      add: "addWood",
+      sub: "subWood",
+      costQuantity: 350,
+      costMinRateOfChange: 100
+    }),
+    Object.freeze({
+      id: "Coal",
+      add: "addCoal",
+      sub: "subCoal",
+      costQuantity: 25,
+      costMinRateOfChange: 10
+    }),
+    Object.freeze({
+      id: "Oil",
+      add: "addOil",
+      sub: "subOil",
+      costQuantity: 15,
+      costMinRateOfChange: 10
+    })
+  ]);
+  function finite5(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function emptyInput5() {
+    return Object.freeze({
+      initialised: !1,
+      maxOperating: 0,
+      grapheneUseful: !1,
+      consumptionBalanceMin: 60,
+      fuels: Object.freeze([])
+    });
+  }
+  function readInput2(dependencies) {
+    let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), interstellar = readProperty(root, "interstellar"), plant = readProperty(interstellar, "g_factory"), resources = readProperty(root, "resource"), graphene = readProperty(resources, "Graphene");
+    if (!isRecord(race) || readProperty(race, "truepath") || readProperty(race, "warlord") || !isRecord(plant) || !isRecord(resources) || !isRecord(graphene) || dependencies.controls.resolve(GRAPHENE_CONTROL) === void 0)
+      return Object.freeze({ root, input: emptyInput5() });
+    let count = finite5(readProperty(plant, "count")), maxOperating = finite5(readProperty(plant, "on")), grapheneAmount = finite5(readProperty(graphene, "amount")), grapheneMaximum = finite5(readProperty(graphene, "max")), grapheneDisplay = readProperty(graphene, "display");
+    if (count === void 0 || count < 1 || maxOperating === void 0 || maxOperating < 0 || grapheneAmount === void 0 || grapheneMaximum === void 0 || typeof grapheneDisplay != "boolean")
+      return Object.freeze({ root, input: emptyInput5() });
+    let fuels = [];
+    for (let fuel of FUELS) {
+      let resource = readProperty(resources, fuel.id), amount = finite5(readProperty(resource, "amount")), maximum = finite5(readProperty(resource, "max")), rateOfChange = finite5(readProperty(resource, "diff")), currentFuelCount2 = finite5(readProperty(plant, fuel.id)), display = readProperty(resource, "display"), disabledByRace = fuel.id === "Lumber" && (!!readProperty(race, "kindling_kindred") || !!readProperty(race, "smoldering"));
+      if (amount === void 0 || maximum === void 0 || rateOfChange === void 0 || currentFuelCount2 === void 0 || typeof display != "boolean")
+        return Object.freeze({ root, input: emptyInput5() });
+      fuels.push(
+        Object.freeze({
+          id: fuel.id,
+          storageRatio: maximum > 0 ? amount / maximum : 0,
+          rateOfChange,
+          currentQuantity: amount,
+          isUnlocked: !disabledByRace && display,
+          costQuantity: fuel.costQuantity,
+          costMinRateOfChange: fuel.costMinRateOfChange,
+          currentFuelCount: currentFuelCount2
+        })
+      );
+    }
+    return Object.freeze({
+      root,
+      input: Object.freeze({
+        initialised: !0,
+        maxOperating,
+        grapheneUseful: grapheneDisplay && (grapheneMaximum <= 0 || grapheneAmount / grapheneMaximum < 0.99),
+        consumptionBalanceMin: 60,
+        fuels: Object.freeze(fuels)
+      })
+    });
+  }
+  function currentFuelCount(root, id) {
+    return finite5(
+      readProperty(
+        readProperty(readProperty(root, "interstellar"), "g_factory"),
+        id
+      )
+    );
+  }
+  function fuelMethod(id, direction) {
+    return FUELS.find((entry) => entry.id === id)?.[direction];
+  }
+  function executeAdjustment4(dependencies, root, adjustment) {
+    let method = fuelMethod(
+      adjustment.fuelId,
+      adjustment.delta > 0 ? "add" : "sub"
+    ), handle = dependencies.controls.resolve(GRAPHENE_CONTROL);
+    if (method === void 0 || handle === void 0)
+      return stale(
+        "graphene-control-missing",
+        "captured graphene control is unavailable"
+      );
+    let count = Math.abs(adjustment.delta);
+    for (let index = 0; index < count; index++) {
+      if (dependencies.rootState.readRoot() !== root)
+        return stale("graphene-root-changed", "captured game root changed");
+      if (currentFuelCount(root, adjustment.fuelId) !== adjustment.expectedCurrentFuelCount + (adjustment.delta > 0 ? index : -index))
+        return stale("graphene-fuel-changed", "graphene fuel allocation changed");
+      let result = dependencies.controls.invoke(handle, method);
+      if (!result.ok)
+        return rejected(
+          "graphene-control-failed",
+          result.detail ?? result.reason
+        );
+    }
+    return SUCCEEDED;
+  }
+  function createCapturedGrapheneAutomation(dependencies) {
+    return Object.freeze({
+      run() {
+        let session = readInput2(dependencies), decision = planGraphene(session.input);
+        if (!session.input.initialised || decision.length === 0) return SUCCEEDED;
+        if (JSON.stringify(planGraphene(session.input)) !== JSON.stringify(decision))
+          return rejected(
+            "invalid-graphene-decision",
+            "graphene decision changed during planning"
+          );
+        for (let adjustment of decision.filter((entry) => entry.delta < 0)) {
+          let outcome = executeAdjustment4(
+            dependencies,
+            session.root,
+            adjustment
+          );
+          if (outcome.status !== "succeeded") return outcome;
+        }
+        for (let adjustment of decision.filter((entry) => entry.delta > 0)) {
+          let outcome = executeAdjustment4(
+            dependencies,
+            session.root,
+            adjustment
+          );
+          if (outcome.status !== "succeeded") return outcome;
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
   // src/adapters/browser/game-drawn-actions.ts
   var DATA_PREFIX = "data-", RESOURCE_CLASS_PREFIX = "res-";
   function collect(element, markup) {
@@ -5268,6 +5441,7 @@
     autoResearch: !1,
     autoTax: !1,
     autoMiningDroid: !1,
+    autoGraphenePlant: !1,
     autoAlchemy: !1
   });
   function isEnabled(settings, key) {
@@ -5324,6 +5498,9 @@
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage)
+    }), graphene = createCapturedGrapheneAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls
     }), civicDiscovery = createCapturedTabDiscovery({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -5394,11 +5571,28 @@
       result.outcome.status !== "succeeded" && logError(
         `mining-droid discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
+    }, grapheneDiscoveryAttempted = !1, ensureGrapheneControls = () => {
+      if (pageCapture2.controls.resolve(GRAPHENE_CONTROL) !== void 0) return;
+      let root = pageCapture2.rootState.readRoot(), race = readProperty(root, "race"), interstellar = readProperty(root, "interstellar"), plant = readProperty(interstellar, "g_factory"), count = readProperty(plant, "count");
+      if (typeof count != "number" || !Number.isFinite(count) || count < 1 || readProperty(race, "truepath") || readProperty(race, "warlord") || grapheneDiscoveryAttempted || (grapheneDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      if (govTabs === void 0) return;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 2
+        }),
+        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
     }, runCycle = () => {
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }
