@@ -4867,8 +4867,6 @@
     if (!isRecord(race)) return null;
     if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
     if (hasRaceFlag(race, "artifical")) return 0;
-    if (hasRaceFlag(race, "ravenous") || hasRaceFlag(race, "carnivore"))
-      return;
     let food = readProperty(readProperty(root, "resource"), "Food"), amount = finiteNonNegative(readProperty(food, "amount")), maximum = finiteNonNegative(readProperty(food, "max")), rate = finiteNumber(readProperty(food, "diff"));
     if (amount === void 0 || maximum === void 0 || rate === void 0)
       return;
@@ -4878,12 +4876,48 @@
         readProperty(readProperty(root, "resource"), "Population"),
         "amount"
       )
-    ), foodMaximum = null;
+    ), minimumFood = maximum * 0.2, maximumFood = maximum * 0.6, specialFoodRule = hasRaceFlag(race, "ravenous") || hasRaceFlag(race, "carnivore");
+    if (hasRaceFlag(race, "ravenous")) {
+      let rank = readProperty(race, "ravenous"), stockpileDivisor = typeof rank == "number" ? {
+        0.1: 2,
+        0.25: 2,
+        0.5: 2,
+        1: 3,
+        2: 4,
+        3: 4,
+        4: 4
+      }[rank] : void 0;
+      if (stockpileDivisor === void 0 || population === void 0)
+        return;
+      minimumFood = population * 1.5, maximumFood = population * 3, rate += Math.max(amount / stockpileDivisor, 0);
+    } else if (hasRaceFlag(race, "carnivore")) {
+      let rank = readProperty(race, "carnivore"), rotPercent = typeof rank == "number" ? {
+        0.1: 70,
+        0.25: 65,
+        0.5: 60,
+        1: 50,
+        2: 40,
+        3: 35,
+        4: 30
+      }[rank] : void 0, smokehouse = readProperty(readProperty(root, "city"), "smokehouse"), smokehouseCount = smokehouse === void 0 ? 0 : isRecord(smokehouse) ? finiteNonNegative(smokehouse.count) : void 0;
+      if (rotPercent === void 0 || population === void 0 || smokehouseCount === void 0)
+        return;
+      minimumFood = population, maximumFood = population * 2, amount > 10 && (rate += (amount - 10) * (rotPercent / 100) * 0.9 ** smokehouseCount);
+    }
+    let foodMaximum = null;
     if (population !== void 0 && history !== void 0 && population > history.lastPopulationCount) {
       let populationChange = population - history.lastPopulationCount, farmerChange = count - history.lastFarmerCount;
       populationChange === farmerChange && rate > 0 && (foodMaximum = Math.max(0, count - populationChange));
     }
-    if (foodMaximum === null && (foodMaximum = count === 0 && amount < maximum * 0.2 && rate <= 0 ? 1 : amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null), !applyFarmCapacity) return foodMaximum;
+    if (foodMaximum === null)
+      if (count === 0 && amount < minimumFood && amount + rate < minimumFood)
+        foodMaximum = 1;
+      else {
+        if (count > 0 && amount + rate < minimumFood)
+          return;
+        foodMaximum = specialFoodRule ? amount > maximumFood && rate > 0 ? Math.max(0, count - 1) : count : count === 0 && amount < maximum * 0.2 && rate <= 0 ? 1 : amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null;
+      }
+    if (!applyFarmCapacity) return foodMaximum;
     let farm = readProperty(readProperty(root, "city"), "farm");
     if (farm === void 0) return foodMaximum;
     if (!isRecord(farm)) return;

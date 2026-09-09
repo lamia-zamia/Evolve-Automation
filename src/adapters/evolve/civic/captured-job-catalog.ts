@@ -521,16 +521,10 @@ function readFarmerSmartMaximum(
   if (!isRecord(race)) return null;
   if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
   if (hasRaceFlag(race, "artifical")) return 0;
-  // The remaining food formula depends on script history and trait-adjusted consumption. These
-  // two ordinary-race outcomes are complete from the live resource row alone and are safe to
-  // characterize without pretending the missing history exists.
-  if (hasRaceFlag(race, "ravenous") || hasRaceFlag(race, "carnivore")) {
-    return undefined;
-  }
   const food = readProperty(readProperty(root, "resource"), "Food");
   const amount = finiteNonNegative(readProperty(food, "amount"));
   const maximum = finiteNonNegative(readProperty(food, "max"));
-  const rate = finiteNumber(readProperty(food, "diff"));
+  let rate = finiteNumber(readProperty(food, "diff"));
   if (amount === undefined || maximum === undefined || rate === undefined) {
     return undefined;
   }
@@ -541,6 +535,68 @@ function readFarmerSmartMaximum(
       "amount",
     ),
   );
+  let minimumFood = maximum * 0.2;
+  let maximumFood = maximum * 0.6;
+  const specialFoodRule =
+    hasRaceFlag(race, "ravenous") || hasRaceFlag(race, "carnivore");
+  if (hasRaceFlag(race, "ravenous")) {
+    const rank = readProperty(race, "ravenous");
+    const stockpileDivisor =
+      typeof rank === "number"
+        ? (
+            {
+              0.1: 2,
+              0.25: 2,
+              0.5: 2,
+              1: 3,
+              2: 4,
+              3: 4,
+              4: 4,
+            } as Readonly<Record<number, number>>
+          )[rank]
+        : undefined;
+    if (stockpileDivisor === undefined || population === undefined) {
+      return undefined;
+    }
+    minimumFood = population * 1.5;
+    maximumFood = population * 3;
+    rate += Math.max(amount / stockpileDivisor, 0);
+  } else if (hasRaceFlag(race, "carnivore")) {
+    const rank = readProperty(race, "carnivore");
+    const rotPercent =
+      typeof rank === "number"
+        ? (
+            {
+              0.1: 70,
+              0.25: 65,
+              0.5: 60,
+              1: 50,
+              2: 40,
+              3: 35,
+              4: 30,
+            } as Readonly<Record<number, number>>
+          )[rank]
+        : undefined;
+    const smokehouse = readProperty(readProperty(root, "city"), "smokehouse");
+    const smokehouseCount =
+      smokehouse === undefined
+        ? 0
+        : isRecord(smokehouse)
+          ? finiteNonNegative(smokehouse["count"])
+          : undefined;
+    if (
+      rotPercent === undefined ||
+      population === undefined ||
+      smokehouseCount === undefined
+    ) {
+      return undefined;
+    }
+    minimumFood = population;
+    maximumFood = population * 2;
+    if (amount > 10) {
+      rate += (amount - 10) * (rotPercent / 100) * 0.9 ** smokehouseCount;
+    }
+  }
   let foodMaximum: number | null = null;
   if (
     population !== undefined &&
@@ -554,12 +610,23 @@ function readFarmerSmartMaximum(
     }
   }
   if (foodMaximum === null) {
-    foodMaximum =
-      count === 0 && amount < maximum * 0.2 && rate <= 0
-        ? 1
-        : amount > maximum * 0.6 && rate > 0
+    if (count === 0 && amount < minimumFood && amount + rate < minimumFood) {
+      foodMaximum = 1;
+    } else if (count > 0 && amount + rate < minimumFood) {
+      // The upstream fallback divides by each source's live production. The captured root has no
+      // equivalent source breakdown, so special-race pools with existing workers remain unknown.
+      return undefined;
+    } else {
+      foodMaximum = specialFoodRule
+        ? amount > maximumFood && rate > 0
           ? Math.max(0, count - 1)
-          : null;
+          : count
+        : count === 0 && amount < maximum * 0.2 && rate <= 0
+          ? 1
+          : amount > maximum * 0.6 && rate > 0
+            ? Math.max(0, count - 1)
+            : null;
+    }
   }
   if (!applyFarmCapacity) return foodMaximum;
   const farm = readProperty(readProperty(root, "city"), "farm");

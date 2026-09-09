@@ -1621,4 +1621,50 @@ assert.equal(
   "an empty normal-race Farmer pool enters the low-Food rescue branch",
 );
 
+const ravenousFoodReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...foodRoot,
+      race: { ravenous: 1 },
+      resource: {
+        ...foodRoot.resource,
+        Food: { amount: 40, max: 100, diff: 1 },
+        Population: { amount: 10, max: 100 },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: foodControls,
+  readSettings: () => ({ job_s_farmer: true }),
+});
+assert.equal(
+  ravenousFoodReader().jobs[0].smartMaximum,
+  2,
+  "a ravenous Food stockpile uses its population-scaled smart threshold",
+);
+
+const carnivoreFoodReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...foodRoot,
+      race: { carnivore: 1 },
+      resource: {
+        ...foodRoot.resource,
+        Food: { amount: 25, max: 100, diff: 1 },
+        Population: { amount: 10, max: 100 },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: foodControls,
+  readSettings: () => ({ job_s_farmer: true }),
+});
+assert.equal(
+  carnivoreFoodReader().jobs[0].smartMaximum,
+  2,
+  "a carnivore Food stockpile includes the captured rot threshold",
+);
+
 console.log("captured-job-catalog ok");
