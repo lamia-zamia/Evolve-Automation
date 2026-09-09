@@ -20,6 +20,8 @@ export interface CapturedJobCatalogEntry {
   readonly display: boolean;
   readonly unlocked: boolean;
   readonly managed: boolean;
+  /** Raw `job_b1..3_<id>` settings; normalization belongs to the planner-input slice. */
+  readonly configuredBreakpoints: readonly [number, number, number] | null;
   readonly isDefault: boolean;
 }
 
@@ -45,6 +47,26 @@ function finiteMaximum(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= -1
     ? value
     : undefined;
+}
+
+function readConfiguredBreakpoints(
+  settings: Record<PropertyKey, unknown> | undefined,
+  id: string,
+): readonly [number, number, number] | null {
+  const values = [1, 2, 3].map((number) =>
+    readProperty(settings, `job_b${number}_${id}`),
+  );
+  if (
+    values.some((value) => typeof value !== "number" || !Number.isFinite(value))
+  ) {
+    return null;
+  }
+  const breakpoints: [number, number, number] = [
+    values[0] as number,
+    values[1] as number,
+    values[2] as number,
+  ];
+  return Object.freeze(breakpoints);
 }
 
 function readCatalog(
@@ -112,6 +134,7 @@ function readCatalog(
     // setting is only effective for an unlocked job. Missing or malformed settings remain false.
     const unlocked = display;
     const managed = unlocked && readProperty(settings, `job_${id}`) === true;
+    const configuredBreakpoints = readConfiguredBreakpoints(settings, id);
     jobs.push(
       Object.freeze({
         id,
@@ -122,6 +145,7 @@ function readCatalog(
         display,
         unlocked,
         managed,
+        configuredBreakpoints,
         isDefault: id === defaultJobId,
       }),
     );

@@ -4401,6 +4401,19 @@
   function finiteMaximum(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= -1 ? value : void 0;
   }
+  function readConfiguredBreakpoints(settings, id) {
+    let values = [1, 2, 3].map(
+      (number) => readProperty(settings, `job_b${number}_${id}`)
+    );
+    if (values.some((value) => typeof value != "number" || !Number.isFinite(value)))
+      return null;
+    let breakpoints = [
+      values[0],
+      values[1],
+      values[2]
+    ];
+    return Object.freeze(breakpoints);
+  }
   function readCatalog(root, controls, settingsValue, onSkipped) {
     let civic = readProperty(root, "civic");
     if (!isRecord(civic)) return;
@@ -4448,7 +4461,7 @@
         onSkipped(controlId, "ordinary job visibility is not boolean");
         continue;
       }
-      let unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0;
+      let unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id);
       jobs.push(
         Object.freeze({
           id,
@@ -4459,6 +4472,7 @@
           display,
           unlocked,
           managed,
+          configuredBreakpoints,
           isDefault: id === defaultJobId
         })
       );

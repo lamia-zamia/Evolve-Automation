@@ -36,7 +36,16 @@ const reader = createCapturedJobCatalogReader({
     subscribeRootReplaced: () => () => {},
   },
   controls,
-  readSettings: () => ({ job_unemployed: true, job_farmer: false }),
+  readSettings: () => ({
+    job_unemployed: true,
+    job_farmer: false,
+    job_b1_unemployed: 0,
+    job_b2_unemployed: 1,
+    job_b3_unemployed: -1,
+    job_b1_farmer: 2,
+    job_b2_farmer: 4,
+    job_b3_farmer: 8,
+  }),
   onSkipped: (id, reason) => skipped.push({ id, reason }),
 });
 
@@ -52,6 +61,7 @@ assert.deepEqual(reader(), {
       display: true,
       unlocked: true,
       managed: true,
+      configuredBreakpoints: [0, 1, -1],
       isDefault: true,
     },
     {
@@ -63,6 +73,7 @@ assert.deepEqual(reader(), {
       display: true,
       unlocked: true,
       managed: false,
+      configuredBreakpoints: [2, 4, 8],
       isDefault: false,
     },
     {
@@ -74,6 +85,7 @@ assert.deepEqual(reader(), {
       display: false,
       unlocked: false,
       managed: false,
+      configuredBreakpoints: null,
       isDefault: false,
     },
   ],
