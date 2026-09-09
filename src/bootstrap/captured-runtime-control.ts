@@ -305,6 +305,8 @@ export function startCapturedRuntime({
     reservations: queueReservations,
     construction: progression.observations,
     readBuildTargets: progression.readManagedBuildTargets,
+    readOfferedTechs: progression.readOfferedTechs,
+    readProjects: progression.readProjects,
     costs: buildCosts,
     onSkipped: (key, reason) => reportOnce(`storage skipped ${key}: ${reason}`),
     nowMs: () => Date.now(),

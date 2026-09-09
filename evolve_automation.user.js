@@ -1288,6 +1288,67 @@
     });
   }
 
+  // src/adapters/evolve/progression/research/captured-project-catalog.ts
+  var ARPA_PANEL_SELECTOR = "#arpaPhysics", PROJECT_SELECTOR = "#arpaPhysics .arpaProject", ARPA_TAB_PATH = Object.freeze([
+    Object.freeze({
+      setting: MAIN_TAB_SETTING,
+      control: MAIN_TAB_CONTROL,
+      index: 5
+    })
+  ]);
+  function createCapturedProjectCatalog(dependencies) {
+    let { rootState, discovery, drawnProjects, controls } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    });
+    return Object.freeze({
+      readProjects() {
+        let root = rootState.readRoot();
+        if (root === void 0) {
+          reportUnavailable("the game root has not been captured yet");
+          return;
+        }
+        let game = requireNonArrayRecord(root, "game root"), resources = requireNonArrayRecord(
+          game.resource,
+          "game.resource"
+        ), arpa = requireNonArrayRecord(game.arpa, "game.arpa"), projects, result = discovery.discover(ARPA_TAB_PATH, {
+          isPanelDrawn: () => drawnProjects.exists(ARPA_PANEL_SELECTOR),
+          whileDrawn: () => {
+            let drawn = drawnProjects.read(
+              PROJECT_SELECTOR,
+              Object.keys(resources)
+            );
+            drawn !== void 0 && (projects = Object.freeze(
+              drawn.map((project) => {
+                let state = requireNonArrayRecord(
+                  arpa[project.projectId],
+                  `game.arpa.${project.projectId}`
+                );
+                return Object.freeze({
+                  ...project,
+                  rank: requireCount(
+                    state.rank,
+                    `game.arpa.${project.projectId}.rank`
+                  ),
+                  progress: requireCount(
+                    state.complete,
+                    `game.arpa.${project.projectId}.complete`
+                  ),
+                  generation: controls.resolve(project.elementId)?.generation ?? 0
+                });
+              })
+            ));
+          }
+        });
+        if (result.outcome.status !== "succeeded" || projects === void 0) {
+          reportUnavailable(
+            result.outcome.status === "succeeded" ? "the project panel could not supply exact costs" : result.outcome.failure?.message ?? result.outcome.status
+          );
+          return;
+        }
+        return projects;
+      }
+    });
+  }
+
   // src/domain/progression/build/building-weighting.ts
   function applyNeedfulKnowledgeWeighting(baseWeight, raisesKnowledgeCap, knowledgeGated, multiplier) {
     return raisesKnowledgeCap && knowledgeGated ? baseWeight * multiplier : baseWeight;
@@ -2655,67 +2716,6 @@
     });
   }
 
-  // src/adapters/evolve/progression/research/captured-project-catalog.ts
-  var ARPA_PANEL_SELECTOR = "#arpaPhysics", PROJECT_SELECTOR = "#arpaPhysics .arpaProject", ARPA_TAB_PATH = Object.freeze([
-    Object.freeze({
-      setting: MAIN_TAB_SETTING,
-      control: MAIN_TAB_CONTROL,
-      index: 5
-    })
-  ]);
-  function createCapturedProjectCatalog(dependencies) {
-    let { rootState, discovery, drawnProjects, controls } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
-    });
-    return Object.freeze({
-      readProjects() {
-        let root = rootState.readRoot();
-        if (root === void 0) {
-          reportUnavailable("the game root has not been captured yet");
-          return;
-        }
-        let game = requireNonArrayRecord(root, "game root"), resources = requireNonArrayRecord(
-          game.resource,
-          "game.resource"
-        ), arpa = requireNonArrayRecord(game.arpa, "game.arpa"), projects, result = discovery.discover(ARPA_TAB_PATH, {
-          isPanelDrawn: () => drawnProjects.exists(ARPA_PANEL_SELECTOR),
-          whileDrawn: () => {
-            let drawn = drawnProjects.read(
-              PROJECT_SELECTOR,
-              Object.keys(resources)
-            );
-            drawn !== void 0 && (projects = Object.freeze(
-              drawn.map((project) => {
-                let state = requireNonArrayRecord(
-                  arpa[project.projectId],
-                  `game.arpa.${project.projectId}`
-                );
-                return Object.freeze({
-                  ...project,
-                  rank: requireCount(
-                    state.rank,
-                    `game.arpa.${project.projectId}.rank`
-                  ),
-                  progress: requireCount(
-                    state.complete,
-                    `game.arpa.${project.projectId}.complete`
-                  ),
-                  generation: controls.resolve(project.elementId)?.generation ?? 0
-                });
-              })
-            ));
-          }
-        });
-        if (result.outcome.status !== "succeeded" || projects === void 0) {
-          reportUnavailable(
-            result.outcome.status === "succeeded" ? "the project panel could not supply exact costs" : result.outcome.failure?.message ?? result.outcome.status
-          );
-          return;
-        }
-        return projects;
-      }
-    });
-  }
-
   // src/domain/game-achievements.ts
   function sampled2(values, id, kind) {
     let value = values.get(id);
@@ -3384,7 +3384,7 @@
       resources,
       reservations,
       ...scriptReservations === void 0 ? {} : { additionalReservations: scriptReservations }
-    }), catalog = createCapturedProjectCatalog({
+    }), catalog = dependencies.projectCatalog ?? createCapturedProjectCatalog({
       rootState,
       discovery: createCapturedTabDiscovery({
         rootState,
@@ -3439,6 +3439,7 @@
           offeredThisCycle = void 0;
         }
       },
+      readProjects: () => catalog.readProjects(),
       observations
     });
   }
@@ -3714,7 +3715,13 @@
       drawnActions,
       controls,
       ...onUnavailable === void 0 ? {} : { onUnavailable }
-    }), readKnowledge = createCapturedKnowledgeReader({
+    }), projectCatalog = createCapturedProjectCatalog({
+      rootState,
+      discovery,
+      drawnProjects,
+      controls,
+      ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) }
+    }), projectSampled = !1, lastProjects, readProjects = () => (projectSampled || (projectSampled = !0, lastProjects = projectCatalog.readProjects()), lastProjects), readKnowledge = createCapturedKnowledgeReader({
       rootState,
       resources,
       readLastOfferedTechs: () => lastOffered,
@@ -3754,6 +3761,7 @@
       mountSuppression,
       panels,
       drawnProjects,
+      projectCatalog: Object.freeze({ readProjects }),
       readPolicy,
       readSettings,
       ensureBuildControls,
@@ -3776,9 +3784,16 @@
     readObservations = () => construction.observations;
     let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings);
     return Object.freeze({
-      runConstructionCycle: () => construction.runCycle(),
+      runConstructionCycle: () => {
+        try {
+          return construction.runCycle();
+        } finally {
+          projectSampled = !1, lastProjects = void 0;
+        }
+      },
       runResearchCycle: () => research.runCycle(),
       readOfferedTechs: () => lastOffered,
+      readProjects,
       observations: construction.observations,
       readManagedBuildTargets
     });
@@ -10065,6 +10080,78 @@
       autoBuildEnabled: !0
     });
   }
+  function targetFromCapturedCost(label, cost) {
+    if (!isRecord(cost))
+      return;
+    let normalized = {};
+    for (let [resourceId, quantity] of Object.entries(cost)) {
+      if (typeof quantity != "number" || !Number.isFinite(quantity))
+        return;
+      normalized[resourceId] = quantity;
+    }
+    return targetFromCost(label, normalized);
+  }
+  function readTechnologyTargets(dependencies) {
+    if (dependencies.readOfferedTechs === void 0) return;
+    let offered = dependencies.readOfferedTechs();
+    if (offered === void 0) return;
+    let result = [];
+    for (let technology of offered) {
+      if (typeof technology.elementId != "string" || technology.elementId.length === 0) {
+        dependencies.onSkipped?.(
+          "storage-technology",
+          "captured technology identity is invalid"
+        );
+        return;
+      }
+      let target = targetFromCapturedCost(
+        `technology/${technology.elementId}`,
+        technology.cost
+      );
+      if (target === void 0) {
+        dependencies.onSkipped?.(
+          technology.elementId,
+          "captured technology cost is invalid"
+        );
+        return;
+      }
+      result.push(target);
+    }
+    return Object.freeze(result);
+  }
+  function readProjectTargets(dependencies, settings) {
+    if (dependencies.readProjects === void 0) return;
+    let projects = dependencies.readProjects();
+    if (projects === void 0) return;
+    let result = [];
+    for (let project of projects) {
+      if (typeof project.projectId != "string" || project.projectId.length === 0) {
+        dependencies.onSkipped?.(
+          "storage-project",
+          "captured project identity is invalid"
+        );
+        return;
+      }
+      let target = targetFromCapturedCost(
+        `project/${project.projectId}`,
+        project.cost
+      );
+      if (target === void 0) {
+        dependencies.onSkipped?.(
+          project.projectId,
+          "captured project cost is invalid"
+        );
+        return;
+      }
+      result.push(
+        Object.freeze({
+          ...target,
+          autoBuildEnabled: settings[`arpa_${project.projectId}`] === !0
+        })
+      );
+    }
+    return Object.freeze(result);
+  }
   function readBuildingTargets(dependencies) {
     if (dependencies.readBuildTargets === void 0 || dependencies.costs === void 0)
       return;
@@ -10211,7 +10298,7 @@
       (resource) => targetFromCost(`storageRequired/${resource.id}`, {
         [resource.id]: resource.storageRequired
       })
-    ), buildingTargets = readBuildingTargets(dependencies);
+    ), buildingTargets = readBuildingTargets(dependencies), technologyTargets = settings.autoResearch === !0 ? readTechnologyTargets(dependencies) : Object.freeze([]), projectTargets = settings.autoARPA === !0 ? readProjectTargets(dependencies, settings) : Object.freeze([]);
     return {
       input: Object.freeze({
         initialized: !0,
@@ -10237,6 +10324,16 @@
             kind: "building",
             enabled: buildingTargets !== void 0,
             targets: buildingTargets ?? Object.freeze([])
+          }),
+          Object.freeze({
+            kind: "technology",
+            enabled: settings.autoResearch === !0 && technologyTargets !== void 0,
+            targets: technologyTargets ?? Object.freeze([])
+          }),
+          Object.freeze({
+            kind: "project",
+            enabled: settings.autoARPA === !0 && projectTargets !== void 0,
+            targets: projectTargets ?? Object.freeze([])
           }),
           Object.freeze({
             kind: "required",
@@ -12694,6 +12791,8 @@
       reservations: queueReservations,
       construction: progression.observations,
       readBuildTargets: progression.readManagedBuildTargets,
+      readOfferedTechs: progression.readOfferedTechs,
+      readProjects: progression.readProjects,
       costs: buildCosts,
       onSkipped: (key, reason) => reportOnce(`storage skipped ${key}: ${reason}`),
       nowMs: () => Date.now()

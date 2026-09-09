@@ -21,6 +21,8 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { GameBuildTarget } from "../../../../ports/game-build-targets.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
+import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
+import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import type {
   StorageAllocationReader,
   StorageExpansionRequester,
@@ -42,6 +44,11 @@ interface CapturedStorageDependencies {
   readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
   /** The game's current cost for a captured build target. */
   readonly costs?: GameActionCostReader;
+  /** The most recently captured offered technologies, when research automation is enabled. */
+  readonly readOfferedTechs?: () =>
+    readonly Readonly<OfferedTech>[] | undefined;
+  /** A fresh captured A.R.P.A. project sample, when project automation is enabled. */
+  readonly readProjects?: () => readonly Readonly<OfferedProject>[] | undefined;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly nowMs: () => number;
 }
@@ -162,6 +169,97 @@ function targetFromCost(
     unlocked: true,
     autoBuildEnabled: true,
   });
+}
+
+function targetFromCapturedCost(
+  label: string,
+  cost: unknown,
+): StorageTargetInput | undefined {
+  if (!isRecord(cost)) {
+    return undefined;
+  }
+  const normalized: Record<string, number> = {};
+  for (const [resourceId, quantity] of Object.entries(cost)) {
+    if (typeof quantity !== "number" || !Number.isFinite(quantity)) {
+      return undefined;
+    }
+    normalized[resourceId] = quantity;
+  }
+  return targetFromCost(label, normalized);
+}
+
+function readTechnologyTargets(
+  dependencies: CapturedStorageDependencies,
+): readonly StorageTargetInput[] | undefined {
+  if (dependencies.readOfferedTechs === undefined) return undefined;
+  const offered = dependencies.readOfferedTechs();
+  if (offered === undefined) return undefined;
+  const result: StorageTargetInput[] = [];
+  for (const technology of offered) {
+    if (
+      typeof technology.elementId !== "string" ||
+      technology.elementId.length === 0
+    ) {
+      dependencies.onSkipped?.(
+        "storage-technology",
+        "captured technology identity is invalid",
+      );
+      return undefined;
+    }
+    const target = targetFromCapturedCost(
+      `technology/${technology.elementId}`,
+      technology.cost,
+    );
+    if (target === undefined) {
+      dependencies.onSkipped?.(
+        technology.elementId,
+        "captured technology cost is invalid",
+      );
+      return undefined;
+    }
+    result.push(target);
+  }
+  return Object.freeze(result);
+}
+
+function readProjectTargets(
+  dependencies: CapturedStorageDependencies,
+  settings: Record<PropertyKey, unknown>,
+): readonly StorageTargetInput[] | undefined {
+  if (dependencies.readProjects === undefined) return undefined;
+  const projects = dependencies.readProjects();
+  if (projects === undefined) return undefined;
+  const result: StorageTargetInput[] = [];
+  for (const project of projects) {
+    if (
+      typeof project.projectId !== "string" ||
+      project.projectId.length === 0
+    ) {
+      dependencies.onSkipped?.(
+        "storage-project",
+        "captured project identity is invalid",
+      );
+      return undefined;
+    }
+    const target = targetFromCapturedCost(
+      `project/${project.projectId}`,
+      project.cost,
+    );
+    if (target === undefined) {
+      dependencies.onSkipped?.(
+        project.projectId,
+        "captured project cost is invalid",
+      );
+      return undefined;
+    }
+    result.push(
+      Object.freeze({
+        ...target,
+        autoBuildEnabled: settings[`arpa_${project.projectId}`] === true,
+      }),
+    );
+  }
+  return Object.freeze(result);
 }
 
 function readBuildingTargets(
@@ -380,6 +478,14 @@ function readInput(dependencies: CapturedStorageDependencies): {
       }),
     );
   const buildingTargets = readBuildingTargets(dependencies);
+  const technologyTargets =
+    settings["autoResearch"] === true
+      ? readTechnologyTargets(dependencies)
+      : Object.freeze([]);
+  const projectTargets =
+    settings["autoARPA"] === true
+      ? readProjectTargets(dependencies, settings)
+      : Object.freeze([]);
   const input = Object.freeze({
     initialized: true,
     crateValue,
@@ -404,6 +510,17 @@ function readInput(dependencies: CapturedStorageDependencies): {
         kind: "building" as const,
         enabled: buildingTargets !== undefined,
         targets: buildingTargets ?? Object.freeze([]),
+      }),
+      Object.freeze({
+        kind: "technology" as const,
+        enabled:
+          settings["autoResearch"] === true && technologyTargets !== undefined,
+        targets: technologyTargets ?? Object.freeze([]),
+      }),
+      Object.freeze({
+        kind: "project" as const,
+        enabled: settings["autoARPA"] === true && projectTargets !== undefined,
+        targets: projectTargets ?? Object.freeze([]),
       }),
       Object.freeze({
         kind: "required" as const,

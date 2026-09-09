@@ -34,6 +34,10 @@ import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import type {
+  GameProjectCatalog,
+  OfferedProject,
+} from "../ports/game-project-catalog.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { KnowledgeGateLevels } from "../domain/progression/build/building-weighting.ts";
@@ -49,6 +53,8 @@ export interface CapturedConstructionControlDependencies {
   readonly mountSuppression: GameMountSuppression;
   readonly panels: GamePanelWorkspace;
   readonly drawnProjects: GameDrawnProjectsReader;
+  /** Shared project catalog, so storage and construction consume one panel sample per cycle. */
+  readonly projectCatalog?: GameProjectCatalog;
   /** Optional one-time discovery of the game's Civilization action controls. */
   readonly ensureBuildControls?: () => void;
   readonly readPolicy: () => CapturedConstructionPolicy;
@@ -78,6 +84,8 @@ export interface CapturedConstructionControlDependencies {
 export interface CapturedConstructionControl {
   /** Runs one construction cycle. Safe to call before the game has created its state. */
   runCycle(): CommandExecutionOutcome;
+  /** The most recently captured A.R.P.A. project snapshot, if one exists. */
+  readonly readProjects: () => readonly Readonly<OfferedProject>[] | undefined;
   /** What the last completed cycle was saving for, for the features that read demand. */
   readonly observations: ConstructionObservations;
 }
@@ -141,20 +149,22 @@ export function createCapturedConstructionControl(
       ? {}
       : { additionalReservations: scriptReservations }),
   });
-  const catalog = createCapturedProjectCatalog({
-    rootState,
-    discovery: createCapturedTabDiscovery({
+  const catalog =
+    dependencies.projectCatalog ??
+    createCapturedProjectCatalog({
       rootState,
+      discovery: createCapturedTabDiscovery({
+        rootState,
+        controls,
+        mountSuppression,
+        panels,
+      }),
+      drawnProjects,
       controls,
-      mountSuppression,
-      panels,
-    }),
-    drawnProjects,
-    controls,
-    ...(onSkipped === undefined
-      ? {}
-      : { onUnavailable: (reason: string) => onSkipped("arpa", reason) }),
-  });
+      ...(onSkipped === undefined
+        ? {}
+        : { onUnavailable: (reason: string) => onSkipped("arpa", reason) }),
+    });
   const { reader, executor, observations } = createCapturedConstructionAdapter({
     // City buildings first, matching the game's own list order, so a project only outranks a
     // building by weighting rather than by being sampled first.
@@ -202,6 +212,7 @@ export function createCapturedConstructionControl(
         offeredThisCycle = undefined;
       }
     },
+    readProjects: () => catalog.readProjects(),
     observations,
   });
 }

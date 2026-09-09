@@ -7,6 +7,11 @@ function makeHarness({
   savingCost = { Iron: 600 },
   buildTargets = [],
   buildCosts = {},
+  offeredTechs,
+  projects,
+  autoResearch = false,
+  autoARPA = false,
+  projectSettings = {},
   mutateAssignments = true,
 } = {}) {
   const root = {
@@ -86,6 +91,9 @@ function makeHarness({
       storageAssignPart: false,
       storageSafeReassign: false,
       autoStorage: true,
+      autoResearch,
+      autoARPA,
+      ...projectSettings,
       res_storageIron: true,
       res_storage_p_Iron: 0,
       res_min_storeIron: 1,
@@ -105,11 +113,111 @@ function makeHarness({
         return buildCosts[elementId];
       },
     },
+    ...(offeredTechs === undefined
+      ? {}
+      : { readOfferedTechs: () => offeredTechs }),
+    ...(projects === undefined ? {} : { readProjects: () => projects }),
     onSkipped: (key, reason) => skipped.push([key, reason]),
     nowMs: () => 1,
   });
   const automation = createStorageAllocationAutomation(ports);
   return { root, calls, automation, ports, skipped, costLookups };
+}
+
+{
+  const { ports, skipped } = makeHarness({
+    autoResearch: true,
+    autoARPA: true,
+    projectSettings: { arpa_alpha: true, arpa_beta: false },
+    offeredTechs: [
+      { elementId: "tech-alpha", cost: { Iron: 700 }, generation: 1 },
+    ],
+    projects: [
+      {
+        elementId: "project-alpha",
+        projectId: "alpha",
+        rank: 0,
+        progress: 0,
+        cost: { Iron: 900 },
+        generation: 1,
+      },
+      {
+        elementId: "project-beta",
+        projectId: "beta",
+        rank: 0,
+        progress: 0,
+        cost: { Iron: 500 },
+        generation: 1,
+      },
+    ],
+  });
+  const input = ports.reader.read();
+  assert.deepEqual(
+    input.targetSources.find(({ kind }) => kind === "technology"),
+    {
+      kind: "technology",
+      enabled: true,
+      targets: [
+        {
+          costs: [{ resourceId: "Iron", quantity: 700 }],
+          isList: false,
+          label: "technology/tech-alpha",
+          unlocked: true,
+          autoBuildEnabled: true,
+        },
+      ],
+    },
+  );
+  assert.deepEqual(
+    input.targetSources.find(({ kind }) => kind === "project"),
+    {
+      kind: "project",
+      enabled: true,
+      targets: [
+        {
+          costs: [{ resourceId: "Iron", quantity: 900 }],
+          isList: false,
+          label: "project/alpha",
+          unlocked: true,
+          autoBuildEnabled: true,
+        },
+        {
+          costs: [{ resourceId: "Iron", quantity: 500 }],
+          isList: false,
+          label: "project/beta",
+          unlocked: true,
+          autoBuildEnabled: false,
+        },
+      ],
+    },
+  );
+  assert.deepEqual(skipped, []);
+}
+
+{
+  const { ports, skipped } = makeHarness({
+    autoResearch: true,
+    offeredTechs: [{ elementId: "tech-bad", cost: { Iron: Number.NaN } }],
+  });
+  assert.deepEqual(
+    ports.reader.read().targetSources.find(({ kind }) => kind === "technology"),
+    { kind: "technology", enabled: false, targets: [] },
+  );
+  assert.deepEqual(skipped, [
+    ["tech-bad", "captured technology cost is invalid"],
+  ]);
+}
+
+{
+  const { ports, skipped } = makeHarness({
+    autoARPA: true,
+    projects: undefined,
+  });
+  assert.deepEqual(
+    ports.reader.read().targetSources.find(({ kind }) => kind === "project"),
+    { kind: "project", enabled: false, targets: [] },
+  );
+  assert.deepEqual(skipped, []);
 }
 
 {

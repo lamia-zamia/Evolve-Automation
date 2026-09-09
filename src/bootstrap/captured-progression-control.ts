@@ -21,6 +21,7 @@ import {
 import { createScriptCostReservationSource } from "../adapters/evolve/script-cost-reservations.ts";
 import { createScriptBuildPolicyReader } from "../adapters/evolve/progression/build/script-build-policy.ts";
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
+import { createCapturedProjectCatalog } from "../adapters/evolve/progression/research/captured-project-catalog.ts";
 import { createCapturedBuildPolicyReader } from "../adapters/evolve/progression/build/captured-build-policy.ts";
 import { createCapturedKnowledgeReader } from "../adapters/evolve/progression/build/captured-knowledge-gate.ts";
 import { createCapturedConstructionControl } from "./captured-construction-control.ts";
@@ -37,6 +38,10 @@ import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import type {
+  GameProjectCatalog,
+  OfferedProject,
+} from "../ports/game-project-catalog.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 
@@ -78,6 +83,8 @@ export interface CapturedProgressionControl {
   readonly runResearchCycle: () => CommandExecutionOutcome;
   /** The most recently captured offered-technology snapshot, if one exists. */
   readonly readOfferedTechs: () => readonly Readonly<OfferedTech>[] | undefined;
+  /** A fresh captured A.R.P.A. project snapshot, if it can be read. */
+  readonly readProjects: () => readonly Readonly<OfferedProject>[] | undefined;
   /** What the last construction cycle was saving for, for the features that read demand. */
   readonly observations: ConstructionObservations;
   /** Managed captured construction targets, used by production modes that weight against builds. */
@@ -190,6 +197,24 @@ export function createCapturedProgressionControl(
     controls,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });
+  const projectCatalog: GameProjectCatalog = createCapturedProjectCatalog({
+    rootState,
+    discovery,
+    drawnProjects,
+    controls,
+    ...(onSkipped === undefined
+      ? {}
+      : { onUnavailable: (reason: string) => onSkipped("arpa", reason) }),
+  });
+  let projectSampled = false;
+  let lastProjects: readonly Readonly<OfferedProject>[] | undefined;
+  const readProjects = () => {
+    if (!projectSampled) {
+      projectSampled = true;
+      lastProjects = projectCatalog.readProjects();
+    }
+    return lastProjects;
+  };
   const readKnowledge = createCapturedKnowledgeReader({
     rootState,
     resources,
@@ -263,6 +288,7 @@ export function createCapturedProgressionControl(
     mountSuppression,
     panels,
     drawnProjects,
+    projectCatalog: Object.freeze({ readProjects }),
     readPolicy,
     readSettings,
     ensureBuildControls,
@@ -292,9 +318,17 @@ export function createCapturedProgressionControl(
   };
 
   return Object.freeze({
-    runConstructionCycle: () => construction.runCycle(),
+    runConstructionCycle: () => {
+      try {
+        return construction.runCycle();
+      } finally {
+        projectSampled = false;
+        lastProjects = undefined;
+      }
+    },
     runResearchCycle: () => research.runCycle(),
     readOfferedTechs: () => lastOffered,
+    readProjects,
     observations: construction.observations,
     readManagedBuildTargets,
   });
