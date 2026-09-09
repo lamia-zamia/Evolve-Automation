@@ -577,7 +577,7 @@ const underpoweredReader = createCapturedBuildPolicyReader({
             elementId,
             generation: 1,
             methods: [],
-            data: { powered: () => 5 },
+            data: { act: { count: 1, on: 1 } },
           }
         : undefined,
     invoke: () => ({ ok: false, reason: "unknown-control" }),
@@ -592,8 +592,8 @@ const underpoweredReader = createCapturedBuildPolicyReader({
 });
 assert.equal(
   underpoweredReader().buildings[0].weighting,
-  8,
-  "a validated action power draw deprioritizes an underpowered city consumer",
+  10,
+  "the captured structure record does not invent a city action power draw",
 );
 
 const nonCityUnderpoweredReader = createCapturedBuildPolicyReader({
@@ -613,7 +613,7 @@ const nonCityUnderpoweredReader = createCapturedBuildPolicyReader({
             elementId,
             generation: 1,
             methods: [],
-            data: { powered: () => 5 },
+            data: { act: { count: 2, on: 1 } },
           }
         : undefined,
     invoke: () => ({ ok: false, reason: "unknown-control" }),
@@ -637,10 +637,10 @@ assert.deepEqual(
     weighting,
   })),
   [
-    { region: "space", id: "moon_base", weighting: 4 },
+    { region: "space", id: "moon_base", weighting: 5 },
     { region: "portal", id: "cooling_tower", weighting: 30 },
   ],
-  "captured non-city regions use their root state and retain power-only dynamic rules",
+  "captured non-city regions use their root state without inventing action power",
 );
 
 const nonCityExceptionReader = createCapturedBuildPolicyReader({
@@ -711,7 +711,7 @@ const nonCityPowerReader = createCapturedBuildPolicyReader({
             elementId,
             generation: 1,
             methods: [],
-            data: { powered: () => -5 },
+            data: { act: { count: 1, on: 1 } },
           }
         : undefined,
     invoke: () => ({ ok: false, reason: "unknown-control" }),
@@ -726,8 +726,8 @@ const nonCityPowerReader = createCapturedBuildPolicyReader({
 });
 assert.equal(
   nonCityPowerReader().buildings[0].weighting,
-  30,
-  "a captured non-city power producer is promoted during a power deficit",
+  10,
+  "a captured non-city structure does not invent a power producer action",
 );
 
 const nonBuildControlReader = createCapturedBuildPolicyReader({

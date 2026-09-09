@@ -333,26 +333,6 @@ function readFutureAiColonistPower(root: unknown): number {
   }).additionalColonistPower;
 }
 
-function readActionPower(
-  handle: ReturnType<GameControlRegistry["resolve"]>,
-): number | undefined {
-  const data = handle?.data;
-  if (!isRecord(data)) return undefined;
-  const powered = data["powered"];
-  if (typeof powered === "number") {
-    return Number.isFinite(powered) ? powered : undefined;
-  }
-  if (typeof powered !== "function") return undefined;
-  try {
-    const value = Reflect.apply(powered, data, []);
-    return typeof value === "number" && Number.isFinite(value)
-      ? value
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 interface CityWeightingInput {
   readonly base: number;
   readonly binding: string;
@@ -470,7 +450,6 @@ function readTarget(
   settings: Record<PropertyKey, unknown>,
   city: Record<PropertyKey, unknown>,
   elementId: string,
-  controls: GameControlRegistry,
   context: Readonly<CityRuleContext>,
   onSkipped: (key: string, reason: string) => void,
 ): Readonly<CapturedBuildTarget> | undefined {
@@ -605,15 +584,11 @@ function readTarget(
     typeof onValue === "number" && Number.isFinite(onValue)
       ? onValue
       : undefined;
-  const powered = readActionPower(controls.resolve(elementId));
-  const underpoweredWeighting =
-    powered !== undefined && powered > 0
-      ? readFiniteSetting(settings, "buildingWeightingUnderpowered", 1)
-      : 1;
-  if (underpoweredWeighting === undefined) {
-    onSkipped(binding, "underpowered weighting is not finite");
-    return undefined;
-  }
+  // DeadSpace's build Vue binding captures the mutable structure record as `data.act`; the
+  // action definition carrying `powered()` remains a private module value. Do not infer a
+  // consumer draw from the structure record or from test-only handle data.
+  const powered = undefined;
+  const underpoweredWeighting = 1;
   const maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
   if (maximum === undefined) {
     onSkipped(binding, "configured maximum is not finite");
@@ -660,7 +635,6 @@ function readNonCityTarget(
   settings: Record<PropertyKey, unknown>,
   root: unknown,
   elementId: string,
-  controls: GameControlRegistry,
   context: Readonly<CityRuleContext>,
   onSkipped: (key: string, reason: string) => void,
 ): Readonly<CapturedBuildTarget> | undefined {
@@ -695,15 +669,10 @@ function readNonCityTarget(
     onSkipped(binding, "new-building weighting is not finite");
     return undefined;
   }
-  const powered = readActionPower(controls.resolve(elementId));
-  const underpoweredWeighting =
-    powered !== undefined && powered > 0
-      ? readFiniteSetting(settings, "buildingWeightingUnderpowered", 1)
-      : 1;
-  if (underpoweredWeighting === undefined) {
-    onSkipped(binding, "underpowered weighting is not finite");
-    return undefined;
-  }
+  // See the city path above: the captured structure state does not expose the action definition's
+  // private `powered()` method, so consumer-underpower weighting remains unavailable here too.
+  const powered = undefined;
+  const underpoweredWeighting = 1;
   const maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
   if (maximum === undefined) {
     onSkipped(binding, "configured maximum is not finite");
@@ -838,14 +807,7 @@ export function createCapturedBuildPolicyReader({
     if (isRecord(settings)) {
       for (const elementId of controls.capturedElementIds()) {
         const target = isRecord(city)
-          ? readTarget(
-              settings,
-              city,
-              elementId,
-              controls,
-              context,
-              reportSkipped,
-            )
+          ? readTarget(settings, city, elementId, context, reportSkipped)
           : undefined;
         const nonCityTarget =
           target === undefined
@@ -853,7 +815,6 @@ export function createCapturedBuildPolicyReader({
                 settings,
                 root,
                 elementId,
-                controls,
                 context,
                 reportSkipped,
               )

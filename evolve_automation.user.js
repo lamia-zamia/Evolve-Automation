@@ -1566,20 +1566,6 @@
       tankOnCount: tank.on
     }).additionalColonistPower;
   }
-  function readActionPower(handle) {
-    let data = handle?.data;
-    if (!isRecord(data)) return;
-    let powered = data.powered;
-    if (typeof powered == "number")
-      return Number.isFinite(powered) ? powered : void 0;
-    if (typeof powered == "function")
-      try {
-        let value = Reflect.apply(powered, data, []);
-        return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-      } catch {
-        return;
-      }
-  }
   function cityWeighting(input) {
     let { id, context, multipliers } = input, weight = applyNewBuildingWeighting(
       input.base,
@@ -1650,7 +1636,7 @@
       multipliers.uselessKnowledge
     );
   }
-  function readTarget2(settings, city, elementId, controls, context, onSkipped) {
+  function readTarget2(settings, city, elementId, context, onSkipped) {
     let binding = CITY_ELEMENT_BINDING_ALIASES[elementId] ?? elementId;
     if (!binding.startsWith("city-") || binding.length === 5 || settings[`bat${binding}`] !== !0) return;
     let id = binding.slice(5), state = readProperty(city, id);
@@ -1744,12 +1730,7 @@
       onSkipped(binding, "authority-cap weighting is not finite");
       return;
     }
-    let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, powered = readActionPower(controls.resolve(elementId)), underpoweredWeighting = powered !== void 0 && powered > 0 ? readFiniteSetting(settings, "buildingWeightingUnderpowered", 1) : 1;
-    if (underpoweredWeighting === void 0) {
-      onSkipped(binding, "underpowered weighting is not finite");
-      return;
-    }
-    let maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+    let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, powered = void 0, underpoweredWeighting = 1, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
       return;
@@ -1790,7 +1771,7 @@
       important: !1
     });
   }
-  function readNonCityTarget(settings, root, elementId, controls, context, onSkipped) {
+  function readNonCityTarget(settings, root, elementId, context, onSkipped) {
     let separator = elementId.indexOf("-");
     if (separator <= 0) return;
     let region = elementId.slice(0, separator);
@@ -1818,12 +1799,7 @@
       onSkipped(binding, "new-building weighting is not finite");
       return;
     }
-    let powered = readActionPower(controls.resolve(elementId)), underpoweredWeighting = powered !== void 0 && powered > 0 ? readFiniteSetting(settings, "buildingWeightingUnderpowered", 1) : 1;
-    if (underpoweredWeighting === void 0) {
-      onSkipped(binding, "underpowered weighting is not finite");
-      return;
-    }
-    let maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+    let powered = void 0, underpoweredWeighting = 1, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
       return;
@@ -1925,18 +1901,10 @@
       }), buildings = [];
       if (isRecord(settings))
         for (let elementId of controls.capturedElementIds()) {
-          let target = isRecord(city) ? readTarget2(
-            settings,
-            city,
-            elementId,
-            controls,
-            context,
-            reportSkipped
-          ) : void 0, nonCityTarget = target === void 0 ? readNonCityTarget(
+          let target = isRecord(city) ? readTarget2(settings, city, elementId, context, reportSkipped) : void 0, nonCityTarget = target === void 0 ? readNonCityTarget(
             settings,
             root,
             elementId,
-            controls,
             context,
             reportSkipped
           ) : void 0;
