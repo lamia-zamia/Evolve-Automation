@@ -8608,6 +8608,350 @@
     });
   }
 
+  // src/domain/economy/production/smelter.ts
+  var EMPTY_DECISION = Object.freeze({
+    fuelAdjustments: Object.freeze([]),
+    smeltAdjustments: Object.freeze([]),
+    tooltips: Object.freeze([])
+  });
+  function costLimitsUnits(cost, units, consumptionBalanceMin) {
+    return cost.currentQuantity < units * cost.quantity * consumptionBalanceMin + cost.minRateOfChange || cost.isDemanded;
+  }
+  function affordableUnits(cost, currentFuelCount2) {
+    let remainingRateOfChange = cost.rateOfChange + currentFuelCount2 * cost.quantity - cost.minRateOfChange;
+    return Math.max(0, Math.floor(remainingRateOfChange / cost.quantity));
+  }
+  function planSmelter(input) {
+    if (!input.initialised)
+      return EMPTY_DECISION;
+    let tooltips = [], fuelAdjustments = [], totalSmelters = input.totalSmelters, fuelRemoved = 0;
+    if (!input.hasForge) {
+      let remainingSmelters = totalSmelters;
+      for (let fuel of input.fuels) {
+        if (!fuel.unlocked)
+          continue;
+        let maxAllowedUnits = remainingSmelters;
+        fuel.isInfernoBeforeOil && remainingSmelters > 75 && (maxAllowedUnits = Math.floor(0.5 * remainingSmelters + 37.5));
+        for (let cost of fuel.cost)
+          if (costLimitsUnits(cost, maxAllowedUnits, input.consumptionBalanceMin)) {
+            let affordable = affordableUnits(cost, fuel.currentFuelCount);
+            affordable < maxAllowedUnits && tooltips.push({
+              key: "smelterFuels" + fuel.id.toLowerCase(),
+              value: `Too low ${cost.resourceName} income<br>`
+            }), maxAllowedUnits = Math.min(maxAllowedUnits, affordable);
+          }
+        remainingSmelters -= maxAllowedUnits;
+        let delta = maxAllowedUnits - fuel.currentFuelCount;
+        delta !== 0 && fuelAdjustments.push(
+          Object.freeze({
+            fuelId: fuel.id,
+            expectedCurrentFuelCount: fuel.currentFuelCount,
+            delta
+          })
+        ), delta < 0 && (fuelRemoved += -delta);
+      }
+      totalSmelters -= remainingSmelters;
+    }
+    totalSmelters += input.extraOperating;
+    let smelterIronCount = input.ironCount, smelterSteelCount = input.steelCount, smelterIridiumCount = input.iridiumCount, maxAllowedIridium = input.iridiumUnlocked && !input.iridiumCapped ? Math.floor(input.productionSmeltingIridium * totalSmelters) : 0, maxAllowedSteel = totalSmelters - smelterIridiumCount, smeltAdjust = {
+      Iridium: maxAllowedIridium - smelterIridiumCount,
+      Steel: smelterIridiumCount - maxAllowedIridium,
+      Iron: 0
+    };
+    if (fuelRemoved > smelterIronCount) {
+      let steelRemoved = fuelRemoved - smelterIronCount;
+      steelRemoved <= smelterSteelCount ? smeltAdjust.Steel += steelRemoved : (smeltAdjust.Steel += smelterSteelCount, smeltAdjust.Iridium += steelRemoved - smelterSteelCount);
+    }
+    for (let cost of input.steelCost)
+      if (costLimitsUnits(cost, smelterSteelCount, input.consumptionBalanceMin)) {
+        let affordable = affordableUnits(cost, smelterSteelCount);
+        affordable < maxAllowedSteel && tooltips.push({
+          key: "smelterMatssteel",
+          value: `Too low ${cost.resourceName} income<br>`
+        }), maxAllowedSteel = Math.min(maxAllowedSteel, affordable);
+      }
+    let ironWeighting = 0, steelWeighting = 0;
+    switch (input.productionSmelting) {
+      case "iron":
+        ironWeighting = input.ironTimeToFull, ironWeighting || (steelWeighting = input.steelTimeToFull);
+        break;
+      case "steel":
+        steelWeighting = input.steelTimeToFull, steelWeighting || (ironWeighting = input.ironTimeToFull);
+        break;
+      case "storage":
+        ironWeighting = input.ironTimeToFull, steelWeighting = input.steelTimeToFull;
+        break;
+      case "required":
+        ironWeighting = input.ironTimeToRequired, steelWeighting = input.steelTimeToRequired;
+        break;
+    }
+    input.ironDemanded && (ironWeighting = Number.MAX_SAFE_INTEGER), input.steelDemanded && (steelWeighting = Number.MAX_SAFE_INTEGER), input.minerCount === 0 && input.beltIronShipStateOnCount === 0 && (ironWeighting = 0, steelWeighting = 1, maxAllowedSteel = totalSmelters - smelterIridiumCount), (smelterSteelCount > maxAllowedSteel || smelterSteelCount > 0 && ironWeighting > steelWeighting) && smeltAdjust.Steel--, smelterSteelCount < maxAllowedSteel && smelterIronCount > 0 && (steelWeighting > ironWeighting || steelWeighting <= 0 && ironWeighting <= 0 && input.titaniumStorageRatio < 0.99 && input.haveTitaniumTech) && smeltAdjust.Steel++, smeltAdjust.Iron = totalSmelters - (smelterIronCount + smelterSteelCount + smeltAdjust.Steel + smelterIridiumCount + smeltAdjust.Iridium);
+    let expectedByProduction = {
+      Iron: smelterIronCount,
+      Steel: smelterSteelCount,
+      Iridium: smelterIridiumCount
+    }, smeltAdjustments = Object.entries(smeltAdjust).map(
+      ([productionId, delta]) => Object.freeze({
+        productionId,
+        expectedCurrentCount: expectedByProduction[productionId],
+        delta
+      })
+    );
+    return Object.freeze({
+      fuelAdjustments: Object.freeze(fuelAdjustments),
+      smeltAdjustments: Object.freeze(smeltAdjustments),
+      tooltips: Object.freeze(tooltips)
+    });
+  }
+
+  // src/adapters/evolve/economy/production/captured-smelter.ts
+  var SMELTER_CONTROL = "iSmelter", FUEL_IDS = Object.freeze(["Oil", "Coal", "Wood", "Inferno"]);
+  function finite9(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readCount(value) {
+    let count = finite9(value);
+    return count !== void 0 && Number.isSafeInteger(count) && count >= 0 ? count : void 0;
+  }
+  function readResource2(resources, id) {
+    let resource = readProperty(resources, id);
+    if (!isRecord(resource)) return;
+    let amount = finite9(resource.amount), maximum = finite9(resource.max), rate = finite9(resource.diff), display = resource.display;
+    if (!(amount === void 0 || maximum === void 0 || rate === void 0 || typeof display != "boolean"))
+      return Object.freeze({
+        name: typeof resource.name == "string" ? resource.name : id,
+        amount,
+        maximum,
+        rate,
+        display
+      });
+  }
+  function timeTo(resource, target) {
+    return resource.maximum <= 0 || resource.amount / resource.maximum > 0.98 ? Number.MIN_SAFE_INTEGER : target <= resource.amount ? 0 : resource.rate > 0 ? (target - resource.amount) / resource.rate : Number.MAX_SAFE_INTEGER;
+  }
+  function makeSmelterCost(resource, quantity, minRateOfChange, demanded) {
+    return Object.freeze({
+      resourceName: resource.name,
+      currentQuantity: resource.amount,
+      rateOfChange: resource.rate,
+      isDemanded: demanded,
+      quantity,
+      minRateOfChange
+    });
+  }
+  function emptyInput6() {
+    return Object.freeze({
+      initialised: !1,
+      hasForge: !1,
+      totalSmelters: 0,
+      extraOperating: 0,
+      consumptionBalanceMin: 60,
+      fuels: Object.freeze([]),
+      ironCount: 0,
+      steelCount: 0,
+      iridiumCount: 0,
+      iridiumUnlocked: !1,
+      iridiumCapped: !1,
+      productionSmeltingIridium: 0.5,
+      productionSmelting: "",
+      steelCost: Object.freeze([]),
+      ironTimeToFull: 0,
+      ironTimeToRequired: 0,
+      ironDemanded: !1,
+      steelTimeToFull: 0,
+      steelTimeToRequired: 0,
+      steelDemanded: !1,
+      minerCount: 0,
+      beltIronShipStateOnCount: 0,
+      titaniumStorageRatio: 1,
+      haveTitaniumTech: !1
+    });
+  }
+  function readSettingRecord(value) {
+    return isRecord(value) ? value : {};
+  }
+  function readFuel(id, resources, race, tech, settings, demand) {
+    let isLumberRace = !race.kindling_kindred && !race.smoldering, evil = !!race.evil, species = typeof race.species == "string" ? race.species : "", resourceId = id === "Wood" ? evil && race.soul_eater && species !== "wendigo" && !race.artificial ? "Food" : evil ? "Furs" : "Lumber" : id === "Inferno" ? "Coal" : id, resource = readResource2(resources, resourceId);
+    if (!(id === "Wood" ? isLumberRace || evil : id === "Inferno" ? (finite9(tech.smelting) ?? 0) >= 8 : resource?.display === !0))
+      return Object.freeze({
+        id,
+        unlocked: !1,
+        isInfernoBeforeOil: !1,
+        currentFuelCount: 0,
+        cost: Object.freeze([])
+      });
+    if (resource === void 0) return;
+    let quantity = id === "Wood" ? evil && (!race.soul_eater || species === "wendigo") ? 1 : 3 : id === "Coal" ? isLumberRace ? 0.25 : 0.15 : id === "Oil" ? 0.35 : 50, minRateOfChange = id === "Inferno" ? 50 : id === "Wood" || id === "Oil" || id === "Coal" ? 2 : 50, priorityValue = settings[`smelter_fuel_p_${id.toLowerCase()}`], priority = finite9(priorityValue) ?? FUEL_IDS.indexOf(id);
+    if (!Number.isFinite(priority)) return;
+    let costs = id === "Inferno" ? (() => {
+      let oil = readResource2(resources, "Oil"), infernite = readResource2(resources, "Infernite");
+      if (!(oil === void 0 || infernite === void 0))
+        return Object.freeze([
+          makeSmelterCost(resource, 50, 50, demand.isDemanded("Coal")),
+          makeSmelterCost(oil, 35, 50, demand.isDemanded("Oil")),
+          makeSmelterCost(infernite, 0.5, 50, demand.isDemanded("Infernite"))
+        ]);
+    })() : Object.freeze([
+      makeSmelterCost(
+        resource,
+        quantity,
+        minRateOfChange,
+        demand.isDemanded(resourceId)
+      )
+    ]);
+    if (costs !== void 0)
+      return Object.freeze({
+        id,
+        unlocked: !0,
+        isInfernoBeforeOil: priority === 0,
+        currentFuelCount: 0,
+        cost: costs
+      });
+  }
+  function readInput4(dependencies) {
+    let root = dependencies.rootState.readRoot(), city = readProperty(root, "city"), smelter = readProperty(city, "smelter"), resources = readProperty(root, "resource"), race = readProperty(root, "race"), tech = readProperty(root, "tech"), settings = readSettingRecord(dependencies.readSettings()), demand = dependencies.readDemand?.() ?? {
+      requestedQuantity: () => 0,
+      isDemanded: () => !1,
+      storageRequired: () => 1
+    };
+    if (!isRecord(smelter) || !isRecord(resources) || !isRecord(race) || !isRecord(tech) || race.steelen || dependencies.controls.resolve(SMELTER_CONTROL) === void 0)
+      return Object.freeze({ root, input: emptyInput6() });
+    let cap = readCount(smelter.cap), star = readCount(smelter.Star), ironCount = readCount(smelter.Iron), steelCount = readCount(smelter.Steel), iridiumCount = readCount(smelter.Iridium);
+    if (cap === void 0 || star === void 0 || ironCount === void 0 || steelCount === void 0 || iridiumCount === void 0 || star > cap)
+      return Object.freeze({ root, input: emptyInput6() });
+    let iron = readResource2(resources, "Iron"), steel = readResource2(resources, "Steel"), coal = readResource2(resources, "Coal"), titanium = readResource2(resources, "Titanium");
+    if (iron === void 0 || steel === void 0 || coal === void 0 || titanium === void 0)
+      return Object.freeze({ root, input: emptyInput6() });
+    let fuels = FUEL_IDS.map(
+      (id) => readFuel(id, resources, race, tech, settings, demand)
+    );
+    if (fuels.some((fuel) => fuel === void 0))
+      return Object.freeze({ root, input: emptyInput6() });
+    let withSmelterCounts = [...fuels].filter((fuel) => fuel !== void 0).sort(
+      (left, right) => (finite9(settings[`smelter_fuel_p_${left.id.toLowerCase()}`]) ?? FUEL_IDS.indexOf(left.id)) - (finite9(settings[`smelter_fuel_p_${right.id.toLowerCase()}`]) ?? FUEL_IDS.indexOf(right.id))
+    ).map(
+      (fuel, index, list) => Object.freeze({
+        ...fuel,
+        isInfernoBeforeOil: fuel.id === "Inferno" && list[index + 1]?.id === "Oil"
+      })
+    ).map(
+      (fuel) => Object.freeze({
+        ...fuel,
+        currentFuelCount: readCount(smelter[fuel.id]) ?? 0
+      })
+    ), requestedIron = demand.requestedQuantity("Iron"), requestedSteel = demand.requestedQuantity("Steel"), productionSmeltingIridium = finite9(settings.productionSmeltingIridium) ?? 0.5;
+    if (productionSmeltingIridium < 0)
+      return Object.freeze({ root, input: emptyInput6() });
+    let miner = readProperty(readProperty(root, "civic"), "miner"), ironShip = readProperty(readProperty(root, "space"), "iron_ship"), titaniumRatio = titanium.maximum > 0 ? titanium.amount / titanium.maximum : 1, input = Object.freeze({
+      initialised: !0,
+      hasForge: !!race.forge,
+      totalSmelters: cap - star,
+      extraOperating: star,
+      consumptionBalanceMin: 60,
+      fuels: Object.freeze(withSmelterCounts),
+      ironCount,
+      steelCount,
+      iridiumCount,
+      iridiumUnlocked: readResource2(resources, "Iridium")?.display === !0 && ((finite9(tech.m_smelting) ?? 0) >= 2 || !!tech.irid_smelting),
+      iridiumCapped: (() => {
+        let iridium = readResource2(resources, "Iridium");
+        return iridium === void 0 || iridium.maximum <= 0 ? !0 : iridium.amount + iridium.rate / 20 >= iridium.maximum;
+      })(),
+      productionSmeltingIridium,
+      productionSmelting: typeof settings.productionSmelting == "string" ? settings.productionSmelting : "required",
+      steelCost: Object.freeze([
+        makeSmelterCost(coal, 0.25, 1.25, demand.isDemanded("Coal")),
+        makeSmelterCost(iron, 2, 6, demand.isDemanded("Iron"))
+      ]),
+      ironTimeToFull: timeTo(iron, iron.maximum),
+      ironTimeToRequired: timeTo(iron, Math.max(iron.amount, requestedIron)),
+      ironDemanded: demand.isDemanded("Iron"),
+      steelTimeToFull: timeTo(steel, steel.maximum),
+      steelTimeToRequired: timeTo(steel, Math.max(steel.amount, requestedSteel)),
+      steelDemanded: demand.isDemanded("Steel"),
+      minerCount: readCount(readProperty(miner, "workers")) ?? 0,
+      beltIronShipStateOnCount: readCount(readProperty(ironShip, "on")) ?? 0,
+      titaniumStorageRatio: titaniumRatio,
+      haveTitaniumTech: (finite9(tech.titanium) ?? 0) > 0
+    });
+    return Object.freeze({ root, input });
+  }
+  function currentValue(root, id) {
+    let smelter = readProperty(readProperty(root, "city"), "smelter");
+    return isRecord(smelter) ? readCount(smelter[id]) : void 0;
+  }
+  function methodFor(kind, delta) {
+    return kind === "fuel" ? delta > 0 ? "addFuel" : "subFuel" : delta > 0 ? "addMetal" : "subMetal";
+  }
+  function createCapturedSmelterAutomation(dependencies) {
+    return Object.freeze({
+      run() {
+        let session = readInput4(dependencies), decision = planSmelter(session.input);
+        if (!session.input.initialised) return SUCCEEDED;
+        let adjustments = [
+          ...decision.fuelAdjustments.map((adjustment) => ({
+            kind: "fuel",
+            id: adjustment.fuelId,
+            expected: adjustment.expectedCurrentFuelCount,
+            delta: adjustment.delta
+          })),
+          ...decision.smeltAdjustments.map((adjustment) => ({
+            kind: "metal",
+            id: adjustment.productionId,
+            expected: adjustment.expectedCurrentCount,
+            delta: adjustment.delta
+          }))
+        ].filter((adjustment) => adjustment.delta !== 0);
+        if (adjustments.length === 0) return SUCCEEDED;
+        let handle = dependencies.controls.resolve(SMELTER_CONTROL);
+        if (handle === void 0 || adjustments.some(
+          (adjustment) => !handle.methods.includes(
+            methodFor(adjustment.kind, adjustment.delta)
+          )
+        ))
+          return rejected(
+            "captured-smelter-control-missing",
+            "captured iSmelter control lacks the required allocation method"
+          );
+        for (let adjustment of adjustments)
+          if (currentValue(session.root, adjustment.id) !== adjustment.expected)
+            return stale(
+              "captured-smelter-allocation-changed",
+              `${adjustment.id}: sampled allocation changed`
+            );
+        for (let kind of ["fuel", "metal"])
+          for (let sign of [-1, 1])
+            for (let adjustment of adjustments) {
+              if (adjustment.kind !== kind || Math.sign(adjustment.delta) !== sign)
+                continue;
+              let method = methodFor(kind, adjustment.delta);
+              for (let index = 0; index < Math.abs(adjustment.delta); index += 1) {
+                if (dependencies.rootState.readRoot() !== session.root)
+                  return stale(
+                    "captured-smelter-root-changed",
+                    "captured game root changed"
+                  );
+                let result = dependencies.controls.invoke(handle, method, [
+                  adjustment.id
+                ]);
+                if (!result.ok)
+                  return rejected(
+                    "captured-smelter-control-failed",
+                    result.detail ?? result.reason
+                  );
+              }
+            }
+        for (let adjustment of adjustments)
+          if (currentValue(session.root, adjustment.id) !== adjustment.expected + adjustment.delta)
+            return stale(
+              "captured-smelter-allocation-unchanged",
+              `${adjustment.id}: expected ${adjustment.expected + adjustment.delta}, actual ${currentValue(session.root, adjustment.id)}`
+            );
+        return SUCCEEDED;
+      }
+    });
+  }
+
   // src/domain/economy/production/factory.ts
   function setTooltip(tooltips, productionId, value) {
     tooltips.set(`iFactory${productionId}`, value);
@@ -8866,13 +9210,13 @@
   function finiteNonNegative4(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
   }
-  function finite9(value) {
+  function finite10(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
-  function readResource2(root, id) {
+  function readResource3(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id);
     if (!isRecord(resource)) return;
-    let amount = finiteNonNegative4(resource.amount), max = finite9(resource.max), diff = finite9(resource.diff);
+    let amount = finiteNonNegative4(resource.amount), max = finite10(resource.max), diff = finite10(resource.diff);
     if (!(amount === void 0 || max === void 0 || diff === void 0))
       return Object.freeze({
         amount,
@@ -8884,14 +9228,14 @@
       });
   }
   function readTechLevel2(root, id) {
-    let value = finite9(readProperty(readProperty(root, "tech"), id));
+    let value = finite10(readProperty(readProperty(root, "tech"), id));
     return value !== void 0 && value >= 0 ? value : 0;
   }
   function readFactoryRateLevel(root) {
-    let value = finite9(readProperty(readProperty(root, "tech"), "factory"));
+    let value = finite10(readProperty(readProperty(root, "tech"), "factory"));
     return value === void 0 || !Number.isSafeInteger(value) || value < 0 || value > 4 ? value === void 0 ? 0 : void 0 : value;
   }
-  function readSettingRecord(value) {
+  function readSettingRecord2(value) {
     return isRecord(value) ? value : {};
   }
   function readBooleanSetting(settings, key, fallback) {
@@ -8901,12 +9245,12 @@
   function readNumberSetting(settings, key, fallback) {
     let value = settings[key];
     if (value === void 0) return fallback;
-    let number = finite9(value);
+    let number = finite10(value);
     return number !== void 0 && number >= 0 ? number : void 0;
   }
   function readPrioritySetting(settings, key, fallback) {
     let value = settings[key];
-    return value === void 0 ? fallback : finite9(value);
+    return value === void 0 ? fallback : finite10(value);
   }
   function readCityFactory(root) {
     let city = readProperty(root, "city"), factory = readProperty(city, "factory");
@@ -8961,7 +9305,7 @@
   function readFullInput(root, captured, settingsValue, demand, readBuildTargets, buildCosts) {
     let rateLevel = readFactoryRateLevel(root);
     if (rateLevel === void 0) return;
-    let settings = readSettingRecord(settingsValue), weightingValue = settings.productionFactoryWeighting, weightingMode = weightingValue === void 0 ? "none" : weightingValue;
+    let settings = readSettingRecord2(settingsValue), weightingValue = settings.productionFactoryWeighting, weightingMode = weightingValue === void 0 ? "none" : weightingValue;
     if (typeof weightingMode != "string" || weightingMode !== "none" && weightingMode !== "demanded" && weightingMode !== "buildings")
       return;
     let buildingCosts = weightingMode === "buildings" ? readBuildingCosts2(readBuildTargets?.(), buildCosts) : void 0;
@@ -8984,7 +9328,7 @@
       if (enabled === void 0 || weighting === void 0 || priority === void 0)
         return;
       unlocked && !enabled && (maximum -= currentProduction);
-      let output = unlocked ? readResource2(root, spec.outputResourceId) : void 0;
+      let output = unlocked ? readResource3(root, spec.outputResourceId) : void 0;
       if (unlocked && output === void 0) return;
       let outputValue = output ?? Object.freeze({
         amount: 0,
@@ -9007,7 +9351,7 @@
       let costs = [];
       if (active)
         for (let costSpec of readProductCosts(root, spec)) {
-          let material = readResource2(root, costSpec.resourceId), quantity = costSpec.rates[rateLevel];
+          let material = readResource3(root, costSpec.resourceId), quantity = costSpec.rates[rateLevel];
           if (quantity === void 0) return;
           costs.push(
             Object.freeze({
@@ -9046,7 +9390,7 @@
     let bioseedConstruct = settings.prestigeType === "bioseed" && settings.prestigeBioseedConstruct === !0, truepath = !1, neutroniumCurrent = 0, neutroniumName = "Neutronium";
     if (bioseedConstruct && activeNano) {
       truepath = !!readProperty(readProperty(root, "race"), "truepath");
-      let neutronium = readResource2(root, "Neutronium");
+      let neutronium = readResource3(root, "Neutronium");
       if (neutronium === void 0) return;
       neutroniumCurrent = neutronium.amount, neutroniumName = neutronium.name;
     }
@@ -9075,7 +9419,7 @@
         productions: Object.freeze(partial)
       });
   }
-  function readInput4(root) {
+  function readInput5(root) {
     let city = readProperty(root, "city");
     if (!isRecord(city)) return;
     let factory = readProperty(city, "factory");
@@ -9112,7 +9456,7 @@
   }) {
     return Object.freeze({
       run() {
-        let root = rootState.readRoot(), input = readInput4(root);
+        let root = rootState.readRoot(), input = readInput5(root);
         if (root === void 0 || input === void 0) return SUCCEEDED;
         let fullInput = readFullInput(
           root,
@@ -9147,7 +9491,7 @@
                 "captured-factory-root-changed",
                 "captured game root changed"
               );
-            let current = readInput4(session.root), actual = current?.lines.find(
+            let current = readInput5(session.root), actual = current?.lines.find(
               (line) => line.id === adjustment.productionId
             )?.current, expected = adjustment.expectedCurrent + (method === "addItem" ? index : -index);
             if (current === void 0 || current.maximum !== session.input.maximum || actual !== expected)
@@ -9176,7 +9520,7 @@
           if (outcome !== void 0) return outcome;
         }
         if (fullInput !== void 0) {
-          let after = readInput4(session.root);
+          let after = readInput5(session.root);
           if (after === void 0 || after.maximum !== fullInput.maximum)
             return stale(
               "captured-factory-allocation-unchanged",
@@ -9240,7 +9584,7 @@
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
   var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
-  function finite10(value) {
+  function finite11(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readSettingsRecord(value) {
@@ -9251,7 +9595,7 @@
     return typeof value == "boolean" ? value : !0;
   }
   function craftPreserve(settings, id) {
-    let value = finite10(settings[`foundry_p_${id}`]);
+    let value = finite11(settings[`foundry_p_${id}`]);
     return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
   }
   function craftAllButtonRendered(getDocument, id) {
@@ -9277,7 +9621,7 @@
     if (!isRecord(resources)) return;
     let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
     for (let [resourceId, costPerCraft] of costs) {
-      let resource = readProperty(resources, resourceId), currentQuantity2 = finite10(readProperty(resource, "amount")), maxQuantity = finite10(readProperty(resource, "max")), rateOfChange = finite10(readProperty(resource, "diff"));
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite11(readProperty(resource, "amount")), maxQuantity = finite11(readProperty(resource, "max")), rateOfChange = finite11(readProperty(resource, "diff"));
       if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
         return;
       let base = {
@@ -9314,7 +9658,7 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite10(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite11(dependencies.readPeriods());
         return session = Object.freeze({
           root,
           demand: dependencies.readDemand(),
@@ -9332,7 +9676,7 @@
         let craftable = readProperty(
           readProperty(session.root, "resource"),
           craftableId
-        ), craftableAmount = finite10(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
+        ), craftableAmount = finite11(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
           dependencies,
           {
             ...session,
@@ -9381,7 +9725,7 @@
           "resource"
         );
         for (let spend of decision.spend) {
-          let actual = finite10(
+          let actual = finite11(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
@@ -9402,7 +9746,7 @@
         if (!result.ok)
           return rejected("craft-control-failed", result.detail ?? result.reason);
         for (let spend of decision.spend) {
-          let actual = finite10(
+          let actual = finite11(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
@@ -9816,7 +10160,27 @@
       result.outcome.status !== "succeeded" && logError(
         `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
-    }, factoryDiscoveryAttempted = !1, ensureFactoryControls = () => {
+    }, factoryDiscoveryAttempted = !1, smelterDiscoveryAttempted = !1, ensureSmelterControls = () => {
+      if (pageCapture2.controls.resolve(SMELTER_CONTROL) !== void 0) return;
+      let city = readProperty(pageCapture2.rootState.readRoot(), "city"), smelterState = readProperty(city, "smelter"), race = readProperty(pageCapture2.rootState.readRoot(), "race"), count = readProperty(smelterState, "count"), exempt = !!readProperty(race, "cataclysm") || !!readProperty(race, "orbit_decayed") || !!readProperty(
+        readProperty(pageCapture2.rootState.readRoot(), "tech"),
+        "isolation"
+      ) || !!readProperty(race, "warlord");
+      if ((typeof count != "number" || !Number.isFinite(count) || count < 1) && !exempt || smelterDiscoveryAttempted || (smelterDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      if (govTabs === void 0) return;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 2
+        }),
+        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `smelter discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
+    }, ensureFactoryControls = () => {
       if (pageCapture2.controls.resolve(FACTORY_CONTROL) !== void 0) return;
       let city = readProperty(pageCapture2.rootState.readRoot(), "city"), factoryState = readProperty(city, "factory"), count = readProperty(factoryState, "count");
       if (typeof count != "number" || !Number.isFinite(count) || count < 1 || factoryDiscoveryAttempted || (factoryDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
@@ -9859,6 +10223,11 @@
     }, powerProducers = createCapturedPowerProducerAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
+    }), smelter = createCapturedSmelterAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage),
+      readDemand: () => readDemand()
     }), factory = createCapturedFactoryAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -9885,7 +10254,7 @@
             structureCount2("tauceti", "mining_ship") >= 1
           ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run());
           let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
-          autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoFactory") && (ensureFactoryControls(), factory.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoSmelter") && (ensureSmelterControls(), smelter.run()), isEnabled(settings, "autoFactory") && (ensureFactoryControls(), factory.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }

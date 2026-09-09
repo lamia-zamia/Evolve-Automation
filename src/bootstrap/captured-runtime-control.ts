@@ -40,6 +40,10 @@ import {
 } from "../adapters/evolve/economy/resources/captured-production-ratios.ts";
 import { createCapturedPowerProducerAutomation } from "../adapters/evolve/economy/production/captured-power-producers.ts";
 import {
+  createCapturedSmelterAutomation,
+  SMELTER_CONTROL,
+} from "../adapters/evolve/economy/production/captured-smelter.ts";
+import {
   createCapturedFactoryAutomation,
   FACTORY_CONTROL,
 } from "../adapters/evolve/economy/production/captured-factory.ts";
@@ -451,6 +455,49 @@ export function startCapturedRuntime({
   };
 
   let factoryDiscoveryAttempted = false;
+  let smelterDiscoveryAttempted = false;
+  const ensureSmelterControls = () => {
+    if (pageCapture.controls.resolve(SMELTER_CONTROL) !== undefined) return;
+    const city = readProperty(pageCapture.rootState.readRoot(), "city");
+    const smelterState = readProperty(city, "smelter");
+    const race = readProperty(pageCapture.rootState.readRoot(), "race");
+    const count = readProperty(smelterState, "count");
+    const exempt =
+      Boolean(readProperty(race, "cataclysm")) ||
+      Boolean(readProperty(race, "orbit_decayed")) ||
+      Boolean(
+        readProperty(
+          readProperty(pageCapture.rootState.readRoot(), "tech"),
+          "isolation",
+        ),
+      ) ||
+      Boolean(readProperty(race, "warlord"));
+    if (
+      (typeof count !== "number" || !Number.isFinite(count) || count < 1) &&
+      !exempt
+    ) {
+      return;
+    }
+    if (smelterDiscoveryAttempted) return;
+    smelterDiscoveryAttempted = true;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    if (govTabs === undefined) return;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 2,
+      }),
+      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `smelter discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+
   const ensureFactoryControls = () => {
     if (pageCapture.controls.resolve(FACTORY_CONTROL) !== undefined) return;
     const city = readProperty(pageCapture.rootState.readRoot(), "city");
@@ -521,6 +568,12 @@ export function startCapturedRuntime({
   const powerProducers = createCapturedPowerProducerAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+  });
+  const smelter = createCapturedSmelterAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
   });
   const factory = createCapturedFactoryAutomation({
     rootState: pageCapture.rootState,
@@ -618,6 +671,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoPower")) {
         ensureCityControls();
         powerProducers.run();
+      }
+      if (isEnabled(settings, "autoSmelter")) {
+        ensureSmelterControls();
+        smelter.run();
       }
       if (isEnabled(settings, "autoFactory")) {
         ensureFactoryControls();
