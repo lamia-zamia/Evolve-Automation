@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { createCapturedJobControls } from "../src/adapters/evolve/civic/captured-job-controls.ts";
+import {
+  createCapturedJobControls,
+  executeCapturedJobDecision,
+} from "../src/adapters/evolve/civic/captured-job-controls.ts";
 
 const calls = [];
 const handles = new Map([
@@ -10,6 +13,22 @@ const handles = new Map([
       generation: 1,
       methods: ["add", "sub", "setDefault"],
     },
+  ],
+  [
+    "civ-hunter",
+    {
+      elementId: "civ-hunter",
+      generation: 1,
+      methods: ["add", "sub", "setDefault"],
+    },
+  ],
+  [
+    "servant-farmer",
+    { elementId: "servant-farmer", generation: 1, methods: ["add", "sub"] },
+  ],
+  [
+    "servant-hunter",
+    { elementId: "servant-hunter", generation: 1, methods: ["add", "sub"] },
   ],
   ["foundry", { elementId: "foundry", generation: 2, methods: ["add", "sub"] }],
 ]);
@@ -60,5 +79,47 @@ assert.equal(
   controls.assign({ elementId: "civ-farmer", count: Infinity }),
   false,
 );
+
+calls.length = 0;
+assert.deepEqual(
+  executeCapturedJobDecision(
+    controls,
+    {
+      manageServants: true,
+      jobs: [
+        { token: 1, id: "farmer", workers: 3, servants: 2, serves: true },
+        { token: 2, id: "hunter", workers: 1, servants: 0, serves: true },
+      ],
+    },
+    {
+      kind: "assign-jobs",
+      assignments: [
+        { jobToken: 1, workers: 1, servants: 1 },
+        { jobToken: 2, workers: 2, servants: 2 },
+      ],
+      selectedDefaultToken: 2,
+      moraleIncomeAdjusted: false,
+      ironIncomeAdjusted: false,
+      maximumSpaceMiners: 0,
+      lastPopulationCount: 0,
+      lastFarmerCount: 1,
+      authorityEntertainerCap: null,
+      clearAuthorityEntertainerCap: false,
+      craftWinner: null,
+      craftDebugMessage: null,
+      authorityDebugMessage: null,
+    },
+  ),
+  { status: "succeeded" },
+);
+assert.deepEqual(calls, [
+  { elementId: "civ-farmer", method: "sub", args: [] },
+  { elementId: "civ-farmer", method: "sub", args: [] },
+  { elementId: "civ-hunter", method: "add", args: [] },
+  { elementId: "servant-farmer", method: "sub", args: [] },
+  { elementId: "servant-hunter", method: "add", args: [] },
+  { elementId: "servant-hunter", method: "add", args: [] },
+  { elementId: "civ-hunter", method: "setDefault", args: ["hunter"] },
+]);
 
 console.log("captured-job-controls ok");
