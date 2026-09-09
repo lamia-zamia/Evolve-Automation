@@ -284,6 +284,7 @@ interface FullJobsSession {
 function craftJob(
   job: Readonly<JobsJobInput>,
   token: number,
+  servants: number,
 ): Readonly<JobsJobInput> {
   // Foundry workers are a separate pool. Keeping them out of the planner's ordinary worker sum
   // prevents the same worker from being counted once as a craftsman and again as a civic worker;
@@ -293,8 +294,9 @@ function craftJob(
     token,
     workers: 0,
     count: 0,
+    servants,
     crafting: true,
-    serves: false,
+    serves: true,
   });
 }
 
@@ -325,8 +327,10 @@ function readFullCycle(
   );
   if (
     foundry === undefined ||
-    foundry.input.skilledServantsMaximum > 0 ||
-    foundry.input.jobs.length !== foundry.input.crafting.length
+    foundry.input.jobs.length !== foundry.input.crafting.length ||
+    foundry.skilledSamples.some(
+      (sample) => !foundry.input.jobs.some((job) => job.id === sample.id),
+    )
   ) {
     return undefined;
   }
@@ -346,8 +350,11 @@ function readFullCycle(
   const noCraft = Boolean(readProperty(readProperty(root, "race"), "no_craft"));
   const baseToken =
     Math.max(-1, ...ordinary.input.jobs.map((job) => job.token)) + 1;
+  const skilledById = new Map(
+    foundry.skilledSamples.map((sample) => [sample.id, sample.servants]),
+  );
   const craftJobs = foundry.input.jobs.map((job, index) =>
-    craftJob(job, baseToken + index),
+    craftJob(job, baseToken + index, skilledById.get(job.id) ?? 0),
   );
   const crafting = foundry.input.crafting.map((craft, index) =>
     Object.freeze({ ...craft, jobToken: baseToken + index }),
@@ -360,6 +367,7 @@ function readFullCycle(
     craftsmenMode,
     foundryWeighting,
     craftsmenMaximum: foundry.input.craftsmenMaximum,
+    skilledServantsMaximum: foundry.skilledMaximum,
     jobs: Object.freeze([...ordinary.input.jobs, ...craftJobs]),
     crafting: Object.freeze(crafting),
   });
@@ -380,7 +388,13 @@ function executeFullDecision(
   const foundry = new Map(
     session.foundry.input.jobs.map((job, index) => [
       session.input.jobs[session.ordinaryJobs.length + index]!.token,
-      { id: job.id, workers: job.workers },
+      {
+        id: job.id,
+        workers: session.foundry.samples[index]?.workers ?? job.workers,
+        servants:
+          session.foundry.skilledSamples.find((sample) => sample.id === job.id)
+            ?.servants ?? 0,
+      },
     ]),
   );
   const workerRemovals: Array<
@@ -389,6 +403,8 @@ function executeFullDecision(
   const workerAdditions: Array<
     readonly ["ordinary" | "foundry", string, number]
   > = [];
+  const servantRemovals: Array<readonly [string, number]> = [];
+  const servantAdditions: Array<readonly [string, number]> = [];
   for (const assignment of decision.assignments) {
     const ordinaryJob = ordinary.get(assignment.jobToken);
     const foundryJob = foundry.get(assignment.jobToken);
@@ -404,11 +420,16 @@ function executeFullDecision(
     const delta = assignment.workers - current;
     if (delta < 0) workerRemovals.push([kind, id, -delta]);
     if (delta > 0) workerAdditions.push([kind, id, delta]);
-    if (assignment.servants !== 0) {
+    if (ordinaryJob !== undefined && assignment.servants !== 0) {
       return rejected(
         "unsupported-full-servant-assignment",
         "full jobs does not execute skilled-servant assignments",
       );
+    }
+    if (foundryJob !== undefined) {
+      const servantDelta = assignment.servants - foundryJob.servants;
+      if (servantDelta < 0) servantRemovals.push([id, -servantDelta]);
+      if (servantDelta > 0) servantAdditions.push([id, servantDelta]);
     }
   }
   const selectedDefault =
@@ -444,6 +465,32 @@ function executeFullDecision(
   for (const [kind, id, count] of workerAdditions) {
     if (!invoke(kind, id, "assign", count))
       return rejected("full-job-control-failed", `could not assign ${id}`);
+  }
+  for (const [id, count] of servantRemovals) {
+    if (
+      !controls.unassign({
+        elementId: `scraft${id}`,
+        count,
+        craftedResourceId: id,
+      })
+    )
+      return rejected(
+        "full-servant-control-failed",
+        `could not unassign skilled servants from ${id}`,
+      );
+  }
+  for (const [id, count] of servantAdditions) {
+    if (
+      !controls.assign({
+        elementId: `scraft${id}`,
+        count,
+        craftedResourceId: id,
+      })
+    )
+      return rejected(
+        "full-servant-control-failed",
+        `could not assign skilled servants to ${id}`,
+      );
   }
   if (
     selectedDefault !== undefined &&
@@ -633,6 +680,10 @@ export function createCapturedFullJobsAutomation({
         currentFoundry === undefined ||
         JSON.stringify(currentFoundry.samples) !==
           JSON.stringify(session.foundry.samples) ||
+        JSON.stringify(currentFoundry.skilledSamples) !==
+          JSON.stringify(session.foundry.skilledSamples) ||
+        currentFoundry.skilledMaximum !== session.foundry.skilledMaximum ||
+        currentFoundry.skilledUsed !== session.foundry.skilledUsed ||
         JSON.stringify(currentFoundry.input.crafting) !==
           JSON.stringify(session.foundry.input.crafting)
       ) {
@@ -691,6 +742,22 @@ export function createCapturedFullJobsAutomation({
               "full-jobs-controls-incomplete",
               `missing ${method} control for ${elementId}`,
             );
+          }
+        }
+        if (ordinaryJob === undefined) {
+          const skilledWorkers =
+            session.foundry.skilledSamples.find(
+              (sample) => sample.id === job.id,
+            )?.servants ?? 0;
+          if (assignment.servants !== skilledWorkers) {
+            const method = assignment.servants < skilledWorkers ? "sub" : "add";
+            if (!methods.get(`scraft${job.id}`)?.has(method)) {
+              sessionRef.value = undefined;
+              return rejected(
+                "full-jobs-controls-incomplete",
+                `missing ${method} control for scraft${job.id}`,
+              );
+            }
           }
         }
       }

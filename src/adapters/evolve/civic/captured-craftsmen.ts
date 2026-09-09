@@ -78,6 +78,11 @@ interface DefaultJobState {
   readonly workers: number;
 }
 
+interface SkilledCraftSample {
+  readonly id: string;
+  readonly servants: number;
+}
+
 interface CraftsmenSession {
   readonly root: unknown;
   readonly input: JobsCycleInput;
@@ -91,6 +96,9 @@ export interface CapturedCraftsmenCycleSample {
   readonly samples: readonly Readonly<CraftSample>[];
   readonly workerPool: number;
   readonly defaultJob: DefaultJobState | undefined;
+  readonly skilledSamples: readonly Readonly<SkilledCraftSample>[];
+  readonly skilledMaximum: number;
+  readonly skilledUsed: number;
 }
 
 function finiteNumber(value: unknown, fallback: number): number {
@@ -156,6 +164,39 @@ function readProducts(root: unknown): readonly CraftSample[] {
       ? [{ id, workers, buildingCapacity: readProductionCapacity(foundry, id) }]
       : [];
   });
+}
+
+function readSkilledCraftsmen(root: unknown):
+  | {
+      readonly samples: readonly Readonly<SkilledCraftSample>[];
+      readonly maximum: number;
+      readonly used: number;
+    }
+  | undefined {
+  const servants = readProperty(readProperty(root, "race"), "servants");
+  if (servants === undefined || servants === false) {
+    return Object.freeze({ samples: Object.freeze([]), maximum: 0, used: 0 });
+  }
+  if (!isRecord(servants)) return undefined;
+  const jobs = readProperty(servants, "sjobs");
+  const maximum = finiteNumber(readProperty(servants, "smax"), -1);
+  const used = finiteNumber(readProperty(servants, "sused"), -1);
+  if (!isRecord(jobs) || maximum < 0 || used < 0) return undefined;
+  const samples = FOUNDRY_PRODUCTS.slice(0, 8).flatMap((id) => {
+    const value = readProperty(jobs, id);
+    if (value === undefined) return [];
+    return typeof value === "number" && Number.isFinite(value) && value >= 0
+      ? [{ id, servants: value }]
+      : [];
+  });
+  const assigned = samples.reduce((sum, sample) => sum + sample.servants, 0);
+  return assigned === used
+    ? Object.freeze({
+        samples: Object.freeze(samples),
+        maximum,
+        used,
+      })
+    : undefined;
 }
 
 function readCraftsmanState(
@@ -365,7 +406,22 @@ export function readCapturedCraftsmenCycle(
   readJobCatalog: () => CapturedJobCatalog | undefined,
   readDemand?: () => CapturedDemandSample,
 ): CapturedCraftsmenCycleSample | undefined {
-  return readCycleInput(root, settingsValue, costs, readJobCatalog, readDemand);
+  const sampled = readCycleInput(
+    root,
+    settingsValue,
+    costs,
+    readJobCatalog,
+    readDemand,
+  );
+  const skilled = readSkilledCraftsmen(root);
+  return sampled === undefined || skilled === undefined
+    ? undefined
+    : Object.freeze({
+        ...sampled,
+        skilledSamples: skilled.samples,
+        skilledMaximum: skilled.maximum,
+        skilledUsed: skilled.used,
+      });
 }
 
 function decisionsMatch(

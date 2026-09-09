@@ -131,7 +131,16 @@ const fullRoot = {
       rcap: {},
     },
   },
-  race: {},
+  race: {
+    servants: {
+      jobs: {},
+      sjobs: { Plywood: 1 },
+      max: 0,
+      used: 0,
+      smax: 1,
+      sused: 1,
+    },
+  },
   resource: {
     Population: { amount: 4, max: 10 },
     Plywood: { amount: 100 },
@@ -141,21 +150,34 @@ const fullRoot = {
 };
 const fullCalls = [];
 const fullControls = {
-  capturedElementIds: () => ["civ-unemployed", "civ-farmer", "foundry"],
+  capturedElementIds: () => [
+    "civ-unemployed",
+    "civ-farmer",
+    "foundry",
+    "scraftPlywood",
+    "scraftBrick",
+  ],
   resolve: (elementId) =>
-    elementId === "foundry" || elementId.startsWith("civ-")
+    elementId === "foundry" ||
+    elementId.startsWith("civ-") ||
+    elementId.startsWith("scraft")
       ? {
           elementId,
           generation: 1,
           methods:
-            elementId === "foundry"
+            elementId === "foundry" || elementId.startsWith("scraft")
               ? ["add", "sub"]
               : ["add", "sub", "setDefault"],
         }
       : undefined,
   invoke: (handle, method, args = []) => {
     fullCalls.push({ elementId: handle.elementId, method, args });
-    if (handle.elementId === "foundry") {
+    if (handle.elementId.startsWith("scraft")) {
+      const id = args[0];
+      fullRoot.race.servants.sjobs[id] =
+        (fullRoot.race.servants.sjobs[id] ?? 0) + (method === "add" ? 1 : -1);
+      fullRoot.race.servants.sused += method === "add" ? 1 : -1;
+    } else if (handle.elementId === "foundry") {
       const id = args[0];
       fullRoot.city.foundry[id] += method === "add" ? 1 : -1;
       fullRoot.city.foundry.crafting += method === "add" ? 1 : -1;
@@ -203,6 +225,10 @@ assert.equal(fullAutomation.executor.execute(fullDecision).status, "succeeded");
 assert.equal(fullRoot.city.foundry.Brick, 2);
 assert.equal(
   fullCalls.some(({ elementId }) => elementId === "foundry"),
+  true,
+);
+assert.equal(
+  fullCalls.some(({ elementId }) => elementId.startsWith("scraft")),
   true,
 );
 

@@ -5325,6 +5325,23 @@
       return isRecord(resource) && typeof workers == "number" && Number.isFinite(workers) && workers >= 0 ? [{ id, workers, buildingCapacity: readProductionCapacity(foundry, id) }] : [];
     });
   }
+  function readSkilledCraftsmen(root) {
+    let servants = readProperty(readProperty(root, "race"), "servants");
+    if (servants === void 0 || servants === !1)
+      return Object.freeze({ samples: Object.freeze([]), maximum: 0, used: 0 });
+    if (!isRecord(servants)) return;
+    let jobs = readProperty(servants, "sjobs"), maximum = finiteNumber2(readProperty(servants, "smax"), -1), used = finiteNumber2(readProperty(servants, "sused"), -1);
+    if (!isRecord(jobs) || maximum < 0 || used < 0) return;
+    let samples = FOUNDRY_PRODUCTS.slice(0, 8).flatMap((id) => {
+      let value = readProperty(jobs, id);
+      return value === void 0 ? [] : typeof value == "number" && Number.isFinite(value) && value >= 0 ? [{ id, servants: value }] : [];
+    });
+    return samples.reduce((sum, sample) => sum + sample.servants, 0) === used ? Object.freeze({
+      samples: Object.freeze(samples),
+      maximum,
+      used
+    }) : void 0;
+  }
   function readCraftsmanState(root, foundry, assignedWorkers) {
     let civic = readProperty(root, "civic"), craftsman = readProperty(civic, "craftsman"), maximumValue = readProperty(foundry, "cap"), fallbackMaximum = readProperty(craftsman, "max"), workersValue = readProperty(craftsman, "workers"), foundryWorkers = readProperty(foundry, "crafting"), maximum = finiteNumber2(
       maximumValue,
@@ -5464,7 +5481,19 @@
     });
   }
   function readCapturedCraftsmenCycle(root, settingsValue, costs, readJobCatalog, readDemand) {
-    return readCycleInput(root, settingsValue, costs, readJobCatalog, readDemand);
+    let sampled3 = readCycleInput(
+      root,
+      settingsValue,
+      costs,
+      readJobCatalog,
+      readDemand
+    ), skilled = readSkilledCraftsmen(root);
+    return sampled3 === void 0 || skilled === void 0 ? void 0 : Object.freeze({
+      ...sampled3,
+      skilledSamples: skilled.samples,
+      skilledMaximum: skilled.maximum,
+      skilledUsed: skilled.used
+    });
   }
   function decisionsMatch(left, right) {
     return JSON.stringify(left) === JSON.stringify(right);
@@ -5845,14 +5874,15 @@
         })
       });
   }
-  function craftJob(job, token) {
+  function craftJob(job, token, servants) {
     return Object.freeze({
       ...job,
       token,
       workers: 0,
       count: 0,
+      servants,
       crafting: !0,
-      serves: !1
+      serves: !0
     });
   }
   function readFullCycle(root, settingsValue, catalogReader, costs, readDemand) {
@@ -5865,10 +5895,14 @@
       catalogReader,
       readDemand
     );
-    if (foundry === void 0 || foundry.input.skilledServantsMaximum > 0 || foundry.input.jobs.length !== foundry.input.crafting.length)
+    if (foundry === void 0 || foundry.input.jobs.length !== foundry.input.crafting.length || foundry.skilledSamples.some(
+      (sample) => !foundry.input.jobs.some((job) => job.id === sample.id)
+    ))
       return;
-    let settings = isRecord(settingsValue) ? settingsValue : {}, modeValue = settings.productionCraftsmen, craftsmenMode = modeValue === "always" || modeValue === "nocraft" || modeValue === "servants" ? modeValue : "other", weightingValue = settings.productionFoundryWeighting, foundryWeighting = weightingValue === "buildings" || weightingValue === "demanded" ? weightingValue : "other", noCraft = !!readProperty(readProperty(root, "race"), "no_craft"), baseToken = Math.max(-1, ...ordinary.input.jobs.map((job) => job.token)) + 1, craftJobs = foundry.input.jobs.map(
-      (job, index) => craftJob(job, baseToken + index)
+    let settings = isRecord(settingsValue) ? settingsValue : {}, modeValue = settings.productionCraftsmen, craftsmenMode = modeValue === "always" || modeValue === "nocraft" || modeValue === "servants" ? modeValue : "other", weightingValue = settings.productionFoundryWeighting, foundryWeighting = weightingValue === "buildings" || weightingValue === "demanded" ? weightingValue : "other", noCraft = !!readProperty(readProperty(root, "race"), "no_craft"), baseToken = Math.max(-1, ...ordinary.input.jobs.map((job) => job.token)) + 1, skilledById = new Map(
+      foundry.skilledSamples.map((sample) => [sample.id, sample.servants])
+    ), craftJobs = foundry.input.jobs.map(
+      (job, index) => craftJob(job, baseToken + index, skilledById.get(job.id) ?? 0)
     ), crafting = foundry.input.crafting.map(
       (craft, index) => Object.freeze({ ...craft, jobToken: baseToken + index })
     ), input = Object.freeze({
@@ -5878,6 +5912,7 @@
       craftsmenMode,
       foundryWeighting,
       craftsmenMaximum: foundry.input.craftsmenMaximum,
+      skilledServantsMaximum: foundry.skilledMaximum,
       jobs: Object.freeze([...ordinary.input.jobs, ...craftJobs]),
       crafting: Object.freeze(crafting)
     });
@@ -5892,9 +5927,13 @@
     let ordinary = new Map(session.ordinaryJobs.map((job) => [job.token, job])), foundry = new Map(
       session.foundry.input.jobs.map((job, index) => [
         session.input.jobs[session.ordinaryJobs.length + index].token,
-        { id: job.id, workers: job.workers }
+        {
+          id: job.id,
+          workers: session.foundry.samples[index]?.workers ?? job.workers,
+          servants: session.foundry.skilledSamples.find((sample) => sample.id === job.id)?.servants ?? 0
+        }
       ])
-    ), workerRemovals = [], workerAdditions = [];
+    ), workerRemovals = [], workerAdditions = [], servantRemovals = [], servantAdditions = [];
     for (let assignment of decision.assignments) {
       let ordinaryJob = ordinary.get(assignment.jobToken), foundryJob = foundry.get(assignment.jobToken);
       if (ordinaryJob === void 0 && foundryJob === void 0)
@@ -5903,11 +5942,15 @@
           "full jobs decision contains an unknown token"
         );
       let current = ordinaryJob?.workers ?? foundryJob.workers, kind = ordinaryJob === void 0 ? "foundry" : "ordinary", id = ordinaryJob?.id ?? foundryJob.id, delta = assignment.workers - current;
-      if (delta < 0 && workerRemovals.push([kind, id, -delta]), delta > 0 && workerAdditions.push([kind, id, delta]), assignment.servants !== 0)
+      if (delta < 0 && workerRemovals.push([kind, id, -delta]), delta > 0 && workerAdditions.push([kind, id, delta]), ordinaryJob !== void 0 && assignment.servants !== 0)
         return rejected(
           "unsupported-full-servant-assignment",
           "full jobs does not execute skilled-servant assignments"
         );
+      if (foundryJob !== void 0) {
+        let servantDelta = assignment.servants - foundryJob.servants;
+        servantDelta < 0 && servantRemovals.push([id, -servantDelta]), servantDelta > 0 && servantAdditions.push([id, servantDelta]);
+      }
     }
     let selectedDefault = decision.selectedDefaultToken === null ? void 0 : ordinary.get(decision.selectedDefaultToken);
     if (decision.selectedDefaultToken !== null && selectedDefault === void 0)
@@ -5929,6 +5972,26 @@
     for (let [kind, id, count] of workerAdditions)
       if (!invoke(kind, id, "assign", count))
         return rejected("full-job-control-failed", `could not assign ${id}`);
+    for (let [id, count] of servantRemovals)
+      if (!controls.unassign({
+        elementId: `scraft${id}`,
+        count,
+        craftedResourceId: id
+      }))
+        return rejected(
+          "full-servant-control-failed",
+          `could not unassign skilled servants from ${id}`
+        );
+    for (let [id, count] of servantAdditions)
+      if (!controls.assign({
+        elementId: `scraft${id}`,
+        count,
+        craftedResourceId: id
+      }))
+        return rejected(
+          "full-servant-control-failed",
+          `could not assign skilled servants to ${id}`
+        );
     return selectedDefault !== void 0 && !controls.setDefault({
       elementId: `civ-${selectedDefault.id}`,
       jobId: selectedDefault.id
@@ -6045,7 +6108,7 @@
           catalogReader,
           readDemand
         );
-        if (currentCatalog === void 0 || JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog) || currentFoundry === void 0 || JSON.stringify(currentFoundry.samples) !== JSON.stringify(session.foundry.samples) || JSON.stringify(currentFoundry.input.crafting) !== JSON.stringify(session.foundry.input.crafting))
+        if (currentCatalog === void 0 || JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog) || currentFoundry === void 0 || JSON.stringify(currentFoundry.samples) !== JSON.stringify(session.foundry.samples) || JSON.stringify(currentFoundry.skilledSamples) !== JSON.stringify(session.foundry.skilledSamples) || currentFoundry.skilledMaximum !== session.foundry.skilledMaximum || currentFoundry.skilledUsed !== session.foundry.skilledUsed || JSON.stringify(currentFoundry.input.crafting) !== JSON.stringify(session.foundry.input.crafting))
           return sessionRef.value = void 0, stale(
             "full-jobs-state-changed",
             "ordinary or foundry state changed"
@@ -6077,6 +6140,19 @@
                 "full-jobs-controls-incomplete",
                 `missing ${method} control for ${elementId}`
               );
+          }
+          if (ordinaryJob === void 0) {
+            let skilledWorkers = session.foundry.skilledSamples.find(
+              (sample) => sample.id === job.id
+            )?.servants ?? 0;
+            if (assignment.servants !== skilledWorkers) {
+              let method = assignment.servants < skilledWorkers ? "sub" : "add";
+              if (!methods.get(`scraft${job.id}`)?.has(method))
+                return sessionRef.value = void 0, rejected(
+                  "full-jobs-controls-incomplete",
+                  `missing ${method} control for scraft${job.id}`
+                );
+            }
           }
         }
         return decision.selectedDefaultToken !== null && !methods.get(
