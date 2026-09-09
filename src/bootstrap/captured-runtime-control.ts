@@ -516,6 +516,8 @@ export function startCapturedRuntime({
   const factory = createCapturedFactoryAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
   });
 
   const runCycle = () => {

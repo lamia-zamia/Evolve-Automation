@@ -69,6 +69,12 @@ const automation = createCapturedFactoryAutomation({
       return { ok: true, value: undefined };
     },
   },
+  readSettings: () => ({}),
+  readDemand: () => ({
+    requestedQuantity: () => 0,
+    isDemanded: () => false,
+    storageRequired: () => 1,
+  }),
 });
 assert.deepEqual(automation.run(), { status: "succeeded" });
 assert.deepEqual(calls, [["subItem", "Lux"]]);
@@ -81,6 +87,12 @@ const missingControl = createCapturedFactoryAutomation({
     resolve: () => undefined,
     invoke: () => ({ ok: false, reason: "unknown-control" }),
   },
+  readSettings: () => ({}),
+  readDemand: () => ({
+    requestedQuantity: () => 0,
+    isDemanded: () => false,
+    storageRequired: () => 1,
+  }),
 });
 root.city.factory.Furs = 3;
 assert.equal(missingControl.run().status, "rejected");
@@ -96,11 +108,101 @@ const laterFactory = createCapturedFactoryAutomation({
     resolve: () => undefined,
     invoke: () => ({ ok: false, reason: "unknown-control" }),
   },
+  readSettings: () => ({}),
+  readDemand: () => ({
+    requestedQuantity: () => 0,
+    isDemanded: () => false,
+    storageRequired: () => 1,
+  }),
 });
 assert.deepEqual(
   laterFactory.run(),
   { status: "succeeded" },
   "full weighted capacity remains unavailable when a later-region factory exists",
 );
+
+const productIds = [
+  "Money",
+  "Furs",
+  "Alloy",
+  "Polymer",
+  "Nano_Tube",
+  "Stanene",
+];
+const materialIds = [
+  "Copper",
+  "Aluminium",
+  "Oil",
+  "Lumber",
+  "Coal",
+  "Neutronium",
+];
+const fullRoot = {
+  city: {
+    factory: {
+      count: 1,
+      on: 2,
+      Lux: 0,
+      Furs: 0,
+      Alloy: 0,
+      Polymer: 0,
+      Nano: 0,
+      Stanene: 0,
+    },
+  },
+  tech: {
+    factory: 0,
+    synthetic_fur: 1,
+    polymer: 1,
+    nano: 1,
+    stanene: 1,
+  },
+  race: {},
+  resource: Object.fromEntries(
+    [...productIds, ...materialIds].map((id) => [
+      id,
+      { amount: 1000, max: 10000, diff: 100, display: true, name: id },
+    ]),
+  ),
+};
+const fullSettings = {
+  productionFactoryWeighting: "none",
+  production_Lux: false,
+  production_Furs: false,
+  production_Alloy: true,
+  production_Polymer: false,
+  production_Nano: false,
+  production_Stanene: false,
+  production_w_Alloy: 1,
+  production_p_Alloy: 3,
+};
+const fullCalls = [];
+const fullAutomation = createCapturedFactoryAutomation({
+  rootState: { readRoot: () => fullRoot },
+  controls: {
+    capturedElementIds: () => [FACTORY_CONTROL],
+    resolve: (elementId) =>
+      elementId === FACTORY_CONTROL
+        ? { elementId, generation: 1, methods: ["addItem", "subItem"] }
+        : undefined,
+    invoke: (_handle, method, args) => {
+      fullCalls.push([method, ...args]);
+      fullRoot.city.factory[args[0]] += method === "addItem" ? 1 : -1;
+      return { ok: true, value: undefined };
+    },
+  },
+  readSettings: () => fullSettings,
+  readDemand: () => ({
+    requestedQuantity: () => 0,
+    isDemanded: () => false,
+    storageRequired: () => 1,
+  }),
+});
+assert.deepEqual(fullAutomation.run(), { status: "succeeded" });
+assert.deepEqual(fullCalls, [
+  ["addItem", "Alloy"],
+  ["addItem", "Alloy"],
+]);
+assert.equal(fullRoot.city.factory.Alloy, 2);
 
 console.log("captured-factory ok");

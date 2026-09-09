@@ -8208,6 +8208,136 @@
     });
   }
 
+  // src/domain/economy/production/factory.ts
+  function setTooltip(tooltips, productionId, value) {
+    tooltips.set(`iFactory${productionId}`, value);
+  }
+  function appendTooltip(tooltips, productionId, value) {
+    let key = `iFactory${productionId}`;
+    tooltips.set(key, (tooltips.get(key) ?? "") + value);
+  }
+  function planFactory(input) {
+    if (!input.initialized) return null;
+    let tooltips = /* @__PURE__ */ new Map(), priorityGroups = /* @__PURE__ */ new Map(), targets = /* @__PURE__ */ new Map();
+    for (let production of input.productions)
+      if (setTooltip(tooltips, production.id, "Disabled<br>"), production.unlocked && production.enabled) {
+        if (production.weighting > 0) {
+          let priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
+          if (priority !== 0) {
+            let group = priorityGroups.get(priority) ?? [];
+            group.push(production), priorityGroups.set(priority, group), setTooltip(tooltips, production.id, "Low priority<br>");
+          }
+        }
+        targets.set(production.id, 0);
+      }
+    let priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group), supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      let supplementaryIndex = priorityList.indexOf(supplementary);
+      priorityList.splice(supplementaryIndex, 1), priorityList[0]?.push(...supplementary);
+    }
+    let onDemand = input.weightingMode === "demanded" && input.productions.some(
+      (production) => production.currentQuantity < production.storageRequired
+    ), scaledWeights = /* @__PURE__ */ new Map();
+    for (let production of input.productions) {
+      let scale = input.weightingMode === "buildings" && input.hasUnlockedBuildings ? production.buildingWeight : input.weightingMode === "demanded" && onDemand ? production.currentQuantity < production.storageRequired ? 1 : 0 : 1;
+      scaledWeights.set(
+        production.outputResourceId,
+        production.weighting * scale
+      );
+    }
+    let remaining = input.maximum;
+    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
+      let products = [...priorityList[groupIndex] ?? []].sort(
+        (left, right) => (scaledWeights.get(left.outputResourceId) ?? 0) - (scaledWeights.get(right.outputResourceId) ?? 0)
+      );
+      for (; remaining > 0; ) {
+        let beforeDistribution = remaining, totalWeight = products.reduce(
+          (sum, production) => sum + (scaledWeights.get(production.outputResourceId) ?? 0),
+          0
+        );
+        for (let index = products.length - 1; index >= 0 && remaining > 0; index--) {
+          let production = products[index];
+          if (production === void 0) continue;
+          setTooltip(tooltips, production.id, "");
+          let calculated = Math.min(
+            remaining,
+            Math.max(
+              1,
+              Math.floor(
+                beforeDistribution / totalWeight * (scaledWeights.get(production.outputResourceId) ?? 0)
+              )
+            )
+          ), actual = calculated;
+          production.useful || (actual = 0, appendTooltip(tooltips, production.id, "Resource capped<br>"));
+          for (let cost of production.costs)
+            if (cost.unlocked) {
+              if (!production.demanded) {
+                if (!input.useDemandedMaterials && cost.demanded) {
+                  actual = 0, appendTooltip(
+                    tooltips,
+                    production.id,
+                    `${cost.name} is demanded<br>`
+                  );
+                  break;
+                }
+                if (cost.storageRatio < input.minimumIngredientRatio) {
+                  actual = 0, appendTooltip(
+                    tooltips,
+                    production.id,
+                    `${cost.name} under min materials ratio<br>`
+                  );
+                  break;
+                }
+              }
+              if (cost.currentQuantity < actual * cost.quantity * input.consumptionBalanceMinimum + cost.minRateOfChange || cost.demanded) {
+                let previousCost = production.currentProduction * cost.quantity, currentCost = (targets.get(production.id) ?? 0) * cost.quantity, rate = cost.rateOfChange + previousCost - currentCost - cost.minRateOfChange;
+                production.demanded && (rate += cost.currentQuantity);
+                let affordable = Math.floor(rate / cost.quantity);
+                affordable < 1 && appendTooltip(
+                  tooltips,
+                  production.id,
+                  `Too low ${cost.name} income<br>`
+                ), actual = Math.min(actual, affordable);
+              }
+            }
+          if (input.bioseedConstruct && production.isNanoTube && input.neutroniumCurrent < (input.truepath ? 500 : 250)) {
+            let reserved = input.truepath ? 500 : 250;
+            appendTooltip(
+              tooltips,
+              production.id,
+              `${reserved} ${input.neutroniumName} reserved<br>`
+            ), actual = 0;
+          }
+          actual > 0 && (remaining -= actual, targets.set(
+            production.id,
+            (targets.get(production.id) ?? 0) + actual
+          )), actual < calculated && products.splice(index, 1);
+        }
+        if (beforeDistribution === remaining) break;
+      }
+    }
+    return Object.freeze({
+      expectedMaximum: input.maximum,
+      adjustments: Object.freeze(
+        input.productions.flatMap(
+          (production) => targets.has(production.id) ? [
+            Object.freeze({
+              productionId: production.id,
+              outputResourceId: production.outputResourceId,
+              expectedCurrent: production.currentProduction,
+              delta: (targets.get(production.id) ?? 0) - production.currentProduction
+            })
+          ] : []
+        )
+      ),
+      tooltips: Object.freeze(
+        [...tooltips.entries()].map(
+          ([key, value]) => Object.freeze({ key, value })
+        )
+      )
+    });
+  }
+
   // src/domain/economy/production/captured-factory.ts
   var CAPTURED_FACTORY_LINES = Object.freeze([
     "Lux",
@@ -8240,9 +8370,287 @@
     ["surface", "crater_factory"],
     ["tauceti", "tau_factory"],
     ["space", "industrial_complex"]
-  ]);
+  ]), PRODUCT_SPECS = Object.freeze([
+    Object.freeze({
+      id: "Lux",
+      outputResourceId: "Money",
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Furs",
+          rates: Object.freeze([2, 3, 4, 5, 6]),
+          minRateOfChange: 5
+        })
+      ])
+    }),
+    Object.freeze({
+      id: "Furs",
+      outputResourceId: "Furs",
+      unlockTech: "synthetic_fur",
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Money",
+          rates: Object.freeze([10, 15, 20, 25, 30]),
+          minRateOfChange: 1e3
+        }),
+        Object.freeze({
+          resourceId: "Polymer",
+          rates: Object.freeze([1.5, 2.25, 3, 3.75, 4.5]),
+          minRateOfChange: 10
+        })
+      ])
+    }),
+    Object.freeze({
+      id: "Alloy",
+      outputResourceId: "Alloy",
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Copper",
+          rates: Object.freeze([0.75, 1.12, 1.49, 1.86, 2.23]),
+          minRateOfChange: 5
+        }),
+        Object.freeze({
+          resourceId: "Aluminium",
+          rates: Object.freeze([1, 1.5, 2, 2.5, 3]),
+          minRateOfChange: 5
+        })
+      ])
+    }),
+    Object.freeze({
+      id: "Polymer",
+      outputResourceId: "Polymer",
+      unlockTech: "polymer",
+      costs: Object.freeze([])
+    }),
+    Object.freeze({
+      id: "Nano",
+      outputResourceId: "Nano_Tube",
+      unlockTech: "nano",
+      isNanoTube: !0,
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Coal",
+          rates: Object.freeze([8, 12, 16, 20, 24]),
+          minRateOfChange: 15
+        }),
+        Object.freeze({
+          resourceId: "Neutronium",
+          rates: Object.freeze([0.05, 0.075, 0.1, 0.125, 0.15]),
+          minRateOfChange: 0.2
+        })
+      ])
+    }),
+    Object.freeze({
+      id: "Stanene",
+      outputResourceId: "Stanene",
+      unlockTech: "stanene",
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Aluminium",
+          rates: Object.freeze([30, 45, 60, 75, 90]),
+          minRateOfChange: 50
+        }),
+        Object.freeze({
+          resourceId: "Nano_Tube",
+          rates: Object.freeze([0.02, 0.03, 0.04, 0.05, 0.06]),
+          minRateOfChange: 5
+        })
+      ])
+    })
+  ]), DEFAULT_WEIGHTINGS = Object.freeze({
+    Lux: 1,
+    Furs: 1,
+    Alloy: 1,
+    Polymer: 1,
+    Nano: 4,
+    Stanene: 4
+  }), DEFAULT_PRIORITIES = Object.freeze({
+    Lux: 2,
+    Furs: 1,
+    Alloy: 3,
+    Polymer: 3,
+    Nano: 3,
+    Stanene: 3
+  });
   function finiteNonNegative3(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
+  }
+  function finite9(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readResource2(root, id) {
+    let resource = readProperty(readProperty(root, "resource"), id);
+    if (!isRecord(resource)) return;
+    let amount = finiteNonNegative3(resource.amount), max = finite9(resource.max), diff = finite9(resource.diff);
+    if (!(amount === void 0 || max === void 0 || diff === void 0))
+      return Object.freeze({
+        amount,
+        max,
+        diff,
+        storageRatio: max > 0 ? amount / max : 0,
+        name: typeof resource.name == "string" ? resource.name : id,
+        unlocked: !!resource.display
+      });
+  }
+  function readTechLevel2(root, id) {
+    let value = finite9(readProperty(readProperty(root, "tech"), id));
+    return value !== void 0 && value >= 0 ? value : 0;
+  }
+  function readFactoryRateLevel(root) {
+    let value = finite9(readProperty(readProperty(root, "tech"), "factory"));
+    return value === void 0 || !Number.isSafeInteger(value) || value < 0 || value > 4 ? value === void 0 ? 0 : void 0 : value;
+  }
+  function readSettingRecord(value) {
+    return isRecord(value) ? value : {};
+  }
+  function readBooleanSetting(settings, key, fallback) {
+    let value = settings[key];
+    return value === void 0 ? fallback : typeof value == "boolean" ? value : void 0;
+  }
+  function readNumberSetting(settings, key, fallback) {
+    let value = settings[key];
+    if (value === void 0) return fallback;
+    let number = finite9(value);
+    return number !== void 0 && number >= 0 ? number : void 0;
+  }
+  function readPrioritySetting(settings, key, fallback) {
+    let value = settings[key];
+    return value === void 0 ? fallback : finite9(value);
+  }
+  function readCityFactory(root) {
+    let city = readProperty(root, "city"), factory = readProperty(city, "factory");
+    return isRecord(factory) ? factory : void 0;
+  }
+  function readPolymerCosts(root) {
+    let race = readProperty(root, "race"), coalSpecies = !!readProperty(race, "kindling_kindred") || !!readProperty(race, "smoldering") || !!readProperty(race, "iceage");
+    return Object.freeze(coalSpecies ? [
+      Object.freeze({
+        resourceId: "Oil",
+        rates: Object.freeze([0.22, 0.33, 0.44, 0.55, 0.66]),
+        minRateOfChange: 2
+      })
+    ] : [
+      Object.freeze({
+        resourceId: "Oil",
+        rates: Object.freeze([0.18, 0.27, 0.36, 0.45, 0.54]),
+        minRateOfChange: 2
+      }),
+      Object.freeze({
+        resourceId: "Lumber",
+        rates: Object.freeze([15, 22, 29, 36, 43]),
+        minRateOfChange: 50
+      })
+    ]);
+  }
+  function readProductCosts(root, spec) {
+    return spec.id === "Polymer" ? readPolymerCosts(root) : spec.costs;
+  }
+  function readFullInput(root, captured, settingsValue, demand) {
+    let rateLevel = readFactoryRateLevel(root);
+    if (rateLevel === void 0) return;
+    let settings = readSettingRecord(settingsValue), weightingValue = settings.productionFactoryWeighting, weightingMode = weightingValue === void 0 ? "none" : weightingValue;
+    if (typeof weightingMode != "string" || weightingMode !== "none" && weightingMode !== "demanded" || readCityFactory(root) === void 0) return;
+    let currentById = new Map(
+      captured.lines.map((line) => [line.id, line.current])
+    ), partial = [], maximum = captured.maximum, activeNano = !1;
+    for (let spec of PRODUCT_SPECS) {
+      let currentProduction = currentById.get(spec.id);
+      if (currentProduction === void 0) return;
+      let unlocked = spec.unlockTech === void 0 || readTechLevel2(root, spec.unlockTech) > 0, enabled = readBooleanSetting(settings, `production_${spec.id}`, !0), weighting = readNumberSetting(
+        settings,
+        `production_w_${spec.id}`,
+        DEFAULT_WEIGHTINGS[spec.id]
+      ), priority = readPrioritySetting(
+        settings,
+        `production_p_${spec.id}`,
+        DEFAULT_PRIORITIES[spec.id]
+      );
+      if (enabled === void 0 || weighting === void 0 || priority === void 0)
+        return;
+      unlocked && !enabled && (maximum -= currentProduction);
+      let output = unlocked ? readResource2(root, spec.outputResourceId) : void 0;
+      if (unlocked && output === void 0) return;
+      let outputValue = output ?? Object.freeze({
+        amount: 0,
+        max: 0,
+        diff: 0,
+        storageRatio: 0,
+        name: spec.outputResourceId,
+        unlocked: !1
+      }), demanded = unlocked ? demand.isDemanded(spec.outputResourceId) : !1, storageRequired = unlocked ? demand.storageRequired(spec.outputResourceId) : 1;
+      if (!Number.isFinite(storageRequired) || storageRequired < 0)
+        return;
+      let effectivePriority = demanded ? Math.max(priority, 100) : priority, active = maximum > 0 && unlocked && enabled && weighting > 0 && effectivePriority !== 0;
+      active && spec.isNanoTube && (activeNano = !0);
+      let costs = [];
+      if (active)
+        for (let costSpec of readProductCosts(root, spec)) {
+          let material = readResource2(root, costSpec.resourceId), quantity = costSpec.rates[rateLevel];
+          if (quantity === void 0) return;
+          costs.push(
+            Object.freeze({
+              resourceId: costSpec.resourceId,
+              name: material?.name ?? costSpec.resourceId,
+              unlocked: material?.unlocked === !0,
+              demanded: material?.unlocked === !0 ? demand.isDemanded(costSpec.resourceId) : !1,
+              currentQuantity: material?.amount ?? 0,
+              rateOfChange: material?.diff ?? 0,
+              storageRatio: material?.storageRatio ?? 0,
+              quantity,
+              minRateOfChange: costSpec.minRateOfChange
+            })
+          );
+        }
+      partial.push(
+        Object.freeze({
+          id: spec.id,
+          outputResourceId: spec.outputResourceId,
+          unlocked,
+          enabled,
+          weighting,
+          priority,
+          demanded,
+          useful: outputValue.storageRatio < 0.99 || demanded,
+          currentQuantity: outputValue.amount,
+          storageRequired,
+          buildingWeight: 100,
+          currentProduction: unlocked && enabled ? currentProduction : 0,
+          isNanoTube: spec.isNanoTube === !0,
+          costs: Object.freeze(costs)
+        })
+      );
+    }
+    if (!Number.isSafeInteger(maximum) || maximum < 0) return;
+    let bioseedConstruct = settings.prestigeType === "bioseed" && settings.prestigeBioseedConstruct === !0, truepath = !1, neutroniumCurrent = 0, neutroniumName = "Neutronium";
+    if (bioseedConstruct && activeNano) {
+      truepath = !!readProperty(readProperty(root, "race"), "truepath");
+      let neutronium = readResource2(root, "Neutronium");
+      if (neutronium === void 0) return;
+      neutroniumCurrent = neutronium.amount, neutroniumName = neutronium.name;
+    }
+    let minimumIngredientRatio = partial.some(
+      (production) => production.unlocked && production.enabled && production.weighting > 0 && production.priority !== 0
+    ) ? readNumberSetting(settings, "productionFactoryMinIngredients", 0) : 0;
+    if (minimumIngredientRatio === void 0) return;
+    let useDemandedMaterials = readBooleanSetting(
+      settings,
+      "useDemanded",
+      !0
+    );
+    if (useDemandedMaterials !== void 0)
+      return Object.freeze({
+        initialized: !0,
+        maximum,
+        weightingMode,
+        hasUnlockedBuildings: !1,
+        useDemandedMaterials,
+        minimumIngredientRatio,
+        consumptionBalanceMinimum: 60,
+        bioseedConstruct,
+        truepath,
+        neutroniumCurrent,
+        neutroniumName,
+        productions: Object.freeze(partial)
+      });
   }
   function readInput4(root) {
     let city = readProperty(root, "city");
@@ -8283,35 +8691,89 @@
   }
   function createCapturedFactoryAutomation({
     rootState,
-    controls
+    controls,
+    readSettings,
+    readDemand
   }) {
     return Object.freeze({
       run() {
         let root = rootState.readRoot(), input = readInput4(root);
         if (root === void 0 || input === void 0) return SUCCEEDED;
-        let session = Object.freeze({ root, input }), adjustments = planCapturedFactoryTrim(session.input);
+        let fullInput = readFullInput(
+          root,
+          input,
+          readSettings(),
+          readDemand()
+        ), session = Object.freeze({ root, input, fullInput }), adjustments = (fullInput === void 0 ? void 0 : planFactory(fullInput))?.adjustments.filter((adjustment) => adjustment.delta !== 0) ?? planCapturedFactoryTrim(session.input).map(
+          (adjustment) => Object.freeze({
+            productionId: adjustment.id,
+            outputResourceId: adjustment.id,
+            expectedCurrent: session.input.lines.find((line) => line.id === adjustment.id)?.current ?? 0,
+            delta: adjustment.delta
+          })
+        );
         if (adjustments.length === 0) return SUCCEEDED;
-        let handle = controls.resolve(FACTORY_CONTROL);
-        if (handle === void 0 || !handle.methods.includes("subItem"))
+        let handle = controls.resolve(FACTORY_CONTROL), needsDecrease = adjustments.some(
+          (adjustment) => adjustment.delta < 0
+        ), needsIncrease = adjustments.some(
+          (adjustment) => adjustment.delta > 0
+        );
+        if (handle === void 0 || needsDecrease && !handle.methods.includes("subItem") || needsIncrease && !handle.methods.includes("addItem"))
           return rejected(
             "captured-factory-control-missing",
-            "no captured iFactory subItem control"
+            "captured iFactory control lacks the required allocation method"
           );
-        for (let adjustment of adjustments) {
-          let count = -adjustment.delta;
+        let invoke = (method, adjustment, count) => {
           for (let index = 0; index < count; index += 1) {
             if (rootState.readRoot() !== session.root)
               return stale(
                 "captured-factory-root-changed",
                 "captured game root changed"
               );
-            let result = controls.invoke(handle, "subItem", [adjustment.id]);
+            let current = readInput4(session.root), actual = current?.lines.find(
+              (line) => line.id === adjustment.productionId
+            )?.current, expected = adjustment.expectedCurrent + (method === "addItem" ? index : -index);
+            if (current === void 0 || current.maximum !== session.input.maximum || actual !== expected)
+              return stale(
+                "captured-factory-allocation-changed",
+                "factory allocation changed"
+              );
+            let result = controls.invoke(handle, method, [
+              adjustment.productionId
+            ]);
             if (!result.ok)
               return rejected(
                 "captured-factory-control-failed",
                 result.detail ?? result.reason
               );
           }
+        };
+        for (let adjustment of adjustments) {
+          if (adjustment.delta >= 0) continue;
+          let outcome = invoke("subItem", adjustment, -adjustment.delta);
+          if (outcome !== void 0) return outcome;
+        }
+        for (let adjustment of adjustments) {
+          if (adjustment.delta <= 0) continue;
+          let outcome = invoke("addItem", adjustment, adjustment.delta);
+          if (outcome !== void 0) return outcome;
+        }
+        if (fullInput !== void 0) {
+          let after = readInput4(session.root);
+          if (after === void 0 || after.maximum !== fullInput.maximum)
+            return stale(
+              "captured-factory-allocation-unchanged",
+              "factory allocation did not reach the planned capacity"
+            );
+          for (let adjustment of adjustments)
+            if (after.lines.find(
+              (line) => line.id === adjustment.productionId
+            )?.current !== adjustment.expectedCurrent + adjustment.delta)
+              return stale(
+                "captured-factory-allocation-unchanged",
+                "factory allocation did not reach the planned allocation"
+              );
+          return SUCCEEDED;
         }
         let remaining = totalAssigned(session.root);
         return remaining === void 0 || remaining > session.input.maximum ? stale(
@@ -8361,7 +8823,7 @@
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
   var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
-  function finite9(value) {
+  function finite10(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readSettingsRecord(value) {
@@ -8372,7 +8834,7 @@
     return typeof value == "boolean" ? value : !0;
   }
   function craftPreserve(settings, id) {
-    let value = finite9(settings[`foundry_p_${id}`]);
+    let value = finite10(settings[`foundry_p_${id}`]);
     return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
   }
   function craftAllButtonRendered(getDocument, id) {
@@ -8398,7 +8860,7 @@
     if (!isRecord(resources)) return;
     let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
     for (let [resourceId, costPerCraft] of costs) {
-      let resource = readProperty(resources, resourceId), currentQuantity2 = finite9(readProperty(resource, "amount")), maxQuantity = finite9(readProperty(resource, "max")), rateOfChange = finite9(readProperty(resource, "diff"));
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite10(readProperty(resource, "amount")), maxQuantity = finite10(readProperty(resource, "max")), rateOfChange = finite10(readProperty(resource, "diff"));
       if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
         return;
       let base = {
@@ -8435,7 +8897,7 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite9(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite10(dependencies.readPeriods());
         return session = Object.freeze({
           root,
           demand: dependencies.readDemand(),
@@ -8453,7 +8915,7 @@
         let craftable = readProperty(
           readProperty(session.root, "resource"),
           craftableId
-        ), craftableAmount = finite9(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
+        ), craftableAmount = finite10(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
           dependencies,
           {
             ...session,
@@ -8502,7 +8964,7 @@
           "resource"
         );
         for (let spend of decision.spend) {
-          let actual = finite9(
+          let actual = finite10(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
@@ -8523,7 +8985,7 @@
         if (!result.ok)
           return rejected("craft-control-failed", result.detail ?? result.reason);
         for (let spend of decision.spend) {
-          let actual = finite9(
+          let actual = finite10(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
@@ -8974,7 +9436,9 @@
       controls: pageCapture2.controls
     }), factory = createCapturedFactoryAutomation({
       rootState: pageCapture2.rootState,
-      controls: pageCapture2.controls
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage),
+      readDemand: () => readDemand()
     }), runCycle = () => {
       demandThisCycle = void 0;
       let settings = readStoredSettings(storage);
