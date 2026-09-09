@@ -265,4 +265,60 @@ assert.equal(unsubscribeCount, 1);
   assert.deepEqual(invoked, ["city-farm"]);
 }
 
+// autoPower reaches the captured city producer control without requiring the legacy manager.
+{
+  const root = {
+    city: {
+      powered: true,
+      power: -1,
+      mill: { count: 2, on: 0 },
+    },
+  };
+  const invoked = [];
+  let cycle;
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: {
+        resolve: (id) =>
+          id === "city-mill"
+            ? { elementId: id, generation: 1, methods: ["power_on"] }
+            : undefined,
+        invoke: (handle, method) => {
+          invoked.push(`${handle.elementId}.${method}`);
+          root.city.mill.on += 1;
+          root.city.power = 1;
+          return { ok: true, value: undefined };
+        },
+        capturedElementIds: () => ["city-mill"],
+      },
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: { getElementById: () => null, querySelectorAll: () => [] },
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({ masterScriptToggle: true, autoPower: true }),
+    },
+    logError: () => {},
+  });
+  cycle({ periods: 1 });
+  stopCycle();
+  assert.deepEqual(invoked, ["city-mill.power_on"]);
+  assert.equal(root.city.mill.on, 1);
+}
+
 console.log("captured-runtime-control ok");
