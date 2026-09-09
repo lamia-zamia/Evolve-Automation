@@ -223,6 +223,27 @@ const staleDecision = planJobs(staleInput);
 staleRoot.city.foundry.Plywood = 1;
 assert.equal(staleAdapter.executor.execute(staleDecision).status, "stale");
 
+const demandStaleRoot = makeRoot();
+const demandStaleControls = controlsFor(demandStaleRoot);
+let demandStale = false;
+const demandStaleAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(demandStaleRoot),
+  controls: demandStaleControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+  readDemand: () => ({
+    isDemanded: (id) => demandStale && id === "Plywood",
+    storageRequired: () => 1,
+    requestedQuantity: () => 0,
+  }),
+});
+const demandStaleDecision = planJobs(demandStaleAdapter.reader.readCycle(true));
+demandStale = true;
+assert.equal(
+  demandStaleAdapter.executor.execute(demandStaleDecision).status,
+  "stale",
+);
+
 const poolRoot = makeRoot();
 const poolControls = controlsFor(poolRoot);
 const poolAdapter = createCapturedCraftsmenAutomation({

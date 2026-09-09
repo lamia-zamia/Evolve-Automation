@@ -5497,6 +5497,18 @@
           session.samples.reduce((sum, sample) => sum + sample.workers, 0)
         ).workers !== session.workerPool)
           return stale("craftsmen-pool-changed", "craftsman worker pool changed");
+        let currentInput = readCycleInput(
+          session.root,
+          dependencies.readSettings(),
+          dependencies.costs,
+          readJobCatalog,
+          dependencies.readDemand
+        )?.input;
+        if (currentInput === void 0 || JSON.stringify(currentInput.crafting) !== JSON.stringify(session.input.crafting))
+          return stale(
+            "crafting-input-changed",
+            "crafting quantities or demand changed"
+          );
         let currentDefaultJob = readDefaultJobState(readJobCatalog);
         if (currentDefaultJob?.id !== session.defaultJob?.id || currentDefaultJob?.workers !== session.defaultJob?.workers)
           return stale(

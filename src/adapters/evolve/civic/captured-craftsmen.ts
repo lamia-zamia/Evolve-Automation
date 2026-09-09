@@ -400,6 +400,22 @@ function createExecutor(
       ).workers;
       if (currentWorkerPool !== session.workerPool)
         return stale("craftsmen-pool-changed", "craftsman worker pool changed");
+      const currentInput = readCycleInput(
+        session.root,
+        dependencies.readSettings(),
+        dependencies.costs,
+        readJobCatalog,
+        dependencies.readDemand,
+      )?.input;
+      if (
+        currentInput === undefined ||
+        JSON.stringify(currentInput.crafting) !==
+          JSON.stringify(session.input.crafting)
+      )
+        return stale(
+          "crafting-input-changed",
+          "crafting quantities or demand changed",
+        );
       const currentDefaultJob = readDefaultJobState(readJobCatalog);
       if (
         currentDefaultJob?.id !== session.defaultJob?.id ||
