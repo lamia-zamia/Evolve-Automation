@@ -4508,6 +4508,9 @@
   function finiteNonNegative(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
   }
+  function finiteNumber(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
   function finiteMaximum(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= -1 ? value : void 0;
   }
@@ -4526,7 +4529,7 @@
   function hasRaceFlag(race, key) {
     return !!readProperty(race, key);
   }
-  function readSmartMaximum(root, id, smart, count, readDemand) {
+  function readSmartMaximum(root, id, smart, settings, count, readDemand) {
     if (!smart) return null;
     if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
     if (id === "torturer") return readTorturerSmartMaximum(root);
@@ -4534,6 +4537,8 @@
     if (id === "scientist") return readScientistSmartMaximum(root, count);
     if (id === "professor") return readProfessorSmartMaximum(root);
     if (id === "banker") return readBankerSmartMaximum(root, readDemand);
+    if (id === "cement_worker")
+      return readCementWorkerSmartMaximum(root, settings, count, readDemand);
     if (id !== "teamster") return null;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
@@ -4632,6 +4637,31 @@
     );
     if (!(amount === void 0 || maximum === void 0 || taxRate === void 0 || banking === void 0))
       return banking >= 7 ? null : amount >= maximum || taxRate <= 0 ? 0 : readDemand === void 0 ? null : amount >= readDemand().storageRequired("Money") ? 0 : null;
+  }
+  function resourceStorageRatio(root, id) {
+    let resource = readProperty(readProperty(root, "resource"), id), amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finiteNumber(readProperty(resource, "max"));
+    if (!(amount === void 0 || maximum === void 0))
+      return maximum > 0 ? amount / maximum : 1;
+  }
+  function resourceDiff(root, id) {
+    return finiteNumber(
+      readProperty(readProperty(readProperty(root, "resource"), id), "diff")
+    );
+  }
+  function readCementWorkerSmartMaximum(root, settings, count, readDemand) {
+    let stoneRatio = resourceStorageRatio(root, "Stone"), stoneDiff = resourceDiff(root, "Stone"), cementRatio = resourceStorageRatio(root, "Cement");
+    if (stoneRatio === void 0 || stoneDiff === void 0 || cementRatio === void 0 || !(cementRatio < 0.99 || readDemand?.().isDemanded("Cement") === !0)) return;
+    let maximum = Number.MAX_SAFE_INTEGER;
+    if (stoneRatio < 0.1) {
+      let stoneRate = stoneDiff + count * 3 - 5;
+      if (hasRaceFlag(readProperty(root, "race"), "smoldering") && readProperty(settings, "autoQuarry") === !0) {
+        let chrysotileDiff = resourceDiff(root, "Chrysotile");
+        if (chrysotileDiff === void 0) return;
+        stoneRate += chrysotileDiff;
+      }
+      maximum = Math.min(maximum, Math.floor(stoneRate / 3));
+    }
+    return maximum;
   }
   function readStorageBackedMinimum(root, id, workers, display) {
     let rawTech = readProperty(root, "tech"), tech = isRecord(rawTech) ? rawTech : void 0, banking = optionalFiniteNumber(tech, "banking");
@@ -4874,6 +4904,7 @@
         root,
         id,
         smart,
+        settings,
         workers + servantInput.count * servantModifier,
         readDemand
       );
@@ -5043,7 +5074,7 @@
     "Super_Fuel",
     "Thermite"
   ], DEFAULT_PRODUCT_SETTING = !0, DEFAULT_WEIGHTING = 1;
-  function finiteNumber(value, fallback) {
+  function finiteNumber2(value, fallback) {
     return typeof value == "number" && Number.isFinite(value) ? value : fallback;
   }
   function settingBoolean(settings, key) {
@@ -5055,7 +5086,7 @@
   }
   function productWeighting(settings, id) {
     let value = settings[`foundry_w_${id}`];
-    return finiteNumber(value, DEFAULT_WEIGHTING) > 0 ? finiteNumber(value, DEFAULT_WEIGHTING) : DEFAULT_WEIGHTING;
+    return finiteNumber2(value, DEFAULT_WEIGHTING) > 0 ? finiteNumber2(value, DEFAULT_WEIGHTING) : DEFAULT_WEIGHTING;
   }
   function readFoundry(root) {
     let city = readProperty(root, "city"), foundry = readProperty(city, "foundry");
@@ -5073,12 +5104,12 @@
     });
   }
   function readCraftsmanState(root, foundry, assignedWorkers) {
-    let civic = readProperty(root, "civic"), craftsman = readProperty(civic, "craftsman"), maximumValue = readProperty(foundry, "cap"), fallbackMaximum = readProperty(craftsman, "max"), workersValue = readProperty(craftsman, "workers"), foundryWorkers = readProperty(foundry, "crafting"), maximum = finiteNumber(
+    let civic = readProperty(root, "civic"), craftsman = readProperty(civic, "craftsman"), maximumValue = readProperty(foundry, "cap"), fallbackMaximum = readProperty(craftsman, "max"), workersValue = readProperty(craftsman, "workers"), foundryWorkers = readProperty(foundry, "crafting"), maximum = finiteNumber2(
       maximumValue,
-      finiteNumber(fallbackMaximum, assignedWorkers)
-    ), workers = finiteNumber(
+      finiteNumber2(fallbackMaximum, assignedWorkers)
+    ), workers = finiteNumber2(
       workersValue,
-      finiteNumber(foundryWorkers, assignedWorkers)
+      finiteNumber2(foundryWorkers, assignedWorkers)
     );
     return Object.freeze({
       maximum: maximum >= 0 ? maximum : assignedWorkers,
@@ -5151,7 +5182,7 @@
         affordability: readAffordability(root, sample.id, costs),
         demanded: !1,
         useful: !1,
-        currentQuantity: finiteNumber(readProperty(resource, "amount"), 0),
+        currentQuantity: finiteNumber2(readProperty(resource, "amount"), 0),
         weighting: productWeighting(settings, sample.id),
         driver: null,
         exclusion: null

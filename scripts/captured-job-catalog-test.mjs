@@ -763,6 +763,48 @@ assert.equal(
   "Banker smart mode keeps bankers while the captured Money storage requirement is unmet",
 );
 
+const cementWorkerReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { smoldering: 1 },
+      resource: {
+        Stone: { amount: 5, max: 100, diff: -2 },
+        Chrysotile: { amount: 20, max: 100, diff: 1 },
+        Cement: { amount: 20, max: 100, diff: 0 },
+      },
+      civic: {
+        ...root.civic,
+        d_job: "cement_worker",
+        cement_worker: {
+          job: "cement_worker",
+          assigned: 4,
+          workers: 4,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-cement_worker"],
+  },
+  readSettings: () => ({ job_s_cement_worker: true, autoQuarry: true }),
+  readDemand: () => ({
+    requestedQuantity: () => 0,
+    isDemanded: (id) => id === "Cement",
+    storageRequired: () => 1,
+  }),
+});
+assert.equal(
+  cementWorkerReader().jobs[0].smartMaximum,
+  2,
+  "Cement Worker uses captured Stone and Smoldering quarry rates while Cement is useful",
+);
+
 const servantReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

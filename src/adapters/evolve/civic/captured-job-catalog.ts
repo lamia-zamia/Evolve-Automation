@@ -101,6 +101,12 @@ function finiteNonNegative(value: unknown): number | undefined {
     : undefined;
 }
 
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
 function finiteMaximum(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= -1
     ? value
@@ -146,6 +152,7 @@ function readSmartMaximum(
   root: unknown,
   id: string,
   smart: boolean,
+  settings: Record<PropertyKey, unknown> | undefined,
   count: number,
   readDemand?: () => CapturedDemandSample,
 ): number | null | undefined {
@@ -156,6 +163,9 @@ function readSmartMaximum(
   if (id === "scientist") return readScientistSmartMaximum(root, count);
   if (id === "professor") return readProfessorSmartMaximum(root);
   if (id === "banker") return readBankerSmartMaximum(root, readDemand);
+  if (id === "cement_worker") {
+    return readCementWorkerSmartMaximum(root, settings, count, readDemand);
+  }
   if (id !== "teamster") return null;
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
@@ -385,6 +395,57 @@ function readBankerSmartMaximum(
   if (amount >= maximum || taxRate <= 0) return 0;
   if (readDemand === undefined) return null;
   return amount >= readDemand().storageRequired("Money") ? 0 : null;
+}
+
+function resourceStorageRatio(root: unknown, id: string): number | undefined {
+  const resource = readProperty(readProperty(root, "resource"), id);
+  const amount = finiteNonNegative(readProperty(resource, "amount"));
+  const maximum = finiteNumber(readProperty(resource, "max"));
+  if (amount === undefined || maximum === undefined) return undefined;
+  return maximum > 0 ? amount / maximum : 1;
+}
+
+function resourceDiff(root: unknown, id: string): number | undefined {
+  return finiteNumber(
+    readProperty(readProperty(readProperty(root, "resource"), id), "diff"),
+  );
+}
+
+function readCementWorkerSmartMaximum(
+  root: unknown,
+  settings: Record<PropertyKey, unknown> | undefined,
+  count: number,
+  readDemand?: () => CapturedDemandSample,
+): number | undefined {
+  const stoneRatio = resourceStorageRatio(root, "Stone");
+  const stoneDiff = resourceDiff(root, "Stone");
+  const cementRatio = resourceStorageRatio(root, "Cement");
+  if (
+    stoneRatio === undefined ||
+    stoneDiff === undefined ||
+    cementRatio === undefined
+  ) {
+    return undefined;
+  }
+  const cementUseful =
+    cementRatio < 0.99 || readDemand?.().isDemanded("Cement") === true;
+  // A full, non-demanded Cement store may still be useful because of an eject/supply modifier;
+  // its fallback also needs per-source production, which the DeadSpace root does not capture.
+  if (!cementUseful) return undefined;
+  let maximum = Number.MAX_SAFE_INTEGER;
+  if (stoneRatio < 0.1) {
+    let stoneRate = stoneDiff + count * 3 - 5;
+    if (
+      hasRaceFlag(readProperty(root, "race"), "smoldering") &&
+      readProperty(settings, "autoQuarry") === true
+    ) {
+      const chrysotileDiff = resourceDiff(root, "Chrysotile");
+      if (chrysotileDiff === undefined) return undefined;
+      stoneRate += chrysotileDiff;
+    }
+    maximum = Math.min(maximum, Math.floor(stoneRate / 3));
+  }
+  return maximum;
 }
 
 function readStorageBackedMinimum(
@@ -736,6 +797,7 @@ function readCatalog(
       root,
       id,
       smart,
+      settings,
       workers + servantInput.count * servantModifier,
       readDemand,
     );
