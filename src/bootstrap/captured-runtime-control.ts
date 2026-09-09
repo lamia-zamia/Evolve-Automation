@@ -26,6 +26,7 @@ import {
 } from "../adapters/evolve/economy/production/captured-graphene.ts";
 import {
   createCapturedReplicatorAutomation,
+  GOVERNOR_CONTROL,
   REPLICATOR_CONTROL,
 } from "../adapters/evolve/economy/production/captured-replicator.ts";
 import {
@@ -555,7 +556,11 @@ export function startCapturedRuntime({
 
   let replicatorDiscoveryAttempted = false;
   const ensureReplicatorControls = () => {
-    if (pageCapture.controls.resolve(REPLICATOR_CONTROL) !== undefined) return;
+    if (
+      pageCapture.controls.resolve(REPLICATOR_CONTROL) !== undefined &&
+      pageCapture.controls.resolve(GOVERNOR_CONTROL) !== undefined
+    )
+      return;
     const root = pageCapture.rootState.readRoot();
     const race = readProperty(root, "race");
     const tech = readProperty(root, "tech");

@@ -1,19 +1,26 @@
 /** Bounded Matter Replicator selection through the captured industry panel. */
 
 import {
+  planReplicatorGovernorSettings,
+  planReplicatorGovernorTask,
   planReplicatorPriority,
   planReplicatorSelection,
+  type ReplicatorGovernorSettingsInput,
   type ReplicatorMetric,
   type ReplicatorPlanningInput,
 } from "../../../../domain/economy/production/replicator.ts";
 import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
 import type { CapturedDemandSample } from "../resources/captured-resource-demand.ts";
-import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type {
+  GameControlHandle,
+  GameControlRegistry,
+} from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
 export const REPLICATOR_CONTROL = "iReplicator";
+export const GOVERNOR_CONTROL = "govOffice";
 
 // DeadSpace's replicatorRes() is Object.keys(atomic_mass) with these exclusions.
 const ATOMIC_MASS = Object.freeze({
@@ -79,6 +86,12 @@ export interface CapturedReplicatorDependencies {
   readonly readDemand?: () => CapturedDemandSample;
 }
 
+interface GovernorSession {
+  readonly control: GameControlHandle;
+  readonly tasks: readonly string[];
+  readonly settings: ReplicatorGovernorSettingsInput | null;
+}
+
 export interface CapturedReplicatorAutomation {
   run(): CommandExecutionOutcome;
 }
@@ -121,6 +134,64 @@ function emptyInput(): ReplicatorPlanningInput {
   });
 }
 
+function readGovernorSettings(
+  governor: Record<PropertyKey, unknown>,
+): ReplicatorGovernorSettingsInput | null {
+  const config = readProperty(governor, "config");
+  const replicate = readProperty(config, "replicate");
+  const power = readProperty(replicate, "pow");
+  const resources = readProperty(replicate, "res");
+  if (!isRecord(power) || !isRecord(resources)) return null;
+  const powerOn = power["on"];
+  const focusQueue = resources["que"];
+  const focusNegative = resources["neg"];
+  const switchOnCap = resources["cap"];
+  const powerCap = finite(power["cap"]);
+  if (
+    typeof powerOn !== "boolean" ||
+    typeof focusQueue !== "boolean" ||
+    typeof focusNegative !== "boolean" ||
+    typeof switchOnCap !== "boolean" ||
+    powerCap === undefined
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    powerOn,
+    focusQueue,
+    focusNegative,
+    switchOnCap,
+    powerCap,
+  });
+}
+
+function readGovernorSession(
+  root: unknown,
+  techLevel: number,
+  controls: GameControlRegistry,
+): GovernorSession | undefined {
+  const governor = readProperty(readProperty(root, "race"), "governor");
+  const control = controls.resolve(GOVERNOR_CONTROL);
+  const tasksValue = readProperty(governor, "tasks");
+  if (
+    !isRecord(governor) ||
+    techLevel < 1 ||
+    control === undefined ||
+    !isRecord(tasksValue)
+  ) {
+    return undefined;
+  }
+  const tasks = Object.values(tasksValue);
+  if (!tasks.every((task) => typeof task === "string")) return undefined;
+  return Object.freeze({
+    control,
+    tasks: Object.freeze(
+      tasks.filter((task): task is string => typeof task === "string"),
+    ),
+    settings: readGovernorSettings(governor),
+  });
+}
+
 function excluded(id: string, race: Record<PropertyKey, unknown>): boolean {
   return (
     ALWAYS_BLACKLISTED.has(id) ||
@@ -133,6 +204,7 @@ function readInput(dependencies: CapturedReplicatorDependencies): {
   readonly root: unknown;
   readonly input: ReplicatorPlanningInput;
   readonly metrics: readonly ReplicatorMetric[];
+  readonly governor: GovernorSession | undefined;
 } {
   const root = dependencies.rootState.readRoot();
   const race = readProperty(root, "race");
@@ -140,25 +212,37 @@ function readInput(dependencies: CapturedReplicatorDependencies): {
   const resources = readProperty(root, "resource");
   const replicator = readProperty(race, "replicator");
   const techLevel = finite(readProperty(tech, "replicator"));
-  const control = dependencies.controls.resolve(REPLICATOR_CONTROL);
   if (
     !isRecord(race) ||
     !isRecord(tech) ||
     !isRecord(resources) ||
     !isRecord(replicator) ||
     techLevel === undefined ||
-    techLevel < 1 ||
-    control === undefined
+    techLevel < 1
   ) {
     return Object.freeze({
       root,
       input: emptyInput(),
       metrics: Object.freeze([]),
+      governor: undefined,
     });
   }
 
   const settingsValue = dependencies.readSettings();
   const settings = isRecord(settingsValue) ? settingsValue : {};
+  const assignGovernorTask = settingBoolean(
+    settings,
+    "replicatorAssignGovernorTask",
+    false,
+  );
+  if (assignGovernorTask === undefined) {
+    return Object.freeze({
+      root,
+      input: emptyInput(),
+      metrics: Object.freeze([]),
+      governor: undefined,
+    });
+  }
   const rawMode = settings["replicatorWeightingMode"];
   const scoreMode =
     rawMode === "mass"
@@ -178,6 +262,7 @@ function readInput(dependencies: CapturedReplicatorDependencies): {
         root,
         input: emptyInput(),
         metrics: Object.freeze([]),
+        governor: undefined,
       });
     const unlocked = display && !excluded(id, race);
     if (!unlocked) {
@@ -206,6 +291,7 @@ function readInput(dependencies: CapturedReplicatorDependencies): {
         root,
         input: emptyInput(),
         metrics: Object.freeze([]),
+        governor: undefined,
       });
     }
     if (!enabled || weighting <= 0) {
@@ -229,6 +315,7 @@ function readInput(dependencies: CapturedReplicatorDependencies): {
         root,
         input: emptyInput(),
         metrics: Object.freeze([]),
+        governor: undefined,
       });
     }
     const demanded = demand?.isDemanded(id) ?? false;
@@ -257,13 +344,114 @@ function readInput(dependencies: CapturedReplicatorDependencies): {
     root,
     input: Object.freeze({
       initialised: true,
-      assignGovernorTask: false,
+      assignGovernorTask,
       scoreMode,
       selectHighestScore: rawMode !== "legacy",
       productions: Object.freeze(productions),
     }),
     metrics: Object.freeze(metrics),
+    governor: readGovernorSession(root, techLevel, dependencies.controls),
   });
+}
+
+function sameGovernorSettings(
+  actual: Readonly<ReplicatorGovernorSettingsInput>,
+  expected: Readonly<ReplicatorGovernorSettingsInput>,
+): boolean {
+  return (
+    actual.powerOn === expected.powerOn &&
+    actual.focusQueue === expected.focusQueue &&
+    actual.focusNegative === expected.focusNegative &&
+    actual.switchOnCap === expected.switchOnCap &&
+    actual.powerCap === expected.powerCap
+  );
+}
+
+function applyGovernor(
+  dependencies: CapturedReplicatorDependencies,
+  session: ReturnType<typeof readInput>,
+): CommandExecutionOutcome {
+  if (!session.input.assignGovernorTask || session.governor === undefined) {
+    return SUCCEEDED;
+  }
+
+  const governor = session.governor;
+  const taskPlan = planReplicatorGovernorTask(governor.tasks);
+  if (taskPlan.status === "unavailable") return SUCCEEDED;
+  if (taskPlan.assignment !== null) {
+    if (!governor.control.methods.includes("setTask")) {
+      return rejected(
+        "governor-task-control-missing",
+        "captured governor control cannot assign tasks",
+      );
+    }
+    if (dependencies.rootState.readRoot() !== session.root) {
+      return stale("replicator-root-changed", "captured game root changed");
+    }
+    const liveTasks = readProperty(
+      readProperty(readProperty(session.root, "race"), "governor"),
+      "tasks",
+    );
+    if (!isRecord(liveTasks)) {
+      return stale(
+        "stale-governor-tasks",
+        "replicator governor tasks disappeared",
+      );
+    }
+    const actual = Object.values(liveTasks)[taskPlan.assignment.taskIndex];
+    if (actual !== taskPlan.assignment.expectedTask) {
+      return stale(
+        "stale-governor-task",
+        "replicator governor task assignments changed",
+      );
+    }
+    const result = dependencies.controls.invoke(governor.control, "setTask", [
+      "replicate",
+      taskPlan.assignment.taskIndex,
+    ]);
+    if (!result.ok) {
+      return rejected(
+        "governor-task-control-failed",
+        result.detail ?? result.reason,
+      );
+    }
+  }
+
+  if (dependencies.rootState.readRoot() !== session.root) {
+    return stale("replicator-root-changed", "captured game root changed");
+  }
+  const governorValue = readProperty(
+    readProperty(session.root, "race"),
+    "governor",
+  );
+  if (!isRecord(governorValue)) return SUCCEEDED;
+  const settings = readGovernorSettings(governorValue);
+  if (settings === null) return SUCCEEDED;
+  const decision = planReplicatorGovernorSettings(settings);
+  if (decision === null) return SUCCEEDED;
+  if (session.governor.settings === null) {
+    return stale(
+      "stale-replicator-governor-settings",
+      "replicator governor settings appeared after capture",
+    );
+  }
+  if (!sameGovernorSettings(settings, session.governor.settings)) {
+    return stale(
+      "stale-replicator-governor-settings",
+      "replicator governor settings changed",
+    );
+  }
+  const config = readProperty(governorValue, "config");
+  const replicate = readProperty(config, "replicate");
+  const power = readProperty(replicate, "pow");
+  const resources = readProperty(replicate, "res");
+  if (!isRecord(power) || !isRecord(resources)) return SUCCEEDED;
+  if (decision.enablePower) power["on"] = true;
+  if (decision.disableQueue) resources["que"] = false;
+  if (decision.disableNegative) resources["neg"] = false;
+  if (decision.disableCapSwitch) resources["cap"] = false;
+  if (decision.raisePowerCap) power["cap"] = 1e12;
+  return SUCCEEDED;
 }
 
 export function createCapturedReplicatorAutomation(
@@ -273,25 +461,30 @@ export function createCapturedReplicatorAutomation(
     run(): CommandExecutionOutcome {
       const session = readInput(dependencies);
       const priorityPlan = planReplicatorPriority(session.input);
-      if (priorityPlan === null) return SUCCEEDED;
-      const decision = planReplicatorSelection(priorityPlan, session.metrics);
-      if (decision === null) return SUCCEEDED;
-      const handle = dependencies.controls.resolve(REPLICATOR_CONTROL);
-      if (handle === undefined) {
-        return stale(
-          "replicator-control-missing",
-          "captured replicator control is unavailable",
-        );
+      if (priorityPlan !== null) {
+        const decision = planReplicatorSelection(priorityPlan, session.metrics);
+        if (decision === null) return applyGovernor(dependencies, session);
+        const handle = dependencies.controls.resolve(REPLICATOR_CONTROL);
+        if (handle === undefined) {
+          return stale(
+            "replicator-control-missing",
+            "captured replicator control is unavailable",
+          );
+        }
+        if (dependencies.rootState.readRoot() !== session.root) {
+          return stale("replicator-root-changed", "captured game root changed");
+        }
+        const result = dependencies.controls.invoke(handle, "setVal", [
+          decision.productionId,
+        ]);
+        if (!result.ok) {
+          return rejected(
+            "replicator-control-failed",
+            result.detail ?? result.reason,
+          );
+        }
       }
-      if (dependencies.rootState.readRoot() !== session.root) {
-        return stale("replicator-root-changed", "captured game root changed");
-      }
-      const result = dependencies.controls.invoke(handle, "setVal", [
-        decision.productionId,
-      ]);
-      return result.ok
-        ? SUCCEEDED
-        : rejected("replicator-control-failed", result.detail ?? result.reason);
+      return applyGovernor(dependencies, session);
     },
   });
 }

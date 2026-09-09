@@ -7659,9 +7659,34 @@
     let selected = priorityPlan.selectHighestScore ? scored.at(-1) : scored[0];
     return selected === void 0 ? null : Object.freeze({ productionId: selected.candidate.productionId });
   }
+  function planReplicatorGovernorTask(tasks) {
+    if (tasks.includes("replicate"))
+      return Object.freeze({ status: "ready", assignment: null });
+    let taskIndex = tasks.indexOf("none");
+    return Object.freeze(taskIndex === -1 ? { status: "unavailable" } : {
+      status: "ready",
+      assignment: Object.freeze({
+        kind: "assign-governor-task",
+        taskIndex,
+        expectedTask: "none"
+      })
+    });
+  }
+  function planReplicatorGovernorSettings(input) {
+    let enablePower = !input.powerOn, disableQueue = input.focusQueue, disableNegative = input.focusNegative, disableCapSwitch = input.switchOnCap, raisePowerCap = input.powerCap < 1e12;
+    return !enablePower && !disableQueue && !disableNegative && !disableCapSwitch && !raisePowerCap ? null : Object.freeze({
+      kind: "update-governor-settings",
+      expected: Object.freeze({ ...input }),
+      enablePower,
+      disableQueue,
+      disableNegative,
+      disableCapSwitch,
+      raisePowerCap
+    });
+  }
 
   // src/adapters/evolve/economy/production/captured-replicator.ts
-  var REPLICATOR_CONTROL = "iReplicator", ATOMIC_MASS = Object.freeze({
+  var REPLICATOR_CONTROL = "iReplicator", GOVERNOR_CONTROL = "govOffice", ATOMIC_MASS = Object.freeze({
     Food: 4.355,
     Lumber: 7.668,
     Chrysotile: 15.395,
@@ -7734,18 +7759,57 @@
       productions: Object.freeze([])
     });
   }
+  function readGovernorSettings(governor) {
+    let config = readProperty(governor, "config"), replicate = readProperty(config, "replicate"), power = readProperty(replicate, "pow"), resources = readProperty(replicate, "res");
+    if (!isRecord(power) || !isRecord(resources)) return null;
+    let powerOn = power.on, focusQueue = resources.que, focusNegative = resources.neg, switchOnCap = resources.cap, powerCap = finite6(power.cap);
+    return typeof powerOn != "boolean" || typeof focusQueue != "boolean" || typeof focusNegative != "boolean" || typeof switchOnCap != "boolean" || powerCap === void 0 ? null : Object.freeze({
+      powerOn,
+      focusQueue,
+      focusNegative,
+      switchOnCap,
+      powerCap
+    });
+  }
+  function readGovernorSession(root, techLevel3, controls) {
+    let governor = readProperty(readProperty(root, "race"), "governor"), control = controls.resolve(GOVERNOR_CONTROL), tasksValue = readProperty(governor, "tasks");
+    if (!isRecord(governor) || techLevel3 < 1 || control === void 0 || !isRecord(tasksValue))
+      return;
+    let tasks = Object.values(tasksValue);
+    if (tasks.every((task) => typeof task == "string"))
+      return Object.freeze({
+        control,
+        tasks: Object.freeze(
+          tasks.filter((task) => typeof task == "string")
+        ),
+        settings: readGovernorSettings(governor)
+      });
+  }
   function excluded(id, race) {
     return ALWAYS_BLACKLISTED.has(id) || id === "Food" && !!race.fasting || id === "Lumber" && !!race.iceage;
   }
   function readInput3(dependencies) {
-    let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), tech = readProperty(root, "tech"), resources = readProperty(root, "resource"), replicator = readProperty(race, "replicator"), techLevel3 = finite6(readProperty(tech, "replicator")), control = dependencies.controls.resolve(REPLICATOR_CONTROL);
-    if (!isRecord(race) || !isRecord(tech) || !isRecord(resources) || !isRecord(replicator) || techLevel3 === void 0 || techLevel3 < 1 || control === void 0)
+    let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), tech = readProperty(root, "tech"), resources = readProperty(root, "resource"), replicator = readProperty(race, "replicator"), techLevel3 = finite6(readProperty(tech, "replicator"));
+    if (!isRecord(race) || !isRecord(tech) || !isRecord(resources) || !isRecord(replicator) || techLevel3 === void 0 || techLevel3 < 1)
       return Object.freeze({
         root,
         input: emptyInput6(),
-        metrics: Object.freeze([])
+        metrics: Object.freeze([]),
+        governor: void 0
       });
-    let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, rawMode = settings.replicatorWeightingMode, scoreMode = rawMode === "mass" ? "mass" : rawMode === "quantity" ? "quantity" : "weight", demand = dependencies.readDemand?.(), productions = [], metrics = [];
+    let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, assignGovernorTask = settingBoolean2(
+      settings,
+      "replicatorAssignGovernorTask",
+      !1
+    );
+    if (assignGovernorTask === void 0)
+      return Object.freeze({
+        root,
+        input: emptyInput6(),
+        metrics: Object.freeze([]),
+        governor: void 0
+      });
+    let rawMode = settings.replicatorWeightingMode, scoreMode = rawMode === "mass" ? "mass" : rawMode === "quantity" ? "quantity" : "weight", demand = dependencies.readDemand?.(), productions = [], metrics = [];
     for (let [id, atomicMass] of Object.entries(ATOMIC_MASS)) {
       let resource = readProperty(resources, id);
       if (!isRecord(resource)) continue;
@@ -7754,7 +7818,8 @@
         return Object.freeze({
           root,
           input: emptyInput6(),
-          metrics: Object.freeze([])
+          metrics: Object.freeze([]),
+          governor: void 0
         });
       if (!(display && !excluded(id, race))) {
         productions.push(
@@ -7775,7 +7840,8 @@
         return Object.freeze({
           root,
           input: emptyInput6(),
-          metrics: Object.freeze([])
+          metrics: Object.freeze([]),
+          governor: void 0
         });
       if (!enabled || weighting <= 0) {
         productions.push(
@@ -7796,7 +7862,8 @@
         return Object.freeze({
           root,
           input: emptyInput6(),
-          metrics: Object.freeze([])
+          metrics: Object.freeze([]),
+          governor: void 0
         });
       let demanded = demand?.isDemanded(id) ?? !1;
       productions.push(
@@ -7822,33 +7889,104 @@
       root,
       input: Object.freeze({
         initialised: !0,
-        assignGovernorTask: !1,
+        assignGovernorTask,
         scoreMode,
         selectHighestScore: rawMode !== "legacy",
         productions: Object.freeze(productions)
       }),
-      metrics: Object.freeze(metrics)
+      metrics: Object.freeze(metrics),
+      governor: readGovernorSession(root, techLevel3, dependencies.controls)
     });
+  }
+  function sameGovernorSettings(actual, expected) {
+    return actual.powerOn === expected.powerOn && actual.focusQueue === expected.focusQueue && actual.focusNegative === expected.focusNegative && actual.switchOnCap === expected.switchOnCap && actual.powerCap === expected.powerCap;
+  }
+  function applyGovernor(dependencies, session) {
+    if (!session.input.assignGovernorTask || session.governor === void 0)
+      return SUCCEEDED;
+    let governor = session.governor, taskPlan = planReplicatorGovernorTask(governor.tasks);
+    if (taskPlan.status === "unavailable") return SUCCEEDED;
+    if (taskPlan.assignment !== null) {
+      if (!governor.control.methods.includes("setTask"))
+        return rejected(
+          "governor-task-control-missing",
+          "captured governor control cannot assign tasks"
+        );
+      if (dependencies.rootState.readRoot() !== session.root)
+        return stale("replicator-root-changed", "captured game root changed");
+      let liveTasks = readProperty(
+        readProperty(readProperty(session.root, "race"), "governor"),
+        "tasks"
+      );
+      if (!isRecord(liveTasks))
+        return stale(
+          "stale-governor-tasks",
+          "replicator governor tasks disappeared"
+        );
+      if (Object.values(liveTasks)[taskPlan.assignment.taskIndex] !== taskPlan.assignment.expectedTask)
+        return stale(
+          "stale-governor-task",
+          "replicator governor task assignments changed"
+        );
+      let result = dependencies.controls.invoke(governor.control, "setTask", [
+        "replicate",
+        taskPlan.assignment.taskIndex
+      ]);
+      if (!result.ok)
+        return rejected(
+          "governor-task-control-failed",
+          result.detail ?? result.reason
+        );
+    }
+    if (dependencies.rootState.readRoot() !== session.root)
+      return stale("replicator-root-changed", "captured game root changed");
+    let governorValue = readProperty(
+      readProperty(session.root, "race"),
+      "governor"
+    );
+    if (!isRecord(governorValue)) return SUCCEEDED;
+    let settings = readGovernorSettings(governorValue);
+    if (settings === null) return SUCCEEDED;
+    let decision = planReplicatorGovernorSettings(settings);
+    if (decision === null) return SUCCEEDED;
+    if (session.governor.settings === null)
+      return stale(
+        "stale-replicator-governor-settings",
+        "replicator governor settings appeared after capture"
+      );
+    if (!sameGovernorSettings(settings, session.governor.settings))
+      return stale(
+        "stale-replicator-governor-settings",
+        "replicator governor settings changed"
+      );
+    let config = readProperty(governorValue, "config"), replicate = readProperty(config, "replicate"), power = readProperty(replicate, "pow"), resources = readProperty(replicate, "res");
+    return !isRecord(power) || !isRecord(resources) ? SUCCEEDED : (decision.enablePower && (power.on = !0), decision.disableQueue && (resources.que = !1), decision.disableNegative && (resources.neg = !1), decision.disableCapSwitch && (resources.cap = !1), decision.raisePowerCap && (power.cap = 1e12), SUCCEEDED);
   }
   function createCapturedReplicatorAutomation(dependencies) {
     return Object.freeze({
       run() {
         let session = readInput3(dependencies), priorityPlan = planReplicatorPriority(session.input);
-        if (priorityPlan === null) return SUCCEEDED;
-        let decision = planReplicatorSelection(priorityPlan, session.metrics);
-        if (decision === null) return SUCCEEDED;
-        let handle = dependencies.controls.resolve(REPLICATOR_CONTROL);
-        if (handle === void 0)
-          return stale(
-            "replicator-control-missing",
-            "captured replicator control is unavailable"
-          );
-        if (dependencies.rootState.readRoot() !== session.root)
-          return stale("replicator-root-changed", "captured game root changed");
-        let result = dependencies.controls.invoke(handle, "setVal", [
-          decision.productionId
-        ]);
-        return result.ok ? SUCCEEDED : rejected("replicator-control-failed", result.detail ?? result.reason);
+        if (priorityPlan !== null) {
+          let decision = planReplicatorSelection(priorityPlan, session.metrics);
+          if (decision === null) return applyGovernor(dependencies, session);
+          let handle = dependencies.controls.resolve(REPLICATOR_CONTROL);
+          if (handle === void 0)
+            return stale(
+              "replicator-control-missing",
+              "captured replicator control is unavailable"
+            );
+          if (dependencies.rootState.readRoot() !== session.root)
+            return stale("replicator-root-changed", "captured game root changed");
+          let result = dependencies.controls.invoke(handle, "setVal", [
+            decision.productionId
+          ]);
+          if (!result.ok)
+            return rejected(
+              "replicator-control-failed",
+              result.detail ?? result.reason
+            );
+        }
+        return applyGovernor(dependencies, session);
       }
     });
   }
@@ -12482,7 +12620,8 @@
         `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
     }, replicatorDiscoveryAttempted = !1, ensureReplicatorControls = () => {
-      if (pageCapture2.controls.resolve(REPLICATOR_CONTROL) !== void 0) return;
+      if (pageCapture2.controls.resolve(REPLICATOR_CONTROL) !== void 0 && pageCapture2.controls.resolve(GOVERNOR_CONTROL) !== void 0)
+        return;
       let root = pageCapture2.rootState.readRoot(), race = readProperty(root, "race"), tech = readProperty(root, "tech"), techLevel3 = readProperty(tech, "replicator");
       if (!isRecord(readProperty(race, "replicator")) || typeof techLevel3 != "number" || !Number.isFinite(techLevel3) || techLevel3 < 1 || replicatorDiscoveryAttempted || (replicatorDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
       let govTabs = SUB_TAB_CONTROLS.govTabs;
