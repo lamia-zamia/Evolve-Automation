@@ -4641,7 +4641,7 @@
   }
   function readFarmerSmartMaximum(root) {
     let race = readProperty(root, "race");
-    return isRecord(race) && hasRaceFlag(race, "artifical") ? 0 : null;
+    return isRecord(race) ? hasRaceFlag(race, "unfathomable") ? Number.MAX_SAFE_INTEGER : hasRaceFlag(race, "artifical") ? 0 : null : null;
   }
   function resourceStorageRatio(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id), amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finiteNumber(readProperty(resource, "max"));

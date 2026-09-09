@@ -837,6 +837,38 @@ assert.equal(
   "Artificial Farmer smart mode stops at the upstream zero maximum",
 );
 
+const unfathomableFarmerReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { unfathomable: 1 },
+      civic: {
+        ...root.civic,
+        d_job: "farmer",
+        farmer: {
+          job: "farmer",
+          assigned: 3,
+          workers: 3,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-farmer"],
+  },
+  readSettings: () => ({ job_s_farmer: true }),
+});
+assert.equal(
+  unfathomableFarmerReader().jobs[0].smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "Unfathomable Farmer restores the upstream uncapped maximum",
+);
+
 const servantReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

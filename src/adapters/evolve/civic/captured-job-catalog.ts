@@ -403,6 +403,7 @@ function readFarmerSmartMaximum(root: unknown): number | null | undefined {
   // Existing early-game fixtures can omit the race bag before race initialization; preserve the
   // catalog's established conservative null cap for that lenient external state.
   if (!isRecord(race)) return null;
+  if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
   return hasRaceFlag(race, "artifical") ? 0 : null;
 }
 
