@@ -8,11 +8,13 @@
 
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
+import type { JobKind } from "../../../domain/civic/jobs.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 
 export interface CapturedJobCatalogEntry {
   readonly id: string;
   readonly controlId: string;
+  readonly kind: JobKind;
   readonly assigned: number;
   readonly workers: number;
   /** DeadSpace uses -1 for an uncapped ordinary job. */
@@ -50,6 +52,25 @@ function finiteMaximum(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= -1
     ? value
     : undefined;
+}
+
+// These are the canonical ordinary ids from DeadSpace's defineJobs list. The fallback keeps
+// newly added or special jobs visible without assigning them a behavior the planner cannot prove.
+const JOB_KINDS: Readonly<Record<string, JobKind>> = Object.freeze({
+  farmer: "farmer",
+  hunter: "hunter",
+  lumberjack: "lumberjack",
+  quarry_worker: "quarry-worker",
+  crystal_miner: "crystal-miner",
+  scavenger: "scavenger",
+  forager: "forager",
+  miner: "miner",
+  space_miner: "space-miner",
+  entertainer: "entertainer",
+});
+
+function jobKind(id: string): JobKind {
+  return JOB_KINDS[id] ?? "other";
 }
 
 function readConfiguredBreakpoints(
@@ -184,6 +205,7 @@ function readCatalog(
       Object.freeze({
         id,
         controlId,
+        kind: jobKind(id),
         assigned,
         workers,
         maximum,

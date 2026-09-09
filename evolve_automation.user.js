@@ -4401,6 +4401,21 @@
   function finiteMaximum(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= -1 ? value : void 0;
   }
+  var JOB_KINDS = Object.freeze({
+    farmer: "farmer",
+    hunter: "hunter",
+    lumberjack: "lumberjack",
+    quarry_worker: "quarry-worker",
+    crystal_miner: "crystal-miner",
+    scavenger: "scavenger",
+    forager: "forager",
+    miner: "miner",
+    space_miner: "space-miner",
+    entertainer: "entertainer"
+  });
+  function jobKind(id) {
+    return JOB_KINDS[id] ?? "other";
+  }
   function readConfiguredBreakpoints(settings, id) {
     let values = [1, 2, 3].map(
       (number) => readProperty(settings, `job_b${number}_${id}`)
@@ -4485,6 +4500,7 @@
         Object.freeze({
           id,
           controlId,
+          kind: jobKind(id),
           assigned,
           workers,
           maximum,

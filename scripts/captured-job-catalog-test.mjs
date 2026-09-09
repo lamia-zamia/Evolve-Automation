@@ -55,6 +55,7 @@ assert.deepEqual(reader(), {
     {
       id: "unemployed",
       controlId: "civ-unemployed",
+      kind: "other",
       assigned: 4,
       workers: 4,
       maximum: 0,
@@ -69,6 +70,7 @@ assert.deepEqual(reader(), {
     {
       id: "farmer",
       controlId: "civ-farmer",
+      kind: "farmer",
       assigned: 3,
       workers: 3,
       maximum: 8,
@@ -83,6 +85,7 @@ assert.deepEqual(reader(), {
     {
       id: "hidden",
       controlId: "civ-hidden",
+      kind: "other",
       assigned: 0,
       workers: 0,
       maximum: 0,
