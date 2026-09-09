@@ -382,6 +382,39 @@ assert.equal(
   "Scientist smart maximum stops capped Knowledge for non-intelligent races",
 );
 
+const professorReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { intelligent: false },
+      tech: { genetics: 1, fanaticism: 1 },
+      resource: { Knowledge: { max: 100 } },
+      civic: {
+        ...root.civic,
+        professor: {
+          job: "professor",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-professor"],
+  },
+  readSettings: () => ({ job_s_professor: true }),
+});
+assert.equal(
+  professorReader().jobs.find(({ id }) => id === "professor")?.smartMaximum,
+  0,
+  "Professor smart maximum stops capped Knowledge without the enabling techs",
+);
+
 const selectionReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

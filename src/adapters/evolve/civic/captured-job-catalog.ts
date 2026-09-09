@@ -147,6 +147,7 @@ function readSmartMaximum(
   if (id === "torturer") return readTorturerSmartMaximum(root);
   if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
   if (id === "scientist") return readScientistSmartMaximum(root, count);
+  if (id === "professor") return readProfessorSmartMaximum(root);
   if (id !== "teamster") return null;
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
@@ -321,6 +322,32 @@ function readScientistSmartMaximum(
     (99 - suspicionAmount) / suspicionPerWizard + count * suspicionPerWizard;
   if (Number.isFinite(maximum)) return maximum;
   return maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+}
+
+function readProfessorSmartMaximum(root: unknown): number | null | undefined {
+  const race = readProperty(root, "race");
+  const resources = readProperty(root, "resource");
+  const knowledge = readProperty(resources, "Knowledge");
+  const knowledgeMaximum = readProperty(knowledge, "max");
+  if (
+    !isRecord(race) ||
+    !isRecord(knowledge) ||
+    typeof knowledgeMaximum !== "number" ||
+    !Number.isFinite(knowledgeMaximum)
+  ) {
+    return undefined;
+  }
+  const tech = readProperty(root, "tech");
+  const techRecord = isRecord(tech) ? tech : undefined;
+  const genetics = optionalFiniteNumber(techRecord, "genetics");
+  const fanaticism = optionalFiniteNumber(techRecord, "fanaticism");
+  if (genetics === undefined || fanaticism === undefined) return undefined;
+  return !readProperty(race, "intelligent") &&
+    knowledgeMaximum >= 0 &&
+    genetics < 5 &&
+    fanaticism < 2
+    ? 0
+    : null;
 }
 
 function readStorageBackedMinimum(

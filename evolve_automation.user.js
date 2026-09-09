@@ -4419,6 +4419,7 @@
     if (id === "torturer") return readTorturerSmartMaximum(root);
     if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
     if (id === "scientist") return readScientistSmartMaximum(root, count);
+    if (id === "professor") return readProfessorSmartMaximum(root);
     if (id !== "teamster") return null;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
@@ -4501,6 +4502,14 @@
       return;
     let suspicionPerWizard = governType === "magocracy" ? 0.5 : 1;
     return maximum = (99 - suspicionAmount) / suspicionPerWizard + count * suspicionPerWizard, Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+  }
+  function readProfessorSmartMaximum(root) {
+    let race = readProperty(root, "race"), resources = readProperty(root, "resource"), knowledge = readProperty(resources, "Knowledge"), knowledgeMaximum = readProperty(knowledge, "max");
+    if (!isRecord(race) || !isRecord(knowledge) || typeof knowledgeMaximum != "number" || !Number.isFinite(knowledgeMaximum))
+      return;
+    let tech = readProperty(root, "tech"), techRecord = isRecord(tech) ? tech : void 0, genetics = optionalFiniteNumber(techRecord, "genetics"), fanaticism = optionalFiniteNumber(techRecord, "fanaticism");
+    if (!(genetics === void 0 || fanaticism === void 0))
+      return !readProperty(race, "intelligent") && knowledgeMaximum >= 0 && genetics < 5 && fanaticism < 2 ? 0 : null;
   }
   function readStorageBackedMinimum(root, id, workers, display) {
     let rawTech = readProperty(root, "tech"), tech = isRecord(rawTech) ? rawTech : void 0, banking = optionalFiniteNumber(tech, "banking");
