@@ -4599,6 +4599,11 @@
       onSkipped("civics", "ordinary job crew state is incomplete");
       return;
     }
+    let servantModifier = readHighPopulationWorkerEffect(root);
+    if (servantModifier === void 0) {
+      onSkipped("civics", "ordinary job servant modifier is unavailable");
+      return;
+    }
     let jobs = [], seen = /* @__PURE__ */ new Set();
     for (let controlId of controls.capturedElementIds()) {
       if (!controlId.startsWith("civ-") || controlId.length <= 4)
@@ -4682,6 +4687,7 @@
           assigned,
           workers,
           servants: servantInput.count,
+          count: workers + servantInput.count * servantModifier,
           serves: servantInput.serves,
           split: isSplitJob(id),
           smartMaximum,
@@ -4703,6 +4709,7 @@
       defaultJobId,
       hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
       minimumDefault,
+      servantModifier,
       servantState,
       jobs: Object.freeze(jobs)
     }) : void 0;

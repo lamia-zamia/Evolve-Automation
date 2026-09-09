@@ -23,6 +23,8 @@ export interface CapturedJobCatalogEntry {
   readonly workers: number;
   /** Current servant assignment; zero when the run has no servant feature. */
   readonly servants: number;
+  /** Effective worker-equivalent count used by DeadSpace's planner. */
+  readonly count: number;
   /** Whether DeadSpace has initialized a servant assignment slot for this job. */
   readonly serves: boolean;
   /** Static planner split flag from the ordinary-job catalog. */
@@ -61,6 +63,8 @@ export interface CapturedJobCatalog {
   readonly hunterActsAsUnemployed: boolean;
   /** Crew reserve needed before selecting a new default job, when crew state exists. */
   readonly minimumDefault: number | null;
+  /** Worker-equivalent value of one servant in the current race. */
+  readonly servantModifier: number;
   /** Null means the race has no servant feature in this run. */
   readonly servantState: Readonly<CapturedServantState> | null;
   readonly jobs: readonly Readonly<CapturedJobCatalogEntry>[];
@@ -422,6 +426,11 @@ function readCatalog(
     onSkipped("civics", "ordinary job crew state is incomplete");
     return undefined;
   }
+  const servantModifier = readHighPopulationWorkerEffect(root);
+  if (servantModifier === undefined) {
+    onSkipped("civics", "ordinary job servant modifier is unavailable");
+    return undefined;
+  }
 
   const jobs: CapturedJobCatalogEntry[] = [];
   const seen = new Set<string>();
@@ -527,6 +536,7 @@ function readCatalog(
         assigned,
         workers,
         servants: servantInput.count,
+        count: workers + servantInput.count * servantModifier,
         serves: servantInput.serves,
         split: isSplitJob(id),
         smartMaximum,
@@ -551,6 +561,7 @@ function readCatalog(
         defaultJobId,
         hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
         minimumDefault,
+        servantModifier,
         servantState,
         jobs: Object.freeze(jobs),
       })
