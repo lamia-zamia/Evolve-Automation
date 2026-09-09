@@ -11,8 +11,8 @@
  * applies the game's rule for which queue entries it is saving for, and the construction cycle's own
  * saving target — the highest-weighted candidate it wants but cannot yet afford, observed from the
  * cycle that has already run. It carries no script triggers, missions, crafters, or fleet demand.
- * City-factory material demand is included when its six-product catalog and city-only capacity are
- * fully captured.
+ * Factory material demand is included when its six-product catalog and validated regional capacity
+ * are fully captured.
  *
  * A missing part of the model can only leave a resource looking undemanded, never demand something
  * nothing wants, so every consumer degrades the same way the bounded slices already do.
@@ -32,6 +32,7 @@ import type { CostReservationSource } from "../../../../ports/game-cost-reservat
 import type { ConstructionObservations } from "../../../../ports/game-construction-observations.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
+import { readCapturedFactoryCapacity } from "../production/captured-factory-capacity.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedResourceDemandDependencies {
@@ -368,8 +369,7 @@ function readCapturedFactoryDemand(
   root: unknown,
   settings: Record<PropertyKey, unknown>,
 ): CapturedFactoryCatalog | undefined {
-  const factory = readProperty(readProperty(root, "city"), "factory");
-  const count = finite(readProperty(factory, "on"));
+  const count = readCapturedFactoryCapacity(root);
   const factoryLevel = finite(
     readProperty(readProperty(root, "tech"), "factory"),
   );
@@ -383,23 +383,6 @@ function readCapturedFactoryDemand(
     factoryLevel > 4
   ) {
     return undefined;
-  }
-  const regions = [
-    ["space", "red_factory"],
-    ["interstellar", "int_factory"],
-    ["portal", "hell_factory"],
-    ["underground", "under_factory"],
-    ["surface", "crater_factory"],
-    ["tauceti", "tau_factory"],
-    ["space", "industrial_complex"],
-  ] as const;
-  for (const [region, id] of regions) {
-    const structure = readProperty(readProperty(root, region), id);
-    if (structure === undefined) continue;
-    if (!isRecord(structure)) return undefined;
-    const laterCount = finite(structure["count"]);
-    if (laterCount === undefined) return undefined;
-    if (laterCount > 0) return undefined;
   }
   const tech = readProperty(root, "tech");
   const race = readProperty(root, "race");
