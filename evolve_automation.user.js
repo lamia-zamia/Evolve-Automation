@@ -4421,6 +4421,7 @@
     if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
     if (id === "scientist") return readScientistSmartMaximum(root, count);
     if (id === "professor") return readProfessorSmartMaximum(root);
+    if (id === "banker") return readBankerSmartMaximum(root);
     if (id !== "teamster") return null;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
@@ -4511,6 +4512,14 @@
     let tech = readProperty(root, "tech"), techRecord = isRecord(tech) ? tech : void 0, genetics = optionalFiniteNumber(techRecord, "genetics"), fanaticism = optionalFiniteNumber(techRecord, "fanaticism");
     if (!(genetics === void 0 || fanaticism === void 0))
       return !readProperty(race, "intelligent") && knowledgeMaximum >= 0 && genetics < 5 && fanaticism < 2 ? 0 : null;
+  }
+  function readBankerSmartMaximum(root) {
+    let resources = readProperty(root, "resource"), money = readProperty(resources, "Money"), amount = finiteNonNegative(readProperty(money, "amount")), maximum = finiteNonNegative(readProperty(money, "max")), taxes = readProperty(readProperty(root, "civic"), "taxes"), taxRate = finiteNonNegative(readProperty(taxes, "tax_rate")), tech = readProperty(root, "tech"), banking = optionalFiniteNumber(
+      isRecord(tech) ? tech : void 0,
+      "banking"
+    );
+    if (!(amount === void 0 || maximum === void 0 || taxRate === void 0 || banking === void 0))
+      return banking >= 7 ? null : amount >= maximum || taxRate <= 0 ? 0 : null;
   }
   function readStorageBackedMinimum(root, id, workers, display) {
     let rawTech = readProperty(root, "tech"), tech = isRecord(rawTech) ? rawTech : void 0, banking = optionalFiniteNumber(tech, "banking");

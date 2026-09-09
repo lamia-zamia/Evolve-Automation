@@ -415,6 +415,38 @@ assert.equal(
   "Professor smart maximum stops capped Knowledge without the enabling techs",
 );
 
+const bankerReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      resource: { Money: { amount: 100, max: 100 } },
+      civic: {
+        ...root.civic,
+        taxes: { tax_rate: 20 },
+        banker: {
+          job: "banker",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-banker"],
+  },
+  readSettings: () => ({ job_s_banker: true }),
+});
+assert.equal(
+  bankerReader().jobs.find(({ id }) => id === "banker")?.smartMaximum,
+  0,
+  "Banker smart maximum stops a capped Money resource",
+);
+
 const selectionReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

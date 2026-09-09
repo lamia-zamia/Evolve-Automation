@@ -148,6 +148,7 @@ function readSmartMaximum(
   if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
   if (id === "scientist") return readScientistSmartMaximum(root, count);
   if (id === "professor") return readProfessorSmartMaximum(root);
+  if (id === "banker") return readBankerSmartMaximum(root);
   if (id !== "teamster") return null;
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
@@ -348,6 +349,33 @@ function readProfessorSmartMaximum(root: unknown): number | null | undefined {
     fanaticism < 2
     ? 0
     : null;
+}
+
+function readBankerSmartMaximum(root: unknown): number | null | undefined {
+  const resources = readProperty(root, "resource");
+  const money = readProperty(resources, "Money");
+  const amount = finiteNonNegative(readProperty(money, "amount"));
+  const maximum = finiteNonNegative(readProperty(money, "max"));
+  const taxes = readProperty(readProperty(root, "civic"), "taxes");
+  const taxRate = finiteNonNegative(readProperty(taxes, "tax_rate"));
+  const tech = readProperty(root, "tech");
+  const banking = optionalFiniteNumber(
+    isRecord(tech) ? tech : undefined,
+    "banking",
+  );
+  if (
+    amount === undefined ||
+    maximum === undefined ||
+    taxRate === undefined ||
+    banking === undefined
+  ) {
+    return undefined;
+  }
+  // DeadSpace no longer exposes the legacy storageRequired getter. The raw cap is still a
+  // sufficient proof for the capped branch; the queued-storage branch remains null until its
+  // captured demand contract is available.
+  if (banking >= 7) return null;
+  return amount >= maximum || taxRate <= 0 ? 0 : null;
 }
 
 function readStorageBackedMinimum(
