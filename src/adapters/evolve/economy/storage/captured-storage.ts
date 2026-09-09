@@ -21,6 +21,7 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { GameBuildTarget } from "../../../../ports/game-build-targets.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
+import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import type {
   StorageAllocationReader,
   StorageExpansionRequester,
@@ -42,6 +43,9 @@ interface CapturedStorageDependencies {
   readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
   /** The game's current cost for a captured build target. */
   readonly costs?: GameActionCostReader;
+  /** The game's currently offered technologies and their exact current costs. */
+  readonly readTechnologyTargets?: () =>
+    readonly Readonly<OfferedTech>[] | undefined;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly nowMs: () => number;
 }
@@ -195,6 +199,25 @@ function readBuildingTargets(
       continue;
     }
     result.push(targetFromCost(target.key, cost));
+  }
+  return Object.freeze(result);
+}
+
+function readTechnologyTargets(
+  dependencies: CapturedStorageDependencies,
+): readonly StorageTargetInput[] {
+  const offered = dependencies.readTechnologyTargets?.();
+  if (offered === undefined) return Object.freeze([]);
+  const result: StorageTargetInput[] = [];
+  for (const target of offered) {
+    if (typeof target.elementId !== "string" || target.elementId.length === 0) {
+      dependencies.onSkipped?.(
+        "storage-technology",
+        "captured technology identity is invalid",
+      );
+      continue;
+    }
+    result.push(targetFromCost(target.elementId, target.cost));
   }
   return Object.freeze(result);
 }
@@ -367,6 +390,7 @@ function readInput(dependencies: CapturedStorageDependencies): {
       }),
     );
   const buildingTargets = readBuildingTargets(dependencies);
+  const technologyTargets = readTechnologyTargets(dependencies);
   const input = Object.freeze({
     initialized: true,
     crateValue,
@@ -386,6 +410,11 @@ function readInput(dependencies: CapturedStorageDependencies): {
         kind: "queued" as const,
         enabled: true,
         targets: Object.freeze(targets),
+      }),
+      Object.freeze({
+        kind: "technology" as const,
+        enabled: true,
+        targets: technologyTargets,
       }),
       Object.freeze({
         kind: "building" as const,

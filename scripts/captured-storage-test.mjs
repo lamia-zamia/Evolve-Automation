@@ -7,6 +7,7 @@ function makeHarness({
   savingCost = { Iron: 600 },
   buildTargets = [],
   buildCosts = {},
+  technologyTargets,
   mutateAssignments = true,
 } = {}) {
   const root = {
@@ -101,6 +102,9 @@ function makeHarness({
     costs: {
       readCost: (elementId) => buildCosts[elementId],
     },
+    ...(technologyTargets === undefined
+      ? {}
+      : { readTechnologyTargets: () => technologyTargets }),
     onSkipped: (key, reason) => skipped.push([key, reason]),
     nowMs: () => 1,
   });
@@ -115,6 +119,9 @@ function makeHarness({
       { key: "city-missing", elementId: "city-missing", weighting: 1 },
     ],
     buildCosts: { "city-farm": { Iron: 400 } },
+    technologyTargets: [
+      { elementId: "tech-mining", cost: { Iron: 250 }, generation: 1 },
+    ],
   });
   const input = ports.reader.read();
   assert.deepEqual(input.targetSources, [
@@ -126,6 +133,19 @@ function makeHarness({
           costs: [{ resourceId: "Iron", quantity: 600 }],
           isList: false,
           label: "saved",
+          unlocked: true,
+          autoBuildEnabled: true,
+        },
+      ],
+    },
+    {
+      kind: "technology",
+      enabled: true,
+      targets: [
+        {
+          costs: [{ resourceId: "Iron", quantity: 250 }],
+          isList: false,
+          label: "tech-mining",
           unlocked: true,
           autoBuildEnabled: true,
         },

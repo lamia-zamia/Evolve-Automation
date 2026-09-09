@@ -9701,6 +9701,22 @@
     }
     return Object.freeze(result);
   }
+  function readTechnologyTargets(dependencies) {
+    let offered = dependencies.readTechnologyTargets?.();
+    if (offered === void 0) return Object.freeze([]);
+    let result = [];
+    for (let target of offered) {
+      if (typeof target.elementId != "string" || target.elementId.length === 0) {
+        dependencies.onSkipped?.(
+          "storage-technology",
+          "captured technology identity is invalid"
+        );
+        continue;
+      }
+      result.push(targetFromCost(target.elementId, target.cost));
+    }
+    return Object.freeze(result);
+  }
   function readResource4(resources, settings, id, readStorageRequired) {
     let resource = readProperty(resources, id);
     if (!isRecord(resource)) return;
@@ -9814,7 +9830,7 @@
       (resource) => targetFromCost(`storageRequired/${resource.id}`, {
         [resource.id]: resource.storageRequired
       })
-    ), buildingTargets = readBuildingTargets(dependencies);
+    ), buildingTargets = readBuildingTargets(dependencies), technologyTargets = readTechnologyTargets(dependencies);
     return {
       input: Object.freeze({
         initialized: !0,
@@ -9835,6 +9851,11 @@
             kind: "queued",
             enabled: !0,
             targets: Object.freeze(targets)
+          }),
+          Object.freeze({
+            kind: "technology",
+            enabled: !0,
+            targets: technologyTargets
           }),
           Object.freeze({
             kind: "building",
@@ -11200,6 +11221,7 @@
       construction: progression.observations,
       readBuildTargets: progression.readManagedBuildTargets,
       costs: buildCosts,
+      readTechnologyTargets: progression.readOfferedTechs,
       onSkipped: (key, reason) => reportOnce(`storage skipped ${key}: ${reason}`),
       nowMs: () => Date.now()
     }), storageAutomation = createStorageAllocationAutomation({
