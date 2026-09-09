@@ -136,6 +136,10 @@ function optionalFiniteNumber(
     : undefined;
 }
 
+function hasRaceFlag(race: unknown, key: string): boolean {
+  return Boolean(readProperty(race, key));
+}
+
 function readSmartMaximum(
   root: unknown,
   id: string,
@@ -306,7 +310,7 @@ function readScientistSmartMaximum(
   ) {
     maximum = 0;
   }
-  if (readProperty(race, "witch_hunter") !== true) return maximum;
+  if (!hasRaceFlag(race, "witch_hunter")) return maximum;
   const govern = readProperty(readProperty(root, "civic"), "govern");
   const governType = readProperty(govern, "type");
   const suspicion = readProperty(resources, "Sus");
@@ -568,10 +572,9 @@ const DEFAULT_PREFERENCE: Readonly<
 function readHunterActsAsUnemployed(root: unknown): boolean {
   const race = readProperty(root, "race");
   return (
-    (readProperty(race, "carnivore") === true &&
-      readProperty(race, "herbivore") !== true) ||
-    readProperty(race, "soul_eater") === true ||
-    readProperty(race, "unfathomable") === true
+    (hasRaceFlag(race, "carnivore") && !hasRaceFlag(race, "herbivore")) ||
+    hasRaceFlag(race, "soul_eater") ||
+    hasRaceFlag(race, "unfathomable")
   );
 }
 
@@ -747,11 +750,11 @@ function readCatalog(
     const race = readProperty(root, "race");
     const demonicLumber =
       kind === "hunter" &&
-      readProperty(race, "soul_eater") === true &&
-      readProperty(race, "evil") === true &&
+      hasRaceFlag(race, "soul_eater") &&
+      hasRaceFlag(race, "evil") &&
       readProperty(race, "species") !== "wendigo" &&
-      readProperty(race, "kindling_kindred") !== true &&
-      readProperty(race, "smoldering") !== true;
+      !hasRaceFlag(race, "kindling_kindred") &&
+      !hasRaceFlag(race, "smoldering");
     // DeadSpace's job surface defines unlocked from civic.display and the script's managed
     // setting is only effective for an unlocked job. Missing or malformed settings remain false.
     const unlocked = display;
@@ -784,8 +787,7 @@ function readCatalog(
         split: isSplitJob(id),
         smartMaximum,
         storageBackedMinimum,
-        warlordMiner:
-          kind === "miner" && readProperty(race, "warlord") === true,
+        warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),
         demonicLumber,
         maximum,
         display,

@@ -4523,6 +4523,9 @@
     let value = readProperty(record, key);
     return value === void 0 ? 0 : typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
+  function hasRaceFlag(race, key) {
+    return !!readProperty(race, key);
+  }
   function readSmartMaximum(root, id, smart, count) {
     if (!smart) return null;
     if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
@@ -4607,7 +4610,7 @@
       return;
     let maximum = Number.MAX_SAFE_INTEGER, tech = readProperty(root, "tech"), techRecord = isRecord(tech) ? tech : void 0, science = optionalFiniteNumber(techRecord, "science"), genetics = optionalFiniteNumber(techRecord, "genetics");
     if (science === void 0 || genetics === void 0) return;
-    if (universe !== "magic" && knowledgeMaximum >= 0 && !readProperty(race, "intelligent") && science < 5 && genetics < 5 && (maximum = 0), readProperty(race, "witch_hunter") !== !0) return maximum;
+    if (universe !== "magic" && knowledgeMaximum >= 0 && !readProperty(race, "intelligent") && science < 5 && genetics < 5 && (maximum = 0), !hasRaceFlag(race, "witch_hunter")) return maximum;
     let govern = readProperty(readProperty(root, "civic"), "govern"), governType = readProperty(govern, "type"), suspicion = readProperty(resources, "Sus"), suspicionAmount = readProperty(suspicion, "amount");
     if (typeof governType != "string" || typeof suspicionAmount != "number" || !Number.isFinite(suspicionAmount))
       return;
@@ -4765,7 +4768,7 @@
   ]);
   function readHunterActsAsUnemployed(root) {
     let race = readProperty(root, "race");
-    return readProperty(race, "carnivore") === !0 && readProperty(race, "herbivore") !== !0 || readProperty(race, "soul_eater") === !0 || readProperty(race, "unfathomable") === !0;
+    return hasRaceFlag(race, "carnivore") && !hasRaceFlag(race, "herbivore") || hasRaceFlag(race, "soul_eater") || hasRaceFlag(race, "unfathomable");
   }
   function readMinimumDefault(root) {
     let civic = readProperty(root, "civic"), crew = readProperty(civic, "crew");
@@ -4887,7 +4890,7 @@
         onSkipped(controlId, "ordinary job storage floor is unavailable");
         return;
       }
-      let kind = jobKind(id), race = readProperty(root, "race"), demonicLumber = kind === "hunter" && readProperty(race, "soul_eater") === !0 && readProperty(race, "evil") === !0 && readProperty(race, "species") !== "wendigo" && readProperty(race, "kindling_kindred") !== !0 && readProperty(race, "smoldering") !== !0, unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
+      let kind = jobKind(id), race = readProperty(root, "race"), demonicLumber = kind === "hunter" && hasRaceFlag(race, "soul_eater") && hasRaceFlag(race, "evil") && readProperty(race, "species") !== "wendigo" && !hasRaceFlag(race, "kindling_kindred") && !hasRaceFlag(race, "smoldering"), unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
         configuredBreakpoints,
         maximum,
         id,
@@ -4914,7 +4917,7 @@
           split: isSplitJob(id),
           smartMaximum,
           storageBackedMinimum,
-          warlordMiner: kind === "miner" && readProperty(race, "warlord") === !0,
+          warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),
           demonicLumber,
           maximum,
           display,

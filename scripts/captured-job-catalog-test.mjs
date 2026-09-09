@@ -518,7 +518,7 @@ const warlordMinerReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({
       ...root,
-      race: { warlord: true },
+      race: { warlord: 1 },
       civic: {
         ...root.civic,
         miner: {
@@ -551,8 +551,8 @@ const demonicLumberReader = createCapturedJobCatalogReader({
       ...root,
       race: {
         species: "demon",
-        soul_eater: true,
-        evil: true,
+        soul_eater: 1,
+        evil: 1,
       },
       civic: {
         ...root.civic,
@@ -589,7 +589,7 @@ assert.equal(
     rootState: {
       readRoot: () => ({
         ...root,
-        race: { species: "wendigo", soul_eater: true, evil: true },
+        race: { species: "wendigo", soul_eater: 1, evil: 1 },
         civic: {
           ...root.civic,
           hunter: {
