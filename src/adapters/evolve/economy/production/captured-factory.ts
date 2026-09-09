@@ -16,6 +16,8 @@ import {
 } from "../../../../domain/economy/production/captured-factory.ts";
 import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
+import type { GameBuildTarget } from "../../../../ports/game-build-targets.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
@@ -28,6 +30,10 @@ export interface CapturedFactoryDependencies {
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
   readonly readDemand: () => CapturedDemandSample;
+  /** Captured managed construction targets for the building-weighted factory mode. */
+  readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
+  /** Prices captured build targets through the game's own cost path. */
+  readonly buildCosts?: GameActionCostReader;
 }
 
 interface FactorySession {
@@ -43,6 +49,11 @@ interface RawResource {
   readonly storageRatio: number;
   readonly name: string;
   readonly unlocked: boolean;
+}
+
+interface BuildingCostSample {
+  readonly target: Readonly<GameBuildTarget>;
+  readonly cost: Readonly<Record<string, number>>;
 }
 
 interface ProductSpec {
@@ -289,6 +300,37 @@ function readPolymerCosts(
       ]);
 }
 
+function readBuildingCosts(
+  targets: readonly Readonly<GameBuildTarget>[] | undefined,
+  costs: GameActionCostReader | undefined,
+): readonly BuildingCostSample[] | undefined {
+  if (targets === undefined || targets.length === 0 || costs === undefined) {
+    return undefined;
+  }
+  const samples: BuildingCostSample[] = [];
+  for (const target of targets) {
+    if (!Number.isFinite(target.weighting)) return undefined;
+    const cost = costs.readCost(target.elementId);
+    if (cost === undefined) return undefined;
+    samples.push(Object.freeze({ target, cost }));
+  }
+  return Object.freeze(samples);
+}
+
+function readBuildingWeight(
+  buildings: readonly BuildingCostSample[],
+  resourceId: string,
+  currentQuantity: number,
+): number | undefined {
+  for (const building of buildings) {
+    const amount = building.cost[resourceId];
+    if (amount === undefined) continue;
+    if (!Number.isFinite(amount)) return undefined;
+    if (amount > currentQuantity) return building.target.weighting;
+  }
+  return 100;
+}
+
 function readProductCosts(
   root: unknown,
   spec: ProductSpec,
@@ -301,6 +343,8 @@ function readFullInput(
   captured: Readonly<CapturedFactoryInput>,
   settingsValue: unknown,
   demand: CapturedDemandSample,
+  readBuildTargets: (() => readonly Readonly<GameBuildTarget>[]) | undefined,
+  buildCosts: GameActionCostReader | undefined,
 ): Readonly<FactoryInput> | undefined {
   const rateLevel = readFactoryRateLevel(root);
   if (rateLevel === undefined) return undefined;
@@ -309,9 +353,17 @@ function readFullInput(
   const weightingMode = weightingValue === undefined ? "none" : weightingValue;
   if (
     typeof weightingMode !== "string" ||
-    (weightingMode !== "none" && weightingMode !== "demanded")
+    (weightingMode !== "none" &&
+      weightingMode !== "demanded" &&
+      weightingMode !== "buildings")
   ) {
-    // Building weights require the full unlocked-building catalog, which is not captured yet.
+    return undefined;
+  }
+  const buildingCosts =
+    weightingMode === "buildings"
+      ? readBuildingCosts(readBuildTargets?.(), buildCosts)
+      : undefined;
+  if (weightingMode === "buildings" && buildingCosts === undefined) {
     return undefined;
   }
   const cityFactory = readCityFactory(root);
@@ -378,6 +430,15 @@ function readFullInput(
       weighting > 0 &&
       effectivePriority !== 0;
     if (active && spec.isNanoTube) activeNano = true;
+    const buildingWeight =
+      buildingCosts === undefined
+        ? 100
+        : readBuildingWeight(
+            buildingCosts,
+            spec.outputResourceId,
+            outputValue.amount,
+          );
+    if (buildingWeight === undefined) return undefined;
     const costs: FactoryMaterialInput[] = [];
     if (active) {
       for (const costSpec of readProductCosts(root, spec)) {
@@ -414,7 +475,7 @@ function readFullInput(
         useful: outputValue.storageRatio < 0.99 || demanded,
         currentQuantity: outputValue.amount,
         storageRequired,
-        buildingWeight: 100,
+        buildingWeight,
         currentProduction: unlocked && enabled ? currentProduction : 0,
         isNanoTube: spec.isNanoTube === true,
         costs: Object.freeze(costs),
@@ -456,7 +517,7 @@ function readFullInput(
     initialized: true,
     maximum,
     weightingMode,
-    hasUnlockedBuildings: false,
+    hasUnlockedBuildings: buildingCosts !== undefined,
     useDemandedMaterials,
     minimumIngredientRatio,
     consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
@@ -503,6 +564,8 @@ export function createCapturedFactoryAutomation({
   controls,
   readSettings,
   readDemand,
+  readBuildTargets,
+  buildCosts,
 }: CapturedFactoryDependencies): {
   readonly run: () => CommandExecutionOutcome;
 } {
@@ -516,6 +579,8 @@ export function createCapturedFactoryAutomation({
         input,
         readSettings(),
         readDemand(),
+        readBuildTargets,
+        buildCosts,
       );
       const session: FactorySession = Object.freeze({ root, input, fullInput });
       const decision =

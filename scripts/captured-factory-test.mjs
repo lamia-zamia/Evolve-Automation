@@ -169,16 +169,19 @@ const fullRoot = {
   ),
 };
 const fullSettings = {
-  productionFactoryWeighting: "none",
-  production_Lux: false,
+  productionFactoryWeighting: "buildings",
+  production_Lux: true,
   production_Furs: false,
   production_Alloy: true,
   production_Polymer: false,
   production_Nano: false,
   production_Stanene: false,
   production_w_Alloy: 1,
+  production_w_Lux: 1,
   production_p_Alloy: 3,
+  production_p_Lux: 3,
 };
+fullRoot.resource.Alloy.amount = 100;
 const fullCalls = [];
 const fullAutomation = createCapturedFactoryAutomation({
   rootState: { readRoot: () => fullRoot },
@@ -200,13 +203,43 @@ const fullAutomation = createCapturedFactoryAutomation({
     isDemanded: () => false,
     storageRequired: () => 1,
   }),
+  readBuildTargets: () => [
+    { key: "alloy-target", elementId: "city-alloy", weighting: 20 },
+  ],
+  buildCosts: {
+    readCost: (elementId) =>
+      elementId === "city-alloy" ? { Alloy: 200 } : undefined,
+  },
 });
 assert.deepEqual(fullAutomation.run(), { status: "succeeded" });
 assert.deepEqual(fullCalls, [
-  ["addItem", "Alloy"],
-  ["addItem", "Alloy"],
+  ["addItem", "Lux"],
+  ["addItem", "Lux"],
   ["addItem", "Alloy"],
 ]);
-assert.equal(fullRoot.city.factory.Alloy, 3);
+assert.equal(fullRoot.city.factory.Lux, 2);
+assert.equal(fullRoot.city.factory.Alloy, 1);
+
+const unavailableBuildings = createCapturedFactoryAutomation({
+  rootState: { readRoot: () => fullRoot },
+  controls: {
+    capturedElementIds: () => [FACTORY_CONTROL],
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+  },
+  readSettings: () => fullSettings,
+  readDemand: () => ({
+    requestedQuantity: () => 0,
+    isDemanded: () => false,
+    storageRequired: () => 1,
+  }),
+  readBuildTargets: () => [],
+  buildCosts: { readCost: () => undefined },
+});
+assert.deepEqual(
+  unavailableBuildings.run(),
+  { status: "succeeded" },
+  "building weighting stays unavailable without a complete target sample",
+);
 
 console.log("captured-factory ok");

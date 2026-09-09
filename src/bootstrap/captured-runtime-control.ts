@@ -526,6 +526,8 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
     readDemand: () => readDemand(),
+    readBuildTargets: progression.readManagedBuildTargets,
+    buildCosts,
   });
 
   const runCycle = () => {

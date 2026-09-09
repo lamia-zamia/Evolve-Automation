@@ -8879,14 +8879,39 @@
       })
     ]);
   }
+  function readBuildingCosts2(targets, costs) {
+    if (targets === void 0 || targets.length === 0 || costs === void 0)
+      return;
+    let samples = [];
+    for (let target of targets) {
+      if (!Number.isFinite(target.weighting)) return;
+      let cost = costs.readCost(target.elementId);
+      if (cost === void 0) return;
+      samples.push(Object.freeze({ target, cost }));
+    }
+    return Object.freeze(samples);
+  }
+  function readBuildingWeight(buildings, resourceId, currentQuantity2) {
+    for (let building of buildings) {
+      let amount = building.cost[resourceId];
+      if (amount !== void 0) {
+        if (!Number.isFinite(amount)) return;
+        if (amount > currentQuantity2) return building.target.weighting;
+      }
+    }
+    return 100;
+  }
   function readProductCosts(root, spec) {
     return spec.id === "Polymer" ? readPolymerCosts(root) : spec.costs;
   }
-  function readFullInput(root, captured, settingsValue, demand) {
+  function readFullInput(root, captured, settingsValue, demand, readBuildTargets, buildCosts) {
     let rateLevel = readFactoryRateLevel(root);
     if (rateLevel === void 0) return;
     let settings = readSettingRecord(settingsValue), weightingValue = settings.productionFactoryWeighting, weightingMode = weightingValue === void 0 ? "none" : weightingValue;
-    if (typeof weightingMode != "string" || weightingMode !== "none" && weightingMode !== "demanded" || readCityFactory(root) === void 0) return;
+    if (typeof weightingMode != "string" || weightingMode !== "none" && weightingMode !== "demanded" && weightingMode !== "buildings")
+      return;
+    let buildingCosts = weightingMode === "buildings" ? readBuildingCosts2(readBuildTargets?.(), buildCosts) : void 0;
+    if (weightingMode === "buildings" && buildingCosts === void 0 || readCityFactory(root) === void 0) return;
     let currentById = new Map(
       captured.lines.map((line) => [line.id, line.current])
     ), partial = [], maximum = captured.maximum, activeNano = !1;
@@ -8919,6 +8944,12 @@
         return;
       let effectivePriority = demanded ? Math.max(priority, 100) : priority, active = maximum > 0 && unlocked && enabled && weighting > 0 && effectivePriority !== 0;
       active && spec.isNanoTube && (activeNano = !0);
+      let buildingWeight = buildingCosts === void 0 ? 100 : readBuildingWeight(
+        buildingCosts,
+        spec.outputResourceId,
+        outputValue.amount
+      );
+      if (buildingWeight === void 0) return;
       let costs = [];
       if (active)
         for (let costSpec of readProductCosts(root, spec)) {
@@ -8950,7 +8981,7 @@
           useful: outputValue.storageRatio < 0.99 || demanded,
           currentQuantity: outputValue.amount,
           storageRequired,
-          buildingWeight: 100,
+          buildingWeight,
           currentProduction: unlocked && enabled ? currentProduction : 0,
           isNanoTube: spec.isNanoTube === !0,
           costs: Object.freeze(costs)
@@ -8979,7 +9010,7 @@
         initialized: !0,
         maximum,
         weightingMode,
-        hasUnlockedBuildings: !1,
+        hasUnlockedBuildings: buildingCosts !== void 0,
         useDemandedMaterials,
         minimumIngredientRatio,
         consumptionBalanceMinimum: 60,
@@ -9021,7 +9052,9 @@
     rootState,
     controls,
     readSettings,
-    readDemand
+    readDemand,
+    readBuildTargets,
+    buildCosts
   }) {
     return Object.freeze({
       run() {
@@ -9031,7 +9064,9 @@
           root,
           input,
           readSettings(),
-          readDemand()
+          readDemand(),
+          readBuildTargets,
+          buildCosts
         ), session = Object.freeze({ root, input, fullInput }), adjustments = (fullInput === void 0 ? void 0 : planFactory(fullInput))?.adjustments.filter((adjustment) => adjustment.delta !== 0) ?? planCapturedFactoryTrim(session.input).map(
           (adjustment) => Object.freeze({
             productionId: adjustment.id,
@@ -9773,7 +9808,9 @@
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage),
-      readDemand: () => readDemand()
+      readDemand: () => readDemand(),
+      readBuildTargets: progression.readManagedBuildTargets,
+      buildCosts
     }), runCycle = () => {
       demandThisCycle = void 0;
       let settings = readStoredSettings(storage);
