@@ -78,6 +78,7 @@ assert.deepEqual(reader(), {
       serves: false,
       split: false,
       smartMaximum: null,
+      storageBackedMinimum: null,
       warlordMiner: false,
       demonicLumber: false,
       maximum: 0,
@@ -101,6 +102,7 @@ assert.deepEqual(reader(), {
       serves: false,
       split: false,
       smartMaximum: null,
+      storageBackedMinimum: null,
       warlordMiner: false,
       demonicLumber: false,
       maximum: 8,
@@ -124,6 +126,7 @@ assert.deepEqual(reader(), {
       serves: false,
       split: true,
       smartMaximum: null,
+      storageBackedMinimum: null,
       warlordMiner: false,
       demonicLumber: false,
       maximum: -1,
@@ -147,6 +150,7 @@ assert.deepEqual(reader(), {
       serves: false,
       split: false,
       smartMaximum: null,
+      storageBackedMinimum: null,
       warlordMiner: false,
       demonicLumber: false,
       maximum: 0,
@@ -318,6 +322,52 @@ assert.equal(
   crewReader().minimumDefault,
   3,
   "crew reserve leaves one worker above the current deficit",
+);
+
+const storageFloorReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      tech: { banking: 7 },
+      genes: { ancients: 2 },
+      civic: {
+        ...root.civic,
+        d_job: "banker",
+        banker: {
+          job: "banker",
+          assigned: 2,
+          workers: 2,
+          max: -1,
+          display: true,
+        },
+        priest: {
+          job: "priest",
+          assigned: 1,
+          workers: 1,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-banker", "civ-priest"],
+  },
+  readSettings: () => ({}),
+});
+assert.deepEqual(
+  storageFloorReader().jobs.map(({ id, storageBackedMinimum }) => ({
+    id,
+    storageBackedMinimum,
+  })),
+  [
+    { id: "banker", storageBackedMinimum: 2 },
+    { id: "priest", storageBackedMinimum: 1 },
+  ],
+  "Banker and Ancient Priest workers preserve their storage-backed floors",
 );
 
 const servantReader = createCapturedJobCatalogReader({

@@ -4419,6 +4419,15 @@
     let maximum = Math.round(teamster / transport * 1.5) - railway * 2;
     return Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
   }
+  function readStorageBackedMinimum(root, id, workers, display) {
+    let rawTech = readProperty(root, "tech"), tech = isRecord(rawTech) ? rawTech : void 0, banking = optionalFiniteNumber(tech, "banking");
+    if (banking === void 0) return;
+    if (id === "banker" && banking >= 7) return workers;
+    if (id !== "priest" || !display) return null;
+    let rawGenes = readProperty(root, "genes"), genes = isRecord(rawGenes) ? rawGenes : void 0, ancients = optionalFiniteNumber(genes, "ancients");
+    if (ancients !== void 0)
+      return ancients >= 2 ? workers : null;
+  }
   function readServantState(root) {
     let race = readProperty(root, "race"), servants = readProperty(race, "servants");
     if (servants === void 0 || servants === !1) return null;
@@ -4569,6 +4578,16 @@
         onSkipped(controlId, "ordinary job smart maximum is unavailable");
         return;
       }
+      let storageBackedMinimum = readStorageBackedMinimum(
+        root,
+        id,
+        workers,
+        display
+      );
+      if (storageBackedMinimum === void 0) {
+        onSkipped(controlId, "ordinary job storage floor is unavailable");
+        return;
+      }
       let kind = jobKind(id), race = readProperty(root, "race"), demonicLumber = kind === "hunter" && readProperty(race, "soul_eater") === !0 && readProperty(race, "evil") === !0 && readProperty(race, "species") !== "wendigo" && readProperty(race, "kindling_kindred") !== !0 && readProperty(race, "smoldering") !== !0, unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
         configuredBreakpoints,
         maximum,
@@ -4589,6 +4608,7 @@
           serves: servantInput.serves,
           split: isSplitJob(id),
           smartMaximum,
+          storageBackedMinimum,
           warlordMiner: kind === "miner" && readProperty(race, "warlord") === !0,
           demonicLumber,
           maximum,

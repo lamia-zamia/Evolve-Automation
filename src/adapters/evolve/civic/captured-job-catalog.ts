@@ -27,6 +27,8 @@ export interface CapturedJobCatalogEntry {
   readonly split: boolean;
   /** Characterized smart maximum, when this catalog slice has all required inputs. */
   readonly smartMaximum: number | null;
+  /** Worker floor when this job currently carries irreversible resource capacity. */
+  readonly storageBackedMinimum: number | null;
   /** Warlord Miner behavior is a direct race/id condition in the pure planner. */
   readonly warlordMiner: boolean;
   /** Hunter's demonic-lumber branch from the captured race profile. */
@@ -122,6 +124,25 @@ function readSmartMaximum(
   const maximum = Math.round((teamster / transport) * 1.5) - railway * 2;
   if (Number.isFinite(maximum)) return maximum;
   return maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+}
+
+function readStorageBackedMinimum(
+  root: unknown,
+  id: string,
+  workers: number,
+  display: boolean,
+): number | null | undefined {
+  const rawTech = readProperty(root, "tech");
+  const tech = isRecord(rawTech) ? rawTech : undefined;
+  const banking = optionalFiniteNumber(tech, "banking");
+  if (banking === undefined) return undefined;
+  if (id === "banker" && banking >= 7) return workers;
+  if (id !== "priest" || !display) return null;
+  const rawGenes = readProperty(root, "genes");
+  const genes = isRecord(rawGenes) ? rawGenes : undefined;
+  const ancients = optionalFiniteNumber(genes, "ancients");
+  if (ancients === undefined) return undefined;
+  return ancients >= 2 ? workers : null;
 }
 
 function readServantState(
@@ -359,6 +380,16 @@ function readCatalog(
       onSkipped(controlId, "ordinary job smart maximum is unavailable");
       return undefined;
     }
+    const storageBackedMinimum = readStorageBackedMinimum(
+      root,
+      id,
+      workers,
+      display,
+    );
+    if (storageBackedMinimum === undefined) {
+      onSkipped(controlId, "ordinary job storage floor is unavailable");
+      return undefined;
+    }
     const kind = jobKind(id);
     const race = readProperty(root, "race");
     const demonicLumber =
@@ -393,6 +424,7 @@ function readCatalog(
         serves: servantInput.serves,
         split: isSplitJob(id),
         smartMaximum,
+        storageBackedMinimum,
         warlordMiner:
           kind === "miner" && readProperty(race, "warlord") === true,
         demonicLumber,
