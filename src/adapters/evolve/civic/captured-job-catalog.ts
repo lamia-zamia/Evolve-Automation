@@ -269,22 +269,22 @@ function normalizeBreakpoints(
   id: string,
   settings: Record<PropertyKey, unknown> | undefined,
   root: unknown,
-): {
-  readonly capped: readonly [number, number, number] | null;
-  readonly uncapped: readonly [number, number, number] | null;
-} {
+):
+  | {
+      readonly capped: readonly [number, number, number] | null;
+      readonly uncapped: readonly [number, number, number] | null;
+    }
+  | undefined {
   if (configured === null) return { capped: null, uncapped: null };
-  const race = readProperty(root, "race");
-  const highPopulation = readProperty(race, "high_pop") === true;
-  if (
-    highPopulation &&
-    readProperty(settings, "jobScalePop") === true &&
-    id !== "hell_surveyor"
-  ) {
-    return { capped: null, uncapped: null };
-  }
+  const highPopulationEnabled =
+    readProperty(settings, "jobScalePop") === true && id !== "hell_surveyor";
+  const highPopulationScale = highPopulationEnabled
+    ? readHighPopulationScale(readProperty(root, "race"))
+    : null;
+  if (highPopulationScale === undefined) return undefined;
+  const scale = highPopulationScale ?? 1;
   const uncapped = configured.map((value) =>
-    value === -1 ? Number.MAX_SAFE_INTEGER : value,
+    value === -1 ? Number.MAX_SAFE_INTEGER : value * scale,
   ) as [number, number, number];
   const cap = maximum === -1 ? Number.MAX_SAFE_INTEGER : maximum;
   const capped = uncapped.map((value) => Math.min(value, cap)) as [
@@ -296,6 +296,29 @@ function normalizeBreakpoints(
     capped: Object.freeze(capped),
     uncapped: Object.freeze(uncapped),
   };
+}
+
+function readHighPopulationScale(race: unknown): number | null | undefined {
+  const rank = readProperty(race, "high_pop");
+  if (rank === undefined || rank === false) return null;
+  if (typeof rank !== "number" || !Number.isFinite(rank)) return undefined;
+  switch (rank) {
+    case 0.1:
+    case 0.25:
+      return 2;
+    case 0.5:
+      return 3;
+    case 1:
+      return 4;
+    case 2:
+      return 5;
+    case 3:
+      return 6;
+    case 4:
+      return 7;
+    default:
+      return undefined;
+  }
 }
 
 function readCatalog(
@@ -411,6 +434,10 @@ function readCatalog(
       settings,
       root,
     );
+    if (normalized === undefined) {
+      onSkipped(controlId, "ordinary job high-population scale is unavailable");
+      return undefined;
+    }
     jobs.push(
       Object.freeze({
         id,

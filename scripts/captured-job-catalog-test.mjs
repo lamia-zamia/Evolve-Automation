@@ -439,7 +439,41 @@ assert.equal(
 
 const highPopulation = createCapturedJobCatalogReader({
   rootState: {
-    readRoot: () => ({ ...root, race: { high_pop: true } }),
+    readRoot: () => ({ ...root, race: { high_pop: 1 } }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls,
+  readSettings: () => ({
+    jobScalePop: true,
+    job_b1_unemployed: 0,
+    job_b2_unemployed: 1,
+    job_b3_unemployed: -1,
+    job_b1_farmer: 1,
+    job_b2_farmer: 2,
+    job_b3_farmer: -1,
+  }),
+});
+const highPopulationCatalog = highPopulation();
+assert.deepEqual(highPopulationCatalog.jobs[0].breakpoints, [0, 0, 0]);
+assert.deepEqual(highPopulationCatalog.jobs[0].uncappedBreakpoints, [
+  0,
+  4,
+  Number.MAX_SAFE_INTEGER,
+]);
+assert.deepEqual(
+  highPopulationCatalog.jobs.find(({ id }) => id === "farmer").breakpoints,
+  [4, 8, 8],
+);
+assert.deepEqual(
+  highPopulationCatalog.jobs.find(({ id }) => id === "farmer")
+    .uncappedBreakpoints,
+  [4, 8, Number.MAX_SAFE_INTEGER],
+);
+
+const unknownHighPopulationScale = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({ ...root, race: { high_pop: 5 } }),
     isReactivitySuppressed: () => false,
     subscribeRootReplaced: () => () => {},
   },
@@ -451,8 +485,11 @@ const highPopulation = createCapturedJobCatalogReader({
     job_b3_unemployed: -1,
   }),
 });
-assert.equal(highPopulation().jobs[0].breakpoints, null);
-assert.equal(highPopulation().jobs[0].uncappedBreakpoints, null);
+assert.equal(
+  unknownHighPopulationScale(),
+  undefined,
+  "an unknown high-population rank does not produce guessed breakpoints",
+);
 
 const incomplete = createCapturedJobCatalogReader({
   rootState: {

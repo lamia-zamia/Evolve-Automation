@@ -4500,16 +4500,37 @@
   }
   function normalizeBreakpoints(configured, maximum, id, settings, root) {
     if (configured === null) return { capped: null, uncapped: null };
-    let race = readProperty(root, "race");
-    if (readProperty(race, "high_pop") === !0 && readProperty(settings, "jobScalePop") === !0 && id !== "hell_surveyor")
-      return { capped: null, uncapped: null };
-    let uncapped = configured.map(
-      (value) => value === -1 ? Number.MAX_SAFE_INTEGER : value
+    let highPopulationScale = readProperty(settings, "jobScalePop") === !0 && id !== "hell_surveyor" ? readHighPopulationScale(readProperty(root, "race")) : null;
+    if (highPopulationScale === void 0) return;
+    let scale = highPopulationScale ?? 1, uncapped = configured.map(
+      (value) => value === -1 ? Number.MAX_SAFE_INTEGER : value * scale
     ), cap = maximum === -1 ? Number.MAX_SAFE_INTEGER : maximum, capped = uncapped.map((value) => Math.min(value, cap));
     return {
       capped: Object.freeze(capped),
       uncapped: Object.freeze(uncapped)
     };
+  }
+  function readHighPopulationScale(race) {
+    let rank = readProperty(race, "high_pop");
+    if (rank === void 0 || rank === !1) return null;
+    if (!(typeof rank != "number" || !Number.isFinite(rank)))
+      switch (rank) {
+        case 0.1:
+        case 0.25:
+          return 2;
+        case 0.5:
+          return 3;
+        case 1:
+          return 4;
+        case 2:
+          return 5;
+        case 3:
+          return 6;
+        case 4:
+          return 7;
+        default:
+          return;
+      }
   }
   function readCatalog(root, controls, settingsValue, onSkipped) {
     let civic = readProperty(root, "civic");
@@ -4595,6 +4616,10 @@
         settings,
         root
       );
+      if (normalized === void 0) {
+        onSkipped(controlId, "ordinary job high-population scale is unavailable");
+        return;
+      }
       jobs.push(
         Object.freeze({
           id,
