@@ -89,6 +89,50 @@ assert.deepEqual(skipped, [
   { key: "city-bad", reason: "configured weighting is not finite" },
 ]);
 
+const authorityCapReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({
+      city: {
+        barracks: { count: 0 },
+        temple: { count: 1 },
+        farm: { count: 1 },
+      },
+      resource: { Authority: { display: true, max: 50 } },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["city-barracks", "city-temple", "city-farm"],
+  },
+  getSettings: () => ({
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+    buildingWeightingAuthority: 0.2,
+    "batcity-barracks": true,
+    "batcity-temple": true,
+    "batcity-farm": true,
+    "bld_w_city-barracks": 10,
+    "bld_w_city-temple": 10,
+    "bld_w_city-farm": 10,
+  }),
+  readKnowledge: () => openKnowledge,
+});
+assert.deepEqual(
+  authorityCapReader().buildings.map(({ id, weighting }) => ({
+    id,
+    weighting,
+  })),
+  [
+    { id: "barracks", weighting: 2 },
+    { id: "temple", weighting: 2 },
+    { id: "farm", weighting: 10 },
+  ],
+  "authority-cap weighting promotes city Barracks and Temple while capacity is short",
+);
+
 const neutralMissingMultiplierReader = createCapturedBuildPolicyReader({
   readKnowledge: () => openKnowledge,
   rootState: {

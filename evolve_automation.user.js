@@ -1348,6 +1348,9 @@
   function applyVacuumCollapseWeighting(baseWeight, buildingId, prestigeType, multiplier) {
     return prestigeType === "vacuum" && buildingId === "pylon" ? baseWeight * multiplier : baseWeight;
   }
+  function applyAuthorityCapWeighting(baseWeight, buildingId, authorityCapBelowTarget, multiplier) {
+    return authorityCapBelowTarget && (buildingId === "barracks" || buildingId === "temple") ? baseWeight * multiplier : baseWeight;
+  }
   function isKnowledgeGated(levels) {
     return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
   }
@@ -1510,6 +1513,14 @@
         demand: -rawDemand + readFutureAiColonistPower(root)
       });
   }
+  function readAuthorityCapBelowTarget(root, settings) {
+    if (settings.authorityManage !== !0) return !1;
+    let target = settings.generalMinimumAuthority;
+    if (typeof target != "number" || !Number.isFinite(target) || target <= 0)
+      return !1;
+    let authority = readProperty(readProperty(root, "resource"), "Authority");
+    return isRecord(authority) ? readProperty(authority, "display") === !0 && typeof authority.max == "number" && Number.isFinite(authority.max) && authority.max < target : !1;
+  }
   function readNonNegativeCount(owner, key) {
     let value = readProperty(owner, key);
     return value === void 0 ? 0 : typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
@@ -1561,7 +1572,12 @@
       input.count,
       multipliers.newBuilding
     );
-    return weight = applyPowerPlantWeighting(
+    return weight = applyAuthorityCapWeighting(
+      weight,
+      id,
+      context.authorityCapBelowTarget,
+      multipliers.authorityCap
+    ), weight = applyPowerPlantWeighting(
       weight,
       id,
       context.powerUnlocked,
@@ -1709,6 +1725,11 @@
       onSkipped(binding, "useless-power weighting is not finite");
       return;
     }
+    let authorityCapWeighting = ["barracks", "temple"].includes(id) ? readFiniteSetting(settings, "buildingWeightingAuthority", 1) : 1;
+    if (authorityCapWeighting === void 0) {
+      onSkipped(binding, "authority-cap weighting is not finite");
+      return;
+    }
     let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, powered = readActionPower(controls.resolve(elementId)), underpoweredWeighting = powered !== void 0 && powered > 0 ? readFiniteSetting(settings, "buildingWeightingUnderpowered", 1) : 1;
     if (underpoweredWeighting === void 0) {
       onSkipped(binding, "underpowered weighting is not finite");
@@ -1745,7 +1766,8 @@
           uselessKnowledge: uselessKnowledgeWeighting,
           needfulPower: needfulPowerWeighting,
           uselessPower: uselessPowerWeighting,
-          underpowered: underpoweredWeighting
+          underpowered: underpoweredWeighting,
+          authorityCap: authorityCapWeighting
         }
       }),
       maximum: maximum >= 0 ? maximum : UNLIMITED,
@@ -1873,7 +1895,8 @@
         ) <= knowledge.levels.knowledgeCapacity,
         powerUnlocked: power?.unlocked ?? !1,
         powerSurplus: power?.surplus ?? 0,
-        unpoweredPowerDemand: power?.demand ?? 0
+        unpoweredPowerDemand: power?.demand ?? 0,
+        authorityCapBelowTarget: isRecord(settings) ? readAuthorityCapBelowTarget(root, settings) : !1
       }), buildings = [];
       if (isRecord(settings))
         for (let elementId of controls.capturedElementIds()) {

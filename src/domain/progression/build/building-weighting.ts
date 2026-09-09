@@ -280,6 +280,19 @@ export function applyVacuumCollapseWeighting(
     : baseWeight;
 }
 
+/** Applies the captured city portion of the Authority-cap building rule. */
+export function applyAuthorityCapWeighting(
+  baseWeight: number,
+  buildingId: string,
+  authorityCapBelowTarget: boolean,
+  multiplier: number,
+): number {
+  return authorityCapBelowTarget &&
+    (buildingId === "barracks" || buildingId === "temple")
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
 /**

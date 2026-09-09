@@ -8,6 +8,7 @@
  */
 
 import {
+  applyAuthorityCapWeighting,
   applyNeedfulKnowledgeWeighting,
   applyNewBuildingWeighting,
   applyNeedMoreStorageWeighting,
@@ -57,6 +58,8 @@ interface CityRuleContext {
   readonly powerUnlocked: boolean;
   readonly powerSurplus: number;
   readonly unpoweredPowerDemand: number;
+  /** Authority capacity is below the managed target. */
+  readonly authorityCapBelowTarget: boolean;
 }
 
 const UNLIMITED = Number.MAX_SAFE_INTEGER;
@@ -249,6 +252,25 @@ function readPowerState(root: unknown): CapturedPowerState | undefined {
   });
 }
 
+function readAuthorityCapBelowTarget(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+): boolean {
+  if (settings["authorityManage"] !== true) return false;
+  const target = settings["generalMinimumAuthority"];
+  if (typeof target !== "number" || !Number.isFinite(target) || target <= 0) {
+    return false;
+  }
+  const authority = readProperty(readProperty(root, "resource"), "Authority");
+  if (!isRecord(authority)) return false;
+  return (
+    readProperty(authority, "display") === true &&
+    typeof authority["max"] === "number" &&
+    Number.isFinite(authority["max"]) &&
+    authority["max"] < target
+  );
+}
+
 function readNonNegativeCount(owner: unknown, key: string): number | undefined {
   const value = readProperty(owner, key);
   if (value === undefined) return 0;
@@ -352,6 +374,7 @@ interface CityWeightingInput {
     needfulPower: number;
     uselessPower: number;
     underpowered: number;
+    authorityCap: number;
   }>;
 }
 
@@ -365,6 +388,12 @@ function cityWeighting(input: Readonly<CityWeightingInput>): number {
     input.base,
     input.count,
     multipliers.newBuilding,
+  );
+  weight = applyAuthorityCapWeighting(
+    weight,
+    id,
+    context.authorityCapBelowTarget,
+    multipliers.authorityCap,
   );
   weight = applyPowerPlantWeighting(
     weight,
@@ -562,6 +591,13 @@ function readTarget(
     onSkipped(binding, "useless-power weighting is not finite");
     return undefined;
   }
+  const authorityCapWeighting = ["barracks", "temple"].includes(id)
+    ? readFiniteSetting(settings, "buildingWeightingAuthority", 1)
+    : 1;
+  if (authorityCapWeighting === undefined) {
+    onSkipped(binding, "authority-cap weighting is not finite");
+    return undefined;
+  }
   const onValue = readProperty(state, "on");
   const on =
     typeof onValue === "number" && Number.isFinite(onValue)
@@ -608,6 +644,7 @@ function readTarget(
         needfulPower: needfulPowerWeighting,
         uselessPower: uselessPowerWeighting,
         underpowered: underpoweredWeighting,
+        authorityCap: authorityCapWeighting,
       },
     }),
     maximum: maximum >= 0 ? maximum : UNLIMITED,
@@ -778,6 +815,9 @@ export function createCapturedBuildPolicyReader({
       powerUnlocked: power?.unlocked ?? false,
       powerSurplus: power?.surplus ?? 0,
       unpoweredPowerDemand: power?.demand ?? 0,
+      authorityCapBelowTarget: isRecord(settings)
+        ? readAuthorityCapBelowTarget(root, settings)
+        : false,
     });
     const buildings: Readonly<CapturedBuildTarget>[] = [];
     if (isRecord(settings)) {
