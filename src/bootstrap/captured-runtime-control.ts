@@ -150,6 +150,10 @@ export function startCapturedRuntime({
   // question, so one of the two has to be late-bound. This one is, with a real empty sample until
   // the cycle exists, rather than a mutable object either side could hold a stale reference to.
   let readDemand: () => CapturedDemandSample = () => EMPTY_DEMAND_SAMPLE;
+  const buildCosts = createCapturedActionCostReader({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+  });
   const progression = createCapturedProgressionControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -162,6 +166,7 @@ export function startCapturedRuntime({
       getDocument: () => document,
       createMouseEvent: (type) => new mouseEvent(type),
     }),
+    costs: buildCosts,
     readSettings: () => readStoredSettings(storage),
     // Reported once per distinct reason: a candidate the cycle cannot price or a catalog it cannot
     // read is otherwise dropped in silence, which is how a composition gap survives a whole session.
@@ -182,10 +187,6 @@ export function startCapturedRuntime({
     nowMs: () => Date.now(),
   });
   const costs = createCapturedCraftCosts({
-    rootState: pageCapture.rootState,
-    controls: pageCapture.controls,
-  });
-  const buildCosts = createCapturedActionCostReader({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
   });

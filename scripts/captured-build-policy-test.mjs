@@ -331,6 +331,84 @@ assert.equal(
   "a hidden storage pool does not trigger storage expansion",
 );
 
+let fuelRoot = {
+  city: {
+    oil_well: { count: 0 },
+    oil_depot: { count: 1 },
+    farm: { count: 1 },
+  },
+  resource: {
+    Oil: { max: 100, display: true },
+    Helium_3: { max: 100, display: true },
+  },
+};
+const fuelReader = createCapturedBuildPolicyReader({
+  readKnowledge: () => openKnowledge,
+  rootState: {
+    readRoot: () => fuelRoot,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => [
+      "city-oil_well",
+      "city-oil_depot",
+      "city-farm",
+      "space-moon_mission",
+      "space-gas_moon_mission",
+    ],
+  },
+  costs: {
+    readCost: (id) =>
+      id === "space-moon_mission"
+        ? { Oil: 500 }
+        : id === "space-gas_moon_mission"
+          ? { Helium_3: 500 }
+          : undefined,
+  },
+  getSettings: () => ({
+    "batcity-oil_well": true,
+    "batcity-oil_depot": true,
+    "batcity-farm": true,
+    "bld_w_city-oil_well": 10,
+    "bld_w_city-oil_depot": 10,
+    "bld_w_city-farm": 10,
+    buildingWeightingMissingFuel: 10,
+  }),
+});
+assert.deepEqual(
+  fuelReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "oil_well", weighting: 100 },
+    { id: "oil_depot", weighting: 100 },
+    { id: "farm", weighting: 10 },
+  ],
+  "captured mission fuel costs promote missing oil production and storage",
+);
+fuelRoot.city.oil_well.count = 1;
+assert.deepEqual(
+  fuelReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "oil_well", weighting: 10 },
+    { id: "oil_depot", weighting: 100 },
+    { id: "farm", weighting: 10 },
+  ],
+  "existing oil production removes only the oil-well promotion",
+);
+fuelRoot.resource.Oil.max = 500;
+fuelRoot.resource.Helium_3.max = 500;
+assert.deepEqual(
+  fuelReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "oil_well", weighting: 10 },
+    { id: "oil_depot", weighting: 10 },
+    { id: "farm", weighting: 10 },
+  ],
+  "fuel storage at the captured mission threshold is neutral",
+);
+
 const malformedStorageSettingReader = createCapturedBuildPolicyReader({
   readKnowledge: () => openKnowledge,
   rootState: {

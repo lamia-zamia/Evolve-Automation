@@ -4,6 +4,10 @@ import {
   decideBuildingWeighting,
   selectActiveWeightingRules,
 } from "../src/domain/progression/build/building-weighting-decision.ts";
+import {
+  applyMissingFuelProductionWeighting,
+  applyMissingFuelStorageWeighting,
+} from "../src/domain/progression/build/building-weighting.ts";
 
 const rule = (id, overrides) =>
   Object.freeze({
@@ -19,6 +23,11 @@ const candidate = (overrides) =>
   Object.freeze({ id: "Barracks", baseWeight: 100, count: 0, ...overrides });
 
 const snapshot = Object.freeze({ marker: "phase" });
+
+assert.equal(applyMissingFuelProductionWeighting(10, "oil_well", true, 4), 40);
+assert.equal(applyMissingFuelProductionWeighting(10, "farm", true, 4), 10);
+assert.equal(applyMissingFuelStorageWeighting(10, "oil_depot", true, 4), 40);
+assert.equal(applyMissingFuelStorageWeighting(10, "gas_storage", true, 4), 10);
 
 // ---------- Selecting the rules worth applying ----------
 const asked = [];

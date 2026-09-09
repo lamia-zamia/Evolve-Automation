@@ -13,6 +13,8 @@ import {
   applyNeedfulKnowledgeWeighting,
   applyNewBuildingWeighting,
   applyNeedMoreStorageWeighting,
+  applyMissingFuelProductionWeighting,
+  applyMissingFuelStorageWeighting,
   applyNonCityPowerProducerWeighting,
   applyNonOperatingWeighting,
   applyNonOperatingCityWeighting,
@@ -28,6 +30,7 @@ import {
 import { planTruepathAiApocalypse } from "../../../../domain/progression/truepath/ai-apocalypse.ts";
 import type { CapturedKnowledgeSample } from "./captured-knowledge-gate.ts";
 import type { ConstructionCycleOptions } from "../../../../ports/construction-candidates.ts";
+import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
@@ -40,6 +43,8 @@ export interface CapturedBuildPolicyDependencies {
   readonly getSettings: () => unknown;
   /** What this cycle knows about Knowledge, shared with the build planner's own gate. */
   readonly readKnowledge: () => CapturedKnowledgeSample;
+  /** Prices the captured mission controls for the fuel-storage weighting rule. */
+  readonly costs?: GameActionCostReader;
   readonly onSkipped?: (key: string, reason: string) => void;
 }
 
@@ -61,6 +66,11 @@ interface CityRuleContext {
   readonly unpoweredPowerDemand: number;
   /** Authority capacity is below the managed target. */
   readonly authorityCapBelowTarget: boolean;
+  /** Fuel capacity is below the most expensive captured mission that needs it. */
+  readonly oilStorageBelowMissionCost: boolean;
+  readonly heliumStorageBelowMissionCost: boolean;
+  /** Neither the city oil well nor the space oil extractor exists. */
+  readonly noOilProduction: boolean;
 }
 
 const UNLIMITED = Number.MAX_SAFE_INTEGER;
@@ -293,6 +303,79 @@ function readPoweredCount(
   return Object.freeze({ count, on });
 }
 
+interface CapturedFuelState {
+  readonly oilStorageBelowMissionCost: boolean;
+  readonly heliumStorageBelowMissionCost: boolean;
+  readonly noOilProduction: boolean;
+}
+
+function readFuelState(
+  root: unknown,
+  controls: GameControlRegistry,
+  costs: GameActionCostReader | undefined,
+): CapturedFuelState | undefined {
+  if (costs === undefined) return undefined;
+  const resources = readProperty(root, "resource");
+  const oil = readProperty(resources, "Oil");
+  const helium = readProperty(resources, "Helium_3");
+  const oilMaximum = isRecord(oil) ? oil["max"] : undefined;
+  const heliumMaximum = isRecord(helium) ? helium["max"] : undefined;
+  if (
+    typeof oilMaximum !== "number" ||
+    !Number.isFinite(oilMaximum) ||
+    oilMaximum < 0 ||
+    typeof heliumMaximum !== "number" ||
+    !Number.isFinite(heliumMaximum) ||
+    heliumMaximum < 0
+  ) {
+    return undefined;
+  }
+
+  const missionIds = controls
+    .capturedElementIds()
+    .filter((id) => id.startsWith("space-") && id.endsWith("_mission"));
+  if (missionIds.length === 0) return undefined;
+
+  let maximumOilCost = 0;
+  let maximumHeliumCost = 0;
+  for (const missionId of missionIds) {
+    const cost = costs.readCost(missionId);
+    if (cost === undefined) return undefined;
+    const oilCost = cost["Oil"];
+    const heliumCost = cost["Helium_3"];
+    if (
+      (oilCost !== undefined &&
+        (typeof oilCost !== "number" ||
+          !Number.isFinite(oilCost) ||
+          oilCost < 0)) ||
+      (heliumCost !== undefined &&
+        (typeof heliumCost !== "number" ||
+          !Number.isFinite(heliumCost) ||
+          heliumCost < 0))
+    ) {
+      return undefined;
+    }
+    maximumOilCost = Math.max(maximumOilCost, oilCost ?? 0);
+    maximumHeliumCost = Math.max(maximumHeliumCost, heliumCost ?? 0);
+  }
+
+  const cityOilWell = readPoweredCount(readProperty(root, "city"), "oil_well");
+  const spaceOilExtractor = readPoweredCount(
+    readProperty(root, "space"),
+    "oil_extractor",
+  );
+  if (cityOilWell === undefined || spaceOilExtractor === undefined) {
+    return undefined;
+  }
+  return Object.freeze({
+    oilStorageBelowMissionCost: oilMaximum < maximumOilCost,
+    heliumStorageBelowMissionCost:
+      readProperty(helium, "display") === true &&
+      heliumMaximum < maximumHeliumCost,
+    noOilProduction: cityOilWell.count + spaceOilExtractor.count <= 0,
+  });
+}
+
 /** Reads the future AI-colonist draw characterized by the upstream True Path progress gate. */
 function readFutureAiColonistPower(root: unknown): number {
   const race = readProperty(root, "race");
@@ -357,6 +440,7 @@ interface CityWeightingInput {
     uselessPower: number;
     underpowered: number;
     authorityCap: number;
+    missingFuel: number;
   }>;
 }
 
@@ -423,6 +507,18 @@ function cityWeighting(input: Readonly<CityWeightingInput>): number {
     id,
     context.storagePartsAllAssigned,
     multipliers.needMoreStorage,
+  );
+  weight = applyMissingFuelProductionWeighting(
+    weight,
+    id,
+    context.oilStorageBelowMissionCost && context.noOilProduction,
+    multipliers.missingFuel,
+  );
+  weight = applyMissingFuelStorageWeighting(
+    weight,
+    id,
+    context.oilStorageBelowMissionCost || context.heliumStorageBelowMissionCost,
+    multipliers.missingFuel,
   );
   weight = applyNonOperatingCityWeighting(
     weight,
@@ -505,6 +601,14 @@ function readTarget(
       : 1;
   if (needStorageWeighting === undefined) {
     onSkipped(binding, "storage expansion weighting is not finite");
+    return undefined;
+  }
+  const fuelWeighting =
+    id === "oil_well" || id === "oil_depot"
+      ? readFiniteSetting(settings, "buildingWeightingMissingFuel", 1)
+      : 1;
+  if (fuelWeighting === undefined) {
+    onSkipped(binding, "missing-fuel weighting is not finite");
     return undefined;
   }
   const housingWeighting = [
@@ -616,6 +720,7 @@ function readTarget(
         uselessMeditation: meditationWeighting,
         vacuumCollapse: vacuumWeighting,
         needMoreStorage: needStorageWeighting,
+        missingFuel: fuelWeighting,
         nonOperating: nonOperatingWeighting,
         needfulKnowledge: needfulKnowledgeWeighting,
         uselessKnowledge: uselessKnowledgeWeighting,
@@ -772,6 +877,7 @@ export function createCapturedBuildPolicyReader({
   controls,
   getSettings,
   readKnowledge,
+  costs,
   onSkipped,
 }: CapturedBuildPolicyDependencies): () => ScriptBuildPolicy {
   const reportSkipped = onSkipped ?? (() => {});
@@ -781,6 +887,7 @@ export function createCapturedBuildPolicyReader({
     const city = readProperty(root, "city");
     const storageParts = readStorageParts(root);
     const power = readPowerState(root);
+    const fuel = readFuelState(root, controls, costs);
     const knowledge = readKnowledge();
     const context: CityRuleContext = Object.freeze({
       unusedStorageParts: storageParts?.unused ?? false,
@@ -802,6 +909,10 @@ export function createCapturedBuildPolicyReader({
       authorityCapBelowTarget: isRecord(settings)
         ? readAuthorityCapBelowTarget(root, settings)
         : false,
+      oilStorageBelowMissionCost: fuel?.oilStorageBelowMissionCost ?? false,
+      heliumStorageBelowMissionCost:
+        fuel?.heliumStorageBelowMissionCost ?? false,
+      noOilProduction: fuel?.noOilProduction ?? false,
     });
     const buildings: Readonly<CapturedBuildTarget>[] = [];
     if (isRecord(settings)) {

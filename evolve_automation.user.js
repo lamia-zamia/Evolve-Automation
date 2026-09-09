@@ -1332,6 +1332,12 @@
   function applyNeedMoreStorageWeighting(baseWeight, buildingId, storagePartsAllAssigned, multiplier) {
     return storagePartsAllAssigned && buildingId === "shed" ? baseWeight * multiplier : baseWeight;
   }
+  function applyMissingFuelProductionWeighting(baseWeight, buildingId, needMoreFuelProduction, multiplier) {
+    return needMoreFuelProduction && buildingId === "oil_well" ? baseWeight * multiplier : baseWeight;
+  }
+  function applyMissingFuelStorageWeighting(baseWeight, buildingId, needMoreFuelStorage, multiplier) {
+    return needMoreFuelStorage && buildingId === "oil_depot" ? baseWeight * multiplier : baseWeight;
+  }
   var CURRENT_CITY_HOUSING = [
     "basic_housing",
     "cottage",
@@ -1547,6 +1553,33 @@
     if (!(count === void 0 || on === void 0 || on > count))
       return Object.freeze({ count, on });
   }
+  function readFuelState(root, controls, costs) {
+    if (costs === void 0) return;
+    let resources = readProperty(root, "resource"), oil = readProperty(resources, "Oil"), helium = readProperty(resources, "Helium_3"), oilMaximum = isRecord(oil) ? oil.max : void 0, heliumMaximum = isRecord(helium) ? helium.max : void 0;
+    if (typeof oilMaximum != "number" || !Number.isFinite(oilMaximum) || oilMaximum < 0 || typeof heliumMaximum != "number" || !Number.isFinite(heliumMaximum) || heliumMaximum < 0)
+      return;
+    let missionIds = controls.capturedElementIds().filter((id) => id.startsWith("space-") && id.endsWith("_mission"));
+    if (missionIds.length === 0) return;
+    let maximumOilCost = 0, maximumHeliumCost = 0;
+    for (let missionId of missionIds) {
+      let cost = costs.readCost(missionId);
+      if (cost === void 0) return;
+      let oilCost = cost.Oil, heliumCost = cost.Helium_3;
+      if (oilCost !== void 0 && (typeof oilCost != "number" || !Number.isFinite(oilCost) || oilCost < 0) || heliumCost !== void 0 && (typeof heliumCost != "number" || !Number.isFinite(heliumCost) || heliumCost < 0))
+        return;
+      maximumOilCost = Math.max(maximumOilCost, oilCost ?? 0), maximumHeliumCost = Math.max(maximumHeliumCost, heliumCost ?? 0);
+    }
+    let cityOilWell = readPoweredCount(readProperty(root, "city"), "oil_well"), spaceOilExtractor = readPoweredCount(
+      readProperty(root, "space"),
+      "oil_extractor"
+    );
+    if (!(cityOilWell === void 0 || spaceOilExtractor === void 0))
+      return Object.freeze({
+        oilStorageBelowMissionCost: oilMaximum < maximumOilCost,
+        heliumStorageBelowMissionCost: readProperty(helium, "display") === !0 && heliumMaximum < maximumHeliumCost,
+        noOilProduction: cityOilWell.count + spaceOilExtractor.count <= 0
+      });
+  }
   function readFutureAiColonistPower(root) {
     let race = readProperty(root, "race"), settings = readProperty(root, "settings");
     if (!readProperty(race, "truepath") || readProperty(settings, "prestigeType") !== "apocalypse")
@@ -1617,6 +1650,16 @@
       id,
       context.storagePartsAllAssigned,
       multipliers.needMoreStorage
+    ), weight = applyMissingFuelProductionWeighting(
+      weight,
+      id,
+      context.oilStorageBelowMissionCost && context.noOilProduction,
+      multipliers.missingFuel
+    ), weight = applyMissingFuelStorageWeighting(
+      weight,
+      id,
+      context.oilStorageBelowMissionCost || context.heliumStorageBelowMissionCost,
+      multipliers.missingFuel
     ), weight = applyNonOperatingCityWeighting(
       weight,
       input.count,
@@ -1676,6 +1719,11 @@
     let needStorageWeighting = id === "shed" ? readFiniteSetting(settings, "buildingWeightingNeedStorage", 1) : 1;
     if (needStorageWeighting === void 0) {
       onSkipped(binding, "storage expansion weighting is not finite");
+      return;
+    }
+    let fuelWeighting = id === "oil_well" || id === "oil_depot" ? readFiniteSetting(settings, "buildingWeightingMissingFuel", 1) : 1;
+    if (fuelWeighting === void 0) {
+      onSkipped(binding, "missing-fuel weighting is not finite");
       return;
     }
     let housingWeighting = [
@@ -1757,6 +1805,7 @@
           uselessMeditation: meditationWeighting,
           vacuumCollapse: vacuumWeighting,
           needMoreStorage: needStorageWeighting,
+          missingFuel: fuelWeighting,
           nonOperating: nonOperatingWeighting,
           needfulKnowledge: needfulKnowledgeWeighting,
           uselessKnowledge: uselessKnowledgeWeighting,
@@ -1877,12 +1926,13 @@
     controls,
     getSettings,
     readKnowledge,
+    costs,
     onSkipped
   }) {
     let reportSkipped = onSkipped ?? (() => {
     });
     return () => {
-      let settings = getSettings(), root = rootState.readRoot(), city = readProperty(root, "city"), storageParts = readStorageParts(root), power = readPowerState(root), knowledge = readKnowledge(), context = Object.freeze({
+      let settings = getSettings(), root = rootState.readRoot(), city = readProperty(root, "city"), storageParts = readStorageParts(root), power = readPowerState(root), fuel = readFuelState(root, controls, costs), knowledge = readKnowledge(), context = Object.freeze({
         unusedStorageParts: storageParts?.unused ?? !1,
         storagePartsAllAssigned: storageParts?.allAssigned ?? !1,
         housingUnderused: readHousingUnderused(root) ?? !1,
@@ -1897,7 +1947,10 @@
         powerUnlocked: power?.unlocked ?? !1,
         powerSurplus: power?.surplus ?? 0,
         unpoweredPowerDemand: power?.demand ?? 0,
-        authorityCapBelowTarget: isRecord(settings) ? readAuthorityCapBelowTarget(root, settings) : !1
+        authorityCapBelowTarget: isRecord(settings) ? readAuthorityCapBelowTarget(root, settings) : !1,
+        oilStorageBelowMissionCost: fuel?.oilStorageBelowMissionCost ?? !1,
+        heliumStorageBelowMissionCost: fuel?.heliumStorageBelowMissionCost ?? !1,
+        noOilProduction: fuel?.noOilProduction ?? !1
       }), buildings = [];
       if (isRecord(settings))
         for (let elementId of controls.capturedElementIds()) {
@@ -3665,6 +3718,7 @@
       controls,
       getSettings: readSettings,
       readKnowledge,
+      ...dependencies.costs === void 0 ? {} : { costs: dependencies.costs },
       ...onSkipped === void 0 ? {} : { onSkipped }
     }) : createScriptBuildPolicyReader({
       getBuildingManager,
@@ -9561,7 +9615,10 @@
       }
     }, panels = createGamePanelWorkspace({ getDocument: () => document }), reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
-    }, readDemand = () => EMPTY_DEMAND_SAMPLE, progression = createCapturedProgressionControl({
+    }, readDemand = () => EMPTY_DEMAND_SAMPLE, buildCosts = createCapturedActionCostReader({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls
+    }), progression = createCapturedProgressionControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       mountSuppression: pageCapture2.mountSuppression,
@@ -9573,6 +9630,7 @@
         getDocument: () => document,
         createMouseEvent: (type) => new mouseEvent(type)
       }),
+      costs: buildCosts,
       readSettings: () => readStoredSettings(storage),
       // Reported once per distinct reason: a candidate the cycle cannot price or a catalog it cannot
       // read is otherwise dropped in silence, which is how a composition gap survives a whole session.
@@ -9589,9 +9647,6 @@
       readSettings: () => readStoredSettings(storage),
       nowMs: () => Date.now()
     }), costs = createCapturedCraftCosts({
-      rootState: pageCapture2.rootState,
-      controls: pageCapture2.controls
-    }), buildCosts = createCapturedActionCostReader({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
     }), craftsmen = createCapturedCraftsmenAutomation({

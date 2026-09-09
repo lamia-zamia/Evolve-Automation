@@ -28,6 +28,7 @@ import { createCapturedResearchControl } from "./captured-research-control.ts";
 import { SAVING_CONFLICT_CAUSE } from "../domain/progression/build/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
+import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { ConstructionObservations } from "../ports/game-construction-observations.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameBuildTarget } from "../ports/game-build-targets.ts";
@@ -46,6 +47,8 @@ export interface CapturedProgressionControlDependencies {
   readonly panels: GamePanelWorkspace;
   readonly drawnActions: GameDrawnActionsReader;
   readonly drawnProjects: GameDrawnProjectsReader;
+  /** Prices captured mission controls for the build weighting adapter. */
+  readonly costs?: GameActionCostReader;
   /** Persisted script settings. Required: without them nothing is managed and nothing is built. */
   readonly readSettings: () => unknown;
   /**
@@ -200,6 +203,9 @@ export function createCapturedProgressionControl(
           controls,
           getSettings: readSettings,
           readKnowledge,
+          ...(dependencies.costs === undefined
+            ? {}
+            : { costs: dependencies.costs }),
           ...(onSkipped === undefined ? {} : { onSkipped }),
         })
       : createScriptBuildPolicyReader({

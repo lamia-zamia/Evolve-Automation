@@ -235,6 +235,30 @@ export function applyNeedMoreStorageWeighting(
     : baseWeight;
 }
 
+/** Applies the captured city fuel-production rule to the oil well. */
+export function applyMissingFuelProductionWeighting(
+  baseWeight: number,
+  buildingId: string,
+  needMoreFuelProduction: boolean,
+  multiplier: number,
+): number {
+  return needMoreFuelProduction && buildingId === "oil_well"
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
+/** Applies the captured city fuel-storage rule to the oil depot. */
+export function applyMissingFuelStorageWeighting(
+  baseWeight: number,
+  buildingId: string,
+  needMoreFuelStorage: boolean,
+  multiplier: number,
+): number {
+  return needMoreFuelStorage && buildingId === "oil_depot"
+    ? baseWeight * multiplier
+    : baseWeight;
+}
+
 const CURRENT_CITY_HOUSING = [
   "basic_housing",
   "cottage",
