@@ -10901,6 +10901,366 @@
     return Object.freeze({ reader, executor });
   }
 
+  // src/domain/economy/market/trade-routes.ts
+  function planTradeRoutes(input) {
+    let { settings } = input, money = input.money, operations = [], sellWeight = settings.tradeRouteSellExcess ? (resource) => resource.usefulRatio >= 1 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio : (resource) => resource.storageRatio >= 0.99 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio, tradableResources = input.priorityList.filter(
+      (r) => r.isRoutesUnlocked && (r.autoTradeBuyEnabled || r.autoTradeSellEnabled)
+    ).sort((a, b) => sellWeight(b) - sellWeight(a)), requiredTradeRoutes = /* @__PURE__ */ new Map(), viewsById = /* @__PURE__ */ new Map();
+    for (let resource of tradableResources)
+      viewsById.set(resource.id, resource);
+    let currentMoneyPerSecond = money.rateOfChange, tradeRoutesUsed = 0, importRouteCap = input.importRouteCap, exportRouteCap = input.exportRouteCap, maxTradeRoutes = input.maxTradeRoutes, unmanagedTradeRoutes = input.unmanagedTradeRoutes, saveInflationMoney = input.saveInflationMoney;
+    for (let resource of tradableResources) {
+      if (!resource.autoTradeSellEnabled || (requiredTradeRoutes.set(resource.id, 0), tradeRoutesUsed >= maxTradeRoutes || input.isBanana && tradeRoutesUsed > 0 || (settings.tradeRouteSellExcess ? resource.usefulRatio < 1 : resource.storageRatio < 0.99)))
+        continue;
+      let routesToAssign = Math.min(
+        exportRouteCap,
+        maxTradeRoutes - tradeRoutesUsed,
+        Math.floor(resource.rateOfChange / resource.tradeRouteQuantity)
+      );
+      routesToAssign > 0 && (tradeRoutesUsed += routesToAssign, requiredTradeRoutes.set(
+        resource.id,
+        (requiredTradeRoutes.get(resource.id) ?? 0) - routesToAssign
+      ), currentMoneyPerSecond += resource.tradeSellPrice * routesToAssign);
+    }
+    if (saveInflationMoney)
+      for (let resource of tradableResources)
+        resource.autoTradeBuyEnabled && requiredTradeRoutes.set(
+          resource.id,
+          requiredTradeRoutes.get(resource.id) ?? 0
+        );
+    let minimumAllowedMoneyPerSecond = Math.min(
+      money.maxQuantity - money.currentQuantity,
+      Math.max(
+        settings.tradeRouteMinimumMoneyPerSecond,
+        settings.tradeRouteMinimumMoneyPercentage / 100 * currentMoneyPerSecond
+      )
+    ), priorityGroups = {};
+    for (let resource of tradableResources) {
+      if (!resource.autoTradeBuyEnabled || (requiredTradeRoutes.set(
+        resource.id,
+        requiredTradeRoutes.get(resource.id) ?? 0
+      ), saveInflationMoney) || resource.autoTradeWeighting <= 0 || (settings.tradeRouteSellExcess ? resource.usefulRatio > 0.99 : resource.storageRatio > 0.98))
+        continue;
+      let priority = resource.autoTradePriority;
+      if (resource.isDemanded)
+        priority = Math.max(priority, 100), money.isDemanded || (minimumAllowedMoneyPerSecond = 0);
+      else if (priority < 100 && priority !== -1 && money.isDemanded)
+        continue;
+      if (priority !== 0) {
+        let group = priorityGroups[priority] ?? [];
+        priorityGroups[priority] = group, group.push(resource);
+      }
+    }
+    let priorityList = Object.keys(priorityGroups).sort((a, b) => Number(b) - Number(a)).map((key) => priorityGroups[key]), negativeGroup = priorityGroups[-1];
+    if (negativeGroup && priorityList.length > 1) {
+      let negativeIndex = priorityList.indexOf(negativeGroup);
+      priorityList.splice(negativeIndex, 1), priorityList[0].push(...negativeGroup);
+    }
+    let required = (id) => requiredTradeRoutes.get(id) ?? 0, resSorter = (a, b) => required(a.id) / a.autoTradeWeighting - required(b.id) / b.autoTradeWeighting || b.autoTradeWeighting - a.autoTradeWeighting, remainingRoutes, unassignStep;
+    input.isEntrepreneur ? (remainingRoutes = tradeRoutesUsed - unmanagedTradeRoutes, unassignStep = 2) : (remainingRoutes = maxTradeRoutes, unassignStep = 1);
+    outerLoop: for (let i = 0; i < priorityList.length && remainingRoutes > 0; i++) {
+      let trades = priorityList[i].sort(
+        (a, b) => a.autoTradeWeighting - b.autoTradeWeighting
+      );
+      assignLoop: for (; trades.length > 0 && remainingRoutes > 0; ) {
+        let resource = trades.sort(resSorter)[0];
+        if (required(resource.id) >= importRouteCap) {
+          trades.shift();
+          continue;
+        }
+        if (currentMoneyPerSecond - resource.tradeBuyPrice < minimumAllowedMoneyPerSecond)
+          break outerLoop;
+        if (tradeRoutesUsed < maxTradeRoutes)
+          currentMoneyPerSecond -= resource.tradeBuyPrice, tradeRoutesUsed++, remainingRoutes--, requiredTradeRoutes.set(resource.id, required(resource.id) + 1);
+        else {
+          let continued = !1;
+          for (let otherId of requiredTradeRoutes.keys()) {
+            let currentRequired = requiredTradeRoutes.get(otherId);
+            if (currentRequired === void 0)
+              continue;
+            let otherResource = viewsById.get(otherId);
+            if (!(currentRequired >= 0 || resource === otherResource) && currentMoneyPerSecond - otherResource.tradeSellPrice - resource.tradeBuyPrice > minimumAllowedMoneyPerSecond && remainingRoutes >= unassignStep) {
+              currentMoneyPerSecond -= otherResource.tradeSellPrice, currentMoneyPerSecond -= resource.tradeBuyPrice, requiredTradeRoutes.set(otherId, required(otherId) + 1), requiredTradeRoutes.set(resource.id, required(resource.id) + 1), remainingRoutes -= unassignStep, continued = !0;
+              break;
+            }
+          }
+          if (continued)
+            continue assignLoop;
+          break outerLoop;
+        }
+      }
+    }
+    let adjustmentTradeRoutes = [];
+    return tradableResources.forEach((resource, i) => {
+      if (!requiredTradeRoutes.has(resource.id))
+        return;
+      let adjustment = required(resource.id) - resource.tradeRoutes;
+      adjustmentTradeRoutes[i] = adjustment, required(resource.id) === 0 && resource.tradeRoutes !== 0 ? (operations.push({ kind: "zero", resourceId: resource.id }), adjustmentTradeRoutes[i] = 0) : adjustment > 0 && resource.tradeRoutes < 0 ? (operations.push({
+        kind: "add",
+        resourceId: resource.id,
+        count: adjustment
+      }), adjustmentTradeRoutes[i] = 0) : adjustment < 0 && resource.tradeRoutes > 0 && (operations.push({
+        kind: "remove",
+        resourceId: resource.id,
+        count: -1 * adjustment
+      }), adjustmentTradeRoutes[i] = 0);
+    }), tradableResources.forEach((resource, i) => {
+      if (!requiredTradeRoutes.has(resource.id))
+        return;
+      let adjustment = adjustmentTradeRoutes[i];
+      adjustment !== void 0 && adjustment > 0 ? operations.push({
+        kind: "add",
+        resourceId: resource.id,
+        count: adjustment
+      }) : adjustment !== void 0 && adjustment < 0 && operations.push({
+        kind: "remove",
+        resourceId: resource.id,
+        count: -1 * adjustment
+      });
+    }), Object.freeze({
+      operations: Object.freeze(operations.map((op) => Object.freeze(op))),
+      moneyRate: currentMoneyPerSecond
+    });
+  }
+
+  // src/adapters/evolve/economy/market/captured-trade-routes.ts
+  var TRADE_RATIO = Object.freeze({
+    Food: 2,
+    Lumber: 2,
+    Chrysotile: 1,
+    Stone: 2,
+    Crystal: 0.4,
+    Furs: 1,
+    Copper: 1,
+    Iron: 1,
+    Aluminium: 1,
+    Cement: 1,
+    Coal: 1,
+    Oil: 0.5,
+    Uranium: 0.12,
+    Steel: 0.5,
+    Titanium: 0.25,
+    Alloy: 0.2,
+    Polymer: 0.2,
+    Iridium: 0.1,
+    Helium_3: 0.1,
+    Deuterium: 0.1,
+    Elerium: 0.02,
+    Water: 2,
+    Neutronium: 0.05,
+    Adamantite: 0.05,
+    Infernite: 0.01,
+    Nano_Tube: 0.1,
+    Graphene: 0.1,
+    Stanene: 0.1,
+    Bolognium: 0.12,
+    Vitreloy: 0.12,
+    Orichalcum: 0.05
+  }), TRAIT_RANKS2 = Object.freeze([0.1, 0.25, 0.5, 1, 2, 3, 4]), TRAIT_VALUES2 = Object.freeze({
+    arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
+    merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
+    conniving: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
+    asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5])
+  });
+  function finite14(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function settingsRecord3(value) {
+    return isRecord(value) ? value : {};
+  }
+  function traitPercent(race, trait) {
+    if (!race[trait]) return 0;
+    let rank = finite14(race[trait]);
+    if (rank === void 0) return;
+    let index = TRAIT_RANKS2.indexOf(rank);
+    return index >= 0 ? TRAIT_VALUES2[trait][index] : void 0;
+  }
+  function fathom(root, race, target) {
+    if (!race.unfathomable) return 0;
+    let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
+    if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
+    let housing = readProperty(city, "captive_housing"), workers = finite14(
+      readProperty(
+        readProperty(readProperty(root, "civic"), "torturer"),
+        "workers"
+      )
+    ), index = dwellers.indexOf(target), active = finite14(readProperty(housing, `race${index}`)), nightmare = readProperty(
+      readProperty(readProperty(root, "stats"), "achieve"),
+      "nightmare"
+    ), mg = finite14(readProperty(nightmare, "mg"));
+    if (workers === void 0 || active === void 0) return;
+    let adjusted = Math.min(active, 100);
+    return adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3)), adjusted / 100 * ((mg ?? 0) / 5);
+  }
+  function hasUnsupportedPriceModifier(root) {
+    let race = readProperty(root, "race"), genes = readProperty(root, "genes"), tech = readProperty(root, "tech"), city = readProperty(root, "city"), space = readProperty(root, "space"), underground = readProperty(root, "underground"), stats = readProperty(readProperty(root, "stats"), "achieve"), civic = readProperty(root, "civic"), foreign = readProperty(civic, "foreign"), gov3 = readProperty(foreign, "gov3");
+    return !!(readProperty(genes, "cunning") || readProperty(genes, "trader") || readProperty(race, "persuasive") || readProperty(race, "ocular_power") || readProperty(race, "devious") || readProperty(race, "empowered") || readProperty(race, "truepath") || readProperty(race, "inflation") || readProperty(race, "quarantine") || readProperty(race, "witch_hunter") || readProperty(city, "wharf") || readProperty(space, "gps") || readProperty(tech, "railway") || readProperty(underground, "trade") || readProperty(stats, "trade") || readProperty(gov3, "hstl") !== void 0);
+  }
+  function routePrices(root, resource, ratio) {
+    let value = finite14(resource.value), race = readProperty(root, "race");
+    if (value === void 0 || value <= 0 || !isRecord(race) || hasUnsupportedPriceModifier(root)) return;
+    let arrogant = traitPercent(race, "arrogant"), conniving = traitPercent(race, "conniving"), merchant = traitPercent(race, "merchant"), asymmetrical = traitPercent(race, "asymmetrical"), goblin = fathom(root, race, "goblin"), imp = fathom(root, race, "imp");
+    if (arrogant === void 0 || conniving === void 0 || merchant === void 0 || asymmetrical === void 0 || goblin === void 0 || imp === void 0)
+      return;
+    let buy = value * ratio * (1 + arrogant / 100) * (1 - conniving / 100) * (1 - imp * 5 / 100), divide = 4 * (1 - merchant / 100) * (1 - goblin * 25 / 100) * (1 + asymmetrical / 100);
+    race.conniving && (divide -= 1);
+    let sell = value * ratio / divide;
+    return Number.isFinite(buy) && Number.isFinite(sell) && divide > 0 ? Object.freeze({ buy, sell }) : void 0;
+  }
+  function routeUnlocked(root, resourceId, resource) {
+    if (resource.display !== !0) return !1;
+    let race = readProperty(root, "race"), tech = readProperty(root, "tech");
+    return resourceId === "Food" && (readProperty(race, "artifical") || readProperty(race, "fasting")) || resourceId === "Lumber" && readProperty(race, "iceage") ? !1 : resourceId === "Food" && readProperty(race, "banana") ? !0 : readProperty(tech, "trade") ? !readProperty(race, "terrifying") : !1;
+  }
+  function readRouteInput(dependencies) {
+    let root = dependencies.rootState.readRoot();
+    if (root === void 0 || hasUnsupportedPriceModifier(root)) {
+      dependencies.onUnavailable?.(
+        "trade-route price modifiers are not captured"
+      );
+      return;
+    }
+    let cityMarket = readProperty(readProperty(root, "city"), "market"), resources = readProperty(root, "resource"), tech = readProperty(root, "tech"), currency = finite14(readProperty(tech, "currency")) ?? 0, money = readProperty(resources, "Money");
+    if (!isRecord(cityMarket) || !isRecord(resources) || !isRecord(money) || Object.hasOwn(cityMarket, "bm")) return;
+    let maximum = finite14(cityMarket.mtrade), used = finite14(cityMarket.trade), moneyRate = finite14(money.diff), moneyMaximum = finite14(money.max), moneyCurrent = finite14(money.amount);
+    if (maximum === void 0 || used === void 0 || moneyRate === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || !Number.isSafeInteger(maximum) || !Number.isSafeInteger(used) || maximum < 0 || used < 0)
+      return;
+    let settings = settingsRecord3(dependencies.readSettings()), demand = dependencies.readDemand?.() ?? {
+      isDemanded: () => !1,
+      storageRequired: () => 1
+    }, routeCounts = /* @__PURE__ */ new Map(), routeControls = /* @__PURE__ */ new Map(), priority = [];
+    for (let [index, resourceId] of Object.keys(resources).entries()) {
+      let resource = readProperty(resources, resourceId), ratio = TRADE_RATIO[resourceId], trade = isRecord(resource) ? finite14(resource.trade) : void 0;
+      if (!isRecord(resource) || ratio === void 0 || trade === void 0)
+        continue;
+      if (!Number.isSafeInteger(trade)) return;
+      if (!routeUnlocked(root, resourceId, resource)) continue;
+      let control = dependencies.controls.resolve(`market-${resourceId}`);
+      if (control === void 0 || !control.methods.includes("autoBuy") || !control.methods.includes("autoSell") || !control.methods.includes("zero"))
+        return;
+      let marketPriority = finite14(settings[`res_buy_p_${resourceId}`]) ?? Number.MAX_SAFE_INTEGER;
+      priority.push({ id: resourceId, index, value: marketPriority }), routeCounts.set(resourceId, trade), routeControls.set(resourceId, control);
+    }
+    priority.sort(
+      (left, right) => left.value - right.value || left.index - right.index
+    );
+    let views = [], unmanaged = 0;
+    for (let entry of priority) {
+      let resource = readProperty(resources, entry.id);
+      if (!isRecord(resource)) return;
+      let amount = finite14(resource.amount), maximumResource = finite14(resource.max), diff = finite14(resource.diff), ratio = TRADE_RATIO[entry.id];
+      if (ratio === void 0) return;
+      let prices = routePrices(root, resource, ratio), required = finite14(demand.storageRequired(entry.id));
+      if (amount === void 0 || maximumResource === void 0 || diff === void 0 || required === void 0 || prices === void 0 || maximumResource < 0 || required <= 0)
+        return;
+      let storageRatio2 = maximumResource > 0 ? amount / maximumResource : 1, usefulRatio = maximumResource > 0 ? amount / Math.min(maximumResource, required) : 1, buyEnabled = settings[`res_trade_buy_${entry.id}`] === !0, sellEnabled = settings[`res_trade_sell_${entry.id}`] === !0;
+      !buyEnabled && !sellEnabled && (unmanaged += routeCounts.get(entry.id) ?? 0), views.push(
+        Object.freeze({
+          id: entry.id,
+          tradeRoutes: routeCounts.get(entry.id) ?? 0,
+          autoTradeBuyEnabled: buyEnabled,
+          autoTradeSellEnabled: sellEnabled,
+          usefulRatio,
+          storageRatio: storageRatio2,
+          tradeSellPrice: prices.sell,
+          tradeBuyPrice: prices.buy,
+          rateOfChange: diff,
+          tradeRouteQuantity: ratio,
+          autoTradeWeighting: finite14(settings[`res_trade_w_${entry.id}`]) ?? 0,
+          autoTradePriority: finite14(settings[`res_trade_p_${entry.id}`]) ?? 0,
+          isRoutesUnlocked: !0,
+          isDemanded: demand.isDemanded(entry.id)
+        })
+      );
+    }
+    let race = readProperty(root, "race"), governor = readProperty(readProperty(race, "governor"), "g"), input = Object.freeze({
+      settings: Object.freeze({
+        tradeRouteSellExcess: settings.tradeRouteSellExcess === !0,
+        tradeRouteMinimumMoneyPerSecond: finite14(settings.tradeRouteMinimumMoneyPerSecond) ?? 0,
+        tradeRouteMinimumMoneyPercentage: finite14(settings.tradeRouteMinimumMoneyPercentage) ?? 0
+      }),
+      priorityList: Object.freeze(views),
+      money: Object.freeze({
+        rateOfChange: moneyRate,
+        maxQuantity: moneyMaximum,
+        currentQuantity: moneyCurrent,
+        isDemanded: demand.isDemanded("Money")
+      }),
+      importRouteCap: currency >= 6 ? 1e6 : currency >= 4 ? 100 : 25,
+      exportRouteCap: readProperty(race, "banana") ? currency >= 6 ? 1e6 : currency >= 4 ? 25 : 10 : currency >= 6 ? 1e6 : currency >= 4 ? 100 : 25,
+      maxTradeRoutes: maximum,
+      unmanagedTradeRoutes: unmanaged,
+      isBanana: !!readProperty(race, "banana"),
+      isEntrepreneur: readProperty(governor, "bg") === "entrepreneur",
+      saveInflationMoney: !1
+    });
+    return Object.freeze({
+      input,
+      session: Object.freeze({
+        root,
+        market: cityMarket,
+        routeCounts,
+        controls: routeControls,
+        marketRouteCount: used
+      })
+    });
+  }
+  function createCapturedTradeRoutes(dependencies) {
+    return Object.freeze({
+      adjust() {
+        let captured = readRouteInput(dependencies);
+        if (captured === void 0) return;
+        let result = planTradeRoutes(captured.input);
+        if (dependencies.rootState.readRoot() !== captured.session.root) return;
+        let current = readProperty(
+          readProperty(captured.session.root, "city"),
+          "market"
+        );
+        if (!isRecord(current) || current !== captured.session.market || finite14(current.trade) !== captured.session.marketRouteCount)
+          return;
+        for (let [resourceId, routes] of captured.session.routeCounts) {
+          let resource = readProperty(
+            readProperty(captured.session.root, "resource"),
+            resourceId
+          );
+          if (!isRecord(resource) || finite14(resource.trade) !== routes) return;
+        }
+        let expected = new Map(captured.session.routeCounts);
+        for (let operation2 of result.operations) {
+          let control = captured.session.controls.get(operation2.resourceId);
+          if (control === void 0) return;
+          let method = operation2.kind === "zero" ? "zero" : operation2.kind === "add" ? "autoBuy" : "autoSell";
+          operation2.kind === "zero" ? expected.set(operation2.resourceId, 0) : expected.set(
+            operation2.resourceId,
+            (expected.get(operation2.resourceId) ?? 0) + (operation2.kind === "add" ? operation2.count : -operation2.count)
+          );
+          let count = operation2.kind === "zero" ? 1 : operation2.count;
+          for (let index = 0; index < count; index += 1)
+            if (!dependencies.controls.invoke(control, method, [
+              operation2.resourceId,
+              1
+            ]).ok) return;
+        }
+        let liveResources = readProperty(captured.session.root, "resource"), finalMarket = readProperty(
+          readProperty(captured.session.root, "city"),
+          "market"
+        );
+        if (!isRecord(liveResources) || !isRecord(finalMarket)) return;
+        let expectedTotal = [...expected.values()].reduce(
+          (sum, value) => sum + Math.abs(value),
+          0
+        );
+        if (finite14(finalMarket.trade) === expectedTotal) {
+          for (let [resourceId, value] of expected)
+            if (finite14(
+              readProperty(readProperty(liveResources, resourceId), "trade")
+            ) !== value)
+              return;
+        }
+      }
+    });
+  }
+
   // src/domain/economy/market/galaxy-market.ts
   function planGalaxyMarket(input) {
     if (!input.initialized) return null;
@@ -11401,7 +11761,7 @@
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
   var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
-  function finite14(value) {
+  function finite15(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readSettingsRecord(value) {
@@ -11412,7 +11772,7 @@
     return typeof value == "boolean" ? value : !0;
   }
   function craftPreserve(settings, id) {
-    let value = finite14(settings[`foundry_p_${id}`]);
+    let value = finite15(settings[`foundry_p_${id}`]);
     return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
   }
   function craftAllButtonRendered(getDocument, id) {
@@ -11438,7 +11798,7 @@
     if (!isRecord(resources)) return;
     let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
     for (let [resourceId, costPerCraft] of costs) {
-      let resource = readProperty(resources, resourceId), currentQuantity2 = finite14(readProperty(resource, "amount")), maxQuantity = finite14(readProperty(resource, "max")), rateOfChange = finite14(readProperty(resource, "diff"));
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite15(readProperty(resource, "amount")), maxQuantity = finite15(readProperty(resource, "max")), rateOfChange = finite15(readProperty(resource, "diff"));
       if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
         return;
       let base = {
@@ -11475,7 +11835,7 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite14(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite15(dependencies.readPeriods());
         return session = Object.freeze({
           root,
           demand: dependencies.readDemand(),
@@ -11493,7 +11853,7 @@
         let craftable = readProperty(
           readProperty(session.root, "resource"),
           craftableId
-        ), craftableAmount = finite14(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
+        ), craftableAmount = finite15(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
           dependencies,
           {
             ...session,
@@ -11542,7 +11902,7 @@
           "resource"
         );
         for (let spend of decision.spend) {
-          let actual = finite14(
+          let actual = finite15(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
@@ -11563,7 +11923,7 @@
         if (!result.ok)
           return rejected("craft-control-failed", result.detail ?? result.reason);
         for (let spend of decision.spend) {
-          let actual = finite14(
+          let actual = finite15(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
@@ -11908,12 +12268,24 @@
       readSettings: () => readStoredSettings(storage),
       readDemand: () => readDemand(),
       onUnavailable: (resourceId, reason) => reportOnce(`market skipped ${resourceId}: ${reason}`)
+    }), tradeRoutes = createCapturedTradeRoutes({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage),
+      readDemand: () => readDemand(),
+      onUnavailable: (reason) => reportOnce(`trade routes unavailable: ${reason}`)
     }), marketAutomation = Object.freeze({
-      run: () => runMarketTradesAutomation({
-        reader: marketPorts.reader,
-        executor: marketPorts.executor,
-        diagnostics
-      })
+      run: () => runMarketTradesAutomation(
+        {
+          reader: marketPorts.reader,
+          executor: marketPorts.executor,
+          tradeRoutes,
+          diagnostics
+        },
+        !1,
+        !1,
+        !0
+      )
     }), ratios = createCapturedProductionRatios({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,

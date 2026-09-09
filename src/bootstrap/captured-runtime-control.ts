@@ -63,6 +63,7 @@ import {
   createCapturedMarketPorts,
   MARKET_QUANTITY_CONTROL,
 } from "../adapters/evolve/economy/market/captured-market.ts";
+import { createCapturedTradeRoutes } from "../adapters/evolve/economy/market/captured-trade-routes.ts";
 import { runGalaxyMarketAutomation } from "../application/galaxy-market.ts";
 import { runMarketTradesAutomation } from "../application/market.ts";
 import { createStorageAllocationAutomation } from "../application/storage-allocation.ts";
@@ -332,13 +333,27 @@ export function startCapturedRuntime({
     onUnavailable: (resourceId, reason) =>
       reportOnce(`market skipped ${resourceId}: ${reason}`),
   });
+  const tradeRoutes = createCapturedTradeRoutes({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
+    onUnavailable: (reason) =>
+      reportOnce(`trade routes unavailable: ${reason}`),
+  });
   const marketAutomation = Object.freeze({
     run: () =>
-      runMarketTradesAutomation({
-        reader: marketPorts.reader,
-        executor: marketPorts.executor,
-        diagnostics,
-      }),
+      runMarketTradesAutomation(
+        {
+          reader: marketPorts.reader,
+          executor: marketPorts.executor,
+          tradeRoutes,
+          diagnostics,
+        },
+        false,
+        false,
+        true,
+      ),
   });
   const ratios = createCapturedProductionRatios({
     rootState: pageCapture.rootState,
