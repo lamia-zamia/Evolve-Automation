@@ -177,6 +177,39 @@ function withTargets(targets, settings = {}, saving = null) {
   assert.equal(sample.storageRequired("Stone"), 1);
 }
 
+// DeadSpace's market gate is race.no_trade. A different race trait must not suppress the
+// auto-market storage buffer, while no_trade must suppress it.
+{
+  const marketRoot = {
+    race: { terrifying: true, no_trade: false },
+    resource: {
+      Stone: { amount: 100, max: 1000, stackable: true },
+    },
+  };
+  const demand = (noTrade) =>
+    createCapturedResourceDemand({
+      rootState: {
+        readRoot: () => ({
+          ...marketRoot,
+          race: { ...marketRoot.race, no_trade: noTrade },
+        }),
+      },
+      reservations: {
+        readReservations: () => ({
+          targets: [{ name: "Cottage", cause: "Queue", cost: { Stone: 400 } }],
+          unavailable: false,
+        }),
+      },
+      readSettings: () => ({
+        autoMarket: true,
+        sellStone: true,
+        res_sell_r_Stone: 0.5,
+      }),
+    }).sample();
+  assert.equal(demand(false).storageRequired("Stone"), 824);
+  assert.equal(demand(true).storageRequired("Stone"), 412);
+}
+
 // An already-captured offered technology participates in the research fallback. The adapter
 // trusts the game's offer qualification and only checks its current resource holdings.
 {

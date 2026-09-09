@@ -6478,7 +6478,7 @@
         let storage = planStorageRequirements({
           storageAssignExtra: settings.storageAssignExtra !== !1,
           autoMarket: settings.autoMarket === !0,
-          noTrade: !!readProperty(readProperty(root, "race"), "terrifying"),
+          noTrade: !!readProperty(readProperty(root, "race"), "no_trade"),
           // The same commitments the demand pass just used, in the same order.
           requestLists: Object.freeze([
             toTargets(queued),

@@ -315,9 +315,7 @@ export function createCapturedResourceDemand(
       const storage = planStorageRequirements({
         storageAssignExtra: settings["storageAssignExtra"] !== false,
         autoMarket: settings["autoMarket"] === true,
-        noTrade: Boolean(
-          readProperty(readProperty(root, "race"), "terrifying"),
-        ),
+        noTrade: Boolean(readProperty(readProperty(root, "race"), "no_trade")),
         // The same commitments the demand pass just used, in the same order.
         requestLists: Object.freeze([
           toTargets(queued),
