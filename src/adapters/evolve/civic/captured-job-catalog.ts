@@ -25,6 +25,8 @@ export interface CapturedJobCatalogEntry {
   readonly serves: boolean;
   /** Static planner split flag from the ordinary-job catalog. */
   readonly split: boolean;
+  /** Characterized smart maximum, when this catalog slice has all required inputs. */
+  readonly smartMaximum: number | null;
   /** DeadSpace uses -1 for an uncapped ordinary job. */
   readonly maximum: number;
   readonly display: boolean;
@@ -77,6 +79,41 @@ function finiteSettingNumber(
 ): number | null {
   const value = readProperty(settings, key);
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function optionalFiniteNumber(
+  record: Record<PropertyKey, unknown> | undefined,
+  key: string,
+): number | undefined {
+  const value = readProperty(record, key);
+  if (value === undefined) return 0;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function readSmartMaximum(
+  root: unknown,
+  id: string,
+  smart: boolean,
+): number | null | undefined {
+  if (!smart || id !== "teamster") return null;
+  const race = readProperty(root, "race");
+  const tech = readProperty(root, "tech");
+  if (!isRecord(race) || !isRecord(tech)) return undefined;
+  const teamster = finiteNonNegative(readProperty(race, "teamster"));
+  const transport = optionalFiniteNumber(tech, "transport");
+  const railway = optionalFiniteNumber(tech, "railway");
+  if (
+    teamster === undefined ||
+    transport === undefined ||
+    railway === undefined
+  ) {
+    return undefined;
+  }
+  const maximum = Math.round((teamster / transport) * 1.5) - railway * 2;
+  if (Number.isFinite(maximum)) return maximum;
+  return maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
 }
 
 function readServantState(
@@ -282,6 +319,12 @@ function readCatalog(
       onSkipped(controlId, "ordinary job servant count is not finite");
       return undefined;
     }
+    const smart = readProperty(settings, `job_s_${id}`) === true;
+    const smartMaximum = readSmartMaximum(root, id, smart);
+    if (smartMaximum === undefined) {
+      onSkipped(controlId, "ordinary job smart maximum is unavailable");
+      return undefined;
+    }
     // DeadSpace's job surface defines unlocked from civic.display and the script's managed
     // setting is only effective for an unlocked job. Missing or malformed settings remain false.
     const unlocked = display;
@@ -299,13 +342,14 @@ function readCatalog(
         id,
         controlId,
         kind: jobKind(id),
-        smart: readProperty(settings, `job_s_${id}`) === true,
+        smart,
         configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
         assigned,
         workers,
         servants: servantInput.count,
         serves: servantInput.serves,
         split: isSplitJob(id),
+        smartMaximum,
         maximum,
         display,
         unlocked,

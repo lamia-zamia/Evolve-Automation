@@ -75,6 +75,7 @@ assert.deepEqual(reader(), {
       servants: 0,
       serves: false,
       split: false,
+      smartMaximum: null,
       maximum: 0,
       display: true,
       unlocked: true,
@@ -95,6 +96,7 @@ assert.deepEqual(reader(), {
       servants: 0,
       serves: false,
       split: false,
+      smartMaximum: null,
       maximum: 8,
       display: true,
       unlocked: true,
@@ -115,6 +117,7 @@ assert.deepEqual(reader(), {
       servants: 0,
       serves: false,
       split: true,
+      smartMaximum: null,
       maximum: -1,
       display: true,
       unlocked: true,
@@ -135,6 +138,7 @@ assert.deepEqual(reader(), {
       servants: 0,
       serves: false,
       split: false,
+      smartMaximum: null,
       maximum: 0,
       display: false,
       unlocked: false,
@@ -149,6 +153,38 @@ assert.deepEqual(reader(), {
 assert.deepEqual(skipped, [
   { id: "civ-missing", reason: "ordinary job control is incomplete" },
 ]);
+
+const teamsterReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { teamster: 9 },
+      tech: { transport: 3, railway: 1 },
+      civic: {
+        ...root.civic,
+        teamster: {
+          job: "teamster",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-teamster"],
+  },
+  readSettings: () => ({ job_s_teamster: true }),
+});
+assert.equal(
+  teamsterReader().jobs.find(({ id }) => id === "teamster")?.smartMaximum,
+  3,
+  "Teamster smart maximum uses the captured race and technology levels",
+);
 
 const servantReader = createCapturedJobCatalogReader({
   rootState: {

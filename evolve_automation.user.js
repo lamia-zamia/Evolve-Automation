@@ -4405,6 +4405,20 @@
     let value = readProperty(settings, key);
     return typeof value == "number" && Number.isFinite(value) ? value : null;
   }
+  function optionalFiniteNumber(record, key) {
+    let value = readProperty(record, key);
+    return value === void 0 ? 0 : typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readSmartMaximum(root, id, smart) {
+    if (!smart || id !== "teamster") return null;
+    let race = readProperty(root, "race"), tech = readProperty(root, "tech");
+    if (!isRecord(race) || !isRecord(tech)) return;
+    let teamster = finiteNonNegative(readProperty(race, "teamster")), transport = optionalFiniteNumber(tech, "transport"), railway = optionalFiniteNumber(tech, "railway");
+    if (teamster === void 0 || transport === void 0 || railway === void 0)
+      return;
+    let maximum = Math.round(teamster / transport * 1.5) - railway * 2;
+    return Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+  }
   function readServantState(root) {
     let race = readProperty(root, "race"), servants = readProperty(race, "servants");
     if (servants === void 0 || servants === !1) return null;
@@ -4533,6 +4547,11 @@
         onSkipped(controlId, "ordinary job servant count is not finite");
         return;
       }
+      let smart = readProperty(settings, `job_s_${id}`) === !0, smartMaximum = readSmartMaximum(root, id, smart);
+      if (smartMaximum === void 0) {
+        onSkipped(controlId, "ordinary job smart maximum is unavailable");
+        return;
+      }
       let unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
         configuredBreakpoints,
         maximum,
@@ -4545,13 +4564,14 @@
           id,
           controlId,
           kind: jobKind(id),
-          smart: readProperty(settings, `job_s_${id}`) === !0,
+          smart,
           configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
           assigned,
           workers,
           servants: servantInput.count,
           serves: servantInput.serves,
           split: isSplitJob(id),
+          smartMaximum,
           maximum,
           display,
           unlocked,
