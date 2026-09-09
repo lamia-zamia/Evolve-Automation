@@ -3611,7 +3611,10 @@
   function planJobs(input) {
     if (!input.available || input.jobs.length === 0) return null;
     let jobIndex = createJobIndex(input), requiredWorkers = input.jobs.map(() => 0), requiredServants = input.jobs.map(() => 0), availableWorkers = input.jobs.reduce((sum, job) => sum + job.workers, 0), availableServants = input.manageServants ? input.servantsMaximum : 0, availableCraftsmen = input.craftsmenMaximum, farmerIndex = indexOfToken(jobIndex, input.farmerToken), hunterIndex = indexOfToken(jobIndex, input.hunterToken), defaultIndex = indexOfToken(jobIndex, input.defaultJobToken);
-    input.craftOnly ? (availableCraftsmen = availableWorkers, availableWorkers = 0, availableServants = 0) : input.autoCraftsmen && availableWorkers >= availableCraftsmen * (farmerIndex === -1 ? 1 : 2) ? availableWorkers -= availableCraftsmen : availableCraftsmen = 0;
+    input.craftOnly ? (availableCraftsmen = Math.min(
+      input.craftOnlyWorkerPool ?? availableWorkers,
+      input.craftsmenMaximum
+    ), availableWorkers = 0, availableServants = 0) : input.autoCraftsmen && availableWorkers >= availableCraftsmen * (farmerIndex === -1 ? 1 : 2) ? availableWorkers -= availableCraftsmen : availableCraftsmen = 0;
     let craft = craftPlan(
       input,
       availableWorkers,
@@ -4509,7 +4512,12 @@
     let assignedWorkers = samples.reduce(
       (sum, sample) => sum + sample.workers,
       0
-    ), craftsmen = readCraftsmanState(root, foundry, assignedWorkers), settings = isRecord(settingsValue) ? settingsValue : {}, resources = readProperty(root, "resource"), jobs = samples.map(
+    ), craftsmen = readCraftsmanState(root, foundry, assignedWorkers), defaultJob = readDefaultJobState(root);
+    if (defaultJob === void 0) return;
+    let craftOnlyWorkerPool = Math.min(
+      craftsmen.maximum,
+      assignedWorkers + defaultJob.workers
+    ), settings = isRecord(settingsValue) ? settingsValue : {}, resources = readProperty(root, "resource"), jobs = samples.map(
       (sample, token) => Object.freeze({
         token,
         id: sample.id,
@@ -4550,6 +4558,7 @@
     }), input = Object.freeze({
       available: !0,
       craftOnly: !0,
+      craftOnlyWorkerPool,
       hunterActsAsUnemployed: !1,
       autoCraftsmen: !0,
       autoCraftWithoutBuilding: !0,
@@ -4597,7 +4606,7 @@
       input,
       samples: Object.freeze(samples),
       workerPool: craftsmen.workers,
-      defaultJob: readDefaultJobState(root)
+      defaultJob
     });
   }
   function decisionsMatch(left, right) {

@@ -2,9 +2,9 @@
  * Rebalances craftsmen already assigned to the upstream foundry.
  *
  * DeadSpace keeps recipe costs outside the captured root, but persists the effective total and
- * per-resource caps beside the foundry plus the current craftsman pool. The adapter uses those
- * validated values to redistribute existing assignments; it still does not acquire new craftsmen
- * from the default job pool.
+ * per-resource caps beside the foundry plus the current craftsman and default-job pools. The
+ * adapter uses those validated values to allocate craftsmen-only work; full auto-jobs remain out
+ * of scope.
  */
 
 import {
@@ -231,6 +231,14 @@ function readCycleInput(
     0,
   );
   const craftsmen = readCraftsmanState(root, foundry, assignedWorkers);
+  const defaultJob = readDefaultJobState(root);
+  // The game initializes this lazily, but a craftsmen command cannot safely acquire or release a
+  // worker without the named default job. Keep the cycle unavailable until that state is present.
+  if (defaultJob === undefined) return undefined;
+  const craftOnlyWorkerPool = Math.min(
+    craftsmen.maximum,
+    assignedWorkers + defaultJob.workers,
+  );
   const settings = isRecord(settingsValue) ? settingsValue : {};
   const resources = readProperty(root, "resource");
   const jobs = samples.map((sample, token) =>
@@ -276,6 +284,7 @@ function readCycleInput(
   const input: JobsCycleInput = Object.freeze({
     available: true,
     craftOnly: true,
+    craftOnlyWorkerPool,
     hunterActsAsUnemployed: false,
     autoCraftsmen: true,
     autoCraftWithoutBuilding: true,
@@ -323,7 +332,7 @@ function readCycleInput(
     input,
     samples: Object.freeze(samples),
     workerPool: craftsmen.workers,
-    defaultJob: readDefaultJobState(root),
+    defaultJob,
   });
 }
 

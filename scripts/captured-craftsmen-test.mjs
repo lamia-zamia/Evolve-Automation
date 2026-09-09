@@ -27,9 +27,11 @@ function controlsFor(root, includeFoundry = true) {
         if (method === "sub") {
           root.city.foundry[id] -= 1;
           root.city.foundry.crafting -= 1;
+          root.civic[root.civic.d_job].workers += 1;
         } else {
           root.city.foundry[id] += 1;
           root.city.foundry.crafting += 1;
+          root.civic[root.civic.d_job].workers -= 1;
         }
         return { ok: true, value: undefined };
       },
@@ -93,10 +95,13 @@ assert.equal(
 );
 assert.equal(runJobsAutomation(adapter, true).status, "succeeded");
 assert.equal(root.city.foundry.Plywood, 0);
-assert.equal(root.city.foundry.Brick, 2);
+assert.equal(root.city.foundry.Brick, 4);
+assert.equal(root.civic.unemployed.workers, 3);
 assert.deepEqual(captured.calls, [
   { method: "sub", id: "Plywood" },
   { method: "sub", id: "Plywood" },
+  { method: "add", id: "Brick" },
+  { method: "add", id: "Brick" },
   { method: "add", id: "Brick" },
   { method: "add", id: "Brick" },
 ]);
@@ -126,6 +131,7 @@ assert.equal(
   1,
 );
 assert.equal(cappedInput.craftsmenMaximum, 4);
+assert.equal(cappedInput.craftOnlyWorkerPool, 4);
 
 const malformedRoot = makeRoot();
 const malformedControls = controlsFor(malformedRoot);
@@ -142,8 +148,9 @@ const malformedAdapter = createCapturedCraftsmenAutomation({
   }),
 });
 assert.equal(runJobsAutomation(malformedAdapter, true).status, "succeeded");
-assert.equal(malformedRoot.city.foundry.Plywood, 2);
+assert.equal(malformedRoot.city.foundry.Plywood, 4);
 assert.equal(malformedRoot.city.foundry.Brick, 0);
+assert.equal(malformedRoot.civic.unemployed.workers, 3);
 
 const staleRoot = makeRoot();
 const staleControls = controlsFor(staleRoot);
@@ -213,13 +220,8 @@ const uninitializedAdapter = createCapturedCraftsmenAutomation({
   costs,
   readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
 });
-const uninitializedDecision = planJobs(
-  uninitializedAdapter.reader.readCycle(true),
-);
-assert.equal(
-  uninitializedAdapter.executor.execute(uninitializedDecision).status,
-  "succeeded",
-);
+assert.equal(uninitializedAdapter.reader.readCycle(true).available, false);
+assert.equal(runJobsAutomation(uninitializedAdapter, true).status, "succeeded");
 
 const missingRoot = makeRoot();
 const missingControls = controlsFor(missingRoot, false);

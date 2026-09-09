@@ -71,6 +71,11 @@ export interface JobsAuthorityInput {
 export interface JobsCycleInput {
   readonly available: boolean;
   readonly craftOnly: boolean;
+  /**
+   * Total worker pool available to craftsmen-only allocation, including workers already in the
+   * foundry. When absent, the planner retains the legacy sum of the supplied job workers.
+   */
+  readonly craftOnlyWorkerPool?: number | undefined;
   /** In Carnivore/Soul Eater/Unfathomable runs, Hunter is the game's unemployed pool. */
   readonly hunterActsAsUnemployed: boolean;
   readonly autoCraftsmen: boolean;
@@ -407,7 +412,10 @@ export function planJobs(
   const defaultIndex = indexOfToken(jobIndex, input.defaultJobToken);
 
   if (input.craftOnly) {
-    availableCraftsmen = availableWorkers;
+    availableCraftsmen = Math.min(
+      input.craftOnlyWorkerPool ?? availableWorkers,
+      input.craftsmenMaximum,
+    );
     availableWorkers = 0;
     availableServants = 0;
   } else if (
