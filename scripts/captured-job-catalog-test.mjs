@@ -1542,6 +1542,20 @@ assert.equal(
   2,
   "the Farmer minimum follows the captured Food/Farm allocation cap",
 );
+const highPopulationFarmReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({ ...foodRoot, race: { high_pop: 1 } }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: foodControls,
+  readSettings: () => ({ job_s_farmer: true }),
+});
+assert.equal(
+  highPopulationFarmReader().jobs[0].smartMaximum,
+  5,
+  "Farm capacity uses the high-population citizen-cap multiplier",
+);
 const hunterFoodReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

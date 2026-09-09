@@ -568,10 +568,11 @@ function readFarmerSmartMaximum(
   if (farm === undefined) return foodMaximum;
   if (!isRecord(farm)) return undefined;
   const farmCount = finiteNonNegative(readProperty(farm, "count"));
-  const workerEffect = readHighPopulationWorkerEffect(root);
-  if (farmCount === undefined || workerEffect === undefined) return undefined;
+  const highPopulation = readHighPopulationFactors(readProperty(root, "race"));
+  if (farmCount === undefined || highPopulation === undefined) return undefined;
+  const citizenCap = highPopulation?.breakpointScale ?? 1;
   const farmerCapacity =
-    farmCount > 0 ? Math.ceil(farmCount * workerEffect) + 1 : 0;
+    farmCount > 0 ? Math.ceil(farmCount * citizenCap) + 1 : 0;
   return Math.min(foodMaximum ?? Number.MAX_SAFE_INTEGER, farmerCapacity);
 }
 

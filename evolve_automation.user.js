@@ -4886,9 +4886,9 @@
     let farm = readProperty(readProperty(root, "city"), "farm");
     if (farm === void 0) return foodMaximum;
     if (!isRecord(farm)) return;
-    let farmCount = finiteNonNegative(readProperty(farm, "count")), workerEffect = readHighPopulationWorkerEffect(root);
-    if (farmCount === void 0 || workerEffect === void 0) return;
-    let farmerCapacity = farmCount > 0 ? Math.ceil(farmCount * workerEffect) + 1 : 0;
+    let farmCount = finiteNonNegative(readProperty(farm, "count")), highPopulation = readHighPopulationFactors(readProperty(root, "race"));
+    if (farmCount === void 0 || highPopulation === void 0) return;
+    let citizenCap = highPopulation?.breakpointScale ?? 1, farmerCapacity = farmCount > 0 ? Math.ceil(farmCount * citizenCap) + 1 : 0;
     return Math.min(foodMaximum ?? Number.MAX_SAFE_INTEGER, farmerCapacity);
   }
   function readHunterSmartMaximum(root, count, readDemand, history) {
