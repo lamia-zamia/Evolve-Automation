@@ -49,6 +49,10 @@ import {
   SMELTER_CONTROL,
 } from "../adapters/evolve/economy/production/captured-smelter.ts";
 import {
+  createCapturedNaniteAutomation,
+  NANITE_CONTROL,
+} from "../adapters/evolve/economy/resources/captured-nanite.ts";
+import {
   createCapturedFactoryAutomation,
   FACTORY_CONTROL,
 } from "../adapters/evolve/economy/production/captured-factory.ts";
@@ -143,6 +147,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoPower: false,
   autoFactory: false,
   autoStorage: false,
+  autoNanite: false,
   autoJobs: false,
   autoGalaxyMarket: false,
 });
@@ -642,6 +647,41 @@ export function startCapturedRuntime({
     }
   };
 
+  let naniteDiscoveryAttempted = false;
+  const ensureNaniteControls = () => {
+    if (pageCapture.controls.resolve(NANITE_CONTROL) !== undefined) return;
+    const root = pageCapture.rootState.readRoot();
+    const race = readProperty(root, "race");
+    const naniteFactory = readProperty(
+      readProperty(root, "city"),
+      "nanite_factory",
+    );
+    if (
+      !readProperty(race, "deconstructor") ||
+      !isRecord(naniteFactory) ||
+      naniteDiscoveryAttempted
+    ) {
+      return;
+    }
+    naniteDiscoveryAttempted = true;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    if (govTabs === undefined) return;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 2,
+      }),
+      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `nanite discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+
   const ensureStorageControls = () => {
     if (
       pageCapture.controls.resolve(STORAGE_CONSTRUCTION_CONTROL) !== undefined
@@ -812,6 +852,12 @@ export function startCapturedRuntime({
     readSettings: () => readStoredSettings(storage),
     readDemand: () => readDemand(),
   });
+  const nanite = createCapturedNaniteAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
+  });
   const factory = createCapturedFactoryAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -920,6 +966,10 @@ export function startCapturedRuntime({
       }
       if (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) {
         progression.runConstructionCycle();
+      }
+      if (isEnabled(settings, "autoNanite")) {
+        ensureNaniteControls();
+        nanite.run();
       }
       if (isEnabled(settings, "autoPower")) {
         ensureCityControls();

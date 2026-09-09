@@ -565,4 +565,97 @@ assert.equal(unsubscribeCount, 1);
   );
 }
 
+// Nanite disposal runs before power producers, so the power planner sees the post-disposal rate.
+{
+  const root = {
+    race: { deconstructor: true },
+    resource: {
+      Nanite: { amount: 0, max: 100, display: true },
+      Copper: { amount: 100, max: 100, diff: 0, display: true },
+    },
+    city: {
+      powered: true,
+      power: -1,
+      nanite_factory: { count: 1, Copper: 0 },
+      mill: { count: 2, on: 0 },
+    },
+  };
+  const invoked = [];
+  let cycle;
+  const controls = {
+    resolve: (elementId) => {
+      if (elementId === "iNFactory") {
+        return {
+          elementId,
+          generation: 1,
+          methods: ["addItem", "subItem"],
+        };
+      }
+      if (elementId === "city-mill") {
+        return { elementId, generation: 1, methods: ["power_on"] };
+      }
+      return undefined;
+    },
+    invoke: (handle, method, args = []) => {
+      invoked.push(`${handle.elementId}.${method}`);
+      if (handle.elementId === "iNFactory") {
+        root.city.nanite_factory[args[0]] += method === "addItem" ? 1 : -1;
+      } else {
+        root.city.mill.on += 1;
+        root.city.power = 1;
+      }
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds: () => ["iNFactory", "city-mill"],
+  };
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls,
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          autoNanite: true,
+          naniteMode: "cap",
+          autoPower: true,
+          res_naniteCopper: true,
+        }),
+    },
+    logError: (message) => {
+      throw new Error(message);
+    },
+  });
+  cycle({ periods: 1 });
+  stopCycle();
+  const firstPower = invoked.findIndex(
+    (entry) => entry === "city-mill.power_on",
+  );
+  assert.ok(firstPower > 0, JSON.stringify(invoked));
+  assert.ok(
+    invoked
+      .slice(0, firstPower)
+      .every((entry) => entry === "iNFactory.addItem"),
+    JSON.stringify(invoked),
+  );
+  assert.equal(root.city.nanite_factory.Copper, 4);
+}
+
 console.log("captured-runtime-control ok");
