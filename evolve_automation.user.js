@@ -4413,11 +4413,12 @@
     let value = readProperty(record, key);
     return value === void 0 ? 0 : typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
-  function readSmartMaximum(root, id, smart) {
+  function readSmartMaximum(root, id, smart, count) {
     if (!smart) return null;
     if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
     if (id === "torturer") return readTorturerSmartMaximum(root);
     if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
+    if (id === "scientist") return readScientistSmartMaximum(root, count);
     if (id !== "teamster") return null;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
@@ -4487,6 +4488,19 @@
       return;
     let storageRatio2 = maximum > 0 ? amount / maximum : 0;
     return threat > 9e3 && storageRatio2 < 1 ? 0 : Number.MAX_SAFE_INTEGER;
+  }
+  function readScientistSmartMaximum(root, count) {
+    let race = readProperty(root, "race"), universe = readProperty(race, "universe"), resources = readProperty(root, "resource"), knowledge = readProperty(resources, "Knowledge"), knowledgeMaximum = readProperty(knowledge, "max");
+    if (!isRecord(race) || typeof universe != "string" || !isRecord(knowledge) || typeof knowledgeMaximum != "number" || !Number.isFinite(knowledgeMaximum))
+      return;
+    let maximum = Number.MAX_SAFE_INTEGER, tech = readProperty(root, "tech"), techRecord = isRecord(tech) ? tech : void 0, science = optionalFiniteNumber(techRecord, "science"), genetics = optionalFiniteNumber(techRecord, "genetics");
+    if (science === void 0 || genetics === void 0) return;
+    if (universe !== "magic" && knowledgeMaximum >= 0 && readProperty(race, "intelligent") !== !0 && science < 5 && genetics < 5 && (maximum = 0), readProperty(race, "witch_hunter") !== !0) return maximum;
+    let govern = readProperty(readProperty(root, "civic"), "govern"), governType = readProperty(govern, "type"), suspicion = readProperty(resources, "Sus"), suspicionAmount = readProperty(suspicion, "amount");
+    if (typeof governType != "string" || typeof suspicionAmount != "number" || !Number.isFinite(suspicionAmount))
+      return;
+    let suspicionPerWizard = governType === "magocracy" ? 0.5 : 1;
+    return maximum = (99 - suspicionAmount) / suspicionPerWizard + count * suspicionPerWizard, Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
   }
   function readStorageBackedMinimum(root, id, workers, display) {
     let rawTech = readProperty(root, "tech"), tech = isRecord(rawTech) ? rawTech : void 0, banking = optionalFiniteNumber(tech, "banking");
@@ -4725,7 +4739,12 @@
         onSkipped(controlId, "ordinary job servant count is not finite");
         return;
       }
-      let smart = readProperty(settings, `job_s_${id}`) === !0, smartMaximum = readSmartMaximum(root, id, smart);
+      let smart = readProperty(settings, `job_s_${id}`) === !0, smartMaximum = readSmartMaximum(
+        root,
+        id,
+        smart,
+        workers + servantInput.count * servantModifier
+      );
       if (smartMaximum === void 0) {
         onSkipped(controlId, "ordinary job smart maximum is unavailable");
         return;

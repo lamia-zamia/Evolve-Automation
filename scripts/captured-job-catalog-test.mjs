@@ -349,6 +349,39 @@ assert.equal(
   "Hell Surveyor smart maximum stops when threat is high and Population storage is open",
 );
 
+const scientistReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { universe: "standard", intelligent: false },
+      tech: { science: 2, genetics: 1 },
+      resource: { Knowledge: { max: 100 } },
+      civic: {
+        ...root.civic,
+        scientist: {
+          job: "scientist",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-scientist"],
+  },
+  readSettings: () => ({ job_s_scientist: true }),
+});
+assert.equal(
+  scientistReader().jobs.find(({ id }) => id === "scientist")?.smartMaximum,
+  0,
+  "Scientist smart maximum stops capped Knowledge for non-intelligent races",
+);
+
 const selectionReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({
