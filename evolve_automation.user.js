@@ -4552,7 +4552,7 @@
         onSkipped(controlId, "ordinary job smart maximum is unavailable");
         return;
       }
-      let kind = jobKind(id), unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
+      let kind = jobKind(id), race = readProperty(root, "race"), demonicLumber = kind === "hunter" && readProperty(race, "soul_eater") === !0 && readProperty(race, "evil") === !0 && readProperty(race, "species") !== "wendigo" && readProperty(race, "kindling_kindred") !== !0 && readProperty(race, "smoldering") !== !0, unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
         configuredBreakpoints,
         maximum,
         id,
@@ -4572,7 +4572,8 @@
           serves: servantInput.serves,
           split: isSplitJob(id),
           smartMaximum,
-          warlordMiner: kind === "miner" && readProperty(readProperty(root, "race"), "warlord") === !0,
+          warlordMiner: kind === "miner" && readProperty(race, "warlord") === !0,
+          demonicLumber,
           maximum,
           display,
           unlocked,

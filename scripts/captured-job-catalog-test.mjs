@@ -77,6 +77,7 @@ assert.deepEqual(reader(), {
       split: false,
       smartMaximum: null,
       warlordMiner: false,
+      demonicLumber: false,
       maximum: 0,
       display: true,
       unlocked: true,
@@ -99,6 +100,7 @@ assert.deepEqual(reader(), {
       split: false,
       smartMaximum: null,
       warlordMiner: false,
+      demonicLumber: false,
       maximum: 8,
       display: true,
       unlocked: true,
@@ -121,6 +123,7 @@ assert.deepEqual(reader(), {
       split: true,
       smartMaximum: null,
       warlordMiner: false,
+      demonicLumber: false,
       maximum: -1,
       display: true,
       unlocked: true,
@@ -143,6 +146,7 @@ assert.deepEqual(reader(), {
       split: false,
       smartMaximum: null,
       warlordMiner: false,
+      demonicLumber: false,
       maximum: 0,
       display: false,
       unlocked: false,
@@ -219,6 +223,41 @@ assert.equal(
   warlordMinerReader().jobs.find(({ id }) => id === "miner")?.warlordMiner,
   true,
   "Warlord Miner behavior follows the captured race flag",
+);
+
+const demonicLumberReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: {
+        species: "demon",
+        soul_eater: true,
+        evil: true,
+      },
+      civic: {
+        ...root.civic,
+        hunter: {
+          job: "hunter",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-hunter"],
+  },
+  readSettings: () => ({}),
+});
+assert.equal(
+  demonicLumberReader().jobs.find(({ id }) => id === "hunter")?.demonicLumber,
+  true,
+  "Demonic Lumber follows the captured demon and lumber-race predicates",
 );
 
 const servantReader = createCapturedJobCatalogReader({

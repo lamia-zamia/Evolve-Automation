@@ -29,6 +29,8 @@ export interface CapturedJobCatalogEntry {
   readonly smartMaximum: number | null;
   /** Warlord Miner behavior is a direct race/id condition in the pure planner. */
   readonly warlordMiner: boolean;
+  /** Hunter's demonic-lumber branch from the captured race profile. */
+  readonly demonicLumber: boolean;
   /** DeadSpace uses -1 for an uncapped ordinary job. */
   readonly maximum: number;
   readonly display: boolean;
@@ -328,6 +330,14 @@ function readCatalog(
       return undefined;
     }
     const kind = jobKind(id);
+    const race = readProperty(root, "race");
+    const demonicLumber =
+      kind === "hunter" &&
+      readProperty(race, "soul_eater") === true &&
+      readProperty(race, "evil") === true &&
+      readProperty(race, "species") !== "wendigo" &&
+      readProperty(race, "kindling_kindred") !== true &&
+      readProperty(race, "smoldering") !== true;
     // DeadSpace's job surface defines unlocked from civic.display and the script's managed
     // setting is only effective for an unlocked job. Missing or malformed settings remain false.
     const unlocked = display;
@@ -354,8 +364,8 @@ function readCatalog(
         split: isSplitJob(id),
         smartMaximum,
         warlordMiner:
-          kind === "miner" &&
-          readProperty(readProperty(root, "race"), "warlord") === true,
+          kind === "miner" && readProperty(race, "warlord") === true,
+        demonicLumber,
         maximum,
         display,
         unlocked,
