@@ -63,6 +63,7 @@ assert.deepEqual(reader(), {
       configuredPriority: 0,
       assigned: 4,
       workers: 4,
+      servants: 0,
       maximum: 0,
       display: true,
       unlocked: true,
@@ -80,6 +81,7 @@ assert.deepEqual(reader(), {
       configuredPriority: 4,
       assigned: 3,
       workers: 3,
+      servants: 0,
       maximum: 8,
       display: true,
       unlocked: true,
@@ -97,6 +99,7 @@ assert.deepEqual(reader(), {
       configuredPriority: null,
       assigned: 0,
       workers: 0,
+      servants: 0,
       maximum: 0,
       display: false,
       unlocked: false,
@@ -111,6 +114,46 @@ assert.deepEqual(reader(), {
 assert.deepEqual(skipped, [
   { id: "civ-missing", reason: "ordinary job control is incomplete" },
 ]);
+
+const servantReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { servants: { jobs: { farmer: 2 } } },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls,
+  readSettings: () => ({}),
+});
+assert.deepEqual(
+  servantReader().jobs.map(({ id, servants }) => ({ id, servants })),
+  [
+    { id: "unemployed", servants: 0 },
+    { id: "farmer", servants: 2 },
+    { id: "hidden", servants: 0 },
+  ],
+  "servant assignments come from the captured servant job map",
+);
+
+const malformedServantReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { servants: { jobs: { farmer: "two" } } },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls,
+  readSettings: () => ({}),
+});
+assert.equal(
+  malformedServantReader(),
+  undefined,
+  "malformed servant assignments do not produce a partial catalog",
+);
 
 const highPopulation = createCapturedJobCatalogReader({
   rootState: {

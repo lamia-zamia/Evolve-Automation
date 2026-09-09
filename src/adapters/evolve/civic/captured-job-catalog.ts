@@ -19,6 +19,8 @@ export interface CapturedJobCatalogEntry {
   readonly configuredPriority: number | null;
   readonly assigned: number;
   readonly workers: number;
+  /** Current servant assignment; zero when the run has no servant feature. */
+  readonly servants: number;
   /** DeadSpace uses -1 for an uncapped ordinary job. */
   readonly maximum: number;
   readonly display: boolean;
@@ -62,6 +64,22 @@ function finiteSettingNumber(
 ): number | null {
   const value = readProperty(settings, key);
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readServants(root: unknown, id: string): number | undefined {
+  const race = readProperty(root, "race");
+  const servants = readProperty(race, "servants");
+  // DeadSpace omits the servant state entirely for races without servants. That is a valid zero,
+  // not an incomplete ordinary-job sample.
+  if (servants === undefined || servants === false) return 0;
+  if (!isRecord(servants)) return undefined;
+  const jobs = readProperty(servants, "jobs");
+  if (!isRecord(jobs)) return undefined;
+  const value = readProperty(jobs, id);
+  // A servant job is created lazily with the servant panel. An absent entry therefore means that
+  // no servant is assigned yet; it must not make an ordinary worker sample unavailable.
+  if (value === undefined) return 0;
+  return finiteNonNegative(value);
 }
 
 // These are the canonical ordinary ids from DeadSpace's defineJobs list. The fallback keeps
@@ -199,6 +217,11 @@ function readCatalog(
       onSkipped(controlId, "ordinary job visibility is not boolean");
       continue;
     }
+    const servants = readServants(root, id);
+    if (servants === undefined) {
+      onSkipped(controlId, "ordinary job servant count is not finite");
+      return undefined;
+    }
     // DeadSpace's job surface defines unlocked from civic.display and the script's managed
     // setting is only effective for an unlocked job. Missing or malformed settings remain false.
     const unlocked = display;
@@ -220,6 +243,7 @@ function readCatalog(
         configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
         assigned,
         workers,
+        servants,
         maximum,
         display,
         unlocked,

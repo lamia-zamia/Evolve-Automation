@@ -4405,6 +4405,15 @@
     let value = readProperty(settings, key);
     return typeof value == "number" && Number.isFinite(value) ? value : null;
   }
+  function readServants(root, id) {
+    let race = readProperty(root, "race"), servants = readProperty(race, "servants");
+    if (servants === void 0 || servants === !1) return 0;
+    if (!isRecord(servants)) return;
+    let jobs = readProperty(servants, "jobs");
+    if (!isRecord(jobs)) return;
+    let value = readProperty(jobs, id);
+    return value === void 0 ? 0 : finiteNonNegative(value);
+  }
   var JOB_KINDS = Object.freeze({
     farmer: "farmer",
     hunter: "hunter",
@@ -4493,6 +4502,11 @@
         onSkipped(controlId, "ordinary job visibility is not boolean");
         continue;
       }
+      let servants = readServants(root, id);
+      if (servants === void 0) {
+        onSkipped(controlId, "ordinary job servant count is not finite");
+        return;
+      }
       let unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
         configuredBreakpoints,
         maximum,
@@ -4509,6 +4523,7 @@
           configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
           assigned,
           workers,
+          servants,
           maximum,
           display,
           unlocked,
