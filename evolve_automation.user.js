@@ -4468,6 +4468,14 @@
     let race = readProperty(root, "race");
     return readProperty(race, "carnivore") === !0 && readProperty(race, "herbivore") !== !0 || readProperty(race, "soul_eater") === !0 || readProperty(race, "unfathomable") === !0;
   }
+  function readMinimumDefault(root) {
+    let civic = readProperty(root, "civic"), crew = readProperty(civic, "crew");
+    if (crew === void 0) return null;
+    if (!isRecord(crew)) return;
+    let maximum = finiteNonNegative(readProperty(crew, "max")), workers = finiteNonNegative(readProperty(crew, "workers"));
+    if (!(maximum === void 0 || workers === void 0))
+      return maximum > workers ? maximum - workers + 1 : 0;
+  }
   function readConfiguredBreakpoints(settings, id) {
     let values = [1, 2, 3].map(
       (number) => readProperty(settings, `job_b${number}_${id}`)
@@ -4503,6 +4511,11 @@
     let settings = isRecord(settingsValue) ? settingsValue : void 0, servantState = readServantState(root);
     if (servantState === void 0) {
       onSkipped("civics", "ordinary job servant state is incomplete");
+      return;
+    }
+    let minimumDefault = readMinimumDefault(root);
+    if (minimumDefault === void 0) {
+      onSkipped("civics", "ordinary job crew state is incomplete");
       return;
     }
     let jobs = [], seen = /* @__PURE__ */ new Set();
@@ -4592,6 +4605,7 @@
     return jobs.some((job) => job.id === defaultJobId) ? Object.freeze({
       defaultJobId,
       hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
+      minimumDefault,
       servantState,
       jobs: Object.freeze(jobs)
     }) : void 0;

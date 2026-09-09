@@ -63,6 +63,7 @@ const reader = createCapturedJobCatalogReader({
 assert.deepEqual(reader(), {
   defaultJobId: "unemployed",
   hunterActsAsUnemployed: false,
+  minimumDefault: null,
   servantState: null,
   jobs: [
     {
@@ -264,6 +265,59 @@ assert.equal(
   demonicLumberReader().hunterActsAsUnemployed,
   true,
   "Hunter acts as unemployed for the captured soul-eater race",
+);
+assert.equal(
+  createCapturedJobCatalogReader({
+    rootState: {
+      readRoot: () => ({
+        ...root,
+        race: { species: "wendigo", soul_eater: true, evil: true },
+        civic: {
+          ...root.civic,
+          hunter: {
+            job: "hunter",
+            assigned: 0,
+            workers: 0,
+            max: -1,
+            display: true,
+          },
+        },
+      }),
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      ...controls,
+      capturedElementIds: () => ["civ-unemployed", "civ-hunter"],
+    },
+    readSettings: () => ({}),
+  })().jobs.find(({ id }) => id === "hunter")?.demonicLumber,
+  false,
+  "Wendigo remains outside the demonic-lumber branch",
+);
+
+const crewReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      civic: {
+        ...root.civic,
+        crew: { max: 5, workers: 3 },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed"],
+  },
+  readSettings: () => ({}),
+});
+assert.equal(
+  crewReader().minimumDefault,
+  3,
+  "crew reserve leaves one worker above the current deficit",
 );
 
 const servantReader = createCapturedJobCatalogReader({

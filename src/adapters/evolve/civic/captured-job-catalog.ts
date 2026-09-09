@@ -55,6 +55,8 @@ export interface CapturedJobCatalog {
   readonly defaultJobId: string;
   /** Whether the current race uses Hunter as the unemployed allocation pool. */
   readonly hunterActsAsUnemployed: boolean;
+  /** Crew reserve needed before selecting a new default job, when crew state exists. */
+  readonly minimumDefault: number | null;
   /** Null means the race has no servant feature in this run. */
   readonly servantState: Readonly<CapturedServantState> | null;
   readonly jobs: readonly Readonly<CapturedJobCatalogEntry>[];
@@ -209,6 +211,17 @@ function readHunterActsAsUnemployed(root: unknown): boolean {
   );
 }
 
+function readMinimumDefault(root: unknown): number | null | undefined {
+  const civic = readProperty(root, "civic");
+  const crew = readProperty(civic, "crew");
+  if (crew === undefined) return null;
+  if (!isRecord(crew)) return undefined;
+  const maximum = finiteNonNegative(readProperty(crew, "max"));
+  const workers = finiteNonNegative(readProperty(crew, "workers"));
+  if (maximum === undefined || workers === undefined) return undefined;
+  return maximum > workers ? maximum - workers + 1 : 0;
+}
+
 function readConfiguredBreakpoints(
   settings: Record<PropertyKey, unknown> | undefined,
   id: string,
@@ -280,6 +293,11 @@ function readCatalog(
   const servantState = readServantState(root);
   if (servantState === undefined) {
     onSkipped("civics", "ordinary job servant state is incomplete");
+    return undefined;
+  }
+  const minimumDefault = readMinimumDefault(root);
+  if (minimumDefault === undefined) {
+    onSkipped("civics", "ordinary job crew state is incomplete");
     return undefined;
   }
 
@@ -394,6 +412,7 @@ function readCatalog(
     ? Object.freeze({
         defaultJobId,
         hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
+        minimumDefault,
         servantState,
         jobs: Object.freeze(jobs),
       })
