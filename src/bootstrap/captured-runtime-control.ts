@@ -180,6 +180,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     costs,
     readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
   });
   const pylon = createCapturedPylonAutomation({
     rootState: pageCapture.rootState,

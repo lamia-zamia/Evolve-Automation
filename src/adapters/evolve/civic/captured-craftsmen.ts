@@ -19,6 +19,7 @@ import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 import type { CapturedCraftCosts } from "../economy/production/captured-craft-costs.ts";
+import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
 import {
   createCapturedJobCatalogReader,
   type CapturedJobCatalog,
@@ -51,6 +52,7 @@ export interface CapturedCraftsmenDependencies {
   readonly controls: GameControlRegistry;
   readonly costs: CapturedCraftCosts;
   readonly readSettings: () => unknown;
+  readonly readDemand?: () => CapturedDemandSample;
 }
 
 export interface CapturedCraftsmenAutomation {
@@ -469,6 +471,9 @@ export function createCapturedCraftsmenAutomation(
     rootState: dependencies.rootState,
     controls: dependencies.controls,
     readSettings: dependencies.readSettings,
+    ...(dependencies.readDemand === undefined
+      ? {}
+      : { readDemand: dependencies.readDemand }),
   });
   const executor = createExecutor(dependencies, sessionRef, readJobCatalog);
   const reader: JobsReader = Object.freeze({

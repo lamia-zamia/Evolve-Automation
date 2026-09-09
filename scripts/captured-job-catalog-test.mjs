@@ -684,6 +684,85 @@ assert.deepEqual(
   "Banker and Ancient Priest workers preserve their storage-backed floors",
 );
 
+const bankerDemandReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      resource: { Money: { amount: 100, max: 200 } },
+      civic: {
+        ...root.civic,
+        d_job: "banker",
+        taxes: { tax_rate: 10 },
+        banker: {
+          job: "banker",
+          assigned: 1,
+          workers: 1,
+          max: -1,
+          display: true,
+        },
+      },
+      tech: { banking: 6 },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-banker"],
+  },
+  readSettings: () => ({ job_s_banker: true }),
+  readDemand: () => ({
+    requestedQuantity: () => 0,
+    isDemanded: () => false,
+    storageRequired: () => 80,
+  }),
+});
+const bankerDemandCatalog = bankerDemandReader();
+assert.equal(
+  bankerDemandCatalog?.jobs[0]?.smartMaximum,
+  0,
+  "Banker smart mode stops once the captured Money storage requirement is met",
+);
+
+const bankerUnsatisfiedReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      resource: { Money: { amount: 100, max: 200 } },
+      civic: {
+        ...root.civic,
+        d_job: "banker",
+        taxes: { tax_rate: 10 },
+        banker: {
+          job: "banker",
+          assigned: 1,
+          workers: 1,
+          max: -1,
+          display: true,
+        },
+      },
+      tech: { banking: 6 },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-banker"],
+  },
+  readSettings: () => ({ job_s_banker: true }),
+  readDemand: () => ({
+    requestedQuantity: () => 0,
+    isDemanded: () => false,
+    storageRequired: () => 120,
+  }),
+});
+assert.equal(
+  bankerUnsatisfiedReader().jobs[0].smartMaximum,
+  null,
+  "Banker smart mode keeps bankers while the captured Money storage requirement is unmet",
+);
+
 const servantReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

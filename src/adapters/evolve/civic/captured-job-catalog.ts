@@ -9,6 +9,7 @@
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type { JobKind } from "../../../domain/civic/jobs.ts";
+import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 
 export interface CapturedJobCatalogEntry {
@@ -90,6 +91,7 @@ export interface CapturedJobCatalogReaderDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
+  readonly readDemand?: () => CapturedDemandSample;
   readonly onSkipped?: (controlId: string, reason: string) => void;
 }
 
@@ -145,6 +147,7 @@ function readSmartMaximum(
   id: string,
   smart: boolean,
   count: number,
+  readDemand?: () => CapturedDemandSample,
 ): number | null | undefined {
   if (!smart) return null;
   if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
@@ -152,7 +155,7 @@ function readSmartMaximum(
   if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
   if (id === "scientist") return readScientistSmartMaximum(root, count);
   if (id === "professor") return readProfessorSmartMaximum(root);
-  if (id === "banker") return readBankerSmartMaximum(root);
+  if (id === "banker") return readBankerSmartMaximum(root, readDemand);
   if (id !== "teamster") return null;
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
@@ -355,7 +358,10 @@ function readProfessorSmartMaximum(root: unknown): number | null | undefined {
     : null;
 }
 
-function readBankerSmartMaximum(root: unknown): number | null | undefined {
+function readBankerSmartMaximum(
+  root: unknown,
+  readDemand?: () => CapturedDemandSample,
+): number | null | undefined {
   const resources = readProperty(root, "resource");
   const money = readProperty(resources, "Money");
   const amount = finiteNonNegative(readProperty(money, "amount"));
@@ -375,11 +381,10 @@ function readBankerSmartMaximum(root: unknown): number | null | undefined {
   ) {
     return undefined;
   }
-  // DeadSpace no longer exposes the legacy storageRequired getter. The raw cap is still a
-  // sufficient proof for the capped branch; the queued-storage branch remains null until its
-  // captured demand contract is available.
   if (banking >= 7) return null;
-  return amount >= maximum || taxRate <= 0 ? 0 : null;
+  if (amount >= maximum || taxRate <= 0) return 0;
+  if (readDemand === undefined) return null;
+  return amount >= readDemand().storageRequired("Money") ? 0 : null;
 }
 
 function readStorageBackedMinimum(
@@ -648,6 +653,7 @@ function readCatalog(
   root: unknown,
   controls: GameControlRegistry,
   settingsValue: unknown,
+  readDemand: (() => CapturedDemandSample) | undefined,
   onSkipped: (controlId: string, reason: string) => void,
 ): CapturedJobCatalog | undefined {
   const civic = readProperty(root, "civic");
@@ -731,6 +737,7 @@ function readCatalog(
       id,
       smart,
       workers + servantInput.count * servantModifier,
+      readDemand,
     );
     if (smartMaximum === undefined) {
       onSkipped(controlId, "ordinary job smart maximum is unavailable");
@@ -861,9 +868,16 @@ export function createCapturedJobCatalogReader({
   rootState,
   controls,
   readSettings,
+  readDemand,
   onSkipped,
 }: CapturedJobCatalogReaderDependencies): () => CapturedJobCatalog | undefined {
   const reportSkipped = onSkipped ?? (() => {});
   return () =>
-    readCatalog(rootState.readRoot(), controls, readSettings(), reportSkipped);
+    readCatalog(
+      rootState.readRoot(),
+      controls,
+      readSettings(),
+      readDemand,
+      reportSkipped,
+    );
 }

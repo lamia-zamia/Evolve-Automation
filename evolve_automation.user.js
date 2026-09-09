@@ -4526,14 +4526,14 @@
   function hasRaceFlag(race, key) {
     return !!readProperty(race, key);
   }
-  function readSmartMaximum(root, id, smart, count) {
+  function readSmartMaximum(root, id, smart, count, readDemand) {
     if (!smart) return null;
     if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
     if (id === "torturer") return readTorturerSmartMaximum(root);
     if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
     if (id === "scientist") return readScientistSmartMaximum(root, count);
     if (id === "professor") return readProfessorSmartMaximum(root);
-    if (id === "banker") return readBankerSmartMaximum(root);
+    if (id === "banker") return readBankerSmartMaximum(root, readDemand);
     if (id !== "teamster") return null;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
@@ -4625,13 +4625,13 @@
     if (!(genetics === void 0 || fanaticism === void 0))
       return !readProperty(race, "intelligent") && knowledgeMaximum >= 0 && genetics < 5 && fanaticism < 2 ? 0 : null;
   }
-  function readBankerSmartMaximum(root) {
+  function readBankerSmartMaximum(root, readDemand) {
     let resources = readProperty(root, "resource"), money = readProperty(resources, "Money"), amount = finiteNonNegative(readProperty(money, "amount")), maximum = finiteNonNegative(readProperty(money, "max")), taxes = readProperty(readProperty(root, "civic"), "taxes"), taxRate = finiteNonNegative(readProperty(taxes, "tax_rate")), tech = readProperty(root, "tech"), banking = optionalFiniteNumber(
       isRecord(tech) ? tech : void 0,
       "banking"
     );
     if (!(amount === void 0 || maximum === void 0 || taxRate === void 0 || banking === void 0))
-      return banking >= 7 ? null : amount >= maximum || taxRate <= 0 ? 0 : null;
+      return banking >= 7 ? null : amount >= maximum || taxRate <= 0 ? 0 : readDemand === void 0 ? null : amount >= readDemand().storageRequired("Money") ? 0 : null;
   }
   function readStorageBackedMinimum(root, id, workers, display) {
     let rawTech = readProperty(root, "tech"), tech = isRecord(rawTech) ? rawTech : void 0, banking = optionalFiniteNumber(tech, "banking");
@@ -4803,7 +4803,7 @@
       uncapped: Object.freeze(uncapped)
     };
   }
-  function readCatalog(root, controls, settingsValue, onSkipped) {
+  function readCatalog(root, controls, settingsValue, readDemand, onSkipped) {
     let civic = readProperty(root, "civic");
     if (!isRecord(civic)) return;
     let defaultJobId = readProperty(civic, "d_job");
@@ -4874,7 +4874,8 @@
         root,
         id,
         smart,
-        workers + servantInput.count * servantModifier
+        workers + servantInput.count * servantModifier,
+        readDemand
       );
       if (smartMaximum === void 0) {
         onSkipped(controlId, "ordinary job smart maximum is unavailable");
@@ -4983,11 +4984,18 @@
     rootState,
     controls,
     readSettings,
+    readDemand,
     onSkipped
   }) {
     let reportSkipped = onSkipped ?? (() => {
     });
-    return () => readCatalog(rootState.readRoot(), controls, readSettings(), reportSkipped);
+    return () => readCatalog(
+      rootState.readRoot(),
+      controls,
+      readSettings(),
+      readDemand,
+      reportSkipped
+    );
   }
 
   // src/adapters/evolve/civic/captured-job-controls.ts
@@ -5292,7 +5300,8 @@
     }, readJobCatalog = createCapturedJobCatalogReader({
       rootState: dependencies.rootState,
       controls: dependencies.controls,
-      readSettings: dependencies.readSettings
+      readSettings: dependencies.readSettings,
+      ...dependencies.readDemand === void 0 ? {} : { readDemand: dependencies.readDemand }
     }), executor = createExecutor(dependencies, sessionRef, readJobCatalog), reader = Object.freeze({
       readCycle() {
         if (dependencies.controls.resolve(FOUNDRY_CONTROL) === void 0)
@@ -7450,7 +7459,8 @@
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => readStoredSettings(storage),
+      readDemand: () => readDemand()
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
