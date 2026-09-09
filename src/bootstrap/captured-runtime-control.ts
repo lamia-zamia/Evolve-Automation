@@ -51,6 +51,11 @@ import {
   createCapturedStoragePorts,
   STORAGE_CONSTRUCTION_CONTROL,
 } from "../adapters/evolve/economy/storage/captured-storage.ts";
+import {
+  createCapturedGalaxyMarketPorts,
+  GALAXY_MARKET_CONTROL,
+} from "../adapters/evolve/economy/market/captured-galaxy-market.ts";
+import { runGalaxyMarketAutomation } from "../application/galaxy-market.ts";
 import { createStorageAllocationAutomation } from "../application/storage-allocation.ts";
 import { createCapturedCraftCosts } from "../adapters/evolve/economy/production/captured-craft-costs.ts";
 import {
@@ -126,6 +131,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoFactory: false,
   autoStorage: false,
   autoJobs: false,
+  autoGalaxyMarket: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -284,6 +290,19 @@ export function startCapturedRuntime({
   const storageAutomation = createStorageAllocationAutomation({
     ...storagePorts,
     diagnostics,
+  });
+  const galaxyMarketPorts = createCapturedGalaxyMarketPorts({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
+  });
+  const galaxyMarketAutomation = Object.freeze({
+    run: () =>
+      runGalaxyMarketAutomation({
+        reader: galaxyMarketPorts.reader,
+        executor: galaxyMarketPorts.executor,
+      }),
   });
   const ratios = createCapturedProductionRatios({
     rootState: pageCapture.rootState,
@@ -486,6 +505,7 @@ export function startCapturedRuntime({
   let factoryDiscoveryAttempted = false;
   let smelterDiscoveryAttempted = false;
   let storageDiscoveryAttempted = false;
+  let galaxyMarketDiscoveryAttempted = false;
   const ensureSmelterControls = () => {
     if (pageCapture.controls.resolve(SMELTER_CONTROL) !== undefined) return;
     const city = readProperty(pageCapture.rootState.readRoot(), "city");
@@ -558,6 +578,37 @@ export function startCapturedRuntime({
     if (result.outcome.status !== "succeeded") {
       logError(
         `storage discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+
+  const ensureGalaxyMarketControls = () => {
+    if (pageCapture.controls.resolve(GALAXY_MARKET_CONTROL) !== undefined) {
+      return;
+    }
+    if (galaxyMarketDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const root = pageCapture.rootState.readRoot();
+    if (!isRecord(readProperty(readProperty(root, "galaxy"), "trade"))) {
+      return;
+    }
+    if (readProperty(readProperty(root, "settings"), "showMarket") !== true) {
+      return;
+    }
+    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    if (marketTabs === undefined) return;
+    galaxyMarketDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 4,
+      }),
+      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 0 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `galaxy market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
     }
   };
@@ -658,6 +709,10 @@ export function startCapturedRuntime({
       return;
     }
     try {
+      if (isEnabled(settings, "autoGalaxyMarket")) {
+        ensureGalaxyMarketControls();
+        galaxyMarketAutomation.run();
+      }
       if (isEnabled(settings, "autoStorage")) {
         ensureStorageControls();
         storageAutomation.run();

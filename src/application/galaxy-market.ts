@@ -11,7 +11,7 @@ export interface GalaxyMarketAutomationDependencies {
   readonly executor: DecisionExecutor<GalaxyMarketDecision>;
 }
 
-const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
+const GALAXY_MARKET_SUCCEEDED: CommandExecutionOutcome = Object.freeze({
   status: "succeeded",
 });
 
@@ -20,6 +20,6 @@ export function runGalaxyMarketAutomation(
 ): CommandExecutionOutcome {
   const decision = planGalaxyMarket(dependencies.reader.read());
   return decision === null
-    ? SUCCEEDED
+    ? GALAXY_MARKET_SUCCEEDED
     : dependencies.executor.execute(decision);
 }

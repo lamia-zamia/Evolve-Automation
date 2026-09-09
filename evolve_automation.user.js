@@ -10060,6 +10060,304 @@
     });
   }
 
+  // src/adapters/evolve/economy/market/captured-galaxy-market.ts
+  var GALAXY_MARKET_CONTROL = "galaxyTrade", BASE_OFFERS = Object.freeze([
+    Object.freeze({ buyResourceId: "Deuterium", sellResourceId: "Helium_3" }),
+    Object.freeze({
+      buyResourceId: "Neutronium",
+      sellResourceId: "Copper"
+    }),
+    Object.freeze({
+      buyResourceId: "Adamantite",
+      sellResourceId: "Iron"
+    }),
+    Object.freeze({
+      buyResourceId: "Elerium",
+      sellResourceId: "Oil"
+    }),
+    Object.freeze({
+      buyResourceId: "Nano_Tube",
+      sellResourceId: "Titanium"
+    }),
+    Object.freeze({ buyResourceId: "Graphene" }),
+    Object.freeze({
+      buyResourceId: "Stanene",
+      sellResourceId: "Aluminium"
+    }),
+    Object.freeze({
+      buyResourceId: "Bolognium",
+      sellResourceId: "Uranium"
+    }),
+    Object.freeze({
+      buyResourceId: "Vitreloy",
+      sellResourceId: "Infernite"
+    })
+  ]);
+  function capturedGalaxyFinite(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readRouteCount(value) {
+    return capturedGalaxyFinite(value) !== void 0 && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+  }
+  function capturedGalaxySettingsRecord(value) {
+    return isRecord(value) ? value : {};
+  }
+  function capturedGalaxySettingNumber(settings, key, fallback) {
+    let value = capturedGalaxyFinite(settings[key]);
+    return value === void 0 ? fallback : value;
+  }
+  function capturedGalaxyOfferIdentities(root) {
+    let race = readProperty(root, "race"), sellResourceId = readProperty(race, "smoldering") ? "Chrysotile" : readProperty(race, "kindling_kindred") ? "Stone" : "Lumber";
+    return Object.freeze(
+      BASE_OFFERS.map(
+        (offer) => Object.freeze({
+          buyResourceId: offer.buyResourceId,
+          sellResourceId: offer.sellResourceId ?? sellResourceId
+        })
+      )
+    );
+  }
+  function capturedGalaxyEmptyInput() {
+    return Object.freeze({
+      initialized: !1,
+      maximum: 0,
+      minimumIngredientRatio: 0,
+      offers: Object.freeze([])
+    });
+  }
+  function capturedGalaxyStorageRatio(resource) {
+    let amount = capturedGalaxyFinite(resource.amount), maximum = capturedGalaxyFinite(resource.max);
+    if (!(amount === void 0 || maximum === void 0))
+      return maximum > 0 ? amount / maximum : 1;
+  }
+  function capturedGalaxyUseful(resource, resourceId, settings, demanded) {
+    let ratio = capturedGalaxyStorageRatio(resource);
+    if (ratio === void 0) return !1;
+    let overflow = settings[`res_storage_o_${resourceId}`] === !0, maxStorage = capturedGalaxyFinite(
+      settings[`res_max_store${resourceId}`]
+    ), amount = capturedGalaxyFinite(resource.amount);
+    return ratio < 0.99 || demanded(resourceId) || overflow && maxStorage !== void 0 && amount !== void 0 && amount < maxStorage;
+  }
+  function capturedGalaxyReadTrade(root) {
+    let galaxy = readProperty(root, "galaxy"), trade = readProperty(galaxy, "trade");
+    if (!isRecord(trade)) return;
+    let maximum = readRouteCount(trade.max), current = BASE_OFFERS.map(
+      (_, index) => readRouteCount(trade[`f${index}`])
+    ), currentValues = current.filter(
+      (value) => value !== void 0
+    ), total = readRouteCount(trade.cur);
+    if (!(maximum === void 0 || total === void 0 || currentValues.length !== current.length || total !== currentValues.reduce((sum, value) => sum + value, 0) || total > maximum))
+      return Object.freeze({
+        trade,
+        maximum,
+        current: Object.freeze(currentValues)
+      });
+  }
+  function createCapturedGalaxyMarketPorts(dependencies) {
+    let session = null, reader = Object.freeze({
+      read() {
+        let root = dependencies.rootState.readRoot(), control = dependencies.controls.resolve(GALAXY_MARKET_CONTROL), trade = capturedGalaxyReadTrade(root);
+        if (control === void 0 || !control.methods.includes("less") || !control.methods.includes("more") || trade === void 0)
+          return session = null, capturedGalaxyEmptyInput();
+        let resources = readProperty(root, "resource");
+        if (!isRecord(resources))
+          return session = null, capturedGalaxyEmptyInput();
+        let settings = capturedGalaxySettingsRecord(
+          dependencies.readSettings()
+        ), demanded = dependencies.readDemand?.() ?? {
+          isDemanded: () => !1
+        }, identities = capturedGalaxyOfferIdentities(root), offers = [];
+        for (let [index, identity] of identities.entries()) {
+          let buy = readProperty(resources, identity.buyResourceId), sell = readProperty(resources, identity.sellResourceId);
+          if (!isRecord(buy) || !isRecord(sell))
+            return session = null, capturedGalaxyEmptyInput();
+          let weighting = capturedGalaxySettingNumber(
+            settings,
+            `res_galaxy_w_${identity.buyResourceId}`,
+            0
+          ), priority = capturedGalaxySettingNumber(
+            settings,
+            `res_galaxy_p_${identity.buyResourceId}`,
+            0
+          ), active = weighting > 0 && priority !== 0 && trade.maximum > 0, sellRatio = capturedGalaxyStorageRatio(sell);
+          if (sellRatio === void 0)
+            return session = null, capturedGalaxyEmptyInput();
+          offers.push(
+            Object.freeze({
+              index,
+              buyResourceId: identity.buyResourceId,
+              sellResourceId: identity.sellResourceId,
+              weighting,
+              priority,
+              demanded: active ? demanded.isDemanded(identity.buyResourceId) : !1,
+              useful: active ? capturedGalaxyUseful(
+                buy,
+                identity.buyResourceId,
+                settings,
+                demanded.isDemanded
+              ) : !1,
+              sellDemanded: active ? demanded.isDemanded(identity.sellResourceId) : !1,
+              sellStorageRatio: active ? sellRatio : 0,
+              current: trade.current[index] ?? 0
+            })
+          );
+        }
+        let hasActive = offers.some(
+          (offer) => offer.weighting > 0 && (offer.demanded ? Math.max(offer.priority, 100) : offer.priority) !== 0
+        );
+        return session = Object.freeze({
+          root,
+          control,
+          maximum: trade.maximum,
+          offers: identities
+        }), Object.freeze({
+          initialized: !0,
+          maximum: trade.maximum,
+          minimumIngredientRatio: hasActive ? capturedGalaxySettingNumber(settings, "marketMinIngredients", 0) : 0,
+          offers: Object.freeze(offers)
+        });
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        let active = session;
+        if (active === null)
+          return stale(
+            "captured-galaxy-market-session-missing",
+            "galaxy market sample is unavailable"
+          );
+        if (!Number.isSafeInteger(decision.expectedMaximum) || decision.expectedMaximum !== active.maximum || decision.adjustments.length !== active.offers.length)
+          return rejected(
+            "invalid-captured-galaxy-market-decision",
+            "galaxy market decision does not match the captured session"
+          );
+        if (dependencies.rootState.readRoot() !== active.root)
+          return stale(
+            "captured-galaxy-market-root-changed",
+            "captured game root changed"
+          );
+        let control = dependencies.controls.resolve(GALAXY_MARKET_CONTROL);
+        if (control === void 0 || control.generation !== active.control.generation)
+          return stale(
+            "captured-galaxy-market-control-changed",
+            "galaxy market control changed"
+          );
+        let trade = capturedGalaxyReadTrade(active.root);
+        if (trade === void 0 || trade.maximum !== active.maximum)
+          return stale(
+            "captured-galaxy-market-state-changed",
+            "galaxy market allocation changed"
+          );
+        for (let [index, adjustment] of decision.adjustments.entries()) {
+          let identity = active.offers[index];
+          if (identity === void 0 || adjustment.offerIndex !== index || adjustment.buyResourceId !== identity.buyResourceId || adjustment.sellResourceId !== identity.sellResourceId || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent !== trade.current[index] || !Number.isSafeInteger(adjustment.delta) || adjustment.expectedCurrent + adjustment.delta < 0)
+            return stale(
+              "captured-galaxy-market-allocation-changed",
+              "galaxy market allocation changed"
+            );
+        }
+        let invoke = (method, index) => dependencies.controls.invoke(control, method, [index]).ok;
+        for (let adjustment of decision.adjustments)
+          if (adjustment.delta < 0) {
+            for (let index = 0; index < -adjustment.delta; index += 1)
+              if (!invoke("less", adjustment.offerIndex))
+                return rejected(
+                  "captured-galaxy-market-control-failed",
+                  "galaxy market decrement failed"
+                );
+          }
+        for (let adjustment of decision.adjustments)
+          if (adjustment.delta > 0) {
+            for (let index = 0; index < adjustment.delta; index += 1)
+              if (!invoke("more", adjustment.offerIndex))
+                return rejected(
+                  "captured-galaxy-market-control-failed",
+                  "galaxy market increment failed"
+                );
+          }
+        let finalTrade = capturedGalaxyReadTrade(active.root);
+        return finalTrade === void 0 || decision.adjustments.some(
+          (adjustment, index) => finalTrade.current[index] !== adjustment.expectedCurrent + adjustment.delta
+        ) ? rejected(
+          "captured-galaxy-market-unchanged",
+          "galaxy market allocation did not match the requested change"
+        ) : SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/domain/economy/market/galaxy-market.ts
+  function planGalaxyMarket(input) {
+    if (!input.initialized) return null;
+    let priorityGroups = /* @__PURE__ */ new Map(), targets = /* @__PURE__ */ new Map();
+    for (let offer of input.offers) {
+      if (offer.weighting > 0) {
+        let priority = offer.demanded ? Math.max(offer.priority, 100) : offer.priority;
+        if (priority !== 0) {
+          let group = priorityGroups.get(priority) ?? [];
+          group.push(offer), priorityGroups.set(priority, group);
+        }
+      }
+      targets.set(offer.buyResourceId, 0);
+    }
+    let priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group), supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      let supplementaryIndex = priorityList.indexOf(supplementary);
+      priorityList.splice(supplementaryIndex, 1), priorityList[0]?.push(...supplementary);
+    }
+    let remaining = input.maximum;
+    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
+      let offers = [...priorityList[groupIndex] ?? []].sort(
+        (left, right) => left.weighting - right.weighting
+      );
+      for (; remaining > 0; ) {
+        let beforeDistribution = remaining, totalWeight = offers.reduce(
+          (sum, offer) => sum + offer.weighting,
+          0
+        );
+        for (let index = offers.length - 1; index >= 0 && remaining > 0; index--) {
+          let offer = offers[index];
+          if (offer === void 0) continue;
+          let requested = Math.min(
+            remaining,
+            Math.max(
+              1,
+              Math.floor(beforeDistribution / totalWeight * offer.weighting)
+            )
+          ), assigned = offer.useful && !offer.sellDemanded && offer.sellStorageRatio >= input.minimumIngredientRatio ? requested : 0;
+          assigned > 0 && (remaining -= assigned, targets.set(
+            offer.buyResourceId,
+            (targets.get(offer.buyResourceId) ?? 0) + assigned
+          )), assigned < requested && offers.splice(index, 1);
+        }
+        if (beforeDistribution === remaining) break;
+      }
+    }
+    return Object.freeze({
+      expectedMaximum: input.maximum,
+      adjustments: Object.freeze(
+        input.offers.map(
+          (offer) => Object.freeze({
+            offerIndex: offer.index,
+            buyResourceId: offer.buyResourceId,
+            sellResourceId: offer.sellResourceId,
+            expectedCurrent: offer.current,
+            delta: (targets.get(offer.buyResourceId) ?? 0) - offer.current
+          })
+        )
+      )
+    });
+  }
+
+  // src/application/galaxy-market.ts
+  var GALAXY_MARKET_SUCCEEDED = Object.freeze({
+    status: "succeeded"
+  });
+  function runGalaxyMarketAutomation(dependencies) {
+    let decision = planGalaxyMarket(dependencies.reader.read());
+    return decision === null ? GALAXY_MARKET_SUCCEEDED : dependencies.executor.execute(decision);
+  }
+
   // src/domain/economy/storage/storage-allocation.ts
   function mapValue(map, key, label) {
     let value = map.get(key);
@@ -10750,7 +11048,8 @@
     autoPower: !1,
     autoFactory: !1,
     autoStorage: !1,
-    autoJobs: !1
+    autoJobs: !1,
+    autoGalaxyMarket: !1
   });
   function isEnabled(settings, key) {
     let value = settings[key];
@@ -10874,6 +11173,16 @@
     }), storageAutomation = createStorageAllocationAutomation({
       ...storagePorts,
       diagnostics
+    }), galaxyMarketPorts = createCapturedGalaxyMarketPorts({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage),
+      readDemand: () => readDemand()
+    }), galaxyMarketAutomation = Object.freeze({
+      run: () => runGalaxyMarketAutomation({
+        reader: galaxyMarketPorts.reader,
+        executor: galaxyMarketPorts.executor
+      })
     }), ratios = createCapturedProductionRatios({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -10990,7 +11299,7 @@
       result.outcome.status !== "succeeded" && logError(
         `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
-    }, factoryDiscoveryAttempted = !1, smelterDiscoveryAttempted = !1, storageDiscoveryAttempted = !1, ensureSmelterControls = () => {
+    }, factoryDiscoveryAttempted = !1, smelterDiscoveryAttempted = !1, storageDiscoveryAttempted = !1, galaxyMarketDiscoveryAttempted = !1, ensureSmelterControls = () => {
       if (pageCapture2.controls.resolve(SMELTER_CONTROL) !== void 0) return;
       let city = readProperty(pageCapture2.rootState.readRoot(), "city"), smelterState = readProperty(city, "smelter"), race = readProperty(pageCapture2.rootState.readRoot(), "race"), count = readProperty(smelterState, "count"), exempt = !!readProperty(race, "cataclysm") || !!readProperty(race, "orbit_decayed") || !!readProperty(
         readProperty(pageCapture2.rootState.readRoot(), "tech"),
@@ -11029,6 +11338,25 @@
       ]);
       result.outcome.status !== "succeeded" && logError(
         `storage discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
+    }, ensureGalaxyMarketControls = () => {
+      if (pageCapture2.controls.resolve(GALAXY_MARKET_CONTROL) !== void 0 || galaxyMarketDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let root = pageCapture2.rootState.readRoot();
+      if (!isRecord(readProperty(readProperty(root, "galaxy"), "trade")) || readProperty(readProperty(root, "settings"), "showMarket") !== !0)
+        return;
+      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      if (marketTabs === void 0) return;
+      galaxyMarketDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 4
+        }),
+        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 0 })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `galaxy market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
     }, ensureFactoryControls = () => {
       if (pageCapture2.controls.resolve(FACTORY_CONTROL) !== void 0) return;
@@ -11090,7 +11418,7 @@
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
+          isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
             QUARRY_CONTROL,
             !!readProperty(
               readProperty(pageCapture2.rootState.readRoot(), "race"),
