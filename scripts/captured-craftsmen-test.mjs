@@ -87,6 +87,11 @@ const costs = {
   read: (id) => (id === "Plywood" ? new Map([["Iron", 1]]) : undefined),
 };
 
+const buildCosts = {
+  readCost: (id) =>
+    id === "city-high" || id === "city-low" ? { Plywood: 10 } : undefined,
+};
+
 const root = makeRoot();
 const captured = controlsFor(root);
 const adapter = createCapturedCraftsmenAutomation({
@@ -153,6 +158,36 @@ assert.equal(
 assert.equal(
   demandedInput.crafting.find(({ jobToken }) => jobToken === 1).demanded,
   true,
+);
+
+const buildingRoot = makeRoot();
+buildingRoot.resource.Plywood.amount = 15;
+const buildingControls = controlsFor(buildingRoot);
+const buildingAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(buildingRoot),
+  controls: buildingControls.controls,
+  costs,
+  buildCosts,
+  readBuildTargets: () => [
+    { key: "city-low", elementId: "city-low", weighting: 5 },
+    { key: "city-high", elementId: "city-high", weighting: 20 },
+  ],
+  readSettings: () => ({
+    productionFoundryWeighting: "buildings",
+    craftPlywood: true,
+    job_Plywood: true,
+    foundry_w_Plywood: 1,
+  }),
+});
+const buildingInput = buildingAdapter.reader.readCycle(true);
+assert.equal(buildingInput.foundryWeighting, "buildings");
+assert.equal(
+  buildingInput.crafting.find(({ jobToken }) => jobToken === 0).weighting,
+  5,
+);
+assert.equal(
+  buildingInput.crafting.find(({ jobToken }) => jobToken === 0).driver,
+  "city-low@5.0×1",
 );
 
 const settingRoot = makeRoot();

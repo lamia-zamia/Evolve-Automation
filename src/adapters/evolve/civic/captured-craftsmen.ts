@@ -13,6 +13,8 @@ import {
   type JobsDecision,
 } from "../../../domain/civic/jobs.ts";
 import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
+import type { GameActionCostReader } from "../../../ports/game-action-costs.ts";
+import type { GameBuildTarget } from "../../../ports/game-build-targets.ts";
 import type { JobsExecutor, JobsReader } from "../../../ports/jobs.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
@@ -53,6 +55,10 @@ export interface CapturedCraftsmenDependencies {
   readonly costs: CapturedCraftCosts;
   readonly readSettings: () => unknown;
   readonly readDemand?: () => CapturedDemandSample;
+  /** Captured managed construction targets for the building-weighted foundry mode. */
+  readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
+  /** Prices the captured build targets through the game's own cost path. */
+  readonly buildCosts?: GameActionCostReader;
 }
 
 export interface CapturedCraftsmenAutomation {
@@ -144,13 +150,62 @@ function craftsmenMode(
 
 function foundryWeighting(
   settings: Record<PropertyKey, unknown>,
+  buildTargets: readonly Readonly<GameBuildTarget>[] | undefined,
+  buildCosts: GameActionCostReader | undefined,
 ): JobsCycleInput["foundryWeighting"] {
-  // The building-weight mode needs the complete unlocked-building catalog. The captured
-  // craftsmen path has no such catalog, while the demanded mode is fully backed by its resource
-  // demand/storage sample.
-  return settings["productionFoundryWeighting"] === "demanded"
-    ? "demanded"
+  if (settings["productionFoundryWeighting"] === "demanded") return "demanded";
+  return settings["productionFoundryWeighting"] === "buildings" &&
+    buildTargets !== undefined &&
+    buildTargets.length > 0 &&
+    buildCosts !== undefined
+    ? "buildings"
     : "other";
+}
+
+interface BuildingCostSample {
+  readonly target: Readonly<GameBuildTarget>;
+  readonly cost: Readonly<Record<string, number>>;
+}
+
+function readBuildingCosts(
+  targets: readonly Readonly<GameBuildTarget>[] | undefined,
+  costs: GameActionCostReader | undefined,
+): readonly BuildingCostSample[] | undefined {
+  if (targets === undefined || targets.length === 0 || costs === undefined) {
+    return undefined;
+  }
+  const ordered = [...targets].sort(
+    (left, right) => right.weighting - left.weighting,
+  );
+  const samples: BuildingCostSample[] = [];
+  for (const target of ordered) {
+    if (!Number.isFinite(target.weighting)) return undefined;
+    const cost = costs.readCost(target.elementId);
+    if (cost === undefined) return undefined;
+    samples.push(Object.freeze({ target, cost }));
+  }
+  return Object.freeze(samples);
+}
+
+function readBuildingRequirement(
+  buildings: readonly BuildingCostSample[],
+  resourceId: string,
+  currentQuantity: number,
+  craftWeighting: number,
+): { readonly weighting: number; readonly driver: string } {
+  let claimed = 0;
+  for (const building of buildings) {
+    const amount = building.cost[resourceId];
+    if (amount === undefined || !Number.isFinite(amount)) continue;
+    claimed += amount;
+    if (claimed > currentQuantity) {
+      return {
+        weighting: building.target.weighting * craftWeighting,
+        driver: `${building.target.key}@${building.target.weighting.toFixed(1)}×${craftWeighting}`,
+      };
+    }
+  }
+  return { weighting: 0, driver: `no building×${craftWeighting}` };
 }
 
 function readFoundry(root: unknown): Record<PropertyKey, unknown> | undefined {
@@ -288,6 +343,8 @@ function readCycleInput(
   costs: CapturedCraftCosts,
   readJobCatalog: () => CapturedJobCatalog | undefined,
   readDemand: (() => CapturedDemandSample) | undefined,
+  readBuildTargets: (() => readonly Readonly<GameBuildTarget>[]) | undefined,
+  buildCosts: GameActionCostReader | undefined,
 ):
   | {
       readonly input: JobsCycleInput;
@@ -318,6 +375,20 @@ function readCycleInput(
     craftsmen.workers + defaultJob.workers,
   );
   const settings = isRecord(settingsValue) ? settingsValue : {};
+  const buildingMode = settings["productionFoundryWeighting"] === "buildings";
+  const buildingTargets = buildingMode ? readBuildTargets?.() : undefined;
+  const buildingCosts = buildingMode
+    ? readBuildingCosts(buildingTargets, buildCosts)
+    : undefined;
+  if (
+    buildingMode &&
+    buildingTargets !== undefined &&
+    buildingTargets.length > 0 &&
+    buildCosts !== undefined &&
+    buildingCosts === undefined
+  ) {
+    return undefined;
+  }
   const resources = readProperty(root, "resource");
   const demand = readDemand?.();
   const jobs = samples.map((sample, token) =>
@@ -347,6 +418,16 @@ function readCycleInput(
   );
   const crafting = samples.map((sample, jobToken) => {
     const resource = readProperty(resources, sample.id);
+    const craftWeight = productWeighting(settings, sample.id);
+    const buildingRequirement =
+      buildingCosts === undefined
+        ? undefined
+        : readBuildingRequirement(
+            buildingCosts,
+            sample.id,
+            finiteNumber(readProperty(resource, "amount"), 0),
+            craftWeight,
+          );
     return Object.freeze({
       jobToken,
       enabled: productEnabled(settings, sample.id),
@@ -358,8 +439,8 @@ function readCycleInput(
         finiteNumber(readProperty(resource, "amount"), 0) <
           demand.storageRequired(sample.id),
       currentQuantity: finiteNumber(readProperty(resource, "amount"), 0),
-      weighting: productWeighting(settings, sample.id),
-      driver: null,
+      weighting: buildingRequirement?.weighting ?? craftWeight,
+      driver: buildingRequirement?.driver ?? null,
       exclusion: null,
     });
   });
@@ -371,7 +452,7 @@ function readCycleInput(
     autoCraftsmen: true,
     autoCraftWithoutBuilding: true,
     craftsmenMode: craftsmenMode(settings),
-    foundryWeighting: foundryWeighting(settings),
+    foundryWeighting: foundryWeighting(settings, buildingTargets, buildCosts),
     manageServants: false,
     setDefault: false,
     servantModifier: 1,
@@ -425,6 +506,8 @@ export function readCapturedCraftsmenCycle(
   costs: CapturedCraftCosts,
   readJobCatalog: () => CapturedJobCatalog | undefined,
   readDemand?: () => CapturedDemandSample,
+  readBuildTargets?: () => readonly Readonly<GameBuildTarget>[],
+  buildCosts?: GameActionCostReader,
 ): CapturedCraftsmenCycleSample | undefined {
   const sampled = readCycleInput(
     root,
@@ -432,6 +515,8 @@ export function readCapturedCraftsmenCycle(
     costs,
     readJobCatalog,
     readDemand,
+    readBuildTargets,
+    buildCosts,
   );
   const skilled = readSkilledCraftsmen(root);
   return sampled === undefined || skilled === undefined
@@ -500,6 +585,8 @@ function createExecutor(
         dependencies.costs,
         readJobCatalog,
         dependencies.readDemand,
+        dependencies.readBuildTargets,
+        dependencies.buildCosts,
       )?.input;
       if (
         currentInput === undefined ||
@@ -651,6 +738,8 @@ export function createCapturedCraftsmenAutomation(
         dependencies.costs,
         readJobCatalog,
         dependencies.readDemand,
+        dependencies.readBuildTargets,
+        dependencies.buildCosts,
       );
       if (sampled === undefined) {
         sessionRef.value = undefined;

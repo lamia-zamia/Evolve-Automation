@@ -30,6 +30,7 @@ import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
 import type { ConstructionObservations } from "../ports/game-construction-observations.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
+import type { GameBuildTarget } from "../ports/game-build-targets.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
 import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
@@ -76,6 +77,8 @@ export interface CapturedProgressionControl {
   readonly readOfferedTechs: () => readonly Readonly<OfferedTech>[] | undefined;
   /** What the last construction cycle was saving for, for the features that read demand. */
   readonly observations: ConstructionObservations;
+  /** Managed captured construction targets, used by production modes that weight against builds. */
+  readonly readManagedBuildTargets: () => readonly Readonly<GameBuildTarget>[];
 }
 
 const NO_RESERVATIONS = Object.freeze({
@@ -277,10 +280,16 @@ export function createCapturedProgressionControl(
 
   readObservations = () => construction.observations;
 
+  const readManagedBuildTargets = () => {
+    ensureBuildControls();
+    return readPolicy().buildings;
+  };
+
   return Object.freeze({
     runConstructionCycle: () => construction.runCycle(),
     runResearchCycle: () => research.runCycle(),
     readOfferedTechs: () => lastOffered,
     observations: construction.observations,
+    readManagedBuildTargets,
   });
 }

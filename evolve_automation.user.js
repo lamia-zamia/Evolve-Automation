@@ -3713,11 +3713,14 @@
       ...onUnavailable === void 0 ? {} : { onUnavailable },
       diagnostics
     });
-    return readObservations = () => construction.observations, Object.freeze({
+    readObservations = () => construction.observations;
+    let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings);
+    return Object.freeze({
       runConstructionCycle: () => construction.runCycle(),
       runResearchCycle: () => research.runCycle(),
       readOfferedTechs: () => lastOffered,
-      observations: construction.observations
+      observations: construction.observations,
+      readManagedBuildTargets
     });
   }
 
@@ -5597,8 +5600,34 @@
     let value = settings.productionCraftsmen;
     return value === "always" || value === "nocraft" || value === "servants" ? value : "other";
   }
-  function foundryWeighting(settings) {
-    return settings.productionFoundryWeighting === "demanded" ? "demanded" : "other";
+  function foundryWeighting(settings, buildTargets, buildCosts) {
+    return settings.productionFoundryWeighting === "demanded" ? "demanded" : settings.productionFoundryWeighting === "buildings" && buildTargets !== void 0 && buildTargets.length > 0 && buildCosts !== void 0 ? "buildings" : "other";
+  }
+  function readBuildingCosts(targets, costs) {
+    if (targets === void 0 || targets.length === 0 || costs === void 0)
+      return;
+    let ordered = [...targets].sort(
+      (left, right) => right.weighting - left.weighting
+    ), samples = [];
+    for (let target of ordered) {
+      if (!Number.isFinite(target.weighting)) return;
+      let cost = costs.readCost(target.elementId);
+      if (cost === void 0) return;
+      samples.push(Object.freeze({ target, cost }));
+    }
+    return Object.freeze(samples);
+  }
+  function readBuildingRequirement(buildings, resourceId, currentQuantity2, craftWeighting) {
+    let claimed = 0;
+    for (let building of buildings) {
+      let amount = building.cost[resourceId];
+      if (!(amount === void 0 || !Number.isFinite(amount)) && (claimed += amount, claimed > currentQuantity2))
+        return {
+          weighting: building.target.weighting * craftWeighting,
+          driver: `${building.target.key}@${building.target.weighting.toFixed(1)}×${craftWeighting}`
+        };
+    }
+    return { weighting: 0, driver: `no building×${craftWeighting}` };
   }
   function readFoundry(root) {
     let city = readProperty(root, "city"), foundry = readProperty(city, "foundry");
@@ -5665,7 +5694,7 @@
     }
     return affordability;
   }
-  function readCycleInput(root, settingsValue, costs, readJobCatalog, readDemand) {
+  function readCycleInput(root, settingsValue, costs, readJobCatalog, readDemand, readBuildTargets, buildCosts) {
     let samples = readProducts(root);
     if (samples.length === 0) return;
     let foundry = readFoundry(root);
@@ -5678,7 +5707,10 @@
     let craftOnlyWorkerPool = Math.min(
       craftsmen.maximum,
       craftsmen.workers + defaultJob.workers
-    ), settings = isRecord(settingsValue) ? settingsValue : {}, resources = readProperty(root, "resource"), demand = readDemand?.(), jobs = samples.map(
+    ), settings = isRecord(settingsValue) ? settingsValue : {}, buildingMode = settings.productionFoundryWeighting === "buildings", buildingTargets = buildingMode ? readBuildTargets?.() : void 0, buildingCosts = buildingMode ? readBuildingCosts(buildingTargets, buildCosts) : void 0;
+    if (buildingMode && buildingTargets !== void 0 && buildingTargets.length > 0 && buildCosts !== void 0 && buildingCosts === void 0)
+      return;
+    let resources = readProperty(root, "resource"), demand = readDemand?.(), jobs = samples.map(
       (sample, token) => Object.freeze({
         token,
         id: sample.id,
@@ -5703,7 +5735,12 @@
         warlordMiner: !1
       })
     ), crafting = samples.map((sample, jobToken) => {
-      let resource = readProperty(resources, sample.id);
+      let resource = readProperty(resources, sample.id), craftWeight = productWeighting(settings, sample.id), buildingRequirement = buildingCosts === void 0 ? void 0 : readBuildingRequirement(
+        buildingCosts,
+        sample.id,
+        finiteNumber2(readProperty(resource, "amount"), 0),
+        craftWeight
+      );
       return Object.freeze({
         jobToken,
         enabled: productEnabled(settings, sample.id),
@@ -5712,8 +5749,8 @@
         demanded: demand?.isDemanded(sample.id) ?? !1,
         useful: demand !== void 0 && finiteNumber2(readProperty(resource, "amount"), 0) < demand.storageRequired(sample.id),
         currentQuantity: finiteNumber2(readProperty(resource, "amount"), 0),
-        weighting: productWeighting(settings, sample.id),
-        driver: null,
+        weighting: buildingRequirement?.weighting ?? craftWeight,
+        driver: buildingRequirement?.driver ?? null,
         exclusion: null
       });
     }), input = Object.freeze({
@@ -5724,7 +5761,7 @@
       autoCraftsmen: !0,
       autoCraftWithoutBuilding: !0,
       craftsmenMode: craftsmenMode(settings),
-      foundryWeighting: foundryWeighting(settings),
+      foundryWeighting: foundryWeighting(settings, buildingTargets, buildCosts),
       manageServants: !1,
       setDefault: !1,
       servantModifier: 1,
@@ -5770,13 +5807,15 @@
       defaultJob
     });
   }
-  function readCapturedCraftsmenCycle(root, settingsValue, costs, readJobCatalog, readDemand) {
+  function readCapturedCraftsmenCycle(root, settingsValue, costs, readJobCatalog, readDemand, readBuildTargets, buildCosts) {
     let sampled3 = readCycleInput(
       root,
       settingsValue,
       costs,
       readJobCatalog,
-      readDemand
+      readDemand,
+      readBuildTargets,
+      buildCosts
     ), skilled = readSkilledCraftsmen(root);
     return sampled3 === void 0 || skilled === void 0 ? void 0 : Object.freeze({
       ...sampled3,
@@ -5824,7 +5863,9 @@
           dependencies.readSettings(),
           dependencies.costs,
           readJobCatalog,
-          dependencies.readDemand
+          dependencies.readDemand,
+          dependencies.readBuildTargets,
+          dependencies.buildCosts
         )?.input;
         if (currentInput === void 0 || JSON.stringify(currentInput.crafting) !== JSON.stringify(session.input.crafting) || currentInput.craftsmenMode !== session.input.craftsmenMode || currentInput.foundryWeighting !== session.input.foundryWeighting)
           return stale(
@@ -5943,7 +5984,9 @@
           dependencies.readSettings(),
           dependencies.costs,
           readJobCatalog,
-          dependencies.readDemand
+          dependencies.readDemand,
+          dependencies.readBuildTargets,
+          dependencies.buildCosts
         );
         return sampled3 === void 0 ? (sessionRef.value = void 0, Object.freeze({
           available: !1,
@@ -6309,7 +6352,7 @@
       serves: !0
     });
   }
-  function readFullCycle(root, settingsValue, catalogReader, costs, readDemand, previousAuthorityCap) {
+  function readFullCycle(root, settingsValue, catalogReader, costs, readDemand, readBuildTargets, buildCosts, previousAuthorityCap) {
     let ordinary = readCycle(
       root,
       settingsValue,
@@ -6322,7 +6365,9 @@
       settingsValue,
       costs,
       catalogReader,
-      readDemand
+      readDemand,
+      readBuildTargets,
+      buildCosts
     );
     if (foundry === void 0 || foundry.input.jobs.length !== foundry.input.crafting.length || foundry.skilledSamples.some(
       (sample) => !foundry.input.jobs.some((job) => job.id === sample.id)
@@ -6501,7 +6546,9 @@
     controls,
     readSettings,
     costs,
-    readDemand
+    readDemand,
+    readBuildTargets,
+    buildCosts
   }) {
     let history, historyRoot, authorityCap = null, catalogReader = createCapturedJobCatalogReader({
       rootState,
@@ -6521,6 +6568,8 @@
           catalogReader,
           costs,
           readDemand,
+          readBuildTargets,
+          buildCosts,
           authorityCap
         );
         return sampled3 === void 0 ? (sessionRef.value = void 0, unavailableInput()) : (sessionRef.value = Object.freeze({
@@ -6546,7 +6595,9 @@
           readSettings(),
           costs,
           catalogReader,
-          readDemand
+          readDemand,
+          readBuildTargets,
+          buildCosts
         );
         if (currentCatalog === void 0 || JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog) || currentFoundry === void 0 || JSON.stringify(currentFoundry.samples) !== JSON.stringify(session.foundry.samples) || JSON.stringify(currentFoundry.skilledSamples) !== JSON.stringify(session.foundry.skilledSamples) || currentFoundry.skilledMaximum !== session.foundry.skilledMaximum || currentFoundry.skilledUsed !== session.foundry.skilledUsed || JSON.stringify(currentFoundry.input.crafting) !== JSON.stringify(session.foundry.input.crafting))
           return sessionRef.value = void 0, stale(
@@ -6612,6 +6663,8 @@
       catalogReader,
       costs,
       readDemand,
+      readBuildTargets,
+      buildCosts,
       authorityCap
     ) !== void 0 });
   }
@@ -9503,12 +9556,17 @@
     }), costs = createCapturedCraftCosts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
+    }), buildCosts = createCapturedActionCostReader({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls
     }), craftsmen = createCapturedCraftsmenAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs,
       readSettings: () => readStoredSettings(storage),
-      readDemand: () => readDemand()
+      readDemand: () => readDemand(),
+      readBuildTargets: progression.readManagedBuildTargets,
+      buildCosts
     }), ordinaryJobs = createCapturedOrdinaryJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -9518,7 +9576,9 @@
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage),
       costs,
-      readDemand: () => readDemand()
+      readDemand: () => readDemand(),
+      readBuildTargets: progression.readManagedBuildTargets,
+      buildCosts
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,

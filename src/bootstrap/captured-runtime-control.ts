@@ -185,12 +185,18 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
   });
+  const buildCosts = createCapturedActionCostReader({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+  });
   const craftsmen = createCapturedCraftsmenAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs,
     readSettings: () => readStoredSettings(storage),
     readDemand: () => readDemand(),
+    readBuildTargets: progression.readManagedBuildTargets,
+    buildCosts,
   });
   const ordinaryJobs = createCapturedOrdinaryJobsAutomation({
     rootState: pageCapture.rootState,
@@ -203,6 +209,8 @@ export function startCapturedRuntime({
     readSettings: () => readStoredSettings(storage),
     costs,
     readDemand: () => readDemand(),
+    readBuildTargets: progression.readManagedBuildTargets,
+    buildCosts,
   });
   const pylon = createCapturedPylonAutomation({
     rootState: pageCapture.rootState,

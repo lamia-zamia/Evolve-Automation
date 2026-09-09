@@ -7,6 +7,8 @@ import {
   type JobsJobInput,
 } from "../../../domain/civic/jobs.ts";
 import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
+import type { GameActionCostReader } from "../../../ports/game-action-costs.ts";
+import type { GameBuildTarget } from "../../../ports/game-build-targets.ts";
 import type { JobsExecutor, JobsReader } from "../../../ports/jobs.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
@@ -41,6 +43,8 @@ export interface CapturedOrdinaryJobsDependencies {
 export interface CapturedFullJobsDependencies extends CapturedOrdinaryJobsDependencies {
   readonly costs: CapturedCraftCosts;
   readonly readDemand?: () => CapturedDemandSample;
+  readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
+  readonly buildCosts?: GameActionCostReader;
 }
 
 interface OrdinaryJobsSession {
@@ -525,6 +529,8 @@ function readFullCycle(
   catalogReader: () => CapturedJobCatalog | undefined,
   costs: CapturedCraftCosts,
   readDemand: (() => CapturedDemandSample) | undefined,
+  readBuildTargets: (() => readonly Readonly<GameBuildTarget>[]) | undefined,
+  buildCosts: GameActionCostReader | undefined,
   previousAuthorityCap: number | null,
 ):
   | {
@@ -549,6 +555,8 @@ function readFullCycle(
     costs,
     catalogReader,
     readDemand,
+    readBuildTargets,
+    buildCosts,
   );
   if (
     foundry === undefined ||
@@ -859,6 +867,8 @@ export function createCapturedFullJobsAutomation({
   readSettings,
   costs,
   readDemand,
+  readBuildTargets,
+  buildCosts,
 }: CapturedFullJobsDependencies): {
   readonly reader: JobsReader;
   readonly executor: JobsExecutor;
@@ -892,6 +902,8 @@ export function createCapturedFullJobsAutomation({
         catalogReader,
         costs,
         readDemand,
+        readBuildTargets,
+        buildCosts,
         authorityCap,
       );
       if (sampled === undefined) {
@@ -927,6 +939,8 @@ export function createCapturedFullJobsAutomation({
         costs,
         catalogReader,
         readDemand,
+        readBuildTargets,
+        buildCosts,
       );
       if (
         currentCatalog === undefined ||
@@ -1052,6 +1066,8 @@ export function createCapturedFullJobsAutomation({
       catalogReader,
       costs,
       readDemand,
+      readBuildTargets,
+      buildCosts,
       authorityCap,
     ) !== undefined;
   return Object.freeze({ reader, executor, isAvailable });
