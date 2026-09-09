@@ -69,6 +69,7 @@ assert.deepEqual(reader(), {
     {
       id: "unemployed",
       controlId: "civ-unemployed",
+      token: 0,
       kind: "other",
       smart: false,
       configuredPriority: 0,
@@ -93,6 +94,7 @@ assert.deepEqual(reader(), {
     {
       id: "farmer",
       controlId: "civ-farmer",
+      token: 3,
       kind: "farmer",
       smart: true,
       configuredPriority: 4,
@@ -117,6 +119,7 @@ assert.deepEqual(reader(), {
     {
       id: "forager",
       controlId: "civ-forager",
+      token: 2,
       kind: "forager",
       smart: false,
       configuredPriority: null,
@@ -141,6 +144,7 @@ assert.deepEqual(reader(), {
     {
       id: "hidden",
       controlId: "civ-hidden",
+      token: null,
       kind: "other",
       smart: false,
       configuredPriority: null,
@@ -234,6 +238,11 @@ assert.equal(
   spaceMinerReader().jobs.find(({ id }) => id === "space_miner").smartMaximum,
   2.08,
   "Space Miner smart maximum uses Belt ship counts and high-pop worker effectiveness",
+);
+assert.equal(
+  spaceMinerReader().jobs.find(({ id }) => id === "space_miner").token,
+  28,
+  "Space Miner token follows DeadSpace's canonical job order",
 );
 
 const warlordMinerReader = createCapturedJobCatalogReader({
