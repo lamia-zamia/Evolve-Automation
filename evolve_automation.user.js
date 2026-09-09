@@ -4416,13 +4416,15 @@
       return Object.freeze({ maximum, used, skilledMaximum, skilledUsed });
   }
   function readServants(servantState, root, id) {
-    if (servantState === null) return 0;
+    if (servantState === null) return { count: 0, serves: !1 };
     let race = readProperty(root, "race"), servants = readProperty(race, "servants");
     if (!isRecord(servants)) return;
     let jobs = readProperty(servants, "jobs");
     if (!isRecord(jobs)) return;
-    let value = readProperty(jobs, id);
-    return value === void 0 ? 0 : finiteNonNegative(value);
+    let serves = Object.prototype.hasOwnProperty.call(jobs, id), value = readProperty(jobs, id);
+    if (value === void 0) return { count: 0, serves };
+    let count = finiteNonNegative(value);
+    return count === void 0 ? void 0 : { count, serves };
   }
   var JOB_KINDS = Object.freeze({
     farmer: "farmer",
@@ -4517,8 +4519,8 @@
         onSkipped(controlId, "ordinary job visibility is not boolean");
         continue;
       }
-      let servants = readServants(servantState, root, id);
-      if (servants === void 0) {
+      let servantInput = readServants(servantState, root, id);
+      if (servantInput === void 0) {
         onSkipped(controlId, "ordinary job servant count is not finite");
         return;
       }
@@ -4538,7 +4540,8 @@
           configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
           assigned,
           workers,
-          servants,
+          servants: servantInput.count,
+          serves: servantInput.serves,
           maximum,
           display,
           unlocked,

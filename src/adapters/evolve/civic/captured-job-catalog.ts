@@ -21,6 +21,8 @@ export interface CapturedJobCatalogEntry {
   readonly workers: number;
   /** Current servant assignment; zero when the run has no servant feature. */
   readonly servants: number;
+  /** Whether DeadSpace has initialized a servant assignment slot for this job. */
+  readonly serves: boolean;
   /** DeadSpace uses -1 for an uncapped ordinary job. */
   readonly maximum: number;
   readonly display: boolean;
@@ -105,18 +107,20 @@ function readServants(
   servantState: Readonly<CapturedServantState> | null,
   root: unknown,
   id: string,
-): number | undefined {
-  if (servantState === null) return 0;
+): { readonly count: number; readonly serves: boolean } | undefined {
+  if (servantState === null) return { count: 0, serves: false };
   const race = readProperty(root, "race");
   const servants = readProperty(race, "servants");
   if (!isRecord(servants)) return undefined;
   const jobs = readProperty(servants, "jobs");
   if (!isRecord(jobs)) return undefined;
+  const serves = Object.prototype.hasOwnProperty.call(jobs, id);
   const value = readProperty(jobs, id);
   // A servant job is created lazily with the servant panel. An absent entry therefore means that
   // no servant is assigned yet; it must not make an ordinary worker sample unavailable.
-  if (value === undefined) return 0;
-  return finiteNonNegative(value);
+  if (value === undefined) return { count: 0, serves };
+  const count = finiteNonNegative(value);
+  return count === undefined ? undefined : { count, serves };
 }
 
 // These are the canonical ordinary ids from DeadSpace's defineJobs list. The fallback keeps
@@ -259,8 +263,8 @@ function readCatalog(
       onSkipped(controlId, "ordinary job visibility is not boolean");
       continue;
     }
-    const servants = readServants(servantState, root, id);
-    if (servants === undefined) {
+    const servantInput = readServants(servantState, root, id);
+    if (servantInput === undefined) {
       onSkipped(controlId, "ordinary job servant count is not finite");
       return undefined;
     }
@@ -285,7 +289,8 @@ function readCatalog(
         configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
         assigned,
         workers,
-        servants,
+        servants: servantInput.count,
+        serves: servantInput.serves,
         maximum,
         display,
         unlocked,

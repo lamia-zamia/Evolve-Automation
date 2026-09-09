@@ -65,6 +65,7 @@ assert.deepEqual(reader(), {
       assigned: 4,
       workers: 4,
       servants: 0,
+      serves: false,
       maximum: 0,
       display: true,
       unlocked: true,
@@ -83,6 +84,7 @@ assert.deepEqual(reader(), {
       assigned: 3,
       workers: 3,
       servants: 0,
+      serves: false,
       maximum: 8,
       display: true,
       unlocked: true,
@@ -101,6 +103,7 @@ assert.deepEqual(reader(), {
       assigned: 0,
       workers: 0,
       servants: 0,
+      serves: false,
       maximum: 0,
       display: false,
       unlocked: false,
@@ -143,11 +146,15 @@ assert.deepEqual(servantReader().servantState, {
   skilledUsed: 1,
 });
 assert.deepEqual(
-  servantReader().jobs.map(({ id, servants }) => ({ id, servants })),
+  servantReader().jobs.map(({ id, servants, serves }) => ({
+    id,
+    servants,
+    serves,
+  })),
   [
-    { id: "unemployed", servants: 0 },
-    { id: "farmer", servants: 2 },
-    { id: "hidden", servants: 0 },
+    { id: "unemployed", servants: 0, serves: false },
+    { id: "farmer", servants: 2, serves: true },
+    { id: "hidden", servants: 0, serves: false },
   ],
   "servant assignments come from the captured servant job map",
 );
