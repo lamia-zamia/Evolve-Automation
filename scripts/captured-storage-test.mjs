@@ -7,7 +7,6 @@ function makeHarness({
   savingCost = { Iron: 600 },
   buildTargets = [],
   buildCosts = {},
-  technologyTargets,
   mutateAssignments = true,
 } = {}) {
   const root = {
@@ -33,6 +32,7 @@ function makeHarness({
   };
   const calls = [];
   const skipped = [];
+  const costLookups = [];
   const controls = new Map([
     [
       "createHead",
@@ -100,16 +100,43 @@ function makeHarness({
     },
     readBuildTargets: () => buildTargets,
     costs: {
-      readCost: (elementId) => buildCosts[elementId],
+      readCost: (elementId) => {
+        costLookups.push(elementId);
+        return buildCosts[elementId];
+      },
     },
-    ...(technologyTargets === undefined
-      ? {}
-      : { readTechnologyTargets: () => technologyTargets }),
     onSkipped: (key, reason) => skipped.push([key, reason]),
     nowMs: () => 1,
   });
   const automation = createStorageAllocationAutomation(ports);
-  return { root, calls, automation, ports, skipped };
+  return { root, calls, automation, ports, skipped, costLookups };
+}
+
+{
+  const { ports, skipped, costLookups } = makeHarness({
+    buildTargets: [
+      { key: "city-food", elementId: "undefined-food", weighting: 10 },
+    ],
+    buildCosts: { "undefined-food": { Iron: 400 } },
+  });
+  const source = ports.reader
+    .read()
+    .targetSources.find(({ kind }) => kind === "building");
+  assert.deepEqual(source, {
+    kind: "building",
+    enabled: true,
+    targets: [
+      {
+        costs: [{ resourceId: "Iron", quantity: 400 }],
+        isList: false,
+        label: "city-food",
+        unlocked: true,
+        autoBuildEnabled: true,
+      },
+    ],
+  });
+  assert.deepEqual(costLookups, ["undefined-food"]);
+  assert.deepEqual(skipped, []);
 }
 
 {
@@ -119,67 +146,47 @@ function makeHarness({
       { key: "city-missing", elementId: "city-missing", weighting: 1 },
     ],
     buildCosts: { "city-farm": { Iron: 400 } },
-    technologyTargets: [
-      { elementId: "tech-mining", cost: { Iron: 250 }, generation: 1 },
-    ],
   });
   const input = ports.reader.read();
-  assert.deepEqual(input.targetSources, [
-    {
-      kind: "queued",
-      enabled: true,
-      targets: [
-        {
-          costs: [{ resourceId: "Iron", quantity: 600 }],
-          isList: false,
-          label: "saved",
-          unlocked: true,
-          autoBuildEnabled: true,
-        },
-      ],
-    },
-    {
-      kind: "technology",
-      enabled: true,
-      targets: [
-        {
-          costs: [{ resourceId: "Iron", quantity: 250 }],
-          isList: false,
-          label: "tech-mining",
-          unlocked: true,
-          autoBuildEnabled: true,
-        },
-      ],
-    },
-    {
-      kind: "building",
-      enabled: true,
-      targets: [
-        {
-          costs: [{ resourceId: "Iron", quantity: 400 }],
-          isList: false,
-          label: "city-farm",
-          unlocked: true,
-          autoBuildEnabled: true,
-        },
-      ],
-    },
-    {
-      kind: "required",
-      enabled: true,
-      targets: [
-        {
-          costs: [{ resourceId: "Iron", quantity: 1 }],
-          isList: false,
-          label: "storageRequired/Iron",
-          unlocked: true,
-          autoBuildEnabled: true,
-        },
-      ],
-    },
-  ]);
+  const source = input.targetSources.find(({ kind }) => kind === "building");
+  assert.deepEqual(source, {
+    kind: "building",
+    enabled: false,
+    targets: [],
+  });
   assert.deepEqual(skipped, [
     ["city-missing", "captured build target cost is unavailable"],
+  ]);
+}
+
+{
+  const { ports, skipped } = makeHarness({ buildTargets: [] });
+  const source = ports.reader
+    .read()
+    .targetSources.find(({ kind }) => kind === "building");
+  assert.deepEqual(source, {
+    kind: "building",
+    enabled: true,
+    targets: [],
+  });
+  assert.deepEqual(skipped, []);
+}
+
+{
+  const { ports, skipped } = makeHarness({
+    buildTargets: [{ key: "city-farm", elementId: "city-farm", weighting: 1 }],
+    buildCosts: { "city-farm": { Iron: Number.NaN } },
+  });
+  const source = ports.reader
+    .read()
+    .targetSources.find(({ kind }) => kind === "building");
+  assert.deepEqual(source, {
+    kind: "building",
+    enabled: false,
+    targets: [],
+  });
+  assert.deepEqual(skipped, [
+    ["city-farm", "captured build target cost is invalid"],
   ]);
 }
 

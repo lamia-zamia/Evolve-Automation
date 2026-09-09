@@ -287,7 +287,6 @@ export function startCapturedRuntime({
     construction: progression.observations,
     readBuildTargets: progression.readManagedBuildTargets,
     costs: buildCosts,
-    readTechnologyTargets: progression.readOfferedTechs,
     onSkipped: (key, reason) => reportOnce(`storage skipped ${key}: ${reason}`),
     nowMs: () => Date.now(),
   });
