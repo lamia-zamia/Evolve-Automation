@@ -25,6 +25,10 @@ import {
   GRAPHENE_CONTROL,
 } from "../adapters/evolve/economy/production/captured-graphene.ts";
 import {
+  createCapturedReplicatorAutomation,
+  REPLICATOR_CONTROL,
+} from "../adapters/evolve/economy/production/captured-replicator.ts";
+import {
   createCapturedResourceDemand,
   EMPTY_DEMAND_SAMPLE,
   type CapturedDemandSample,
@@ -122,6 +126,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoTax: false,
   autoMiningDroid: false,
   autoGraphenePlant: false,
+  autoReplicator: false,
   autoAlchemy: false,
   autoCraft: false,
   autoQuarry: false,
@@ -255,6 +260,12 @@ export function startCapturedRuntime({
   const graphene = createCapturedGrapheneAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+  });
+  const replicator = createCapturedReplicatorAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
   });
   // The demand sample is planned at most once per cycle and shared by everything that reads it.
   // The research offer snapshot is already captured by progression; sharing it here keeps queue
@@ -505,6 +516,41 @@ export function startCapturedRuntime({
     }
   };
 
+  let replicatorDiscoveryAttempted = false;
+  const ensureReplicatorControls = () => {
+    if (pageCapture.controls.resolve(REPLICATOR_CONTROL) !== undefined) return;
+    const root = pageCapture.rootState.readRoot();
+    const race = readProperty(root, "race");
+    const tech = readProperty(root, "tech");
+    const techLevel = readProperty(tech, "replicator");
+    if (
+      !isRecord(readProperty(race, "replicator")) ||
+      typeof techLevel !== "number" ||
+      !Number.isFinite(techLevel) ||
+      techLevel < 1 ||
+      replicatorDiscoveryAttempted
+    ) {
+      return;
+    }
+    replicatorDiscoveryAttempted = true;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    if (govTabs === undefined) return;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 2,
+      }),
+      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `replicator discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+
   let factoryDiscoveryAttempted = false;
   let smelterDiscoveryAttempted = false;
   let storageDiscoveryAttempted = false;
@@ -737,6 +783,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoGraphenePlant")) {
         ensureGrapheneControls();
         graphene.run();
+      }
+      if (isEnabled(settings, "autoReplicator")) {
+        ensureReplicatorControls();
+        replicator.run();
       }
       if (isEnabled(settings, "autoQuarry")) {
         ensureRatioControls(
