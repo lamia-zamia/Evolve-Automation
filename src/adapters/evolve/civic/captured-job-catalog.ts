@@ -13,6 +13,7 @@ import { isRecord, readProperty } from "../../validation.ts";
 export interface CapturedJobCatalogEntry {
   readonly id: string;
   readonly controlId: string;
+  readonly assigned: number;
   readonly workers: number;
   /** DeadSpace uses -1 for an uncapped ordinary job. */
   readonly maximum: number;
@@ -78,6 +79,15 @@ function readCatalog(
       onSkipped(controlId, "ordinary job state is unavailable");
       continue;
     }
+    if (readProperty(job, "job") !== id) {
+      onSkipped(controlId, "ordinary job identity does not match control");
+      continue;
+    }
+    const assigned = finiteNonNegative(readProperty(job, "assigned"));
+    if (assigned === undefined) {
+      onSkipped(controlId, "ordinary job assigned count is not finite");
+      continue;
+    }
     const workers = finiteNonNegative(readProperty(job, "workers"));
     if (workers === undefined) {
       onSkipped(controlId, "ordinary job worker count is not finite");
@@ -97,6 +107,7 @@ function readCatalog(
       Object.freeze({
         id,
         controlId,
+        assigned,
         workers,
         maximum,
         display,

@@ -4,9 +4,15 @@ import { createCapturedJobCatalogReader } from "../src/adapters/evolve/civic/cap
 const root = {
   civic: {
     d_job: "unemployed",
-    unemployed: { workers: 4, max: 0, display: true },
-    farmer: { workers: 3, max: 8, display: true },
-    hidden: { workers: 0, max: 0, display: false },
+    unemployed: {
+      job: "unemployed",
+      assigned: 4,
+      workers: 4,
+      max: 0,
+      display: true,
+    },
+    farmer: { job: "farmer", assigned: 3, workers: 3, max: 8, display: true },
+    hidden: { job: "hidden", assigned: 0, workers: 0, max: 0, display: false },
   },
 };
 const skipped = [];
@@ -39,6 +45,7 @@ assert.deepEqual(reader(), {
     {
       id: "unemployed",
       controlId: "civ-unemployed",
+      assigned: 4,
       workers: 4,
       maximum: 0,
       display: true,
@@ -47,6 +54,7 @@ assert.deepEqual(reader(), {
     {
       id: "farmer",
       controlId: "civ-farmer",
+      assigned: 3,
       workers: 3,
       maximum: 8,
       display: true,
@@ -55,6 +63,7 @@ assert.deepEqual(reader(), {
     {
       id: "hidden",
       controlId: "civ-hidden",
+      assigned: 0,
       workers: 0,
       maximum: 0,
       display: false,
@@ -71,7 +80,13 @@ const incomplete = createCapturedJobCatalogReader({
     readRoot: () => ({
       civic: {
         d_job: "unemployed",
-        unemployed: { workers: 1, max: 0, display: true },
+        unemployed: {
+          job: "unemployed",
+          assigned: 1,
+          workers: 1,
+          max: 0,
+          display: true,
+        },
       },
     }),
     isReactivitySuppressed: () => false,
@@ -88,5 +103,34 @@ const incomplete = createCapturedJobCatalogReader({
   },
 });
 assert.equal(incomplete(), undefined);
+
+const mismatched = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      civic: {
+        d_job: "unemployed",
+        unemployed: {
+          job: "farmer",
+          assigned: 1,
+          workers: 1,
+          max: 0,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    capturedElementIds: () => ["civ-unemployed"],
+    resolve: () => ({
+      elementId: "civ-unemployed",
+      generation: 1,
+      methods: ["add", "sub", "setDefault"],
+    }),
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+  },
+});
+assert.equal(mismatched(), undefined);
 
 console.log("captured-job-catalog ok");

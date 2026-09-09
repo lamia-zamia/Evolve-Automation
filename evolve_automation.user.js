@@ -4424,6 +4424,15 @@
         onSkipped(controlId, "ordinary job state is unavailable");
         continue;
       }
+      if (readProperty(job, "job") !== id) {
+        onSkipped(controlId, "ordinary job identity does not match control");
+        continue;
+      }
+      let assigned = finiteNonNegative(readProperty(job, "assigned"));
+      if (assigned === void 0) {
+        onSkipped(controlId, "ordinary job assigned count is not finite");
+        continue;
+      }
       let workers = finiteNonNegative(readProperty(job, "workers"));
       if (workers === void 0) {
         onSkipped(controlId, "ordinary job worker count is not finite");
@@ -4443,6 +4452,7 @@
         Object.freeze({
           id,
           controlId,
+          assigned,
           workers,
           maximum,
           display,
