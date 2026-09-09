@@ -8,7 +8,12 @@
 
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
-import type { JobKind, JobsJobInput } from "../../../domain/civic/jobs.ts";
+import type {
+  JobKind,
+  JobsAuthorityInput,
+  JobsCycleInput,
+  JobsJobInput,
+} from "../../../domain/civic/jobs.ts";
 import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 
@@ -99,6 +104,14 @@ export interface CapturedJobCatalogReaderDependencies {
   readonly onSkipped?: (controlId: string, reason: string) => void;
 }
 
+/** The cycle facts that are not owned by the ordinary-job catalog reader. */
+export type CapturedJobsCycleOptions = Omit<
+  JobsCycleInput,
+  "available" | "jobs" | "splitEntries" | "defaultPreference"
+> & {
+  readonly authority: Readonly<JobsAuthorityInput>;
+};
+
 /**
  * Projects the validated ordinary catalog into the pure planner's per-job input shape.
  *
@@ -142,6 +155,28 @@ export function toCapturedJobsJobInputs(
       }),
     ),
   );
+}
+
+/**
+ * Joins the validated ordinary catalog with an explicitly captured cycle sample.
+ *
+ * The catalog owns job identity, split entries, and default candidates. Everything else stays an
+ * option so authority, population, crafting, and the remaining race-specific inputs cannot be
+ * smuggled in through defaults.
+ */
+export function toCapturedJobsCycleInput(
+  catalog: Readonly<CapturedJobCatalog>,
+  options: Readonly<CapturedJobsCycleOptions>,
+): Readonly<JobsCycleInput> | undefined {
+  const jobs = toCapturedJobsJobInputs(catalog);
+  if (jobs === undefined) return undefined;
+  return Object.freeze({
+    ...options,
+    available: true,
+    jobs,
+    splitEntries: catalog.splitEntries,
+    defaultPreference: catalog.defaultPreference,
+  });
 }
 
 function finiteNonNegative(value: unknown): number | undefined {

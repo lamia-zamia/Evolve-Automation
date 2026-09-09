@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   createCapturedJobCatalogReader,
+  toCapturedJobsCycleInput,
   toCapturedJobsJobInputs,
 } from "../src/adapters/evolve/civic/captured-job-catalog.ts";
 
@@ -276,6 +277,64 @@ assert.deepEqual(
     },
   ],
   "the planner projection preserves canonical known jobs",
+);
+const knownCatalog = knownPlannerReader();
+const projectedCycle = toCapturedJobsCycleInput(knownCatalog, {
+  craftOnly: false,
+  hunterActsAsUnemployed: false,
+  autoCraftsmen: false,
+  autoCraftWithoutBuilding: false,
+  craftsmenMode: "other",
+  foundryWeighting: "other",
+  manageServants: false,
+  setDefault: true,
+  servantModifier: knownCatalog.servantModifier,
+  servantsMaximum: 0,
+  skilledServantsMaximum: 0,
+  craftsmenMaximum: 0,
+  minimumDefault: knownCatalog.minimumDefault ?? 0,
+  reserveMiner: false,
+  defaultJobToken: 0,
+  hunterToken: 1,
+  farmerToken: 3,
+  lumberjackToken: 4,
+  quarryToken: 5,
+  crystalMinerToken: 6,
+  scavengerToken: 7,
+  foragerToken: 2,
+  entertainerToken: 19,
+  minerToken: 13,
+  population: 4,
+  craftDebug: false,
+  lastCraftWinner: null,
+  authority: {
+    enabled: false,
+    current: 0,
+    morale: 0,
+    moralePotential: 0,
+    moraleMaximum: 0,
+    moraleCeiling: null,
+    entertainerMorale: 0,
+    superstarMorale: 0,
+    previousCap: null,
+    debug: false,
+  },
+  crafting: [],
+});
+assert.equal(projectedCycle?.available, true);
+assert.deepEqual(
+  projectedCycle?.jobs.map(({ id, token }) => ({ id, token })),
+  [
+    { id: "unemployed", token: 0 },
+    { id: "farmer", token: 3 },
+    { id: "forager", token: 2 },
+  ],
+  "cycle projection carries catalog jobs into the pure planner input",
+);
+assert.deepEqual(
+  projectedCycle?.splitEntries,
+  knownCatalog.splitEntries,
+  "cycle projection carries catalog split entries without rebuilding them",
 );
 
 const teamsterReader = createCapturedJobCatalogReader({
