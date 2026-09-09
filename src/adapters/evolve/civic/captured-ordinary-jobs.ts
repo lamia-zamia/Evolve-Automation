@@ -150,6 +150,22 @@ function finiteNumber(value: unknown): number | undefined {
     : undefined;
 }
 
+/** DeadSpace's haveTask("tax") is membership in the governor task values. */
+function readTaxTaskActive(root: unknown): boolean | undefined {
+  const race = readProperty(root, "race");
+  if (!isRecord(race)) return undefined;
+  const governor = readProperty(race, "governor");
+  if (governor === undefined) return false;
+  if (!isRecord(governor)) return undefined;
+  const tasks = readProperty(governor, "tasks");
+  if (tasks === undefined) return false;
+  if (!isRecord(tasks)) return undefined;
+  for (const task of Object.values(tasks)) {
+    if (typeof task !== "string") return undefined;
+  }
+  return Object.values(tasks).includes("tax");
+}
+
 function traitValue(
   race: Record<PropertyKey, unknown>,
   id: string,
@@ -258,7 +274,9 @@ function readAuthorityInput(
   }
   const [minimumTax, taxCap] = readCapturedTaxLimits(root);
   let authorityTaxLimit = taxCap;
-  if (settings["autoTax"] === true) {
+  const autoTax = settings["autoTax"] === true;
+  let taxTaskActive = false;
+  if (autoTax) {
     const requested = readProperty(settings, "generalRequestedTaxRate");
     if (requested !== undefined) {
       const requestedRate = finiteNumber(requested);
@@ -272,13 +290,17 @@ function readAuthorityInput(
       }
     }
   }
+  if (!autoTax && current < target && taxRate < taxCap) {
+    const capturedTaxTask = readTaxTaskActive(root);
+    if (capturedTaxTask === undefined) return undefined;
+    taxTaskActive = capturedTaxTask;
+  }
   const canTax =
     current < target &&
     taxDisplay !== false &&
-    (settings["autoTax"] === true
-      ? taxRate < authorityTaxLimit
-      : taxRate < taxCap);
-  if (current < target && settings["autoTax"] !== true && taxRate < taxCap) {
+    (autoTax || taxTaskActive) &&
+    taxRate < authorityTaxLimit;
+  if (current < target && !autoTax && taxRate < taxCap && !taxTaskActive) {
     return undefined;
   }
 

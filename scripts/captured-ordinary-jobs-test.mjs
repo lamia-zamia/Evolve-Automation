@@ -164,6 +164,39 @@ assert.deepEqual(authorityInput.authority, {
   debug: false,
 });
 
+const taxTaskAuthorityRoot = structuredClone(authorityRoot);
+taxTaskAuthorityRoot.resource.Authority.amount = 50;
+taxTaskAuthorityRoot.race = { governor: { tasks: { t0: "tax" } } };
+const taxTaskAuthority = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => taxTaskAuthorityRoot },
+  controls: authorityControls,
+  readSettings: () => ({
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+  }),
+});
+assert.equal(
+  taxTaskAuthority.reader.readCycle(false).available,
+  true,
+  "an active Governor tax task supplies the captured Authority tax gate",
+);
+
+const malformedTaxTaskAuthorityRoot = structuredClone(taxTaskAuthorityRoot);
+malformedTaxTaskAuthorityRoot.race.governor.tasks = { t0: 1 };
+const malformedTaxTaskAuthority = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => malformedTaxTaskAuthorityRoot },
+  controls: authorityControls,
+  readSettings: () => ({
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+  }),
+});
+assert.equal(
+  malformedTaxTaskAuthority.reader.readCycle(false).available,
+  false,
+  "malformed Governor task state remains fail-closed",
+);
+
 const nobleAuthorityRoot = structuredClone(authorityRoot);
 nobleAuthorityRoot.resource.Authority.amount = 50;
 nobleAuthorityRoot.civic.taxes.tax_rate = 15;

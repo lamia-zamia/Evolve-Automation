@@ -6074,6 +6074,20 @@
   function finiteNumber3(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
+  function readTaxTaskActive(root) {
+    let race = readProperty(root, "race");
+    if (!isRecord(race)) return;
+    let governor = readProperty(race, "governor");
+    if (governor === void 0) return !1;
+    if (!isRecord(governor)) return;
+    let tasks = readProperty(governor, "tasks");
+    if (tasks === void 0) return !1;
+    if (isRecord(tasks)) {
+      for (let task of Object.values(tasks))
+        if (typeof task != "string") return;
+      return Object.values(tasks).includes("tax");
+    }
+  }
   function traitValue(race, id, values, operation2) {
     let rank = readProperty(race, id);
     if (rank === void 0 || rank === !1)
@@ -6134,8 +6148,8 @@
     let currency = readProperty(readProperty(root, "tech"), "currency");
     if (currency !== void 0 && (typeof currency != "number" || !Number.isFinite(currency)))
       return;
-    let [minimumTax, taxCap] = readCapturedTaxLimits(root), authorityTaxLimit = taxCap;
-    if (settings.autoTax === !0) {
+    let [minimumTax, taxCap] = readCapturedTaxLimits(root), authorityTaxLimit = taxCap, autoTax = settings.autoTax === !0, taxTaskActive = !1;
+    if (autoTax) {
       let requested = readProperty(settings, "generalRequestedTaxRate");
       if (requested !== void 0) {
         let requestedRate = finiteNumber3(requested);
@@ -6148,8 +6162,13 @@
           );
       }
     }
-    let canTax = current < target && taxDisplay !== !1 && (settings.autoTax === !0 ? taxRate < authorityTaxLimit : taxRate < taxCap);
-    if (current < target && settings.autoTax !== !0 && taxRate < taxCap)
+    if (!autoTax && current < target && taxRate < taxCap) {
+      let capturedTaxTask = readTaxTaskActive(root);
+      if (capturedTaxTask === void 0) return;
+      taxTaskActive = capturedTaxTask;
+    }
+    let canTax = current < target && taxDisplay !== !1 && (autoTax || taxTaskActive) && taxRate < authorityTaxLimit;
+    if (current < target && !autoTax && taxRate < taxCap && !taxTaskActive)
       return;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
