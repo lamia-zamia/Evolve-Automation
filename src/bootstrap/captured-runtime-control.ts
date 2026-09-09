@@ -53,6 +53,10 @@ import {
   NANITE_CONTROL,
 } from "../adapters/evolve/economy/resources/captured-nanite.ts";
 import {
+  createCapturedEjectorAutomation,
+  EJECTOR_SUMMARY_CONTROL,
+} from "../adapters/evolve/economy/resources/captured-ejector.ts";
+import {
   createCapturedFactoryAutomation,
   FACTORY_CONTROL,
 } from "../adapters/evolve/economy/production/captured-factory.ts";
@@ -148,6 +152,8 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoFactory: false,
   autoStorage: false,
   autoNanite: false,
+  autoEject: false,
+  autoSupply: false,
   autoJobs: false,
   autoGalaxyMarket: false,
 });
@@ -682,6 +688,49 @@ export function startCapturedRuntime({
     }
   };
 
+  let ejectorDiscoveryAttempted = false;
+  const ensureEjectorControls = () => {
+    if (
+      pageCapture.controls
+        .capturedElementIds()
+        .some((id) => id.startsWith("eject") && id !== EJECTOR_SUMMARY_CONTROL)
+    ) {
+      return;
+    }
+    const root = pageCapture.rootState.readRoot();
+    const ejector = readProperty(
+      readProperty(root, "interstellar"),
+      "mass_ejector",
+    );
+    const count = readProperty(ejector, "count");
+    if (
+      !isRecord(ejector) ||
+      typeof count !== "number" ||
+      !Number.isFinite(count) ||
+      count < 1 ||
+      ejectorDiscoveryAttempted
+    ) {
+      return;
+    }
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    if (marketTabs === undefined) return;
+    ejectorDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 4,
+      }),
+      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 2 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `ejector discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+
   const ensureStorageControls = () => {
     if (
       pageCapture.controls.resolve(STORAGE_CONSTRUCTION_CONTROL) !== undefined
@@ -858,6 +907,12 @@ export function startCapturedRuntime({
     readSettings: () => readStoredSettings(storage),
     readDemand: () => readDemand(),
   });
+  const ejector = createCapturedEjectorAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
+  });
   const factory = createCapturedFactoryAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -970,6 +1025,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoNanite")) {
         ensureNaniteControls();
         nanite.run();
+      }
+      if (isEnabled(settings, "autoEject")) {
+        ensureEjectorControls();
+        ejector.run();
       }
       if (isEnabled(settings, "autoPower")) {
         ensureCityControls();

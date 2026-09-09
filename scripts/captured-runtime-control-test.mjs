@@ -573,6 +573,9 @@ assert.equal(unsubscribeCount, 1);
       Nanite: { amount: 0, max: 100, display: true },
       Copper: { amount: 100, max: 100, diff: 0, display: true },
     },
+    interstellar: {
+      mass_ejector: { count: 1, on: 1, Copper: 0 },
+    },
     city: {
       powered: true,
       power: -1,
@@ -591,6 +594,13 @@ assert.equal(unsubscribeCount, 1);
           methods: ["addItem", "subItem"],
         };
       }
+      if (elementId === "ejectCopper") {
+        return {
+          elementId,
+          generation: 1,
+          methods: ["ejectMore", "ejectLess"],
+        };
+      }
       if (elementId === "city-mill") {
         return { elementId, generation: 1, methods: ["power_on"] };
       }
@@ -600,13 +610,16 @@ assert.equal(unsubscribeCount, 1);
       invoked.push(`${handle.elementId}.${method}`);
       if (handle.elementId === "iNFactory") {
         root.city.nanite_factory[args[0]] += method === "addItem" ? 1 : -1;
+      } else if (handle.elementId === "ejectCopper") {
+        root.interstellar.mass_ejector[args[0]] +=
+          method === "ejectMore" ? 1 : -1;
       } else {
         root.city.mill.on += 1;
         root.city.power = 1;
       }
       return { ok: true, value: undefined };
     },
-    capturedElementIds: () => ["iNFactory", "city-mill"],
+    capturedElementIds: () => ["iNFactory", "ejectCopper", "city-mill"],
   };
   const stopCycle = startCapturedRuntime({
     pageCapture: {
@@ -635,8 +648,11 @@ assert.equal(unsubscribeCount, 1);
           masterScriptToggle: true,
           autoNanite: true,
           naniteMode: "cap",
+          autoEject: true,
+          ejectMode: "cap",
           autoPower: true,
           res_naniteCopper: true,
+          res_ejectCopper: true,
         }),
     },
     logError: (message) => {
@@ -652,7 +668,15 @@ assert.equal(unsubscribeCount, 1);
   assert.ok(
     invoked
       .slice(0, firstPower)
-      .every((entry) => entry === "iNFactory.addItem"),
+      .every(
+        (entry) =>
+          entry === "iNFactory.addItem" || entry === "ejectCopper.ejectMore",
+      ),
+    JSON.stringify(invoked),
+  );
+  assert.ok(
+    invoked.findIndex((entry) => entry === "ejectCopper.ejectMore") >
+      invoked.findIndex((entry) => entry === "iNFactory.addItem"),
     JSON.stringify(invoked),
   );
   assert.equal(root.city.nanite_factory.Copper, 4);
