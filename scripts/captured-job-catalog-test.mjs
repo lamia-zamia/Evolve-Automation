@@ -1464,4 +1464,47 @@ const mismatched = createCapturedJobCatalogReader({
 });
 assert.equal(mismatched(), undefined);
 
+const foodRoot = {
+  civic: {
+    d_job: "farmer",
+    farmer: {
+      job: "farmer",
+      assigned: 3,
+      workers: 3,
+      max: -1,
+      display: true,
+    },
+  },
+  race: {},
+  resource: { Food: { amount: 100, max: 100, diff: 0 } },
+};
+const foodReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => foodRoot,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    capturedElementIds: () => ["civ-farmer"],
+    resolve: () => ({
+      elementId: "civ-farmer",
+      generation: 1,
+      methods: ["add", "sub", "setDefault"],
+    }),
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+  },
+  readSettings: () => ({ job_s_farmer: true }),
+});
+assert.equal(
+  foodReader().jobs[0].smartMaximum,
+  0,
+  "a full Food store stops smart Farmers",
+);
+foodRoot.resource.Food = { amount: 70, max: 100, diff: 1 };
+assert.equal(
+  foodReader().jobs[0].smartMaximum,
+  2,
+  "a normal-race Food surplus sheds one smart Farmer",
+);
+
 console.log("captured-job-catalog ok");

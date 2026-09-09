@@ -247,8 +247,8 @@ function readSmartMaximum(
   if (id === "scientist") return readScientistSmartMaximum(root, count);
   if (id === "professor") return readProfessorSmartMaximum(root);
   if (id === "banker") return readBankerSmartMaximum(root, readDemand);
-  if (id === "farmer") return readFarmerSmartMaximum(root);
-  if (id === "hunter") return readHunterSmartMaximum(root, readDemand);
+  if (id === "farmer") return readFarmerSmartMaximum(root, count);
+  if (id === "hunter") return readHunterSmartMaximum(root, count, readDemand);
   if (id === "lumberjack") {
     return readLumberjackSmartMaximum(root, readDemand);
   }
@@ -498,17 +498,36 @@ function readBankerSmartMaximum(
   return amount >= readDemand().storageRequired("Money") ? 0 : null;
 }
 
-function readFarmerSmartMaximum(root: unknown): number | null | undefined {
+function readFarmerSmartMaximum(
+  root: unknown,
+  count: number,
+): number | null | undefined {
   const race = readProperty(root, "race");
   // Existing early-game fixtures can omit the race bag before race initialization; preserve the
   // catalog's established conservative null cap for that lenient external state.
   if (!isRecord(race)) return null;
   if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
-  return hasRaceFlag(race, "artifical") ? 0 : null;
+  if (hasRaceFlag(race, "artifical")) return 0;
+  // The remaining food formula depends on script history and trait-adjusted consumption. These
+  // two ordinary-race outcomes are complete from the live resource row alone and are safe to
+  // characterize without pretending the missing history exists.
+  if (hasRaceFlag(race, "ravenous") || hasRaceFlag(race, "carnivore")) {
+    return undefined;
+  }
+  const food = readProperty(readProperty(root, "resource"), "Food");
+  const amount = finiteNonNegative(readProperty(food, "amount"));
+  const maximum = finiteNonNegative(readProperty(food, "max"));
+  const rate = finiteNumber(readProperty(food, "diff"));
+  if (amount === undefined || maximum === undefined || rate === undefined) {
+    return undefined;
+  }
+  if (amount >= maximum) return 0;
+  return amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null;
 }
 
 function readHunterSmartMaximum(
   root: unknown,
+  count: number,
   readDemand?: () => CapturedDemandSample,
 ): number | null | undefined {
   const race = readProperty(root, "race");
@@ -536,6 +555,13 @@ function readHunterSmartMaximum(
     const useful = readResourceUseful(root, "Lumber", readDemand);
     if (useful === true) return Number.MAX_SAFE_INTEGER;
     uncertain = true;
+  }
+
+  if (!hasRaceFlag(race, "ravenous") && !hasRaceFlag(race, "carnivore")) {
+    const food = readFarmerSmartMaximum(root, count);
+    if (food === 0) return 0;
+    if (food === undefined) return undefined;
+    if (!uncertain && food !== null) return food;
   }
 
   // The ordinary Farmer/Hunter food formula still needs live consumption and history fields.
