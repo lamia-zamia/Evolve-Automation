@@ -34,8 +34,17 @@ export interface CapturedJobCatalogEntry {
   readonly isDefault: boolean;
 }
 
+export interface CapturedServantState {
+  readonly maximum: number;
+  readonly used: number;
+  readonly skilledMaximum: number;
+  readonly skilledUsed: number;
+}
+
 export interface CapturedJobCatalog {
   readonly defaultJobId: string;
+  /** Null means the race has no servant feature in this run. */
+  readonly servantState: Readonly<CapturedServantState> | null;
   readonly jobs: readonly Readonly<CapturedJobCatalogEntry>[];
 }
 
@@ -66,12 +75,40 @@ function finiteSettingNumber(
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function readServants(root: unknown, id: string): number | undefined {
+function readServantState(
+  root: unknown,
+): Readonly<CapturedServantState> | null | undefined {
   const race = readProperty(root, "race");
   const servants = readProperty(race, "servants");
   // DeadSpace omits the servant state entirely for races without servants. That is a valid zero,
   // not an incomplete ordinary-job sample.
-  if (servants === undefined || servants === false) return 0;
+  if (servants === undefined || servants === false) return null;
+  if (!isRecord(servants)) return undefined;
+  const jobs = readProperty(servants, "jobs");
+  if (!isRecord(jobs)) return undefined;
+  const maximum = finiteNonNegative(readProperty(servants, "max"));
+  const used = finiteNonNegative(readProperty(servants, "used"));
+  const skilledMaximum = finiteNonNegative(readProperty(servants, "smax"));
+  const skilledUsed = finiteNonNegative(readProperty(servants, "sused"));
+  if (
+    maximum === undefined ||
+    used === undefined ||
+    skilledMaximum === undefined ||
+    skilledUsed === undefined
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ maximum, used, skilledMaximum, skilledUsed });
+}
+
+function readServants(
+  servantState: Readonly<CapturedServantState> | null,
+  root: unknown,
+  id: string,
+): number | undefined {
+  if (servantState === null) return 0;
+  const race = readProperty(root, "race");
+  const servants = readProperty(race, "servants");
   if (!isRecord(servants)) return undefined;
   const jobs = readProperty(servants, "jobs");
   if (!isRecord(jobs)) return undefined;
@@ -169,6 +206,11 @@ function readCatalog(
     return undefined;
   }
   const settings = isRecord(settingsValue) ? settingsValue : undefined;
+  const servantState = readServantState(root);
+  if (servantState === undefined) {
+    onSkipped("civics", "ordinary job servant state is incomplete");
+    return undefined;
+  }
 
   const jobs: CapturedJobCatalogEntry[] = [];
   const seen = new Set<string>();
@@ -217,7 +259,7 @@ function readCatalog(
       onSkipped(controlId, "ordinary job visibility is not boolean");
       continue;
     }
-    const servants = readServants(root, id);
+    const servants = readServants(servantState, root, id);
     if (servants === undefined) {
       onSkipped(controlId, "ordinary job servant count is not finite");
       return undefined;
@@ -259,6 +301,7 @@ function readCatalog(
   return jobs.some((job) => job.id === defaultJobId)
     ? Object.freeze({
         defaultJobId,
+        servantState,
         jobs: Object.freeze(jobs),
       })
     : undefined;

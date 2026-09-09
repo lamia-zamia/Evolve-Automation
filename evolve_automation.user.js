@@ -4405,9 +4405,19 @@
     let value = readProperty(settings, key);
     return typeof value == "number" && Number.isFinite(value) ? value : null;
   }
-  function readServants(root, id) {
+  function readServantState(root) {
     let race = readProperty(root, "race"), servants = readProperty(race, "servants");
-    if (servants === void 0 || servants === !1) return 0;
+    if (servants === void 0 || servants === !1) return null;
+    if (!isRecord(servants)) return;
+    let jobs = readProperty(servants, "jobs");
+    if (!isRecord(jobs)) return;
+    let maximum = finiteNonNegative(readProperty(servants, "max")), used = finiteNonNegative(readProperty(servants, "used")), skilledMaximum = finiteNonNegative(readProperty(servants, "smax")), skilledUsed = finiteNonNegative(readProperty(servants, "sused"));
+    if (!(maximum === void 0 || used === void 0 || skilledMaximum === void 0 || skilledUsed === void 0))
+      return Object.freeze({ maximum, used, skilledMaximum, skilledUsed });
+  }
+  function readServants(servantState, root, id) {
+    if (servantState === null) return 0;
+    let race = readProperty(root, "race"), servants = readProperty(race, "servants");
     if (!isRecord(servants)) return;
     let jobs = readProperty(servants, "jobs");
     if (!isRecord(jobs)) return;
@@ -4461,7 +4471,12 @@
     let defaultJobId = readProperty(civic, "d_job");
     if (typeof defaultJobId != "string" || defaultJobId.length === 0)
       return;
-    let settings = isRecord(settingsValue) ? settingsValue : void 0, jobs = [], seen = /* @__PURE__ */ new Set();
+    let settings = isRecord(settingsValue) ? settingsValue : void 0, servantState = readServantState(root);
+    if (servantState === void 0) {
+      onSkipped("civics", "ordinary job servant state is incomplete");
+      return;
+    }
+    let jobs = [], seen = /* @__PURE__ */ new Set();
     for (let controlId of controls.capturedElementIds()) {
       if (!controlId.startsWith("civ-") || controlId.length <= 4)
         continue;
@@ -4502,7 +4517,7 @@
         onSkipped(controlId, "ordinary job visibility is not boolean");
         continue;
       }
-      let servants = readServants(root, id);
+      let servants = readServants(servantState, root, id);
       if (servants === void 0) {
         onSkipped(controlId, "ordinary job servant count is not finite");
         return;
@@ -4537,6 +4552,7 @@
     }
     return jobs.some((job) => job.id === defaultJobId) ? Object.freeze({
       defaultJobId,
+      servantState,
       jobs: Object.freeze(jobs)
     }) : void 0;
   }

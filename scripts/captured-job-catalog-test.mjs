@@ -54,6 +54,7 @@ const reader = createCapturedJobCatalogReader({
 
 assert.deepEqual(reader(), {
   defaultJobId: "unemployed",
+  servantState: null,
   jobs: [
     {
       id: "unemployed",
@@ -119,13 +120,27 @@ const servantReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({
       ...root,
-      race: { servants: { jobs: { farmer: 2 } } },
+      race: {
+        servants: {
+          max: 4,
+          used: 2,
+          smax: 1,
+          sused: 1,
+          jobs: { farmer: 2 },
+        },
+      },
     }),
     isReactivitySuppressed: () => false,
     subscribeRootReplaced: () => () => {},
   },
   controls,
   readSettings: () => ({}),
+});
+assert.deepEqual(servantReader().servantState, {
+  maximum: 4,
+  used: 2,
+  skilledMaximum: 1,
+  skilledUsed: 1,
 });
 assert.deepEqual(
   servantReader().jobs.map(({ id, servants }) => ({ id, servants })),
@@ -141,7 +156,15 @@ const malformedServantReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({
       ...root,
-      race: { servants: { jobs: { farmer: "two" } } },
+      race: {
+        servants: {
+          max: 4,
+          used: 2,
+          smax: 1,
+          sused: 1,
+          jobs: { farmer: "two" },
+        },
+      },
     }),
     isReactivitySuppressed: () => false,
     subscribeRootReplaced: () => () => {},
