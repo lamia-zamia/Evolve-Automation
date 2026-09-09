@@ -6129,6 +6129,14 @@
     2: 21.2,
     3: 18,
     4: 15.8
+  }), NOBLE_TAX_LIMITS = Object.freeze({
+    0.1: [18, 20],
+    0.25: [15, 20],
+    0.5: [12, 20],
+    1: [10, 20],
+    2: [10, 24],
+    3: [10, 28],
+    4: [10, 30]
   });
   function readAuthorityInput(root, settings, previousCap) {
     if (settings.authorityManage !== !0) return unavailableInput().authority;
@@ -6156,10 +6164,10 @@
     let currency = readProperty(readProperty(root, "tech"), "currency");
     if (currency !== void 0 && (typeof currency != "number" || !Number.isFinite(currency)))
       return;
-    let raceForTax = readProperty(root, "race");
-    if (readProperty(raceForTax, "terrifying") || readProperty(raceForTax, "noble") || readProperty(raceForTax, "wish") || governmentType === "oligarchy")
+    let raceForTax = readProperty(root, "race"), terrifying = !!readProperty(raceForTax, "terrifying"), nobleRank = readProperty(raceForTax, "noble"), nobleLimits = nobleRank === void 0 || nobleRank === !1 ? void 0 : typeof nobleRank == "number" && Number.isFinite(nobleRank) ? NOBLE_TAX_LIMITS[nobleRank] : void 0;
+    if (nobleRank !== void 0 && nobleRank !== !1 && nobleLimits === void 0 || readProperty(raceForTax, "wish") || governmentType === "oligarchy")
       return;
-    let taxCap = currency !== void 0 && currency >= 5 ? 50 : 30, authorityTaxLimit = taxCap;
+    let taxCap = nobleLimits ? nobleLimits[1] : (currency !== void 0 && currency >= 5 ? 50 : 30) + (terrifying ? 20 : 0), authorityTaxLimit = taxCap;
     if (settings.autoTax === !0) {
       let requested = readProperty(settings, "generalRequestedTaxRate");
       if (requested !== void 0) {
@@ -6167,7 +6175,7 @@
         if (requestedRate === void 0 || requestedRate < 0) {
           if (requestedRate === void 0) return;
         } else {
-          let minimumTax = currency !== void 0 && currency >= 5 ? 0 : 10;
+          let minimumTax = nobleLimits ? nobleLimits[0] : currency !== void 0 && currency >= 5 ? 0 : 10;
           authorityTaxLimit = Math.min(
             Math.max(requestedRate, minimumTax),
             taxCap

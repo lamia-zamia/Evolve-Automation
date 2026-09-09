@@ -197,6 +197,17 @@ const HIGH_POPULATION_MORALE: Readonly<Record<number, number>> = Object.freeze({
   4: 15.8,
 });
 
+const NOBLE_TAX_LIMITS: Readonly<Record<number, readonly [number, number]>> =
+  Object.freeze({
+    0.1: [18, 20],
+    0.25: [15, 20],
+    0.5: [12, 20],
+    1: [10, 20],
+    2: [10, 24],
+    3: [10, 28],
+    4: [10, 30],
+  });
+
 function readAuthorityInput(
   root: unknown,
   settings: Record<PropertyKey, unknown>,
@@ -256,15 +267,31 @@ function readAuthorityInput(
     return undefined;
   }
   const raceForTax = readProperty(root, "race");
+  const terrifying = Boolean(readProperty(raceForTax, "terrifying"));
+  const nobleRank = readProperty(raceForTax, "noble");
+  const nobleLimits =
+    nobleRank === undefined || nobleRank === false
+      ? undefined
+      : typeof nobleRank === "number" && Number.isFinite(nobleRank)
+        ? NOBLE_TAX_LIMITS[nobleRank]
+        : undefined;
   if (
-    Boolean(readProperty(raceForTax, "terrifying")) ||
-    Boolean(readProperty(raceForTax, "noble")) ||
+    nobleRank !== undefined &&
+    nobleRank !== false &&
+    nobleLimits === undefined
+  ) {
+    return undefined;
+  }
+  if (
     Boolean(readProperty(raceForTax, "wish")) ||
     governmentType === "oligarchy"
   ) {
     return undefined;
   }
-  const taxCap = currency !== undefined && currency >= 5 ? 50 : 30;
+  const taxCap = nobleLimits
+    ? nobleLimits[1]
+    : (currency !== undefined && currency >= 5 ? 50 : 30) +
+      (terrifying ? 20 : 0);
   let authorityTaxLimit = taxCap;
   if (settings["autoTax"] === true) {
     const requested = readProperty(settings, "generalRequestedTaxRate");
@@ -273,7 +300,11 @@ function readAuthorityInput(
       if (requestedRate === undefined || requestedRate < 0) {
         if (requestedRate === undefined) return undefined;
       } else {
-        const minimumTax = currency !== undefined && currency >= 5 ? 0 : 10;
+        const minimumTax = nobleLimits
+          ? nobleLimits[0]
+          : currency !== undefined && currency >= 5
+            ? 0
+            : 10;
         authorityTaxLimit = Math.min(
           Math.max(requestedRate, minimumTax),
           taxCap,

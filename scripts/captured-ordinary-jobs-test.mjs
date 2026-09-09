@@ -164,6 +164,46 @@ assert.deepEqual(authorityInput.authority, {
   debug: false,
 });
 
+const nobleAuthorityRoot = structuredClone(authorityRoot);
+nobleAuthorityRoot.resource.Authority.amount = 50;
+nobleAuthorityRoot.civic.taxes.tax_rate = 15;
+nobleAuthorityRoot.race = { noble: 1 };
+const nobleAuthority = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => nobleAuthorityRoot },
+  controls: authorityControls,
+  readSettings: () => ({
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+    autoTax: true,
+    generalRequestedTaxRate: 25,
+  }),
+});
+assert.equal(
+  nobleAuthority.reader.readCycle(false).available,
+  true,
+  "Noble rank supplies the captured tax minimum and maximum",
+);
+
+const terrifyingAuthorityRoot = structuredClone(authorityRoot);
+terrifyingAuthorityRoot.resource.Authority.amount = 50;
+terrifyingAuthorityRoot.civic.taxes.tax_rate = 45;
+terrifyingAuthorityRoot.race = { terrifying: 1 };
+const terrifyingAuthority = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => terrifyingAuthorityRoot },
+  controls: authorityControls,
+  readSettings: () => ({
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+    autoTax: true,
+    generalRequestedTaxRate: 50,
+  }),
+});
+assert.equal(
+  terrifyingAuthority.reader.readCycle(false).available,
+  true,
+  "Terrifying supplies the captured additional tax capacity",
+);
+
 const partialAutomation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => root },
   controls: {
