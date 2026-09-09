@@ -1,5 +1,10 @@
 import { planTradeRoutes } from "../../../../domain/economy/market/trade-routes.ts";
 import { shouldSaveInflationMoney } from "../../../../domain/economy/resources/inflation-assist.ts";
+import {
+  planRegionalTradeRoutes,
+  type RegionalTradeResourceInput,
+  type RegionalTradeRoutesInput,
+} from "../../../../domain/economy/market/regional-trade-routes.ts";
 import type {
   TradeResourceView,
   TradeRoutesInput,
@@ -27,6 +32,19 @@ interface RouteSession {
   readonly routeCounts: ReadonlyMap<string, number>;
   readonly controls: ReadonlyMap<string, GameControlHandle>;
   readonly marketRouteCount: number;
+}
+
+interface RegionalRouteSession {
+  readonly root: unknown;
+  readonly market: Record<PropertyKey, unknown>;
+  readonly selectedZone: unknown;
+  readonly expectedRoutes: Map<string, number>;
+  readonly controls: ReadonlyMap<string, GameControlHandle>;
+}
+
+interface RegionalRouteCapture {
+  readonly input: Readonly<RegionalTradeRoutesInput>;
+  readonly session: RegionalRouteSession;
 }
 
 // This is the upstream tradeRatio catalog, not a second policy catalog. DeadSpace does not retain
@@ -73,6 +91,54 @@ const TRAIT_VALUES = Object.freeze({
   conniving: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
   asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5]),
 });
+
+const BLACK_MARKET_VOLUMES: Readonly<Record<string, number>> = Object.freeze({
+  Food: 20,
+  Lumber: 20,
+  Chrysotile: 10,
+  Stone: 20,
+  Crystal: 4,
+  Furs: 10,
+  Copper: 10,
+  Iron: 10,
+  Aluminium: 10,
+  Cement: 10,
+  Coal: 10,
+  Oil: 5,
+  Uranium: 1.2,
+  Steel: 5,
+  Titanium: 2.5,
+  Alloy: 2,
+  Polymer: 2,
+  Iridium: 1,
+  Helium_3: 1,
+  Elerium: 0.2,
+  Water: 20,
+  Neutronium: 0.5,
+  Adamantite: 0.5,
+  Nano_Tube: 10,
+  Graphene: 1,
+  Stanene: 1,
+  Bolognium: 1.2,
+  Orichalcum: 0.5,
+  Unobtainium: 0.25,
+  Plywood: 1,
+  Brick: 1,
+  Wrought_Iron: 1,
+  Sheet_Metal: 1,
+  Mythril: 1,
+  Quantium: 1,
+  Aerographene: 1,
+});
+
+const REGIONAL_PRIORITY = Object.freeze([
+  "Food",
+  "Oil",
+  "Helium_3",
+  "Elerium",
+  "Coal",
+  "Water",
+]);
 
 function finite(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
@@ -152,6 +218,19 @@ function hasUnsupportedPriceModifier(root: unknown): boolean {
     readProperty(underground, "trade") ||
     readProperty(stats, "trade") ||
     readProperty(gov3, "hstl") !== undefined,
+  );
+}
+
+function hasUnsupportedRegionalVolumeModifier(root: unknown): boolean {
+  const race = readProperty(root, "race");
+  const governor = readProperty(race, "governor");
+  const governorType = readProperty(readProperty(governor, "g"), "bg");
+  return (
+    hasUnsupportedPriceModifier(root) ||
+    Boolean(readProperty(race, "merchant")) ||
+    Boolean(readProperty(race, "devious")) ||
+    Boolean(readProperty(race, "unfathomable")) ||
+    governorType === "dealmaker"
   );
 }
 
@@ -511,11 +590,214 @@ function readRouteInput(
   });
 }
 
+function regionalPoolRoute(
+  ledger: Record<PropertyKey, unknown>,
+  pool: string,
+  resourceId: string,
+): number | undefined {
+  const poolLedger = readProperty(ledger, pool);
+  if (poolLedger === undefined) return 0;
+  if (!isRecord(poolLedger)) return undefined;
+  const value = readProperty(poolLedger, resourceId);
+  if (value === undefined) return 0;
+  return finite(value);
+}
+
+function readRegionalRouteInput(
+  dependencies: CapturedTradeRoutesDependencies,
+): RegionalRouteCapture | undefined {
+  const root = dependencies.rootState.readRoot();
+  const tech = readProperty(root, "tech");
+  const shadow = finite(readProperty(tech, "shadow"));
+  if (root === undefined || shadow === undefined || shadow < 5)
+    return undefined;
+  if (hasUnsupportedRegionalVolumeModifier(root)) {
+    dependencies.onUnavailable?.(
+      "regional black-market volume modifiers are not captured",
+    );
+    return undefined;
+  }
+
+  const city = readProperty(root, "city");
+  const market = readProperty(city, "market");
+  const resources = readProperty(root, "resource");
+  const race = readProperty(root, "race");
+  const governor = readProperty(race, "governor");
+  const config = readProperty(governor, "config");
+  const trader = readProperty(config, "trader");
+  if (!isRecord(market) || !isRecord(resources)) return undefined;
+
+  const maximumRoutes = finite(market["mtrade"]);
+  const money = finite(
+    readProperty(readProperty(resources, "Money"), "amount"),
+  );
+  if (
+    maximumRoutes === undefined ||
+    !Number.isSafeInteger(maximumRoutes) ||
+    maximumRoutes < 0 ||
+    money === undefined
+  ) {
+    return undefined;
+  }
+  const marginValue = isRecord(trader) ? finite(trader["margin"]) : undefined;
+  const reserveValue = isRecord(trader) ? finite(trader["reserve"]) : undefined;
+  const margin = marginValue !== undefined && marginValue > 0 ? marginValue : 0;
+  const reserve =
+    reserveValue !== undefined && reserveValue > 0 ? reserveValue : 0;
+
+  const blackMarket = readProperty(market, "bm");
+  const ledger = isRecord(blackMarket) ? blackMarket : {};
+  const poolNames = new Set<string>();
+  const routeCounts = new Map<string, number>();
+  for (const value of Object.keys(ledger)) poolNames.add(value);
+
+  const candidates: RegionalTradeResourceInput[] = [];
+  for (const resourceId of Object.keys(BLACK_MARKET_VOLUMES)) {
+    const resource = readProperty(resources, resourceId);
+    if (!isRecord(resource) || resource["display"] !== true) continue;
+    const diffLedger = readProperty(resource, "regDiff");
+    // `supply.js:regDiff` lazily creates this ledger and returns an empty object before the
+    // regional reckoning has written its first rate. Preserve that lenient upstream state.
+    if (diffLedger === undefined) continue;
+    if (!isRecord(diffLedger)) return undefined;
+    for (const pool of Object.keys(diffLedger)) poolNames.add(pool);
+  }
+  if (poolNames.size === 0) return undefined;
+
+  const controls = new Map<string, GameControlHandle>();
+  for (const pool of poolNames) {
+    for (const [resourceId, volume] of Object.entries(BLACK_MARKET_VOLUMES)) {
+      const resource = readProperty(resources, resourceId);
+      if (!isRecord(resource) || resource["display"] !== true) continue;
+      const diffLedger = readProperty(resource, "regDiff");
+      if (diffLedger !== undefined && !isRecord(diffLedger)) return undefined;
+      const rateOfChange =
+        finite(isRecord(diffLedger) ? diffLedger[pool] : undefined) ?? 0;
+      const currentRoutes = regionalPoolRoute(ledger, pool, resourceId);
+      if (
+        currentRoutes === undefined ||
+        !Number.isSafeInteger(currentRoutes) ||
+        currentRoutes < 0
+      ) {
+        return undefined;
+      }
+      if (currentRoutes > 0)
+        routeCounts.set(`${pool}\u0000${resourceId}`, currentRoutes);
+      const priorityIndex = REGIONAL_PRIORITY.indexOf(resourceId);
+      candidates.push({
+        resourceId,
+        pool,
+        rateOfChange,
+        currentRoutes,
+        volume,
+        priority: priorityIndex < 0 ? REGIONAL_PRIORITY.length : priorityIndex,
+      });
+    }
+  }
+
+  for (const candidate of candidates) {
+    const key = `${candidate.pool}\u0000${candidate.resourceId}`;
+    const needsControl =
+      candidate.rateOfChange < 0 || candidate.currentRoutes > 0;
+    if (!needsControl) continue;
+    const control = dependencies.controls.resolve(`bm-${candidate.resourceId}`);
+    if (
+      control === undefined ||
+      !control.methods.includes("more") ||
+      !control.methods.includes("less")
+    ) {
+      return undefined;
+    }
+    controls.set(candidate.resourceId, control);
+    if (!routeCounts.has(key)) routeCounts.set(key, candidate.currentRoutes);
+  }
+
+  const expectedRoutes = new Map(routeCounts);
+  const input: RegionalTradeRoutesInput = Object.freeze({
+    resources: Object.freeze(
+      candidates.map((candidate) => Object.freeze(candidate)),
+    ),
+    maximumRoutes,
+    money,
+    reserve,
+    margin,
+  });
+  return Object.freeze({
+    input,
+    session: Object.freeze({
+      root,
+      market,
+      selectedZone: market["bmZone"],
+      expectedRoutes,
+      controls,
+    }),
+  });
+}
+
+function applyRegionalTradeRoutes(
+  dependencies: CapturedTradeRoutesDependencies,
+  captured: RegionalRouteCapture | undefined,
+): void {
+  if (captured === undefined) return;
+  const result = planRegionalTradeRoutes(captured.input);
+  if (result.operations.length === 0) return;
+  const multiplier = dependencies.controls.resolve(
+    "marketRouteMultiplier",
+  )?.data;
+  if (
+    isRecord(multiplier) &&
+    multiplier["multiplier"] !== undefined &&
+    multiplier["multiplier"] !== 1
+  )
+    return;
+
+  const market = captured.session.market;
+  try {
+    for (const operation of result.operations) {
+      const control = captured.session.controls.get(operation.resourceId);
+      if (control === undefined) return;
+      for (let index = 0; index < operation.count; index += 1) {
+        if (dependencies.rootState.readRoot() !== captured.session.root) return;
+        const key = `${operation.pool}\u0000${operation.resourceId}`;
+        const expected = captured.session.expectedRoutes.get(key) ?? 0;
+        const actual = regionalPoolRoute(
+          isRecord(market["bm"]) ? market["bm"] : {},
+          operation.pool,
+          operation.resourceId,
+        );
+        if (actual !== expected) return;
+        market["bmZone"] = operation.pool;
+        const method = operation.kind === "add" ? "more" : "less";
+        const invoked = dependencies.controls.invoke(control, method);
+        if (!invoked.ok) return;
+        const next = regionalPoolRoute(
+          isRecord(market["bm"]) ? market["bm"] : {},
+          operation.pool,
+          operation.resourceId,
+        );
+        const expectedNext = expected + (operation.kind === "add" ? 1 : -1);
+        if (next !== expectedNext) return;
+        captured.session.expectedRoutes.set(key, expectedNext);
+      }
+    }
+  } finally {
+    market["bmZone"] = captured.session.selectedZone;
+  }
+}
+
 export function createCapturedTradeRoutes(
   dependencies: CapturedTradeRoutesDependencies,
 ): TradeRouteAdjuster {
   return Object.freeze({
     adjust(): void {
+      const regional = readRegionalRouteInput(dependencies);
+      if (regional !== undefined) {
+        applyRegionalTradeRoutes(dependencies, regional);
+        return;
+      }
+      const root = dependencies.rootState.readRoot();
+      const shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
+      if (shadow !== undefined && shadow >= 5) return;
       const captured = readRouteInput(dependencies);
       if (captured === undefined) return;
       const result = planTradeRoutes(captured.input);

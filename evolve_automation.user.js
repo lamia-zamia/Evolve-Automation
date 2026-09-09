@@ -11175,6 +11175,58 @@
     return input.active && input.saveMinutes >= 0 && inflationSecondsToFinish(input.money) <= input.saveMinutes * 60;
   }
 
+  // src/domain/economy/market/regional-trade-routes.ts
+  function planRegionalTradeRoutes(input) {
+    let deficits = [], spare = [], operations = [], used = 0;
+    for (let resource of input.resources)
+      resource.currentRoutes < 0 || resource.volume <= 0 || (used += resource.currentRoutes, resource.rateOfChange < 0 ? deficits.push({
+        resourceId: resource.resourceId,
+        pool: resource.pool,
+        shortfall: -resource.rateOfChange,
+        priority: resource.priority,
+        want: Math.ceil(
+          (-resource.rateOfChange + input.margin) / resource.volume
+        )
+      }) : resource.currentRoutes > 0 && resource.rateOfChange - resource.currentRoutes * resource.volume >= input.margin && spare.push({
+        resourceId: resource.resourceId,
+        pool: resource.pool,
+        priority: resource.priority,
+        routes: resource.currentRoutes
+      }));
+    deficits.sort(
+      (left, right) => left.priority - right.priority || right.shortfall - left.shortfall
+    ), spare.sort((left, right) => right.priority - left.priority);
+    for (let deficit of deficits) {
+      if (input.money <= input.reserve) break;
+      let free = () => input.maximumRoutes - used, needed = Math.min(deficit.want, Math.max(0, input.maximumRoutes));
+      if (free() < needed)
+        for (let candidate of spare) {
+          if (free() >= needed) break;
+          if (candidate.routes <= 0 || candidate.pool === deficit.pool && candidate.resourceId === deficit.resourceId)
+            continue;
+          let count2 = Math.min(candidate.routes, needed - free());
+          count2 <= 0 || (candidate.routes -= count2, used -= count2, operations.push({
+            kind: "remove",
+            resourceId: candidate.resourceId,
+            pool: candidate.pool,
+            count: count2
+          }));
+        }
+      let count = Math.min(needed, Math.max(0, free()));
+      count <= 0 || (used += count, operations.push({
+        kind: "add",
+        resourceId: deficit.resourceId,
+        pool: deficit.pool,
+        count
+      }));
+    }
+    return Object.freeze({
+      operations: Object.freeze(
+        operations.map((operation2) => Object.freeze(operation2))
+      )
+    });
+  }
+
   // src/adapters/evolve/economy/market/captured-trade-routes.ts
   var TRADE_RATIO = Object.freeze({
     Food: 2,
@@ -11213,7 +11265,51 @@
     merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
     conniving: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
     asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5])
-  });
+  }), BLACK_MARKET_VOLUMES = Object.freeze({
+    Food: 20,
+    Lumber: 20,
+    Chrysotile: 10,
+    Stone: 20,
+    Crystal: 4,
+    Furs: 10,
+    Copper: 10,
+    Iron: 10,
+    Aluminium: 10,
+    Cement: 10,
+    Coal: 10,
+    Oil: 5,
+    Uranium: 1.2,
+    Steel: 5,
+    Titanium: 2.5,
+    Alloy: 2,
+    Polymer: 2,
+    Iridium: 1,
+    Helium_3: 1,
+    Elerium: 0.2,
+    Water: 20,
+    Neutronium: 0.5,
+    Adamantite: 0.5,
+    Nano_Tube: 10,
+    Graphene: 1,
+    Stanene: 1,
+    Bolognium: 1.2,
+    Orichalcum: 0.5,
+    Unobtainium: 0.25,
+    Plywood: 1,
+    Brick: 1,
+    Wrought_Iron: 1,
+    Sheet_Metal: 1,
+    Mythril: 1,
+    Quantium: 1,
+    Aerographene: 1
+  }), REGIONAL_PRIORITY = Object.freeze([
+    "Food",
+    "Oil",
+    "Helium_3",
+    "Elerium",
+    "Coal",
+    "Water"
+  ]);
   function finite14(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
@@ -11247,6 +11343,10 @@
   function hasUnsupportedPriceModifier(root) {
     let race = readProperty(root, "race"), genes = readProperty(root, "genes"), tech = readProperty(root, "tech"), city = readProperty(root, "city"), space = readProperty(root, "space"), underground = readProperty(root, "underground"), stats = readProperty(readProperty(root, "stats"), "achieve"), civic = readProperty(root, "civic"), foreign = readProperty(civic, "foreign"), gov3 = readProperty(foreign, "gov3");
     return !!(readProperty(genes, "cunning") || readProperty(genes, "trader") || readProperty(race, "persuasive") || readProperty(race, "ocular_power") || readProperty(race, "devious") || readProperty(race, "empowered") || readProperty(race, "truepath") || readProperty(race, "quarantine") || readProperty(race, "witch_hunter") || readProperty(city, "wharf") || readProperty(space, "gps") || readProperty(tech, "railway") || readProperty(underground, "trade") || readProperty(stats, "trade") || readProperty(gov3, "hstl") !== void 0);
+  }
+  function hasUnsupportedRegionalVolumeModifier(root) {
+    let race = readProperty(root, "race"), governor = readProperty(race, "governor"), governorType = readProperty(readProperty(governor, "g"), "bg");
+    return hasUnsupportedPriceModifier(root) || !!readProperty(race, "merchant") || !!readProperty(race, "devious") || !!readProperty(race, "unfathomable") || governorType === "dealmaker";
   }
   function routePrices(root, resource, ratio) {
     let value = finite14(resource.value), race = readProperty(root, "race");
@@ -11422,9 +11522,140 @@
       })
     });
   }
+  function regionalPoolRoute(ledger, pool, resourceId) {
+    let poolLedger = readProperty(ledger, pool);
+    if (poolLedger === void 0) return 0;
+    if (!isRecord(poolLedger)) return;
+    let value = readProperty(poolLedger, resourceId);
+    return value === void 0 ? 0 : finite14(value);
+  }
+  function readRegionalRouteInput(dependencies) {
+    let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), shadow = finite14(readProperty(tech, "shadow"));
+    if (root === void 0 || shadow === void 0 || shadow < 5)
+      return;
+    if (hasUnsupportedRegionalVolumeModifier(root)) {
+      dependencies.onUnavailable?.(
+        "regional black-market volume modifiers are not captured"
+      );
+      return;
+    }
+    let city = readProperty(root, "city"), market = readProperty(city, "market"), resources = readProperty(root, "resource"), race = readProperty(root, "race"), governor = readProperty(race, "governor"), config = readProperty(governor, "config"), trader = readProperty(config, "trader");
+    if (!isRecord(market) || !isRecord(resources)) return;
+    let maximumRoutes = finite14(market.mtrade), money = finite14(
+      readProperty(readProperty(resources, "Money"), "amount")
+    );
+    if (maximumRoutes === void 0 || !Number.isSafeInteger(maximumRoutes) || maximumRoutes < 0 || money === void 0)
+      return;
+    let marginValue = isRecord(trader) ? finite14(trader.margin) : void 0, reserveValue = isRecord(trader) ? finite14(trader.reserve) : void 0, margin = marginValue !== void 0 && marginValue > 0 ? marginValue : 0, reserve = reserveValue !== void 0 && reserveValue > 0 ? reserveValue : 0, blackMarket = readProperty(market, "bm"), ledger = isRecord(blackMarket) ? blackMarket : {}, poolNames = /* @__PURE__ */ new Set(), routeCounts = /* @__PURE__ */ new Map();
+    for (let value of Object.keys(ledger)) poolNames.add(value);
+    let candidates = [];
+    for (let resourceId of Object.keys(BLACK_MARKET_VOLUMES)) {
+      let resource = readProperty(resources, resourceId);
+      if (!isRecord(resource) || resource.display !== !0) continue;
+      let diffLedger = readProperty(resource, "regDiff");
+      if (diffLedger !== void 0) {
+        if (!isRecord(diffLedger)) return;
+        for (let pool of Object.keys(diffLedger)) poolNames.add(pool);
+      }
+    }
+    if (poolNames.size === 0) return;
+    let controls = /* @__PURE__ */ new Map();
+    for (let pool of poolNames)
+      for (let [resourceId, volume] of Object.entries(BLACK_MARKET_VOLUMES)) {
+        let resource = readProperty(resources, resourceId);
+        if (!isRecord(resource) || resource.display !== !0) continue;
+        let diffLedger = readProperty(resource, "regDiff");
+        if (diffLedger !== void 0 && !isRecord(diffLedger)) return;
+        let rateOfChange = finite14(isRecord(diffLedger) ? diffLedger[pool] : void 0) ?? 0, currentRoutes = regionalPoolRoute(ledger, pool, resourceId);
+        if (currentRoutes === void 0 || !Number.isSafeInteger(currentRoutes) || currentRoutes < 0)
+          return;
+        currentRoutes > 0 && routeCounts.set(`${pool}\0${resourceId}`, currentRoutes);
+        let priorityIndex = REGIONAL_PRIORITY.indexOf(resourceId);
+        candidates.push({
+          resourceId,
+          pool,
+          rateOfChange,
+          currentRoutes,
+          volume,
+          priority: priorityIndex < 0 ? REGIONAL_PRIORITY.length : priorityIndex
+        });
+      }
+    for (let candidate of candidates) {
+      let key = `${candidate.pool}\0${candidate.resourceId}`;
+      if (!(candidate.rateOfChange < 0 || candidate.currentRoutes > 0)) continue;
+      let control = dependencies.controls.resolve(`bm-${candidate.resourceId}`);
+      if (control === void 0 || !control.methods.includes("more") || !control.methods.includes("less"))
+        return;
+      controls.set(candidate.resourceId, control), routeCounts.has(key) || routeCounts.set(key, candidate.currentRoutes);
+    }
+    let expectedRoutes = new Map(routeCounts), input = Object.freeze({
+      resources: Object.freeze(
+        candidates.map((candidate) => Object.freeze(candidate))
+      ),
+      maximumRoutes,
+      money,
+      reserve,
+      margin
+    });
+    return Object.freeze({
+      input,
+      session: Object.freeze({
+        root,
+        market,
+        selectedZone: market.bmZone,
+        expectedRoutes,
+        controls
+      })
+    });
+  }
+  function applyRegionalTradeRoutes(dependencies, captured) {
+    if (captured === void 0) return;
+    let result = planRegionalTradeRoutes(captured.input);
+    if (result.operations.length === 0) return;
+    let multiplier = dependencies.controls.resolve(
+      "marketRouteMultiplier"
+    )?.data;
+    if (isRecord(multiplier) && multiplier.multiplier !== void 0 && multiplier.multiplier !== 1)
+      return;
+    let market = captured.session.market;
+    try {
+      for (let operation2 of result.operations) {
+        let control = captured.session.controls.get(operation2.resourceId);
+        if (control === void 0) return;
+        for (let index = 0; index < operation2.count; index += 1) {
+          if (dependencies.rootState.readRoot() !== captured.session.root) return;
+          let key = `${operation2.pool}\0${operation2.resourceId}`, expected = captured.session.expectedRoutes.get(key) ?? 0;
+          if (regionalPoolRoute(
+            isRecord(market.bm) ? market.bm : {},
+            operation2.pool,
+            operation2.resourceId
+          ) !== expected) return;
+          market.bmZone = operation2.pool;
+          let method = operation2.kind === "add" ? "more" : "less";
+          if (!dependencies.controls.invoke(control, method).ok) return;
+          let next = regionalPoolRoute(
+            isRecord(market.bm) ? market.bm : {},
+            operation2.pool,
+            operation2.resourceId
+          ), expectedNext = expected + (operation2.kind === "add" ? 1 : -1);
+          if (next !== expectedNext) return;
+          captured.session.expectedRoutes.set(key, expectedNext);
+        }
+      }
+    } finally {
+      market.bmZone = captured.session.selectedZone;
+    }
+  }
   function createCapturedTradeRoutes(dependencies) {
     return Object.freeze({
       adjust() {
+        let regional = readRegionalRouteInput(dependencies);
+        if (regional !== void 0) {
+          applyRegionalTradeRoutes(dependencies, regional);
+          return;
+        }
+        let root = dependencies.rootState.readRoot(), shadow = finite14(readProperty(readProperty(root, "tech"), "shadow"));
+        if (shadow !== void 0 && shadow >= 5) return;
         let captured = readRouteInput(dependencies);
         if (captured === void 0) return;
         let result = planTradeRoutes(captured.input);
