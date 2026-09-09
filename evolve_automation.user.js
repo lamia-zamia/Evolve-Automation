@@ -4537,6 +4537,7 @@
     if (id === "scientist") return readScientistSmartMaximum(root, count);
     if (id === "professor") return readProfessorSmartMaximum(root);
     if (id === "banker") return readBankerSmartMaximum(root, readDemand);
+    if (id === "farmer") return readFarmerSmartMaximum(root);
     if (id === "cement_worker")
       return readCementWorkerSmartMaximum(root, settings, count, readDemand);
     if (id !== "teamster") return null;
@@ -4637,6 +4638,10 @@
     );
     if (!(amount === void 0 || maximum === void 0 || taxRate === void 0 || banking === void 0))
       return banking >= 7 ? null : amount >= maximum || taxRate <= 0 ? 0 : readDemand === void 0 ? null : amount >= readDemand().storageRequired("Money") ? 0 : null;
+  }
+  function readFarmerSmartMaximum(root) {
+    let race = readProperty(root, "race");
+    return isRecord(race) && hasRaceFlag(race, "artifical") ? 0 : null;
   }
   function resourceStorageRatio(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id), amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finiteNumber(readProperty(resource, "max"));

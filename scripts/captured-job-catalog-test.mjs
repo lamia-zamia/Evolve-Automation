@@ -805,6 +805,38 @@ assert.equal(
   "Cement Worker uses captured Stone and Smoldering quarry rates while Cement is useful",
 );
 
+const artificialFarmerReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { artifical: 1 },
+      civic: {
+        ...root.civic,
+        d_job: "farmer",
+        farmer: {
+          job: "farmer",
+          assigned: 3,
+          workers: 3,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-farmer"],
+  },
+  readSettings: () => ({ job_s_farmer: true }),
+});
+assert.equal(
+  artificialFarmerReader().jobs[0].smartMaximum,
+  0,
+  "Artificial Farmer smart mode stops at the upstream zero maximum",
+);
+
 const servantReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

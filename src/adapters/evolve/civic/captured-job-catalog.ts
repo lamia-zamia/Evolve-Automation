@@ -163,6 +163,7 @@ function readSmartMaximum(
   if (id === "scientist") return readScientistSmartMaximum(root, count);
   if (id === "professor") return readProfessorSmartMaximum(root);
   if (id === "banker") return readBankerSmartMaximum(root, readDemand);
+  if (id === "farmer") return readFarmerSmartMaximum(root);
   if (id === "cement_worker") {
     return readCementWorkerSmartMaximum(root, settings, count, readDemand);
   }
@@ -395,6 +396,14 @@ function readBankerSmartMaximum(
   if (amount >= maximum || taxRate <= 0) return 0;
   if (readDemand === undefined) return null;
   return amount >= readDemand().storageRequired("Money") ? 0 : null;
+}
+
+function readFarmerSmartMaximum(root: unknown): number | null | undefined {
+  const race = readProperty(root, "race");
+  // Existing early-game fixtures can omit the race bag before race initialization; preserve the
+  // catalog's established conservative null cap for that lenient external state.
+  if (!isRecord(race)) return null;
+  return hasRaceFlag(race, "artifical") ? 0 : null;
 }
 
 function resourceStorageRatio(root: unknown, id: string): number | undefined {
