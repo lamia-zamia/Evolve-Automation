@@ -8,7 +8,7 @@
 
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
-import type { JobKind } from "../../../domain/civic/jobs.ts";
+import type { JobKind, JobsJobInput } from "../../../domain/civic/jobs.ts";
 import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 
@@ -93,6 +93,45 @@ export interface CapturedJobCatalogReaderDependencies {
   readonly readSettings: () => unknown;
   readonly readDemand?: () => CapturedDemandSample;
   readonly onSkipped?: (controlId: string, reason: string) => void;
+}
+
+/**
+ * Projects the validated ordinary catalog into the pure planner's per-job input shape.
+ *
+ * Unknown controls remain visible in the read-only catalog, but they cannot be assigned safely
+ * until a canonical planner token and command contract are characterized.
+ */
+export function toCapturedJobsJobInputs(
+  catalog: Readonly<CapturedJobCatalog>,
+): readonly Readonly<JobsJobInput>[] | undefined {
+  if (catalog.jobs.some((job) => job.token === null)) return undefined;
+  return Object.freeze(
+    catalog.jobs.map((job) =>
+      Object.freeze({
+        token: job.token!,
+        id: job.id,
+        kind: job.kind,
+        workers: job.workers,
+        servants: job.servants,
+        count: job.count,
+        maximum: job.maximum,
+        managed: job.managed,
+        unlocked: job.unlocked,
+        smart: job.smart,
+        crafting: false,
+        serves: job.serves,
+        split: job.split,
+        isDefault: job.isDefault,
+        breakpoints: job.breakpoints ?? ([0, 0, 0] as const),
+        uncappedBreakpoints: job.uncappedBreakpoints ?? ([0, 0, 0] as const),
+        smartMaximum: job.smartMaximum,
+        farmerMinimum: null,
+        storageBackedMinimum: job.storageBackedMinimum,
+        demonicLumber: job.demonicLumber,
+        warlordMiner: job.warlordMiner,
+      }),
+    ),
+  );
 }
 
 function finiteNonNegative(value: unknown): number | undefined {

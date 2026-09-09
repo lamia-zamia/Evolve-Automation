@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { createCapturedJobCatalogReader } from "../src/adapters/evolve/civic/captured-job-catalog.ts";
+import {
+  createCapturedJobCatalogReader,
+  toCapturedJobsJobInputs,
+} from "../src/adapters/evolve/civic/captured-job-catalog.ts";
 
 const root = {
   civic: {
@@ -207,6 +210,65 @@ assert.deepEqual(reader(), {
 assert.deepEqual(skipped, [
   { id: "civ-missing", reason: "ordinary job control is incomplete" },
 ]);
+const plannerInputs = toCapturedJobsJobInputs(reader());
+assert.equal(
+  plannerInputs,
+  undefined,
+  "the planner projection rejects a catalog containing an unknown token",
+);
+const knownPlannerReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => root,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-farmer", "civ-forager"],
+  },
+  readSettings: () => ({
+    job_unemployed: true,
+    job_b1_unemployed: 0,
+    job_b2_unemployed: 1,
+    job_b3_unemployed: -1,
+    job_s_farmer: true,
+  }),
+});
+assert.deepEqual(
+  toCapturedJobsJobInputs(knownPlannerReader())?.map(
+    ({ id, token, kind, crafting, smartMaximum }) => ({
+      id,
+      token,
+      kind,
+      crafting,
+      smartMaximum,
+    }),
+  ),
+  [
+    {
+      id: "unemployed",
+      token: 0,
+      kind: "other",
+      crafting: false,
+      smartMaximum: null,
+    },
+    {
+      id: "farmer",
+      token: 3,
+      kind: "farmer",
+      crafting: false,
+      smartMaximum: null,
+    },
+    {
+      id: "forager",
+      token: 2,
+      kind: "forager",
+      crafting: false,
+      smartMaximum: null,
+    },
+  ],
+  "the planner projection preserves canonical known jobs",
+);
 
 const teamsterReader = createCapturedJobCatalogReader({
   rootState: {
