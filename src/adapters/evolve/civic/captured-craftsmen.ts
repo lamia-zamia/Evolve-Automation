@@ -133,6 +133,26 @@ function productWeighting(
     : DEFAULT_WEIGHTING;
 }
 
+function craftsmenMode(
+  settings: Record<PropertyKey, unknown>,
+): JobsCycleInput["craftsmenMode"] {
+  const value = settings["productionCraftsmen"];
+  return value === "always" || value === "nocraft" || value === "servants"
+    ? value
+    : "other";
+}
+
+function foundryWeighting(
+  settings: Record<PropertyKey, unknown>,
+): JobsCycleInput["foundryWeighting"] {
+  // The building-weight mode needs the complete unlocked-building catalog. The captured
+  // craftsmen path has no such catalog, while the demanded mode is fully backed by its resource
+  // demand/storage sample.
+  return settings["productionFoundryWeighting"] === "demanded"
+    ? "demanded"
+    : "other";
+}
+
 function readFoundry(root: unknown): Record<PropertyKey, unknown> | undefined {
   const city = readProperty(root, "city");
   const foundry = readProperty(city, "foundry");
@@ -350,8 +370,8 @@ function readCycleInput(
     hunterActsAsUnemployed: false,
     autoCraftsmen: true,
     autoCraftWithoutBuilding: true,
-    craftsmenMode: "other",
-    foundryWeighting: "other",
+    craftsmenMode: craftsmenMode(settings),
+    foundryWeighting: foundryWeighting(settings),
     manageServants: false,
     setDefault: false,
     servantModifier: 1,
@@ -484,7 +504,9 @@ function createExecutor(
       if (
         currentInput === undefined ||
         JSON.stringify(currentInput.crafting) !==
-          JSON.stringify(session.input.crafting)
+          JSON.stringify(session.input.crafting) ||
+        currentInput.craftsmenMode !== session.input.craftsmenMode ||
+        currentInput.foundryWeighting !== session.input.foundryWeighting
       )
         return stale(
           "crafting-input-changed",

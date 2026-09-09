@@ -130,6 +130,7 @@ const demandedAdapter = createCapturedCraftsmenAutomation({
   controls: demandedControls.controls,
   costs,
   readSettings: () => ({
+    productionFoundryWeighting: "demanded",
     craftPlywood: true,
     job_Plywood: true,
     foundry_w_Plywood: 1,
@@ -144,6 +145,7 @@ const demandedAdapter = createCapturedCraftsmenAutomation({
   }),
 });
 const demandedInput = demandedAdapter.reader.readCycle(true);
+assert.equal(demandedInput.foundryWeighting, "demanded");
 assert.equal(
   demandedInput.crafting.find(({ jobToken }) => jobToken === 0).useful,
   true,
@@ -151,6 +153,29 @@ assert.equal(
 assert.equal(
   demandedInput.crafting.find(({ jobToken }) => jobToken === 1).demanded,
   true,
+);
+
+const settingRoot = makeRoot();
+const settingControls = controlsFor(settingRoot);
+let settingMode = "other";
+const settingAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(settingRoot),
+  controls: settingControls.controls,
+  costs,
+  readSettings: () => ({
+    productionFoundryWeighting: settingMode,
+    craftPlywood: true,
+    job_Plywood: true,
+    craftBrick: true,
+    job_Brick: true,
+  }),
+});
+const settingDecision = planJobs(settingAdapter.reader.readCycle(true));
+settingMode = "demanded";
+assert.equal(
+  settingAdapter.executor.execute(settingDecision).status,
+  "stale",
+  "a foundry weighting setting change invalidates the sampled craftsmen command",
 );
 
 const cappedRoot = makeRoot();

@@ -5593,6 +5593,13 @@
     let value = settings[`foundry_w_${id}`];
     return finiteNumber2(value, DEFAULT_WEIGHTING) > 0 ? finiteNumber2(value, DEFAULT_WEIGHTING) : DEFAULT_WEIGHTING;
   }
+  function craftsmenMode(settings) {
+    let value = settings.productionCraftsmen;
+    return value === "always" || value === "nocraft" || value === "servants" ? value : "other";
+  }
+  function foundryWeighting(settings) {
+    return settings.productionFoundryWeighting === "demanded" ? "demanded" : "other";
+  }
   function readFoundry(root) {
     let city = readProperty(root, "city"), foundry = readProperty(city, "foundry");
     return isRecord(foundry) ? foundry : void 0;
@@ -5716,8 +5723,8 @@
       hunterActsAsUnemployed: !1,
       autoCraftsmen: !0,
       autoCraftWithoutBuilding: !0,
-      craftsmenMode: "other",
-      foundryWeighting: "other",
+      craftsmenMode: craftsmenMode(settings),
+      foundryWeighting: foundryWeighting(settings),
       manageServants: !1,
       setDefault: !1,
       servantModifier: 1,
@@ -5819,7 +5826,7 @@
           readJobCatalog,
           dependencies.readDemand
         )?.input;
-        if (currentInput === void 0 || JSON.stringify(currentInput.crafting) !== JSON.stringify(session.input.crafting))
+        if (currentInput === void 0 || JSON.stringify(currentInput.crafting) !== JSON.stringify(session.input.crafting) || currentInput.craftsmenMode !== session.input.craftsmenMode || currentInput.foundryWeighting !== session.input.foundryWeighting)
           return stale(
             "crafting-input-changed",
             "crafting quantities or demand changed"
@@ -6321,7 +6328,7 @@
       (sample) => !foundry.input.jobs.some((job) => job.id === sample.id)
     ))
       return;
-    let settings = isRecord(settingsValue) ? settingsValue : {}, modeValue = settings.productionCraftsmen, craftsmenMode = modeValue === "always" || modeValue === "nocraft" || modeValue === "servants" ? modeValue : "other", weightingValue = settings.productionFoundryWeighting, foundryWeighting = weightingValue === "buildings" || weightingValue === "demanded" ? weightingValue : "other", noCraft = !!readProperty(readProperty(root, "race"), "no_craft"), baseToken = Math.max(-1, ...ordinary.input.jobs.map((job) => job.token)) + 1, skilledById = new Map(
+    let settings = isRecord(settingsValue) ? settingsValue : {}, modeValue = settings.productionCraftsmen, craftsmenMode2 = modeValue === "always" || modeValue === "nocraft" || modeValue === "servants" ? modeValue : "other", weightingValue = settings.productionFoundryWeighting, foundryWeighting2 = weightingValue === "buildings" || weightingValue === "demanded" ? weightingValue : "other", noCraft = !!readProperty(readProperty(root, "race"), "no_craft"), baseToken = Math.max(-1, ...ordinary.input.jobs.map((job) => job.token)) + 1, skilledById = new Map(
       foundry.skilledSamples.map((sample) => [sample.id, sample.servants])
     ), craftJobs = foundry.input.jobs.map(
       (job, index) => craftJob(job, baseToken + index, skilledById.get(job.id) ?? 0)
@@ -6330,9 +6337,9 @@
     ), input = Object.freeze({
       ...ordinary.input,
       autoCraftsmen: !0,
-      autoCraftWithoutBuilding: craftsmenMode === "always" || craftsmenMode === "nocraft" && noCraft,
-      craftsmenMode,
-      foundryWeighting,
+      autoCraftWithoutBuilding: craftsmenMode2 === "always" || craftsmenMode2 === "nocraft" && noCraft,
+      craftsmenMode: craftsmenMode2,
+      foundryWeighting: foundryWeighting2,
       craftsmenMaximum: foundry.input.craftsmenMaximum,
       skilledServantsMaximum: foundry.skilledMaximum,
       jobs: Object.freeze([...ordinary.input.jobs, ...craftJobs]),
