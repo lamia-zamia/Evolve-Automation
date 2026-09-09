@@ -4673,6 +4673,11 @@
     }
     return uncertain ? void 0 : null;
   }
+  function readFarmerMinimum(root, id) {
+    if (id !== "farmer" && id !== "hunter") return null;
+    let race = readProperty(root, "race");
+    return isRecord(race) && (hasRaceFlag(race, "artifical") || hasRaceFlag(race, "unfathomable")) ? 0 : null;
+  }
   function resourceStorageRatio(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id), amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finiteNumber(readProperty(resource, "max"));
     if (!(amount === void 0 || maximum === void 0))
@@ -5059,6 +5064,7 @@
           split: isSplitJob(id),
           smartMaximum,
           smartMaximumKnown,
+          farmerMinimum: readFarmerMinimum(root, id),
           storageBackedMinimum,
           warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),
           demonicLumber,

@@ -34,6 +34,8 @@ export interface CapturedJobCatalogEntry {
   readonly smartMaximum: number | null;
   /** False means the smart setting is visible but its rule is not yet characterized. */
   readonly smartMaximumKnown: boolean;
+  /** Characterized Farmer/Hunter food floor for Artificial and Unfathomable races. */
+  readonly farmerMinimum: number | null;
   /** Worker floor when this job currently carries irreversible resource capacity. */
   readonly storageBackedMinimum: number | null;
   /** Warlord Miner behavior is a direct race/id condition in the pure planner. */
@@ -133,7 +135,7 @@ export function toCapturedJobsJobInputs(
         breakpoints: job.breakpoints ?? ([0, 0, 0] as const),
         uncappedBreakpoints: job.uncappedBreakpoints ?? ([0, 0, 0] as const),
         smartMaximum: job.smartMaximum,
-        farmerMinimum: null,
+        farmerMinimum: job.farmerMinimum,
         storageBackedMinimum: job.storageBackedMinimum,
         demonicLumber: job.demonicLumber,
         warlordMiner: job.warlordMiner,
@@ -503,6 +505,15 @@ function readHunterSmartMaximum(
 
   // The ordinary Farmer/Hunter food formula still needs live consumption and history fields.
   return uncertain ? undefined : null;
+}
+
+function readFarmerMinimum(root: unknown, id: string): number | null {
+  if (id !== "farmer" && id !== "hunter") return null;
+  const race = readProperty(root, "race");
+  return isRecord(race) &&
+    (hasRaceFlag(race, "artifical") || hasRaceFlag(race, "unfathomable"))
+    ? 0
+    : null;
 }
 
 function resourceStorageRatio(root: unknown, id: string): number | undefined {
@@ -1102,6 +1113,7 @@ function readCatalog(
         split: isSplitJob(id),
         smartMaximum,
         smartMaximumKnown,
+        farmerMinimum: readFarmerMinimum(root, id),
         storageBackedMinimum,
         warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),
         demonicLumber,

@@ -116,6 +116,7 @@ assert.deepEqual(reader(), {
       split: false,
       smartMaximum: null,
       smartMaximumKnown: true,
+      farmerMinimum: null,
       storageBackedMinimum: null,
       warlordMiner: false,
       demonicLumber: false,
@@ -143,6 +144,7 @@ assert.deepEqual(reader(), {
       split: false,
       smartMaximum: null,
       smartMaximumKnown: true,
+      farmerMinimum: null,
       storageBackedMinimum: null,
       warlordMiner: false,
       demonicLumber: false,
@@ -170,6 +172,7 @@ assert.deepEqual(reader(), {
       split: true,
       smartMaximum: null,
       smartMaximumKnown: true,
+      farmerMinimum: null,
       storageBackedMinimum: null,
       warlordMiner: false,
       demonicLumber: false,
@@ -197,6 +200,7 @@ assert.deepEqual(reader(), {
       split: false,
       smartMaximum: null,
       smartMaximumKnown: true,
+      farmerMinimum: null,
       storageBackedMinimum: null,
       warlordMiner: false,
       demonicLumber: false,
@@ -902,6 +906,11 @@ assert.equal(
   0,
   "Artificial Farmer smart mode stops at the upstream zero maximum",
 );
+assert.equal(
+  artificialFarmerReader().jobs[0].farmerMinimum,
+  0,
+  "Artificial Farmer preserves the upstream zero farmer minimum",
+);
 
 const unfathomableFarmerReader = createCapturedJobCatalogReader({
   rootState: {
@@ -933,6 +942,11 @@ assert.equal(
   unfathomableFarmerReader().jobs[0].smartMaximum,
   Number.MAX_SAFE_INTEGER,
   "Unfathomable Farmer restores the upstream uncapped maximum",
+);
+assert.equal(
+  unfathomableFarmerReader().jobs[0].farmerMinimum,
+  0,
+  "Unfathomable Farmer keeps its upstream zero food minimum under the later uncapped override",
 );
 
 const unfathomableHunterReader = createCapturedJobCatalogReader({
