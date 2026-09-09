@@ -200,6 +200,42 @@ assert.equal(
   "Teamster smart maximum uses the captured race and technology levels",
 );
 
+const spaceMinerReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { high_pop: 1 },
+      space: {
+        elerium_ship: { on: 2 },
+        iridium_ship: { on: 1 },
+        iron_ship: { on: 3 },
+      },
+      civic: {
+        ...root.civic,
+        space_miner: {
+          job: "space_miner",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-space_miner"],
+  },
+  readSettings: () => ({ job_s_space_miner: true }),
+});
+assert.equal(
+  spaceMinerReader().jobs.find(({ id }) => id === "space_miner").smartMaximum,
+  2.08,
+  "Space Miner smart maximum uses Belt ship counts and high-pop worker effectiveness",
+);
+
 const warlordMinerReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

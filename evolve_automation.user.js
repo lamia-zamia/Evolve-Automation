@@ -4410,7 +4410,9 @@
     return value === void 0 ? 0 : typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readSmartMaximum(root, id, smart) {
-    if (!smart || id !== "teamster") return null;
+    if (!smart) return null;
+    if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
+    if (id !== "teamster") return null;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
     let teamster = finiteNonNegative(readProperty(race, "teamster")), transport = optionalFiniteNumber(tech, "transport"), railway = optionalFiniteNumber(tech, "railway");
@@ -4418,6 +4420,41 @@
       return;
     let maximum = Math.round(teamster / transport * 1.5) - railway * 2;
     return Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+  }
+  function readHighPopulationFactors(race) {
+    let rank = readProperty(race, "high_pop");
+    if (rank === void 0 || rank === !1) return null;
+    if (!(typeof rank != "number" || !Number.isFinite(rank)))
+      switch (rank) {
+        case 0.1:
+        case 0.25:
+          return { breakpointScale: 2, workerEffect: 0.5 };
+        case 0.5:
+          return { breakpointScale: 3, workerEffect: 0.34 };
+        case 1:
+          return { breakpointScale: 4, workerEffect: 0.26 };
+        case 2:
+          return { breakpointScale: 5, workerEffect: 0.212 };
+        case 3:
+          return { breakpointScale: 6, workerEffect: 0.18 };
+        case 4:
+          return { breakpointScale: 7, workerEffect: 0.158 };
+        default:
+          return;
+      }
+  }
+  function readHighPopulationWorkerEffect(root) {
+    let factors = readHighPopulationFactors(readProperty(root, "race"));
+    return factors === void 0 ? void 0 : factors?.workerEffect ?? 1;
+  }
+  function readSpaceBuildingOn(root, id) {
+    let space = readProperty(root, "space"), building = readProperty(space, id);
+    return building === void 0 ? 0 : finiteNonNegative(readProperty(building, "on"));
+  }
+  function readSpaceMinerSmartMaximum(root) {
+    let elerium = readSpaceBuildingOn(root, "elerium_ship"), iridium = readSpaceBuildingOn(root, "iridium_ship"), iron = readSpaceBuildingOn(root, "iron_ship"), workerEffect = readHighPopulationWorkerEffect(root);
+    if (!(elerium === void 0 || iridium === void 0 || iron === void 0 || workerEffect === void 0))
+      return (elerium * 2 + iridium + iron) * workerEffect;
   }
   function readStorageBackedMinimum(root, id, workers, display) {
     let rawTech = readProperty(root, "tech"), tech = isRecord(rawTech) ? rawTech : void 0, banking = optionalFiniteNumber(tech, "banking");
@@ -4500,37 +4537,15 @@
   }
   function normalizeBreakpoints(configured, maximum, id, settings, root) {
     if (configured === null) return { capped: null, uncapped: null };
-    let highPopulationScale = readProperty(settings, "jobScalePop") === !0 && id !== "hell_surveyor" ? readHighPopulationScale(readProperty(root, "race")) : null;
-    if (highPopulationScale === void 0) return;
-    let scale = highPopulationScale ?? 1, uncapped = configured.map(
+    let highPopulation = readProperty(settings, "jobScalePop") === !0 && id !== "hell_surveyor" ? readHighPopulationFactors(readProperty(root, "race")) : null;
+    if (highPopulation === void 0) return;
+    let scale = highPopulation?.breakpointScale ?? 1, uncapped = configured.map(
       (value) => value === -1 ? Number.MAX_SAFE_INTEGER : value * scale
     ), cap = maximum === -1 ? Number.MAX_SAFE_INTEGER : maximum, capped = uncapped.map((value) => Math.min(value, cap));
     return {
       capped: Object.freeze(capped),
       uncapped: Object.freeze(uncapped)
     };
-  }
-  function readHighPopulationScale(race) {
-    let rank = readProperty(race, "high_pop");
-    if (rank === void 0 || rank === !1) return null;
-    if (!(typeof rank != "number" || !Number.isFinite(rank)))
-      switch (rank) {
-        case 0.1:
-        case 0.25:
-          return 2;
-        case 0.5:
-          return 3;
-        case 1:
-          return 4;
-        case 2:
-          return 5;
-        case 3:
-          return 6;
-        case 4:
-          return 7;
-        default:
-          return;
-      }
   }
   function readCatalog(root, controls, settingsValue, onSkipped) {
     let civic = readProperty(root, "civic");

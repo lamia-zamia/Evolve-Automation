@@ -107,7 +107,9 @@ function readSmartMaximum(
   id: string,
   smart: boolean,
 ): number | null | undefined {
-  if (!smart || id !== "teamster") return null;
+  if (!smart) return null;
+  if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
+  if (id !== "teamster") return null;
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
   if (!isRecord(race) || !isRecord(tech)) return undefined;
@@ -124,6 +126,65 @@ function readSmartMaximum(
   const maximum = Math.round((teamster / transport) * 1.5) - railway * 2;
   if (Number.isFinite(maximum)) return maximum;
   return maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+}
+
+interface HighPopulationFactors {
+  readonly breakpointScale: number;
+  readonly workerEffect: number;
+}
+
+function readHighPopulationFactors(
+  race: unknown,
+): Readonly<HighPopulationFactors> | null | undefined {
+  const rank = readProperty(race, "high_pop");
+  if (rank === undefined || rank === false) return null;
+  if (typeof rank !== "number" || !Number.isFinite(rank)) return undefined;
+  switch (rank) {
+    case 0.1:
+    case 0.25:
+      return { breakpointScale: 2, workerEffect: 0.5 };
+    case 0.5:
+      return { breakpointScale: 3, workerEffect: 0.34 };
+    case 1:
+      return { breakpointScale: 4, workerEffect: 0.26 };
+    case 2:
+      return { breakpointScale: 5, workerEffect: 0.212 };
+    case 3:
+      return { breakpointScale: 6, workerEffect: 0.18 };
+    case 4:
+      return { breakpointScale: 7, workerEffect: 0.158 };
+    default:
+      return undefined;
+  }
+}
+
+function readHighPopulationWorkerEffect(root: unknown): number | undefined {
+  const factors = readHighPopulationFactors(readProperty(root, "race"));
+  return factors === undefined ? undefined : (factors?.workerEffect ?? 1);
+}
+
+function readSpaceBuildingOn(root: unknown, id: string): number | undefined {
+  const space = readProperty(root, "space");
+  const building = readProperty(space, id);
+  if (building === undefined) return 0;
+  const on = finiteNonNegative(readProperty(building, "on"));
+  return on;
+}
+
+function readSpaceMinerSmartMaximum(root: unknown): number | undefined {
+  const elerium = readSpaceBuildingOn(root, "elerium_ship");
+  const iridium = readSpaceBuildingOn(root, "iridium_ship");
+  const iron = readSpaceBuildingOn(root, "iron_ship");
+  const workerEffect = readHighPopulationWorkerEffect(root);
+  if (
+    elerium === undefined ||
+    iridium === undefined ||
+    iron === undefined ||
+    workerEffect === undefined
+  ) {
+    return undefined;
+  }
+  return (elerium * 2 + iridium + iron) * workerEffect;
 }
 
 function readStorageBackedMinimum(
@@ -278,11 +339,11 @@ function normalizeBreakpoints(
   if (configured === null) return { capped: null, uncapped: null };
   const highPopulationEnabled =
     readProperty(settings, "jobScalePop") === true && id !== "hell_surveyor";
-  const highPopulationScale = highPopulationEnabled
-    ? readHighPopulationScale(readProperty(root, "race"))
+  const highPopulation = highPopulationEnabled
+    ? readHighPopulationFactors(readProperty(root, "race"))
     : null;
-  if (highPopulationScale === undefined) return undefined;
-  const scale = highPopulationScale ?? 1;
+  if (highPopulation === undefined) return undefined;
+  const scale = highPopulation?.breakpointScale ?? 1;
   const uncapped = configured.map((value) =>
     value === -1 ? Number.MAX_SAFE_INTEGER : value * scale,
   ) as [number, number, number];
@@ -296,29 +357,6 @@ function normalizeBreakpoints(
     capped: Object.freeze(capped),
     uncapped: Object.freeze(uncapped),
   };
-}
-
-function readHighPopulationScale(race: unknown): number | null | undefined {
-  const rank = readProperty(race, "high_pop");
-  if (rank === undefined || rank === false) return null;
-  if (typeof rank !== "number" || !Number.isFinite(rank)) return undefined;
-  switch (rank) {
-    case 0.1:
-    case 0.25:
-      return 2;
-    case 0.5:
-      return 3;
-    case 1:
-      return 4;
-    case 2:
-      return 5;
-    case 3:
-      return 6;
-    case 4:
-      return 7;
-    default:
-      return undefined;
-  }
 }
 
 function readCatalog(
