@@ -204,6 +204,46 @@ assert.equal(
   "Terrifying supplies the captured additional tax capacity",
 );
 
+const wishAuthorityRoot = structuredClone(authorityRoot);
+wishAuthorityRoot.resource.Authority.amount = 50;
+wishAuthorityRoot.civic.taxes.tax_rate = 45;
+wishAuthorityRoot.race = { wish: true, wishStats: { tax: 20 } };
+const wishAuthority = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => wishAuthorityRoot },
+  controls: authorityControls,
+  readSettings: () => ({
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+    autoTax: true,
+    generalRequestedTaxRate: 50,
+  }),
+});
+assert.equal(
+  wishAuthority.reader.readCycle(false).available,
+  true,
+  "Wish tax state supplies the captured additional tax capacity",
+);
+
+const oligarchyAuthorityRoot = structuredClone(authorityRoot);
+oligarchyAuthorityRoot.resource.Authority.amount = 50;
+oligarchyAuthorityRoot.civic.taxes.tax_rate = 30;
+oligarchyAuthorityRoot.civic.govern.type = "oligarchy";
+const oligarchyAuthority = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => oligarchyAuthorityRoot },
+  controls: authorityControls,
+  readSettings: () => ({
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+    autoTax: true,
+    generalRequestedTaxRate: 35,
+  }),
+});
+assert.equal(
+  oligarchyAuthority.reader.readCycle(false).available,
+  true,
+  "Oligarchy supplies the captured government tax capacity",
+);
+
 const partialAutomation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => root },
   controls: {

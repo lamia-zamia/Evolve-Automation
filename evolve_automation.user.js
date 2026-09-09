@@ -4555,7 +4555,7 @@
       return typeof background == "string" ? background : void 0;
     })() : void 0;
   }
-  function readTaxCap(root) {
+  function readCapturedTaxLimits(root) {
     let tech = readProperty(root, "tech"), race = readProperty(root, "race"), genes = readProperty(root, "genes"), government = readProperty(readProperty(root, "civic"), "govern"), highTech = capturedTaxFinite(readProperty(tech, "high_tech"), 0), extreme = capturedTaxFinite(readProperty(tech, "currency"), 0) >= 5, terrifying = !!readProperty(race, "terrifying"), noble = rateForNoble(readProperty(race, "noble")), minimum = (extreme || terrifying) && noble === void 0 ? 0 : noble?.[0] ?? 10, maximum = 30;
     (extreme || terrifying) && (maximum += 20);
     let background = readGovernorBackground(root);
@@ -4624,7 +4624,7 @@
         status: "unavailable",
         reason: morale.incomeAdusted === !0 ? "morale-already-adjusted" : "taxes-hidden"
       });
-    let race = readProperty(root, "race"), caps = readTaxCap(root), amount = capturedTaxQuantity(money, "amount"), maximum = capturedTaxQuantity(money, "max");
+    let race = readProperty(root, "race"), caps = readCapturedTaxLimits(root), amount = capturedTaxQuantity(money, "amount"), maximum = capturedTaxQuantity(money, "max");
     return Object.freeze({
       metadata,
       status: "ready",
@@ -6129,14 +6129,6 @@
     2: 21.2,
     3: 18,
     4: 15.8
-  }), NOBLE_TAX_LIMITS = Object.freeze({
-    0.1: [18, 20],
-    0.25: [15, 20],
-    0.5: [12, 20],
-    1: [10, 20],
-    2: [10, 24],
-    3: [10, 28],
-    4: [10, 30]
   });
   function readAuthorityInput(root, settings, previousCap) {
     if (settings.authorityManage !== !0) return unavailableInput().authority;
@@ -6164,23 +6156,18 @@
     let currency = readProperty(readProperty(root, "tech"), "currency");
     if (currency !== void 0 && (typeof currency != "number" || !Number.isFinite(currency)))
       return;
-    let raceForTax = readProperty(root, "race"), terrifying = !!readProperty(raceForTax, "terrifying"), nobleRank = readProperty(raceForTax, "noble"), nobleLimits = nobleRank === void 0 || nobleRank === !1 ? void 0 : typeof nobleRank == "number" && Number.isFinite(nobleRank) ? NOBLE_TAX_LIMITS[nobleRank] : void 0;
-    if (nobleRank !== void 0 && nobleRank !== !1 && nobleLimits === void 0 || readProperty(raceForTax, "wish") || governmentType === "oligarchy")
-      return;
-    let taxCap = nobleLimits ? nobleLimits[1] : (currency !== void 0 && currency >= 5 ? 50 : 30) + (terrifying ? 20 : 0), authorityTaxLimit = taxCap;
+    let [minimumTax, taxCap] = readCapturedTaxLimits(root), authorityTaxLimit = taxCap;
     if (settings.autoTax === !0) {
       let requested = readProperty(settings, "generalRequestedTaxRate");
       if (requested !== void 0) {
         let requestedRate = finiteNumber3(requested);
         if (requestedRate === void 0 || requestedRate < 0) {
           if (requestedRate === void 0) return;
-        } else {
-          let minimumTax = nobleLimits ? nobleLimits[0] : currency !== void 0 && currency >= 5 ? 0 : 10;
+        } else
           authorityTaxLimit = Math.min(
             Math.max(requestedRate, minimumTax),
             taxCap
           );
-        }
       }
     }
     let canTax = current < target && taxDisplay !== !1 && (settings.autoTax === !0 ? taxRate < authorityTaxLimit : taxRate < taxCap);

@@ -91,7 +91,9 @@ function readGovernorBackground(root: unknown): string | undefined {
     : undefined;
 }
 
-function readTaxCap(root: unknown): readonly [number, number] {
+export function readCapturedTaxLimits(
+  root: unknown,
+): readonly [number, number] {
   const tech = readProperty(root, "tech");
   const race = readProperty(root, "race");
   const genes = readProperty(root, "genes");
@@ -219,7 +221,7 @@ function readCapturedTaxSnapshot(
     });
   }
   const race = readProperty(root, "race");
-  const caps = readTaxCap(root);
+  const caps = readCapturedTaxLimits(root);
   const amount = capturedTaxQuantity(money, "amount");
   const maximum = capturedTaxQuantity(money, "max");
   return Object.freeze({
