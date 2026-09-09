@@ -4882,7 +4882,7 @@
       let populationChange = population - history.lastPopulationCount, farmerChange = count - history.lastFarmerCount;
       populationChange === farmerChange && rate > 0 && (foodMaximum = Math.max(0, count - populationChange));
     }
-    if (foodMaximum === null && (foodMaximum = amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null), !applyFarmCapacity) return foodMaximum;
+    if (foodMaximum === null && (foodMaximum = count === 0 && amount < maximum * 0.2 && rate <= 0 ? 1 : amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null), !applyFarmCapacity) return foodMaximum;
     let farm = readProperty(readProperty(root, "city"), "farm");
     if (farm === void 0) return foodMaximum;
     if (!isRecord(farm)) return;

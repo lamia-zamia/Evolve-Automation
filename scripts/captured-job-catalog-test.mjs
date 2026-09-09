@@ -1576,5 +1576,35 @@ assert.equal(
   3,
   "a normal-race Hunter keeps the current Food allocation as its floor",
 );
+const lowFoodRescueReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...foodRoot,
+      civic: {
+        d_job: "farmer",
+        farmer: {
+          job: "farmer",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+      resource: {
+        ...foodRoot.resource,
+        Food: { amount: 10, max: 100, diff: -1 },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: foodControls,
+  readSettings: () => ({ job_s_farmer: true }),
+});
+assert.equal(
+  lowFoodRescueReader().jobs[0].smartMaximum,
+  1,
+  "an empty normal-race Farmer pool enters the low-Food rescue branch",
+);
 
 console.log("captured-job-catalog ok");

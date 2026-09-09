@@ -555,7 +555,11 @@ function readFarmerSmartMaximum(
   }
   if (foodMaximum === null) {
     foodMaximum =
-      amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null;
+      count === 0 && amount < maximum * 0.2 && rate <= 0
+        ? 1
+        : amount > maximum * 0.6 && rate > 0
+          ? Math.max(0, count - 1)
+          : null;
   }
   if (!applyFarmCapacity) return foodMaximum;
   const farm = readProperty(readProperty(root, "city"), "farm");
