@@ -4921,9 +4921,14 @@
     let race = readProperty(root, "race");
     return isRecord(race) && (hasRaceFlag(race, "artifical") || hasRaceFlag(race, "unfathomable")) ? 0 : null;
   }
-  function readCapturedFarmerMinimum(root, id, smart, count, smartMaximum) {
+  function readCapturedFarmerMinimum(root, id, smart, count, smartMaximum, history) {
     let explicit = readFarmerMinimum(root, id);
-    return explicit !== null || id !== "farmer" || !smart ? explicit : isRecord(readProperty(root, "race")) ? smartMaximum ?? count : null;
+    if (explicit !== null || !smart) return explicit;
+    if (id === "hunter") {
+      let foodMaximum = readFarmerSmartMaximum(root, count, history, !1);
+      return foodMaximum === void 0 ? null : foodMaximum ?? count;
+    }
+    return id !== "farmer" ? explicit : isRecord(readProperty(root, "race")) ? smartMaximum ?? count : null;
   }
   function resourceStorageRatio(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id), amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finiteNumber(readProperty(resource, "max"));
@@ -5285,7 +5290,7 @@
         onSkipped(controlId, "ordinary job storage floor is unavailable");
         return;
       }
-      let kind = jobKind(id), race = readProperty(root, "race"), demonicLumber = kind === "hunter" && hasRaceFlag(race, "soul_eater") && hasRaceFlag(race, "evil") && readProperty(race, "species") !== "wendigo" && !hasRaceFlag(race, "kindling_kindred") && !hasRaceFlag(race, "smoldering"), unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
+      let kind = jobKind(id), jobHistory = readJobHistory?.(), race = readProperty(root, "race"), demonicLumber = kind === "hunter" && hasRaceFlag(race, "soul_eater") && hasRaceFlag(race, "evil") && readProperty(race, "species") !== "wendigo" && !hasRaceFlag(race, "kindling_kindred") && !hasRaceFlag(race, "smoldering"), unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
         configuredBreakpoints,
         maximum,
         id,
@@ -5317,7 +5322,8 @@
             id,
             smart,
             workers + servantInput.count * servantModifier,
-            smartMaximum
+            smartMaximum,
+            jobHistory
           ),
           storageBackedMinimum,
           warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),

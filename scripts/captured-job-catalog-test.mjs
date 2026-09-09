@@ -1542,5 +1542,39 @@ assert.equal(
   2,
   "the Farmer minimum follows the captured Food/Farm allocation cap",
 );
+const hunterFoodReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...foodRoot,
+      civic: {
+        d_job: "hunter",
+        hunter: {
+          job: "hunter",
+          assigned: 3,
+          workers: 3,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...foodControls,
+    capturedElementIds: () => ["civ-hunter"],
+    resolve: () => ({
+      elementId: "civ-hunter",
+      generation: 1,
+      methods: ["add", "sub", "setDefault"],
+    }),
+  },
+  readSettings: () => ({ job_s_hunter: true }),
+});
+assert.equal(
+  hunterFoodReader().jobs[0].farmerMinimum,
+  3,
+  "a normal-race Hunter keeps the current Food allocation as its floor",
+);
 
 console.log("captured-job-catalog ok");

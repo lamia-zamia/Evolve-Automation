@@ -630,9 +630,15 @@ function readCapturedFarmerMinimum(
   smart: boolean,
   count: number,
   smartMaximum: number | null,
+  history?: Readonly<CapturedJobHistory>,
 ): number | null {
   const explicit = readFarmerMinimum(root, id);
-  if (explicit !== null || id !== "farmer" || !smart) return explicit;
+  if (explicit !== null || !smart) return explicit;
+  if (id === "hunter") {
+    const foodMaximum = readFarmerSmartMaximum(root, count, history, false);
+    return foodMaximum === undefined ? null : (foodMaximum ?? count);
+  }
+  if (id !== "farmer") return explicit;
   // Upstream keeps the Farmer minimum at the current food/farm-derived allocation when the
   // smart maximum has no finite cap. An absent race bag remains the established lenient null.
   return isRecord(readProperty(root, "race")) ? (smartMaximum ?? count) : null;
@@ -1197,6 +1203,7 @@ function readCatalog(
       return undefined;
     }
     const kind = jobKind(id);
+    const jobHistory = readJobHistory?.();
     const race = readProperty(root, "race");
     const demonicLumber =
       kind === "hunter" &&
@@ -1243,6 +1250,7 @@ function readCatalog(
           smart,
           workers + servantInput.count * servantModifier,
           smartMaximum,
+          jobHistory,
         ),
         storageBackedMinimum,
         warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),
