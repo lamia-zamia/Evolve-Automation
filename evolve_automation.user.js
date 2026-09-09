@@ -1312,6 +1312,15 @@
     return !powerUnlocked || powered === void 0 || powered <= 0 || buildingId === "lake_cooling_tower" || buildingId === "neutron_citadel" ? baseWeight : powered > powerSurplus ? baseWeight * multiplier : baseWeight;
   }
   function applyNonOperatingCityWeighting(baseWeight, count, on, multiplier, excluded) {
+    return applyNonOperatingWeighting(
+      baseWeight,
+      count,
+      on,
+      multiplier,
+      excluded
+    );
+  }
+  function applyNonOperatingWeighting(baseWeight, count, on, multiplier, excluded) {
     return !excluded && on !== void 0 && count - on > 0 ? baseWeight * multiplier : baseWeight;
   }
   function applyUnusedStorageWeighting(baseWeight, buildingId, unusedStorageParts, multiplier) {
@@ -1430,6 +1439,13 @@
     "surface",
     "tauceti",
     "underground"
+  ]), NON_CITY_NON_OPERATING_EXCEPTIONS = /* @__PURE__ */ new Set([
+    "stellar_engine",
+    "attractor",
+    "mechbay",
+    "guard_post",
+    "port",
+    "base_camp"
   ]);
   function readFiniteSetting(settings, key, defaultValue) {
     let value = settings[key];
@@ -1771,13 +1787,24 @@
       onSkipped(binding, "configured maximum is not finite");
       return;
     }
+    let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, nonOperatingWeighting = on !== void 0 && count - on > 0 && !NON_CITY_NON_OPERATING_EXCEPTIONS.has(id) ? readFiniteSetting(settings, "buildingWeightingNonOperating", 1) : 1;
+    if (nonOperatingWeighting === void 0) {
+      onSkipped(binding, "non-operating weighting is not finite");
+      return;
+    }
     return Object.freeze({
       key: binding,
       elementId,
       region,
       id,
       weighting: applyUnderpoweredWeighting(
-        weighting * newBuildingWeighting,
+        applyNonOperatingWeighting(
+          weighting * newBuildingWeighting,
+          count,
+          on,
+          nonOperatingWeighting,
+          NON_CITY_NON_OPERATING_EXCEPTIONS.has(id)
+        ),
         id,
         context.powerUnlocked,
         context.powerSurplus,

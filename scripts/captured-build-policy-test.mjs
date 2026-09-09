@@ -548,7 +548,7 @@ const nonCityUnderpoweredReader = createCapturedBuildPolicyReader({
     readRoot: () => ({
       city: { power: 3, power_total: -3, powered: true },
       portal: { cooling_tower: { count: 0 } },
-      space: { moon_base: { count: 2 } },
+      space: { moon_base: { count: 2, on: 1 } },
     }),
     isReactivitySuppressed: () => false,
     subscribeRootReplaced: () => () => {},
@@ -574,6 +574,7 @@ const nonCityUnderpoweredReader = createCapturedBuildPolicyReader({
     "bld_w_portal-cooling_tower": 10,
     buildingWeightingNew: 3,
     buildingWeightingUnderpowered: 0.8,
+    buildingWeightingNonOperating: 0.5,
   }),
 });
 assert.deepEqual(
@@ -583,10 +584,37 @@ assert.deepEqual(
     weighting,
   })),
   [
-    { region: "space", id: "moon_base", weighting: 8 },
+    { region: "space", id: "moon_base", weighting: 4 },
     { region: "portal", id: "cooling_tower", weighting: 30 },
   ],
   "captured non-city regions use their root state and retain power-only dynamic rules",
+);
+
+const nonCityExceptionReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({
+      city: { power: 10, power_total: -10, powered: true },
+      portal: { guard_post: { count: 2, on: 1 } },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["portal-guard_post"],
+  },
+  readKnowledge: () => openKnowledge,
+  getSettings: () => ({
+    "batportal-guard_post": true,
+    "bld_w_portal-guard_post": 10,
+    buildingWeightingNonOperating: 0.5,
+  }),
+});
+assert.equal(
+  nonCityExceptionReader().buildings[0].weighting,
+  10,
+  "known non-city smart/prebuild actions keep their configured weight",
 );
 
 const nonBuildControlReader = createCapturedBuildPolicyReader({

@@ -163,6 +163,23 @@ export function applyNonOperatingCityWeighting(
   multiplier: number,
   excluded: boolean,
 ): number {
+  return applyNonOperatingWeighting(
+    baseWeight,
+    count,
+    on,
+    multiplier,
+    excluded,
+  );
+}
+
+/** Applies the shared non-city rule to an ordinary switchable action. */
+export function applyNonOperatingWeighting(
+  baseWeight: number,
+  count: number,
+  on: number | undefined,
+  multiplier: number,
+  excluded: boolean,
+): number {
   return !excluded && on !== undefined && count - on > 0
     ? baseWeight * multiplier
     : baseWeight;

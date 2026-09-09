@@ -11,6 +11,7 @@ import {
   applyNeedfulKnowledgeWeighting,
   applyNewBuildingWeighting,
   applyNeedMoreStorageWeighting,
+  applyNonOperatingWeighting,
   applyNonOperatingCityWeighting,
   applyPowerPlantWeighting,
   applyUnderpoweredWeighting,
@@ -87,6 +88,19 @@ const CAPTURED_BUILD_REGIONS: ReadonlySet<string> = new Set([
   "surface",
   "tauceti",
   "underground",
+]);
+
+/**
+ * DeadSpace's non-city rule deliberately leaves these smart/multi-segment actions alone. Their
+ * `on` count can be below `count` while the game is prebuilding or balancing a grouped structure.
+ */
+const NON_CITY_NON_OPERATING_EXCEPTIONS: ReadonlySet<string> = new Set([
+  "stellar_engine",
+  "attractor",
+  "mechbay",
+  "guard_post",
+  "port",
+  "base_camp",
 ]);
 
 function readFiniteSetting(
@@ -645,13 +659,34 @@ function readNonCityTarget(
     onSkipped(binding, "configured maximum is not finite");
     return undefined;
   }
+  const onValue = readProperty(state, "on");
+  const on =
+    typeof onValue === "number" && Number.isFinite(onValue)
+      ? onValue
+      : undefined;
+  const nonOperatingWeighting =
+    on !== undefined &&
+    count - on > 0 &&
+    !NON_CITY_NON_OPERATING_EXCEPTIONS.has(id)
+      ? readFiniteSetting(settings, "buildingWeightingNonOperating", 1)
+      : 1;
+  if (nonOperatingWeighting === undefined) {
+    onSkipped(binding, "non-operating weighting is not finite");
+    return undefined;
+  }
   return Object.freeze({
     key: binding,
     elementId,
     region,
     id,
     weighting: applyUnderpoweredWeighting(
-      weighting * newBuildingWeighting,
+      applyNonOperatingWeighting(
+        weighting * newBuildingWeighting,
+        count,
+        on,
+        nonOperatingWeighting,
+        NON_CITY_NON_OPERATING_EXCEPTIONS.has(id),
+      ),
       id,
       context.powerUnlocked,
       context.powerSurplus,
