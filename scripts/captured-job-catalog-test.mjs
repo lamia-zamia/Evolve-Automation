@@ -66,6 +66,37 @@ assert.deepEqual(reader(), {
   minimumDefault: null,
   servantModifier: 1,
   servantState: null,
+  splitEntries: [{ jobToken: 2, weighting: 50, breakpoints: [0, 0, 0] }],
+  defaultPreference: [
+    {
+      jobToken: 2,
+      allocationToken: 2,
+      requirement: "managed",
+      managed: false,
+      unlocked: true,
+    },
+    {
+      jobToken: 3,
+      allocationToken: 3,
+      requirement: "managed",
+      managed: false,
+      unlocked: true,
+    },
+    {
+      jobToken: 2,
+      allocationToken: 2,
+      requirement: "unlocked",
+      managed: false,
+      unlocked: true,
+    },
+    {
+      jobToken: 0,
+      allocationToken: 0,
+      requirement: "unlocked",
+      managed: true,
+      unlocked: true,
+    },
+  ],
   jobs: [
     {
       id: "unemployed",
@@ -249,6 +280,73 @@ assert.equal(
   28,
   "Space Miner token follows DeadSpace's canonical job order",
 );
+
+const selectionReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      civic: {
+        ...root.civic,
+        lumberjack: {
+          job: "lumberjack",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => [
+      "civ-unemployed",
+      "civ-farmer",
+      "civ-forager",
+      "civ-lumberjack",
+    ],
+  },
+  readSettings: () => ({
+    jobSetDefault: true,
+    job_lumberjack: true,
+    job_forager: true,
+    job_b1_lumberjack: 4,
+    job_b2_lumberjack: 10,
+    job_b3_lumberjack: 0,
+    jobLumberWeighting: 12,
+    jobForagerWeighting: 7,
+  }),
+});
+const selectionCatalog = selectionReader();
+assert.deepEqual(selectionCatalog.splitEntries, [
+  { jobToken: 4, weighting: 12, breakpoints: [4, 10, 0] },
+  { jobToken: 2, weighting: 7, breakpoints: [0, 0, 0] },
+]);
+assert.deepEqual(selectionCatalog.defaultPreference.slice(0, 3), [
+  {
+    jobToken: 4,
+    allocationToken: 4,
+    requirement: "managed-with-workers",
+    managed: true,
+    unlocked: true,
+  },
+  {
+    jobToken: 2,
+    allocationToken: 2,
+    requirement: "managed",
+    managed: true,
+    unlocked: true,
+  },
+  {
+    jobToken: 3,
+    allocationToken: 3,
+    requirement: "managed",
+    managed: false,
+    unlocked: true,
+  },
+]);
 
 const warlordMinerReader = createCapturedJobCatalogReader({
   rootState: {

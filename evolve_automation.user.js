@@ -4405,6 +4405,10 @@
     let value = readProperty(settings, key);
     return typeof value == "number" && Number.isFinite(value) ? value : null;
   }
+  function settingNumber(settings, key, fallback) {
+    let value = readProperty(settings, key);
+    return value === void 0 ? fallback : typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
   function optionalFiniteNumber(record, key) {
     let value = readProperty(record, key);
     return value === void 0 ? 0 : typeof value == "number" && Number.isFinite(value) ? value : void 0;
@@ -4546,6 +4550,49 @@
   function isSplitJob(id) {
     return SPLIT_JOB_IDS.has(id);
   }
+  var SPLIT_SETTINGS = Object.freeze([
+    Object.freeze({
+      id: "lumberjack",
+      setting: "jobLumberWeighting",
+      fallback: 50
+    }),
+    Object.freeze({
+      id: "quarry_worker",
+      setting: "jobQuarryWeighting",
+      fallback: 50
+    }),
+    Object.freeze({
+      id: "crystal_miner",
+      setting: "jobCrystalWeighting",
+      fallback: 50
+    }),
+    Object.freeze({
+      id: "scavenger",
+      setting: "jobScavengerWeighting",
+      fallback: 5
+    }),
+    Object.freeze({
+      id: "forager",
+      setting: "jobForagerWeighting",
+      fallback: 50
+    })
+  ]), DEFAULT_PREFERENCE = Object.freeze([
+    Object.freeze({ id: "quarry_worker", requirement: "managed-with-workers" }),
+    Object.freeze({ id: "lumberjack", requirement: "managed-with-workers" }),
+    Object.freeze({ id: "crystal_miner", requirement: "managed-with-workers" }),
+    Object.freeze({ id: "scavenger", requirement: "managed-with-workers" }),
+    Object.freeze({ id: "forager", requirement: "managed" }),
+    Object.freeze({ id: "hunter", requirement: "managed" }),
+    Object.freeze({ id: "farmer", requirement: "managed" }),
+    Object.freeze({ id: "teamster", requirement: "managed" }),
+    Object.freeze({ id: "scavenger", requirement: "unlocked" }),
+    Object.freeze({ id: "crystal_miner", requirement: "unlocked" }),
+    Object.freeze({ id: "quarry_worker", requirement: "unlocked" }),
+    Object.freeze({ id: "lumberjack", requirement: "unlocked" }),
+    Object.freeze({ id: "forager", requirement: "unlocked" }),
+    Object.freeze({ id: "hunter", requirement: "managed" }),
+    Object.freeze({ id: "unemployed", requirement: "unlocked" })
+  ]);
   function readHunterActsAsUnemployed(root) {
     let race = readProperty(root, "race");
     return readProperty(race, "carnivore") === !0 && readProperty(race, "herbivore") !== !0 || readProperty(race, "soul_eater") === !0 || readProperty(race, "unfathomable") === !0;
@@ -4705,14 +4752,54 @@
         })
       );
     }
-    return jobs.some((job) => job.id === defaultJobId) ? Object.freeze({
+    if (!jobs.some((job) => job.id === defaultJobId)) return;
+    let byId = new Map(jobs.map((job) => [job.id, job])), splitEntries = [];
+    for (let split of SPLIT_SETTINGS) {
+      let job = byId.get(split.id);
+      if (job === void 0 || job.token === null) continue;
+      let weighting = settingNumber(settings, split.setting, split.fallback);
+      if (weighting === void 0) {
+        onSkipped(
+          `civ-${split.id}`,
+          "ordinary job split weighting is unavailable"
+        );
+        return;
+      }
+      if (weighting <= 0) continue;
+      let breakpoints = job.configuredBreakpoints === null ? [0, 0, 0] : job.configuredBreakpoints.map(
+        (value, index) => value > 0 ? job.breakpoints?.[index] ?? 0 : 0
+      );
+      splitEntries.push(
+        Object.freeze({
+          jobToken: job.token,
+          weighting,
+          breakpoints: Object.freeze(breakpoints)
+        })
+      );
+    }
+    let defaultPreference = [];
+    for (let candidate of DEFAULT_PREFERENCE) {
+      let job = byId.get(candidate.id);
+      job === void 0 || job.token === null || defaultPreference.push(
+        Object.freeze({
+          jobToken: job.token,
+          allocationToken: job.token,
+          requirement: candidate.requirement,
+          managed: job.managed,
+          unlocked: job.unlocked
+        })
+      );
+    }
+    return Object.freeze({
       defaultJobId,
       hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
       minimumDefault,
       servantModifier,
       servantState,
+      splitEntries: Object.freeze(splitEntries),
+      defaultPreference: Object.freeze(defaultPreference),
       jobs: Object.freeze(jobs)
-    }) : void 0;
+    });
   }
   function createCapturedJobCatalogReader({
     rootState,
@@ -5222,7 +5309,7 @@
   function finite2(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
-  function settingNumber(settings, key, fallback) {
+  function settingNumber2(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : finite2(value);
   }
@@ -5284,7 +5371,7 @@
     let race = readProperty(root, "race"), tech = readProperty(root, "tech"), casting = readProperty(race, "casting"), resources = readProperty(root, "resource"), mana = readProperty(resources, "Mana"), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, magic = finite2(readProperty(tech, "magic")), manaAmount = finite2(readProperty(mana, "amount")), manaMaximum = finite2(readProperty(mana, "max")), manaRateOfChange = finite2(readProperty(mana, "diff"));
     if (!isRecord(casting) || magic === void 0 || magic < 3 || manaAmount === void 0 || manaMaximum === void 0 || manaRateOfChange === void 0 || dependencies.controls.resolve(PYLON_CONTROL) === void 0)
       return Object.freeze({ root, input: emptyInput2() });
-    let ritualManaUse = settingNumber(settings, "productionRitualManaUse", 0.5);
+    let ritualManaUse = settingNumber2(settings, "productionRitualManaUse", 0.5);
     if (ritualManaUse === void 0)
       return Object.freeze({ root, input: emptyInput2() });
     let spells = [];
@@ -5292,7 +5379,7 @@
       if (!spellAvailable(id, race, magic)) continue;
       let currentSpells2 = finite2(readProperty(casting, id));
       if (currentSpells2 === void 0 || currentSpells2 < 0) continue;
-      let fallback = id === "hunting" ? DEFAULT_HUNTING_WEIGHTING : id === "farmer" ? DEFAULT_FARMER_WEIGHTING : DEFAULT_SPELL_WEIGHTING, weighting = settingNumber(settings, `spell_w_${id}`, fallback);
+      let fallback = id === "hunting" ? DEFAULT_HUNTING_WEIGHTING : id === "farmer" ? DEFAULT_FARMER_WEIGHTING : DEFAULT_SPELL_WEIGHTING, weighting = settingNumber2(settings, `spell_w_${id}`, fallback);
       if (weighting === void 0)
         return Object.freeze({ root, input: emptyInput2() });
       spells.push(
@@ -5479,7 +5566,7 @@
       resources: Object.freeze([])
     });
   }
-  function settingNumber2(settings, key, fallback) {
+  function settingNumber3(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : finite3(value);
   }
@@ -5498,7 +5585,7 @@
         continue;
       let resource = readProperty(resources, id);
       if (!isRecord(resource)) continue;
-      let amount = finite3(resource.amount), maximum = finite3(resource.max), currentCount3 = finite3(alchemy[id]), display = resource.display, weighting = settingNumber2(settings, `res_alchemy_w_${id}`, 0);
+      let amount = finite3(resource.amount), maximum = finite3(resource.max), currentCount3 = finite3(alchemy[id]), display = resource.display, weighting = settingNumber3(settings, `res_alchemy_w_${id}`, 0);
       amount === void 0 || maximum === void 0 || currentCount3 === void 0 || typeof display != "boolean" || weighting === void 0 || settings[`res_alchemy_${id}`] === !1 || resourceViews.push(
         Object.freeze({
           id,
@@ -5510,7 +5597,7 @@
         })
       );
     }
-    let magicAlchemyManaUse = settingNumber2(
+    let magicAlchemyManaUse = settingNumber3(
       settings,
       "magicAlchemyManaUse",
       0.5
@@ -5710,7 +5797,7 @@
   function finite4(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
-  function settingNumber3(settings, key, fallback) {
+  function settingNumber4(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : finite4(value);
   }
@@ -5727,11 +5814,11 @@
       return Object.freeze({ root, input: emptyInput4() });
     let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, productions = [];
     for (let product of PRODUCTS) {
-      let resource = readProperty(resources, product.resource), amount = finite4(readProperty(resource, "amount")), maximumResource = finite4(readProperty(resource, "max")), current = finite4(readProperty(droids, product.id)), display = readProperty(resource, "display"), weighting = settingNumber3(
+      let resource = readProperty(resources, product.resource), amount = finite4(readProperty(resource, "amount")), maximumResource = finite4(readProperty(resource, "max")), current = finite4(readProperty(droids, product.id)), display = readProperty(resource, "display"), weighting = settingNumber4(
         settings,
         `droid_w_${product.resource}`,
         product.weighting
-      ), priority = settingNumber3(
+      ), priority = settingNumber4(
         settings,
         `droid_pr_${product.resource}`,
         product.priority
@@ -6422,7 +6509,7 @@
   function finite7(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
-  function settingNumber4(settings, key, fallback) {
+  function settingNumber5(settings, key, fallback) {
     if (!isRecord(settings)) return fallback;
     let value = settings[key];
     return value === void 0 ? fallback : finite7(value);
@@ -6464,7 +6551,7 @@
     productions: Object.freeze([])
   });
   function readQuarryInput(dependencies, root) {
-    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite7(readProperty(quarry, "asbestos")), count = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber4(
+    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite7(readProperty(quarry, "asbestos")), count = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber5(
       dependencies.readSettings(),
       "productionChrysotileWeight",
       2
@@ -6486,7 +6573,7 @@
     });
   }
   function readMineInput(dependencies, root) {
-    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite7(readProperty(mine, "ratio")), count = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber4(
+    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite7(readProperty(mine, "ratio")), count = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber5(
       dependencies.readSettings(),
       "productionAdamantiteWeight",
       1
@@ -6511,7 +6598,7 @@
     let settings = dependencies.readSettings(), demand = dependencies.readDemand(), productions = [];
     for (let spec of EXTRACTOR_SPECS) {
       if (spec.id === "rare" && roidTech < RARE_EXTRACTION_TECH_LEVEL) continue;
-      let currentRatio = finite7(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber4(settings, `productionExtWeight_${spec.id}`, 1);
+      let currentRatio = finite7(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber5(settings, `productionExtWeight_${spec.id}`, 1);
       if (currentRatio === void 0 || res1StorageRatio === void 0 || res2StorageRatio === void 0 || weight === void 0)
         return EMPTY_EXTRACTOR;
       productions.push(

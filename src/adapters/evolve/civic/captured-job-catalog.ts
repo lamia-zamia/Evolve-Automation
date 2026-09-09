@@ -2,7 +2,7 @@
  * Reads the ordinary job catalog that DeadSpace exposes through the captured Civics controls.
  *
  * The catalog is deliberately smaller than the full job planner input. Workers, caps, visibility,
- * default-job identity, and game-owned control methods are stable captured facts; breakpoints,
+ * default-job identity, split preferences, and game-owned control methods are stable captured facts;
  * smart-job rules, storage floors, and special race behavior still need their own characterization.
  */
 
@@ -57,6 +57,20 @@ export interface CapturedServantState {
   readonly skilledUsed: number;
 }
 
+export interface CapturedJobSplitEntry {
+  readonly jobToken: number;
+  readonly weighting: number;
+  readonly breakpoints: readonly [number, number, number];
+}
+
+export interface CapturedJobDefaultCandidate {
+  readonly jobToken: number;
+  readonly allocationToken: number | null;
+  readonly requirement: "managed-with-workers" | "managed" | "unlocked";
+  readonly managed: boolean;
+  readonly unlocked: boolean;
+}
+
 export interface CapturedJobCatalog {
   readonly defaultJobId: string;
   /** Whether the current race uses Hunter as the unemployed allocation pool. */
@@ -67,6 +81,8 @@ export interface CapturedJobCatalog {
   readonly servantModifier: number;
   /** Null means the race has no servant feature in this run. */
   readonly servantState: Readonly<CapturedServantState> | null;
+  readonly splitEntries: readonly Readonly<CapturedJobSplitEntry>[];
+  readonly defaultPreference: readonly Readonly<CapturedJobDefaultCandidate>[];
   readonly jobs: readonly Readonly<CapturedJobCatalogEntry>[];
 }
 
@@ -95,6 +111,18 @@ function finiteSettingNumber(
 ): number | null {
   const value = readProperty(settings, key);
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function settingNumber(
+  settings: Record<PropertyKey, unknown> | undefined,
+  key: string,
+  fallback: number,
+): number | undefined {
+  const value = readProperty(settings, key);
+  if (value === undefined) return fallback;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function optionalFiniteNumber(
@@ -327,6 +355,59 @@ function isSplitJob(id: string): boolean {
   return SPLIT_JOB_IDS.has(id);
 }
 
+const SPLIT_SETTINGS: Readonly<
+  Readonly<{ id: string; setting: string; fallback: number }>[]
+> = Object.freeze([
+  Object.freeze({
+    id: "lumberjack",
+    setting: "jobLumberWeighting",
+    fallback: 50,
+  }),
+  Object.freeze({
+    id: "quarry_worker",
+    setting: "jobQuarryWeighting",
+    fallback: 50,
+  }),
+  Object.freeze({
+    id: "crystal_miner",
+    setting: "jobCrystalWeighting",
+    fallback: 50,
+  }),
+  Object.freeze({
+    id: "scavenger",
+    setting: "jobScavengerWeighting",
+    fallback: 5,
+  }),
+  Object.freeze({
+    id: "forager",
+    setting: "jobForagerWeighting",
+    fallback: 50,
+  }),
+]);
+
+const DEFAULT_PREFERENCE: Readonly<
+  Readonly<{
+    id: string;
+    requirement: "managed-with-workers" | "managed" | "unlocked";
+  }>[]
+> = Object.freeze([
+  Object.freeze({ id: "quarry_worker", requirement: "managed-with-workers" }),
+  Object.freeze({ id: "lumberjack", requirement: "managed-with-workers" }),
+  Object.freeze({ id: "crystal_miner", requirement: "managed-with-workers" }),
+  Object.freeze({ id: "scavenger", requirement: "managed-with-workers" }),
+  Object.freeze({ id: "forager", requirement: "managed" }),
+  Object.freeze({ id: "hunter", requirement: "managed" }),
+  Object.freeze({ id: "farmer", requirement: "managed" }),
+  Object.freeze({ id: "teamster", requirement: "managed" }),
+  Object.freeze({ id: "scavenger", requirement: "unlocked" }),
+  Object.freeze({ id: "crystal_miner", requirement: "unlocked" }),
+  Object.freeze({ id: "quarry_worker", requirement: "unlocked" }),
+  Object.freeze({ id: "lumberjack", requirement: "unlocked" }),
+  Object.freeze({ id: "forager", requirement: "unlocked" }),
+  Object.freeze({ id: "hunter", requirement: "managed" }),
+  Object.freeze({ id: "unemployed", requirement: "unlocked" }),
+]);
+
 function readHunterActsAsUnemployed(root: unknown): boolean {
   const race = readProperty(root, "race");
   return (
@@ -556,16 +637,60 @@ function readCatalog(
     );
   }
 
-  return jobs.some((job) => job.id === defaultJobId)
-    ? Object.freeze({
-        defaultJobId,
-        hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
-        minimumDefault,
-        servantModifier,
-        servantState,
-        jobs: Object.freeze(jobs),
-      })
-    : undefined;
+  if (!jobs.some((job) => job.id === defaultJobId)) return undefined;
+  const byId = new Map(jobs.map((job) => [job.id, job]));
+  const splitEntries: CapturedJobSplitEntry[] = [];
+  for (const split of SPLIT_SETTINGS) {
+    const job = byId.get(split.id);
+    if (job === undefined || job.token === null) continue;
+    const weighting = settingNumber(settings, split.setting, split.fallback);
+    if (weighting === undefined) {
+      onSkipped(
+        `civ-${split.id}`,
+        "ordinary job split weighting is unavailable",
+      );
+      return undefined;
+    }
+    if (weighting <= 0) continue;
+    const breakpoints = (
+      job.configuredBreakpoints === null
+        ? [0, 0, 0]
+        : job.configuredBreakpoints.map((value, index) =>
+            value > 0 ? (job.breakpoints?.[index] ?? 0) : 0,
+          )
+    ) as [number, number, number];
+    splitEntries.push(
+      Object.freeze({
+        jobToken: job.token,
+        weighting,
+        breakpoints: Object.freeze(breakpoints),
+      }),
+    );
+  }
+  const defaultPreference: CapturedJobDefaultCandidate[] = [];
+  for (const candidate of DEFAULT_PREFERENCE) {
+    const job = byId.get(candidate.id);
+    if (job === undefined || job.token === null) continue;
+    defaultPreference.push(
+      Object.freeze({
+        jobToken: job.token,
+        allocationToken: job.token,
+        requirement: candidate.requirement,
+        managed: job.managed,
+        unlocked: job.unlocked,
+      }),
+    );
+  }
+  return Object.freeze({
+    defaultJobId,
+    hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
+    minimumDefault,
+    servantModifier,
+    servantState,
+    splitEntries: Object.freeze(splitEntries),
+    defaultPreference: Object.freeze(defaultPreference),
+    jobs: Object.freeze(jobs),
+  });
 }
 
 export function createCapturedJobCatalogReader({
