@@ -36,7 +36,13 @@ interface SmelterSession {
   readonly input: Readonly<SmelterInput>;
 }
 
-const FUEL_IDS = Object.freeze(["Oil", "Coal", "Wood", "Inferno"] as const);
+const FUEL_IDS = Object.freeze([
+  "Oil",
+  "Coal",
+  "Wood",
+  "Inferno",
+  "Super",
+] as const);
 type FuelId = (typeof FUEL_IDS)[number];
 
 function finite(value: unknown): number | undefined {
@@ -161,14 +167,18 @@ function readFuel(
           : "Lumber"
       : id === "Inferno"
         ? "Coal"
-        : id;
+        : id === "Super"
+          ? "Super_Fuel"
+          : id;
   const resource = readResource(resources, resourceId);
   const unlocked =
     id === "Wood"
       ? isLumberRace || evil
       : id === "Inferno"
         ? (finite(tech["smelting"]) ?? 0) >= 8
-        : resource?.display === true;
+        : id === "Super"
+          ? (finite(tech["super_fuel"]) ?? 0) >= 2
+          : resource?.display === true;
   if (!unlocked) {
     return Object.freeze({
       id,
@@ -190,11 +200,13 @@ function readFuel(
           : 0.15
         : id === "Oil"
           ? 0.35
-          : 50;
+          : id === "Super"
+            ? 1
+            : 50;
   const minRateOfChange =
     id === "Inferno"
       ? 50
-      : id === "Wood" || id === "Oil" || id === "Coal"
+      : id === "Wood" || id === "Oil" || id === "Coal" || id === "Super"
         ? 2
         : 50;
   const priorityValue = settings[`smelter_fuel_p_${id.toLowerCase()}`];

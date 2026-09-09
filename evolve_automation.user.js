@@ -8705,7 +8705,13 @@
   }
 
   // src/adapters/evolve/economy/production/captured-smelter.ts
-  var SMELTER_CONTROL = "iSmelter", FUEL_IDS = Object.freeze(["Oil", "Coal", "Wood", "Inferno"]);
+  var SMELTER_CONTROL = "iSmelter", FUEL_IDS = Object.freeze([
+    "Oil",
+    "Coal",
+    "Wood",
+    "Inferno",
+    "Super"
+  ]);
   function finite9(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
@@ -8771,8 +8777,8 @@
     return isRecord(value) ? value : {};
   }
   function readFuel(id, resources, race, tech, settings, demand) {
-    let isLumberRace = !race.kindling_kindred && !race.smoldering, evil = !!race.evil, species = typeof race.species == "string" ? race.species : "", resourceId = id === "Wood" ? evil && race.soul_eater && species !== "wendigo" && !race.artificial ? "Food" : evil ? "Furs" : "Lumber" : id === "Inferno" ? "Coal" : id, resource = readResource2(resources, resourceId);
-    if (!(id === "Wood" ? isLumberRace || evil : id === "Inferno" ? (finite9(tech.smelting) ?? 0) >= 8 : resource?.display === !0))
+    let isLumberRace = !race.kindling_kindred && !race.smoldering, evil = !!race.evil, species = typeof race.species == "string" ? race.species : "", resourceId = id === "Wood" ? evil && race.soul_eater && species !== "wendigo" && !race.artificial ? "Food" : evil ? "Furs" : "Lumber" : id === "Inferno" ? "Coal" : id === "Super" ? "Super_Fuel" : id, resource = readResource2(resources, resourceId);
+    if (!(id === "Wood" ? isLumberRace || evil : id === "Inferno" ? (finite9(tech.smelting) ?? 0) >= 8 : id === "Super" ? (finite9(tech.super_fuel) ?? 0) >= 2 : resource?.display === !0))
       return Object.freeze({
         id,
         unlocked: !1,
@@ -8781,7 +8787,7 @@
         cost: Object.freeze([])
       });
     if (resource === void 0) return;
-    let quantity = id === "Wood" ? evil && (!race.soul_eater || species === "wendigo") ? 1 : 3 : id === "Coal" ? isLumberRace ? 0.25 : 0.15 : id === "Oil" ? 0.35 : 50, minRateOfChange = id === "Inferno" ? 50 : id === "Wood" || id === "Oil" || id === "Coal" ? 2 : 50, priorityValue = settings[`smelter_fuel_p_${id.toLowerCase()}`], priority = finite9(priorityValue) ?? FUEL_IDS.indexOf(id);
+    let quantity = id === "Wood" ? evil && (!race.soul_eater || species === "wendigo") ? 1 : 3 : id === "Coal" ? isLumberRace ? 0.25 : 0.15 : id === "Oil" ? 0.35 : id === "Super" ? 1 : 50, minRateOfChange = id === "Inferno" ? 50 : id === "Wood" || id === "Oil" || id === "Coal" || id === "Super" ? 2 : 50, priorityValue = settings[`smelter_fuel_p_${id.toLowerCase()}`], priority = finite9(priorityValue) ?? FUEL_IDS.indexOf(id);
     if (!Number.isFinite(priority)) return;
     let costs = id === "Inferno" ? (() => {
       let oil = readResource2(resources, "Oil"), infernite = readResource2(resources, "Infernite");
