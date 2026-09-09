@@ -1335,6 +1335,80 @@
     return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
   }
 
+  // src/domain/progression/truepath/ai-apocalypse.ts
+  var AI_RESOURCE_RESEARCH_IDS = /* @__PURE__ */ new Set([
+    "tech-ai_optimizations",
+    "tech-synthetic_life",
+    "tech-protocol66",
+    "tech-protocol66a"
+  ]);
+  function isTruepathAiResourceResearch(id) {
+    return id !== null && AI_RESOURCE_RESEARCH_IDS.has(id);
+  }
+  function readTruepathAiProgress(input) {
+    let progress = input.colonistOnCount * input.decoderOnCount * 0.35 + input.trooperOnCount * 2 + input.tankOnCount * 2;
+    return Math.min(100, Math.max(0, progress));
+  }
+  function planTruepathAiApocalypse(input) {
+    let progress = readTruepathAiProgress(input);
+    if (!input.enabled || input.aiCoreLevel < 3 || progress >= 100)
+      return Object.freeze({
+        progress,
+        target: null,
+        targetColonistCount: 0,
+        additionalColonistPower: 0
+      });
+    if (input.decoderOnCount < 1)
+      return Object.freeze({
+        progress,
+        target: input.decoderCount < 1 ? "TitanDecoder" : null,
+        targetColonistCount: 0,
+        additionalColonistPower: 0
+      });
+    let baseProgress = input.trooperOnCount * 2 + input.tankOnCount * 2, targetColonistCount = Math.ceil(
+      Math.max(0, 100 - baseProgress) / (input.decoderOnCount * 0.35)
+    ), additionalColonistPower = Math.max(0, targetColonistCount - input.colonistCount) * 10;
+    if ([
+      input.decoderMoneyCost,
+      input.colonistMoneyCost,
+      input.trooperMoneyCost,
+      input.tankMoneyCost
+    ].some(
+      (price) => typeof price == "number" && Number.isFinite(price)
+    )) {
+      let progressPerColonist = input.decoderOnCount * 0.35, colonistPrice = input.colonistMoneyCost, candidates = [];
+      typeof colonistPrice == "number" && Number.isFinite(colonistPrice) && input.colonistCount < targetColonistCount && progressPerColonist > 0 && candidates.push({
+        target: "TitanAIColonist",
+        score: colonistPrice / progressPerColonist
+      });
+      let addDirectProgressCandidate = (target, price) => {
+        typeof price == "number" && Number.isFinite(price) && candidates.push({ target, score: price / 2 });
+      };
+      addDirectProgressCandidate("ErisTrooper", input.trooperMoneyCost), addDirectProgressCandidate("ErisTank", input.tankMoneyCost);
+      let decoderPrice = input.decoderMoneyCost, nextDecoderCount = input.decoderOnCount + 1, targetWithNextDecoder = Math.ceil(
+        Math.max(0, 100 - baseProgress) / (nextDecoderCount * 0.35)
+      ), colonistsRemoved = targetColonistCount - targetWithNextDecoder;
+      typeof decoderPrice == "number" && Number.isFinite(decoderPrice) && colonistsRemoved > 0 && candidates.push({
+        target: "TitanDecoder",
+        score: decoderPrice / colonistsRemoved
+      }), candidates.sort((left, right) => left.score - right.score);
+      let best = candidates[0];
+      if (best !== void 0)
+        return Object.freeze({
+          progress,
+          target: best.target,
+          targetColonistCount,
+          additionalColonistPower
+        });
+    }
+    return Object.freeze({
+      progress,
+      target: input.colonistCount < targetColonistCount ? "TitanAIColonist" : null,
+      targetColonistCount,
+      additionalColonistPower
+    });
+  }
+
   // src/adapters/evolve/progression/build/captured-build-policy.ts
   var UNLIMITED = Number.MAX_SAFE_INTEGER, KNOWLEDGE_BUILDINGS = /* @__PURE__ */ new Set([
     "university",
@@ -1393,7 +1467,42 @@
     if (!isRecord(city)) return;
     let unlocked = readProperty(city, "powered"), surplus = readProperty(city, "power"), rawDemand = readProperty(city, "power_total");
     if (!(typeof unlocked != "boolean" || typeof surplus != "number" || !Number.isFinite(surplus) || typeof rawDemand != "number" || !Number.isFinite(rawDemand)))
-      return Object.freeze({ unlocked, surplus, demand: -rawDemand });
+      return Object.freeze({
+        unlocked,
+        surplus,
+        demand: -rawDemand + readFutureAiColonistPower(root)
+      });
+  }
+  function readNonNegativeCount(owner, key) {
+    let value = readProperty(owner, key);
+    return value === void 0 ? 0 : typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
+  }
+  function readPoweredCount(owner, key) {
+    let record = readProperty(owner, key);
+    if (record === void 0) return Object.freeze({ count: 0, on: 0 });
+    if (!isRecord(record)) return;
+    let count = readNonNegativeCount(record, "count"), on = readNonNegativeCount(record, "on");
+    if (!(count === void 0 || on === void 0 || on > count))
+      return Object.freeze({ count, on });
+  }
+  function readFutureAiColonistPower(root) {
+    let race = readProperty(root, "race"), settings = readProperty(root, "settings");
+    if (!readProperty(race, "truepath") || readProperty(settings, "prestigeType") !== "apocalypse")
+      return 0;
+    let techLevel3 = readNonNegativeCount(
+      readProperty(root, "tech"),
+      "titan_ai_core"
+    ), space = readProperty(root, "space"), decoder = readPoweredCount(space, "decoder"), colonist = readPoweredCount(space, "ai_colonist"), trooper = readPoweredCount(space, "shock_trooper"), tank = readPoweredCount(space, "tank");
+    return techLevel3 === void 0 || decoder === void 0 || colonist === void 0 || trooper === void 0 || tank === void 0 ? 0 : planTruepathAiApocalypse({
+      enabled: !0,
+      aiCoreLevel: techLevel3,
+      decoderCount: decoder.count,
+      decoderOnCount: decoder.on,
+      colonistCount: colonist.count,
+      colonistOnCount: colonist.on,
+      trooperOnCount: trooper.on,
+      tankOnCount: tank.on
+    }).additionalColonistPower;
   }
   function cityWeighting(input) {
     let { id, context, multipliers } = input, weight = applyNewBuildingWeighting(
@@ -6235,17 +6344,6 @@
       resources: Object.freeze(resources),
       knowledge: calculateKnowledgeRequirements(input.knowledge)
     });
-  }
-
-  // src/domain/progression/truepath/ai-apocalypse.ts
-  var AI_RESOURCE_RESEARCH_IDS = /* @__PURE__ */ new Set([
-    "tech-ai_optimizations",
-    "tech-synthetic_life",
-    "tech-protocol66",
-    "tech-protocol66a"
-  ]);
-  function isTruepathAiResourceResearch(id) {
-    return id !== null && AI_RESOURCE_RESEARCH_IDS.has(id);
   }
 
   // src/domain/economy/resources/demand-prioritization.ts

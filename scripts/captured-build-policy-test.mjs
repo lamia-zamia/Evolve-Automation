@@ -512,7 +512,26 @@ powerRoot = {
     power_total: -100,
     powered: true,
   },
+  race: { truepath: 1 },
+  settings: { prestigeType: "apocalypse" },
+  tech: { titan_ai_core: 3 },
+  space: {
+    decoder: { count: 4, on: 4 },
+    ai_colonist: { count: 0, on: 0 },
+    shock_trooper: { count: 13, on: 13 },
+    tank: { count: 7, on: 7 },
+  },
 };
+assert.deepEqual(
+  powerReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "mill", weighting: 30 },
+    { id: "coal_power", weighting: 30 },
+    { id: "farm", weighting: 10 },
+  ],
+  "future Apocalypse AI-colonist demand keeps power producers useful",
+);
+powerRoot.settings.prestigeType = "bioseed";
 assert.deepEqual(
   powerReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
   [
@@ -520,7 +539,18 @@ assert.deepEqual(
     { id: "coal_power", weighting: 1 },
     { id: "farm", weighting: 10 },
   ],
-  "surplus power demotes producers except Mill",
+  "non-Apocalypse runs do not add future AI demand",
+);
+powerRoot.settings.prestigeType = "apocalypse";
+powerRoot.space.decoder.on = "4";
+assert.deepEqual(
+  powerReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "mill", weighting: 10 },
+    { id: "coal_power", weighting: 1 },
+    { id: "farm", weighting: 10 },
+  ],
+  "malformed future AI state leaves current power weighting unchanged",
 );
 powerRoot = {
   city: {

@@ -20,6 +20,7 @@ import {
   applyUselessKnowledgeWeighting,
   isKnowledgeGated,
 } from "../../../../domain/progression/build/building-weighting.ts";
+import { planTruepathAiApocalypse } from "../../../../domain/progression/truepath/ai-apocalypse.ts";
 import type { CapturedKnowledgeSample } from "./captured-knowledge-gate.ts";
 import type { ConstructionCycleOptions } from "../../../../ports/construction-candidates.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
@@ -197,8 +198,74 @@ function readPowerState(root: unknown): CapturedPowerState | undefined {
     return undefined;
   }
   // DeadSpace stores power capacity as a negative `city.power_total`; the policy compares it
-  // with the positive current Power surplus. Future AI-colonist demand is not visible here.
-  return Object.freeze({ unlocked, surplus, demand: -rawDemand });
+  // with the positive current Power surplus. The current city draw is already included in that
+  // value; the True Path Apocalypse route adds only Colonists not built yet.
+  return Object.freeze({
+    unlocked,
+    surplus,
+    demand: -rawDemand + readFutureAiColonistPower(root),
+  });
+}
+
+function readNonNegativeCount(owner: unknown, key: string): number | undefined {
+  const value = readProperty(owner, key);
+  if (value === undefined) return 0;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+function readPoweredCount(
+  owner: unknown,
+  key: string,
+): { readonly count: number; readonly on: number } | undefined {
+  const record = readProperty(owner, key);
+  if (record === undefined) return Object.freeze({ count: 0, on: 0 });
+  if (!isRecord(record)) return undefined;
+  const count = readNonNegativeCount(record, "count");
+  const on = readNonNegativeCount(record, "on");
+  if (count === undefined || on === undefined || on > count) return undefined;
+  return Object.freeze({ count, on });
+}
+
+/** Reads the future AI-colonist draw characterized by the upstream True Path progress gate. */
+function readFutureAiColonistPower(root: unknown): number {
+  const race = readProperty(root, "race");
+  const settings = readProperty(root, "settings");
+  if (
+    !readProperty(race, "truepath") ||
+    readProperty(settings, "prestigeType") !== "apocalypse"
+  ) {
+    return 0;
+  }
+  const techLevel = readNonNegativeCount(
+    readProperty(root, "tech"),
+    "titan_ai_core",
+  );
+  const space = readProperty(root, "space");
+  const decoder = readPoweredCount(space, "decoder");
+  const colonist = readPoweredCount(space, "ai_colonist");
+  const trooper = readPoweredCount(space, "shock_trooper");
+  const tank = readPoweredCount(space, "tank");
+  if (
+    techLevel === undefined ||
+    decoder === undefined ||
+    colonist === undefined ||
+    trooper === undefined ||
+    tank === undefined
+  ) {
+    return 0;
+  }
+  return planTruepathAiApocalypse({
+    enabled: true,
+    aiCoreLevel: techLevel,
+    decoderCount: decoder.count,
+    decoderOnCount: decoder.on,
+    colonistCount: colonist.count,
+    colonistOnCount: colonist.on,
+    trooperOnCount: trooper.on,
+    tankOnCount: tank.on,
+  }).additionalColonistPower;
 }
 
 interface CityWeightingInput {
