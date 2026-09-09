@@ -178,9 +178,14 @@ function readCycle(
   | undefined {
   const settings = isRecord(settingsValue) ? settingsValue : {};
   // Authority management needs morale history, tax state, and trait-derived income that the
-  // captured ordinary surface does not yet expose. Do not turn an enabled setting into a false
-  // disabled sample.
-  if (settings["authorityManage"] === true) return undefined;
+  // captured ordinary surface does not yet expose. Upstream explicitly disables the authority
+  // branch when the configured target is zero, so that exact case remains a safe ordinary cycle.
+  if (
+    settings["authorityManage"] === true &&
+    settings["generalMinimumAuthority"] !== 0
+  ) {
+    return undefined;
+  }
   const population = finiteNonNegative(
     readProperty(
       readProperty(readProperty(root, "resource"), "Population"),

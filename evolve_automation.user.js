@@ -6022,7 +6022,8 @@
   }
   function readCycle(root, settingsValue, catalogReader) {
     let settings = isRecord(settingsValue) ? settingsValue : {};
-    if (settings.authorityManage === !0) return;
+    if (settings.authorityManage === !0 && settings.generalMinimumAuthority !== 0)
+      return;
     let population = finiteNonNegative2(
       readProperty(
         readProperty(readProperty(root, "resource"), "Population"),

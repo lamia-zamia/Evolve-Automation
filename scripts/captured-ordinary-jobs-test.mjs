@@ -80,6 +80,19 @@ assert.equal(
   false,
   "authority management stays unavailable until its live inputs are captured",
 );
+const disabledAuthorityAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => root },
+  controls,
+  readSettings: () => ({
+    authorityManage: true,
+    generalMinimumAuthority: 0,
+  }),
+});
+assert.equal(
+  disabledAuthorityAutomation.reader.readCycle(false).available,
+  true,
+  "a zero authority target keeps the upstream authority branch disabled",
+);
 
 const partialAutomation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => root },
