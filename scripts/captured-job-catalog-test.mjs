@@ -316,6 +316,39 @@ assert.equal(
   "Torturer smart maximum uses captive housing and Nightmare rank",
 );
 
+const hellSurveyorReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      portal: { fortress: { threat: 9500 } },
+      resource: { Population: { storageRatio: 0.5 } },
+      civic: {
+        ...root.civic,
+        hell_surveyor: {
+          job: "hell_surveyor",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-hell_surveyor"],
+  },
+  readSettings: () => ({ job_s_hell_surveyor: true }),
+});
+assert.equal(
+  hellSurveyorReader().jobs.find(({ id }) => id === "hell_surveyor")
+    ?.smartMaximum,
+  0,
+  "Hell Surveyor smart maximum stops when threat is high and Population storage is open",
+);
+
 const selectionReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

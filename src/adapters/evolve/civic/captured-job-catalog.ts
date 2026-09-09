@@ -144,6 +144,7 @@ function readSmartMaximum(
   if (!smart) return null;
   if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
   if (id === "torturer") return readTorturerSmartMaximum(root);
+  if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
   if (id !== "teamster") return null;
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
@@ -246,6 +247,22 @@ function readTorturerSmartMaximum(root: unknown): number | undefined {
   const maximum = Math.ceil(total / (rank / 2));
   if (Number.isFinite(maximum)) return maximum;
   return maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+}
+
+function readHellSurveyorSmartMaximum(root: unknown): number | undefined {
+  const fortress = readProperty(readProperty(root, "portal"), "fortress");
+  const threat = readProperty(fortress, "threat");
+  const population = readProperty(readProperty(root, "resource"), "Population");
+  const storageRatio = readProperty(population, "storageRatio");
+  if (
+    typeof threat !== "number" ||
+    !Number.isFinite(threat) ||
+    typeof storageRatio !== "number" ||
+    !Number.isFinite(storageRatio)
+  ) {
+    return undefined;
+  }
+  return threat > 9000 && storageRatio < 1 ? 0 : Number.MAX_SAFE_INTEGER;
 }
 
 function readStorageBackedMinimum(

@@ -4417,6 +4417,7 @@
     if (!smart) return null;
     if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
     if (id === "torturer") return readTorturerSmartMaximum(root);
+    if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
     if (id !== "teamster") return null;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
@@ -4479,6 +4480,11 @@
     if (rank === void 0) return;
     let maximum = Math.ceil(total / (rank / 2));
     return Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+  }
+  function readHellSurveyorSmartMaximum(root) {
+    let fortress = readProperty(readProperty(root, "portal"), "fortress"), threat = readProperty(fortress, "threat"), population = readProperty(readProperty(root, "resource"), "Population"), storageRatio2 = readProperty(population, "storageRatio");
+    if (!(typeof threat != "number" || !Number.isFinite(threat) || typeof storageRatio2 != "number" || !Number.isFinite(storageRatio2)))
+      return threat > 9e3 && storageRatio2 < 1 ? 0 : Number.MAX_SAFE_INTEGER;
   }
   function readStorageBackedMinimum(root, id, workers, display) {
     let rawTech = readProperty(root, "tech"), tech = isRecord(rawTech) ? rawTech : void 0, banking = optionalFiniteNumber(tech, "banking");
