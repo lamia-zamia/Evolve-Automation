@@ -16,6 +16,7 @@ import {
   createCapturedJobCatalogReader,
   toCapturedJobsCycleInput,
   type CapturedJobCatalog,
+  type CapturedJobHistory,
   type CapturedJobsCycleOptions,
 } from "./captured-job-catalog.ts";
 import {
@@ -517,10 +518,14 @@ export function createCapturedOrdinaryJobsAutomation({
   readonly reader: JobsReader;
   readonly executor: JobsExecutor;
 } {
+  let history: CapturedJobHistory | undefined;
+  let historyRoot: unknown;
   const catalogReader = createCapturedJobCatalogReader({
     rootState,
     controls,
     readSettings,
+    readJobHistory: () =>
+      historyRoot === rootState.readRoot() ? history : undefined,
   });
   const controlsPort = createCapturedJobControls({ controls });
   const sessionRef: { value: OrdinaryJobsSession | undefined } = {
@@ -592,11 +597,19 @@ export function createCapturedOrdinaryJobsAutomation({
         );
       }
       sessionRef.value = undefined;
-      return executeCapturedJobDecision(
+      const outcome = executeCapturedJobDecision(
         controlsPort,
         session.commandState,
         decision,
       );
+      if (outcome.status === "succeeded") {
+        historyRoot = session.root;
+        history = Object.freeze({
+          lastPopulationCount: decision.lastPopulationCount,
+          lastFarmerCount: decision.lastFarmerCount,
+        });
+      }
+      return outcome;
     },
   });
   return Object.freeze({ reader, executor });
@@ -618,10 +631,14 @@ export function createCapturedFullJobsAutomation({
   readonly executor: JobsExecutor;
   readonly isAvailable: () => boolean;
 } {
+  let history: CapturedJobHistory | undefined;
+  let historyRoot: unknown;
   const catalogReader = createCapturedJobCatalogReader({
     rootState,
     controls,
     readSettings,
+    readJobHistory: () =>
+      historyRoot === rootState.readRoot() ? history : undefined,
     ...(readDemand === undefined ? {} : { readDemand }),
   });
   const controlsPort = createCapturedJobControls({ controls });
@@ -779,7 +796,15 @@ export function createCapturedFullJobsAutomation({
         );
       }
       sessionRef.value = undefined;
-      return executeFullDecision(controlsPort, session, decision);
+      const outcome = executeFullDecision(controlsPort, session, decision);
+      if (outcome.status === "succeeded") {
+        historyRoot = session.root;
+        history = Object.freeze({
+          lastPopulationCount: decision.lastPopulationCount,
+          lastFarmerCount: decision.lastFarmerCount,
+        });
+      }
+      return outcome;
     },
   });
   const isAvailable = (): boolean =>

@@ -101,7 +101,14 @@ export interface CapturedJobCatalogReaderDependencies {
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
   readonly readDemand?: () => CapturedDemandSample;
+  readonly readJobHistory?: () => Readonly<CapturedJobHistory> | undefined;
   readonly onSkipped?: (controlId: string, reason: string) => void;
+}
+
+/** Explicit application-owned history needed by the upstream food allocation rule. */
+export interface CapturedJobHistory {
+  readonly lastPopulationCount: number;
+  readonly lastFarmerCount: number;
 }
 
 /** The cycle facts that are not owned by the ordinary-job catalog reader. */
@@ -239,6 +246,7 @@ function readSmartMaximum(
   settings: Record<PropertyKey, unknown> | undefined,
   count: number,
   readDemand?: () => CapturedDemandSample,
+  readJobHistory?: () => Readonly<CapturedJobHistory> | undefined,
 ): number | null | undefined {
   if (!smart) return null;
   if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
@@ -247,8 +255,11 @@ function readSmartMaximum(
   if (id === "scientist") return readScientistSmartMaximum(root, count);
   if (id === "professor") return readProfessorSmartMaximum(root);
   if (id === "banker") return readBankerSmartMaximum(root, readDemand);
-  if (id === "farmer") return readFarmerSmartMaximum(root, count);
-  if (id === "hunter") return readHunterSmartMaximum(root, count, readDemand);
+  const history = readJobHistory?.();
+  if (id === "farmer") return readFarmerSmartMaximum(root, count, history);
+  if (id === "hunter") {
+    return readHunterSmartMaximum(root, count, readDemand, history);
+  }
   if (id === "lumberjack") {
     return readLumberjackSmartMaximum(root, readDemand);
   }
@@ -501,6 +512,7 @@ function readBankerSmartMaximum(
 function readFarmerSmartMaximum(
   root: unknown,
   count: number,
+  history?: Readonly<CapturedJobHistory>,
 ): number | null | undefined {
   const race = readProperty(root, "race");
   // Existing early-game fixtures can omit the race bag before race initialization; preserve the
@@ -522,6 +534,23 @@ function readFarmerSmartMaximum(
     return undefined;
   }
   if (amount >= maximum) return 0;
+  const population = finiteNonNegative(
+    readProperty(
+      readProperty(readProperty(root, "resource"), "Population"),
+      "amount",
+    ),
+  );
+  if (
+    population !== undefined &&
+    history !== undefined &&
+    population > history.lastPopulationCount
+  ) {
+    const populationChange = population - history.lastPopulationCount;
+    const farmerChange = count - history.lastFarmerCount;
+    if (populationChange === farmerChange && rate > 0) {
+      return Math.max(0, count - populationChange);
+    }
+  }
   return amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null;
 }
 
@@ -529,6 +558,7 @@ function readHunterSmartMaximum(
   root: unknown,
   count: number,
   readDemand?: () => CapturedDemandSample,
+  history?: Readonly<CapturedJobHistory>,
 ): number | null | undefined {
   const race = readProperty(root, "race");
   if (!isRecord(race)) return null;
@@ -558,7 +588,7 @@ function readHunterSmartMaximum(
   }
 
   if (!hasRaceFlag(race, "ravenous") && !hasRaceFlag(race, "carnivore")) {
-    const food = readFarmerSmartMaximum(root, count);
+    const food = readFarmerSmartMaximum(root, count, history);
     if (food === 0) return 0;
     if (food === undefined) return undefined;
     if (!uncertain && food !== null) return food;
@@ -1032,6 +1062,7 @@ function readCatalog(
   controls: GameControlRegistry,
   settingsValue: unknown,
   readDemand: (() => CapturedDemandSample) | undefined,
+  readJobHistory: (() => Readonly<CapturedJobHistory> | undefined) | undefined,
   onSkipped: (controlId: string, reason: string) => void,
 ): CapturedJobCatalog | undefined {
   const civic = readProperty(root, "civic");
@@ -1117,6 +1148,7 @@ function readCatalog(
       settings,
       workers + servantInput.count * servantModifier,
       readDemand,
+      readJobHistory,
     );
     if (smartMaximum === undefined) {
       onSkipped(controlId, "ordinary job smart maximum is unavailable");
@@ -1251,6 +1283,7 @@ export function createCapturedJobCatalogReader({
   controls,
   readSettings,
   readDemand,
+  readJobHistory,
   onSkipped,
 }: CapturedJobCatalogReaderDependencies): () => CapturedJobCatalog | undefined {
   const reportSkipped = onSkipped ?? (() => {});
@@ -1260,6 +1293,7 @@ export function createCapturedJobCatalogReader({
       controls,
       readSettings(),
       readDemand,
+      readJobHistory,
       reportSkipped,
     );
 }

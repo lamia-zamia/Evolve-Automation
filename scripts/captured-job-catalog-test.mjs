@@ -1476,7 +1476,19 @@ const foodRoot = {
     },
   },
   race: {},
-  resource: { Food: { amount: 100, max: 100, diff: 0 } },
+  resource: {
+    Food: { amount: 100, max: 100, diff: 0 },
+    Population: { amount: 6, max: 100 },
+  },
+};
+const foodControls = {
+  capturedElementIds: () => ["civ-farmer"],
+  resolve: () => ({
+    elementId: "civ-farmer",
+    generation: 1,
+    methods: ["add", "sub", "setDefault"],
+  }),
+  invoke: () => ({ ok: false, reason: "unknown-control" }),
 };
 const foodReader = createCapturedJobCatalogReader({
   rootState: {
@@ -1484,15 +1496,7 @@ const foodReader = createCapturedJobCatalogReader({
     isReactivitySuppressed: () => false,
     subscribeRootReplaced: () => () => {},
   },
-  controls: {
-    capturedElementIds: () => ["civ-farmer"],
-    resolve: () => ({
-      elementId: "civ-farmer",
-      generation: 1,
-      methods: ["add", "sub", "setDefault"],
-    }),
-    invoke: () => ({ ok: false, reason: "unknown-control" }),
-  },
+  controls: foodControls,
   readSettings: () => ({ job_s_farmer: true }),
 });
 assert.equal(
@@ -1505,6 +1509,21 @@ assert.equal(
   foodReader().jobs[0].smartMaximum,
   2,
   "a normal-race Food surplus sheds one smart Farmer",
+);
+foodRoot.resource.Food = { amount: 50, max: 100, diff: 1 };
+assert.equal(
+  createCapturedJobCatalogReader({
+    rootState: {
+      readRoot: () => foodRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: foodControls,
+    readSettings: () => ({ job_s_farmer: true }),
+    readJobHistory: () => ({ lastPopulationCount: 5, lastFarmerCount: 2 }),
+  })().jobs[0].smartMaximum,
+  2,
+  "recent population growth caps Farmers by the matching prior allocation change",
 );
 
 console.log("captured-job-catalog ok");

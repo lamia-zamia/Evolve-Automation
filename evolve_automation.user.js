@@ -4738,7 +4738,7 @@
   function hasRaceFlag(race, key) {
     return !!readProperty(race, key);
   }
-  function readSmartMaximum(root, id, smart, settings, count, readDemand) {
+  function readSmartMaximum(root, id, smart, settings, count, readDemand, readJobHistory) {
     if (!smart) return null;
     if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
     if (id === "torturer") return readTorturerSmartMaximum(root);
@@ -4746,8 +4746,10 @@
     if (id === "scientist") return readScientistSmartMaximum(root, count);
     if (id === "professor") return readProfessorSmartMaximum(root);
     if (id === "banker") return readBankerSmartMaximum(root, readDemand);
-    if (id === "farmer") return readFarmerSmartMaximum(root, count);
-    if (id === "hunter") return readHunterSmartMaximum(root, count, readDemand);
+    let history = readJobHistory?.();
+    if (id === "farmer") return readFarmerSmartMaximum(root, count, history);
+    if (id === "hunter")
+      return readHunterSmartMaximum(root, count, readDemand, history);
     if (id === "lumberjack")
       return readLumberjackSmartMaximum(root, readDemand);
     if (id === "quarry_worker")
@@ -4859,7 +4861,7 @@
     if (!(amount === void 0 || maximum === void 0 || taxRate === void 0 || banking === void 0))
       return banking >= 7 ? null : amount >= maximum || taxRate <= 0 ? 0 : readDemand === void 0 ? null : amount >= readDemand().storageRequired("Money") ? 0 : null;
   }
-  function readFarmerSmartMaximum(root, count) {
+  function readFarmerSmartMaximum(root, count, history) {
     let race = readProperty(root, "race");
     if (!isRecord(race)) return null;
     if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
@@ -4867,10 +4869,23 @@
     if (hasRaceFlag(race, "ravenous") || hasRaceFlag(race, "carnivore"))
       return;
     let food = readProperty(readProperty(root, "resource"), "Food"), amount = finiteNonNegative(readProperty(food, "amount")), maximum = finiteNonNegative(readProperty(food, "max")), rate = finiteNumber(readProperty(food, "diff"));
-    if (!(amount === void 0 || maximum === void 0 || rate === void 0))
-      return amount >= maximum ? 0 : amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null;
+    if (amount === void 0 || maximum === void 0 || rate === void 0)
+      return;
+    if (amount >= maximum) return 0;
+    let population = finiteNonNegative(
+      readProperty(
+        readProperty(readProperty(root, "resource"), "Population"),
+        "amount"
+      )
+    );
+    if (population !== void 0 && history !== void 0 && population > history.lastPopulationCount) {
+      let populationChange = population - history.lastPopulationCount, farmerChange = count - history.lastFarmerCount;
+      if (populationChange === farmerChange && rate > 0)
+        return Math.max(0, count - populationChange);
+    }
+    return amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null;
   }
-  function readHunterSmartMaximum(root, count, readDemand) {
+  function readHunterSmartMaximum(root, count, readDemand, history) {
     let race = readProperty(root, "race");
     if (!isRecord(race)) return null;
     if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
@@ -4888,7 +4903,7 @@
       uncertain = !0;
     }
     if (!hasRaceFlag(race, "ravenous") && !hasRaceFlag(race, "carnivore")) {
-      let food = readFarmerSmartMaximum(root, count);
+      let food = readFarmerSmartMaximum(root, count, history);
       if (food === 0) return 0;
       if (food === void 0) return;
       if (!uncertain && food !== null) return food;
@@ -5170,7 +5185,7 @@
       uncapped: Object.freeze(uncapped)
     };
   }
-  function readCatalog(root, controls, settingsValue, readDemand, onSkipped) {
+  function readCatalog(root, controls, settingsValue, readDemand, readJobHistory, onSkipped) {
     let civic = readProperty(root, "civic");
     if (!isRecord(civic)) return;
     let defaultJobId = readProperty(civic, "d_job");
@@ -5243,7 +5258,8 @@
         smart,
         settings,
         workers + servantInput.count * servantModifier,
-        readDemand
+        readDemand,
+        readJobHistory
       );
       if (smartMaximum === void 0) {
         onSkipped(controlId, "ordinary job smart maximum is unavailable");
@@ -5355,6 +5371,7 @@
     controls,
     readSettings,
     readDemand,
+    readJobHistory,
     onSkipped
   }) {
     let reportSkipped = onSkipped ?? (() => {
@@ -5364,6 +5381,7 @@
       controls,
       readSettings(),
       readDemand,
+      readJobHistory,
       reportSkipped
     );
   }
@@ -6178,10 +6196,11 @@
     controls,
     readSettings
   }) {
-    let catalogReader = createCapturedJobCatalogReader({
+    let history, historyRoot, catalogReader = createCapturedJobCatalogReader({
       rootState,
       controls,
-      readSettings
+      readSettings,
+      readJobHistory: () => historyRoot === rootState.readRoot() ? history : void 0
     }), controlsPort = createCapturedJobControls({ controls }), sessionRef = {
       value: void 0
     }, reader = Object.freeze({
@@ -6216,17 +6235,26 @@
             "ordinary job catalog changed"
           );
         let expected = planJobs(session.input);
-        return expected === null || JSON.stringify(expected) !== JSON.stringify(decision) ? (sessionRef.value = void 0, rejected(
-          "invalid-ordinary-jobs-decision",
-          "ordinary jobs decision does not match the sampled plan"
-        )) : preflightDecision(controls, session.commandState, decision) ? (sessionRef.value = void 0, executeCapturedJobDecision(
+        if (expected === null || JSON.stringify(expected) !== JSON.stringify(decision))
+          return sessionRef.value = void 0, rejected(
+            "invalid-ordinary-jobs-decision",
+            "ordinary jobs decision does not match the sampled plan"
+          );
+        if (!preflightDecision(controls, session.commandState, decision))
+          return sessionRef.value = void 0, rejected(
+            "ordinary-jobs-controls-incomplete",
+            "ordinary jobs command controls are incomplete"
+          );
+        sessionRef.value = void 0;
+        let outcome = executeCapturedJobDecision(
           controlsPort,
           session.commandState,
           decision
-        )) : (sessionRef.value = void 0, rejected(
-          "ordinary-jobs-controls-incomplete",
-          "ordinary jobs command controls are incomplete"
-        ));
+        );
+        return outcome.status === "succeeded" && (historyRoot = session.root, history = Object.freeze({
+          lastPopulationCount: decision.lastPopulationCount,
+          lastFarmerCount: decision.lastFarmerCount
+        })), outcome;
       }
     });
     return Object.freeze({ reader, executor });
@@ -6238,10 +6266,11 @@
     costs,
     readDemand
   }) {
-    let catalogReader = createCapturedJobCatalogReader({
+    let history, historyRoot, catalogReader = createCapturedJobCatalogReader({
       rootState,
       controls,
       readSettings,
+      readJobHistory: () => historyRoot === rootState.readRoot() ? history : void 0,
       ...readDemand === void 0 ? {} : { readDemand }
     }), controlsPort = createCapturedJobControls({ controls }), sessionRef = {
       value: void 0
@@ -6324,12 +6353,19 @@
               );
           }
         }
-        return decision.selectedDefaultToken !== null && !methods.get(
+        if (decision.selectedDefaultToken !== null && !methods.get(
           `civ-${session.ordinaryJobs.find((job) => job.token === decision.selectedDefaultToken)?.id ?? ""}`
-        )?.has("setDefault") ? (sessionRef.value = void 0, rejected(
-          "full-jobs-controls-incomplete",
-          "missing default-job control"
-        )) : (sessionRef.value = void 0, executeFullDecision(controlsPort, session, decision));
+        )?.has("setDefault"))
+          return sessionRef.value = void 0, rejected(
+            "full-jobs-controls-incomplete",
+            "missing default-job control"
+          );
+        sessionRef.value = void 0;
+        let outcome = executeFullDecision(controlsPort, session, decision);
+        return outcome.status === "succeeded" && (historyRoot = session.root, history = Object.freeze({
+          lastPopulationCount: decision.lastPopulationCount,
+          lastFarmerCount: decision.lastFarmerCount
+        })), outcome;
       }
     });
     return Object.freeze({ reader, executor, isAvailable: () => readFullCycle(
