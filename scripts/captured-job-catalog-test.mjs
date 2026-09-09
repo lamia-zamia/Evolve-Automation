@@ -869,6 +869,75 @@ assert.equal(
   "Unfathomable Farmer restores the upstream uncapped maximum",
 );
 
+const lumberjackUsefulReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      resource: { Lumber: { amount: 20, max: 100 } },
+      civic: {
+        ...root.civic,
+        d_job: "lumberjack",
+        lumberjack: {
+          job: "lumberjack",
+          assigned: 2,
+          workers: 2,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-lumberjack"],
+  },
+  readSettings: () => ({ job_s_lumberjack: true }),
+});
+assert.equal(
+  lumberjackUsefulReader().jobs[0].smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "Lumberjack stays available while captured Lumber storage is below the useful threshold",
+);
+
+const lumberjackDemandReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      resource: { Lumber: { amount: 100, max: 100 } },
+      civic: {
+        ...root.civic,
+        d_job: "lumberjack",
+        lumberjack: {
+          job: "lumberjack",
+          assigned: 2,
+          workers: 2,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-lumberjack"],
+  },
+  readSettings: () => ({ job_s_lumberjack: true }),
+  readDemand: () => ({
+    requestedQuantity: () => 0,
+    isDemanded: (id) => id === "Lumber",
+    storageRequired: () => 1,
+  }),
+});
+assert.equal(
+  lumberjackDemandReader().jobs[0].smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "Lumberjack treats a demanded full Lumber store as useful",
+);
+
 const servantReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

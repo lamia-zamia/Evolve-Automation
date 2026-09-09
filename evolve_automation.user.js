@@ -4538,6 +4538,8 @@
     if (id === "professor") return readProfessorSmartMaximum(root);
     if (id === "banker") return readBankerSmartMaximum(root, readDemand);
     if (id === "farmer") return readFarmerSmartMaximum(root);
+    if (id === "lumberjack")
+      return readLumberjackSmartMaximum(root, readDemand);
     if (id === "cement_worker")
       return readCementWorkerSmartMaximum(root, settings, count, readDemand);
     if (id !== "teamster") return null;
@@ -4652,6 +4654,14 @@
     return finiteNumber(
       readProperty(readProperty(readProperty(root, "resource"), id), "diff")
     );
+  }
+  function readResourceUseful(root, id, readDemand) {
+    let ratio = resourceStorageRatio(root, id);
+    if (ratio !== void 0 && (ratio < 0.99 || readDemand?.().isDemanded(id) === !0))
+      return !0;
+  }
+  function readLumberjackSmartMaximum(root, readDemand) {
+    return readResourceUseful(root, "Lumber", readDemand) === !0 ? Number.MAX_SAFE_INTEGER : void 0;
   }
   function readCementWorkerSmartMaximum(root, settings, count, readDemand) {
     let stoneRatio = resourceStorageRatio(root, "Stone"), stoneDiff = resourceDiff(root, "Stone"), cementRatio = resourceStorageRatio(root, "Cement");

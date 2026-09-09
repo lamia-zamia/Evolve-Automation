@@ -164,6 +164,9 @@ function readSmartMaximum(
   if (id === "professor") return readProfessorSmartMaximum(root);
   if (id === "banker") return readBankerSmartMaximum(root, readDemand);
   if (id === "farmer") return readFarmerSmartMaximum(root);
+  if (id === "lumberjack") {
+    return readLumberjackSmartMaximum(root, readDemand);
+  }
   if (id === "cement_worker") {
     return readCementWorkerSmartMaximum(root, settings, count, readDemand);
   }
@@ -419,6 +422,29 @@ function resourceDiff(root: unknown, id: string): number | undefined {
   return finiteNumber(
     readProperty(readProperty(readProperty(root, "resource"), id), "diff"),
   );
+}
+
+function readResourceUseful(
+  root: unknown,
+  id: string,
+  readDemand?: () => CapturedDemandSample,
+): boolean | undefined {
+  const ratio = resourceStorageRatio(root, id);
+  if (ratio === undefined) return undefined;
+  if (ratio < 0.99 || readDemand?.().isDemanded(id) === true) return true;
+  // DeadSpace no longer exposes the legacy eject/supply/store-overflow flags or the
+  // per-source production breakdown. A full, undemanded resource is therefore not
+  // provably useless, and its busy-worker fallback must remain unavailable.
+  return undefined;
+}
+
+function readLumberjackSmartMaximum(
+  root: unknown,
+  readDemand?: () => CapturedDemandSample,
+): number | undefined {
+  return readResourceUseful(root, "Lumber", readDemand) === true
+    ? Number.MAX_SAFE_INTEGER
+    : undefined;
 }
 
 function readCementWorkerSmartMaximum(
