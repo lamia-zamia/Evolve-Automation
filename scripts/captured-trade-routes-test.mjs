@@ -7,7 +7,7 @@ const root = {
   tech: { trade: 1, currency: 4 },
   city: { market: { mtrade: 5, trade: 0 } },
   resource: {
-    Money: { amount: 100, max: 1000, diff: 10 },
+    Money: { amount: 100, max: 1000, diff: 100 },
     Iron: {
       display: true,
       trade: 0,
@@ -19,6 +19,16 @@ const root = {
   },
 };
 const calls = [];
+let settings = {
+  tradeRouteSellExcess: true,
+  tradeRouteMinimumMoneyPerSecond: 0,
+  tradeRouteMinimumMoneyPercentage: 0,
+  res_trade_sell_Iron: true,
+  res_trade_buy_Iron: false,
+  res_trade_w_Iron: 1,
+  res_trade_p_Iron: 1,
+  res_buy_p_Iron: 1,
+};
 const controls = new Map([
   [
     "market-Iron",
@@ -67,16 +77,7 @@ const registry = {
 const routes = createCapturedTradeRoutes({
   rootState: { readRoot: () => root },
   controls: registry,
-  readSettings: () => ({
-    tradeRouteSellExcess: true,
-    tradeRouteMinimumMoneyPerSecond: 0,
-    tradeRouteMinimumMoneyPercentage: 0,
-    res_trade_sell_Iron: true,
-    res_trade_buy_Iron: false,
-    res_trade_w_Iron: 1,
-    res_trade_p_Iron: 1,
-    res_buy_p_Iron: 1,
-  }),
+  readSettings: () => settings,
   readDemand: () => ({
     isDemanded: () => false,
     storageRequired: () => 1,
@@ -88,6 +89,38 @@ assert.equal(root.resource.Iron.trade, -5);
 assert.equal(root.city.market.trade, 5);
 assert.equal(calls.length, 5);
 assert.deepEqual(calls[0], ["autoSell", "Iron"]);
+
+root.resource.Iron.trade = 0;
+root.resource.Iron.amount = 0;
+root.city.market.trade = 0;
+root.resource.Money.amount = 249999998800;
+root.resource.Money.max = 300000000000;
+root.resource.Money.diff = 100;
+root.race.universe = "standard";
+root.race.inflation = 10;
+root.stats = { achieve: { wheelbarrow: { l: 0 } } };
+settings = {
+  ...settings,
+  res_trade_sell_Iron: false,
+  res_trade_buy_Iron: true,
+  inflationChallengeAssist: true,
+  inflationChallengeSaveMinutes: 2,
+};
+calls.length = 0;
+routes.adjust();
+assert.deepEqual(calls, []);
+
+settings = { ...settings, inflationChallengeAssist: "invalid" };
+routes.adjust();
+assert.equal(calls[0][0], "autoBuy");
+
+root.resource.Iron.trade = 0;
+root.city.market.trade = 0;
+root.stats.achieve.wheelbarrow = 7;
+settings = { ...settings, inflationChallengeAssist: true };
+calls.length = 0;
+routes.adjust();
+assert.equal(calls[0][0], "autoBuy");
 
 root.resource.Iron.trade = 0;
 root.city.market.trade = 0;

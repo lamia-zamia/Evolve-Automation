@@ -11023,6 +11023,20 @@
     });
   }
 
+  // src/domain/economy/resources/inflation-assist.ts
+  function isInflationMoneyReachable(input) {
+    return input.maxMoney >= input.targetMoney;
+  }
+  function inflationSecondsToFinish(input) {
+    if (!isInflationMoneyReachable(input))
+      return Number.POSITIVE_INFINITY;
+    let remaining = input.targetMoney - input.currentMoney;
+    return remaining <= 0 ? 0 : input.moneyRate > 0 ? remaining / input.moneyRate : Number.POSITIVE_INFINITY;
+  }
+  function shouldSaveInflationMoney(input) {
+    return input.active && input.saveMinutes >= 0 && inflationSecondsToFinish(input.money) <= input.saveMinutes * 60;
+  }
+
   // src/adapters/evolve/economy/market/captured-trade-routes.ts
   var TRADE_RATIO = Object.freeze({
     Food: 2,
@@ -11094,18 +11108,83 @@
   }
   function hasUnsupportedPriceModifier(root) {
     let race = readProperty(root, "race"), genes = readProperty(root, "genes"), tech = readProperty(root, "tech"), city = readProperty(root, "city"), space = readProperty(root, "space"), underground = readProperty(root, "underground"), stats = readProperty(readProperty(root, "stats"), "achieve"), civic = readProperty(root, "civic"), foreign = readProperty(civic, "foreign"), gov3 = readProperty(foreign, "gov3");
-    return !!(readProperty(genes, "cunning") || readProperty(genes, "trader") || readProperty(race, "persuasive") || readProperty(race, "ocular_power") || readProperty(race, "devious") || readProperty(race, "empowered") || readProperty(race, "truepath") || readProperty(race, "inflation") || readProperty(race, "quarantine") || readProperty(race, "witch_hunter") || readProperty(city, "wharf") || readProperty(space, "gps") || readProperty(tech, "railway") || readProperty(underground, "trade") || readProperty(stats, "trade") || readProperty(gov3, "hstl") !== void 0);
+    return !!(readProperty(genes, "cunning") || readProperty(genes, "trader") || readProperty(race, "persuasive") || readProperty(race, "ocular_power") || readProperty(race, "devious") || readProperty(race, "empowered") || readProperty(race, "truepath") || readProperty(race, "quarantine") || readProperty(race, "witch_hunter") || readProperty(city, "wharf") || readProperty(space, "gps") || readProperty(tech, "railway") || readProperty(underground, "trade") || readProperty(stats, "trade") || readProperty(gov3, "hstl") !== void 0);
   }
   function routePrices(root, resource, ratio) {
     let value = finite14(resource.value), race = readProperty(root, "race");
     if (value === void 0 || value <= 0 || !isRecord(race) || hasUnsupportedPriceModifier(root)) return;
-    let arrogant = traitPercent(race, "arrogant"), conniving = traitPercent(race, "conniving"), merchant = traitPercent(race, "merchant"), asymmetrical = traitPercent(race, "asymmetrical"), goblin = fathom(root, race, "goblin"), imp = fathom(root, race, "imp");
+    let inflation = race.inflation;
+    if (inflation !== void 0 && inflation !== !1 && (typeof inflation != "number" || !Number.isFinite(inflation)))
+      return;
+    let inflationLevel = typeof inflation == "number" ? inflation : 0, arrogant = traitPercent(race, "arrogant"), conniving = traitPercent(race, "conniving"), merchant = traitPercent(race, "merchant"), asymmetrical = traitPercent(race, "asymmetrical"), goblin = fathom(root, race, "goblin"), imp = fathom(root, race, "imp");
     if (arrogant === void 0 || conniving === void 0 || merchant === void 0 || asymmetrical === void 0 || goblin === void 0 || imp === void 0)
       return;
-    let buy = value * ratio * (1 + arrogant / 100) * (1 - conniving / 100) * (1 - imp * 5 / 100), divide = 4 * (1 - merchant / 100) * (1 - goblin * 25 / 100) * (1 + asymmetrical / 100);
+    let buy = value * ratio * (1 + arrogant / 100) * (1 - conniving / 100) * (1 - imp * 5 / 100) * (1 + inflationLevel / 300), divide = 4 * (1 - merchant / 100) * (1 - goblin * 25 / 100) * (1 + asymmetrical / 100);
     race.conniving && (divide -= 1);
-    let sell = value * ratio / divide;
+    let sell = value * ratio / divide * (1 + inflationLevel / 500);
     return Number.isFinite(buy) && Number.isFinite(sell) && divide > 0 ? Object.freeze({ buy, sell }) : void 0;
+  }
+  var INFLATION_CHALLENGE_MONEY = 25e10, ACHIEVEMENT_LEVEL_TRAITS2 = Object.freeze([
+    "no_plasmid",
+    "no_trade",
+    "no_craft",
+    "no_crispr",
+    "weak_mastery",
+    "nerfed",
+    "badgenes"
+  ]);
+  function achievementAffix(universe) {
+    if (typeof universe == "string")
+      switch (universe) {
+        case "evil":
+          return "e";
+        case "antimatter":
+          return "a";
+        case "heavy":
+          return "h";
+        case "micro":
+          return "m";
+        case "magic":
+          return "mg";
+        default:
+          return "l";
+      }
+  }
+  function readInflationSaveMoney(root, settings, money) {
+    try {
+      let assist = settings.inflationChallengeAssist;
+      if (assist !== void 0 && typeof assist != "boolean" || assist !== !0) return !1;
+      let race = readProperty(root, "race");
+      if (!isRecord(race)) return !1;
+      let inflation = race.inflation;
+      if (inflation === void 0 || inflation === !1 || typeof inflation != "number" || !Number.isFinite(inflation))
+        return !1;
+      let saveMinutes = finite14(settings.inflationChallengeSaveMinutes);
+      if (saveMinutes === void 0) return !1;
+      let currentMoney = finite14(money.amount), maxMoney = finite14(money.max), moneyRate = finite14(money.diff);
+      if (currentMoney === void 0 || maxMoney === void 0 || moneyRate === void 0)
+        return !1;
+      let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), wheelbarrow = readProperty(achievements, "wheelbarrow"), affix = achievementAffix(readProperty(race, "universe"));
+      if (!isRecord(stats) || !isRecord(achievements) || affix === void 0 || wheelbarrow != null && !isRecord(wheelbarrow))
+        return !1;
+      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite14(rawStar);
+      if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
+      let achievementLevel2 = 1;
+      for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
+        race[trait] && (achievementLevel2 += 1);
+      return achievementLevel2 = Math.min(achievementLevel2, 5), shouldSaveInflationMoney({
+        active: wheelbarrowStar < achievementLevel2 && readProperty(race, "inflation") !== !1,
+        saveMinutes,
+        money: {
+          targetMoney: INFLATION_CHALLENGE_MONEY,
+          currentMoney,
+          maxMoney,
+          moneyRate
+        }
+      });
+    } catch {
+      return !1;
+    }
   }
   function routeUnlocked(root, resourceId, resource) {
     if (resource.display !== !0) return !1;
@@ -11192,7 +11271,7 @@
       unmanagedTradeRoutes: unmanaged,
       isBanana: !!readProperty(race, "banana"),
       isEntrepreneur: readProperty(governor, "bg") === "entrepreneur",
-      saveInflationMoney: !1
+      saveInflationMoney: readInflationSaveMoney(root, settings, money)
     });
     return Object.freeze({
       input,
