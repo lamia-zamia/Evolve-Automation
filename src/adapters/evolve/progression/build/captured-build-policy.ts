@@ -13,6 +13,7 @@ import {
   applyNeedMoreStorageWeighting,
   applyNonOperatingCityWeighting,
   applyPowerPlantWeighting,
+  applyUnderpoweredWeighting,
   applyUselessMeditationWeighting,
   applyUselessHousingWeighting,
   applyVacuumCollapseWeighting,
@@ -268,11 +269,32 @@ function readFutureAiColonistPower(root: unknown): number {
   }).additionalColonistPower;
 }
 
+function readActionPower(
+  handle: ReturnType<GameControlRegistry["resolve"]>,
+): number | undefined {
+  const data = handle?.data;
+  if (!isRecord(data)) return undefined;
+  const powered = data["powered"];
+  if (typeof powered === "number") {
+    return Number.isFinite(powered) ? powered : undefined;
+  }
+  if (typeof powered !== "function") return undefined;
+  try {
+    const value = Reflect.apply(powered, data, []);
+    return typeof value === "number" && Number.isFinite(value)
+      ? value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 interface CityWeightingInput {
   readonly base: number;
   readonly id: string;
   readonly count: number;
   readonly on: number | undefined;
+  readonly powered: number | undefined;
   readonly context: Readonly<CityRuleContext>;
   readonly prestigeRoute: string;
   readonly raisesKnowledgeCap: boolean;
@@ -288,6 +310,7 @@ interface CityWeightingInput {
     uselessKnowledge: number;
     needfulPower: number;
     uselessPower: number;
+    underpowered: number;
   }>;
 }
 
@@ -310,6 +333,14 @@ function cityWeighting(input: Readonly<CityWeightingInput>): number {
     context.unpoweredPowerDemand,
     multipliers.needfulPower,
     multipliers.uselessPower,
+  );
+  weight = applyUnderpoweredWeighting(
+    weight,
+    id,
+    context.powerUnlocked,
+    context.powerSurplus,
+    input.powered,
+    multipliers.underpowered,
   );
   weight = applyUnusedStorageWeighting(
     weight,
@@ -367,6 +398,7 @@ function readTarget(
   settings: Record<PropertyKey, unknown>,
   city: Record<PropertyKey, unknown>,
   elementId: string,
+  controls: GameControlRegistry,
   context: Readonly<CityRuleContext>,
   onSkipped: (key: string, reason: string) => void,
 ): Readonly<CapturedBuildTarget> | undefined {
@@ -494,6 +526,15 @@ function readTarget(
     typeof onValue === "number" && Number.isFinite(onValue)
       ? onValue
       : undefined;
+  const powered = readActionPower(controls.resolve(elementId));
+  const underpoweredWeighting =
+    powered !== undefined && powered > 0
+      ? readFiniteSetting(settings, "buildingWeightingUnderpowered", 1)
+      : 1;
+  if (underpoweredWeighting === undefined) {
+    onSkipped(binding, "underpowered weighting is not finite");
+    return undefined;
+  }
   const maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
   if (maximum === undefined) {
     onSkipped(binding, "configured maximum is not finite");
@@ -509,6 +550,7 @@ function readTarget(
       id,
       count,
       on,
+      powered,
       context,
       prestigeRoute: settings["prestigeType"] === "vacuum" ? "vacuum" : "other",
       raisesKnowledgeCap,
@@ -524,6 +566,7 @@ function readTarget(
         uselessKnowledge: uselessKnowledgeWeighting,
         needfulPower: needfulPowerWeighting,
         uselessPower: uselessPowerWeighting,
+        underpowered: underpoweredWeighting,
       },
     }),
     maximum: maximum >= 0 ? maximum : UNLIMITED,
@@ -572,6 +615,7 @@ export function createCapturedBuildPolicyReader({
           settings,
           city,
           elementId,
+          controls,
           context,
           reportSkipped,
         );

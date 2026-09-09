@@ -102,6 +102,7 @@ interface CapturedControl {
   readonly elementId: string;
   generation: number;
   methods: Record<string, AnyFunction>;
+  data: unknown;
   receiver: Record<string, AnyFunction> | undefined;
 }
 
@@ -238,12 +239,14 @@ export function installVueCapture(
         elementId,
         generation: 1,
         methods,
+        data: readProperty(optionsValue, "data"),
         receiver: undefined,
       });
       return;
     }
     existing.generation += 1;
     existing.methods = methods;
+    existing.data = readProperty(optionsValue, "data");
     existing.receiver = undefined;
   }
 
@@ -402,6 +405,7 @@ export function installVueCapture(
         elementId: control.elementId,
         generation: control.generation,
         methods: Object.freeze(Object.keys(control.methods)),
+        data: control.data,
       });
     },
     invoke(

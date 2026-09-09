@@ -130,6 +130,27 @@ export function applyPowerPlantWeighting(
     : baseWeight;
 }
 
+/** Applies the captured underpowered rule when an action exposes its own power draw. */
+export function applyUnderpoweredWeighting(
+  baseWeight: number,
+  buildingId: string,
+  powerUnlocked: boolean,
+  powerSurplus: number,
+  powered: number | undefined,
+  multiplier: number,
+): number {
+  if (
+    !powerUnlocked ||
+    powered === undefined ||
+    powered <= 0 ||
+    buildingId === "lake_cooling_tower" ||
+    buildingId === "neutron_citadel"
+  ) {
+    return baseWeight;
+  }
+  return powered > powerSurplus ? baseWeight * multiplier : baseWeight;
+}
+
 /**
  * Applies the captured city rule for a switchable building with copies left
  * turned off. Non-switchable buildings have no `on` sample and therefore keep

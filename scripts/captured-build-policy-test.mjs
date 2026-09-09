@@ -503,6 +503,45 @@ assert.deepEqual(
   ],
   "a power deficit promotes current city power producers",
 );
+
+const underpoweredReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({
+      city: {
+        farm: { count: 1, on: 1 },
+        power: 3,
+        power_total: -3,
+        powered: true,
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: (elementId) =>
+      elementId === "city-farm"
+        ? {
+            elementId,
+            generation: 1,
+            methods: [],
+            data: { powered: () => 5 },
+          }
+        : undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["city-farm"],
+  },
+  readKnowledge: () => openKnowledge,
+  getSettings: () => ({
+    "batcity-farm": true,
+    "bld_w_city-farm": 10,
+    buildingWeightingUnderpowered: 0.8,
+  }),
+});
+assert.equal(
+  underpoweredReader().buildings[0].weighting,
+  8,
+  "a validated action power draw deprioritizes an underpowered city consumer",
+);
 powerRoot = {
   city: {
     mill: { count: 1, on: 1 },

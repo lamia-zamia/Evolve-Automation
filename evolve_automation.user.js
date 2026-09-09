@@ -373,11 +373,12 @@
           elementId,
           generation: 1,
           methods,
+          data: readProperty(optionsValue, "data"),
           receiver: void 0
         });
         return;
       }
-      existing.generation += 1, existing.methods = methods, existing.receiver = void 0;
+      existing.generation += 1, existing.methods = methods, existing.data = readProperty(optionsValue, "data"), existing.receiver = void 0;
     }
     function receiverFor(control) {
       if (control.receiver !== void 0) return control.receiver;
@@ -481,7 +482,8 @@
           return Object.freeze({
             elementId: control.elementId,
             generation: control.generation,
-            methods: Object.freeze(Object.keys(control.methods))
+            methods: Object.freeze(Object.keys(control.methods)),
+            data: control.data
           });
       },
       invoke(handle, method, args = []) {
@@ -1306,6 +1308,9 @@
   function applyPowerPlantWeighting(baseWeight, buildingId, powerUnlocked, powerSurplus, unpoweredPowerDemand, needfulMultiplier, uselessMultiplier) {
     return !powerUnlocked || !CURRENT_CITY_POWER_PLANTS.has(buildingId) ? baseWeight : powerSurplus < unpoweredPowerDemand ? baseWeight * needfulMultiplier : powerSurplus > unpoweredPowerDemand && buildingId !== "mill" ? baseWeight * uselessMultiplier : baseWeight;
   }
+  function applyUnderpoweredWeighting(baseWeight, buildingId, powerUnlocked, powerSurplus, powered, multiplier) {
+    return !powerUnlocked || powered === void 0 || powered <= 0 || buildingId === "lake_cooling_tower" || buildingId === "neutron_citadel" ? baseWeight : powered > powerSurplus ? baseWeight * multiplier : baseWeight;
+  }
   function applyNonOperatingCityWeighting(baseWeight, count, on, multiplier, excluded) {
     return !excluded && on !== void 0 && count - on > 0 ? baseWeight * multiplier : baseWeight;
   }
@@ -1504,6 +1509,20 @@
       tankOnCount: tank.on
     }).additionalColonistPower;
   }
+  function readActionPower(handle) {
+    let data = handle?.data;
+    if (!isRecord(data)) return;
+    let powered = data.powered;
+    if (typeof powered == "number")
+      return Number.isFinite(powered) ? powered : void 0;
+    if (typeof powered == "function")
+      try {
+        let value = Reflect.apply(powered, data, []);
+        return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+      } catch {
+        return;
+      }
+  }
   function cityWeighting(input) {
     let { id, context, multipliers } = input, weight = applyNewBuildingWeighting(
       input.base,
@@ -1518,6 +1537,13 @@
       context.unpoweredPowerDemand,
       multipliers.needfulPower,
       multipliers.uselessPower
+    ), weight = applyUnderpoweredWeighting(
+      weight,
+      id,
+      context.powerUnlocked,
+      context.powerSurplus,
+      input.powered,
+      multipliers.underpowered
     ), weight = applyUnusedStorageWeighting(
       weight,
       id,
@@ -1562,7 +1588,7 @@
       multipliers.uselessKnowledge
     );
   }
-  function readTarget2(settings, city, elementId, context, onSkipped) {
+  function readTarget2(settings, city, elementId, controls, context, onSkipped) {
     if (!elementId.startsWith("city-") || elementId.length === 5)
       return;
     let binding = elementId;
@@ -1653,7 +1679,12 @@
       onSkipped(binding, "useless-power weighting is not finite");
       return;
     }
-    let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+    let onValue = readProperty(state, "on"), on = typeof onValue == "number" && Number.isFinite(onValue) ? onValue : void 0, powered = readActionPower(controls.resolve(elementId)), underpoweredWeighting = powered !== void 0 && powered > 0 ? readFiniteSetting(settings, "buildingWeightingUnderpowered", 1) : 1;
+    if (underpoweredWeighting === void 0) {
+      onSkipped(binding, "underpowered weighting is not finite");
+      return;
+    }
+    let maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
       return;
@@ -1668,6 +1699,7 @@
         id,
         count,
         on,
+        powered,
         context,
         prestigeRoute: settings.prestigeType === "vacuum" ? "vacuum" : "other",
         raisesKnowledgeCap,
@@ -1682,7 +1714,8 @@
           needfulKnowledge: needfulKnowledgeWeighting,
           uselessKnowledge: uselessKnowledgeWeighting,
           needfulPower: needfulPowerWeighting,
-          uselessPower: uselessPowerWeighting
+          uselessPower: uselessPowerWeighting,
+          underpowered: underpoweredWeighting
         }
       }),
       maximum: maximum >= 0 ? maximum : UNLIMITED,
@@ -1722,6 +1755,7 @@
             settings,
             city,
             elementId,
+            controls,
             context,
             reportSkipped
           );

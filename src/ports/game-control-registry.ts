@@ -11,6 +11,8 @@ export interface GameControlHandle {
   /** Incremented every time the game rebuilds the control. */
   readonly generation: number;
   readonly methods: readonly string[];
+  /** Optional adapter-owned Vue binding data for readers that can validate it narrowly. */
+  readonly data?: unknown;
 }
 
 export type GameControlFailure =
