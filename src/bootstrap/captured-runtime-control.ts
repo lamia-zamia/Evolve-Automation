@@ -34,6 +34,7 @@ import {
   QUARRY_CONTROL,
   TITAN_MINE_CONTROL,
 } from "../adapters/evolve/economy/resources/captured-production-ratios.ts";
+import { createCapturedPowerProducerAutomation } from "../adapters/evolve/economy/production/captured-power-producers.ts";
 import { createCapturedCraftCosts } from "../adapters/evolve/economy/production/captured-craft-costs.ts";
 import {
   createCapturedCraftExecutor,
@@ -104,6 +105,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoQuarry: false,
   autoMine: false,
   autoExtractor: false,
+  autoPower: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -259,6 +261,24 @@ export function startCapturedRuntime({
     if (result.outcome.status !== "succeeded") {
       logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+  let cityControlsDiscoveryAttempted = false;
+  const ensureCityControls = () => {
+    if (cityControlsDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    cityControlsDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 1,
+      }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `city discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
     }
   };
@@ -433,6 +453,10 @@ export function startCapturedRuntime({
     );
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
   };
+  const powerProducers = createCapturedPowerProducerAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+  });
 
   const runCycle = () => {
     demandThisCycle = undefined;
@@ -505,6 +529,10 @@ export function startCapturedRuntime({
       }
       if (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) {
         progression.runConstructionCycle();
+      }
+      if (isEnabled(settings, "autoPower")) {
+        ensureCityControls();
+        powerProducers.run();
       }
       if (isEnabled(settings, "autoResearch")) {
         progression.runResearchCycle();

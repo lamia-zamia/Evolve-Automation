@@ -6801,6 +6801,99 @@
     });
   }
 
+  // src/domain/economy/production/captured-power.ts
+  function planCapturedPowerProducers(input) {
+    return !input.unlocked || input.surplus >= 0 ? Object.freeze([]) : Object.freeze(
+      input.producers.flatMap((producer) => producer.count > producer.on ? [
+        Object.freeze({
+          producerId: producer.id,
+          maximumOn: producer.count
+        })
+      ] : [])
+    );
+  }
+
+  // src/adapters/evolve/economy/production/captured-power-producers.ts
+  var CAPTURED_POWER_PRODUCER_IDS = Object.freeze([
+    "mill",
+    "windmill",
+    "coal_power",
+    "oil_power",
+    "fission_power"
+  ]);
+  function finite8(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readInput3(root) {
+    let city = readProperty(root, "city");
+    if (!isRecord(city)) return;
+    let unlocked = readProperty(city, "powered"), surplus = finite8(readProperty(city, "power"));
+    if (typeof unlocked != "boolean" || surplus === void 0) return;
+    let producers = [];
+    for (let id of CAPTURED_POWER_PRODUCER_IDS) {
+      let value = readProperty(city, id);
+      if (value === void 0) continue;
+      if (!isRecord(value)) return;
+      let count = finite8(value.count), on = finite8(value.on);
+      if (count === void 0 || on === void 0 || count < 0 || on < 0 || on > count)
+        return;
+      producers.push(Object.freeze({ id, count, on }));
+    }
+    return Object.freeze({
+      unlocked,
+      surplus,
+      producers: Object.freeze(producers)
+    });
+  }
+  function currentProducer(root, id) {
+    let value = readProperty(readProperty(root, "city"), id);
+    if (!isRecord(value)) return;
+    let count = finite8(value.count), on = finite8(value.on);
+    return count !== void 0 && on !== void 0 ? Object.freeze({ count, on }) : void 0;
+  }
+  function createCapturedPowerProducerAutomation({
+    rootState,
+    controls
+  }) {
+    return Object.freeze({
+      run() {
+        let root = rootState.readRoot(), input = readInput3(root);
+        if (root === void 0 || input === void 0) return SUCCEEDED;
+        let session = Object.freeze({ root, input });
+        for (let decision of planCapturedPowerProducers(session.input)) {
+          let elementId = `city-${decision.producerId}`, handle = controls.resolve(elementId);
+          if (handle === void 0 || !handle.methods.includes("power_on"))
+            return rejected(
+              "captured-power-control-missing",
+              `no captured power control for ${elementId}`
+            );
+          for (; ; ) {
+            if (rootState.readRoot() !== session.root)
+              return stale(
+                "captured-power-root-changed",
+                "captured game root changed"
+              );
+            let current = currentProducer(session.root, decision.producerId), city = readProperty(session.root, "city"), surplus = finite8(readProperty(city, "power"));
+            if (current === void 0 || surplus === void 0)
+              return stale(
+                "captured-power-state-changed",
+                "captured producer state changed"
+              );
+            if (surplus >= 0 || current.on >= Math.min(current.count, decision.maximumOn))
+              break;
+            let result = controls.invoke(handle, "power_on");
+            if (!result.ok)
+              return rejected(
+                "captured-power-control-failed",
+                result.detail ?? result.reason
+              );
+          }
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
   // src/adapters/evolve/economy/production/captured-craft-costs.ts
   var CRAFT_ROW_PREFIX = "res", COST_ENTRY = /<div>([^<]*)<\/div>/g;
   function resolveResourceId(root, name) {
@@ -6840,7 +6933,7 @@
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
   var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
-  function finite8(value) {
+  function finite9(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readSettingsRecord(value) {
@@ -6851,7 +6944,7 @@
     return typeof value == "boolean" ? value : !0;
   }
   function craftPreserve(settings, id) {
-    let value = finite8(settings[`foundry_p_${id}`]);
+    let value = finite9(settings[`foundry_p_${id}`]);
     return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
   }
   function craftAllButtonRendered(getDocument, id) {
@@ -6877,7 +6970,7 @@
     if (!isRecord(resources)) return;
     let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
     for (let [resourceId, costPerCraft] of costs) {
-      let resource = readProperty(resources, resourceId), currentQuantity2 = finite8(readProperty(resource, "amount")), maxQuantity = finite8(readProperty(resource, "max")), rateOfChange = finite8(readProperty(resource, "diff"));
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite9(readProperty(resource, "amount")), maxQuantity = finite9(readProperty(resource, "max")), rateOfChange = finite9(readProperty(resource, "diff"));
       if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
         return;
       let base = {
@@ -6914,7 +7007,7 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite8(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite9(dependencies.readPeriods());
         return session = Object.freeze({
           root,
           demand: dependencies.readDemand(),
@@ -6932,7 +7025,7 @@
         let craftable = readProperty(
           readProperty(session.root, "resource"),
           craftableId
-        ), craftableAmount = finite8(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
+        ), craftableAmount = finite9(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
           dependencies,
           {
             ...session,
@@ -6981,7 +7074,7 @@
           "resource"
         );
         for (let spend of decision.spend) {
-          let actual = finite8(
+          let actual = finite9(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
@@ -7002,7 +7095,7 @@
         if (!result.ok)
           return rejected("craft-control-failed", result.detail ?? result.reason);
         for (let spend of decision.spend) {
-          let actual = finite8(
+          let actual = finite9(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
@@ -7192,7 +7285,8 @@
     autoCraft: !1,
     autoQuarry: !1,
     autoMine: !1,
-    autoExtractor: !1
+    autoExtractor: !1,
+    autoPower: !1
   });
   function isEnabled(settings, key) {
     let value = settings[key];
@@ -7312,6 +7406,19 @@
       result.outcome.status !== "succeeded" && logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
+    }, cityControlsDiscoveryAttempted = !1, ensureCityControls = () => {
+      if (cityControlsDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      cityControlsDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 1
+        })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `city discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
     }, pylonDiscoveryAttempted = !1, ensurePylonControls = () => {
       if (pageCapture2.controls.resolve(PYLON_CONTROL) !== void 0) return;
       let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), magic = readProperty(tech, "magic");
@@ -7404,7 +7511,10 @@
         "count"
       );
       return typeof value == "number" && Number.isFinite(value) ? value : 0;
-    }, runCycle = () => {
+    }, powerProducers = createCapturedPowerProducerAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls
+    }), runCycle = () => {
       demandThisCycle = void 0;
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
@@ -7421,7 +7531,7 @@
           ), ratios.titanMine()), isEnabled(settings, "autoExtractor") && (ensureRatioControls(
             MINING_SHIP_CONTROL,
             structureCount2("tauceti", "mining_ship") >= 1
-          ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }
