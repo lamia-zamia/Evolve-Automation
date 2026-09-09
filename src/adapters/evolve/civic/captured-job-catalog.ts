@@ -143,6 +143,7 @@ function readSmartMaximum(
 ): number | null | undefined {
   if (!smart) return null;
   if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
+  if (id === "torturer") return readTorturerSmartMaximum(root);
   if (id !== "teamster") return null;
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
@@ -219,6 +220,32 @@ function readSpaceMinerSmartMaximum(root: unknown): number | undefined {
     return undefined;
   }
   return (elerium * 2 + iridium + iron) * workerEffect;
+}
+
+function readTorturerSmartMaximum(root: unknown): number | undefined {
+  const city = readProperty(root, "city");
+  const dwellers = readProperty(city, "surfaceDwellers");
+  const housing = readProperty(city, "captive_housing");
+  if (!Array.isArray(dwellers) || !isRecord(housing)) return undefined;
+  let total = 0;
+  for (let index = 0; index < dwellers.length; index++) {
+    const race = finiteNonNegative(readProperty(housing, `race${index}`));
+    const jailed = finiteNonNegative(readProperty(housing, `jailrace${index}`));
+    if (race === undefined || jailed === undefined) return undefined;
+    total += race + jailed;
+  }
+  const stats = readProperty(root, "stats");
+  const achievements = readProperty(stats, "achieve");
+  if (!isRecord(stats) || !isRecord(achievements)) return undefined;
+  const achievement = readProperty(achievements, "nightmare");
+  if (achievement === undefined) return Number.MAX_SAFE_INTEGER;
+  if (!isRecord(achievement)) return undefined;
+  const rankValue = readProperty(achievement, "mg");
+  const rank = rankValue === undefined ? 0 : finiteNonNegative(rankValue);
+  if (rank === undefined) return undefined;
+  const maximum = Math.ceil(total / (rank / 2));
+  if (Number.isFinite(maximum)) return maximum;
+  return maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
 }
 
 function readStorageBackedMinimum(

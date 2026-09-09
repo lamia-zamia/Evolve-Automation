@@ -281,6 +281,41 @@ assert.equal(
   "Space Miner token follows DeadSpace's canonical job order",
 );
 
+const torturerReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      city: {
+        surfaceDwellers: [{}, {}],
+        captive_housing: { race0: 3, jailrace0: 1, race1: 2, jailrace1: 0 },
+      },
+      stats: { achieve: { nightmare: { mg: 2 } } },
+      civic: {
+        ...root.civic,
+        torturer: {
+          job: "torturer",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-torturer"],
+  },
+  readSettings: () => ({ job_s_torturer: true }),
+});
+assert.equal(
+  torturerReader().jobs.find(({ id }) => id === "torturer")?.smartMaximum,
+  6,
+  "Torturer smart maximum uses captive housing and Nightmare rank",
+);
+
 const selectionReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

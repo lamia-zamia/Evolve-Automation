@@ -4416,6 +4416,7 @@
   function readSmartMaximum(root, id, smart) {
     if (!smart) return null;
     if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
+    if (id === "torturer") return readTorturerSmartMaximum(root);
     if (id !== "teamster") return null;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
@@ -4459,6 +4460,25 @@
     let elerium = readSpaceBuildingOn(root, "elerium_ship"), iridium = readSpaceBuildingOn(root, "iridium_ship"), iron = readSpaceBuildingOn(root, "iron_ship"), workerEffect = readHighPopulationWorkerEffect(root);
     if (!(elerium === void 0 || iridium === void 0 || iron === void 0 || workerEffect === void 0))
       return (elerium * 2 + iridium + iron) * workerEffect;
+  }
+  function readTorturerSmartMaximum(root) {
+    let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers"), housing = readProperty(city, "captive_housing");
+    if (!Array.isArray(dwellers) || !isRecord(housing)) return;
+    let total = 0;
+    for (let index = 0; index < dwellers.length; index++) {
+      let race = finiteNonNegative(readProperty(housing, `race${index}`)), jailed = finiteNonNegative(readProperty(housing, `jailrace${index}`));
+      if (race === void 0 || jailed === void 0) return;
+      total += race + jailed;
+    }
+    let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve");
+    if (!isRecord(stats) || !isRecord(achievements)) return;
+    let achievement = readProperty(achievements, "nightmare");
+    if (achievement === void 0) return Number.MAX_SAFE_INTEGER;
+    if (!isRecord(achievement)) return;
+    let rankValue = readProperty(achievement, "mg"), rank = rankValue === void 0 ? 0 : finiteNonNegative(rankValue);
+    if (rank === void 0) return;
+    let maximum = Math.ceil(total / (rank / 2));
+    return Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
   }
   function readStorageBackedMinimum(root, id, workers, display) {
     let rawTech = readProperty(root, "tech"), tech = isRecord(rawTech) ? rawTech : void 0, banking = optionalFiniteNumber(tech, "banking");
