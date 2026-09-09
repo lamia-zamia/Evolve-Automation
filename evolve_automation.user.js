@@ -4552,7 +4552,7 @@
         onSkipped(controlId, "ordinary job smart maximum is unavailable");
         return;
       }
-      let unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
+      let kind = jobKind(id), unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
         configuredBreakpoints,
         maximum,
         id,
@@ -4563,7 +4563,7 @@
         Object.freeze({
           id,
           controlId,
-          kind: jobKind(id),
+          kind,
           smart,
           configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
           assigned,
@@ -4572,6 +4572,7 @@
           serves: servantInput.serves,
           split: isSplitJob(id),
           smartMaximum,
+          warlordMiner: kind === "miner" && readProperty(readProperty(root, "race"), "warlord") === !0,
           maximum,
           display,
           unlocked,

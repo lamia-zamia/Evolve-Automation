@@ -27,6 +27,8 @@ export interface CapturedJobCatalogEntry {
   readonly split: boolean;
   /** Characterized smart maximum, when this catalog slice has all required inputs. */
   readonly smartMaximum: number | null;
+  /** Warlord Miner behavior is a direct race/id condition in the pure planner. */
+  readonly warlordMiner: boolean;
   /** DeadSpace uses -1 for an uncapped ordinary job. */
   readonly maximum: number;
   readonly display: boolean;
@@ -325,6 +327,7 @@ function readCatalog(
       onSkipped(controlId, "ordinary job smart maximum is unavailable");
       return undefined;
     }
+    const kind = jobKind(id);
     // DeadSpace's job surface defines unlocked from civic.display and the script's managed
     // setting is only effective for an unlocked job. Missing or malformed settings remain false.
     const unlocked = display;
@@ -341,7 +344,7 @@ function readCatalog(
       Object.freeze({
         id,
         controlId,
-        kind: jobKind(id),
+        kind,
         smart,
         configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
         assigned,
@@ -350,6 +353,9 @@ function readCatalog(
         serves: servantInput.serves,
         split: isSplitJob(id),
         smartMaximum,
+        warlordMiner:
+          kind === "miner" &&
+          readProperty(readProperty(root, "race"), "warlord") === true,
         maximum,
         display,
         unlocked,

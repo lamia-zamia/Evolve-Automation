@@ -76,6 +76,7 @@ assert.deepEqual(reader(), {
       serves: false,
       split: false,
       smartMaximum: null,
+      warlordMiner: false,
       maximum: 0,
       display: true,
       unlocked: true,
@@ -97,6 +98,7 @@ assert.deepEqual(reader(), {
       serves: false,
       split: false,
       smartMaximum: null,
+      warlordMiner: false,
       maximum: 8,
       display: true,
       unlocked: true,
@@ -118,6 +120,7 @@ assert.deepEqual(reader(), {
       serves: false,
       split: true,
       smartMaximum: null,
+      warlordMiner: false,
       maximum: -1,
       display: true,
       unlocked: true,
@@ -139,6 +142,7 @@ assert.deepEqual(reader(), {
       serves: false,
       split: false,
       smartMaximum: null,
+      warlordMiner: false,
       maximum: 0,
       display: false,
       unlocked: false,
@@ -184,6 +188,37 @@ assert.equal(
   teamsterReader().jobs.find(({ id }) => id === "teamster")?.smartMaximum,
   3,
   "Teamster smart maximum uses the captured race and technology levels",
+);
+
+const warlordMinerReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { warlord: true },
+      civic: {
+        ...root.civic,
+        miner: {
+          job: "miner",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-miner"],
+  },
+  readSettings: () => ({}),
+});
+assert.equal(
+  warlordMinerReader().jobs.find(({ id }) => id === "miner")?.warlordMiner,
+  true,
+  "Warlord Miner behavior follows the captured race flag",
 );
 
 const servantReader = createCapturedJobCatalogReader({
