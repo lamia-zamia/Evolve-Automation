@@ -4544,6 +4544,10 @@
       return readQuarryWorkerSmartMaximum(root, readDemand);
     if (id === "crystal_miner")
       return readCrystalMinerSmartMaximum(root, readDemand);
+    if (id === "miner")
+      return readMinerSmartMaximum(root, settings, readDemand);
+    if (id === "coal_miner")
+      return readCoalMinerSmartMaximum(root, settings, readDemand);
     if (id === "cement_worker")
       return readCementWorkerSmartMaximum(root, settings, count, readDemand);
     if (id !== "teamster") return null;
@@ -4692,6 +4696,31 @@
   }
   function readCrystalMinerSmartMaximum(root, readDemand) {
     return readAnyUsefulSmartMaximum(root, ["Crystal"], readDemand);
+  }
+  function readUsefulUnlockedResources(root, ids) {
+    let resources = [];
+    for (let id of ids) {
+      let unlocked = readResourceUnlocked(root, id);
+      if (unlocked === void 0) return;
+      unlocked && resources.push(id);
+    }
+    return resources;
+  }
+  function readMinerSmartMaximum(root, settings, readDemand) {
+    if (readProperty(settings, "jobDisableMiners") === !0) return;
+    let race = readProperty(root, "race");
+    if (hasRaceFlag(race, "warlord")) return null;
+    let tech = readProperty(root, "tech"), resources = ["Copper"], sappyResources = hasRaceFlag(race, "sappy") ? readUsefulUnlockedResources(root, ["Aluminium", "Chrysotile"]) : [];
+    if (sappyResources === void 0) return;
+    resources.push(...sappyResources), (optionalFiniteNumber(isRecord(tech) ? tech : void 0, "titanium") ?? 0) >= 2 && resources.push("Titanium");
+    let ironUnlocked = readResourceUnlocked(root, "Iron");
+    if (ironUnlocked !== void 0)
+      return ironUnlocked && resources.push("Iron"), readAnyUsefulSmartMaximum(root, resources, readDemand);
+  }
+  function readCoalMinerSmartMaximum(root, settings, readDemand) {
+    if (readProperty(settings, "jobDisableMiners") === !0) return;
+    let uraniumUnlocked = readResourceUnlocked(root, "Uranium");
+    return uraniumUnlocked === void 0 ? void 0 : readAnyUsefulSmartMaximum(root, uraniumUnlocked ? ["Uranium", "Coal"] : ["Coal"], readDemand);
   }
   function readCementWorkerSmartMaximum(root, settings, count, readDemand) {
     let stoneRatio = resourceStorageRatio(root, "Stone"), stoneDiff = resourceDiff(root, "Stone"), cementRatio = resourceStorageRatio(root, "Cement");

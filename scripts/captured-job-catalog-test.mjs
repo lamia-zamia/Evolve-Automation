@@ -1006,6 +1006,79 @@ assert.equal(
   "Crystal Miner stays uncapped while captured Crystal storage is useful",
 );
 
+const minerUsefulReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { sappy: 1 },
+      resource: {
+        Aluminium: { display: true, amount: 10, max: 100 },
+        Chrysotile: { display: false, amount: 100, max: 100 },
+        Copper: { amount: 100, max: 100 },
+        Iron: { display: false, amount: 100, max: 100 },
+      },
+      civic: {
+        ...root.civic,
+        d_job: "miner",
+        miner: {
+          job: "miner",
+          assigned: 1,
+          workers: 1,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-miner"],
+  },
+  readSettings: () => ({ job_s_miner: true }),
+});
+assert.equal(
+  minerUsefulReader().jobs[0].smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "Miner stays uncapped when a captured Sappy input is useful",
+);
+
+const coalMinerUsefulReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      resource: {
+        Uranium: { display: false, amount: 100, max: 100 },
+        Coal: { amount: 10, max: 100 },
+      },
+      civic: {
+        ...root.civic,
+        d_job: "coal_miner",
+        coal_miner: {
+          job: "coal_miner",
+          assigned: 1,
+          workers: 1,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-coal_miner"],
+  },
+  readSettings: () => ({ job_s_coal_miner: true }),
+});
+assert.equal(
+  coalMinerUsefulReader().jobs[0].smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "Coal Miner stays uncapped while captured Coal storage is useful",
+);
+
 const servantReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

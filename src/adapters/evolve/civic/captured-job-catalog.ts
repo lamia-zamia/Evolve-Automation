@@ -173,6 +173,12 @@ function readSmartMaximum(
   if (id === "crystal_miner") {
     return readCrystalMinerSmartMaximum(root, readDemand);
   }
+  if (id === "miner") {
+    return readMinerSmartMaximum(root, settings, readDemand);
+  }
+  if (id === "coal_miner") {
+    return readCoalMinerSmartMaximum(root, settings, readDemand);
+  }
   if (id === "cement_worker") {
     return readCementWorkerSmartMaximum(root, settings, count, readDemand);
   }
@@ -492,6 +498,61 @@ function readCrystalMinerSmartMaximum(
   readDemand?: () => CapturedDemandSample,
 ): number | undefined {
   return readAnyUsefulSmartMaximum(root, ["Crystal"], readDemand);
+}
+
+function readUsefulUnlockedResources(
+  root: unknown,
+  ids: readonly string[],
+): readonly string[] | undefined {
+  const resources: string[] = [];
+  for (const id of ids) {
+    const unlocked = readResourceUnlocked(root, id);
+    if (unlocked === undefined) return undefined;
+    if (unlocked) resources.push(id);
+  }
+  return resources;
+}
+
+function readMinerSmartMaximum(
+  root: unknown,
+  settings: Record<PropertyKey, unknown> | undefined,
+  readDemand?: () => CapturedDemandSample,
+): number | null | undefined {
+  // The raw root does not expose the Gateway Starbase lookup used by the legacy
+  // jobDisableMiners gate. Do not claim a useful-resource result while that option
+  // could disable the whole branch.
+  if (readProperty(settings, "jobDisableMiners") === true) return undefined;
+  const race = readProperty(root, "race");
+  if (hasRaceFlag(race, "warlord")) return null;
+  const tech = readProperty(root, "tech");
+  const resources = ["Copper"];
+  const sappyResources = hasRaceFlag(race, "sappy")
+    ? readUsefulUnlockedResources(root, ["Aluminium", "Chrysotile"])
+    : [];
+  if (sappyResources === undefined) return undefined;
+  resources.push(...sappyResources);
+  if (
+    (optionalFiniteNumber(isRecord(tech) ? tech : undefined, "titanium") ??
+      0) >= 2
+  ) {
+    resources.push("Titanium");
+  }
+  const ironUnlocked = readResourceUnlocked(root, "Iron");
+  if (ironUnlocked === undefined) return undefined;
+  if (ironUnlocked) resources.push("Iron");
+  return readAnyUsefulSmartMaximum(root, resources, readDemand);
+}
+
+function readCoalMinerSmartMaximum(
+  root: unknown,
+  settings: Record<PropertyKey, unknown> | undefined,
+  readDemand?: () => CapturedDemandSample,
+): number | undefined {
+  if (readProperty(settings, "jobDisableMiners") === true) return undefined;
+  const uraniumUnlocked = readResourceUnlocked(root, "Uranium");
+  if (uraniumUnlocked === undefined) return undefined;
+  const resources = uraniumUnlocked ? ["Uranium", "Coal"] : ["Coal"];
+  return readAnyUsefulSmartMaximum(root, resources, readDemand);
 }
 
 function readCementWorkerSmartMaximum(
