@@ -14,9 +14,11 @@ import {
 } from "../../../../domain/economy/storage/storage-expansion.ts";
 import { crateCost } from "../../../../domain/economy/storage/crate-cost.ts";
 import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
+import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { CostReservationSource } from "../../../../ports/game-cost-reservations.ts";
 import type { ConstructionObservations } from "../../../../ports/game-construction-observations.ts";
 import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
+import type { GameBuildTarget } from "../../../../ports/game-build-targets.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type {
@@ -36,6 +38,11 @@ interface CapturedStorageDependencies {
   readonly readStorageRequired: (resourceId: string) => number;
   readonly reservations: CostReservationSource;
   readonly construction?: ConstructionObservations;
+  /** Managed construction targets, sampled from the same captured build policy as autoBuild. */
+  readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
+  /** The game's current cost for a captured build target. */
+  readonly costs?: GameActionCostReader;
+  readonly onSkipped?: (key: string, reason: string) => void;
   readonly nowMs: () => number;
 }
 
@@ -155,6 +162,41 @@ function targetFromCost(
     unlocked: true,
     autoBuildEnabled: true,
   });
+}
+
+function readBuildingTargets(
+  dependencies: CapturedStorageDependencies,
+): readonly StorageTargetInput[] {
+  if (
+    dependencies.readBuildTargets === undefined ||
+    dependencies.costs === undefined
+  )
+    return Object.freeze([]);
+  const result: StorageTargetInput[] = [];
+  for (const target of dependencies.readBuildTargets()) {
+    if (
+      typeof target.key !== "string" ||
+      typeof target.elementId !== "string" ||
+      target.key.length === 0 ||
+      target.elementId.length === 0
+    ) {
+      dependencies.onSkipped?.(
+        "storage-building",
+        "captured build target identity is invalid",
+      );
+      continue;
+    }
+    const cost = dependencies.costs.readCost(target.elementId);
+    if (cost === undefined) {
+      dependencies.onSkipped?.(
+        target.key,
+        "captured build target cost is unavailable",
+      );
+      continue;
+    }
+    result.push(targetFromCost(target.key, cost));
+  }
+  return Object.freeze(result);
 }
 
 function readResource(
@@ -324,6 +366,7 @@ function readInput(dependencies: CapturedStorageDependencies): {
         [resource.id]: resource.storageRequired,
       }),
     );
+  const buildingTargets = readBuildingTargets(dependencies);
   const input = Object.freeze({
     initialized: true,
     crateValue,
@@ -343,6 +386,11 @@ function readInput(dependencies: CapturedStorageDependencies): {
         kind: "queued" as const,
         enabled: true,
         targets: Object.freeze(targets),
+      }),
+      Object.freeze({
+        kind: "building" as const,
+        enabled: true,
+        targets: buildingTargets,
       }),
       Object.freeze({
         kind: "required" as const,

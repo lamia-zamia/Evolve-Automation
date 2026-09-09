@@ -9677,6 +9677,30 @@
       autoBuildEnabled: !0
     });
   }
+  function readBuildingTargets(dependencies) {
+    if (dependencies.readBuildTargets === void 0 || dependencies.costs === void 0)
+      return Object.freeze([]);
+    let result = [];
+    for (let target of dependencies.readBuildTargets()) {
+      if (typeof target.key != "string" || typeof target.elementId != "string" || target.key.length === 0 || target.elementId.length === 0) {
+        dependencies.onSkipped?.(
+          "storage-building",
+          "captured build target identity is invalid"
+        );
+        continue;
+      }
+      let cost = dependencies.costs.readCost(target.elementId);
+      if (cost === void 0) {
+        dependencies.onSkipped?.(
+          target.key,
+          "captured build target cost is unavailable"
+        );
+        continue;
+      }
+      result.push(targetFromCost(target.key, cost));
+    }
+    return Object.freeze(result);
+  }
   function readResource4(resources, settings, id, readStorageRequired) {
     let resource = readProperty(resources, id);
     if (!isRecord(resource)) return;
@@ -9790,7 +9814,7 @@
       (resource) => targetFromCost(`storageRequired/${resource.id}`, {
         [resource.id]: resource.storageRequired
       })
-    );
+    ), buildingTargets = readBuildingTargets(dependencies);
     return {
       input: Object.freeze({
         initialized: !0,
@@ -9811,6 +9835,11 @@
             kind: "queued",
             enabled: !0,
             targets: Object.freeze(targets)
+          }),
+          Object.freeze({
+            kind: "building",
+            enabled: !0,
+            targets: buildingTargets
           }),
           Object.freeze({
             kind: "required",
@@ -11169,6 +11198,9 @@
       readStorageRequired: (resourceId) => readDemand().storageRequired(resourceId),
       reservations: queueReservations,
       construction: progression.observations,
+      readBuildTargets: progression.readManagedBuildTargets,
+      costs: buildCosts,
+      onSkipped: (key, reason) => reportOnce(`storage skipped ${key}: ${reason}`),
       nowMs: () => Date.now()
     }), storageAutomation = createStorageAllocationAutomation({
       ...storagePorts,

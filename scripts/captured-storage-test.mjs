@@ -5,6 +5,8 @@ import { createCapturedStoragePorts } from "../src/adapters/evolve/economy/stora
 function makeHarness({
   freeCrates = 0,
   savingCost = { Iron: 600 },
+  buildTargets = [],
+  buildCosts = {},
   mutateAssignments = true,
 } = {}) {
   const root = {
@@ -29,6 +31,7 @@ function makeHarness({
     },
   };
   const calls = [];
+  const skipped = [];
   const controls = new Map([
     [
       "createHead",
@@ -94,10 +97,70 @@ function makeHarness({
     construction: {
       readSavingTarget: () => ({ name: "saved", cost: savingCost }),
     },
+    readBuildTargets: () => buildTargets,
+    costs: {
+      readCost: (elementId) => buildCosts[elementId],
+    },
+    onSkipped: (key, reason) => skipped.push([key, reason]),
     nowMs: () => 1,
   });
   const automation = createStorageAllocationAutomation(ports);
-  return { root, calls, automation };
+  return { root, calls, automation, ports, skipped };
+}
+
+{
+  const { ports, skipped } = makeHarness({
+    buildTargets: [
+      { key: "city-farm", elementId: "city-farm", weighting: 10 },
+      { key: "city-missing", elementId: "city-missing", weighting: 1 },
+    ],
+    buildCosts: { "city-farm": { Iron: 400 } },
+  });
+  const input = ports.reader.read();
+  assert.deepEqual(input.targetSources, [
+    {
+      kind: "queued",
+      enabled: true,
+      targets: [
+        {
+          costs: [{ resourceId: "Iron", quantity: 600 }],
+          isList: false,
+          label: "saved",
+          unlocked: true,
+          autoBuildEnabled: true,
+        },
+      ],
+    },
+    {
+      kind: "building",
+      enabled: true,
+      targets: [
+        {
+          costs: [{ resourceId: "Iron", quantity: 400 }],
+          isList: false,
+          label: "city-farm",
+          unlocked: true,
+          autoBuildEnabled: true,
+        },
+      ],
+    },
+    {
+      kind: "required",
+      enabled: true,
+      targets: [
+        {
+          costs: [{ resourceId: "Iron", quantity: 1 }],
+          isList: false,
+          label: "storageRequired/Iron",
+          unlocked: true,
+          autoBuildEnabled: true,
+        },
+      ],
+    },
+  ]);
+  assert.deepEqual(skipped, [
+    ["city-missing", "captured build target cost is unavailable"],
+  ]);
 }
 
 {

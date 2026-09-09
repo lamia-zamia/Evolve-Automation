@@ -285,6 +285,9 @@ export function startCapturedRuntime({
       readDemand().storageRequired(resourceId),
     reservations: queueReservations,
     construction: progression.observations,
+    readBuildTargets: progression.readManagedBuildTargets,
+    costs: buildCosts,
+    onSkipped: (key, reason) => reportOnce(`storage skipped ${key}: ${reason}`),
     nowMs: () => Date.now(),
   });
   const storageAutomation = createStorageAllocationAutomation({
