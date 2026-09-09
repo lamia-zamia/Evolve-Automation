@@ -72,6 +72,23 @@ const KNOWLEDGE_BUILDINGS: ReadonlySet<string> = new Set([
   "biolab",
 ]);
 
+/**
+ * Action ids use their upstream root container as the first segment. Keep this allowlist narrow:
+ * controls such as `tech-*`, `evolution-*`, and `arpa-*` are not construction targets even when
+ * a persisted setting happens to contain a similarly named key.
+ */
+const CAPTURED_BUILD_REGIONS: ReadonlySet<string> = new Set([
+  "city",
+  "space",
+  "interstellar",
+  "galaxy",
+  "portal",
+  "eden",
+  "surface",
+  "tauceti",
+  "underground",
+]);
+
 function readFiniteSetting(
   settings: Record<PropertyKey, unknown>,
   key: string,
@@ -575,6 +592,78 @@ function readTarget(
   });
 }
 
+function readNonCityTarget(
+  settings: Record<PropertyKey, unknown>,
+  root: unknown,
+  elementId: string,
+  controls: GameControlRegistry,
+  context: Readonly<CityRuleContext>,
+  onSkipped: (key: string, reason: string) => void,
+): Readonly<CapturedBuildTarget> | undefined {
+  const separator = elementId.indexOf("-");
+  if (separator <= 0) return undefined;
+  const region = elementId.slice(0, separator);
+  if (!CAPTURED_BUILD_REGIONS.has(region) || region === "city") {
+    return undefined;
+  }
+  const binding = elementId;
+  if (settings[`bat${binding}`] !== true) return undefined;
+  const id = elementId.slice(separator + 1);
+  const owner = readProperty(root, region);
+  const state = readProperty(owner, id);
+  if (!isRecord(state)) {
+    onSkipped(binding, `captured ${region} state is unavailable`);
+    return undefined;
+  }
+  const count = readProperty(state, "count");
+  if (typeof count !== "number" || !Number.isFinite(count)) {
+    onSkipped(binding, `captured ${region} count is not finite`);
+    return undefined;
+  }
+  const weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);
+  if (weighting === undefined) {
+    onSkipped(binding, "configured weighting is not finite");
+    return undefined;
+  }
+  const newBuildingWeighting =
+    count === 0 ? readFiniteSetting(settings, "buildingWeightingNew", 1) : 1;
+  if (newBuildingWeighting === undefined) {
+    onSkipped(binding, "new-building weighting is not finite");
+    return undefined;
+  }
+  const powered = readActionPower(controls.resolve(elementId));
+  const underpoweredWeighting =
+    powered !== undefined && powered > 0
+      ? readFiniteSetting(settings, "buildingWeightingUnderpowered", 1)
+      : 1;
+  if (underpoweredWeighting === undefined) {
+    onSkipped(binding, "underpowered weighting is not finite");
+    return undefined;
+  }
+  const maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+  if (maximum === undefined) {
+    onSkipped(binding, "configured maximum is not finite");
+    return undefined;
+  }
+  return Object.freeze({
+    key: binding,
+    elementId,
+    region,
+    id,
+    weighting: applyUnderpoweredWeighting(
+      weighting * newBuildingWeighting,
+      id,
+      context.powerUnlocked,
+      context.powerSurplus,
+      powered,
+      underpoweredWeighting,
+    ),
+    maximum: maximum >= 0 ? maximum : UNLIMITED,
+    knowledge: false,
+    important: false,
+  });
+}
+
 export function createCapturedBuildPolicyReader({
   rootState,
   controls,
@@ -609,17 +698,31 @@ export function createCapturedBuildPolicyReader({
       unpoweredPowerDemand: power?.demand ?? 0,
     });
     const buildings: Readonly<CapturedBuildTarget>[] = [];
-    if (isRecord(settings) && isRecord(city)) {
+    if (isRecord(settings)) {
       for (const elementId of controls.capturedElementIds()) {
-        const target = readTarget(
-          settings,
-          city,
-          elementId,
-          controls,
-          context,
-          reportSkipped,
-        );
+        const target = isRecord(city)
+          ? readTarget(
+              settings,
+              city,
+              elementId,
+              controls,
+              context,
+              reportSkipped,
+            )
+          : undefined;
+        const nonCityTarget =
+          target === undefined
+            ? readNonCityTarget(
+                settings,
+                root,
+                elementId,
+                controls,
+                context,
+                reportSkipped,
+              )
+            : undefined;
         if (target !== undefined) buildings.push(target);
+        else if (nonCityTarget !== undefined) buildings.push(nonCityTarget);
       }
     }
     return Object.freeze({

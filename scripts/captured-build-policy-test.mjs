@@ -542,6 +542,75 @@ assert.equal(
   8,
   "a validated action power draw deprioritizes an underpowered city consumer",
 );
+
+const nonCityUnderpoweredReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({
+      city: { power: 3, power_total: -3, powered: true },
+      portal: { cooling_tower: { count: 0 } },
+      space: { moon_base: { count: 2 } },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: (elementId) =>
+      elementId === "space-moon_base"
+        ? {
+            elementId,
+            generation: 1,
+            methods: [],
+            data: { powered: () => 5 },
+          }
+        : undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["space-moon_base", "portal-cooling_tower"],
+  },
+  readKnowledge: () => openKnowledge,
+  getSettings: () => ({
+    "batspace-moon_base": true,
+    "batportal-cooling_tower": true,
+    "bld_w_space-moon_base": 10,
+    "bld_w_portal-cooling_tower": 10,
+    buildingWeightingNew: 3,
+    buildingWeightingUnderpowered: 0.8,
+  }),
+});
+assert.deepEqual(
+  nonCityUnderpoweredReader().buildings.map(({ region, id, weighting }) => ({
+    region,
+    id,
+    weighting,
+  })),
+  [
+    { region: "space", id: "moon_base", weighting: 8 },
+    { region: "portal", id: "cooling_tower", weighting: 30 },
+  ],
+  "captured non-city regions use their root state and retain power-only dynamic rules",
+);
+
+const nonBuildControlReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({ tech: { moon_base: { count: 0 } } }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["tech-moon_base", "arpa-monument"],
+  },
+  readKnowledge: () => openKnowledge,
+  getSettings: () => ({
+    "battech-moon_base": true,
+    "batarpa-monument": true,
+  }),
+});
+assert.deepEqual(
+  nonBuildControlReader().buildings,
+  [],
+  "tech and ARPA controls are not inferred as construction targets",
+);
 powerRoot = {
   city: {
     mill: { count: 1, on: 1 },

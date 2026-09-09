@@ -1,5 +1,5 @@
 /**
- * City construction as one family of the captured construction cycle.
+ * Captured construction as one family of the captured construction cycle.
  *
  * Everything here comes from the page capture — the live root for counts, the game's own cost code
  * for prices, the game's own `action()` closure for the purchase. Nothing asks whether a panel is
@@ -129,7 +129,7 @@ export function createCapturedBuildSource(
   let cycle: ReadonlyMap<string, CycleCandidate> = new Map();
 
   return Object.freeze({
-    family: "city",
+    family: "buildings",
 
     beginCycle(): readonly Readonly<ConstructionCandidate>[] {
       dependencies.ensureControls?.();

@@ -1420,6 +1420,16 @@
     "library",
     "wardenclyffe",
     "biolab"
+  ]), CAPTURED_BUILD_REGIONS = /* @__PURE__ */ new Set([
+    "city",
+    "space",
+    "interstellar",
+    "galaxy",
+    "portal",
+    "eden",
+    "surface",
+    "tauceti",
+    "underground"
   ]);
   function readFiniteSetting(settings, key, defaultValue) {
     let value = settings[key];
@@ -1723,6 +1733,62 @@
       important: !1
     });
   }
+  function readNonCityTarget(settings, root, elementId, controls, context, onSkipped) {
+    let separator = elementId.indexOf("-");
+    if (separator <= 0) return;
+    let region = elementId.slice(0, separator);
+    if (!CAPTURED_BUILD_REGIONS.has(region) || region === "city")
+      return;
+    let binding = elementId;
+    if (settings[`bat${binding}`] !== !0) return;
+    let id = elementId.slice(separator + 1), owner = readProperty(root, region), state = readProperty(owner, id);
+    if (!isRecord(state)) {
+      onSkipped(binding, `captured ${region} state is unavailable`);
+      return;
+    }
+    let count = readProperty(state, "count");
+    if (typeof count != "number" || !Number.isFinite(count)) {
+      onSkipped(binding, `captured ${region} count is not finite`);
+      return;
+    }
+    let weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);
+    if (weighting === void 0) {
+      onSkipped(binding, "configured weighting is not finite");
+      return;
+    }
+    let newBuildingWeighting = count === 0 ? readFiniteSetting(settings, "buildingWeightingNew", 1) : 1;
+    if (newBuildingWeighting === void 0) {
+      onSkipped(binding, "new-building weighting is not finite");
+      return;
+    }
+    let powered = readActionPower(controls.resolve(elementId)), underpoweredWeighting = powered !== void 0 && powered > 0 ? readFiniteSetting(settings, "buildingWeightingUnderpowered", 1) : 1;
+    if (underpoweredWeighting === void 0) {
+      onSkipped(binding, "underpowered weighting is not finite");
+      return;
+    }
+    let maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+    if (maximum === void 0) {
+      onSkipped(binding, "configured maximum is not finite");
+      return;
+    }
+    return Object.freeze({
+      key: binding,
+      elementId,
+      region,
+      id,
+      weighting: applyUnderpoweredWeighting(
+        weighting * newBuildingWeighting,
+        id,
+        context.powerUnlocked,
+        context.powerSurplus,
+        powered,
+        underpoweredWeighting
+      ),
+      maximum: maximum >= 0 ? maximum : UNLIMITED,
+      knowledge: !1,
+      important: !1
+    });
+  }
   function createCapturedBuildPolicyReader({
     rootState,
     controls,
@@ -1749,17 +1815,24 @@
         powerSurplus: power?.surplus ?? 0,
         unpoweredPowerDemand: power?.demand ?? 0
       }), buildings = [];
-      if (isRecord(settings) && isRecord(city))
+      if (isRecord(settings))
         for (let elementId of controls.capturedElementIds()) {
-          let target = readTarget2(
+          let target = isRecord(city) ? readTarget2(
             settings,
             city,
             elementId,
             controls,
             context,
             reportSkipped
-          );
-          target !== void 0 && buildings.push(target);
+          ) : void 0, nonCityTarget = target === void 0 ? readNonCityTarget(
+            settings,
+            root,
+            elementId,
+            controls,
+            context,
+            reportSkipped
+          ) : void 0;
+          target !== void 0 ? buildings.push(target) : nonCityTarget !== void 0 && buildings.push(nonCityTarget);
         }
       return Object.freeze({
         buildings: Object.freeze(buildings),
@@ -2206,7 +2279,7 @@
     let { rootState, controls, costs, resources, readTargets } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
     }), cycle = /* @__PURE__ */ new Map();
     return Object.freeze({
-      family: "city",
+      family: "buildings",
       beginCycle() {
         dependencies.ensureControls?.();
         let root = rootState.readRoot(), entries = /* @__PURE__ */ new Map();
