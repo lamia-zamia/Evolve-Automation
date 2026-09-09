@@ -4482,9 +4482,11 @@
     return Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
   }
   function readHellSurveyorSmartMaximum(root) {
-    let fortress = readProperty(readProperty(root, "portal"), "fortress"), threat = readProperty(fortress, "threat"), population = readProperty(readProperty(root, "resource"), "Population"), storageRatio2 = readProperty(population, "storageRatio");
-    if (!(typeof threat != "number" || !Number.isFinite(threat) || typeof storageRatio2 != "number" || !Number.isFinite(storageRatio2)))
-      return threat > 9e3 && storageRatio2 < 1 ? 0 : Number.MAX_SAFE_INTEGER;
+    let fortress = readProperty(readProperty(root, "portal"), "fortress"), threat = readProperty(fortress, "threat"), population = readProperty(readProperty(root, "resource"), "Population"), amount = readProperty(population, "amount"), maximum = readProperty(population, "max");
+    if (typeof threat != "number" || !Number.isFinite(threat) || typeof amount != "number" || !Number.isFinite(amount) || typeof maximum != "number" || !Number.isFinite(maximum))
+      return;
+    let storageRatio2 = maximum > 0 ? amount / maximum : 0;
+    return threat > 9e3 && storageRatio2 < 1 ? 0 : Number.MAX_SAFE_INTEGER;
   }
   function readStorageBackedMinimum(root, id, workers, display) {
     let rawTech = readProperty(root, "tech"), tech = isRecord(rawTech) ? rawTech : void 0, banking = optionalFiniteNumber(tech, "banking");

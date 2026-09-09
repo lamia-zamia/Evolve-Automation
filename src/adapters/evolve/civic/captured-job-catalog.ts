@@ -253,15 +253,19 @@ function readHellSurveyorSmartMaximum(root: unknown): number | undefined {
   const fortress = readProperty(readProperty(root, "portal"), "fortress");
   const threat = readProperty(fortress, "threat");
   const population = readProperty(readProperty(root, "resource"), "Population");
-  const storageRatio = readProperty(population, "storageRatio");
+  const amount = readProperty(population, "amount");
+  const maximum = readProperty(population, "max");
   if (
     typeof threat !== "number" ||
     !Number.isFinite(threat) ||
-    typeof storageRatio !== "number" ||
-    !Number.isFinite(storageRatio)
+    typeof amount !== "number" ||
+    !Number.isFinite(amount) ||
+    typeof maximum !== "number" ||
+    !Number.isFinite(maximum)
   ) {
     return undefined;
   }
+  const storageRatio = maximum > 0 ? amount / maximum : 0;
   return threat > 9000 && storageRatio < 1 ? 0 : Number.MAX_SAFE_INTEGER;
 }
 

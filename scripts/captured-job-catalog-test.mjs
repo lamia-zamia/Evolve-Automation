@@ -321,7 +321,7 @@ const hellSurveyorReader = createCapturedJobCatalogReader({
     readRoot: () => ({
       ...root,
       portal: { fortress: { threat: 9500 } },
-      resource: { Population: { storageRatio: 0.5 } },
+      resource: { Population: { amount: 50, max: 100 } },
       civic: {
         ...root.civic,
         hell_surveyor: {
