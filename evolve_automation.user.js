@@ -3266,6 +3266,12 @@
     count: () => {
     }
   });
+  function createCountTally(diagnostics) {
+    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? INERT_TALLY : Object.freeze({
+      enabled: !0,
+      count: (name, amount = 1) => diagnostics.recordCount(name, amount)
+    });
+  }
 
   // src/application/build.ts
   var SUCCEEDED2 = Object.freeze({
@@ -10568,6 +10574,333 @@
     return Object.freeze({ reader, executor });
   }
 
+  // src/adapters/evolve/economy/market/captured-market.ts
+  var MARKET_QUANTITY_CONTROL = "market-qty", TRAIT_VALUES = Object.freeze({
+    arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
+    merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
+    connivingBuy: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
+    connivingSell: Object.freeze([6, 8, 10, 15, 20, 24, 28]),
+    asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5])
+  }), TRAIT_RANKS = Object.freeze([
+    0.1,
+    0.25,
+    0.5,
+    1,
+    2,
+    3,
+    4
+  ]);
+  function finite13(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function settingsRecord2(value) {
+    return isRecord(value) ? value : {};
+  }
+  function readMultiplier(race, trait, values, increase) {
+    if (!race[trait]) return 1;
+    if (race.empowered) return;
+    let rank = finite13(race[trait]);
+    if (rank === void 0) return;
+    let index = TRAIT_RANKS.indexOf(rank), value = index >= 0 ? values[index] : void 0;
+    return value === void 0 ? void 0 : 1 + (increase ? value : -value) / 100;
+  }
+  function readFathom(root, race, target) {
+    if (!race.unfathomable) return 0;
+    let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
+    if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
+    let housing = readProperty(city, "captive_housing"), civic = readProperty(root, "civic"), torturer = readProperty(civic, "torturer"), workers = finite13(readProperty(torturer, "workers")), index = dwellers.indexOf(target), active = finite13(readProperty(housing, `race${index}`));
+    if (workers === void 0 || active === void 0) return;
+    let adjusted = Math.min(active, 100);
+    adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3));
+    let nightmare = readProperty(readProperty(root, "stats"), "achieve"), mg = finite13(readProperty(readProperty(nightmare, "nightmare"), "mg"));
+    return adjusted / 100 * ((mg ?? 0) / 5);
+  }
+  function readUnitPrices(root, resource) {
+    let value = finite13(resource.value), race = readProperty(root, "race");
+    if (value === void 0 || value <= 0 || !isRecord(race)) return;
+    let arrogant = readMultiplier(
+      race,
+      "arrogant",
+      TRAIT_VALUES.arrogant,
+      !0
+    ), connivingBuy = readMultiplier(
+      race,
+      "conniving",
+      TRAIT_VALUES.connivingBuy,
+      !1
+    ), merchant = readMultiplier(
+      race,
+      "merchant",
+      TRAIT_VALUES.merchant,
+      !1
+    ), asymmetrical = readMultiplier(
+      race,
+      "asymmetrical",
+      TRAIT_VALUES.asymmetrical,
+      !0
+    ), connivingSell = readMultiplier(
+      race,
+      "conniving",
+      TRAIT_VALUES.connivingSell,
+      !1
+    ), impFathom = readFathom(root, race, "imp"), goblinFathom = readFathom(root, race, "goblin");
+    if (arrogant === void 0 || connivingBuy === void 0 || merchant === void 0 || asymmetrical === void 0 || connivingSell === void 0 || impFathom === void 0 || goblinFathom === void 0)
+      return;
+    let buy = value * arrogant * connivingBuy * (1 - impFathom * 5 / 100), sellDivide = 4 * merchant * (1 - goblinFathom * 25 / 100) * asymmetrical * connivingSell * (1 - impFathom * 15 / 100), sell = value / sellDivide;
+    return Number.isFinite(buy) && Number.isFinite(sell) && sellDivide > 0 ? Object.freeze({ buy, sell }) : void 0;
+  }
+  function resourceStorageRatio2(resource) {
+    let amount = finite13(resource.amount), maximum = finite13(resource.max);
+    return amount !== void 0 && maximum !== void 0 && maximum > 0 ? amount / maximum : 1;
+  }
+  function resourceMaximum(resource) {
+    let maximum = finite13(resource.max);
+    return maximum !== void 0 && maximum >= 0 ? maximum : 0;
+  }
+  function maximumMultiplier(root) {
+    let currency = finite13(readProperty(readProperty(root, "tech"), "currency"));
+    return currency !== void 0 && currency >= 6 ? 1e6 : currency !== void 0 && currency >= 4 ? 5e3 : 100;
+  }
+  function emptySell(index, resourceId, ignoreSellRatio) {
+    return Object.freeze({
+      index,
+      resourceId,
+      eligible: !1,
+      autoSellEnabled: !1,
+      ignoreSellRatio,
+      storageRatio: 0,
+      autoSellRatio: 0,
+      moneyMaximum: 0,
+      moneyCurrent: 0,
+      unitPrice: 1,
+      currentQuantity: 0,
+      maxQuantity: 0,
+      income: 0,
+      ticksPerSecond: 1,
+      maximumMultiplier: 1
+    });
+  }
+  function emptyBuy(index, resourceId) {
+    return Object.freeze({
+      index,
+      resourceId,
+      eligible: !1,
+      autoBuyEnabled: !1,
+      storageRatio: 0,
+      autoBuyRatio: 0,
+      moneyDemanded: !1,
+      moneyCurrent: 0,
+      minimumMoneyAllowed: 0,
+      unitPrice: 1,
+      currentQuantity: 0,
+      maxQuantity: 0,
+      maximumMultiplier: 1
+    });
+  }
+  function readPriorityIds(resources, settings) {
+    return Object.keys(resources).map((id, index) => ({
+      id,
+      index,
+      resource: readProperty(resources, id),
+      priority: finite13(settings[`res_buy_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
+    })).filter(
+      (entry) => isRecord(entry.resource) && Object.hasOwn(entry.resource, "trade")
+    ).sort(
+      (left, right) => left.priority - right.priority || left.index - right.index
+    ).map((entry) => entry.id);
+  }
+  function readTicksPerSecond(settings) {
+    let tickRate = finite13(settings.tickRate) ?? 4;
+    return tickRate > 0 ? 4 / tickRate : 1;
+  }
+  function createCapturedMarketPorts(dependencies) {
+    let session = null, lastResourceId = null, reader = Object.freeze({
+      readGate() {
+        session = null;
+        let root = dependencies.rootState.readRoot(), settings = readProperty(root, "settings"), race = readProperty(root, "race");
+        return Object.freeze({
+          unlocked: readProperty(settings, "showMarket") === !0,
+          noTrade: !!readProperty(race, "no_trade")
+        });
+      },
+      readSession() {
+        let root = dependencies.rootState.readRoot(), settings = settingsRecord2(dependencies.readSettings()), resources = readProperty(root, "resource"), cityMarket = readProperty(readProperty(root, "city"), "market"), money = readProperty(resources, "Money"), quantityControl = dependencies.controls.resolve(
+          MARKET_QUANTITY_CONTROL
+        );
+        if (!isRecord(resources) || !isRecord(cityMarket) || !isRecord(money) || quantityControl === void 0)
+          throw new Error("captured market controls are unavailable");
+        let originalMultiplier = finite13(cityMarket.qty), moneyMaximum = finite13(money.max), moneyCurrent = finite13(money.amount);
+        if (originalMultiplier === void 0 || !Number.isSafeInteger(originalMultiplier) || originalMultiplier < 1 || moneyMaximum === void 0 || moneyCurrent === void 0)
+          throw new TypeError("captured market quantities are invalid");
+        let minimumMoneyAllowed = Math.max(
+          moneyMaximum * (finite13(settings.minimumMoneyPercentage) ?? 0) / 100,
+          finite13(settings.minimumMoney) ?? 0
+        ), resourceIds = readPriorityIds(resources, settings), rowGenerations = /* @__PURE__ */ new Map();
+        for (let resourceId of resourceIds) {
+          let row = dependencies.controls.resolve(`market-${resourceId}`);
+          row !== void 0 && rowGenerations.set(resourceId, row.generation);
+        }
+        return session = Object.freeze({
+          root,
+          quantityControl,
+          rowGenerations,
+          resourceIds: Object.freeze(resourceIds),
+          originalMultiplier,
+          maximumMultiplier: maximumMultiplier(root),
+          minimumMoneyAllowed
+        }), lastResourceId = null, Object.freeze({
+          originalMultiplier,
+          maximumMultiplier: session.maximumMultiplier,
+          minimumMoneyAllowed
+        });
+      },
+      readSell(index, ignoreSellRatio) {
+        let active = session;
+        if (active === null) throw new Error("market session is unavailable");
+        let resourceId = active.resourceIds[index];
+        if (resourceId === void 0)
+          return lastResourceId = null, null;
+        lastResourceId = resourceId;
+        let root = active.root, resources = readProperty(root, "resource"), resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
+        if (!isRecord(resource) || !isRecord(money) || control === void 0 || !control.methods.includes("purchase") || !control.methods.includes("sell"))
+          return emptySell(index, resourceId, ignoreSellRatio);
+        let currentQuantity2 = finite13(resource.amount), maxQuantity = resourceMaximum(resource), moneyMaximum = finite13(money.max), moneyCurrent = finite13(money.amount), prices = readUnitPrices(root, resource), settings = settingsRecord2(dependencies.readSettings()), autoSellRatio = finite13(settings[`res_sell_r_${resourceId}`]) ?? 0, storageRatio2 = resourceStorageRatio2(resource), income = finite13(resource.diff), ticksPerSecond = readTicksPerSecond(settings);
+        return currentQuantity2 === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || prices === void 0 || income === void 0 || ticksPerSecond <= 0 ? (dependencies.onUnavailable?.(
+          resourceId,
+          "market price or quantity is unavailable"
+        ), emptySell(index, resourceId, ignoreSellRatio)) : Object.freeze({
+          index,
+          resourceId,
+          eligible: !0,
+          autoSellEnabled: settings[`sell${resourceId}`] === !0,
+          ignoreSellRatio,
+          storageRatio: storageRatio2,
+          autoSellRatio,
+          moneyMaximum,
+          moneyCurrent,
+          unitPrice: prices.sell,
+          currentQuantity: currentQuantity2,
+          maxQuantity,
+          income,
+          ticksPerSecond,
+          maximumMultiplier: active.maximumMultiplier
+        });
+      },
+      readBuy(index, minimumMoneyAllowed) {
+        let active = session, resourceId = active?.resourceIds[index];
+        if (active == null || resourceId === void 0 || lastResourceId !== resourceId)
+          throw new Error("market buy must follow its sell candidate");
+        let resources = readProperty(active.root, "resource"), resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
+        if (!isRecord(resource) || !isRecord(money) || control === void 0 || !control.methods.includes("purchase") || !control.methods.includes("sell"))
+          return emptyBuy(index, resourceId);
+        let currentQuantity2 = finite13(resource.amount), maxQuantity = resourceMaximum(resource), moneyCurrent = finite13(money.amount), prices = readUnitPrices(active.root, resource), settings = settingsRecord2(dependencies.readSettings()), autoBuyRatio = finite13(settings[`res_buy_r_${resourceId}`]) ?? 0;
+        return currentQuantity2 === void 0 || moneyCurrent === void 0 || prices === void 0 ? (dependencies.onUnavailable?.(
+          resourceId,
+          "market price or quantity is unavailable"
+        ), emptyBuy(index, resourceId)) : Object.freeze({
+          index,
+          resourceId,
+          eligible: !0,
+          autoBuyEnabled: settings[`buy${resourceId}`] === !0,
+          storageRatio: resourceStorageRatio2(resource),
+          autoBuyRatio,
+          moneyDemanded: dependencies.readDemand?.()?.isDemanded("Money") ?? !1,
+          moneyCurrent,
+          minimumMoneyAllowed,
+          unitPrice: prices.buy,
+          currentQuantity: currentQuantity2,
+          maxQuantity,
+          maximumMultiplier: active.maximumMultiplier
+        });
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        let active = session;
+        if (active === null)
+          return stale(
+            "captured-market-session-missing",
+            "market sample is unavailable"
+          );
+        if (decision.kind === "restore-multiplier")
+          return !Number.isSafeInteger(decision.multiplier) || decision.multiplier < 1 ? rejected(
+            "invalid-market-multiplier",
+            "market multiplier must be a positive safe integer"
+          ) : setMultiplier(active, decision.multiplier);
+        if (!Number.isSafeInteger(decision.multiplier) || decision.multiplier < 1 || decision.multiplier > active.maximumMultiplier || !Number.isSafeInteger(decision.repetitions) || decision.repetitions < 1)
+          return rejected(
+            "invalid-captured-market-trade",
+            "market trade quantities are invalid"
+          );
+        if (!Number.isSafeInteger(decision.index) || decision.index < 0 || active.resourceIds[decision.index] !== decision.resourceId)
+          return stale(
+            "captured-market-resource-changed",
+            "market resource ordering changed"
+          );
+        if (dependencies.rootState.readRoot() !== active.root)
+          return stale(
+            "captured-market-root-changed",
+            "captured game root changed"
+          );
+        let resource = readProperty(
+          readProperty(active.root, "resource"),
+          decision.resourceId
+        ), money = readProperty(
+          readProperty(active.root, "resource"),
+          "Money"
+        ), prices = isRecord(resource) ? readUnitPrices(active.root, resource) : void 0;
+        if (!isRecord(resource) || !isRecord(money) || finite13(money.amount) !== decision.expectedMoneyCurrent || finite13(resource.amount) !== decision.expectedResourceCurrent || prices === void 0 || prices[decision.side] !== decision.expectedUnitPrice)
+          return stale("captured-market-state-changed", "market inputs changed");
+        let control = dependencies.controls.resolve(
+          `market-${decision.resourceId}`
+        );
+        if (control === void 0 || control.generation !== active.rowGenerations.get(decision.resourceId) || !control.methods.includes(decision.side === "buy" ? "purchase" : "sell"))
+          return stale(
+            "captured-market-control-changed",
+            "market row control changed"
+          );
+        let result = setMultiplier(active, decision.multiplier);
+        if (result.status !== "succeeded") return result;
+        let method = decision.side === "buy" ? "purchase" : "sell";
+        for (let repetition = 0; repetition < decision.repetitions; repetition += 1)
+          if (!dependencies.controls.invoke(control, method, [
+            decision.resourceId
+          ]).ok)
+            return rejected(
+              "captured-market-control-failed",
+              `${method} control failed`
+            );
+        return SUCCEEDED;
+      }
+    });
+    function setMultiplier(active, multiplier) {
+      if (multiplier > active.maximumMultiplier)
+        return rejected(
+          "invalid-market-multiplier",
+          "market multiplier exceeds the game limit"
+        );
+      if (dependencies.rootState.readRoot() !== active.root)
+        return stale(
+          "captured-market-root-changed",
+          "captured game root changed"
+        );
+      let control = dependencies.controls.resolve(MARKET_QUANTITY_CONTROL);
+      if (control === void 0 || control.generation !== active.quantityControl.generation)
+        return stale(
+          "captured-market-quantity-control-changed",
+          "market quantity control changed"
+        );
+      let data = control.data;
+      return !isRecord(data) || data !== readProperty(readProperty(active.root, "city"), "market") ? stale(
+        "captured-market-quantity-state-changed",
+        "market quantity state changed"
+      ) : (Reflect.set(data, "qty", multiplier), finite13(data.qty) === multiplier ? SUCCEEDED : rejected(
+        "captured-market-quantity-failed",
+        "market quantity did not change"
+      ));
+    }
+    return Object.freeze({ reader, executor });
+  }
+
   // src/domain/economy/market/galaxy-market.ts
   function planGalaxyMarket(input) {
     if (!input.initialized) return null;
@@ -10638,6 +10971,100 @@
   function runGalaxyMarketAutomation(dependencies) {
     let decision = planGalaxyMarket(dependencies.reader.read());
     return decision === null ? GALAXY_MARKET_SUCCEEDED : dependencies.executor.execute(decision);
+  }
+
+  // src/domain/economy/market/market.ts
+  function batchTrade(side, input, maximumUnits) {
+    return maximumUnits <= input.maximumMultiplier ? Object.freeze({
+      kind: "trade",
+      side,
+      index: input.index,
+      resourceId: input.resourceId,
+      expectedMoneyCurrent: input.moneyCurrent,
+      expectedResourceCurrent: input.currentQuantity,
+      expectedUnitPrice: input.unitPrice,
+      multiplier: maximumUnits,
+      repetitions: 1
+    }) : Object.freeze({
+      kind: "trade",
+      side,
+      index: input.index,
+      resourceId: input.resourceId,
+      expectedMoneyCurrent: input.moneyCurrent,
+      expectedResourceCurrent: input.currentQuantity,
+      expectedUnitPrice: input.unitPrice,
+      multiplier: input.maximumMultiplier,
+      repetitions: Math.min(
+        5,
+        Math.floor(maximumUnits / input.maximumMultiplier)
+      )
+    });
+  }
+  function planMarketSell(input) {
+    if (!input.eligible || !input.autoSellEnabled || !input.ignoreSellRatio && input.storageRatio < input.autoSellRatio)
+      return null;
+    let maximumUnits = Math.floor(
+      (input.moneyMaximum - input.moneyCurrent) / input.unitPrice
+    );
+    return maximumUnits = Math.min(
+      maximumUnits,
+      input.storageRatio > input.autoSellRatio ? Math.floor(
+        input.currentQuantity - input.autoSellRatio * input.maxQuantity
+      ) : Math.floor(input.income * 2 / input.ticksPerSecond)
+    ), batchTrade("sell", input, maximumUnits);
+  }
+  function planMarketBuy(input) {
+    if (!input.eligible || !input.autoBuyEnabled || input.storageRatio >= input.autoBuyRatio || input.moneyDemanded)
+      return null;
+    let storableAmount = Math.floor(
+      (input.autoBuyRatio - input.storageRatio) * input.maxQuantity
+    ), affordableAmount = Math.floor(
+      (input.moneyCurrent - input.minimumMoneyAllowed) / input.unitPrice
+    ), maximumUnits = Math.min(storableAmount, affordableAmount);
+    return maximumUnits > 0 ? batchTrade("buy", input, maximumUnits) : null;
+  }
+
+  // src/application/market.ts
+  var SUCCEEDED7 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMarketTradesAutomation(dependencies, bulkSell = !1, ignoreSellRatio = !1, adjustTradeRoutes = !1) {
+    let measure = createPhaseMeasure(dependencies.diagnostics), tally = createCountTally(dependencies.diagnostics), gate = dependencies.reader.readGate();
+    if (!gate.unlocked)
+      return SUCCEEDED7;
+    if (adjustTradeRoutes) {
+      let tradeRoutes = dependencies.tradeRoutes;
+      if (tradeRoutes === void 0)
+        return SUCCEEDED7;
+      measure("autoMarket.adjustTradeRoutes", () => tradeRoutes.adjust());
+    }
+    if (gate.noTrade)
+      return SUCCEEDED7;
+    let session = dependencies.reader.readSession(), outcome = SUCCEEDED7;
+    for (let index = 0; ; index++) {
+      let sellInput = measure(
+        "autoMarket.readSell",
+        () => dependencies.reader.readSell(index, ignoreSellRatio)
+      );
+      if (sellInput === null)
+        break;
+      tally.count("autoMarket.resources");
+      let sell = planMarketSell(sellInput);
+      if (sell !== null && (tally.count("autoMarket.sells"), outcome = dependencies.executor.execute(sell), outcome.status !== "succeeded"))
+        break;
+      if (bulkSell === !0 || !sellInput.eligible)
+        continue;
+      let buy = planMarketBuy(
+        dependencies.reader.readBuy(index, session.minimumMoneyAllowed)
+      );
+      if (buy !== null && (tally.count("autoMarket.buys"), outcome = dependencies.executor.execute(buy), outcome.status !== "succeeded"))
+        break;
+    }
+    let restore = dependencies.executor.execute({
+      kind: "restore-multiplier",
+      multiplier: session.originalMultiplier
+    });
+    return outcome.status === "succeeded" ? restore : outcome;
   }
 
   // src/domain/economy/storage/storage-allocation.ts
@@ -10901,7 +11328,7 @@
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -10919,13 +11346,13 @@
           "autoStorage.expand",
           () => dependencies.expansion.expand(rawPlan.storageToBuild)
         ))
-          return SUCCEEDED7;
+          return SUCCEEDED8;
         let finalized = finalizeStorageAllocation(rawPlan, state), unfunded = unfundedStorageCapacity(finalized.decision);
         if (unfunded > 0 && measure(
           "autoStorage.expand",
           () => dependencies.expansion.expand(unfunded)
         ))
-          return SUCCEEDED7;
+          return SUCCEEDED8;
         let outcome = dependencies.executor.execute(finalized.decision);
         return outcome.status === "succeeded" && (state = finalized.nextState), outcome;
       },
@@ -10974,7 +11401,7 @@
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
   var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
-  function finite13(value) {
+  function finite14(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readSettingsRecord(value) {
@@ -10985,7 +11412,7 @@
     return typeof value == "boolean" ? value : !0;
   }
   function craftPreserve(settings, id) {
-    let value = finite13(settings[`foundry_p_${id}`]);
+    let value = finite14(settings[`foundry_p_${id}`]);
     return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
   }
   function craftAllButtonRendered(getDocument, id) {
@@ -11011,7 +11438,7 @@
     if (!isRecord(resources)) return;
     let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
     for (let [resourceId, costPerCraft] of costs) {
-      let resource = readProperty(resources, resourceId), currentQuantity2 = finite13(readProperty(resource, "amount")), maxQuantity = finite13(readProperty(resource, "max")), rateOfChange = finite13(readProperty(resource, "diff"));
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite14(readProperty(resource, "amount")), maxQuantity = finite14(readProperty(resource, "max")), rateOfChange = finite14(readProperty(resource, "diff"));
       if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
         return;
       let base = {
@@ -11048,7 +11475,7 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite13(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite14(dependencies.readPeriods());
         return session = Object.freeze({
           root,
           demand: dependencies.readDemand(),
@@ -11066,7 +11493,7 @@
         let craftable = readProperty(
           readProperty(session.root, "resource"),
           craftableId
-        ), craftableAmount = finite13(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
+        ), craftableAmount = finite14(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
           dependencies,
           {
             ...session,
@@ -11115,7 +11542,7 @@
           "resource"
         );
         for (let spend of decision.spend) {
-          let actual = finite13(
+          let actual = finite14(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
@@ -11136,7 +11563,7 @@
         if (!result.ok)
           return rejected("craft-control-failed", result.detail ?? result.reason);
         for (let spend of decision.spend) {
-          let actual = finite13(
+          let actual = finite14(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
@@ -11323,6 +11750,7 @@
     autoMiningDroid: !1,
     autoGraphenePlant: !1,
     autoReplicator: !1,
+    autoMarket: !1,
     autoAlchemy: !1,
     autoCraft: !1,
     autoQuarry: !1,
@@ -11474,6 +11902,18 @@
         reader: galaxyMarketPorts.reader,
         executor: galaxyMarketPorts.executor
       })
+    }), marketPorts = createCapturedMarketPorts({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage),
+      readDemand: () => readDemand(),
+      onUnavailable: (resourceId, reason) => reportOnce(`market skipped ${resourceId}: ${reason}`)
+    }), marketAutomation = Object.freeze({
+      run: () => runMarketTradesAutomation({
+        reader: marketPorts.reader,
+        executor: marketPorts.executor,
+        diagnostics
+      })
     }), ratios = createCapturedProductionRatios({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -11607,7 +12047,7 @@
       result.outcome.status !== "succeeded" && logError(
         `replicator discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
-    }, factoryDiscoveryAttempted = !1, smelterDiscoveryAttempted = !1, storageDiscoveryAttempted = !1, galaxyMarketDiscoveryAttempted = !1, ensureSmelterControls = () => {
+    }, factoryDiscoveryAttempted = !1, smelterDiscoveryAttempted = !1, storageDiscoveryAttempted = !1, galaxyMarketDiscoveryAttempted = !1, marketDiscoveryAttempted = !1, ensureSmelterControls = () => {
       if (pageCapture2.controls.resolve(SMELTER_CONTROL) !== void 0) return;
       let city = readProperty(pageCapture2.rootState.readRoot(), "city"), smelterState = readProperty(city, "smelter"), race = readProperty(pageCapture2.rootState.readRoot(), "race"), count = readProperty(smelterState, "count"), exempt = !!readProperty(race, "cataclysm") || !!readProperty(race, "orbit_decayed") || !!readProperty(
         readProperty(pageCapture2.rootState.readRoot(), "tech"),
@@ -11665,6 +12105,25 @@
       ]);
       result.outcome.status !== "succeeded" && logError(
         `galaxy market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
+    }, ensureMarketControls = () => {
+      if (pageCapture2.controls.resolve(MARKET_QUANTITY_CONTROL) !== void 0 || marketDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let root = pageCapture2.rootState.readRoot();
+      if (readProperty(readProperty(root, "settings"), "showMarket") !== !0)
+        return;
+      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      if (marketTabs === void 0) return;
+      marketDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 4
+        }),
+        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 0 })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
     }, ensureFactoryControls = () => {
       if (pageCapture2.controls.resolve(FACTORY_CONTROL) !== void 0) return;
@@ -11726,7 +12185,7 @@
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
+          isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
             QUARRY_CONTROL,
             !!readProperty(
               readProperty(pageCapture2.rootState.readRoot(), "race"),

@@ -12,7 +12,7 @@ import { createCountTally, createPhaseMeasure } from "../utils/performance.ts";
 export interface MarketAutomationDependencies {
   readonly reader: MarketReader;
   readonly executor: DecisionExecutor<MarketDecision>;
-  readonly tradeRoutes: TradeRouteAdjuster;
+  readonly tradeRoutes?: TradeRouteAdjuster;
   readonly diagnostics?: TickDiagnostics | undefined;
 }
 
@@ -25,15 +25,34 @@ export function runMarketAutomation(
   bulkSell = false,
   ignoreSellRatio = false,
 ): CommandExecutionOutcome {
+  return runMarketTradesAutomation(
+    dependencies,
+    bulkSell,
+    ignoreSellRatio,
+    true,
+  );
+}
+
+/** Runs ordinary market trades without changing the game's trade-route assignments. */
+export function runMarketTradesAutomation(
+  dependencies: MarketAutomationDependencies,
+  bulkSell = false,
+  ignoreSellRatio = false,
+  adjustTradeRoutes = false,
+): CommandExecutionOutcome {
   const measure = createPhaseMeasure(dependencies.diagnostics);
   const tally = createCountTally(dependencies.diagnostics);
   const gate = dependencies.reader.readGate();
   if (!gate.unlocked) {
     return SUCCEEDED;
   }
-  measure("autoMarket.adjustTradeRoutes", () =>
-    dependencies.tradeRoutes.adjust(),
-  );
+  if (adjustTradeRoutes) {
+    const tradeRoutes = dependencies.tradeRoutes;
+    if (tradeRoutes === undefined) {
+      return SUCCEEDED;
+    }
+    measure("autoMarket.adjustTradeRoutes", () => tradeRoutes.adjust());
+  }
   if (gate.noTrade) {
     return SUCCEEDED;
   }

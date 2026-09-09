@@ -59,7 +59,12 @@ import {
   createCapturedGalaxyMarketPorts,
   GALAXY_MARKET_CONTROL,
 } from "../adapters/evolve/economy/market/captured-galaxy-market.ts";
+import {
+  createCapturedMarketPorts,
+  MARKET_QUANTITY_CONTROL,
+} from "../adapters/evolve/economy/market/captured-market.ts";
 import { runGalaxyMarketAutomation } from "../application/galaxy-market.ts";
+import { runMarketTradesAutomation } from "../application/market.ts";
 import { createStorageAllocationAutomation } from "../application/storage-allocation.ts";
 import { createCapturedCraftCosts } from "../adapters/evolve/economy/production/captured-craft-costs.ts";
 import {
@@ -127,6 +132,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoMiningDroid: false,
   autoGraphenePlant: false,
   autoReplicator: false,
+  autoMarket: false,
   autoAlchemy: false,
   autoCraft: false,
   autoQuarry: false,
@@ -316,6 +322,22 @@ export function startCapturedRuntime({
       runGalaxyMarketAutomation({
         reader: galaxyMarketPorts.reader,
         executor: galaxyMarketPorts.executor,
+      }),
+  });
+  const marketPorts = createCapturedMarketPorts({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
+    onUnavailable: (resourceId, reason) =>
+      reportOnce(`market skipped ${resourceId}: ${reason}`),
+  });
+  const marketAutomation = Object.freeze({
+    run: () =>
+      runMarketTradesAutomation({
+        reader: marketPorts.reader,
+        executor: marketPorts.executor,
+        diagnostics,
       }),
   });
   const ratios = createCapturedProductionRatios({
@@ -555,6 +577,7 @@ export function startCapturedRuntime({
   let smelterDiscoveryAttempted = false;
   let storageDiscoveryAttempted = false;
   let galaxyMarketDiscoveryAttempted = false;
+  let marketDiscoveryAttempted = false;
   const ensureSmelterControls = () => {
     if (pageCapture.controls.resolve(SMELTER_CONTROL) !== undefined) return;
     const city = readProperty(pageCapture.rootState.readRoot(), "city");
@@ -662,6 +685,34 @@ export function startCapturedRuntime({
     }
   };
 
+  const ensureMarketControls = () => {
+    if (pageCapture.controls.resolve(MARKET_QUANTITY_CONTROL) !== undefined) {
+      return;
+    }
+    if (marketDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const root = pageCapture.rootState.readRoot();
+    if (readProperty(readProperty(root, "settings"), "showMarket") !== true) {
+      return;
+    }
+    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    if (marketTabs === undefined) return;
+    marketDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 4,
+      }),
+      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 0 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+
   const ensureFactoryControls = () => {
     if (pageCapture.controls.resolve(FACTORY_CONTROL) !== undefined) return;
     const city = readProperty(pageCapture.rootState.readRoot(), "city");
@@ -758,6 +809,10 @@ export function startCapturedRuntime({
       return;
     }
     try {
+      if (isEnabled(settings, "autoMarket")) {
+        ensureMarketControls();
+        marketAutomation.run();
+      }
       if (isEnabled(settings, "autoGalaxyMarket")) {
         ensureGalaxyMarketControls();
         galaxyMarketAutomation.run();
