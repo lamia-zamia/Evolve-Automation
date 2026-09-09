@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { crateCost } from "../src/domain/economy/storage/crate-cost.ts";
 
 // Transcribed from Evolve's `crate()`. `iron_wood` is an unconditional override of the resource,
-// and the price is 200 whenever any of the three traits is present.
+// and the price is 200 whenever any of the four traits is present.
 const cases = [
   [
     { smoldering: false, kindlingKindred: false, ironWood: false },
@@ -15,6 +15,24 @@ const cases = [
   ],
   [
     { smoldering: false, kindlingKindred: true, ironWood: false },
+    { Stone: 200 },
+  ],
+  [
+    {
+      smoldering: false,
+      kindlingKindred: false,
+      iceAge: true,
+      ironWood: false,
+    },
+    { Stone: 200 },
+  ],
+  [
+    {
+      smoldering: false,
+      kindlingKindred: false,
+      iceAge: true,
+      ironWood: true,
+    },
     { Stone: 200 },
   ],
   // iron_wood alone, with no warlord and no other trait: Lumber at 200, not Plywood at 10.

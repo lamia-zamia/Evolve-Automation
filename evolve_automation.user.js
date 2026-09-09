@@ -9551,6 +9551,810 @@
     });
   }
 
+  // src/domain/economy/storage/storage-expansion.ts
+  function affordableUnits2(view) {
+    let cap = view.maxQuantity - view.currentQuantity;
+    for (let cost of view.costs)
+      cap = Math.min(cap, cost.available / cost.costPerUnit);
+    return cap;
+  }
+  function constructCommand(unit, view, count) {
+    let spend = view.costs.map(
+      (cost) => Object.freeze({
+        resourceId: cost.resourceId,
+        amount: cost.costPerUnit * count
+      })
+    );
+    return Object.freeze({
+      kind: "construct-storage",
+      unit,
+      count,
+      storagePerUnit: view.storagePerUnit,
+      producedResourceId: view.resourceId,
+      spend: Object.freeze(spend)
+    });
+  }
+  function planStorageExpansion(snapshot, settings) {
+    let missing = snapshot.storageToBuild, crateCap = affordableUnits2(snapshot.crates), containerCap = affordableUnits2(snapshot.containers);
+    settings.storageLimitPreMad && snapshot.isEarlyGame && (snapshot.steel.storageRatio < 0.8 && (containerCap = 0), snapshot.isLumberRace && snapshot.library.count < 20 && snapshot.library.plywoodCost !== null && snapshot.library.plywoodCost > snapshot.plywoodAvailable && snapshot.steel.maxQuantity >= snapshot.steel.storageRequired && (crateCap = 0));
+    let commands = [], preferContainers = !settings.storageLimitPreMad && snapshot.isEarlyGame;
+    if (preferContainers && missing > 0) {
+      let containersToBuild = Math.min(
+        Math.floor(containerCap),
+        Math.ceil(missing / snapshot.containers.storagePerUnit)
+      );
+      commands.push(
+        constructCommand("container", snapshot.containers, containersToBuild)
+      ), missing -= containersToBuild * snapshot.containers.storagePerUnit;
+    }
+    let cratesToBuild = Math.min(
+      Math.floor(crateCap),
+      preferContainers && missing <= 0 ? 0 : Math.ceil(missing / snapshot.crates.storagePerUnit)
+    );
+    if (commands.push(constructCommand("crate", snapshot.crates, cratesToBuild)), missing -= cratesToBuild * snapshot.crates.storagePerUnit, !preferContainers && missing > 0) {
+      let containersToBuild = Math.min(
+        Math.floor(containerCap),
+        Math.ceil(missing / snapshot.containers.storagePerUnit)
+      );
+      commands.push(
+        constructCommand("container", snapshot.containers, containersToBuild)
+      );
+    }
+    return Object.freeze(commands);
+  }
+
+  // src/domain/economy/storage/crate-cost.ts
+  function crateCost(race) {
+    return race.ironWood && !race.iceAge ? Object.freeze({ Lumber: 200 }) : race.smoldering ? Object.freeze({ Chrysotile: 200 }) : race.kindlingKindred || race.iceAge ? Object.freeze({ Stone: 200 }) : Object.freeze({ Plywood: 10 });
+  }
+
+  // src/adapters/evolve/economy/storage/captured-storage.ts
+  var STORAGE_CONSTRUCTION_CONTROL = "createHead";
+  function finite11(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readStorageCount(value, fallback = 0) {
+    if (value === void 0) return fallback;
+    let parsed = finite11(value);
+    return parsed !== void 0 && Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : void 0;
+  }
+  function settingsRecord(value) {
+    return isRecord(value) ? value : {};
+  }
+  function descriptorCapacity(controls, method) {
+    let handle = controls.resolve(STORAGE_CONSTRUCTION_CONTROL);
+    if (handle === void 0 || !handle.methods.includes(method))
+      return;
+    let result = controls.invoke(handle, method);
+    if (!result.ok || typeof result.value != "string") return;
+    let value = result.value.match(/\d[\d,]*(?:\.\d+)?/g)?.[1];
+    if (value === void 0) return;
+    let capacity = Number(value.replaceAll(",", ""));
+    return Number.isFinite(capacity) && capacity > 0 ? capacity : void 0;
+  }
+  function storageView(resources, resourceId, storagePerUnit, cost) {
+    let resource = readProperty(resources, resourceId);
+    if (!isRecord(resource)) return;
+    let maxQuantity = finite11(resource.max), currentQuantity2 = finite11(resource.amount);
+    if (maxQuantity === void 0 || currentQuantity2 === void 0)
+      return;
+    let costs = [];
+    for (let [costResourceId, costPerUnit] of Object.entries(cost)) {
+      let available = finite11(
+        readProperty(readProperty(resources, costResourceId), "amount")
+      );
+      if (available === void 0 || !Number.isFinite(costPerUnit))
+        return;
+      costs.push(
+        Object.freeze({ resourceId: costResourceId, costPerUnit, available })
+      );
+    }
+    return Object.freeze({
+      resourceId,
+      maxQuantity,
+      currentQuantity: currentQuantity2,
+      storagePerUnit,
+      costs: Object.freeze(costs)
+    });
+  }
+  function earlyGame(root) {
+    let race = readProperty(root, "race"), tech = readProperty(root, "tech");
+    if (readProperty(race, "cataclysm") || readProperty(race, "orbit_decayed") || readProperty(race, "lone_survivor") || readProperty(race, "warlord"))
+      return !1;
+    let highTech = finite11(readProperty(tech, "high_tech")) ?? 0;
+    return readProperty(race, "truepath") || readProperty(race, "sludge") || readProperty(race, "ultra_sludge") ? highTech < 7 : (finite11(readProperty(tech, "mad")) ?? 0) < 1;
+  }
+  function targetFromCost(label, cost) {
+    return Object.freeze({
+      costs: Object.freeze(
+        Object.entries(cost).flatMap(
+          ([resourceId, quantity]) => quantity === void 0 || !Number.isFinite(quantity) ? [] : [Object.freeze({ resourceId, quantity })]
+        )
+      ),
+      isList: !1,
+      label,
+      unlocked: !0,
+      autoBuildEnabled: !0
+    });
+  }
+  function readResource4(resources, settings, id, readStorageRequired) {
+    let resource = readProperty(resources, id);
+    if (!isRecord(resource)) return;
+    let currentQuantity2 = finite11(resource.amount), rawMax = finite11(resource.max), currentCrates = readStorageCount(resource.crates), currentContainers = readStorageCount(resource.containers), storageRequired = readStorageRequired(id);
+    if (currentQuantity2 === void 0 || rawMax === void 0 || currentCrates === void 0 || currentContainers === void 0 || !Number.isFinite(storageRequired))
+      return;
+    let maxStorage = finite11(settings[`res_max_store${id}`]) ?? -1, minStorage = finite11(settings[`res_min_store${id}`]) ?? 1, autoSellRatio = finite11(settings[`res_sell_r_${id}`]);
+    return Object.freeze({
+      id,
+      unlocked: resource.display === !0,
+      managed: resource.stackable === !0 && settings[`res_storage${id}`] === !0,
+      currentQuantity: currentQuantity2,
+      maxQuantity: rawMax >= 0 ? rawMax : Number.MAX_SAFE_INTEGER,
+      maxStorage,
+      storageRequired,
+      minStorage,
+      currentCrates,
+      currentContainers,
+      storeOverflow: settings[`res_storage_o_${id}`] === !0,
+      autoSellEnabled: settings[`sell${id}`] === !0,
+      autoSellRatio: autoSellRatio !== void 0 && autoSellRatio > 0 ? autoSellRatio : 0
+    });
+  }
+  function readInput6(dependencies) {
+    let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource"), race = readProperty(root, "race");
+    if (!isRecord(resources) || !isRecord(race))
+      return {
+        input: Object.freeze({
+          initialized: !1,
+          crateValue: 0,
+          containerValue: 0,
+          freeCrates: 0,
+          freeContainers: 0,
+          assignExtra: !1,
+          assignPart: !1,
+          safeReassign: !1,
+          noTrade: !1,
+          autoMarket: !1,
+          debug: !1,
+          resources: Object.freeze([]),
+          priorityResourceIds: Object.freeze([]),
+          targetSources: Object.freeze([])
+        }),
+        session: null
+      };
+    let crateValue = descriptorCapacity(
+      dependencies.controls,
+      "buildCrateDesc"
+    ), containerValue = descriptorCapacity(
+      dependencies.controls,
+      "buildContainerDesc"
+    ), crates = readProperty(resources, "Crates"), containers = readProperty(resources, "Containers"), freeCrates = finite11(readProperty(crates, "amount")), freeContainers = finite11(readProperty(containers, "amount"));
+    if (crateValue === void 0 || containerValue === void 0 || freeCrates === void 0 || freeContainers === void 0)
+      return {
+        input: Object.freeze({
+          initialized: !1,
+          crateValue: 0,
+          containerValue: 0,
+          freeCrates: 0,
+          freeContainers: 0,
+          assignExtra: !1,
+          assignPart: !1,
+          safeReassign: !1,
+          noTrade: !1,
+          autoMarket: !1,
+          debug: !1,
+          resources: Object.freeze([]),
+          priorityResourceIds: Object.freeze([]),
+          targetSources: Object.freeze([])
+        }),
+        session: null
+      };
+    let settings = settingsRecord(dependencies.readSettings()), priorityResourceIds = Object.keys(resources).map((id, index) => ({
+      id,
+      index,
+      priority: finite11(settings[`res_storage_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
+    })).sort(
+      (left, right) => left.priority - right.priority || left.index - right.index
+    ).map(({ id }) => id), resourceInputs = priorityResourceIds.map(
+      (id) => readResource4(resources, settings, id, dependencies.readStorageRequired)
+    );
+    if (resourceInputs.some((resource) => resource === void 0))
+      return {
+        input: Object.freeze({
+          initialized: !1,
+          crateValue,
+          containerValue,
+          freeCrates,
+          freeContainers,
+          assignExtra: !1,
+          assignPart: !1,
+          safeReassign: !1,
+          noTrade: !1,
+          autoMarket: !1,
+          debug: !1,
+          resources: Object.freeze([]),
+          priorityResourceIds: Object.freeze([]),
+          targetSources: Object.freeze([])
+        }),
+        session: null
+      };
+    let resourcesInput = Object.freeze(
+      resourceInputs
+    ), targets = [], reservations = dependencies.reservations.readReservations();
+    if (!reservations.unavailable)
+      for (let target of reservations.targets)
+        targets.push(targetFromCost(target.name, target.cost));
+    let saving = dependencies.construction?.readSavingTarget() ?? null;
+    saving !== null && targets.push(targetFromCost(saving.name, saving.cost));
+    let requiredTargets = resourcesInput.filter((resource) => resource.unlocked && resource.managed).map(
+      (resource) => targetFromCost(`storageRequired/${resource.id}`, {
+        [resource.id]: resource.storageRequired
+      })
+    );
+    return {
+      input: Object.freeze({
+        initialized: !0,
+        crateValue,
+        containerValue,
+        freeCrates,
+        freeContainers,
+        assignExtra: settings.storageAssignExtra === !0,
+        assignPart: settings.storageAssignPart === !0,
+        safeReassign: settings.storageSafeReassign === !0,
+        noTrade: !!race.no_trade,
+        autoMarket: settings.autoMarket === !0,
+        debug: !1,
+        resources: resourcesInput,
+        priorityResourceIds: Object.freeze(priorityResourceIds),
+        targetSources: Object.freeze([
+          Object.freeze({
+            kind: "queued",
+            enabled: !0,
+            targets: Object.freeze(targets)
+          }),
+          Object.freeze({
+            kind: "required",
+            enabled: !0,
+            targets: Object.freeze(requiredTargets)
+          })
+        ])
+      }),
+      session: Object.freeze({
+        root,
+        crateValue,
+        containerValue,
+        freeCrates,
+        freeContainers,
+        priorityResourceIds: Object.freeze(priorityResourceIds),
+        resources: new Map(
+          resourcesInput.map((resource) => [resource.id, resource])
+        )
+      })
+    };
+  }
+  function readExpansionSnapshot(dependencies, storageToBuild) {
+    let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource"), race = readProperty(root, "race");
+    if (!isRecord(resources) || !isRecord(race)) return;
+    let crateValue = descriptorCapacity(
+      dependencies.controls,
+      "buildCrateDesc"
+    ), containerValue = descriptorCapacity(
+      dependencies.controls,
+      "buildContainerDesc"
+    );
+    if (crateValue === void 0 || containerValue === void 0)
+      return;
+    let crates = storageView(
+      resources,
+      "Crates",
+      crateValue,
+      crateCost({
+        smoldering: !!race.smoldering,
+        kindlingKindred: !!race.kindling_kindred,
+        iceAge: !!race.iceage,
+        ironWood: !!race.iron_wood
+      })
+    ), containers = storageView(resources, "Containers", containerValue, {
+      Steel: 125
+    }), steel = readProperty(resources, "Steel"), plywood = readProperty(resources, "Plywood");
+    if (!crates || !containers || !isRecord(steel) || !isRecord(plywood))
+      return;
+    let steelAmount = finite11(steel.amount), steelMax = finite11(steel.max), plywoodAmount = finite11(plywood.amount), steelStorageRequired = dependencies.readStorageRequired("Steel");
+    if (steelAmount === void 0 || steelMax === void 0 || plywoodAmount === void 0 || !Number.isFinite(steelStorageRequired))
+      return;
+    let capturedAtMs = dependencies.nowMs(), libraryCount = finite11(
+      readProperty(
+        readProperty(readProperty(root, "city"), "library"),
+        "count"
+      )
+    ) ?? 0;
+    return Object.freeze({
+      metadata: createSnapshotMetadata({
+        id: `captured-storage-expansion-${capturedAtMs}`,
+        capturedAtMs
+      }),
+      storageToBuild,
+      crates,
+      containers,
+      isEarlyGame: earlyGame(root),
+      isLumberRace: !race.kindling_kindred && !race.smoldering,
+      steel: Object.freeze({
+        storageRatio: steelMax > 0 ? steelAmount / steelMax : 0,
+        maxQuantity: steelMax,
+        storageRequired: steelStorageRequired
+      }),
+      library: Object.freeze({ count: libraryCount, plywoodCost: null }),
+      plywoodAvailable: plywoodAmount
+    });
+  }
+  function executeExpansion(dependencies, storageToBuild) {
+    let sampledRoot = dependencies.rootState.readRoot(), snapshot = readExpansionSnapshot(dependencies, storageToBuild);
+    if (snapshot === void 0) return !1;
+    let settings = settingsRecord(dependencies.readSettings()), commands = planStorageExpansion(snapshot, {
+      storageLimitPreMad: typeof settings.storageLimitPreMad == "boolean" ? settings.storageLimitPreMad : !0
+    }), built = 0;
+    for (let command of commands) {
+      if (command.count <= 0) continue;
+      let handle = dependencies.controls.resolve(STORAGE_CONSTRUCTION_CONTROL), method = command.unit === "crate" ? "crate" : "container";
+      if (handle === void 0 || !handle.methods.includes(method)) return !1;
+      for (let index = 0; index < command.count; index += 1) {
+        if (dependencies.rootState.readRoot() !== sampledRoot) return !1;
+        let before = finite11(
+          readProperty(
+            readProperty(dependencies.rootState.readRoot(), "resource"),
+            command.producedResourceId
+          ) && readProperty(
+            readProperty(
+              readProperty(dependencies.rootState.readRoot(), "resource"),
+              command.producedResourceId
+            ),
+            "amount"
+          )
+        );
+        if (!dependencies.controls.invoke(handle, method).ok) return !1;
+        let after = finite11(
+          readProperty(
+            readProperty(
+              readProperty(dependencies.rootState.readRoot(), "resource"),
+              command.producedResourceId
+            ),
+            "amount"
+          )
+        );
+        if (before === void 0 || after === void 0 || after <= before)
+          return !1;
+        built += after - before;
+      }
+    }
+    return built > 0;
+  }
+  function storageExecutor(dependencies, readSession) {
+    return Object.freeze({
+      execute(decision) {
+        let session = readSession();
+        if (session === null)
+          return stale(
+            "captured-storage-session-missing",
+            "storage sample is unavailable"
+          );
+        if (dependencies.rootState.readRoot() !== session.root)
+          return stale(
+            "captured-storage-root-changed",
+            "captured game root changed"
+          );
+        if (decision.crateValue !== session.crateValue || decision.containerValue !== session.containerValue || decision.expectedFreeCrates !== session.freeCrates || decision.expectedFreeContainers !== session.freeContainers || decision.expectedPriorityResourceIds.some(
+          (id, index) => id !== session.priorityResourceIds[index]
+        ))
+          return stale(
+            "captured-storage-capacity-changed",
+            "storage sample changed"
+          );
+        let adjustments = decision.adjustments;
+        for (let adjustment of adjustments) {
+          let resource = session.resources.get(adjustment.resourceId), rootResource = readProperty(
+            readProperty(dependencies.rootState.readRoot(), "resource"),
+            adjustment.resourceId
+          );
+          if (resource === void 0 || finite11(readProperty(rootResource, "crates")) !== adjustment.expectedCrates || finite11(readProperty(rootResource, "containers")) !== adjustment.expectedContainers || finite11(readProperty(rootResource, "max")) !== adjustment.expectedMaximum)
+            return stale(
+              "captured-storage-resource-changed",
+              `${adjustment.resourceId}: storage allocation changed`
+            );
+        }
+        let ordered = [
+          ...adjustments.filter(
+            (adjustment) => adjustment.crateDelta < 0 || adjustment.containerDelta < 0
+          ),
+          ...adjustments.filter(
+            (adjustment) => adjustment.crateDelta > 0 || adjustment.containerDelta > 0
+          )
+        ];
+        for (let adjustment of ordered) {
+          let handle = dependencies.controls.resolve(
+            `stack-${adjustment.resourceId}`
+          );
+          if (handle === void 0)
+            return rejected(
+              "captured-storage-control-missing",
+              `${adjustment.resourceId}: stack control is unavailable`
+            );
+          for (let [delta, method] of [
+            [
+              adjustment.crateDelta,
+              adjustment.crateDelta < 0 ? "subCrate" : "addCrate"
+            ],
+            [
+              adjustment.containerDelta,
+              adjustment.containerDelta < 0 ? "subCon" : "addCon"
+            ]
+          ])
+            if (delta !== 0) {
+              if (!handle.methods.includes(method))
+                return rejected(
+                  "captured-storage-control-missing",
+                  `${adjustment.resourceId}: ${method} control is unavailable`
+                );
+              for (let index = 0; index < Math.abs(delta); index += 1) {
+                let result = dependencies.controls.invoke(handle, method, [
+                  adjustment.resourceId
+                ]);
+                if (!result.ok)
+                  return rejected(
+                    "captured-storage-control-failed",
+                    result.detail ?? result.reason
+                  );
+              }
+            }
+        }
+        let finalRoot = dependencies.rootState.readRoot();
+        if (finalRoot !== session.root)
+          return stale(
+            "captured-storage-root-changed",
+            "captured game root changed"
+          );
+        let finalResources = readProperty(finalRoot, "resource"), finalCrates = finite11(
+          readProperty(readProperty(finalResources, "Crates"), "amount")
+        ), finalContainers = finite11(
+          readProperty(readProperty(finalResources, "Containers"), "amount")
+        ), crateDelta = adjustments.reduce(
+          (total, adjustment) => total + adjustment.crateDelta,
+          0
+        ), containerDelta = adjustments.reduce(
+          (total, adjustment) => total + adjustment.containerDelta,
+          0
+        );
+        if (finalCrates !== session.freeCrates - crateDelta || finalContainers !== session.freeContainers - containerDelta)
+          return rejected(
+            "captured-storage-assignment-unchanged",
+            "storage pool counts did not match the requested allocation"
+          );
+        for (let adjustment of adjustments) {
+          let resource = readProperty(finalResources, adjustment.resourceId), finalCrateCount = finite11(readProperty(resource, "crates")), finalContainerCount = finite11(
+            readProperty(resource, "containers")
+          ), finalMaximum = finite11(readProperty(resource, "max")), expectedMaximum = adjustment.expectedMaximum + adjustment.crateDelta * session.crateValue + adjustment.containerDelta * session.containerValue;
+          if (finalCrateCount !== adjustment.expectedCrates + adjustment.crateDelta || finalContainerCount !== adjustment.expectedContainers + adjustment.containerDelta || finalMaximum !== expectedMaximum)
+            return rejected(
+              "captured-storage-assignment-unchanged",
+              `${adjustment.resourceId}: allocation did not match the requested change`
+            );
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+  function createCapturedStoragePorts(dependencies) {
+    let session = null, reader = Object.freeze({
+      read() {
+        let sample = readInput6(dependencies);
+        return session = sample.session, sample.input;
+      }
+    }), expansion = Object.freeze({
+      expand(storageToBuild) {
+        return !Number.isFinite(storageToBuild) || storageToBuild <= 0 ? !1 : executeExpansion(dependencies, storageToBuild);
+      }
+    });
+    return Object.freeze({
+      reader,
+      executor: storageExecutor(dependencies, () => session),
+      expansion
+    });
+  }
+
+  // src/domain/economy/storage/storage-allocation.ts
+  function mapValue(map, key, label) {
+    let value = map.get(key);
+    if (value === void 0)
+      throw new TypeError(`missing ${label}`);
+    return value;
+  }
+  function sourceEnabled(source, input) {
+    return source.enabled ? source.kind === "safe-current" ? input.safeReassign : source.kind === "required" ? input.assignPart : !0 : !1;
+  }
+  function targetEligible(source, target) {
+    return source.kind !== "project" && source.kind !== "building" ? !0 : target.unlocked && target.autoBuildEnabled;
+  }
+  function buildAllocationItems(input, managedIds) {
+    let result = [], managedIndexes = new Map(
+      managedIds.map((resourceId, index) => [resourceId, index])
+    );
+    for (let source of input.targetSources) {
+      if (!sourceEnabled(source, input)) continue;
+      let groups = managedIds.map(() => []);
+      for (let target of source.targets) {
+        if (!targetEligible(source, target)) continue;
+        let costs = new Map(
+          target.costs.map((cost) => [cost.resourceId, cost.quantity])
+        ), firstManagedIndex;
+        for (let [resourceId, quantity] of costs) {
+          if (!quantity) continue;
+          let managedIndex = managedIndexes.get(resourceId);
+          managedIndex !== void 0 && (firstManagedIndex === void 0 || managedIndex < firstManagedIndex) && (firstManagedIndex = managedIndex);
+        }
+        firstManagedIndex !== void 0 && groups[firstManagedIndex].push({ target, costs });
+      }
+      for (let index = 0; index < managedIds.length; index++) {
+        let resourceId = managedIds[index], group = groups[index];
+        group.sort(
+          (left, right) => (right.costs.get(resourceId) ?? 0) - (left.costs.get(resourceId) ?? 0)
+        ), result.push(...group);
+      }
+    }
+    return Object.freeze(result);
+  }
+  function freezeDebounceMap(map) {
+    return Object.freeze(
+      Object.fromEntries(
+        Object.entries(map).map(([key, value]) => [
+          key,
+          Object.freeze({ ...value })
+        ])
+      )
+    );
+  }
+  function debounce(entry, desired, current) {
+    if (entry.locked !== void 0)
+      if (desired >= entry.locked || desired <= entry.locked - 2)
+        delete entry.locked;
+      else
+        return entry.locked;
+    if (desired === current)
+      return entry.direction = 0, entry.ticks = 0, desired;
+    let direction = desired > current ? 1 : -1;
+    return entry.direction === direction ? entry.ticks = (entry.ticks ?? 0) + 1 : (entry.direction = direction, entry.ticks = 1), (entry.ticks ?? 0) < 3 ? current : (entry.direction = 0, entry.ticks = 0, entry.previous === desired ? (entry.locked = Math.max(current, desired), entry.locked) : (entry.previous = current, desired));
+  }
+  function planStorageAllocation(input) {
+    if (!input.initialized || input.crateValue <= 0 || input.containerValue <= 0)
+      return null;
+    let resources = new Map(
+      input.resources.map((resource) => [resource.id, resource])
+    );
+    if (resources.size !== input.resources.length)
+      throw new TypeError("duplicate storage resource id");
+    let managedIds = input.priorityResourceIds.filter((id) => {
+      let resource = mapValue(resources, id, `storage resource ${id}`);
+      return resource.unlocked && resource.managed;
+    });
+    if (managedIds.length === 0) return null;
+    let totalCrates = input.freeCrates, totalContainers = input.freeContainers, adjustments = /* @__PURE__ */ new Map(), modifiers = /* @__PURE__ */ new Map();
+    for (let id of managedIds) {
+      let resource = mapValue(resources, id, `storage resource ${id}`), sellAllowed = !input.noTrade && input.autoMarket && resource.autoSellEnabled && resource.autoSellRatio > 0;
+      modifiers.set(
+        id,
+        input.assignExtra ? sellAllowed ? 1.03 / resource.autoSellRatio : 1.03 : 1
+      ), adjustments.set(id, {
+        crate: 0,
+        container: 0,
+        amount: resource.maxQuantity - (resource.currentCrates * input.crateValue + resource.currentContainers * input.containerValue)
+      }), totalCrates += resource.currentCrates, totalContainers += resource.currentContainers;
+    }
+    let storageToBuild = 0, storageToBuildDriver = null, raiseStorageToBuild = (value, label) => {
+      value <= storageToBuild || (storageToBuild = value, storageToBuildDriver = label);
+    }, drivers = /* @__PURE__ */ new Map(), items = buildAllocationItems(input, managedIds);
+    nextItem: for (let item of items) {
+      let currentAssignment = /* @__PURE__ */ new Map(), remainingCrates = totalCrates, remainingContainers = totalContainers;
+      for (let [resourceId, quantity] of item.costs) {
+        let resource = mapValue(
+          resources,
+          resourceId,
+          `target resource ${resourceId}`
+        ), adjustment = adjustments.get(resourceId), modifier = item.target.isList || adjustment === void 0 ? 1 : mapValue(modifiers, resourceId, `storage modifier ${resourceId}`);
+        if (adjustment === void 0 || adjustment.amount >= quantity * modifier) continue;
+        if (!item.target.isList && resource.maxStorage >= 0 && resource.maxStorage < quantity * modifier)
+          continue nextItem;
+        let missing = Math.min(
+          resource.maxStorage >= 0 ? resource.maxStorage : Number.MAX_SAFE_INTEGER,
+          quantity * modifier
+        ) - adjustment.amount, available = remainingCrates * input.crateValue + remainingContainers * input.containerValue;
+        if (item.target.isList || missing <= available) {
+          let assignment = { crate: 0, container: 0 };
+          if (currentAssignment.set(resourceId, assignment), missing > 0 && remainingCrates > 0) {
+            let count = Math.min(
+              Math.ceil(missing / input.crateValue),
+              remainingCrates
+            );
+            remainingCrates -= count, missing -= count * input.crateValue, assignment.crate = count;
+          }
+          if (missing > 0 && remainingContainers > 0) {
+            let count = Math.min(
+              Math.ceil(missing / input.containerValue),
+              remainingContainers
+            );
+            remainingContainers -= count, missing -= count * input.containerValue, assignment.container = count;
+          }
+          missing > 0 && raiseStorageToBuild(missing, `${item.target.label}/${resourceId}`);
+        } else {
+          raiseStorageToBuild(
+            missing - available,
+            `${item.target.label}/${resourceId}`
+          );
+          continue nextItem;
+        }
+      }
+      for (let [resourceId, assignment] of currentAssignment) {
+        let adjustment = mapValue(
+          adjustments,
+          resourceId,
+          `storage adjustment ${resourceId}`
+        );
+        if (input.debug && (assignment.crate > 0 || assignment.container > 0)) {
+          let quantity = item.costs.get(resourceId) ?? 0;
+          drivers.set(
+            resourceId,
+            `${item.target.label} (qty=${quantity.toFixed(
+              1
+            )}, missing≈${(quantity - adjustment.amount).toFixed(1)})`
+          );
+        }
+        adjustment.crate += assignment.crate, adjustment.container += assignment.container, adjustment.amount += assignment.crate * input.crateValue + assignment.container * input.containerValue;
+      }
+      totalCrates = remainingCrates, totalContainers = remainingContainers;
+    }
+    return Object.freeze({
+      crateValue: input.crateValue,
+      containerValue: input.containerValue,
+      expectedFreeCrates: input.freeCrates,
+      expectedFreeContainers: input.freeContainers,
+      storageToBuild,
+      storageToBuildDriver,
+      assignments: Object.freeze(
+        managedIds.map((resourceId) => {
+          let resource = mapValue(
+            resources,
+            resourceId,
+            `storage resource ${resourceId}`
+          ), adjustment = mapValue(
+            adjustments,
+            resourceId,
+            `storage adjustment ${resourceId}`
+          );
+          return Object.freeze({
+            resourceId,
+            expectedCrates: resource.currentCrates,
+            expectedContainers: resource.currentContainers,
+            desiredCrates: adjustment.crate,
+            desiredContainers: adjustment.container,
+            expectedMaximum: resource.maxQuantity,
+            currentQuantity: resource.currentQuantity,
+            storageRequired: resource.storageRequired,
+            driver: drivers.get(resourceId) ?? null
+          });
+        })
+      ),
+      expectedPriorityResourceIds: Object.freeze([...input.priorityResourceIds]),
+      debug: input.debug
+    });
+  }
+  function finalizeStorageAllocation(plan, state) {
+    let crateState = Object.fromEntries(
+      Object.entries(state.crates).map(([key, value]) => [key, { ...value }])
+    ), containerState = Object.fromEntries(
+      Object.entries(state.containers).map(([key, value]) => [
+        key,
+        { ...value }
+      ])
+    ), adjustments = [], logs = [];
+    plan.debug && logs.push(
+      `[storage] plan storageToBuild=${plan.storageToBuild.toFixed(1)}, freeCrates=${plan.expectedFreeCrates}, freeContainers=${plan.expectedFreeContainers}, crateValue=${plan.crateValue}, containerValue=${plan.containerValue}, driver=${plan.storageToBuildDriver ?? "none"}`
+    );
+    for (let assignment of plan.assignments) {
+      let crateEntry = crateState[assignment.resourceId] ?? (crateState[assignment.resourceId] = {}), containerEntry = containerState[assignment.resourceId] ?? (containerState[assignment.resourceId] = {}), targetCrates = debounce(
+        crateEntry,
+        assignment.desiredCrates,
+        assignment.expectedCrates
+      ), targetContainers = debounce(
+        containerEntry,
+        assignment.desiredContainers,
+        assignment.expectedContainers
+      ), crateDelta = targetCrates - assignment.expectedCrates, containerDelta = targetContainers - assignment.expectedContainers;
+      if (adjustments.push(
+        Object.freeze({
+          resourceId: assignment.resourceId,
+          expectedCrates: assignment.expectedCrates,
+          expectedContainers: assignment.expectedContainers,
+          crateDelta,
+          containerDelta,
+          expectedMaximum: assignment.expectedMaximum
+        })
+      ), plan.debug && (crateDelta !== 0 || containerDelta !== 0)) {
+        let base = assignment.expectedMaximum - (assignment.expectedCrates * plan.crateValue + assignment.expectedContainers * plan.containerValue);
+        logs.push(
+          `[storage] ${assignment.resourceId}: crates ${assignment.expectedCrates}→${targetCrates} (Δ${crateDelta >= 0 ? "+" : ""}${crateDelta}), containers ${assignment.expectedContainers}→${targetContainers} (Δ${containerDelta >= 0 ? "+" : ""}${containerDelta}) | currentQty=${assignment.currentQuantity.toFixed(
+            1
+          )}, base=${base.toFixed(1)}, storageRequired=${assignment.storageRequired.toFixed(
+            1
+          )}, driver=${assignment.driver ?? "none"}`
+        );
+      } else plan.debug && assignment.storageRequired > assignment.expectedMaximum && logs.push(
+        `[storage] ${assignment.resourceId}: no change | currentQty=${assignment.currentQuantity.toFixed(
+          1
+        )}, max=${assignment.expectedMaximum.toFixed(1)}, storageRequired=${assignment.storageRequired.toFixed(
+          1
+        )}, held ${assignment.expectedCrates}c/${assignment.expectedContainers}C, wanted ${assignment.desiredCrates}c/${assignment.desiredContainers}C, driver=${assignment.driver ?? "none"}`
+      );
+    }
+    return Object.freeze({
+      decision: Object.freeze({
+        kind: "apply-storage-allocation",
+        crateValue: plan.crateValue,
+        containerValue: plan.containerValue,
+        expectedFreeCrates: plan.expectedFreeCrates,
+        expectedFreeContainers: plan.expectedFreeContainers,
+        expectedPriorityResourceIds: plan.expectedPriorityResourceIds,
+        adjustments: Object.freeze(adjustments),
+        logs: Object.freeze(logs)
+      }),
+      nextState: Object.freeze({
+        crates: freezeDebounceMap(crateState),
+        containers: freezeDebounceMap(containerState)
+      })
+    });
+  }
+  function unfundedStorageCapacity(decision) {
+    let crates = decision.expectedFreeCrates, containers = decision.expectedFreeContainers;
+    for (let adjustment of decision.adjustments)
+      crates -= adjustment.crateDelta, containers -= adjustment.containerDelta;
+    return (crates < 0 ? -crates * decision.crateValue : 0) + (containers < 0 ? -containers * decision.containerValue : 0);
+  }
+  var EMPTY_STORAGE_ALLOCATION_STATE = Object.freeze({
+    crates: Object.freeze({}),
+    containers: Object.freeze({})
+  });
+
+  // src/application/storage-allocation.ts
+  var SUCCEEDED7 = Object.freeze({
+    status: "succeeded"
+  });
+  function createStorageAllocationAutomation(dependencies) {
+    let state = EMPTY_STORAGE_ALLOCATION_STATE;
+    return Object.freeze({
+      run() {
+        let measure = createPhaseMeasure(dependencies.diagnostics), input = measure(
+          "autoStorage.read",
+          () => dependencies.reader.read()
+        ), rawPlan = measure(
+          "autoStorage.plan",
+          () => planStorageAllocation(input)
+        );
+        if (rawPlan === null || rawPlan.storageToBuild > 0 && measure(
+          "autoStorage.expand",
+          () => dependencies.expansion.expand(rawPlan.storageToBuild)
+        ))
+          return SUCCEEDED7;
+        let finalized = finalizeStorageAllocation(rawPlan, state), unfunded = unfundedStorageCapacity(finalized.decision);
+        if (unfunded > 0 && measure(
+          "autoStorage.expand",
+          () => dependencies.expansion.expand(unfunded)
+        ))
+          return SUCCEEDED7;
+        let outcome = dependencies.executor.execute(finalized.decision);
+        return outcome.status === "succeeded" && (state = finalized.nextState), outcome;
+      },
+      readState() {
+        return state;
+      }
+    });
+  }
+
   // src/adapters/evolve/economy/production/captured-craft-costs.ts
   var CRAFT_ROW_PREFIX = "res", COST_ENTRY = /<div>([^<]*)<\/div>/g;
   function resolveResourceId(root, name) {
@@ -9590,7 +10394,7 @@
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
   var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
-  function finite11(value) {
+  function finite12(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readSettingsRecord(value) {
@@ -9601,7 +10405,7 @@
     return typeof value == "boolean" ? value : !0;
   }
   function craftPreserve(settings, id) {
-    let value = finite11(settings[`foundry_p_${id}`]);
+    let value = finite12(settings[`foundry_p_${id}`]);
     return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
   }
   function craftAllButtonRendered(getDocument, id) {
@@ -9627,7 +10431,7 @@
     if (!isRecord(resources)) return;
     let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
     for (let [resourceId, costPerCraft] of costs) {
-      let resource = readProperty(resources, resourceId), currentQuantity2 = finite11(readProperty(resource, "amount")), maxQuantity = finite11(readProperty(resource, "max")), rateOfChange = finite11(readProperty(resource, "diff"));
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite12(readProperty(resource, "amount")), maxQuantity = finite12(readProperty(resource, "max")), rateOfChange = finite12(readProperty(resource, "diff"));
       if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
         return;
       let base = {
@@ -9664,7 +10468,7 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite11(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite12(dependencies.readPeriods());
         return session = Object.freeze({
           root,
           demand: dependencies.readDemand(),
@@ -9682,7 +10486,7 @@
         let craftable = readProperty(
           readProperty(session.root, "resource"),
           craftableId
-        ), craftableAmount = finite11(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
+        ), craftableAmount = finite12(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
           dependencies,
           {
             ...session,
@@ -9731,7 +10535,7 @@
           "resource"
         );
         for (let spend of decision.spend) {
-          let actual = finite11(
+          let actual = finite12(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
@@ -9752,7 +10556,7 @@
         if (!result.ok)
           return rejected("craft-control-failed", result.detail ?? result.reason);
         for (let spend of decision.spend) {
-          let actual = finite11(
+          let actual = finite12(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
@@ -9945,6 +10749,7 @@
     autoExtractor: !1,
     autoPower: !1,
     autoFactory: !1,
+    autoStorage: !1,
     autoJobs: !1
   });
   function isEnabled(settings, key) {
@@ -9982,6 +10787,14 @@
       }),
       costs: buildCosts,
       readSettings: () => readStoredSettings(storage),
+      readCapturedStorageRequired: (resourceIds) => {
+        let sample = readDemand();
+        return Object.freeze(
+          Object.fromEntries(
+            resourceIds.map((id) => [id, sample.storageRequired(id)])
+          )
+        );
+      },
       // Reported once per distinct reason: a candidate the cycle cannot price or a catalog it cannot
       // read is otherwise dropped in silence, which is how a composition gap survives a whole session.
       onSkipped: (key, reason) => reportOnce(`progression skipped ${key}: ${reason}`),
@@ -10034,23 +10847,34 @@
     }), graphene = createCapturedGrapheneAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
+    }), queueReservations = createCapturedQueueReservationSource({
+      rootState: pageCapture2.rootState,
+      resources: createCapturedResourceSource(pageCapture2.rootState),
+      readOfferedTechs: progression.readOfferedTechs,
+      costs: createCapturedActionCostReader({
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls
+      })
     }), demand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
       construction: progression.observations,
       readOfferedTechs: progression.readOfferedTechs,
-      reservations: createCapturedQueueReservationSource({
-        rootState: pageCapture2.rootState,
-        resources: createCapturedResourceSource(pageCapture2.rootState),
-        readOfferedTechs: progression.readOfferedTechs,
-        costs: createCapturedActionCostReader({
-          rootState: pageCapture2.rootState,
-          controls: pageCapture2.controls
-        })
-      }),
+      reservations: queueReservations,
       readSettings: () => readStoredSettings(storage)
     }), demandThisCycle;
     readDemand = () => demandThisCycle ??= demand.sample();
-    let ratios = createCapturedProductionRatios({
+    let storagePorts = createCapturedStoragePorts({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage),
+      readStorageRequired: (resourceId) => readDemand().storageRequired(resourceId),
+      reservations: queueReservations,
+      construction: progression.observations,
+      nowMs: () => Date.now()
+    }), storageAutomation = createStorageAllocationAutomation({
+      ...storagePorts,
+      diagnostics
+    }), ratios = createCapturedProductionRatios({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage),
@@ -10166,7 +10990,7 @@
       result.outcome.status !== "succeeded" && logError(
         `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
-    }, factoryDiscoveryAttempted = !1, smelterDiscoveryAttempted = !1, ensureSmelterControls = () => {
+    }, factoryDiscoveryAttempted = !1, smelterDiscoveryAttempted = !1, storageDiscoveryAttempted = !1, ensureSmelterControls = () => {
       if (pageCapture2.controls.resolve(SMELTER_CONTROL) !== void 0) return;
       let city = readProperty(pageCapture2.rootState.readRoot(), "city"), smelterState = readProperty(city, "smelter"), race = readProperty(pageCapture2.rootState.readRoot(), "race"), count = readProperty(smelterState, "count"), exempt = !!readProperty(race, "cataclysm") || !!readProperty(race, "orbit_decayed") || !!readProperty(
         readProperty(pageCapture2.rootState.readRoot(), "tech"),
@@ -10185,6 +11009,26 @@
       ]);
       result.outcome.status !== "succeeded" && logError(
         `smelter discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
+    }, ensureStorageControls = () => {
+      if (pageCapture2.controls.resolve(STORAGE_CONSTRUCTION_CONTROL) !== void 0 || storageDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0 || readProperty(
+        readProperty(pageCapture2.rootState.readRoot(), "settings"),
+        "showStorage"
+      ) !== !0)
+        return;
+      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      if (marketTabs === void 0) return;
+      storageDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 4
+        }),
+        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 1 })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `storage discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
     }, ensureFactoryControls = () => {
       if (pageCapture2.controls.resolve(FACTORY_CONTROL) !== void 0) return;
@@ -10246,7 +11090,7 @@
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
+          isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
             QUARRY_CONTROL,
             !!readProperty(
               readProperty(pageCapture2.rootState.readRoot(), "race"),

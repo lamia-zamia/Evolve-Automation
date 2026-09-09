@@ -47,6 +47,11 @@ import {
   createCapturedFactoryAutomation,
   FACTORY_CONTROL,
 } from "../adapters/evolve/economy/production/captured-factory.ts";
+import {
+  createCapturedStoragePorts,
+  STORAGE_CONSTRUCTION_CONTROL,
+} from "../adapters/evolve/economy/storage/captured-storage.ts";
+import { createStorageAllocationAutomation } from "../application/storage-allocation.ts";
 import { createCapturedCraftCosts } from "../adapters/evolve/economy/production/captured-craft-costs.ts";
 import {
   createCapturedCraftExecutor,
@@ -119,6 +124,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoExtractor: false,
   autoPower: false,
   autoFactory: false,
+  autoStorage: false,
   autoJobs: false,
 });
 
@@ -172,6 +178,14 @@ export function startCapturedRuntime({
     }),
     costs: buildCosts,
     readSettings: () => readStoredSettings(storage),
+    readCapturedStorageRequired: (resourceIds) => {
+      const sample = readDemand();
+      return Object.freeze(
+        Object.fromEntries(
+          resourceIds.map((id) => [id, sample.storageRequired(id)]),
+        ),
+      );
+    },
     // Reported once per distinct reason: a candidate the cycle cannot price or a catalog it cannot
     // read is otherwise dropped in silence, which is how a composition gap survives a whole session.
     onSkipped: (key, reason) =>
@@ -239,23 +253,38 @@ export function startCapturedRuntime({
   // The demand sample is planned at most once per cycle and shared by everything that reads it.
   // The research offer snapshot is already captured by progression; sharing it here keeps queue
   // reservations and demand on one catalog without buying another discovery pass.
+  const queueReservations = createCapturedQueueReservationSource({
+    rootState: pageCapture.rootState,
+    resources: createCapturedResourceSource(pageCapture.rootState),
+    readOfferedTechs: progression.readOfferedTechs,
+    costs: createCapturedActionCostReader({
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+    }),
+  });
   const demand = createCapturedResourceDemand({
     rootState: pageCapture.rootState,
     construction: progression.observations,
     readOfferedTechs: progression.readOfferedTechs,
-    reservations: createCapturedQueueReservationSource({
-      rootState: pageCapture.rootState,
-      resources: createCapturedResourceSource(pageCapture.rootState),
-      readOfferedTechs: progression.readOfferedTechs,
-      costs: createCapturedActionCostReader({
-        rootState: pageCapture.rootState,
-        controls: pageCapture.controls,
-      }),
-    }),
+    reservations: queueReservations,
     readSettings: () => readStoredSettings(storage),
   });
   let demandThisCycle: CapturedDemandSample | undefined;
   readDemand = () => (demandThisCycle ??= demand.sample());
+  const storagePorts = createCapturedStoragePorts({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    readStorageRequired: (resourceId) =>
+      readDemand().storageRequired(resourceId),
+    reservations: queueReservations,
+    construction: progression.observations,
+    nowMs: () => Date.now(),
+  });
+  const storageAutomation = createStorageAllocationAutomation({
+    ...storagePorts,
+    diagnostics,
+  });
   const ratios = createCapturedProductionRatios({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -456,6 +485,7 @@ export function startCapturedRuntime({
 
   let factoryDiscoveryAttempted = false;
   let smelterDiscoveryAttempted = false;
+  let storageDiscoveryAttempted = false;
   const ensureSmelterControls = () => {
     if (pageCapture.controls.resolve(SMELTER_CONTROL) !== undefined) return;
     const city = readProperty(pageCapture.rootState.readRoot(), "city");
@@ -494,6 +524,40 @@ export function startCapturedRuntime({
     if (result.outcome.status !== "succeeded") {
       logError(
         `smelter discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+
+  const ensureStorageControls = () => {
+    if (
+      pageCapture.controls.resolve(STORAGE_CONSTRUCTION_CONTROL) !== undefined
+    ) {
+      return;
+    }
+    if (storageDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    if (
+      readProperty(
+        readProperty(pageCapture.rootState.readRoot(), "settings"),
+        "showStorage",
+      ) !== true
+    ) {
+      return;
+    }
+    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    if (marketTabs === undefined) return;
+    storageDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 4,
+      }),
+      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 1 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `storage discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
     }
   };
@@ -594,6 +658,10 @@ export function startCapturedRuntime({
       return;
     }
     try {
+      if (isEnabled(settings, "autoStorage")) {
+        ensureStorageControls();
+        storageAutomation.run();
+      }
       if (
         isEnabled(settings, "autoBuild") ||
         isEnabled(settings, "buildingAlwaysClick")

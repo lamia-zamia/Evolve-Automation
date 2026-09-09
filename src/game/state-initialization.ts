@@ -313,6 +313,7 @@ export function createStateInitialization({
         return crateCost({
           smoldering: Boolean(race["smoldering"]),
           kindlingKindred: Boolean(race["kindling_kindred"]),
+          iceAge: Boolean(race["iceage"]),
           ironWood: Boolean(race["iron_wood"]),
         });
       },
