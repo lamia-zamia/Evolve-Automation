@@ -18,6 +18,8 @@ export interface CapturedJobCatalogEntry {
   /** DeadSpace uses -1 for an uncapped ordinary job. */
   readonly maximum: number;
   readonly display: boolean;
+  readonly unlocked: boolean;
+  readonly managed: boolean;
   readonly isDefault: boolean;
 }
 
@@ -29,6 +31,7 @@ export interface CapturedJobCatalog {
 export interface CapturedJobCatalogReaderDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly readSettings: () => unknown;
   readonly onSkipped?: (controlId: string, reason: string) => void;
 }
 
@@ -47,6 +50,7 @@ function finiteMaximum(value: unknown): number | undefined {
 function readCatalog(
   root: unknown,
   controls: GameControlRegistry,
+  settingsValue: unknown,
   onSkipped: (controlId: string, reason: string) => void,
 ): CapturedJobCatalog | undefined {
   const civic = readProperty(root, "civic");
@@ -55,6 +59,7 @@ function readCatalog(
   if (typeof defaultJobId !== "string" || defaultJobId.length === 0) {
     return undefined;
   }
+  const settings = isRecord(settingsValue) ? settingsValue : undefined;
 
   const jobs: CapturedJobCatalogEntry[] = [];
   const seen = new Set<string>();
@@ -103,6 +108,10 @@ function readCatalog(
       onSkipped(controlId, "ordinary job visibility is not boolean");
       continue;
     }
+    // DeadSpace's job surface defines unlocked from civic.display and the script's managed
+    // setting is only effective for an unlocked job. Missing or malformed settings remain false.
+    const unlocked = display;
+    const managed = unlocked && readProperty(settings, `job_${id}`) === true;
     jobs.push(
       Object.freeze({
         id,
@@ -111,6 +120,8 @@ function readCatalog(
         workers,
         maximum,
         display,
+        unlocked,
+        managed,
         isDefault: id === defaultJobId,
       }),
     );
@@ -127,8 +138,10 @@ function readCatalog(
 export function createCapturedJobCatalogReader({
   rootState,
   controls,
+  readSettings,
   onSkipped,
 }: CapturedJobCatalogReaderDependencies): () => CapturedJobCatalog | undefined {
   const reportSkipped = onSkipped ?? (() => {});
-  return () => readCatalog(rootState.readRoot(), controls, reportSkipped);
+  return () =>
+    readCatalog(rootState.readRoot(), controls, readSettings(), reportSkipped);
 }

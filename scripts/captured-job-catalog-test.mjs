@@ -36,6 +36,7 @@ const reader = createCapturedJobCatalogReader({
     subscribeRootReplaced: () => () => {},
   },
   controls,
+  readSettings: () => ({ job_unemployed: true, job_farmer: false }),
   onSkipped: (id, reason) => skipped.push({ id, reason }),
 });
 
@@ -49,6 +50,8 @@ assert.deepEqual(reader(), {
       workers: 4,
       maximum: 0,
       display: true,
+      unlocked: true,
+      managed: true,
       isDefault: true,
     },
     {
@@ -58,6 +61,8 @@ assert.deepEqual(reader(), {
       workers: 3,
       maximum: 8,
       display: true,
+      unlocked: true,
+      managed: false,
       isDefault: false,
     },
     {
@@ -67,6 +72,8 @@ assert.deepEqual(reader(), {
       workers: 0,
       maximum: 0,
       display: false,
+      unlocked: false,
+      managed: false,
       isDefault: false,
     },
   ],
@@ -101,6 +108,7 @@ const incomplete = createCapturedJobCatalogReader({
     }),
     invoke: () => ({ ok: false, reason: "unknown-control" }),
   },
+  readSettings: () => ({}),
 });
 assert.equal(incomplete(), undefined);
 
@@ -130,6 +138,7 @@ const mismatched = createCapturedJobCatalogReader({
     }),
     invoke: () => ({ ok: false, reason: "unknown-control" }),
   },
+  readSettings: () => ({ job_unemployed: true }),
 });
 assert.equal(mismatched(), undefined);
 

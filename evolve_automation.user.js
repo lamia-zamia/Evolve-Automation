@@ -4401,13 +4401,13 @@
   function finiteMaximum(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= -1 ? value : void 0;
   }
-  function readCatalog(root, controls, onSkipped) {
+  function readCatalog(root, controls, settingsValue, onSkipped) {
     let civic = readProperty(root, "civic");
     if (!isRecord(civic)) return;
     let defaultJobId = readProperty(civic, "d_job");
     if (typeof defaultJobId != "string" || defaultJobId.length === 0)
       return;
-    let jobs = [], seen = /* @__PURE__ */ new Set();
+    let settings = isRecord(settingsValue) ? settingsValue : void 0, jobs = [], seen = /* @__PURE__ */ new Set();
     for (let controlId of controls.capturedElementIds()) {
       if (!controlId.startsWith("civ-") || controlId.length <= 4)
         continue;
@@ -4448,6 +4448,7 @@
         onSkipped(controlId, "ordinary job visibility is not boolean");
         continue;
       }
+      let unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0;
       jobs.push(
         Object.freeze({
           id,
@@ -4456,6 +4457,8 @@
           workers,
           maximum,
           display,
+          unlocked,
+          managed,
           isDefault: id === defaultJobId
         })
       );
@@ -4468,11 +4471,12 @@
   function createCapturedJobCatalogReader({
     rootState,
     controls,
+    readSettings,
     onSkipped
   }) {
     let reportSkipped = onSkipped ?? (() => {
     });
-    return () => readCatalog(rootState.readRoot(), controls, reportSkipped);
+    return () => readCatalog(rootState.readRoot(), controls, readSettings(), reportSkipped);
   }
 
   // src/adapters/evolve/civic/captured-job-controls.ts
@@ -4779,7 +4783,8 @@
       value: void 0
     }, readJobCatalog = createCapturedJobCatalogReader({
       rootState: dependencies.rootState,
-      controls: dependencies.controls
+      controls: dependencies.controls,
+      readSettings: dependencies.readSettings
     }), executor = createExecutor(dependencies, sessionRef), reader = Object.freeze({
       readCycle() {
         if (dependencies.controls.resolve(FOUNDRY_CONTROL) === void 0)

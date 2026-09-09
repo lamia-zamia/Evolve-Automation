@@ -470,6 +470,7 @@ export function createCapturedCraftsmenAutomation(
   const readJobCatalog = createCapturedJobCatalogReader({
     rootState: dependencies.rootState,
     controls: dependencies.controls,
+    readSettings: dependencies.readSettings,
   });
   const executor = createExecutor(dependencies, sessionRef);
   const reader: JobsReader = Object.freeze({
