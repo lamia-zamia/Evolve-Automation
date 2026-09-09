@@ -4538,6 +4538,7 @@
     if (id === "professor") return readProfessorSmartMaximum(root);
     if (id === "banker") return readBankerSmartMaximum(root, readDemand);
     if (id === "farmer") return readFarmerSmartMaximum(root);
+    if (id === "hunter") return readHunterSmartMaximum(root, readDemand);
     if (id === "lumberjack")
       return readLumberjackSmartMaximum(root, readDemand);
     if (id === "quarry_worker")
@@ -4652,6 +4653,25 @@
   function readFarmerSmartMaximum(root) {
     let race = readProperty(root, "race");
     return isRecord(race) ? hasRaceFlag(race, "unfathomable") ? Number.MAX_SAFE_INTEGER : hasRaceFlag(race, "artifical") ? 0 : null : null;
+  }
+  function readHunterSmartMaximum(root, readDemand) {
+    let race = readProperty(root, "race");
+    if (!isRecord(race)) return null;
+    if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
+    let uncertain = !1;
+    if (hasRaceFlag(race, "evil") || hasRaceFlag(race, "artifical")) {
+      let fursUnlocked = readResourceUnlocked(root, "Furs");
+      if (fursUnlocked === void 0) return;
+      if (fursUnlocked) {
+        if (readResourceUseful(root, "Furs", readDemand) === !0) return Number.MAX_SAFE_INTEGER;
+        uncertain = !0;
+      }
+    }
+    if (hasRaceFlag(race, "soul_eater") && hasRaceFlag(race, "evil") && readProperty(race, "species") !== "wendigo" && !hasRaceFlag(race, "kindling_kindred") && !hasRaceFlag(race, "smoldering")) {
+      if (readResourceUseful(root, "Lumber", readDemand) === !0) return Number.MAX_SAFE_INTEGER;
+      uncertain = !0;
+    }
+    return uncertain ? void 0 : null;
   }
   function resourceStorageRatio(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id), amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finiteNumber(readProperty(resource, "max"));

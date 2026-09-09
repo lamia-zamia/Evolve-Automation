@@ -869,6 +869,71 @@ assert.equal(
   "Unfathomable Farmer restores the upstream uncapped maximum",
 );
 
+const unfathomableHunterReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { unfathomable: 1 },
+      civic: {
+        ...root.civic,
+        d_job: "hunter",
+        hunter: {
+          job: "hunter",
+          assigned: 1,
+          workers: 1,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-hunter"],
+  },
+  readSettings: () => ({ job_s_hunter: true }),
+});
+assert.equal(
+  unfathomableHunterReader().jobs[0].smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "Unfathomable Hunter keeps the upstream later uncapped maximum",
+);
+
+const fursHunterReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { evil: 1 },
+      resource: { Furs: { display: true, amount: 10, max: 100 } },
+      civic: {
+        ...root.civic,
+        d_job: "hunter",
+        hunter: {
+          job: "hunter",
+          assigned: 1,
+          workers: 1,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-hunter"],
+  },
+  readSettings: () => ({ job_s_hunter: true }),
+});
+assert.equal(
+  fursHunterReader().jobs[0].smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "Evil Hunter stays uncapped when captured Furs storage is useful",
+);
+
 const lumberjackUsefulReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

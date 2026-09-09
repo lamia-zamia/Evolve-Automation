@@ -164,6 +164,7 @@ function readSmartMaximum(
   if (id === "professor") return readProfessorSmartMaximum(root);
   if (id === "banker") return readBankerSmartMaximum(root, readDemand);
   if (id === "farmer") return readFarmerSmartMaximum(root);
+  if (id === "hunter") return readHunterSmartMaximum(root, readDemand);
   if (id === "lumberjack") {
     return readLumberjackSmartMaximum(root, readDemand);
   }
@@ -420,6 +421,41 @@ function readFarmerSmartMaximum(root: unknown): number | null | undefined {
   if (!isRecord(race)) return null;
   if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
   return hasRaceFlag(race, "artifical") ? 0 : null;
+}
+
+function readHunterSmartMaximum(
+  root: unknown,
+  readDemand?: () => CapturedDemandSample,
+): number | null | undefined {
+  const race = readProperty(root, "race");
+  if (!isRecord(race)) return null;
+  if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
+
+  let uncertain = false;
+  if (hasRaceFlag(race, "evil") || hasRaceFlag(race, "artifical")) {
+    const fursUnlocked = readResourceUnlocked(root, "Furs");
+    if (fursUnlocked === undefined) return undefined;
+    if (fursUnlocked) {
+      const useful = readResourceUseful(root, "Furs", readDemand);
+      if (useful === true) return Number.MAX_SAFE_INTEGER;
+      uncertain = true;
+    }
+  }
+
+  const demonicLumber =
+    hasRaceFlag(race, "soul_eater") &&
+    hasRaceFlag(race, "evil") &&
+    readProperty(race, "species") !== "wendigo" &&
+    !hasRaceFlag(race, "kindling_kindred") &&
+    !hasRaceFlag(race, "smoldering");
+  if (demonicLumber) {
+    const useful = readResourceUseful(root, "Lumber", readDemand);
+    if (useful === true) return Number.MAX_SAFE_INTEGER;
+    uncertain = true;
+  }
+
+  // The ordinary Farmer/Hunter food formula still needs live consumption and history fields.
+  return uncertain ? undefined : null;
 }
 
 function resourceStorageRatio(root: unknown, id: string): number | undefined {
