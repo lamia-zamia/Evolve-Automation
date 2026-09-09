@@ -5063,8 +5063,8 @@
     return uraniumUnlocked === void 0 ? void 0 : readAnyUsefulSmartMaximum(root, uraniumUnlocked ? ["Uranium", "Coal"] : ["Coal"], readDemand);
   }
   function readCementWorkerSmartMaximum(root, settings, count, readDemand) {
-    let stoneRatio = resourceStorageRatio(root, "Stone"), stoneDiff = resourceDiff(root, "Stone"), cementRatio = resourceStorageRatio(root, "Cement");
-    if (stoneRatio === void 0 || stoneDiff === void 0 || cementRatio === void 0 || !(cementRatio < 0.99 || readDemand?.().isDemanded("Cement") === !0)) return;
+    let stoneRatio = resourceStorageRatio(root, "Stone"), stoneDiff = resourceDiff(root, "Stone");
+    if (stoneRatio === void 0 || stoneDiff === void 0 || !(readResourceUseful(root, "Cement", readDemand) === !0)) return;
     let maximum = Number.MAX_SAFE_INTEGER;
     if (stoneRatio < 0.1) {
       let stoneRate = stoneDiff + count * 3 - 5;

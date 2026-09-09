@@ -934,6 +934,41 @@ assert.equal(
   "Cement Worker uses captured Stone and Smoldering quarry rates while Cement is useful",
 );
 
+const cementNegativeRateReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      resource: {
+        Stone: { amount: 5, max: 100, diff: 0 },
+        Cement: { amount: 100, max: 100, diff: -1 },
+      },
+      civic: {
+        ...root.civic,
+        d_job: "cement_worker",
+        cement_worker: {
+          job: "cement_worker",
+          assigned: 4,
+          workers: 4,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-cement_worker"],
+  },
+  readSettings: () => ({ job_s_cement_worker: true }),
+});
+assert.equal(
+  cementNegativeRateReader().jobs[0].smartMaximum,
+  2,
+  "Cement Worker treats a full but consuming Cement store as useful",
+);
+
 const artificialFarmerReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

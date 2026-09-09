@@ -886,16 +886,10 @@ function readCementWorkerSmartMaximum(
 ): number | undefined {
   const stoneRatio = resourceStorageRatio(root, "Stone");
   const stoneDiff = resourceDiff(root, "Stone");
-  const cementRatio = resourceStorageRatio(root, "Cement");
-  if (
-    stoneRatio === undefined ||
-    stoneDiff === undefined ||
-    cementRatio === undefined
-  ) {
+  if (stoneRatio === undefined || stoneDiff === undefined) {
     return undefined;
   }
-  const cementUseful =
-    cementRatio < 0.99 || readDemand?.().isDemanded("Cement") === true;
+  const cementUseful = readResourceUseful(root, "Cement", readDemand) === true;
   // A full, non-demanded Cement store may still be useful because of an eject/supply modifier;
   // its fallback also needs per-source production, which the DeadSpace root does not capture.
   if (!cementUseful) return undefined;
