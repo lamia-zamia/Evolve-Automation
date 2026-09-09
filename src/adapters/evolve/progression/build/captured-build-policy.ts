@@ -104,6 +104,15 @@ const NON_CITY_NON_OPERATING_EXCEPTIONS: ReadonlySet<string> = new Set([
   "base_camp",
 ]);
 
+// DeadSpace 1.5.0 creates city gather actions without passing the city region to `buildTemplate`,
+// so their live controls render as `undefined-food`/`undefined-stone`. The persisted automation
+// settings still use the stable city binding; keep both identities in the captured target.
+const CITY_ELEMENT_BINDING_ALIASES: Readonly<Record<string, string>> =
+  Object.freeze({
+    "undefined-food": "city-food",
+    "undefined-stone": "city-stone",
+  });
+
 function readFiniteSetting(
   settings: Record<PropertyKey, unknown>,
   key: string,
@@ -434,14 +443,14 @@ function readTarget(
   context: Readonly<CityRuleContext>,
   onSkipped: (key: string, reason: string) => void,
 ): Readonly<CapturedBuildTarget> | undefined {
-  if (!elementId.startsWith("city-") || elementId.length === "city-".length) {
+  const binding = CITY_ELEMENT_BINDING_ALIASES[elementId] ?? elementId;
+  if (!binding.startsWith("city-") || binding.length === "city-".length) {
     return undefined;
   }
-  const binding = elementId;
   // `bat…` is the script's managed-building switch. Non-building city actions have no such key in
   // the reset settings and therefore remain outside this adapter's construction family.
   if (settings[`bat${binding}`] !== true) return undefined;
-  const id = elementId.slice("city-".length);
+  const id = binding.slice("city-".length);
   const state = readProperty(city, id);
   if (!isRecord(state)) {
     onSkipped(binding, "captured city state is unavailable");

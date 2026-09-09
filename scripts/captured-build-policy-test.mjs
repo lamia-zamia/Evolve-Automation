@@ -964,4 +964,44 @@ assert.deepEqual(
   );
 }
 
+{
+  const reader = createCapturedBuildPolicyReader({
+    readKnowledge: () => openKnowledge,
+    rootState: {
+      readRoot: () => ({ city: { food: { count: 0 }, stone: { count: 1 } } }),
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => ["undefined-food", "undefined-stone"],
+    },
+    getSettings: () => ({
+      "batcity-food": true,
+      "bld_w_city-food": 7,
+      "batcity-stone": false,
+    }),
+  });
+  assert.deepEqual(
+    reader().buildings.map(({ key, elementId, region, id, weighting }) => ({
+      key,
+      elementId,
+      region,
+      id,
+      weighting,
+    })),
+    [
+      {
+        key: "city-food",
+        elementId: "undefined-food",
+        region: "city",
+        id: "food",
+        weighting: 7,
+      },
+    ],
+    "gather controls use their city binding for settings while retaining the rendered element id",
+  );
+}
+
 console.log("captured-build-policy ok");

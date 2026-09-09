@@ -1449,7 +1449,10 @@
     "guard_post",
     "port",
     "base_camp"
-  ]);
+  ]), CITY_ELEMENT_BINDING_ALIASES = Object.freeze({
+    "undefined-food": "city-food",
+    "undefined-stone": "city-stone"
+  });
   function readFiniteSetting(settings, key, defaultValue) {
     let value = settings[key];
     return value === void 0 ? defaultValue : typeof value == "number" && Number.isFinite(value) ? value : void 0;
@@ -1618,11 +1621,9 @@
     );
   }
   function readTarget2(settings, city, elementId, controls, context, onSkipped) {
-    if (!elementId.startsWith("city-") || elementId.length === 5)
-      return;
-    let binding = elementId;
-    if (settings[`bat${binding}`] !== !0) return;
-    let id = elementId.slice(5), state = readProperty(city, id);
+    let binding = CITY_ELEMENT_BINDING_ALIASES[elementId] ?? elementId;
+    if (!binding.startsWith("city-") || binding.length === 5 || settings[`bat${binding}`] !== !0) return;
+    let id = binding.slice(5), state = readProperty(city, id);
     if (!isRecord(state)) {
       onSkipped(binding, "captured city state is unavailable");
       return;
