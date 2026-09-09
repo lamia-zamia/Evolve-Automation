@@ -5722,6 +5722,15 @@
   function tokenFor(catalog, id) {
     return catalog.jobs.find((job) => job.id === id)?.token ?? null;
   }
+  function hasCompleteJobCatalog(root, catalog) {
+    let civic = readProperty(root, "civic");
+    if (!isRecord(civic)) return !1;
+    let capturedIds = new Set(catalog.jobs.map((job) => job.id));
+    for (let [id, value] of Object.entries(civic))
+      if (isRecord(value) && typeof readProperty(value, "job") == "string" && !capturedIds.has(id))
+        return !1;
+    return !0;
+  }
   function readCycle(root, settingsValue, catalogReader) {
     let settings = isRecord(settingsValue) ? settingsValue : {};
     if (settings.authorityManage === !0) return;
@@ -5733,7 +5742,7 @@
     );
     if (population === void 0) return;
     let catalog = catalogReader();
-    if (catalog === void 0) return;
+    if (catalog === void 0 || !hasCompleteJobCatalog(root, catalog)) return;
     let servantState = catalog.servantState, manageServants = settings.jobManageServants === !0;
     if (manageServants && servantState === null) return;
     let defaultJobToken = catalog.jobs.find((job) => job.isDefault)?.token;

@@ -98,6 +98,21 @@ function tokenFor(
   return catalog.jobs.find((job) => job.id === id)?.token ?? null;
 }
 
+function hasCompleteJobCatalog(
+  root: unknown,
+  catalog: Readonly<CapturedJobCatalog>,
+): boolean {
+  const civic = readProperty(root, "civic");
+  if (!isRecord(civic)) return false;
+  const capturedIds = new Set(catalog.jobs.map((job) => job.id));
+  for (const [id, value] of Object.entries(civic)) {
+    if (isRecord(value) && typeof readProperty(value, "job") === "string") {
+      if (!capturedIds.has(id)) return false;
+    }
+  }
+  return true;
+}
+
 function readCycle(
   root: unknown,
   settingsValue: unknown,
@@ -123,6 +138,7 @@ function readCycle(
   if (population === undefined) return undefined;
   const catalog = catalogReader();
   if (catalog === undefined) return undefined;
+  if (!hasCompleteJobCatalog(root, catalog)) return undefined;
   const servantState = catalog.servantState;
   const manageServants = settings["jobManageServants"] === true;
   if (manageServants && servantState === null) return undefined;

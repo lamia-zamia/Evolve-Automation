@@ -78,4 +78,26 @@ assert.equal(
   "authority management stays unavailable until its live inputs are captured",
 );
 
+const partialAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => root },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed"],
+    resolve: (elementId) =>
+      elementId === "civ-unemployed"
+        ? {
+            elementId,
+            generation: 1,
+            methods: ["add", "sub", "setDefault"],
+          }
+        : undefined,
+  },
+  readSettings: () => ({ job_unemployed: true, job_farmer: true }),
+});
+assert.equal(
+  partialAutomation.reader.readCycle(false).available,
+  false,
+  "a partial live job catalog cannot plan against uncaptured workers",
+);
+
 console.log("captured-ordinary-jobs ok");
