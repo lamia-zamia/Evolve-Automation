@@ -4501,6 +4501,7 @@
           id,
           controlId,
           kind: jobKind(id),
+          smart: readProperty(settings, `job_s_${id}`) === !0,
           assigned,
           workers,
           maximum,

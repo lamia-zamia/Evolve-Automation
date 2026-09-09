@@ -15,6 +15,7 @@ export interface CapturedJobCatalogEntry {
   readonly id: string;
   readonly controlId: string;
   readonly kind: JobKind;
+  readonly smart: boolean;
   readonly assigned: number;
   readonly workers: number;
   /** DeadSpace uses -1 for an uncapped ordinary job. */
@@ -206,6 +207,7 @@ function readCatalog(
         id,
         controlId,
         kind: jobKind(id),
+        smart: readProperty(settings, `job_s_${id}`) === true,
         assigned,
         workers,
         maximum,
