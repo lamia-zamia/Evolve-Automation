@@ -5025,8 +5025,10 @@
   }
   function readResourceUseful(root, id, readDemand) {
     let ratio = resourceStorageRatio(root, id);
-    if (ratio !== void 0 && (ratio < 0.99 || readDemand?.().isDemanded(id) === !0))
-      return !0;
+    if (ratio === void 0) return;
+    if (ratio < 0.99 || readDemand?.().isDemanded(id) === !0) return !0;
+    let diff = resourceDiff(root, id);
+    if (diff !== void 0 && diff < 0) return !0;
   }
   function readLumberjackSmartMaximum(root, readDemand) {
     return readResourceUseful(root, "Lumber", readDemand) === !0 ? Number.MAX_SAFE_INTEGER : void 0;

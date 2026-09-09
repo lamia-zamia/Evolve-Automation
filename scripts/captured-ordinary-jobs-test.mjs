@@ -4,6 +4,7 @@ import {
   createCapturedFullJobsAutomation,
   createCapturedOrdinaryJobsAutomation,
 } from "../src/adapters/evolve/civic/captured-ordinary-jobs.ts";
+import { createCapturedJobCatalogReader } from "../src/adapters/evolve/civic/captured-job-catalog.ts";
 
 const root = {
   civic: {
@@ -326,6 +327,48 @@ assert.equal(
 assert.equal(
   fullCalls.some(({ elementId }) => elementId === "servant-farmer"),
   true,
+);
+
+const fullConsumedResourceRoot = {
+  civic: {
+    d_job: "lumberjack",
+    lumberjack: {
+      job: "lumberjack",
+      assigned: 1,
+      workers: 1,
+      max: -1,
+      display: true,
+    },
+  },
+  resource: {
+    Population: { amount: 1, max: 10 },
+    Lumber: { amount: 100, max: 100, diff: -2 },
+  },
+  race: {},
+};
+const fullConsumedResourceCatalog = createCapturedJobCatalogReader({
+  rootState: { readRoot: () => fullConsumedResourceRoot },
+  controls: {
+    capturedElementIds: () => ["civ-lumberjack"],
+    resolve: (elementId) =>
+      elementId === "civ-lumberjack"
+        ? {
+            elementId,
+            generation: 1,
+            methods: ["add", "sub", "setDefault"],
+          }
+        : undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+  },
+  readSettings: () => ({
+    job_s_lumberjack: true,
+    job_lumberjack: true,
+  }),
+});
+assert.equal(
+  fullConsumedResourceCatalog()?.jobs[0]?.smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "a full resource with a negative live rate remains useful to its smart worker",
 );
 
 console.log("captured-ordinary-jobs ok");

@@ -738,9 +738,11 @@ function readResourceUseful(
   const ratio = resourceStorageRatio(root, id);
   if (ratio === undefined) return undefined;
   if (ratio < 0.99 || readDemand?.().isDemanded(id) === true) return true;
+  const diff = resourceDiff(root, id);
+  if (diff !== undefined && diff < 0) return true;
   // DeadSpace no longer exposes the legacy eject/supply/store-overflow flags or the
-  // per-source production breakdown. A full, undemanded resource is therefore not
-  // provably useless, and its busy-worker fallback must remain unavailable.
+  // per-source production breakdown. A full, undemanded resource with no negative live rate is
+  // therefore not provably useful or useless, and its busy-worker fallback remains unavailable.
   return undefined;
 }
 
