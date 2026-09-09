@@ -4753,14 +4753,11 @@
       workers: workers >= 0 ? workers : assignedWorkers
     });
   }
-  function readDefaultJobState(root) {
-    let civic = readProperty(root, "civic");
-    if (!isRecord(civic)) return;
-    let id = readProperty(civic, "d_job");
-    if (typeof id != "string" || id.length === 0) return;
-    let job = readProperty(civic, id), workers = readProperty(job, "workers");
-    if (!(typeof workers != "number" || !Number.isFinite(workers) || workers < 0))
-      return Object.freeze({ id, workers });
+  function readDefaultJobState(readJobCatalog) {
+    let catalog = readJobCatalog();
+    if (catalog === void 0) return;
+    let job = catalog.jobs.find(({ isDefault }) => isDefault);
+    return job === void 0 ? void 0 : Object.freeze({ id: job.id, workers: job.workers });
   }
   function readAffordability(root, id, costs) {
     let recipe = costs.read(id);
@@ -4776,7 +4773,7 @@
     }
     return affordability;
   }
-  function readCycleInput(root, settingsValue, costs) {
+  function readCycleInput(root, settingsValue, costs, readJobCatalog) {
     let samples = readProducts(root);
     if (samples.length === 0) return;
     let foundry = readFoundry(root);
@@ -4784,7 +4781,7 @@
     let assignedWorkers = samples.reduce(
       (sum, sample) => sum + sample.workers,
       0
-    ), craftsmen = readCraftsmanState(root, foundry, assignedWorkers), defaultJob = readDefaultJobState(root);
+    ), craftsmen = readCraftsmanState(root, foundry, assignedWorkers), defaultJob = readDefaultJobState(readJobCatalog);
     if (defaultJob === void 0 || craftsmen.workers !== assignedWorkers) return;
     let craftOnlyWorkerPool = Math.min(
       craftsmen.maximum,
@@ -4890,7 +4887,7 @@
       (sample, index) => sample.id === samples[index].id && sample.workers === samples[index].workers && sample.buildingCapacity === samples[index].buildingCapacity
     );
   }
-  function createExecutor(dependencies, sessionRef) {
+  function createExecutor(dependencies, sessionRef, readJobCatalog) {
     let controls = createCapturedJobControls({
       controls: dependencies.controls
     });
@@ -4915,7 +4912,7 @@
           session.samples.reduce((sum, sample) => sum + sample.workers, 0)
         ).workers !== session.workerPool)
           return stale("craftsmen-pool-changed", "craftsman worker pool changed");
-        let currentDefaultJob = readDefaultJobState(session.root);
+        let currentDefaultJob = readDefaultJobState(readJobCatalog);
         if (currentDefaultJob?.id !== session.defaultJob?.id || currentDefaultJob?.workers !== session.defaultJob?.workers)
           return stale(
             "default-job-pool-changed",
@@ -4972,7 +4969,7 @@
       rootState: dependencies.rootState,
       controls: dependencies.controls,
       readSettings: dependencies.readSettings
-    }), executor = createExecutor(dependencies, sessionRef), reader = Object.freeze({
+    }), executor = createExecutor(dependencies, sessionRef, readJobCatalog), reader = Object.freeze({
       readCycle() {
         if (dependencies.controls.resolve(FOUNDRY_CONTROL) === void 0)
           return sessionRef.value = void 0, Object.freeze({
@@ -5024,7 +5021,8 @@
         let root = dependencies.rootState.readRoot(), sampled3 = readCycleInput(
           root,
           dependencies.readSettings(),
-          dependencies.costs
+          dependencies.costs,
+          readJobCatalog
         );
         return sampled3 === void 0 ? (sessionRef.value = void 0, Object.freeze({
           available: !1,

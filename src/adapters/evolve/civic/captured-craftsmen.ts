@@ -174,19 +174,15 @@ function readCraftsmanState(
   });
 }
 
-function readDefaultJobState(root: unknown): DefaultJobState | undefined {
-  const civic = readProperty(root, "civic");
-  if (!isRecord(civic)) return undefined;
-  // `civic.d_job` is filled during vars loading. A transient root can precede that initialization;
-  // craft-only redistribution stays lenient, while future default-job acquisition must require a
-  // complete state here before it can consume this pool.
-  const id = readProperty(civic, "d_job");
-  if (typeof id !== "string" || id.length === 0) return undefined;
-  const job = readProperty(civic, id);
-  const workers = readProperty(job, "workers");
-  if (typeof workers !== "number" || !Number.isFinite(workers) || workers < 0)
-    return undefined;
-  return Object.freeze({ id, workers });
+function readDefaultJobState(
+  readJobCatalog: () => CapturedJobCatalog | undefined,
+): DefaultJobState | undefined {
+  const catalog = readJobCatalog();
+  if (catalog === undefined) return undefined;
+  const job = catalog.jobs.find(({ isDefault }) => isDefault);
+  return job === undefined
+    ? undefined
+    : Object.freeze({ id: job.id, workers: job.workers });
 }
 
 function readAffordability(
@@ -220,6 +216,7 @@ function readCycleInput(
   root: unknown,
   settingsValue: unknown,
   costs: CapturedCraftCosts,
+  readJobCatalog: () => CapturedJobCatalog | undefined,
 ):
   | {
       readonly input: JobsCycleInput;
@@ -237,7 +234,7 @@ function readCycleInput(
     0,
   );
   const craftsmen = readCraftsmanState(root, foundry, assignedWorkers);
-  const defaultJob = readDefaultJobState(root);
+  const defaultJob = readDefaultJobState(readJobCatalog);
   // The game initializes this lazily, but a craftsmen command cannot safely acquire or release a
   // worker without the named default job. Keep the cycle unavailable until that state is present.
   if (defaultJob === undefined) return undefined;
@@ -369,6 +366,7 @@ function samplesMatch(root: unknown, samples: readonly CraftSample[]): boolean {
 function createExecutor(
   dependencies: CapturedCraftsmenDependencies,
   sessionRef: { value: CraftsmenSession | undefined },
+  readJobCatalog: () => CapturedJobCatalog | undefined,
 ): JobsExecutor {
   const controls = createCapturedJobControls({
     controls: dependencies.controls,
@@ -395,7 +393,7 @@ function createExecutor(
       ).workers;
       if (currentWorkerPool !== session.workerPool)
         return stale("craftsmen-pool-changed", "craftsman worker pool changed");
-      const currentDefaultJob = readDefaultJobState(session.root);
+      const currentDefaultJob = readDefaultJobState(readJobCatalog);
       if (
         currentDefaultJob?.id !== session.defaultJob?.id ||
         currentDefaultJob?.workers !== session.defaultJob?.workers
@@ -472,7 +470,7 @@ export function createCapturedCraftsmenAutomation(
     controls: dependencies.controls,
     readSettings: dependencies.readSettings,
   });
-  const executor = createExecutor(dependencies, sessionRef);
+  const executor = createExecutor(dependencies, sessionRef, readJobCatalog);
   const reader: JobsReader = Object.freeze({
     readCycle() {
       if (dependencies.controls.resolve(FOUNDRY_CONTROL) === undefined) {
@@ -529,6 +527,7 @@ export function createCapturedCraftsmenAutomation(
         root,
         dependencies.readSettings(),
         dependencies.costs,
+        readJobCatalog,
       );
       if (sampled === undefined) {
         sessionRef.value = undefined;

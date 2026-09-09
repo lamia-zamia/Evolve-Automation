@@ -16,10 +16,20 @@ function controlsFor(root, includeFoundry = true) {
   const handle = includeFoundry
     ? { elementId: "foundry", generation: 1, methods: ["add", "sub"] }
     : undefined;
+  const jobHandle = {
+    elementId: "civ-job",
+    generation: 1,
+    methods: ["add", "sub", "setDefault"],
+  };
   return {
     calls,
     controls: {
-      resolve: (elementId) => (elementId === "foundry" ? handle : undefined),
+      resolve: (elementId) =>
+        elementId === "foundry"
+          ? handle
+          : elementId.startsWith("civ-")
+            ? jobHandle
+            : undefined,
       invoke: (current, method, args = []) => {
         calls.push({ method, id: args[0] });
         const id = args[0];
@@ -35,7 +45,8 @@ function controlsFor(root, includeFoundry = true) {
         }
         return { ok: true, value: undefined };
       },
-      capturedElementIds: () => (handle === undefined ? [] : ["foundry"]),
+      capturedElementIds: () =>
+        handle === undefined ? [] : ["foundry", `civ-${root.civic.d_job}`],
     },
   };
 }
@@ -54,7 +65,13 @@ function makeRoot() {
     },
     civic: {
       d_job: "unemployed",
-      unemployed: { workers: 5 },
+      unemployed: {
+        job: "unemployed",
+        assigned: 5,
+        workers: 5,
+        max: 0,
+        display: true,
+      },
       craftsman: { workers: 2, max: 4 },
     },
     resource: {
