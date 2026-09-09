@@ -5358,7 +5358,7 @@
     }
     return affordability;
   }
-  function readCycleInput(root, settingsValue, costs, readJobCatalog) {
+  function readCycleInput(root, settingsValue, costs, readJobCatalog, readDemand) {
     let samples = readProducts(root);
     if (samples.length === 0) return;
     let foundry = readFoundry(root);
@@ -5371,7 +5371,7 @@
     let craftOnlyWorkerPool = Math.min(
       craftsmen.maximum,
       craftsmen.workers + defaultJob.workers
-    ), settings = isRecord(settingsValue) ? settingsValue : {}, resources = readProperty(root, "resource"), jobs = samples.map(
+    ), settings = isRecord(settingsValue) ? settingsValue : {}, resources = readProperty(root, "resource"), demand = readDemand?.(), jobs = samples.map(
       (sample, token) => Object.freeze({
         token,
         id: sample.id,
@@ -5402,8 +5402,8 @@
         enabled: productEnabled(settings, sample.id),
         buildingCapacity: sample.buildingCapacity,
         affordability: readAffordability(root, sample.id, costs),
-        demanded: !1,
-        useful: !1,
+        demanded: demand?.isDemanded(sample.id) ?? !1,
+        useful: demand !== void 0 && finiteNumber2(readProperty(resource, "amount"), 0) < demand.storageRequired(sample.id),
         currentQuantity: finiteNumber2(readProperty(resource, "amount"), 0),
         weighting: productWeighting(settings, sample.id),
         driver: null,
@@ -5608,7 +5608,8 @@
           root,
           dependencies.readSettings(),
           dependencies.costs,
-          readJobCatalog
+          readJobCatalog,
+          dependencies.readDemand
         );
         return sampled3 === void 0 ? (sessionRef.value = void 0, Object.freeze({
           available: !1,

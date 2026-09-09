@@ -123,6 +123,36 @@ assert.deepEqual(captured.calls, [
   { method: "add", id: "Brick" },
 ]);
 
+const demandedRoot = makeRoot();
+const demandedControls = controlsFor(demandedRoot);
+const demandedAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(demandedRoot),
+  controls: demandedControls.controls,
+  costs,
+  readSettings: () => ({
+    craftPlywood: true,
+    job_Plywood: true,
+    foundry_w_Plywood: 1,
+    craftBrick: true,
+    job_Brick: true,
+    foundry_w_Brick: 1,
+  }),
+  readDemand: () => ({
+    isDemanded: (id) => id === "Brick",
+    storageRequired: (id) => (id === "Plywood" ? 150 : 1),
+    requestedQuantity: () => 0,
+  }),
+});
+const demandedInput = demandedAdapter.reader.readCycle(true);
+assert.equal(
+  demandedInput.crafting.find(({ jobToken }) => jobToken === 0).useful,
+  true,
+);
+assert.equal(
+  demandedInput.crafting.find(({ jobToken }) => jobToken === 1).demanded,
+  true,
+);
+
 const cappedRoot = makeRoot();
 cappedRoot.city.foundry.Plywood = 0;
 cappedRoot.city.foundry.Scarletite = 2;

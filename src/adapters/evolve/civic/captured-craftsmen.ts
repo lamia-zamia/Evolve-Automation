@@ -219,6 +219,7 @@ function readCycleInput(
   settingsValue: unknown,
   costs: CapturedCraftCosts,
   readJobCatalog: () => CapturedJobCatalog | undefined,
+  readDemand: (() => CapturedDemandSample) | undefined,
 ):
   | {
       readonly input: JobsCycleInput;
@@ -250,6 +251,7 @@ function readCycleInput(
   );
   const settings = isRecord(settingsValue) ? settingsValue : {};
   const resources = readProperty(root, "resource");
+  const demand = readDemand?.();
   const jobs = samples.map((sample, token) =>
     Object.freeze({
       token,
@@ -282,8 +284,11 @@ function readCycleInput(
       enabled: productEnabled(settings, sample.id),
       buildingCapacity: sample.buildingCapacity,
       affordability: readAffordability(root, sample.id, costs),
-      demanded: false,
-      useful: false,
+      demanded: demand?.isDemanded(sample.id) ?? false,
+      useful:
+        demand !== undefined &&
+        finiteNumber(readProperty(resource, "amount"), 0) <
+          demand.storageRequired(sample.id),
       currentQuantity: finiteNumber(readProperty(resource, "amount"), 0),
       weighting: productWeighting(settings, sample.id),
       driver: null,
@@ -533,6 +538,7 @@ export function createCapturedCraftsmenAutomation(
         dependencies.readSettings(),
         dependencies.costs,
         readJobCatalog,
+        dependencies.readDemand,
       );
       if (sampled === undefined) {
         sessionRef.value = undefined;
