@@ -16,6 +16,7 @@ export interface CapturedJobCatalogEntry {
   readonly controlId: string;
   readonly kind: JobKind;
   readonly smart: boolean;
+  readonly configuredPriority: number | null;
   readonly assigned: number;
   readonly workers: number;
   /** DeadSpace uses -1 for an uncapped ordinary job. */
@@ -53,6 +54,14 @@ function finiteMaximum(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= -1
     ? value
     : undefined;
+}
+
+function finiteSettingNumber(
+  settings: Record<PropertyKey, unknown> | undefined,
+  key: string,
+): number | null {
+  const value = readProperty(settings, key);
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 // These are the canonical ordinary ids from DeadSpace's defineJobs list. The fallback keeps
@@ -208,6 +217,7 @@ function readCatalog(
         controlId,
         kind: jobKind(id),
         smart: readProperty(settings, `job_s_${id}`) === true,
+        configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
         assigned,
         workers,
         maximum,

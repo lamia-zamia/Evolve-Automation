@@ -4401,6 +4401,10 @@
   function finiteMaximum(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= -1 ? value : void 0;
   }
+  function finiteSettingNumber(settings, key) {
+    let value = readProperty(settings, key);
+    return typeof value == "number" && Number.isFinite(value) ? value : null;
+  }
   var JOB_KINDS = Object.freeze({
     farmer: "farmer",
     hunter: "hunter",
@@ -4502,6 +4506,7 @@
           controlId,
           kind: jobKind(id),
           smart: readProperty(settings, `job_s_${id}`) === !0,
+          configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
           assigned,
           workers,
           maximum,
