@@ -1476,6 +1476,7 @@ const foodRoot = {
     },
   },
   race: {},
+  city: { farm: { count: 1 } },
   resource: {
     Food: { amount: 100, max: 100, diff: 0 },
     Population: { amount: 6, max: 100 },
@@ -1524,6 +1525,12 @@ assert.equal(
   })().jobs[0].smartMaximum,
   2,
   "recent population growth caps Farmers by the matching prior allocation change",
+);
+foodRoot.resource.Food = { amount: 50, max: 100, diff: 0 };
+assert.equal(
+  foodReader().jobs[0].smartMaximum,
+  2,
+  "a captured Farm capacity caps normal-race smart Farmers",
 );
 
 console.log("captured-job-catalog ok");

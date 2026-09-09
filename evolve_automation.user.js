@@ -4861,7 +4861,7 @@
     if (!(amount === void 0 || maximum === void 0 || taxRate === void 0 || banking === void 0))
       return banking >= 7 ? null : amount >= maximum || taxRate <= 0 ? 0 : readDemand === void 0 ? null : amount >= readDemand().storageRequired("Money") ? 0 : null;
   }
-  function readFarmerSmartMaximum(root, count, history) {
+  function readFarmerSmartMaximum(root, count, history, applyFarmCapacity = !0) {
     let race = readProperty(root, "race");
     if (!isRecord(race)) return null;
     if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
@@ -4877,13 +4877,19 @@
         readProperty(readProperty(root, "resource"), "Population"),
         "amount"
       )
-    );
+    ), foodMaximum = null;
     if (population !== void 0 && history !== void 0 && population > history.lastPopulationCount) {
       let populationChange = population - history.lastPopulationCount, farmerChange = count - history.lastFarmerCount;
-      if (populationChange === farmerChange && rate > 0)
-        return Math.max(0, count - populationChange);
+      populationChange === farmerChange && rate > 0 && (foodMaximum = Math.max(0, count - populationChange));
     }
-    return amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null;
+    if (foodMaximum === null && (foodMaximum = amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null), !applyFarmCapacity) return foodMaximum;
+    let farm = readProperty(readProperty(root, "city"), "farm");
+    if (farm === void 0) return foodMaximum;
+    if (!isRecord(farm)) return;
+    let farmCount = finiteNonNegative(readProperty(farm, "count")), workerEffect = readHighPopulationWorkerEffect(root);
+    if (farmCount === void 0 || workerEffect === void 0) return;
+    let farmerCapacity = farmCount > 0 ? Math.ceil(farmCount * workerEffect) + 1 : 0;
+    return Math.min(foodMaximum ?? Number.MAX_SAFE_INTEGER, farmerCapacity);
   }
   function readHunterSmartMaximum(root, count, readDemand, history) {
     let race = readProperty(root, "race");
@@ -4903,7 +4909,7 @@
       uncertain = !0;
     }
     if (!hasRaceFlag(race, "ravenous") && !hasRaceFlag(race, "carnivore")) {
-      let food = readFarmerSmartMaximum(root, count, history);
+      let food = readFarmerSmartMaximum(root, count, history, !1);
       if (food === 0) return 0;
       if (food === void 0) return;
       if (!uncertain && food !== null) return food;

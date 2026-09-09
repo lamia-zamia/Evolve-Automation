@@ -513,6 +513,7 @@ function readFarmerSmartMaximum(
   root: unknown,
   count: number,
   history?: Readonly<CapturedJobHistory>,
+  applyFarmCapacity = true,
 ): number | null | undefined {
   const race = readProperty(root, "race");
   // Existing early-game fixtures can omit the race bag before race initialization; preserve the
@@ -540,6 +541,7 @@ function readFarmerSmartMaximum(
       "amount",
     ),
   );
+  let foodMaximum: number | null = null;
   if (
     population !== undefined &&
     history !== undefined &&
@@ -548,10 +550,25 @@ function readFarmerSmartMaximum(
     const populationChange = population - history.lastPopulationCount;
     const farmerChange = count - history.lastFarmerCount;
     if (populationChange === farmerChange && rate > 0) {
-      return Math.max(0, count - populationChange);
+      foodMaximum = Math.max(0, count - populationChange);
     }
   }
-  return amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null;
+  if (foodMaximum === null) {
+    foodMaximum =
+      amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null;
+  }
+  if (!applyFarmCapacity) return foodMaximum;
+  const farm = readProperty(readProperty(root, "city"), "farm");
+  // Early-game roots can omit the lazily-created Farm record; retain the Food-only cap in that
+  // state rather than making the whole smart-job catalog unavailable.
+  if (farm === undefined) return foodMaximum;
+  if (!isRecord(farm)) return undefined;
+  const farmCount = finiteNonNegative(readProperty(farm, "count"));
+  const workerEffect = readHighPopulationWorkerEffect(root);
+  if (farmCount === undefined || workerEffect === undefined) return undefined;
+  const farmerCapacity =
+    farmCount > 0 ? Math.ceil(farmCount * workerEffect) + 1 : 0;
+  return Math.min(foodMaximum ?? Number.MAX_SAFE_INTEGER, farmerCapacity);
 }
 
 function readHunterSmartMaximum(
@@ -588,7 +605,7 @@ function readHunterSmartMaximum(
   }
 
   if (!hasRaceFlag(race, "ravenous") && !hasRaceFlag(race, "carnivore")) {
-    const food = readFarmerSmartMaximum(root, count, history);
+    const food = readFarmerSmartMaximum(root, count, history, false);
     if (food === 0) return 0;
     if (food === undefined) return undefined;
     if (!uncertain && food !== null) return food;
