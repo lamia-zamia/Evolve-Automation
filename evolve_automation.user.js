@@ -4414,6 +4414,19 @@
     ];
     return Object.freeze(breakpoints);
   }
+  function normalizeBreakpoints(configured, maximum, id, settings, root) {
+    if (configured === null) return { capped: null, uncapped: null };
+    let race = readProperty(root, "race");
+    if (readProperty(race, "high_pop") === !0 && readProperty(settings, "jobScalePop") === !0 && id !== "hell_surveyor")
+      return { capped: null, uncapped: null };
+    let uncapped = configured.map(
+      (value) => value === -1 ? Number.MAX_SAFE_INTEGER : value
+    ), cap = maximum === -1 ? Number.MAX_SAFE_INTEGER : maximum, capped = uncapped.map((value) => Math.min(value, cap));
+    return {
+      capped: Object.freeze(capped),
+      uncapped: Object.freeze(uncapped)
+    };
+  }
   function readCatalog(root, controls, settingsValue, onSkipped) {
     let civic = readProperty(root, "civic");
     if (!isRecord(civic)) return;
@@ -4461,7 +4474,13 @@
         onSkipped(controlId, "ordinary job visibility is not boolean");
         continue;
       }
-      let unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id);
+      let unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
+        configuredBreakpoints,
+        maximum,
+        id,
+        settings,
+        root
+      );
       jobs.push(
         Object.freeze({
           id,
@@ -4473,6 +4492,8 @@
           unlocked,
           managed,
           configuredBreakpoints,
+          breakpoints: normalized.capped,
+          uncappedBreakpoints: normalized.uncapped,
           isDefault: id === defaultJobId
         })
       );

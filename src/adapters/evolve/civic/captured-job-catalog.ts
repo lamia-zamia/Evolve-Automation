@@ -22,6 +22,9 @@ export interface CapturedJobCatalogEntry {
   readonly managed: boolean;
   /** Raw `job_b1..3_<id>` settings; normalization belongs to the planner-input slice. */
   readonly configuredBreakpoints: readonly [number, number, number] | null;
+  /** Normalized breakpoints when population scaling is characterized. */
+  readonly breakpoints: readonly [number, number, number] | null;
+  readonly uncappedBreakpoints: readonly [number, number, number] | null;
   readonly isDefault: boolean;
 }
 
@@ -67,6 +70,41 @@ function readConfiguredBreakpoints(
     values[2] as number,
   ];
   return Object.freeze(breakpoints);
+}
+
+function normalizeBreakpoints(
+  configured: readonly [number, number, number] | null,
+  maximum: number,
+  id: string,
+  settings: Record<PropertyKey, unknown> | undefined,
+  root: unknown,
+): {
+  readonly capped: readonly [number, number, number] | null;
+  readonly uncapped: readonly [number, number, number] | null;
+} {
+  if (configured === null) return { capped: null, uncapped: null };
+  const race = readProperty(root, "race");
+  const highPopulation = readProperty(race, "high_pop") === true;
+  if (
+    highPopulation &&
+    readProperty(settings, "jobScalePop") === true &&
+    id !== "hell_surveyor"
+  ) {
+    return { capped: null, uncapped: null };
+  }
+  const uncapped = configured.map((value) =>
+    value === -1 ? Number.MAX_SAFE_INTEGER : value,
+  ) as [number, number, number];
+  const cap = maximum === -1 ? Number.MAX_SAFE_INTEGER : maximum;
+  const capped = uncapped.map((value) => Math.min(value, cap)) as [
+    number,
+    number,
+    number,
+  ];
+  return {
+    capped: Object.freeze(capped),
+    uncapped: Object.freeze(uncapped),
+  };
 }
 
 function readCatalog(
@@ -135,6 +173,13 @@ function readCatalog(
     const unlocked = display;
     const managed = unlocked && readProperty(settings, `job_${id}`) === true;
     const configuredBreakpoints = readConfiguredBreakpoints(settings, id);
+    const normalized = normalizeBreakpoints(
+      configuredBreakpoints,
+      maximum,
+      id,
+      settings,
+      root,
+    );
     jobs.push(
       Object.freeze({
         id,
@@ -146,6 +191,8 @@ function readCatalog(
         unlocked,
         managed,
         configuredBreakpoints,
+        breakpoints: normalized.capped,
+        uncappedBreakpoints: normalized.uncapped,
         isDefault: id === defaultJobId,
       }),
     );

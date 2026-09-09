@@ -62,6 +62,8 @@ assert.deepEqual(reader(), {
       unlocked: true,
       managed: true,
       configuredBreakpoints: [0, 1, -1],
+      breakpoints: [0, 0, 0],
+      uncappedBreakpoints: [0, 1, Number.MAX_SAFE_INTEGER],
       isDefault: true,
     },
     {
@@ -74,6 +76,8 @@ assert.deepEqual(reader(), {
       unlocked: true,
       managed: false,
       configuredBreakpoints: [2, 4, 8],
+      breakpoints: [2, 4, 8],
+      uncappedBreakpoints: [2, 4, 8],
       isDefault: false,
     },
     {
@@ -86,6 +90,8 @@ assert.deepEqual(reader(), {
       unlocked: false,
       managed: false,
       configuredBreakpoints: null,
+      breakpoints: null,
+      uncappedBreakpoints: null,
       isDefault: false,
     },
   ],
@@ -93,6 +99,23 @@ assert.deepEqual(reader(), {
 assert.deepEqual(skipped, [
   { id: "civ-missing", reason: "ordinary job control is incomplete" },
 ]);
+
+const highPopulation = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({ ...root, race: { high_pop: true } }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls,
+  readSettings: () => ({
+    jobScalePop: true,
+    job_b1_unemployed: 0,
+    job_b2_unemployed: 1,
+    job_b3_unemployed: -1,
+  }),
+});
+assert.equal(highPopulation().jobs[0].breakpoints, null);
+assert.equal(highPopulation().jobs[0].uncappedBreakpoints, null);
 
 const incomplete = createCapturedJobCatalogReader({
   rootState: {
