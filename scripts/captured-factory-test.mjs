@@ -118,7 +118,7 @@ const laterFactory = createCapturedFactoryAutomation({
 assert.deepEqual(
   laterFactory.run(),
   { status: "succeeded" },
-  "full weighted capacity remains unavailable when a later-region factory exists",
+  "a later-region factory contributes capacity when the current allocation fits",
 );
 
 const productIds = [
@@ -149,6 +149,9 @@ const fullRoot = {
       Nano: 0,
       Stanene: 0,
     },
+  },
+  space: {
+    red_factory: { count: 1, on: 1 },
   },
   tech: {
     factory: 0,
@@ -202,7 +205,8 @@ assert.deepEqual(fullAutomation.run(), { status: "succeeded" });
 assert.deepEqual(fullCalls, [
   ["addItem", "Alloy"],
   ["addItem", "Alloy"],
+  ["addItem", "Alloy"],
 ]);
-assert.equal(fullRoot.city.factory.Alloy, 2);
+assert.equal(fullRoot.city.factory.Alloy, 3);
 
 console.log("captured-factory ok");

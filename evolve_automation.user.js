@@ -8587,15 +8587,7 @@
   }
 
   // src/adapters/evolve/economy/production/captured-factory.ts
-  var FACTORY_CONTROL = "iFactory", FACTORY_REGIONS = Object.freeze([
-    ["space", "red_factory"],
-    ["interstellar", "int_factory"],
-    ["portal", "hell_factory"],
-    ["underground", "under_factory"],
-    ["surface", "crater_factory"],
-    ["tauceti", "tau_factory"],
-    ["space", "industrial_complex"]
-  ]), PRODUCT_SPECS = Object.freeze([
+  var FACTORY_CONTROL = "iFactory", PRODUCT_SPECS = Object.freeze([
     Object.freeze({
       id: "Lux",
       outputResourceId: "Money",
@@ -8882,18 +8874,8 @@
     if (!isRecord(city)) return;
     let factory = readProperty(city, "factory");
     if (!isRecord(factory)) return;
-    let maximum = finiteNonNegative3(factory.on);
-    if (maximum === void 0 || !Number.isSafeInteger(maximum)) return;
-    for (let [region, id] of FACTORY_REGIONS) {
-      let owner = readProperty(root, region);
-      if (owner === void 0) continue;
-      if (!isRecord(owner)) return;
-      let structure = readProperty(owner, id);
-      if (structure === void 0) continue;
-      if (!isRecord(structure)) return;
-      let count = finiteNonNegative3(structure.count);
-      if (count === void 0 || count > 0) return;
-    }
+    let maximum = readFactoryCapacity(root, factory);
+    if (maximum === void 0) return;
     let lines = [];
     for (let id of CAPTURED_FACTORY_LINES) {
       let current = finiteNonNegative3(factory[id]);
@@ -8902,6 +8884,76 @@
       lines.push(Object.freeze({ id, current }));
     }
     return Object.freeze({ maximum, lines: Object.freeze(lines) });
+  }
+  function readRegionalFactoryOn(root, region, id) {
+    let owner = readProperty(root, region);
+    if (owner === void 0) return 0;
+    if (!isRecord(owner)) return;
+    let structure = readProperty(owner, id);
+    if (structure === void 0) return 0;
+    if (!isRecord(structure)) return;
+    let count = finiteNonNegative3(structure.count), on = finiteNonNegative3(structure.on);
+    if (!(count === void 0 || on === void 0 || !Number.isSafeInteger(count) || !Number.isSafeInteger(on) || on > count))
+      return on;
+  }
+  function readHighPopulationScale(root) {
+    let rank = readProperty(readProperty(root, "race"), "high_pop");
+    if (rank === void 0 || rank === !1) return 1;
+    if (!(typeof rank != "number" || !Number.isFinite(rank)))
+      switch (rank) {
+        case 0.1:
+        case 0.25:
+          return 2;
+        case 0.5:
+          return 3;
+        case 1:
+          return 4;
+        case 2:
+          return 5;
+        case 3:
+          return 6;
+        case 4:
+          return 7;
+        default:
+          return;
+      }
+  }
+  function readRankedFactoryLines(root, region, id) {
+    let owner = readProperty(root, region), structure = readProperty(owner, id);
+    if (structure === void 0) return 0;
+    if (!isRecord(structure)) return;
+    let rankValue = structure.rank, rank = rankValue == null ? 1 : finiteNonNegative3(rankValue);
+    return rank !== void 0 && Number.isSafeInteger(rank) && rank >= 1 ? 3 + rank : void 0;
+  }
+  function readFactoryCapacity(root, cityFactory) {
+    let cityOn = finiteNonNegative3(cityFactory.on);
+    if (cityOn === void 0 || !Number.isSafeInteger(cityOn)) return;
+    let redOn = readRegionalFactoryOn(root, "space", "red_factory"), interstellarOn = readRegionalFactoryOn(
+      root,
+      "interstellar",
+      "int_factory"
+    ), portalOn = readRegionalFactoryOn(root, "portal", "hell_factory"), undergroundOn = readRegionalFactoryOn(
+      root,
+      "underground",
+      "under_factory"
+    ), surfaceOn = readRegionalFactoryOn(root, "surface", "crater_factory"), industrialOn = readRegionalFactoryOn(
+      root,
+      "space",
+      "industrial_complex"
+    ), tauOn = readRegionalFactoryOn(root, "tauceti", "tau_factory"), portalLines = readRankedFactoryLines(root, "portal", "hell_factory"), highPopulationScale = readHighPopulationScale(root);
+    if (redOn === void 0 || interstellarOn === void 0 || portalOn === void 0 || undergroundOn === void 0 || surfaceOn === void 0 || industrialOn === void 0 || tauOn === void 0 || portalLines === void 0 || highPopulationScale === void 0)
+      return;
+    let craterLines = 0;
+    if (surfaceOn > 0) {
+      let craterWorker = readProperty(
+        readProperty(readProperty(root, "civic"), "crater_worker"),
+        "workers"
+      ), workers = finiteNonNegative3(craterWorker);
+      if (workers === void 0) return;
+      craterLines = Math.floor(surfaceOn / 2 * (workers / highPopulationScale));
+    }
+    let isolation = !!readProperty(readProperty(root, "tech"), "isolation"), maximum = cityOn + redOn + interstellarOn * 2 + portalOn * portalLines + undergroundOn * 2 + craterLines + industrialOn * 2 + tauOn * (isolation ? 5 : 3);
+    return Number.isSafeInteger(maximum) && maximum >= 0 ? maximum : void 0;
   }
   function totalAssigned(root) {
     let factory = readProperty(readProperty(root, "city"), "factory");
