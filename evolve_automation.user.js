@@ -4764,9 +4764,10 @@
     if (id === "professor") return readProfessorSmartMaximum(root);
     if (id === "banker") return readBankerSmartMaximum(root, readDemand);
     let history = readJobHistory?.();
-    if (id === "farmer") return readFarmerSmartMaximum(root, count, history);
+    if (id === "farmer")
+      return readFarmerSmartMaximum(root, count, settings, history);
     if (id === "hunter")
-      return readHunterSmartMaximum(root, count, readDemand, history);
+      return readHunterSmartMaximum(root, count, readDemand, settings, history);
     if (id === "lumberjack")
       return readLumberjackSmartMaximum(root, readDemand);
     if (id === "quarry_worker")
@@ -4878,7 +4879,7 @@
     if (!(amount === void 0 || maximum === void 0 || taxRate === void 0 || banking === void 0))
       return banking >= 7 ? null : amount >= maximum || taxRate <= 0 ? 0 : readDemand === void 0 ? null : amount >= readDemand().storageRequired("Money") ? 0 : null;
   }
-  function readFarmerSmartMaximum(root, count, history, applyFarmCapacity = !0) {
+  function readFarmerSmartMaximum(root, count, settings, history, applyFarmCapacity = !0) {
     let race = readProperty(root, "race");
     if (!isRecord(race)) return null;
     if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
@@ -4920,16 +4921,18 @@
         return;
       minimumFood = population, maximumFood = population * 2, amount > 10 && (rate += (amount - 10) * (rotPercent / 100) * 0.9 ** smokehouseCount);
     }
-    let foodMaximum = null;
+    let tickRateValue = readProperty(settings, "tickRate"), tickRate = tickRateValue === void 0 ? 4 : finiteNonNegative(tickRateValue);
+    if (tickRate === void 0 || tickRate <= 0) return;
+    let nextTickFood = amount + rate / (4 / tickRate), foodMaximum = null;
     if (population !== void 0 && history !== void 0 && population > history.lastPopulationCount) {
       let populationChange = population - history.lastPopulationCount, farmerChange = count - history.lastFarmerCount;
       populationChange === farmerChange && rate > 0 && (foodMaximum = Math.max(0, count - populationChange));
     }
     if (foodMaximum === null)
-      if (count === 0 && amount < minimumFood && amount + rate < minimumFood)
+      if (count === 0 && amount < minimumFood && nextTickFood < minimumFood)
         foodMaximum = 1;
       else {
-        if (count > 0 && amount + rate < minimumFood)
+        if (count > 0 && nextTickFood < minimumFood)
           return;
         foodMaximum = specialFoodRule ? amount > maximumFood && rate > 0 ? Math.max(0, count - 1) : count : count === 0 && amount < maximum * 0.2 && rate <= 0 ? 1 : amount > maximum * 0.6 && rate > 0 ? Math.max(0, count - 1) : null;
       }
@@ -4942,7 +4945,7 @@
     let citizenCap = highPopulation?.breakpointScale ?? 1, farmerCapacity = farmCount > 0 ? Math.ceil(farmCount * citizenCap) + 1 : 0;
     return Math.min(foodMaximum ?? Number.MAX_SAFE_INTEGER, farmerCapacity);
   }
-  function readHunterSmartMaximum(root, count, readDemand, history) {
+  function readHunterSmartMaximum(root, count, readDemand, settings, history) {
     let race = readProperty(root, "race");
     if (!isRecord(race)) return null;
     if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
@@ -4960,7 +4963,7 @@
       uncertain = !0;
     }
     if (!hasRaceFlag(race, "ravenous") && !hasRaceFlag(race, "carnivore")) {
-      let food = readFarmerSmartMaximum(root, count, history, !1);
+      let food = readFarmerSmartMaximum(root, count, settings, history, !1);
       if (food === 0) return 0;
       if (food === void 0) return;
       if (!uncertain && food !== null) return food;
@@ -4972,11 +4975,17 @@
     let race = readProperty(root, "race");
     return isRecord(race) && (hasRaceFlag(race, "artifical") || hasRaceFlag(race, "unfathomable")) ? 0 : null;
   }
-  function readCapturedFarmerMinimum(root, id, smart, count, smartMaximum, history) {
+  function readCapturedFarmerMinimum(root, id, smart, count, smartMaximum, history, settings) {
     let explicit = readFarmerMinimum(root, id);
     if (explicit !== null || !smart) return explicit;
     if (id === "hunter") {
-      let foodMaximum = readFarmerSmartMaximum(root, count, history, !1);
+      let foodMaximum = readFarmerSmartMaximum(
+        root,
+        count,
+        settings,
+        history,
+        !1
+      );
       return foodMaximum === void 0 ? null : foodMaximum ?? count;
     }
     return id !== "farmer" ? explicit : isRecord(readProperty(root, "race")) ? smartMaximum ?? count : null;
@@ -5376,7 +5385,8 @@
             smart,
             workers + servantInput.count * servantModifier,
             smartMaximum,
-            jobHistory
+            jobHistory,
+            settings
           ),
           storageBackedMinimum,
           warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),

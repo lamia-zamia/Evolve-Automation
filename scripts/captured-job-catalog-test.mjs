@@ -1621,6 +1621,37 @@ assert.equal(
   "an empty normal-race Farmer pool enters the low-Food rescue branch",
 );
 
+const slowScriptFoodReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...foodRoot,
+      civic: {
+        d_job: "farmer",
+        farmer: {
+          job: "farmer",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+      resource: {
+        ...foodRoot.resource,
+        Food: { amount: 19.5, max: 100, diff: 1 },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: foodControls,
+  readSettings: () => ({ job_s_farmer: true, tickRate: 1 }),
+});
+assert.equal(
+  slowScriptFoodReader().jobs[0].smartMaximum,
+  1,
+  "positive Food production is projected over the configured script tick",
+);
+
 const ravenousFoodReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

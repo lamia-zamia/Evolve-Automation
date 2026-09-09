@@ -256,9 +256,11 @@ function readSmartMaximum(
   if (id === "professor") return readProfessorSmartMaximum(root);
   if (id === "banker") return readBankerSmartMaximum(root, readDemand);
   const history = readJobHistory?.();
-  if (id === "farmer") return readFarmerSmartMaximum(root, count, history);
+  if (id === "farmer") {
+    return readFarmerSmartMaximum(root, count, settings, history);
+  }
   if (id === "hunter") {
-    return readHunterSmartMaximum(root, count, readDemand, history);
+    return readHunterSmartMaximum(root, count, readDemand, settings, history);
   }
   if (id === "lumberjack") {
     return readLumberjackSmartMaximum(root, readDemand);
@@ -512,6 +514,7 @@ function readBankerSmartMaximum(
 function readFarmerSmartMaximum(
   root: unknown,
   count: number,
+  settings: Record<PropertyKey, unknown> | undefined,
   history?: Readonly<CapturedJobHistory>,
   applyFarmCapacity = true,
 ): number | null | undefined {
@@ -597,6 +600,14 @@ function readFarmerSmartMaximum(
       rate += (amount - 10) * (rotPercent / 100) * 0.9 ** smokehouseCount;
     }
   }
+  const tickRateValue = readProperty(settings, "tickRate");
+  const tickRate =
+    tickRateValue === undefined ? 4 : finiteNonNegative(tickRateValue);
+  if (tickRate === undefined || tickRate <= 0) return undefined;
+  // DeadSpace 1.5.0 leaves settings.at at zero permanently. The compatibility formula's
+  // normal-speed branch therefore projects one script tick with 4 / tickRate periods; do not
+  // revive the removed accelerated-time multiplier here.
+  const nextTickFood = amount + rate / (4 / tickRate);
   let foodMaximum: number | null = null;
   if (
     population !== undefined &&
@@ -610,9 +621,9 @@ function readFarmerSmartMaximum(
     }
   }
   if (foodMaximum === null) {
-    if (count === 0 && amount < minimumFood && amount + rate < minimumFood) {
+    if (count === 0 && amount < minimumFood && nextTickFood < minimumFood) {
       foodMaximum = 1;
-    } else if (count > 0 && amount + rate < minimumFood) {
+    } else if (count > 0 && nextTickFood < minimumFood) {
       // The upstream fallback divides by each source's live production. The captured root has no
       // equivalent source breakdown, so special-race pools with existing workers remain unknown.
       return undefined;
@@ -647,6 +658,7 @@ function readHunterSmartMaximum(
   root: unknown,
   count: number,
   readDemand?: () => CapturedDemandSample,
+  settings?: Record<PropertyKey, unknown>,
   history?: Readonly<CapturedJobHistory>,
 ): number | null | undefined {
   const race = readProperty(root, "race");
@@ -677,7 +689,7 @@ function readHunterSmartMaximum(
   }
 
   if (!hasRaceFlag(race, "ravenous") && !hasRaceFlag(race, "carnivore")) {
-    const food = readFarmerSmartMaximum(root, count, history, false);
+    const food = readFarmerSmartMaximum(root, count, settings, history, false);
     if (food === 0) return 0;
     if (food === undefined) return undefined;
     if (!uncertain && food !== null) return food;
@@ -703,11 +715,18 @@ function readCapturedFarmerMinimum(
   count: number,
   smartMaximum: number | null,
   history?: Readonly<CapturedJobHistory>,
+  settings?: Record<PropertyKey, unknown>,
 ): number | null {
   const explicit = readFarmerMinimum(root, id);
   if (explicit !== null || !smart) return explicit;
   if (id === "hunter") {
-    const foodMaximum = readFarmerSmartMaximum(root, count, history, false);
+    const foodMaximum = readFarmerSmartMaximum(
+      root,
+      count,
+      settings,
+      history,
+      false,
+    );
     return foodMaximum === undefined ? null : (foodMaximum ?? count);
   }
   if (id !== "farmer") return explicit;
@@ -1325,6 +1344,7 @@ function readCatalog(
           workers + servantInput.count * servantModifier,
           smartMaximum,
           jobHistory,
+          settings,
         ),
         storageBackedMinimum,
         warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),
