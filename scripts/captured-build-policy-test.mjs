@@ -93,10 +93,11 @@ const authorityCapReader = createCapturedBuildPolicyReader({
   rootState: {
     readRoot: () => ({
       city: {
-        barracks: { count: 0 },
+        garrison: { count: 0 },
         temple: { count: 1 },
         farm: { count: 1 },
       },
+      space: { space_barracks: { count: 1 } },
       resource: { Authority: { display: true, max: 50 } },
     }),
     isReactivitySuppressed: () => false,
@@ -105,18 +106,25 @@ const authorityCapReader = createCapturedBuildPolicyReader({
   controls: {
     resolve: () => undefined,
     invoke: () => ({ ok: false, reason: "unknown-control" }),
-    capturedElementIds: () => ["city-barracks", "city-temple", "city-farm"],
+    capturedElementIds: () => [
+      "city-garrison",
+      "city-temple",
+      "city-farm",
+      "space-space_barracks",
+    ],
   },
   getSettings: () => ({
     authorityManage: true,
     generalMinimumAuthority: 100,
     buildingWeightingAuthority: 0.2,
-    "batcity-barracks": true,
+    "batcity-garrison": true,
     "batcity-temple": true,
     "batcity-farm": true,
-    "bld_w_city-barracks": 10,
+    "batspace-space_barracks": true,
+    "bld_w_city-garrison": 10,
     "bld_w_city-temple": 10,
     "bld_w_city-farm": 10,
+    "bld_w_space-space_barracks": 10,
   }),
   readKnowledge: () => openKnowledge,
 });
@@ -126,11 +134,12 @@ assert.deepEqual(
     weighting,
   })),
   [
-    { id: "barracks", weighting: 2 },
+    { id: "garrison", weighting: 2 },
     { id: "temple", weighting: 2 },
     { id: "farm", weighting: 10 },
+    { id: "space_barracks", weighting: 2 },
   ],
-  "authority-cap weighting promotes city Barracks and Temple while capacity is short",
+  "authority-cap weighting promotes captured Authority-cap buildings while capacity is short",
 );
 
 const neutralMissingMultiplierReader = createCapturedBuildPolicyReader({

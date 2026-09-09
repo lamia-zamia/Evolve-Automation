@@ -9,6 +9,7 @@
 
 import {
   applyAuthorityCapWeighting,
+  isAuthorityCapBuilding,
   applyNeedfulKnowledgeWeighting,
   applyNewBuildingWeighting,
   applyNeedMoreStorageWeighting,
@@ -354,6 +355,7 @@ function readActionPower(
 
 interface CityWeightingInput {
   readonly base: number;
+  readonly binding: string;
   readonly id: string;
   readonly count: number;
   readonly on: number | undefined;
@@ -391,7 +393,7 @@ function cityWeighting(input: Readonly<CityWeightingInput>): number {
   );
   weight = applyAuthorityCapWeighting(
     weight,
-    id,
+    input.binding,
     context.authorityCapBelowTarget,
     multipliers.authorityCap,
   );
@@ -591,7 +593,7 @@ function readTarget(
     onSkipped(binding, "useless-power weighting is not finite");
     return undefined;
   }
-  const authorityCapWeighting = ["barracks", "temple"].includes(id)
+  const authorityCapWeighting = isAuthorityCapBuilding(binding)
     ? readFiniteSetting(settings, "buildingWeightingAuthority", 1)
     : 1;
   if (authorityCapWeighting === undefined) {
@@ -624,6 +626,7 @@ function readTarget(
     id,
     weighting: cityWeighting({
       base: weighting,
+      binding,
       id,
       count,
       on,
@@ -744,6 +747,13 @@ function readNonCityTarget(
     onSkipped(binding, "useless-power weighting is not finite");
     return undefined;
   }
+  const authorityCapWeighting = isAuthorityCapBuilding(binding)
+    ? readFiniteSetting(settings, "buildingWeightingAuthority", 1)
+    : 1;
+  if (authorityCapWeighting === undefined) {
+    onSkipped(binding, "authority-cap weighting is not finite");
+    return undefined;
+  }
   const dynamicWeight = applyNonCityPowerProducerWeighting(
     applyVacuumCollapseWeighting(
       applyNonOperatingWeighting(
@@ -770,7 +780,12 @@ function readNonCityTarget(
     region,
     id,
     weighting: applyUnderpoweredWeighting(
-      dynamicWeight,
+      applyAuthorityCapWeighting(
+        dynamicWeight,
+        binding,
+        context.authorityCapBelowTarget,
+        authorityCapWeighting,
+      ),
       id,
       context.powerUnlocked,
       context.powerSurplus,

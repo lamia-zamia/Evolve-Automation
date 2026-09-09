@@ -1348,8 +1348,22 @@
   function applyVacuumCollapseWeighting(baseWeight, buildingId, prestigeType, multiplier) {
     return prestigeType === "vacuum" && buildingId === "pylon" ? baseWeight * multiplier : baseWeight;
   }
-  function applyAuthorityCapWeighting(baseWeight, buildingId, authorityCapBelowTarget, multiplier) {
-    return authorityCapBelowTarget && (buildingId === "barracks" || buildingId === "temple") ? baseWeight * multiplier : baseWeight;
+  var AUTHORITY_CAP_BUILDINGS = /* @__PURE__ */ new Set([
+    "city-garrison",
+    "city-temple",
+    "space-space_barracks",
+    "interstellar-cruiser",
+    "space-space_station",
+    "portal-brute",
+    "portal-minions",
+    "portal-throne",
+    "eden-bunker"
+  ]);
+  function isAuthorityCapBuilding(buildingBinding) {
+    return AUTHORITY_CAP_BUILDINGS.has(buildingBinding);
+  }
+  function applyAuthorityCapWeighting(baseWeight, buildingBinding, authorityCapBelowTarget, multiplier) {
+    return authorityCapBelowTarget && isAuthorityCapBuilding(buildingBinding) ? baseWeight * multiplier : baseWeight;
   }
   function isKnowledgeGated(levels) {
     return levels.cheapestTechKnowledge > levels.knowledgeCapacity || levels.knowledgeRequiredByBuildTargets > levels.knowledgeCapacity;
@@ -1574,7 +1588,7 @@
     );
     return weight = applyAuthorityCapWeighting(
       weight,
-      id,
+      input.binding,
       context.authorityCapBelowTarget,
       multipliers.authorityCap
     ), weight = applyPowerPlantWeighting(
@@ -1725,7 +1739,7 @@
       onSkipped(binding, "useless-power weighting is not finite");
       return;
     }
-    let authorityCapWeighting = ["barracks", "temple"].includes(id) ? readFiniteSetting(settings, "buildingWeightingAuthority", 1) : 1;
+    let authorityCapWeighting = isAuthorityCapBuilding(binding) ? readFiniteSetting(settings, "buildingWeightingAuthority", 1) : 1;
     if (authorityCapWeighting === void 0) {
       onSkipped(binding, "authority-cap weighting is not finite");
       return;
@@ -1747,6 +1761,7 @@
       id,
       weighting: cityWeighting({
         base: weighting,
+        binding,
         id,
         count,
         on,
@@ -1833,6 +1848,11 @@
       onSkipped(binding, "useless-power weighting is not finite");
       return;
     }
+    let authorityCapWeighting = isAuthorityCapBuilding(binding) ? readFiniteSetting(settings, "buildingWeightingAuthority", 1) : 1;
+    if (authorityCapWeighting === void 0) {
+      onSkipped(binding, "authority-cap weighting is not finite");
+      return;
+    }
     let dynamicWeight = applyNonCityPowerProducerWeighting(
       applyVacuumCollapseWeighting(
         applyNonOperatingWeighting(
@@ -1859,7 +1879,12 @@
       region,
       id,
       weighting: applyUnderpoweredWeighting(
-        dynamicWeight,
+        applyAuthorityCapWeighting(
+          dynamicWeight,
+          binding,
+          context.authorityCapBelowTarget,
+          authorityCapWeighting
+        ),
         id,
         context.powerUnlocked,
         context.powerSurplus,

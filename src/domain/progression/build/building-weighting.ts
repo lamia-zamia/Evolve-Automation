@@ -280,15 +280,31 @@ export function applyVacuumCollapseWeighting(
     : baseWeight;
 }
 
-/** Applies the captured city portion of the Authority-cap building rule. */
+const AUTHORITY_CAP_BUILDINGS: ReadonlySet<string> = new Set([
+  "city-garrison",
+  "city-temple",
+  "space-space_barracks",
+  "interstellar-cruiser",
+  "space-space_station",
+  "portal-brute",
+  "portal-minions",
+  "portal-throne",
+  "eden-bunker",
+]);
+
+/** Returns whether a captured binding is one of DeadSpace's Authority-cap buildings. */
+export function isAuthorityCapBuilding(buildingBinding: string): boolean {
+  return AUTHORITY_CAP_BUILDINGS.has(buildingBinding);
+}
+
+/** Applies the captured Authority-cap building rule. */
 export function applyAuthorityCapWeighting(
   baseWeight: number,
-  buildingId: string,
+  buildingBinding: string,
   authorityCapBelowTarget: boolean,
   multiplier: number,
 ): number {
-  return authorityCapBelowTarget &&
-    (buildingId === "barracks" || buildingId === "temple")
+  return authorityCapBelowTarget && isAuthorityCapBuilding(buildingBinding)
     ? baseWeight * multiplier
     : baseWeight;
 }
