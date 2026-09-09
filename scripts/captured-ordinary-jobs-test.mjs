@@ -184,9 +184,8 @@ const fullControls = {
     } else if (handle.elementId.startsWith("servant-")) {
       const id = handle.elementId.slice("servant-".length);
       fullRoot.race.servants.jobs[id] =
-        (fullRoot.race.servants.jobs[id] ?? 0) +
-        (method === "add" ? args[0] : -args[0]);
-      fullRoot.race.servants.used += method === "add" ? args[0] : -args[0];
+        (fullRoot.race.servants.jobs[id] ?? 0) + (method === "add" ? 1 : -1);
+      fullRoot.race.servants.used += method === "add" ? 1 : -1;
     } else if (handle.elementId === "foundry") {
       const id = args[0];
       fullRoot.city.foundry[id] += method === "add" ? 1 : -1;

@@ -409,4 +409,160 @@ assert.equal(unsubscribeCount, 1);
   ]);
 }
 
+// When both job families are enabled, the runtime uses one combined decision and command phase.
+// The fixture includes both ordinary and skilled servants so the branch also proves that the
+// runtime does not fall back to a second craftsmen-only pass after the full phase succeeds.
+{
+  const root = {
+    civic: {
+      d_job: "unemployed",
+      unemployed: {
+        job: "unemployed",
+        assigned: 4,
+        workers: 4,
+        max: 0,
+        display: true,
+      },
+      farmer: {
+        job: "farmer",
+        assigned: 0,
+        workers: 0,
+        max: -1,
+        display: true,
+      },
+      craftsman: { workers: 1, max: 2 },
+    },
+    city: {
+      foundry: {
+        Plywood: 1,
+        Brick: 0,
+        crafting: 1,
+        cap: 2,
+        rcap: { Plywood: 2, Brick: 2 },
+      },
+    },
+    race: {
+      servants: {
+        jobs: { farmer: 0 },
+        sjobs: { Plywood: 1 },
+        max: 1,
+        used: 0,
+        smax: 1,
+        sused: 1,
+      },
+    },
+    resource: {
+      Population: { amount: 4, max: 10 },
+      Plywood: { amount: 100, max: 1000, name: "Plywood", display: true },
+      Brick: { amount: 0, max: 1000, name: "Brick", display: true },
+      Iron: { amount: 100, max: 1000, name: "Iron", display: true },
+    },
+  };
+  const invoked = [];
+  let cycle;
+  const controlIds = [
+    "civ-unemployed",
+    "civ-farmer",
+    "servant-farmer",
+    "foundry",
+    "scraftPlywood",
+    "scraftBrick",
+    "resPlywood",
+    "resBrick",
+  ];
+  const controls = {
+    resolve: (elementId) => {
+      if (!controlIds.includes(elementId)) return undefined;
+      const methods = elementId.startsWith("res")
+        ? ["craftCost"]
+        : elementId === "foundry" ||
+            elementId.startsWith("scraft") ||
+            elementId.startsWith("servant-")
+          ? ["add", "sub"]
+          : ["add", "sub", "setDefault"];
+      return { elementId, generation: 1, methods };
+    },
+    invoke: (handle, method, args = []) => {
+      if (method === "craftCost")
+        return { ok: true, value: "<div>Iron 1</div>" };
+      invoked.push(`${handle.elementId}.${method}`);
+      if (handle.elementId === "foundry") {
+        const id = args[0];
+        root.city.foundry[id] += method === "add" ? 1 : -1;
+        root.city.foundry.crafting += method === "add" ? 1 : -1;
+        root.civic.craftsman.workers += method === "add" ? 1 : -1;
+        root.civic.unemployed.workers += method === "add" ? -1 : 1;
+      } else if (handle.elementId.startsWith("scraft")) {
+        const id = args[0];
+        root.race.servants.sjobs[id] =
+          (root.race.servants.sjobs[id] ?? 0) + (method === "add" ? 1 : -1);
+        root.race.servants.sused += method === "add" ? 1 : -1;
+      } else if (handle.elementId === "servant-farmer") {
+        root.race.servants.jobs.farmer += method === "add" ? 1 : -1;
+        root.race.servants.used += method === "add" ? 1 : -1;
+      } else if (method === "setDefault") {
+        root.civic.d_job = args[0];
+      } else {
+        const id = handle.elementId.slice("civ-".length);
+        root.civic[id].workers += method === "add" ? 1 : -1;
+      }
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds: () => controlIds,
+  };
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls,
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          autoJobs: true,
+          autoCraftsmen: true,
+          job_unemployed: true,
+          job_farmer: true,
+          jobManageServants: true,
+          productionCraftsmen: "always",
+          craftPlywood: true,
+          job_Plywood: true,
+          foundry_w_Plywood: 1,
+          craftBrick: true,
+          job_Brick: true,
+          foundry_w_Brick: 1,
+        }),
+    },
+    logError: (message) => {
+      throw new Error(message);
+    },
+  });
+  cycle({ periods: 1 });
+  stopCycle();
+  assert.ok(invoked.some((entry) => entry.startsWith("foundry.")));
+  assert.ok(invoked.some((entry) => entry.startsWith("scraft")));
+  assert.ok(invoked.some((entry) => entry.startsWith("servant-farmer.")));
+  assert.equal(
+    invoked.filter((entry) => entry.startsWith("foundry.")).length,
+    1,
+    "the combined branch must not run a second craftsmen-only pass",
+  );
+}
+
 console.log("captured-runtime-control ok");
