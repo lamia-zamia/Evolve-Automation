@@ -624,6 +624,20 @@ function readFarmerMinimum(root: unknown, id: string): number | null {
     : null;
 }
 
+function readCapturedFarmerMinimum(
+  root: unknown,
+  id: string,
+  smart: boolean,
+  count: number,
+  smartMaximum: number | null,
+): number | null {
+  const explicit = readFarmerMinimum(root, id);
+  if (explicit !== null || id !== "farmer" || !smart) return explicit;
+  // Upstream keeps the Farmer minimum at the current food/farm-derived allocation when the
+  // smart maximum has no finite cap. An absent race bag remains the established lenient null.
+  return isRecord(readProperty(root, "race")) ? (smartMaximum ?? count) : null;
+}
+
 function resourceStorageRatio(root: unknown, id: string): number | undefined {
   const resource = readProperty(readProperty(root, "resource"), id);
   const amount = finiteNonNegative(readProperty(resource, "amount"));
@@ -1223,7 +1237,13 @@ function readCatalog(
         split: isSplitJob(id),
         smartMaximum,
         smartMaximumKnown,
-        farmerMinimum: readFarmerMinimum(root, id),
+        farmerMinimum: readCapturedFarmerMinimum(
+          root,
+          id,
+          smart,
+          workers + servantInput.count * servantModifier,
+          smartMaximum,
+        ),
         storageBackedMinimum,
         warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),
         demonicLumber,

@@ -1505,6 +1505,11 @@ assert.equal(
   0,
   "a full Food store stops smart Farmers",
 );
+assert.equal(
+  foodReader().jobs[0].farmerMinimum,
+  0,
+  "a full Food store also sets the Farmer minimum to zero",
+);
 foodRoot.resource.Food = { amount: 70, max: 100, diff: 1 };
 assert.equal(
   foodReader().jobs[0].smartMaximum,
@@ -1531,6 +1536,11 @@ assert.equal(
   foodReader().jobs[0].smartMaximum,
   2,
   "a captured Farm capacity caps normal-race smart Farmers",
+);
+assert.equal(
+  foodReader().jobs[0].farmerMinimum,
+  2,
+  "the Farmer minimum follows the captured Food/Farm allocation cap",
 );
 
 console.log("captured-job-catalog ok");

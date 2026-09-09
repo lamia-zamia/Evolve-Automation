@@ -4921,6 +4921,10 @@
     let race = readProperty(root, "race");
     return isRecord(race) && (hasRaceFlag(race, "artifical") || hasRaceFlag(race, "unfathomable")) ? 0 : null;
   }
+  function readCapturedFarmerMinimum(root, id, smart, count, smartMaximum) {
+    let explicit = readFarmerMinimum(root, id);
+    return explicit !== null || id !== "farmer" || !smart ? explicit : isRecord(readProperty(root, "race")) ? smartMaximum ?? count : null;
+  }
   function resourceStorageRatio(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id), amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finiteNumber(readProperty(resource, "max"));
     if (!(amount === void 0 || maximum === void 0))
@@ -5308,7 +5312,13 @@
           split: isSplitJob(id),
           smartMaximum,
           smartMaximumKnown,
-          farmerMinimum: readFarmerMinimum(root, id),
+          farmerMinimum: readCapturedFarmerMinimum(
+            root,
+            id,
+            smart,
+            workers + servantInput.count * servantModifier,
+            smartMaximum
+          ),
           storageBackedMinimum,
           warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),
           demonicLumber,
