@@ -53,6 +53,8 @@ export interface CapturedServantState {
 
 export interface CapturedJobCatalog {
   readonly defaultJobId: string;
+  /** Whether the current race uses Hunter as the unemployed allocation pool. */
+  readonly hunterActsAsUnemployed: boolean;
   /** Null means the race has no servant feature in this run. */
   readonly servantState: Readonly<CapturedServantState> | null;
   readonly jobs: readonly Readonly<CapturedJobCatalogEntry>[];
@@ -195,6 +197,16 @@ function jobKind(id: string): JobKind {
 
 function isSplitJob(id: string): boolean {
   return SPLIT_JOB_IDS.has(id);
+}
+
+function readHunterActsAsUnemployed(root: unknown): boolean {
+  const race = readProperty(root, "race");
+  return (
+    (readProperty(race, "carnivore") === true &&
+      readProperty(race, "herbivore") !== true) ||
+    readProperty(race, "soul_eater") === true ||
+    readProperty(race, "unfathomable") === true
+  );
 }
 
 function readConfiguredBreakpoints(
@@ -381,6 +393,7 @@ function readCatalog(
   return jobs.some((job) => job.id === defaultJobId)
     ? Object.freeze({
         defaultJobId,
+        hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
         servantState,
         jobs: Object.freeze(jobs),
       })

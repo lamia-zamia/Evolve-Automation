@@ -62,6 +62,7 @@ const reader = createCapturedJobCatalogReader({
 
 assert.deepEqual(reader(), {
   defaultJobId: "unemployed",
+  hunterActsAsUnemployed: false,
   servantState: null,
   jobs: [
     {
@@ -258,6 +259,11 @@ assert.equal(
   demonicLumberReader().jobs.find(({ id }) => id === "hunter")?.demonicLumber,
   true,
   "Demonic Lumber follows the captured demon and lumber-race predicates",
+);
+assert.equal(
+  demonicLumberReader().hunterActsAsUnemployed,
+  true,
+  "Hunter acts as unemployed for the captured soul-eater race",
 );
 
 const servantReader = createCapturedJobCatalogReader({

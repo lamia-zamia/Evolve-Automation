@@ -4464,6 +4464,10 @@
   function isSplitJob(id) {
     return SPLIT_JOB_IDS.has(id);
   }
+  function readHunterActsAsUnemployed(root) {
+    let race = readProperty(root, "race");
+    return readProperty(race, "carnivore") === !0 && readProperty(race, "herbivore") !== !0 || readProperty(race, "soul_eater") === !0 || readProperty(race, "unfathomable") === !0;
+  }
   function readConfiguredBreakpoints(settings, id) {
     let values = [1, 2, 3].map(
       (number) => readProperty(settings, `job_b${number}_${id}`)
@@ -4587,6 +4591,7 @@
     }
     return jobs.some((job) => job.id === defaultJobId) ? Object.freeze({
       defaultJobId,
+      hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
       servantState,
       jobs: Object.freeze(jobs)
     }) : void 0;
