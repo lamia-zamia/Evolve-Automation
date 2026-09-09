@@ -23,6 +23,8 @@ export interface CapturedJobCatalogEntry {
   readonly servants: number;
   /** Whether DeadSpace has initialized a servant assignment slot for this job. */
   readonly serves: boolean;
+  /** Static planner split flag from the ordinary-job catalog. */
+  readonly split: boolean;
   /** DeadSpace uses -1 for an uncapped ordinary job. */
   readonly maximum: number;
   readonly display: boolean;
@@ -138,8 +140,20 @@ const JOB_KINDS: Readonly<Record<string, JobKind>> = Object.freeze({
   entertainer: "entertainer",
 });
 
+const SPLIT_JOB_IDS: ReadonlySet<string> = new Set([
+  "forager",
+  "lumberjack",
+  "quarry_worker",
+  "crystal_miner",
+  "scavenger",
+]);
+
 function jobKind(id: string): JobKind {
   return JOB_KINDS[id] ?? "other";
+}
+
+function isSplitJob(id: string): boolean {
+  return SPLIT_JOB_IDS.has(id);
 }
 
 function readConfiguredBreakpoints(
@@ -291,6 +305,7 @@ function readCatalog(
         workers,
         servants: servantInput.count,
         serves: servantInput.serves,
+        split: isSplitJob(id),
         maximum,
         display,
         unlocked,

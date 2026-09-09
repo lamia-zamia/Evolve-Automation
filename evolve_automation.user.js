@@ -4437,9 +4437,18 @@
     miner: "miner",
     space_miner: "space-miner",
     entertainer: "entertainer"
-  });
+  }), SPLIT_JOB_IDS = /* @__PURE__ */ new Set([
+    "forager",
+    "lumberjack",
+    "quarry_worker",
+    "crystal_miner",
+    "scavenger"
+  ]);
   function jobKind(id) {
     return JOB_KINDS[id] ?? "other";
+  }
+  function isSplitJob(id) {
+    return SPLIT_JOB_IDS.has(id);
   }
   function readConfiguredBreakpoints(settings, id) {
     let values = [1, 2, 3].map(
@@ -4542,6 +4551,7 @@
           workers,
           servants: servantInput.count,
           serves: servantInput.serves,
+          split: isSplitJob(id),
           maximum,
           display,
           unlocked,
