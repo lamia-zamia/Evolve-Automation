@@ -7730,15 +7730,169 @@
     }
     return Object.freeze(states);
   }
+  var FACTORY_DEMAND_SPECS = Object.freeze([
+    Object.freeze({
+      id: "Lux",
+      outputResourceId: "Money",
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Furs",
+          rates: Object.freeze([2, 3, 4, 5, 6]),
+          minRateOfChange: 5
+        })
+      ])
+    }),
+    Object.freeze({
+      id: "Furs",
+      outputResourceId: "Furs",
+      unlockTech: "synthetic_fur",
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Money",
+          rates: Object.freeze([10, 15, 20, 25, 30]),
+          minRateOfChange: 1e3
+        }),
+        Object.freeze({
+          resourceId: "Polymer",
+          rates: Object.freeze([1.5, 2.25, 3, 3.75, 4.5]),
+          minRateOfChange: 10
+        })
+      ])
+    }),
+    Object.freeze({
+      id: "Alloy",
+      outputResourceId: "Alloy",
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Copper",
+          rates: Object.freeze([0.75, 1.12, 1.49, 1.86, 2.23]),
+          minRateOfChange: 5
+        }),
+        Object.freeze({
+          resourceId: "Aluminium",
+          rates: Object.freeze([1, 1.5, 2, 2.5, 3]),
+          minRateOfChange: 5
+        })
+      ])
+    }),
+    Object.freeze({
+      id: "Polymer",
+      outputResourceId: "Polymer",
+      unlockTech: "polymer",
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Oil",
+          rates: Object.freeze([0.18, 0.27, 0.36, 0.45, 0.54]),
+          minRateOfChange: 2
+        }),
+        Object.freeze({
+          resourceId: "Lumber",
+          rates: Object.freeze([15, 22, 29, 36, 43]),
+          minRateOfChange: 50
+        })
+      ])
+    }),
+    Object.freeze({
+      id: "Nano",
+      outputResourceId: "Nano_Tube",
+      unlockTech: "nano",
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Coal",
+          rates: Object.freeze([8, 12, 16, 20, 24]),
+          minRateOfChange: 15
+        }),
+        Object.freeze({
+          resourceId: "Neutronium",
+          rates: Object.freeze([0.05, 0.075, 0.1, 0.125, 0.15]),
+          minRateOfChange: 0.2
+        })
+      ])
+    }),
+    Object.freeze({
+      id: "Stanene",
+      outputResourceId: "Stanene",
+      unlockTech: "stanene",
+      costs: Object.freeze([
+        Object.freeze({
+          resourceId: "Aluminium",
+          rates: Object.freeze([30, 45, 60, 75, 90]),
+          minRateOfChange: 50
+        }),
+        Object.freeze({
+          resourceId: "Nano_Tube",
+          rates: Object.freeze([0.02, 0.03, 0.04, 0.05, 0.06]),
+          minRateOfChange: 5
+        })
+      ])
+    })
+  ]);
+  function readCapturedFactoryDemand(root, settings) {
+    let factory = readProperty(readProperty(root, "city"), "factory"), count = finite6(readProperty(factory, "on")), factoryLevel = finite6(
+      readProperty(readProperty(root, "tech"), "factory")
+    );
+    if (count === void 0 || count <= 0 || !Number.isSafeInteger(count) || factoryLevel === void 0 || !Number.isSafeInteger(factoryLevel) || factoryLevel < 0 || factoryLevel > 4)
+      return;
+    let regions = [
+      ["space", "red_factory"],
+      ["interstellar", "int_factory"],
+      ["portal", "hell_factory"],
+      ["underground", "under_factory"],
+      ["surface", "crater_factory"],
+      ["tauceti", "tau_factory"],
+      ["space", "industrial_complex"]
+    ];
+    for (let [region, id] of regions) {
+      let structure = readProperty(readProperty(root, region), id);
+      if (structure === void 0) continue;
+      if (!isRecord(structure)) return;
+      let laterCount = finite6(structure.count);
+      if (laterCount === void 0 || laterCount > 0) return;
+    }
+    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), coalSpecies = !!readProperty(race, "kindling_kindred") || !!readProperty(race, "smoldering") || !!readProperty(race, "iceage"), productions = FACTORY_DEMAND_SPECS.map((spec) => {
+      let techLevel3 = spec.unlockTech === void 0 ? 1 : finite6(readProperty(tech, spec.unlockTech)) ?? 0, enabled = settings[`production_${spec.id}`] ?? !0, weighting = settings[`production_w_${spec.id}`] ?? (spec.id === "Nano" || spec.id === "Stanene" ? 4 : 1);
+      if (typeof enabled != "boolean" || typeof weighting != "number" || !Number.isFinite(weighting))
+        return;
+      let unlocked = spec.unlockTech === void 0 || techLevel3 > 0, costs = spec.costs.flatMap((cost) => {
+        let quantity = (spec.id === "Polymer" && coalSpecies && cost.resourceId === "Oil" ? [0.22, 0.33, 0.44, 0.55, 0.66] : cost.rates)[factoryLevel], resource = readProperty(
+          readProperty(root, "resource"),
+          cost.resourceId
+        ), maximum = finite6(readProperty(resource, "max"));
+        return quantity === void 0 || maximum === void 0 ? [] : [
+          Object.freeze({
+            quantity,
+            minRateOfChange: cost.minRateOfChange,
+            resourceId: cost.resourceId,
+            resourceMaxQuantity: maximum
+          })
+        ];
+      });
+      if (!(unlocked && enabled && weighting > 0 && costs.length !== spec.costs.length))
+        return Object.freeze({
+          outputResourceId: spec.outputResourceId,
+          unlocked,
+          enabled,
+          weighting,
+          costs: Object.freeze(costs)
+        });
+    });
+    if (!productions.some((production) => production === void 0))
+      return Object.freeze({
+        count,
+        productions: Object.freeze(productions.map((production) => production))
+      });
+  }
   function createCapturedResourceDemand(dependencies) {
     return Object.freeze({
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
         if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
-        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.();
-        if (queued.length === 0 && saving === null && (offered === void 0 || offered.length === 0))
+        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, factoryCatalog = readCapturedFactoryDemand(root, settings), hasFactoryDemand = factoryCatalog?.productions.some(
+          (production) => production.unlocked && production.enabled && production.weighting > 0
+        ) ?? !1;
+        if (queued.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand)
           return EMPTY_DEMAND_SAMPLE;
-        let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, savingCosts = saving === null ? null : toCosts(saving.cost), result = planDemandPrioritization({
+        let savingCosts = saving === null ? null : toCosts(saving.cost), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
           // The captured offer list is the game's own technology qualification result. The reader
           // only recomputes affordability from current holdings; it never recreates tech gates.
@@ -7766,7 +7920,30 @@
           }),
           factoryCount: 0,
           factoryProductions: Object.freeze([])
-        }), requested = /* @__PURE__ */ new Map();
+        }), baseResult = planDemandPrioritization(baseInput), baseRequested = /* @__PURE__ */ new Map();
+        for (let request of baseResult.requests) {
+          let amount = finite6(request.amount);
+          amount !== void 0 && baseRequested.set(
+            request.resourceId,
+            Math.max(baseRequested.get(request.resourceId) ?? 0, amount)
+          );
+        }
+        let factoryProductions = Object.freeze(factoryCatalog === void 0 ? [] : factoryCatalog.productions.map((production) => {
+          let amount = finite6(
+            readProperty(
+              readProperty(resources, production.outputResourceId),
+              "amount"
+            )
+          );
+          return Object.freeze({
+            ...production,
+            isDemanded: amount !== void 0 && (baseRequested.get(production.outputResourceId) ?? 0) > amount
+          });
+        })), result = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
+          ...baseInput,
+          factoryCount: factoryCatalog.count,
+          factoryProductions
+        }) : baseResult, requested = /* @__PURE__ */ new Map();
         for (let request of result.requests) {
           let amount = finite6(request.amount);
           if (amount === void 0) continue;
@@ -7780,14 +7957,28 @@
             maximum === void 0 || maximum < 0 ? amount : Math.min(amount, maximum)
           );
         }
-        let storage = planStorageRequirements({
+        let factoryStorageTargets = factoryProductions.filter(
+          (production) => production.unlocked && production.enabled && production.weighting > 0
+        ).map(
+          (production) => Object.freeze({
+            costs: Object.freeze(
+              production.costs.map(
+                (cost) => Object.freeze({
+                  resourceId: cost.resourceId,
+                  amount: cost.quantity
+                })
+              )
+            )
+          })
+        ), storage = planStorageRequirements({
           storageAssignExtra: settings.storageAssignExtra !== !1,
           autoMarket: settings.autoMarket === !0,
           noTrade: !!readProperty(readProperty(root, "race"), "no_trade"),
           // The same commitments the demand pass just used, in the same order.
           requestLists: Object.freeze([
             toTargets(queued),
-            Object.freeze(savingCosts === null ? [] : [Object.freeze({ costs: savingCosts })])
+            Object.freeze(savingCosts === null ? [] : [Object.freeze({ costs: savingCosts })]),
+            factoryStorageTargets
           ]),
           // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
           // the offered catalog; this pass would have to draw one of its own to answer it.

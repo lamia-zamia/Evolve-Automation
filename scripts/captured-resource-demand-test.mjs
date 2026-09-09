@@ -237,4 +237,37 @@ function withTargets(targets, settings = {}, saving = null) {
   assert.equal(sample.isDemanded("Stone"), false);
 }
 
+// A fully captured city factory reserves its active recipe materials even without a queue target.
+{
+  const factoryRoot = {
+    race: {},
+    tech: { factory: 1 },
+    city: { factory: { on: 2 } },
+    resource: {
+      Alloy: { amount: 0, max: 1000, stackable: true },
+      Copper: { amount: 0, max: 1000, stackable: true },
+      Aluminium: { amount: 0, max: 1000, stackable: true },
+    },
+  };
+  const sample = createCapturedResourceDemand({
+    rootState: { readRoot: () => factoryRoot },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({
+      productionFactoryFocusMaterials: true,
+      production_Lux: false,
+      production_Furs: false,
+      production_Alloy: true,
+      production_Polymer: false,
+      production_Nano: false,
+      production_Stanene: false,
+      production_w_Alloy: 1,
+      productionFactoryMinIngredients: 0,
+    }),
+  }).sample();
+  assert.equal(sample.requestedQuantity("Copper"), 5);
+  assert.equal(sample.requestedQuantity("Aluminium"), 5);
+}
+
 console.log("Captured resource-demand adapter tests passed");
