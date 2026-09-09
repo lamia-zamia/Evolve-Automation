@@ -7965,7 +7965,7 @@
               production.costs.map(
                 (cost) => Object.freeze({
                   resourceId: cost.resourceId,
-                  amount: cost.quantity
+                  amount: cost.minRateOfChange + (finite6(settings.productionFactoryMinIngredients) ?? 0) * cost.resourceMaxQuantity
                 })
               )
             )

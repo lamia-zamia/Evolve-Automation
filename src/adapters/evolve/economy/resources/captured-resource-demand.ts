@@ -605,7 +605,10 @@ export function createCapturedResourceDemand(
               production.costs.map((cost) =>
                 Object.freeze({
                   resourceId: cost.resourceId,
-                  amount: cost.quantity,
+                  amount:
+                    cost.minRateOfChange +
+                    (finite(settings["productionFactoryMinIngredients"]) ?? 0) *
+                      cost.resourceMaxQuantity,
                 }),
               ),
             ),

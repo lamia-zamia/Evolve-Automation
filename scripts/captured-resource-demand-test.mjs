@@ -268,6 +268,7 @@ function withTargets(targets, settings = {}, saving = null) {
   }).sample();
   assert.equal(sample.requestedQuantity("Copper"), 5);
   assert.equal(sample.requestedQuantity("Aluminium"), 5);
+  assert.equal(sample.storageRequired("Copper"), 5.15);
 }
 
 console.log("Captured resource-demand adapter tests passed");
