@@ -4607,7 +4607,7 @@
       return;
     let maximum = Number.MAX_SAFE_INTEGER, tech = readProperty(root, "tech"), techRecord = isRecord(tech) ? tech : void 0, science = optionalFiniteNumber(techRecord, "science"), genetics = optionalFiniteNumber(techRecord, "genetics");
     if (science === void 0 || genetics === void 0) return;
-    if (universe !== "magic" && knowledgeMaximum >= 0 && readProperty(race, "intelligent") !== !0 && science < 5 && genetics < 5 && (maximum = 0), readProperty(race, "witch_hunter") !== !0) return maximum;
+    if (universe !== "magic" && knowledgeMaximum >= 0 && !readProperty(race, "intelligent") && science < 5 && genetics < 5 && (maximum = 0), readProperty(race, "witch_hunter") !== !0) return maximum;
     let govern = readProperty(readProperty(root, "civic"), "govern"), governType = readProperty(govern, "type"), suspicion = readProperty(resources, "Sus"), suspicionAmount = readProperty(suspicion, "amount");
     if (typeof governType != "string" || typeof suspicionAmount != "number" || !Number.isFinite(suspicionAmount))
       return;

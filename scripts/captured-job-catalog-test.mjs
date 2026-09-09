@@ -353,7 +353,7 @@ const scientistReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({
       ...root,
-      race: { universe: "standard", intelligent: false },
+      race: { universe: "standard", intelligent: 1 },
       tech: { science: 2, genetics: 1 },
       resource: { Knowledge: { max: 100 } },
       civic: {
@@ -378,15 +378,15 @@ const scientistReader = createCapturedJobCatalogReader({
 });
 assert.equal(
   scientistReader().jobs.find(({ id }) => id === "scientist")?.smartMaximum,
-  0,
-  "Scientist smart maximum stops capped Knowledge for non-intelligent races",
+  Number.MAX_SAFE_INTEGER,
+  "Scientist treats a ranked intelligent trait as enabled",
 );
 
 const professorReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({
       ...root,
-      race: { intelligent: false },
+      race: { intelligent: 1 },
       tech: { genetics: 1, fanaticism: 1 },
       resource: { Knowledge: { max: 100 } },
       civic: {
@@ -411,8 +411,8 @@ const professorReader = createCapturedJobCatalogReader({
 });
 assert.equal(
   professorReader().jobs.find(({ id }) => id === "professor")?.smartMaximum,
-  0,
-  "Professor smart maximum stops capped Knowledge without the enabling techs",
+  null,
+  "Professor treats a ranked intelligent trait as enabled",
 );
 
 const bankerReader = createCapturedJobCatalogReader({

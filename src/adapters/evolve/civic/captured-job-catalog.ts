@@ -300,7 +300,7 @@ function readScientistSmartMaximum(
   if (
     universe !== "magic" &&
     knowledgeMaximum >= 0 &&
-    readProperty(race, "intelligent") !== true &&
+    !readProperty(race, "intelligent") &&
     science < 5 &&
     genetics < 5
   ) {
