@@ -241,9 +241,13 @@ function readCycleInput(
   // The game initializes this lazily, but a craftsmen command cannot safely acquire or release a
   // worker without the named default job. Keep the cycle unavailable until that state is present.
   if (defaultJob === undefined) return undefined;
+  // Upstream updates the resource rows and civic.craftsman.workers in the same foundry control.
+  // Do not acquire from the default pool while a reactive sample exposes only part of that update;
+  // the planner cannot preserve an assignment that is missing from its captured rows.
+  if (craftsmen.workers !== assignedWorkers) return undefined;
   const craftOnlyWorkerPool = Math.min(
     craftsmen.maximum,
-    assignedWorkers + defaultJob.workers,
+    craftsmen.workers + defaultJob.workers,
   );
   const settings = isRecord(settingsValue) ? settingsValue : {};
   const resources = readProperty(root, "resource");

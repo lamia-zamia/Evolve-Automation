@@ -4594,10 +4594,10 @@
       (sum, sample) => sum + sample.workers,
       0
     ), craftsmen = readCraftsmanState(root, foundry, assignedWorkers), defaultJob = readDefaultJobState(root);
-    if (defaultJob === void 0) return;
+    if (defaultJob === void 0 || craftsmen.workers !== assignedWorkers) return;
     let craftOnlyWorkerPool = Math.min(
       craftsmen.maximum,
-      assignedWorkers + defaultJob.workers
+      craftsmen.workers + defaultJob.workers
     ), settings = isRecord(settingsValue) ? settingsValue : {}, resources = readProperty(root, "resource"), jobs = samples.map(
       (sample, token) => Object.freeze({
         token,

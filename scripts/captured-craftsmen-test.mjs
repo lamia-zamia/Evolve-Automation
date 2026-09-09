@@ -133,6 +133,17 @@ assert.equal(
 assert.equal(cappedInput.craftsmenMaximum, 4);
 assert.equal(cappedInput.craftOnlyWorkerPool, 4);
 
+const inconsistentRoot = makeRoot();
+inconsistentRoot.civic.craftsman.workers = 1;
+const inconsistentControls = controlsFor(inconsistentRoot);
+const inconsistentAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(inconsistentRoot),
+  controls: inconsistentControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+});
+assert.equal(inconsistentAdapter.reader.readCycle(true).available, false);
+
 const malformedRoot = makeRoot();
 const malformedControls = controlsFor(malformedRoot);
 const malformedAdapter = createCapturedCraftsmenAutomation({
