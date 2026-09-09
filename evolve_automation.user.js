@@ -4798,7 +4798,23 @@
     miner: "miner",
     space_miner: "space-miner",
     entertainer: "entertainer"
-  }), JOB_TOKENS = Object.freeze({
+  }), SMART_MAXIMUM_IDS = /* @__PURE__ */ new Set([
+    "space_miner",
+    "torturer",
+    "hell_surveyor",
+    "scientist",
+    "professor",
+    "banker",
+    "farmer",
+    "hunter",
+    "lumberjack",
+    "quarry_worker",
+    "crystal_miner",
+    "miner",
+    "coal_miner",
+    "cement_worker",
+    "teamster"
+  ]), JOB_TOKENS = Object.freeze({
     unemployed: 0,
     hunter: 1,
     forager: 2,
@@ -5006,7 +5022,7 @@
         onSkipped(controlId, "ordinary job smart maximum is unavailable");
         return;
       }
-      let storageBackedMinimum = readStorageBackedMinimum(
+      let smartMaximumKnown = !smart || SMART_MAXIMUM_IDS.has(id), storageBackedMinimum = readStorageBackedMinimum(
         root,
         id,
         workers,
@@ -5042,6 +5058,7 @@
           serves: servantInput.serves,
           split: isSplitJob(id),
           smartMaximum,
+          smartMaximumKnown,
           storageBackedMinimum,
           warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),
           demonicLumber,

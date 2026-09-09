@@ -32,6 +32,8 @@ export interface CapturedJobCatalogEntry {
   readonly split: boolean;
   /** Characterized smart maximum, when this catalog slice has all required inputs. */
   readonly smartMaximum: number | null;
+  /** False means the smart setting is visible but its rule is not yet characterized. */
+  readonly smartMaximumKnown: boolean;
   /** Worker floor when this job currently carries irreversible resource capacity. */
   readonly storageBackedMinimum: number | null;
   /** Warlord Miner behavior is a direct race/id condition in the pure planner. */
@@ -104,7 +106,13 @@ export interface CapturedJobCatalogReaderDependencies {
 export function toCapturedJobsJobInputs(
   catalog: Readonly<CapturedJobCatalog>,
 ): readonly Readonly<JobsJobInput>[] | undefined {
-  if (catalog.jobs.some((job) => job.token === null)) return undefined;
+  if (
+    catalog.jobs.some(
+      (job) => job.token === null || (job.smart && !job.smartMaximumKnown),
+    )
+  ) {
+    return undefined;
+  }
   return Object.freeze(
     catalog.jobs.map((job) =>
       Object.freeze({
@@ -747,6 +755,24 @@ const JOB_KINDS: Readonly<Record<string, JobKind>> = Object.freeze({
   entertainer: "entertainer",
 });
 
+const SMART_MAXIMUM_IDS: ReadonlySet<string> = new Set([
+  "space_miner",
+  "torturer",
+  "hell_surveyor",
+  "scientist",
+  "professor",
+  "banker",
+  "farmer",
+  "hunter",
+  "lumberjack",
+  "quarry_worker",
+  "crystal_miner",
+  "miner",
+  "coal_miner",
+  "cement_worker",
+  "teamster",
+]);
+
 const JOB_TOKENS: Readonly<Record<string, number>> = Object.freeze({
   unemployed: 0,
   hunter: 1,
@@ -1024,6 +1050,7 @@ function readCatalog(
       onSkipped(controlId, "ordinary job smart maximum is unavailable");
       return undefined;
     }
+    const smartMaximumKnown = !smart || SMART_MAXIMUM_IDS.has(id);
     const storageBackedMinimum = readStorageBackedMinimum(
       root,
       id,
@@ -1074,6 +1101,7 @@ function readCatalog(
         serves: servantInput.serves,
         split: isSplitJob(id),
         smartMaximum,
+        smartMaximumKnown,
         storageBackedMinimum,
         warlordMiner: kind === "miner" && hasRaceFlag(race, "warlord"),
         demonicLumber,
