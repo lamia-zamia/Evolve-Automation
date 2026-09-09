@@ -4505,6 +4505,49 @@
   }
 
   // src/adapters/evolve/civic/captured-job-catalog.ts
+  function toCapturedJobsJobInputs(catalog) {
+    if (!catalog.jobs.some(
+      (job) => job.token === null || job.smart && !job.smartMaximumKnown
+    ))
+      return Object.freeze(
+        catalog.jobs.map(
+          (job) => Object.freeze({
+            token: job.token,
+            id: job.id,
+            kind: job.kind,
+            workers: job.workers,
+            servants: job.servants,
+            count: job.count,
+            maximum: job.maximum,
+            managed: job.managed,
+            unlocked: job.unlocked,
+            smart: job.smart,
+            crafting: !1,
+            serves: job.serves,
+            split: job.split,
+            isDefault: job.isDefault,
+            breakpoints: job.breakpoints ?? [0, 0, 0],
+            uncappedBreakpoints: job.uncappedBreakpoints ?? [0, 0, 0],
+            smartMaximum: job.smartMaximum,
+            farmerMinimum: job.farmerMinimum,
+            storageBackedMinimum: job.storageBackedMinimum,
+            demonicLumber: job.demonicLumber,
+            warlordMiner: job.warlordMiner
+          })
+        )
+      );
+  }
+  function toCapturedJobsCycleInput(catalog, options) {
+    let jobs = toCapturedJobsJobInputs(catalog);
+    if (jobs !== void 0)
+      return Object.freeze({
+        ...options,
+        available: !0,
+        jobs,
+        splitEntries: catalog.splitEntries,
+        defaultPreference: catalog.defaultPreference
+      });
+  }
   function finiteNonNegative(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
   }
@@ -5175,6 +5218,68 @@
       }
     });
   }
+  function executeCapturedJobDecision(controls, state, decision) {
+    let byToken = new Map(state.jobs.map((job) => [job.token, job])), workerRemovals = [], workerAdditions = [], servantRemovals = [], servantAdditions = [];
+    for (let assignment of decision.assignments) {
+      let job = byToken.get(assignment.jobToken);
+      if (job === void 0)
+        return rejected(
+          "unknown-job-token",
+          "Jobs decision contains an unknown job token"
+        );
+      if (!Number.isFinite(assignment.workers) || assignment.workers < 0 || !Number.isFinite(assignment.servants) || assignment.servants < 0)
+        return rejected(
+          "invalid-job-assignment",
+          "Jobs decision contains a non-finite or negative assignment"
+        );
+      let workerDelta = assignment.workers - job.workers;
+      if (workerDelta < 0 ? workerRemovals.push([job, -workerDelta]) : workerDelta > 0 && workerAdditions.push([job, workerDelta]), !state.manageServants) continue;
+      if (!job.serves && assignment.servants !== job.servants)
+        return rejected(
+          "unsupported-servant-assignment",
+          `Job ${job.id} has no captured servant control`
+        );
+      let servantDelta = assignment.servants - job.servants;
+      servantDelta < 0 ? servantRemovals.push([job, -servantDelta]) : servantDelta > 0 && servantAdditions.push([job, servantDelta]);
+    }
+    let selectedDefault = decision.selectedDefaultToken === null ? void 0 : byToken.get(decision.selectedDefaultToken);
+    if (decision.selectedDefaultToken !== null && selectedDefault === void 0)
+      return rejected(
+        "unknown-default-job-token",
+        "Jobs decision selects an unknown default job token"
+      );
+    for (let [job, count] of workerRemovals)
+      if (!controls.unassign({ elementId: `civ-${job.id}`, count }))
+        return rejected(
+          "job-control-failed",
+          `could not unassign workers from ${job.id}`
+        );
+    for (let [job, count] of workerAdditions)
+      if (!controls.assign({ elementId: `civ-${job.id}`, count }))
+        return rejected(
+          "job-control-failed",
+          `could not assign workers to ${job.id}`
+        );
+    for (let [job, count] of servantRemovals)
+      if (!controls.unassign({ elementId: `servant-${job.id}`, count }))
+        return rejected(
+          "servant-control-failed",
+          `could not unassign servants from ${job.id}`
+        );
+    for (let [job, count] of servantAdditions)
+      if (!controls.assign({ elementId: `servant-${job.id}`, count }))
+        return rejected(
+          "servant-control-failed",
+          `could not assign servants to ${job.id}`
+        );
+    return selectedDefault !== void 0 && !controls.setDefault({
+      elementId: `civ-${selectedDefault.id}`,
+      jobId: selectedDefault.id
+    }) ? rejected(
+      "default-job-control-failed",
+      `could not select ${selectedDefault.id} as the default job`
+    ) : SUCCEEDED;
+  }
 
   // src/adapters/evolve/civic/captured-craftsmen.ts
   var FOUNDRY_CONTROL = "foundry", FOUNDRY_PRODUCTS = [
@@ -5560,6 +5665,190 @@
       }
     });
     return Object.freeze({ reader, executor, readJobCatalog });
+  }
+
+  // src/adapters/evolve/civic/captured-ordinary-jobs.ts
+  function unavailableInput() {
+    return Object.freeze({
+      available: !1,
+      craftOnly: !1,
+      hunterActsAsUnemployed: !1,
+      autoCraftsmen: !1,
+      autoCraftWithoutBuilding: !1,
+      craftsmenMode: "other",
+      foundryWeighting: "other",
+      manageServants: !1,
+      setDefault: !1,
+      servantModifier: 1,
+      servantsMaximum: 0,
+      skilledServantsMaximum: 0,
+      craftsmenMaximum: 0,
+      minimumDefault: 0,
+      reserveMiner: !1,
+      defaultJobToken: null,
+      hunterToken: null,
+      farmerToken: null,
+      lumberjackToken: null,
+      quarryToken: null,
+      crystalMinerToken: null,
+      scavengerToken: null,
+      foragerToken: null,
+      entertainerToken: null,
+      minerToken: null,
+      population: 0,
+      craftDebug: !1,
+      lastCraftWinner: null,
+      authority: Object.freeze({
+        enabled: !1,
+        current: 0,
+        morale: 0,
+        moralePotential: 0,
+        moraleMaximum: 0,
+        moraleCeiling: null,
+        entertainerMorale: 0,
+        superstarMorale: 0,
+        previousCap: null,
+        debug: !1
+      }),
+      jobs: Object.freeze([]),
+      crafting: Object.freeze([]),
+      splitEntries: Object.freeze([]),
+      defaultPreference: Object.freeze([])
+    });
+  }
+  function finiteNonNegative2(value) {
+    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
+  }
+  function tokenFor(catalog, id) {
+    return catalog.jobs.find((job) => job.id === id)?.token ?? null;
+  }
+  function readCycle(root, settingsValue, catalogReader) {
+    let settings = isRecord(settingsValue) ? settingsValue : {};
+    if (settings.authorityManage === !0) return;
+    let population = finiteNonNegative2(
+      readProperty(
+        readProperty(readProperty(root, "resource"), "Population"),
+        "amount"
+      )
+    );
+    if (population === void 0) return;
+    let catalog = catalogReader();
+    if (catalog === void 0) return;
+    let servantState = catalog.servantState, manageServants = settings.jobManageServants === !0;
+    if (manageServants && servantState === null) return;
+    let defaultJobToken = catalog.jobs.find((job) => job.isDefault)?.token;
+    if (defaultJobToken == null)
+      return;
+    let farmerToken = !!readProperty(readProperty(root, "race"), "artifical") ? null : catalog.hunterActsAsUnemployed ? tokenFor(catalog, "hunter") : Math.max(
+      tokenFor(catalog, "hunter") ?? -1,
+      tokenFor(catalog, "farmer") ?? -1
+    ), normalizedFarmerToken = farmerToken === null || farmerToken < 0 ? null : farmerToken, demonicLumber = catalog.jobs.some((job) => job.demonicLumber), options = {
+      craftOnly: !1,
+      hunterActsAsUnemployed: catalog.hunterActsAsUnemployed,
+      autoCraftsmen: !1,
+      autoCraftWithoutBuilding: !1,
+      craftsmenMode: "other",
+      foundryWeighting: "other",
+      manageServants,
+      setDefault: settings.jobSetDefault === !0,
+      servantModifier: catalog.servantModifier,
+      servantsMaximum: manageServants ? servantState?.maximum ?? 0 : 0,
+      skilledServantsMaximum: manageServants ? servantState?.skilledMaximum ?? 0 : 0,
+      craftsmenMaximum: 0,
+      minimumDefault: catalog.minimumDefault ?? 0,
+      reserveMiner: !1,
+      defaultJobToken,
+      hunterToken: tokenFor(catalog, "hunter"),
+      farmerToken: normalizedFarmerToken,
+      lumberjackToken: demonicLumber ? normalizedFarmerToken : tokenFor(catalog, "lumberjack"),
+      quarryToken: tokenFor(catalog, "quarry_worker"),
+      crystalMinerToken: tokenFor(catalog, "crystal_miner"),
+      scavengerToken: tokenFor(catalog, "scavenger"),
+      foragerToken: tokenFor(catalog, "forager"),
+      entertainerToken: tokenFor(catalog, "entertainer"),
+      minerToken: tokenFor(catalog, "miner"),
+      population,
+      craftDebug: !1,
+      lastCraftWinner: null,
+      authority: unavailableInput().authority,
+      crafting: Object.freeze([])
+    }, input = toCapturedJobsCycleInput(catalog, options);
+    if (input !== void 0)
+      return Object.freeze({
+        catalog,
+        input,
+        commandState: Object.freeze({
+          manageServants,
+          jobs: Object.freeze(
+            catalog.jobs.flatMap(
+              (job) => job.token === null ? [] : [
+                Object.freeze({
+                  token: job.token,
+                  id: job.id,
+                  workers: job.workers,
+                  servants: job.servants,
+                  serves: job.serves
+                })
+              ]
+            )
+          )
+        })
+      });
+  }
+  function createCapturedOrdinaryJobsAutomation({
+    rootState,
+    controls,
+    readSettings
+  }) {
+    let catalogReader = createCapturedJobCatalogReader({
+      rootState,
+      controls,
+      readSettings
+    }), controlsPort = createCapturedJobControls({ controls }), sessionRef = {
+      value: void 0
+    }, reader = Object.freeze({
+      readCycle(craftOnly) {
+        if (craftOnly)
+          return sessionRef.value = void 0, unavailableInput();
+        let root = rootState.readRoot(), sampled3 = readCycle(root, readSettings(), catalogReader);
+        return sampled3 === void 0 ? (sessionRef.value = void 0, unavailableInput()) : (sessionRef.value = Object.freeze({
+          root,
+          catalog: sampled3.catalog,
+          input: sampled3.input,
+          commandState: sampled3.commandState
+        }), sampled3.input);
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        let session = sessionRef.value;
+        if (session === void 0)
+          return stale(
+            "ordinary-jobs-session-missing",
+            "ordinary jobs session is missing"
+          );
+        if (rootState.readRoot() !== session.root)
+          return sessionRef.value = void 0, stale(
+            "ordinary-jobs-root-changed",
+            "captured game root changed"
+          );
+        let currentCatalog = catalogReader();
+        if (currentCatalog === void 0 || JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog))
+          return sessionRef.value = void 0, stale(
+            "ordinary-jobs-state-changed",
+            "ordinary job catalog changed"
+          );
+        let expected = planJobs(session.input);
+        return expected === null || JSON.stringify(expected) !== JSON.stringify(decision) ? (sessionRef.value = void 0, rejected(
+          "invalid-ordinary-jobs-decision",
+          "ordinary jobs decision does not match the sampled plan"
+        )) : (sessionRef.value = void 0, executeCapturedJobDecision(
+          controlsPort,
+          session.commandState,
+          decision
+        ));
+      }
+    });
+    return Object.freeze({ reader, executor });
   }
 
   // src/domain/economy/production/pylon.ts
@@ -7553,7 +7842,8 @@
     autoQuarry: !1,
     autoMine: !1,
     autoExtractor: !1,
-    autoPower: !1
+    autoPower: !1,
+    autoJobs: !1
   });
   function isEnabled(settings, key) {
     let value = settings[key];
@@ -7609,6 +7899,10 @@
       costs,
       readSettings: () => readStoredSettings(storage),
       readDemand: () => readDemand()
+    }), ordinaryJobs = createCapturedOrdinaryJobsAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage)
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -7799,7 +8093,7 @@
           ), ratios.titanMine()), isEnabled(settings, "autoExtractor") && (ensureRatioControls(
             MINING_SHIP_CONTROL,
             structureCount2("tauceti", "mining_ship") >= 1
-          ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoJobs") && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }

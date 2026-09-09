@@ -4,6 +4,7 @@ import { runJobsAutomation } from "../application/jobs.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { createCapturedTaxControl } from "./captured-tax-control.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
+import { createCapturedOrdinaryJobsAutomation } from "../adapters/evolve/civic/captured-ordinary-jobs.ts";
 import {
   createCapturedPylonAutomation,
   PYLON_CONTROL,
@@ -106,6 +107,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoMine: false,
   autoExtractor: false,
   autoPower: false,
+  autoJobs: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -181,6 +183,11 @@ export function startCapturedRuntime({
     costs,
     readSettings: () => readStoredSettings(storage),
     readDemand: () => readDemand(),
+  });
+  const ordinaryJobs = createCapturedOrdinaryJobsAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
   });
   const pylon = createCapturedPylonAutomation({
     rootState: pageCapture.rootState,
@@ -520,6 +527,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoPylon")) {
         ensurePylonControls();
         pylon.run();
+      }
+      if (isEnabled(settings, "autoJobs")) {
+        ensureCivicControls();
+        runJobsAutomation(ordinaryJobs, false);
       }
       if (isEnabled(settings, "autoCraftsmen")) {
         ensureCivicControls();

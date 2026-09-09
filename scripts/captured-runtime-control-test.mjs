@@ -321,4 +321,92 @@ assert.equal(unsubscribeCount, 1);
   assert.equal(root.city.mill.on, 1);
 }
 
+// autoJobs reaches captured ordinary civ controls without the compatibility manager.
+{
+  const root = {
+    civic: {
+      d_job: "unemployed",
+      unemployed: {
+        job: "unemployed",
+        assigned: 2,
+        workers: 2,
+        max: 0,
+        display: true,
+      },
+      farmer: {
+        job: "farmer",
+        assigned: 0,
+        workers: 0,
+        max: -1,
+        display: true,
+      },
+    },
+    resource: { Population: { amount: 2, max: 10 } },
+  };
+  const invoked = [];
+  let cycle;
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: {
+        resolve: (id) =>
+          id === "civ-unemployed" || id === "civ-farmer"
+            ? {
+                elementId: id,
+                generation: 1,
+                methods: ["add", "sub", "setDefault"],
+              }
+            : undefined,
+        invoke: (handle, method, args = []) => {
+          invoked.push(`${handle.elementId}.${method}`);
+          if (method === "setDefault") {
+            root.civic.d_job = args[0];
+          } else {
+            const id = handle.elementId.slice("civ-".length);
+            root.civic[id].workers += method === "add" ? 1 : -1;
+          }
+          return { ok: true, value: undefined };
+        },
+        capturedElementIds: () => ["civ-unemployed", "civ-farmer"],
+      },
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          autoJobs: true,
+          job_unemployed: true,
+          job_farmer: true,
+          jobSetDefault: true,
+        }),
+    },
+    logError: () => {},
+  });
+  cycle({ periods: 1 });
+  stopCycle();
+  assert.deepEqual(invoked, [
+    "civ-unemployed.sub",
+    "civ-unemployed.sub",
+    "civ-farmer.add",
+    "civ-farmer.add",
+    "civ-farmer.setDefault",
+  ]);
+}
+
 console.log("captured-runtime-control ok");
