@@ -4,7 +4,10 @@ import { runJobsAutomation } from "../application/jobs.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { createCapturedTaxControl } from "./captured-tax-control.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
-import { createCapturedOrdinaryJobsAutomation } from "../adapters/evolve/civic/captured-ordinary-jobs.ts";
+import {
+  createCapturedFullJobsAutomation,
+  createCapturedOrdinaryJobsAutomation,
+} from "../adapters/evolve/civic/captured-ordinary-jobs.ts";
 import {
   createCapturedPylonAutomation,
   PYLON_CONTROL,
@@ -188,6 +191,13 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
+  });
+  const fullJobs = createCapturedFullJobsAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    costs,
+    readDemand: () => readDemand(),
   });
   const pylon = createCapturedPylonAutomation({
     rootState: pageCapture.rootState,
@@ -528,11 +538,19 @@ export function startCapturedRuntime({
         ensurePylonControls();
         pylon.run();
       }
-      if (isEnabled(settings, "autoJobs")) {
+      const autoJobs = isEnabled(settings, "autoJobs");
+      const autoCraftsmen = isEnabled(settings, "autoCraftsmen");
+      let combinedJobs = false;
+      if (autoJobs && autoCraftsmen) {
+        ensureCivicControls();
+        combinedJobs = fullJobs.isAvailable();
+        if (combinedJobs) runJobsAutomation(fullJobs, false);
+      }
+      if (autoJobs && !combinedJobs) {
         ensureCivicControls();
         runJobsAutomation(ordinaryJobs, false);
       }
-      if (isEnabled(settings, "autoCraftsmen")) {
+      if (autoCraftsmen && !combinedJobs) {
         ensureCivicControls();
         runJobsAutomation(craftsmen, true);
       }

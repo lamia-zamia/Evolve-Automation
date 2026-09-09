@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { planJobs } from "../src/domain/civic/jobs.ts";
-import { createCapturedOrdinaryJobsAutomation } from "../src/adapters/evolve/civic/captured-ordinary-jobs.ts";
+import {
+  createCapturedFullJobsAutomation,
+  createCapturedOrdinaryJobsAutomation,
+} from "../src/adapters/evolve/civic/captured-ordinary-jobs.ts";
 
 const root = {
   civic: {
@@ -98,6 +101,109 @@ assert.equal(
   partialAutomation.reader.readCycle(false).available,
   false,
   "a partial live job catalog cannot plan against uncaptured workers",
+);
+
+const fullRoot = {
+  civic: {
+    d_job: "unemployed",
+    unemployed: {
+      job: "unemployed",
+      assigned: 4,
+      workers: 4,
+      max: 0,
+      display: true,
+    },
+    farmer: {
+      job: "farmer",
+      assigned: 0,
+      workers: 0,
+      max: -1,
+      display: true,
+    },
+    craftsman: { workers: 1, max: 2 },
+  },
+  city: {
+    foundry: {
+      Plywood: 1,
+      Brick: 0,
+      crafting: 1,
+      cap: 2,
+      rcap: {},
+    },
+  },
+  race: {},
+  resource: {
+    Population: { amount: 4, max: 10 },
+    Plywood: { amount: 100 },
+    Brick: { amount: 0 },
+    Iron: { amount: 100 },
+  },
+};
+const fullCalls = [];
+const fullControls = {
+  capturedElementIds: () => ["civ-unemployed", "civ-farmer", "foundry"],
+  resolve: (elementId) =>
+    elementId === "foundry" || elementId.startsWith("civ-")
+      ? {
+          elementId,
+          generation: 1,
+          methods:
+            elementId === "foundry"
+              ? ["add", "sub"]
+              : ["add", "sub", "setDefault"],
+        }
+      : undefined,
+  invoke: (handle, method, args = []) => {
+    fullCalls.push({ elementId: handle.elementId, method, args });
+    if (handle.elementId === "foundry") {
+      const id = args[0];
+      fullRoot.city.foundry[id] += method === "add" ? 1 : -1;
+      fullRoot.city.foundry.crafting += method === "add" ? 1 : -1;
+      fullRoot.civic.craftsman.workers += method === "add" ? 1 : -1;
+      fullRoot.civic.unemployed.workers += method === "add" ? -1 : 1;
+    } else if (method === "setDefault") {
+      fullRoot.civic.d_job = args[0];
+    } else {
+      const id = handle.elementId.slice("civ-".length);
+      fullRoot.civic[id].workers += method === "add" ? 1 : -1;
+    }
+    return { ok: true, value: undefined };
+  },
+};
+const fullAutomation = createCapturedFullJobsAutomation({
+  rootState: { readRoot: () => fullRoot },
+  controls: fullControls,
+  readSettings: () => ({
+    job_unemployed: true,
+    job_farmer: true,
+    productionCraftsmen: "always",
+    craftPlywood: true,
+    job_Plywood: true,
+    foundry_w_Plywood: 1,
+    craftBrick: true,
+    job_Brick: true,
+    foundry_w_Brick: 1,
+  }),
+  costs: {
+    read: (id) =>
+      id === "Plywood" || id === "Brick" ? new Map([["Iron", 1]]) : undefined,
+  },
+});
+const fullInput = fullAutomation.reader.readCycle(false);
+assert.equal(fullInput.available, true);
+const fullDecision = planJobs(fullInput);
+assert.ok(fullDecision);
+assert.equal(
+  fullDecision.assignments.some(
+    ({ jobToken, workers }) => jobToken >= 2 && workers > 0,
+  ),
+  true,
+);
+assert.equal(fullAutomation.executor.execute(fullDecision).status, "succeeded");
+assert.equal(fullRoot.city.foundry.Brick, 2);
+assert.equal(
+  fullCalls.some(({ elementId }) => elementId === "foundry"),
+  true,
 );
 
 console.log("captured-ordinary-jobs ok");

@@ -86,6 +86,13 @@ interface CraftsmenSession {
   readonly defaultJob: DefaultJobState | undefined;
 }
 
+export interface CapturedCraftsmenCycleSample {
+  readonly input: Readonly<JobsCycleInput>;
+  readonly samples: readonly Readonly<CraftSample>[];
+  readonly workerPool: number;
+  readonly defaultJob: DefaultJobState | undefined;
+}
+
 function finiteNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -348,6 +355,17 @@ function readCycleInput(
     workerPool: craftsmen.workers,
     defaultJob,
   });
+}
+
+/** Reads the foundry half for a caller that will combine it with ordinary jobs. */
+export function readCapturedCraftsmenCycle(
+  root: unknown,
+  settingsValue: unknown,
+  costs: CapturedCraftCosts,
+  readJobCatalog: () => CapturedJobCatalog | undefined,
+  readDemand?: () => CapturedDemandSample,
+): CapturedCraftsmenCycleSample | undefined {
+  return readCycleInput(root, settingsValue, costs, readJobCatalog, readDemand);
 }
 
 function decisionsMatch(

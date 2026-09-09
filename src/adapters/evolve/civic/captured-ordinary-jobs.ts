@@ -4,12 +4,13 @@ import {
   planJobs,
   type JobsCycleInput,
   type JobsDecision,
+  type JobsJobInput,
 } from "../../../domain/civic/jobs.ts";
 import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import type { JobsExecutor, JobsReader } from "../../../ports/jobs.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
-import { rejected, stale } from "../../command-outcomes.ts";
+import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 import {
   createCapturedJobCatalogReader,
@@ -22,11 +23,22 @@ import {
   executeCapturedJobDecision,
   type CapturedJobCommandState,
 } from "./captured-job-controls.ts";
+import {
+  readCapturedCraftsmenCycle,
+  type CapturedCraftsmenCycleSample,
+} from "./captured-craftsmen.ts";
+import type { CapturedCraftCosts } from "../economy/production/captured-craft-costs.ts";
+import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
 
 export interface CapturedOrdinaryJobsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
+}
+
+export interface CapturedFullJobsDependencies extends CapturedOrdinaryJobsDependencies {
+  readonly costs: CapturedCraftCosts;
+  readonly readDemand?: () => CapturedDemandSample;
 }
 
 interface OrdinaryJobsSession {
@@ -259,6 +271,195 @@ function readCycle(
   });
 }
 
+interface FullJobsSession {
+  readonly root: unknown;
+  readonly catalog: Readonly<CapturedJobCatalog>;
+  readonly foundry: Readonly<CapturedCraftsmenCycleSample>;
+  readonly input: Readonly<JobsCycleInput>;
+  readonly ordinaryJobs: readonly Readonly<
+    CapturedJobCommandState["jobs"][number]
+  >[];
+}
+
+function craftJob(
+  job: Readonly<JobsJobInput>,
+  token: number,
+): Readonly<JobsJobInput> {
+  // Foundry workers are a separate pool. Keeping them out of the planner's ordinary worker sum
+  // prevents the same worker from being counted once as a craftsman and again as a civic worker;
+  // the command session retains the live foundry count for its delta.
+  return Object.freeze({
+    ...job,
+    token,
+    workers: 0,
+    count: 0,
+    crafting: true,
+    serves: false,
+  });
+}
+
+function readFullCycle(
+  root: unknown,
+  settingsValue: unknown,
+  catalogReader: () => CapturedJobCatalog | undefined,
+  costs: CapturedCraftCosts,
+  readDemand: (() => CapturedDemandSample) | undefined,
+):
+  | {
+      readonly catalog: Readonly<CapturedJobCatalog>;
+      readonly foundry: Readonly<CapturedCraftsmenCycleSample>;
+      readonly input: Readonly<JobsCycleInput>;
+      readonly ordinaryJobs: readonly Readonly<
+        FullJobsSession["ordinaryJobs"][number]
+      >[];
+    }
+  | undefined {
+  const ordinary = readCycle(root, settingsValue, catalogReader);
+  if (ordinary === undefined || ordinary.input.manageServants) return undefined;
+  const foundry = readCapturedCraftsmenCycle(
+    root,
+    settingsValue,
+    costs,
+    catalogReader,
+    readDemand,
+  );
+  if (
+    foundry === undefined ||
+    foundry.input.skilledServantsMaximum > 0 ||
+    foundry.input.jobs.length !== foundry.input.crafting.length
+  ) {
+    return undefined;
+  }
+  const settings = isRecord(settingsValue) ? settingsValue : {};
+  const modeValue = settings["productionCraftsmen"];
+  const craftsmenMode =
+    modeValue === "always" ||
+    modeValue === "nocraft" ||
+    modeValue === "servants"
+      ? modeValue
+      : ("other" as const);
+  const weightingValue = settings["productionFoundryWeighting"];
+  const foundryWeighting =
+    weightingValue === "buildings" || weightingValue === "demanded"
+      ? weightingValue
+      : ("other" as const);
+  const noCraft = Boolean(readProperty(readProperty(root, "race"), "no_craft"));
+  const baseToken =
+    Math.max(-1, ...ordinary.input.jobs.map((job) => job.token)) + 1;
+  const craftJobs = foundry.input.jobs.map((job, index) =>
+    craftJob(job, baseToken + index),
+  );
+  const crafting = foundry.input.crafting.map((craft, index) =>
+    Object.freeze({ ...craft, jobToken: baseToken + index }),
+  );
+  const input = Object.freeze({
+    ...ordinary.input,
+    autoCraftsmen: true,
+    autoCraftWithoutBuilding:
+      craftsmenMode === "always" || (craftsmenMode === "nocraft" && noCraft),
+    craftsmenMode,
+    foundryWeighting,
+    craftsmenMaximum: foundry.input.craftsmenMaximum,
+    jobs: Object.freeze([...ordinary.input.jobs, ...craftJobs]),
+    crafting: Object.freeze(crafting),
+  });
+  return Object.freeze({
+    catalog: ordinary.catalog,
+    foundry,
+    input,
+    ordinaryJobs: ordinary.commandState.jobs,
+  });
+}
+
+function executeFullDecision(
+  controls: ReturnType<typeof createCapturedJobControls>,
+  session: Readonly<FullJobsSession>,
+  decision: Readonly<JobsDecision>,
+): CommandExecutionOutcome {
+  const ordinary = new Map(session.ordinaryJobs.map((job) => [job.token, job]));
+  const foundry = new Map(
+    session.foundry.input.jobs.map((job, index) => [
+      session.input.jobs[session.ordinaryJobs.length + index]!.token,
+      { id: job.id, workers: job.workers },
+    ]),
+  );
+  const workerRemovals: Array<
+    readonly ["ordinary" | "foundry", string, number]
+  > = [];
+  const workerAdditions: Array<
+    readonly ["ordinary" | "foundry", string, number]
+  > = [];
+  for (const assignment of decision.assignments) {
+    const ordinaryJob = ordinary.get(assignment.jobToken);
+    const foundryJob = foundry.get(assignment.jobToken);
+    if (ordinaryJob === undefined && foundryJob === undefined) {
+      return rejected(
+        "unknown-full-job-token",
+        "full jobs decision contains an unknown token",
+      );
+    }
+    const current = ordinaryJob?.workers ?? foundryJob!.workers;
+    const kind = ordinaryJob === undefined ? "foundry" : "ordinary";
+    const id = ordinaryJob?.id ?? foundryJob!.id;
+    const delta = assignment.workers - current;
+    if (delta < 0) workerRemovals.push([kind, id, -delta]);
+    if (delta > 0) workerAdditions.push([kind, id, delta]);
+    if (assignment.servants !== 0) {
+      return rejected(
+        "unsupported-full-servant-assignment",
+        "full jobs does not execute skilled-servant assignments",
+      );
+    }
+  }
+  const selectedDefault =
+    decision.selectedDefaultToken === null
+      ? undefined
+      : ordinary.get(decision.selectedDefaultToken);
+  if (decision.selectedDefaultToken !== null && selectedDefault === undefined) {
+    return rejected(
+      "unknown-full-default-job",
+      "full jobs selects an unknown default job",
+    );
+  }
+  const invoke = (
+    kind: "ordinary" | "foundry",
+    id: string,
+    method: "assign" | "unassign",
+    count: number,
+  ): boolean =>
+    kind === "ordinary"
+      ? (method === "assign" ? controls.assign : controls.unassign)({
+          elementId: `civ-${id}`,
+          count,
+        })
+      : (method === "assign" ? controls.assign : controls.unassign)({
+          elementId: "foundry",
+          count,
+          craftedResourceId: id,
+        });
+  for (const [kind, id, count] of workerRemovals) {
+    if (!invoke(kind, id, "unassign", count))
+      return rejected("full-job-control-failed", `could not unassign ${id}`);
+  }
+  for (const [kind, id, count] of workerAdditions) {
+    if (!invoke(kind, id, "assign", count))
+      return rejected("full-job-control-failed", `could not assign ${id}`);
+  }
+  if (
+    selectedDefault !== undefined &&
+    !controls.setDefault({
+      elementId: `civ-${selectedDefault.id}`,
+      jobId: selectedDefault.id,
+    })
+  ) {
+    return rejected(
+      "full-default-job-control-failed",
+      `could not select ${selectedDefault.id} as the default job`,
+    );
+  }
+  return SUCCEEDED;
+}
+
 export function createCapturedOrdinaryJobsAutomation({
   rootState,
   controls,
@@ -350,4 +551,174 @@ export function createCapturedOrdinaryJobsAutomation({
     },
   });
   return Object.freeze({ reader, executor });
+}
+
+/**
+ * Combines ordinary jobs and foundry craftsmen into one planner decision when the captured
+ * surface has no skilled-servant phase to execute. The caller keeps the bounded separate paths
+ * for runs whose servant state needs another command family.
+ */
+export function createCapturedFullJobsAutomation({
+  rootState,
+  controls,
+  readSettings,
+  costs,
+  readDemand,
+}: CapturedFullJobsDependencies): {
+  readonly reader: JobsReader;
+  readonly executor: JobsExecutor;
+  readonly isAvailable: () => boolean;
+} {
+  const catalogReader = createCapturedJobCatalogReader({
+    rootState,
+    controls,
+    readSettings,
+    ...(readDemand === undefined ? {} : { readDemand }),
+  });
+  const controlsPort = createCapturedJobControls({ controls });
+  const sessionRef: { value: FullJobsSession | undefined } = {
+    value: undefined,
+  };
+  const reader: JobsReader = Object.freeze({
+    readCycle(craftOnly: boolean) {
+      if (craftOnly) {
+        sessionRef.value = undefined;
+        return unavailableInput();
+      }
+      const root = rootState.readRoot();
+      const sampled = readFullCycle(
+        root,
+        readSettings(),
+        catalogReader,
+        costs,
+        readDemand,
+      );
+      if (sampled === undefined) {
+        sessionRef.value = undefined;
+        return unavailableInput();
+      }
+      sessionRef.value = Object.freeze({
+        root,
+        catalog: sampled.catalog,
+        foundry: sampled.foundry,
+        input: sampled.input,
+        ordinaryJobs: sampled.ordinaryJobs,
+      });
+      return sampled.input;
+    },
+  });
+  const executor: JobsExecutor = Object.freeze({
+    execute(decision: Readonly<JobsDecision>): CommandExecutionOutcome {
+      const session = sessionRef.value;
+      if (session === undefined)
+        return stale(
+          "full-jobs-session-missing",
+          "full jobs session is missing",
+        );
+      if (rootState.readRoot() !== session.root) {
+        sessionRef.value = undefined;
+        return stale("full-jobs-root-changed", "captured game root changed");
+      }
+      const currentCatalog = catalogReader();
+      const currentFoundry = readCapturedCraftsmenCycle(
+        session.root,
+        readSettings(),
+        costs,
+        catalogReader,
+        readDemand,
+      );
+      if (
+        currentCatalog === undefined ||
+        JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog) ||
+        currentFoundry === undefined ||
+        JSON.stringify(currentFoundry.samples) !==
+          JSON.stringify(session.foundry.samples) ||
+        JSON.stringify(currentFoundry.input.crafting) !==
+          JSON.stringify(session.foundry.input.crafting)
+      ) {
+        sessionRef.value = undefined;
+        return stale(
+          "full-jobs-state-changed",
+          "ordinary or foundry state changed",
+        );
+      }
+      const expected = planJobs(session.input);
+      if (
+        expected === null ||
+        JSON.stringify(expected) !== JSON.stringify(decision)
+      ) {
+        sessionRef.value = undefined;
+        return rejected(
+          "invalid-full-jobs-decision",
+          "full jobs decision does not match the sampled plan",
+        );
+      }
+      const methods = new Map<string, Set<string>>();
+      for (const id of controls.capturedElementIds()) {
+        const handle = controls.resolve(id);
+        if (handle !== undefined) methods.set(id, new Set(handle.methods));
+      }
+      for (const assignment of decision.assignments) {
+        const ordinaryJob = session.ordinaryJobs.find(
+          (job) => job.token === assignment.jobToken,
+        );
+        const firstCraftToken =
+          session.input.jobs[session.ordinaryJobs.length]?.token;
+        const foundryIndex =
+          firstCraftToken === undefined
+            ? -1
+            : assignment.jobToken - firstCraftToken;
+        const foundryJob = session.foundry.input.jobs[foundryIndex];
+        const job =
+          ordinaryJob ??
+          (foundryJob === undefined
+            ? undefined
+            : { id: foundryJob.id, workers: foundryJob.workers });
+        if (job === undefined) {
+          sessionRef.value = undefined;
+          return rejected(
+            "full-jobs-controls-incomplete",
+            "full jobs contains an unknown command token",
+          );
+        }
+        if (assignment.workers !== job.workers) {
+          const method = assignment.workers < job.workers ? "sub" : "add";
+          const elementId =
+            ordinaryJob === undefined ? "foundry" : `civ-${job.id}`;
+          if (!methods.get(elementId)?.has(method)) {
+            sessionRef.value = undefined;
+            return rejected(
+              "full-jobs-controls-incomplete",
+              `missing ${method} control for ${elementId}`,
+            );
+          }
+        }
+      }
+      if (
+        decision.selectedDefaultToken !== null &&
+        !methods
+          .get(
+            `civ-${session.ordinaryJobs.find((job) => job.token === decision.selectedDefaultToken)?.id ?? ""}`,
+          )
+          ?.has("setDefault")
+      ) {
+        sessionRef.value = undefined;
+        return rejected(
+          "full-jobs-controls-incomplete",
+          "missing default-job control",
+        );
+      }
+      sessionRef.value = undefined;
+      return executeFullDecision(controlsPort, session, decision);
+    },
+  });
+  const isAvailable = (): boolean =>
+    readFullCycle(
+      rootState.readRoot(),
+      readSettings(),
+      catalogReader,
+      costs,
+      readDemand,
+    ) !== undefined;
+  return Object.freeze({ reader, executor, isAvailable });
 }

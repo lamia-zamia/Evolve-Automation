@@ -5463,6 +5463,9 @@
       defaultJob
     });
   }
+  function readCapturedCraftsmenCycle(root, settingsValue, costs, readJobCatalog, readDemand) {
+    return readCycleInput(root, settingsValue, costs, readJobCatalog, readDemand);
+  }
   function decisionsMatch(left, right) {
     return JSON.stringify(left) === JSON.stringify(right);
   }
@@ -5842,6 +5845,98 @@
         })
       });
   }
+  function craftJob(job, token) {
+    return Object.freeze({
+      ...job,
+      token,
+      workers: 0,
+      count: 0,
+      crafting: !0,
+      serves: !1
+    });
+  }
+  function readFullCycle(root, settingsValue, catalogReader, costs, readDemand) {
+    let ordinary = readCycle(root, settingsValue, catalogReader);
+    if (ordinary === void 0 || ordinary.input.manageServants) return;
+    let foundry = readCapturedCraftsmenCycle(
+      root,
+      settingsValue,
+      costs,
+      catalogReader,
+      readDemand
+    );
+    if (foundry === void 0 || foundry.input.skilledServantsMaximum > 0 || foundry.input.jobs.length !== foundry.input.crafting.length)
+      return;
+    let settings = isRecord(settingsValue) ? settingsValue : {}, modeValue = settings.productionCraftsmen, craftsmenMode = modeValue === "always" || modeValue === "nocraft" || modeValue === "servants" ? modeValue : "other", weightingValue = settings.productionFoundryWeighting, foundryWeighting = weightingValue === "buildings" || weightingValue === "demanded" ? weightingValue : "other", noCraft = !!readProperty(readProperty(root, "race"), "no_craft"), baseToken = Math.max(-1, ...ordinary.input.jobs.map((job) => job.token)) + 1, craftJobs = foundry.input.jobs.map(
+      (job, index) => craftJob(job, baseToken + index)
+    ), crafting = foundry.input.crafting.map(
+      (craft, index) => Object.freeze({ ...craft, jobToken: baseToken + index })
+    ), input = Object.freeze({
+      ...ordinary.input,
+      autoCraftsmen: !0,
+      autoCraftWithoutBuilding: craftsmenMode === "always" || craftsmenMode === "nocraft" && noCraft,
+      craftsmenMode,
+      foundryWeighting,
+      craftsmenMaximum: foundry.input.craftsmenMaximum,
+      jobs: Object.freeze([...ordinary.input.jobs, ...craftJobs]),
+      crafting: Object.freeze(crafting)
+    });
+    return Object.freeze({
+      catalog: ordinary.catalog,
+      foundry,
+      input,
+      ordinaryJobs: ordinary.commandState.jobs
+    });
+  }
+  function executeFullDecision(controls, session, decision) {
+    let ordinary = new Map(session.ordinaryJobs.map((job) => [job.token, job])), foundry = new Map(
+      session.foundry.input.jobs.map((job, index) => [
+        session.input.jobs[session.ordinaryJobs.length + index].token,
+        { id: job.id, workers: job.workers }
+      ])
+    ), workerRemovals = [], workerAdditions = [];
+    for (let assignment of decision.assignments) {
+      let ordinaryJob = ordinary.get(assignment.jobToken), foundryJob = foundry.get(assignment.jobToken);
+      if (ordinaryJob === void 0 && foundryJob === void 0)
+        return rejected(
+          "unknown-full-job-token",
+          "full jobs decision contains an unknown token"
+        );
+      let current = ordinaryJob?.workers ?? foundryJob.workers, kind = ordinaryJob === void 0 ? "foundry" : "ordinary", id = ordinaryJob?.id ?? foundryJob.id, delta = assignment.workers - current;
+      if (delta < 0 && workerRemovals.push([kind, id, -delta]), delta > 0 && workerAdditions.push([kind, id, delta]), assignment.servants !== 0)
+        return rejected(
+          "unsupported-full-servant-assignment",
+          "full jobs does not execute skilled-servant assignments"
+        );
+    }
+    let selectedDefault = decision.selectedDefaultToken === null ? void 0 : ordinary.get(decision.selectedDefaultToken);
+    if (decision.selectedDefaultToken !== null && selectedDefault === void 0)
+      return rejected(
+        "unknown-full-default-job",
+        "full jobs selects an unknown default job"
+      );
+    let invoke = (kind, id, method, count) => kind === "ordinary" ? (method === "assign" ? controls.assign : controls.unassign)({
+      elementId: `civ-${id}`,
+      count
+    }) : (method === "assign" ? controls.assign : controls.unassign)({
+      elementId: "foundry",
+      count,
+      craftedResourceId: id
+    });
+    for (let [kind, id, count] of workerRemovals)
+      if (!invoke(kind, id, "unassign", count))
+        return rejected("full-job-control-failed", `could not unassign ${id}`);
+    for (let [kind, id, count] of workerAdditions)
+      if (!invoke(kind, id, "assign", count))
+        return rejected("full-job-control-failed", `could not assign ${id}`);
+    return selectedDefault !== void 0 && !controls.setDefault({
+      elementId: `civ-${selectedDefault.id}`,
+      jobId: selectedDefault.id
+    }) ? rejected(
+      "full-default-job-control-failed",
+      `could not select ${selectedDefault.id} as the default job`
+    ) : SUCCEEDED;
+  }
   function createCapturedOrdinaryJobsAutomation({
     rootState,
     controls,
@@ -5899,6 +5994,106 @@
       }
     });
     return Object.freeze({ reader, executor });
+  }
+  function createCapturedFullJobsAutomation({
+    rootState,
+    controls,
+    readSettings,
+    costs,
+    readDemand
+  }) {
+    let catalogReader = createCapturedJobCatalogReader({
+      rootState,
+      controls,
+      readSettings,
+      ...readDemand === void 0 ? {} : { readDemand }
+    }), controlsPort = createCapturedJobControls({ controls }), sessionRef = {
+      value: void 0
+    }, reader = Object.freeze({
+      readCycle(craftOnly) {
+        if (craftOnly)
+          return sessionRef.value = void 0, unavailableInput();
+        let root = rootState.readRoot(), sampled3 = readFullCycle(
+          root,
+          readSettings(),
+          catalogReader,
+          costs,
+          readDemand
+        );
+        return sampled3 === void 0 ? (sessionRef.value = void 0, unavailableInput()) : (sessionRef.value = Object.freeze({
+          root,
+          catalog: sampled3.catalog,
+          foundry: sampled3.foundry,
+          input: sampled3.input,
+          ordinaryJobs: sampled3.ordinaryJobs
+        }), sampled3.input);
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        let session = sessionRef.value;
+        if (session === void 0)
+          return stale(
+            "full-jobs-session-missing",
+            "full jobs session is missing"
+          );
+        if (rootState.readRoot() !== session.root)
+          return sessionRef.value = void 0, stale("full-jobs-root-changed", "captured game root changed");
+        let currentCatalog = catalogReader(), currentFoundry = readCapturedCraftsmenCycle(
+          session.root,
+          readSettings(),
+          costs,
+          catalogReader,
+          readDemand
+        );
+        if (currentCatalog === void 0 || JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog) || currentFoundry === void 0 || JSON.stringify(currentFoundry.samples) !== JSON.stringify(session.foundry.samples) || JSON.stringify(currentFoundry.input.crafting) !== JSON.stringify(session.foundry.input.crafting))
+          return sessionRef.value = void 0, stale(
+            "full-jobs-state-changed",
+            "ordinary or foundry state changed"
+          );
+        let expected = planJobs(session.input);
+        if (expected === null || JSON.stringify(expected) !== JSON.stringify(decision))
+          return sessionRef.value = void 0, rejected(
+            "invalid-full-jobs-decision",
+            "full jobs decision does not match the sampled plan"
+          );
+        let methods = /* @__PURE__ */ new Map();
+        for (let id of controls.capturedElementIds()) {
+          let handle = controls.resolve(id);
+          handle !== void 0 && methods.set(id, new Set(handle.methods));
+        }
+        for (let assignment of decision.assignments) {
+          let ordinaryJob = session.ordinaryJobs.find(
+            (job2) => job2.token === assignment.jobToken
+          ), firstCraftToken = session.input.jobs[session.ordinaryJobs.length]?.token, foundryIndex = firstCraftToken === void 0 ? -1 : assignment.jobToken - firstCraftToken, foundryJob = session.foundry.input.jobs[foundryIndex], job = ordinaryJob ?? (foundryJob === void 0 ? void 0 : { id: foundryJob.id, workers: foundryJob.workers });
+          if (job === void 0)
+            return sessionRef.value = void 0, rejected(
+              "full-jobs-controls-incomplete",
+              "full jobs contains an unknown command token"
+            );
+          if (assignment.workers !== job.workers) {
+            let method = assignment.workers < job.workers ? "sub" : "add", elementId = ordinaryJob === void 0 ? "foundry" : `civ-${job.id}`;
+            if (!methods.get(elementId)?.has(method))
+              return sessionRef.value = void 0, rejected(
+                "full-jobs-controls-incomplete",
+                `missing ${method} control for ${elementId}`
+              );
+          }
+        }
+        return decision.selectedDefaultToken !== null && !methods.get(
+          `civ-${session.ordinaryJobs.find((job) => job.token === decision.selectedDefaultToken)?.id ?? ""}`
+        )?.has("setDefault") ? (sessionRef.value = void 0, rejected(
+          "full-jobs-controls-incomplete",
+          "missing default-job control"
+        )) : (sessionRef.value = void 0, executeFullDecision(controlsPort, session, decision));
+      }
+    });
+    return Object.freeze({ reader, executor, isAvailable: () => readFullCycle(
+      rootState.readRoot(),
+      readSettings(),
+      catalogReader,
+      costs,
+      readDemand
+    ) !== void 0 });
   }
 
   // src/domain/economy/production/pylon.ts
@@ -7953,6 +8148,12 @@
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage)
+    }), fullJobs = createCapturedFullJobsAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage),
+      costs,
+      readDemand: () => readDemand()
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -8143,7 +8344,9 @@
           ), ratios.titanMine()), isEnabled(settings, "autoExtractor") && (ensureRatioControls(
             MINING_SHIP_CONTROL,
             structureCount2("tauceti", "mining_ship") >= 1
-          ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run()), isEnabled(settings, "autoJobs") && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), isEnabled(settings, "autoCraftsmen") && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run());
+          let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
+          autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }
