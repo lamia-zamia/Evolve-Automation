@@ -1308,6 +1308,9 @@
   function applyPowerPlantWeighting(baseWeight, buildingId, powerUnlocked, powerSurplus, unpoweredPowerDemand, needfulMultiplier, uselessMultiplier) {
     return !powerUnlocked || !CURRENT_CITY_POWER_PLANTS.has(buildingId) ? baseWeight : powerSurplus < unpoweredPowerDemand ? baseWeight * needfulMultiplier : powerSurplus > unpoweredPowerDemand && buildingId !== "mill" ? baseWeight * uselessMultiplier : baseWeight;
   }
+  function applyNonCityPowerProducerWeighting(baseWeight, powerUnlocked, powerSurplus, unpoweredPowerDemand, powered, needfulMultiplier, uselessMultiplier) {
+    return !powerUnlocked || powered === void 0 || powered >= 0 ? baseWeight : powerSurplus < unpoweredPowerDemand ? baseWeight * needfulMultiplier : powerSurplus > unpoweredPowerDemand ? baseWeight * uselessMultiplier : baseWeight;
+  }
   function applyUnderpoweredWeighting(baseWeight, buildingId, powerUnlocked, powerSurplus, powered, multiplier) {
     return !powerUnlocked || powered === void 0 || powered <= 0 || buildingId === "lake_cooling_tower" || buildingId === "neutron_citadel" ? baseWeight : powered > powerSurplus ? baseWeight * multiplier : baseWeight;
   }
@@ -1797,17 +1800,35 @@
       onSkipped(binding, "vacuum-collapse weighting is not finite");
       return;
     }
-    let dynamicWeight = applyVacuumCollapseWeighting(
-      applyNonOperatingWeighting(
-        weighting * newBuildingWeighting,
-        count,
-        on,
-        nonOperatingWeighting,
-        NON_CITY_NON_OPERATING_EXCEPTIONS.has(id)
+    let powerProducer = powered !== void 0 && powered < 0, needfulPowerWeighting = powerProducer ? readFiniteSetting(settings, "buildingWeightingNeedfulPowerPlant", 1) : 1;
+    if (needfulPowerWeighting === void 0) {
+      onSkipped(binding, "needful-power weighting is not finite");
+      return;
+    }
+    let uselessPowerWeighting = powerProducer ? readFiniteSetting(settings, "buildingWeightingUselessPowerPlant", 1) : 1;
+    if (uselessPowerWeighting === void 0) {
+      onSkipped(binding, "useless-power weighting is not finite");
+      return;
+    }
+    let dynamicWeight = applyNonCityPowerProducerWeighting(
+      applyVacuumCollapseWeighting(
+        applyNonOperatingWeighting(
+          weighting * newBuildingWeighting,
+          count,
+          on,
+          nonOperatingWeighting,
+          NON_CITY_NON_OPERATING_EXCEPTIONS.has(id)
+        ),
+        id,
+        settings.prestigeType === "vacuum" ? "vacuum" : "other",
+        vacuumWeighting
       ),
-      id,
-      settings.prestigeType === "vacuum" ? "vacuum" : "other",
-      vacuumWeighting
+      context.powerUnlocked,
+      context.powerSurplus,
+      context.unpoweredPowerDemand,
+      powered,
+      needfulPowerWeighting,
+      uselessPowerWeighting
     );
     return Object.freeze({
       key: binding,

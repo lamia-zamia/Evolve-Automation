@@ -642,6 +642,41 @@ assert.equal(
   "Vacuum Collapse weighting applies to a captured non-city pylon",
 );
 
+const nonCityPowerReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({
+      city: { power: 1, power_total: -3, powered: true },
+      space: { geothermal: { count: 1, on: 1 } },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: (elementId) =>
+      elementId === "space-geothermal"
+        ? {
+            elementId,
+            generation: 1,
+            methods: [],
+            data: { powered: () => -5 },
+          }
+        : undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["space-geothermal"],
+  },
+  readKnowledge: () => openKnowledge,
+  getSettings: () => ({
+    "batspace-geothermal": true,
+    "bld_w_space-geothermal": 10,
+    buildingWeightingNeedfulPowerPlant: 3,
+  }),
+});
+assert.equal(
+  nonCityPowerReader().buildings[0].weighting,
+  30,
+  "a captured non-city power producer is promoted during a power deficit",
+);
+
 const nonBuildControlReader = createCapturedBuildPolicyReader({
   rootState: {
     readRoot: () => ({ tech: { moon_base: { count: 0 } } }),

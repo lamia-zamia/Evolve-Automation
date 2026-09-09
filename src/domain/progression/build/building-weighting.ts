@@ -130,6 +130,27 @@ export function applyPowerPlantWeighting(
     : baseWeight;
 }
 
+/** Applies the same energy-need rule to a captured non-city power producer. */
+export function applyNonCityPowerProducerWeighting(
+  baseWeight: number,
+  powerUnlocked: boolean,
+  powerSurplus: number,
+  unpoweredPowerDemand: number,
+  powered: number | undefined,
+  needfulMultiplier: number,
+  uselessMultiplier: number,
+): number {
+  if (!powerUnlocked || powered === undefined || powered >= 0) {
+    return baseWeight;
+  }
+  if (powerSurplus < unpoweredPowerDemand) {
+    return baseWeight * needfulMultiplier;
+  }
+  return powerSurplus > unpoweredPowerDemand
+    ? baseWeight * uselessMultiplier
+    : baseWeight;
+}
+
 /** Applies the captured underpowered rule when an action exposes its own power draw. */
 export function applyUnderpoweredWeighting(
   baseWeight: number,

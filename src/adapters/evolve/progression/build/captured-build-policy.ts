@@ -11,6 +11,7 @@ import {
   applyNeedfulKnowledgeWeighting,
   applyNewBuildingWeighting,
   applyNeedMoreStorageWeighting,
+  applyNonCityPowerProducerWeighting,
   applyNonOperatingWeighting,
   applyNonOperatingCityWeighting,
   applyPowerPlantWeighting,
@@ -682,17 +683,40 @@ function readNonCityTarget(
     onSkipped(binding, "vacuum-collapse weighting is not finite");
     return undefined;
   }
-  const dynamicWeight = applyVacuumCollapseWeighting(
-    applyNonOperatingWeighting(
-      weighting * newBuildingWeighting,
-      count,
-      on,
-      nonOperatingWeighting,
-      NON_CITY_NON_OPERATING_EXCEPTIONS.has(id),
+  const powerProducer = powered !== undefined && powered < 0;
+  const needfulPowerWeighting = powerProducer
+    ? readFiniteSetting(settings, "buildingWeightingNeedfulPowerPlant", 1)
+    : 1;
+  if (needfulPowerWeighting === undefined) {
+    onSkipped(binding, "needful-power weighting is not finite");
+    return undefined;
+  }
+  const uselessPowerWeighting = powerProducer
+    ? readFiniteSetting(settings, "buildingWeightingUselessPowerPlant", 1)
+    : 1;
+  if (uselessPowerWeighting === undefined) {
+    onSkipped(binding, "useless-power weighting is not finite");
+    return undefined;
+  }
+  const dynamicWeight = applyNonCityPowerProducerWeighting(
+    applyVacuumCollapseWeighting(
+      applyNonOperatingWeighting(
+        weighting * newBuildingWeighting,
+        count,
+        on,
+        nonOperatingWeighting,
+        NON_CITY_NON_OPERATING_EXCEPTIONS.has(id),
+      ),
+      id,
+      settings["prestigeType"] === "vacuum" ? "vacuum" : "other",
+      vacuumWeighting,
     ),
-    id,
-    settings["prestigeType"] === "vacuum" ? "vacuum" : "other",
-    vacuumWeighting,
+    context.powerUnlocked,
+    context.powerSurplus,
+    context.unpoweredPowerDemand,
+    powered,
+    needfulPowerWeighting,
+    uselessPowerWeighting,
   );
   return Object.freeze({
     key: binding,
