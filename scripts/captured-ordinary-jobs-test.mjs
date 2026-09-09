@@ -94,6 +94,75 @@ assert.equal(
   "a zero authority target keeps the upstream authority branch disabled",
 );
 
+const authorityRoot = {
+  civic: {
+    d_job: "unemployed",
+    unemployed: {
+      job: "unemployed",
+      assigned: 2,
+      workers: 2,
+      max: 0,
+      display: true,
+    },
+    farmer: {
+      job: "farmer",
+      assigned: 0,
+      workers: 0,
+      max: -1,
+      display: true,
+    },
+    entertainer: {
+      job: "entertainer",
+      assigned: 1,
+      workers: 1,
+      max: -1,
+      display: true,
+    },
+    taxes: { tax_rate: 20, display: true },
+    govern: { type: "democracy" },
+  },
+  resource: {
+    Population: { amount: 3, max: 10 },
+    Authority: { amount: 120, max: 200, display: true },
+    Morale: { amount: 110, max: 200, diff: 0.5 },
+  },
+  race: {},
+  tech: { theatre: 2 },
+};
+const authorityControls = {
+  capturedElementIds: () => ["civ-unemployed", "civ-farmer", "civ-entertainer"],
+  resolve: (elementId) =>
+    elementId.startsWith("civ-")
+      ? { elementId, generation: 1, methods: ["add", "sub", "setDefault"] }
+      : undefined,
+  invoke: () => ({ ok: true, value: undefined }),
+};
+const capturedAuthority = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => authorityRoot },
+  controls: authorityControls,
+  readSettings: () => ({
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+    job_unemployed: true,
+    job_farmer: true,
+    job_entertainer: true,
+  }),
+});
+const authorityInput = capturedAuthority.reader.readCycle(false);
+assert.equal(authorityInput.available, true);
+assert.deepEqual(authorityInput.authority, {
+  enabled: true,
+  current: 120,
+  morale: 110,
+  moralePotential: 0.5,
+  moraleMaximum: 200,
+  moraleCeiling: 132.22222222222223,
+  entertainerMorale: 2,
+  superstarMorale: 0,
+  previousCap: null,
+  debug: false,
+});
+
 const partialAutomation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => root },
   controls: {

@@ -143,6 +143,212 @@ function finiteNonNegative(value: unknown): number | undefined {
     : undefined;
 }
 
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function traitValue(
+  race: Record<PropertyKey, unknown>,
+  id: string,
+  values: Readonly<Record<number, number>>,
+  operation: "raw" | "factor" | "percent",
+): number | undefined {
+  const rank = readProperty(race, id);
+  if (rank === undefined || rank === false) {
+    return operation === "raw" ? 0 : 1;
+  }
+  if (typeof rank !== "number" || !Number.isFinite(rank)) return undefined;
+  const value = values[rank];
+  if (value === undefined) return undefined;
+  if (operation === "factor") return 1 - value / 100;
+  if (operation === "percent") return value / 100;
+  return value;
+}
+
+const MUSICAL_MORALE: Readonly<Record<number, number>> = Object.freeze({
+  0.1: 0.15,
+  0.25: 0.25,
+  0.5: 0.5,
+  1: 1,
+  2: 1.1,
+  3: 1.2,
+  4: 1.25,
+});
+
+const EMOTIONLESS_REDUCTION: Readonly<Record<number, number>> = Object.freeze({
+  0.1: 55,
+  0.25: 50,
+  0.5: 45,
+  1: 35,
+  2: 25,
+  3: 20,
+  4: 18,
+});
+
+const HIGH_POPULATION_MORALE: Readonly<Record<number, number>> = Object.freeze({
+  0.1: 50,
+  0.25: 50,
+  0.5: 34,
+  1: 26,
+  2: 21.2,
+  3: 18,
+  4: 15.8,
+});
+
+function readAuthorityInput(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+  previousCap: number | null,
+): Readonly<JobsCycleInput["authority"]> | undefined {
+  if (settings["authorityManage"] !== true) return unavailableInput().authority;
+  const configuredTarget = finiteNumber(settings["generalMinimumAuthority"]);
+  if (configuredTarget === undefined) return undefined;
+  if (configuredTarget === 0) {
+    return unavailableInput().authority;
+  }
+  const resources = readProperty(root, "resource");
+  const authority = readProperty(resources, "Authority");
+  const morale = readProperty(resources, "Morale");
+  if (!isRecord(authority) || !isRecord(morale)) return undefined;
+  const current = finiteNonNegative(readProperty(authority, "amount"));
+  const maximum = finiteNonNegative(readProperty(authority, "max"));
+  const moraleCurrent = finiteNumber(readProperty(morale, "amount"));
+  const moralePotential = finiteNumber(readProperty(morale, "diff"));
+  const moraleMaximum = finiteNumber(readProperty(morale, "max"));
+  if (
+    current === undefined ||
+    maximum === undefined ||
+    moraleCurrent === undefined ||
+    moralePotential === undefined ||
+    moraleMaximum === undefined
+  ) {
+    return undefined;
+  }
+  const display = readProperty(authority, "display");
+  if (display !== undefined && typeof display !== "boolean") return undefined;
+  if (display === false) return unavailableInput().authority;
+
+  const target = Math.max(
+    100,
+    configuredTarget < 0 ? maximum : configuredTarget,
+  );
+  const taxes = readProperty(readProperty(root, "civic"), "taxes");
+  const taxDisplay = readProperty(taxes, "display");
+  const taxRate = finiteNonNegative(readProperty(taxes, "tax_rate"));
+  if (
+    taxRate === undefined ||
+    (taxDisplay !== undefined && typeof taxDisplay !== "boolean")
+  ) {
+    return undefined;
+  }
+  const government = readProperty(readProperty(root, "civic"), "govern");
+  const governmentType = readProperty(government, "type");
+  if (governmentType !== undefined && typeof governmentType !== "string") {
+    return undefined;
+  }
+  const currency = readProperty(readProperty(root, "tech"), "currency");
+  if (
+    currency !== undefined &&
+    (typeof currency !== "number" || !Number.isFinite(currency))
+  ) {
+    return undefined;
+  }
+  const raceForTax = readProperty(root, "race");
+  if (
+    Boolean(readProperty(raceForTax, "terrifying")) ||
+    Boolean(readProperty(raceForTax, "noble")) ||
+    Boolean(readProperty(raceForTax, "wish")) ||
+    governmentType === "oligarchy"
+  ) {
+    return undefined;
+  }
+  const taxCap = currency !== undefined && currency >= 5 ? 50 : 30;
+  let authorityTaxLimit = taxCap;
+  if (settings["autoTax"] === true) {
+    const requested = readProperty(settings, "generalRequestedTaxRate");
+    if (requested !== undefined) {
+      const requestedRate = finiteNumber(requested);
+      if (requestedRate === undefined || requestedRate < 0) {
+        if (requestedRate === undefined) return undefined;
+      } else {
+        const minimumTax = currency !== undefined && currency >= 5 ? 0 : 10;
+        authorityTaxLimit = Math.min(
+          Math.max(requestedRate, minimumTax),
+          taxCap,
+        );
+      }
+    }
+  }
+  const canTax =
+    current < target &&
+    taxDisplay !== false &&
+    (settings["autoTax"] === true
+      ? taxRate < authorityTaxLimit
+      : taxRate < taxCap);
+  if (current < target && settings["autoTax"] !== true && taxRate < taxCap) {
+    return undefined;
+  }
+
+  const race = readProperty(root, "race");
+  const tech = readProperty(root, "tech");
+  if (!isRecord(race) || !isRecord(tech)) return undefined;
+  const theatreValue = readProperty(tech, "theatre");
+  const theatre =
+    theatreValue === undefined ? 0 : finiteNonNegative(theatreValue);
+  const musical = traitValue(race, "musical", MUSICAL_MORALE, "raw");
+  const emotionless = traitValue(
+    race,
+    "emotionless",
+    EMOTIONLESS_REDUCTION,
+    "factor",
+  );
+  const highPopulation = traitValue(
+    race,
+    "high_pop",
+    HIGH_POPULATION_MORALE,
+    "percent",
+  );
+  if (
+    theatre === undefined ||
+    musical === undefined ||
+    emotionless === undefined ||
+    highPopulation === undefined
+  ) {
+    return undefined;
+  }
+  const entertainerMorale =
+    (theatre + musical) *
+    emotionless *
+    highPopulation *
+    (readProperty(race, "lone_survivor") ? 25 : 1);
+  const superstarValue = readProperty(tech, "superstar");
+  const superstar =
+    superstarValue === undefined ? 0 : finiteNonNegative(superstarValue);
+  if (superstar === undefined) return undefined;
+  const superstarMorale = superstar > 0 ? highPopulation : 0;
+  let moraleCeiling: number | null = null;
+  if (!canTax) {
+    const factor = governmentType === "democracy" ? 0.9 : 1;
+    const authorityAtHundred =
+      current + Math.max(0, moraleCurrent - 100) * factor;
+    moraleCeiling = 100 + Math.max(0, authorityAtHundred - 100) / factor;
+  }
+  return Object.freeze({
+    enabled: true,
+    current,
+    morale: moraleCurrent,
+    moralePotential,
+    moraleMaximum,
+    moraleCeiling,
+    entertainerMorale,
+    superstarMorale,
+    previousCap,
+    debug: false,
+  });
+}
+
 function tokenFor(
   catalog: Readonly<CapturedJobCatalog>,
   id: string,
@@ -169,6 +375,7 @@ function readCycle(
   root: unknown,
   settingsValue: unknown,
   catalogReader: () => CapturedJobCatalog | undefined,
+  previousAuthorityCap: number | null,
 ):
   | {
       readonly catalog: Readonly<CapturedJobCatalog>;
@@ -177,15 +384,8 @@ function readCycle(
     }
   | undefined {
   const settings = isRecord(settingsValue) ? settingsValue : {};
-  // Authority management needs morale history, tax state, and trait-derived income that the
-  // captured ordinary surface does not yet expose. Upstream explicitly disables the authority
-  // branch when the configured target is zero, so that exact case remains a safe ordinary cycle.
-  if (
-    settings["authorityManage"] === true &&
-    settings["generalMinimumAuthority"] !== 0
-  ) {
-    return undefined;
-  }
+  const authority = readAuthorityInput(root, settings, previousAuthorityCap);
+  if (authority === undefined) return undefined;
   const population = finiteNonNegative(
     readProperty(
       readProperty(readProperty(root, "resource"), "Population"),
@@ -248,7 +448,7 @@ function readCycle(
     population,
     craftDebug: false,
     lastCraftWinner: null,
-    authority: unavailableInput().authority,
+    authority,
     crafting: Object.freeze([]),
   };
   const input = toCapturedJobsCycleInput(catalog, options);
@@ -312,6 +512,7 @@ function readFullCycle(
   catalogReader: () => CapturedJobCatalog | undefined,
   costs: CapturedCraftCosts,
   readDemand: (() => CapturedDemandSample) | undefined,
+  previousAuthorityCap: number | null,
 ):
   | {
       readonly catalog: Readonly<CapturedJobCatalog>;
@@ -322,7 +523,12 @@ function readFullCycle(
       >[];
     }
   | undefined {
-  const ordinary = readCycle(root, settingsValue, catalogReader);
+  const ordinary = readCycle(
+    root,
+    settingsValue,
+    catalogReader,
+    previousAuthorityCap,
+  );
   if (ordinary === undefined) return undefined;
   const foundry = readCapturedCraftsmenCycle(
     root,
@@ -525,6 +731,7 @@ export function createCapturedOrdinaryJobsAutomation({
 } {
   let history: CapturedJobHistory | undefined;
   let historyRoot: unknown;
+  let authorityCap: number | null = null;
   const catalogReader = createCapturedJobCatalogReader({
     rootState,
     controls,
@@ -543,7 +750,12 @@ export function createCapturedOrdinaryJobsAutomation({
         return unavailableInput();
       }
       const root = rootState.readRoot();
-      const sampled = readCycle(root, readSettings(), catalogReader);
+      const sampled = readCycle(
+        root,
+        readSettings(),
+        catalogReader,
+        authorityCap,
+      );
       if (sampled === undefined) {
         sessionRef.value = undefined;
         return unavailableInput();
@@ -613,6 +825,9 @@ export function createCapturedOrdinaryJobsAutomation({
           lastPopulationCount: decision.lastPopulationCount,
           lastFarmerCount: decision.lastFarmerCount,
         });
+        authorityCap = decision.clearAuthorityEntertainerCap
+          ? null
+          : decision.authorityEntertainerCap;
       }
       return outcome;
     },
@@ -638,6 +853,7 @@ export function createCapturedFullJobsAutomation({
 } {
   let history: CapturedJobHistory | undefined;
   let historyRoot: unknown;
+  let authorityCap: number | null = null;
   const catalogReader = createCapturedJobCatalogReader({
     rootState,
     controls,
@@ -663,6 +879,7 @@ export function createCapturedFullJobsAutomation({
         catalogReader,
         costs,
         readDemand,
+        authorityCap,
       );
       if (sampled === undefined) {
         sessionRef.value = undefined;
@@ -808,6 +1025,9 @@ export function createCapturedFullJobsAutomation({
           lastPopulationCount: decision.lastPopulationCount,
           lastFarmerCount: decision.lastFarmerCount,
         });
+        authorityCap = decision.clearAuthorityEntertainerCap
+          ? null
+          : decision.authorityEntertainerCap;
       }
       return outcome;
     },
@@ -819,6 +1039,7 @@ export function createCapturedFullJobsAutomation({
       catalogReader,
       costs,
       readDemand,
+      authorityCap,
     ) !== undefined;
   return Object.freeze({ reader, executor, isAvailable });
 }

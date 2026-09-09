@@ -6043,6 +6043,126 @@
   function finiteNonNegative2(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
   }
+  function finiteNumber3(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function traitValue(race, id, values, operation2) {
+    let rank = readProperty(race, id);
+    if (rank === void 0 || rank === !1)
+      return operation2 === "raw" ? 0 : 1;
+    if (typeof rank != "number" || !Number.isFinite(rank)) return;
+    let value = values[rank];
+    if (value !== void 0)
+      return operation2 === "factor" ? 1 - value / 100 : operation2 === "percent" ? value / 100 : value;
+  }
+  var MUSICAL_MORALE = Object.freeze({
+    0.1: 0.15,
+    0.25: 0.25,
+    0.5: 0.5,
+    1: 1,
+    2: 1.1,
+    3: 1.2,
+    4: 1.25
+  }), EMOTIONLESS_REDUCTION = Object.freeze({
+    0.1: 55,
+    0.25: 50,
+    0.5: 45,
+    1: 35,
+    2: 25,
+    3: 20,
+    4: 18
+  }), HIGH_POPULATION_MORALE = Object.freeze({
+    0.1: 50,
+    0.25: 50,
+    0.5: 34,
+    1: 26,
+    2: 21.2,
+    3: 18,
+    4: 15.8
+  });
+  function readAuthorityInput(root, settings, previousCap) {
+    if (settings.authorityManage !== !0) return unavailableInput().authority;
+    let configuredTarget = finiteNumber3(settings.generalMinimumAuthority);
+    if (configuredTarget === void 0) return;
+    if (configuredTarget === 0)
+      return unavailableInput().authority;
+    let resources = readProperty(root, "resource"), authority = readProperty(resources, "Authority"), morale = readProperty(resources, "Morale");
+    if (!isRecord(authority) || !isRecord(morale)) return;
+    let current = finiteNonNegative2(readProperty(authority, "amount")), maximum = finiteNonNegative2(readProperty(authority, "max")), moraleCurrent = finiteNumber3(readProperty(morale, "amount")), moralePotential = finiteNumber3(readProperty(morale, "diff")), moraleMaximum = finiteNumber3(readProperty(morale, "max"));
+    if (current === void 0 || maximum === void 0 || moraleCurrent === void 0 || moralePotential === void 0 || moraleMaximum === void 0)
+      return;
+    let display = readProperty(authority, "display");
+    if (display !== void 0 && typeof display != "boolean") return;
+    if (display === !1) return unavailableInput().authority;
+    let target = Math.max(
+      100,
+      configuredTarget < 0 ? maximum : configuredTarget
+    ), taxes = readProperty(readProperty(root, "civic"), "taxes"), taxDisplay = readProperty(taxes, "display"), taxRate = finiteNonNegative2(readProperty(taxes, "tax_rate"));
+    if (taxRate === void 0 || taxDisplay !== void 0 && typeof taxDisplay != "boolean")
+      return;
+    let government = readProperty(readProperty(root, "civic"), "govern"), governmentType = readProperty(government, "type");
+    if (governmentType !== void 0 && typeof governmentType != "string")
+      return;
+    let currency = readProperty(readProperty(root, "tech"), "currency");
+    if (currency !== void 0 && (typeof currency != "number" || !Number.isFinite(currency)))
+      return;
+    let raceForTax = readProperty(root, "race");
+    if (readProperty(raceForTax, "terrifying") || readProperty(raceForTax, "noble") || readProperty(raceForTax, "wish") || governmentType === "oligarchy")
+      return;
+    let taxCap = currency !== void 0 && currency >= 5 ? 50 : 30, authorityTaxLimit = taxCap;
+    if (settings.autoTax === !0) {
+      let requested = readProperty(settings, "generalRequestedTaxRate");
+      if (requested !== void 0) {
+        let requestedRate = finiteNumber3(requested);
+        if (requestedRate === void 0 || requestedRate < 0) {
+          if (requestedRate === void 0) return;
+        } else {
+          let minimumTax = currency !== void 0 && currency >= 5 ? 0 : 10;
+          authorityTaxLimit = Math.min(
+            Math.max(requestedRate, minimumTax),
+            taxCap
+          );
+        }
+      }
+    }
+    let canTax = current < target && taxDisplay !== !1 && (settings.autoTax === !0 ? taxRate < authorityTaxLimit : taxRate < taxCap);
+    if (current < target && settings.autoTax !== !0 && taxRate < taxCap)
+      return;
+    let race = readProperty(root, "race"), tech = readProperty(root, "tech");
+    if (!isRecord(race) || !isRecord(tech)) return;
+    let theatreValue = readProperty(tech, "theatre"), theatre = theatreValue === void 0 ? 0 : finiteNonNegative2(theatreValue), musical = traitValue(race, "musical", MUSICAL_MORALE, "raw"), emotionless = traitValue(
+      race,
+      "emotionless",
+      EMOTIONLESS_REDUCTION,
+      "factor"
+    ), highPopulation = traitValue(
+      race,
+      "high_pop",
+      HIGH_POPULATION_MORALE,
+      "percent"
+    );
+    if (theatre === void 0 || musical === void 0 || emotionless === void 0 || highPopulation === void 0)
+      return;
+    let entertainerMorale = (theatre + musical) * emotionless * highPopulation * (readProperty(race, "lone_survivor") ? 25 : 1), superstarValue = readProperty(tech, "superstar"), superstar = superstarValue === void 0 ? 0 : finiteNonNegative2(superstarValue);
+    if (superstar === void 0) return;
+    let superstarMorale = superstar > 0 ? highPopulation : 0, moraleCeiling = null;
+    if (!canTax) {
+      let factor = governmentType === "democracy" ? 0.9 : 1, authorityAtHundred = current + Math.max(0, moraleCurrent - 100) * factor;
+      moraleCeiling = 100 + Math.max(0, authorityAtHundred - 100) / factor;
+    }
+    return Object.freeze({
+      enabled: !0,
+      current,
+      morale: moraleCurrent,
+      moralePotential,
+      moraleMaximum,
+      moraleCeiling,
+      entertainerMorale,
+      superstarMorale,
+      previousCap,
+      debug: !1
+    });
+  }
   function tokenFor(catalog, id) {
     return catalog.jobs.find((job) => job.id === id)?.token ?? null;
   }
@@ -6055,10 +6175,9 @@
         return !1;
     return !0;
   }
-  function readCycle(root, settingsValue, catalogReader) {
-    let settings = isRecord(settingsValue) ? settingsValue : {};
-    if (settings.authorityManage === !0 && settings.generalMinimumAuthority !== 0)
-      return;
+  function readCycle(root, settingsValue, catalogReader, previousAuthorityCap) {
+    let settings = isRecord(settingsValue) ? settingsValue : {}, authority = readAuthorityInput(root, settings, previousAuthorityCap);
+    if (authority === void 0) return;
     let population = finiteNonNegative2(
       readProperty(
         readProperty(readProperty(root, "resource"), "Population"),
@@ -6104,7 +6223,7 @@
       population,
       craftDebug: !1,
       lastCraftWinner: null,
-      authority: unavailableInput().authority,
+      authority,
       crafting: Object.freeze([])
     }, input = toCapturedJobsCycleInput(catalog, options);
     if (input !== void 0)
@@ -6140,8 +6259,13 @@
       serves: !0
     });
   }
-  function readFullCycle(root, settingsValue, catalogReader, costs, readDemand) {
-    let ordinary = readCycle(root, settingsValue, catalogReader);
+  function readFullCycle(root, settingsValue, catalogReader, costs, readDemand, previousAuthorityCap) {
+    let ordinary = readCycle(
+      root,
+      settingsValue,
+      catalogReader,
+      previousAuthorityCap
+    );
     if (ordinary === void 0) return;
     let foundry = readCapturedCraftsmenCycle(
       root,
@@ -6254,7 +6378,7 @@
     controls,
     readSettings
   }) {
-    let history, historyRoot, catalogReader = createCapturedJobCatalogReader({
+    let history, historyRoot, authorityCap = null, catalogReader = createCapturedJobCatalogReader({
       rootState,
       controls,
       readSettings,
@@ -6265,7 +6389,12 @@
       readCycle(craftOnly) {
         if (craftOnly)
           return sessionRef.value = void 0, unavailableInput();
-        let root = rootState.readRoot(), sampled3 = readCycle(root, readSettings(), catalogReader);
+        let root = rootState.readRoot(), sampled3 = readCycle(
+          root,
+          readSettings(),
+          catalogReader,
+          authorityCap
+        );
         return sampled3 === void 0 ? (sessionRef.value = void 0, unavailableInput()) : (sessionRef.value = Object.freeze({
           root,
           catalog: sampled3.catalog,
@@ -6312,7 +6441,7 @@
         return outcome.status === "succeeded" && (historyRoot = session.root, history = Object.freeze({
           lastPopulationCount: decision.lastPopulationCount,
           lastFarmerCount: decision.lastFarmerCount
-        })), outcome;
+        }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap), outcome;
       }
     });
     return Object.freeze({ reader, executor });
@@ -6324,7 +6453,7 @@
     costs,
     readDemand
   }) {
-    let history, historyRoot, catalogReader = createCapturedJobCatalogReader({
+    let history, historyRoot, authorityCap = null, catalogReader = createCapturedJobCatalogReader({
       rootState,
       controls,
       readSettings,
@@ -6341,7 +6470,8 @@
           readSettings(),
           catalogReader,
           costs,
-          readDemand
+          readDemand,
+          authorityCap
         );
         return sampled3 === void 0 ? (sessionRef.value = void 0, unavailableInput()) : (sessionRef.value = Object.freeze({
           root,
@@ -6423,7 +6553,7 @@
         return outcome.status === "succeeded" && (historyRoot = session.root, history = Object.freeze({
           lastPopulationCount: decision.lastPopulationCount,
           lastFarmerCount: decision.lastFarmerCount
-        })), outcome;
+        }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap), outcome;
       }
     });
     return Object.freeze({ reader, executor, isAvailable: () => readFullCycle(
@@ -6431,7 +6561,8 @@
       readSettings(),
       catalogReader,
       costs,
-      readDemand
+      readDemand,
+      authorityCap
     ) !== void 0 });
   }
 
