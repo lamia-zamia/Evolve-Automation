@@ -72,6 +72,8 @@ export interface CapturedProgressionControlDependencies {
 export interface CapturedProgressionControl {
   readonly runConstructionCycle: () => CommandExecutionOutcome;
   readonly runResearchCycle: () => CommandExecutionOutcome;
+  /** The most recently captured offered-technology snapshot, if one exists. */
+  readonly readOfferedTechs: () => readonly Readonly<OfferedTech>[] | undefined;
   /** What the last construction cycle was saving for, for the features that read demand. */
   readonly observations: ConstructionObservations;
 }
@@ -278,6 +280,7 @@ export function createCapturedProgressionControl(
   return Object.freeze({
     runConstructionCycle: () => construction.runCycle(),
     runResearchCycle: () => research.runCycle(),
+    readOfferedTechs: () => lastOffered,
     observations: construction.observations,
   });
 }

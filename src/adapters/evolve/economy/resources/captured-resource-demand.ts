@@ -22,6 +22,7 @@ import type { StorageResourceState } from "../../../../domain/economy/storage/st
 import {
   planDemandPrioritization,
   type DemandCost,
+  type DemandTech,
   type DemandPrioritizationSettings,
   type DemandTarget,
 } from "../../../../domain/economy/resources/demand-prioritization.ts";
@@ -29,6 +30,7 @@ import type { ReservedCostTarget } from "../../../../domain/cost-conflicts.ts";
 import type { CostReservationSource } from "../../../../ports/game-cost-reservations.ts";
 import type { ConstructionObservations } from "../../../../ports/game-construction-observations.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
+import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedResourceDemandDependencies {
@@ -39,6 +41,9 @@ export interface CapturedResourceDemandDependencies {
    * which then simply sees no implicit commitment.
    */
   readonly construction?: ConstructionObservations;
+  /** The last offered-technology snapshot already captured by progression, if any. */
+  readonly readOfferedTechs?: () =>
+    readonly Readonly<OfferedTech>[] | undefined;
   readonly readSettings: () => unknown;
 }
 
@@ -167,6 +172,42 @@ function toTargets(
   );
 }
 
+function readAffordable(
+  resources: Record<PropertyKey, unknown>,
+  cost: Readonly<Record<string, number>>,
+): boolean {
+  for (const [resourceId, amount] of Object.entries(cost)) {
+    if (!Number.isFinite(amount) || amount < 0) return false;
+    const current = finite(
+      readProperty(readProperty(resources, resourceId), "amount"),
+    );
+    // Missing holdings are not treated as zero: the captured root has not yet
+    // created that resource, so this is conservatively not an affordable offer.
+    if (current === undefined || current < amount) return false;
+  }
+  return true;
+}
+
+function toOfferedTechs(
+  resources: Record<PropertyKey, unknown>,
+  offered: readonly Readonly<OfferedTech>[] | undefined,
+): readonly DemandTech[] {
+  if (offered === undefined) return Object.freeze([]);
+  return Object.freeze(
+    offered.map((tech) =>
+      Object.freeze({
+        id: tech.elementId,
+        isAffordable: readAffordable(resources, tech.cost),
+        target: Object.freeze({
+          isProject: false,
+          progress: null,
+          costs: toCosts(tech.cost),
+        }),
+      }),
+    ),
+  );
+}
+
 /**
  * Every resource the game has created, at the script's own per-cycle baseline: nothing has been
  * requested yet, and one unit of storage is required. `hasStorage` is the game's own `stackable`
@@ -207,15 +248,22 @@ export function createCapturedResourceDemand(
       if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
       const queued = dependencies.reservations.readReservations().targets;
       const saving = dependencies.construction?.readSavingTarget() ?? null;
-      if (queued.length === 0 && saving === null) return EMPTY_DEMAND_SAMPLE;
+      const offered = dependencies.readOfferedTechs?.();
+      if (
+        queued.length === 0 &&
+        saving === null &&
+        (offered === undefined || offered.length === 0)
+      ) {
+        return EMPTY_DEMAND_SAMPLE;
+      }
       const settingsValue = dependencies.readSettings();
       const settings = isRecord(settingsValue) ? settingsValue : {};
       const savingCosts = saving === null ? null : toCosts(saving.cost);
 
       const result = planDemandPrioritization({
         settings: readSettingsInput(settingsValue),
-        // Only reachable through the research fallback, which has no technologies to offer in this
-        // bounded sample and therefore returns the same empty list either way.
+        // The captured offer list is the game's own technology qualification result. The reader
+        // only recomputes affordability from current holdings; it never recreates tech gates.
         isEarlyGame: false,
         consumptionBalanceTarget: 0,
         truepathAiBuildingTarget: null,
@@ -228,7 +276,7 @@ export function createCapturedResourceDemand(
             ? null
             : Object.freeze({ name: saving.name, costs: savingCosts }),
         missions: Object.freeze([]),
-        unlockedTechs: Object.freeze([]),
+        unlockedTechs: toOfferedTechs(resources, offered),
         spyPurchaseMoney: 0,
         fleet: Object.freeze({
           nextShipAffordable: false,

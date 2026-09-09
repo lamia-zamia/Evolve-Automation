@@ -177,4 +177,31 @@ function withTargets(targets, settings = {}, saving = null) {
   assert.equal(sample.storageRequired("Stone"), 1);
 }
 
+// An already-captured offered technology participates in the research fallback. The adapter
+// trusts the game's offer qualification and only checks its current resource holdings.
+{
+  const offeredRoot = {
+    race: {},
+    resource: {
+      Knowledge: { amount: 150, max: 500, stackable: false },
+      Stone: { amount: 100, max: 1000, stackable: true },
+    },
+  };
+  const sample = createCapturedResourceDemand({
+    rootState: { readRoot: () => offeredRoot },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readOfferedTechs: () => [
+      { elementId: "tech-stonework", cost: { Knowledge: 100, Stone: 40 } },
+      { elementId: "tech-forge", cost: { Knowledge: 200 } },
+    ],
+    readSettings: () => ({ researchRequestSpace: true }),
+  }).sample();
+  assert.equal(sample.requestedQuantity("Knowledge"), 100);
+  assert.equal(sample.requestedQuantity("Stone"), 40);
+  assert.equal(sample.isDemanded("Knowledge"), false);
+  assert.equal(sample.isDemanded("Stone"), false);
+}
+
 console.log("Captured resource-demand adapter tests passed");

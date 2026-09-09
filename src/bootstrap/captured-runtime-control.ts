@@ -199,14 +199,16 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
   });
   // The demand sample is planned at most once per cycle and shared by everything that reads it.
-  // Its reservation source is the player's build queue only: pricing the research queue needs the
-  // offered-technology catalog, and that discovery pass belongs to the construction cycle.
+  // The research offer snapshot is already captured by progression; sharing it here keeps queue
+  // reservations and demand on one catalog without buying another discovery pass.
   const demand = createCapturedResourceDemand({
     rootState: pageCapture.rootState,
     construction: progression.observations,
+    readOfferedTechs: progression.readOfferedTechs,
     reservations: createCapturedQueueReservationSource({
       rootState: pageCapture.rootState,
       resources: createCapturedResourceSource(pageCapture.rootState),
+      readOfferedTechs: progression.readOfferedTechs,
       costs: createCapturedActionCostReader({
         rootState: pageCapture.rootState,
         controls: pageCapture.controls,

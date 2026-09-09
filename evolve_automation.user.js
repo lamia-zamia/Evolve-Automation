@@ -3424,6 +3424,7 @@
     return readObservations = () => construction.observations, Object.freeze({
       runConstructionCycle: () => construction.runCycle(),
       runResearchCycle: () => research.runCycle(),
+      readOfferedTechs: () => lastOffered,
       observations: construction.observations
     });
   }
@@ -6372,6 +6373,29 @@
       )
     );
   }
+  function readAffordable(resources, cost) {
+    for (let [resourceId, amount] of Object.entries(cost)) {
+      if (!Number.isFinite(amount) || amount < 0) return !1;
+      let current = finite6(
+        readProperty(readProperty(resources, resourceId), "amount")
+      );
+      if (current === void 0 || current < amount) return !1;
+    }
+    return !0;
+  }
+  function toOfferedTechs(resources, offered) {
+    return Object.freeze(offered === void 0 ? [] : offered.map(
+      (tech) => Object.freeze({
+        id: tech.elementId,
+        isAffordable: readAffordable(resources, tech.cost),
+        target: Object.freeze({
+          isProject: !1,
+          progress: null,
+          costs: toCosts(tech.cost)
+        })
+      })
+    ));
+  }
   function readStorageResources(resources, settings) {
     let states = [];
     for (let id of Object.keys(resources)) {
@@ -6397,12 +6421,13 @@
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
         if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
-        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null;
-        if (queued.length === 0 && saving === null) return EMPTY_DEMAND_SAMPLE;
+        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.();
+        if (queued.length === 0 && saving === null && (offered === void 0 || offered.length === 0))
+          return EMPTY_DEMAND_SAMPLE;
         let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, savingCosts = saving === null ? null : toCosts(saving.cost), result = planDemandPrioritization({
           settings: readSettingsInput(settingsValue),
-          // Only reachable through the research fallback, which has no technologies to offer in this
-          // bounded sample and therefore returns the same empty list either way.
+          // The captured offer list is the game's own technology qualification result. The reader
+          // only recomputes affordability from current holdings; it never recreates tech gates.
           isEarlyGame: !1,
           consumptionBalanceTarget: 0,
           truepathAiBuildingTarget: null,
@@ -6412,7 +6437,7 @@
           triggerTargets: Object.freeze([]),
           savingTarget: saving === null || savingCosts === null ? null : Object.freeze({ name: saving.name, costs: savingCosts }),
           missions: Object.freeze([]),
-          unlockedTechs: Object.freeze([]),
+          unlockedTechs: toOfferedTechs(resources, offered),
           spyPurchaseMoney: 0,
           fleet: Object.freeze({
             nextShipAffordable: !1,
@@ -7240,9 +7265,11 @@
     }), demand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
       construction: progression.observations,
+      readOfferedTechs: progression.readOfferedTechs,
       reservations: createCapturedQueueReservationSource({
         rootState: pageCapture2.rootState,
         resources: createCapturedResourceSource(pageCapture2.rootState),
+        readOfferedTechs: progression.readOfferedTechs,
         costs: createCapturedActionCostReader({
           rootState: pageCapture2.rootState,
           controls: pageCapture2.controls
