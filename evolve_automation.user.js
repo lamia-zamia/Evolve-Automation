@@ -5887,7 +5887,7 @@
   }
   function readFullCycle(root, settingsValue, catalogReader, costs, readDemand) {
     let ordinary = readCycle(root, settingsValue, catalogReader);
-    if (ordinary === void 0 || ordinary.input.manageServants) return;
+    if (ordinary === void 0) return;
     let foundry = readCapturedCraftsmenCycle(
       root,
       settingsValue,
@@ -5942,15 +5942,9 @@
           "full jobs decision contains an unknown token"
         );
       let current = ordinaryJob?.workers ?? foundryJob.workers, kind = ordinaryJob === void 0 ? "foundry" : "ordinary", id = ordinaryJob?.id ?? foundryJob.id, delta = assignment.workers - current;
-      if (delta < 0 && workerRemovals.push([kind, id, -delta]), delta > 0 && workerAdditions.push([kind, id, delta]), ordinaryJob !== void 0 && assignment.servants !== 0)
-        return rejected(
-          "unsupported-full-servant-assignment",
-          "full jobs does not execute skilled-servant assignments"
-        );
-      if (foundryJob !== void 0) {
-        let servantDelta = assignment.servants - foundryJob.servants;
-        servantDelta < 0 && servantRemovals.push([id, -servantDelta]), servantDelta > 0 && servantAdditions.push([id, servantDelta]);
-      }
+      delta < 0 && workerRemovals.push([kind, id, -delta]), delta > 0 && workerAdditions.push([kind, id, delta]);
+      let servantDelta = assignment.servants - (ordinaryJob?.servants ?? foundryJob?.servants ?? 0);
+      servantDelta < 0 && servantRemovals.push([kind, id, -servantDelta]), servantDelta > 0 && servantAdditions.push([kind, id, servantDelta]);
     }
     let selectedDefault = decision.selectedDefaultToken === null ? void 0 : ordinary.get(decision.selectedDefaultToken);
     if (decision.selectedDefaultToken !== null && selectedDefault === void 0)
@@ -5972,25 +5966,25 @@
     for (let [kind, id, count] of workerAdditions)
       if (!invoke(kind, id, "assign", count))
         return rejected("full-job-control-failed", `could not assign ${id}`);
-    for (let [id, count] of servantRemovals)
-      if (!controls.unassign({
+    for (let [kind, id, count] of servantRemovals)
+      if (!(kind === "ordinary" ? controls.unassign({ elementId: `servant-${id}`, count }) : controls.unassign({
         elementId: `scraft${id}`,
         count,
         craftedResourceId: id
-      }))
+      })))
         return rejected(
           "full-servant-control-failed",
-          `could not unassign skilled servants from ${id}`
+          `could not unassign servants from ${id}`
         );
-    for (let [id, count] of servantAdditions)
-      if (!controls.assign({
+    for (let [kind, id, count] of servantAdditions)
+      if (!(kind === "ordinary" ? controls.assign({ elementId: `servant-${id}`, count }) : controls.assign({
         elementId: `scraft${id}`,
         count,
         craftedResourceId: id
-      }))
+      })))
         return rejected(
           "full-servant-control-failed",
-          `could not assign skilled servants to ${id}`
+          `could not assign servants to ${id}`
         );
     return selectedDefault !== void 0 && !controls.setDefault({
       elementId: `civ-${selectedDefault.id}`,
@@ -6141,18 +6135,14 @@
                 `missing ${method} control for ${elementId}`
               );
           }
-          if (ordinaryJob === void 0) {
-            let skilledWorkers = session.foundry.skilledSamples.find(
-              (sample) => sample.id === job.id
-            )?.servants ?? 0;
-            if (assignment.servants !== skilledWorkers) {
-              let method = assignment.servants < skilledWorkers ? "sub" : "add";
-              if (!methods.get(`scraft${job.id}`)?.has(method))
-                return sessionRef.value = void 0, rejected(
-                  "full-jobs-controls-incomplete",
-                  `missing ${method} control for scraft${job.id}`
-                );
-            }
+          let currentServants = ordinaryJob?.servants ?? session.foundry.skilledSamples.find((sample) => sample.id === job.id)?.servants ?? 0;
+          if (assignment.servants !== currentServants) {
+            let method = assignment.servants < currentServants ? "sub" : "add", elementId = ordinaryJob === void 0 ? `scraft${job.id}` : `servant-${job.id}`;
+            if (!methods.get(elementId)?.has(method))
+              return sessionRef.value = void 0, rejected(
+                "full-jobs-controls-incomplete",
+                `missing ${method} control for ${elementId}`
+              );
           }
         }
         return decision.selectedDefaultToken !== null && !methods.get(

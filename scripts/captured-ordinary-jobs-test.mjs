@@ -133,9 +133,9 @@ const fullRoot = {
   },
   race: {
     servants: {
-      jobs: {},
+      jobs: { farmer: 0 },
       sjobs: { Plywood: 1 },
-      max: 0,
+      max: 1,
       used: 0,
       smax: 1,
       sused: 1,
@@ -153,6 +153,7 @@ const fullControls = {
   capturedElementIds: () => [
     "civ-unemployed",
     "civ-farmer",
+    "servant-farmer",
     "foundry",
     "scraftPlywood",
     "scraftBrick",
@@ -160,12 +161,15 @@ const fullControls = {
   resolve: (elementId) =>
     elementId === "foundry" ||
     elementId.startsWith("civ-") ||
-    elementId.startsWith("scraft")
+    elementId.startsWith("scraft") ||
+    elementId.startsWith("servant-")
       ? {
           elementId,
           generation: 1,
           methods:
-            elementId === "foundry" || elementId.startsWith("scraft")
+            elementId === "foundry" ||
+            elementId.startsWith("scraft") ||
+            elementId.startsWith("servant-")
               ? ["add", "sub"]
               : ["add", "sub", "setDefault"],
         }
@@ -177,6 +181,12 @@ const fullControls = {
       fullRoot.race.servants.sjobs[id] =
         (fullRoot.race.servants.sjobs[id] ?? 0) + (method === "add" ? 1 : -1);
       fullRoot.race.servants.sused += method === "add" ? 1 : -1;
+    } else if (handle.elementId.startsWith("servant-")) {
+      const id = handle.elementId.slice("servant-".length);
+      fullRoot.race.servants.jobs[id] =
+        (fullRoot.race.servants.jobs[id] ?? 0) +
+        (method === "add" ? args[0] : -args[0]);
+      fullRoot.race.servants.used += method === "add" ? args[0] : -args[0];
     } else if (handle.elementId === "foundry") {
       const id = args[0];
       fullRoot.city.foundry[id] += method === "add" ? 1 : -1;
@@ -199,6 +209,7 @@ const fullAutomation = createCapturedFullJobsAutomation({
     job_unemployed: true,
     job_farmer: true,
     productionCraftsmen: "always",
+    jobManageServants: true,
     craftPlywood: true,
     job_Plywood: true,
     foundry_w_Plywood: 1,
@@ -229,6 +240,10 @@ assert.equal(
 );
 assert.equal(
   fullCalls.some(({ elementId }) => elementId.startsWith("scraft")),
+  true,
+);
+assert.equal(
+  fullCalls.some(({ elementId }) => elementId === "servant-farmer"),
   true,
 );
 
