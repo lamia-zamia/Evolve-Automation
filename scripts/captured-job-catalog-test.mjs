@@ -1142,6 +1142,42 @@ assert.equal(
   "Lumberjack treats a demanded full Lumber store as useful",
 );
 
+const evilFursLumberjackReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: { evil: 1 },
+      resource: {
+        Furs: { amount: 1, max: 100 },
+        Lumber: { amount: 100, max: 100, diff: 0 },
+      },
+      civic: {
+        ...root.civic,
+        d_job: "lumberjack",
+        lumberjack: {
+          job: "lumberjack",
+          assigned: 2,
+          workers: 2,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-lumberjack"],
+  },
+  readSettings: () => ({ job_s_lumberjack: true }),
+});
+assert.equal(
+  evilFursLumberjackReader().jobs[0].smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "evil non-Soul-Eater Lumberjack stays available for useful Furs",
+);
+
 const quarryWorkerUsefulReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

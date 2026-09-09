@@ -5008,7 +5008,8 @@
     if (diff !== void 0 && diff < 0) return !0;
   }
   function readLumberjackSmartMaximum(root, readDemand) {
-    return readResourceUseful(root, "Lumber", readDemand) === !0 ? Number.MAX_SAFE_INTEGER : void 0;
+    let race = readProperty(root, "race");
+    return hasRaceFlag(race, "evil") && !hasRaceFlag(race, "soul_eater") && readResourceUseful(root, "Furs", readDemand) === !0 || readResourceUseful(root, "Lumber", readDemand) === !0 ? Number.MAX_SAFE_INTEGER : void 0;
   }
   function readResourceUnlocked(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id);

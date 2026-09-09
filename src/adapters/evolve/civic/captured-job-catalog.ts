@@ -769,6 +769,14 @@ function readLumberjackSmartMaximum(
   root: unknown,
   readDemand?: () => CapturedDemandSample,
 ): number | undefined {
+  const race = readProperty(root, "race");
+  if (
+    hasRaceFlag(race, "evil") &&
+    !hasRaceFlag(race, "soul_eater") &&
+    readResourceUseful(root, "Furs", readDemand) === true
+  ) {
+    return Number.MAX_SAFE_INTEGER;
+  }
   return readResourceUseful(root, "Lumber", readDemand) === true
     ? Number.MAX_SAFE_INTEGER
     : undefined;
