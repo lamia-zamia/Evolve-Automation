@@ -19,6 +19,10 @@ import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 import type { CapturedCraftCosts } from "../economy/production/captured-craft-costs.ts";
+import {
+  createCapturedJobCatalogReader,
+  type CapturedJobCatalog,
+} from "./captured-job-catalog.ts";
 import { createCapturedJobControls } from "./captured-job-controls.ts";
 
 const FOUNDRY_CONTROL = "foundry";
@@ -52,6 +56,8 @@ export interface CapturedCraftsmenDependencies {
 export interface CapturedCraftsmenAutomation {
   readonly reader: JobsReader;
   readonly executor: JobsExecutor;
+  /** Read-only ordinary-job state captured for the next full auto-jobs slice. */
+  readonly readJobCatalog: () => CapturedJobCatalog | undefined;
 }
 
 interface CraftSample {
@@ -457,6 +463,10 @@ export function createCapturedCraftsmenAutomation(
   const sessionRef: { value: CraftsmenSession | undefined } = {
     value: undefined,
   };
+  const readJobCatalog = createCapturedJobCatalogReader({
+    rootState: dependencies.rootState,
+    controls: dependencies.controls,
+  });
   const executor = createExecutor(dependencies, sessionRef);
   const reader: JobsReader = Object.freeze({
     readCycle() {
@@ -574,5 +584,5 @@ export function createCapturedCraftsmenAutomation(
       return sampled.input;
     },
   });
-  return Object.freeze({ reader, executor });
+  return Object.freeze({ reader, executor, readJobCatalog });
 }

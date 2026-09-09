@@ -4394,6 +4394,77 @@
     });
   }
 
+  // src/adapters/evolve/civic/captured-job-catalog.ts
+  function finiteNonNegative(value) {
+    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
+  }
+  function finiteMaximum(value) {
+    return typeof value == "number" && Number.isFinite(value) && value >= -1 ? value : void 0;
+  }
+  function readCatalog(root, controls, onSkipped) {
+    let civic = readProperty(root, "civic");
+    if (!isRecord(civic)) return;
+    let defaultJobId = readProperty(civic, "d_job");
+    if (typeof defaultJobId != "string" || defaultJobId.length === 0)
+      return;
+    let jobs = [], seen = /* @__PURE__ */ new Set();
+    for (let controlId of controls.capturedElementIds()) {
+      if (!controlId.startsWith("civ-") || controlId.length <= 4)
+        continue;
+      let id = controlId.slice(4);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      let handle = controls.resolve(controlId);
+      if (handle === void 0 || !handle.methods.includes("add") || !handle.methods.includes("sub") || !handle.methods.includes("setDefault")) {
+        onSkipped(controlId, "ordinary job control is incomplete");
+        continue;
+      }
+      let job = readProperty(civic, id);
+      if (!isRecord(job)) {
+        onSkipped(controlId, "ordinary job state is unavailable");
+        continue;
+      }
+      let workers = finiteNonNegative(readProperty(job, "workers"));
+      if (workers === void 0) {
+        onSkipped(controlId, "ordinary job worker count is not finite");
+        continue;
+      }
+      let maximum = finiteMaximum(readProperty(job, "max"));
+      if (maximum === void 0) {
+        onSkipped(controlId, "ordinary job maximum is not finite");
+        continue;
+      }
+      let display = readProperty(job, "display");
+      if (typeof display != "boolean") {
+        onSkipped(controlId, "ordinary job visibility is not boolean");
+        continue;
+      }
+      jobs.push(
+        Object.freeze({
+          id,
+          controlId,
+          workers,
+          maximum,
+          display,
+          isDefault: id === defaultJobId
+        })
+      );
+    }
+    return jobs.some((job) => job.id === defaultJobId) ? Object.freeze({
+      defaultJobId,
+      jobs: Object.freeze(jobs)
+    }) : void 0;
+  }
+  function createCapturedJobCatalogReader({
+    rootState,
+    controls,
+    onSkipped
+  }) {
+    let reportSkipped = onSkipped ?? (() => {
+    });
+    return () => readCatalog(rootState.readRoot(), controls, reportSkipped);
+  }
+
   // src/adapters/evolve/civic/captured-job-controls.ts
   function callCount(controls, elementId, method, count, craftedResourceId) {
     let handle = controls.resolve(elementId);
@@ -4696,7 +4767,10 @@
   function createCapturedCraftsmenAutomation(dependencies) {
     let sessionRef = {
       value: void 0
-    }, executor = createExecutor(dependencies, sessionRef), reader = Object.freeze({
+    }, readJobCatalog = createCapturedJobCatalogReader({
+      rootState: dependencies.rootState,
+      controls: dependencies.controls
+    }), executor = createExecutor(dependencies, sessionRef), reader = Object.freeze({
       readCycle() {
         if (dependencies.controls.resolve(FOUNDRY_CONTROL) === void 0)
           return sessionRef.value = void 0, Object.freeze({
@@ -4804,7 +4878,7 @@
         }), sampled3.input);
       }
     });
-    return Object.freeze({ reader, executor });
+    return Object.freeze({ reader, executor, readJobCatalog });
   }
 
   // src/domain/economy/production/pylon.ts
