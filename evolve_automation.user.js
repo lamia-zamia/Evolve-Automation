@@ -1792,19 +1792,30 @@
       onSkipped(binding, "non-operating weighting is not finite");
       return;
     }
+    let vacuumWeighting = id === "pylon" ? readFiniteSetting(settings, "buildingWeightingVacuumCollapse", 1) : 1;
+    if (vacuumWeighting === void 0) {
+      onSkipped(binding, "vacuum-collapse weighting is not finite");
+      return;
+    }
+    let dynamicWeight = applyVacuumCollapseWeighting(
+      applyNonOperatingWeighting(
+        weighting * newBuildingWeighting,
+        count,
+        on,
+        nonOperatingWeighting,
+        NON_CITY_NON_OPERATING_EXCEPTIONS.has(id)
+      ),
+      id,
+      settings.prestigeType === "vacuum" ? "vacuum" : "other",
+      vacuumWeighting
+    );
     return Object.freeze({
       key: binding,
       elementId,
       region,
       id,
       weighting: applyUnderpoweredWeighting(
-        applyNonOperatingWeighting(
-          weighting * newBuildingWeighting,
-          count,
-          on,
-          nonOperatingWeighting,
-          NON_CITY_NON_OPERATING_EXCEPTIONS.has(id)
-        ),
+        dynamicWeight,
         id,
         context.powerUnlocked,
         context.powerSurplus,

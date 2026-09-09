@@ -617,6 +617,31 @@ assert.equal(
   "known non-city smart/prebuild actions keep their configured weight",
 );
 
+const nonCityPylonReader = createCapturedBuildPolicyReader({
+  rootState: {
+    readRoot: () => ({ space: { pylon: { count: 1, on: 1 } } }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["space-pylon"],
+  },
+  readKnowledge: () => openKnowledge,
+  getSettings: () => ({
+    "batspace-pylon": true,
+    "bld_w_space-pylon": 10,
+    buildingWeightingVacuumCollapse: 0.1,
+    prestigeType: "vacuum",
+  }),
+});
+assert.equal(
+  nonCityPylonReader().buildings[0].weighting,
+  1,
+  "Vacuum Collapse weighting applies to a captured non-city pylon",
+);
+
 const nonBuildControlReader = createCapturedBuildPolicyReader({
   rootState: {
     readRoot: () => ({ tech: { moon_base: { count: 0 } } }),
