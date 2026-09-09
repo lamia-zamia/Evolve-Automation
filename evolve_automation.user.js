@@ -4540,6 +4540,10 @@
     if (id === "farmer") return readFarmerSmartMaximum(root);
     if (id === "lumberjack")
       return readLumberjackSmartMaximum(root, readDemand);
+    if (id === "quarry_worker")
+      return readQuarryWorkerSmartMaximum(root, readDemand);
+    if (id === "crystal_miner")
+      return readCrystalMinerSmartMaximum(root, readDemand);
     if (id === "cement_worker")
       return readCementWorkerSmartMaximum(root, settings, count, readDemand);
     if (id !== "teamster") return null;
@@ -4662,6 +4666,32 @@
   }
   function readLumberjackSmartMaximum(root, readDemand) {
     return readResourceUseful(root, "Lumber", readDemand) === !0 ? Number.MAX_SAFE_INTEGER : void 0;
+  }
+  function readResourceUnlocked(root, id) {
+    let resource = readProperty(readProperty(root, "resource"), id);
+    if (resource === void 0) return !1;
+    let display = readProperty(resource, "display");
+    return typeof display == "boolean" ? display : void 0;
+  }
+  function readAnyUsefulSmartMaximum(root, ids, readDemand) {
+    let uncertain = !1;
+    for (let id of ids) {
+      if (readResourceUseful(root, id, readDemand) === !0) return Number.MAX_SAFE_INTEGER;
+      uncertain = !0;
+    }
+    return uncertain ? void 0 : 0;
+  }
+  function readQuarryWorkerSmartMaximum(root, readDemand) {
+    let resources = ["Stone"];
+    for (let id of ["Aluminium", "Chrysotile"]) {
+      let unlocked = readResourceUnlocked(root, id);
+      if (unlocked === void 0) return;
+      unlocked && resources.unshift(id);
+    }
+    return readAnyUsefulSmartMaximum(root, resources, readDemand);
+  }
+  function readCrystalMinerSmartMaximum(root, readDemand) {
+    return readAnyUsefulSmartMaximum(root, ["Crystal"], readDemand);
   }
   function readCementWorkerSmartMaximum(root, settings, count, readDemand) {
     let stoneRatio = resourceStorageRatio(root, "Stone"), stoneDiff = resourceDiff(root, "Stone"), cementRatio = resourceStorageRatio(root, "Cement");

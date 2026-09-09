@@ -938,6 +938,74 @@ assert.equal(
   "Lumberjack treats a demanded full Lumber store as useful",
 );
 
+const quarryWorkerUsefulReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      resource: {
+        Stone: { amount: 100, max: 100 },
+        Aluminium: { display: true, amount: 10, max: 100 },
+        Chrysotile: { display: false, amount: 100, max: 100 },
+      },
+      civic: {
+        ...root.civic,
+        d_job: "quarry_worker",
+        quarry_worker: {
+          job: "quarry_worker",
+          assigned: 1,
+          workers: 1,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-quarry_worker"],
+  },
+  readSettings: () => ({ job_s_quarry_worker: true }),
+});
+assert.equal(
+  quarryWorkerUsefulReader().jobs[0].smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "Quarry Worker stays uncapped when an unlocked captured input is useful",
+);
+
+const crystalMinerUsefulReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      resource: { Crystal: { amount: 1, max: 100 } },
+      civic: {
+        ...root.civic,
+        d_job: "crystal_miner",
+        crystal_miner: {
+          job: "crystal_miner",
+          assigned: 1,
+          workers: 1,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-crystal_miner"],
+  },
+  readSettings: () => ({ job_s_crystal_miner: true }),
+});
+assert.equal(
+  crystalMinerUsefulReader().jobs[0].smartMaximum,
+  Number.MAX_SAFE_INTEGER,
+  "Crystal Miner stays uncapped while captured Crystal storage is useful",
+);
+
 const servantReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

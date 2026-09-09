@@ -167,6 +167,12 @@ function readSmartMaximum(
   if (id === "lumberjack") {
     return readLumberjackSmartMaximum(root, readDemand);
   }
+  if (id === "quarry_worker") {
+    return readQuarryWorkerSmartMaximum(root, readDemand);
+  }
+  if (id === "crystal_miner") {
+    return readCrystalMinerSmartMaximum(root, readDemand);
+  }
   if (id === "cement_worker") {
     return readCementWorkerSmartMaximum(root, settings, count, readDemand);
   }
@@ -445,6 +451,47 @@ function readLumberjackSmartMaximum(
   return readResourceUseful(root, "Lumber", readDemand) === true
     ? Number.MAX_SAFE_INTEGER
     : undefined;
+}
+
+function readResourceUnlocked(root: unknown, id: string): boolean | undefined {
+  const resource = readProperty(readProperty(root, "resource"), id);
+  if (resource === undefined) return false;
+  const display = readProperty(resource, "display");
+  return typeof display === "boolean" ? display : undefined;
+}
+
+function readAnyUsefulSmartMaximum(
+  root: unknown,
+  ids: readonly string[],
+  readDemand?: () => CapturedDemandSample,
+): number | undefined {
+  let uncertain = false;
+  for (const id of ids) {
+    const useful = readResourceUseful(root, id, readDemand);
+    if (useful === true) return Number.MAX_SAFE_INTEGER;
+    uncertain = true;
+  }
+  return uncertain ? undefined : 0;
+}
+
+function readQuarryWorkerSmartMaximum(
+  root: unknown,
+  readDemand?: () => CapturedDemandSample,
+): number | undefined {
+  const resources = ["Stone"];
+  for (const id of ["Aluminium", "Chrysotile"] as const) {
+    const unlocked = readResourceUnlocked(root, id);
+    if (unlocked === undefined) return undefined;
+    if (unlocked) resources.unshift(id);
+  }
+  return readAnyUsefulSmartMaximum(root, resources, readDemand);
+}
+
+function readCrystalMinerSmartMaximum(
+  root: unknown,
+  readDemand?: () => CapturedDemandSample,
+): number | undefined {
+  return readAnyUsefulSmartMaximum(root, ["Crystal"], readDemand);
 }
 
 function readCementWorkerSmartMaximum(
