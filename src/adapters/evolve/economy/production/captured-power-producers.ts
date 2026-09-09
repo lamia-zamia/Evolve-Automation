@@ -18,6 +18,29 @@ export const CAPTURED_POWER_PRODUCER_IDS = Object.freeze([
   "fission_power",
 ] as const);
 
+/**
+ * DeadSpace's explicit generator pass also admits these regional structures. The
+ * alien-space-station entry is intentionally absent: it has no ordinary power-grid
+ * control and is switched by its own game event instead.
+ */
+const CAPTURED_REGIONAL_POWER_PRODUCERS = Object.freeze([
+  ["space", "geothermal"],
+  ["space", "e_reactor"],
+  ["interstellar", "fusion"],
+  ["tauceti", "fusion_generator"],
+  ["tauceti", "antimatter_reactor"],
+  ["underground", "under_coal_power"],
+  ["underground", "under_oil_power"],
+  ["underground", "core_tap"],
+  ["surface", "crater_fission"],
+  ["surface", "rocket_engine"],
+] as const);
+
+interface CapturedPowerProducerLocation {
+  readonly region: string;
+  readonly id: string;
+}
+
 export interface CapturedPowerProducerDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
@@ -59,6 +82,23 @@ function readInput(root: unknown): Readonly<CapturedPowerInput> | undefined {
     }
     producers.push(Object.freeze({ id, count, on }));
   }
+  for (const [region, id] of CAPTURED_REGIONAL_POWER_PRODUCERS) {
+    const value = readProperty(readProperty(root, region), id);
+    if (value === undefined) continue;
+    if (!isRecord(value)) return undefined;
+    const count = finite(value["count"]);
+    const on = finite(value["on"]);
+    if (
+      count === undefined ||
+      on === undefined ||
+      count < 0 ||
+      on < 0 ||
+      on > count
+    ) {
+      return undefined;
+    }
+    producers.push(Object.freeze({ id, count, on }));
+  }
   return Object.freeze({
     unlocked,
     surplus,
@@ -68,15 +108,29 @@ function readInput(root: unknown): Readonly<CapturedPowerInput> | undefined {
 
 function currentProducer(
   root: unknown,
-  id: string,
+  producer: Readonly<CapturedPowerProducerLocation>,
 ): { count: number; on: number } | undefined {
-  const value = readProperty(readProperty(root, "city"), id);
+  const value = readProperty(readProperty(root, producer.region), producer.id);
   if (!isRecord(value)) return undefined;
   const count = finite(value["count"]);
   const on = finite(value["on"]);
   return count !== undefined && on !== undefined
     ? Object.freeze({ count, on })
     : undefined;
+}
+
+function producerLocation(
+  id: string,
+): CapturedPowerProducerLocation | undefined {
+  if ((CAPTURED_POWER_PRODUCER_IDS as readonly string[]).includes(id)) {
+    return Object.freeze({ region: "city", id });
+  }
+  const regional = CAPTURED_REGIONAL_POWER_PRODUCERS.find(
+    ([, candidate]) => candidate === id,
+  );
+  return regional === undefined
+    ? undefined
+    : Object.freeze({ region: regional[0], id: regional[1] });
 }
 
 export function createCapturedPowerProducerAutomation({
@@ -92,7 +146,14 @@ export function createCapturedPowerProducerAutomation({
       if (root === undefined || input === undefined) return SUCCEEDED;
       const session: PowerSession = Object.freeze({ root, input });
       for (const decision of planCapturedPowerProducers(session.input)) {
-        const elementId = `city-${decision.producerId}`;
+        const producer = producerLocation(decision.producerId);
+        if (producer === undefined) {
+          return stale(
+            "captured-power-producer-missing",
+            `captured producer ${decision.producerId} disappeared`,
+          );
+        }
+        const elementId = `${producer.region}-${decision.producerId}`;
         const handle = controls.resolve(elementId);
         if (handle === undefined || !handle.methods.includes("power_on")) {
           return rejected(
@@ -107,7 +168,7 @@ export function createCapturedPowerProducerAutomation({
               "captured game root changed",
             );
           }
-          const current = currentProducer(session.root, decision.producerId);
+          const current = currentProducer(session.root, producer);
           const city = readProperty(session.root, "city");
           const surplus = finite(readProperty(city, "power"));
           if (current === undefined || surplus === undefined) {

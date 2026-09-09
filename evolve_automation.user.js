@@ -8325,6 +8325,17 @@
     "coal_power",
     "oil_power",
     "fission_power"
+  ]), CAPTURED_REGIONAL_POWER_PRODUCERS = Object.freeze([
+    ["space", "geothermal"],
+    ["space", "e_reactor"],
+    ["interstellar", "fusion"],
+    ["tauceti", "fusion_generator"],
+    ["tauceti", "antimatter_reactor"],
+    ["underground", "under_coal_power"],
+    ["underground", "under_oil_power"],
+    ["underground", "core_tap"],
+    ["surface", "crater_fission"],
+    ["surface", "rocket_engine"]
   ]);
   function finite8(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
@@ -8344,17 +8355,34 @@
         return;
       producers.push(Object.freeze({ id, count, on }));
     }
+    for (let [region, id] of CAPTURED_REGIONAL_POWER_PRODUCERS) {
+      let value = readProperty(readProperty(root, region), id);
+      if (value === void 0) continue;
+      if (!isRecord(value)) return;
+      let count = finite8(value.count), on = finite8(value.on);
+      if (count === void 0 || on === void 0 || count < 0 || on < 0 || on > count)
+        return;
+      producers.push(Object.freeze({ id, count, on }));
+    }
     return Object.freeze({
       unlocked,
       surplus,
       producers: Object.freeze(producers)
     });
   }
-  function currentProducer(root, id) {
-    let value = readProperty(readProperty(root, "city"), id);
+  function currentProducer(root, producer) {
+    let value = readProperty(readProperty(root, producer.region), producer.id);
     if (!isRecord(value)) return;
     let count = finite8(value.count), on = finite8(value.on);
     return count !== void 0 && on !== void 0 ? Object.freeze({ count, on }) : void 0;
+  }
+  function producerLocation(id) {
+    if (CAPTURED_POWER_PRODUCER_IDS.includes(id))
+      return Object.freeze({ region: "city", id });
+    let regional = CAPTURED_REGIONAL_POWER_PRODUCERS.find(
+      ([, candidate]) => candidate === id
+    );
+    return regional === void 0 ? void 0 : Object.freeze({ region: regional[0], id: regional[1] });
   }
   function createCapturedPowerProducerAutomation({
     rootState,
@@ -8366,7 +8394,13 @@
         if (root === void 0 || input === void 0) return SUCCEEDED;
         let session = Object.freeze({ root, input });
         for (let decision of planCapturedPowerProducers(session.input)) {
-          let elementId = `city-${decision.producerId}`, handle = controls.resolve(elementId);
+          let producer = producerLocation(decision.producerId);
+          if (producer === void 0)
+            return stale(
+              "captured-power-producer-missing",
+              `captured producer ${decision.producerId} disappeared`
+            );
+          let elementId = `${producer.region}-${decision.producerId}`, handle = controls.resolve(elementId);
           if (handle === void 0 || !handle.methods.includes("power_on"))
             return rejected(
               "captured-power-control-missing",
@@ -8378,7 +8412,7 @@
                 "captured-power-root-changed",
                 "captured game root changed"
               );
-            let current = currentProducer(session.root, decision.producerId), city = readProperty(session.root, "city"), surplus = finite8(readProperty(city, "power"));
+            let current = currentProducer(session.root, producer), city = readProperty(session.root, "city"), surplus = finite8(readProperty(city, "power"));
             if (current === void 0 || surplus === void 0)
               return stale(
                 "captured-power-state-changed",
