@@ -5668,6 +5668,31 @@
   }
 
   // src/adapters/evolve/civic/captured-ordinary-jobs.ts
+  function hasMethod(controls, elementId, method) {
+    let handle = controls.resolve(elementId);
+    return handle !== void 0 && handle.methods.includes(method);
+  }
+  function preflightDecision(controls, state, decision) {
+    let jobs = new Map(state.jobs.map((job) => [job.token, job]));
+    for (let assignment of decision.assignments) {
+      let job = jobs.get(assignment.jobToken);
+      if (job === void 0) return !1;
+      if (assignment.workers !== job.workers) {
+        let method = assignment.workers < job.workers ? "sub" : "add";
+        if (!hasMethod(controls, `civ-${job.id}`, method)) return !1;
+      }
+      if (state.manageServants && assignment.servants !== job.servants) {
+        let method = assignment.servants < job.servants ? "sub" : "add";
+        if (!hasMethod(controls, `servant-${job.id}`, method)) return !1;
+      }
+    }
+    if (decision.selectedDefaultToken !== null) {
+      let job = jobs.get(decision.selectedDefaultToken);
+      if (job === void 0 || !hasMethod(controls, `civ-${job.id}`, "setDefault"))
+        return !1;
+    }
+    return !0;
+  }
   function unavailableInput() {
     return Object.freeze({
       available: !1,
@@ -5850,10 +5875,13 @@
         return expected === null || JSON.stringify(expected) !== JSON.stringify(decision) ? (sessionRef.value = void 0, rejected(
           "invalid-ordinary-jobs-decision",
           "ordinary jobs decision does not match the sampled plan"
-        )) : (sessionRef.value = void 0, executeCapturedJobDecision(
+        )) : preflightDecision(controls, session.commandState, decision) ? (sessionRef.value = void 0, executeCapturedJobDecision(
           controlsPort,
           session.commandState,
           decision
+        )) : (sessionRef.value = void 0, rejected(
+          "ordinary-jobs-controls-incomplete",
+          "ordinary jobs command controls are incomplete"
         ));
       }
     });

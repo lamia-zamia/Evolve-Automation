@@ -36,6 +36,45 @@ interface OrdinaryJobsSession {
   readonly commandState: Readonly<CapturedJobCommandState>;
 }
 
+function hasMethod(
+  controls: GameControlRegistry,
+  elementId: string,
+  method: string,
+): boolean {
+  const handle = controls.resolve(elementId);
+  return handle !== undefined && handle.methods.includes(method);
+}
+
+function preflightDecision(
+  controls: GameControlRegistry,
+  state: Readonly<CapturedJobCommandState>,
+  decision: Readonly<JobsDecision>,
+): boolean {
+  const jobs = new Map(state.jobs.map((job) => [job.token, job]));
+  for (const assignment of decision.assignments) {
+    const job = jobs.get(assignment.jobToken);
+    if (job === undefined) return false;
+    if (assignment.workers !== job.workers) {
+      const method = assignment.workers < job.workers ? "sub" : "add";
+      if (!hasMethod(controls, `civ-${job.id}`, method)) return false;
+    }
+    if (state.manageServants && assignment.servants !== job.servants) {
+      const method = assignment.servants < job.servants ? "sub" : "add";
+      if (!hasMethod(controls, `servant-${job.id}`, method)) return false;
+    }
+  }
+  if (decision.selectedDefaultToken !== null) {
+    const job = jobs.get(decision.selectedDefaultToken);
+    if (
+      job === undefined ||
+      !hasMethod(controls, `civ-${job.id}`, "setDefault")
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function unavailableInput(): Readonly<JobsCycleInput> {
   return Object.freeze({
     available: false,
@@ -293,6 +332,13 @@ export function createCapturedOrdinaryJobsAutomation({
         return rejected(
           "invalid-ordinary-jobs-decision",
           "ordinary jobs decision does not match the sampled plan",
+        );
+      }
+      if (!preflightDecision(controls, session.commandState, decision)) {
+        sessionRef.value = undefined;
+        return rejected(
+          "ordinary-jobs-controls-incomplete",
+          "ordinary jobs command controls are incomplete",
         );
       }
       sessionRef.value = undefined;
