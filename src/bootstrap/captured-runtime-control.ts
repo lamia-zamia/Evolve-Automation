@@ -39,6 +39,10 @@ import {
   TITAN_MINE_CONTROL,
 } from "../adapters/evolve/economy/resources/captured-production-ratios.ts";
 import { createCapturedPowerProducerAutomation } from "../adapters/evolve/economy/production/captured-power-producers.ts";
+import {
+  createCapturedFactoryAutomation,
+  FACTORY_CONTROL,
+} from "../adapters/evolve/economy/production/captured-factory.ts";
 import { createCapturedCraftCosts } from "../adapters/evolve/economy/production/captured-craft-costs.ts";
 import {
   createCapturedCraftExecutor,
@@ -110,6 +114,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoMine: false,
   autoExtractor: false,
   autoPower: false,
+  autoFactory: false,
   autoJobs: false,
 });
 
@@ -436,6 +441,39 @@ export function startCapturedRuntime({
     }
   };
 
+  let factoryDiscoveryAttempted = false;
+  const ensureFactoryControls = () => {
+    if (pageCapture.controls.resolve(FACTORY_CONTROL) !== undefined) return;
+    const city = readProperty(pageCapture.rootState.readRoot(), "city");
+    const factoryState = readProperty(city, "factory");
+    const count = readProperty(factoryState, "count");
+    if (
+      typeof count !== "number" ||
+      !Number.isFinite(count) ||
+      count < 1 ||
+      factoryDiscoveryAttempted
+    ) {
+      return;
+    }
+    factoryDiscoveryAttempted = true;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    if (govTabs === undefined) return;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 2,
+      }),
+      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `factory discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+
   let ratioDiscoveryAttempted = false;
   /** The three ratio sliders share the industry panel the droid and graphene plants render into. */
   const ensureRatioControls = (control: string, unlocked: boolean) => {
@@ -472,6 +510,10 @@ export function startCapturedRuntime({
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
   };
   const powerProducers = createCapturedPowerProducerAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+  });
+  const factory = createCapturedFactoryAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
   });
@@ -563,6 +605,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoPower")) {
         ensureCityControls();
         powerProducers.run();
+      }
+      if (isEnabled(settings, "autoFactory")) {
+        ensureFactoryControls();
+        factory.run();
       }
       if (isEnabled(settings, "autoResearch")) {
         progression.runResearchCycle();

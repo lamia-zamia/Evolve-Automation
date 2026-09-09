@@ -8208,6 +8208,120 @@
     });
   }
 
+  // src/domain/economy/production/captured-factory.ts
+  var CAPTURED_FACTORY_LINES = Object.freeze([
+    "Lux",
+    "Furs",
+    "Alloy",
+    "Polymer",
+    "Nano",
+    "Stanene"
+  ]);
+  function planCapturedFactoryTrim(input) {
+    if (!Number.isSafeInteger(input.maximum) || input.maximum < 0)
+      return Object.freeze([]);
+    let over = input.lines.reduce((sum, line) => sum + line.current, 0) - input.maximum;
+    if (over <= 0) return Object.freeze([]);
+    let current = new Map(input.lines.map((line) => [line.id, line.current])), adjustments = [];
+    for (let id of CAPTURED_FACTORY_LINES) {
+      if (over <= 0) break;
+      let available = current.get(id) ?? 0, amount = Math.min(available, over);
+      amount <= 0 || (adjustments.push(Object.freeze({ id, delta: -amount })), over -= amount);
+    }
+    return Object.freeze(adjustments);
+  }
+
+  // src/adapters/evolve/economy/production/captured-factory.ts
+  var FACTORY_CONTROL = "iFactory", FACTORY_REGIONS = Object.freeze([
+    ["space", "red_factory"],
+    ["interstellar", "int_factory"],
+    ["portal", "hell_factory"],
+    ["underground", "under_factory"],
+    ["surface", "crater_factory"],
+    ["tauceti", "tau_factory"],
+    ["space", "industrial_complex"]
+  ]);
+  function finiteNonNegative3(value) {
+    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
+  }
+  function readInput4(root) {
+    let city = readProperty(root, "city");
+    if (!isRecord(city)) return;
+    let factory = readProperty(city, "factory");
+    if (!isRecord(factory)) return;
+    let maximum = finiteNonNegative3(factory.on);
+    if (maximum === void 0 || !Number.isSafeInteger(maximum)) return;
+    for (let [region, id] of FACTORY_REGIONS) {
+      let owner = readProperty(root, region);
+      if (owner === void 0) continue;
+      if (!isRecord(owner)) return;
+      let structure = readProperty(owner, id);
+      if (structure === void 0) continue;
+      if (!isRecord(structure)) return;
+      let count = finiteNonNegative3(structure.count);
+      if (count === void 0 || count > 0) return;
+    }
+    let lines = [];
+    for (let id of CAPTURED_FACTORY_LINES) {
+      let current = finiteNonNegative3(factory[id]);
+      if (current === void 0 || !Number.isSafeInteger(current))
+        return;
+      lines.push(Object.freeze({ id, current }));
+    }
+    return Object.freeze({ maximum, lines: Object.freeze(lines) });
+  }
+  function totalAssigned(root) {
+    let factory = readProperty(readProperty(root, "city"), "factory");
+    if (!isRecord(factory)) return;
+    let total = 0;
+    for (let id of CAPTURED_FACTORY_LINES) {
+      let value = finiteNonNegative3(factory[id]);
+      if (value === void 0) return;
+      total += value;
+    }
+    return total;
+  }
+  function createCapturedFactoryAutomation({
+    rootState,
+    controls
+  }) {
+    return Object.freeze({
+      run() {
+        let root = rootState.readRoot(), input = readInput4(root);
+        if (root === void 0 || input === void 0) return SUCCEEDED;
+        let session = Object.freeze({ root, input }), adjustments = planCapturedFactoryTrim(session.input);
+        if (adjustments.length === 0) return SUCCEEDED;
+        let handle = controls.resolve(FACTORY_CONTROL);
+        if (handle === void 0 || !handle.methods.includes("subItem"))
+          return rejected(
+            "captured-factory-control-missing",
+            "no captured iFactory subItem control"
+          );
+        for (let adjustment of adjustments) {
+          let count = -adjustment.delta;
+          for (let index = 0; index < count; index += 1) {
+            if (rootState.readRoot() !== session.root)
+              return stale(
+                "captured-factory-root-changed",
+                "captured game root changed"
+              );
+            let result = controls.invoke(handle, "subItem", [adjustment.id]);
+            if (!result.ok)
+              return rejected(
+                "captured-factory-control-failed",
+                result.detail ?? result.reason
+              );
+          }
+        }
+        let remaining = totalAssigned(session.root);
+        return remaining === void 0 || remaining > session.input.maximum ? stale(
+          "captured-factory-allocation-unchanged",
+          "factory allocation did not reach captured capacity"
+        ) : SUCCEEDED;
+      }
+    });
+  }
+
   // src/adapters/evolve/economy/production/captured-craft-costs.ts
   var CRAFT_ROW_PREFIX = "res", COST_ENTRY = /<div>([^<]*)<\/div>/g;
   function resolveResourceId(root, name) {
@@ -8601,6 +8715,7 @@
     autoMine: !1,
     autoExtractor: !1,
     autoPower: !1,
+    autoFactory: !1,
     autoJobs: !1
   });
   function isEnabled(settings, key) {
@@ -8814,6 +8929,23 @@
       result.outcome.status !== "succeeded" && logError(
         `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
+    }, factoryDiscoveryAttempted = !1, ensureFactoryControls = () => {
+      if (pageCapture2.controls.resolve(FACTORY_CONTROL) !== void 0) return;
+      let city = readProperty(pageCapture2.rootState.readRoot(), "city"), factoryState = readProperty(city, "factory"), count = readProperty(factoryState, "count");
+      if (typeof count != "number" || !Number.isFinite(count) || count < 1 || factoryDiscoveryAttempted || (factoryDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      if (govTabs === void 0) return;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 2
+        }),
+        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `factory discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
     }, ratioDiscoveryAttempted = !1, ensureRatioControls = (control, unlocked) => {
       if (!unlocked || ratioDiscoveryAttempted || pageCapture2.controls.resolve(control) !== void 0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
         return;
@@ -8840,6 +8972,9 @@
     }, powerProducers = createCapturedPowerProducerAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
+    }), factory = createCapturedFactoryAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls
     }), runCycle = () => {
       demandThisCycle = void 0;
       let settings = readStoredSettings(storage);
@@ -8859,7 +8994,7 @@
             structureCount2("tauceti", "mining_ship") >= 1
           ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run());
           let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
-          autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoFactory") && (ensureFactoryControls(), factory.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }
