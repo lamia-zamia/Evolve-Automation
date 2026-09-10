@@ -288,6 +288,26 @@ const CAPTURED_MISSIONS = Object.freeze([
     completionTech: "ascension",
     completionLevel: 3,
   }),
+  Object.freeze({
+    actionId: "galaxy-gateway_mission",
+    completionTech: "gateway",
+    completionLevel: 2,
+  }),
+  Object.freeze({
+    actionId: "galaxy-gorddon_mission",
+    completionTech: "xeno",
+    completionLevel: 3,
+  }),
+  Object.freeze({
+    actionId: "galaxy-alien2_mission",
+    completionTech: "conflict",
+    completionLevel: 1,
+  }),
+  Object.freeze({
+    actionId: "galaxy-chthonian_mission",
+    completionTech: "chthonian",
+    completionLevel: 2,
+  }),
 ]);
 
 /** DeadSpace creates each mission control only after its own requirements pass. */

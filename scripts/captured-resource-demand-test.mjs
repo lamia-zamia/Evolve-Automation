@@ -344,6 +344,36 @@ for (const [missionId, completionTech, completionLevel] of [
   );
 }
 
+// Galaxy missions use their own grant technology counters and the same captured action/cost
+// surface after the galaxy space tab has been discovered.
+for (const [missionId, completionTech, completionLevel] of [
+  ["galaxy-gateway_mission", "gateway", 2],
+  ["galaxy-gorddon_mission", "xeno", 3],
+  ["galaxy-alien2_mission", "conflict", 1],
+  ["galaxy-chthonian_mission", "chthonian", 2],
+]) {
+  const sample = spaceMissionDemand({
+    space: 0,
+    tech: { [completionTech]: 0 },
+    missionId,
+    resourceId: "Deuterium",
+    cost: { Deuterium: 1100 },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Deuterium"), 100);
+  assert.equal(
+    spaceMissionDemand({
+      space: 0,
+      tech: { [completionTech]: completionLevel },
+      missionId,
+      resourceId: "Deuterium",
+      cost: { Deuterium: 1100 },
+    })
+      .sample()
+      .requestedQuantity("Deuterium"),
+    0,
+  );
+}
+
 // A root without resources yet is not a demand claim.
 {
   const sample = createCapturedResourceDemand({

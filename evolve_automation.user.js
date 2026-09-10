@@ -8849,6 +8849,26 @@
       actionId: "interstellar-sirius_mission",
       completionTech: "ascension",
       completionLevel: 3
+    }),
+    Object.freeze({
+      actionId: "galaxy-gateway_mission",
+      completionTech: "gateway",
+      completionLevel: 2
+    }),
+    Object.freeze({
+      actionId: "galaxy-gorddon_mission",
+      completionTech: "xeno",
+      completionLevel: 3
+    }),
+    Object.freeze({
+      actionId: "galaxy-alien2_mission",
+      completionTech: "conflict",
+      completionLevel: 1
+    }),
+    Object.freeze({
+      actionId: "galaxy-chthonian_mission",
+      completionTech: "chthonian",
+      completionLevel: 2
     })
   ]);
   function readCapturedSpaceMissionDemand(root, settings, controls, costs) {
