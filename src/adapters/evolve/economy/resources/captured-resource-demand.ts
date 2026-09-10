@@ -218,6 +218,16 @@ const CAPTURED_SPACE_MISSIONS = Object.freeze([
     completionTech: "space",
     completionLevel: 6,
   }),
+  Object.freeze({
+    actionId: "space-belt_mission",
+    completionTech: "asteroid",
+    completionLevel: 1,
+  }),
+  Object.freeze({
+    actionId: "space-dwarf_mission",
+    completionTech: "dwarf",
+    completionLevel: 1,
+  }),
 ]);
 
 /** DeadSpace creates each mission control only after its own space requirements pass. */

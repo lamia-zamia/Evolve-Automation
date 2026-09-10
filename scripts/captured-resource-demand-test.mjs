@@ -251,6 +251,33 @@ function spaceMissionDemand({
   );
 }
 
+// Belt and Dwarf use their own discovery technologies rather than the space-level completion field.
+for (const [missionId, completionTech, resourceId] of [
+  ["space-belt_mission", "asteroid", "Helium_3"],
+  ["space-dwarf_mission", "dwarf", "Helium_3"],
+]) {
+  const sample = spaceMissionDemand({
+    space: 5,
+    tech: { [completionTech]: 0 },
+    missionId,
+    resourceId,
+    cost: { [resourceId]: 800 },
+  }).sample();
+  assert.equal(sample.requestedQuantity(resourceId), 100);
+  assert.equal(
+    spaceMissionDemand({
+      space: 5,
+      tech: { [completionTech]: 1 },
+      missionId,
+      resourceId,
+      cost: { [resourceId]: 800 },
+    })
+      .sample()
+      .requestedQuantity(resourceId),
+    0,
+  );
+}
+
 // A root without resources yet is not a demand claim.
 {
   const sample = createCapturedResourceDemand({
