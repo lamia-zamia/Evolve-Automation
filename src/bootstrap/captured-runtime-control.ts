@@ -7,6 +7,7 @@ import {
   createCapturedGovernmentAutomation,
   runCapturedGovernmentAutomation,
 } from "../adapters/evolve/civic/captured-government.ts";
+import { createCapturedHellAutomation } from "../adapters/evolve/combat/captured-hell.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import {
   createCapturedFullJobsAutomation,
@@ -166,6 +167,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoJobs: false,
   autoGalaxyMarket: false,
   autoGovernment: false,
+  autoHell: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -245,6 +247,11 @@ export function startCapturedRuntime({
     nowMs: () => Date.now(),
   });
   const government = createCapturedGovernmentAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+  });
+  const hell = createCapturedHellAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
@@ -1027,6 +1034,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoGovernment")) {
         ensureCivicControls();
         runCapturedGovernmentAutomation(government);
+      }
+      if (isEnabled(settings, "autoHell")) {
+        ensureCivicControls();
+        hell.run();
       }
       if (isEnabled(settings, "autoMiningDroid")) {
         ensureMiningDroidControls();

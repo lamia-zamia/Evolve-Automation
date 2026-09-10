@@ -3,8 +3,8 @@
  *
  * DeadSpace owns the candidate list and current appointment in `race.governor`; the only effect
  * this slice needs is the mounted candidates component's `appoint(index)` method. Government-type
- * selection stays out of this adapter until its unlock contract is captured from the game rather
- * than inferred from the compatibility GovernmentManager.
+ * selection uses the upstream unlock gates and the mounted `govType`/`govModal` components rather
+ * than the compatibility GovernmentManager.
  */
 
 import {

@@ -4989,6 +4989,174 @@
     return automation.executor.execute(planGovernment(automation.reader.read()));
   }
 
+  // src/domain/combat/hell.ts
+  function freezeCommands(commands) {
+    return Object.freeze(commands.map((command) => Object.freeze(command)));
+  }
+  function manageDecision(commands, authorityAdjusted = !1, authorityDebug = null) {
+    return commands.length === 0 && !authorityAdjusted && authorityDebug === null ? null : Object.freeze({
+      kind: "manage-hell",
+      commands: freezeCommands(commands),
+      authorityAdjusted,
+      authorityDebug: authorityDebug === null ? null : Object.freeze(authorityDebug)
+    });
+  }
+  function adjustmentCommands(input, targetSoldiers, targetPatrols, targetPatrolSize) {
+    let commands = [];
+    return input.handlePatrolSize && input.hellPatrolSize > targetPatrolSize && commands.push({
+      kind: "remove-patrol-size",
+      count: input.hellPatrolSize - targetPatrolSize
+    }), input.hellPatrols > targetPatrols && commands.push({
+      kind: "remove-patrol",
+      count: input.hellPatrols - targetPatrols
+    }), input.hellSoldiers > targetSoldiers && commands.push({
+      kind: "remove-garrison",
+      count: input.hellSoldiers - targetSoldiers
+    }), input.hellSoldiers < targetSoldiers && commands.push({
+      kind: "add-garrison",
+      count: targetSoldiers - input.hellSoldiers
+    }), input.handlePatrolSize && input.hellPatrolSize < targetPatrolSize && commands.push({
+      kind: "add-patrol-size",
+      count: targetPatrolSize - input.hellPatrolSize
+    }), input.hellPatrols < targetPatrols && commands.push({
+      kind: "add-patrol",
+      count: targetPatrols - input.hellPatrols
+    }), commands;
+  }
+  function calculatePatrolRating(input) {
+    let rating = input.fortressThreat * input.patrolThreatPercent / 100;
+    if (rating -= input.patrolDroneModifier * input.warDroneCount * (input.portalTechnology >= 7 ? 1.5 : 1), rating -= input.patrolDroidModifier * input.warDroidCount * (input.hellDroidTechnology ? 2 : 1), rating -= input.patrolBootcampModifier * input.bootCampCount, rating = Math.max(rating, input.minimumPatrolRating), input.bolsterPatrolRating > 0 && input.bolsterPercentTop > 0) {
+      let fillRatio = input.currentCityGarrison / input.maximumCityGarrison;
+      fillRatio <= input.bolsterPercentTop / 100 && (fillRatio <= input.bolsterPercentBottom / 100 ? rating += input.bolsterPatrolRating : input.bolsterPercentBottom < input.bolsterPercentTop && (rating += input.bolsterPatrolRating * (input.bolsterPercentTop / 100 - fillRatio) / (input.bolsterPercentTop - input.bolsterPercentBottom) * 100));
+    }
+    return rating;
+  }
+  function prepareHellCycle(input) {
+    if (!input.available) return null;
+    if (input.warlord)
+      return input.enemies > 0 && input.handleEnemyFortress && input.minions > input.minimumMinions ? Object.freeze({ kind: "attack-enemy-fortress", enemyIndex: 0 }) : null;
+    let homeSoldiers = input.homeGarrison;
+    if (input.elysiumUnlocked && homeSoldiers < 100 && (homeSoldiers = 100), !(input.maximumSoldiers > homeSoldiers + input.minimumHellSoldiers && (input.hellSoldiers > input.minimumHellSoldiers || input.currentSoldiers >= input.maximumSoldiers * input.minimumSoldierPercent / 100)))
+      return input.hellAssigned > 0 ? manageDecision([
+        { kind: "remove-patrol-size", count: input.hellPatrolSize },
+        { kind: "remove-patrol", count: input.hellPatrols },
+        { kind: "remove-garrison", count: input.hellSoldiers }
+      ]) : manageDecision(adjustmentCommands(input, 0, 0, 0));
+    let targetHellSoldiers = Math.min(input.currentSoldiers, input.maximumSoldiers) - homeSoldiers, availableHellSoldiers = targetHellSoldiers - input.hellReservedSoldiers, wallMultiplier = input.lowWallsMultiplier * (1 - input.fortressWalls / 100), targetDefense = input.fortressThreat * 35 / input.targetFortressDamage, turretPower = input.turretCount * (input.turretTechnology ? input.turretTechnology >= 2 ? 70 : 50 : 35);
+    return Object.freeze({
+      kind: "calculate-hell-targets",
+      input,
+      targetHellSoldiers,
+      availableHellSoldiers,
+      garrisonRating: Math.max(0, wallMultiplier * targetDefense - turretPower),
+      patrolRating: input.handlePatrolSize ? calculatePatrolRating(input) : null
+    });
+  }
+
+  // src/adapters/evolve/combat/captured-hell.ts
+  var FORT_CONTROL = "fort";
+  function finiteHellValue(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function emptyHellInput() {
+    return Object.freeze({
+      available: !1,
+      warlord: !1,
+      enemies: 0,
+      minions: 0,
+      handleEnemyFortress: !1,
+      minimumMinions: 0,
+      maximumSoldiers: 0,
+      currentSoldiers: 0,
+      currentCityGarrison: 0,
+      maximumCityGarrison: 0,
+      hellSoldiers: 0,
+      hellPatrols: 0,
+      hellPatrolSize: 0,
+      hellAssigned: 0,
+      hellReservedSoldiers: 0,
+      currentHellGarrison: 0,
+      homeGarrison: 0,
+      minimumHellSoldiers: 0,
+      minimumSoldierPercent: 0,
+      elysiumUnlocked: !1,
+      fortressWalls: 0,
+      fortressThreat: 0,
+      lowWallsMultiplier: 0,
+      targetFortressDamage: 1,
+      turretCount: 0,
+      turretTechnology: 0,
+      handlePatrolSize: !1,
+      patrolThreatPercent: 0,
+      patrolDroneModifier: 0,
+      patrolDroidModifier: 0,
+      patrolBootcampModifier: 0,
+      minimumPatrolRating: 0,
+      bolsterPatrolRating: 0,
+      bolsterPercentTop: 0,
+      bolsterPercentBottom: 0,
+      warDroneCount: 0,
+      portalTechnology: 0,
+      warDroidCount: 0,
+      hellDroidTechnology: !1,
+      bootCampCount: 0,
+      manageAuthority: !1,
+      minimumAuthority: 0,
+      minimumAuthorityPatrolPercent: 0,
+      evilTechnology: 0,
+      grenadier: !1,
+      government: ""
+    });
+  }
+  function readWarlordInput(root, settingsValue) {
+    if (!isRecord(root)) return emptyHellInput();
+    let race = readProperty(root, "race"), portal = readProperty(root, "portal");
+    if (!isRecord(race) || !isRecord(portal) || race.warlord !== !0)
+      return emptyHellInput();
+    let minions = readProperty(portal, "minions"), throne = readProperty(portal, "throne"), enemies = readProperty(throne, "enemy"), settings = isRecord(settingsValue) ? settingsValue : {};
+    return Object.freeze({
+      ...emptyHellInput(),
+      available: !0,
+      warlord: !0,
+      enemies: Array.isArray(enemies) ? enemies.length : 0,
+      minions: finiteHellValue(readProperty(minions, "spawns")) ?? 0,
+      handleEnemyFortress: settings.warlordHandleFortress === !0,
+      minimumMinions: finiteHellValue(settings.warlordMinimumMinions) ?? 0
+    });
+  }
+  function createCapturedHellAutomation(dependencies) {
+    let session = null;
+    return Object.freeze({
+      run() {
+        let root = dependencies.rootState.readRoot(), input = readWarlordInput(root, dependencies.readSettings());
+        session = Object.freeze({ root, input });
+        let decision = prepareHellCycle(input);
+        if (decision === null) return SUCCEEDED;
+        if (decision.kind !== "attack-enemy-fortress") return SUCCEEDED;
+        if (dependencies.rootState.readRoot() !== session.root)
+          return stale("hell-root-changed", "game root changed after sampling");
+        if (prepareHellCycle(
+          readWarlordInput(session.root, dependencies.readSettings())
+        )?.kind !== "attack-enemy-fortress")
+          return stale(
+            "hell-attack-no-longer-valid",
+            "the Warlord fortress attack is no longer valid"
+          );
+        let control = dependencies.controls.resolve(FORT_CONTROL);
+        if (control === void 0 || !control.methods.includes("attack"))
+          return stale(
+            "hell-controls-unavailable",
+            "the captured Hell fortress control is unavailable"
+          );
+        let result = dependencies.controls.invoke(control, "attack", [0]);
+        return result.ok ? SUCCEEDED : stale(
+          "hell-controls-unavailable",
+          `Hell fortress attack failed: ${result.reason}`
+        );
+      }
+    });
+  }
+
   // src/adapters/evolve/civic/captured-job-catalog.ts
   function toCapturedJobsJobInputs(catalog) {
     if (!catalog.jobs.some(
@@ -13792,7 +13960,8 @@
     autoSupply: !1,
     autoJobs: !1,
     autoGalaxyMarket: !1,
-    autoGovernment: !1
+    autoGovernment: !1,
+    autoHell: !1
   });
   function isEnabled(settings, key) {
     let value = settings[key];
@@ -13852,6 +14021,10 @@
       readSettings: () => readStoredSettings(storage),
       nowMs: () => Date.now()
     }), government = createCapturedGovernmentAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage)
+    }), hell = createCapturedHellAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage)
@@ -14321,7 +14494,7 @@
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoGovernment") && (ensureCivicControls(), runCapturedGovernmentAutomation(government)), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
+          isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoGovernment") && (ensureCivicControls(), runCapturedGovernmentAutomation(government)), isEnabled(settings, "autoHell") && (ensureCivicControls(), hell.run()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
             QUARRY_CONTROL,
             !!readProperty(
               readProperty(pageCapture2.rootState.readRoot(), "race"),
