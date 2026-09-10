@@ -183,6 +183,30 @@ function spaceMissionDemand({
   );
 }
 
+// Sun completion is keyed by solar technology, not by the generic space level.
+{
+  const sample = spaceMissionDemand({
+    space: 4,
+    tech: { solar: 0 },
+    missionId: "space-sun_mission",
+    resourceId: "Helium_3",
+    cost: { Helium_3: 500 },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Helium_3"), 100);
+  assert.equal(
+    spaceMissionDemand({
+      space: 4,
+      tech: { solar: 1 },
+      missionId: "space-sun_mission",
+      resourceId: "Helium_3",
+      cost: { Helium_3: 500 },
+    })
+      .sample()
+      .requestedQuantity("Helium_3"),
+    0,
+  );
+}
+
 // A root without resources yet is not a demand claim.
 {
   const sample = createCapturedResourceDemand({

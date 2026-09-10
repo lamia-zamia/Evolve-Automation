@@ -8764,6 +8764,11 @@
       actionId: "space-hell_mission",
       completionTech: "hell",
       completionLevel: 1
+    }),
+    Object.freeze({
+      actionId: "space-sun_mission",
+      completionTech: "solar",
+      completionLevel: 1
     })
   ]);
   function readCapturedSpaceMissionDemand(root, settings, controls, costs) {
