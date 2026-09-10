@@ -9799,6 +9799,235 @@
     });
   }
 
+  // src/adapters/evolve/economy/resources/captured-supply.ts
+  var SUPPLY_SUMMARY_CONTROL = "spireSupply", STORAGE_SHIFT3 = 1.01, SUPPLY_VALUES = Object.freeze({
+    Lumber: Object.freeze({ in: 0.5, out: 25e3 }),
+    Chrysotile: Object.freeze({ in: 0.5, out: 25e3 }),
+    Stone: Object.freeze({ in: 0.5, out: 25e3 }),
+    Crystal: Object.freeze({ in: 3, out: 25e3 }),
+    Furs: Object.freeze({ in: 3, out: 25e3 }),
+    Copper: Object.freeze({ in: 1.5, out: 25e3 }),
+    Iron: Object.freeze({ in: 1.5, out: 25e3 }),
+    Aluminium: Object.freeze({ in: 2.5, out: 25e3 }),
+    Cement: Object.freeze({ in: 3, out: 25e3 }),
+    Coal: Object.freeze({ in: 1.5, out: 25e3 }),
+    Oil: Object.freeze({ in: 2.5, out: 12e3 }),
+    Uranium: Object.freeze({ in: 5, out: 300 }),
+    Steel: Object.freeze({ in: 3, out: 25e3 }),
+    Titanium: Object.freeze({ in: 3, out: 25e3 }),
+    Alloy: Object.freeze({ in: 6, out: 25e3 }),
+    Polymer: Object.freeze({ in: 6, out: 25e3 }),
+    Iridium: Object.freeze({ in: 8, out: 25e3 }),
+    Helium_3: Object.freeze({ in: 4.5, out: 12e3 }),
+    Deuterium: Object.freeze({ in: 4, out: 1e3 }),
+    Neutronium: Object.freeze({ in: 15, out: 1e3 }),
+    Adamantite: Object.freeze({ in: 12.5, out: 1e3 }),
+    Infernite: Object.freeze({ in: 25, out: 250 }),
+    Elerium: Object.freeze({ in: 30, out: 250 }),
+    Nano_Tube: Object.freeze({ in: 6.5, out: 1e3 }),
+    Graphene: Object.freeze({ in: 5, out: 1e3 }),
+    Stanene: Object.freeze({ in: 4.5, out: 1e3 }),
+    Bolognium: Object.freeze({ in: 18, out: 1e3 }),
+    Vitreloy: Object.freeze({ in: 14, out: 1e3 }),
+    Orichalcum: Object.freeze({ in: 10, out: 1e3 }),
+    Plywood: Object.freeze({ in: 10, out: 250 }),
+    Brick: Object.freeze({ in: 10, out: 250 }),
+    Wrought_Iron: Object.freeze({ in: 10, out: 250 }),
+    Sheet_Metal: Object.freeze({ in: 10, out: 250 }),
+    Mythril: Object.freeze({ in: 12.5, out: 250 }),
+    Aerogel: Object.freeze({ in: 16.5, out: 250 }),
+    Nanoweave: Object.freeze({ in: 18, out: 250 }),
+    Scarletite: Object.freeze({ in: 35, out: 250 })
+  }), CRAFTABLE_RESOURCES = Object.freeze({
+    Plywood: !0,
+    Brick: !0,
+    Wrought_Iron: !0,
+    Sheet_Metal: !0,
+    Mythril: !0,
+    Aerogel: !0,
+    Nanoweave: !0
+  }), RATIO_MODES3 = Object.freeze({
+    cap: Object.freeze([0.975]),
+    excess: Object.freeze([-1]),
+    all: Object.freeze([0.045]),
+    mixed: Object.freeze([0.975, -1]),
+    full: Object.freeze([0.975, -1, 0.045])
+  }), DEFAULT_RATIOS3 = Object.freeze([0.975]);
+  function finite13(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function nonNegative3(value) {
+    let number = finite13(value);
+    return number !== void 0 && number >= 0 ? number : void 0;
+  }
+  function truthy3(value) {
+    return !!value;
+  }
+  function emptyInput10() {
+    return Object.freeze({
+      initialised: !1,
+      useful: !1,
+      maximum: 0,
+      storageShift: STORAGE_SHIFT3,
+      hungryRace: !1,
+      ratios: Object.freeze([]),
+      resources: Object.freeze([]),
+      current: Object.freeze([])
+    });
+  }
+  function readRatios3(settings) {
+    let mode = settings.supplyMode;
+    return mode === void 0 ? DEFAULT_RATIOS3 : typeof mode == "string" ? RATIO_MODES3[mode] ?? [] : [];
+  }
+  function supplyResourceIds(controls) {
+    return Object.freeze(
+      controls.capturedElementIds().filter(
+        (id) => id.startsWith("supply") && id !== SUPPLY_SUMMARY_CONTROL && id.length > 6
+      ).map((id) => id.slice(6))
+    );
+  }
+  function readInput8(dependencies) {
+    let root = dependencies.rootState.readRoot(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, portal = readProperty(root, "portal"), transport = readProperty(portal, "transport"), cargo = readProperty(transport, "cargo"), resources = readProperty(root, "resource"), race = readProperty(root, "race");
+    if (settings.autoSupply !== !0 || !isRecord(transport) || !isRecord(cargo) || !isRecord(resources) || !isRecord(race))
+      return Object.freeze({ root, input: emptyInput10() });
+    let transportCount = finite13(transport.count), transportOn = finite13(transport.on), cargoMaximum = nonNegative3(cargo.max), bireme = readProperty(portal, "bireme"), biremeOn = finite13(readProperty(bireme, "on")), supply = readProperty(resources, "Supply"), supplyAmount = finite13(readProperty(supply, "amount")), supplyMaximum = finite13(readProperty(supply, "max"));
+    if (transportCount === void 0 || !Number.isSafeInteger(transportCount) || transportCount < 1 || transportOn === void 0 || biremeOn === void 0 || cargoMaximum === void 0 || !Number.isSafeInteger(cargoMaximum) || !isRecord(supply) || supplyAmount === void 0 || supplyMaximum === void 0)
+      return Object.freeze({ root, input: emptyInput10() });
+    let useful = supplyMaximum > 0 && supplyAmount / supplyMaximum < 1 && transportOn > 0 && biremeOn > 0, demand = dependencies.readDemand(), ratios = readRatios3(settings), hungryRace = truthy3(race.carnivore) && !truthy3(race.herbivore) && !truthy3(race.artifical) || truthy3(race.ravenous), resourceViews = [], current = [];
+    for (let id of supplyResourceIds(dependencies.controls)) {
+      let value = SUPPLY_VALUES[id], resource = readProperty(resources, id);
+      if (value === void 0 || !isRecord(resource) || resource.display !== !0)
+        continue;
+      let amount = nonNegative3(resource.amount), rawMaximum = finite13(resource.max), baseRate = finite13(resource.diff), storageRequired = finite13(demand.storageRequired(id)), requestedQuantity = finite13(demand.requestedQuantity(id)), allocation = nonNegative3(cargo[id] ?? 0);
+      if (amount === void 0 || rawMaximum === void 0 || baseRate === void 0 || storageRequired === void 0 || requestedQuantity === void 0 || allocation === void 0 || value.out <= 0)
+        return Object.freeze({ root, input: emptyInput10() });
+      let maximum = rawMaximum >= 0 ? rawMaximum : Number.MAX_SAFE_INTEGER;
+      if (maximum <= 0) return Object.freeze({ root, input: emptyInput10() });
+      let enabled = settings[`res_supply${id}`] === !0, demanded = demand.isDemanded(id), storageRatio2 = amount / maximum, isCraftable = CRAFTABLE_RESOURCES[id] === !0, keepView = {
+        storageRequired,
+        requestedQuantity,
+        maxQuantity: maximum,
+        isFood: !1
+      }, rate = baseRate + allocation * value.out, craftableMaximum = isCraftable && amount > storageRequired * STORAGE_SHIFT3 ? Math.max(rate, amount - storageRequired * STORAGE_SHIFT3) / value.out : null, ratioMaximums = ratios.map((ratio) => {
+        if (!enabled || demanded || isCraftable) return null;
+        let keepRatio = calculateConsumeKeepRatio(
+          ratio,
+          keepView,
+          STORAGE_SHIFT3,
+          hungryRace
+        );
+        if (keepRatio === null || !(storageRatio2 > keepRatio || storageRatio2 >= 0.999 && keepRatio >= 1))
+          return null;
+        let queryRatio = storageRatio2 > keepRatio ? keepRatio : storageRatio2 >= 0.999 && keepRatio >= 1 ? storageRatio2 : null;
+        return queryRatio === null ? null : Math.max(rate, (storageRatio2 - queryRatio) * maximum) / value.out;
+      });
+      resourceViews.push(
+        Object.freeze({
+          id,
+          enabled,
+          demanded,
+          ...keepView,
+          isCraftable,
+          currentQuantity: amount,
+          storageRatio: storageRatio2,
+          craftableMaximum,
+          ratioMaximums: Object.freeze(ratioMaximums)
+        })
+      ), current.push(Object.freeze({ id, count: allocation }));
+    }
+    return Object.freeze({
+      root,
+      input: Object.freeze({
+        initialised: !0,
+        useful,
+        maximum: cargoMaximum,
+        storageShift: STORAGE_SHIFT3,
+        hungryRace,
+        ratios: Object.freeze([...ratios]),
+        resources: Object.freeze(resourceViews),
+        current: Object.freeze(current)
+      })
+    });
+  }
+  function currentAllocation3(root, id) {
+    let value = readProperty(
+      readProperty(
+        readProperty(readProperty(root, "portal"), "transport"),
+        "cargo"
+      ),
+      id
+    );
+    return value === void 0 ? 0 : nonNegative3(value);
+  }
+  function executeDecision3(dependencies, session, decision) {
+    let adjustments = decision.adjustments.filter(
+      (adjustment) => adjustment.delta !== 0
+    );
+    if (adjustments.length === 0) return SUCCEEDED;
+    for (let adjustment of adjustments) {
+      if (!Number.isSafeInteger(adjustment.delta))
+        return rejected(
+          "captured-supply-invalid-adjustment",
+          "supply adjustment must be a safe integer"
+        );
+      if (currentAllocation3(session.root, adjustment.resourceId) !== adjustment.expectedCurrent)
+        return stale(
+          "captured-supply-allocation-changed",
+          `${adjustment.resourceId}: sampled allocation changed`
+        );
+    }
+    for (let sign of [-1, 1])
+      for (let adjustment of adjustments) {
+        if (Math.sign(adjustment.delta) !== sign) continue;
+        let handle = dependencies.controls.resolve(
+          `supply${adjustment.resourceId}`
+        ), method = sign < 0 ? "supplyLess" : "supplyMore";
+        if (handle === void 0 || !handle.methods.includes(method))
+          return rejected(
+            "captured-supply-control-missing",
+            `captured supply${adjustment.resourceId} row lacks ${method}`
+          );
+        for (let index = 0; index < Math.abs(adjustment.delta); index += 1) {
+          if (dependencies.rootState.readRoot() !== session.root)
+            return stale(
+              "captured-supply-root-changed",
+              "captured game root changed"
+            );
+          let expected = adjustment.expectedCurrent + sign * index;
+          if (currentAllocation3(session.root, adjustment.resourceId) !== expected)
+            return stale(
+              "captured-supply-allocation-changed",
+              `${adjustment.resourceId}: allocation changed during execution`
+            );
+          let result = dependencies.controls.invoke(handle, method, [
+            adjustment.resourceId
+          ]);
+          if (!result.ok)
+            return rejected(
+              "captured-supply-control-failed",
+              result.detail ?? result.reason
+            );
+        }
+      }
+    for (let adjustment of adjustments) {
+      let actual = currentAllocation3(session.root, adjustment.resourceId);
+      if (actual !== adjustment.expectedCurrent + adjustment.delta)
+        return stale(
+          "captured-supply-allocation-unchanged",
+          `${adjustment.resourceId}: expected ${adjustment.expectedCurrent + adjustment.delta}, actual ${actual}`
+        );
+    }
+    return SUCCEEDED;
+  }
+  function createCapturedSupplyAutomation(dependencies) {
+    return Object.freeze({
+      run() {
+        let session = readInput8(dependencies);
+        return executeDecision3(dependencies, session, planConsume(session.input));
+      }
+    });
+  }
+
   // src/domain/economy/production/factory.ts
   function setTooltip(tooltips, productionId, value) {
     tooltips.set(`iFactory${productionId}`, value);
@@ -10057,13 +10286,13 @@
   function finiteNonNegative4(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
   }
-  function finite13(value) {
+  function finite14(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readResource3(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id);
     if (!isRecord(resource)) return;
-    let amount = finiteNonNegative4(resource.amount), max = finite13(resource.max), diff = finite13(resource.diff);
+    let amount = finiteNonNegative4(resource.amount), max = finite14(resource.max), diff = finite14(resource.diff);
     if (!(amount === void 0 || max === void 0 || diff === void 0))
       return Object.freeze({
         amount,
@@ -10075,11 +10304,11 @@
       });
   }
   function readTechLevel2(root, id) {
-    let value = finite13(readProperty(readProperty(root, "tech"), id));
+    let value = finite14(readProperty(readProperty(root, "tech"), id));
     return value !== void 0 && value >= 0 ? value : 0;
   }
   function readFactoryRateLevel(root) {
-    let value = finite13(readProperty(readProperty(root, "tech"), "factory"));
+    let value = finite14(readProperty(readProperty(root, "tech"), "factory"));
     return value === void 0 || !Number.isSafeInteger(value) || value < 0 || value > 4 ? value === void 0 ? 0 : void 0 : value;
   }
   function readSettingRecord2(value) {
@@ -10092,12 +10321,12 @@
   function readNumberSetting(settings, key, fallback) {
     let value = settings[key];
     if (value === void 0) return fallback;
-    let number = finite13(value);
+    let number = finite14(value);
     return number !== void 0 && number >= 0 ? number : void 0;
   }
   function readPrioritySetting(settings, key, fallback) {
     let value = settings[key];
-    return value === void 0 ? fallback : finite13(value);
+    return value === void 0 ? fallback : finite14(value);
   }
   function readCityFactory(root) {
     let city = readProperty(root, "city"), factory = readProperty(city, "factory");
@@ -10266,7 +10495,7 @@
         productions: Object.freeze(partial)
       });
   }
-  function readInput8(root) {
+  function readInput9(root) {
     let city = readProperty(root, "city");
     if (!isRecord(city)) return;
     let factory = readProperty(city, "factory");
@@ -10303,7 +10532,7 @@
   }) {
     return Object.freeze({
       run() {
-        let root = rootState.readRoot(), input = readInput8(root);
+        let root = rootState.readRoot(), input = readInput9(root);
         if (root === void 0 || input === void 0) return SUCCEEDED;
         let fullInput = readFullInput(
           root,
@@ -10338,7 +10567,7 @@
                 "captured-factory-root-changed",
                 "captured game root changed"
               );
-            let current = readInput8(session.root), actual = current?.lines.find(
+            let current = readInput9(session.root), actual = current?.lines.find(
               (line) => line.id === adjustment.productionId
             )?.current, expected = adjustment.expectedCurrent + (method === "addItem" ? index : -index);
             if (current === void 0 || current.maximum !== session.input.maximum || actual !== expected)
@@ -10367,7 +10596,7 @@
           if (outcome !== void 0) return outcome;
         }
         if (fullInput !== void 0) {
-          let after = readInput8(session.root);
+          let after = readInput9(session.root);
           if (after === void 0 || after.maximum !== fullInput.maximum)
             return stale(
               "captured-factory-allocation-unchanged",
@@ -10451,12 +10680,12 @@
 
   // src/adapters/evolve/economy/storage/captured-storage.ts
   var STORAGE_CONSTRUCTION_CONTROL = "createHead";
-  function finite14(value) {
+  function finite15(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readStorageCount(value, fallback = 0) {
     if (value === void 0) return fallback;
-    let parsed = finite14(value);
+    let parsed = finite15(value);
     return parsed !== void 0 && Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : void 0;
   }
   function settingsRecord(value) {
@@ -10476,12 +10705,12 @@
   function storageView(resources, resourceId, storagePerUnit, cost) {
     let resource = readProperty(resources, resourceId);
     if (!isRecord(resource)) return;
-    let maxQuantity = finite14(resource.max), currentQuantity2 = finite14(resource.amount);
+    let maxQuantity = finite15(resource.max), currentQuantity2 = finite15(resource.amount);
     if (maxQuantity === void 0 || currentQuantity2 === void 0)
       return;
     let costs = [];
     for (let [costResourceId, costPerUnit] of Object.entries(cost)) {
-      let available = finite14(
+      let available = finite15(
         readProperty(readProperty(resources, costResourceId), "amount")
       );
       if (available === void 0 || !Number.isFinite(costPerUnit))
@@ -10502,8 +10731,8 @@
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (readProperty(race, "cataclysm") || readProperty(race, "orbit_decayed") || readProperty(race, "lone_survivor") || readProperty(race, "warlord"))
       return !1;
-    let highTech = finite14(readProperty(tech, "high_tech")) ?? 0;
-    return readProperty(race, "truepath") || readProperty(race, "sludge") || readProperty(race, "ultra_sludge") ? highTech < 7 : (finite14(readProperty(tech, "mad")) ?? 0) < 1;
+    let highTech = finite15(readProperty(tech, "high_tech")) ?? 0;
+    return readProperty(race, "truepath") || readProperty(race, "sludge") || readProperty(race, "ultra_sludge") ? highTech < 7 : (finite15(readProperty(tech, "mad")) ?? 0) < 1;
   }
   function targetFromCost(label, cost) {
     return Object.freeze({
@@ -10626,10 +10855,10 @@
   function readResource4(resources, settings, id, readStorageRequired) {
     let resource = readProperty(resources, id);
     if (!isRecord(resource)) return;
-    let currentQuantity2 = finite14(resource.amount), rawMax = finite14(resource.max), currentCrates = readStorageCount(resource.crates), currentContainers = readStorageCount(resource.containers), storageRequired = readStorageRequired(id);
+    let currentQuantity2 = finite15(resource.amount), rawMax = finite15(resource.max), currentCrates = readStorageCount(resource.crates), currentContainers = readStorageCount(resource.containers), storageRequired = readStorageRequired(id);
     if (currentQuantity2 === void 0 || rawMax === void 0 || currentCrates === void 0 || currentContainers === void 0 || !Number.isFinite(storageRequired))
       return;
-    let maxStorage = finite14(settings[`res_max_store${id}`]) ?? -1, minStorage = finite14(settings[`res_min_store${id}`]) ?? 1, autoSellRatio = finite14(settings[`res_sell_r_${id}`]);
+    let maxStorage = finite15(settings[`res_max_store${id}`]) ?? -1, minStorage = finite15(settings[`res_min_store${id}`]) ?? 1, autoSellRatio = finite15(settings[`res_sell_r_${id}`]);
     return Object.freeze({
       id,
       unlocked: resource.display === !0,
@@ -10646,7 +10875,7 @@
       autoSellRatio: autoSellRatio !== void 0 && autoSellRatio > 0 ? autoSellRatio : 0
     });
   }
-  function readInput9(dependencies) {
+  function readInput10(dependencies) {
     let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource"), race = readProperty(root, "race");
     if (!isRecord(resources) || !isRecord(race))
       return {
@@ -10674,7 +10903,7 @@
     ), containerValue = descriptorCapacity(
       dependencies.controls,
       "buildContainerDesc"
-    ), crates = readProperty(resources, "Crates"), containers = readProperty(resources, "Containers"), freeCrates = finite14(readProperty(crates, "amount")), freeContainers = finite14(readProperty(containers, "amount"));
+    ), crates = readProperty(resources, "Crates"), containers = readProperty(resources, "Containers"), freeCrates = finite15(readProperty(crates, "amount")), freeContainers = finite15(readProperty(containers, "amount"));
     if (crateValue === void 0 || containerValue === void 0 || freeCrates === void 0 || freeContainers === void 0)
       return {
         input: Object.freeze({
@@ -10698,7 +10927,7 @@
     let settings = settingsRecord(dependencies.readSettings()), priorityResourceIds = Object.keys(resources).map((id, index) => ({
       id,
       index,
-      priority: finite14(settings[`res_storage_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
+      priority: finite15(settings[`res_storage_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
     })).sort(
       (left, right) => left.priority - right.priority || left.index - right.index
     ).map(({ id }) => id), resourceInputs = priorityResourceIds.map(
@@ -10820,10 +11049,10 @@
     }), steel = readProperty(resources, "Steel"), plywood = readProperty(resources, "Plywood");
     if (!crates || !containers || !isRecord(steel) || !isRecord(plywood))
       return;
-    let steelAmount = finite14(steel.amount), steelMax = finite14(steel.max), plywoodAmount = finite14(plywood.amount), steelStorageRequired = dependencies.readStorageRequired("Steel");
+    let steelAmount = finite15(steel.amount), steelMax = finite15(steel.max), plywoodAmount = finite15(plywood.amount), steelStorageRequired = dependencies.readStorageRequired("Steel");
     if (steelAmount === void 0 || steelMax === void 0 || plywoodAmount === void 0 || !Number.isFinite(steelStorageRequired))
       return;
-    let capturedAtMs = dependencies.nowMs(), libraryCount = finite14(
+    let capturedAtMs = dependencies.nowMs(), libraryCount = finite15(
       readProperty(
         readProperty(readProperty(root, "city"), "library"),
         "count"
@@ -10860,7 +11089,7 @@
       if (handle === void 0 || !handle.methods.includes(method)) return !1;
       for (let index = 0; index < command.count; index += 1) {
         if (dependencies.rootState.readRoot() !== sampledRoot) return !1;
-        let before = finite14(
+        let before = finite15(
           readProperty(
             readProperty(dependencies.rootState.readRoot(), "resource"),
             command.producedResourceId
@@ -10873,7 +11102,7 @@
           )
         );
         if (!dependencies.controls.invoke(handle, method).ok) return !1;
-        let after = finite14(
+        let after = finite15(
           readProperty(
             readProperty(
               readProperty(dependencies.rootState.readRoot(), "resource"),
@@ -10916,7 +11145,7 @@
             readProperty(dependencies.rootState.readRoot(), "resource"),
             adjustment.resourceId
           );
-          if (resource === void 0 || finite14(readProperty(rootResource, "crates")) !== adjustment.expectedCrates || finite14(readProperty(rootResource, "containers")) !== adjustment.expectedContainers || finite14(readProperty(rootResource, "max")) !== adjustment.expectedMaximum)
+          if (resource === void 0 || finite15(readProperty(rootResource, "crates")) !== adjustment.expectedCrates || finite15(readProperty(rootResource, "containers")) !== adjustment.expectedContainers || finite15(readProperty(rootResource, "max")) !== adjustment.expectedMaximum)
             return stale(
               "captured-storage-resource-changed",
               `${adjustment.resourceId}: storage allocation changed`
@@ -10973,9 +11202,9 @@
             "captured-storage-root-changed",
             "captured game root changed"
           );
-        let finalResources = readProperty(finalRoot, "resource"), finalCrates = finite14(
+        let finalResources = readProperty(finalRoot, "resource"), finalCrates = finite15(
           readProperty(readProperty(finalResources, "Crates"), "amount")
-        ), finalContainers = finite14(
+        ), finalContainers = finite15(
           readProperty(readProperty(finalResources, "Containers"), "amount")
         ), crateDelta = adjustments.reduce(
           (total, adjustment) => total + adjustment.crateDelta,
@@ -10990,9 +11219,9 @@
             "storage pool counts did not match the requested allocation"
           );
         for (let adjustment of adjustments) {
-          let resource = readProperty(finalResources, adjustment.resourceId), finalCrateCount = finite14(readProperty(resource, "crates")), finalContainerCount = finite14(
+          let resource = readProperty(finalResources, adjustment.resourceId), finalCrateCount = finite15(readProperty(resource, "crates")), finalContainerCount = finite15(
             readProperty(resource, "containers")
-          ), finalMaximum = finite14(readProperty(resource, "max")), expectedMaximum = adjustment.expectedMaximum + adjustment.crateDelta * session.crateValue + adjustment.containerDelta * session.containerValue;
+          ), finalMaximum = finite15(readProperty(resource, "max")), expectedMaximum = adjustment.expectedMaximum + adjustment.crateDelta * session.crateValue + adjustment.containerDelta * session.containerValue;
           if (finalCrateCount !== adjustment.expectedCrates + adjustment.crateDelta || finalContainerCount !== adjustment.expectedContainers + adjustment.containerDelta || finalMaximum !== expectedMaximum)
             return rejected(
               "captured-storage-assignment-unchanged",
@@ -11006,7 +11235,7 @@
   function createCapturedStoragePorts(dependencies) {
     let session = null, reader = Object.freeze({
       read() {
-        let sample = readInput9(dependencies);
+        let sample = readInput10(dependencies);
         return session = sample.session, sample.input;
       }
     }), expansion = Object.freeze({
@@ -11263,7 +11492,7 @@
     3,
     4
   ]);
-  function finite15(value) {
+  function finite16(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function settingsRecord2(value) {
@@ -11272,7 +11501,7 @@
   function readMultiplier(race, trait, values, increase) {
     if (!race[trait]) return 1;
     if (race.empowered) return;
-    let rank = finite15(race[trait]);
+    let rank = finite16(race[trait]);
     if (rank === void 0) return;
     let index = TRAIT_RANKS.indexOf(rank), value = index >= 0 ? values[index] : void 0;
     return value === void 0 ? void 0 : 1 + (increase ? value : -value) / 100;
@@ -11281,15 +11510,15 @@
     if (!race.unfathomable) return 0;
     let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
     if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
-    let housing = readProperty(city, "captive_housing"), civic = readProperty(root, "civic"), torturer = readProperty(civic, "torturer"), workers = finite15(readProperty(torturer, "workers")), index = dwellers.indexOf(target), active = finite15(readProperty(housing, `race${index}`));
+    let housing = readProperty(city, "captive_housing"), civic = readProperty(root, "civic"), torturer = readProperty(civic, "torturer"), workers = finite16(readProperty(torturer, "workers")), index = dwellers.indexOf(target), active = finite16(readProperty(housing, `race${index}`));
     if (workers === void 0 || active === void 0) return;
     let adjusted = Math.min(active, 100);
     adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3));
-    let nightmare = readProperty(readProperty(root, "stats"), "achieve"), mg = finite15(readProperty(readProperty(nightmare, "nightmare"), "mg"));
+    let nightmare = readProperty(readProperty(root, "stats"), "achieve"), mg = finite16(readProperty(readProperty(nightmare, "nightmare"), "mg"));
     return adjusted / 100 * ((mg ?? 0) / 5);
   }
   function readUnitPrices(root, resource) {
-    let value = finite15(resource.value), race = readProperty(root, "race");
+    let value = finite16(resource.value), race = readProperty(root, "race");
     if (value === void 0 || value <= 0 || !isRecord(race)) return;
     let arrogant = readMultiplier(
       race,
@@ -11323,15 +11552,15 @@
     return Number.isFinite(buy) && Number.isFinite(sell) && sellDivide > 0 ? Object.freeze({ buy, sell }) : void 0;
   }
   function resourceStorageRatio2(resource) {
-    let amount = finite15(resource.amount), maximum = finite15(resource.max);
+    let amount = finite16(resource.amount), maximum = finite16(resource.max);
     return amount !== void 0 && maximum !== void 0 && maximum > 0 ? amount / maximum : 1;
   }
   function resourceMaximum(resource) {
-    let maximum = finite15(resource.max);
+    let maximum = finite16(resource.max);
     return maximum !== void 0 && maximum >= 0 ? maximum : 0;
   }
   function maximumMultiplier(root) {
-    let currency = finite15(readProperty(readProperty(root, "tech"), "currency"));
+    let currency = finite16(readProperty(readProperty(root, "tech"), "currency"));
     return currency !== void 0 && currency >= 6 ? 1e6 : currency !== void 0 && currency >= 4 ? 5e3 : 100;
   }
   function emptySell(index, resourceId, ignoreSellRatio) {
@@ -11375,7 +11604,7 @@
       id,
       index,
       resource: readProperty(resources, id),
-      priority: finite15(settings[`res_buy_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
+      priority: finite16(settings[`res_buy_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
     })).filter(
       (entry) => isRecord(entry.resource) && Object.hasOwn(entry.resource, "trade")
     ).sort(
@@ -11383,7 +11612,7 @@
     ).map((entry) => entry.id);
   }
   function readTicksPerSecond(settings) {
-    let tickRate = finite15(settings.tickRate) ?? 4;
+    let tickRate = finite16(settings.tickRate) ?? 4;
     return tickRate > 0 ? 4 / tickRate : 1;
   }
   function createCapturedMarketPorts(dependencies) {
@@ -11402,12 +11631,12 @@
         );
         if (!isRecord(resources) || !isRecord(cityMarket) || !isRecord(money) || quantityControl === void 0)
           throw new Error("captured market controls are unavailable");
-        let originalMultiplier = finite15(cityMarket.qty), moneyMaximum = finite15(money.max), moneyCurrent = finite15(money.amount);
+        let originalMultiplier = finite16(cityMarket.qty), moneyMaximum = finite16(money.max), moneyCurrent = finite16(money.amount);
         if (originalMultiplier === void 0 || !Number.isSafeInteger(originalMultiplier) || originalMultiplier < 1 || moneyMaximum === void 0 || moneyCurrent === void 0)
           throw new TypeError("captured market quantities are invalid");
         let minimumMoneyAllowed = Math.max(
-          moneyMaximum * (finite15(settings.minimumMoneyPercentage) ?? 0) / 100,
-          finite15(settings.minimumMoney) ?? 0
+          moneyMaximum * (finite16(settings.minimumMoneyPercentage) ?? 0) / 100,
+          finite16(settings.minimumMoney) ?? 0
         ), resourceIds = readPriorityIds(resources, settings), rowGenerations = /* @__PURE__ */ new Map();
         for (let resourceId of resourceIds) {
           let row = dependencies.controls.resolve(`market-${resourceId}`);
@@ -11437,7 +11666,7 @@
         let root = active.root, resources = readProperty(root, "resource"), resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
         if (!isRecord(resource) || !isRecord(money) || control === void 0 || !control.methods.includes("purchase") || !control.methods.includes("sell"))
           return emptySell(index, resourceId, ignoreSellRatio);
-        let currentQuantity2 = finite15(resource.amount), maxQuantity = resourceMaximum(resource), moneyMaximum = finite15(money.max), moneyCurrent = finite15(money.amount), prices = readUnitPrices(root, resource), settings = settingsRecord2(dependencies.readSettings()), autoSellRatio = finite15(settings[`res_sell_r_${resourceId}`]) ?? 0, storageRatio2 = resourceStorageRatio2(resource), income = finite15(resource.diff), ticksPerSecond = readTicksPerSecond(settings);
+        let currentQuantity2 = finite16(resource.amount), maxQuantity = resourceMaximum(resource), moneyMaximum = finite16(money.max), moneyCurrent = finite16(money.amount), prices = readUnitPrices(root, resource), settings = settingsRecord2(dependencies.readSettings()), autoSellRatio = finite16(settings[`res_sell_r_${resourceId}`]) ?? 0, storageRatio2 = resourceStorageRatio2(resource), income = finite16(resource.diff), ticksPerSecond = readTicksPerSecond(settings);
         return currentQuantity2 === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || prices === void 0 || income === void 0 || ticksPerSecond <= 0 ? (dependencies.onUnavailable?.(
           resourceId,
           "market price or quantity is unavailable"
@@ -11466,7 +11695,7 @@
         let resources = readProperty(active.root, "resource"), resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
         if (!isRecord(resource) || !isRecord(money) || control === void 0 || !control.methods.includes("purchase") || !control.methods.includes("sell"))
           return emptyBuy(index, resourceId);
-        let currentQuantity2 = finite15(resource.amount), maxQuantity = resourceMaximum(resource), moneyCurrent = finite15(money.amount), prices = readUnitPrices(active.root, resource), settings = settingsRecord2(dependencies.readSettings()), autoBuyRatio = finite15(settings[`res_buy_r_${resourceId}`]) ?? 0;
+        let currentQuantity2 = finite16(resource.amount), maxQuantity = resourceMaximum(resource), moneyCurrent = finite16(money.amount), prices = readUnitPrices(active.root, resource), settings = settingsRecord2(dependencies.readSettings()), autoBuyRatio = finite16(settings[`res_buy_r_${resourceId}`]) ?? 0;
         return currentQuantity2 === void 0 || moneyCurrent === void 0 || prices === void 0 ? (dependencies.onUnavailable?.(
           resourceId,
           "market price or quantity is unavailable"
@@ -11521,7 +11750,7 @@
           readProperty(active.root, "resource"),
           "Money"
         ), prices = isRecord(resource) ? readUnitPrices(active.root, resource) : void 0;
-        if (!isRecord(resource) || !isRecord(money) || finite15(money.amount) !== decision.expectedMoneyCurrent || finite15(resource.amount) !== decision.expectedResourceCurrent || prices === void 0 || prices[decision.side] !== decision.expectedUnitPrice)
+        if (!isRecord(resource) || !isRecord(money) || finite16(money.amount) !== decision.expectedMoneyCurrent || finite16(resource.amount) !== decision.expectedResourceCurrent || prices === void 0 || prices[decision.side] !== decision.expectedUnitPrice)
           return stale("captured-market-state-changed", "market inputs changed");
         let control = dependencies.controls.resolve(
           `market-${decision.resourceId}`
@@ -11566,7 +11795,7 @@
       return !isRecord(data) || data !== readProperty(readProperty(active.root, "city"), "market") ? stale(
         "captured-market-quantity-state-changed",
         "market quantity state changed"
-      ) : (Reflect.set(data, "qty", multiplier), finite15(data.qty) === multiplier ? SUCCEEDED : rejected(
+      ) : (Reflect.set(data, "qty", multiplier), finite16(data.qty) === multiplier ? SUCCEEDED : rejected(
         "captured-market-quantity-failed",
         "market quantity did not change"
       ));
@@ -11845,7 +12074,7 @@
     "Coal",
     "Water"
   ]);
-  function finite16(value) {
+  function finite17(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function settingsRecord3(value) {
@@ -11853,7 +12082,7 @@
   }
   function traitPercent(race, trait) {
     if (!race[trait]) return 0;
-    let rank = finite16(race[trait]);
+    let rank = finite17(race[trait]);
     if (rank === void 0) return;
     let index = TRAIT_RANKS2.indexOf(rank);
     return index >= 0 ? TRAIT_VALUES2[trait][index] : void 0;
@@ -11862,15 +12091,15 @@
     if (!race.unfathomable) return 0;
     let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
     if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
-    let housing = readProperty(city, "captive_housing"), workers = finite16(
+    let housing = readProperty(city, "captive_housing"), workers = finite17(
       readProperty(
         readProperty(readProperty(root, "civic"), "torturer"),
         "workers"
       )
-    ), index = dwellers.indexOf(target), active = finite16(readProperty(housing, `race${index}`)), nightmare = readProperty(
+    ), index = dwellers.indexOf(target), active = finite17(readProperty(housing, `race${index}`)), nightmare = readProperty(
       readProperty(readProperty(root, "stats"), "achieve"),
       "nightmare"
-    ), mg = finite16(readProperty(nightmare, "mg"));
+    ), mg = finite17(readProperty(nightmare, "mg"));
     if (workers === void 0 || active === void 0) return;
     let adjusted = Math.min(active, 100);
     return adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3)), adjusted / 100 * ((mg ?? 0) / 5);
@@ -11884,7 +12113,7 @@
     return hasUnsupportedPriceModifier(root) || !!readProperty(race, "merchant") || !!readProperty(race, "devious") || !!readProperty(race, "unfathomable") || governorType === "dealmaker";
   }
   function routePrices(root, resource, ratio) {
-    let value = finite16(resource.value), race = readProperty(root, "race");
+    let value = finite17(resource.value), race = readProperty(root, "race");
     if (value === void 0 || value <= 0 || !isRecord(race) || hasUnsupportedPriceModifier(root)) return;
     let inflation = race.inflation;
     if (inflation !== void 0 && inflation !== !1 && (typeof inflation != "number" || !Number.isFinite(inflation)))
@@ -11932,15 +12161,15 @@
       let inflation = race.inflation;
       if (inflation === void 0 || inflation === !1 || typeof inflation != "number" || !Number.isFinite(inflation))
         return !1;
-      let saveMinutes = finite16(settings.inflationChallengeSaveMinutes);
+      let saveMinutes = finite17(settings.inflationChallengeSaveMinutes);
       if (saveMinutes === void 0) return !1;
-      let currentMoney = finite16(money.amount), maxMoney = finite16(money.max), moneyRate = finite16(money.diff);
+      let currentMoney = finite17(money.amount), maxMoney = finite17(money.max), moneyRate = finite17(money.diff);
       if (currentMoney === void 0 || maxMoney === void 0 || moneyRate === void 0)
         return !1;
       let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), wheelbarrow = readProperty(achievements, "wheelbarrow"), affix = achievementAffix(readProperty(race, "universe"));
       if (!isRecord(stats) || !isRecord(achievements) || affix === void 0 || wheelbarrow != null && !isRecord(wheelbarrow))
         return !1;
-      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite16(rawStar);
+      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite17(rawStar);
       if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
       let achievementLevel2 = 1;
       for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
@@ -11972,9 +12201,9 @@
       );
       return;
     }
-    let cityMarket = readProperty(readProperty(root, "city"), "market"), resources = readProperty(root, "resource"), tech = readProperty(root, "tech"), currency = finite16(readProperty(tech, "currency")) ?? 0, money = readProperty(resources, "Money");
+    let cityMarket = readProperty(readProperty(root, "city"), "market"), resources = readProperty(root, "resource"), tech = readProperty(root, "tech"), currency = finite17(readProperty(tech, "currency")) ?? 0, money = readProperty(resources, "Money");
     if (!isRecord(cityMarket) || !isRecord(resources) || !isRecord(money) || Object.hasOwn(cityMarket, "bm")) return;
-    let maximum = finite16(cityMarket.mtrade), used = finite16(cityMarket.trade), moneyRate = finite16(money.diff), moneyMaximum = finite16(money.max), moneyCurrent = finite16(money.amount);
+    let maximum = finite17(cityMarket.mtrade), used = finite17(cityMarket.trade), moneyRate = finite17(money.diff), moneyMaximum = finite17(money.max), moneyCurrent = finite17(money.amount);
     if (maximum === void 0 || used === void 0 || moneyRate === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || !Number.isSafeInteger(maximum) || !Number.isSafeInteger(used) || maximum < 0 || used < 0)
       return;
     let settings = settingsRecord3(dependencies.readSettings()), demand = dependencies.readDemand?.() ?? {
@@ -11982,7 +12211,7 @@
       storageRequired: () => 1
     }, routeCounts = /* @__PURE__ */ new Map(), routeControls = /* @__PURE__ */ new Map(), priority = [];
     for (let [index, resourceId] of Object.keys(resources).entries()) {
-      let resource = readProperty(resources, resourceId), ratio = TRADE_RATIO[resourceId], trade = isRecord(resource) ? finite16(resource.trade) : void 0;
+      let resource = readProperty(resources, resourceId), ratio = TRADE_RATIO[resourceId], trade = isRecord(resource) ? finite17(resource.trade) : void 0;
       if (!isRecord(resource) || ratio === void 0 || trade === void 0)
         continue;
       if (!Number.isSafeInteger(trade)) return;
@@ -11990,7 +12219,7 @@
       let control = dependencies.controls.resolve(`market-${resourceId}`);
       if (control === void 0 || !control.methods.includes("autoBuy") || !control.methods.includes("autoSell") || !control.methods.includes("zero"))
         return;
-      let marketPriority = finite16(settings[`res_buy_p_${resourceId}`]) ?? Number.MAX_SAFE_INTEGER;
+      let marketPriority = finite17(settings[`res_buy_p_${resourceId}`]) ?? Number.MAX_SAFE_INTEGER;
       priority.push({ id: resourceId, index, value: marketPriority }), routeCounts.set(resourceId, trade), routeControls.set(resourceId, control);
     }
     priority.sort(
@@ -12000,9 +12229,9 @@
     for (let entry of priority) {
       let resource = readProperty(resources, entry.id);
       if (!isRecord(resource)) return;
-      let amount = finite16(resource.amount), maximumResource = finite16(resource.max), diff = finite16(resource.diff), ratio = TRADE_RATIO[entry.id];
+      let amount = finite17(resource.amount), maximumResource = finite17(resource.max), diff = finite17(resource.diff), ratio = TRADE_RATIO[entry.id];
       if (ratio === void 0) return;
-      let prices = routePrices(root, resource, ratio), required = finite16(demand.storageRequired(entry.id));
+      let prices = routePrices(root, resource, ratio), required = finite17(demand.storageRequired(entry.id));
       if (amount === void 0 || maximumResource === void 0 || diff === void 0 || required === void 0 || prices === void 0 || maximumResource < 0 || required <= 0)
         return;
       let storageRatio2 = maximumResource > 0 ? amount / maximumResource : 1, usefulRatio = maximumResource > 0 ? amount / Math.min(maximumResource, required) : 1, buyEnabled = settings[`res_trade_buy_${entry.id}`] === !0, sellEnabled = settings[`res_trade_sell_${entry.id}`] === !0;
@@ -12018,8 +12247,8 @@
           tradeBuyPrice: prices.buy,
           rateOfChange: diff,
           tradeRouteQuantity: ratio,
-          autoTradeWeighting: finite16(settings[`res_trade_w_${entry.id}`]) ?? 0,
-          autoTradePriority: finite16(settings[`res_trade_p_${entry.id}`]) ?? 0,
+          autoTradeWeighting: finite17(settings[`res_trade_w_${entry.id}`]) ?? 0,
+          autoTradePriority: finite17(settings[`res_trade_p_${entry.id}`]) ?? 0,
           isRoutesUnlocked: !0,
           isDemanded: demand.isDemanded(entry.id)
         })
@@ -12028,8 +12257,8 @@
     let race = readProperty(root, "race"), governor = readProperty(readProperty(race, "governor"), "g"), input = Object.freeze({
       settings: Object.freeze({
         tradeRouteSellExcess: settings.tradeRouteSellExcess === !0,
-        tradeRouteMinimumMoneyPerSecond: finite16(settings.tradeRouteMinimumMoneyPerSecond) ?? 0,
-        tradeRouteMinimumMoneyPercentage: finite16(settings.tradeRouteMinimumMoneyPercentage) ?? 0
+        tradeRouteMinimumMoneyPerSecond: finite17(settings.tradeRouteMinimumMoneyPerSecond) ?? 0,
+        tradeRouteMinimumMoneyPercentage: finite17(settings.tradeRouteMinimumMoneyPercentage) ?? 0
       }),
       priorityList: Object.freeze(views),
       money: Object.freeze({
@@ -12062,10 +12291,10 @@
     if (poolLedger === void 0) return 0;
     if (!isRecord(poolLedger)) return;
     let value = readProperty(poolLedger, resourceId);
-    return value === void 0 ? 0 : finite16(value);
+    return value === void 0 ? 0 : finite17(value);
   }
   function readRegionalRouteInput(dependencies) {
-    let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), shadow = finite16(readProperty(tech, "shadow"));
+    let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), shadow = finite17(readProperty(tech, "shadow"));
     if (root === void 0 || shadow === void 0 || shadow < 5)
       return;
     if (hasUnsupportedRegionalVolumeModifier(root)) {
@@ -12076,12 +12305,12 @@
     }
     let city = readProperty(root, "city"), market = readProperty(city, "market"), resources = readProperty(root, "resource"), race = readProperty(root, "race"), governor = readProperty(race, "governor"), config = readProperty(governor, "config"), trader = readProperty(config, "trader");
     if (!isRecord(market) || !isRecord(resources)) return;
-    let maximumRoutes = finite16(market.mtrade), money = finite16(
+    let maximumRoutes = finite17(market.mtrade), money = finite17(
       readProperty(readProperty(resources, "Money"), "amount")
     );
     if (maximumRoutes === void 0 || !Number.isSafeInteger(maximumRoutes) || maximumRoutes < 0 || money === void 0)
       return;
-    let marginValue = isRecord(trader) ? finite16(trader.margin) : void 0, reserveValue = isRecord(trader) ? finite16(trader.reserve) : void 0, margin = marginValue !== void 0 && marginValue > 0 ? marginValue : 0, reserve = reserveValue !== void 0 && reserveValue > 0 ? reserveValue : 0, blackMarket = readProperty(market, "bm"), ledger = isRecord(blackMarket) ? blackMarket : {}, poolNames = /* @__PURE__ */ new Set(), routeCounts = /* @__PURE__ */ new Map();
+    let marginValue = isRecord(trader) ? finite17(trader.margin) : void 0, reserveValue = isRecord(trader) ? finite17(trader.reserve) : void 0, margin = marginValue !== void 0 && marginValue > 0 ? marginValue : 0, reserve = reserveValue !== void 0 && reserveValue > 0 ? reserveValue : 0, blackMarket = readProperty(market, "bm"), ledger = isRecord(blackMarket) ? blackMarket : {}, poolNames = /* @__PURE__ */ new Set(), routeCounts = /* @__PURE__ */ new Map();
     for (let value of Object.keys(ledger)) poolNames.add(value);
     let candidates = [];
     for (let resourceId of Object.keys(BLACK_MARKET_VOLUMES)) {
@@ -12101,7 +12330,7 @@
         if (!isRecord(resource) || resource.display !== !0) continue;
         let diffLedger = readProperty(resource, "regDiff");
         if (diffLedger !== void 0 && !isRecord(diffLedger)) return;
-        let rateOfChange = finite16(isRecord(diffLedger) ? diffLedger[pool] : void 0) ?? 0, currentRoutes = regionalPoolRoute(ledger, pool, resourceId);
+        let rateOfChange = finite17(isRecord(diffLedger) ? diffLedger[pool] : void 0) ?? 0, currentRoutes = regionalPoolRoute(ledger, pool, resourceId);
         if (currentRoutes === void 0 || !Number.isSafeInteger(currentRoutes) || currentRoutes < 0)
           return;
         currentRoutes > 0 && routeCounts.set(`${pool}\0${resourceId}`, currentRoutes);
@@ -12189,7 +12418,7 @@
           applyRegionalTradeRoutes(dependencies, regional);
           return;
         }
-        let root = dependencies.rootState.readRoot(), shadow = finite16(readProperty(readProperty(root, "tech"), "shadow"));
+        let root = dependencies.rootState.readRoot(), shadow = finite17(readProperty(readProperty(root, "tech"), "shadow"));
         if (shadow !== void 0 && shadow >= 5) return;
         let captured = readRouteInput(dependencies);
         if (captured === void 0) return;
@@ -12199,14 +12428,14 @@
           readProperty(captured.session.root, "city"),
           "market"
         );
-        if (!isRecord(current) || current !== captured.session.market || finite16(current.trade) !== captured.session.marketRouteCount)
+        if (!isRecord(current) || current !== captured.session.market || finite17(current.trade) !== captured.session.marketRouteCount)
           return;
         for (let [resourceId, routes] of captured.session.routeCounts) {
           let resource = readProperty(
             readProperty(captured.session.root, "resource"),
             resourceId
           );
-          if (!isRecord(resource) || finite16(resource.trade) !== routes) return;
+          if (!isRecord(resource) || finite17(resource.trade) !== routes) return;
         }
         let expected = new Map(captured.session.routeCounts);
         for (let operation2 of result.operations) {
@@ -12233,9 +12462,9 @@
           (sum, value) => sum + Math.abs(value),
           0
         );
-        if (finite16(finalMarket.trade) === expectedTotal) {
+        if (finite17(finalMarket.trade) === expectedTotal) {
           for (let [resourceId, value] of expected)
-            if (finite16(
+            if (finite17(
               readProperty(readProperty(liveResources, resourceId), "trade")
             ) !== value)
               return;
@@ -12744,7 +12973,7 @@
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
   var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
-  function finite17(value) {
+  function finite18(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readSettingsRecord(value) {
@@ -12755,7 +12984,7 @@
     return typeof value == "boolean" ? value : !0;
   }
   function craftPreserve(settings, id) {
-    let value = finite17(settings[`foundry_p_${id}`]);
+    let value = finite18(settings[`foundry_p_${id}`]);
     return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
   }
   function craftAllButtonRendered(getDocument, id) {
@@ -12781,7 +13010,7 @@
     if (!isRecord(resources)) return;
     let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
     for (let [resourceId, costPerCraft] of costs) {
-      let resource = readProperty(resources, resourceId), currentQuantity2 = finite17(readProperty(resource, "amount")), maxQuantity = finite17(readProperty(resource, "max")), rateOfChange = finite17(readProperty(resource, "diff"));
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite18(readProperty(resource, "amount")), maxQuantity = finite18(readProperty(resource, "max")), rateOfChange = finite18(readProperty(resource, "diff"));
       if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
         return;
       let base = {
@@ -12818,7 +13047,7 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite17(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite18(dependencies.readPeriods());
         return session = Object.freeze({
           root,
           demand: dependencies.readDemand(),
@@ -12836,7 +13065,7 @@
         let craftable = readProperty(
           readProperty(session.root, "resource"),
           craftableId
-        ), craftableAmount = finite17(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
+        ), craftableAmount = finite18(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
           dependencies,
           {
             ...session,
@@ -12885,7 +13114,7 @@
           "resource"
         );
         for (let spend of decision.spend) {
-          let actual = finite17(
+          let actual = finite18(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
@@ -12906,7 +13135,7 @@
         if (!result.ok)
           return rejected("craft-control-failed", result.detail ?? result.reason);
         for (let spend of decision.spend) {
-          let actual = finite17(
+          let actual = finite18(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
@@ -13470,6 +13699,28 @@
       result.outcome.status !== "succeeded" && logError(
         `ejector discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
+    }, supplyDiscoveryAttempted = !1, ensureSupplyControls = () => {
+      if (pageCapture2.controls.capturedElementIds().some((id) => id.startsWith("supply") && id !== SUPPLY_SUMMARY_CONTROL))
+        return;
+      let transport = readProperty(
+        readProperty(pageCapture2.rootState.readRoot(), "portal"),
+        "transport"
+      ), count = readProperty(transport, "count");
+      if (!isRecord(transport) || typeof count != "number" || !Number.isFinite(count) || count < 1 || supplyDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      if (marketTabs === void 0) return;
+      supplyDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: 4
+        }),
+        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 3 })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `supply discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
     }, ensureStorageControls = () => {
       if (pageCapture2.controls.resolve(STORAGE_CONSTRUCTION_CONTROL) !== void 0 || storageDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0 || readProperty(
         readProperty(pageCapture2.rootState.readRoot(), "settings"),
@@ -13586,6 +13837,11 @@
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage),
       readDemand: () => readDemand()
+    }), supply = createCapturedSupplyAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage),
+      readDemand: () => readDemand()
     }), factory = createCapturedFactoryAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -13612,7 +13868,7 @@
             structureCount2("tauceti", "mining_ship") >= 1
           ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run());
           let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
-          autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoNanite") && (ensureNaniteControls(), nanite.run()), isEnabled(settings, "autoEject") && (ensureEjectorControls(), ejector.run()), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoSmelter") && (ensureSmelterControls(), smelter.run()), isEnabled(settings, "autoFactory") && (ensureFactoryControls(), factory.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoNanite") && (ensureNaniteControls(), nanite.run()), isEnabled(settings, "autoSupply") && (ensureSupplyControls(), supply.run()), isEnabled(settings, "autoEject") && (ensureEjectorControls(), ejector.run()), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run()), isEnabled(settings, "autoSmelter") && (ensureSmelterControls(), smelter.run()), isEnabled(settings, "autoFactory") && (ensureFactoryControls(), factory.run()), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }

@@ -57,6 +57,10 @@ import {
   EJECTOR_SUMMARY_CONTROL,
 } from "../adapters/evolve/economy/resources/captured-ejector.ts";
 import {
+  createCapturedSupplyAutomation,
+  SUPPLY_SUMMARY_CONTROL,
+} from "../adapters/evolve/economy/resources/captured-supply.ts";
+import {
   createCapturedFactoryAutomation,
   FACTORY_CONTROL,
 } from "../adapters/evolve/economy/production/captured-factory.ts";
@@ -731,6 +735,48 @@ export function startCapturedRuntime({
     }
   };
 
+  let supplyDiscoveryAttempted = false;
+  const ensureSupplyControls = () => {
+    if (
+      pageCapture.controls
+        .capturedElementIds()
+        .some((id) => id.startsWith("supply") && id !== SUPPLY_SUMMARY_CONTROL)
+    ) {
+      return;
+    }
+    const transport = readProperty(
+      readProperty(pageCapture.rootState.readRoot(), "portal"),
+      "transport",
+    );
+    const count = readProperty(transport, "count");
+    if (
+      !isRecord(transport) ||
+      typeof count !== "number" ||
+      !Number.isFinite(count) ||
+      count < 1 ||
+      supplyDiscoveryAttempted
+    ) {
+      return;
+    }
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    if (marketTabs === undefined) return;
+    supplyDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 4,
+      }),
+      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 3 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `supply discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+
   const ensureStorageControls = () => {
     if (
       pageCapture.controls.resolve(STORAGE_CONSTRUCTION_CONTROL) !== undefined
@@ -913,6 +959,12 @@ export function startCapturedRuntime({
     readSettings: () => readStoredSettings(storage),
     readDemand: () => readDemand(),
   });
+  const supply = createCapturedSupplyAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
+  });
   const factory = createCapturedFactoryAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -1025,6 +1077,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoNanite")) {
         ensureNaniteControls();
         nanite.run();
+      }
+      if (isEnabled(settings, "autoSupply")) {
+        ensureSupplyControls();
+        supply.run();
       }
       if (isEnabled(settings, "autoEject")) {
         ensureEjectorControls();

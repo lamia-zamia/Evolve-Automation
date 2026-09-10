@@ -571,6 +571,7 @@ assert.equal(unsubscribeCount, 1);
     race: { deconstructor: true },
     resource: {
       Nanite: { amount: 0, max: 100, display: true },
+      Supply: { amount: 0, max: 100, display: true },
       Copper: { amount: 100, max: 100, diff: 0, display: true },
     },
     interstellar: {
@@ -581,6 +582,10 @@ assert.equal(unsubscribeCount, 1);
       power: -1,
       nanite_factory: { count: 1, Copper: 0 },
       mill: { count: 2, on: 0 },
+    },
+    portal: {
+      bireme: { count: 1, on: 1 },
+      transport: { count: 1, on: 1, cargo: { max: 2, Copper: 0 } },
     },
   };
   const invoked = [];
@@ -601,6 +606,13 @@ assert.equal(unsubscribeCount, 1);
           methods: ["ejectMore", "ejectLess"],
         };
       }
+      if (elementId === "supplyCopper") {
+        return {
+          elementId,
+          generation: 1,
+          methods: ["supplyMore", "supplyLess"],
+        };
+      }
       if (elementId === "city-mill") {
         return { elementId, generation: 1, methods: ["power_on"] };
       }
@@ -613,13 +625,21 @@ assert.equal(unsubscribeCount, 1);
       } else if (handle.elementId === "ejectCopper") {
         root.interstellar.mass_ejector[args[0]] +=
           method === "ejectMore" ? 1 : -1;
+      } else if (handle.elementId === "supplyCopper") {
+        root.portal.transport.cargo[args[0]] +=
+          method === "supplyMore" ? 1 : -1;
       } else {
         root.city.mill.on += 1;
         root.city.power = 1;
       }
       return { ok: true, value: undefined };
     },
-    capturedElementIds: () => ["iNFactory", "ejectCopper", "city-mill"],
+    capturedElementIds: () => [
+      "iNFactory",
+      "supplyCopper",
+      "ejectCopper",
+      "city-mill",
+    ],
   };
   const stopCycle = startCapturedRuntime({
     pageCapture: {
@@ -648,10 +668,13 @@ assert.equal(unsubscribeCount, 1);
           masterScriptToggle: true,
           autoNanite: true,
           naniteMode: "cap",
+          autoSupply: true,
+          supplyMode: "cap",
           autoEject: true,
           ejectMode: "cap",
           autoPower: true,
           res_naniteCopper: true,
+          res_supplyCopper: true,
           res_ejectCopper: true,
         }),
     },
@@ -670,13 +693,20 @@ assert.equal(unsubscribeCount, 1);
       .slice(0, firstPower)
       .every(
         (entry) =>
-          entry === "iNFactory.addItem" || entry === "ejectCopper.ejectMore",
+          entry === "iNFactory.addItem" ||
+          entry === "supplyCopper.supplyMore" ||
+          entry === "ejectCopper.ejectMore",
       ),
     JSON.stringify(invoked),
   );
   assert.ok(
-    invoked.findIndex((entry) => entry === "ejectCopper.ejectMore") >
+    invoked.findIndex((entry) => entry === "supplyCopper.supplyMore") >
       invoked.findIndex((entry) => entry === "iNFactory.addItem"),
+    JSON.stringify(invoked),
+  );
+  assert.ok(
+    invoked.findIndex((entry) => entry === "ejectCopper.ejectMore") >
+      invoked.findIndex((entry) => entry === "supplyCopper.supplyMore"),
     JSON.stringify(invoked),
   );
   assert.equal(root.city.nanite_factory.Copper, 4);
