@@ -8692,6 +8692,10 @@
   function finite7(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
+  function readCapturedIsEarlyGame(root) {
+    let race = readProperty(root, "race"), tech = readProperty(root, "tech");
+    return readProperty(race, "cataclysm") || readProperty(race, "orbit_decayed") || readProperty(race, "lone_survivor") || readProperty(race, "warlord") ? !1 : readProperty(race, "truepath") || readProperty(race, "sludge") || readProperty(race, "ultra_sludge") ? (finite7(readProperty(tech, "high_tech")) ?? 0) < 7 : (finite7(readProperty(tech, "mad")) ?? 0) < 1;
+  }
   function readSettingsInput(settingsValue) {
     let settings = isRecord(settingsValue) ? settingsValue : {};
     return Object.freeze({
@@ -9170,7 +9174,7 @@
           settings: readSettingsInput(settingsValue),
           // The captured offer list is the game's own technology qualification result. The reader
           // only recomputes affordability from current holdings; it never recreates tech gates.
-          isEarlyGame: !1,
+          isEarlyGame: readCapturedIsEarlyGame(root),
           consumptionBalanceTarget: 120,
           truepathAiBuildingTarget: null,
           inflationMoney: null,

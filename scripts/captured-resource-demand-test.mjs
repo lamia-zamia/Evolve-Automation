@@ -600,6 +600,66 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.equal(sample.isDemanded("Stone"), false);
 }
 
+// Research demand uses the captured pre-MAD gate: an ordinary fresh run uses the ordinary
+// research setting, while a post-MAD run uses the separate Space+ setting.
+{
+  const demand = (tech) =>
+    createCapturedResourceDemand({
+      rootState: {
+        readRoot: () => ({
+          race: {},
+          tech,
+          resource: {
+            Knowledge: { amount: 100, max: 500, stackable: false },
+          },
+        }),
+      },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      readOfferedTechs: () => [
+        { elementId: "tech-stonework", cost: { Knowledge: 100 } },
+      ],
+      readSettings: () => ({
+        researchRequest: true,
+        researchRequestSpace: false,
+      }),
+    }).sample();
+  assert.equal(demand({}).requestedQuantity("Knowledge"), 100);
+  assert.equal(demand({ mad: 1 }).requestedQuantity("Knowledge"), 0);
+}
+
+// True Path and sludge races leave the early-game window at high_tech 7, while the special
+// challenge races are never treated as early game.
+{
+  const demand = (race, tech) =>
+    createCapturedResourceDemand({
+      rootState: {
+        readRoot: () => ({
+          race,
+          tech,
+          resource: { Knowledge: { amount: 100, max: 500, stackable: false } },
+        }),
+      },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      readOfferedTechs: () => [
+        { elementId: "tech-stonework", cost: { Knowledge: 100 } },
+      ],
+      readSettings: () => ({ researchRequest: true }),
+    }).sample();
+  assert.equal(
+    demand({ truepath: true }, { high_tech: 6 }).requestedQuantity("Knowledge"),
+    100,
+  );
+  assert.equal(
+    demand({ truepath: true }, { high_tech: 7 }).requestedQuantity("Knowledge"),
+    0,
+  );
+  assert.equal(demand({ warlord: true }, {}).requestedQuantity("Knowledge"), 0);
+}
+
 // A fully captured city factory reserves its active recipe materials even without a queue target.
 {
   const factoryRoot = {

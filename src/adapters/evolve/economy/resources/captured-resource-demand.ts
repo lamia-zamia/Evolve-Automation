@@ -113,6 +113,28 @@ function finite(value: unknown): number | undefined {
     : undefined;
 }
 
+/** Mirrors the script's runtime query over the captured race and technology bags. */
+function readCapturedIsEarlyGame(root: unknown): boolean {
+  const race = readProperty(root, "race");
+  const tech = readProperty(root, "tech");
+  if (
+    Boolean(readProperty(race, "cataclysm")) ||
+    Boolean(readProperty(race, "orbit_decayed")) ||
+    Boolean(readProperty(race, "lone_survivor")) ||
+    Boolean(readProperty(race, "warlord"))
+  ) {
+    return false;
+  }
+  if (
+    Boolean(readProperty(race, "truepath")) ||
+    Boolean(readProperty(race, "sludge")) ||
+    Boolean(readProperty(race, "ultra_sludge"))
+  ) {
+    return (finite(readProperty(tech, "high_tech")) ?? 0) < 7;
+  }
+  return (finite(readProperty(tech, "mad")) ?? 0) < 1;
+}
+
 function readSettingsInput(
   settingsValue: unknown,
 ): DemandPrioritizationSettings {
@@ -794,7 +816,7 @@ export function createCapturedResourceDemand(
         settings: readSettingsInput(settingsValue),
         // The captured offer list is the game's own technology qualification result. The reader
         // only recomputes affordability from current holdings; it never recreates tech gates.
-        isEarlyGame: false,
+        isEarlyGame: readCapturedIsEarlyGame(root),
         consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
         truepathAiBuildingTarget: null,
         inflationMoney: null,
