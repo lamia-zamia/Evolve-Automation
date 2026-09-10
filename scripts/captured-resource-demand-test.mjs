@@ -77,6 +77,7 @@ function withTargets(targets, settings = {}, saving = null, craftCosts) {
 
 function spaceMissionDemand({
   space = 2,
+  tech = {},
   missionId = "space-moon_mission",
   resourceId = "Oil",
   control = true,
@@ -84,7 +85,7 @@ function spaceMissionDemand({
   costUnavailable = false,
 } = {}) {
   const missionRoot = {
-    tech: { space },
+    tech: { space, ...tech },
     resource: { [resourceId]: { amount: 0, max: 100, stackable: true } },
   };
   return createCapturedResourceDemand({
@@ -151,6 +152,30 @@ function spaceMissionDemand({
       missionId: "space-red_mission",
       resourceId: "Helium_3",
       cost: { Helium_3: 250 },
+    })
+      .sample()
+      .requestedQuantity("Helium_3"),
+    0,
+  );
+}
+
+// The Hell mission completes on a different technology field and has its own captured price.
+{
+  const sample = spaceMissionDemand({
+    space: 3,
+    tech: { hell: 0 },
+    missionId: "space-hell_mission",
+    resourceId: "Helium_3",
+    cost: { Helium_3: 400 },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Helium_3"), 100);
+  assert.equal(
+    spaceMissionDemand({
+      space: 3,
+      tech: { hell: 1 },
+      missionId: "space-hell_mission",
+      resourceId: "Helium_3",
+      cost: { Helium_3: 400 },
     })
       .sample()
       .requestedQuantity("Helium_3"),

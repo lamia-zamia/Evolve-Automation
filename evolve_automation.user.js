@@ -8750,18 +8750,31 @@
     );
   }
   var CAPTURED_SPACE_MISSIONS = Object.freeze([
-    Object.freeze({ actionId: "space-moon_mission", completionLevel: 3 }),
-    Object.freeze({ actionId: "space-red_mission", completionLevel: 4 })
+    Object.freeze({
+      actionId: "space-moon_mission",
+      completionTech: "space",
+      completionLevel: 3
+    }),
+    Object.freeze({
+      actionId: "space-red_mission",
+      completionTech: "space",
+      completionLevel: 4
+    }),
+    Object.freeze({
+      actionId: "space-hell_mission",
+      completionTech: "hell",
+      completionLevel: 1
+    })
   ]);
   function readCapturedSpaceMissionDemand(root, settings, controls, costs) {
     if (controls === void 0 || costs === void 0 || settingBoolean3(settings, "missionRequest", !0) === !1)
       return Object.freeze([]);
-    let tech = readProperty(root, "tech"), space = finite7(readProperty(tech, "space"));
-    if (space === void 0) return Object.freeze([]);
+    let tech = readProperty(root, "tech");
+    if (!isRecord(tech)) return Object.freeze([]);
     let missions = [];
     for (let mission of CAPTURED_SPACE_MISSIONS) {
-      let actionId = mission.actionId;
-      if (controls.resolve(actionId) === void 0 || settingBoolean3(settings, `bat${actionId}`, !0) === !1 || space >= mission.completionLevel)
+      let actionId = mission.actionId, completion = finite7(readProperty(tech, mission.completionTech));
+      if (controls.resolve(actionId) === void 0 || settingBoolean3(settings, `bat${actionId}`, !0) === !1 || completion === void 0 || completion >= mission.completionLevel)
         continue;
       let cost = costs.readCost(actionId);
       if (cost === void 0) continue;

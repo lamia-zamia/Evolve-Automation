@@ -188,8 +188,21 @@ function toTargets(
 }
 
 const CAPTURED_SPACE_MISSIONS = Object.freeze([
-  Object.freeze({ actionId: "space-moon_mission", completionLevel: 3 }),
-  Object.freeze({ actionId: "space-red_mission", completionLevel: 4 }),
+  Object.freeze({
+    actionId: "space-moon_mission",
+    completionTech: "space",
+    completionLevel: 3,
+  }),
+  Object.freeze({
+    actionId: "space-red_mission",
+    completionTech: "space",
+    completionLevel: 4,
+  }),
+  Object.freeze({
+    actionId: "space-hell_mission",
+    completionTech: "hell",
+    completionLevel: 1,
+  }),
 ]);
 
 /** DeadSpace creates each mission control only after its own space requirements pass. */
@@ -207,15 +220,16 @@ function readCapturedSpaceMissionDemand(
     return Object.freeze([]);
   }
   const tech = readProperty(root, "tech");
-  const space = finite(readProperty(tech, "space"));
-  if (space === undefined) return Object.freeze([]);
+  if (!isRecord(tech)) return Object.freeze([]);
   const missions: DemandMission[] = [];
   for (const mission of CAPTURED_SPACE_MISSIONS) {
     const actionId = mission.actionId;
+    const completion = finite(readProperty(tech, mission.completionTech));
     if (
       controls.resolve(actionId) === undefined ||
       settingBoolean(settings, `bat${actionId}`, true) === false ||
-      space >= mission.completionLevel
+      completion === undefined ||
+      completion >= mission.completionLevel
     ) {
       continue;
     }
