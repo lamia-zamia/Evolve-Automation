@@ -1034,6 +1034,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
+    readDemand: () => readDemand(),
   });
 
   const runCycle = () => {

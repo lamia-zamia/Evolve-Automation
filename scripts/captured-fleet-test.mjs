@@ -61,6 +61,7 @@ const controls = {
 const automation = createCapturedFleetAutomation({
   rootState: { readRoot: () => root },
   controls,
+  readDemand: () => ({ isDemanded: () => false }),
   readSettings: () => ({
     fleetAlien2Knowledge: 8000000,
     fleetAlien2Loses: "normal",
@@ -81,5 +82,60 @@ assert.equal(
   ).length,
   30,
 );
+
+const ordinaryRoot = {
+  race: {},
+  tech: { piracy: 1 },
+  galaxy: {
+    defense: Object.fromEntries(
+      [
+        "gxy_gateway",
+        "gxy_stargate",
+        "gxy_gorddon",
+        "gxy_alien1",
+        "gxy_alien2",
+        "gxy_chthonian",
+      ].map((region) => [
+        region,
+        Object.fromEntries(shipNames.map((ship) => [ship, 0])),
+      ]),
+    ),
+    ...Object.fromEntries(
+      shipNames.map((ship) => [
+        ship,
+        { count: ship === "corvette_ship" ? 2 : 0 },
+      ]),
+    ),
+    bolognium_ship: { on: 1 },
+  },
+  resource: {
+    Bolognium: { amount: 0, max: 100 },
+  },
+};
+const ordinaryTrace = [];
+const ordinaryAutomation = createCapturedFleetAutomation({
+  rootState: { readRoot: () => ordinaryRoot },
+  controls: {
+    resolve(elementId) {
+      if (elementId === "fleet")
+        return { elementId, generation: 1, methods: ["add", "sub"] };
+      return undefined;
+    },
+    invoke(handle, method, args = []) {
+      ordinaryTrace.push([handle.elementId, method, ...args]);
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds: () => ["fleet"],
+  },
+  readDemand: () => ({
+    isDemanded: (resourceId) => resourceId === "Bolognium",
+  }),
+  readSettings: () => ({ fleetCrewReclaim: true, fleetMaxCover: true }),
+});
+assert.equal(runFleetAutomation(ordinaryAutomation).status, "succeeded");
+assert.deepEqual(ordinaryTrace, [
+  ["fleet", "add", "gxy_stargate", "corvette_ship"],
+  ["fleet", "add", "gxy_gateway", "corvette_ship"],
+]);
 
 console.log("Captured galaxy fleet tests passed");

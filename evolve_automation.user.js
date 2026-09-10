@@ -9786,6 +9786,22 @@
     });
   }
 
+  // src/domain/combat/galaxy-piracy.ts
+  function anyUseful(demand, resourceIds) {
+    return resourceIds.some((resourceId) => demand[resourceId]);
+  }
+  function decideGalaxyPiracyProtection(input) {
+    let { producers, usefulResources } = input, gxy_gateway = producers.bologniumShip && usefulResources.Bolognium, gxy_gorddon = input.gorddonTradeTargetsUsefulResource || producers.gorddonSymposium && usefulResources.Knowledge, gxy_alien1 = producers.alien1VitreloyPlant && usefulResources.Vitreloy, gxy_alien2 = producers.alien2ArmedMiner && anyUseful(usefulResources, ["Adamantite", "Bolognium", "Iridium"]) || producers.alien2Scavenger && usefulResources.Knowledge, gxy_chthonian = producers.chthonianExcavator && usefulResources.Orichalcum;
+    return {
+      gxy_stargate: gxy_gateway || gxy_gorddon || gxy_alien1 || gxy_alien2 || gxy_chthonian,
+      gxy_gateway,
+      gxy_gorddon,
+      gxy_alien1,
+      gxy_alien2,
+      gxy_chthonian
+    };
+  }
+
   // src/adapters/evolve/combat/captured-fleet.ts
   var REGION_NAMES = Object.freeze([
     "gxy_gateway",
@@ -9794,7 +9810,31 @@
     "gxy_alien1",
     "gxy_alien2",
     "gxy_chthonian"
-  ]);
+  ]), PIRACY_RESOURCES = Object.freeze([
+    "Adamantite",
+    "Bolognium",
+    "Iridium",
+    "Knowledge",
+    "Orichalcum",
+    "Vitreloy"
+  ]), GALAXY_TRADE_BUY_RESOURCES = Object.freeze([
+    "Deuterium",
+    "Neutronium",
+    "Adamantite",
+    "Elerium",
+    "Nano_Tube",
+    "Graphene",
+    "Stanene",
+    "Bolognium",
+    "Vitreloy"
+  ]), DEFAULT_PRIORITIES = Object.freeze({
+    gxy_stargate: 0,
+    gxy_alien2: 1,
+    gxy_alien1: 2,
+    gxy_chthonian: 3,
+    gxy_gateway: 4,
+    gxy_gorddon: 5
+  });
   function finite8(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
@@ -9806,6 +9846,129 @@
     return Object.fromEntries(
       GALAXY_SHIP_NAMES.map((name) => [name, 0])
     );
+  }
+  function settingBoolean4(settings, key, fallback) {
+    return typeof settings[key] == "boolean" ? settings[key] : fallback;
+  }
+  function settingNumber7(settings, key, fallback) {
+    return finite8(settings[key]) ?? fallback;
+  }
+  function activeCount(galaxy, id) {
+    return count(readProperty(readProperty(galaxy, id), "on")) ?? 0;
+  }
+  function resourceIsUseful(root, settings, demanded, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId);
+    if (!isRecord(resource)) return !1;
+    let amount = finite8(resource.amount), maximum = finite8(resource.max);
+    if (amount === void 0 || maximum === void 0) return !1;
+    let ratio = maximum > 0 ? amount / maximum : 1, maxStorage = finite8(settings[`res_max_store${resourceId}`]);
+    return ratio < 0.99 || demanded(resourceId) || settings[`res_storage_o_${resourceId}`] === !0 && maxStorage !== void 0 && amount < maxStorage;
+  }
+  function tradeTargetsUsefulResource(root, usefulResources) {
+    let trade = readProperty(readProperty(root, "galaxy"), "trade");
+    return isRecord(trade) ? GALAXY_TRADE_BUY_RESOURCES.some((resourceId, index) => {
+      let routes = count(trade[`f${index}`]);
+      return routes !== void 0 && routes > 0 && resourceIsGalaxyResource(usefulResources, resourceId);
+    }) : !1;
+  }
+  function resourceIsGalaxyResource(usefulResources, resourceId) {
+    return resourceId in usefulResources && usefulResources[resourceId] === !0;
+  }
+  function readAuxiliaryShipPower(id, race) {
+    let banana = race.banana === !0, wish = race.wish === !0 && isRecord(race.wishStats) && readProperty(race.wishStats, "ship") === !0;
+    return (id === "armed_miner" ? banana ? 4 : 5 : id === "minelayer" ? banana ? 35 : 50 : banana ? 9 : 12) + (wish ? id === "armed_miner" ? banana ? 2 : 5 : id === "minelayer" ? banana ? 15 : 25 : banana ? 3 : 6 : 0);
+  }
+  function readGalaxyRegions(root, race, galaxy, settings, demand, piracy) {
+    if (race.chicken === !0 || race.ocular_power === !0 && isRecord(race.ocularPowerConfig) && readProperty(race.ocularPowerConfig, "f") === !0)
+      return;
+    let usefulResources = Object.fromEntries(
+      PIRACY_RESOURCES.map((resourceId) => [
+        resourceId,
+        resourceIsUseful(root, settings, demand, resourceId)
+      ])
+    ), protection = decideGalaxyPiracyProtection({
+      producers: {
+        bologniumShip: activeCount(galaxy, "bolognium_ship") > 0,
+        gorddonSymposium: activeCount(galaxy, "symposium") > 0,
+        alien1VitreloyPlant: activeCount(galaxy, "vitreloy_plant") > 0,
+        alien2ArmedMiner: activeCount(galaxy, "armed_miner") > 0,
+        alien2Scavenger: activeCount(galaxy, "scavenger") > 0,
+        chthonianExcavator: activeCount(galaxy, "excavator") > 0
+      },
+      usefulResources,
+      gorddonTradeTargetsUsefulResource: tradeTargetsUsefulResource(
+        root,
+        usefulResources
+      )
+    }), instinct = race.instinct === !0, armedMinerPower = readAuxiliaryShipPower("armed_miner", race), minelayerPower = readAuxiliaryShipPower("minelayer", race), raiderPower = readAuxiliaryShipPower("raider", race), multiplier = instinct ? 0.9 : 1;
+    return Object.freeze([
+      Object.freeze({
+        name: "gxy_stargate",
+        piracy: 0.1 * piracy * multiplier,
+        armada: activeCount(galaxy, "defense_platform") * 20,
+        useful: protection.gxy_stargate,
+        priority: settingNumber7(
+          settings,
+          "fleet_pr_gxy_stargate",
+          DEFAULT_PRIORITIES.gxy_stargate ?? 0
+        )
+      }),
+      Object.freeze({
+        name: "gxy_gateway",
+        piracy: 0.1 * piracy * multiplier,
+        armada: activeCount(galaxy, "starbase") * 25,
+        useful: protection.gxy_gateway,
+        priority: settingNumber7(
+          settings,
+          "fleet_pr_gxy_gateway",
+          DEFAULT_PRIORITIES.gxy_gateway ?? 0
+        )
+      }),
+      Object.freeze({
+        name: "gxy_gorddon",
+        piracy: instinct ? 720 : 800,
+        armada: 0,
+        useful: protection.gxy_gorddon,
+        priority: settingNumber7(
+          settings,
+          "fleet_pr_gxy_gorddon",
+          DEFAULT_PRIORITIES.gxy_gorddon ?? 0
+        )
+      }),
+      Object.freeze({
+        name: "gxy_alien1",
+        piracy: instinct ? 900 : 1e3,
+        armada: 0,
+        useful: protection.gxy_alien1,
+        priority: settingNumber7(
+          settings,
+          "fleet_pr_gxy_alien1",
+          DEFAULT_PRIORITIES.gxy_alien1 ?? 0
+        )
+      }),
+      Object.freeze({
+        name: "gxy_alien2",
+        piracy: instinct ? 2250 : 2500,
+        armada: activeCount(galaxy, "foothold") * 50 + activeCount(galaxy, "armed_miner") * armedMinerPower,
+        useful: protection.gxy_alien2,
+        priority: settingNumber7(
+          settings,
+          "fleet_pr_gxy_alien2",
+          DEFAULT_PRIORITIES.gxy_alien2 ?? 0
+        )
+      }),
+      Object.freeze({
+        name: "gxy_chthonian",
+        piracy: instinct ? 7e3 : 7500,
+        armada: activeCount(galaxy, "minelayer") * minelayerPower + activeCount(galaxy, "raider") * raiderPower,
+        useful: protection.gxy_chthonian,
+        priority: settingNumber7(
+          settings,
+          "fleet_pr_gxy_chthonian",
+          DEFAULT_PRIORITIES.gxy_chthonian ?? 0
+        )
+      })
+    ]);
   }
   function readShipPower(name, race) {
     let banana = race.banana === !0, wish = race.wish === !0 && isRecord(race.wishStats) && readProperty(race.wishStats, "ship") === !0, base = {
@@ -9845,12 +10008,12 @@
       totals: Object.freeze(totals)
     });
   }
-  function readInput4(root, settingsValue, controls) {
+  function readInput4(root, settingsValue, controls, readDemand) {
     let race = readProperty(root, "race"), tech = readProperty(root, "tech"), galaxy = readProperty(root, "galaxy"), settings = isRecord(settingsValue) ? settingsValue : {};
     if (!isRecord(race) || !isRecord(tech) || !isRecord(galaxy) || race.truepath === !0)
       return;
     let piracy = finite8(tech.piracy), defense = readDefense(root), fleet = controls.resolve("fleet");
-    if (piracy === void 0 || piracy <= 0 || defense === void 0 || fleet === void 0)
+    if (piracy === void 0 || piracy <= 0 || defense === void 0 || fleet === void 0 || !fleet.methods.includes("add") || !fleet.methods.includes("sub"))
       return;
     let ships = [];
     for (let name of GALAXY_SHIP_NAMES) {
@@ -9865,16 +10028,30 @@
         })
       );
     }
-    let chthonian = controls.resolve("galaxy-chthonian_mission"), alien2 = controls.resolve("galaxy-alien2_mission"), chthonianLossMode = typeof settings.fleetChthonianLoses == "string" ? settings.fleetChthonianLoses : "ignore", knowledgeMaximum = finite8(
+    let chthonian = controls.resolve("galaxy-chthonian_mission"), alien2 = controls.resolve("galaxy-alien2_mission"), regions = readGalaxyRegions(
+      root,
+      race,
+      galaxy,
+      settings,
+      readDemand().isDemanded,
+      piracy
+    );
+    if (regions === void 0) return;
+    let chthonianLossMode = typeof settings.fleetChthonianLoses == "string" ? settings.fleetChthonianLoses : "ignore", knowledgeMaximum = finite8(
       readProperty(
         readProperty(readProperty(root, "resource"), "Knowledge"),
         "max"
       )
-    ) ?? 0, input = Object.freeze({
+    ) ?? 0, galaxyAssaultPending = chthonian !== void 0 && chthonianLossMode !== "ignore" || alien2 !== void 0, regionInputs = regions.map(
+      (region, index) => Object.freeze({
+        ...region,
+        assigned: defense.regions[index]?.assigned ?? emptyCounts()
+      })
+    ), input = Object.freeze({
       available: !0,
       ships: Object.freeze(ships),
       defenseRegions: defense.regions,
-      regions: Object.freeze([]),
+      regions: Object.freeze(regionInputs),
       chthonianUnlocked: chthonian !== void 0,
       chthonianLossMode,
       dreadedGuardActive: !1,
@@ -9883,22 +10060,25 @@
       alien2KnowledgeMaximum: knowledgeMaximum,
       alien2KnowledgeRequired: finite8(settings.fleetAlien2Knowledge) ?? 8e6,
       alien2LossMode: typeof settings.fleetAlien2Loses == "string" ? settings.fleetAlien2Loses : "normal",
-      crewReclaim: !1,
-      galaxyAssaultPending: !1,
-      maximumCoverage: !1,
-      gorddonSymposiumActive: !1
+      crewReclaim: settingBoolean4(settings, "fleetCrewReclaim", !0),
+      galaxyAssaultPending,
+      maximumCoverage: settingBoolean4(settings, "fleetMaxCover", !0),
+      gorddonSymposiumActive: activeCount(galaxy, "symposium") > 0
     });
-    return planFleet(input)?.kind === "launch-galaxy-assault" ? Object.freeze({
-      input,
-      ...chthonian === void 0 ? {} : { chthonian },
-      ...alien2 === void 0 ? {} : { alien2 }
-    }) : void 0;
+    if (planFleet(input) !== null)
+      return Object.freeze({
+        input,
+        ...chthonian === void 0 ? {} : { chthonian },
+        ...alien2 === void 0 ? {} : { alien2 }
+      });
   }
   function sameDecision2(expected, actual) {
-    return expected.kind === actual.kind && expected.kind === "launch-galaxy-assault" && actual.kind === "launch-galaxy-assault" && expected.mission === actual.mission && expected.commands.length === actual.commands.length && expected.commands.every((command, index) => {
+    return expected.kind !== actual.kind || expected.commands.length !== actual.commands.length || !expected.commands.every((command, index) => {
       let candidate = actual.commands[index];
       return candidate !== void 0 && command.kind === candidate.kind && command.region === candidate.region && command.ship === candidate.ship && command.count === candidate.count;
-    });
+    }) ? !1 : expected.kind === "launch-galaxy-assault" ? actual.kind === "launch-galaxy-assault" && expected.mission === actual.mission : actual.kind !== "manage-galaxy-fleet" ? !1 : expected.neededShips === null ? actual.neededShips === null : actual.neededShips !== null && GALAXY_SHIP_NAMES.every(
+      (ship) => expected.neededShips?.[ship] === actual.neededShips?.[ship]
+    );
   }
   function createCapturedFleetAutomation(dependencies) {
     let session = null, reader = Object.freeze({
@@ -9907,7 +10087,8 @@
         let sample = readInput4(
           dependencies.rootState.readRoot(),
           dependencies.readSettings(),
-          dependencies.controls
+          dependencies.controls,
+          dependencies.readDemand
         );
         if (sample === void 0)
           return Object.freeze({
@@ -9950,19 +10131,19 @@
             "captured-fleet-source-changed",
             "galaxy fleet root changed"
           );
-        let expected = planFleet(active.input);
-        if (expected === null || !sameDecision2(expected, decision))
+        let expected = planFleet(active.input), current = readInput4(
+          active.root,
+          dependencies.readSettings(),
+          dependencies.controls,
+          dependencies.readDemand
+        ), currentDecision = current === void 0 ? null : planFleet(current.input);
+        if (expected === null || currentDecision === null || currentDecision === void 0 || !sameDecision2(expected, decision) || !sameDecision2(currentDecision, decision))
           return rejected(
             "captured-fleet-decision-invalid",
             "galaxy fleet decision changed"
           );
-        if (decision.kind !== "launch-galaxy-assault")
-          return rejected(
-            "captured-fleet-decision-invalid",
-            "galaxy fleet decision is not an assault"
-          );
-        let mission = decision.mission === "chthonian" ? active.chthonian : active.alien2;
-        if (mission === void 0)
+        let mission = decision.kind === "launch-galaxy-assault" ? decision.mission === "chthonian" ? active.chthonian : active.alien2 : void 0;
+        if (decision.kind === "launch-galaxy-assault" && mission === void 0)
           return stale(
             "captured-fleet-mission-missing",
             "galaxy assault mission is no longer captured"
@@ -9982,6 +10163,7 @@
               );
           }
         }
+        if (mission === void 0) return SUCCEEDED;
         let result = dependencies.controls.invoke(mission, "action");
         return result.ok ? SUCCEEDED : stale("captured-fleet-mission-stale", result.detail ?? result.reason);
       }
@@ -10072,7 +10254,7 @@
   function finite9(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
-  function settingNumber7(settings, key, fallback) {
+  function settingNumber8(settings, key, fallback) {
     if (!isRecord(settings)) return fallback;
     let value = settings[key];
     return value === void 0 ? fallback : finite9(value);
@@ -10114,7 +10296,7 @@
     productions: Object.freeze([])
   });
   function readQuarryInput(dependencies, root) {
-    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite9(readProperty(quarry, "asbestos")), count2 = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber7(
+    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite9(readProperty(quarry, "asbestos")), count2 = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber8(
       dependencies.readSettings(),
       "productionChrysotileWeight",
       2
@@ -10136,7 +10318,7 @@
     });
   }
   function readMineInput(dependencies, root) {
-    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite9(readProperty(mine, "ratio")), count2 = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber7(
+    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite9(readProperty(mine, "ratio")), count2 = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber8(
       dependencies.readSettings(),
       "productionAdamantiteWeight",
       1
@@ -10161,7 +10343,7 @@
     let settings = dependencies.readSettings(), demand = dependencies.readDemand(), productions = [];
     for (let spec of EXTRACTOR_SPECS) {
       if (spec.id === "rare" && roidTech < RARE_EXTRACTION_TECH_LEVEL) continue;
-      let currentRatio = finite9(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber7(settings, `productionExtWeight_${spec.id}`, 1);
+      let currentRatio = finite9(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber8(settings, `productionExtWeight_${spec.id}`, 1);
       if (currentRatio === void 0 || res1StorageRatio === void 0 || res2StorageRatio === void 0 || weight === void 0)
         return EMPTY_EXTRACTOR;
       productions.push(
@@ -11843,7 +12025,7 @@
     Polymer: 1,
     Nano: 4,
     Stanene: 4
-  }), DEFAULT_PRIORITIES = Object.freeze({
+  }), DEFAULT_PRIORITIES2 = Object.freeze({
     Lux: 2,
     Furs: 1,
     Alloy: 3,
@@ -11967,7 +12149,7 @@
       ), priority = readPrioritySetting(
         settings,
         `production_p_${spec.id}`,
-        DEFAULT_PRIORITIES[spec.id]
+        DEFAULT_PRIORITIES2[spec.id]
       );
       if (enabled === void 0 || weighting === void 0 || priority === void 0)
         return;
@@ -15468,7 +15650,8 @@
     }), fleet = createCapturedFleetAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => readStoredSettings(storage),
+      readDemand: () => readDemand()
     }), runCycle = () => {
       demandThisCycle = void 0;
       let settings = readStoredSettings(storage);
