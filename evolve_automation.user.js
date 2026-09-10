@@ -8869,6 +8869,17 @@
       actionId: "galaxy-chthonian_mission",
       completionTech: "chthonian",
       completionLevel: 2
+    }),
+    Object.freeze({
+      actionId: "interstellar-jump_ship",
+      completionTech: "stargate",
+      completionLevel: 2,
+      isBlackholeJumpShip: !0
+    }),
+    Object.freeze({
+      actionId: "interstellar-sirius_b",
+      completionTech: "ascension",
+      completionLevel: 4
     })
   ]);
   function readCapturedSpaceMissionDemand(root, settings, controls, costs) {
@@ -8888,7 +8899,7 @@
         isUnlocked: !0,
         autoBuildEnabled: !0,
         isComplete: !1,
-        isBlackholeJumpShip: !1,
+        isBlackholeJumpShip: "isBlackholeJumpShip" in mission && mission.isBlackholeJumpShip === !0,
         target: Object.freeze({
           isProject: !1,
           progress: null,

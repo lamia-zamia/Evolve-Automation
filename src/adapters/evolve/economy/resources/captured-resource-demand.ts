@@ -308,6 +308,17 @@ const CAPTURED_MISSIONS = Object.freeze([
     completionTech: "chthonian",
     completionLevel: 2,
   }),
+  Object.freeze({
+    actionId: "interstellar-jump_ship",
+    completionTech: "stargate",
+    completionLevel: 2,
+    isBlackholeJumpShip: true,
+  }),
+  Object.freeze({
+    actionId: "interstellar-sirius_b",
+    completionTech: "ascension",
+    completionLevel: 4,
+  }),
 ]);
 
 /** DeadSpace creates each mission control only after its own requirements pass. */
@@ -346,7 +357,9 @@ function readCapturedSpaceMissionDemand(
       isUnlocked: true,
       autoBuildEnabled: true,
       isComplete: false,
-      isBlackholeJumpShip: false,
+      isBlackholeJumpShip:
+        "isBlackholeJumpShip" in mission &&
+        mission.isBlackholeJumpShip === true,
       target: Object.freeze({
         isProject: false,
         progress: null,

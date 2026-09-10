@@ -374,6 +374,69 @@ for (const [missionId, completionTech, completionLevel] of [
   );
 }
 
+// Grant actions that are not named *_mission still participate in the legacy mission list. The
+// Jump Ship keeps the whitehole-specific demand exception marker; Sirius-B is ordinary demand.
+for (const [missionId, completionTech, completionLevel] of [
+  ["interstellar-sirius_b", "ascension", 4],
+]) {
+  const sample = spaceMissionDemand({
+    space: 0,
+    tech: { [completionTech]: 0 },
+    missionId,
+    resourceId: "Knowledge",
+    cost: { Knowledge: 1200 },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Knowledge"), 100);
+  assert.equal(
+    spaceMissionDemand({
+      space: 0,
+      tech: { [completionTech]: completionLevel },
+      missionId,
+      resourceId: "Knowledge",
+      cost: { Knowledge: 1200 },
+    })
+      .sample()
+      .requestedQuantity("Knowledge"),
+    0,
+  );
+}
+
+{
+  const jumpRoot = {
+    tech: { stargate: 0 },
+    resource: { Money: { amount: 0, max: 100, stackable: true } },
+  };
+  const readJumpDemand = (settings) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => jumpRoot },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      controls: {
+        resolve: (elementId) =>
+          elementId === "interstellar-jump_ship"
+            ? { elementId, generation: 1, methods: ["setData"] }
+            : undefined,
+        invoke: () => ({ ok: true, value: undefined }),
+        capturedElementIds: () => ["interstellar-jump_ship"],
+      },
+      costs: { readCost: () => ({ Money: 2000 }) },
+      readSettings: () => settings,
+    }).sample();
+  assert.equal(
+    readJumpDemand({ missionRequest: true }).requestedQuantity("Money"),
+    100,
+  );
+  assert.equal(
+    readJumpDemand({
+      missionRequest: true,
+      prestigeBioseedConstruct: true,
+      prestigeType: "whitehole",
+    }).requestedQuantity("Money"),
+    0,
+  );
+}
+
 // A root without resources yet is not a demand claim.
 {
   const sample = createCapturedResourceDemand({
