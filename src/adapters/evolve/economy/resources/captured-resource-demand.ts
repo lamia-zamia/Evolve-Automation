@@ -40,6 +40,7 @@ import type { ConstructionObservations } from "../../../../ports/game-constructi
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import type { CapturedCraftCosts } from "../production/captured-craft-costs.ts";
+import type { CapturedFleetDemand } from "../../combat/captured-fleet-demand.ts";
 import { readCapturedFactoryCapacity } from "../production/captured-factory-capacity.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
@@ -60,6 +61,8 @@ export interface CapturedResourceDemandDependencies {
   readonly readSettings: () => unknown;
   /** The game's own per-volume Foundry recipe reader, when the control surface is available. */
   readonly craftCosts?: CapturedCraftCosts;
+  /** The rendered True Path shipyard cost, when the current blueprint is fully captured. */
+  readonly fleet?: CapturedFleetDemand;
 }
 
 export interface CapturedDemandSample {
@@ -776,6 +779,7 @@ export function createCapturedResourceDemand(
       const offered = dependencies.readOfferedTechs?.();
       const settingsValue = dependencies.readSettings();
       const settings = isRecord(settingsValue) ? settingsValue : {};
+      const fleet = dependencies.fleet?.read();
       const missions = readCapturedSpaceMissionDemand(
         root,
         settings,
@@ -800,13 +804,21 @@ export function createCapturedResourceDemand(
             production.weighting > 0,
         ) ?? false;
       const hasCrafterDemand = (crafterDemand?.crafters.length ?? 0) > 0;
+      const hasFleetDemand =
+        settingBoolean(settings, "autoFleet", false) &&
+        settingString(settings, "prioritizeOuterFleet", "ignore").includes(
+          "req",
+        ) &&
+        fleet?.nextShipAffordable === true &&
+        fleet.nextShipCost.length > 0;
       if (
         queued.length === 0 &&
         saving === null &&
         (offered === undefined || offered.length === 0) &&
         !hasFactoryDemand &&
         !hasCrafterDemand &&
-        missions.length === 0
+        missions.length === 0 &&
+        !hasFleetDemand
       ) {
         return EMPTY_DEMAND_SAMPLE;
       }
@@ -830,10 +842,12 @@ export function createCapturedResourceDemand(
         missions,
         unlockedTechs: toOfferedTechs(resources, offered),
         spyPurchaseMoney: 0,
-        fleet: Object.freeze({
-          nextShipAffordable: false,
-          nextShipCost: Object.freeze([]),
-        }),
+        fleet:
+          fleet ??
+          Object.freeze({
+            nextShipAffordable: false,
+            nextShipCost: Object.freeze([]),
+          }),
         availableCrafters: crafterDemand?.availableCrafters ?? 0,
         crafters: crafterDemand?.crafters ?? Object.freeze([]),
         vitreloyPlant: Object.freeze({

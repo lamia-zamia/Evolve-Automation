@@ -9325,7 +9325,7 @@
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
         if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
-        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, missions = readCapturedSpaceMissionDemand(
+        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, fleet = dependencies.fleet?.read(), missions = readCapturedSpaceMissionDemand(
           root,
           settings,
           dependencies.controls,
@@ -9337,8 +9337,10 @@
           dependencies.craftCosts
         ) : void 0, factoryCatalog = readCapturedFactoryDemand(root, settings), hasFactoryDemand = factoryCatalog?.productions.some(
           (production) => production.unlocked && production.enabled && production.weighting > 0
-        ) ?? !1, hasCrafterDemand = (crafterDemand?.crafters.length ?? 0) > 0;
-        if (queued.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0)
+        ) ?? !1, hasCrafterDemand = (crafterDemand?.crafters.length ?? 0) > 0, hasFleetDemand = settingBoolean3(settings, "autoFleet", !1) && settingString(settings, "prioritizeOuterFleet", "ignore").includes(
+          "req"
+        ) && fleet?.nextShipAffordable === !0 && fleet.nextShipCost.length > 0;
+        if (queued.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand)
           return EMPTY_DEMAND_SAMPLE;
         let savingCosts = saving === null ? null : toCosts(saving.cost), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
@@ -9355,7 +9357,7 @@
           missions,
           unlockedTechs: toOfferedTechs(resources, offered),
           spyPurchaseMoney: 0,
-          fleet: Object.freeze({
+          fleet: fleet ?? Object.freeze({
             nextShipAffordable: !1,
             nextShipCost: Object.freeze([])
           }),
@@ -9456,6 +9458,57 @@
             return amount !== void 0 && wanted > amount;
           }
         });
+      }
+    });
+  }
+
+  // src/adapters/evolve/combat/captured-fleet-demand.ts
+  function fleetDocument(value) {
+    return isRecord(value) && typeof value.querySelector == "function" ? value : void 0;
+  }
+  function readCost3(element) {
+    let names = /* @__PURE__ */ new Set(), amounts = /* @__PURE__ */ new Map(), collect2 = (candidate) => {
+      for (let attribute of Array.from(candidate.attributes ?? []))
+        if (attribute.name === "class")
+          for (let token of attribute.value.split(/\s+/))
+            token.startsWith("res-") && token.length > 4 && names.add(token.slice(4));
+        else attribute.name.startsWith("data-") && amounts.set(attribute.name.slice(5), attribute.value);
+    };
+    collect2(element);
+    for (let descendant of Array.from(element.querySelectorAll?.("*") ?? []))
+      collect2(descendant);
+    let cost = {};
+    for (let name of names) {
+      let amount = Number(amounts.get(name.toLowerCase()));
+      Number.isFinite(amount) && amount > 0 && (cost[name] = amount);
+    }
+    return Object.freeze(cost);
+  }
+  function readResourceMaximums(root, cost) {
+    let resources = readProperty(root, "resource");
+    return isRecord(resources) ? Object.entries(cost).every(([resourceId, amount]) => {
+      let maximum = readProperty(readProperty(resources, resourceId), "max");
+      return typeof maximum == "number" && Number.isFinite(maximum) && maximum >= amount;
+    }) : !1;
+  }
+  function createCapturedFleetDemand(dependencies) {
+    return Object.freeze({
+      read() {
+        let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), race = readProperty(root, "race"), shipyard = readProperty(readProperty(root, "space"), "shipyard"), blueprint = readProperty(shipyard, "blueprint");
+        if (!isRecord(tech) || !isRecord(race) || !isRecord(shipyard) || !isRecord(blueprint) || !(typeof tech.syndicate == "number" && tech.syndicate > 0) || race.truepath !== !0 || dependencies.controls.resolve("shipPlans") === void 0)
+          return;
+        let costsElement = fleetDocument(dependencies.getDocument())?.querySelector("#shipYardCosts");
+        if (costsElement == null) return;
+        let cost = readCost3(costsElement);
+        if (Object.keys(cost).length !== 0)
+          return Object.freeze({
+            nextShipAffordable: readResourceMaximums(root, cost),
+            nextShipCost: Object.freeze(
+              Object.entries(cost).map(
+                ([resourceId, amount]) => Object.freeze({ resourceId, amount })
+              )
+            )
+          });
       }
     });
   }
@@ -14207,7 +14260,7 @@
         } else name.startsWith(DATA_PREFIX) && markup.amounts.set(name.slice(DATA_PREFIX.length), value);
       }
   }
-  function readCost3(element) {
+  function readCost4(element) {
     let markup = { names: /* @__PURE__ */ new Set(), amounts: /* @__PURE__ */ new Map() };
     collect(element, markup);
     let descendants = element.querySelectorAll?.("*");
@@ -14234,7 +14287,7 @@
         for (let index = 0; index < elements.length; index++) {
           let element = elements[index], id = element?.id;
           element === void 0 || typeof id != "string" || id.length === 0 || actions.push(
-            Object.freeze({ id, cost: Object.freeze(readCost3(element)) })
+            Object.freeze({ id, cost: Object.freeze(readCost4(element)) })
           );
         }
         return Object.freeze(actions);
@@ -14502,7 +14555,12 @@
       readOfferedTechs: progression.readOfferedTechs,
       reservations: queueReservations,
       readSettings: () => readStoredSettings(storage),
-      craftCosts: costs
+      craftCosts: costs,
+      fleet: createCapturedFleetDemand({
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls,
+        getDocument: () => document
+      })
     }), demandThisCycle;
     readDemand = () => demandThisCycle ??= demand.sample();
     let storagePorts = createCapturedStoragePorts({
@@ -14911,7 +14969,7 @@
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoGovernment") && (ensureCivicControls(), runCapturedGovernmentAutomation(government)), isEnabled(settings, "autoHell") && (ensureCivicControls(), hell.run()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
+          isEnabled(settings, "autoFleet") && ensureCivicControls(), isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoGovernment") && (ensureCivicControls(), runCapturedGovernmentAutomation(government)), isEnabled(settings, "autoHell") && (ensureCivicControls(), hell.run()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
             QUARRY_CONTROL,
             !!readProperty(
               readProperty(pageCapture2.rootState.readRoot(), "race"),

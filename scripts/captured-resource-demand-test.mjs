@@ -27,6 +27,29 @@ function withTargets(targets, settings = {}, saving = null, craftCosts) {
   });
 }
 
+// Fleet demand uses the shipyard's rendered costs and only participates when the two script
+// settings ask the prioritizer to preserve the current blueprint.
+{
+  const sample = createCapturedResourceDemand({
+    rootState: { readRoot: () => root },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({ autoFleet: true, prioritizeOuterFleet: "req" }),
+    fleet: {
+      read: () => ({
+        nextShipAffordable: true,
+        nextShipCost: [
+          { resourceId: "Stone", amount: 250 },
+          { resourceId: "Lumber", amount: 80 },
+        ],
+      }),
+    },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Stone"), 250);
+  assert.equal(sample.requestedQuantity("Lumber"), 80);
+}
+
 // A queued building's cost is what the queue is accumulating.
 {
   const sample = withTargets([

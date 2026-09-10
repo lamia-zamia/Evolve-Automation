@@ -40,6 +40,7 @@ import {
   type CapturedDemandSample,
 } from "../adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
+import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
 import {
@@ -329,6 +330,11 @@ export function startCapturedRuntime({
     reservations: queueReservations,
     readSettings: () => readStoredSettings(storage),
     craftCosts: costs,
+    fleet: createCapturedFleetDemand({
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+      getDocument: () => document,
+    }),
   });
   let demandThisCycle: CapturedDemandSample | undefined;
   readDemand = () => (demandThisCycle ??= demand.sample());
@@ -1011,6 +1017,7 @@ export function startCapturedRuntime({
       return;
     }
     try {
+      if (isEnabled(settings, "autoFleet")) ensureCivicControls();
       if (isEnabled(settings, "autoMarket")) {
         ensureMarketControls();
         marketAutomation.run();
