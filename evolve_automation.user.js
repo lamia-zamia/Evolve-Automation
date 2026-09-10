@@ -5124,25 +5124,101 @@
       minimumMinions: finiteHellValue(settings.warlordMinimumMinions) ?? 0
     });
   }
+  function readHellInput(root, settingsValue) {
+    if (!isRecord(root)) return emptyHellInput();
+    let race = readProperty(root, "race"), portal = readProperty(root, "portal");
+    if (!isRecord(race) || !isRecord(portal)) return emptyHellInput();
+    if (race.warlord === !0) return readWarlordInput(root, settingsValue);
+    let garrison = readProperty(readProperty(root, "civic"), "garrison"), fortress = readProperty(portal, "fortress");
+    if (!isRecord(garrison) || !isRecord(fortress)) return emptyHellInput();
+    let workers = finiteHellValue(readProperty(garrison, "workers")), maximumWorkers = finiteHellValue(readProperty(garrison, "max")), crew = finiteHellValue(readProperty(garrison, "crew")), hellSoldiers = finiteHellValue(readProperty(fortress, "garrison")), hellPatrols = finiteHellValue(readProperty(fortress, "patrols")), hellPatrolSize = finiteHellValue(readProperty(fortress, "patrol_size"));
+    if (workers === void 0 || maximumWorkers === void 0 || crew === void 0 || hellSoldiers === void 0 || hellPatrols === void 0 || hellPatrolSize === void 0)
+      return emptyHellInput();
+    let space = readProperty(root, "space"), fob = readProperty(space, "fob"), fobTroops = finiteHellValue(readProperty(fob, "troops")) ?? 0, settings = isRecord(settingsValue) ? settingsValue : {}, homeGarrison = finiteHellValue(settings.hellHomeGarrison) ?? 10, minimumHellSoldiers = finiteHellValue(settings.hellMinSoldiers) ?? 20, minimumSoldierPercent = finiteHellValue(settings.hellMinSoldiersPercent) ?? 90, tech = readProperty(root, "tech"), elysium = finiteHellValue(readProperty(tech, "elysium")) ?? 0;
+    return Object.freeze({
+      ...emptyHellInput(),
+      available: !0,
+      maximumSoldiers: maximumWorkers - crew,
+      currentSoldiers: workers - crew,
+      currentCityGarrison: workers - crew - hellSoldiers - fobTroops,
+      maximumCityGarrison: maximumWorkers - crew - hellSoldiers,
+      hellSoldiers,
+      hellPatrols,
+      hellPatrolSize,
+      // DeadSpace initializes `assigned` lazily; the compatibility bridge treats it as zero.
+      hellAssigned: finiteHellValue(readProperty(fortress, "assigned")) ?? 0,
+      currentHellGarrison: hellSoldiers - hellPatrols * hellPatrolSize,
+      homeGarrison,
+      minimumHellSoldiers,
+      minimumSoldierPercent,
+      elysiumUnlocked: elysium >= 3,
+      handlePatrolSize: settings.hellHandlePatrolSize !== !1
+    });
+  }
+  var HELL_ADJUSTMENT_METHODS = Object.freeze({
+    "remove-patrol-size": "patSizeDec",
+    "remove-patrol": "patDec",
+    "remove-garrison": "aLast",
+    "add-garrison": "aNext",
+    "add-patrol-size": "patSizeInc",
+    "add-patrol": "patInc"
+  });
+  function applyHellManagement(decision, control, controls) {
+    if (control === void 0)
+      return stale(
+        "hell-controls-unavailable",
+        "the captured Hell fortress control is unavailable"
+      );
+    for (let command of decision.commands) {
+      let method = HELL_ADJUSTMENT_METHODS[command.kind];
+      if (!control.methods.includes(method))
+        return stale(
+          "hell-controls-unavailable",
+          `the captured Hell fortress control lacks ${method}`
+        );
+      if (!Number.isSafeInteger(command.count) || command.count < 0)
+        return stale(
+          "hell-command-invalid",
+          `invalid Hell adjustment count: ${command.count}`
+        );
+      for (let i = 0; i < command.count; i += 1) {
+        let result = controls.invoke(control, method);
+        if (!result.ok)
+          return stale(
+            "hell-controls-unavailable",
+            `Hell adjustment failed: ${result.reason}`
+          );
+      }
+    }
+    return SUCCEEDED;
+  }
   function createCapturedHellAutomation(dependencies) {
     let session = null;
     return Object.freeze({
       run() {
-        let root = dependencies.rootState.readRoot(), input = readWarlordInput(root, dependencies.readSettings());
+        let root = dependencies.rootState.readRoot(), input = readHellInput(root, dependencies.readSettings());
         session = Object.freeze({ root, input });
         let decision = prepareHellCycle(input);
         if (decision === null) return SUCCEEDED;
-        if (decision.kind !== "attack-enemy-fortress") return SUCCEEDED;
         if (dependencies.rootState.readRoot() !== session.root)
           return stale("hell-root-changed", "game root changed after sampling");
-        if (prepareHellCycle(
-          readWarlordInput(session.root, dependencies.readSettings())
-        )?.kind !== "attack-enemy-fortress")
+        let current = prepareHellCycle(
+          readHellInput(session.root, dependencies.readSettings())
+        );
+        if (current === null || JSON.stringify(current) !== JSON.stringify(decision))
           return stale(
-            "hell-attack-no-longer-valid",
-            "the Warlord fortress attack is no longer valid"
+            "hell-plan-no-longer-valid",
+            "the captured Hell plan is no longer valid"
           );
         let control = dependencies.controls.resolve(FORT_CONTROL);
+        if (decision.kind === "manage-hell")
+          return applyHellManagement(decision, control, dependencies.controls);
+        if (decision.kind === "calculate-hell-targets")
+          return stale(
+            "hell-calculation-unavailable",
+            "the captured Hell soldier-rating query is unavailable"
+          );
+        if (decision.kind !== "attack-enemy-fortress") return SUCCEEDED;
         if (control === void 0 || !control.methods.includes("attack"))
           return stale(
             "hell-controls-unavailable",

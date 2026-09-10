@@ -1,4 +1,4 @@
-/** Captured Warlord Hell-fortress attacks for the independent runtime. */
+/** Captured Hell-fortress management for the independent runtime. */
 
 import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import {
@@ -99,6 +99,114 @@ function readWarlordInput(
   });
 }
 
+function readHellInput(root: unknown, settingsValue: unknown): HellCycleInput {
+  if (!isRecord(root)) return emptyHellInput();
+  const race = readProperty(root, "race");
+  const portal = readProperty(root, "portal");
+  if (!isRecord(race) || !isRecord(portal)) return emptyHellInput();
+  if (race["warlord"] === true) return readWarlordInput(root, settingsValue);
+
+  const garrison = readProperty(readProperty(root, "civic"), "garrison");
+  const fortress = readProperty(portal, "fortress");
+  if (!isRecord(garrison) || !isRecord(fortress)) return emptyHellInput();
+  const workers = finiteHellValue(readProperty(garrison, "workers"));
+  const maximumWorkers = finiteHellValue(readProperty(garrison, "max"));
+  const crew = finiteHellValue(readProperty(garrison, "crew"));
+  const hellSoldiers = finiteHellValue(readProperty(fortress, "garrison"));
+  const hellPatrols = finiteHellValue(readProperty(fortress, "patrols"));
+  const hellPatrolSize = finiteHellValue(readProperty(fortress, "patrol_size"));
+  if (
+    workers === undefined ||
+    maximumWorkers === undefined ||
+    crew === undefined ||
+    hellSoldiers === undefined ||
+    hellPatrols === undefined ||
+    hellPatrolSize === undefined
+  ) {
+    return emptyHellInput();
+  }
+  const space = readProperty(root, "space");
+  const fob = readProperty(space, "fob");
+  const fobTroops = finiteHellValue(readProperty(fob, "troops")) ?? 0;
+  const settings = isRecord(settingsValue) ? settingsValue : {};
+  const homeGarrison = finiteHellValue(settings["hellHomeGarrison"]) ?? 10;
+  const minimumHellSoldiers =
+    finiteHellValue(settings["hellMinSoldiers"]) ?? 20;
+  const minimumSoldierPercent =
+    finiteHellValue(settings["hellMinSoldiersPercent"]) ?? 90;
+  const tech = readProperty(root, "tech");
+  const elysium = finiteHellValue(readProperty(tech, "elysium")) ?? 0;
+  return Object.freeze({
+    ...emptyHellInput(),
+    available: true,
+    maximumSoldiers: maximumWorkers - crew,
+    currentSoldiers: workers - crew,
+    currentCityGarrison: workers - crew - hellSoldiers - fobTroops,
+    maximumCityGarrison: maximumWorkers - crew - hellSoldiers,
+    hellSoldiers,
+    hellPatrols,
+    hellPatrolSize,
+    // DeadSpace initializes `assigned` lazily; the compatibility bridge treats it as zero.
+    hellAssigned: finiteHellValue(readProperty(fortress, "assigned")) ?? 0,
+    currentHellGarrison: hellSoldiers - hellPatrols * hellPatrolSize,
+    homeGarrison,
+    minimumHellSoldiers,
+    minimumSoldierPercent,
+    elysiumUnlocked: elysium >= 3,
+    handlePatrolSize: settings["hellHandlePatrolSize"] !== false,
+  });
+}
+
+const HELL_ADJUSTMENT_METHODS = Object.freeze({
+  "remove-patrol-size": "patSizeDec",
+  "remove-patrol": "patDec",
+  "remove-garrison": "aLast",
+  "add-garrison": "aNext",
+  "add-patrol-size": "patSizeInc",
+  "add-patrol": "patInc",
+} as const);
+
+function applyHellManagement(
+  decision: Extract<
+    ReturnType<typeof prepareHellCycle>,
+    { kind: "manage-hell" }
+  >,
+  control: ReturnType<GameControlRegistry["resolve"]>,
+  controls: GameControlRegistry,
+): CommandExecutionOutcome {
+  if (control === undefined) {
+    return stale(
+      "hell-controls-unavailable",
+      "the captured Hell fortress control is unavailable",
+    );
+  }
+  for (const command of decision.commands) {
+    const method = HELL_ADJUSTMENT_METHODS[command.kind];
+    if (!control.methods.includes(method)) {
+      return stale(
+        "hell-controls-unavailable",
+        `the captured Hell fortress control lacks ${method}`,
+      );
+    }
+    if (!Number.isSafeInteger(command.count) || command.count < 0) {
+      return stale(
+        "hell-command-invalid",
+        `invalid Hell adjustment count: ${command.count}`,
+      );
+    }
+    for (let i = 0; i < command.count; i += 1) {
+      const result = controls.invoke(control, method);
+      if (!result.ok) {
+        return stale(
+          "hell-controls-unavailable",
+          `Hell adjustment failed: ${result.reason}`,
+        );
+      }
+    }
+  }
+  return SUCCEEDED;
+}
+
 export interface CapturedHellAutomation {
   readonly run: () => CommandExecutionOutcome;
 }
@@ -113,25 +221,37 @@ export function createCapturedHellAutomation(dependencies: {
   return Object.freeze({
     run(): CommandExecutionOutcome {
       const root = dependencies.rootState.readRoot();
-      const input = readWarlordInput(root, dependencies.readSettings());
+      const input = readHellInput(root, dependencies.readSettings());
       session = Object.freeze({ root, input });
       const decision = prepareHellCycle(input);
       if (decision === null) return SUCCEEDED;
-      if (decision.kind !== "attack-enemy-fortress") return SUCCEEDED;
 
       if (dependencies.rootState.readRoot() !== session.root) {
         return stale("hell-root-changed", "game root changed after sampling");
       }
       const current = prepareHellCycle(
-        readWarlordInput(session.root, dependencies.readSettings()),
+        readHellInput(session.root, dependencies.readSettings()),
       );
-      if (current?.kind !== "attack-enemy-fortress") {
+      if (
+        current === null ||
+        JSON.stringify(current) !== JSON.stringify(decision)
+      ) {
         return stale(
-          "hell-attack-no-longer-valid",
-          "the Warlord fortress attack is no longer valid",
+          "hell-plan-no-longer-valid",
+          "the captured Hell plan is no longer valid",
         );
       }
       const control = dependencies.controls.resolve(FORT_CONTROL);
+      if (decision.kind === "manage-hell") {
+        return applyHellManagement(decision, control, dependencies.controls);
+      }
+      if (decision.kind === "calculate-hell-targets") {
+        return stale(
+          "hell-calculation-unavailable",
+          "the captured Hell soldier-rating query is unavailable",
+        );
+      }
+      if (decision.kind !== "attack-enemy-fortress") return SUCCEEDED;
       if (control === undefined || !control.methods.includes("attack")) {
         return stale(
           "hell-controls-unavailable",
