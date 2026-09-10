@@ -35,19 +35,26 @@ function makeRoot(days) {
     resource: { Food: { amount: 10 } },
     race: { species: "human" },
     stats: { days },
+    tech: {},
+    city: {},
+    civic: {},
   };
 }
 
 // --- root shape ------------------------------------------------------------------------------
 
 assert.equal(isGameRootShape(makeRoot(1)), true);
+const initialRoot = makeRoot(0);
+delete initialRoot.settings;
+assert.equal(
+  isGameRootShape(initialRoot),
+  true,
+  "DeadSpace adds settings after the first fresh-game reactive call",
+);
 assert.equal(isGameRootShape({ settings: {}, resource: {}, race: {} }), false);
 assert.equal(isGameRootShape(null), false);
 assert.equal(isGameRootShape("global"), false);
-assert.equal(
-  isGameRootShape({ settings: 1, resource: {}, race: {}, stats: {} }),
-  false,
-);
+assert.equal(isGameRootShape({ ...makeRoot(1), tech: 1 }), false);
 
 // --- absent globals --------------------------------------------------------------------------
 

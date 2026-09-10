@@ -299,7 +299,7 @@
     return typeof value == "function" ? value : void 0;
   }
   function isGameRootShape(value) {
-    return isRecord(value) ? isRecord(readProperty(value, "settings")) && isRecord(readProperty(value, "resource")) && isRecord(readProperty(value, "race")) && isRecord(readProperty(value, "stats")) : !1;
+    return isRecord(value) ? isRecord(readProperty(value, "resource")) && isRecord(readProperty(value, "race")) && isRecord(readProperty(value, "stats")) && isRecord(readProperty(value, "tech")) && isRecord(readProperty(value, "city")) && isRecord(readProperty(value, "civic")) : !1;
   }
   function readMarker(value) {
     let marker = readProperty(value, CAPTURE_MARKER);

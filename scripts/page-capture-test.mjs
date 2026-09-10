@@ -58,6 +58,9 @@ const root = {
   resource: { Food: { amount: 1 } },
   race: { species: "human" },
   stats: { days: 14 },
+  tech: {},
+  city: {},
+  civic: {},
 };
 vue.reactive(root);
 assert.equal(

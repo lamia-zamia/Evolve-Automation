@@ -110,14 +110,20 @@ function asFunction(value: unknown): AnyFunction | undefined {
   return typeof value === "function" ? (value as AnyFunction) : undefined;
 }
 
-/** The game root carries all four of these from its first save load onward. */
+/**
+ * DeadSpace adds `settings` after its first `makeReactive(global)` call on a new game. The root's
+ * state collections already exist at that boundary; requiring settings would miss the only fresh
+ * root capture until an unrelated later reactivity restore.
+ */
 export function isGameRootShape(value: unknown): boolean {
   if (!isRecord(value)) return false;
   return (
-    isRecord(readProperty(value, "settings")) &&
     isRecord(readProperty(value, "resource")) &&
     isRecord(readProperty(value, "race")) &&
-    isRecord(readProperty(value, "stats"))
+    isRecord(readProperty(value, "stats")) &&
+    isRecord(readProperty(value, "tech")) &&
+    isRecord(readProperty(value, "city")) &&
+    isRecord(readProperty(value, "civic"))
   );
 }
 
