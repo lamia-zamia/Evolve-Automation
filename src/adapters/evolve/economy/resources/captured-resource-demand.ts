@@ -187,7 +187,7 @@ function toTargets(
   );
 }
 
-const CAPTURED_SPACE_MISSIONS = Object.freeze([
+const CAPTURED_MISSIONS = Object.freeze([
   Object.freeze({
     actionId: "space-moon_mission",
     completionTech: "space",
@@ -228,9 +228,34 @@ const CAPTURED_SPACE_MISSIONS = Object.freeze([
     completionTech: "dwarf",
     completionLevel: 1,
   }),
+  Object.freeze({
+    actionId: "portal-pit_mission",
+    completionTech: "hell_pit",
+    completionLevel: 2,
+  }),
+  Object.freeze({
+    actionId: "portal-ruins_mission",
+    completionTech: "hell_ruins",
+    completionLevel: 2,
+  }),
+  Object.freeze({
+    actionId: "portal-gate_mission",
+    completionTech: "hell_gate",
+    completionLevel: 1,
+  }),
+  Object.freeze({
+    actionId: "portal-lake_mission",
+    completionTech: "hell_lake",
+    completionLevel: 2,
+  }),
+  Object.freeze({
+    actionId: "portal-spire_mission",
+    completionTech: "hell_spire",
+    completionLevel: 2,
+  }),
 ]);
 
-/** DeadSpace creates each mission control only after its own space requirements pass. */
+/** DeadSpace creates each mission control only after its own requirements pass. */
 function readCapturedSpaceMissionDemand(
   root: unknown,
   settings: Record<PropertyKey, unknown>,
@@ -247,7 +272,7 @@ function readCapturedSpaceMissionDemand(
   const tech = readProperty(root, "tech");
   if (!isRecord(tech)) return Object.freeze([]);
   const missions: DemandMission[] = [];
-  for (const mission of CAPTURED_SPACE_MISSIONS) {
+  for (const mission of CAPTURED_MISSIONS) {
     const actionId = mission.actionId;
     const completion = finite(readProperty(tech, mission.completionTech));
     if (

@@ -8749,7 +8749,7 @@
       )
     );
   }
-  var CAPTURED_SPACE_MISSIONS = Object.freeze([
+  var CAPTURED_MISSIONS = Object.freeze([
     Object.freeze({
       actionId: "space-moon_mission",
       completionTech: "space",
@@ -8789,6 +8789,31 @@
       actionId: "space-dwarf_mission",
       completionTech: "dwarf",
       completionLevel: 1
+    }),
+    Object.freeze({
+      actionId: "portal-pit_mission",
+      completionTech: "hell_pit",
+      completionLevel: 2
+    }),
+    Object.freeze({
+      actionId: "portal-ruins_mission",
+      completionTech: "hell_ruins",
+      completionLevel: 2
+    }),
+    Object.freeze({
+      actionId: "portal-gate_mission",
+      completionTech: "hell_gate",
+      completionLevel: 1
+    }),
+    Object.freeze({
+      actionId: "portal-lake_mission",
+      completionTech: "hell_lake",
+      completionLevel: 2
+    }),
+    Object.freeze({
+      actionId: "portal-spire_mission",
+      completionTech: "hell_spire",
+      completionLevel: 2
     })
   ]);
   function readCapturedSpaceMissionDemand(root, settings, controls, costs) {
@@ -8797,7 +8822,7 @@
     let tech = readProperty(root, "tech");
     if (!isRecord(tech)) return Object.freeze([]);
     let missions = [];
-    for (let mission of CAPTURED_SPACE_MISSIONS) {
+    for (let mission of CAPTURED_MISSIONS) {
       let actionId = mission.actionId, completion = finite7(readProperty(tech, mission.completionTech));
       if (controls.resolve(actionId) === void 0 || settingBoolean3(settings, `bat${actionId}`, !0) === !1 || completion === void 0 || completion >= mission.completionLevel)
         continue;

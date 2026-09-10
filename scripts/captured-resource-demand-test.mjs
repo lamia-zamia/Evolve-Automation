@@ -278,6 +278,39 @@ for (const [missionId, completionTech, resourceId] of [
   );
 }
 
+// Portal missions use their own Hell technology counters and remain demandable through the same
+// captured action/cost surface as space missions.
+for (const [missionId, completionTech] of [
+  ["portal-pit_mission", "hell_pit"],
+  ["portal-ruins_mission", "hell_ruins"],
+  ["portal-gate_mission", "hell_gate"],
+  ["portal-lake_mission", "hell_lake"],
+  ["portal-spire_mission", "hell_spire"],
+]) {
+  const sample = spaceMissionDemand({
+    space: 0,
+    tech: { [completionTech]: 0 },
+    missionId,
+    resourceId: "Money",
+    cost: { Money: 500 },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Money"), 100);
+  assert.equal(sample.isDemanded("Money"), true);
+}
+
+assert.equal(
+  spaceMissionDemand({
+    space: 0,
+    tech: { hell_gate: 1 },
+    missionId: "portal-gate_mission",
+    resourceId: "Money",
+    cost: { Money: 500 },
+  })
+    .sample()
+    .requestedQuantity("Money"),
+  0,
+);
+
 // A root without resources yet is not a demand claim.
 {
   const sample = createCapturedResourceDemand({
