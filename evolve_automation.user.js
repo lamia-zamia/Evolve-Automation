@@ -4765,6 +4765,143 @@
     });
   }
 
+  // src/domain/civic/government.ts
+  function planGovernment(input) {
+    let government = null;
+    input.isEnabled && !input.guardAnarchist && (input.tradeFederationReady ? government = "federation" : input.govSpace !== "none" && input.haveQFactory && input.govSpaceUnlocked ? government = input.govSpace : input.govFinal !== "none" && input.govFinalUnlocked ? government = input.govFinal : input.govInterim !== "none" && input.govInterimUnlocked && (government = input.govInterim));
+    let appointCandidate = null, appointCandidateBackground = null;
+    if (input.haveGovernorTech && input.govGovernor !== "none" && input.currentGovernor === "none") {
+      for (let i = 0; i < input.candidateBackgrounds.length; i++)
+        if (input.candidateBackgrounds[i] === input.govGovernor) {
+          appointCandidate = i, appointCandidateBackground = input.govGovernor;
+          break;
+        }
+    }
+    return Object.freeze({
+      government,
+      appointCandidate,
+      appointCandidateBackground
+    });
+  }
+
+  // src/adapters/evolve/civic/captured-government.ts
+  var CANDIDATES_CONTROL = "candidates";
+  function finiteGovernor(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readCandidateBackgrounds(root) {
+    let candidates = readProperty(
+      readProperty(readProperty(root, "race"), "governor"),
+      "candidates"
+    );
+    return Array.isArray(candidates) ? Object.freeze(
+      candidates.map((candidate) => {
+        let background = readProperty(candidate, "bg");
+        return typeof background == "string" ? background : "";
+      })
+    ) : Object.freeze([]);
+  }
+  function readCurrentGovernor(root) {
+    let background = readProperty(
+      readProperty(readProperty(readProperty(root, "race"), "governor"), "g"),
+      "bg"
+    );
+    return typeof background == "string" ? background : "none";
+  }
+  function readGovernmentInput(root, settingsValue) {
+    let settings = isRecord(settingsValue) ? settingsValue : {}, technology = finiteGovernor(
+      readProperty(readProperty(root, "tech"), "governor")
+    ), governorTarget = settings.govGovernor, input = {
+      isEnabled: settings.autoGovernment === !0,
+      guardAnarchist: !1,
+      haveQFactory: !1,
+      haveGovernorTech: technology !== void 0 && technology >= 1,
+      currentGovernor: readCurrentGovernor(root),
+      govSpace: "none",
+      govFinal: "none",
+      govInterim: "none",
+      govGovernor: typeof governorTarget == "string" ? governorTarget : "none",
+      govSpaceUnlocked: !1,
+      govFinalUnlocked: !1,
+      govInterimUnlocked: !1,
+      tradeFederationReady: !1,
+      candidateBackgrounds: readCandidateBackgrounds(root)
+    };
+    return Object.freeze(input);
+  }
+  function createCapturedGovernmentAutomation(dependencies) {
+    let session = null, reader = Object.freeze({
+      read() {
+        let root = dependencies.rootState.readRoot();
+        return session = root === void 0 ? null : Object.freeze({
+          root,
+          candidateBackgrounds: readCandidateBackgrounds(root)
+        }), root === void 0 ? Object.freeze({
+          isEnabled: !1,
+          guardAnarchist: !1,
+          haveQFactory: !1,
+          haveGovernorTech: !1,
+          currentGovernor: "none",
+          govSpace: "none",
+          govFinal: "none",
+          govInterim: "none",
+          govGovernor: "none",
+          govSpaceUnlocked: !1,
+          govFinalUnlocked: !1,
+          govInterimUnlocked: !1,
+          tradeFederationReady: !1,
+          candidateBackgrounds: Object.freeze([])
+        }) : readGovernmentInput(root, dependencies.readSettings());
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        if (decision.government !== null)
+          return stale(
+            "government-selection-unavailable",
+            "captured government type selection is not available"
+          );
+        if (decision.appointCandidate === null) return SUCCEEDED;
+        let active = session;
+        if (active === null)
+          return stale(
+            "governor-session-missing",
+            "governor state was not sampled"
+          );
+        let root = dependencies.rootState.readRoot();
+        if (root !== active.root)
+          return stale(
+            "governor-root-changed",
+            "game root changed after sampling"
+          );
+        if (readCurrentGovernor(root) !== "none")
+          return stale("governor-appointed", "a governor was already appointed");
+        if (readCandidateBackgrounds(root)[decision.appointCandidate] !== decision.appointCandidateBackground)
+          return stale(
+            "stale-governor-candidate",
+            "governor candidates changed",
+            { candidateIndex: decision.appointCandidate }
+          );
+        let handle = dependencies.controls.resolve(CANDIDATES_CONTROL);
+        if (handle === void 0)
+          return stale(
+            "governor-controls-unavailable",
+            "governor appointment controls are not captured"
+          );
+        let result = dependencies.controls.invoke(handle, "appoint", [
+          decision.appointCandidate
+        ]);
+        return result.ok ? SUCCEEDED : stale(
+          "governor-controls-unavailable",
+          `governor appointment control failed: ${result.reason}`
+        );
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+  function runCapturedGovernmentAutomation(automation) {
+    return automation.executor.execute(planGovernment(automation.reader.read()));
+  }
+
   // src/adapters/evolve/civic/captured-job-catalog.ts
   function toCapturedJobsJobInputs(catalog) {
     if (!catalog.jobs.some(
@@ -13567,7 +13704,8 @@
     autoEject: !1,
     autoSupply: !1,
     autoJobs: !1,
-    autoGalaxyMarket: !1
+    autoGalaxyMarket: !1,
+    autoGovernment: !1
   });
   function isEnabled(settings, key) {
     let value = settings[key];
@@ -13626,6 +13764,10 @@
       controls: pageCapture2.controls,
       readSettings: () => readStoredSettings(storage),
       nowMs: () => Date.now()
+    }), government = createCapturedGovernmentAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => readStoredSettings(storage)
     }), costs = createCapturedCraftCosts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
@@ -14092,7 +14234,7 @@
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
+          isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoGovernment") && (ensureCivicControls(), runCapturedGovernmentAutomation(government)), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
             QUARRY_CONTROL,
             !!readProperty(
               readProperty(pageCapture2.rootState.readRoot(), "race"),

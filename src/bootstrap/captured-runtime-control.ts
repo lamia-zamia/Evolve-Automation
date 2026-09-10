@@ -3,6 +3,10 @@ import { runCraftAutomation } from "../application/craft.ts";
 import { runJobsAutomation } from "../application/jobs.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { createCapturedTaxControl } from "./captured-tax-control.ts";
+import {
+  createCapturedGovernmentAutomation,
+  runCapturedGovernmentAutomation,
+} from "../adapters/evolve/civic/captured-government.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import {
   createCapturedFullJobsAutomation,
@@ -161,6 +165,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoSupply: false,
   autoJobs: false,
   autoGalaxyMarket: false,
+  autoGovernment: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -238,6 +243,11 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => readStoredSettings(storage),
     nowMs: () => Date.now(),
+  });
+  const government = createCapturedGovernmentAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
   });
   const costs = createCapturedCraftCosts({
     rootState: pageCapture.rootState,
@@ -1013,6 +1023,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoTax")) {
         ensureCivicControls();
         tax.autoTax();
+      }
+      if (isEnabled(settings, "autoGovernment")) {
+        ensureCivicControls();
+        runCapturedGovernmentAutomation(government);
       }
       if (isEnabled(settings, "autoMiningDroid")) {
         ensureMiningDroidControls();
