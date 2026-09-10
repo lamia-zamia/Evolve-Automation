@@ -8774,6 +8774,11 @@
       actionId: "space-gas_mission",
       completionTech: "space",
       completionLevel: 5
+    }),
+    Object.freeze({
+      actionId: "space-gas_moon_mission",
+      completionTech: "space",
+      completionLevel: 6
     })
   ]);
   function readCapturedSpaceMissionDemand(root, settings, controls, costs) {

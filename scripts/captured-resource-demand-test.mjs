@@ -229,6 +229,28 @@ function spaceMissionDemand({
   );
 }
 
+// Gas Moon follows the gas grant and keeps its own captured action cost.
+{
+  const sample = spaceMissionDemand({
+    space: 5,
+    missionId: "space-gas_moon_mission",
+    resourceId: "Helium_3",
+    cost: { Helium_3: 700 },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Helium_3"), 100);
+  assert.equal(
+    spaceMissionDemand({
+      space: 6,
+      missionId: "space-gas_moon_mission",
+      resourceId: "Helium_3",
+      cost: { Helium_3: 700 },
+    })
+      .sample()
+      .requestedQuantity("Helium_3"),
+    0,
+  );
+}
+
 // A root without resources yet is not a demand claim.
 {
   const sample = createCapturedResourceDemand({
