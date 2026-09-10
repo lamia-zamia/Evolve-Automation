@@ -5321,6 +5321,29 @@
     if (!(perSoldier === void 0 || perSoldier <= 0))
       return Math.ceil(targetRating / perSoldier);
   }
+  function readHellAuthority(root, input) {
+    let unavailable = Object.freeze({
+      unlocked: !1,
+      current: 0,
+      maximum: 0,
+      scriptTick: 0,
+      debugEnabled: !1
+    });
+    if (!input.manageAuthority || input.minimumAuthority === 0)
+      return unavailable;
+    let authority = readProperty(readProperty(root, "resource"), "Authority");
+    if (!isRecord(authority) || authority.display === !1)
+      return unavailable;
+    let current = finiteHellValue(readProperty(authority, "amount")), maximum = finiteHellValue(readProperty(authority, "max"));
+    if (!(current === void 0 || maximum === void 0))
+      return Object.freeze({
+        unlocked: !0,
+        current: Math.max(0, current),
+        maximum: Math.max(0, maximum),
+        scriptTick: 0,
+        debugEnabled: !1
+      });
+  }
   function createCapturedHellAutomation(dependencies) {
     let session = null;
     return Object.freeze({
@@ -5352,16 +5375,16 @@
               "hell-calculation-unavailable",
               "the captured Hell soldier-rating query is unavailable"
             );
+          let authority = readHellAuthority(session.root, decision.input);
+          if (authority === void 0)
+            return stale(
+              "hell-calculation-unavailable",
+              "the captured Hell authority resource is invalid"
+            );
           let planned = planHell(decision, {
             garrisonSoldiers,
             patrolSoldiers,
-            authority: Object.freeze({
-              unlocked: !1,
-              current: 0,
-              maximum: 0,
-              scriptTick: 0,
-              debugEnabled: !1
-            })
+            authority
           });
           return planned === null ? SUCCEEDED : applyHellManagement(planned, control, dependencies.controls);
         }

@@ -110,7 +110,7 @@ function makeEvacuationRoot({
 }
 
 // When the captured counts show that Hell cannot be entered, evacuation uses only the upstream
-// fortress controls; soldier-rating calculation remains intentionally unavailable below this gate.
+// fortress controls; soldier-rating calculation remains unnecessary below this gate.
 {
   const root = makeEvacuationRoot();
   const invoked = [];
@@ -194,6 +194,42 @@ function makeEvacuationRoot({
     31,
   );
   assert.equal(invoked.filter(({ method }) => method === "patInc").length, 24);
+}
+
+// Enabled authority management uses the captured resource bag and rejects malformed authority
+// state rather than silently treating it as zero.
+{
+  const root = {
+    ...makeEvacuationRoot({ assigned: 0, patrols: 0, patrolSize: 1 }),
+    civic: {
+      garrison: { workers: 1000, max: 1000, crew: 0 },
+      govern: { type: "" },
+    },
+    portal: {
+      fortress: {
+        garrison: 0,
+        patrols: 0,
+        patrol_size: 1,
+        assigned: 0,
+        walls: 50,
+        threat: 1000,
+      },
+    },
+    city: { boot_camp: { count: 0 } },
+    tech: { elysium: 0, turret: 0, portal: 0 },
+    resource: { Authority: { amount: "invalid", max: 1000, display: true } },
+  };
+  const automation = createCapturedHellAutomation({
+    rootState: { readRoot: () => root },
+    controls: makeControls([], true, ["rating"]),
+    readSettings: () => ({
+      authorityManage: true,
+      generalMinimumAuthority: 100,
+    }),
+  });
+  const outcome = automation.run();
+  assert.equal(outcome.status, "stale");
+  assert.equal(outcome.failure.code, "hell-calculation-unavailable");
 }
 
 console.log("Captured Hell adapter tests passed");

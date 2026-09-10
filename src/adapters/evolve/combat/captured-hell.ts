@@ -5,6 +5,7 @@ import {
   planHell,
   prepareHellCycle,
   type HellCycleInput,
+  type HellAuthorityInput,
 } from "../../../domain/combat/hell.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
@@ -293,6 +294,36 @@ function readSoldierTarget(
   return Math.ceil(targetRating / perSoldier);
 }
 
+function readHellAuthority(
+  root: unknown,
+  input: Readonly<HellCycleInput>,
+): Readonly<HellAuthorityInput> | undefined {
+  const unavailable = Object.freeze({
+    unlocked: false,
+    current: 0,
+    maximum: 0,
+    scriptTick: 0,
+    debugEnabled: false,
+  });
+  if (!input.manageAuthority || input.minimumAuthority === 0) {
+    return unavailable;
+  }
+  const authority = readProperty(readProperty(root, "resource"), "Authority");
+  if (!isRecord(authority) || authority["display"] === false) {
+    return unavailable;
+  }
+  const current = finiteHellValue(readProperty(authority, "amount"));
+  const maximum = finiteHellValue(readProperty(authority, "max"));
+  if (current === undefined || maximum === undefined) return undefined;
+  return Object.freeze({
+    unlocked: true,
+    current: Math.max(0, current),
+    maximum: Math.max(0, maximum),
+    scriptTick: 0,
+    debugEnabled: false,
+  });
+}
+
 export interface CapturedHellAutomation {
   readonly run: () => CommandExecutionOutcome;
 }
@@ -346,16 +377,17 @@ export function createCapturedHellAutomation(dependencies: {
             "the captured Hell soldier-rating query is unavailable",
           );
         }
+        const authority = readHellAuthority(session.root, decision.input);
+        if (authority === undefined) {
+          return stale(
+            "hell-calculation-unavailable",
+            "the captured Hell authority resource is invalid",
+          );
+        }
         const planned = planHell(decision, {
           garrisonSoldiers,
           patrolSoldiers,
-          authority: Object.freeze({
-            unlocked: false,
-            current: 0,
-            maximum: 0,
-            scriptTick: 0,
-            debugEnabled: false,
-          }),
+          authority,
         });
         if (planned === null) return SUCCEEDED;
         return applyHellManagement(planned, control, dependencies.controls);
