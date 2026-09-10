@@ -8324,6 +8324,64 @@
     }
     return Object.freeze(states);
   }
+  var CAPTURED_FOUNDRY_PRODUCTS = Object.freeze([
+    "Plywood",
+    "Brick",
+    "Wrought_Iron",
+    "Sheet_Metal",
+    "Mythril",
+    "Aerogel",
+    "Nanoweave",
+    "Aerographene",
+    "Scarletite",
+    "Quantium",
+    "Super_Fuel",
+    "Thermite"
+  ]);
+  function readCapturedCrafterDemand(root, resources, settings, craftCosts) {
+    if (craftCosts === void 0 || !isRecord(readProperty(readProperty(root, "city"), "foundry")))
+      return;
+    let maximum = finite7(
+      readProperty(readProperty(readProperty(root, "civic"), "craftsman"), "max")
+    );
+    if (maximum === void 0 || maximum < 0) return;
+    let availableCrafters = maximum, servants = readProperty(readProperty(root, "race"), "servants");
+    if (isRecord(servants)) {
+      let skilledMaximum = finite7(readProperty(servants, "smax"));
+      skilledMaximum !== void 0 && skilledMaximum >= 0 && (availableCrafters += skilledMaximum);
+    }
+    let crafters = [];
+    for (let id of CAPTURED_FOUNDRY_PRODUCTS) {
+      let resource = readProperty(resources, id);
+      if (!isRecord(resource) || readProperty(resource, "display") !== !0)
+        continue;
+      let recipe = craftCosts.read(id);
+      if (recipe === void 0) continue;
+      let costs = [], valid = !0;
+      for (let [resourceId, amount] of recipe) {
+        let material = readProperty(resources, resourceId), maximumQuantity = finite7(readProperty(material, "max"));
+        if (maximumQuantity === void 0 || !Number.isFinite(amount) || amount <= 0) {
+          valid = !1;
+          break;
+        }
+        costs.push({
+          resourceId,
+          amount,
+          materialMaxQuantity: maximumQuantity < 0 ? Number.MAX_SAFE_INTEGER : maximumQuantity
+        });
+      }
+      !valid || costs.length === 0 || crafters.push({
+        isDemanded: !1,
+        isUnlocked: !0,
+        craftPreserve: finite7(settings[`foundry_p_${id}`]) ?? 0,
+        costs: Object.freeze(costs)
+      });
+    }
+    return Object.freeze({
+      availableCrafters,
+      crafters: Object.freeze(crafters)
+    });
+  }
   var FACTORY_DEMAND_SPECS = Object.freeze([
     Object.freeze({
       id: "Lux",
@@ -8465,17 +8523,22 @@
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
         if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
-        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, factoryCatalog = readCapturedFactoryDemand(root, settings), hasFactoryDemand = factoryCatalog?.productions.some(
+        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, crafterDemand = settings.productionFactoryFocusMaterials === !0 ? readCapturedCrafterDemand(
+          root,
+          resources,
+          settings,
+          dependencies.craftCosts
+        ) : void 0, factoryCatalog = readCapturedFactoryDemand(root, settings), hasFactoryDemand = factoryCatalog?.productions.some(
           (production) => production.unlocked && production.enabled && production.weighting > 0
-        ) ?? !1;
-        if (queued.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand)
+        ) ?? !1, hasCrafterDemand = (crafterDemand?.crafters.length ?? 0) > 0;
+        if (queued.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand)
           return EMPTY_DEMAND_SAMPLE;
         let savingCosts = saving === null ? null : toCosts(saving.cost), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
           // The captured offer list is the game's own technology qualification result. The reader
           // only recomputes affordability from current holdings; it never recreates tech gates.
           isEarlyGame: !1,
-          consumptionBalanceTarget: 0,
+          consumptionBalanceTarget: 120,
           truepathAiBuildingTarget: null,
           inflationMoney: null,
           retirementGraphene: null,
@@ -8489,8 +8552,8 @@
             nextShipAffordable: !1,
             nextShipCost: Object.freeze([])
           }),
-          availableCrafters: 0,
-          crafters: Object.freeze([]),
+          availableCrafters: crafterDemand?.availableCrafters ?? 0,
+          crafters: crafterDemand?.crafters ?? Object.freeze([]),
           vitreloyPlant: Object.freeze({
             autoStateEnabled: !1,
             count: 0,
@@ -13619,7 +13682,8 @@
       construction: progression.observations,
       readOfferedTechs: progression.readOfferedTechs,
       reservations: queueReservations,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => readStoredSettings(storage),
+      craftCosts: costs
     }), demandThisCycle;
     readDemand = () => demandThisCycle ??= demand.sample();
     let storagePorts = createCapturedStoragePorts({

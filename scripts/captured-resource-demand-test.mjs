@@ -12,7 +12,7 @@ const root = {
   },
 };
 
-function withTargets(targets, settings = {}, saving = null) {
+function withTargets(targets, settings = {}, saving = null, craftCosts) {
   return createCapturedResourceDemand({
     rootState: { readRoot: () => root },
     reservations: {
@@ -23,6 +23,7 @@ function withTargets(targets, settings = {}, saving = null) {
       readKnowledgeRequirement: () => 0,
     },
     readSettings: () => settings,
+    craftCosts,
   });
 }
 
@@ -266,9 +267,53 @@ function withTargets(targets, settings = {}, saving = null) {
       productionFactoryMinIngredients: 0,
     }),
   }).sample();
-  assert.equal(sample.requestedQuantity("Copper"), 5);
-  assert.equal(sample.requestedQuantity("Aluminium"), 5);
+  assert.equal(sample.requestedQuantity("Copper"), 273.8);
+  assert.equal(sample.requestedQuantity("Aluminium"), 365);
   assert.equal(sample.storageRequired("Copper"), 5.15);
+}
+
+// Factory-focus demand also reserves the materials for captured Foundry recipes. The recipe
+// reader is the game's own cost path, while the root contributes the available ordinary and
+// skilled craftsman pools.
+{
+  const foundryRoot = {
+    city: { foundry: {} },
+    civic: { craftsman: { max: 4 } },
+    race: { servants: { smax: 2 } },
+    resource: {
+      Lumber: { amount: 0, max: 1000, stackable: true },
+      Plywood: { amount: 0, max: -1, stackable: false, display: true },
+    },
+  };
+  const demand = createCapturedResourceDemand({
+    rootState: { readRoot: () => foundryRoot },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({
+      productionFactoryFocusMaterials: true,
+      foundry_p_Plywood: 0,
+    }),
+    craftCosts: {
+      read: (resourceId) =>
+        resourceId === "Plywood" ? new Map([["Lumber", 2]]) : undefined,
+    },
+  });
+  const sample = demand.sample();
+  assert.equal(sample.requestedQuantity("Lumber"), (6 * 120 * 2) / 140);
+  assert.equal(sample.isDemanded("Lumber"), true);
+
+  const focusOff = createCapturedResourceDemand({
+    rootState: { readRoot: () => foundryRoot },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({}),
+    craftCosts: {
+      read: () => new Map([["Lumber", 2]]),
+    },
+  }).sample();
+  assert.equal(focusOff.requestedQuantity("Lumber"), 0);
 }
 
 console.log("Captured resource-demand adapter tests passed");

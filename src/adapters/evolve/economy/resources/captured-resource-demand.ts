@@ -10,7 +10,8 @@
  * through the game's own cost code by the existing captured reservation source, which already
  * applies the game's rule for which queue entries it is saving for, and the construction cycle's own
  * saving target — the highest-weighted candidate it wants but cannot yet afford, observed from the
- * cycle that has already run. It carries no script triggers, missions, crafters, or fleet demand.
+ * cycle that has already run. Foundry recipes are included only when the factory-focus setting is
+ * enabled and the game's own captured craft-cost renderer supplies every ingredient we use.
  * Factory material demand is included when its six-product catalog and validated regional capacity
  * are fully captured.
  *
@@ -20,9 +21,12 @@
 
 import { planStorageRequirements } from "../../../../domain/economy/storage/storage-requirements.ts";
 import type { StorageResourceState } from "../../../../domain/economy/storage/storage-requirements.ts";
+import { CONSUMPTION_BALANCE_TARGET } from "../../../../config.ts";
 import {
   planDemandPrioritization,
   type DemandCost,
+  type DemandCrafter,
+  type DemandCrafterCost,
   type DemandTech,
   type DemandPrioritizationSettings,
   type DemandTarget,
@@ -32,6 +36,7 @@ import type { CostReservationSource } from "../../../../ports/game-cost-reservat
 import type { ConstructionObservations } from "../../../../ports/game-construction-observations.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
+import type { CapturedCraftCosts } from "../production/captured-craft-costs.ts";
 import { readCapturedFactoryCapacity } from "../production/captured-factory-capacity.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
@@ -47,6 +52,8 @@ export interface CapturedResourceDemandDependencies {
   readonly readOfferedTechs?: () =>
     readonly Readonly<OfferedTech>[] | undefined;
   readonly readSettings: () => unknown;
+  /** The game's own per-volume Foundry recipe reader, when the control surface is available. */
+  readonly craftCosts?: CapturedCraftCosts;
 }
 
 export interface CapturedDemandSample {
@@ -238,6 +245,98 @@ function readStorageResources(
     );
   }
   return Object.freeze(states);
+}
+
+const CAPTURED_FOUNDRY_PRODUCTS = Object.freeze([
+  "Plywood",
+  "Brick",
+  "Wrought_Iron",
+  "Sheet_Metal",
+  "Mythril",
+  "Aerogel",
+  "Nanoweave",
+  "Aerographene",
+  "Scarletite",
+  "Quantium",
+  "Super_Fuel",
+  "Thermite",
+]);
+
+interface CapturedCrafterDemand {
+  readonly availableCrafters: number;
+  readonly crafters: readonly DemandCrafter[];
+}
+
+/**
+ * Captures only the Foundry half of demand. The resource's same-cycle `isDemanded` value would
+ * recurse through this sample, so the factory-focus setting is the explicit gate and every row is
+ * marked as not independently demanded. Missing recipe or material data drops that row rather
+ * than guessing a cost; the remaining rows still use the game's normal per-crafter balance.
+ */
+function readCapturedCrafterDemand(
+  root: unknown,
+  resources: Record<PropertyKey, unknown>,
+  settings: Record<PropertyKey, unknown>,
+  craftCosts: CapturedCraftCosts | undefined,
+): CapturedCrafterDemand | undefined {
+  if (craftCosts === undefined) return undefined;
+  if (!isRecord(readProperty(readProperty(root, "city"), "foundry"))) {
+    return undefined;
+  }
+  const maximum = finite(
+    readProperty(readProperty(readProperty(root, "civic"), "craftsman"), "max"),
+  );
+  if (maximum === undefined || maximum < 0) return undefined;
+
+  let availableCrafters = maximum;
+  const servants = readProperty(readProperty(root, "race"), "servants");
+  if (isRecord(servants)) {
+    const skilledMaximum = finite(readProperty(servants, "smax"));
+    if (skilledMaximum !== undefined && skilledMaximum >= 0) {
+      availableCrafters += skilledMaximum;
+    }
+  }
+
+  const crafters: DemandCrafter[] = [];
+  for (const id of CAPTURED_FOUNDRY_PRODUCTS) {
+    const resource = readProperty(resources, id);
+    if (!isRecord(resource) || readProperty(resource, "display") !== true) {
+      continue;
+    }
+    const recipe = craftCosts.read(id);
+    if (recipe === undefined) continue;
+    const costs: DemandCrafterCost[] = [];
+    let valid = true;
+    for (const [resourceId, amount] of recipe) {
+      const material = readProperty(resources, resourceId);
+      const maximumQuantity = finite(readProperty(material, "max"));
+      if (
+        maximumQuantity === undefined ||
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        valid = false;
+        break;
+      }
+      costs.push({
+        resourceId,
+        amount,
+        materialMaxQuantity:
+          maximumQuantity < 0 ? Number.MAX_SAFE_INTEGER : maximumQuantity,
+      });
+    }
+    if (!valid || costs.length === 0) continue;
+    crafters.push({
+      isDemanded: false,
+      isUnlocked: true,
+      craftPreserve: finite(settings[`foundry_p_${id}`]) ?? 0,
+      costs: Object.freeze(costs),
+    });
+  }
+  return Object.freeze({
+    availableCrafters,
+    crafters: Object.freeze(crafters),
+  });
 }
 
 interface CapturedFactoryCatalog {
@@ -466,6 +565,15 @@ export function createCapturedResourceDemand(
       const offered = dependencies.readOfferedTechs?.();
       const settingsValue = dependencies.readSettings();
       const settings = isRecord(settingsValue) ? settingsValue : {};
+      const crafterDemand =
+        settings["productionFactoryFocusMaterials"] === true
+          ? readCapturedCrafterDemand(
+              root,
+              resources,
+              settings,
+              dependencies.craftCosts,
+            )
+          : undefined;
       const factoryCatalog = readCapturedFactoryDemand(root, settings);
       const hasFactoryDemand =
         factoryCatalog?.productions.some(
@@ -474,11 +582,13 @@ export function createCapturedResourceDemand(
             production.enabled &&
             production.weighting > 0,
         ) ?? false;
+      const hasCrafterDemand = (crafterDemand?.crafters.length ?? 0) > 0;
       if (
         queued.length === 0 &&
         saving === null &&
         (offered === undefined || offered.length === 0) &&
-        !hasFactoryDemand
+        !hasFactoryDemand &&
+        !hasCrafterDemand
       ) {
         return EMPTY_DEMAND_SAMPLE;
       }
@@ -489,7 +599,7 @@ export function createCapturedResourceDemand(
         // The captured offer list is the game's own technology qualification result. The reader
         // only recomputes affordability from current holdings; it never recreates tech gates.
         isEarlyGame: false,
-        consumptionBalanceTarget: 0,
+        consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
         truepathAiBuildingTarget: null,
         inflationMoney: null,
         retirementGraphene: null,
@@ -506,8 +616,8 @@ export function createCapturedResourceDemand(
           nextShipAffordable: false,
           nextShipCost: Object.freeze([]),
         }),
-        availableCrafters: 0,
-        crafters: Object.freeze([]),
+        availableCrafters: crafterDemand?.availableCrafters ?? 0,
+        crafters: crafterDemand?.crafters ?? Object.freeze([]),
         vitreloyPlant: Object.freeze({
           autoStateEnabled: false,
           count: 0,

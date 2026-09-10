@@ -309,6 +309,7 @@ export function startCapturedRuntime({
     readOfferedTechs: progression.readOfferedTechs,
     reservations: queueReservations,
     readSettings: () => readStoredSettings(storage),
+    craftCosts: costs,
   });
   let demandThisCycle: CapturedDemandSample | undefined;
   readDemand = () => (demandThisCycle ??= demand.sample());
