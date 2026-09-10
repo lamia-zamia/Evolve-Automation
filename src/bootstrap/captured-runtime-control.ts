@@ -44,6 +44,7 @@ import {
   TITAN_MINE_CONTROL,
 } from "../adapters/evolve/economy/resources/captured-production-ratios.ts";
 import { createCapturedPowerProducerAutomation } from "../adapters/evolve/economy/production/captured-power-producers.ts";
+import { createCapturedPowerWarningAutomation } from "../adapters/evolve/economy/production/captured-power-warnings.ts";
 import {
   createCapturedSmelterAutomation,
   SMELTER_CONTROL,
@@ -941,6 +942,12 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
   });
+  const powerWarnings = createCapturedPowerWarningAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    getDocument: () => document,
+    readSettings: () => readStoredSettings(storage),
+  });
   const smelter = createCapturedSmelterAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -1089,6 +1096,7 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoPower")) {
         ensureCityControls();
         powerProducers.run();
+        powerWarnings.run();
       }
       if (isEnabled(settings, "autoSmelter")) {
         ensureSmelterControls();
