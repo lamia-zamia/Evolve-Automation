@@ -21,6 +21,8 @@ import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 
 const CANDIDATES_CONTROL = "candidates";
+const GOVERNMENT_CONTROL = "govType";
+const GOVERNMENT_MODAL_CONTROL = "govModal";
 
 export interface CapturedGovernmentAutomation {
   readonly reader: GovernmentReader;
@@ -60,6 +62,56 @@ function readCurrentGovernor(root: unknown): string {
   return typeof background === "string" ? background : "none";
 }
 
+function readCurrentGovernment(root: unknown): string {
+  const government = readProperty(
+    readProperty(readProperty(root, "civic"), "govern"),
+    "type",
+  );
+  return typeof government === "string" ? government : "none";
+}
+
+function governmentUnlocked(root: unknown, government: string): boolean {
+  const tech = readProperty(root, "tech");
+  const race = readProperty(root, "race");
+  const govern = finiteGovernor(readProperty(tech, "govern"));
+  if (government === "dictator") {
+    return (
+      readProperty(race, "wish") === true &&
+      isRecord(readProperty(race, "wishStats")) &&
+      readProperty(readProperty(race, "wishStats"), "gov") === true
+    );
+  }
+  if (government === "magocracy") {
+    return (
+      readProperty(tech, "gov_mage") === true ||
+      (finiteGovernor(readProperty(tech, "gov_mage")) ?? 0) > 0
+    );
+  }
+  if (readProperty(race, "warlord") === true || govern === undefined) {
+    return false;
+  }
+  switch (government) {
+    case "autocracy":
+    case "democracy":
+    case "oligarchy":
+      return govern >= 1;
+    case "theocracy":
+      return Boolean(readProperty(tech, "gov_theo"));
+    case "republic":
+      return govern >= 2;
+    case "socialist":
+      return Boolean(readProperty(tech, "gov_soc"));
+    case "corpocracy":
+      return Boolean(readProperty(tech, "gov_corp"));
+    case "technocracy":
+      return govern >= 3;
+    case "federation":
+      return Boolean(readProperty(tech, "gov_fed"));
+    default:
+      return false;
+  }
+}
+
 function readGovernmentInput(
   root: unknown,
   settingsValue: unknown,
@@ -68,20 +120,35 @@ function readGovernmentInput(
   const technology = finiteGovernor(
     readProperty(readProperty(root, "tech"), "governor"),
   );
+  const currentGovernment = readCurrentGovernment(root);
+  const prestigeType = settings["prestigeType"];
+  const guardAnarchist =
+    settings["achievementGuards"] !== false &&
+    settings["guardAnarchist"] !== false &&
+    prestigeType === "mad" &&
+    currentGovernment === "anarchy";
+  const configured = (key: string): string =>
+    typeof settings[key] === "string" ? (settings[key] as string) : "none";
+  const govSpace = configured("govSpace");
+  const govFinal = configured("govFinal");
+  const govInterim = configured("govInterim");
   const governorTarget = settings["govGovernor"];
   const input: GovernmentInput = {
     isEnabled: settings["autoGovernment"] === true,
-    guardAnarchist: false,
-    haveQFactory: false,
+    guardAnarchist,
+    haveQFactory:
+      (finiteGovernor(readProperty(readProperty(root, "tech"), "q_factory")) ??
+        0) > 0,
     haveGovernorTech: technology !== undefined && technology >= 1,
     currentGovernor: readCurrentGovernor(root),
-    govSpace: "none",
-    govFinal: "none",
-    govInterim: "none",
+    govSpace,
+    govFinal,
+    govInterim,
     govGovernor: typeof governorTarget === "string" ? governorTarget : "none",
-    govSpaceUnlocked: false,
-    govFinalUnlocked: false,
-    govInterimUnlocked: false,
+    govSpaceUnlocked: govSpace !== "none" && governmentUnlocked(root, govSpace),
+    govFinalUnlocked: govFinal !== "none" && governmentUnlocked(root, govFinal),
+    govInterimUnlocked:
+      govInterim !== "none" && governmentUnlocked(root, govInterim),
     tradeFederationReady: false,
     candidateBackgrounds: readCandidateBackgrounds(root),
   };
@@ -129,10 +196,72 @@ export function createCapturedGovernmentAutomation(dependencies: {
   const executor: DecisionExecutor<GovernmentDecision> = Object.freeze({
     execute(decision: Readonly<GovernmentDecision>): CommandExecutionOutcome {
       if (decision.government !== null) {
-        return stale(
-          "government-selection-unavailable",
-          "captured government type selection is not available",
-        );
+        const active = session;
+        if (active === null) {
+          return stale(
+            "government-session-missing",
+            "government state was not sampled",
+          );
+        }
+        const root = dependencies.rootState.readRoot();
+        if (root !== active.root) {
+          return stale(
+            "government-root-changed",
+            "game root changed after sampling",
+          );
+        }
+        if (readCurrentGovernment(root) === decision.government) {
+          // The compatibility manager treats this as a successful no-op.
+        } else {
+          const revision = finiteGovernor(
+            readProperty(
+              readProperty(readProperty(root, "civic"), "govern"),
+              "rev",
+            ),
+          );
+          if (revision === undefined || revision > 0) {
+            return stale(
+              "government-revolution-pending",
+              "government cannot change while its revolution is pending",
+            );
+          }
+          if (!governmentUnlocked(root, decision.government)) {
+            return stale(
+              "government-locked",
+              "planned government became locked",
+              { government: decision.government },
+            );
+          }
+          const modal = dependencies.controls.resolve(GOVERNMENT_MODAL_CONTROL);
+          if (modal !== undefined) {
+            const result = dependencies.controls.invoke(modal, "setGov", [
+              decision.government,
+            ]);
+            if (!result.ok) {
+              return stale(
+                "government-controls-unavailable",
+                `government modal control failed: ${result.reason}`,
+              );
+            }
+          } else {
+            const control = dependencies.controls.resolve(GOVERNMENT_CONTROL);
+            if (control === undefined) {
+              return stale(
+                "government-controls-unavailable",
+                "government selection controls are not captured",
+              );
+            }
+            const result = dependencies.controls.invoke(control, "trigModal");
+            if (!result.ok) {
+              return stale(
+                "government-controls-unavailable",
+                `government modal opener failed: ${result.reason}`,
+              );
+            }
+            // The modal component is mounted asynchronously; the next cycle will commit it.
+            return SUCCEEDED;
+          }
+        }
       }
       if (decision.appointCandidate === null) return SUCCEEDED;
       const active = session;

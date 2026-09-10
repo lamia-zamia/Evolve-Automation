@@ -73,4 +73,51 @@ function makeControls(invoked, available = true) {
   assert.equal(outcome.failure.code, "governor-controls-unavailable");
 }
 
+// Government type selection uses the captured government component in two phases: open the
+// upstream modal, then commit through its mounted modal component on the next cycle.
+{
+  const root = makeRoot();
+  root.tech.govern = 1;
+  root.civic = { govern: { type: "anarchy", rev: 0 } };
+  let modalOpen = false;
+  const invoked = [];
+  const automation = createCapturedGovernmentAutomation({
+    rootState: { readRoot: () => root },
+    controls: {
+      resolve: (elementId) => {
+        if (elementId === "govType" && !modalOpen) {
+          return { elementId, generation: 1, methods: ["trigModal"] };
+        }
+        if (elementId === "govModal" && modalOpen) {
+          return { elementId, generation: 1, methods: ["setGov"] };
+        }
+        return undefined;
+      },
+      invoke: (_handle, method, args) => {
+        invoked.push({ method, args });
+        if (method === "trigModal") modalOpen = true;
+        if (method === "setGov") root.civic.govern.type = args[0];
+        return { ok: true, value: undefined };
+      },
+      capturedElementIds: () => [],
+    },
+    readSettings: () => ({
+      autoGovernment: true,
+      govInterim: "democracy",
+      govGovernor: "none",
+    }),
+  });
+  assert.deepEqual(runCapturedGovernmentAutomation(automation), {
+    status: "succeeded",
+  });
+  assert.deepEqual(runCapturedGovernmentAutomation(automation), {
+    status: "succeeded",
+  });
+  assert.equal(root.civic.govern.type, "democracy");
+  assert.deepEqual(invoked, [
+    { method: "trigModal", args: undefined },
+    { method: "setGov", args: ["democracy"] },
+  ]);
+}
+
 console.log("Captured government adapter tests passed");

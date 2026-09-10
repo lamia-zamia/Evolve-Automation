@@ -4785,7 +4785,7 @@
   }
 
   // src/adapters/evolve/civic/captured-government.ts
-  var CANDIDATES_CONTROL = "candidates";
+  var CANDIDATES_CONTROL = "candidates", GOVERNMENT_CONTROL = "govType", GOVERNMENT_MODAL_CONTROL = "govModal";
   function finiteGovernor(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
@@ -4808,22 +4808,58 @@
     );
     return typeof background == "string" ? background : "none";
   }
+  function readCurrentGovernment(root) {
+    let government = readProperty(
+      readProperty(readProperty(root, "civic"), "govern"),
+      "type"
+    );
+    return typeof government == "string" ? government : "none";
+  }
+  function governmentUnlocked(root, government) {
+    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), govern = finiteGovernor(readProperty(tech, "govern"));
+    if (government === "dictator")
+      return readProperty(race, "wish") === !0 && isRecord(readProperty(race, "wishStats")) && readProperty(readProperty(race, "wishStats"), "gov") === !0;
+    if (government === "magocracy")
+      return readProperty(tech, "gov_mage") === !0 || (finiteGovernor(readProperty(tech, "gov_mage")) ?? 0) > 0;
+    if (readProperty(race, "warlord") === !0 || govern === void 0)
+      return !1;
+    switch (government) {
+      case "autocracy":
+      case "democracy":
+      case "oligarchy":
+        return govern >= 1;
+      case "theocracy":
+        return !!readProperty(tech, "gov_theo");
+      case "republic":
+        return govern >= 2;
+      case "socialist":
+        return !!readProperty(tech, "gov_soc");
+      case "corpocracy":
+        return !!readProperty(tech, "gov_corp");
+      case "technocracy":
+        return govern >= 3;
+      case "federation":
+        return !!readProperty(tech, "gov_fed");
+      default:
+        return !1;
+    }
+  }
   function readGovernmentInput(root, settingsValue) {
     let settings = isRecord(settingsValue) ? settingsValue : {}, technology = finiteGovernor(
       readProperty(readProperty(root, "tech"), "governor")
-    ), governorTarget = settings.govGovernor, input = {
+    ), currentGovernment = readCurrentGovernment(root), prestigeType = settings.prestigeType, guardAnarchist = settings.achievementGuards !== !1 && settings.guardAnarchist !== !1 && prestigeType === "mad" && currentGovernment === "anarchy", configured = (key) => typeof settings[key] == "string" ? settings[key] : "none", govSpace = configured("govSpace"), govFinal = configured("govFinal"), govInterim = configured("govInterim"), governorTarget = settings.govGovernor, input = {
       isEnabled: settings.autoGovernment === !0,
-      guardAnarchist: !1,
-      haveQFactory: !1,
+      guardAnarchist,
+      haveQFactory: (finiteGovernor(readProperty(readProperty(root, "tech"), "q_factory")) ?? 0) > 0,
       haveGovernorTech: technology !== void 0 && technology >= 1,
       currentGovernor: readCurrentGovernor(root),
-      govSpace: "none",
-      govFinal: "none",
-      govInterim: "none",
+      govSpace,
+      govFinal,
+      govInterim,
       govGovernor: typeof governorTarget == "string" ? governorTarget : "none",
-      govSpaceUnlocked: !1,
-      govFinalUnlocked: !1,
-      govInterimUnlocked: !1,
+      govSpaceUnlocked: govSpace !== "none" && governmentUnlocked(root, govSpace),
+      govFinalUnlocked: govFinal !== "none" && governmentUnlocked(root, govFinal),
+      govInterimUnlocked: govInterim !== "none" && governmentUnlocked(root, govInterim),
       tradeFederationReady: !1,
       candidateBackgrounds: readCandidateBackgrounds(root)
     };
@@ -4855,11 +4891,62 @@
       }
     }), executor = Object.freeze({
       execute(decision) {
-        if (decision.government !== null)
-          return stale(
-            "government-selection-unavailable",
-            "captured government type selection is not available"
-          );
+        if (decision.government !== null) {
+          let active2 = session;
+          if (active2 === null)
+            return stale(
+              "government-session-missing",
+              "government state was not sampled"
+            );
+          let root2 = dependencies.rootState.readRoot();
+          if (root2 !== active2.root)
+            return stale(
+              "government-root-changed",
+              "game root changed after sampling"
+            );
+          if (readCurrentGovernment(root2) !== decision.government) {
+            let revision = finiteGovernor(
+              readProperty(
+                readProperty(readProperty(root2, "civic"), "govern"),
+                "rev"
+              )
+            );
+            if (revision === void 0 || revision > 0)
+              return stale(
+                "government-revolution-pending",
+                "government cannot change while its revolution is pending"
+              );
+            if (!governmentUnlocked(root2, decision.government))
+              return stale(
+                "government-locked",
+                "planned government became locked",
+                { government: decision.government }
+              );
+            let modal = dependencies.controls.resolve(GOVERNMENT_MODAL_CONTROL);
+            if (modal !== void 0) {
+              let result2 = dependencies.controls.invoke(modal, "setGov", [
+                decision.government
+              ]);
+              if (!result2.ok)
+                return stale(
+                  "government-controls-unavailable",
+                  `government modal control failed: ${result2.reason}`
+                );
+            } else {
+              let control = dependencies.controls.resolve(GOVERNMENT_CONTROL);
+              if (control === void 0)
+                return stale(
+                  "government-controls-unavailable",
+                  "government selection controls are not captured"
+                );
+              let result2 = dependencies.controls.invoke(control, "trigModal");
+              return result2.ok ? SUCCEEDED : stale(
+                "government-controls-unavailable",
+                `government modal opener failed: ${result2.reason}`
+              );
+            }
+          }
+        }
         if (decision.appointCandidate === null) return SUCCEEDED;
         let active = session;
         if (active === null)
