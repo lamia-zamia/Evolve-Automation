@@ -2,6 +2,7 @@
 
 import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import {
+  planHell,
   prepareHellCycle,
   type HellCycleInput,
 } from "../../../domain/combat/hell.ts";
@@ -11,6 +12,7 @@ import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 
 const FORT_CONTROL = "fort";
+const GARRISON_CONTROLS = ["garrison", "c_garrison"] as const;
 
 interface HellSession {
   readonly root: unknown;
@@ -21,6 +23,14 @@ function finiteHellValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
+}
+
+function settingNumber(
+  settings: Record<string, unknown>,
+  key: string,
+  fallback: number,
+): number {
+  return finiteHellValue(settings[key]) ?? fallback;
 }
 
 function emptyHellInput(): HellCycleInput {
@@ -129,13 +139,21 @@ function readHellInput(root: unknown, settingsValue: unknown): HellCycleInput {
   const fob = readProperty(space, "fob");
   const fobTroops = finiteHellValue(readProperty(fob, "troops")) ?? 0;
   const settings = isRecord(settingsValue) ? settingsValue : {};
-  const homeGarrison = finiteHellValue(settings["hellHomeGarrison"]) ?? 10;
-  const minimumHellSoldiers =
-    finiteHellValue(settings["hellMinSoldiers"]) ?? 20;
-  const minimumSoldierPercent =
-    finiteHellValue(settings["hellMinSoldiersPercent"]) ?? 90;
   const tech = readProperty(root, "tech");
+  const city = readProperty(root, "city");
+  const turret = readProperty(portal, "turret");
+  const warDrone = readProperty(portal, "war_drone");
+  const warDroid = readProperty(portal, "war_droid");
+  const bootCamp = readProperty(city, "boot_camp");
+  const govern = readProperty(readProperty(root, "civic"), "govern");
   const elysium = finiteHellValue(readProperty(tech, "elysium")) ?? 0;
+  const homeGarrison = settingNumber(settings, "hellHomeGarrison", 10);
+  const minimumHellSoldiers = settingNumber(settings, "hellMinSoldiers", 20);
+  const minimumSoldierPercent = settingNumber(
+    settings,
+    "hellMinSoldiersPercent",
+    90,
+  );
   return Object.freeze({
     ...emptyHellInput(),
     available: true,
@@ -153,7 +171,55 @@ function readHellInput(root: unknown, settingsValue: unknown): HellCycleInput {
     minimumHellSoldiers,
     minimumSoldierPercent,
     elysiumUnlocked: elysium >= 3,
+    fortressWalls: finiteHellValue(readProperty(fortress, "walls")) ?? 0,
+    fortressThreat: finiteHellValue(readProperty(fortress, "threat")) ?? 0,
+    lowWallsMultiplier: settingNumber(settings, "hellLowWallsMulti", 3),
+    targetFortressDamage: settingNumber(
+      settings,
+      "hellTargetFortressDamage",
+      100,
+    ),
+    turretCount: finiteHellValue(readProperty(turret, "on")) ?? 0,
+    turretTechnology: finiteHellValue(readProperty(tech, "turret")) ?? 0,
     handlePatrolSize: settings["hellHandlePatrolSize"] !== false,
+    patrolThreatPercent: settingNumber(settings, "hellPatrolThreatPercent", 8),
+    patrolDroneModifier: settingNumber(settings, "hellPatrolDroneMod", 5),
+    patrolDroidModifier: settingNumber(settings, "hellPatrolDroidMod", 5),
+    patrolBootcampModifier: settingNumber(settings, "hellPatrolBootcampMod", 0),
+    minimumPatrolRating: settingNumber(settings, "hellPatrolMinRating", 30),
+    bolsterPatrolRating: settingNumber(
+      settings,
+      "hellBolsterPatrolRating",
+      300,
+    ),
+    bolsterPercentTop: settingNumber(
+      settings,
+      "hellBolsterPatrolPercentTop",
+      50,
+    ),
+    bolsterPercentBottom: settingNumber(
+      settings,
+      "hellBolsterPatrolPercentBottom",
+      20,
+    ),
+    warDroneCount: finiteHellValue(readProperty(warDrone, "on")) ?? 0,
+    portalTechnology: finiteHellValue(readProperty(tech, "portal")) ?? 0,
+    warDroidCount: finiteHellValue(readProperty(warDroid, "on")) ?? 0,
+    hellDroidTechnology: Boolean(readProperty(tech, "hdroid")),
+    bootCampCount: finiteHellValue(readProperty(bootCamp, "count")) ?? 0,
+    manageAuthority: settings["authorityManage"] === true,
+    minimumAuthority: settingNumber(settings, "generalMinimumAuthority", 0),
+    minimumAuthorityPatrolPercent: settingNumber(
+      settings,
+      "generalAuthorityMinPatrolPercent",
+      0,
+    ),
+    evilTechnology: finiteHellValue(readProperty(tech, "evil")) ?? 0,
+    grenadier: readProperty(race, "grenadier") === true,
+    government:
+      typeof readProperty(govern, "type") === "string"
+        ? (readProperty(govern, "type") as string)
+        : "",
   });
 }
 
@@ -207,6 +273,26 @@ function applyHellManagement(
   return SUCCEEDED;
 }
 
+function readSoldierTarget(
+  controls: GameControlRegistry,
+  targetRating: number,
+): number | undefined {
+  if (targetRating <= 0) return 0;
+  const control = GARRISON_CONTROLS.map((id) => controls.resolve(id)).find(
+    (candidate) => candidate !== undefined,
+  );
+  if (control === undefined || !control.methods.includes("rating")) {
+    return undefined;
+  }
+  // DeadSpace's garrison.rating(10, true) renders armyRating(10,'army',0) / 10,
+  // the same per-soldier sample used by the compatibility target inversion.
+  const result = controls.invoke(control, "rating", [10, true]);
+  if (!result.ok) return undefined;
+  const perSoldier = finiteHellValue(result.value);
+  if (perSoldier === undefined || perSoldier <= 0) return undefined;
+  return Math.ceil(targetRating / perSoldier);
+}
+
 export interface CapturedHellAutomation {
   readonly run: () => CommandExecutionOutcome;
 }
@@ -246,10 +332,33 @@ export function createCapturedHellAutomation(dependencies: {
         return applyHellManagement(decision, control, dependencies.controls);
       }
       if (decision.kind === "calculate-hell-targets") {
-        return stale(
-          "hell-calculation-unavailable",
-          "the captured Hell soldier-rating query is unavailable",
+        const garrisonSoldiers = readSoldierTarget(
+          dependencies.controls,
+          decision.garrisonRating,
         );
+        const patrolSoldiers =
+          decision.patrolRating === null
+            ? decision.input.hellPatrolSize
+            : readSoldierTarget(dependencies.controls, decision.patrolRating);
+        if (garrisonSoldiers === undefined || patrolSoldiers === undefined) {
+          return stale(
+            "hell-calculation-unavailable",
+            "the captured Hell soldier-rating query is unavailable",
+          );
+        }
+        const planned = planHell(decision, {
+          garrisonSoldiers,
+          patrolSoldiers,
+          authority: Object.freeze({
+            unlocked: false,
+            current: 0,
+            maximum: 0,
+            scriptTick: 0,
+            debugEnabled: false,
+          }),
+        });
+        if (planned === null) return SUCCEEDED;
+        return applyHellManagement(planned, control, dependencies.controls);
       }
       if (decision.kind !== "attack-enemy-fortress") return SUCCEEDED;
       if (control === undefined || !control.methods.includes("attack")) {

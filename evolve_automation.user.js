@@ -5052,11 +5052,78 @@
       patrolRating: input.handlePatrolSize ? calculatePatrolRating(input) : null
     });
   }
+  function calculateHellBaseTargets(request, targets) {
+    let hellGarrison = targets.garrisonSoldiers;
+    request.availableHellSoldiers < hellGarrison ? hellGarrison = 0 : request.availableHellSoldiers < hellGarrison * 2 && (hellGarrison = Math.floor(request.availableHellSoldiers / 2));
+    let patrolSize = request.input.handlePatrolSize ? Math.min(
+      targets.patrolSoldiers,
+      request.availableHellSoldiers - hellGarrison
+    ) : request.input.hellPatrolSize;
+    return Object.freeze({ hellGarrison, patrolSize });
+  }
+  function planHell(request, calculated) {
+    let input = request.input, base = calculateHellBaseTargets(request, calculated), hellGarrison = base.hellGarrison, patrolSize = base.patrolSize, authorityAdjusted = !1, authorityDebug = null;
+    if (input.manageAuthority && input.minimumAuthority !== 0 && calculated.authority.unlocked && patrolSize > 0) {
+      let perSoldier = 0.7 + 0.1 * input.evilTechnology;
+      input.grenadier && (perSoldier *= 1.75), input.government === "autocracy" ? perSoldier *= 1.08 : input.government === "dictator" && (perSoldier *= 1.12);
+      let authorityTarget = input.minimumAuthority < 0 ? calculated.authority.maximum : input.minimumAuthority, deficit = authorityTarget - calculated.authority.current, neededStationed = input.currentHellGarrison + Math.ceil(deficit / perSoldier), patrolReserve = 1;
+      input.minimumAuthority < 0 && input.minimumAuthorityPatrolPercent > 0 && (patrolReserve = Math.min(
+        request.availableHellSoldiers,
+        Math.ceil(
+          request.availableHellSoldiers * input.minimumAuthorityPatrolPercent / 100
+        )
+      ));
+      let maximumStationed = Math.max(
+        0,
+        request.availableHellSoldiers - patrolReserve
+      ), authorityGarrison = Math.max(
+        hellGarrison,
+        Math.min(neededStationed, maximumStationed)
+      );
+      patrolSize = Math.min(
+        patrolSize,
+        Math.max(1, request.availableHellSoldiers - authorityGarrison)
+      ), authorityAdjusted = authorityGarrison !== input.currentHellGarrison, calculated.authority.debugEnabled && authorityGarrison !== hellGarrison && (authorityDebug = {
+        amount: calculated.authority.current,
+        target: authorityTarget,
+        perSoldier,
+        currentStationed: input.currentHellGarrison,
+        neededStationed,
+        defenseGarrison: hellGarrison,
+        authorityGarrison,
+        maximumStationed,
+        patrolReserve,
+        patrolSize,
+        availableSoldiers: request.availableHellSoldiers
+      }), hellGarrison = authorityGarrison;
+    }
+    let targetPatrols = Math.max(
+      1,
+      Math.floor((request.availableHellSoldiers - hellGarrison) / patrolSize)
+    );
+    if (input.handlePatrolSize && targetPatrols === 1) {
+      let availableForPatrol = request.availableHellSoldiers - hellGarrison;
+      availableForPatrol >= 1.5 * patrolSize && (patrolSize = Math.floor(availableForPatrol / 3), targetPatrols = Math.floor(availableForPatrol / patrolSize));
+    }
+    return manageDecision(
+      adjustmentCommands(
+        input,
+        request.targetHellSoldiers,
+        targetPatrols,
+        patrolSize
+      ),
+      authorityAdjusted,
+      authorityDebug
+    );
+  }
 
   // src/adapters/evolve/combat/captured-hell.ts
-  var FORT_CONTROL = "fort";
+  var FORT_CONTROL = "fort", GARRISON_CONTROLS = ["garrison", "c_garrison"];
   function finiteHellValue(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function settingNumber(settings, key, fallback) {
+    return finiteHellValue(settings[key]) ?? fallback;
   }
   function emptyHellInput() {
     return Object.freeze({
@@ -5134,7 +5201,11 @@
     let workers = finiteHellValue(readProperty(garrison, "workers")), maximumWorkers = finiteHellValue(readProperty(garrison, "max")), crew = finiteHellValue(readProperty(garrison, "crew")), hellSoldiers = finiteHellValue(readProperty(fortress, "garrison")), hellPatrols = finiteHellValue(readProperty(fortress, "patrols")), hellPatrolSize = finiteHellValue(readProperty(fortress, "patrol_size"));
     if (workers === void 0 || maximumWorkers === void 0 || crew === void 0 || hellSoldiers === void 0 || hellPatrols === void 0 || hellPatrolSize === void 0)
       return emptyHellInput();
-    let space = readProperty(root, "space"), fob = readProperty(space, "fob"), fobTroops = finiteHellValue(readProperty(fob, "troops")) ?? 0, settings = isRecord(settingsValue) ? settingsValue : {}, homeGarrison = finiteHellValue(settings.hellHomeGarrison) ?? 10, minimumHellSoldiers = finiteHellValue(settings.hellMinSoldiers) ?? 20, minimumSoldierPercent = finiteHellValue(settings.hellMinSoldiersPercent) ?? 90, tech = readProperty(root, "tech"), elysium = finiteHellValue(readProperty(tech, "elysium")) ?? 0;
+    let space = readProperty(root, "space"), fob = readProperty(space, "fob"), fobTroops = finiteHellValue(readProperty(fob, "troops")) ?? 0, settings = isRecord(settingsValue) ? settingsValue : {}, tech = readProperty(root, "tech"), city = readProperty(root, "city"), turret = readProperty(portal, "turret"), warDrone = readProperty(portal, "war_drone"), warDroid = readProperty(portal, "war_droid"), bootCamp = readProperty(city, "boot_camp"), govern = readProperty(readProperty(root, "civic"), "govern"), elysium = finiteHellValue(readProperty(tech, "elysium")) ?? 0, homeGarrison = settingNumber(settings, "hellHomeGarrison", 10), minimumHellSoldiers = settingNumber(settings, "hellMinSoldiers", 20), minimumSoldierPercent = settingNumber(
+      settings,
+      "hellMinSoldiersPercent",
+      90
+    );
     return Object.freeze({
       ...emptyHellInput(),
       available: !0,
@@ -5152,7 +5223,52 @@
       minimumHellSoldiers,
       minimumSoldierPercent,
       elysiumUnlocked: elysium >= 3,
-      handlePatrolSize: settings.hellHandlePatrolSize !== !1
+      fortressWalls: finiteHellValue(readProperty(fortress, "walls")) ?? 0,
+      fortressThreat: finiteHellValue(readProperty(fortress, "threat")) ?? 0,
+      lowWallsMultiplier: settingNumber(settings, "hellLowWallsMulti", 3),
+      targetFortressDamage: settingNumber(
+        settings,
+        "hellTargetFortressDamage",
+        100
+      ),
+      turretCount: finiteHellValue(readProperty(turret, "on")) ?? 0,
+      turretTechnology: finiteHellValue(readProperty(tech, "turret")) ?? 0,
+      handlePatrolSize: settings.hellHandlePatrolSize !== !1,
+      patrolThreatPercent: settingNumber(settings, "hellPatrolThreatPercent", 8),
+      patrolDroneModifier: settingNumber(settings, "hellPatrolDroneMod", 5),
+      patrolDroidModifier: settingNumber(settings, "hellPatrolDroidMod", 5),
+      patrolBootcampModifier: settingNumber(settings, "hellPatrolBootcampMod", 0),
+      minimumPatrolRating: settingNumber(settings, "hellPatrolMinRating", 30),
+      bolsterPatrolRating: settingNumber(
+        settings,
+        "hellBolsterPatrolRating",
+        300
+      ),
+      bolsterPercentTop: settingNumber(
+        settings,
+        "hellBolsterPatrolPercentTop",
+        50
+      ),
+      bolsterPercentBottom: settingNumber(
+        settings,
+        "hellBolsterPatrolPercentBottom",
+        20
+      ),
+      warDroneCount: finiteHellValue(readProperty(warDrone, "on")) ?? 0,
+      portalTechnology: finiteHellValue(readProperty(tech, "portal")) ?? 0,
+      warDroidCount: finiteHellValue(readProperty(warDroid, "on")) ?? 0,
+      hellDroidTechnology: !!readProperty(tech, "hdroid"),
+      bootCampCount: finiteHellValue(readProperty(bootCamp, "count")) ?? 0,
+      manageAuthority: settings.authorityManage === !0,
+      minimumAuthority: settingNumber(settings, "generalMinimumAuthority", 0),
+      minimumAuthorityPatrolPercent: settingNumber(
+        settings,
+        "generalAuthorityMinPatrolPercent",
+        0
+      ),
+      evilTechnology: finiteHellValue(readProperty(tech, "evil")) ?? 0,
+      grenadier: readProperty(race, "grenadier") === !0,
+      government: typeof readProperty(govern, "type") == "string" ? readProperty(govern, "type") : ""
     });
   }
   var HELL_ADJUSTMENT_METHODS = Object.freeze({
@@ -5192,6 +5308,19 @@
     }
     return SUCCEEDED;
   }
+  function readSoldierTarget(controls, targetRating) {
+    if (targetRating <= 0) return 0;
+    let control = GARRISON_CONTROLS.map((id) => controls.resolve(id)).find(
+      (candidate) => candidate !== void 0
+    );
+    if (control === void 0 || !control.methods.includes("rating"))
+      return;
+    let result = controls.invoke(control, "rating", [10, !0]);
+    if (!result.ok) return;
+    let perSoldier = finiteHellValue(result.value);
+    if (!(perSoldier === void 0 || perSoldier <= 0))
+      return Math.ceil(targetRating / perSoldier);
+  }
   function createCapturedHellAutomation(dependencies) {
     let session = null;
     return Object.freeze({
@@ -5213,11 +5342,29 @@
         let control = dependencies.controls.resolve(FORT_CONTROL);
         if (decision.kind === "manage-hell")
           return applyHellManagement(decision, control, dependencies.controls);
-        if (decision.kind === "calculate-hell-targets")
-          return stale(
-            "hell-calculation-unavailable",
-            "the captured Hell soldier-rating query is unavailable"
-          );
+        if (decision.kind === "calculate-hell-targets") {
+          let garrisonSoldiers = readSoldierTarget(
+            dependencies.controls,
+            decision.garrisonRating
+          ), patrolSoldiers = decision.patrolRating === null ? decision.input.hellPatrolSize : readSoldierTarget(dependencies.controls, decision.patrolRating);
+          if (garrisonSoldiers === void 0 || patrolSoldiers === void 0)
+            return stale(
+              "hell-calculation-unavailable",
+              "the captured Hell soldier-rating query is unavailable"
+            );
+          let planned = planHell(decision, {
+            garrisonSoldiers,
+            patrolSoldiers,
+            authority: Object.freeze({
+              unlocked: !1,
+              current: 0,
+              maximum: 0,
+              scriptTick: 0,
+              debugEnabled: !1
+            })
+          });
+          return planned === null ? SUCCEEDED : applyHellManagement(planned, control, dependencies.controls);
+        }
         if (decision.kind !== "attack-enemy-fortress") return SUCCEEDED;
         if (control === void 0 || !control.methods.includes("attack"))
           return stale(
@@ -5290,7 +5437,7 @@
     let value = readProperty(settings, key);
     return typeof value == "number" && Number.isFinite(value) ? value : null;
   }
-  function settingNumber(settings, key, fallback) {
+  function settingNumber2(settings, key, fallback) {
     let value = readProperty(settings, key);
     return value === void 0 ? fallback : typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
@@ -5954,7 +6101,7 @@
     for (let split of SPLIT_SETTINGS) {
       let job = byId.get(split.id);
       if (job === void 0 || job.token === null) continue;
-      let weighting = settingNumber(settings, split.setting, split.fallback);
+      let weighting = settingNumber2(settings, split.setting, split.fallback);
       if (weighting === void 0) {
         onSkipped(
           `civ-${split.id}`,
@@ -7294,7 +7441,7 @@
   function finite2(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
-  function settingNumber2(settings, key, fallback) {
+  function settingNumber3(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : finite2(value);
   }
@@ -7356,7 +7503,7 @@
     let race = readProperty(root, "race"), tech = readProperty(root, "tech"), casting = readProperty(race, "casting"), resources = readProperty(root, "resource"), mana = readProperty(resources, "Mana"), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, magic = finite2(readProperty(tech, "magic")), manaAmount = finite2(readProperty(mana, "amount")), manaMaximum = finite2(readProperty(mana, "max")), manaRateOfChange = finite2(readProperty(mana, "diff"));
     if (!isRecord(casting) || magic === void 0 || magic < 3 || manaAmount === void 0 || manaMaximum === void 0 || manaRateOfChange === void 0 || dependencies.controls.resolve(PYLON_CONTROL) === void 0)
       return Object.freeze({ root, input: emptyInput2() });
-    let ritualManaUse = settingNumber2(settings, "productionRitualManaUse", 0.5);
+    let ritualManaUse = settingNumber3(settings, "productionRitualManaUse", 0.5);
     if (ritualManaUse === void 0)
       return Object.freeze({ root, input: emptyInput2() });
     let spells = [];
@@ -7364,7 +7511,7 @@
       if (!spellAvailable(id, race, magic)) continue;
       let currentSpells2 = finite2(readProperty(casting, id));
       if (currentSpells2 === void 0 || currentSpells2 < 0) continue;
-      let fallback = id === "hunting" ? DEFAULT_HUNTING_WEIGHTING : id === "farmer" ? DEFAULT_FARMER_WEIGHTING : DEFAULT_SPELL_WEIGHTING, weighting = settingNumber2(settings, `spell_w_${id}`, fallback);
+      let fallback = id === "hunting" ? DEFAULT_HUNTING_WEIGHTING : id === "farmer" ? DEFAULT_FARMER_WEIGHTING : DEFAULT_SPELL_WEIGHTING, weighting = settingNumber3(settings, `spell_w_${id}`, fallback);
       if (weighting === void 0)
         return Object.freeze({ root, input: emptyInput2() });
       spells.push(
@@ -7551,7 +7698,7 @@
       resources: Object.freeze([])
     });
   }
-  function settingNumber3(settings, key, fallback) {
+  function settingNumber4(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : finite3(value);
   }
@@ -7570,7 +7717,7 @@
         continue;
       let resource = readProperty(resources, id);
       if (!isRecord(resource)) continue;
-      let amount = finite3(resource.amount), maximum = finite3(resource.max), currentCount3 = finite3(alchemy[id]), display = resource.display, weighting = settingNumber3(settings, `res_alchemy_w_${id}`, 0);
+      let amount = finite3(resource.amount), maximum = finite3(resource.max), currentCount3 = finite3(alchemy[id]), display = resource.display, weighting = settingNumber4(settings, `res_alchemy_w_${id}`, 0);
       amount === void 0 || maximum === void 0 || currentCount3 === void 0 || typeof display != "boolean" || weighting === void 0 || settings[`res_alchemy_${id}`] === !1 || resourceViews.push(
         Object.freeze({
           id,
@@ -7582,7 +7729,7 @@
         })
       );
     }
-    let magicAlchemyManaUse = settingNumber3(
+    let magicAlchemyManaUse = settingNumber4(
       settings,
       "magicAlchemyManaUse",
       0.5
@@ -7782,7 +7929,7 @@
   function finite4(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
-  function settingNumber4(settings, key, fallback) {
+  function settingNumber5(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : finite4(value);
   }
@@ -7799,11 +7946,11 @@
       return Object.freeze({ root, input: emptyInput4() });
     let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, productions = [];
     for (let product of PRODUCTS) {
-      let resource = readProperty(resources, product.resource), amount = finite4(readProperty(resource, "amount")), maximumResource = finite4(readProperty(resource, "max")), current = finite4(readProperty(droids, product.id)), display = readProperty(resource, "display"), weighting = settingNumber4(
+      let resource = readProperty(resources, product.resource), amount = finite4(readProperty(resource, "amount")), maximumResource = finite4(readProperty(resource, "max")), current = finite4(readProperty(droids, product.id)), display = readProperty(resource, "display"), weighting = settingNumber5(
         settings,
         `droid_w_${product.resource}`,
         product.weighting
-      ), priority = settingNumber4(
+      ), priority = settingNumber5(
         settings,
         `droid_pr_${product.resource}`,
         product.priority
@@ -8229,7 +8376,7 @@
     let value = settings[key];
     return value === void 0 ? fallback : typeof value == "boolean" ? value : void 0;
   }
-  function settingNumber5(settings, key, fallback) {
+  function settingNumber6(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : finite6(value);
   }
@@ -8318,7 +8465,7 @@
         );
         continue;
       }
-      let enabled = settingBoolean2(settings, `replicator_${id}`, !0), weighting = settingNumber5(settings, `replicator_w_${id}`, 1), priority = settingNumber5(settings, `replicator_p_${id}`, 1);
+      let enabled = settingBoolean2(settings, `replicator_${id}`, !0), weighting = settingNumber6(settings, `replicator_w_${id}`, 1), priority = settingNumber6(settings, `replicator_p_${id}`, 1);
       if (enabled === void 0 || weighting === void 0 || priority === void 0)
         return Object.freeze({
           root,
@@ -9373,7 +9520,7 @@
   function finite8(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
-  function settingNumber6(settings, key, fallback) {
+  function settingNumber7(settings, key, fallback) {
     if (!isRecord(settings)) return fallback;
     let value = settings[key];
     return value === void 0 ? fallback : finite8(value);
@@ -9415,7 +9562,7 @@
     productions: Object.freeze([])
   });
   function readQuarryInput(dependencies, root) {
-    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite8(readProperty(quarry, "asbestos")), count = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber6(
+    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite8(readProperty(quarry, "asbestos")), count = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber7(
       dependencies.readSettings(),
       "productionChrysotileWeight",
       2
@@ -9437,7 +9584,7 @@
     });
   }
   function readMineInput(dependencies, root) {
-    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite8(readProperty(mine, "ratio")), count = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber6(
+    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite8(readProperty(mine, "ratio")), count = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber7(
       dependencies.readSettings(),
       "productionAdamantiteWeight",
       1
@@ -9462,7 +9609,7 @@
     let settings = dependencies.readSettings(), demand = dependencies.readDemand(), productions = [];
     for (let spec of EXTRACTOR_SPECS) {
       if (spec.id === "rare" && roidTech < RARE_EXTRACTION_TECH_LEVEL) continue;
-      let currentRatio = finite8(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber6(settings, `productionExtWeight_${spec.id}`, 1);
+      let currentRatio = finite8(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber7(settings, `productionExtWeight_${spec.id}`, 1);
       if (currentRatio === void 0 || res1StorageRatio === void 0 || res2StorageRatio === void 0 || weight === void 0)
         return EMPTY_EXTRACTOR;
       productions.push(

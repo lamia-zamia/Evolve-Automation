@@ -15,14 +15,15 @@ function makeRoot({ enemies = 1, minions = 1500, warlord = true } = {}) {
 function makeControls(invoked, available = true, methods = ["attack"]) {
   return {
     resolve: (elementId) =>
-      available && elementId === "fort"
+      available && (elementId === "fort" || elementId === "garrison")
         ? { elementId, generation: 1, methods }
         : undefined,
     invoke: (_handle, method, args) => {
       invoked.push({ method, args });
+      if (method === "rating") return { ok: true, value: 2.5 };
       return { ok: true, value: undefined };
     },
-    capturedElementIds: () => (available ? ["fort"] : []),
+    capturedElementIds: () => (available ? ["fort", "garrison"] : []),
   };
 }
 
@@ -135,22 +136,64 @@ function makeEvacuationRoot({
   );
 }
 
-// Once the gate allows entry, the adapter does not guess soldier ratings and reports a stale
-// calculation until that direct query is captured.
+// Once the gate allows entry, a captured garrison rating supplies both soldier targets and the
+// fortress controls receive the resulting management commands.
 {
-  const root = makeEvacuationRoot({ assigned: 0, patrols: 0, patrolSize: 1 });
+  const root = {
+    ...makeEvacuationRoot({ assigned: 0, patrols: 0, patrolSize: 1 }),
+    civic: {
+      garrison: { workers: 1000, max: 1000, crew: 0 },
+      govern: { type: "" },
+    },
+    portal: {
+      fortress: {
+        garrison: 0,
+        patrols: 0,
+        patrol_size: 1,
+        assigned: 0,
+        walls: 50,
+        threat: 1000,
+      },
+      turret: { on: 0 },
+      war_drone: { on: 0 },
+      war_droid: { on: 0 },
+    },
+    city: { boot_camp: { count: 0 } },
+    tech: { elysium: 0, turret: 0, portal: 0 },
+  };
+  const invoked = [];
   const automation = createCapturedHellAutomation({
     rootState: { readRoot: () => root },
-    controls: makeControls([], true, ["aNext"]),
+    controls: makeControls(invoked, true, [
+      "aNext",
+      "patSizeInc",
+      "patInc",
+      "rating",
+    ]),
     readSettings: () => ({
       hellHomeGarrison: 10,
       hellMinSoldiers: 20,
       hellMinSoldiersPercent: 90,
+      hellLowWallsMulti: 3,
+      hellTargetFortressDamage: 100,
+      hellPatrolMinRating: 30,
+      hellPatrolThreatPercent: 8,
     }),
   });
-  const outcome = automation.run();
-  assert.equal(outcome.status, "stale");
-  assert.equal(outcome.failure.code, "hell-calculation-unavailable");
+  assert.deepEqual(automation.run(), { status: "succeeded" });
+  assert.deepEqual(
+    invoked.filter(({ method }) => method === "rating"),
+    [
+      { method: "rating", args: [10, true] },
+      { method: "rating", args: [10, true] },
+    ],
+  );
+  assert.equal(invoked.filter(({ method }) => method === "aNext").length, 990);
+  assert.equal(
+    invoked.filter(({ method }) => method === "patSizeInc").length,
+    31,
+  );
+  assert.equal(invoked.filter(({ method }) => method === "patInc").length, 24);
 }
 
 console.log("Captured Hell adapter tests passed");
