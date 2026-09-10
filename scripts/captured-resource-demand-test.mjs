@@ -311,6 +311,39 @@ assert.equal(
   0,
 );
 
+// Interstellar missions keep the same captured price path while advancing distinct technology
+// counters; wormhole is the one that completes at a non-initial level.
+for (const [missionId, completionTech, completionLevel] of [
+  ["interstellar-alpha_mission", "alpha", 1],
+  ["interstellar-proxima_mission", "proxima", 1],
+  ["interstellar-nebula_mission", "nebula", 1],
+  ["interstellar-neutron_mission", "neutron", 1],
+  ["interstellar-blackhole_mission", "blackhole", 1],
+  ["interstellar-wormhole_mission", "stargate", 3],
+  ["interstellar-sirius_mission", "ascension", 3],
+]) {
+  const sample = spaceMissionDemand({
+    space: 0,
+    tech: { [completionTech]: 0 },
+    missionId,
+    resourceId: "Helium_3",
+    cost: { Helium_3: 900 },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Helium_3"), 100);
+  assert.equal(
+    spaceMissionDemand({
+      space: 0,
+      tech: { [completionTech]: completionLevel },
+      missionId,
+      resourceId: "Helium_3",
+      cost: { Helium_3: 900 },
+    })
+      .sample()
+      .requestedQuantity("Helium_3"),
+    0,
+  );
+}
+
 // A root without resources yet is not a demand claim.
 {
   const sample = createCapturedResourceDemand({

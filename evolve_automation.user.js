@@ -8814,6 +8814,41 @@
       actionId: "portal-spire_mission",
       completionTech: "hell_spire",
       completionLevel: 2
+    }),
+    Object.freeze({
+      actionId: "interstellar-alpha_mission",
+      completionTech: "alpha",
+      completionLevel: 1
+    }),
+    Object.freeze({
+      actionId: "interstellar-proxima_mission",
+      completionTech: "proxima",
+      completionLevel: 1
+    }),
+    Object.freeze({
+      actionId: "interstellar-nebula_mission",
+      completionTech: "nebula",
+      completionLevel: 1
+    }),
+    Object.freeze({
+      actionId: "interstellar-neutron_mission",
+      completionTech: "neutron",
+      completionLevel: 1
+    }),
+    Object.freeze({
+      actionId: "interstellar-blackhole_mission",
+      completionTech: "blackhole",
+      completionLevel: 1
+    }),
+    Object.freeze({
+      actionId: "interstellar-wormhole_mission",
+      completionTech: "stargate",
+      completionLevel: 3
+    }),
+    Object.freeze({
+      actionId: "interstellar-sirius_mission",
+      completionTech: "ascension",
+      completionLevel: 3
     })
   ]);
   function readCapturedSpaceMissionDemand(root, settings, controls, costs) {
