@@ -8749,17 +8749,24 @@
       )
     );
   }
-  function readCapturedMoonMissionDemand(root, settings, controls, costs) {
-    let actionId = "space-moon_mission";
-    if (controls === void 0 || costs === void 0 || controls.resolve(actionId) === void 0 || settingBoolean3(settings, "missionRequest", !0) === !1 || settingBoolean3(settings, `bat${actionId}`, !0) === !1)
+  var CAPTURED_SPACE_MISSIONS = Object.freeze([
+    Object.freeze({ actionId: "space-moon_mission", completionLevel: 3 }),
+    Object.freeze({ actionId: "space-red_mission", completionLevel: 4 })
+  ]);
+  function readCapturedSpaceMissionDemand(root, settings, controls, costs) {
+    if (controls === void 0 || costs === void 0 || settingBoolean3(settings, "missionRequest", !0) === !1)
       return Object.freeze([]);
     let tech = readProperty(root, "tech"), space = finite7(readProperty(tech, "space"));
-    if (space === void 0 || space >= 3) return Object.freeze([]);
-    let cost = costs.readCost(actionId);
-    if (cost === void 0) return Object.freeze([]);
-    let missionCosts = toCosts(cost);
-    return missionCosts.length === 0 ? Object.freeze([]) : Object.freeze([
-      Object.freeze({
+    if (space === void 0) return Object.freeze([]);
+    let missions = [];
+    for (let mission of CAPTURED_SPACE_MISSIONS) {
+      let actionId = mission.actionId;
+      if (controls.resolve(actionId) === void 0 || settingBoolean3(settings, `bat${actionId}`, !0) === !1 || space >= mission.completionLevel)
+        continue;
+      let cost = costs.readCost(actionId);
+      if (cost === void 0) continue;
+      let missionCosts = toCosts(cost);
+      missionCosts.length !== 0 && missions.push({
         isUnlocked: !0,
         autoBuildEnabled: !0,
         isComplete: !1,
@@ -8769,8 +8776,9 @@
           progress: null,
           costs: missionCosts
         })
-      })
-    ]);
+      });
+    }
+    return Object.freeze(missions.map((mission) => Object.freeze(mission)));
   }
   function readAffordable(resources, cost) {
     for (let [resourceId, amount] of Object.entries(cost)) {
@@ -9014,7 +9022,7 @@
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
         if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
-        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, missions = readCapturedMoonMissionDemand(
+        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, missions = readCapturedSpaceMissionDemand(
           root,
           settings,
           dependencies.controls,

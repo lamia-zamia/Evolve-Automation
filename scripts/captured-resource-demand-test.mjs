@@ -75,15 +75,17 @@ function withTargets(targets, settings = {}, saving = null, craftCosts) {
   assert.equal(sample.isDemanded("Stone"), false);
 }
 
-function moonMissionDemand({
+function spaceMissionDemand({
   space = 2,
+  missionId = "space-moon_mission",
+  resourceId = "Oil",
   control = true,
   cost = { Oil: 300 },
   costUnavailable = false,
 } = {}) {
   const missionRoot = {
     tech: { space },
-    resource: { Oil: { amount: 0, max: 100, stackable: true } },
+    resource: { [resourceId]: { amount: 0, max: 100, stackable: true } },
   };
   return createCapturedResourceDemand({
     rootState: { readRoot: () => missionRoot },
@@ -92,23 +94,23 @@ function moonMissionDemand({
     },
     controls: {
       resolve: (elementId) =>
-        control && elementId === "space-moon_mission"
+        control && elementId === missionId
           ? { elementId, generation: 1, methods: ["setData"] }
           : undefined,
       invoke: () => ({ ok: true, value: undefined }),
-      capturedElementIds: () => (control ? ["space-moon_mission"] : []),
+      capturedElementIds: () => (control ? [missionId] : []),
     },
     costs: { readCost: () => (costUnavailable ? undefined : cost) },
     readSettings: () => ({
       missionRequest: true,
-      "batspace-moon_mission": true,
+      [`bat${missionId}`]: true,
     }),
   });
 }
 
 // A captured, requested Moon mission reserves the game's own Oil cost, capped by storage.
 {
-  const sample = moonMissionDemand().sample();
+  const sample = spaceMissionDemand().sample();
   assert.equal(sample.requestedQuantity("Oil"), 100);
   assert.equal(sample.isDemanded("Oil"), true);
 }
@@ -117,17 +119,41 @@ function moonMissionDemand({
 // not guessed into the demand model.
 {
   assert.equal(
-    moonMissionDemand({ space: 3 }).sample().requestedQuantity("Oil"),
+    spaceMissionDemand({ space: 3 }).sample().requestedQuantity("Oil"),
     0,
   );
   assert.equal(
-    moonMissionDemand({ control: false }).sample().requestedQuantity("Oil"),
+    spaceMissionDemand({ control: false }).sample().requestedQuantity("Oil"),
     0,
   );
   assert.equal(
-    moonMissionDemand({ costUnavailable: true })
+    spaceMissionDemand({ costUnavailable: true })
       .sample()
       .requestedQuantity("Oil"),
+    0,
+  );
+}
+
+// The Red mission has a distinct upstream gate and resource cost, so it is not inferred from the
+// Moon mission's completion level.
+{
+  const sample = spaceMissionDemand({
+    space: 3,
+    missionId: "space-red_mission",
+    resourceId: "Helium_3",
+    cost: { Helium_3: 250 },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Helium_3"), 100);
+  assert.equal(sample.isDemanded("Helium_3"), true);
+  assert.equal(
+    spaceMissionDemand({
+      space: 4,
+      missionId: "space-red_mission",
+      resourceId: "Helium_3",
+      cost: { Helium_3: 250 },
+    })
+      .sample()
+      .requestedQuantity("Helium_3"),
     0,
   );
 }

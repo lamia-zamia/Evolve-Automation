@@ -187,37 +187,43 @@ function toTargets(
   );
 }
 
-/**
- * The first independently captured mission is the Moon mission. DeadSpace creates its action
- * control only after the space requirements pass, so control presence is the unlock signal; the
- * root's space level is only used for its completion grant. Costs still come from the game's own
- * action catalog rather than duplicating its inflation and trait adjustments.
- */
-function readCapturedMoonMissionDemand(
+const CAPTURED_SPACE_MISSIONS = Object.freeze([
+  Object.freeze({ actionId: "space-moon_mission", completionLevel: 3 }),
+  Object.freeze({ actionId: "space-red_mission", completionLevel: 4 }),
+]);
+
+/** DeadSpace creates each mission control only after its own space requirements pass. */
+function readCapturedSpaceMissionDemand(
   root: unknown,
   settings: Record<PropertyKey, unknown>,
   controls: GameControlRegistry | undefined,
   costs: GameActionCostReader | undefined,
 ): readonly DemandMission[] {
-  const actionId = "space-moon_mission";
   if (
     controls === undefined ||
     costs === undefined ||
-    controls.resolve(actionId) === undefined ||
-    settingBoolean(settings, "missionRequest", true) === false ||
-    settingBoolean(settings, `bat${actionId}`, true) === false
+    settingBoolean(settings, "missionRequest", true) === false
   ) {
     return Object.freeze([]);
   }
   const tech = readProperty(root, "tech");
   const space = finite(readProperty(tech, "space"));
-  if (space === undefined || space >= 3) return Object.freeze([]);
-  const cost = costs.readCost(actionId);
-  if (cost === undefined) return Object.freeze([]);
-  const missionCosts = toCosts(cost);
-  if (missionCosts.length === 0) return Object.freeze([]);
-  return Object.freeze([
-    Object.freeze({
+  if (space === undefined) return Object.freeze([]);
+  const missions: DemandMission[] = [];
+  for (const mission of CAPTURED_SPACE_MISSIONS) {
+    const actionId = mission.actionId;
+    if (
+      controls.resolve(actionId) === undefined ||
+      settingBoolean(settings, `bat${actionId}`, true) === false ||
+      space >= mission.completionLevel
+    ) {
+      continue;
+    }
+    const cost = costs.readCost(actionId);
+    if (cost === undefined) continue;
+    const missionCosts = toCosts(cost);
+    if (missionCosts.length === 0) continue;
+    missions.push({
       isUnlocked: true,
       autoBuildEnabled: true,
       isComplete: false,
@@ -227,8 +233,9 @@ function readCapturedMoonMissionDemand(
         progress: null,
         costs: missionCosts,
       }),
-    }),
-  ]);
+    });
+  }
+  return Object.freeze(missions.map((mission) => Object.freeze(mission)));
 }
 
 function readAffordable(
@@ -615,7 +622,7 @@ export function createCapturedResourceDemand(
       const offered = dependencies.readOfferedTechs?.();
       const settingsValue = dependencies.readSettings();
       const settings = isRecord(settingsValue) ? settingsValue : {};
-      const missions = readCapturedMoonMissionDemand(
+      const missions = readCapturedSpaceMissionDemand(
         root,
         settings,
         dependencies.controls,
