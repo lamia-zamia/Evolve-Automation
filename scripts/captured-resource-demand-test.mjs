@@ -207,6 +207,28 @@ function spaceMissionDemand({
   );
 }
 
+// Gas completion is the next space-level grant and uses a separately priced mission action.
+{
+  const sample = spaceMissionDemand({
+    space: 4,
+    missionId: "space-gas_mission",
+    resourceId: "Helium_3",
+    cost: { Helium_3: 600 },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Helium_3"), 100);
+  assert.equal(
+    spaceMissionDemand({
+      space: 5,
+      missionId: "space-gas_mission",
+      resourceId: "Helium_3",
+      cost: { Helium_3: 600 },
+    })
+      .sample()
+      .requestedQuantity("Helium_3"),
+    0,
+  );
+}
+
 // A root without resources yet is not a demand claim.
 {
   const sample = createCapturedResourceDemand({

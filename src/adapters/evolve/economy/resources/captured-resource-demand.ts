@@ -208,6 +208,11 @@ const CAPTURED_SPACE_MISSIONS = Object.freeze([
     completionTech: "solar",
     completionLevel: 1,
   }),
+  Object.freeze({
+    actionId: "space-gas_mission",
+    completionTech: "space",
+    completionLevel: 5,
+  }),
 ]);
 
 /** DeadSpace creates each mission control only after its own space requirements pass. */
