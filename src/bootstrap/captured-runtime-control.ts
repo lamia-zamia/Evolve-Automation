@@ -41,6 +41,7 @@ import {
 } from "../adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
+import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
 import {
@@ -85,6 +86,7 @@ import {
 } from "../adapters/evolve/economy/market/captured-market.ts";
 import { createCapturedTradeRoutes } from "../adapters/evolve/economy/market/captured-trade-routes.ts";
 import { runGalaxyMarketAutomation } from "../application/galaxy-market.ts";
+import { runFleetAutomation } from "../application/fleet.ts";
 import { runMarketTradesAutomation } from "../application/market.ts";
 import { createStorageAllocationAutomation } from "../application/storage-allocation.ts";
 import { createCapturedCraftCosts } from "../adapters/evolve/economy/production/captured-craft-costs.ts";
@@ -441,6 +443,28 @@ export function startCapturedRuntime({
     if (result.outcome.status !== "succeeded") {
       logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+  let galaxyFleetDiscoveryAttempted = false;
+  const ensureGalaxyFleetControls = () => {
+    if (pageCapture.controls.resolve("fleet") !== undefined) return;
+    if (galaxyFleetDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const spaceTabs = SUB_TAB_CONTROLS.spaceTabs;
+    if (spaceTabs === undefined) return;
+    galaxyFleetDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: 1,
+      }),
+      Object.freeze({ setting: "spaceTabs", control: spaceTabs, index: 3 }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `galaxy fleet discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
     }
   };
@@ -1006,6 +1030,11 @@ export function startCapturedRuntime({
     readBuildTargets: progression.readManagedBuildTargets,
     buildCosts,
   });
+  const fleet = createCapturedFleetAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => readStoredSettings(storage),
+  });
 
   const runCycle = () => {
     demandThisCycle = undefined;
@@ -1017,7 +1046,15 @@ export function startCapturedRuntime({
       return;
     }
     try {
-      if (isEnabled(settings, "autoFleet")) ensureCivicControls();
+      if (isEnabled(settings, "autoFleet")) {
+        const truepath =
+          readProperty(
+            readProperty(pageCapture.rootState.readRoot(), "race"),
+            "truepath",
+          ) === true;
+        if (truepath) ensureCivicControls();
+        else ensureGalaxyFleetControls();
+      }
       if (isEnabled(settings, "autoMarket")) {
         ensureMarketControls();
         marketAutomation.run();
@@ -1140,6 +1177,20 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoFactory")) {
         ensureFactoryControls();
         factory.run();
+      }
+      if (isEnabled(settings, "autoFleet")) {
+        const truepath =
+          readProperty(
+            readProperty(pageCapture.rootState.readRoot(), "race"),
+            "truepath",
+          ) === true;
+        if (!truepath) {
+          ensureGalaxyFleetControls();
+          runFleetAutomation({
+            reader: fleet.reader,
+            executor: fleet.executor,
+          });
+        }
       }
       if (isEnabled(settings, "autoResearch")) {
         progression.runResearchCycle();
