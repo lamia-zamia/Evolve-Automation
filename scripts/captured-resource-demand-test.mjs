@@ -75,6 +75,63 @@ function withTargets(targets, settings = {}, saving = null, craftCosts) {
   assert.equal(sample.isDemanded("Stone"), false);
 }
 
+function moonMissionDemand({
+  space = 2,
+  control = true,
+  cost = { Oil: 300 },
+  costUnavailable = false,
+} = {}) {
+  const missionRoot = {
+    tech: { space },
+    resource: { Oil: { amount: 0, max: 100, stackable: true } },
+  };
+  return createCapturedResourceDemand({
+    rootState: { readRoot: () => missionRoot },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    controls: {
+      resolve: (elementId) =>
+        control && elementId === "space-moon_mission"
+          ? { elementId, generation: 1, methods: ["setData"] }
+          : undefined,
+      invoke: () => ({ ok: true, value: undefined }),
+      capturedElementIds: () => (control ? ["space-moon_mission"] : []),
+    },
+    costs: { readCost: () => (costUnavailable ? undefined : cost) },
+    readSettings: () => ({
+      missionRequest: true,
+      "batspace-moon_mission": true,
+    }),
+  });
+}
+
+// A captured, requested Moon mission reserves the game's own Oil cost, capped by storage.
+{
+  const sample = moonMissionDemand().sample();
+  assert.equal(sample.requestedQuantity("Oil"), 100);
+  assert.equal(sample.isDemanded("Oil"), true);
+}
+
+// The mission grant completes at space level three, and an uncaptured or unpriceable action is
+// not guessed into the demand model.
+{
+  assert.equal(
+    moonMissionDemand({ space: 3 }).sample().requestedQuantity("Oil"),
+    0,
+  );
+  assert.equal(
+    moonMissionDemand({ control: false }).sample().requestedQuantity("Oil"),
+    0,
+  );
+  assert.equal(
+    moonMissionDemand({ costUnavailable: true })
+      .sample()
+      .requestedQuantity("Oil"),
+    0,
+  );
+}
+
 // A root without resources yet is not a demand claim.
 {
   const sample = createCapturedResourceDemand({

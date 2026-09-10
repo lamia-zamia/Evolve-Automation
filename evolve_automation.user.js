@@ -8673,6 +8673,29 @@
       )
     );
   }
+  function readCapturedMoonMissionDemand(root, settings, controls, costs) {
+    let actionId = "space-moon_mission";
+    if (controls === void 0 || costs === void 0 || controls.resolve(actionId) === void 0 || settingBoolean3(settings, "missionRequest", !0) === !1 || settingBoolean3(settings, `bat${actionId}`, !0) === !1)
+      return Object.freeze([]);
+    let tech = readProperty(root, "tech"), space = finite7(readProperty(tech, "space"));
+    if (space === void 0 || space >= 3) return Object.freeze([]);
+    let cost = costs.readCost(actionId);
+    if (cost === void 0) return Object.freeze([]);
+    let missionCosts = toCosts(cost);
+    return missionCosts.length === 0 ? Object.freeze([]) : Object.freeze([
+      Object.freeze({
+        isUnlocked: !0,
+        autoBuildEnabled: !0,
+        isComplete: !1,
+        isBlackholeJumpShip: !1,
+        target: Object.freeze({
+          isProject: !1,
+          progress: null,
+          costs: missionCosts
+        })
+      })
+    ]);
+  }
   function readAffordable(resources, cost) {
     for (let [resourceId, amount] of Object.entries(cost)) {
       if (!Number.isFinite(amount) || amount < 0) return !1;
@@ -8915,7 +8938,12 @@
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
         if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
-        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, crafterDemand = settings.productionFactoryFocusMaterials === !0 ? readCapturedCrafterDemand(
+        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, missions = readCapturedMoonMissionDemand(
+          root,
+          settings,
+          dependencies.controls,
+          dependencies.costs
+        ), crafterDemand = settings.productionFactoryFocusMaterials === !0 ? readCapturedCrafterDemand(
           root,
           resources,
           settings,
@@ -8923,7 +8951,7 @@
         ) : void 0, factoryCatalog = readCapturedFactoryDemand(root, settings), hasFactoryDemand = factoryCatalog?.productions.some(
           (production) => production.unlocked && production.enabled && production.weighting > 0
         ) ?? !1, hasCrafterDemand = (crafterDemand?.crafters.length ?? 0) > 0;
-        if (queued.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand)
+        if (queued.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0)
           return EMPTY_DEMAND_SAMPLE;
         let savingCosts = saving === null ? null : toCosts(saving.cost), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
@@ -8937,7 +8965,7 @@
           queuedTargets: toTargets(queued),
           triggerTargets: Object.freeze([]),
           savingTarget: saving === null || savingCosts === null ? null : Object.freeze({ name: saving.name, costs: savingCosts }),
-          missions: Object.freeze([]),
+          missions,
           unlockedTechs: toOfferedTechs(resources, offered),
           spyPurchaseMoney: 0,
           fleet: Object.freeze({
@@ -14081,6 +14109,8 @@
       })
     }), demand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      costs: buildCosts,
       construction: progression.observations,
       readOfferedTechs: progression.readOfferedTechs,
       reservations: queueReservations,

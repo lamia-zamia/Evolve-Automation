@@ -27,12 +27,15 @@ import {
   type DemandCost,
   type DemandCrafter,
   type DemandCrafterCost,
+  type DemandMission,
   type DemandTech,
   type DemandPrioritizationSettings,
   type DemandTarget,
 } from "../../../../domain/economy/resources/demand-prioritization.ts";
 import type { ReservedCostTarget } from "../../../../domain/cost-conflicts.ts";
 import type { CostReservationSource } from "../../../../ports/game-cost-reservations.ts";
+import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
+import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { ConstructionObservations } from "../../../../ports/game-construction-observations.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
@@ -43,6 +46,9 @@ import { isRecord, readProperty } from "../../../validation.ts";
 export interface CapturedResourceDemandDependencies {
   readonly rootState: GameRootStateSource;
   readonly reservations: CostReservationSource;
+  /** Captured action controls and the game's own cost reader for independently ported missions. */
+  readonly controls?: GameControlRegistry;
+  readonly costs?: GameActionCostReader;
   /**
    * What the construction cycle observed. Absent for a caller with no construction cycle to watch,
    * which then simply sees no implicit commitment.
@@ -179,6 +185,50 @@ function toTargets(
       }),
     ),
   );
+}
+
+/**
+ * The first independently captured mission is the Moon mission. DeadSpace creates its action
+ * control only after the space requirements pass, so control presence is the unlock signal; the
+ * root's space level is only used for its completion grant. Costs still come from the game's own
+ * action catalog rather than duplicating its inflation and trait adjustments.
+ */
+function readCapturedMoonMissionDemand(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+  controls: GameControlRegistry | undefined,
+  costs: GameActionCostReader | undefined,
+): readonly DemandMission[] {
+  const actionId = "space-moon_mission";
+  if (
+    controls === undefined ||
+    costs === undefined ||
+    controls.resolve(actionId) === undefined ||
+    settingBoolean(settings, "missionRequest", true) === false ||
+    settingBoolean(settings, `bat${actionId}`, true) === false
+  ) {
+    return Object.freeze([]);
+  }
+  const tech = readProperty(root, "tech");
+  const space = finite(readProperty(tech, "space"));
+  if (space === undefined || space >= 3) return Object.freeze([]);
+  const cost = costs.readCost(actionId);
+  if (cost === undefined) return Object.freeze([]);
+  const missionCosts = toCosts(cost);
+  if (missionCosts.length === 0) return Object.freeze([]);
+  return Object.freeze([
+    Object.freeze({
+      isUnlocked: true,
+      autoBuildEnabled: true,
+      isComplete: false,
+      isBlackholeJumpShip: false,
+      target: Object.freeze({
+        isProject: false,
+        progress: null,
+        costs: missionCosts,
+      }),
+    }),
+  ]);
 }
 
 function readAffordable(
@@ -565,6 +615,12 @@ export function createCapturedResourceDemand(
       const offered = dependencies.readOfferedTechs?.();
       const settingsValue = dependencies.readSettings();
       const settings = isRecord(settingsValue) ? settingsValue : {};
+      const missions = readCapturedMoonMissionDemand(
+        root,
+        settings,
+        dependencies.controls,
+        dependencies.costs,
+      );
       const crafterDemand =
         settings["productionFactoryFocusMaterials"] === true
           ? readCapturedCrafterDemand(
@@ -588,7 +644,8 @@ export function createCapturedResourceDemand(
         saving === null &&
         (offered === undefined || offered.length === 0) &&
         !hasFactoryDemand &&
-        !hasCrafterDemand
+        !hasCrafterDemand &&
+        missions.length === 0
       ) {
         return EMPTY_DEMAND_SAMPLE;
       }
@@ -609,7 +666,7 @@ export function createCapturedResourceDemand(
           saving === null || savingCosts === null
             ? null
             : Object.freeze({ name: saving.name, costs: savingCosts }),
-        missions: Object.freeze([]),
+        missions,
         unlockedTechs: toOfferedTechs(resources, offered),
         spyPurchaseMoney: 0,
         fleet: Object.freeze({

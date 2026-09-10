@@ -322,6 +322,8 @@ export function startCapturedRuntime({
   });
   const demand = createCapturedResourceDemand({
     rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    costs: buildCosts,
     construction: progression.observations,
     readOfferedTechs: progression.readOfferedTechs,
     reservations: queueReservations,
