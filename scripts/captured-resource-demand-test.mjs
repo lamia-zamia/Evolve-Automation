@@ -116,6 +116,35 @@ function withTargets(targets, settings = {}, saving = null, craftCosts) {
   );
 }
 
+// A project trigger reserves the whole remaining project, with the same doubling any part-built
+// project target takes.
+{
+  const projectTriggers = (progress) => ({
+    read: () => [
+      {
+        actionId: "arpalhc",
+        actionType: "arpa",
+        cost: { Stone: 350 },
+        projectId: "lhc",
+        steps: 100 - progress,
+        progress,
+        generation: 1,
+      },
+    ],
+  });
+  const withProjectTriggers = (progress) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => root },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      readSettings: () => ({}),
+      triggers: projectTriggers(progress),
+    }).sample();
+  assert.equal(withProjectTriggers(10).requestedQuantity("Stone"), 700);
+  assert.equal(withProjectTriggers(99).requestedQuantity("Stone"), 350);
+}
+
 // An empty queue plans nothing.
 {
   const sample = withTargets([]).sample();

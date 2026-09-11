@@ -28,6 +28,27 @@ const OFFERED = [
   { elementId: "tech-mad", cost: { Knowledge: 600 }, generation: 1 },
 ];
 
+const PROJECTS = [
+  {
+    elementId: "arpalaunch_facility",
+    projectId: "launch_facility",
+    rank: 0,
+    progress: 10,
+    cost: { Money: 100, Lumber: 50 },
+    generation: 3,
+  },
+];
+
+const ARPA_TARGET = {
+  actionId: "arpalaunch_facility",
+  actionType: "arpa",
+  cost: { Money: 9000, Lumber: 4500 },
+  projectId: "launch_facility",
+  steps: 90,
+  progress: 10,
+  generation: 3,
+};
+
 function trigger(overrides = {}) {
   return {
     seq: 0,
@@ -47,13 +68,19 @@ function triggers({
   triggers: rows = [],
   rootValue = root,
   offered = OFFERED,
+  projects = PROJECTS,
+  readOfferedProjects,
   controls,
 } = {}) {
+  const offeredProjects = projects === null ? undefined : projects;
   return createCapturedTriggers({
     rootState: { readRoot: () => rootValue },
     controls: controls ?? {
       resolve: (elementId) =>
-        elementId in COSTS
+        elementId in COSTS ||
+        (offeredProjects ?? []).some(
+          (project) => project.elementId === elementId,
+        )
           ? { elementId, generation: 1, methods: [] }
           : undefined,
       invoke: () => ({ ok: true, value: undefined }),
@@ -62,6 +89,7 @@ function triggers({
     costs: { readCost: (actionId) => COSTS[actionId] },
     readSettings: () => ({ autoTrigger: true, triggers: rows, ...settings }),
     readOfferedTechs: () => (offered === null ? undefined : offered),
+    readOfferedProjects: readOfferedProjects ?? (() => offeredProjects),
   });
 }
 
@@ -147,14 +175,126 @@ assert.deepEqual(
   [],
 );
 
-// A.R.P.A. actions are not priced yet, so a trigger for one raises no demand.
+// A.R.P.A. triggers buy the whole remaining project at the drawn per-percent price.
 assert.deepEqual(
   triggers({
     triggers: [
       trigger({ actionType: "arpa", actionId: "arpalaunch_facility" }),
     ],
   }).read(),
+  [ARPA_TARGET],
+);
+
+// A project the panel is not offering, or whose panel cannot be read, raises no demand.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger({ actionType: "arpa", actionId: "arpalhc" })],
+  }).read(),
   [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ actionType: "arpa", actionId: "arpalaunch_facility" }),
+    ],
+    projects: null,
+  }).read(),
+  [],
+);
+
+// A project whose whole remaining cost does not fit in storage is not a target.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ actionType: "arpa", actionId: "arpalaunch_facility" }),
+    ],
+    projects: [
+      {
+        elementId: "arpalaunch_facility",
+        projectId: "launch_facility",
+        rank: 0,
+        progress: 10,
+        cost: { Money: 100, Lumber: 60 },
+        generation: 3,
+      },
+    ],
+  }).read(),
+  [],
+);
+
+// A project already at its configured rank is done, like a finished building count.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        actionType: "arpa",
+        actionId: "arpalaunch_facility",
+        actionCount: 0,
+      }),
+    ],
+  }).read(),
+  [],
+);
+
+// A project whose control was never captured is not one the executor could press.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ actionType: "arpa", actionId: "arpalaunch_facility" }),
+    ],
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: true, value: undefined }),
+      capturedElementIds: () => [],
+    },
+  }).read(),
+  [],
+);
+
+// The project panel stays undrawn when no configured trigger names an A.R.P.A. action.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger()],
+    readOfferedProjects: () => {
+      throw new Error("the panel must not be drawn without an arpa trigger");
+    },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// A project trigger competes for its cost resources like any other trigger.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ priority: 0, actionId: "city-mine" }),
+      trigger({
+        priority: 1,
+        actionType: "arpa",
+        actionId: "arpalaunch_facility",
+      }),
+    ],
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        priority: 0,
+        actionType: "arpa",
+        actionId: "arpalaunch_facility",
+      }),
+      trigger({
+        priority: 1,
+        actionType: "research",
+        actionId: "tech-mad",
+      }),
+    ],
+  }).read(),
+  [
+    ARPA_TARGET,
+    { actionId: "tech-mad", actionType: "research", cost: { Knowledge: 600 } },
+  ],
 );
 
 // Chained triggers wait for the trigger before them to finish.

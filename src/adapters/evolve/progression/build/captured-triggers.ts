@@ -14,9 +14,10 @@
  *
  * Known gaps, each of which drops the trigger instead of approximating it:
  *
- * - A.R.P.A. actions are priced per percentage point from the drawn project panel, and a trigger
- *   buys the whole remaining project rather than the configured step. Their completion is read
- *   here — chained triggers depend on it — but they raise no demand yet.
+ * - A trigger buys the whole remaining project, priced from the drawn panel's per-percent cost
+ *   multiplied by the remaining percent. The drawn 1% price is rounded for display while the game
+ *   charges the unrounded fraction per step, so the product slightly overstates the charge — the
+ *   safe direction for both saving and the executor's affordability gate.
  * - Research completion is not captured: the game's grant keys live in its private action catalog,
  *   so a technology is only known to be incomplete while the research panel still offers it. A
  *   trigger chained behind a research trigger is therefore dropped until that one is offered.
@@ -25,18 +26,37 @@
 
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { evaluateCapturedCondition } from "../../captured-conditions.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
-/** One trigger action the game could buy now, priced at the game's own current cost. */
-export interface CapturedTriggerTarget {
-  /** The id the game renders the action under, e.g. `city-farm` or `tech-mad`. */
-  readonly actionId: string;
-  readonly actionType: "build" | "research";
-  readonly cost: Readonly<Record<string, number>>;
-}
+/**
+ * One trigger action the game could buy now, priced at the game's own current cost.
+ *
+ * A.R.P.A. targets carry the sampled project state the executor's stale checks and the demand
+ * model's project rule need: a trigger buys the whole remaining project, so `cost` is the drawn
+ * per-percent price times `steps` and `progress` is the `complete` percent it was priced from.
+ */
+export type CapturedTriggerTarget =
+  | {
+      readonly actionId: string;
+      readonly actionType: "build" | "research";
+      readonly cost: Readonly<Record<string, number>>;
+    }
+  | {
+      readonly actionId: string;
+      readonly actionType: "arpa";
+      readonly cost: Readonly<Record<string, number>>;
+      /** The project id the game's own `build` method takes, e.g. `lhc`. */
+      readonly projectId: string;
+      /** The whole remaining project in percent: the steps one press buys. */
+      readonly steps: number;
+      /** The project's current `complete` percent. */
+      readonly progress: number;
+      readonly generation: number;
+    };
 
 export interface CapturedTriggers {
   /** The actionable triggers in the player's priority order. Sampled once per cycle. */
@@ -51,6 +71,9 @@ export interface CapturedTriggersDependencies {
   /** The offered-technology snapshot this cycle already captured, if any. */
   readonly readOfferedTechs?: () =>
     readonly Readonly<OfferedTech>[] | undefined;
+  /** The A.R.P.A. snapshot this cycle already captured, if any. */
+  readonly readOfferedProjects?: () =>
+    readonly Readonly<OfferedProject>[] | undefined;
 }
 
 interface TriggerRow {
@@ -167,6 +190,19 @@ export function createCapturedTriggers(
         offered === undefined
           ? undefined
           : new Map(offered.map((tech) => [tech.elementId, tech]));
+      // The project panel is the most expensive read on this path, so it is only drawn when a
+      // configured trigger actually names an A.R.P.A. action. The sample is the cycle's shared
+      // one, so a construction cycle later in the tick reuses these prices.
+      const offeredProjectsById =
+        dependencies.readOfferedProjects === undefined ||
+        !rows.some((row) => row.actionType === "arpa")
+          ? undefined
+          : new Map(
+              (dependencies.readOfferedProjects() ?? []).map((project) => [
+                project.elementId,
+                project,
+              ]),
+            );
       const byPriority = new Map(rows.map((row) => [row.priority, row]));
 
       /** Whether the trigger's action has already been carried out, if that is knowable. */
@@ -230,26 +266,80 @@ export function createCapturedTriggers(
         return costs.readCost(row.actionId);
       };
 
+      /**
+       * A trigger buys the whole remaining project, priced from the drawn panel's per-percent
+       * cost. A project the panel is not offering — locked, or finished past its rank gate — is
+       * not one the game could buy now, so it raises no demand rather than guessing a price.
+       */
+      const priceArpa = (
+        row: TriggerRow,
+      ): Readonly<CapturedTriggerTarget> | undefined => {
+        const project = offeredProjectsById?.get(row.actionId);
+        if (project === undefined) return undefined;
+        // The target list only carries actions whose control was captured, so the executor can
+        // press them; the panel draw above captures the project controls as it prices them.
+        if (controls.resolve(row.actionId) === undefined) return undefined;
+        const remaining = 100 - project.progress;
+        if (
+          !Number.isSafeInteger(remaining) ||
+          remaining < 1 ||
+          remaining > 100
+        ) {
+          return undefined;
+        }
+        const cost: Record<string, number> = {};
+        for (const [resourceId, perPercent] of Object.entries(project.cost)) {
+          if (!Number.isFinite(perPercent) || perPercent <= 0) {
+            return undefined;
+          }
+          cost[resourceId] = perPercent * remaining;
+        }
+        if (Object.keys(cost).length === 0) return undefined;
+        const total = Object.freeze(cost);
+        if (!fitsInStorage(root, total)) return undefined;
+        return Object.freeze({
+          actionId: row.actionId,
+          actionType: "arpa",
+          cost: total,
+          projectId: project.projectId,
+          steps: remaining,
+          progress: project.progress,
+          generation: project.generation,
+        } as const);
+      };
+
       const targets: CapturedTriggerTarget[] = [];
       const claimed = new Set<string>();
+      /** The script's own conflict rule: two triggers saving for the same resource would each
+       * hold it against the other, so only the higher-priority one is a target. */
+      const claim = (target: Readonly<CapturedTriggerTarget>): boolean => {
+        const resourceIds = Object.keys(target.cost);
+        if (resourceIds.some((resourceId) => claimed.has(resourceId))) {
+          return false;
+        }
+        for (const resourceId of resourceIds) claimed.add(resourceId);
+        targets.push(target);
+        return true;
+      };
       for (const row of rows) {
         const actionType =
-          row.actionType === "build" || row.actionType === "research"
+          row.actionType === "build" ||
+          row.actionType === "research" ||
+          row.actionType === "arpa"
             ? row.actionType
             : undefined;
         if (actionType === undefined) continue;
         if (isComplete(row) !== false) continue;
         if (requirementMet(row) !== true) continue;
+        if (actionType === "arpa") {
+          const target = priceArpa(row);
+          if (target === undefined) continue;
+          claim(target);
+          continue;
+        }
         const cost = price(row);
         if (cost === undefined || !fitsInStorage(root, cost)) continue;
-        const resourceIds = Object.keys(cost);
-        // The script's own conflict rule: two triggers saving for the same resource would each
-        // hold it against the other, so only the higher-priority one is a target.
-        if (resourceIds.some((resourceId) => claimed.has(resourceId))) continue;
-        for (const resourceId of resourceIds) claimed.add(resourceId);
-        targets.push(
-          Object.freeze({ actionId: row.actionId, actionType, cost }),
-        );
+        claim(Object.freeze({ actionId: row.actionId, actionType, cost }));
       }
       return Object.freeze(targets);
     },

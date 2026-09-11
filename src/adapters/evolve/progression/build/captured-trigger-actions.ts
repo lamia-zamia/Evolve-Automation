@@ -11,9 +11,10 @@
  * Upstream's `runAction` does not simply decline a purchase it cannot pay for: once the build or
  * research queue is unlocked it enqueues the action instead, so pressing an unaffordable trigger
  * every cycle would quietly fill the player's queue with it. The only honest record of what a press
- * did is the state it moved — a building's count, or the technology bag. A press the game declined
- * anyway is a decision that bought nothing, not a failure, and it leaves the tick free to research
- * and build.
+ * did is the state it moved — a building's count, a project's rank or progress, or the technology
+ * bag. A press the game declined anyway is a decision that bought nothing, not a failure, and it
+ * leaves the tick free to research and build. Project triggers press the project's own `build`
+ * method with the whole remaining percent, the way the construction cycle does.
  */
 
 import { canAfford } from "../../../../domain/game-world.ts";
@@ -24,6 +25,7 @@ import type {
   TriggerReader,
 } from "../../../../ports/trigger.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
@@ -46,6 +48,9 @@ export interface CapturedTriggerActionsDependencies {
   /** The offered-technology snapshot the research triggers were priced from, if any. */
   readonly readOfferedTechs?: () =>
     readonly Readonly<OfferedTech>[] | undefined;
+  /** The A.R.P.A. snapshot the project triggers were priced from, if any. */
+  readonly readOfferedProjects?: () =>
+    readonly Readonly<OfferedProject>[] | undefined;
 }
 
 export interface CapturedTriggerActions {
@@ -70,6 +75,23 @@ function readActionCount(root: unknown, actionId: string): number | undefined {
   );
   return typeof count === "number" && Number.isFinite(count)
     ? count
+    : undefined;
+}
+
+/** An A.R.P.A. project's current rank and completion percent, if the root carries both. */
+function readProjectState(
+  root: unknown,
+  projectId: string,
+): { rank: number; progress: number } | undefined {
+  const state = readProperty(readProperty(root, "arpa"), projectId);
+  if (!isRecord(state)) return undefined;
+  const rank = readProperty(state, "rank");
+  const progress = readProperty(state, "complete");
+  return typeof rank === "number" &&
+    Number.isFinite(rank) &&
+    typeof progress === "number" &&
+    Number.isFinite(progress)
+    ? { rank, progress }
     : undefined;
 }
 
@@ -165,14 +187,73 @@ export function createCapturedTriggerActions(
         }
       }
 
+      if (target.actionType === "arpa") {
+        const offer = dependencies
+          .readOfferedProjects?.()
+          ?.find((project) => project.elementId === target.actionId);
+        if (offer === undefined) {
+          return triggerExecutionResult(
+            stale(
+              "stale-trigger-offer",
+              `${target.actionId} is no longer offered`,
+              { targetId: decision.targetId, index: decision.index },
+            ),
+            false,
+          );
+        }
+        if (handle.generation !== target.generation) {
+          // The game redrew this action after the snapshot was taken, so what it offers now was
+          // decided by predicates this cycle never saw. The old closure would still click.
+          return triggerExecutionResult(
+            stale(
+              "stale-trigger-control",
+              `${target.actionId} generation ${offer.generation}, current ${handle.generation}`,
+              { targetId: decision.targetId },
+            ),
+            false,
+          );
+        }
+        const state = readProjectState(rootState.readRoot(), target.projectId);
+        if (
+          state === undefined ||
+          state.rank !== offer.rank ||
+          state.progress !== offer.progress
+        ) {
+          // The project moved after the target was priced, so the sampled whole-remaining cost
+          // no longer describes it. The next cycle reprices.
+          return triggerExecutionResult(
+            stale(
+              "stale-trigger-state",
+              `${target.projectId} moved after sampling`,
+              { targetId: decision.targetId },
+            ),
+            false,
+          );
+        }
+      }
+
       const research = target.actionType === "research";
+      const project = target.actionType === "arpa" ? target : undefined;
       const beforeTech = research
         ? readCapturedTechState(rootState.readRoot())
         : "";
-      const beforeCount = research
-        ? undefined
-        : readActionCount(rootState.readRoot(), target.actionId);
-      const invocation = controls.invoke(handle, "action");
+      const beforeCount =
+        research || project !== undefined
+          ? undefined
+          : readActionCount(rootState.readRoot(), target.actionId);
+      const beforeProject =
+        project === undefined
+          ? undefined
+          : readProjectState(rootState.readRoot(), project.projectId);
+      // A trigger buys the whole remaining project through the project's own `build` method,
+      // the way the construction cycle does; anything else presses the game's action closure.
+      const invocation =
+        project === undefined
+          ? controls.invoke(handle, "action")
+          : controls.invoke(handle, "build", [
+              project.projectId,
+              project.steps,
+            ]);
       if (!invocation.ok) {
         return triggerExecutionResult(
           invocation.reason === "stale-control"
@@ -194,6 +275,19 @@ export function createCapturedTriggerActions(
         return triggerExecutionResult(
           SUCCEEDED,
           readCapturedTechState(rootState.readRoot()) !== beforeTech,
+        );
+      }
+      if (project !== undefined) {
+        const afterProject = readProjectState(
+          rootState.readRoot(),
+          project.projectId,
+        );
+        return triggerExecutionResult(
+          SUCCEEDED,
+          beforeProject !== undefined &&
+            afterProject !== undefined &&
+            (afterProject.rank > beforeProject.rank ||
+              afterProject.progress > beforeProject.progress),
         );
       }
       const afterCount = readActionCount(rootState.readRoot(), target.actionId);

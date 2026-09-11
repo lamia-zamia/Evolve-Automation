@@ -787,8 +787,10 @@ export function createCapturedResourceDemand(
       const triggerTargets = Object.freeze(
         (dependencies.triggers?.read() ?? []).map((target) =>
           Object.freeze({
-            isProject: false,
-            progress: null,
+            // A project trigger reserves the whole remaining project, so it takes the same
+            // doubling the pure planner gives any part-built project target.
+            isProject: target.actionType === "arpa",
+            progress: target.actionType === "arpa" ? target.progress : null,
             costs: toCosts(target.cost),
           }),
         ),

@@ -85,6 +85,13 @@ export interface CapturedProgressionControl {
   readonly readOfferedTechs: () => readonly Readonly<OfferedTech>[] | undefined;
   /** A fresh captured A.R.P.A. project snapshot, if it can be read. */
   readonly readProjects: () => readonly Readonly<OfferedProject>[] | undefined;
+  /**
+   * Drops the shared A.R.P.A. sample so the next reader takes a fresh one. The trigger phase
+   * prices project triggers from this same sample before construction runs, so it is reset once
+   * per cycle rather than only after a construction run — otherwise a cycle that skips
+   * construction would keep repricing from the previous cycle's panel.
+   */
+  readonly resetProjectSample: () => void;
   /** What the last construction cycle was saving for, for the features that read demand. */
   readonly observations: ConstructionObservations;
   /** Managed captured construction targets, used by production modes that weight against builds. */
@@ -213,6 +220,10 @@ export function createCapturedProgressionControl(
   });
   let projectSampled = false;
   let lastProjects: readonly Readonly<OfferedProject>[] | undefined;
+  const resetProjectSample = () => {
+    projectSampled = false;
+    lastProjects = undefined;
+  };
   const readProjects = () => {
     if (!projectSampled) {
       projectSampled = true;
@@ -327,13 +338,13 @@ export function createCapturedProgressionControl(
       try {
         return construction.runCycle();
       } finally {
-        projectSampled = false;
-        lastProjects = undefined;
+        resetProjectSample();
       }
     },
     runResearchCycle: () => research.runCycle(),
     readOfferedTechs: () => lastOffered,
     readProjects,
+    resetProjectSample,
     observations: construction.observations,
     readManagedBuildTargets,
     ensureBuildControls,

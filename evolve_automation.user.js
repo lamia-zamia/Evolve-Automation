@@ -3723,7 +3723,9 @@
       drawnProjects,
       controls,
       ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) }
-    }), projectSampled = !1, lastProjects, readProjects = () => (projectSampled || (projectSampled = !0, lastProjects = projectCatalog.readProjects()), lastProjects), readKnowledge = createCapturedKnowledgeReader({
+    }), projectSampled = !1, lastProjects, resetProjectSample = () => {
+      projectSampled = !1, lastProjects = void 0;
+    }, readProjects = () => (projectSampled || (projectSampled = !0, lastProjects = projectCatalog.readProjects()), lastProjects), readKnowledge = createCapturedKnowledgeReader({
       rootState,
       resources,
       readLastOfferedTechs: () => lastOffered,
@@ -3790,12 +3792,13 @@
         try {
           return construction.runCycle();
         } finally {
-          projectSampled = !1, lastProjects = void 0;
+          resetProjectSample();
         }
       },
       runResearchCycle: () => research.runCycle(),
       readOfferedTechs: () => lastOffered,
       readProjects,
+      resetProjectSample,
       observations: construction.observations,
       readManagedBuildTargets,
       ensureBuildControls
@@ -9331,8 +9334,10 @@
         let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, fleet = dependencies.fleet?.read(), triggerTargets = Object.freeze(
           (dependencies.triggers?.read() ?? []).map(
             (target) => Object.freeze({
-              isProject: !1,
-              progress: null,
+              // A project trigger reserves the whole remaining project, so it takes the same
+              // doubling the pure planner gives any part-built project target.
+              isProject: target.actionType === "arpa",
+              progress: target.actionType === "arpa" ? target.progress : null,
               costs: toCosts(target.cost)
             })
           )
@@ -10375,7 +10380,12 @@
         if (readProperty(settings, "autoTrigger") !== !0) return NO_TARGETS;
         let rows = readRows(settings);
         if (rows.length === 0) return NO_TARGETS;
-        let root = rootState.readRoot(), offered = dependencies.readOfferedTechs?.(), offeredTechs = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech])), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
+        let root = rootState.readRoot(), offered = dependencies.readOfferedTechs?.(), offeredTechs = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech])), offeredProjectsById = dependencies.readOfferedProjects === void 0 || !rows.some((row) => row.actionType === "arpa") ? void 0 : new Map(
+          (dependencies.readOfferedProjects() ?? []).map((project) => [
+            project.elementId,
+            project
+          ])
+        ), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
             let count2 = finiteValue2(
               readProperty(
@@ -10413,19 +10423,48 @@
             return offeredTechs?.get(row.actionId)?.cost;
           if (row.actionType === "build" && controls.resolve(row.actionId) !== void 0)
             return costs.readCost(row.actionId);
-        }, targets = [], claimed = /* @__PURE__ */ new Set();
-        for (let row of rows) {
-          let actionType = row.actionType === "build" || row.actionType === "research" ? row.actionType : void 0;
-          if (actionType === void 0 || isComplete(row) !== !1 || requirementMet(row) !== !0) continue;
-          let cost = price(row);
-          if (cost === void 0 || !fitsInStorage(root, cost)) continue;
-          let resourceIds = Object.keys(cost);
-          if (!resourceIds.some((resourceId) => claimed.has(resourceId))) {
-            for (let resourceId of resourceIds) claimed.add(resourceId);
-            targets.push(
-              Object.freeze({ actionId: row.actionId, actionType, cost })
-            );
+        }, priceArpa = (row) => {
+          let project = offeredProjectsById?.get(row.actionId);
+          if (project === void 0 || controls.resolve(row.actionId) === void 0) return;
+          let remaining = 100 - project.progress;
+          if (!Number.isSafeInteger(remaining) || remaining < 1 || remaining > 100)
+            return;
+          let cost = {};
+          for (let [resourceId, perPercent] of Object.entries(project.cost)) {
+            if (!Number.isFinite(perPercent) || perPercent <= 0)
+              return;
+            cost[resourceId] = perPercent * remaining;
           }
+          if (Object.keys(cost).length === 0) return;
+          let total = Object.freeze(cost);
+          if (fitsInStorage(root, total))
+            return Object.freeze({
+              actionId: row.actionId,
+              actionType: "arpa",
+              cost: total,
+              projectId: project.projectId,
+              steps: remaining,
+              progress: project.progress,
+              generation: project.generation
+            });
+        }, targets = [], claimed = /* @__PURE__ */ new Set(), claim = (target) => {
+          let resourceIds = Object.keys(target.cost);
+          if (resourceIds.some((resourceId) => claimed.has(resourceId)))
+            return !1;
+          for (let resourceId of resourceIds) claimed.add(resourceId);
+          return targets.push(target), !0;
+        };
+        for (let row of rows) {
+          let actionType = row.actionType === "build" || row.actionType === "research" || row.actionType === "arpa" ? row.actionType : void 0;
+          if (actionType === void 0 || isComplete(row) !== !1 || requirementMet(row) !== !0) continue;
+          if (actionType === "arpa") {
+            let target = priceArpa(row);
+            if (target === void 0) continue;
+            claim(target);
+            continue;
+          }
+          let cost = price(row);
+          cost === void 0 || !fitsInStorage(root, cost) || claim(Object.freeze({ actionId: row.actionId, actionType, cost }));
         }
         return Object.freeze(targets);
       }
@@ -10527,6 +10566,12 @@
     );
     return typeof count2 == "number" && Number.isFinite(count2) ? count2 : void 0;
   }
+  function readProjectState(root, projectId) {
+    let state = readProperty(readProperty(root, "arpa"), projectId);
+    if (!isRecord(state)) return;
+    let rank = readProperty(state, "rank"), progress = readProperty(state, "complete");
+    return typeof rank == "number" && Number.isFinite(rank) && typeof progress == "number" && Number.isFinite(progress) ? { rank, progress } : void 0;
+  }
   function createCapturedTriggerActions(dependencies) {
     let { rootState, controls, resources, readTargets, readSettings } = dependencies, reader = Object.freeze({
       read(index) {
@@ -10592,7 +10637,41 @@
               !1
             );
         }
-        let research = target.actionType === "research", beforeTech = research ? readCapturedTechState(rootState.readRoot()) : "", beforeCount = research ? void 0 : readActionCount(rootState.readRoot(), target.actionId), invocation = controls.invoke(handle, "action");
+        if (target.actionType === "arpa") {
+          let offer = dependencies.readOfferedProjects?.()?.find((project2) => project2.elementId === target.actionId);
+          if (offer === void 0)
+            return triggerExecutionResult(
+              stale(
+                "stale-trigger-offer",
+                `${target.actionId} is no longer offered`,
+                { targetId: decision.targetId, index: decision.index }
+              ),
+              !1
+            );
+          if (handle.generation !== target.generation)
+            return triggerExecutionResult(
+              stale(
+                "stale-trigger-control",
+                `${target.actionId} generation ${offer.generation}, current ${handle.generation}`,
+                { targetId: decision.targetId }
+              ),
+              !1
+            );
+          let state = readProjectState(rootState.readRoot(), target.projectId);
+          if (state === void 0 || state.rank !== offer.rank || state.progress !== offer.progress)
+            return triggerExecutionResult(
+              stale(
+                "stale-trigger-state",
+                `${target.projectId} moved after sampling`,
+                { targetId: decision.targetId }
+              ),
+              !1
+            );
+        }
+        let research = target.actionType === "research", project = target.actionType === "arpa" ? target : void 0, beforeTech = research ? readCapturedTechState(rootState.readRoot()) : "", beforeCount = research || project !== void 0 ? void 0 : readActionCount(rootState.readRoot(), target.actionId), beforeProject = project === void 0 ? void 0 : readProjectState(rootState.readRoot(), project.projectId), invocation = project === void 0 ? controls.invoke(handle, "action") : controls.invoke(handle, "build", [
+          project.projectId,
+          project.steps
+        ]);
         if (!invocation.ok)
           return triggerExecutionResult(
             invocation.reason === "stale-control" ? stale(
@@ -10610,6 +10689,16 @@
             SUCCEEDED,
             readCapturedTechState(rootState.readRoot()) !== beforeTech
           );
+        if (project !== void 0) {
+          let afterProject = readProjectState(
+            rootState.readRoot(),
+            project.projectId
+          );
+          return triggerExecutionResult(
+            SUCCEEDED,
+            beforeProject !== void 0 && afterProject !== void 0 && (afterProject.rank > beforeProject.rank || afterProject.progress > beforeProject.progress)
+          );
+        }
         let afterCount = readActionCount(rootState.readRoot(), target.actionId);
         return triggerExecutionResult(
           SUCCEEDED,
@@ -15627,14 +15716,16 @@
       controls: pageCapture2.controls,
       costs: buildCosts,
       readSettings: () => readStoredSettings(storage),
-      readOfferedTechs: progression.readOfferedTechs
+      readOfferedTechs: progression.readOfferedTechs,
+      readOfferedProjects: progression.readProjects
     }), triggerTargetsThisCycle, readTriggerTargets = () => triggerTargetsThisCycle ??= triggers.read(), triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       resources: createCapturedResourceSource(pageCapture2.rootState),
       readTargets: readTriggerTargets,
       readSettings: () => readStoredSettings(storage),
-      readOfferedTechs: progression.readOfferedTechs
+      readOfferedTechs: progression.readOfferedTechs,
+      readOfferedProjects: progression.readProjects
     }), demand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -16075,7 +16166,7 @@
       readSettings: () => readStoredSettings(storage),
       readDemand: () => readDemand()
     }), runCycle = () => {
-      demandThisCycle = void 0, triggerTargetsThisCycle = void 0;
+      demandThisCycle = void 0, triggerTargetsThisCycle = void 0, progression.resetProjectSample();
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {

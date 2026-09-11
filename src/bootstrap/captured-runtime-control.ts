@@ -338,6 +338,7 @@ export function startCapturedRuntime({
     costs: buildCosts,
     readSettings: () => readStoredSettings(storage),
     readOfferedTechs: progression.readOfferedTechs,
+    readOfferedProjects: progression.readProjects,
   });
   // One trigger sample per cycle, shared by the demand model and the trigger phase: what the
   // script saves for and what it clicks must be the same list.
@@ -352,6 +353,7 @@ export function startCapturedRuntime({
     readTargets: readTriggerTargets,
     readSettings: () => readStoredSettings(storage),
     readOfferedTechs: progression.readOfferedTechs,
+    readOfferedProjects: progression.readProjects,
   });
   const demand = createCapturedResourceDemand({
     rootState: pageCapture.rootState,
@@ -1071,6 +1073,7 @@ export function startCapturedRuntime({
   const runCycle = () => {
     demandThisCycle = undefined;
     triggerTargetsThisCycle = undefined;
+    progression.resetProjectSample();
     const settings = readStoredSettings(storage);
     if (
       !pageCapture.isComplete() ||

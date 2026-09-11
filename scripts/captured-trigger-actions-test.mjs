@@ -16,6 +16,23 @@ const MAD = Object.freeze({
   actionType: "research",
   cost: { Knowledge: 600 },
 });
+const ARPA = Object.freeze({
+  actionId: "arpalaunch_facility",
+  actionType: "arpa",
+  cost: { Money: 9000 },
+  projectId: "launch_facility",
+  steps: 90,
+  progress: 10,
+  generation: 1,
+});
+const ARPA_OFFER = Object.freeze({
+  elementId: "arpalaunch_facility",
+  projectId: "launch_facility",
+  rank: 0,
+  progress: 10,
+  cost: { Money: 100 },
+  generation: 1,
+});
 
 function makeRoot(overrides = {}) {
   return {
@@ -53,9 +70,11 @@ function actions({
   offered = [
     { elementId: "tech-mad", cost: { Knowledge: 600 }, generation: 1 },
   ],
+  projects = [ARPA_OFFER],
   onInvoke = () => {},
 } = {}) {
   const invoked = [];
+  const calls = [];
   const adapter = createCapturedTriggerActions({
     rootState: { readRoot: () => root },
     resources: {
@@ -83,8 +102,9 @@ function actions({
         elementId in generations
           ? { elementId, generation: generations[elementId], methods: [] }
           : undefined,
-      invoke: (handle, method) => {
+      invoke: (handle, method, args) => {
         invoked.push(handle.elementId + "." + method);
+        calls.push({ elementId: handle.elementId, method, args });
         return onInvoke(handle, method, root) ?? { ok: true, value: undefined };
       },
       capturedElementIds: () => Object.keys(generations),
@@ -92,8 +112,9 @@ function actions({
     readTargets: () => targets,
     readSettings: () => settings,
     readOfferedTechs: () => (offered === null ? undefined : offered),
+    readOfferedProjects: () => (projects === null ? undefined : projects),
   });
-  return { ...adapter, invoked, root };
+  return { ...adapter, invoked, calls, root };
 }
 
 // The reader walks the cycle's own target list and stops at its end.
@@ -315,6 +336,122 @@ assert.throws(() => actions().reader.read(1.5), TypeError);
   const result = runTriggerAutomation(adapter);
   assert.equal(result.outcome.status, "rejected");
   assert.equal(triggerPhaseActive(result), true);
+}
+
+// A project trigger is read like any other target, and presses the project's own build method
+// with the whole remaining percent; the progress it moved is the proof.
+function arpaRoot(overrides = {}) {
+  return {
+    race: { species: "human" },
+    tech: {},
+    arpa: { launch_facility: { rank: 0, complete: 10 } },
+    resource: {
+      Money: { amount: 50000, max: 100000, diff: 1, display: true },
+    },
+    stats: { achieve: {} },
+    ...overrides,
+  };
+}
+
+{
+  const { reader } = actions({ targets: [ARPA] });
+  assert.equal(reader.read(0).target.id, "arpalaunch_facility");
+}
+
+{
+  const { executor, invoked, calls, root } = actions({
+    root: arpaRoot(),
+    targets: [ARPA],
+    generations: { arpalaunch_facility: 1 },
+    onInvoke: (_handle, _method, current) => {
+      current.arpa.launch_facility.complete += 90;
+    },
+  });
+  const result = executor.execute({
+    kind: "click",
+    index: 0,
+    targetId: "arpalaunch_facility",
+  });
+  assert.deepEqual(invoked, ["arpalaunch_facility.build"]);
+  assert.deepEqual(calls[0].args, ["launch_facility", 90]);
+  assert.equal(result.outcome.status, "succeeded");
+  assert.equal(result.clicked, true);
+  assert.equal(root.arpa.launch_facility.complete, 100);
+}
+
+// A project press the game declined bought nothing; it is a decision, not a failure.
+{
+  const result = actions({
+    root: arpaRoot(),
+    targets: [ARPA],
+    generations: { arpalaunch_facility: 1 },
+  }).executor.execute({
+    kind: "click",
+    index: 0,
+    targetId: "arpalaunch_facility",
+  });
+  assert.equal(result.outcome.status, "succeeded");
+  assert.equal(result.clicked, false);
+}
+
+// A project the cycle is still saving for is never pressed.
+{
+  const adapter = actions({ targets: [ARPA] });
+  const result = adapter.executor.execute({
+    kind: "click",
+    index: 0,
+    targetId: "arpalaunch_facility",
+  });
+  assert.equal(result.outcome.status, "succeeded");
+  assert.equal(result.clicked, false);
+  assert.deepEqual(adapter.invoked, []);
+}
+
+// A project the game no longer offers, or has redrawn, is not pressed through the old closure.
+{
+  const withdrawn = actions({
+    root: arpaRoot(),
+    targets: [ARPA],
+    generations: { arpalaunch_facility: 1 },
+    projects: [],
+  }).executor.execute({
+    kind: "click",
+    index: 0,
+    targetId: "arpalaunch_facility",
+  });
+  assert.equal(withdrawn.outcome.status, "stale");
+  assert.equal(withdrawn.outcome.failure.code, "stale-trigger-offer");
+
+  const redrawn = actions({
+    root: arpaRoot(),
+    targets: [ARPA],
+    generations: { arpalaunch_facility: 2 },
+  }).executor.execute({
+    kind: "click",
+    index: 0,
+    targetId: "arpalaunch_facility",
+  });
+  assert.equal(redrawn.outcome.status, "stale");
+  assert.equal(redrawn.outcome.failure.code, "stale-trigger-control");
+}
+
+// A project that moved after it was priced is repriced next cycle, not pressed at the old price.
+{
+  const moved = arpaRoot();
+  moved.arpa.launch_facility.complete = 11;
+  const adapter = actions({
+    root: moved,
+    targets: [ARPA],
+    generations: { arpalaunch_facility: 1 },
+  });
+  const result = adapter.executor.execute({
+    kind: "click",
+    index: 0,
+    targetId: "arpalaunch_facility",
+  });
+  assert.equal(result.outcome.status, "stale");
+  assert.equal(result.outcome.failure.code, "stale-trigger-state");
+  assert.deepEqual(adapter.invoked, []);
 }
 
 console.log("captured trigger actions tests passed");
