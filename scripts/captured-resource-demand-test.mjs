@@ -91,6 +91,31 @@ function withTargets(targets, settings = {}, saving = null, craftCosts) {
   assert.equal(sample.isDemanded("Stone"), false);
 }
 
+// An active trigger's action is a commitment too, and the player's own setting gates it.
+{
+  const triggers = {
+    read: () => [
+      { actionId: "city-mine", actionType: "build", cost: { Stone: 350 } },
+    ],
+  };
+  const withTriggers = (settings = {}) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => root },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      readSettings: () => settings,
+      triggers,
+    }).sample();
+  const sample = withTriggers();
+  assert.equal(sample.requestedQuantity("Stone"), 350);
+  assert.equal(sample.isDemanded("Stone"), true);
+  assert.equal(
+    withTriggers({ prioritizeTriggers: "save" }).requestedQuantity("Stone"),
+    0,
+  );
+}
+
 // An empty queue plans nothing.
 {
   const sample = withTargets([]).sample();

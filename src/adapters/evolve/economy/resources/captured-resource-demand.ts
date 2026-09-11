@@ -13,7 +13,8 @@
  * cycle that has already run. Foundry recipes are included only when the factory-focus setting is
  * enabled and the game's own captured craft-cost renderer supplies every ingredient we use.
  * Factory material demand is included when its six-product catalog and validated regional capacity
- * are fully captured.
+ * are fully captured. The player's own triggers are carried when the captured trigger source can
+ * say which of them the game could act on now.
  *
  * A missing part of the model can only leave a resource looking undemanded, never demand something
  * nothing wants, so every consumer degrades the same way the bounded slices already do.
@@ -41,6 +42,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import type { CapturedCraftCosts } from "../production/captured-craft-costs.ts";
 import type { CapturedFleetDemand } from "../../combat/captured-fleet-demand.ts";
+import type { CapturedTriggers } from "../../progression/build/captured-triggers.ts";
 import { readCapturedFactoryCapacity } from "../production/captured-factory-capacity.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
@@ -63,6 +65,8 @@ export interface CapturedResourceDemandDependencies {
   readonly craftCosts?: CapturedCraftCosts;
   /** The rendered True Path shipyard cost, when the current blueprint is fully captured. */
   readonly fleet?: CapturedFleetDemand;
+  /** The player's own triggers, when the captured trigger source is composed. */
+  readonly triggers?: CapturedTriggers;
 }
 
 export interface CapturedDemandSample {
@@ -780,6 +784,15 @@ export function createCapturedResourceDemand(
       const settingsValue = dependencies.readSettings();
       const settings = isRecord(settingsValue) ? settingsValue : {};
       const fleet = dependencies.fleet?.read();
+      const triggerTargets = Object.freeze(
+        (dependencies.triggers?.read() ?? []).map((target) =>
+          Object.freeze({
+            isProject: false,
+            progress: null,
+            costs: toCosts(target.cost),
+          }),
+        ),
+      );
       const missions = readCapturedSpaceMissionDemand(
         root,
         settings,
@@ -813,6 +826,7 @@ export function createCapturedResourceDemand(
         fleet.nextShipCost.length > 0;
       if (
         queued.length === 0 &&
+        triggerTargets.length === 0 &&
         saving === null &&
         (offered === undefined || offered.length === 0) &&
         !hasFactoryDemand &&
@@ -834,7 +848,7 @@ export function createCapturedResourceDemand(
         inflationMoney: null,
         retirementGraphene: null,
         queuedTargets: toTargets(queued),
-        triggerTargets: Object.freeze([]),
+        triggerTargets,
         savingTarget:
           saving === null || savingCosts === null
             ? null

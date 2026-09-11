@@ -43,6 +43,7 @@ import { createCapturedResourceSource } from "../adapters/evolve/captured-world-
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
+import { createCapturedTriggers } from "../adapters/evolve/progression/build/captured-triggers.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
 import {
   createCapturedProductionRatios,
@@ -323,10 +324,18 @@ export function startCapturedRuntime({
       controls: pageCapture.controls,
     }),
   });
+  const triggers = createCapturedTriggers({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    costs: buildCosts,
+    readSettings: () => readStoredSettings(storage),
+    readOfferedTechs: progression.readOfferedTechs,
+  });
   const demand = createCapturedResourceDemand({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs: buildCosts,
+    triggers,
     construction: progression.observations,
     readOfferedTechs: progression.readOfferedTechs,
     reservations: queueReservations,

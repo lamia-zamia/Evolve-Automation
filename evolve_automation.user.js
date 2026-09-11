@@ -9325,7 +9325,15 @@
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
         if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
-        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, fleet = dependencies.fleet?.read(), missions = readCapturedSpaceMissionDemand(
+        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, fleet = dependencies.fleet?.read(), triggerTargets = Object.freeze(
+          (dependencies.triggers?.read() ?? []).map(
+            (target) => Object.freeze({
+              isProject: !1,
+              progress: null,
+              costs: toCosts(target.cost)
+            })
+          )
+        ), missions = readCapturedSpaceMissionDemand(
           root,
           settings,
           dependencies.controls,
@@ -9340,7 +9348,7 @@
         ) ?? !1, hasCrafterDemand = (crafterDemand?.crafters.length ?? 0) > 0, hasFleetDemand = settingBoolean3(settings, "autoFleet", !1) && settingString(settings, "prioritizeOuterFleet", "ignore").includes(
           "req"
         ) && fleet?.nextShipAffordable === !0 && fleet.nextShipCost.length > 0;
-        if (queued.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand)
+        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand)
           return EMPTY_DEMAND_SAMPLE;
         let savingCosts = saving === null ? null : toCosts(saving.cost), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
@@ -9352,7 +9360,7 @@
           inflationMoney: null,
           retirementGraphene: null,
           queuedTargets: toTargets(queued),
-          triggerTargets: Object.freeze([]),
+          triggerTargets,
           savingTarget: saving === null || savingCosts === null ? null : Object.freeze({ name: saving.name, costs: savingCosts }),
           missions,
           unlockedTechs: toOfferedTechs(resources, offered),
@@ -10169,6 +10177,253 @@
       }
     });
     return Object.freeze({ reader, executor });
+  }
+
+  // src/adapters/evolve/captured-conditions.ts
+  var BOOLEAN_OPERANDS = /* @__PURE__ */ new Set([
+    "Boolean",
+    "ResourceUnlocked",
+    "Challenge",
+    "Universe",
+    "Government",
+    "MimicGenus",
+    "PlanetBiome",
+    "PlanetTrait"
+  ]);
+  function finiteValue(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function structureState(root, argument) {
+    if (typeof argument != "string") return;
+    let separator = argument.indexOf("-");
+    if (separator <= 0) return;
+    let region = readProperty(root, argument.slice(0, separator));
+    return readProperty(region, argument.slice(separator + 1));
+  }
+  function projectRecord(root, argument) {
+    if (!(typeof argument != "string" || !argument.startsWith("arpa")))
+      return readProperty(
+        readProperty(root, "arpa"),
+        argument.slice(4)
+      );
+  }
+  function resourceRecord(root, argument) {
+    if (typeof argument == "string")
+      return readProperty(readProperty(root, "resource"), argument);
+  }
+  function queueLength(root, key) {
+    let entries = readProperty(readProperty(root, key), "queue");
+    return Array.isArray(entries) ? entries.length : void 0;
+  }
+  function readDate(root, argument) {
+    let days = finiteValue(readProperty(readProperty(root, "stats"), "days"));
+    if (argument === "total") return days;
+    let race = readProperty(root, "race");
+    if (argument === "impact") {
+      if (days === void 0 || !isRecord(race)) return;
+      let decay = readProperty(race, "orbit_decay");
+      return decay ? Number(decay) - days : -1;
+    }
+    if (typeof argument == "string")
+      return finiteValue(
+        readProperty(
+          readProperty(readProperty(root, "city"), "calendar"),
+          argument
+        )
+      );
+  }
+  function readNumber2(root, type, argument) {
+    switch (type) {
+      case "BuildingCount":
+        return finiteValue(readProperty(structureState(root, argument), "count"));
+      case "ProjectCount":
+        return finiteValue(readProperty(projectRecord(root, argument), "rank"));
+      case "ProjectProgress":
+        return finiteValue(
+          readProperty(projectRecord(root, argument), "complete")
+        );
+      case "ResourceQuantity":
+        return finiteValue(
+          readProperty(resourceRecord(root, argument), "amount")
+        );
+      case "ResourceStorage":
+        return finiteValue(readProperty(resourceRecord(root, argument), "max"));
+      case "ResourceRatio": {
+        let amount = finiteValue(
+          readProperty(resourceRecord(root, argument), "amount")
+        ), maximum = finiteValue(
+          readProperty(resourceRecord(root, argument), "max")
+        );
+        return amount === void 0 || maximum === void 0 ? void 0 : maximum > 0 ? amount / maximum : 1;
+      }
+      case "TraitLevel": {
+        let race = readProperty(root, "race");
+        return !isRecord(race) || typeof argument != "string" ? void 0 : finiteValue(readProperty(race, argument)) ?? 0;
+      }
+      case "Date":
+        return readDate(root, argument);
+      case "Queue":
+        return argument === "queue" ? queueLength(root, "queue") : argument === "r_queue" ? queueLength(root, "r_queue") : void 0;
+      default:
+        return;
+    }
+  }
+  function readBoolean(root, type, argument) {
+    switch (type) {
+      case "Boolean":
+        return typeof argument == "boolean" ? argument : void 0;
+      case "ResourceUnlocked": {
+        let entry = resourceRecord(root, argument);
+        return isRecord(entry) ? readProperty(entry, "display") === !0 : void 0;
+      }
+      case "Challenge": {
+        let race = readProperty(root, "race");
+        return !isRecord(race) || typeof argument != "string" ? void 0 : !!readProperty(race, argument);
+      }
+      case "Universe": {
+        let race = readProperty(root, "race");
+        return isRecord(race) ? readProperty(race, "universe") === argument : void 0;
+      }
+      case "Government": {
+        let civic = readProperty(root, "civic");
+        return isRecord(civic) ? readProperty(readProperty(civic, "govern"), "type") === argument : void 0;
+      }
+      case "MimicGenus": {
+        let race = readProperty(root, "race");
+        return isRecord(race) ? (readProperty(race, "ss_genus") ?? "none") === argument : void 0;
+      }
+      case "PlanetBiome": {
+        let city = readProperty(root, "city");
+        return isRecord(city) ? readProperty(city, "biome") === argument : void 0;
+      }
+      case "PlanetTrait": {
+        let traits = readProperty(readProperty(root, "city"), "ptrait");
+        return Array.isArray(traits) ? traits.includes(argument) : void 0;
+      }
+      default:
+        return;
+    }
+  }
+  function readCapturedOperand(root, type, argument) {
+    if (typeof type == "string")
+      return BOOLEAN_OPERANDS.has(type) ? readBoolean(root, type, argument) : readNumber2(root, type, argument);
+  }
+  function evaluateCapturedCondition(root, type, argument, count2) {
+    let value = readCapturedOperand(root, type, argument);
+    if (value === void 0) return;
+    let target = Number(count2);
+    if (Number.isFinite(target))
+      return typeof value == "boolean" ? Number(value) === target : value >= target;
+  }
+
+  // src/adapters/evolve/progression/build/captured-triggers.ts
+  var NO_TARGETS = Object.freeze(
+    []
+  ), ARPA_PREFIX = "arpa";
+  function finiteValue2(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readRow(raw) {
+    if (!isRecord(raw)) return;
+    let priority = finiteValue2(readProperty(raw, "priority")), requirementType = readProperty(raw, "requirementType"), actionType = readProperty(raw, "actionType"), actionId = readProperty(raw, "actionId"), actionCount = finiteValue2(readProperty(raw, "actionCount"));
+    if (!(priority === void 0 || typeof requirementType != "string" || typeof actionType != "string" || typeof actionId != "string" || actionId.length === 0 || actionCount === void 0))
+      return Object.freeze({
+        priority,
+        requirementType,
+        requirementId: readProperty(raw, "requirementId"),
+        requirementCount: readProperty(raw, "requirementCount"),
+        actionType,
+        actionId,
+        actionCount
+      });
+  }
+  function readRows(settings) {
+    let stored = readProperty(settings, "triggers");
+    if (!Array.isArray(stored)) return Object.freeze([]);
+    let rows = [];
+    for (let raw of stored) {
+      let row = readRow(raw);
+      row !== void 0 && rows.push(row);
+    }
+    return Object.freeze(rows.sort((a, b) => a.priority - b.priority));
+  }
+  function readStructure(root, actionId) {
+    let separator = actionId.indexOf("-");
+    if (separator <= 0) return;
+    let region = readProperty(root, actionId.slice(0, separator));
+    return readProperty(region, actionId.slice(separator + 1));
+  }
+  function fitsInStorage(root, cost) {
+    let resources = readProperty(root, "resource");
+    for (let [resourceId, amount] of Object.entries(cost)) {
+      if (!Number.isFinite(amount) || amount <= 0) continue;
+      let maximum = finiteValue2(
+        readProperty(readProperty(resources, resourceId), "max")
+      );
+      if (maximum === void 0 || maximum >= 0 && maximum < amount) return !1;
+    }
+    return !0;
+  }
+  function createCapturedTriggers(dependencies) {
+    let { rootState, controls, costs, readSettings } = dependencies;
+    return Object.freeze({
+      read() {
+        let settings = readSettings();
+        if (readProperty(settings, "autoTrigger") !== !0) return NO_TARGETS;
+        let rows = readRows(settings);
+        if (rows.length === 0) return NO_TARGETS;
+        let root = rootState.readRoot(), offered = dependencies.readOfferedTechs?.(), offeredTechs = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech])), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
+          if (row.actionType === "build") {
+            let count2 = finiteValue2(
+              readProperty(readStructure(root, row.actionId), "count")
+            );
+            return count2 === void 0 ? void 0 : count2 >= row.actionCount;
+          }
+          if (row.actionType === "arpa") {
+            let projectId = row.actionId.startsWith(ARPA_PREFIX) ? row.actionId.slice(ARPA_PREFIX.length) : void 0, rank = finiteValue2(
+              readProperty(
+                readProperty(readProperty(root, "arpa"), projectId ?? ""),
+                "rank"
+              )
+            );
+            return rank === void 0 ? void 0 : rank >= row.actionCount;
+          }
+          if (row.actionType === "research")
+            return offeredTechs?.has(row.actionId) === !0 ? !1 : void 0;
+        }, requirementMet = (row) => {
+          if (row.requirementType === "chain") {
+            if (row.priority < 1) return !0;
+            let previous = byPriority.get(row.priority - 1);
+            return previous === void 0 ? void 0 : isComplete(previous);
+          }
+          return evaluateCapturedCondition(
+            root,
+            row.requirementType,
+            row.requirementId,
+            row.requirementCount
+          );
+        }, price = (row) => {
+          if (row.actionType === "research")
+            return offeredTechs?.get(row.actionId)?.cost;
+          if (row.actionType === "build" && controls.resolve(row.actionId) !== void 0)
+            return costs.readCost(row.actionId);
+        }, targets = [], claimed = /* @__PURE__ */ new Set();
+        for (let row of rows) {
+          let actionType = row.actionType === "build" || row.actionType === "research" ? row.actionType : void 0;
+          if (actionType === void 0 || isComplete(row) !== !1 || requirementMet(row) !== !0) continue;
+          let cost = price(row);
+          if (cost === void 0 || !fitsInStorage(root, cost)) continue;
+          let resourceIds = Object.keys(cost);
+          if (!resourceIds.some((resourceId) => claimed.has(resourceId))) {
+            for (let resourceId of resourceIds) claimed.add(resourceId);
+            targets.push(
+              Object.freeze({ actionId: row.actionId, actionType, cost })
+            );
+          }
+        }
+        return Object.freeze(targets);
+      }
+    });
   }
 
   // src/domain/economy/resources/resource-ratios.ts
@@ -15214,10 +15469,17 @@
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls
       })
+    }), triggers = createCapturedTriggers({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      costs: buildCosts,
+      readSettings: () => readStoredSettings(storage),
+      readOfferedTechs: progression.readOfferedTechs
     }), demand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs: buildCosts,
+      triggers,
       construction: progression.observations,
       readOfferedTechs: progression.readOfferedTechs,
       reservations: queueReservations,
