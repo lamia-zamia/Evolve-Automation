@@ -9,6 +9,9 @@ const root = {
     mine: { count: 0 },
     apartment: { count: 0 },
   },
+  civic: {
+    farmer: { workers: 3, max: 5, display: true },
+  },
   arpa: { launch_facility: { rank: 0, complete: 10 } },
   resource: {
     Money: { amount: 500, max: 100000, display: true },
@@ -116,6 +119,32 @@ assert.deepEqual(
       trigger({
         requirementType: "ResearchComplete",
         requirementId: "tech-mad",
+      }),
+    ],
+  }).read(),
+  [],
+);
+
+// Job, governor, and fleet requirements are answered from the captured root.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "JobWorkers",
+        requirementId: "farmer",
+        requirementCount: 3,
+      }),
+    ],
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "JobWorkers",
+        requirementId: "farmer",
+        requirementCount: 4,
       }),
     ],
   }).read(),

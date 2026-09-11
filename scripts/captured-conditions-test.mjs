@@ -12,18 +12,31 @@ const root = {
     kindling_kindred: 2,
     orbit_decay: 300,
     truepath: 1,
+    servants: { jobs: { farmer: 1 }, sjobs: { Plywood: 1 } },
+    governor: { g: { bg: "soldier" } },
   },
   city: {
     biome: "forest",
     ptrait: ["trashed"],
     calendar: { year: 12, day: 40 },
     farm: { count: 7 },
+    foundry: { Plywood: 2 },
   },
-  space: { moon_base: { count: 1, on: 1 } },
-  civic: { govern: { type: "federation" } },
+  space: {
+    moon_base: { count: 1, on: 1 },
+    shipyard: { ships: [{}, {}] },
+  },
+  civic: {
+    govern: { type: "federation" },
+    farmer: { workers: 3, max: 5, display: true },
+    miner: { workers: 2, max: 4, display: false },
+    craftsman: { workers: 0, max: 6, display: true },
+  },
+  portal: { carport: { damaged: 1 } },
   arpa: { launch_facility: { rank: 1, complete: 42 } },
   resource: {
     Money: { amount: 250, max: 1000, display: true },
+    Plywood: { amount: 10, max: 100, display: true },
     Soul_Gem: { amount: 0, max: -1, display: false },
   },
   stats: { days: 900 },
@@ -56,6 +69,60 @@ assert.equal(readCapturedOperand(root, "Date", "impact"), -600);
 assert.equal(readCapturedOperand(root, "Queue", "queue"), 2);
 assert.equal(readCapturedOperand(root, "Queue", "r_queue"), 0);
 
+// Job operands read the civic entry, or the foundry table for a crafting job.
+assert.equal(readCapturedOperand(root, "JobWorkers", "farmer"), 3);
+assert.equal(readCapturedOperand(root, "JobWorkers", "miner"), 2);
+assert.equal(readCapturedOperand(root, "JobWorkers", "Plywood"), 2);
+assert.equal(readCapturedOperand(root, "JobWorkers", "nothing"), undefined);
+// Unbounded basic jobs report the script's own maximum, not the civic slot count.
+assert.equal(
+  readCapturedOperand(root, "JobMax", "farmer"),
+  Number.MAX_SAFE_INTEGER,
+);
+assert.equal(readCapturedOperand(root, "JobMax", "miner"), 4);
+// Crafting jobs share the one cap on the craftsman entry.
+assert.equal(readCapturedOperand(root, "JobMax", "Plywood"), 6);
+assert.equal(readCapturedOperand(root, "JobMax", "nothing"), undefined);
+// The count adds servants: the servant table, or the skilled table for crafting.
+assert.equal(readCapturedOperand(root, "JobCount", "farmer"), 4);
+assert.equal(readCapturedOperand(root, "JobCount", "miner"), 2);
+assert.equal(readCapturedOperand(root, "JobCount", "Plywood"), 3);
+assert.equal(readCapturedOperand(root, "JobCount", "nothing"), undefined);
+assert.equal(readCapturedOperand(root, "JobServants", "farmer"), 1);
+assert.equal(readCapturedOperand(root, "JobServants", "Plywood"), 1);
+assert.equal(readCapturedOperand(root, "JobServants", "miner"), 0);
+assert.equal(readCapturedOperand(root, "JobServants", "nothing"), undefined);
+
+// Servant output scales with the rank of high_pop, which the root does not carry: a high_pop
+// run with servants assigned is unanswerable, while one without servants stays exact.
+{
+  const highPop = {
+    ...root,
+    race: { ...root.race, high_pop: 1 },
+  };
+  assert.equal(readCapturedOperand(highPop, "JobCount", "farmer"), undefined);
+  assert.equal(readCapturedOperand(highPop, "JobCount", "miner"), 2);
+  assert.equal(readCapturedOperand(highPop, "JobServants", "farmer"), 1);
+}
+
+// The True Path fleet, Mass Relay, and carport fields.
+assert.equal(readCapturedOperand(root, "Other", "tpfleet"), 2);
+assert.equal(readCapturedOperand(root, "Other", "bcar"), 1);
+assert.ok(Number.isNaN(readCapturedOperand(root, "Other", "mrelay")));
+assert.equal(
+  readCapturedOperand(
+    { ...root, space: { ...root.space, m_relay: { charged: 5000 } } },
+    "Other",
+    "mrelay",
+  ),
+  0.5,
+);
+assert.equal(readCapturedOperand({ ...root, portal: {} }, "Other", "bcar"), 0);
+assert.equal(
+  readCapturedOperand({ ...root, space: {} }, "Other", "tpfleet"),
+  0,
+);
+
 // Orbit Decay is the only scenario that creates `race.orbit_decay`.
 assert.equal(
   readCapturedOperand(
@@ -70,11 +137,27 @@ assert.equal(
 assert.equal(readCapturedOperand(root, "Boolean", true), true);
 assert.equal(readCapturedOperand(root, "ResourceUnlocked", "Money"), true);
 assert.equal(readCapturedOperand(root, "ResourceUnlocked", "Soul_Gem"), false);
+assert.equal(readCapturedOperand(root, "JobUnlocked", "farmer"), true);
+assert.equal(readCapturedOperand(root, "JobUnlocked", "miner"), false);
+// A crafting job unlocks with its resource rather than a civic entry.
+assert.equal(readCapturedOperand(root, "JobUnlocked", "Plywood"), true);
+assert.equal(readCapturedOperand(root, "JobUnlocked", "nothing"), undefined);
 assert.equal(readCapturedOperand(root, "Challenge", "truepath"), true);
 assert.equal(readCapturedOperand(root, "Challenge", "junker"), false);
 assert.equal(readCapturedOperand(root, "Universe", "standard"), true);
 assert.equal(readCapturedOperand(root, "Universe", "evil"), false);
 assert.equal(readCapturedOperand(root, "Government", "federation"), true);
+assert.equal(readCapturedOperand(root, "Governor", "soldier"), true);
+assert.equal(readCapturedOperand(root, "Governor", "mayor"), false);
+// Without an appointed governor the reader reports "none", like the script's own reader.
+assert.equal(
+  readCapturedOperand(
+    { ...root, race: { ...root.race, governor: undefined } },
+    "Governor",
+    "none",
+  ),
+  true,
+);
 assert.equal(readCapturedOperand(root, "MimicGenus", "none"), true);
 assert.equal(readCapturedOperand(root, "PlanetBiome", "forest"), true);
 assert.equal(readCapturedOperand(root, "PlanetTrait", "trashed"), true);
@@ -91,7 +174,16 @@ assert.equal(
   undefined,
 );
 assert.equal(readCapturedOperand(root, "Other", "alevel"), undefined);
+assert.equal(readCapturedOperand(root, "Other", "rname"), undefined);
 assert.equal(readCapturedOperand(root, "Queue", "evo"), undefined);
+// Manager-computed and script-computed operands stay unanswered.
+assert.equal(readCapturedOperand(root, "Soldiers", "workers"), undefined);
+assert.equal(readCapturedOperand(root, "Industry", "smelters"), undefined);
+assert.equal(readCapturedOperand(root, "ResourceIncome", "Money"), undefined);
+assert.equal(
+  readCapturedOperand(root, "ResourceSatisfied", "Money"),
+  undefined,
+);
 assert.equal(
   readCapturedOperand(root, "BuildingCount", "city-nothing"),
   undefined,
@@ -120,6 +212,11 @@ assert.equal(
 );
 assert.equal(evaluateCapturedCondition(root, "Challenge", "junker", 0), true);
 assert.equal(evaluateCapturedCondition(root, "Challenge", "junker", 2), false);
+assert.equal(evaluateCapturedCondition(root, "JobCount", "farmer", 4), true);
+assert.equal(evaluateCapturedCondition(root, "JobCount", "farmer", 5), false);
+assert.equal(evaluateCapturedCondition(root, "Governor", "soldier", 1), true);
+assert.equal(evaluateCapturedCondition(root, "Governor", "mayor", 1), false);
+assert.equal(evaluateCapturedCondition(root, "JobUnlocked", "miner", 0), true);
 assert.equal(
   evaluateCapturedCondition(root, "ResearchComplete", "tech-mad", 1),
   undefined,

@@ -3,10 +3,11 @@
  *
  * A stored trigger condition names an operand type, an argument and a count. This module answers
  * the operand types whose whole input is the game's own root state: building and project counts,
- * resource holdings, the race and planet bags, the calendar and the two build queues. Everything
- * else a condition can name — script-computed resource fields, the settings layer, custom
- * expressions, and anything needing a drawn catalog or a private action definition — is
- * deliberately absent.
+ * civic job assignments, resource holdings, the appointed governor, the race and planet bags, the
+ * calendar, the two build queues, and the True Path fleet, Mass Relay, and carport fields.
+ * Everything else a condition can name — script-computed resource fields, the settings layer,
+ * custom expressions, research and unlock catalogs, manager-computed values, and anything needing
+ * a drawn catalog or a private action definition — is deliberately absent.
  *
  * `undefined` has exactly one meaning here: the operand cannot be answered from what has been
  * captured. It is never "false" and never "zero", so a caller has to drop the condition rather
@@ -25,9 +26,11 @@ export type CapturedOperandValue = boolean | number;
 const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "Boolean",
   "ResourceUnlocked",
+  "JobUnlocked",
   "Challenge",
   "Universe",
   "Government",
+  "Governor",
   "MimicGenus",
   "PlanetBiome",
   "PlanetTrait",
@@ -66,6 +69,96 @@ function projectRecord(root: unknown, argument: unknown): unknown {
 function resourceRecord(root: unknown, argument: unknown): unknown {
   if (typeof argument !== "string") return undefined;
   return readProperty(readProperty(root, "resource"), argument);
+}
+
+/** One civic job entry by its stored id, e.g. `farmer` — not a crafting resource id. */
+function civicJob(root: unknown, argument: unknown): unknown {
+  if (typeof argument !== "string") return undefined;
+  return readProperty(readProperty(root, "civic"), argument);
+}
+
+/** The foundry assignment table, keyed by crafting resource id. */
+function foundryRecord(root: unknown): unknown {
+  return readProperty(readProperty(root, "city"), "foundry");
+}
+
+/** Jobs with unbounded worker slots (`BasicJob` in the script's own job catalog). */
+const BASIC_JOB_IDS: ReadonlySet<string> = new Set([
+  "unemployed",
+  "teamster",
+  "meditator",
+  "hunter",
+  "farmer",
+  "forager",
+  "lumberjack",
+  "quarry_worker",
+  "crystal_miner",
+  "scavenger",
+]);
+
+/** Assigned workers: the civic entry, or the foundry table for a crafting job. */
+function jobWorkers(root: unknown, argument: unknown): number | undefined {
+  if (typeof argument !== "string") return undefined;
+  const assigned = finiteValue(
+    readProperty(civicJob(root, argument), "workers"),
+  );
+  if (assigned !== undefined) return assigned;
+  return finiteValue(readProperty(foundryRecord(root), argument));
+}
+
+/** Whether the argument names a job at all: a civic entry or a foundry assignment. */
+function jobExists(root: unknown, argument: unknown): boolean {
+  if (typeof argument !== "string") return false;
+  if (isRecord(civicJob(root, argument))) return true;
+  return finiteValue(readProperty(foundryRecord(root), argument)) !== undefined;
+}
+
+/**
+ * Assigned servants: the servant table for an ordinary job, the skilled-servant table for a
+ * crafting job, and zero for a job that takes none — but only when the argument names a job.
+ * An unknown id is unanswerable rather than zero, matching the compatibility lookup's throw.
+ */
+function jobServantCount(root: unknown, argument: unknown): number | undefined {
+  if (typeof argument !== "string") return undefined;
+  const servants = readProperty(readProperty(root, "race"), "servants");
+  const assigned = finiteValue(
+    readProperty(readProperty(servants, "jobs"), argument),
+  );
+  if (assigned !== undefined) return assigned;
+  const skilled = finiteValue(
+    readProperty(readProperty(servants, "sjobs"), argument),
+  );
+  if (skilled !== undefined) return skilled;
+  return jobExists(root, argument) ? 0 : undefined;
+}
+
+/** Assigned worker slots: unbounded for the basic jobs, the entry cap otherwise. */
+function jobMax(root: unknown, argument: unknown): number | undefined {
+  if (typeof argument !== "string") return undefined;
+  if (BASIC_JOB_IDS.has(argument)) return Number.MAX_SAFE_INTEGER;
+  const entry = civicJob(root, argument);
+  if (isRecord(entry)) return finiteValue(readProperty(entry, "max"));
+  // Crafting jobs share the one cap on the craftsman entry.
+  if (!jobExists(root, argument)) return undefined;
+  return finiteValue(
+    readProperty(readProperty(readProperty(root, "civic"), "craftsman"), "max"),
+  );
+}
+
+/**
+ * The compatibility job count: workers plus servants, with servants scaled by `high_pop`.
+ * That multiplier is rank data from the game's trait catalog, so a high_pop run with servants
+ * assigned is unanswerable; without servants — the common case — the multiplier is provably 1.
+ */
+function jobCount(root: unknown, argument: unknown): number | undefined {
+  const workers = jobWorkers(root, argument);
+  if (workers === undefined) return undefined;
+  const servants = jobServantCount(root, argument);
+  if (servants === undefined) return undefined;
+  if (servants > 0 && readProperty(readProperty(root, "race"), "high_pop")) {
+    return undefined;
+  }
+  return workers + servants;
 }
 
 function queueLength(root: unknown, key: string): number | undefined {
@@ -131,6 +224,42 @@ function readNumber(
       // as level 0.
       return finiteValue(readProperty(race, argument)) ?? 0;
     }
+    case "JobWorkers":
+      return jobWorkers(root, argument);
+    case "JobMax":
+      return jobMax(root, argument);
+    case "JobCount":
+      return jobCount(root, argument);
+    case "JobServants":
+      return jobServantCount(root, argument);
+    case "Other": {
+      if (argument === "tpfleet") {
+        const ships = readProperty(
+          readProperty(readProperty(root, "space"), "shipyard"),
+          "ships",
+        );
+        return Array.isArray(ships) ? ships.length : 0;
+      }
+      if (argument === "mrelay") {
+        // An absent relay keeps the historical NaN result rather than reading as uncharged.
+        return (
+          Number(
+            readProperty(
+              readProperty(readProperty(root, "space"), "m_relay"),
+              "charged",
+            ),
+          ) / 10000.0
+        );
+      }
+      if (argument === "bcar") {
+        const damaged = readProperty(
+          readProperty(readProperty(root, "portal"), "carport"),
+          "damaged",
+        );
+        return typeof damaged === "number" ? damaged : 0;
+      }
+      return undefined;
+    }
     case "Date":
       return readDate(root, argument);
     case "Queue":
@@ -157,6 +286,15 @@ function readBoolean(
         ? readProperty(entry, "display") === true
         : undefined;
     }
+    case "JobUnlocked": {
+      if (typeof argument !== "string") return undefined;
+      const entry = civicJob(root, argument);
+      if (isRecord(entry)) return Boolean(readProperty(entry, "display"));
+      // Crafting jobs unlock with their resource rather than a civic entry.
+      const resource = resourceRecord(root, argument);
+      if (isRecord(resource)) return Boolean(readProperty(resource, "display"));
+      return undefined;
+    }
     case "Challenge": {
       const race = readProperty(root, "race");
       if (!isRecord(race) || typeof argument !== "string") return undefined;
@@ -175,6 +313,16 @@ function readBoolean(
       // `civic.govern` is created when the first government is chosen; before that no government
       // type matches.
       return readProperty(readProperty(civic, "govern"), "type") === argument;
+    }
+    case "Governor": {
+      const race = readProperty(root, "race");
+      if (!isRecord(race)) return undefined;
+      // Mirrors the script's own governor reader: the background id, or "none".
+      const background = readProperty(
+        readProperty(readProperty(race, "governor"), "g"),
+        "bg",
+      );
+      return (background ?? "none") === argument;
     }
     case "MimicGenus": {
       const race = readProperty(root, "race");

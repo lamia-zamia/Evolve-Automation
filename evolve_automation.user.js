@@ -10191,9 +10191,11 @@
   var BOOLEAN_OPERANDS = /* @__PURE__ */ new Set([
     "Boolean",
     "ResourceUnlocked",
+    "JobUnlocked",
     "Challenge",
     "Universe",
     "Government",
+    "Governor",
     "MimicGenus",
     "PlanetBiome",
     "PlanetTrait"
@@ -10218,6 +10220,63 @@
   function resourceRecord(root, argument) {
     if (typeof argument == "string")
       return readProperty(readProperty(root, "resource"), argument);
+  }
+  function civicJob(root, argument) {
+    if (typeof argument == "string")
+      return readProperty(readProperty(root, "civic"), argument);
+  }
+  function foundryRecord(root) {
+    return readProperty(readProperty(root, "city"), "foundry");
+  }
+  var BASIC_JOB_IDS = /* @__PURE__ */ new Set([
+    "unemployed",
+    "teamster",
+    "meditator",
+    "hunter",
+    "farmer",
+    "forager",
+    "lumberjack",
+    "quarry_worker",
+    "crystal_miner",
+    "scavenger"
+  ]);
+  function jobWorkers(root, argument) {
+    if (typeof argument != "string") return;
+    let assigned = finiteValue(
+      readProperty(civicJob(root, argument), "workers")
+    );
+    return assigned !== void 0 ? assigned : finiteValue(readProperty(foundryRecord(root), argument));
+  }
+  function jobExists(root, argument) {
+    return typeof argument != "string" ? !1 : isRecord(civicJob(root, argument)) ? !0 : finiteValue(readProperty(foundryRecord(root), argument)) !== void 0;
+  }
+  function jobServantCount(root, argument) {
+    if (typeof argument != "string") return;
+    let servants = readProperty(readProperty(root, "race"), "servants"), assigned = finiteValue(
+      readProperty(readProperty(servants, "jobs"), argument)
+    );
+    if (assigned !== void 0) return assigned;
+    let skilled = finiteValue(
+      readProperty(readProperty(servants, "sjobs"), argument)
+    );
+    return skilled !== void 0 ? skilled : jobExists(root, argument) ? 0 : void 0;
+  }
+  function jobMax(root, argument) {
+    if (typeof argument != "string") return;
+    if (BASIC_JOB_IDS.has(argument)) return Number.MAX_SAFE_INTEGER;
+    let entry = civicJob(root, argument);
+    if (isRecord(entry)) return finiteValue(readProperty(entry, "max"));
+    if (jobExists(root, argument))
+      return finiteValue(
+        readProperty(readProperty(readProperty(root, "civic"), "craftsman"), "max")
+      );
+  }
+  function jobCount(root, argument) {
+    let workers = jobWorkers(root, argument);
+    if (workers === void 0) return;
+    let servants = jobServantCount(root, argument);
+    if (servants !== void 0 && !(servants > 0 && readProperty(readProperty(root, "race"), "high_pop")))
+      return workers + servants;
   }
   function queueLength(root, key) {
     let entries = readProperty(readProperty(root, key), "queue");
@@ -10268,6 +10327,38 @@
         let race = readProperty(root, "race");
         return !isRecord(race) || typeof argument != "string" ? void 0 : finiteValue(readProperty(race, argument)) ?? 0;
       }
+      case "JobWorkers":
+        return jobWorkers(root, argument);
+      case "JobMax":
+        return jobMax(root, argument);
+      case "JobCount":
+        return jobCount(root, argument);
+      case "JobServants":
+        return jobServantCount(root, argument);
+      case "Other": {
+        if (argument === "tpfleet") {
+          let ships = readProperty(
+            readProperty(readProperty(root, "space"), "shipyard"),
+            "ships"
+          );
+          return Array.isArray(ships) ? ships.length : 0;
+        }
+        if (argument === "mrelay")
+          return Number(
+            readProperty(
+              readProperty(readProperty(root, "space"), "m_relay"),
+              "charged"
+            )
+          ) / 1e4;
+        if (argument === "bcar") {
+          let damaged = readProperty(
+            readProperty(readProperty(root, "portal"), "carport"),
+            "damaged"
+          );
+          return typeof damaged == "number" ? damaged : 0;
+        }
+        return;
+      }
       case "Date":
         return readDate(root, argument);
       case "Queue":
@@ -10284,6 +10375,13 @@
         let entry = resourceRecord(root, argument);
         return isRecord(entry) ? readProperty(entry, "display") === !0 : void 0;
       }
+      case "JobUnlocked": {
+        if (typeof argument != "string") return;
+        let entry = civicJob(root, argument);
+        if (isRecord(entry)) return !!readProperty(entry, "display");
+        let resource = resourceRecord(root, argument);
+        return isRecord(resource) ? !!readProperty(resource, "display") : void 0;
+      }
       case "Challenge": {
         let race = readProperty(root, "race");
         return !isRecord(race) || typeof argument != "string" ? void 0 : !!readProperty(race, argument);
@@ -10295,6 +10393,13 @@
       case "Government": {
         let civic = readProperty(root, "civic");
         return isRecord(civic) ? readProperty(readProperty(civic, "govern"), "type") === argument : void 0;
+      }
+      case "Governor": {
+        let race = readProperty(root, "race");
+        return isRecord(race) ? (readProperty(
+          readProperty(readProperty(race, "governor"), "g"),
+          "bg"
+        ) ?? "none") === argument : void 0;
       }
       case "MimicGenus": {
         let race = readProperty(root, "race");
