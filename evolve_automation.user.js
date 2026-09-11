@@ -3478,11 +3478,8 @@
     }
   }
 
-  // src/adapters/evolve/progression/research/captured-research.ts
-  var NOTHING_OFFERED = Object.freeze({
-    techs: Object.freeze([])
-  });
-  function techState(root) {
+  // src/adapters/evolve/captured-tech-state.ts
+  function readCapturedTechState(root) {
     let tech = readProperty(root, "tech");
     if (!isRecord(tech)) return "none";
     let parts = [];
@@ -3490,6 +3487,11 @@
       parts.push(`${key}:${String(tech[key])}`);
     return parts.join(",");
   }
+
+  // src/adapters/evolve/progression/research/captured-research.ts
+  var NOTHING_OFFERED = Object.freeze({
+    techs: Object.freeze([])
+  });
   function executionResult(outcome, researched) {
     return Object.freeze({ outcome, researched });
   }
@@ -3556,10 +3558,10 @@
             ),
             !1
           );
-        let before = techState(rootState.readRoot()), result = controls.invoke(handle, "action");
+        let before = readCapturedTechState(rootState.readRoot()), result = controls.invoke(handle, "action");
         return result.ok ? executionResult(
           SUCCEEDED,
-          techState(rootState.readRoot()) !== before
+          readCapturedTechState(rootState.readRoot()) !== before
         ) : executionResult(
           result.reason === "stale-control" ? stale("stale-research-control", result.detail ?? result.reason, {
             techId: decision.techId
@@ -3795,7 +3797,8 @@
       readOfferedTechs: () => lastOffered,
       readProjects,
       observations: construction.observations,
-      readManagedBuildTargets
+      readManagedBuildTargets,
+      ensureBuildControls
     });
   }
 
@@ -10347,7 +10350,7 @@
     }
     return Object.freeze(rows.sort((a, b) => a.priority - b.priority));
   }
-  function readStructure(root, actionId) {
+  function readTriggerActionStructure(root, actionId) {
     let separator = actionId.indexOf("-");
     if (separator <= 0) return;
     let region = readProperty(root, actionId.slice(0, separator));
@@ -10375,7 +10378,10 @@
         let root = rootState.readRoot(), offered = dependencies.readOfferedTechs?.(), offeredTechs = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech])), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
             let count2 = finiteValue2(
-              readProperty(readStructure(root, row.actionId), "count")
+              readProperty(
+                readTriggerActionStructure(root, row.actionId),
+                "count"
+              )
             );
             return count2 === void 0 ? void 0 : count2 >= row.actionCount;
           }
@@ -10424,6 +10430,194 @@
         return Object.freeze(targets);
       }
     });
+  }
+
+  // src/domain/economy/resources/inflation-assist.ts
+  function isInflationMoneyReachable(input) {
+    return input.maxMoney >= input.targetMoney;
+  }
+  function inflationSecondsToFinish(input) {
+    if (!isInflationMoneyReachable(input))
+      return Number.POSITIVE_INFINITY;
+    let remaining = input.targetMoney - input.currentMoney;
+    return remaining <= 0 ? 0 : input.moneyRate > 0 ? remaining / input.moneyRate : Number.POSITIVE_INFINITY;
+  }
+  function shouldSaveInflationMoney(input) {
+    return input.active && input.saveMinutes >= 0 && inflationSecondsToFinish(input.money) <= input.saveMinutes * 60;
+  }
+
+  // src/adapters/evolve/economy/resources/captured-inflation-assist.ts
+  var INFLATION_CHALLENGE_MONEY = 25e10, ACHIEVEMENT_LEVEL_TRAITS2 = Object.freeze([
+    "no_plasmid",
+    "no_trade",
+    "no_craft",
+    "no_crispr",
+    "weak_mastery",
+    "nerfed",
+    "badgenes"
+  ]);
+  function finiteAmount(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function achievementAffix(universe) {
+    if (typeof universe == "string")
+      switch (universe) {
+        case "evil":
+          return "e";
+        case "antimatter":
+          return "a";
+        case "heavy":
+          return "h";
+        case "micro":
+          return "m";
+        case "magic":
+          return "mg";
+        default:
+          return "l";
+      }
+  }
+  function readCapturedInflationSaveMoney(root, settings) {
+    try {
+      let assist = settings.inflationChallengeAssist;
+      if (assist !== void 0 && typeof assist != "boolean" || assist !== !0) return !1;
+      let race = readProperty(root, "race");
+      if (!isRecord(race)) return !1;
+      let inflation = race.inflation;
+      if (inflation === void 0 || inflation === !1 || typeof inflation != "number" || !Number.isFinite(inflation))
+        return !1;
+      let money = readProperty(readProperty(root, "resource"), "Money");
+      if (!isRecord(money)) return !1;
+      let saveMinutes = finiteAmount(settings.inflationChallengeSaveMinutes);
+      if (saveMinutes === void 0) return !1;
+      let currentMoney = finiteAmount(money.amount), maxMoney = finiteAmount(money.max), moneyRate = finiteAmount(money.diff);
+      if (currentMoney === void 0 || maxMoney === void 0 || moneyRate === void 0)
+        return !1;
+      let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), wheelbarrow = readProperty(achievements, "wheelbarrow"), affix = achievementAffix(readProperty(race, "universe"));
+      if (!isRecord(stats) || !isRecord(achievements) || affix === void 0 || wheelbarrow != null && !isRecord(wheelbarrow))
+        return !1;
+      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finiteAmount(rawStar);
+      if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
+      let achievementLevel2 = 1;
+      for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
+        race[trait] && (achievementLevel2 += 1);
+      return achievementLevel2 = Math.min(achievementLevel2, 5), shouldSaveInflationMoney({
+        active: wheelbarrowStar < achievementLevel2 && readProperty(race, "inflation") !== !1,
+        saveMinutes,
+        money: {
+          targetMoney: INFLATION_CHALLENGE_MONEY,
+          currentMoney,
+          maxMoney,
+          moneyRate
+        }
+      });
+    } catch {
+      return !1;
+    }
+  }
+
+  // src/adapters/evolve/progression/build/captured-trigger-actions.ts
+  var NO_TARGET = Object.freeze({ target: null });
+  function triggerExecutionResult(outcome, clicked) {
+    return Object.freeze({ outcome, clicked });
+  }
+  function readActionCount(root, actionId) {
+    let count2 = readProperty(
+      readTriggerActionStructure(root, actionId),
+      "count"
+    );
+    return typeof count2 == "number" && Number.isFinite(count2) ? count2 : void 0;
+  }
+  function createCapturedTriggerActions(dependencies) {
+    let { rootState, controls, resources, readTargets, readSettings } = dependencies, reader = Object.freeze({
+      read(index) {
+        if (!Number.isSafeInteger(index) || index < 0)
+          throw new TypeError("trigger index must be a non-negative integer");
+        let target = readTargets()[index];
+        if (target === void 0) return NO_TARGET;
+        let settings = readSettings(), shouldSaveMoney = readCapturedInflationSaveMoney(
+          rootState.readRoot(),
+          isRecord(settings) ? settings : {}
+        );
+        return Object.freeze({
+          target: Object.freeze({
+            index,
+            id: target.actionId,
+            shouldSaveMoney,
+            hasPositiveMoneyCost: shouldSaveMoney && (target.cost.Money ?? 0) > 0
+          })
+        });
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        let target = readTargets()[decision.index];
+        if (target === void 0 || target.actionId !== decision.targetId)
+          return triggerExecutionResult(
+            stale("stale-trigger-target", "trigger target list changed", {
+              targetId: decision.targetId,
+              index: decision.index,
+              actualTargetId: target?.actionId ?? null
+            }),
+            !1
+          );
+        let sample = resources.readResources(Object.keys(target.cost));
+        if (sample === void 0 || !canAfford(sample, target.cost))
+          return triggerExecutionResult(SUCCEEDED, !1);
+        let handle = controls.resolve(target.actionId);
+        if (handle === void 0)
+          return triggerExecutionResult(
+            rejected(
+              "trigger-control-missing",
+              `no captured control for ${target.actionId}`
+            ),
+            !1
+          );
+        if (target.actionType === "research") {
+          let offer = dependencies.readOfferedTechs?.()?.find((tech) => tech.elementId === target.actionId);
+          if (offer === void 0)
+            return triggerExecutionResult(
+              stale(
+                "stale-trigger-offer",
+                `${target.actionId} is no longer offered`,
+                { targetId: decision.targetId, index: decision.index }
+              ),
+              !1
+            );
+          if (handle.generation !== offer.generation)
+            return triggerExecutionResult(
+              stale(
+                "stale-trigger-control",
+                `${target.actionId} generation ${offer.generation}, current ${handle.generation}`,
+                { targetId: decision.targetId }
+              ),
+              !1
+            );
+        }
+        let research = target.actionType === "research", beforeTech = research ? readCapturedTechState(rootState.readRoot()) : "", beforeCount = research ? void 0 : readActionCount(rootState.readRoot(), target.actionId), invocation = controls.invoke(handle, "action");
+        if (!invocation.ok)
+          return triggerExecutionResult(
+            invocation.reason === "stale-control" ? stale(
+              "stale-trigger-control",
+              invocation.detail ?? invocation.reason,
+              { targetId: decision.targetId }
+            ) : rejected(
+              "trigger-click-failed",
+              invocation.detail ?? invocation.reason
+            ),
+            !1
+          );
+        if (research)
+          return triggerExecutionResult(
+            SUCCEEDED,
+            readCapturedTechState(rootState.readRoot()) !== beforeTech
+          );
+        let afterCount = readActionCount(rootState.readRoot(), target.actionId);
+        return triggerExecutionResult(
+          SUCCEEDED,
+          beforeCount !== void 0 && afterCount !== void 0 && afterCount > beforeCount
+        );
+      }
+    });
+    return Object.freeze({ reader, executor });
   }
 
   // src/domain/economy/resources/resource-ratios.ts
@@ -13930,20 +14124,6 @@
     });
   }
 
-  // src/domain/economy/resources/inflation-assist.ts
-  function isInflationMoneyReachable(input) {
-    return input.maxMoney >= input.targetMoney;
-  }
-  function inflationSecondsToFinish(input) {
-    if (!isInflationMoneyReachable(input))
-      return Number.POSITIVE_INFINITY;
-    let remaining = input.targetMoney - input.currentMoney;
-    return remaining <= 0 ? 0 : input.moneyRate > 0 ? remaining / input.moneyRate : Number.POSITIVE_INFINITY;
-  }
-  function shouldSaveInflationMoney(input) {
-    return input.active && input.saveMinutes >= 0 && inflationSecondsToFinish(input.money) <= input.saveMinutes * 60;
-  }
-
   // src/domain/economy/market/regional-trade-routes.ts
   function planRegionalTradeRoutes(input) {
     let deficits = [], spare = [], operations = [], used = 0;
@@ -14131,68 +14311,6 @@
     let sell = value * ratio / divide * (1 + inflationLevel / 500);
     return Number.isFinite(buy) && Number.isFinite(sell) && divide > 0 ? Object.freeze({ buy, sell }) : void 0;
   }
-  var INFLATION_CHALLENGE_MONEY = 25e10, ACHIEVEMENT_LEVEL_TRAITS2 = Object.freeze([
-    "no_plasmid",
-    "no_trade",
-    "no_craft",
-    "no_crispr",
-    "weak_mastery",
-    "nerfed",
-    "badgenes"
-  ]);
-  function achievementAffix(universe) {
-    if (typeof universe == "string")
-      switch (universe) {
-        case "evil":
-          return "e";
-        case "antimatter":
-          return "a";
-        case "heavy":
-          return "h";
-        case "micro":
-          return "m";
-        case "magic":
-          return "mg";
-        default:
-          return "l";
-      }
-  }
-  function readInflationSaveMoney(root, settings, money) {
-    try {
-      let assist = settings.inflationChallengeAssist;
-      if (assist !== void 0 && typeof assist != "boolean" || assist !== !0) return !1;
-      let race = readProperty(root, "race");
-      if (!isRecord(race)) return !1;
-      let inflation = race.inflation;
-      if (inflation === void 0 || inflation === !1 || typeof inflation != "number" || !Number.isFinite(inflation))
-        return !1;
-      let saveMinutes = finite19(settings.inflationChallengeSaveMinutes);
-      if (saveMinutes === void 0) return !1;
-      let currentMoney = finite19(money.amount), maxMoney = finite19(money.max), moneyRate = finite19(money.diff);
-      if (currentMoney === void 0 || maxMoney === void 0 || moneyRate === void 0)
-        return !1;
-      let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), wheelbarrow = readProperty(achievements, "wheelbarrow"), affix = achievementAffix(readProperty(race, "universe"));
-      if (!isRecord(stats) || !isRecord(achievements) || affix === void 0 || wheelbarrow != null && !isRecord(wheelbarrow))
-        return !1;
-      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite19(rawStar);
-      if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
-      let achievementLevel2 = 1;
-      for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
-        race[trait] && (achievementLevel2 += 1);
-      return achievementLevel2 = Math.min(achievementLevel2, 5), shouldSaveInflationMoney({
-        active: wheelbarrowStar < achievementLevel2 && readProperty(race, "inflation") !== !1,
-        saveMinutes,
-        money: {
-          targetMoney: INFLATION_CHALLENGE_MONEY,
-          currentMoney,
-          maxMoney,
-          moneyRate
-        }
-      });
-    } catch {
-      return !1;
-    }
-  }
   function routeUnlocked(root, resourceId, resource) {
     if (resource.display !== !0) return !1;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
@@ -14278,7 +14396,7 @@
       unmanagedTradeRoutes: unmanaged,
       isBanana: !!readProperty(race, "banana"),
       isEntrepreneur: readProperty(governor, "bg") === "entrepreneur",
-      saveInflationMoney: readInflationSaveMoney(root, settings, money)
+      saveInflationMoney: readCapturedInflationSaveMoney(root, settings)
     });
     return Object.freeze({
       input,
@@ -14559,6 +14677,41 @@
     return decision === null ? SUCCEEDED7 : dependencies.executor.execute(decision);
   }
 
+  // src/domain/progression/build/trigger.ts
+  function planTrigger(input) {
+    return input.target === null ? null : Object.freeze({
+      kind: input.target.shouldSaveMoney && input.target.hasPositiveMoneyCost ? "skip" : "click",
+      index: input.target.index,
+      targetId: input.target.id
+    });
+  }
+
+  // src/application/trigger.ts
+  var SUCCEEDED8 = Object.freeze({
+    status: "succeeded"
+  });
+  function triggerResult(outcome, active) {
+    return Object.freeze({ outcome, active });
+  }
+  function runTriggerAutomation(dependencies) {
+    let index = 0, active = !1;
+    for (; ; ) {
+      let decision = planTrigger(dependencies.reader.read(index));
+      if (decision === null)
+        return triggerResult(SUCCEEDED8, active);
+      if (decision.kind === "click") {
+        let execution = dependencies.executor.execute(decision);
+        if (execution.outcome.status !== "succeeded")
+          return triggerResult(execution.outcome, active);
+        active ||= execution.clicked;
+      }
+      index = decision.index + 1;
+    }
+  }
+  function triggerPhaseActive(result) {
+    return result.outcome.status === "succeeded" ? result.active : !0;
+  }
+
   // src/domain/economy/market/market.ts
   function batchTrade(side, input, maximumUnits) {
     return maximumUnits <= input.maximumMultiplier ? Object.freeze({
@@ -14611,22 +14764,22 @@
   }
 
   // src/application/market.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function runMarketTradesAutomation(dependencies, bulkSell = !1, ignoreSellRatio = !1, adjustTradeRoutes = !1) {
     let measure = createPhaseMeasure(dependencies.diagnostics), tally = createCountTally(dependencies.diagnostics), gate = dependencies.reader.readGate();
     if (!gate.unlocked)
-      return SUCCEEDED8;
+      return SUCCEEDED9;
     if (adjustTradeRoutes) {
       let tradeRoutes = dependencies.tradeRoutes;
       if (tradeRoutes === void 0)
-        return SUCCEEDED8;
+        return SUCCEEDED9;
       measure("autoMarket.adjustTradeRoutes", () => tradeRoutes.adjust());
     }
     if (gate.noTrade)
-      return SUCCEEDED8;
-    let session = dependencies.reader.readSession(), outcome = SUCCEEDED8;
+      return SUCCEEDED9;
+    let session = dependencies.reader.readSession(), outcome = SUCCEEDED9;
     for (let index = 0; ; index++) {
       let sellInput = measure(
         "autoMarket.readSell",
@@ -14914,7 +15067,7 @@
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -14932,13 +15085,13 @@
           "autoStorage.expand",
           () => dependencies.expansion.expand(rawPlan.storageToBuild)
         ))
-          return SUCCEEDED9;
+          return SUCCEEDED10;
         let finalized = finalizeStorageAllocation(rawPlan, state), unfunded = unfundedStorageCapacity(finalized.decision);
         if (unfunded > 0 && measure(
           "autoStorage.expand",
           () => dependencies.expansion.expand(unfunded)
         ))
-          return SUCCEEDED9;
+          return SUCCEEDED10;
         let outcome = dependencies.executor.execute(finalized.decision);
         return outcome.status === "succeeded" && (state = finalized.nextState), outcome;
       },
@@ -15475,11 +15628,18 @@
       costs: buildCosts,
       readSettings: () => readStoredSettings(storage),
       readOfferedTechs: progression.readOfferedTechs
+    }), triggerTargetsThisCycle, readTriggerTargets = () => triggerTargetsThisCycle ??= triggers.read(), triggerActions = createCapturedTriggerActions({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      resources: createCapturedResourceSource(pageCapture2.rootState),
+      readTargets: readTriggerTargets,
+      readSettings: () => readStoredSettings(storage),
+      readOfferedTechs: progression.readOfferedTechs
     }), demand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs: buildCosts,
-      triggers,
+      triggers: Object.freeze({ read: readTriggerTargets }),
       construction: progression.observations,
       readOfferedTechs: progression.readOfferedTechs,
       reservations: queueReservations,
@@ -15915,11 +16075,11 @@
       readSettings: () => readStoredSettings(storage),
       readDemand: () => readDemand()
     }), runCycle = () => {
-      demandThisCycle = void 0;
+      demandThisCycle = void 0, triggerTargetsThisCycle = void 0;
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
-          isEnabled(settings, "autoFleet") && (readProperty(
+          isEnabled(settings, "autoTrigger") && progression.ensureBuildControls(), isEnabled(settings, "autoFleet") && (readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),
             "truepath"
           ) === !0 ? ensureCivicControls() : ensureGalaxyFleetControls()), isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoGovernment") && (ensureCivicControls(), runCapturedGovernmentAutomation(government)), isEnabled(settings, "autoHell") && (ensureCivicControls(), hell.run()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
@@ -15936,13 +16096,20 @@
             structureCount2("tauceti", "mining_ship") >= 1
           ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run());
           let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
-          autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoNanite") && (ensureNaniteControls(), nanite.run()), isEnabled(settings, "autoSupply") && (ensureSupplyControls(), supply.run()), isEnabled(settings, "autoEject") && (ensureEjectorControls(), ejector.run()), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run(), powerWarnings.run()), isEnabled(settings, "autoSmelter") && (ensureSmelterControls(), smelter.run()), isEnabled(settings, "autoFactory") && (ensureFactoryControls(), factory.run()), isEnabled(settings, "autoFleet") && (readProperty(
+          autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft);
+          let triggerActive = isEnabled(settings, "autoTrigger") && triggerPhaseActive(
+            runTriggerAutomation({
+              reader: triggerActions.reader,
+              executor: triggerActions.executor
+            })
+          );
+          !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoNanite") && (ensureNaniteControls(), nanite.run()), isEnabled(settings, "autoSupply") && (ensureSupplyControls(), supply.run()), isEnabled(settings, "autoEject") && (ensureEjectorControls(), ejector.run()), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run(), powerWarnings.run()), isEnabled(settings, "autoSmelter") && (ensureSmelterControls(), smelter.run()), isEnabled(settings, "autoFactory") && (ensureFactoryControls(), factory.run()), isEnabled(settings, "autoFleet") && (readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),
             "truepath"
           ) === !0 || (ensureGalaxyFleetControls(), runFleetAutomation({
             reader: fleet.reader,
             executor: fleet.executor
-          }))), isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+          }))), !triggerActive && isEnabled(settings, "autoResearch") && progression.runResearchCycle();
         } catch (error) {
           logError(String(error));
         }

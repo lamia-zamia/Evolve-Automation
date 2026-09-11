@@ -20,7 +20,7 @@ const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
   status: "succeeded",
 });
 
-function result(
+function triggerResult(
   outcome: CommandExecutionOutcome,
   active: boolean,
 ): TriggerAutomationResult {
@@ -40,13 +40,13 @@ export function runTriggerAutomation(
   while (true) {
     const decision = planTrigger(dependencies.reader.read(index));
     if (decision === null) {
-      return result(SUCCEEDED, active);
+      return triggerResult(SUCCEEDED, active);
     }
 
     if (decision.kind === "click") {
       const execution = dependencies.executor.execute(decision);
       if (execution.outcome.status !== "succeeded") {
-        return result(execution.outcome, active);
+        return triggerResult(execution.outcome, active);
       }
       active ||= execution.clicked;
     }

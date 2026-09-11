@@ -119,7 +119,10 @@ function readRows(settings: unknown): readonly TriggerRow[] {
 }
 
 /** The structure record behind a build action id: `city-farm` is `city.farm`. */
-function readStructure(root: unknown, actionId: string): unknown {
+export function readTriggerActionStructure(
+  root: unknown,
+  actionId: string,
+): unknown {
   const separator = actionId.indexOf("-");
   if (separator <= 0) return undefined;
   const region = readProperty(root, actionId.slice(0, separator));
@@ -170,7 +173,10 @@ export function createCapturedTriggers(
       const isComplete = (row: TriggerRow): boolean | undefined => {
         if (row.actionType === "build") {
           const count = finiteValue(
-            readProperty(readStructure(root, row.actionId), "count"),
+            readProperty(
+              readTriggerActionStructure(root, row.actionId),
+              "count",
+            ),
           );
           return count === undefined ? undefined : count >= row.actionCount;
         }

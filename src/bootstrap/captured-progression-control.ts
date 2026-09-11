@@ -89,6 +89,11 @@ export interface CapturedProgressionControl {
   readonly observations: ConstructionObservations;
   /** Managed captured construction targets, used by production modes that weight against builds. */
   readonly readManagedBuildTargets: () => readonly Readonly<GameBuildTarget>[];
+  /**
+   * Discovers the construction action controls once, for features that act on build actions
+   * without running the construction cycle.
+   */
+  readonly ensureBuildControls: () => void;
 }
 
 const NO_RESERVATIONS = Object.freeze({
@@ -331,5 +336,6 @@ export function createCapturedProgressionControl(
     readProjects,
     observations: construction.observations,
     readManagedBuildTargets,
+    ensureBuildControls,
   });
 }

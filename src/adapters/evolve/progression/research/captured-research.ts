@@ -29,7 +29,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { readCapturedTechState } from "../../captured-tech-state.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 
 export interface CapturedResearchDependencies {
@@ -49,20 +49,6 @@ export interface CapturedResearchAdapter {
 const NOTHING_OFFERED: ResearchInput = Object.freeze({
   techs: Object.freeze([]),
 });
-
-/**
- * What the game's technology state currently is, in one comparable value. Any grant moves it, and
- * nothing else does, so a change across a click is proof the click researched something.
- */
-function techState(root: unknown): string {
-  const tech = readProperty(root, "tech");
-  if (!isRecord(tech)) return "none";
-  const parts: string[] = [];
-  for (const key of Object.keys(tech).sort()) {
-    parts.push(`${key}:${String(tech[key])}`);
-  }
-  return parts.join(",");
-}
 
 function executionResult(
   outcome: ResearchExecutionResult["outcome"],
@@ -154,7 +140,7 @@ export function createCapturedResearchAdapter(
           false,
         );
       }
-      const before = techState(rootState.readRoot());
+      const before = readCapturedTechState(rootState.readRoot());
       const result = controls.invoke(handle, "action");
       if (!result.ok) {
         return executionResult(
@@ -170,7 +156,7 @@ export function createCapturedResearchAdapter(
       // declined is a decision that produced no research, not a failure.
       return executionResult(
         SUCCEEDED,
-        techState(rootState.readRoot()) !== before,
+        readCapturedTechState(rootState.readRoot()) !== before,
       );
     },
   });

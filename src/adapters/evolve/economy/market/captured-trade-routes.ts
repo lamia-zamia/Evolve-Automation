@@ -1,5 +1,5 @@
 import { planTradeRoutes } from "../../../../domain/economy/market/trade-routes.ts";
-import { shouldSaveInflationMoney } from "../../../../domain/economy/resources/inflation-assist.ts";
+import { readCapturedInflationSaveMoney } from "../resources/captured-inflation-assist.ts";
 import {
   planRegionalTradeRoutes,
   type RegionalTradeResourceInput,
@@ -287,112 +287,6 @@ function routePrices(
     : undefined;
 }
 
-const INFLATION_CHALLENGE_MONEY = 25e10;
-const ACHIEVEMENT_LEVEL_TRAITS = Object.freeze([
-  "no_plasmid",
-  "no_trade",
-  "no_craft",
-  "no_crispr",
-  "weak_mastery",
-  "nerfed",
-  "badgenes",
-]);
-
-function achievementAffix(universe: unknown): string | undefined {
-  if (typeof universe !== "string") return undefined;
-  switch (universe) {
-    case "evil":
-      return "e";
-    case "antimatter":
-      return "a";
-    case "heavy":
-      return "h";
-    case "micro":
-      return "m";
-    case "magic":
-      return "mg";
-    default:
-      return "l";
-  }
-}
-
-function readInflationSaveMoney(
-  root: unknown,
-  settings: Record<PropertyKey, unknown>,
-  money: Record<PropertyKey, unknown>,
-): boolean {
-  try {
-    const assist = settings["inflationChallengeAssist"];
-    if (assist !== undefined && typeof assist !== "boolean") return false;
-    if (assist !== true) return false;
-
-    const race = readProperty(root, "race");
-    if (!isRecord(race)) return false;
-    const inflation = race["inflation"];
-    if (
-      inflation === undefined ||
-      inflation === false ||
-      typeof inflation !== "number" ||
-      !Number.isFinite(inflation)
-    ) {
-      return false;
-    }
-
-    const saveMinutes = finite(settings["inflationChallengeSaveMinutes"]);
-    if (saveMinutes === undefined) return false;
-    const currentMoney = finite(money["amount"]);
-    const maxMoney = finite(money["max"]);
-    const moneyRate = finite(money["diff"]);
-    if (
-      currentMoney === undefined ||
-      maxMoney === undefined ||
-      moneyRate === undefined
-    ) {
-      return false;
-    }
-
-    const stats = readProperty(root, "stats");
-    const achievements = readProperty(stats, "achieve");
-    const wheelbarrow = readProperty(achievements, "wheelbarrow");
-    const affix = achievementAffix(readProperty(race, "universe"));
-    if (!isRecord(stats) || !isRecord(achievements) || affix === undefined) {
-      return false;
-    }
-    if (
-      wheelbarrow !== undefined &&
-      wheelbarrow !== null &&
-      !isRecord(wheelbarrow)
-    ) {
-      return false;
-    }
-    const rawStar = readProperty(wheelbarrow, affix);
-    const wheelbarrowStar =
-      rawStar === undefined || rawStar === null ? 0 : finite(rawStar);
-    if (wheelbarrowStar === undefined || wheelbarrowStar < 0) return false;
-
-    let achievementLevel = 1;
-    for (const trait of ACHIEVEMENT_LEVEL_TRAITS) {
-      if (race[trait]) achievementLevel += 1;
-    }
-    achievementLevel = Math.min(achievementLevel, 5);
-
-    return shouldSaveInflationMoney({
-      active:
-        wheelbarrowStar < achievementLevel &&
-        readProperty(race, "inflation") !== false,
-      saveMinutes,
-      money: {
-        targetMoney: INFLATION_CHALLENGE_MONEY,
-        currentMoney,
-        maxMoney,
-        moneyRate,
-      },
-    });
-  } catch {
-    return false;
-  }
-}
-
 function routeUnlocked(
   root: unknown,
   resourceId: string,
@@ -576,7 +470,7 @@ function readRouteInput(
     unmanagedTradeRoutes: unmanaged,
     isBanana: Boolean(readProperty(race, "banana")),
     isEntrepreneur: readProperty(governor, "bg") === "entrepreneur",
-    saveInflationMoney: readInflationSaveMoney(root, settings, money),
+    saveInflationMoney: readCapturedInflationSaveMoney(root, settings),
   });
   return Object.freeze({
     input,

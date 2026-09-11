@@ -43,7 +43,11 @@ import { createCapturedResourceSource } from "../adapters/evolve/captured-world-
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
-import { createCapturedTriggers } from "../adapters/evolve/progression/build/captured-triggers.ts";
+import {
+  createCapturedTriggers,
+  type CapturedTriggerTarget,
+} from "../adapters/evolve/progression/build/captured-triggers.ts";
+import { createCapturedTriggerActions } from "../adapters/evolve/progression/build/captured-trigger-actions.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
 import {
   createCapturedProductionRatios,
@@ -88,6 +92,10 @@ import {
 import { createCapturedTradeRoutes } from "../adapters/evolve/economy/market/captured-trade-routes.ts";
 import { runGalaxyMarketAutomation } from "../application/galaxy-market.ts";
 import { runFleetAutomation } from "../application/fleet.ts";
+import {
+  runTriggerAutomation,
+  triggerPhaseActive,
+} from "../application/trigger.ts";
 import { runMarketTradesAutomation } from "../application/market.ts";
 import { createStorageAllocationAutomation } from "../application/storage-allocation.ts";
 import { createCapturedCraftCosts } from "../adapters/evolve/economy/production/captured-craft-costs.ts";
@@ -331,11 +339,25 @@ export function startCapturedRuntime({
     readSettings: () => readStoredSettings(storage),
     readOfferedTechs: progression.readOfferedTechs,
   });
+  // One trigger sample per cycle, shared by the demand model and the trigger phase: what the
+  // script saves for and what it clicks must be the same list.
+  let triggerTargetsThisCycle:
+    readonly Readonly<CapturedTriggerTarget>[] | undefined;
+  const readTriggerTargets = () =>
+    (triggerTargetsThisCycle ??= triggers.read());
+  const triggerActions = createCapturedTriggerActions({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    resources: createCapturedResourceSource(pageCapture.rootState),
+    readTargets: readTriggerTargets,
+    readSettings: () => readStoredSettings(storage),
+    readOfferedTechs: progression.readOfferedTechs,
+  });
   const demand = createCapturedResourceDemand({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs: buildCosts,
-    triggers,
+    triggers: Object.freeze({ read: readTriggerTargets }),
     construction: progression.observations,
     readOfferedTechs: progression.readOfferedTechs,
     reservations: queueReservations,
@@ -1048,6 +1070,7 @@ export function startCapturedRuntime({
 
   const runCycle = () => {
     demandThisCycle = undefined;
+    triggerTargetsThisCycle = undefined;
     const settings = readStoredSettings(storage);
     if (
       !pageCapture.isComplete() ||
@@ -1056,6 +1079,11 @@ export function startCapturedRuntime({
       return;
     }
     try {
+      if (isEnabled(settings, "autoTrigger")) {
+        // Trigger targets are only the actions whose controls were captured, so the sample the
+        // demand model shares has to be taken after construction discovery, not before it.
+        progression.ensureBuildControls();
+      }
       if (isEnabled(settings, "autoFleet")) {
         const truepath =
           readProperty(
@@ -1160,7 +1188,20 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoCraft")) {
         runCraftAutomation(craft);
       }
-      if (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) {
+      // Triggers are commitments: when one of them buys something this cycle, construction and
+      // research stand down so they cannot spend what the next trigger is saving for.
+      const triggerActive =
+        isEnabled(settings, "autoTrigger") &&
+        triggerPhaseActive(
+          runTriggerAutomation({
+            reader: triggerActions.reader,
+            executor: triggerActions.executor,
+          }),
+        );
+      if (
+        !triggerActive &&
+        (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))
+      ) {
         progression.runConstructionCycle();
       }
       if (isEnabled(settings, "autoNanite")) {
@@ -1202,7 +1243,7 @@ export function startCapturedRuntime({
           });
         }
       }
-      if (isEnabled(settings, "autoResearch")) {
+      if (!triggerActive && isEnabled(settings, "autoResearch")) {
         progression.runResearchCycle();
       }
     } catch (error) {
