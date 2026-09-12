@@ -662,14 +662,122 @@ assert.equal(
   false,
 );
 
+// --- the satellite price operand, from the same priced pass -----------------
+
+// The swarm satellite's next-copy Money price, under its game action id.
+const pricedSat = {
+  buildingCosts: new Map([["space-swarm_satellite", { Money: 5000 }]]),
+};
+assert.equal(readCapturedOperand(root, "Other", "satcost", pricedSat), 5000);
+// A priced satellite missing the Money entry costs nothing in it.
+assert.equal(
+  readCapturedOperand(root, "Other", "satcost", {
+    buildingCosts: new Map([["space-swarm_satellite", {}]]),
+  }),
+  0,
+);
+// A satellite the cycle never priced stays unanswered rather than reading as free.
+assert.equal(readCapturedOperand(root, "Other", "satcost", priced), undefined);
+assert.equal(readCapturedOperand(root, "Other", "satcost"), undefined);
+assert.equal(
+  evaluateCapturedCondition(root, "Other", "satcost", 5000, pricedSat),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "Other", "satcost", 5001, pricedSat),
+  false,
+);
+
+// --- the stored-settings operands, from the cycle's own settings ------------
+
+// The reset type, a setting value, and the evolution-queue length all come from the stored
+// settings the trigger sample already holds, not from game state.
+const stored = {
+  settings: {
+    prestigeType: "mad",
+    tickRate: 8,
+    autoBuild: true,
+    customName: "yes",
+    evolutionQueue: ["human", "elven", "orc"],
+  },
+};
+assert.equal(readCapturedOperand(root, "ResetType", "mad", stored), true);
+assert.equal(readCapturedOperand(root, "ResetType", "bioseed", stored), false);
+// A boolean operand matches its stored count rather than exceeding it.
+assert.equal(
+  evaluateCapturedCondition(root, "ResetType", "mad", 1, stored),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "ResetType", "mad", 0, stored),
+  false,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "ResetType", "bioseed", 0, stored),
+  true,
+);
+// Without the settings sample there is nothing to match against.
+assert.equal(readCapturedOperand(root, "ResetType", "mad"), undefined);
+// A numeric setting reads directly; a boolean rides as 0 or 1 so the script's `>=` holds.
+assert.equal(
+  readCapturedOperand(root, "SettingCurrent", "tickRate", stored),
+  8,
+);
+assert.equal(
+  readCapturedOperand(root, "SettingCurrent", "autoBuild", stored),
+  1,
+);
+// Anything that is neither — strings, absent keys, a missing sample — stays unanswered.
+assert.equal(
+  readCapturedOperand(root, "SettingCurrent", "customName", stored),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "SettingCurrent", "nothing", stored),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "SettingCurrent", "tickRate"),
+  undefined,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "SettingCurrent", "tickRate", 8, stored),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "SettingCurrent", "tickRate", 9, stored),
+  false,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "SettingCurrent", "autoBuild", 0, stored),
+  true,
+);
+// The evolution plan is the stored queue's length; anything but an array is unanswered.
+assert.equal(readCapturedOperand(root, "Queue", "evo", stored), 3);
+assert.equal(
+  readCapturedOperand(root, "Queue", "evo", {
+    settings: { evolutionQueue: "human" },
+  }),
+  undefined,
+);
+assert.equal(evaluateCapturedCondition(root, "Queue", "evo", 3, stored), true);
+assert.equal(evaluateCapturedCondition(root, "Queue", "evo", 4, stored), false);
+
 // Nothing the capture does not hold is guessed at.
 assert.equal(readCapturedOperand(root, "Eval", "1 + 1"), undefined);
 assert.equal(
   readCapturedOperand(root, "SettingCurrent", "autoBuild"),
   undefined,
 );
+// Stored defaults have no characterized counterpart to the raw-versus-live distinction yet.
+assert.equal(
+  readCapturedOperand(root, "SettingDefault", "tickRate", stored),
+  undefined,
+);
 // `rname` needs the module-level race catalog, which nothing captures.
 assert.equal(readCapturedOperand(root, "Other", "rname"), undefined);
+// `tknow` is the knowledge gate's own sample, which no pass carries yet.
+assert.equal(readCapturedOperand(root, "Other", "tknow", stored), undefined);
 assert.equal(readCapturedOperand(root, "RaceGenus", "humanoid"), undefined);
 assert.equal(readCapturedOperand(root, "Queue", "evo"), undefined);
 // Manager-computed and script-computed operands stay unanswered.

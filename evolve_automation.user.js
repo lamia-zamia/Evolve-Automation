@@ -10333,7 +10333,7 @@
   }
 
   // src/adapters/evolve/captured-conditions.ts
-  var BOOLEAN_OPERANDS = /* @__PURE__ */ new Set([
+  var SWARM_SATELLITE_ACTION_ID = "space-swarm_satellite", BOOLEAN_OPERANDS = /* @__PURE__ */ new Set([
     "Boolean",
     "ResourceUnlocked",
     "JobUnlocked",
@@ -10346,6 +10346,7 @@
     "Universe",
     "Government",
     "Governor",
+    "ResetType",
     "RacePillared",
     "MimicGenus",
     "PlanetBiome",
@@ -10496,6 +10497,11 @@
         return;
     }
   }
+  function storedSettingNumber(context, argument) {
+    if (typeof argument != "string") return;
+    let value = context?.settings?.[argument];
+    return typeof value == "boolean" ? Number(value) : finite(value);
+  }
   function buildingCostAmount(context, argument) {
     if (typeof argument != "string") return;
     let [buildingId, resourceId] = argument.split(".");
@@ -10525,6 +10531,8 @@
     switch (type) {
       case "BuildingCost":
         return buildingCostAmount(context, argument);
+      case "SettingCurrent":
+        return storedSettingNumber(context, argument);
       case "BuildingCount":
         return finite(readProperty(structureState(root, argument), "count"));
       case "ProjectCount":
@@ -10581,12 +10589,22 @@
           );
           return typeof damaged == "number" ? damaged : 0;
         }
+        if (argument === "satcost") {
+          let cost = context?.buildingCosts?.get(SWARM_SATELLITE_ACTION_ID);
+          return cost === void 0 ? void 0 : finite(cost.Money) ?? 0;
+        }
         return;
       }
       case "Date":
         return readDate(root, argument);
       case "Queue":
-        return argument === "queue" ? queueLength(root, "queue") : argument === "r_queue" ? queueLength(root, "r_queue") : void 0;
+        if (argument === "queue") return queueLength(root, "queue");
+        if (argument === "r_queue") return queueLength(root, "r_queue");
+        if (argument === "evo") {
+          let planned = context?.settings?.evolutionQueue;
+          return Array.isArray(planned) ? planned.length : void 0;
+        }
+        return;
       case "Industry":
         return argument === "smelters" ? smelterSlots(root) : void 0;
       case "Soldiers":
@@ -10647,6 +10665,11 @@
           "bg"
         ) ?? "none") === argument : void 0;
       }
+      case "ResetType": {
+        if (typeof argument != "string") return;
+        let settings = context?.settings;
+        return settings === void 0 ? void 0 : settings.prestigeType === argument;
+      }
       case "RacePillared":
         return racePillared(root, argument);
       case "MimicGenus": {
@@ -10689,6 +10712,8 @@
       let dot = row.requirementId.indexOf(".");
       return dot > 0 ? row.requirementId.slice(0, dot) : void 0;
     }
+    if (row.requirementType === "Other" && row.requirementId === "satcost")
+      return SWARM_SATELLITE_ACTION_ID;
   }
   function readRow(raw) {
     if (!isRecord(raw)) return;
@@ -10753,12 +10778,13 @@
           let cost = costs.readCost(buildingId);
           cost !== void 0 && buildingCosts.set(buildingId, cost);
         }
-        let conditionContext = Object.freeze({
+        let storedSettings = isRecord(settings) ? settings : void 0, conditionContext = Object.freeze({
           ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
           ...grantedTechs === void 0 ? {} : { grantedTechs },
           ...offeredProjectsById === void 0 ? {} : { unlockedProjects: new Set(offeredProjectsById.keys()) },
           ...buildingUnlocks === void 0 ? {} : { buildingUnlocks },
-          ...buildingCosts.size === 0 ? {} : { buildingCosts }
+          ...buildingCosts.size === 0 ? {} : { buildingCosts },
+          ...storedSettings === void 0 ? {} : { settings: storedSettings }
         }), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
             let count2 = finite(

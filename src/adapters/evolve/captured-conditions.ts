@@ -8,6 +8,12 @@
  * Mass Relay, and carport fields, the garrison and Hell fortress counts, and the smelter slot
  * count.
  *
+ * The cycle's own stored settings answer the rest of what needs no game read: the prestige type,
+ * a numeric or boolean setting value, and the evolution-queue length. The settings ride the same
+ * condition context as the priced costs, because the trigger sample already holds the stored blob.
+ * `SettingDefault` stays out: the captured composition keeps one stored blob, so the raw-versus-live
+ * distinction the compatibility reader draws has no characterized counterpart here yet.
+ *
  * It also answers the operands the root cannot supply but a drawn panel can. The game's grant
  * keys live in its private action catalog, so `ResearchUnlocked` and `ResearchComplete` are read
  * from the research panel the cycle already drew; `ProjectUnlocked` is read the same way from the
@@ -17,8 +23,8 @@
  * `CapturedConditionContext`, and a condition naming one goes
  * unanswered whenever the pass it needs was not taken.
  *
- * Everything else a condition can name — script-computed resource fields, the settings layer,
- * custom expressions, building clickability, manager-computed values, and anything needing the
+ * Everything else a condition can name — script-computed resource fields, custom expressions,
+ * building clickability, manager-computed values, stored defaults, and anything needing the
  * module-level race catalog or a private action definition — is deliberately absent.
  *
  * `undefined` has exactly one meaning here: the operand cannot be answered from what has been
@@ -60,13 +66,26 @@ export interface CapturedConditionContext {
   };
   /**
    * The game's current adjusted cost for each building a condition asked about. A building absent
-   * from the map was not priced, which leaves its cost operands unanswered.
+   * from the map was not priced, which leaves its cost operands unanswered. The satellite entry
+   * answers `Other/satcost` under its game action id.
    */
   readonly buildingCosts?: ReadonlyMap<
     string,
     Readonly<Record<string, number>>
   >;
+  /**
+   * The cycle's stored script settings, for the operands that read the player's own configuration
+   * rather than game state. Absent leaves those operands unanswered.
+   */
+  readonly settings?: Readonly<Record<string, unknown>>;
 }
+
+/**
+ * The game action id behind `Other/satcost`, the Sun Swarm Satellite's next-copy Money price.
+ * Declared by the game itself (`space.js`, `spc_sun.swarm_satellite`), so the cost probe prices
+ * the same binding the game draws.
+ */
+export const SWARM_SATELLITE_ACTION_ID = "space-swarm_satellite";
 
 /**
  * Operand types whose value is compared for equality instead of `>=`, mirroring the script's own
@@ -85,6 +104,7 @@ const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "Universe",
   "Government",
   "Governor",
+  "ResetType",
   "RacePillared",
   "MimicGenus",
   "PlanetBiome",
@@ -358,6 +378,22 @@ function soldierCount(root: unknown, argument: unknown): number | undefined {
 }
 
 /**
+ * One stored numeric or boolean setting as the script's own numeric comparison sees it. The
+ * compatibility reader compares with `>=`, so a boolean rides as 0 or 1 and only fails a count
+ * above it, exactly like the script. Anything that is neither — strings, objects, absent keys —
+ * stays unanswered rather than coerced.
+ */
+function storedSettingNumber(
+  context: Readonly<CapturedConditionContext> | undefined,
+  argument: unknown,
+): number | undefined {
+  if (typeof argument !== "string") return undefined;
+  const value = context?.settings?.[argument];
+  if (typeof value === "boolean") return Number(value);
+  return finite(value);
+}
+
+/**
  * One entry of the cycle's own adjusted price for a building, stored as
  * `<building>.<resource>`. A priced building missing the named resource costs nothing in it,
  * exactly as the script's own `?? 0` reads; a building the cycle never priced leaves the
@@ -405,6 +441,8 @@ function readNumber(
   switch (type) {
     case "BuildingCost":
       return buildingCostAmount(context, argument);
+    case "SettingCurrent":
+      return storedSettingNumber(context, argument);
     case "BuildingCount":
       return finite(readProperty(structureState(root, argument), "count"));
     case "ProjectCount":
@@ -472,6 +510,14 @@ function readNumber(
         );
         return typeof damaged === "number" ? damaged : 0;
       }
+      if (argument === "satcost") {
+        // The satellite's next-copy Money price from the cycle's shared priced pass. A cost the
+        // game never bound a control for is not one the cost reader can probe, so it stays
+        // unanswered rather than reading as free.
+        const cost = context?.buildingCosts?.get(SWARM_SATELLITE_ACTION_ID);
+        if (cost === undefined) return undefined;
+        return finite(cost["Money"]) ?? 0;
+      }
       return undefined;
     }
     case "Date":
@@ -479,6 +525,12 @@ function readNumber(
     case "Queue":
       if (argument === "queue") return queueLength(root, "queue");
       if (argument === "r_queue") return queueLength(root, "r_queue");
+      if (argument === "evo") {
+        // The player's own evolution plan, stored alongside the triggers. Anything but an array
+        // is a broken setting rather than an empty plan, so it stays unanswered.
+        const planned = context?.settings?.["evolutionQueue"];
+        return Array.isArray(planned) ? planned.length : undefined;
+      }
       return undefined;
     case "Industry":
       if (argument === "smelters") return smelterSlots(root);
@@ -592,6 +644,14 @@ function readBoolean(
         "bg",
       );
       return (background ?? "none") === argument;
+    }
+    case "ResetType": {
+      // The prestige the player configured, read off the same stored settings the triggers came
+      // from. Without that sample there is nothing to match against.
+      if (typeof argument !== "string") return undefined;
+      const settings = context?.settings;
+      if (settings === undefined) return undefined;
+      return settings["prestigeType"] === argument;
     }
     case "RacePillared":
       return racePillared(root, argument);

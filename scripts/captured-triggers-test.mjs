@@ -28,6 +28,7 @@ const COSTS = {
   "city-mine": { Money: 60, Lumber: 175 },
   "city-apartment": { Money: 875, Lumber: 600 },
   "city-amphitheatre": { Money: 500, Stone: 200 },
+  "space-swarm_satellite": { Money: 5000, Copper: 2500 },
 };
 
 const OFFERED = [
@@ -516,6 +517,119 @@ assert.deepEqual(
     ],
   }).read(),
   [],
+);
+
+// --- Other/satcost conditions price the swarm satellite ----------------------
+
+// A satcost condition prices the satellite through the same probe pass, once however many rows
+// name it, and answers the Money entry.
+{
+  const asked = [];
+  const result = triggers({
+    triggers: [
+      trigger({
+        priority: 0,
+        requirementType: "Other",
+        requirementId: "satcost",
+        requirementCount: 5000,
+        actionId: "city-mine",
+      }),
+      trigger({
+        priority: 1,
+        requirementType: "Other",
+        requirementId: "satcost",
+        requirementCount: 5001,
+        actionId: "city-amphitheatre",
+      }),
+    ],
+    costs: (actionId) => {
+      asked.push(actionId);
+      return COSTS[actionId];
+    },
+  }).read();
+  assert.equal(asked.filter((id) => id === "space-swarm_satellite").length, 1);
+  // The satellite's Money price is exactly 5000, so the first condition holds and the second
+  // trigger is dropped — and `city-mine` is the only target.
+  assert.deepEqual(result, [
+    { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+  ]);
+}
+
+// A satellite the cost reader cannot price leaves the condition unanswered rather than free.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "Other",
+        requirementId: "satcost",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+    costs: () => undefined,
+  }).read(),
+  [],
+);
+
+// --- Stored-settings conditions read the trigger sample's own settings ------
+
+// The configured prestige type, a numeric setting, and the evolution-queue length are answered
+// from the stored settings the rows came from.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResetType",
+        requirementId: "mad",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    settings: { prestigeType: "mad" },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResetType",
+        requirementId: "bioseed",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    settings: { prestigeType: "mad" },
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "SettingCurrent",
+        requirementId: "tickRate",
+        requirementCount: 8,
+        actionId: "city-mine",
+      }),
+    ],
+    settings: { tickRate: 8 },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "Queue",
+        requirementId: "evo",
+        requirementCount: 2,
+        actionId: "city-mine",
+      }),
+    ],
+    settings: { evolutionQueue: ["human", "elven"] },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
 );
 
 // --- BuildingUnlocked conditions draw only the regions they name -----------

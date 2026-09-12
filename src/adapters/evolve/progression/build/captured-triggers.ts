@@ -33,7 +33,10 @@ import type { GameControlRegistry } from "../../../../ports/game-control-registr
 import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
-import { evaluateCapturedCondition } from "../../captured-conditions.ts";
+import {
+  evaluateCapturedCondition,
+  SWARM_SATELLITE_ACTION_ID,
+} from "../../captured-conditions.ts";
 import { costFitsStorage } from "../../captured-affordability.ts";
 import {
   finite,
@@ -116,8 +119,8 @@ const ARPA_PREFIX = "arpa";
 
 /**
  * The building whose current cost a condition needs priced: the named building itself for
- * `BuildingAffordable`, the dotted pair's building half for `BuildingCost`. Anything else needs
- * no price.
+ * `BuildingAffordable`, the dotted pair's building half for `BuildingCost`, and the swarm
+ * satellite for `Other/satcost`. Anything else needs no price.
  */
 function costConditionBuildingId(row: TriggerRow): string | undefined {
   if (row.requirementType === "BuildingAffordable") {
@@ -129,6 +132,9 @@ function costConditionBuildingId(row: TriggerRow): string | undefined {
     if (typeof row.requirementId !== "string") return undefined;
     const dot = row.requirementId.indexOf(".");
     return dot > 0 ? row.requirementId.slice(0, dot) : undefined;
+  }
+  if (row.requirementType === "Other" && row.requirementId === "satcost") {
+    return SWARM_SATELLITE_ACTION_ID;
   }
   return undefined;
 }
@@ -291,7 +297,9 @@ export function createCapturedTriggers(
       }
       // The condition evaluator answers the research, project and building operands from the same
       // passes the actions are priced from, so a trigger's requirement and its target describe one
-      // moment.
+      // moment. The stored settings travel with them for the operands that read the player's own
+      // configuration rather than game state.
+      const storedSettings = isRecord(settings) ? settings : undefined;
       const conditionContext = Object.freeze({
         ...(offeredTechs === undefined
           ? {}
@@ -302,6 +310,7 @@ export function createCapturedTriggers(
           : { unlockedProjects: new Set(offeredProjectsById.keys()) }),
         ...(buildingUnlocks === undefined ? {} : { buildingUnlocks }),
         ...(buildingCosts.size === 0 ? {} : { buildingCosts }),
+        ...(storedSettings === undefined ? {} : { settings: storedSettings }),
       });
       const byPriority = new Map(rows.map((row) => [row.priority, row]));
 
