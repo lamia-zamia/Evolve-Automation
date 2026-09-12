@@ -13,12 +13,18 @@
  * `setAction` remaps the outer tab back to `space` before taking the id, so an outer building such
  * as `space-titan_spaceport` carries the same `space-` prefix as an inner one. Reading only one of
  * the two would report every building in the other half as not offered.
+ *
+ * The same rows carry the power switch. `setAction` draws a `span.on`/`span.off` pair onto a
+ * building whose own gate passed and draws neither onto one whose gate did not, so this pass
+ * answers how many copies are on and off without a second draw for the regions it already paid
+ * for.
  */
 
 import type { GameDrawnActionsReader } from "../../../../ports/game-drawn-actions.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { GameTabDiscovery } from "../../../../ports/game-tab-discovery.ts";
 import type {
+  BuildingSwitchState,
   BuildingUnlockSample,
   GameBuildingUnlockReader,
 } from "../../../../ports/game-building-unlocks.ts";
@@ -109,6 +115,7 @@ export function createCapturedBuildingUnlocks(
 
       const unlocked = new Set<string>();
       const sampled = new Set<string>();
+      const switchStates = new Map<string, Readonly<BuildingSwitchState>>();
       for (const region of regions) {
         const panels = REGION_PANELS[region];
         if (panels === undefined) {
@@ -120,6 +127,7 @@ export function createCapturedBuildingUnlocks(
         // A region is only answered when every panel holding its rows was read, because a missed
         // panel would report the buildings in it as not offered.
         const ids: string[] = [];
+        const states = new Map<string, Readonly<BuildingSwitchState>>();
         let complete = true;
         for (const panel of panels) {
           const path = Object.freeze([
@@ -148,6 +156,12 @@ export function createCapturedBuildingUnlocks(
                 `${panel.container} .action`,
               )) {
                 ids.push(action.id);
+                // Only the rows the game drew a switch onto report one. A row without the pair
+                // has no power state, which is a different answer from a region nobody drew and
+                // is kept apart from one by the region set the sample carries.
+                if (action.state !== undefined) {
+                  states.set(action.id, action.state);
+                }
               }
               read = true;
             },
@@ -165,12 +179,17 @@ export function createCapturedBuildingUnlocks(
         }
         if (!complete) continue;
         for (const id of ids) unlocked.add(id);
+        for (const [id, state] of states) switchStates.set(id, state);
         sampled.add(region);
       }
       if (sampled.size === 0) return undefined;
       return Object.freeze({
         unlocked: Object.freeze(unlocked) as ReadonlySet<string>,
         regions: Object.freeze(sampled) as ReadonlySet<string>,
+        states: Object.freeze(switchStates) as ReadonlyMap<
+          string,
+          Readonly<BuildingSwitchState>
+        >,
       });
     },
   });

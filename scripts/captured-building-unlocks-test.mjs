@@ -7,12 +7,32 @@ import {
   MAIN_TAB_SETTING,
 } from "../src/adapters/evolve/captured-tab-discovery.ts";
 
+/**
+ * One drawn row. A plain id is a row with no power switch; `[id, on, off]` is one the game drew a
+ * `span.on`/`span.off` pair onto, with the text it rendered into each.
+ */
+function makeRow(row) {
+  const [id, on, off] = Array.isArray(row) ? row : [row];
+  const spans = {
+    ":scope > span.on": on,
+    ":scope > span.off": off,
+  };
+  return {
+    id,
+    attributes: [],
+    querySelectorAll(selector) {
+      const text = spans[selector];
+      return text === undefined ? [] : [{ textContent: String(text) }];
+    },
+  };
+}
+
 /** A page whose region containers hold the given action ids, keyed by container selector. */
 function makePage(containers) {
   return {
     querySelectorAll(selector) {
       const rows = containers[selector];
-      if (rows !== undefined) return rows.map((id) => ({ id, attributes: [] }));
+      if (rows !== undefined) return rows.map(makeRow);
       // A bare container selector answers whether that panel is present at all.
       const bare = Object.hasOwn(containers, `${selector} .action`);
       return bare ? [{ id: selector.slice(1), attributes: [] }] : [];
@@ -186,6 +206,51 @@ for (const [region, container, subTab] of [
     drawnActions: { read: () => [], exists: () => false },
   });
   assert.equal(reader.read(new Set(["city"])), undefined);
+}
+
+// The power switch rides along on the same draw. `setAction` appends the on/off pair only to a
+// row whose own gate passed, so a row carrying the spans reports its counts and a row without
+// them reports no state at all — the two cases the operands read as a number and as zero.
+{
+  const { reader } = makeReader({
+    "#city .action": [["city-factory", 3, 2], "city-farm"],
+  });
+  const sample = reader.read(new Set(["city"]));
+  assert.deepEqual(sample.states.get("city-factory"), { on: 3, off: 2 });
+  assert.equal(sample.states.has("city-farm"), false);
+  // The row is still an ordinary drawn row for the unlock operand.
+  assert.equal(sample.unlocked.has("city-farm"), true);
+}
+
+// The counts are taken whole. A casino or lab row substitutes a holiday string for a zero, and a
+// half-read pair would report one span's number against the other's absence, so either one
+// unreadable leaves the row with no state rather than a guessed one.
+{
+  const { reader } = makeReader({
+    "#city .action": [
+      ["city-casino", 1, "\u{1F95A}"],
+      ["city-biolab", "trick", 0],
+      ["city-wardenclyffe", 4],
+    ],
+  });
+  const sample = reader.read(new Set(["city"]));
+  assert.equal(sample.states.has("city-casino"), false);
+  assert.equal(sample.states.has("city-biolab"), false);
+  assert.equal(sample.states.has("city-wardenclyffe"), false);
+}
+
+// A multi-panel region reports the switches from every panel it had to read.
+{
+  const { reader } = makeReader({
+    "#space .action": [["space-moon_base", 1, 0]],
+    "#outerSol .action": [["space-titan_spaceport", 2, 1]],
+  });
+  const sample = reader.read(new Set(["space"]));
+  assert.deepEqual(sample.states.get("space-moon_base"), { on: 1, off: 0 });
+  assert.deepEqual(sample.states.get("space-titan_spaceport"), {
+    on: 2,
+    off: 1,
+  });
 }
 
 console.log("captured-building-unlocks ok");

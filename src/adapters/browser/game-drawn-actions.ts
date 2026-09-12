@@ -18,16 +18,24 @@
  * lower-cased name. Requiring both also excludes, structurally rather than by a name blacklist,
  * the two `data-` attributes in that subtree that are not prices: Vue's own `data-v-app` mount
  * marker, and the `data-req-<tech>` a prediction writes for an unmet requirement.
+ *
+ * The same pass reads the row's power switch. `setAction` appends a `span.on` and a `span.off`
+ * directly to the wrapper for an action that has a switch, and for one that does not it appends
+ * neither, so their presence is the game's own answer to a gate built entirely out of the
+ * module-lexical definition. Unlike the prices these are element text, not attributes, and the
+ * counts are read whole or not at all.
  */
 
 import type {
   DrawnAction,
+  DrawnActionState,
   GameDrawnActionsReader,
 } from "../../ports/game-drawn-actions.ts";
 
 /** The subset of a page element this adapter touches. */
 interface DrawnElement {
   readonly id?: unknown;
+  readonly textContent?: unknown;
   readonly attributes?: ArrayLike<{
     readonly name: string;
     readonly value: string;
@@ -75,6 +83,47 @@ function collect(element: DrawnElement, markup: PriceMarkup): void {
   }
 }
 
+/**
+ * The row's power switch, when it drew one. `setAction` appends both spans directly to the
+ * `.action` wrapper, so a child combinator reads this row's own pair and never a nested one, and
+ * the pair is taken only whole: the game draws the two together and one alone would leave the
+ * other operand reading a number that belongs to a different row.
+ */
+function readSwitchState(
+  element: DrawnElement,
+): Readonly<DrawnActionState> | undefined {
+  const on = readSpanCount(element, ":scope > span.on");
+  const off = readSpanCount(element, ":scope > span.off");
+  if (on === undefined || off === undefined) return undefined;
+  return Object.freeze({ on, off });
+}
+
+/**
+ * One switch span's count. The game renders these with `v-html` of a bare number, except where a
+ * holiday easter egg substitutes a string for a zero, so anything that is not a whole count above
+ * or at zero leaves the state unread rather than coerced.
+ */
+function readSpanCount(
+  element: DrawnElement,
+  selector: string,
+): number | undefined {
+  let spans: ArrayLike<DrawnElement> | undefined;
+  try {
+    spans = element.querySelectorAll?.(selector);
+  } catch {
+    // A page whose element cannot answer a `:scope` selector reports no switch rather than
+    // failing the whole panel read, which every other operand on this pass still depends on.
+    return undefined;
+  }
+  if (spans === undefined || spans.length !== 1) return undefined;
+  const text = spans[0]?.textContent;
+  if (typeof text !== "string") return undefined;
+  const trimmed = text.trim();
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const count = Number(trimmed);
+  return Number.isSafeInteger(count) ? count : undefined;
+}
+
 function readCost(element: DrawnElement): Record<string, number> {
   const markup: PriceMarkup = { names: new Set(), amounts: new Map() };
   collect(element, markup);
@@ -114,8 +163,13 @@ export function createGameDrawnActionsReader({
         ) {
           continue;
         }
+        const state = readSwitchState(element);
         actions.push(
-          Object.freeze({ id, cost: Object.freeze(readCost(element)) }),
+          Object.freeze({
+            id,
+            cost: Object.freeze(readCost(element)),
+            ...(state === undefined ? {} : { state }),
+          }),
         );
       }
       return Object.freeze(actions);

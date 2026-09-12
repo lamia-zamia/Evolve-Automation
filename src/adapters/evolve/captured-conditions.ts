@@ -72,6 +72,12 @@ export interface CapturedConditionContext {
   readonly buildingUnlocks?: {
     readonly unlocked: ReadonlySet<string>;
     readonly regions: ReadonlySet<string>;
+    /**
+     * The on/off counts of the sampled rows that drew a power switch. A drawn row missing from
+     * here has no switch, which is the game's own answer and reads as zero of each; a row in a
+     * region nobody drew has no answer at all.
+     */
+    readonly states: ReadonlyMap<string, Readonly<{ on: number; off: number }>>;
   };
   /**
    * The game's current adjusted cost for each building a condition asked about. A building absent
@@ -368,8 +374,37 @@ function queueLength(root: unknown, key: string): number | undefined {
  * The script's own smelter slot count: total capacity minus the Star slots, which the script
  * manages separately as extra operating capacity. Both fields are created with the smelter
  * structure itself, so a missing smelter bag leaves the operand unanswered rather than zero.
- * Factory slots need building on/off state the root cannot answer and stay unanswered.
+ * Factory slots are a different figure again — the industry panel's own operating
+ * capacity, drawn behind `#iFactory` — and stay unanswered here.
  */
+/**
+ * One half of a building's rendered power switch. The switch exists only for a building whose own
+ * gate passed — `switchable()`, or `powered` with `high_tech >= 2` and `checkPowerRequirements` —
+ * and every input to that gate is the module-lexical action definition, so the drawn row is the
+ * captured answer: a row the region pass sampled without a switch has no state, and the script's
+ * own reader reports zero for exactly that case. A building in a region nobody drew, and one the
+ * panel never offered, stay unanswered rather than reading as switched off.
+ *
+ * The off count is the game's own `on_cap() - on` rather than `count - on`, so a segmented
+ * megastructure — a single machine the switch caps at one — reports the game's figure instead of
+ * its segment count.
+ */
+function switchedCount(
+  context: Readonly<CapturedConditionContext> | undefined,
+  argument: unknown,
+  half: "on" | "off",
+): number | undefined {
+  if (typeof argument !== "string") return undefined;
+  const parts = splitActionId(argument);
+  if (parts === undefined) return undefined;
+  const sample = context?.buildingUnlocks;
+  if (sample === undefined || !sample.regions.has(parts.region)) {
+    return undefined;
+  }
+  if (!sample.unlocked.has(argument)) return undefined;
+  return sample.states.get(argument)?.[half] ?? 0;
+}
+
 function smelterSlots(root: unknown): number | undefined {
   const smelter = readProperty(readProperty(root, "city"), "smelter");
   if (!isRecord(smelter)) return undefined;
@@ -512,6 +547,10 @@ function readNumber(
       return storedSettingNumber(context, argument);
     case "BuildingCount":
       return finite(readProperty(structureState(root, argument), "count"));
+    case "BuildingEnabled":
+      return switchedCount(context, argument, "on");
+    case "BuildingDisabled":
+      return switchedCount(context, argument, "off");
     case "ProjectCount":
       return finite(readProperty(projectRecord(root, argument), "rank"));
     case "ProjectProgress":

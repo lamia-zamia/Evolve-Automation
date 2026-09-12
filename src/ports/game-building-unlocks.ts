@@ -17,6 +17,14 @@
  * unanswered rather than being read as locked.
  */
 
+/** One building row's rendered power switch. */
+export interface BuildingSwitchState {
+  /** Copies switched on. */
+  readonly on: number;
+  /** Copies switched off, which the game sizes against the switch's own cap. */
+  readonly off: number;
+}
+
 /** The drawn building ids, and the regions the sample can actually speak for. */
 export interface BuildingUnlockSample {
   /** Element ids drawn across the sampled regions, e.g. `city-farm`. */
@@ -26,6 +34,16 @@ export interface BuildingUnlockSample {
    * "the panel said no" distinct from "the panel was never read".
    */
   readonly regions: ReadonlySet<string>;
+  /**
+   * The on/off counts for the drawn rows that rendered a power switch, by element id. Whether a
+   * building has a switch at all is decided by `switchable()`, or by `powered` with
+   * `high_tech >= 2` and `checkPowerRequirements` — all of them reads of the module-lexical
+   * definition — and the game answers it by drawing the two spans or not drawing them, so a row
+   * in a sampled region that is absent here has no switch to report. The off count is the
+   * game's own `on_cap() - on`, which is the built count for an ordinary building and 1 for a
+   * segmented megastructure that is a single machine.
+   */
+  readonly states: ReadonlyMap<string, Readonly<BuildingSwitchState>>;
 }
 
 export interface GameBuildingUnlockReader {

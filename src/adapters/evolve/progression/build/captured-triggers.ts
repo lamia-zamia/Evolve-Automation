@@ -131,6 +131,15 @@ const NO_TARGETS: readonly Readonly<CapturedTriggerTarget>[] = Object.freeze(
 const ARPA_PREFIX = "arpa";
 
 /**
+ * The condition operands answered from a drawn building region. Each one names a `<region>-<id>`
+ * building and is answered by that row: its presence for the unlock, its on/off spans for the
+ * switch counts.
+ */
+const REGION_PANEL_CONDITIONS: ReadonlySet<string> = Object.freeze(
+  new Set(["BuildingUnlocked", "BuildingEnabled", "BuildingDisabled"]),
+);
+
+/**
  * The building whose current cost a condition needs priced: the named building itself for
  * `BuildingAffordable`, the dotted pair's building half for `BuildingCost`, and the swarm
  * satellite for `Other/satcost`. Anything else needs no price.
@@ -314,11 +323,13 @@ export function createCapturedTriggers(
               drawnProjects.map((project) => [project.elementId, project]),
             );
       // Each building region is behind its own sub-tab and costs a pass to draw, so only the
-      // regions a configured `BuildingUnlocked` condition actually names are sampled. A row whose
-      // argument is not a `<region>-<id>` pair names no panel and is left to go unanswered.
+      // regions a configured condition actually names are sampled. The same draw answers all
+      // three panel operands: `BuildingUnlocked` from a row's presence, and the two switch counts
+      // from the on/off spans that row carries. A row whose argument is not a `<region>-<id>`
+      // pair names no panel and is left to go unanswered.
       const buildingRegions = new Set<string>();
       for (const row of rows) {
-        if (row.requirementType !== "BuildingUnlocked") continue;
+        if (!REGION_PANEL_CONDITIONS.has(row.requirementType)) continue;
         if (typeof row.requirementId !== "string") continue;
         const parts = splitActionId(row.requirementId);
         if (parts === undefined) continue;

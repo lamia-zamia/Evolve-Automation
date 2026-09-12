@@ -13,11 +13,29 @@
  * holdings rather than read from the `cna` class.
  */
 
+/** The on/off counts the game rendered onto a building row that has a power switch. */
+export interface DrawnActionState {
+  /** Copies switched on, the `span.on` the row renders from `act.on`. */
+  readonly on: number;
+  /** Copies switched off, the `span.off` the row renders as `on_cap() - act.on`. */
+  readonly off: number;
+}
+
 export interface DrawnAction {
   /** The id the game gave the element, e.g. `tech-mining`. */
   readonly id: string;
   /** `data-<Resource>` costs, keyed by the game's resource names. */
   readonly cost: Readonly<Record<string, number>>;
+  /**
+   * The row's rendered on/off counts, when it rendered a pair of them. `setAction` appends the
+   * two spans only for an action whose own gate passed — `switchable()` if the definition has
+   * one, otherwise `powered` plus `high_tech >= 2` plus `checkPowerRequirements` — and all three
+   * of those read the module-lexical definition, so the drawn spans are the captured answer to
+   * whether a building has a power state at all. Absent means the game drew no such pair, or
+   * drew something that is not a number: the casino and lab rows substitute a holiday string for
+   * a zero, which is not a count and is not guessed at.
+   */
+  readonly state?: Readonly<DrawnActionState>;
 }
 
 export interface GameDrawnActionsReader {

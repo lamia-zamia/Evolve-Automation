@@ -906,6 +906,7 @@ assert.deepEqual(
       return {
         unlocked: new Set(["city-bank"]),
         regions: new Set(["city"]),
+        states: new Map(),
       };
     },
   }).read();
@@ -919,6 +920,55 @@ assert.deepEqual(
     { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
   ]);
 }
+
+// The switch operands are answered from the same rows, so they draw their region too — and the
+// pass that answers them is the one the unlock operand already pays for.
+{
+  const asked = [];
+  assert.deepEqual(
+    triggers({
+      triggers: [
+        trigger({
+          requirementType: "BuildingEnabled",
+          requirementId: "portal-carport",
+          requirementCount: 2,
+          actionId: "city-mine",
+        }),
+      ],
+      readBuildingUnlocks: (regions) => {
+        asked.push([...regions].sort());
+        return {
+          unlocked: new Set(["portal-carport"]),
+          regions: new Set(["portal"]),
+          states: new Map([["portal-carport", { on: 2, off: 3 }]]),
+        };
+      },
+    }).read(),
+    [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+  );
+  assert.deepEqual(asked, [["portal"]]);
+}
+
+// A row the region drew without a switch has no power state, so `BuildingDisabled` reads zero and
+// a trigger waiting for an idle copy does not fire.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingDisabled",
+        requirementId: "city-farm",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: () => ({
+      unlocked: new Set(["city-farm"]),
+      regions: new Set(["city"]),
+      states: new Map(),
+    }),
+  }).read(),
+  [],
+);
 
 // No BuildingUnlocked condition means no panel is drawn at all.
 assert.deepEqual(
@@ -948,6 +998,7 @@ assert.deepEqual(
     readBuildingUnlocks: () => ({
       unlocked: new Set(["city-farm"]),
       regions: new Set(["city"]),
+      states: new Map(),
     }),
   }).read(),
   [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],

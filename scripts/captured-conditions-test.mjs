@@ -402,6 +402,8 @@ const cityAndSpace = {
   buildingUnlocks: {
     unlocked: new Set(["city-farm", "city-mine", "space-titan_spaceport"]),
     regions: new Set(["city", "space"]),
+    // `city-mine` drew a power switch; the other two rows drew none.
+    states: new Map([["city-mine", { on: 4, off: 1 }]]),
   },
 };
 assert.equal(
@@ -436,6 +438,48 @@ assert.equal(
 );
 assert.equal(
   readCapturedOperand(root, "BuildingUnlocked", "city-farm"),
+  undefined,
+);
+
+// --- the building switch operands, answered from the same drawn rows ---
+
+// A row that drew the on/off pair reports both halves. The off count is the game's own
+// `on_cap() - on`, so it is what the row rendered rather than a recomputed `count - on`.
+assert.equal(
+  readCapturedOperand(root, "BuildingEnabled", "city-mine", cityAndSpace),
+  4,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingDisabled", "city-mine", cityAndSpace),
+  1,
+);
+// A drawn row with no switch has no power state, which the script's own reader reports as zero.
+// The game answers this by not drawing the spans, so the sample's silence is the answer.
+assert.equal(
+  readCapturedOperand(root, "BuildingEnabled", "city-farm", cityAndSpace),
+  0,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingDisabled", "city-farm", cityAndSpace),
+  0,
+);
+// A building the panel never offered is not a building with zero copies switched on: nothing was
+// drawn to read, so it stays unanswered rather than reading as an idle building.
+assert.equal(
+  readCapturedOperand(root, "BuildingEnabled", "city-bank", cityAndSpace),
+  undefined,
+);
+// So is a region nobody drew, an argument naming no region, and an absent sample.
+assert.equal(
+  readCapturedOperand(root, "BuildingDisabled", "portal-carport", cityAndSpace),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingEnabled", "mine", cityAndSpace),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingEnabled", "city-mine"),
   undefined,
 );
 // It is a boolean operand: the stored count is matched, not exceeded.

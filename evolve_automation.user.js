@@ -3757,14 +3757,14 @@
           reportSkipped("*", "the space-tab control is unavailable");
           return;
         }
-        let unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set();
+        let unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switchStates = /* @__PURE__ */ new Map();
         for (let region of regions) {
           let panels = REGION_PANELS[region];
           if (panels === void 0) {
             reportSkipped(region, "not a building region");
             continue;
           }
-          let ids = [], complete = !0;
+          let ids = [], states = /* @__PURE__ */ new Map(), complete = !0;
           for (let panel of panels) {
             let path = Object.freeze([
               Object.freeze({
@@ -3784,7 +3784,7 @@
                   for (let action of drawnActions.read(
                     `${panel.container} .action`
                   ))
-                    ids.push(action.id);
+                    ids.push(action.id), action.state !== void 0 && states.set(action.id, action.state);
                   read = !0;
                 }
               }
@@ -3799,13 +3799,15 @@
           }
           if (complete) {
             for (let id of ids) unlocked.add(id);
+            for (let [id, state] of states) switchStates.set(id, state);
             sampled3.add(region);
           }
         }
         if (sampled3.size !== 0)
           return Object.freeze({
             unlocked: Object.freeze(unlocked),
-            regions: Object.freeze(sampled3)
+            regions: Object.freeze(sampled3),
+            states: Object.freeze(switchStates)
           });
       }
     });
@@ -10484,6 +10486,14 @@
     let entries = readProperty(readProperty(root, key), "queue");
     return Array.isArray(entries) ? entries.length : void 0;
   }
+  function switchedCount(context, argument, half) {
+    if (typeof argument != "string") return;
+    let parts = splitActionId(argument);
+    if (parts === void 0) return;
+    let sample = context?.buildingUnlocks;
+    if (!(sample === void 0 || !sample.regions.has(parts.region)) && sample.unlocked.has(argument))
+      return sample.states.get(argument)?.[half] ?? 0;
+  }
   function smelterSlots(root) {
     let smelter = readProperty(readProperty(root, "city"), "smelter");
     if (!isRecord(smelter)) return;
@@ -10560,6 +10570,10 @@
         return storedSettingNumber(context, argument);
       case "BuildingCount":
         return finite(readProperty(structureState(root, argument), "count"));
+      case "BuildingEnabled":
+        return switchedCount(context, argument, "on");
+      case "BuildingDisabled":
+        return switchedCount(context, argument, "off");
       case "ProjectCount":
         return finite(readProperty(projectRecord(root, argument), "rank"));
       case "ProjectProgress":
@@ -10747,7 +10761,9 @@
   // src/adapters/evolve/progression/build/captured-triggers.ts
   var NO_TARGETS = Object.freeze(
     []
-  ), ARPA_PREFIX = "arpa";
+  ), ARPA_PREFIX = "arpa", REGION_PANEL_CONDITIONS = Object.freeze(
+    /* @__PURE__ */ new Set(["BuildingUnlocked", "BuildingEnabled", "BuildingDisabled"])
+  );
   function costConditionBuildingId(row) {
     if (row.requirementType === "BuildingAffordable")
       return typeof row.requirementId == "string" ? row.requirementId : void 0;
@@ -10827,7 +10843,7 @@
           drawnProjects.map((project) => [project.elementId, project])
         ), buildingRegions = /* @__PURE__ */ new Set();
         for (let row of rows) {
-          if (row.requirementType !== "BuildingUnlocked" || typeof row.requirementId != "string") continue;
+          if (!REGION_PANEL_CONDITIONS.has(row.requirementType) || typeof row.requirementId != "string") continue;
           let parts = splitActionId(row.requirementId);
           parts !== void 0 && buildingRegions.add(parts.region);
         }
@@ -15845,6 +15861,26 @@
         } else name.startsWith(DATA_PREFIX) && markup.amounts.set(name.slice(DATA_PREFIX.length), value);
       }
   }
+  function readSwitchState(element) {
+    let on = readSpanCount(element, ":scope > span.on"), off = readSpanCount(element, ":scope > span.off");
+    if (!(on === void 0 || off === void 0))
+      return Object.freeze({ on, off });
+  }
+  function readSpanCount(element, selector) {
+    let spans;
+    try {
+      spans = element.querySelectorAll?.(selector);
+    } catch {
+      return;
+    }
+    if (spans === void 0 || spans.length !== 1) return;
+    let text = spans[0]?.textContent;
+    if (typeof text != "string") return;
+    let trimmed = text.trim();
+    if (!/^\d+$/.test(trimmed)) return;
+    let count2 = Number(trimmed);
+    return Number.isSafeInteger(count2) ? count2 : void 0;
+  }
   function readCost4(element) {
     let markup = { names: /* @__PURE__ */ new Set(), amounts: /* @__PURE__ */ new Map() };
     collect(element, markup);
@@ -15871,8 +15907,15 @@
         let elements = getDocument().querySelectorAll(selector), actions = [];
         for (let index = 0; index < elements.length; index++) {
           let element = elements[index], id = element?.id;
-          element === void 0 || typeof id != "string" || id.length === 0 || actions.push(
-            Object.freeze({ id, cost: Object.freeze(readCost4(element)) })
+          if (element === void 0 || typeof id != "string" || id.length === 0)
+            continue;
+          let state = readSwitchState(element);
+          actions.push(
+            Object.freeze({
+              id,
+              cost: Object.freeze(readCost4(element)),
+              ...state === void 0 ? {} : { state }
+            })
           );
         }
         return Object.freeze(actions);
