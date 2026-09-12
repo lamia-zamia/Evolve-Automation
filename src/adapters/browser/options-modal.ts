@@ -51,6 +51,10 @@ interface JQueryNode {
   ): JQueryNode;
   on(
     events: string,
+    handler: (this: JQueryInput, event: JQueryEvent) => void,
+  ): JQueryNode;
+  on(
+    events: string,
     data: unknown,
     handler: (event: JQueryEvent) => void,
   ): JQueryNode;
@@ -148,7 +152,7 @@ export function createOptionsModalBrowserAdapter({
 
     if (state.checked && enabledCallback) enabledCallback();
 
-    toggle.on("change", "input", function (this: JQueryInput) {
+    const updateToggle = function (this: JQueryInput): void {
       const writer = getSettingsWriter();
       writer.setToggle(settingName, this.checked);
       writer.persist();
@@ -157,7 +161,8 @@ export function createOptionsModalBrowserAdapter({
         .text(settingToggleCaption(settingName, this.checked));
       if (this.checked && enabledCallback) enabledCallback();
       if (!this.checked && disabledCallback) disabledCallback();
-    });
+    };
+    toggle.find("input").on("change", updateToggle);
     toggle.on(
       "click",
       { label: `Toggle (${settingName})`, name: settingName, type: "boolean" },

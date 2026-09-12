@@ -214,6 +214,10 @@ export function startCapturedRuntime({
     settings: settingsStore,
     logError: (message) => logError(message),
   });
+  // The settings UI is useful even when document-start capture was missed (for example, when a
+  // local bundle is loaded after the game). Automation still fails closed below until capture is
+  // complete, but configuration should not disappear with it.
+  settingsPanel.ensurePanel();
   const reported = new Set<string>();
   const reportOnce = (message: string) => {
     if (reported.has(message)) return;
@@ -1184,7 +1188,7 @@ export function startCapturedRuntime({
     // Drawn before the master-toggle guard below, and before any automation runs: a fresh profile
     // carries no settings at all, so a script that only drew its interface while already enabled
     // could never be switched on.
-    if (pageCapture.isComplete()) settingsPanel.ensurePanel();
+    settingsPanel.ensurePanel();
     const settings = settingsStore.readRaw();
     if (
       !pageCapture.isComplete() ||

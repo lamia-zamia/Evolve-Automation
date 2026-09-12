@@ -158,8 +158,7 @@ function createPage(
   assert.equal(settings.readRaw()["tickRate"], 7);
   assert.equal(JSON.parse(storage.writes())["tickRate"], 7);
 
-  // The handler is delegated from the toggle's own label, so the change has to bubble from the
-  // input the way a real one does.
+  // Dispatch on the input itself, the same native event path used by the browser control.
   checkbox.checked = true;
   checkbox.dispatch("change");
   assert.equal(settings.readRaw()["autoResearch"], true);

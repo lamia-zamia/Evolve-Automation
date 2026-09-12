@@ -17259,10 +17259,12 @@
             <span class="check"></span><span class="script-setting-label">${caption}</span>
           </label><br>`
       ).toggleClass("inactive-row", state.inactive);
-      state.checked && enabledCallback && enabledCallback(), toggle.on("change", "input", function() {
+      state.checked && enabledCallback && enabledCallback();
+      let updateToggle = function() {
         let writer = getSettingsWriter();
         writer.setToggle(settingName, this.checked), writer.persist(), toggle.find(".script-setting-label").text(settingToggleCaption(settingName, this.checked)), this.checked && enabledCallback && enabledCallback(), !this.checked && disabledCallback && disabledCallback();
-      }), toggle.on(
+      };
+      toggle.find("input").on("change", updateToggle), toggle.on(
         "click",
         { label: `Toggle (${settingName})`, name: settingName, type: "boolean" },
         openOverrideModal
@@ -18876,7 +18878,9 @@
       capturedPanelWindow: settingsHostWindow2,
       settings: settingsStore,
       logError: (message) => logError(message)
-    }), reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
+    });
+    settingsPanel.ensurePanel();
+    let reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
     }, readDemand = () => EMPTY_DEMAND_SAMPLE, buildCosts = createCapturedActionCostReader({
       rootState: pageCapture2.rootState,
@@ -19509,7 +19513,7 @@
       readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
     }), runCycle = () => {
-      demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), pageCapture2.isComplete() && settingsPanel.ensurePanel();
+      demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel();
       let settings = settingsStore.readRaw();
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {

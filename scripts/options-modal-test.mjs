@@ -149,7 +149,7 @@ const parent = makeNode("parent");
 settings.createSettingToggle(parent, "autoJobs", "Manage jobs");
 assert.ok(trace.some((entry) => entry.includes("inactive-row:true")));
 const changeHandler = handlers.find(
-  (entry) => entry.event === "change" && entry.selector === "input",
+  (entry) => entry.event === "change" && entry.selector === undefined,
 );
 changeHandler.handler.call({ checked: false }, {});
 assert.deepEqual(writerTrace.slice(-2), ["set:autoJobs:false", "persist"]);
