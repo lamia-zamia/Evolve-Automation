@@ -8,7 +8,7 @@ import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export const CAPTURED_POWER_PRODUCER_IDS = Object.freeze([
   "mill",
@@ -49,12 +49,6 @@ export interface CapturedPowerProducerDependencies {
 interface PowerSession {
   readonly root: unknown;
   readonly input: Readonly<CapturedPowerInput>;
-}
-
-function finite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
 }
 
 function readInput(root: unknown): Readonly<CapturedPowerInput> | undefined {

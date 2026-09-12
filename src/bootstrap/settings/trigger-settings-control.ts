@@ -4,6 +4,7 @@ import {
   type TriggerSettingsBrowserActions,
 } from "../../adapters/browser/trigger-settings.ts";
 import { createTriggerSettingsEvolveAdapter } from "../../adapters/evolve/progression/build/trigger-settings.ts";
+import { readRecord } from "../../adapters/validation.ts";
 
 declare global {
   var __EA_TEST_SURFACE_ENABLED__: boolean;
@@ -34,12 +35,6 @@ interface TriggerManager {
   DuplicateTrigger(seq: number): unknown;
   EvalizeTrigger(seq: number): unknown;
   sortByPriority(): unknown;
-}
-
-function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
 }
 
 function readContextValue<T>(

@@ -1,4 +1,5 @@
 import { createScriptDataLifecycle } from "../game/script-data.ts";
+import { readRecord } from "../adapters/validation.ts";
 
 declare global {
   var __EA_TEST_SURFACE_ENABLED__: boolean;
@@ -11,12 +12,6 @@ interface RuntimeTestSurface {
 }
 
 type LifecycleDependencies = Parameters<typeof createScriptDataLifecycle>[0];
-
-function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
 
 function readContextValue<T>(
   context: unknown,

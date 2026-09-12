@@ -102,7 +102,11 @@ function isEarlyGame(
   return !hasTech(tech, "mad");
 }
 
-function finite(value: unknown, fallback: number): number {
+/**
+ * Unlike the shared `finite` guard, this coerces (`Number()`, so numeric strings count) and
+ * answers a fallback instead of `undefined`. It keeps its own name so the two are never merged.
+ */
+function finiteWithFallback(value: unknown, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
@@ -165,13 +169,13 @@ export function createCapturedProjectContextReader(
         isVacuumCollapseManaStageReady({
           prestigeType,
           manaRate: resourceView(mana, "Mana").rateOfChange,
-          requiredManaRate: finite(
+          requiredManaRate: finiteWithFallback(
             settings["prestigeVacuumMana"],
             DEFAULT_VACUUM_MANA_REQUIREMENT,
           ),
         })
       ) {
-        syphon.weightMultiplier = finite(
+        syphon.weightMultiplier = finiteWithFallback(
           settings["buildingWeightingVacuumCollapse"],
           DEFAULT_VACUUM_WEIGHTING_MULTIPLIER,
         );
@@ -207,7 +211,7 @@ export function createCapturedProjectContextReader(
               !bananaObjectiveComplete(achievementState, "b5")
             ) {
               overrides.monument = Object.freeze({
-                weightMultiplier: finite(
+                weightMultiplier: finiteWithFallback(
                   settings["buildingWeightingBananaObjective"],
                   1,
                 ),
@@ -219,7 +223,7 @@ export function createCapturedProjectContextReader(
                 achievementLevel(raceTraits)
             ) {
               overrides.stock_exchange = Object.freeze({
-                weightMultiplier: finite(
+                weightMultiplier: finiteWithFallback(
                   settings["buildingWeightingInflationMoney"],
                   1,
                 ),

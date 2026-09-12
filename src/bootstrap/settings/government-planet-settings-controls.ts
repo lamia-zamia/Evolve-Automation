@@ -10,6 +10,7 @@ import {
 } from "../../adapters/browser/planet-settings.ts";
 import { createGovernmentSettingsEvolveAdapter } from "../../adapters/evolve/civic/government-settings.ts";
 import { createPlanetSettingsEvolveAdapter } from "../../adapters/evolve/progression/evolution/planet-settings.ts";
+import { readRecord } from "../../adapters/validation.ts";
 
 declare global {
   var __EA_TEST_SURFACE_ENABLED__: boolean;
@@ -31,12 +32,6 @@ type GovernmentBrowserDependencies = Parameters<
 type PlanetBrowserDependencies = Parameters<
   typeof createPlanetSettingsBrowserAdapter
 >[0];
-
-function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
 
 function readContextValue<T>(
   context: unknown,

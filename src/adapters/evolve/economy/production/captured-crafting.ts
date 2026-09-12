@@ -32,7 +32,7 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 import {
   CRAFT_ROW_PREFIX,
   type CapturedCraftCosts,
@@ -83,12 +83,6 @@ interface CraftingSession {
 interface CraftableDemandView {
   readonly craftableDemanded: boolean;
   readonly craftableBelowRequirement: boolean;
-}
-
-function finite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
 }
 
 function readSettingsRecord(value: unknown): Record<PropertyKey, unknown> {

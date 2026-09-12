@@ -12,7 +12,7 @@ import type { CapturedDemandSample } from "./captured-resource-demand.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export const NANITE_CONTROL = "iNFactory";
 
@@ -65,12 +65,6 @@ export interface CapturedNaniteDependencies {
 interface NaniteSession {
   readonly root: unknown;
   readonly input: Readonly<ConsumeInput>;
-}
-
-function finite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
 }
 
 function nonNegative(value: unknown): number | undefined {

@@ -14,13 +14,7 @@
  * resource is reported as unjudgeable.
  */
 
-import { isRecord, readProperty } from "../validation.ts";
-
-function finiteAmount(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
+import { finite, isRecord, readProperty } from "../validation.ts";
 
 /**
  * Whether the game has split its resources into per-region supply pools. Above this technology
@@ -29,9 +23,7 @@ function finiteAmount(value: unknown): number | undefined {
  * are split is captured — so every comparison here stops being exact.
  */
 export function isRegionalSupply(root: unknown): boolean {
-  const shadow = finiteAmount(
-    readProperty(readProperty(root, "tech"), "shadow"),
-  );
+  const shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
   return shadow !== undefined && shadow >= 5;
 }
 
@@ -77,7 +69,7 @@ export function costFitsStorage(
     const entry = costResource(root, key);
     if (!isRecord(entry)) return undefined;
     if (amount > 0 && readProperty(entry, "display") !== true) return false;
-    const capacity = finiteAmount(readProperty(entry, "max"));
+    const capacity = finite(readProperty(entry, "max"));
     if (capacity === undefined) return undefined;
     const isCeiling = zeroCapIsCeiling ? capacity >= 0 : capacity > 0;
     if (isCeiling && amount > capacity) return false;

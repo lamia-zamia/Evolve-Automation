@@ -12,7 +12,7 @@
  */
 
 import { shouldSaveInflationMoney } from "../../../../domain/economy/resources/inflation-assist.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 const INFLATION_CHALLENGE_MONEY = 25e10;
 const ACHIEVEMENT_LEVEL_TRAITS = Object.freeze([
@@ -24,12 +24,6 @@ const ACHIEVEMENT_LEVEL_TRAITS = Object.freeze([
   "nerfed",
   "badgenes",
 ]);
-
-function finiteAmount(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
 
 /** The suffix upstream appends to an achievement key for the run's universe. */
 function achievementAffix(universe: unknown): string | undefined {
@@ -74,11 +68,11 @@ export function readCapturedInflationSaveMoney(
     const money = readProperty(readProperty(root, "resource"), "Money");
     if (!isRecord(money)) return false;
 
-    const saveMinutes = finiteAmount(settings["inflationChallengeSaveMinutes"]);
+    const saveMinutes = finite(settings["inflationChallengeSaveMinutes"]);
     if (saveMinutes === undefined) return false;
-    const currentMoney = finiteAmount(money["amount"]);
-    const maxMoney = finiteAmount(money["max"]);
-    const moneyRate = finiteAmount(money["diff"]);
+    const currentMoney = finite(money["amount"]);
+    const maxMoney = finite(money["max"]);
+    const moneyRate = finite(money["diff"]);
     if (
       currentMoney === undefined ||
       maxMoney === undefined ||
@@ -103,7 +97,7 @@ export function readCapturedInflationSaveMoney(
     }
     const rawStar = readProperty(wheelbarrow, affix);
     const wheelbarrowStar =
-      rawStar === undefined || rawStar === null ? 0 : finiteAmount(rawStar);
+      rawStar === undefined || rawStar === null ? 0 : finite(rawStar);
     if (wheelbarrowStar === undefined || wheelbarrowStar < 0) return false;
 
     let achievementLevel = 1;

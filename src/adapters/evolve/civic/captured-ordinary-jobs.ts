@@ -13,7 +13,7 @@ import type { JobsExecutor, JobsReader } from "../../../ports/jobs.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../validation.ts";
+import { finite, isRecord, readProperty } from "../../validation.ts";
 import {
   createCapturedJobCatalogReader,
   toCapturedJobsCycleInput,
@@ -148,12 +148,6 @@ function finiteNonNegative(value: unknown): number | undefined {
     : undefined;
 }
 
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
 /** DeadSpace's haveTask("tax") is membership in the governor task values. */
 function readTaxTaskActive(root: unknown): boolean | undefined {
   const race = readProperty(root, "race");
@@ -224,7 +218,7 @@ function readAuthorityInput(
   previousCap: number | null,
 ): Readonly<JobsCycleInput["authority"]> | undefined {
   if (settings["authorityManage"] !== true) return unavailableInput().authority;
-  const configuredTarget = finiteNumber(settings["generalMinimumAuthority"]);
+  const configuredTarget = finite(settings["generalMinimumAuthority"]);
   if (configuredTarget === undefined) return undefined;
   if (configuredTarget === 0) {
     return unavailableInput().authority;
@@ -235,9 +229,9 @@ function readAuthorityInput(
   if (!isRecord(authority) || !isRecord(morale)) return undefined;
   const current = finiteNonNegative(readProperty(authority, "amount"));
   const maximum = finiteNonNegative(readProperty(authority, "max"));
-  const moraleCurrent = finiteNumber(readProperty(morale, "amount"));
-  const moralePotential = finiteNumber(readProperty(morale, "diff"));
-  const moraleMaximum = finiteNumber(readProperty(morale, "max"));
+  const moraleCurrent = finite(readProperty(morale, "amount"));
+  const moralePotential = finite(readProperty(morale, "diff"));
+  const moraleMaximum = finite(readProperty(morale, "max"));
   if (
     current === undefined ||
     maximum === undefined ||
@@ -283,7 +277,7 @@ function readAuthorityInput(
   if (autoTax) {
     const requested = readProperty(settings, "generalRequestedTaxRate");
     if (requested !== undefined) {
-      const requestedRate = finiteNumber(requested);
+      const requestedRate = finite(requested);
       if (requestedRate === undefined || requestedRate < 0) {
         if (requestedRate === undefined) return undefined;
       } else {

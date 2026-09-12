@@ -4,6 +4,7 @@ import {
   type WarSettingsBrowserActions,
 } from "../../adapters/browser/war-settings.ts";
 import { createWarSettingsEvolveAdapter } from "../../adapters/evolve/combat/war-settings.ts";
+import { readRecord } from "../../adapters/validation.ts";
 
 declare global {
   var __EA_TEST_SURFACE_ENABLED__: boolean;
@@ -22,12 +23,6 @@ type RuntimeFunction = (...args: unknown[]) => unknown;
 type BrowserDependencies = Parameters<
   typeof createWarSettingsBrowserAdapter
 >[0];
-
-function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
 
 function readContextValue<T>(
   context: unknown,

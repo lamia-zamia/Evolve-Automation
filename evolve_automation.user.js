@@ -63,6 +63,9 @@
   function isFiniteNumber(value) {
     return typeof value == "number" && Number.isFinite(value);
   }
+  function finite(value) {
+    return isFiniteNumber(value) ? value : void 0;
+  }
   function readProperty(owner, key) {
     return typeof owner == "object" && owner !== null || typeof owner == "function" ? owner[key] : void 0;
   }
@@ -2367,13 +2370,8 @@
   }
 
   // src/adapters/evolve/captured-affordability.ts
-  function finiteAmount(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function isRegionalSupply(root) {
-    let shadow = finiteAmount(
-      readProperty(readProperty(root, "tech"), "shadow")
-    );
+    let shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
     return shadow !== void 0 && shadow >= 5;
   }
   function costResource(root, key) {
@@ -2389,7 +2387,7 @@
       let entry = costResource(root, key);
       if (!isRecord(entry)) return;
       if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
-      let capacity = finiteAmount(readProperty(entry, "max"));
+      let capacity = finite(readProperty(entry, "max"));
       if (capacity === void 0) return;
       if ((zeroCapIsCeiling ? capacity >= 0 : capacity > 0) && amount > capacity) return !1;
     }
@@ -2817,7 +2815,7 @@
   function isEarlyGame(traits, tech) {
     return hasTrait(traits, "cataclysm") || hasTrait(traits, "orbit_decayed") || hasTrait(traits, "lone_survivor") || hasTrait(traits, "warlord") ? !1 : hasTrait(traits, "truepath") || hasTrait(traits, "sludge") || hasTrait(traits, "ultra_sludge") ? !hasTech(tech, "high_tech", 7) : !hasTech(tech, "mad");
   }
-  function finite(value, fallback) {
+  function finiteWithFallback(value, fallback) {
     let parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
   }
@@ -2844,11 +2842,11 @@
         mana !== void 0 && isVacuumCollapseManaStageReady({
           prestigeType,
           manaRate: resourceView(mana, "Mana").rateOfChange,
-          requiredManaRate: finite(
+          requiredManaRate: finiteWithFallback(
             settings.prestigeVacuumMana,
             10
           )
-        }) && (syphon.weightMultiplier = finite(
+        }) && (syphon.weightMultiplier = finiteWithFallback(
           settings.buildingWeightingVacuumCollapse,
           10
         ));
@@ -2867,12 +2865,12 @@
               bananaRace ? ["b5"] : []
             );
             achievementState !== void 0 && (bananaRace && !bananaObjectiveComplete(achievementState, "b5") && (overrides.monument = Object.freeze({
-              weightMultiplier: finite(
+              weightMultiplier: finiteWithFallback(
                 settings.buildingWeightingBananaObjective,
                 1
               )
             })), inflationRun && achievementStar(achievementState, "wheelbarrow") < achievementLevel(raceTraits) && (overrides.stock_exchange = Object.freeze({
-              weightMultiplier: finite(
+              weightMultiplier: finiteWithFallback(
                 settings.buildingWeightingInflationMoney,
                 1
               )
@@ -4967,9 +4965,6 @@
 
   // src/adapters/evolve/civic/captured-government.ts
   var CANDIDATES_CONTROL = "candidates", GOVERNMENT_CONTROL = "govType", GOVERNMENT_MODAL_CONTROL = "govModal";
-  function finiteGovernor(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function readCandidateBackgrounds(root) {
     let candidates = readProperty(
       readProperty(readProperty(root, "race"), "governor"),
@@ -4997,11 +4992,11 @@
     return typeof government == "string" ? government : "none";
   }
   function governmentUnlocked(root, government) {
-    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), govern = finiteGovernor(readProperty(tech, "govern"));
+    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), govern = finite(readProperty(tech, "govern"));
     if (government === "dictator")
       return readProperty(race, "wish") === !0 && isRecord(readProperty(race, "wishStats")) && readProperty(readProperty(race, "wishStats"), "gov") === !0;
     if (government === "magocracy")
-      return readProperty(tech, "gov_mage") === !0 || (finiteGovernor(readProperty(tech, "gov_mage")) ?? 0) > 0;
+      return readProperty(tech, "gov_mage") === !0 || (finite(readProperty(tech, "gov_mage")) ?? 0) > 0;
     if (readProperty(race, "warlord") === !0 || govern === void 0)
       return !1;
     switch (government) {
@@ -5026,12 +5021,12 @@
     }
   }
   function readGovernmentInput(root, settingsValue) {
-    let settings = isRecord(settingsValue) ? settingsValue : {}, technology = finiteGovernor(
+    let settings = isRecord(settingsValue) ? settingsValue : {}, technology = finite(
       readProperty(readProperty(root, "tech"), "governor")
     ), currentGovernment = readCurrentGovernment(root), prestigeType = settings.prestigeType, guardAnarchist = settings.achievementGuards !== !1 && settings.guardAnarchist !== !1 && prestigeType === "mad" && currentGovernment === "anarchy", configured = (key) => typeof settings[key] == "string" ? settings[key] : "none", govSpace = configured("govSpace"), govFinal = configured("govFinal"), govInterim = configured("govInterim"), governorTarget = settings.govGovernor, input = {
       isEnabled: settings.autoGovernment === !0,
       guardAnarchist,
-      haveQFactory: (finiteGovernor(readProperty(readProperty(root, "tech"), "q_factory")) ?? 0) > 0,
+      haveQFactory: (finite(readProperty(readProperty(root, "tech"), "q_factory")) ?? 0) > 0,
       haveGovernorTech: technology !== void 0 && technology >= 1,
       currentGovernor: readCurrentGovernor(root),
       govSpace,
@@ -5086,7 +5081,7 @@
               "game root changed after sampling"
             );
           if (readCurrentGovernment(root2) !== decision.government) {
-            let revision = finiteGovernor(
+            let revision = finite(
               readProperty(
                 readProperty(readProperty(root2, "civic"), "govern"),
                 "rev"
@@ -5300,11 +5295,8 @@
 
   // src/adapters/evolve/combat/captured-hell.ts
   var FORT_CONTROL = "fort", GARRISON_CONTROLS = ["garrison", "c_garrison"];
-  function finiteHellValue(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function settingNumber(settings, key, fallback) {
-    return finiteHellValue(settings[key]) ?? fallback;
+    return finite(settings[key]) ?? fallback;
   }
   function emptyHellInput() {
     return Object.freeze({
@@ -5367,9 +5359,9 @@
       available: !0,
       warlord: !0,
       enemies: Array.isArray(enemies) ? enemies.length : 0,
-      minions: finiteHellValue(readProperty(minions, "spawns")) ?? 0,
+      minions: finite(readProperty(minions, "spawns")) ?? 0,
       handleEnemyFortress: settings.warlordHandleFortress === !0,
-      minimumMinions: finiteHellValue(settings.warlordMinimumMinions) ?? 0
+      minimumMinions: finite(settings.warlordMinimumMinions) ?? 0
     });
   }
   function readHellInput(root, settingsValue) {
@@ -5379,10 +5371,10 @@
     if (race.warlord === !0) return readWarlordInput(root, settingsValue);
     let garrison = readProperty(readProperty(root, "civic"), "garrison"), fortress = readProperty(portal, "fortress");
     if (!isRecord(garrison) || !isRecord(fortress)) return emptyHellInput();
-    let workers = finiteHellValue(readProperty(garrison, "workers")), maximumWorkers = finiteHellValue(readProperty(garrison, "max")), crew = finiteHellValue(readProperty(garrison, "crew")), hellSoldiers = finiteHellValue(readProperty(fortress, "garrison")), hellPatrols = finiteHellValue(readProperty(fortress, "patrols")), hellPatrolSize = finiteHellValue(readProperty(fortress, "patrol_size"));
+    let workers = finite(readProperty(garrison, "workers")), maximumWorkers = finite(readProperty(garrison, "max")), crew = finite(readProperty(garrison, "crew")), hellSoldiers = finite(readProperty(fortress, "garrison")), hellPatrols = finite(readProperty(fortress, "patrols")), hellPatrolSize = finite(readProperty(fortress, "patrol_size"));
     if (workers === void 0 || maximumWorkers === void 0 || crew === void 0 || hellSoldiers === void 0 || hellPatrols === void 0 || hellPatrolSize === void 0)
       return emptyHellInput();
-    let space = readProperty(root, "space"), fob = readProperty(space, "fob"), fobTroops = finiteHellValue(readProperty(fob, "troops")) ?? 0, settings = isRecord(settingsValue) ? settingsValue : {}, tech = readProperty(root, "tech"), city = readProperty(root, "city"), turret = readProperty(portal, "turret"), warDrone = readProperty(portal, "war_drone"), warDroid = readProperty(portal, "war_droid"), bootCamp = readProperty(city, "boot_camp"), govern = readProperty(readProperty(root, "civic"), "govern"), elysium = finiteHellValue(readProperty(tech, "elysium")) ?? 0, homeGarrison = settingNumber(settings, "hellHomeGarrison", 10), minimumHellSoldiers = settingNumber(settings, "hellMinSoldiers", 20), minimumSoldierPercent = settingNumber(
+    let space = readProperty(root, "space"), fob = readProperty(space, "fob"), fobTroops = finite(readProperty(fob, "troops")) ?? 0, settings = isRecord(settingsValue) ? settingsValue : {}, tech = readProperty(root, "tech"), city = readProperty(root, "city"), turret = readProperty(portal, "turret"), warDrone = readProperty(portal, "war_drone"), warDroid = readProperty(portal, "war_droid"), bootCamp = readProperty(city, "boot_camp"), govern = readProperty(readProperty(root, "civic"), "govern"), elysium = finite(readProperty(tech, "elysium")) ?? 0, homeGarrison = settingNumber(settings, "hellHomeGarrison", 10), minimumHellSoldiers = settingNumber(settings, "hellMinSoldiers", 20), minimumSoldierPercent = settingNumber(
       settings,
       "hellMinSoldiersPercent",
       90
@@ -5398,22 +5390,22 @@
       hellPatrols,
       hellPatrolSize,
       // DeadSpace initializes `assigned` lazily; the compatibility bridge treats it as zero.
-      hellAssigned: finiteHellValue(readProperty(fortress, "assigned")) ?? 0,
+      hellAssigned: finite(readProperty(fortress, "assigned")) ?? 0,
       currentHellGarrison: hellSoldiers - hellPatrols * hellPatrolSize,
       homeGarrison,
       minimumHellSoldiers,
       minimumSoldierPercent,
       elysiumUnlocked: elysium >= 3,
-      fortressWalls: finiteHellValue(readProperty(fortress, "walls")) ?? 0,
-      fortressThreat: finiteHellValue(readProperty(fortress, "threat")) ?? 0,
+      fortressWalls: finite(readProperty(fortress, "walls")) ?? 0,
+      fortressThreat: finite(readProperty(fortress, "threat")) ?? 0,
       lowWallsMultiplier: settingNumber(settings, "hellLowWallsMulti", 3),
       targetFortressDamage: settingNumber(
         settings,
         "hellTargetFortressDamage",
         100
       ),
-      turretCount: finiteHellValue(readProperty(turret, "on")) ?? 0,
-      turretTechnology: finiteHellValue(readProperty(tech, "turret")) ?? 0,
+      turretCount: finite(readProperty(turret, "on")) ?? 0,
+      turretTechnology: finite(readProperty(tech, "turret")) ?? 0,
       handlePatrolSize: settings.hellHandlePatrolSize !== !1,
       patrolThreatPercent: settingNumber(settings, "hellPatrolThreatPercent", 8),
       patrolDroneModifier: settingNumber(settings, "hellPatrolDroneMod", 5),
@@ -5435,11 +5427,11 @@
         "hellBolsterPatrolPercentBottom",
         20
       ),
-      warDroneCount: finiteHellValue(readProperty(warDrone, "on")) ?? 0,
-      portalTechnology: finiteHellValue(readProperty(tech, "portal")) ?? 0,
-      warDroidCount: finiteHellValue(readProperty(warDroid, "on")) ?? 0,
+      warDroneCount: finite(readProperty(warDrone, "on")) ?? 0,
+      portalTechnology: finite(readProperty(tech, "portal")) ?? 0,
+      warDroidCount: finite(readProperty(warDroid, "on")) ?? 0,
       hellDroidTechnology: !!readProperty(tech, "hdroid"),
-      bootCampCount: finiteHellValue(readProperty(bootCamp, "count")) ?? 0,
+      bootCampCount: finite(readProperty(bootCamp, "count")) ?? 0,
       manageAuthority: settings.authorityManage === !0,
       minimumAuthority: settingNumber(settings, "generalMinimumAuthority", 0),
       minimumAuthorityPatrolPercent: settingNumber(
@@ -5447,7 +5439,7 @@
         "generalAuthorityMinPatrolPercent",
         0
       ),
-      evilTechnology: finiteHellValue(readProperty(tech, "evil")) ?? 0,
+      evilTechnology: finite(readProperty(tech, "evil")) ?? 0,
       grenadier: readProperty(race, "grenadier") === !0,
       government: typeof readProperty(govern, "type") == "string" ? readProperty(govern, "type") : ""
     });
@@ -5498,7 +5490,7 @@
       return;
     let result = controls.invoke(control, "rating", [10, !0]);
     if (!result.ok) return;
-    let perSoldier = finiteHellValue(result.value);
+    let perSoldier = finite(result.value);
     if (!(perSoldier === void 0 || perSoldier <= 0))
       return Math.ceil(targetRating / perSoldier);
   }
@@ -5515,7 +5507,7 @@
     let authority = readProperty(readProperty(root, "resource"), "Authority");
     if (!isRecord(authority) || authority.display === !1)
       return unavailable;
-    let current = finiteHellValue(readProperty(authority, "amount")), maximum = finiteHellValue(readProperty(authority, "max"));
+    let current = finite(readProperty(authority, "amount")), maximum = finite(readProperty(authority, "max"));
     if (!(current === void 0 || maximum === void 0))
       return Object.freeze({
         unlocked: !0,
@@ -5630,9 +5622,6 @@
   }
   function finiteNonNegative(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
-  }
-  function finiteNumber(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function finiteMaximum(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= -1 ? value : void 0;
@@ -5781,7 +5770,7 @@
     if (!isRecord(race)) return null;
     if (hasRaceFlag(race, "unfathomable")) return Number.MAX_SAFE_INTEGER;
     if (hasRaceFlag(race, "artifical")) return 0;
-    let food = readProperty(readProperty(root, "resource"), "Food"), amount = finiteNonNegative(readProperty(food, "amount")), maximum = finiteNonNegative(readProperty(food, "max")), rate = finiteNumber(readProperty(food, "diff"));
+    let food = readProperty(readProperty(root, "resource"), "Food"), amount = finiteNonNegative(readProperty(food, "amount")), maximum = finiteNonNegative(readProperty(food, "max")), rate = finite(readProperty(food, "diff"));
     if (amount === void 0 || maximum === void 0 || rate === void 0)
       return;
     if (amount >= maximum) return 0;
@@ -5888,12 +5877,12 @@
     return id !== "farmer" ? explicit : isRecord(readProperty(root, "race")) ? smartMaximum ?? count2 : null;
   }
   function resourceStorageRatio(root, id) {
-    let resource = readProperty(readProperty(root, "resource"), id), amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finiteNumber(readProperty(resource, "max"));
+    let resource = readProperty(readProperty(root, "resource"), id), amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finite(readProperty(resource, "max"));
     if (!(amount === void 0 || maximum === void 0))
       return maximum > 0 ? amount / maximum : 1;
   }
   function resourceDiff(root, id) {
-    return finiteNumber(
+    return finite(
       readProperty(readProperty(readProperty(root, "resource"), id), "diff")
     );
   }
@@ -6476,7 +6465,7 @@
     "Super_Fuel",
     "Thermite"
   ], DEFAULT_PRODUCT_SETTING = !0, DEFAULT_WEIGHTING = 1;
-  function finiteNumber2(value, fallback) {
+  function finiteNumber(value, fallback) {
     return typeof value == "number" && Number.isFinite(value) ? value : fallback;
   }
   function settingBoolean(settings, key) {
@@ -6488,7 +6477,7 @@
   }
   function productWeighting(settings, id) {
     let value = settings[`foundry_w_${id}`];
-    return finiteNumber2(value, DEFAULT_WEIGHTING) > 0 ? finiteNumber2(value, DEFAULT_WEIGHTING) : DEFAULT_WEIGHTING;
+    return finiteNumber(value, DEFAULT_WEIGHTING) > 0 ? finiteNumber(value, DEFAULT_WEIGHTING) : DEFAULT_WEIGHTING;
   }
   function craftsmenMode(settings) {
     let value = settings.productionCraftsmen;
@@ -6543,7 +6532,7 @@
     if (servants === void 0 || servants === !1)
       return Object.freeze({ samples: Object.freeze([]), maximum: 0, used: 0 });
     if (!isRecord(servants)) return;
-    let jobs = readProperty(servants, "sjobs"), maximum = finiteNumber2(readProperty(servants, "smax"), -1), used = finiteNumber2(readProperty(servants, "sused"), -1);
+    let jobs = readProperty(servants, "sjobs"), maximum = finiteNumber(readProperty(servants, "smax"), -1), used = finiteNumber(readProperty(servants, "sused"), -1);
     if (!isRecord(jobs) || maximum < 0 || used < 0) return;
     let samples = FOUNDRY_PRODUCTS.slice(0, 8).flatMap((id) => {
       let value = readProperty(jobs, id);
@@ -6556,12 +6545,12 @@
     }) : void 0;
   }
   function readCraftsmanState(root, foundry, assignedWorkers) {
-    let civic = readProperty(root, "civic"), craftsman = readProperty(civic, "craftsman"), maximumValue = readProperty(foundry, "cap"), fallbackMaximum = readProperty(craftsman, "max"), workersValue = readProperty(craftsman, "workers"), foundryWorkers = readProperty(foundry, "crafting"), maximum = finiteNumber2(
+    let civic = readProperty(root, "civic"), craftsman = readProperty(civic, "craftsman"), maximumValue = readProperty(foundry, "cap"), fallbackMaximum = readProperty(craftsman, "max"), workersValue = readProperty(craftsman, "workers"), foundryWorkers = readProperty(foundry, "crafting"), maximum = finiteNumber(
       maximumValue,
-      finiteNumber2(fallbackMaximum, assignedWorkers)
-    ), workers = finiteNumber2(
+      finiteNumber(fallbackMaximum, assignedWorkers)
+    ), workers = finiteNumber(
       workersValue,
-      finiteNumber2(foundryWorkers, assignedWorkers)
+      finiteNumber(foundryWorkers, assignedWorkers)
     );
     return Object.freeze({
       maximum: maximum >= 0 ? maximum : assignedWorkers,
@@ -6632,7 +6621,7 @@
       let resource = readProperty(resources, sample.id), craftWeight = productWeighting(settings, sample.id), buildingRequirement = buildingCosts === void 0 ? void 0 : readBuildingRequirement(
         buildingCosts,
         sample.id,
-        finiteNumber2(readProperty(resource, "amount"), 0),
+        finiteNumber(readProperty(resource, "amount"), 0),
         craftWeight
       );
       return Object.freeze({
@@ -6641,8 +6630,8 @@
         buildingCapacity: sample.buildingCapacity,
         affordability: readAffordability(root, sample.id, costs),
         demanded: demand?.isDemanded(sample.id) ?? !1,
-        useful: demand !== void 0 && finiteNumber2(readProperty(resource, "amount"), 0) < demand.storageRequired(sample.id),
-        currentQuantity: finiteNumber2(readProperty(resource, "amount"), 0),
+        useful: demand !== void 0 && finiteNumber(readProperty(resource, "amount"), 0) < demand.storageRequired(sample.id),
+        currentQuantity: finiteNumber(readProperty(resource, "amount"), 0),
         weighting: buildingRequirement?.weighting ?? craftWeight,
         driver: buildingRequirement?.driver ?? null,
         exclusion: null
@@ -7016,9 +7005,6 @@
   function finiteNonNegative2(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
   }
-  function finiteNumber3(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function readTaxTaskActive(root) {
     let race = readProperty(root, "race");
     if (!isRecord(race)) return;
@@ -7069,13 +7055,13 @@
   });
   function readAuthorityInput(root, settings, previousCap) {
     if (settings.authorityManage !== !0) return unavailableInput().authority;
-    let configuredTarget = finiteNumber3(settings.generalMinimumAuthority);
+    let configuredTarget = finite(settings.generalMinimumAuthority);
     if (configuredTarget === void 0) return;
     if (configuredTarget === 0)
       return unavailableInput().authority;
     let resources = readProperty(root, "resource"), authority = readProperty(resources, "Authority"), morale = readProperty(resources, "Morale");
     if (!isRecord(authority) || !isRecord(morale)) return;
-    let current = finiteNonNegative2(readProperty(authority, "amount")), maximum = finiteNonNegative2(readProperty(authority, "max")), moraleCurrent = finiteNumber3(readProperty(morale, "amount")), moralePotential = finiteNumber3(readProperty(morale, "diff")), moraleMaximum = finiteNumber3(readProperty(morale, "max"));
+    let current = finiteNonNegative2(readProperty(authority, "amount")), maximum = finiteNonNegative2(readProperty(authority, "max")), moraleCurrent = finite(readProperty(morale, "amount")), moralePotential = finite(readProperty(morale, "diff")), moraleMaximum = finite(readProperty(morale, "max"));
     if (current === void 0 || maximum === void 0 || moraleCurrent === void 0 || moralePotential === void 0 || moraleMaximum === void 0)
       return;
     let display = readProperty(authority, "display");
@@ -7097,7 +7083,7 @@
     if (autoTax) {
       let requested = readProperty(settings, "generalRequestedTaxRate");
       if (requested !== void 0) {
-        let requestedRate = finiteNumber3(requested);
+        let requestedRate = finite(requested);
         if (requestedRate === void 0 || requestedRate < 0) {
           if (requestedRate === void 0) return;
         } else
@@ -7642,12 +7628,9 @@
     "hunting",
     "crafting"
   ], DEFAULT_SPELL_WEIGHTING = 100, DEFAULT_HUNTING_WEIGHTING = 10, DEFAULT_FARMER_WEIGHTING = 1;
-  function finite2(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function settingNumber3(settings, key, fallback) {
     let value = settings[key];
-    return value === void 0 ? fallback : finite2(value);
+    return value === void 0 ? fallback : finite(value);
   }
   function emptyInput2() {
     return Object.freeze({
@@ -7664,7 +7647,7 @@
     });
   }
   function readNonNegative(value) {
-    let result = finite2(value);
+    let result = finite(value);
     return result !== void 0 && result >= 0 ? result : 0;
   }
   function hasTrait2(race, key) {
@@ -7704,7 +7687,7 @@
     let root = dependencies.rootState.readRoot();
     if (root === void 0)
       return Object.freeze({ root, input: emptyInput2() });
-    let race = readProperty(root, "race"), tech = readProperty(root, "tech"), casting = readProperty(race, "casting"), resources = readProperty(root, "resource"), mana = readProperty(resources, "Mana"), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, magic = finite2(readProperty(tech, "magic")), manaAmount = finite2(readProperty(mana, "amount")), manaMaximum = finite2(readProperty(mana, "max")), manaRateOfChange = finite2(readProperty(mana, "diff"));
+    let race = readProperty(root, "race"), tech = readProperty(root, "tech"), casting = readProperty(race, "casting"), resources = readProperty(root, "resource"), mana = readProperty(resources, "Mana"), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, magic = finite(readProperty(tech, "magic")), manaAmount = finite(readProperty(mana, "amount")), manaMaximum = finite(readProperty(mana, "max")), manaRateOfChange = finite(readProperty(mana, "diff"));
     if (!isRecord(casting) || magic === void 0 || magic < 3 || manaAmount === void 0 || manaMaximum === void 0 || manaRateOfChange === void 0 || dependencies.controls.resolve(PYLON_CONTROL) === void 0)
       return Object.freeze({ root, input: emptyInput2() });
     let ritualManaUse = settingNumber3(settings, "productionRitualManaUse", 0.5);
@@ -7713,7 +7696,7 @@
     let spells = [];
     for (let id of SPELL_IDS) {
       if (!spellAvailable(id, race, magic)) continue;
-      let currentSpells2 = finite2(readProperty(casting, id));
+      let currentSpells2 = finite(readProperty(casting, id));
       if (currentSpells2 === void 0 || currentSpells2 < 0) continue;
       let fallback = id === "hunting" ? DEFAULT_HUNTING_WEIGHTING : id === "farmer" ? DEFAULT_FARMER_WEIGHTING : DEFAULT_SPELL_WEIGHTING, weighting = settingNumber3(settings, `spell_w_${id}`, fallback);
       if (weighting === void 0)
@@ -7727,7 +7710,7 @@
         })
       );
     }
-    let civic = readProperty(root, "civic"), priest = readProperty(civic, "priest"), cementWorker = readProperty(civic, "cement_worker"), techRoguemagic = finite2(readProperty(tech, "roguemagic")), ritualSafe = typeof settings.productionRitualSafe == "boolean" ? settings.productionRitualSafe : !0, witchHunter = !!readProperty(race, "witch_hunter");
+    let civic = readProperty(root, "civic"), priest = readProperty(civic, "priest"), cementWorker = readProperty(civic, "cement_worker"), techRoguemagic = finite(readProperty(tech, "roguemagic")), ritualSafe = typeof settings.productionRitualSafe == "boolean" ? settings.productionRitualSafe : !0, witchHunter = !!readProperty(race, "witch_hunter");
     return Object.freeze({
       root,
       input: Object.freeze({
@@ -7745,14 +7728,14 @@
     });
   }
   function currentSpells(root, id) {
-    let value = finite2(
+    let value = finite(
       readProperty(readProperty(readProperty(root, "race"), "casting"), id)
     );
     return value !== void 0 && value >= 0 ? value : void 0;
   }
   function manaRate(root) {
     let mana = readProperty(readProperty(root, "resource"), "Mana");
-    return finite2(readProperty(mana, "diff"));
+    return finite(readProperty(mana, "diff"));
   }
   function decisionMatches(input, decision) {
     return JSON.stringify(planPylon(input)) === JSON.stringify(decision);
@@ -7880,9 +7863,6 @@
 
   // src/adapters/evolve/economy/production/captured-alchemy.ts
   var ALCHEMY_CONTROL_PREFIX = "alchemy";
-  function finite3(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function emptyInput3() {
     return Object.freeze({
       unlocked: !1,
@@ -7904,13 +7884,13 @@
   }
   function settingNumber4(settings, key, fallback) {
     let value = settings[key];
-    return value === void 0 ? fallback : finite3(value);
+    return value === void 0 ? fallback : finite(value);
   }
   function readAlchemyInput(dependencies) {
     let root = dependencies.rootState.readRoot();
     if (root === void 0)
       return Object.freeze({ root, input: emptyInput3() });
-    let tech = readProperty(root, "tech"), alchemyTech = finite3(readProperty(tech, "alchemy")), race = readProperty(root, "race"), alchemy = readProperty(race, "alchemy"), resources = readProperty(root, "resource"), mana = readProperty(resources, "Mana"), crystal = readProperty(resources, "Crystal"), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, manaAmount = finite3(readProperty(mana, "amount")), manaMaximum = finite3(readProperty(mana, "max")), manaRateOfChange = finite3(readProperty(mana, "diff")), crystalAmount = finite3(readProperty(crystal, "amount")), crystalRateOfChange = finite3(readProperty(crystal, "diff"));
+    let tech = readProperty(root, "tech"), alchemyTech = finite(readProperty(tech, "alchemy")), race = readProperty(root, "race"), alchemy = readProperty(race, "alchemy"), resources = readProperty(root, "resource"), mana = readProperty(resources, "Mana"), crystal = readProperty(resources, "Crystal"), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, manaAmount = finite(readProperty(mana, "amount")), manaMaximum = finite(readProperty(mana, "max")), manaRateOfChange = finite(readProperty(mana, "diff")), crystalAmount = finite(readProperty(crystal, "amount")), crystalRateOfChange = finite(readProperty(crystal, "diff"));
     if (alchemyTech === void 0 || alchemyTech < 1 || !isRecord(alchemy) || !isRecord(resources) || manaAmount === void 0 || manaMaximum === void 0 || manaRateOfChange === void 0 || crystalAmount === void 0 || crystalRateOfChange === void 0 || dependencies.controls.capturedElementIds().every((id) => !id.startsWith(ALCHEMY_CONTROL_PREFIX)))
       return Object.freeze({ root, input: emptyInput3() });
     let resourceViews = [];
@@ -7921,7 +7901,7 @@
         continue;
       let resource = readProperty(resources, id);
       if (!isRecord(resource)) continue;
-      let amount = finite3(resource.amount), maximum = finite3(resource.max), currentCount3 = finite3(alchemy[id]), display = resource.display, weighting = settingNumber4(settings, `res_alchemy_w_${id}`, 0);
+      let amount = finite(resource.amount), maximum = finite(resource.max), currentCount3 = finite(alchemy[id]), display = resource.display, weighting = settingNumber4(settings, `res_alchemy_w_${id}`, 0);
       amount === void 0 || maximum === void 0 || currentCount3 === void 0 || typeof display != "boolean" || weighting === void 0 || settings[`res_alchemy_${id}`] === !1 || resourceViews.push(
         Object.freeze({
           id,
@@ -7961,10 +7941,10 @@
   }
   function currentCount(root, id) {
     let alchemy = readProperty(readProperty(root, "race"), "alchemy");
-    return finite3(readProperty(alchemy, id));
+    return finite(readProperty(alchemy, id));
   }
   function manaRate2(root) {
-    return finite3(
+    return finite(
       readProperty(readProperty(readProperty(root, "resource"), "Mana"), "diff")
     );
   }
@@ -8130,12 +8110,9 @@
       priority: 1
     })
   ]);
-  function finite4(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function settingNumber5(settings, key, fallback) {
     let value = settings[key];
-    return value === void 0 ? fallback : finite4(value);
+    return value === void 0 ? fallback : finite(value);
   }
   function emptyInput4() {
     return Object.freeze({
@@ -8145,12 +8122,12 @@
     });
   }
   function readInput(dependencies) {
-    let root = dependencies.rootState.readRoot(), interstellar = readProperty(root, "interstellar"), droids = readProperty(interstellar, "mining_droid"), resources = readProperty(root, "resource"), control = dependencies.controls.resolve(MINING_DROID_CONTROL), maximum = finite4(readProperty(droids, "on")), count2 = finite4(readProperty(droids, "count"));
+    let root = dependencies.rootState.readRoot(), interstellar = readProperty(root, "interstellar"), droids = readProperty(interstellar, "mining_droid"), resources = readProperty(root, "resource"), control = dependencies.controls.resolve(MINING_DROID_CONTROL), maximum = finite(readProperty(droids, "on")), count2 = finite(readProperty(droids, "count"));
     if (!isRecord(droids) || !isRecord(resources) || control === void 0 || maximum === void 0 || count2 === void 0 || count2 < 1 || maximum < 0)
       return Object.freeze({ root, input: emptyInput4() });
     let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, productions = [];
     for (let product of PRODUCTS) {
-      let resource = readProperty(resources, product.resource), amount = finite4(readProperty(resource, "amount")), maximumResource = finite4(readProperty(resource, "max")), current = finite4(readProperty(droids, product.id)), display = readProperty(resource, "display"), weighting = settingNumber5(
+      let resource = readProperty(resources, product.resource), amount = finite(readProperty(resource, "amount")), maximumResource = finite(readProperty(resource, "max")), current = finite(readProperty(droids, product.id)), display = readProperty(resource, "display"), weighting = settingNumber5(
         settings,
         `droid_w_${product.resource}`,
         product.weighting
@@ -8184,7 +8161,7 @@
     });
   }
   function currentCount2(root, id) {
-    return finite4(
+    return finite(
       readProperty(
         readProperty(readProperty(root, "interstellar"), "mining_droid"),
         id
@@ -8226,7 +8203,7 @@
         if (targets === null) return SUCCEEDED;
         let current = session.input.productions.map((production) => ({
           productionId: production.id,
-          count: finite4(
+          count: finite(
             readProperty(
               readProperty(
                 readProperty(session.root, "interstellar"),
@@ -8328,9 +8305,6 @@
       costMinRateOfChange: 10
     })
   ]);
-  function finite5(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function emptyInput5() {
     return Object.freeze({
       initialised: !1,
@@ -8344,12 +8318,12 @@
     let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), interstellar = readProperty(root, "interstellar"), plant = readProperty(interstellar, "g_factory"), resources = readProperty(root, "resource"), graphene = readProperty(resources, "Graphene");
     if (!isRecord(race) || readProperty(race, "truepath") || readProperty(race, "warlord") || !isRecord(plant) || !isRecord(resources) || !isRecord(graphene) || dependencies.controls.resolve(GRAPHENE_CONTROL) === void 0)
       return Object.freeze({ root, input: emptyInput5() });
-    let count2 = finite5(readProperty(plant, "count")), maxOperating = finite5(readProperty(plant, "on")), grapheneAmount = finite5(readProperty(graphene, "amount")), grapheneMaximum = finite5(readProperty(graphene, "max")), grapheneDisplay = readProperty(graphene, "display");
+    let count2 = finite(readProperty(plant, "count")), maxOperating = finite(readProperty(plant, "on")), grapheneAmount = finite(readProperty(graphene, "amount")), grapheneMaximum = finite(readProperty(graphene, "max")), grapheneDisplay = readProperty(graphene, "display");
     if (count2 === void 0 || count2 < 1 || maxOperating === void 0 || maxOperating < 0 || grapheneAmount === void 0 || grapheneMaximum === void 0 || typeof grapheneDisplay != "boolean")
       return Object.freeze({ root, input: emptyInput5() });
     let fuels = [];
     for (let fuel of FUELS) {
-      let resource = readProperty(resources, fuel.id), amount = finite5(readProperty(resource, "amount")), maximum = finite5(readProperty(resource, "max")), rateOfChange = finite5(readProperty(resource, "diff")), currentFuelCount2 = finite5(readProperty(plant, fuel.id)), display = readProperty(resource, "display"), disabledByRace = fuel.id === "Lumber" && (!!readProperty(race, "kindling_kindred") || !!readProperty(race, "smoldering"));
+      let resource = readProperty(resources, fuel.id), amount = finite(readProperty(resource, "amount")), maximum = finite(readProperty(resource, "max")), rateOfChange = finite(readProperty(resource, "diff")), currentFuelCount2 = finite(readProperty(plant, fuel.id)), display = readProperty(resource, "display"), disabledByRace = fuel.id === "Lumber" && (!!readProperty(race, "kindling_kindred") || !!readProperty(race, "smoldering"));
       if (amount === void 0 || maximum === void 0 || rateOfChange === void 0 || currentFuelCount2 === void 0 || typeof display != "boolean")
         return Object.freeze({ root, input: emptyInput5() });
       fuels.push(
@@ -8377,7 +8351,7 @@
     });
   }
   function currentFuelCount(root, id) {
-    return finite5(
+    return finite(
       readProperty(
         readProperty(readProperty(root, "interstellar"), "g_factory"),
         id
@@ -8573,16 +8547,13 @@
     "Quantium",
     "Super_Fuel"
   ]);
-  function finite6(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function settingBoolean2(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : typeof value == "boolean" ? value : void 0;
   }
   function settingNumber6(settings, key, fallback) {
     let value = settings[key];
-    return value === void 0 ? fallback : finite6(value);
+    return value === void 0 ? fallback : finite(value);
   }
   function emptyInput6() {
     return Object.freeze({
@@ -8596,7 +8567,7 @@
   function readGovernorSettings(governor) {
     let config = readProperty(governor, "config"), replicate = readProperty(config, "replicate"), power = readProperty(replicate, "pow"), resources = readProperty(replicate, "res");
     if (!isRecord(power) || !isRecord(resources)) return null;
-    let powerOn = power.on, focusQueue = resources.que, focusNegative = resources.neg, switchOnCap = resources.cap, powerCap = finite6(power.cap);
+    let powerOn = power.on, focusQueue = resources.que, focusNegative = resources.neg, switchOnCap = resources.cap, powerCap = finite(power.cap);
     return typeof powerOn != "boolean" || typeof focusQueue != "boolean" || typeof focusNegative != "boolean" || typeof switchOnCap != "boolean" || powerCap === void 0 ? null : Object.freeze({
       powerOn,
       focusQueue,
@@ -8623,7 +8594,7 @@
     return ALWAYS_BLACKLISTED.has(id) || id === "Food" && !!race.fasting || id === "Lumber" && !!race.iceage;
   }
   function readInput3(dependencies) {
-    let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), tech = readProperty(root, "tech"), resources = readProperty(root, "resource"), replicator = readProperty(race, "replicator"), techLevel3 = finite6(readProperty(tech, "replicator"));
+    let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), tech = readProperty(root, "tech"), resources = readProperty(root, "resource"), replicator = readProperty(race, "replicator"), techLevel3 = finite(readProperty(tech, "replicator"));
     if (!isRecord(race) || !isRecord(tech) || !isRecord(resources) || !isRecord(replicator) || techLevel3 === void 0 || techLevel3 < 1)
       return Object.freeze({
         root,
@@ -8691,7 +8662,7 @@
         );
         continue;
       }
-      let amount = finite6(resource.amount), maximum = finite6(resource.max);
+      let amount = finite(resource.amount), maximum = finite(resource.max);
       if (amount === void 0 || maximum === void 0)
         return Object.freeze({
           root,
@@ -9040,12 +9011,9 @@
     let value = settings[key];
     return typeof value == "boolean" ? value : fallback;
   }
-  function finite7(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function readCapturedIsEarlyGame(root) {
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
-    return readProperty(race, "cataclysm") || readProperty(race, "orbit_decayed") || readProperty(race, "lone_survivor") || readProperty(race, "warlord") ? !1 : readProperty(race, "truepath") || readProperty(race, "sludge") || readProperty(race, "ultra_sludge") ? (finite7(readProperty(tech, "high_tech")) ?? 0) < 7 : (finite7(readProperty(tech, "mad")) ?? 0) < 1;
+    return readProperty(race, "cataclysm") || readProperty(race, "orbit_decayed") || readProperty(race, "lone_survivor") || readProperty(race, "warlord") ? !1 : readProperty(race, "truepath") || readProperty(race, "sludge") || readProperty(race, "ultra_sludge") ? (finite(readProperty(tech, "high_tech")) ?? 0) < 7 : (finite(readProperty(tech, "mad")) ?? 0) < 1;
   }
   function readSettingsInput(settingsValue) {
     let settings = isRecord(settingsValue) ? settingsValue : {};
@@ -9082,13 +9050,13 @@
         !1
       ),
       autoPower: settingBoolean3(settings, "autoPower", !1),
-      productionFactoryMinIngredients: finite7(settings.productionFactoryMinIngredients) ?? 0
+      productionFactoryMinIngredients: finite(settings.productionFactoryMinIngredients) ?? 0
     });
   }
   function toCosts(cost) {
     return Object.freeze(
       Object.entries(cost).flatMap(([resourceId, amount]) => {
-        let value = finite7(amount);
+        let value = finite(amount);
         return value === void 0 ? [] : [Object.freeze({ resourceId, amount: value })];
       })
     );
@@ -9244,7 +9212,7 @@
     if (!isRecord(tech)) return Object.freeze([]);
     let missions = [];
     for (let mission of CAPTURED_MISSIONS) {
-      let actionId = mission.actionId, completion = finite7(readProperty(tech, mission.completionTech));
+      let actionId = mission.actionId, completion = finite(readProperty(tech, mission.completionTech));
       if (controls.resolve(actionId) === void 0 || settingBoolean3(settings, `bat${actionId}`, !0) === !1 || completion === void 0 || completion >= mission.completionLevel)
         continue;
       let cost = costs.readCost(actionId);
@@ -9267,7 +9235,7 @@
   function readAffordable(resources, cost) {
     for (let [resourceId, amount] of Object.entries(cost)) {
       if (!Number.isFinite(amount) || amount < 0) return !1;
-      let current = finite7(
+      let current = finite(
         readProperty(readProperty(resources, resourceId), "amount")
       );
       if (current === void 0 || current < amount) return !1;
@@ -9290,9 +9258,9 @@
   function readStorageResources(resources, settings) {
     let states = [];
     for (let id of Object.keys(resources)) {
-      let resource = resources[id], maximum = finite7(readProperty(resource, "max"));
+      let resource = resources[id], maximum = finite(readProperty(resource, "max"));
       if (maximum === void 0) continue;
-      let ratio = finite7(settings[`res_sell_r_${id}`]);
+      let ratio = finite(settings[`res_sell_r_${id}`]);
       states.push(
         Object.freeze({
           id,
@@ -9324,13 +9292,13 @@
   function readCapturedCrafterDemand(root, resources, settings, craftCosts) {
     if (craftCosts === void 0 || !isRecord(readProperty(readProperty(root, "city"), "foundry")))
       return;
-    let maximum = finite7(
+    let maximum = finite(
       readProperty(readProperty(readProperty(root, "civic"), "craftsman"), "max")
     );
     if (maximum === void 0 || maximum < 0) return;
     let availableCrafters = maximum, servants = readProperty(readProperty(root, "race"), "servants");
     if (isRecord(servants)) {
-      let skilledMaximum = finite7(readProperty(servants, "smax"));
+      let skilledMaximum = finite(readProperty(servants, "smax"));
       skilledMaximum !== void 0 && skilledMaximum >= 0 && (availableCrafters += skilledMaximum);
     }
     let crafters = [];
@@ -9342,7 +9310,7 @@
       if (recipe === void 0) continue;
       let costs = [], valid = !0;
       for (let [resourceId, amount] of recipe) {
-        let material = readProperty(resources, resourceId), maximumQuantity = finite7(readProperty(material, "max"));
+        let material = readProperty(resources, resourceId), maximumQuantity = finite(readProperty(material, "max"));
         if (maximumQuantity === void 0 || !Number.isFinite(amount) || amount <= 0) {
           valid = !1;
           break;
@@ -9356,7 +9324,7 @@
       !valid || costs.length === 0 || crafters.push({
         isDemanded: !1,
         isUnlocked: !0,
-        craftPreserve: finite7(settings[`foundry_p_${id}`]) ?? 0,
+        craftPreserve: finite(settings[`foundry_p_${id}`]) ?? 0,
         costs: Object.freeze(costs)
       });
     }
@@ -9463,20 +9431,20 @@
     })
   ]);
   function readCapturedFactoryDemand(root, settings) {
-    let count2 = readCapturedFactoryCapacity(root), factoryLevel = finite7(
+    let count2 = readCapturedFactoryCapacity(root), factoryLevel = finite(
       readProperty(readProperty(root, "tech"), "factory")
     );
     if (count2 === void 0 || count2 <= 0 || !Number.isSafeInteger(count2) || factoryLevel === void 0 || !Number.isSafeInteger(factoryLevel) || factoryLevel < 0 || factoryLevel > 4)
       return;
     let tech = readProperty(root, "tech"), race = readProperty(root, "race"), coalSpecies = !!readProperty(race, "kindling_kindred") || !!readProperty(race, "smoldering") || !!readProperty(race, "iceage"), productions = FACTORY_DEMAND_SPECS.map((spec) => {
-      let techLevel3 = spec.unlockTech === void 0 ? 1 : finite7(readProperty(tech, spec.unlockTech)) ?? 0, enabled = settings[`production_${spec.id}`] ?? !0, weighting = settings[`production_w_${spec.id}`] ?? (spec.id === "Nano" || spec.id === "Stanene" ? 4 : 1);
+      let techLevel3 = spec.unlockTech === void 0 ? 1 : finite(readProperty(tech, spec.unlockTech)) ?? 0, enabled = settings[`production_${spec.id}`] ?? !0, weighting = settings[`production_w_${spec.id}`] ?? (spec.id === "Nano" || spec.id === "Stanene" ? 4 : 1);
       if (typeof enabled != "boolean" || typeof weighting != "number" || !Number.isFinite(weighting))
         return;
       let unlocked = spec.unlockTech === void 0 || techLevel3 > 0, costs = spec.costs.flatMap((cost) => {
         let quantity = (spec.id === "Polymer" && coalSpecies && cost.resourceId === "Oil" ? [0.22, 0.33, 0.44, 0.55, 0.66] : cost.rates)[factoryLevel], resource = readProperty(
           readProperty(root, "resource"),
           cost.resourceId
-        ), maximum = finite7(readProperty(resource, "max"));
+        ), maximum = finite(readProperty(resource, "max"));
         return quantity === void 0 || maximum === void 0 ? [] : [
           Object.freeze({
             quantity,
@@ -9563,14 +9531,14 @@
           factoryProductions: Object.freeze([])
         }), baseResult = planDemandPrioritization(baseInput), baseRequested = /* @__PURE__ */ new Map();
         for (let request of baseResult.requests) {
-          let amount = finite7(request.amount);
+          let amount = finite(request.amount);
           amount !== void 0 && baseRequested.set(
             request.resourceId,
             Math.max(baseRequested.get(request.resourceId) ?? 0, amount)
           );
         }
         let factoryProductions = Object.freeze(factoryCatalog === void 0 ? [] : factoryCatalog.productions.map((production) => {
-          let amount = finite7(
+          let amount = finite(
             readProperty(
               readProperty(resources, production.outputResourceId),
               "amount"
@@ -9586,11 +9554,11 @@
           factoryProductions
         }) : baseResult, requested = /* @__PURE__ */ new Map();
         for (let request of result.requests) {
-          let amount = finite7(request.amount);
+          let amount = finite(request.amount);
           if (amount === void 0) continue;
           let current = requested.get(request.resourceId) ?? 0;
           if (amount <= current) continue;
-          let maximum = finite7(
+          let maximum = finite(
             readProperty(readProperty(resources, request.resourceId), "max")
           );
           requested.set(
@@ -9606,7 +9574,7 @@
               production.costs.map(
                 (cost) => Object.freeze({
                   resourceId: cost.resourceId,
-                  amount: cost.minRateOfChange + (finite7(settings.productionFactoryMinIngredients) ?? 0) * cost.resourceMaxQuantity
+                  amount: cost.minRateOfChange + (finite(settings.productionFactoryMinIngredients) ?? 0) * cost.resourceMaxQuantity
                 })
               )
             )
@@ -9643,7 +9611,7 @@
           isDemanded: (resourceId) => {
             let wanted = requested.get(resourceId);
             if (wanted === void 0) return !1;
-            let amount = finite7(
+            let amount = finite(
               readProperty(readProperty(resources, resourceId), "amount")
             );
             return amount !== void 0 && wanted > amount;
@@ -10026,11 +9994,8 @@
     gxy_gateway: 4,
     gxy_gorddon: 5
   });
-  function finite8(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function count(value) {
-    let result = finite8(value);
+    let result = finite(value);
     return result !== void 0 && Number.isSafeInteger(result) && result >= 0 ? result : void 0;
   }
   function emptyCounts() {
@@ -10042,7 +10007,7 @@
     return typeof settings[key] == "boolean" ? settings[key] : fallback;
   }
   function settingNumber7(settings, key, fallback) {
-    return finite8(settings[key]) ?? fallback;
+    return finite(settings[key]) ?? fallback;
   }
   function activeCount(galaxy, id) {
     return count(readProperty(readProperty(galaxy, id), "on")) ?? 0;
@@ -10050,9 +10015,9 @@
   function resourceIsUseful(root, settings, demanded, resourceId) {
     let resource = readProperty(readProperty(root, "resource"), resourceId);
     if (!isRecord(resource)) return !1;
-    let amount = finite8(resource.amount), maximum = finite8(resource.max);
+    let amount = finite(resource.amount), maximum = finite(resource.max);
     if (amount === void 0 || maximum === void 0) return !1;
-    let ratio = maximum > 0 ? amount / maximum : 1, maxStorage = finite8(settings[`res_max_store${resourceId}`]);
+    let ratio = maximum > 0 ? amount / maximum : 1, maxStorage = finite(settings[`res_max_store${resourceId}`]);
     return ratio < 0.99 || demanded(resourceId) || settings[`res_storage_o_${resourceId}`] === !0 && maxStorage !== void 0 && amount < maxStorage;
   }
   function tradeTargetsUsefulResource(root, usefulResources) {
@@ -10203,7 +10168,7 @@
     let race = readProperty(root, "race"), tech = readProperty(root, "tech"), galaxy = readProperty(root, "galaxy"), settings = isRecord(settingsValue) ? settingsValue : {};
     if (!isRecord(race) || !isRecord(tech) || !isRecord(galaxy) || race.truepath === !0)
       return;
-    let piracy = finite8(tech.piracy), defense = readDefense(root), fleet = controls.resolve("fleet");
+    let piracy = finite(tech.piracy), defense = readDefense(root), fleet = controls.resolve("fleet");
     if (piracy === void 0 || piracy <= 0 || defense === void 0 || fleet === void 0 || !fleet.methods.includes("add") || !fleet.methods.includes("sub"))
       return;
     let ships = [];
@@ -10228,7 +10193,7 @@
       piracy
     );
     if (regions === void 0) return;
-    let chthonianLossMode = typeof settings.fleetChthonianLoses == "string" ? settings.fleetChthonianLoses : "ignore", knowledgeMaximum = finite8(
+    let chthonianLossMode = typeof settings.fleetChthonianLoses == "string" ? settings.fleetChthonianLoses : "ignore", knowledgeMaximum = finite(
       readProperty(
         readProperty(readProperty(root, "resource"), "Knowledge"),
         "max"
@@ -10249,7 +10214,7 @@
       instinct: race.instinct === !0,
       alien2Unlocked: alien2 !== void 0,
       alien2KnowledgeMaximum: knowledgeMaximum,
-      alien2KnowledgeRequired: finite8(settings.fleetAlien2Knowledge) ?? 8e6,
+      alien2KnowledgeRequired: finite(settings.fleetAlien2Knowledge) ?? 8e6,
       alien2LossMode: typeof settings.fleetAlien2Loses == "string" ? settings.fleetAlien2Loses : "normal",
       crewReclaim: settingBoolean4(settings, "fleetCrewReclaim", !0),
       galaxyAssaultPending,
@@ -10381,9 +10346,6 @@
     "PlanetBiome",
     "PlanetTrait"
   ]);
-  function finiteValue(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function structureState(root, argument) {
     if (typeof argument != "string") return;
     let separator = argument.indexOf("-");
@@ -10423,21 +10385,19 @@
   ]);
   function jobWorkers(root, argument) {
     if (typeof argument != "string") return;
-    let assigned = finiteValue(
-      readProperty(civicJob(root, argument), "workers")
-    );
-    return assigned !== void 0 ? assigned : finiteValue(readProperty(foundryRecord(root), argument));
+    let assigned = finite(readProperty(civicJob(root, argument), "workers"));
+    return assigned !== void 0 ? assigned : finite(readProperty(foundryRecord(root), argument));
   }
   function jobExists(root, argument) {
-    return typeof argument != "string" ? !1 : isRecord(civicJob(root, argument)) ? !0 : finiteValue(readProperty(foundryRecord(root), argument)) !== void 0;
+    return typeof argument != "string" ? !1 : isRecord(civicJob(root, argument)) ? !0 : finite(readProperty(foundryRecord(root), argument)) !== void 0;
   }
   function jobServantCount(root, argument) {
     if (typeof argument != "string") return;
-    let servants = readProperty(readProperty(root, "race"), "servants"), assigned = finiteValue(
+    let servants = readProperty(readProperty(root, "race"), "servants"), assigned = finite(
       readProperty(readProperty(servants, "jobs"), argument)
     );
     if (assigned !== void 0) return assigned;
-    let skilled = finiteValue(
+    let skilled = finite(
       readProperty(readProperty(servants, "sjobs"), argument)
     );
     return skilled !== void 0 ? skilled : jobExists(root, argument) ? 0 : void 0;
@@ -10446,9 +10406,9 @@
     if (typeof argument != "string") return;
     if (BASIC_JOB_IDS.has(argument)) return Number.MAX_SAFE_INTEGER;
     let entry = civicJob(root, argument);
-    if (isRecord(entry)) return finiteValue(readProperty(entry, "max"));
+    if (isRecord(entry)) return finite(readProperty(entry, "max"));
     if (jobExists(root, argument))
-      return finiteValue(
+      return finite(
         readProperty(readProperty(readProperty(root, "civic"), "craftsman"), "max")
       );
   }
@@ -10487,7 +10447,7 @@
     if (level === void 0) return;
     let raceId = resolveRaceId(root, argument);
     if (typeof raceId != "string") return !1;
-    let rank = finiteValue(readProperty(pillars, raceId));
+    let rank = finite(readProperty(pillars, raceId));
     return rank !== void 0 && rank >= level;
   }
   function queueLength(root, key) {
@@ -10495,7 +10455,7 @@
     return Array.isArray(entries) ? entries.length : void 0;
   }
   function readDate(root, argument) {
-    let days = finiteValue(readProperty(readProperty(root, "stats"), "days"));
+    let days = finite(readProperty(readProperty(root, "stats"), "days"));
     if (argument === "total") return days;
     let race = readProperty(root, "race");
     if (argument === "impact") {
@@ -10504,7 +10464,7 @@
       return decay ? Number(decay) - days : -1;
     }
     if (typeof argument == "string")
-      return finiteValue(
+      return finite(
         readProperty(
           readProperty(readProperty(root, "city"), "calendar"),
           argument
@@ -10514,30 +10474,26 @@
   function readNumber2(root, type, argument) {
     switch (type) {
       case "BuildingCount":
-        return finiteValue(readProperty(structureState(root, argument), "count"));
+        return finite(readProperty(structureState(root, argument), "count"));
       case "ProjectCount":
-        return finiteValue(readProperty(projectRecord(root, argument), "rank"));
+        return finite(readProperty(projectRecord(root, argument), "rank"));
       case "ProjectProgress":
-        return finiteValue(
-          readProperty(projectRecord(root, argument), "complete")
-        );
+        return finite(readProperty(projectRecord(root, argument), "complete"));
       case "ResourceQuantity":
-        return finiteValue(
-          readProperty(resourceRecord(root, argument), "amount")
-        );
+        return finite(readProperty(resourceRecord(root, argument), "amount"));
       case "ResourceStorage":
-        return finiteValue(readProperty(resourceRecord(root, argument), "max"));
+        return finite(readProperty(resourceRecord(root, argument), "max"));
       case "ResourceRatio": {
-        let amount = finiteValue(
+        let amount = finite(
           readProperty(resourceRecord(root, argument), "amount")
-        ), maximum = finiteValue(
+        ), maximum = finite(
           readProperty(resourceRecord(root, argument), "max")
         );
         return amount === void 0 || maximum === void 0 ? void 0 : maximum > 0 ? amount / maximum : 1;
       }
       case "TraitLevel": {
         let race = readProperty(root, "race");
-        return !isRecord(race) || typeof argument != "string" ? void 0 : finiteValue(readProperty(race, argument)) ?? 0;
+        return !isRecord(race) || typeof argument != "string" ? void 0 : finite(readProperty(race, argument)) ?? 0;
       }
       case "JobWorkers":
         return jobWorkers(root, argument);
@@ -10671,12 +10627,9 @@
   ]), NO_TARGETS = Object.freeze(
     []
   ), ARPA_PREFIX = "arpa";
-  function finiteValue2(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function readRow(raw) {
     if (!isRecord(raw)) return;
-    let priority = finiteValue2(readProperty(raw, "priority")), requirementType = readProperty(raw, "requirementType"), actionType = readProperty(raw, "actionType"), actionId = readProperty(raw, "actionId"), actionCount = finiteValue2(readProperty(raw, "actionCount"));
+    let priority = finite(readProperty(raw, "priority")), requirementType = readProperty(raw, "requirementType"), actionType = readProperty(raw, "actionType"), actionId = readProperty(raw, "actionId"), actionCount = finite(readProperty(raw, "actionCount"));
     if (!(priority === void 0 || typeof requirementType != "string" || typeof actionType != "string" || typeof actionId != "string" || actionId.length === 0 || actionCount === void 0))
       return Object.freeze({
         priority,
@@ -10746,7 +10699,7 @@
           ...buildingCosts.size === 0 ? {} : { buildingCosts }
         }), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
-            let count2 = finiteValue2(
+            let count2 = finite(
               readProperty(
                 readTriggerActionStructure(root, row.actionId),
                 "count"
@@ -10755,7 +10708,7 @@
             return count2 === void 0 ? void 0 : count2 >= row.actionCount;
           }
           if (row.actionType === "arpa") {
-            let projectId = row.actionId.startsWith(ARPA_PREFIX) ? row.actionId.slice(ARPA_PREFIX.length) : void 0, rank = finiteValue2(
+            let projectId = row.actionId.startsWith(ARPA_PREFIX) ? row.actionId.slice(ARPA_PREFIX.length) : void 0, rank = finite(
               readProperty(
                 readProperty(readProperty(root, "arpa"), projectId ?? ""),
                 "rank"
@@ -10855,9 +10808,6 @@
     "nerfed",
     "badgenes"
   ]);
-  function finiteAmount2(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function achievementAffix(universe) {
     if (typeof universe == "string")
       switch (universe) {
@@ -10886,15 +10836,15 @@
         return !1;
       let money = readProperty(readProperty(root, "resource"), "Money");
       if (!isRecord(money)) return !1;
-      let saveMinutes = finiteAmount2(settings.inflationChallengeSaveMinutes);
+      let saveMinutes = finite(settings.inflationChallengeSaveMinutes);
       if (saveMinutes === void 0) return !1;
-      let currentMoney = finiteAmount2(money.amount), maxMoney = finiteAmount2(money.max), moneyRate = finiteAmount2(money.diff);
+      let currentMoney = finite(money.amount), maxMoney = finite(money.max), moneyRate = finite(money.diff);
       if (currentMoney === void 0 || maxMoney === void 0 || moneyRate === void 0)
         return !1;
       let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), wheelbarrow = readProperty(achievements, "wheelbarrow"), affix = achievementAffix(readProperty(race, "universe"));
       if (!isRecord(stats) || !isRecord(achievements) || affix === void 0 || wheelbarrow != null && !isRecord(wheelbarrow))
         return !1;
-      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finiteAmount2(rawStar);
+      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite(rawStar);
       if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
       let achievementLevel2 = 1;
       for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
@@ -11149,26 +11099,23 @@
     Object.freeze({ id: "uncommon", first: "Iridium", second: "Neutronium" }),
     Object.freeze({ id: "rare", first: "Orichalcum", second: "Elerium" })
   ]);
-  function finite9(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function settingNumber8(settings, key, fallback) {
     if (!isRecord(settings)) return fallback;
     let value = settings[key];
-    return value === void 0 ? fallback : finite9(value);
+    return value === void 0 ? fallback : finite(value);
   }
   function storageRatio(root, resourceId) {
-    let resource = readProperty(readProperty(root, "resource"), resourceId), amount = finite9(readProperty(resource, "amount")), maximum = finite9(readProperty(resource, "max"));
+    let resource = readProperty(readProperty(root, "resource"), resourceId), amount = finite(readProperty(resource, "amount")), maximum = finite(readProperty(resource, "max"));
     if (!(amount === void 0 || maximum === void 0))
       return maximum > 0 ? amount / maximum : 0;
   }
   function structureCount(root, region, id) {
-    return finite9(
+    return finite(
       readProperty(readProperty(readProperty(root, region), id), "count")
     );
   }
   function techLevel2(root, id) {
-    return finite9(readProperty(readProperty(root, "tech"), id)) ?? 0;
+    return finite(readProperty(readProperty(root, "tech"), id)) ?? 0;
   }
   var EMPTY_QUARRY = Object.freeze({
     initialised: !1,
@@ -11194,7 +11141,7 @@
     productions: Object.freeze([])
   });
   function readQuarryInput(dependencies, root) {
-    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite9(readProperty(quarry, "asbestos")), count2 = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber8(
+    let race = readProperty(root, "race"), quarry = readProperty(readProperty(root, "city"), "rock_quarry"), currentRatio = finite(readProperty(quarry, "asbestos")), count2 = structureCount(root, "city", "rock_quarry"), chrysotileStorageRatio = storageRatio(root, "Chrysotile"), stoneStorageRatio = storageRatio(root, "Stone"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), chrysotileWeight = settingNumber8(
       dependencies.readSettings(),
       "productionChrysotileWeight",
       2
@@ -11216,7 +11163,7 @@
     });
   }
   function readMineInput(dependencies, root) {
-    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite9(readProperty(mine, "ratio")), count2 = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber8(
+    let mine = readProperty(readProperty(root, "space"), "titan_mine"), currentRatio = finite(readProperty(mine, "ratio")), count2 = structureCount(root, "space", "titan_mine"), adamantiteStorageRatio = storageRatio(root, "Adamantite"), aluminiumStorageRatio = storageRatio(root, "Aluminium"), adamantiteWeight = settingNumber8(
       dependencies.readSettings(),
       "productionAdamantiteWeight",
       1
@@ -11235,13 +11182,13 @@
     });
   }
   function readExtractorInput(dependencies, root) {
-    let ship = readProperty(readProperty(root, "tauceti"), "mining_ship"), count2 = finite9(readProperty(ship, "count")), roidTech = techLevel2(root, "tau_roid");
+    let ship = readProperty(readProperty(root, "tauceti"), "mining_ship"), count2 = finite(readProperty(ship, "count")), roidTech = techLevel2(root, "tau_roid");
     if (!isRecord(ship) || dependencies.controls.resolve(MINING_SHIP_CONTROL) === void 0 || roidTech < MINING_SHIP_TECH_LEVEL || count2 === void 0 || count2 < 1)
       return EMPTY_EXTRACTOR;
     let settings = dependencies.readSettings(), demand = dependencies.readDemand(), productions = [];
     for (let spec of EXTRACTOR_SPECS) {
       if (spec.id === "rare" && roidTech < RARE_EXTRACTION_TECH_LEVEL) continue;
-      let currentRatio = finite9(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber8(settings, `productionExtWeight_${spec.id}`, 1);
+      let currentRatio = finite(readProperty(ship, spec.id)), res1StorageRatio = storageRatio(root, spec.first), res2StorageRatio = storageRatio(root, spec.second), weight = settingNumber8(settings, `productionExtWeight_${spec.id}`, 1);
       if (currentRatio === void 0 || res1StorageRatio === void 0 || res2StorageRatio === void 0 || weight === void 0)
         return EMPTY_EXTRACTOR;
       productions.push(
@@ -11307,7 +11254,7 @@
           {
             control: QUARRY_CONTROL,
             name: "quarry",
-            readCurrent: (current) => finite9(
+            readCurrent: (current) => finite(
               readProperty(
                 readProperty(readProperty(current, "city"), "rock_quarry"),
                 "asbestos"
@@ -11325,7 +11272,7 @@
           {
             control: TITAN_MINE_CONTROL,
             name: "titan mine",
-            readCurrent: (current) => finite9(
+            readCurrent: (current) => finite(
               readProperty(
                 readProperty(readProperty(current, "space"), "titan_mine"),
                 "ratio"
@@ -11347,7 +11294,7 @@
               control: MINING_SHIP_CONTROL,
               name: `mining ship ${adjustment.id}`,
               id: adjustment.id,
-              readCurrent: (current) => finite9(
+              readCurrent: (current) => finite(
                 readProperty(
                   readProperty(readProperty(current, "tauceti"), "mining_ship"),
                   adjustment.id
@@ -11394,20 +11341,17 @@
     ["surface", "crater_fission"],
     ["surface", "rocket_engine"]
   ]);
-  function finite10(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function readInput5(root) {
     let city = readProperty(root, "city");
     if (!isRecord(city)) return;
-    let unlocked = readProperty(city, "powered"), surplus = finite10(readProperty(city, "power"));
+    let unlocked = readProperty(city, "powered"), surplus = finite(readProperty(city, "power"));
     if (typeof unlocked != "boolean" || surplus === void 0) return;
     let producers = [];
     for (let id of CAPTURED_POWER_PRODUCER_IDS) {
       let value = readProperty(city, id);
       if (value === void 0) continue;
       if (!isRecord(value)) return;
-      let count2 = finite10(value.count), on = finite10(value.on);
+      let count2 = finite(value.count), on = finite(value.on);
       if (count2 === void 0 || on === void 0 || count2 < 0 || on < 0 || on > count2)
         return;
       producers.push(Object.freeze({ id, count: count2, on }));
@@ -11416,7 +11360,7 @@
       let value = readProperty(readProperty(root, region), id);
       if (value === void 0) continue;
       if (!isRecord(value)) return;
-      let count2 = finite10(value.count), on = finite10(value.on);
+      let count2 = finite(value.count), on = finite(value.on);
       if (count2 === void 0 || on === void 0 || count2 < 0 || on < 0 || on > count2)
         return;
       producers.push(Object.freeze({ id, count: count2, on }));
@@ -11430,7 +11374,7 @@
   function currentProducer(root, producer) {
     let value = readProperty(readProperty(root, producer.region), producer.id);
     if (!isRecord(value)) return;
-    let count2 = finite10(value.count), on = finite10(value.on);
+    let count2 = finite(value.count), on = finite(value.on);
     return count2 !== void 0 && on !== void 0 ? Object.freeze({ count: count2, on }) : void 0;
   }
   function producerLocation(id) {
@@ -11469,7 +11413,7 @@
                 "captured-power-root-changed",
                 "captured game root changed"
               );
-            let current = currentProducer(session.root, producer), city = readProperty(session.root, "city"), surplus = finite10(readProperty(city, "power"));
+            let current = currentProducer(session.root, producer), city = readProperty(session.root, "city"), surplus = finite(readProperty(city, "power"));
             if (current === void 0 || surplus === void 0)
               return stale(
                 "captured-power-state-changed",
@@ -11511,9 +11455,6 @@
   );
 
   // src/adapters/evolve/economy/production/captured-power-warnings.ts
-  function finite11(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function warningDocument(value) {
     if (!(!isRecord(value) || typeof value.querySelectorAll != "function"))
       return value;
@@ -11556,29 +11497,29 @@
       parts.binding
     );
     if (!isRecord(structure)) return;
-    let stateOn = finite11(structure.on), count2 = finite11(structure.count);
+    let stateOn = finite(structure.on), count2 = finite(structure.count);
     if (stateOn === void 0 || count2 === void 0 || stateOn < 0 || count2 < 0 || stateOn > count2)
       return;
     let belt = ["elerium_ship", "iridium_ship", "iron_ship"].includes(
       parts.binding
-    ), lake = ["bireme", "transport"].includes(parts.binding), tau = ["whaling_ship", "mining_ship"].includes(parts.binding), warningKind = belt ? parts.binding === "elerium_ship" ? "belt-elerium" : parts.binding === "iridium_ship" ? "belt-iridium" : "belt-iron" : lake ? parts.binding === "bireme" ? "lake-bireme" : "lake-transport" : tau ? parts.binding === "whaling_ship" ? "tau-whaling" : "tau-mining" : "ordinary", resources = readProperty(root, "resource"), support = readProperty(resources, "Belt_Support"), lakeSupport = readProperty(resources, "Lake_Support"), beltScale = highPopulationScale(root), beltSupportNeeded = beltScale === void 0 ? 0 : (finite11(
+    ), lake = ["bireme", "transport"].includes(parts.binding), tau = ["whaling_ship", "mining_ship"].includes(parts.binding), warningKind = belt ? parts.binding === "elerium_ship" ? "belt-elerium" : parts.binding === "iridium_ship" ? "belt-iridium" : "belt-iron" : lake ? parts.binding === "bireme" ? "lake-bireme" : "lake-transport" : tau ? parts.binding === "whaling_ship" ? "tau-whaling" : "tau-mining" : "ordinary", resources = readProperty(root, "resource"), support = readProperty(resources, "Belt_Support"), lakeSupport = readProperty(resources, "Lake_Support"), beltScale = highPopulationScale(root), beltSupportNeeded = beltScale === void 0 ? 0 : (finite(
       readProperty(
         readProperty(readProperty(root, "space"), "elerium_ship"),
         "on"
       )
-    ) ?? 0) * 2 * beltScale + (finite11(
+    ) ?? 0) * 2 * beltScale + (finite(
       readProperty(
         readProperty(readProperty(root, "space"), "iridium_ship"),
         "on"
       )
-    ) ?? 0) * beltScale + (finite11(
+    ) ?? 0) * beltScale + (finite(
       readProperty(
         readProperty(readProperty(root, "space"), "iron_ship"),
         "on"
       )
-    ) ?? 0) * beltScale, lakeSupportNeeded = (finite11(
+    ) ?? 0) * beltScale, lakeSupportNeeded = (finite(
       readProperty(readProperty(readProperty(root, "portal"), "bireme"), "on")
-    ) ?? 0) + (finite11(
+    ) ?? 0) + (finite(
       readProperty(
         readProperty(readProperty(root, "portal"), "transport"),
         "on"
@@ -11593,9 +11534,9 @@
       ship: belt || tau,
       warningKind,
       beltSupportNeeded,
-      beltSupportMaximum: finite11(readProperty(support, "max")) ?? 0,
+      beltSupportMaximum: finite(readProperty(support, "max")) ?? 0,
       lakeSupportNeeded,
-      lakeSupportMaximum: finite11(readProperty(lakeSupport, "max")) ?? 0
+      lakeSupportMaximum: finite(readProperty(lakeSupport, "max")) ?? 0
     });
   }
   function readWarnings(root, settingsValue, documentValue) {
@@ -11613,7 +11554,7 @@
   function currentStateOn(root, elementId) {
     let parts = elementParts(elementId);
     if (parts !== void 0)
-      return finite11(
+      return finite(
         readProperty(
           readProperty(readProperty(root, parts.region), parts.binding),
           "on"
@@ -11763,17 +11704,14 @@
     "Inferno",
     "Super"
   ]);
-  function finite12(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function readCount(value) {
-    let count2 = finite12(value);
+    let count2 = finite(value);
     return count2 !== void 0 && Number.isSafeInteger(count2) && count2 >= 0 ? count2 : void 0;
   }
   function readResource2(resources, id) {
     let resource = readProperty(resources, id);
     if (!isRecord(resource)) return;
-    let amount = finite12(resource.amount), maximum = finite12(resource.max), rate = finite12(resource.diff), display = resource.display;
+    let amount = finite(resource.amount), maximum = finite(resource.max), rate = finite(resource.diff), display = resource.display;
     if (!(amount === void 0 || maximum === void 0 || rate === void 0 || typeof display != "boolean"))
       return Object.freeze({
         name: typeof resource.name == "string" ? resource.name : id,
@@ -11829,7 +11767,7 @@
   }
   function readFuel(id, resources, race, tech, settings, demand) {
     let isLumberRace = !race.kindling_kindred && !race.smoldering, evil = !!race.evil, species = typeof race.species == "string" ? race.species : "", resourceId = id === "Wood" ? evil && race.soul_eater && species !== "wendigo" && !race.artificial ? "Food" : evil ? "Furs" : "Lumber" : id === "Inferno" ? "Coal" : id === "Super" ? "Super_Fuel" : id, resource = readResource2(resources, resourceId);
-    if (!(id === "Wood" ? isLumberRace || evil : id === "Inferno" ? (finite12(tech.smelting) ?? 0) >= 8 : id === "Super" ? (finite12(tech.super_fuel) ?? 0) >= 2 : resource?.display === !0))
+    if (!(id === "Wood" ? isLumberRace || evil : id === "Inferno" ? (finite(tech.smelting) ?? 0) >= 8 : id === "Super" ? (finite(tech.super_fuel) ?? 0) >= 2 : resource?.display === !0))
       return Object.freeze({
         id,
         unlocked: !1,
@@ -11838,7 +11776,7 @@
         cost: Object.freeze([])
       });
     if (resource === void 0) return;
-    let quantity = id === "Wood" ? evil && (!race.soul_eater || species === "wendigo") ? 1 : 3 : id === "Coal" ? isLumberRace ? 0.25 : 0.15 : id === "Oil" ? 0.35 : id === "Super" ? 1 : 50, minRateOfChange = id === "Inferno" ? 50 : id === "Wood" || id === "Oil" || id === "Coal" || id === "Super" ? 2 : 50, priorityValue = settings[`smelter_fuel_p_${id.toLowerCase()}`], priority = finite12(priorityValue) ?? FUEL_IDS.indexOf(id);
+    let quantity = id === "Wood" ? evil && (!race.soul_eater || species === "wendigo") ? 1 : 3 : id === "Coal" ? isLumberRace ? 0.25 : 0.15 : id === "Oil" ? 0.35 : id === "Super" ? 1 : 50, minRateOfChange = id === "Inferno" ? 50 : id === "Wood" || id === "Oil" || id === "Coal" || id === "Super" ? 2 : 50, priorityValue = settings[`smelter_fuel_p_${id.toLowerCase()}`], priority = finite(priorityValue) ?? FUEL_IDS.indexOf(id);
     if (!Number.isFinite(priority)) return;
     let costs = id === "Inferno" ? (() => {
       let oil = readResource2(resources, "Oil"), infernite = readResource2(resources, "Infernite");
@@ -11885,7 +11823,7 @@
     if (fuels.some((fuel) => fuel === void 0))
       return Object.freeze({ root, input: emptyInput7() });
     let withSmelterCounts = [...fuels].filter((fuel) => fuel !== void 0).sort(
-      (left, right) => (finite12(settings[`smelter_fuel_p_${left.id.toLowerCase()}`]) ?? FUEL_IDS.indexOf(left.id)) - (finite12(settings[`smelter_fuel_p_${right.id.toLowerCase()}`]) ?? FUEL_IDS.indexOf(right.id))
+      (left, right) => (finite(settings[`smelter_fuel_p_${left.id.toLowerCase()}`]) ?? FUEL_IDS.indexOf(left.id)) - (finite(settings[`smelter_fuel_p_${right.id.toLowerCase()}`]) ?? FUEL_IDS.indexOf(right.id))
     ).map(
       (fuel, index, list) => Object.freeze({
         ...fuel,
@@ -11896,7 +11834,7 @@
         ...fuel,
         currentFuelCount: readCount(smelter[fuel.id]) ?? 0
       })
-    ), requestedIron = demand.requestedQuantity("Iron"), requestedSteel = demand.requestedQuantity("Steel"), productionSmeltingIridium = finite12(settings.productionSmeltingIridium) ?? 0.5;
+    ), requestedIron = demand.requestedQuantity("Iron"), requestedSteel = demand.requestedQuantity("Steel"), productionSmeltingIridium = finite(settings.productionSmeltingIridium) ?? 0.5;
     if (productionSmeltingIridium < 0)
       return Object.freeze({ root, input: emptyInput7() });
     let miner = readProperty(readProperty(root, "civic"), "miner"), ironShip = readProperty(readProperty(root, "space"), "iron_ship"), titaniumRatio = titanium.maximum > 0 ? titanium.amount / titanium.maximum : 1, input = Object.freeze({
@@ -11909,7 +11847,7 @@
       ironCount,
       steelCount,
       iridiumCount,
-      iridiumUnlocked: readResource2(resources, "Iridium")?.display === !0 && ((finite12(tech.m_smelting) ?? 0) >= 2 || !!tech.irid_smelting),
+      iridiumUnlocked: readResource2(resources, "Iridium")?.display === !0 && ((finite(tech.m_smelting) ?? 0) >= 2 || !!tech.irid_smelting),
       iridiumCapped: (() => {
         let iridium = readResource2(resources, "Iridium");
         return iridium === void 0 || iridium.maximum <= 0 ? !0 : iridium.amount + iridium.rate / 20 >= iridium.maximum;
@@ -11929,7 +11867,7 @@
       minerCount: readCount(readProperty(miner, "workers")) ?? 0,
       beltIronShipStateOnCount: readCount(readProperty(ironShip, "on")) ?? 0,
       titaniumStorageRatio: titaniumRatio,
-      haveTitaniumTech: (finite12(tech.titanium) ?? 0) > 0
+      haveTitaniumTech: (finite(tech.titanium) ?? 0) > 0
     });
     return Object.freeze({ root, input });
   }
@@ -12113,11 +12051,8 @@
     mixed: Object.freeze([0.965, -1]),
     full: Object.freeze([0.965, -1, 0.035])
   }), DEFAULT_RATIOS = Object.freeze([0.965, -1, 0.035]);
-  function finite13(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function nonNegative(value) {
-    let number = finite13(value);
+    let number = finite(value);
     return number !== void 0 && number >= 0 ? number : void 0;
   }
   function truthy(value) {
@@ -12143,14 +12078,14 @@
     let root = dependencies.rootState.readRoot(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, city = readProperty(root, "city"), race = readProperty(root, "race"), resources = readProperty(root, "resource"), factory = readProperty(city, "nanite_factory"), nanite = readProperty(resources, "Nanite"), control = dependencies.controls.resolve(NANITE_CONTROL);
     if (settings.autoNanite !== !0 || !isRecord(race) || !isRecord(resources) || !isRecord(factory) || control === void 0 || !control.methods.includes("addItem") || !control.methods.includes("subItem") || !truthy(race.deconstructor))
       return Object.freeze({ root, input: emptyInput8() });
-    let factoryCount = finite13(factory.count), naniteAmount = finite13(readProperty(nanite, "amount")), naniteMaximum = finite13(readProperty(nanite, "max"));
+    let factoryCount = finite(factory.count), naniteAmount = finite(readProperty(nanite, "amount")), naniteMaximum = finite(readProperty(nanite, "max"));
     if (factoryCount === void 0 || !Number.isSafeInteger(factoryCount) || factoryCount < 0 || naniteAmount === void 0 || naniteMaximum === void 0)
       return Object.freeze({ root, input: emptyInput8() });
     let demand = dependencies.readDemand(), ratios = readRatios(settings), hungryRace = truthy(race.carnivore) && !truthy(race.herbivore) && !truthy(race.artifical) || truthy(race.ravenous), resourceViews = [], current = [];
     for (let id of NANITE_RESOURCES) {
       let resource = readProperty(resources, id);
       if (!isRecord(resource) || resource.display !== !0) continue;
-      let amount = finite13(resource.amount), maximum = finite13(resource.max), rate = finite13(resource.diff), storageRequired = finite13(demand.storageRequired(id)), requestedQuantity = finite13(demand.requestedQuantity(id)), allocation = nonNegative(factory[id] ?? 0);
+      let amount = finite(resource.amount), maximum = finite(resource.max), rate = finite(resource.diff), storageRequired = finite(demand.storageRequired(id)), requestedQuantity = finite(demand.requestedQuantity(id)), allocation = nonNegative(factory[id] ?? 0);
       if (amount === void 0 || maximum === void 0 || maximum <= 0 || rate === void 0 || storageRequired === void 0 || requestedQuantity === void 0 || allocation === void 0)
         return Object.freeze({ root, input: emptyInput8() });
       let currentQuantity2 = amount, enabled = settings[`res_nanite${id}`] === !0, demanded = demand.isDemanded(id), storageRatio2 = amount / maximum, keepView = {
@@ -12276,11 +12211,8 @@
     mixed: Object.freeze([0.985, -1]),
     full: Object.freeze([0.985, -1, 0.055])
   }), DEFAULT_RATIOS2 = Object.freeze([0.985]);
-  function finite14(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function nonNegative2(value) {
-    let number = finite14(value);
+    let number = finite(value);
     return number !== void 0 && number >= 0 ? number : void 0;
   }
   function truthy2(value) {
@@ -12313,7 +12245,7 @@
     let root = dependencies.rootState.readRoot(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, interstellar = readProperty(root, "interstellar"), ejector = readProperty(interstellar, "mass_ejector"), resources = readProperty(root, "resource"), race = readProperty(root, "race");
     if (settings.autoEject !== !0 || !isRecord(ejector) || !isRecord(resources) || !isRecord(race))
       return Object.freeze({ root, input: emptyInput9() });
-    let count2 = finite14(ejector.count), on = finite14(ejector.on);
+    let count2 = finite(ejector.count), on = finite(ejector.on);
     if (count2 === void 0 || !Number.isSafeInteger(count2) || count2 < 1 || on === void 0 || on < 0)
       return Object.freeze({ root, input: emptyInput9() });
     let demand = dependencies.readDemand(), ratios = readRatios2(settings), hungryRace = truthy2(race.carnivore) && !truthy2(race.herbivore) && !truthy2(race.artifical) || truthy2(race.ravenous), resourceViews = [], current = [];
@@ -12321,7 +12253,7 @@
       if (truthy2(race.artifical) && id === "Food") continue;
       let resource = readProperty(resources, id);
       if (!isRecord(resource) || resource.display !== !0) continue;
-      let amount = nonNegative2(resource.amount), rawMaximum = finite14(resource.max), rate = finite14(resource.diff), storageRequired = finite14(demand.storageRequired(id)), requestedQuantity = finite14(demand.requestedQuantity(id)), allocation = nonNegative2(ejector[id] ?? 0);
+      let amount = nonNegative2(resource.amount), rawMaximum = finite(resource.max), rate = finite(resource.diff), storageRequired = finite(demand.storageRequired(id)), requestedQuantity = finite(demand.requestedQuantity(id)), allocation = nonNegative2(ejector[id] ?? 0);
       if (amount === void 0 || rawMaximum === void 0 || rate === void 0 || storageRequired === void 0 || requestedQuantity === void 0 || allocation === void 0)
         return Object.freeze({ root, input: emptyInput9() });
       let maximum = rawMaximum >= 0 ? rawMaximum : Number.MAX_SAFE_INTEGER;
@@ -12501,11 +12433,8 @@
     mixed: Object.freeze([0.975, -1]),
     full: Object.freeze([0.975, -1, 0.045])
   }), DEFAULT_RATIOS3 = Object.freeze([0.975]);
-  function finite15(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function nonNegative3(value) {
-    let number = finite15(value);
+    let number = finite(value);
     return number !== void 0 && number >= 0 ? number : void 0;
   }
   function truthy3(value) {
@@ -12538,7 +12467,7 @@
     let root = dependencies.rootState.readRoot(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, portal = readProperty(root, "portal"), transport = readProperty(portal, "transport"), cargo = readProperty(transport, "cargo"), resources = readProperty(root, "resource"), race = readProperty(root, "race");
     if (settings.autoSupply !== !0 || !isRecord(transport) || !isRecord(cargo) || !isRecord(resources) || !isRecord(race))
       return Object.freeze({ root, input: emptyInput10() });
-    let transportCount = finite15(transport.count), transportOn = finite15(transport.on), cargoMaximum = nonNegative3(cargo.max), bireme = readProperty(portal, "bireme"), biremeOn = finite15(readProperty(bireme, "on")), supply = readProperty(resources, "Supply"), supplyAmount = finite15(readProperty(supply, "amount")), supplyMaximum = finite15(readProperty(supply, "max"));
+    let transportCount = finite(transport.count), transportOn = finite(transport.on), cargoMaximum = nonNegative3(cargo.max), bireme = readProperty(portal, "bireme"), biremeOn = finite(readProperty(bireme, "on")), supply = readProperty(resources, "Supply"), supplyAmount = finite(readProperty(supply, "amount")), supplyMaximum = finite(readProperty(supply, "max"));
     if (transportCount === void 0 || !Number.isSafeInteger(transportCount) || transportCount < 1 || transportOn === void 0 || biremeOn === void 0 || cargoMaximum === void 0 || !Number.isSafeInteger(cargoMaximum) || !isRecord(supply) || supplyAmount === void 0 || supplyMaximum === void 0)
       return Object.freeze({ root, input: emptyInput10() });
     let useful = supplyMaximum > 0 && supplyAmount / supplyMaximum < 1 && transportOn > 0 && biremeOn > 0, demand = dependencies.readDemand(), ratios = readRatios3(settings), hungryRace = truthy3(race.carnivore) && !truthy3(race.herbivore) && !truthy3(race.artifical) || truthy3(race.ravenous), resourceViews = [], current = [];
@@ -12546,7 +12475,7 @@
       let value = SUPPLY_VALUES[id], resource = readProperty(resources, id);
       if (value === void 0 || !isRecord(resource) || resource.display !== !0)
         continue;
-      let amount = nonNegative3(resource.amount), rawMaximum = finite15(resource.max), baseRate = finite15(resource.diff), storageRequired = finite15(demand.storageRequired(id)), requestedQuantity = finite15(demand.requestedQuantity(id)), allocation = nonNegative3(cargo[id] ?? 0);
+      let amount = nonNegative3(resource.amount), rawMaximum = finite(resource.max), baseRate = finite(resource.diff), storageRequired = finite(demand.storageRequired(id)), requestedQuantity = finite(demand.requestedQuantity(id)), allocation = nonNegative3(cargo[id] ?? 0);
       if (amount === void 0 || rawMaximum === void 0 || baseRate === void 0 || storageRequired === void 0 || requestedQuantity === void 0 || allocation === void 0 || value.out <= 0)
         return Object.freeze({ root, input: emptyInput10() });
       let maximum = rawMaximum >= 0 ? rawMaximum : Number.MAX_SAFE_INTEGER;
@@ -12934,13 +12863,10 @@
   function finiteNonNegative4(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
   }
-  function finite16(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function readResource3(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id);
     if (!isRecord(resource)) return;
-    let amount = finiteNonNegative4(resource.amount), max = finite16(resource.max), diff = finite16(resource.diff);
+    let amount = finiteNonNegative4(resource.amount), max = finite(resource.max), diff = finite(resource.diff);
     if (!(amount === void 0 || max === void 0 || diff === void 0))
       return Object.freeze({
         amount,
@@ -12952,11 +12878,11 @@
       });
   }
   function readTechLevel2(root, id) {
-    let value = finite16(readProperty(readProperty(root, "tech"), id));
+    let value = finite(readProperty(readProperty(root, "tech"), id));
     return value !== void 0 && value >= 0 ? value : 0;
   }
   function readFactoryRateLevel(root) {
-    let value = finite16(readProperty(readProperty(root, "tech"), "factory"));
+    let value = finite(readProperty(readProperty(root, "tech"), "factory"));
     return value === void 0 || !Number.isSafeInteger(value) || value < 0 || value > 4 ? value === void 0 ? 0 : void 0 : value;
   }
   function readSettingRecord2(value) {
@@ -12969,12 +12895,12 @@
   function readNumberSetting(settings, key, fallback) {
     let value = settings[key];
     if (value === void 0) return fallback;
-    let number = finite16(value);
+    let number = finite(value);
     return number !== void 0 && number >= 0 ? number : void 0;
   }
   function readPrioritySetting(settings, key, fallback) {
     let value = settings[key];
-    return value === void 0 ? fallback : finite16(value);
+    return value === void 0 ? fallback : finite(value);
   }
   function readCityFactory(root) {
     let city = readProperty(root, "city"), factory = readProperty(city, "factory");
@@ -13328,12 +13254,9 @@
 
   // src/adapters/evolve/economy/storage/captured-storage.ts
   var STORAGE_CONSTRUCTION_CONTROL = "createHead";
-  function finite17(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function readStorageCount(value, fallback = 0) {
     if (value === void 0) return fallback;
-    let parsed = finite17(value);
+    let parsed = finite(value);
     return parsed !== void 0 && Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : void 0;
   }
   function settingsRecord(value) {
@@ -13353,12 +13276,12 @@
   function storageView(resources, resourceId, storagePerUnit, cost) {
     let resource = readProperty(resources, resourceId);
     if (!isRecord(resource)) return;
-    let maxQuantity = finite17(resource.max), currentQuantity2 = finite17(resource.amount);
+    let maxQuantity = finite(resource.max), currentQuantity2 = finite(resource.amount);
     if (maxQuantity === void 0 || currentQuantity2 === void 0)
       return;
     let costs = [];
     for (let [costResourceId, costPerUnit] of Object.entries(cost)) {
-      let available = finite17(
+      let available = finite(
         readProperty(readProperty(resources, costResourceId), "amount")
       );
       if (available === void 0 || !Number.isFinite(costPerUnit))
@@ -13379,8 +13302,8 @@
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (readProperty(race, "cataclysm") || readProperty(race, "orbit_decayed") || readProperty(race, "lone_survivor") || readProperty(race, "warlord"))
       return !1;
-    let highTech = finite17(readProperty(tech, "high_tech")) ?? 0;
-    return readProperty(race, "truepath") || readProperty(race, "sludge") || readProperty(race, "ultra_sludge") ? highTech < 7 : (finite17(readProperty(tech, "mad")) ?? 0) < 1;
+    let highTech = finite(readProperty(tech, "high_tech")) ?? 0;
+    return readProperty(race, "truepath") || readProperty(race, "sludge") || readProperty(race, "ultra_sludge") ? highTech < 7 : (finite(readProperty(tech, "mad")) ?? 0) < 1;
   }
   function targetFromCost(label, cost) {
     return Object.freeze({
@@ -13503,10 +13426,10 @@
   function readResource4(resources, settings, id, readStorageRequired) {
     let resource = readProperty(resources, id);
     if (!isRecord(resource)) return;
-    let currentQuantity2 = finite17(resource.amount), rawMax = finite17(resource.max), currentCrates = readStorageCount(resource.crates), currentContainers = readStorageCount(resource.containers), storageRequired = readStorageRequired(id);
+    let currentQuantity2 = finite(resource.amount), rawMax = finite(resource.max), currentCrates = readStorageCount(resource.crates), currentContainers = readStorageCount(resource.containers), storageRequired = readStorageRequired(id);
     if (currentQuantity2 === void 0 || rawMax === void 0 || currentCrates === void 0 || currentContainers === void 0 || !Number.isFinite(storageRequired))
       return;
-    let maxStorage = finite17(settings[`res_max_store${id}`]) ?? -1, minStorage = finite17(settings[`res_min_store${id}`]) ?? 1, autoSellRatio = finite17(settings[`res_sell_r_${id}`]);
+    let maxStorage = finite(settings[`res_max_store${id}`]) ?? -1, minStorage = finite(settings[`res_min_store${id}`]) ?? 1, autoSellRatio = finite(settings[`res_sell_r_${id}`]);
     return Object.freeze({
       id,
       unlocked: resource.display === !0,
@@ -13551,7 +13474,7 @@
     ), containerValue = descriptorCapacity(
       dependencies.controls,
       "buildContainerDesc"
-    ), crates = readProperty(resources, "Crates"), containers = readProperty(resources, "Containers"), freeCrates = finite17(readProperty(crates, "amount")), freeContainers = finite17(readProperty(containers, "amount"));
+    ), crates = readProperty(resources, "Crates"), containers = readProperty(resources, "Containers"), freeCrates = finite(readProperty(crates, "amount")), freeContainers = finite(readProperty(containers, "amount"));
     if (crateValue === void 0 || containerValue === void 0 || freeCrates === void 0 || freeContainers === void 0)
       return {
         input: Object.freeze({
@@ -13575,7 +13498,7 @@
     let settings = settingsRecord(dependencies.readSettings()), priorityResourceIds = Object.keys(resources).map((id, index) => ({
       id,
       index,
-      priority: finite17(settings[`res_storage_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
+      priority: finite(settings[`res_storage_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
     })).sort(
       (left, right) => left.priority - right.priority || left.index - right.index
     ).map(({ id }) => id), resourceInputs = priorityResourceIds.map(
@@ -13697,10 +13620,10 @@
     }), steel = readProperty(resources, "Steel"), plywood = readProperty(resources, "Plywood");
     if (!crates || !containers || !isRecord(steel) || !isRecord(plywood))
       return;
-    let steelAmount = finite17(steel.amount), steelMax = finite17(steel.max), plywoodAmount = finite17(plywood.amount), steelStorageRequired = dependencies.readStorageRequired("Steel");
+    let steelAmount = finite(steel.amount), steelMax = finite(steel.max), plywoodAmount = finite(plywood.amount), steelStorageRequired = dependencies.readStorageRequired("Steel");
     if (steelAmount === void 0 || steelMax === void 0 || plywoodAmount === void 0 || !Number.isFinite(steelStorageRequired))
       return;
-    let capturedAtMs = dependencies.nowMs(), libraryCount = finite17(
+    let capturedAtMs = dependencies.nowMs(), libraryCount = finite(
       readProperty(
         readProperty(readProperty(root, "city"), "library"),
         "count"
@@ -13737,7 +13660,7 @@
       if (handle === void 0 || !handle.methods.includes(method)) return !1;
       for (let index = 0; index < command.count; index += 1) {
         if (dependencies.rootState.readRoot() !== sampledRoot) return !1;
-        let before = finite17(
+        let before = finite(
           readProperty(
             readProperty(dependencies.rootState.readRoot(), "resource"),
             command.producedResourceId
@@ -13750,7 +13673,7 @@
           )
         );
         if (!dependencies.controls.invoke(handle, method).ok) return !1;
-        let after = finite17(
+        let after = finite(
           readProperty(
             readProperty(
               readProperty(dependencies.rootState.readRoot(), "resource"),
@@ -13793,7 +13716,7 @@
             readProperty(dependencies.rootState.readRoot(), "resource"),
             adjustment.resourceId
           );
-          if (resource === void 0 || finite17(readProperty(rootResource, "crates")) !== adjustment.expectedCrates || finite17(readProperty(rootResource, "containers")) !== adjustment.expectedContainers || finite17(readProperty(rootResource, "max")) !== adjustment.expectedMaximum)
+          if (resource === void 0 || finite(readProperty(rootResource, "crates")) !== adjustment.expectedCrates || finite(readProperty(rootResource, "containers")) !== adjustment.expectedContainers || finite(readProperty(rootResource, "max")) !== adjustment.expectedMaximum)
             return stale(
               "captured-storage-resource-changed",
               `${adjustment.resourceId}: storage allocation changed`
@@ -13850,9 +13773,9 @@
             "captured-storage-root-changed",
             "captured game root changed"
           );
-        let finalResources = readProperty(finalRoot, "resource"), finalCrates = finite17(
+        let finalResources = readProperty(finalRoot, "resource"), finalCrates = finite(
           readProperty(readProperty(finalResources, "Crates"), "amount")
-        ), finalContainers = finite17(
+        ), finalContainers = finite(
           readProperty(readProperty(finalResources, "Containers"), "amount")
         ), crateDelta = adjustments.reduce(
           (total, adjustment) => total + adjustment.crateDelta,
@@ -13867,9 +13790,9 @@
             "storage pool counts did not match the requested allocation"
           );
         for (let adjustment of adjustments) {
-          let resource = readProperty(finalResources, adjustment.resourceId), finalCrateCount = finite17(readProperty(resource, "crates")), finalContainerCount = finite17(
+          let resource = readProperty(finalResources, adjustment.resourceId), finalCrateCount = finite(readProperty(resource, "crates")), finalContainerCount = finite(
             readProperty(resource, "containers")
-          ), finalMaximum = finite17(readProperty(resource, "max")), expectedMaximum = adjustment.expectedMaximum + adjustment.crateDelta * session.crateValue + adjustment.containerDelta * session.containerValue;
+          ), finalMaximum = finite(readProperty(resource, "max")), expectedMaximum = adjustment.expectedMaximum + adjustment.crateDelta * session.crateValue + adjustment.containerDelta * session.containerValue;
           if (finalCrateCount !== adjustment.expectedCrates + adjustment.crateDelta || finalContainerCount !== adjustment.expectedContainers + adjustment.containerDelta || finalMaximum !== expectedMaximum)
             return rejected(
               "captured-storage-assignment-unchanged",
@@ -14140,16 +14063,13 @@
     3,
     4
   ]);
-  function finite18(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function settingsRecord2(value) {
     return isRecord(value) ? value : {};
   }
   function readMultiplier(race, trait, values, increase) {
     if (!race[trait]) return 1;
     if (race.empowered) return;
-    let rank = finite18(race[trait]);
+    let rank = finite(race[trait]);
     if (rank === void 0) return;
     let index = TRAIT_RANKS.indexOf(rank), value = index >= 0 ? values[index] : void 0;
     return value === void 0 ? void 0 : 1 + (increase ? value : -value) / 100;
@@ -14158,15 +14078,15 @@
     if (!race.unfathomable) return 0;
     let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
     if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
-    let housing = readProperty(city, "captive_housing"), civic = readProperty(root, "civic"), torturer = readProperty(civic, "torturer"), workers = finite18(readProperty(torturer, "workers")), index = dwellers.indexOf(target), active = finite18(readProperty(housing, `race${index}`));
+    let housing = readProperty(city, "captive_housing"), civic = readProperty(root, "civic"), torturer = readProperty(civic, "torturer"), workers = finite(readProperty(torturer, "workers")), index = dwellers.indexOf(target), active = finite(readProperty(housing, `race${index}`));
     if (workers === void 0 || active === void 0) return;
     let adjusted = Math.min(active, 100);
     adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3));
-    let nightmare = readProperty(readProperty(root, "stats"), "achieve"), mg = finite18(readProperty(readProperty(nightmare, "nightmare"), "mg"));
+    let nightmare = readProperty(readProperty(root, "stats"), "achieve"), mg = finite(readProperty(readProperty(nightmare, "nightmare"), "mg"));
     return adjusted / 100 * ((mg ?? 0) / 5);
   }
   function readUnitPrices(root, resource) {
-    let value = finite18(resource.value), race = readProperty(root, "race");
+    let value = finite(resource.value), race = readProperty(root, "race");
     if (value === void 0 || value <= 0 || !isRecord(race)) return;
     let arrogant = readMultiplier(
       race,
@@ -14200,15 +14120,15 @@
     return Number.isFinite(buy) && Number.isFinite(sell) && sellDivide > 0 ? Object.freeze({ buy, sell }) : void 0;
   }
   function resourceStorageRatio2(resource) {
-    let amount = finite18(resource.amount), maximum = finite18(resource.max);
+    let amount = finite(resource.amount), maximum = finite(resource.max);
     return amount !== void 0 && maximum !== void 0 && maximum > 0 ? amount / maximum : 1;
   }
   function resourceMaximum(resource) {
-    let maximum = finite18(resource.max);
+    let maximum = finite(resource.max);
     return maximum !== void 0 && maximum >= 0 ? maximum : 0;
   }
   function maximumMultiplier(root) {
-    let currency = finite18(readProperty(readProperty(root, "tech"), "currency"));
+    let currency = finite(readProperty(readProperty(root, "tech"), "currency"));
     return currency !== void 0 && currency >= 6 ? 1e6 : currency !== void 0 && currency >= 4 ? 5e3 : 100;
   }
   function emptySell(index, resourceId, ignoreSellRatio) {
@@ -14252,7 +14172,7 @@
       id,
       index,
       resource: readProperty(resources, id),
-      priority: finite18(settings[`res_buy_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
+      priority: finite(settings[`res_buy_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
     })).filter(
       (entry) => isRecord(entry.resource) && Object.hasOwn(entry.resource, "trade")
     ).sort(
@@ -14260,7 +14180,7 @@
     ).map((entry) => entry.id);
   }
   function readTicksPerSecond(settings) {
-    let tickRate = finite18(settings.tickRate) ?? 4;
+    let tickRate = finite(settings.tickRate) ?? 4;
     return tickRate > 0 ? 4 / tickRate : 1;
   }
   function createCapturedMarketPorts(dependencies) {
@@ -14279,12 +14199,12 @@
         );
         if (!isRecord(resources) || !isRecord(cityMarket) || !isRecord(money) || quantityControl === void 0)
           throw new Error("captured market controls are unavailable");
-        let originalMultiplier = finite18(cityMarket.qty), moneyMaximum = finite18(money.max), moneyCurrent = finite18(money.amount);
+        let originalMultiplier = finite(cityMarket.qty), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount);
         if (originalMultiplier === void 0 || !Number.isSafeInteger(originalMultiplier) || originalMultiplier < 1 || moneyMaximum === void 0 || moneyCurrent === void 0)
           throw new TypeError("captured market quantities are invalid");
         let minimumMoneyAllowed = Math.max(
-          moneyMaximum * (finite18(settings.minimumMoneyPercentage) ?? 0) / 100,
-          finite18(settings.minimumMoney) ?? 0
+          moneyMaximum * (finite(settings.minimumMoneyPercentage) ?? 0) / 100,
+          finite(settings.minimumMoney) ?? 0
         ), resourceIds = readPriorityIds(resources, settings), rowGenerations = /* @__PURE__ */ new Map();
         for (let resourceId of resourceIds) {
           let row = dependencies.controls.resolve(`market-${resourceId}`);
@@ -14314,7 +14234,7 @@
         let root = active.root, resources = readProperty(root, "resource"), resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
         if (!isRecord(resource) || !isRecord(money) || control === void 0 || !control.methods.includes("purchase") || !control.methods.includes("sell"))
           return emptySell(index, resourceId, ignoreSellRatio);
-        let currentQuantity2 = finite18(resource.amount), maxQuantity = resourceMaximum(resource), moneyMaximum = finite18(money.max), moneyCurrent = finite18(money.amount), prices = readUnitPrices(root, resource), settings = settingsRecord2(dependencies.readSettings()), autoSellRatio = finite18(settings[`res_sell_r_${resourceId}`]) ?? 0, storageRatio2 = resourceStorageRatio2(resource), income = finite18(resource.diff), ticksPerSecond = readTicksPerSecond(settings);
+        let currentQuantity2 = finite(resource.amount), maxQuantity = resourceMaximum(resource), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount), prices = readUnitPrices(root, resource), settings = settingsRecord2(dependencies.readSettings()), autoSellRatio = finite(settings[`res_sell_r_${resourceId}`]) ?? 0, storageRatio2 = resourceStorageRatio2(resource), income = finite(resource.diff), ticksPerSecond = readTicksPerSecond(settings);
         return currentQuantity2 === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || prices === void 0 || income === void 0 || ticksPerSecond <= 0 ? (dependencies.onUnavailable?.(
           resourceId,
           "market price or quantity is unavailable"
@@ -14343,7 +14263,7 @@
         let resources = readProperty(active.root, "resource"), resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
         if (!isRecord(resource) || !isRecord(money) || control === void 0 || !control.methods.includes("purchase") || !control.methods.includes("sell"))
           return emptyBuy(index, resourceId);
-        let currentQuantity2 = finite18(resource.amount), maxQuantity = resourceMaximum(resource), moneyCurrent = finite18(money.amount), prices = readUnitPrices(active.root, resource), settings = settingsRecord2(dependencies.readSettings()), autoBuyRatio = finite18(settings[`res_buy_r_${resourceId}`]) ?? 0;
+        let currentQuantity2 = finite(resource.amount), maxQuantity = resourceMaximum(resource), moneyCurrent = finite(money.amount), prices = readUnitPrices(active.root, resource), settings = settingsRecord2(dependencies.readSettings()), autoBuyRatio = finite(settings[`res_buy_r_${resourceId}`]) ?? 0;
         return currentQuantity2 === void 0 || moneyCurrent === void 0 || prices === void 0 ? (dependencies.onUnavailable?.(
           resourceId,
           "market price or quantity is unavailable"
@@ -14398,7 +14318,7 @@
           readProperty(active.root, "resource"),
           "Money"
         ), prices = isRecord(resource) ? readUnitPrices(active.root, resource) : void 0;
-        if (!isRecord(resource) || !isRecord(money) || finite18(money.amount) !== decision.expectedMoneyCurrent || finite18(resource.amount) !== decision.expectedResourceCurrent || prices === void 0 || prices[decision.side] !== decision.expectedUnitPrice)
+        if (!isRecord(resource) || !isRecord(money) || finite(money.amount) !== decision.expectedMoneyCurrent || finite(resource.amount) !== decision.expectedResourceCurrent || prices === void 0 || prices[decision.side] !== decision.expectedUnitPrice)
           return stale("captured-market-state-changed", "market inputs changed");
         let control = dependencies.controls.resolve(
           `market-${decision.resourceId}`
@@ -14443,7 +14363,7 @@
       return !isRecord(data) || data !== readProperty(readProperty(active.root, "city"), "market") ? stale(
         "captured-market-quantity-state-changed",
         "market quantity state changed"
-      ) : (Reflect.set(data, "qty", multiplier), finite18(data.qty) === multiplier ? SUCCEEDED : rejected(
+      ) : (Reflect.set(data, "qty", multiplier), finite(data.qty) === multiplier ? SUCCEEDED : rejected(
         "captured-market-quantity-failed",
         "market quantity did not change"
       ));
@@ -14708,15 +14628,12 @@
     "Coal",
     "Water"
   ]);
-  function finite19(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function settingsRecord3(value) {
     return isRecord(value) ? value : {};
   }
   function traitPercent(race, trait) {
     if (!race[trait]) return 0;
-    let rank = finite19(race[trait]);
+    let rank = finite(race[trait]);
     if (rank === void 0) return;
     let index = TRAIT_RANKS2.indexOf(rank);
     return index >= 0 ? TRAIT_VALUES2[trait][index] : void 0;
@@ -14725,15 +14642,15 @@
     if (!race.unfathomable) return 0;
     let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
     if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
-    let housing = readProperty(city, "captive_housing"), workers = finite19(
+    let housing = readProperty(city, "captive_housing"), workers = finite(
       readProperty(
         readProperty(readProperty(root, "civic"), "torturer"),
         "workers"
       )
-    ), index = dwellers.indexOf(target), active = finite19(readProperty(housing, `race${index}`)), nightmare = readProperty(
+    ), index = dwellers.indexOf(target), active = finite(readProperty(housing, `race${index}`)), nightmare = readProperty(
       readProperty(readProperty(root, "stats"), "achieve"),
       "nightmare"
-    ), mg = finite19(readProperty(nightmare, "mg"));
+    ), mg = finite(readProperty(nightmare, "mg"));
     if (workers === void 0 || active === void 0) return;
     let adjusted = Math.min(active, 100);
     return adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3)), adjusted / 100 * ((mg ?? 0) / 5);
@@ -14747,7 +14664,7 @@
     return hasUnsupportedPriceModifier(root) || !!readProperty(race, "merchant") || !!readProperty(race, "devious") || !!readProperty(race, "unfathomable") || governorType === "dealmaker";
   }
   function routePrices(root, resource, ratio) {
-    let value = finite19(resource.value), race = readProperty(root, "race");
+    let value = finite(resource.value), race = readProperty(root, "race");
     if (value === void 0 || value <= 0 || !isRecord(race) || hasUnsupportedPriceModifier(root)) return;
     let inflation = race.inflation;
     if (inflation !== void 0 && inflation !== !1 && (typeof inflation != "number" || !Number.isFinite(inflation)))
@@ -14773,9 +14690,9 @@
       );
       return;
     }
-    let cityMarket = readProperty(readProperty(root, "city"), "market"), resources = readProperty(root, "resource"), tech = readProperty(root, "tech"), currency = finite19(readProperty(tech, "currency")) ?? 0, money = readProperty(resources, "Money");
+    let cityMarket = readProperty(readProperty(root, "city"), "market"), resources = readProperty(root, "resource"), tech = readProperty(root, "tech"), currency = finite(readProperty(tech, "currency")) ?? 0, money = readProperty(resources, "Money");
     if (!isRecord(cityMarket) || !isRecord(resources) || !isRecord(money) || Object.hasOwn(cityMarket, "bm")) return;
-    let maximum = finite19(cityMarket.mtrade), used = finite19(cityMarket.trade), moneyRate = finite19(money.diff), moneyMaximum = finite19(money.max), moneyCurrent = finite19(money.amount);
+    let maximum = finite(cityMarket.mtrade), used = finite(cityMarket.trade), moneyRate = finite(money.diff), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount);
     if (maximum === void 0 || used === void 0 || moneyRate === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || !Number.isSafeInteger(maximum) || !Number.isSafeInteger(used) || maximum < 0 || used < 0)
       return;
     let settings = settingsRecord3(dependencies.readSettings()), demand = dependencies.readDemand?.() ?? {
@@ -14783,7 +14700,7 @@
       storageRequired: () => 1
     }, routeCounts = /* @__PURE__ */ new Map(), routeControls = /* @__PURE__ */ new Map(), priority = [];
     for (let [index, resourceId] of Object.keys(resources).entries()) {
-      let resource = readProperty(resources, resourceId), ratio = TRADE_RATIO[resourceId], trade = isRecord(resource) ? finite19(resource.trade) : void 0;
+      let resource = readProperty(resources, resourceId), ratio = TRADE_RATIO[resourceId], trade = isRecord(resource) ? finite(resource.trade) : void 0;
       if (!isRecord(resource) || ratio === void 0 || trade === void 0)
         continue;
       if (!Number.isSafeInteger(trade)) return;
@@ -14791,7 +14708,7 @@
       let control = dependencies.controls.resolve(`market-${resourceId}`);
       if (control === void 0 || !control.methods.includes("autoBuy") || !control.methods.includes("autoSell") || !control.methods.includes("zero"))
         return;
-      let marketPriority = finite19(settings[`res_buy_p_${resourceId}`]) ?? Number.MAX_SAFE_INTEGER;
+      let marketPriority = finite(settings[`res_buy_p_${resourceId}`]) ?? Number.MAX_SAFE_INTEGER;
       priority.push({ id: resourceId, index, value: marketPriority }), routeCounts.set(resourceId, trade), routeControls.set(resourceId, control);
     }
     priority.sort(
@@ -14801,9 +14718,9 @@
     for (let entry of priority) {
       let resource = readProperty(resources, entry.id);
       if (!isRecord(resource)) return;
-      let amount = finite19(resource.amount), maximumResource = finite19(resource.max), diff = finite19(resource.diff), ratio = TRADE_RATIO[entry.id];
+      let amount = finite(resource.amount), maximumResource = finite(resource.max), diff = finite(resource.diff), ratio = TRADE_RATIO[entry.id];
       if (ratio === void 0) return;
-      let prices = routePrices(root, resource, ratio), required = finite19(demand.storageRequired(entry.id));
+      let prices = routePrices(root, resource, ratio), required = finite(demand.storageRequired(entry.id));
       if (amount === void 0 || maximumResource === void 0 || diff === void 0 || required === void 0 || prices === void 0 || maximumResource < 0 || required <= 0)
         return;
       let storageRatio2 = maximumResource > 0 ? amount / maximumResource : 1, usefulRatio = maximumResource > 0 ? amount / Math.min(maximumResource, required) : 1, buyEnabled = settings[`res_trade_buy_${entry.id}`] === !0, sellEnabled = settings[`res_trade_sell_${entry.id}`] === !0;
@@ -14819,8 +14736,8 @@
           tradeBuyPrice: prices.buy,
           rateOfChange: diff,
           tradeRouteQuantity: ratio,
-          autoTradeWeighting: finite19(settings[`res_trade_w_${entry.id}`]) ?? 0,
-          autoTradePriority: finite19(settings[`res_trade_p_${entry.id}`]) ?? 0,
+          autoTradeWeighting: finite(settings[`res_trade_w_${entry.id}`]) ?? 0,
+          autoTradePriority: finite(settings[`res_trade_p_${entry.id}`]) ?? 0,
           isRoutesUnlocked: !0,
           isDemanded: demand.isDemanded(entry.id)
         })
@@ -14829,8 +14746,8 @@
     let race = readProperty(root, "race"), governor = readProperty(readProperty(race, "governor"), "g"), input = Object.freeze({
       settings: Object.freeze({
         tradeRouteSellExcess: settings.tradeRouteSellExcess === !0,
-        tradeRouteMinimumMoneyPerSecond: finite19(settings.tradeRouteMinimumMoneyPerSecond) ?? 0,
-        tradeRouteMinimumMoneyPercentage: finite19(settings.tradeRouteMinimumMoneyPercentage) ?? 0
+        tradeRouteMinimumMoneyPerSecond: finite(settings.tradeRouteMinimumMoneyPerSecond) ?? 0,
+        tradeRouteMinimumMoneyPercentage: finite(settings.tradeRouteMinimumMoneyPercentage) ?? 0
       }),
       priorityList: Object.freeze(views),
       money: Object.freeze({
@@ -14863,10 +14780,10 @@
     if (poolLedger === void 0) return 0;
     if (!isRecord(poolLedger)) return;
     let value = readProperty(poolLedger, resourceId);
-    return value === void 0 ? 0 : finite19(value);
+    return value === void 0 ? 0 : finite(value);
   }
   function readRegionalRouteInput(dependencies) {
-    let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), shadow = finite19(readProperty(tech, "shadow"));
+    let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), shadow = finite(readProperty(tech, "shadow"));
     if (root === void 0 || shadow === void 0 || shadow < 5)
       return;
     if (hasUnsupportedRegionalVolumeModifier(root)) {
@@ -14877,12 +14794,12 @@
     }
     let city = readProperty(root, "city"), market = readProperty(city, "market"), resources = readProperty(root, "resource"), race = readProperty(root, "race"), governor = readProperty(race, "governor"), config = readProperty(governor, "config"), trader = readProperty(config, "trader");
     if (!isRecord(market) || !isRecord(resources)) return;
-    let maximumRoutes = finite19(market.mtrade), money = finite19(
+    let maximumRoutes = finite(market.mtrade), money = finite(
       readProperty(readProperty(resources, "Money"), "amount")
     );
     if (maximumRoutes === void 0 || !Number.isSafeInteger(maximumRoutes) || maximumRoutes < 0 || money === void 0)
       return;
-    let marginValue = isRecord(trader) ? finite19(trader.margin) : void 0, reserveValue = isRecord(trader) ? finite19(trader.reserve) : void 0, margin = marginValue !== void 0 && marginValue > 0 ? marginValue : 0, reserve = reserveValue !== void 0 && reserveValue > 0 ? reserveValue : 0, blackMarket = readProperty(market, "bm"), ledger = isRecord(blackMarket) ? blackMarket : {}, poolNames = /* @__PURE__ */ new Set(), routeCounts = /* @__PURE__ */ new Map();
+    let marginValue = isRecord(trader) ? finite(trader.margin) : void 0, reserveValue = isRecord(trader) ? finite(trader.reserve) : void 0, margin = marginValue !== void 0 && marginValue > 0 ? marginValue : 0, reserve = reserveValue !== void 0 && reserveValue > 0 ? reserveValue : 0, blackMarket = readProperty(market, "bm"), ledger = isRecord(blackMarket) ? blackMarket : {}, poolNames = /* @__PURE__ */ new Set(), routeCounts = /* @__PURE__ */ new Map();
     for (let value of Object.keys(ledger)) poolNames.add(value);
     let candidates = [];
     for (let resourceId of Object.keys(BLACK_MARKET_VOLUMES)) {
@@ -14902,7 +14819,7 @@
         if (!isRecord(resource) || resource.display !== !0) continue;
         let diffLedger = readProperty(resource, "regDiff");
         if (diffLedger !== void 0 && !isRecord(diffLedger)) return;
-        let rateOfChange = finite19(isRecord(diffLedger) ? diffLedger[pool] : void 0) ?? 0, currentRoutes = regionalPoolRoute(ledger, pool, resourceId);
+        let rateOfChange = finite(isRecord(diffLedger) ? diffLedger[pool] : void 0) ?? 0, currentRoutes = regionalPoolRoute(ledger, pool, resourceId);
         if (currentRoutes === void 0 || !Number.isSafeInteger(currentRoutes) || currentRoutes < 0)
           return;
         currentRoutes > 0 && routeCounts.set(`${pool}\0${resourceId}`, currentRoutes);
@@ -14990,7 +14907,7 @@
           applyRegionalTradeRoutes(dependencies, regional);
           return;
         }
-        let root = dependencies.rootState.readRoot(), shadow = finite19(readProperty(readProperty(root, "tech"), "shadow"));
+        let root = dependencies.rootState.readRoot(), shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
         if (shadow !== void 0 && shadow >= 5) return;
         let captured = readRouteInput(dependencies);
         if (captured === void 0) return;
@@ -15000,14 +14917,14 @@
           readProperty(captured.session.root, "city"),
           "market"
         );
-        if (!isRecord(current) || current !== captured.session.market || finite19(current.trade) !== captured.session.marketRouteCount)
+        if (!isRecord(current) || current !== captured.session.market || finite(current.trade) !== captured.session.marketRouteCount)
           return;
         for (let [resourceId, routes] of captured.session.routeCounts) {
           let resource = readProperty(
             readProperty(captured.session.root, "resource"),
             resourceId
           );
-          if (!isRecord(resource) || finite19(resource.trade) !== routes) return;
+          if (!isRecord(resource) || finite(resource.trade) !== routes) return;
         }
         let expected = new Map(captured.session.routeCounts);
         for (let operation2 of result.operations) {
@@ -15034,9 +14951,9 @@
           (sum, value) => sum + Math.abs(value),
           0
         );
-        if (finite19(finalMarket.trade) === expectedTotal) {
+        if (finite(finalMarket.trade) === expectedTotal) {
           for (let [resourceId, value] of expected)
-            if (finite19(
+            if (finite(
               readProperty(readProperty(liveResources, resourceId), "trade")
             ) !== value)
               return;
@@ -15589,9 +15506,6 @@
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
   var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
-  function finite20(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
   function readSettingsRecord(value) {
     return isRecord(value) ? value : {};
   }
@@ -15600,7 +15514,7 @@
     return typeof value == "boolean" ? value : !0;
   }
   function craftPreserve(settings, id) {
-    let value = finite20(settings[`foundry_p_${id}`]);
+    let value = finite(settings[`foundry_p_${id}`]);
     return value !== void 0 && value >= 0 && value <= 1 ? value : 0;
   }
   function craftAllButtonRendered(getDocument, id) {
@@ -15626,7 +15540,7 @@
     if (!isRecord(resources)) return;
     let settings = readSettingsRecord(dependencies.readSettings()), preserve = craftPreserve(settings, craftableId), materials = [];
     for (let [resourceId, costPerCraft] of costs) {
-      let resource = readProperty(resources, resourceId), currentQuantity2 = finite20(readProperty(resource, "amount")), maxQuantity = finite20(readProperty(resource, "max")), rateOfChange = finite20(readProperty(resource, "diff"));
+      let resource = readProperty(resources, resourceId), currentQuantity2 = finite(readProperty(resource, "amount")), maxQuantity = finite(readProperty(resource, "max")), rateOfChange = finite(readProperty(resource, "diff"));
       if (currentQuantity2 === void 0 || maxQuantity === void 0 || rateOfChange === void 0)
         return;
       let base = {
@@ -15663,7 +15577,7 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite20(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite(dependencies.readPeriods());
         return session = Object.freeze({
           root,
           demand: dependencies.readDemand(),
@@ -15681,7 +15595,7 @@
         let craftable = readProperty(
           readProperty(session.root, "resource"),
           craftableId
-        ), craftableAmount = finite20(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
+        ), craftableAmount = finite(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
           dependencies,
           {
             ...session,
@@ -15730,7 +15644,7 @@
           "resource"
         );
         for (let spend of decision.spend) {
-          let actual = finite20(
+          let actual = finite(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
@@ -15751,7 +15665,7 @@
         if (!result.ok)
           return rejected("craft-control-failed", result.detail ?? result.reason);
         for (let spend of decision.spend) {
-          let actual = finite20(
+          let actual = finite(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)

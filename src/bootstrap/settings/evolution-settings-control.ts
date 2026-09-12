@@ -4,6 +4,7 @@ import {
   type EvolutionSettingsBrowserActions,
 } from "../../adapters/browser/evolution-settings.ts";
 import { createEvolutionSettingsEvolveAdapter } from "../../adapters/evolve/progression/evolution/evolution-settings.ts";
+import { readRecord } from "../../adapters/validation.ts";
 
 declare global {
   var __EA_TEST_SURFACE_ENABLED__: boolean;
@@ -29,12 +30,6 @@ interface EvolutionSettingsRaw {
 }
 interface EvolutionSettingsState {
   evolutionTarget: unknown;
-}
-
-function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
 }
 
 function readContextValue<T>(

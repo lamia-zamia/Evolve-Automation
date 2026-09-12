@@ -4,6 +4,7 @@ import {
   type PrestigeSettingsBrowserActions,
 } from "../../adapters/browser/prestige-settings.ts";
 import { createPrestigeSettingsEvolveAdapter } from "../../adapters/evolve/progression/prestige/prestige-settings.ts";
+import { readRecord } from "../../adapters/validation.ts";
 
 declare global {
   var __EA_TEST_SURFACE_ENABLED__: boolean;
@@ -22,12 +23,6 @@ type RuntimeFunction = (...args: unknown[]) => unknown;
 type BrowserDependencies = Parameters<
   typeof createPrestigeSettingsBrowserAdapter
 >[0];
-
-function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
 
 function readContextValue<T>(
   context: unknown,

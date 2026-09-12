@@ -15,7 +15,7 @@ import type {
   JobsJobInput,
 } from "../../../domain/civic/jobs.ts";
 import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
-import { isRecord, readProperty } from "../../validation.ts";
+import { finite, isRecord, readProperty } from "../../validation.ts";
 
 export interface CapturedJobCatalogEntry {
   readonly id: string;
@@ -188,12 +188,6 @@ export function toCapturedJobsCycleInput(
 
 function finiteNonNegative(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : undefined;
-}
-
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
 }
@@ -527,7 +521,7 @@ function readFarmerSmartMaximum(
   const food = readProperty(readProperty(root, "resource"), "Food");
   const amount = finiteNonNegative(readProperty(food, "amount"));
   const maximum = finiteNonNegative(readProperty(food, "max"));
-  let rate = finiteNumber(readProperty(food, "diff"));
+  let rate = finite(readProperty(food, "diff"));
   if (amount === undefined || maximum === undefined || rate === undefined) {
     return undefined;
   }
@@ -738,13 +732,13 @@ function readCapturedFarmerMinimum(
 function resourceStorageRatio(root: unknown, id: string): number | undefined {
   const resource = readProperty(readProperty(root, "resource"), id);
   const amount = finiteNonNegative(readProperty(resource, "amount"));
-  const maximum = finiteNumber(readProperty(resource, "max"));
+  const maximum = finite(readProperty(resource, "max"));
   if (amount === undefined || maximum === undefined) return undefined;
   return maximum > 0 ? amount / maximum : 1;
 }
 
 function resourceDiff(root: unknown, id: string): number | undefined {
-  return finiteNumber(
+  return finite(
     readProperty(readProperty(readProperty(root, "resource"), id), "diff"),
   );
 }

@@ -60,6 +60,17 @@ export function isRecord(value: unknown): value is UnknownRecord {
 }
 
 /**
+ * As `isRecord`, for callers that need the bag rather than a verdict: the value itself, or
+ * `undefined`. Single owner for the module-local `readRecord` guards the settings controls
+ * used to carry one each.
+ */
+export function readRecord(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined;
+}
+
+/**
  * As `isRecord`, but rejects arrays. Game data that must be a keyed bag reads through this one,
  * because an array satisfies `typeof value === "object"` and would otherwise pass as a record
  * whose keys are its indices.
@@ -71,6 +82,15 @@ export function isNonArrayRecord(value: unknown): value is UnknownRecord {
 /** Non-throwing counterpart of `requireNumber`. `NaN` and both infinities are rejected. */
 export function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * As `isFiniteNumber`, for callers that need the value rather than a verdict: the finite number
+ * itself, or `undefined`. Single owner for the module-local `finite` guards the captured
+ * adapters used to carry one each.
+ */
+export function finite(value: unknown): number | undefined {
+  return isFiniteNumber(value) ? value : undefined;
 }
 
 /** As `isFiniteNumber`, for the game counts and quantities that cannot be negative. */

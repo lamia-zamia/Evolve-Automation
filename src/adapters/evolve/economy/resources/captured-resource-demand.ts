@@ -44,7 +44,7 @@ import type { CapturedCraftCosts } from "../production/captured-craft-costs.ts";
 import type { CapturedFleetDemand } from "../../combat/captured-fleet-demand.ts";
 import type { CapturedTriggers } from "../../progression/build/captured-triggers.ts";
 import { readCapturedFactoryCapacity } from "../production/captured-factory-capacity.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedResourceDemandDependencies {
   readonly rootState: GameRootStateSource;
@@ -112,12 +112,6 @@ function settingBoolean(
 ): boolean {
   const value = settings[key];
   return typeof value === "boolean" ? value : fallback;
-}
-
-function finite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
 }
 
 /** Mirrors the script's runtime query over the captured race and technology bags. */

@@ -17,7 +17,7 @@ import type {
 } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export const REPLICATOR_CONTROL = "iReplicator";
 export const GOVERNOR_CONTROL = "govOffice";
@@ -94,12 +94,6 @@ interface GovernorSession {
 
 export interface CapturedReplicatorAutomation {
   run(): CommandExecutionOutcome;
-}
-
-function finite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
 }
 
 function settingBoolean(

@@ -24,7 +24,7 @@
  * than decide on it.
  */
 
-import { isRecord, readProperty } from "../validation.ts";
+import { finite, isRecord, readProperty } from "../validation.ts";
 import { costFitsStorage, isRegionalSupply } from "./captured-affordability.ts";
 
 /** A condition compares an operand's value against its stored count. */
@@ -84,12 +84,6 @@ const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "PlanetTrait",
 ]);
 
-function finiteValue(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
 /**
  * The mutable structure record behind an action id: `city-farm` is `city.farm`. Region and id are
  * the two halves of the id the game renders the action under, which is how the game itself stores
@@ -147,18 +141,16 @@ const BASIC_JOB_IDS: ReadonlySet<string> = new Set([
 /** Assigned workers: the civic entry, or the foundry table for a crafting job. */
 function jobWorkers(root: unknown, argument: unknown): number | undefined {
   if (typeof argument !== "string") return undefined;
-  const assigned = finiteValue(
-    readProperty(civicJob(root, argument), "workers"),
-  );
+  const assigned = finite(readProperty(civicJob(root, argument), "workers"));
   if (assigned !== undefined) return assigned;
-  return finiteValue(readProperty(foundryRecord(root), argument));
+  return finite(readProperty(foundryRecord(root), argument));
 }
 
 /** Whether the argument names a job at all: a civic entry or a foundry assignment. */
 function jobExists(root: unknown, argument: unknown): boolean {
   if (typeof argument !== "string") return false;
   if (isRecord(civicJob(root, argument))) return true;
-  return finiteValue(readProperty(foundryRecord(root), argument)) !== undefined;
+  return finite(readProperty(foundryRecord(root), argument)) !== undefined;
 }
 
 /**
@@ -169,11 +161,11 @@ function jobExists(root: unknown, argument: unknown): boolean {
 function jobServantCount(root: unknown, argument: unknown): number | undefined {
   if (typeof argument !== "string") return undefined;
   const servants = readProperty(readProperty(root, "race"), "servants");
-  const assigned = finiteValue(
+  const assigned = finite(
     readProperty(readProperty(servants, "jobs"), argument),
   );
   if (assigned !== undefined) return assigned;
-  const skilled = finiteValue(
+  const skilled = finite(
     readProperty(readProperty(servants, "sjobs"), argument),
   );
   if (skilled !== undefined) return skilled;
@@ -185,10 +177,10 @@ function jobMax(root: unknown, argument: unknown): number | undefined {
   if (typeof argument !== "string") return undefined;
   if (BASIC_JOB_IDS.has(argument)) return Number.MAX_SAFE_INTEGER;
   const entry = civicJob(root, argument);
-  if (isRecord(entry)) return finiteValue(readProperty(entry, "max"));
+  if (isRecord(entry)) return finite(readProperty(entry, "max"));
   // Crafting jobs share the one cap on the craftsman entry.
   if (!jobExists(root, argument)) return undefined;
-  return finiteValue(
+  return finite(
     readProperty(readProperty(readProperty(root, "civic"), "craftsman"), "max"),
   );
 }
@@ -270,7 +262,7 @@ function racePillared(root: unknown, argument: unknown): boolean | undefined {
   if (level === undefined) return undefined;
   const raceId = resolveRaceId(root, argument);
   if (typeof raceId !== "string") return false;
-  const rank = finiteValue(readProperty(pillars, raceId));
+  const rank = finite(readProperty(pillars, raceId));
   return rank !== undefined && rank >= level;
 }
 
@@ -280,7 +272,7 @@ function queueLength(root: unknown, key: string): number | undefined {
 }
 
 function readDate(root: unknown, argument: unknown): number | undefined {
-  const days = finiteValue(readProperty(readProperty(root, "stats"), "days"));
+  const days = finite(readProperty(readProperty(root, "stats"), "days"));
   if (argument === "total") return days;
   const race = readProperty(root, "race");
   if (argument === "impact") {
@@ -291,7 +283,7 @@ function readDate(root: unknown, argument: unknown): number | undefined {
     return decay ? Number(decay) - days : -1;
   }
   if (typeof argument !== "string") return undefined;
-  return finiteValue(
+  return finite(
     readProperty(
       readProperty(readProperty(root, "city"), "calendar"),
       argument,
@@ -307,24 +299,20 @@ function readNumber(
 ): number | undefined {
   switch (type) {
     case "BuildingCount":
-      return finiteValue(readProperty(structureState(root, argument), "count"));
+      return finite(readProperty(structureState(root, argument), "count"));
     case "ProjectCount":
-      return finiteValue(readProperty(projectRecord(root, argument), "rank"));
+      return finite(readProperty(projectRecord(root, argument), "rank"));
     case "ProjectProgress":
-      return finiteValue(
-        readProperty(projectRecord(root, argument), "complete"),
-      );
+      return finite(readProperty(projectRecord(root, argument), "complete"));
     case "ResourceQuantity":
-      return finiteValue(
-        readProperty(resourceRecord(root, argument), "amount"),
-      );
+      return finite(readProperty(resourceRecord(root, argument), "amount"));
     case "ResourceStorage":
-      return finiteValue(readProperty(resourceRecord(root, argument), "max"));
+      return finite(readProperty(resourceRecord(root, argument), "max"));
     case "ResourceRatio": {
-      const amount = finiteValue(
+      const amount = finite(
         readProperty(resourceRecord(root, argument), "amount"),
       );
-      const maximum = finiteValue(
+      const maximum = finite(
         readProperty(resourceRecord(root, argument), "max"),
       );
       if (amount === undefined || maximum === undefined) return undefined;
@@ -335,7 +323,7 @@ function readNumber(
       if (!isRecord(race) || typeof argument !== "string") return undefined;
       // A trait the race does not have is simply absent from the bag, which the script reads
       // as level 0.
-      return finiteValue(readProperty(race, argument)) ?? 0;
+      return finite(readProperty(race, argument)) ?? 0;
     }
     case "JobWorkers":
       return jobWorkers(root, argument);

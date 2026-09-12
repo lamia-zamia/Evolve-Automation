@@ -10,7 +10,7 @@ import {
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { stale, SUCCEEDED } from "../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../validation.ts";
+import { finite, isRecord, readProperty } from "../../validation.ts";
 
 const FORT_CONTROL = "fort";
 const GARRISON_CONTROLS = ["garrison", "c_garrison"] as const;
@@ -20,18 +20,12 @@ interface HellSession {
   readonly input: Readonly<HellCycleInput>;
 }
 
-function finiteHellValue(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
 function settingNumber(
   settings: Record<string, unknown>,
   key: string,
   fallback: number,
 ): number {
-  return finiteHellValue(settings[key]) ?? fallback;
+  return finite(settings[key]) ?? fallback;
 }
 
 function emptyHellInput(): HellCycleInput {
@@ -104,9 +98,9 @@ function readWarlordInput(
     available: true,
     warlord: true,
     enemies: Array.isArray(enemies) ? enemies.length : 0,
-    minions: finiteHellValue(readProperty(minions, "spawns")) ?? 0,
+    minions: finite(readProperty(minions, "spawns")) ?? 0,
     handleEnemyFortress: settings["warlordHandleFortress"] === true,
-    minimumMinions: finiteHellValue(settings["warlordMinimumMinions"]) ?? 0,
+    minimumMinions: finite(settings["warlordMinimumMinions"]) ?? 0,
   });
 }
 
@@ -120,12 +114,12 @@ function readHellInput(root: unknown, settingsValue: unknown): HellCycleInput {
   const garrison = readProperty(readProperty(root, "civic"), "garrison");
   const fortress = readProperty(portal, "fortress");
   if (!isRecord(garrison) || !isRecord(fortress)) return emptyHellInput();
-  const workers = finiteHellValue(readProperty(garrison, "workers"));
-  const maximumWorkers = finiteHellValue(readProperty(garrison, "max"));
-  const crew = finiteHellValue(readProperty(garrison, "crew"));
-  const hellSoldiers = finiteHellValue(readProperty(fortress, "garrison"));
-  const hellPatrols = finiteHellValue(readProperty(fortress, "patrols"));
-  const hellPatrolSize = finiteHellValue(readProperty(fortress, "patrol_size"));
+  const workers = finite(readProperty(garrison, "workers"));
+  const maximumWorkers = finite(readProperty(garrison, "max"));
+  const crew = finite(readProperty(garrison, "crew"));
+  const hellSoldiers = finite(readProperty(fortress, "garrison"));
+  const hellPatrols = finite(readProperty(fortress, "patrols"));
+  const hellPatrolSize = finite(readProperty(fortress, "patrol_size"));
   if (
     workers === undefined ||
     maximumWorkers === undefined ||
@@ -138,7 +132,7 @@ function readHellInput(root: unknown, settingsValue: unknown): HellCycleInput {
   }
   const space = readProperty(root, "space");
   const fob = readProperty(space, "fob");
-  const fobTroops = finiteHellValue(readProperty(fob, "troops")) ?? 0;
+  const fobTroops = finite(readProperty(fob, "troops")) ?? 0;
   const settings = isRecord(settingsValue) ? settingsValue : {};
   const tech = readProperty(root, "tech");
   const city = readProperty(root, "city");
@@ -147,7 +141,7 @@ function readHellInput(root: unknown, settingsValue: unknown): HellCycleInput {
   const warDroid = readProperty(portal, "war_droid");
   const bootCamp = readProperty(city, "boot_camp");
   const govern = readProperty(readProperty(root, "civic"), "govern");
-  const elysium = finiteHellValue(readProperty(tech, "elysium")) ?? 0;
+  const elysium = finite(readProperty(tech, "elysium")) ?? 0;
   const homeGarrison = settingNumber(settings, "hellHomeGarrison", 10);
   const minimumHellSoldiers = settingNumber(settings, "hellMinSoldiers", 20);
   const minimumSoldierPercent = settingNumber(
@@ -166,22 +160,22 @@ function readHellInput(root: unknown, settingsValue: unknown): HellCycleInput {
     hellPatrols,
     hellPatrolSize,
     // DeadSpace initializes `assigned` lazily; the compatibility bridge treats it as zero.
-    hellAssigned: finiteHellValue(readProperty(fortress, "assigned")) ?? 0,
+    hellAssigned: finite(readProperty(fortress, "assigned")) ?? 0,
     currentHellGarrison: hellSoldiers - hellPatrols * hellPatrolSize,
     homeGarrison,
     minimumHellSoldiers,
     minimumSoldierPercent,
     elysiumUnlocked: elysium >= 3,
-    fortressWalls: finiteHellValue(readProperty(fortress, "walls")) ?? 0,
-    fortressThreat: finiteHellValue(readProperty(fortress, "threat")) ?? 0,
+    fortressWalls: finite(readProperty(fortress, "walls")) ?? 0,
+    fortressThreat: finite(readProperty(fortress, "threat")) ?? 0,
     lowWallsMultiplier: settingNumber(settings, "hellLowWallsMulti", 3),
     targetFortressDamage: settingNumber(
       settings,
       "hellTargetFortressDamage",
       100,
     ),
-    turretCount: finiteHellValue(readProperty(turret, "on")) ?? 0,
-    turretTechnology: finiteHellValue(readProperty(tech, "turret")) ?? 0,
+    turretCount: finite(readProperty(turret, "on")) ?? 0,
+    turretTechnology: finite(readProperty(tech, "turret")) ?? 0,
     handlePatrolSize: settings["hellHandlePatrolSize"] !== false,
     patrolThreatPercent: settingNumber(settings, "hellPatrolThreatPercent", 8),
     patrolDroneModifier: settingNumber(settings, "hellPatrolDroneMod", 5),
@@ -203,11 +197,11 @@ function readHellInput(root: unknown, settingsValue: unknown): HellCycleInput {
       "hellBolsterPatrolPercentBottom",
       20,
     ),
-    warDroneCount: finiteHellValue(readProperty(warDrone, "on")) ?? 0,
-    portalTechnology: finiteHellValue(readProperty(tech, "portal")) ?? 0,
-    warDroidCount: finiteHellValue(readProperty(warDroid, "on")) ?? 0,
+    warDroneCount: finite(readProperty(warDrone, "on")) ?? 0,
+    portalTechnology: finite(readProperty(tech, "portal")) ?? 0,
+    warDroidCount: finite(readProperty(warDroid, "on")) ?? 0,
     hellDroidTechnology: Boolean(readProperty(tech, "hdroid")),
-    bootCampCount: finiteHellValue(readProperty(bootCamp, "count")) ?? 0,
+    bootCampCount: finite(readProperty(bootCamp, "count")) ?? 0,
     manageAuthority: settings["authorityManage"] === true,
     minimumAuthority: settingNumber(settings, "generalMinimumAuthority", 0),
     minimumAuthorityPatrolPercent: settingNumber(
@@ -215,7 +209,7 @@ function readHellInput(root: unknown, settingsValue: unknown): HellCycleInput {
       "generalAuthorityMinPatrolPercent",
       0,
     ),
-    evilTechnology: finiteHellValue(readProperty(tech, "evil")) ?? 0,
+    evilTechnology: finite(readProperty(tech, "evil")) ?? 0,
     grenadier: readProperty(race, "grenadier") === true,
     government:
       typeof readProperty(govern, "type") === "string"
@@ -289,7 +283,7 @@ function readSoldierTarget(
   // the same per-soldier sample used by the compatibility target inversion.
   const result = controls.invoke(control, "rating", [10, true]);
   if (!result.ok) return undefined;
-  const perSoldier = finiteHellValue(result.value);
+  const perSoldier = finite(result.value);
   if (perSoldier === undefined || perSoldier <= 0) return undefined;
   return Math.ceil(targetRating / perSoldier);
 }
@@ -312,8 +306,8 @@ function readHellAuthority(
   if (!isRecord(authority) || authority["display"] === false) {
     return unavailable;
   }
-  const current = finiteHellValue(readProperty(authority, "amount"));
-  const maximum = finiteHellValue(readProperty(authority, "max"));
+  const current = finite(readProperty(authority, "amount"));
+  const maximum = finite(readProperty(authority, "max"));
   if (current === undefined || maximum === undefined) return undefined;
   return Object.freeze({
     unlocked: true,

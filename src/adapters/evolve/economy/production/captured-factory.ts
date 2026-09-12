@@ -20,7 +20,7 @@ import type { GameActionCostReader } from "../../../../ports/game-action-costs.t
 import type { GameBuildTarget } from "../../../../ports/game-build-targets.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 import { readCapturedFactoryCapacity } from "./captured-factory-capacity.ts";
 
 export const FACTORY_CONTROL = "iFactory";
@@ -176,12 +176,6 @@ const DEFAULT_PRIORITIES = Object.freeze({
 
 function finiteNonNegative(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : undefined;
-}
-
-function finite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
 }

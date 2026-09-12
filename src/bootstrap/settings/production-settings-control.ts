@@ -2,6 +2,7 @@ import { createProductionSettingsIntentHandler } from "../../application/product
 import { createProductionSettingsBrowserAdapter } from "../../adapters/browser/production-settings.ts";
 import { createProductionSettingsEvolveAdapter } from "../../adapters/evolve/economy/production/production-settings.ts";
 import { CONSUMPTION_BALANCE_TARGET } from "../../config.ts";
+import { readRecord } from "../../adapters/validation.ts";
 
 declare global {
   var __EA_TEST_SURFACE_ENABLED__: boolean;
@@ -21,12 +22,6 @@ type ProductionSettingsActions = Omit<
   BrowserDependencies,
   "getDocument" | "getJQuery" | "getReadModel" | "intents"
 >;
-
-function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
 
 function readContextValue<T>(
   context: unknown,

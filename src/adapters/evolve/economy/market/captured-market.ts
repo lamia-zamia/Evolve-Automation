@@ -11,7 +11,7 @@ import type { GameControlRegistry } from "../../../../ports/game-control-registr
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { MarketReader } from "../../../../ports/market.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export const MARKET_QUANTITY_CONTROL = "market-qty";
 
@@ -52,12 +52,6 @@ const TRAIT_VALUES: Readonly<{
 const TRAIT_RANKS: readonly number[] = Object.freeze([
   0.1, 0.25, 0.5, 1, 2, 3, 4,
 ]);
-
-function finite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
 
 function settingsRecord(value: unknown): Record<PropertyKey, unknown> {
   return isRecord(value) ? value : {};

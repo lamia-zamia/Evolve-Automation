@@ -13,7 +13,7 @@ import type { TradeRouteAdjuster } from "../../../../ports/market.ts";
 import type { GameControlHandle } from "../../../../ports/game-control-registry.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 interface CapturedTradeRoutesDependencies {
   readonly rootState: GameRootStateSource;
@@ -139,12 +139,6 @@ const REGIONAL_PRIORITY = Object.freeze([
   "Coal",
   "Water",
 ]);
-
-function finite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
 
 function settingsRecord(value: unknown): Record<PropertyKey, unknown> {
   return isRecord(value) ? value : {};

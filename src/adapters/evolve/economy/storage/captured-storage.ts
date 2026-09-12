@@ -29,7 +29,7 @@ import type {
 } from "../../../../ports/storage-allocation.ts";
 import { createSnapshotMetadata } from "../../../../domain/snapshot.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export const STORAGE_CONSTRUCTION_CONTROL = "createHead";
 
@@ -61,12 +61,6 @@ interface StorageSession {
   readonly freeContainers: number;
   readonly priorityResourceIds: readonly string[];
   readonly resources: ReadonlyMap<string, StorageAllocationResourceInput>;
-}
-
-function finite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
 }
 
 function readStorageCount(value: unknown, fallback = 0): number | undefined {

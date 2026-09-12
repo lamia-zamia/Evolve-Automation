@@ -57,6 +57,7 @@ import type { StorageSettingsIntentHandler } from "../../ports/storage-settings.
 import type { ProjectSettingsIntentHandler } from "../../ports/project-settings.ts";
 import type { MagicSettingsIntentHandler } from "../../ports/magic-settings.ts";
 import type { JobSettingsIntentHandler } from "../../ports/job-settings.ts";
+import { readRecord } from "../../adapters/validation.ts";
 
 declare global {
   var __EA_TEST_SURFACE_ENABLED__: boolean;
@@ -102,12 +103,6 @@ type AuthorityBrowserDependencies = Parameters<
   typeof createAuthoritySettingsBrowserAdapter
 >[0];
 type RuntimeFunction = (...args: unknown[]) => unknown;
-
-function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
 
 function readContextValue<T>(
   context: unknown,

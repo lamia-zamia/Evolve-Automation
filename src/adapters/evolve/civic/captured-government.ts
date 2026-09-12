@@ -18,7 +18,7 @@ import type { GovernmentReader } from "../../../ports/government.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { stale, SUCCEEDED } from "../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../validation.ts";
+import { finite, isRecord, readProperty } from "../../validation.ts";
 
 const CANDIDATES_CONTROL = "candidates";
 const GOVERNMENT_CONTROL = "govType";
@@ -32,12 +32,6 @@ export interface CapturedGovernmentAutomation {
 interface AppointmentSession {
   readonly root: unknown;
   readonly candidateBackgrounds: readonly string[];
-}
-
-function finiteGovernor(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
 }
 
 function readCandidateBackgrounds(root: unknown): readonly string[] {
@@ -73,7 +67,7 @@ function readCurrentGovernment(root: unknown): string {
 function governmentUnlocked(root: unknown, government: string): boolean {
   const tech = readProperty(root, "tech");
   const race = readProperty(root, "race");
-  const govern = finiteGovernor(readProperty(tech, "govern"));
+  const govern = finite(readProperty(tech, "govern"));
   if (government === "dictator") {
     return (
       readProperty(race, "wish") === true &&
@@ -84,7 +78,7 @@ function governmentUnlocked(root: unknown, government: string): boolean {
   if (government === "magocracy") {
     return (
       readProperty(tech, "gov_mage") === true ||
-      (finiteGovernor(readProperty(tech, "gov_mage")) ?? 0) > 0
+      (finite(readProperty(tech, "gov_mage")) ?? 0) > 0
     );
   }
   if (readProperty(race, "warlord") === true || govern === undefined) {
@@ -117,7 +111,7 @@ function readGovernmentInput(
   settingsValue: unknown,
 ): Readonly<GovernmentInput> {
   const settings = isRecord(settingsValue) ? settingsValue : {};
-  const technology = finiteGovernor(
+  const technology = finite(
     readProperty(readProperty(root, "tech"), "governor"),
   );
   const currentGovernment = readCurrentGovernment(root);
@@ -137,8 +131,7 @@ function readGovernmentInput(
     isEnabled: settings["autoGovernment"] === true,
     guardAnarchist,
     haveQFactory:
-      (finiteGovernor(readProperty(readProperty(root, "tech"), "q_factory")) ??
-        0) > 0,
+      (finite(readProperty(readProperty(root, "tech"), "q_factory")) ?? 0) > 0,
     haveGovernorTech: technology !== undefined && technology >= 1,
     currentGovernor: readCurrentGovernor(root),
     govSpace,
@@ -213,7 +206,7 @@ export function createCapturedGovernmentAutomation(dependencies: {
         if (readCurrentGovernment(root) === decision.government) {
           // The compatibility manager treats this as a successful no-op.
         } else {
-          const revision = finiteGovernor(
+          const revision = finite(
             readProperty(
               readProperty(readProperty(root, "civic"), "govern"),
               "rev",

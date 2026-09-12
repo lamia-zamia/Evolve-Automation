@@ -35,7 +35,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { evaluateCapturedCondition } from "../../captured-conditions.ts";
 import { costFitsStorage } from "../../captured-affordability.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 /**
  * One trigger action the game could buy now, priced at the game's own current cost.
@@ -114,23 +114,17 @@ const NO_TARGETS: readonly Readonly<CapturedTriggerTarget>[] = Object.freeze(
 
 const ARPA_PREFIX = "arpa";
 
-function finiteValue(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
 /**
  * Validates one stored trigger. The editor writes every field, so a row missing one is a broken
  * setting rather than a game state this has to tolerate: it is dropped.
  */
 function readRow(raw: unknown): TriggerRow | undefined {
   if (!isRecord(raw)) return undefined;
-  const priority = finiteValue(readProperty(raw, "priority"));
+  const priority = finite(readProperty(raw, "priority"));
   const requirementType = readProperty(raw, "requirementType");
   const actionType = readProperty(raw, "actionType");
   const actionId = readProperty(raw, "actionId");
-  const actionCount = finiteValue(readProperty(raw, "actionCount"));
+  const actionCount = finite(readProperty(raw, "actionCount"));
   if (
     priority === undefined ||
     typeof requirementType !== "string" ||
@@ -296,7 +290,7 @@ export function createCapturedTriggers(
       /** Whether the trigger's action has already been carried out, if that is knowable. */
       const isComplete = (row: TriggerRow): boolean | undefined => {
         if (row.actionType === "build") {
-          const count = finiteValue(
+          const count = finite(
             readProperty(
               readTriggerActionStructure(root, row.actionId),
               "count",
@@ -309,7 +303,7 @@ export function createCapturedTriggers(
           const projectId = row.actionId.startsWith(ARPA_PREFIX)
             ? row.actionId.slice(ARPA_PREFIX.length)
             : undefined;
-          const rank = finiteValue(
+          const rank = finite(
             readProperty(
               readProperty(readProperty(root, "arpa"), projectId ?? ""),
               "rank",

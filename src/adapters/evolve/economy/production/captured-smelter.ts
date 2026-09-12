@@ -12,7 +12,7 @@ import type { CapturedDemandSample } from "../resources/captured-resource-demand
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export const SMELTER_CONTROL = "iSmelter";
 
@@ -44,12 +44,6 @@ const FUEL_IDS = Object.freeze([
   "Super",
 ] as const);
 type FuelId = (typeof FUEL_IDS)[number];
-
-function finite(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
 
 function readCount(value: unknown): number | undefined {
   const count = finite(value);
