@@ -4,7 +4,8 @@
  * A stored trigger condition names an operand type, an argument and a count. This module answers
  * the operand types whose whole input is the game's own root state: building and project counts,
  * civic job assignments, resource holdings, the appointed governor, the race and planet bags, the
- * calendar, the two build queues, and the True Path fleet, Mass Relay, and carport fields.
+ * calendar, the two build queues, the ascension level and pillar ranks, and the True Path fleet,
+ * Mass Relay, and carport fields.
  *
  * It also answers the two research operands, which the root cannot supply: the game's grant keys
  * live in its private action catalog, so `ResearchUnlocked` and `ResearchComplete` are read from
@@ -13,7 +14,7 @@
  *
  * Everything else a condition can name — script-computed resource fields, the settings layer,
  * custom expressions, building and project unlock states, manager-computed values, and anything
- * needing a private action definition — is deliberately absent.
+ * needing the module-level race catalog or a private action definition — is deliberately absent.
  *
  * `undefined` has exactly one meaning here: the operand cannot be answered from what has been
  * captured. It is never "false" and never "zero", so a caller has to drop the condition rather
@@ -51,6 +52,7 @@ const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "Universe",
   "Government",
   "Governor",
+  "RacePillared",
   "MimicGenus",
   "PlanetBiome",
   "PlanetTrait",
@@ -181,6 +183,71 @@ function jobCount(root: unknown, argument: unknown): number | undefined {
   return workers + servants;
 }
 
+/**
+ * The flags `alevel()` counts, in the game's own order. Each is a challenge the player took on, and
+ * each raises the ascension level by one.
+ */
+const ASCENSION_CHALLENGE_FLAGS: readonly string[] = Object.freeze([
+  "no_plasmid",
+  "no_trade",
+  "no_craft",
+  "no_crispr",
+  "weak_mastery",
+  "nerfed",
+  "badgenes",
+]);
+
+/**
+ * The game's `alevel()`: one plus the challenges taken, capped at five. It lives in the game's
+ * achievement module rather than on any state it exposes, but every input is a flag on the race
+ * bag, so the captured root answers it exactly.
+ */
+function ascensionLevel(root: unknown): number | undefined {
+  const race = readProperty(root, "race");
+  if (!isRecord(race)) return undefined;
+  let level = 1;
+  for (const flag of ASCENSION_CHALLENGE_FLAGS) {
+    if (readProperty(race, flag)) level++;
+  }
+  return level > 5 ? 5 : level;
+}
+
+/**
+ * The race an argument names: one of the three ids the race bag itself carries, the Sludge host
+ * species, or a literal race id the editor stored.
+ */
+function resolveRaceId(root: unknown, argument: unknown): unknown {
+  const race = readProperty(root, "race");
+  if (
+    argument === "species" ||
+    argument === "gods" ||
+    argument === "old_gods"
+  ) {
+    return readProperty(race, argument);
+  }
+  // `race.srace` exists only in the Sludge scenarios; before one starts the game has no host.
+  if (argument === "srace") {
+    return readProperty(race, "srace") ?? "protoplasm";
+  }
+  return argument;
+}
+
+/**
+ * Whether the named race has been pillared at least as high as the current ascension level.
+ * `global.pillars` maps a race id to the `alevel()` it was pillared at, and a race missing from it
+ * has never been pillared — which is a real answer, not an absent one.
+ */
+function racePillared(root: unknown, argument: unknown): boolean | undefined {
+  const pillars = readProperty(root, "pillars");
+  if (!isRecord(pillars)) return undefined;
+  const level = ascensionLevel(root);
+  if (level === undefined) return undefined;
+  const raceId = resolveRaceId(root, argument);
+  if (typeof raceId !== "string") return false;
+  const rank = finiteValue(readProperty(pillars, raceId));
+  return rank !== undefined && rank >= level;
+}
+
 function queueLength(root: unknown, key: string): number | undefined {
   const entries = readProperty(readProperty(root, key), "queue");
   return Array.isArray(entries) ? entries.length : undefined;
@@ -271,6 +338,12 @@ function readNumber(
           ) / 10000.0
         );
       }
+      if (argument === "alevel") {
+        // The script reports the level as the number of challenges taken, so one less than the
+        // game's own count.
+        const level = ascensionLevel(root);
+        return level === undefined ? undefined : level - 1;
+      }
       if (argument === "bcar") {
         const damaged = readProperty(
           readProperty(readProperty(root, "portal"), "carport"),
@@ -359,6 +432,8 @@ function readBoolean(
       );
       return (background ?? "none") === argument;
     }
+    case "RacePillared":
+      return racePillared(root, argument);
     case "MimicGenus": {
       const race = readProperty(root, "race");
       if (!isRecord(race)) return undefined;

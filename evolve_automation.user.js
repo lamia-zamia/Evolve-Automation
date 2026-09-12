@@ -10209,6 +10209,7 @@
     "Universe",
     "Government",
     "Governor",
+    "RacePillared",
     "MimicGenus",
     "PlanetBiome",
     "PlanetTrait"
@@ -10291,6 +10292,37 @@
     if (servants !== void 0 && !(servants > 0 && readProperty(readProperty(root, "race"), "high_pop")))
       return workers + servants;
   }
+  var ASCENSION_CHALLENGE_FLAGS = Object.freeze([
+    "no_plasmid",
+    "no_trade",
+    "no_craft",
+    "no_crispr",
+    "weak_mastery",
+    "nerfed",
+    "badgenes"
+  ]);
+  function ascensionLevel(root) {
+    let race = readProperty(root, "race");
+    if (!isRecord(race)) return;
+    let level = 1;
+    for (let flag of ASCENSION_CHALLENGE_FLAGS)
+      readProperty(race, flag) && level++;
+    return level > 5 ? 5 : level;
+  }
+  function resolveRaceId(root, argument) {
+    let race = readProperty(root, "race");
+    return argument === "species" || argument === "gods" || argument === "old_gods" ? readProperty(race, argument) : argument === "srace" ? readProperty(race, "srace") ?? "protoplasm" : argument;
+  }
+  function racePillared(root, argument) {
+    let pillars = readProperty(root, "pillars");
+    if (!isRecord(pillars)) return;
+    let level = ascensionLevel(root);
+    if (level === void 0) return;
+    let raceId = resolveRaceId(root, argument);
+    if (typeof raceId != "string") return !1;
+    let rank = finiteValue(readProperty(pillars, raceId));
+    return rank !== void 0 && rank >= level;
+  }
   function queueLength(root, key) {
     let entries = readProperty(readProperty(root, key), "queue");
     return Array.isArray(entries) ? entries.length : void 0;
@@ -10363,6 +10395,10 @@
               "charged"
             )
           ) / 1e4;
+        if (argument === "alevel") {
+          let level = ascensionLevel(root);
+          return level === void 0 ? void 0 : level - 1;
+        }
         if (argument === "bcar") {
           let damaged = readProperty(
             readProperty(readProperty(root, "portal"), "carport"),
@@ -10418,6 +10454,8 @@
           "bg"
         ) ?? "none") === argument : void 0;
       }
+      case "RacePillared":
+        return racePillared(root, argument);
       case "MimicGenus": {
         let race = readProperty(root, "race");
         return isRecord(race) ? (readProperty(race, "ss_genus") ?? "none") === argument : void 0;

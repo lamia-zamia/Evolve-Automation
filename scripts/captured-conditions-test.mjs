@@ -40,6 +40,8 @@ const root = {
     Soul_Gem: { amount: 0, max: -1, display: false },
   },
   stats: { days: 900 },
+  // Race ids mapped to the ascension level each was pillared at.
+  pillars: { human: 2, elven: 1 },
   queue: { queue: [{ id: "city-farm" }, { id: "city-mine" }] },
   r_queue: { queue: [] },
 };
@@ -163,6 +165,88 @@ assert.equal(readCapturedOperand(root, "PlanetBiome", "forest"), true);
 assert.equal(readCapturedOperand(root, "PlanetTrait", "trashed"), true);
 assert.equal(readCapturedOperand(root, "PlanetTrait", "unstable"), false);
 
+// --- the ascension level and pillar ranks ----------------------------------
+
+// The game's own `alevel()` is one plus the challenges taken, capped at five; the script's operand
+// reports the challenge count, so one less again. The fixture race took none.
+assert.equal(readCapturedOperand(root, "Other", "alevel"), 0);
+{
+  const challenged = {
+    ...root,
+    race: { ...root.race, no_plasmid: 1, no_trade: 1, badgenes: 1 },
+  };
+  assert.equal(readCapturedOperand(challenged, "Other", "alevel"), 3);
+  // Five is the ceiling, so a sixth challenge adds nothing.
+  const everything = {
+    ...root,
+    race: {
+      ...root.race,
+      no_plasmid: 1,
+      no_trade: 1,
+      no_craft: 1,
+      no_crispr: 1,
+      weak_mastery: 1,
+      nerfed: 1,
+      badgenes: 1,
+    },
+  };
+  assert.equal(readCapturedOperand(everything, "Other", "alevel"), 4);
+  // A pillar earned below the current ascension level no longer counts. At the fixture's level of
+  // one both ranks are enough; one challenge in, only the rank-two pillar still is.
+  assert.equal(readCapturedOperand(root, "RacePillared", "human"), true);
+  assert.equal(readCapturedOperand(root, "RacePillared", "species"), true);
+  assert.equal(readCapturedOperand(root, "RacePillared", "elven"), true);
+  const ascended = { ...root, race: { ...root.race, no_plasmid: 1 } };
+  assert.equal(readCapturedOperand(ascended, "RacePillared", "human"), true);
+  assert.equal(readCapturedOperand(ascended, "RacePillared", "elven"), false);
+  assert.equal(readCapturedOperand(challenged, "RacePillared", "human"), false);
+}
+// A race the bag has never recorded is not pillared, which is a real answer.
+assert.equal(readCapturedOperand(root, "RacePillared", "sharkin"), false);
+// The three ids the race bag carries itself, and the Sludge host species.
+assert.equal(readCapturedOperand(root, "RacePillared", "gods"), false);
+assert.equal(
+  readCapturedOperand(
+    { ...root, race: { ...root.race, gods: "elven" }, pillars: { elven: 5 } },
+    "RacePillared",
+    "gods",
+  ),
+  true,
+);
+assert.equal(
+  readCapturedOperand(
+    { ...root, pillars: { protoplasm: 4 } },
+    "RacePillared",
+    "srace",
+  ),
+  true,
+);
+assert.equal(
+  readCapturedOperand(
+    { ...root, race: { ...root.race, srace: "human" } },
+    "RacePillared",
+    "srace",
+  ),
+  true,
+);
+// It is a boolean operand: the stored count is matched, not exceeded.
+assert.equal(evaluateCapturedCondition(root, "RacePillared", "human", 1), true);
+assert.equal(
+  evaluateCapturedCondition(root, "RacePillared", "human", 0),
+  false,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "RacePillared", "sharkin", 0),
+  true,
+);
+// Without the bags neither operand is decidable.
+assert.equal(readCapturedOperand({}, "RacePillared", "human"), undefined);
+assert.equal(
+  readCapturedOperand({ race: {} }, "RacePillared", "human"),
+  undefined,
+);
+assert.equal(readCapturedOperand({}, "Other", "alevel"), undefined);
+
 // --- the research operands, answered from the drawn panel ------------------
 
 // The research panel draws each technology on the current path in one of two halves. Both come in
@@ -248,8 +332,9 @@ assert.equal(
   readCapturedOperand(root, "SettingCurrent", "autoBuild"),
   undefined,
 );
-assert.equal(readCapturedOperand(root, "Other", "alevel"), undefined);
+// `rname` needs the module-level race catalog, which nothing captures.
 assert.equal(readCapturedOperand(root, "Other", "rname"), undefined);
+assert.equal(readCapturedOperand(root, "RaceGenus", "humanoid"), undefined);
 assert.equal(readCapturedOperand(root, "Queue", "evo"), undefined);
 // Manager-computed and script-computed operands stay unanswered.
 assert.equal(readCapturedOperand(root, "Soldiers", "workers"), undefined);
