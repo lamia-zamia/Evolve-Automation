@@ -307,6 +307,49 @@ assert.deepEqual(
   [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
 );
 
+// A `ProjectUnlocked` condition needs the same panel, so it draws it on its own.
+const projectUnlockedTrigger = [
+  trigger({
+    requirementType: "ProjectUnlocked",
+    requirementId: "arpalaunch_facility",
+    requirementCount: 1,
+  }),
+];
+assert.deepEqual(triggers({ triggers: projectUnlockedTrigger }).read(), [
+  { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+]);
+// A project the panel did not draw is not unlocked, which is a real answer: the condition fails
+// and the trigger raises no demand.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ProjectUnlocked",
+        requirementId: "arpalhc",
+        requirementCount: 1,
+      }),
+    ],
+  }).read(),
+  [],
+);
+// A drawn panel and an unreadable one are not the same thing, which a condition asking for a
+// project that is *not* unlocked tells apart: an empty panel answers it, an unread one does not.
+const projectLockedTrigger = [
+  trigger({
+    requirementType: "ProjectUnlocked",
+    requirementId: "arpalaunch_facility",
+    requirementCount: 0,
+  }),
+];
+assert.deepEqual(
+  triggers({ triggers: projectLockedTrigger, projects: [] }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({ triggers: projectLockedTrigger, projects: null }).read(),
+  [],
+);
+
 // A project trigger competes for its cost resources like any other trigger.
 assert.deepEqual(
   triggers({

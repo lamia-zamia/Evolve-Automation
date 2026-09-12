@@ -10205,6 +10205,7 @@
     "JobUnlocked",
     "ResearchUnlocked",
     "ResearchComplete",
+    "ProjectUnlocked",
     "Challenge",
     "Universe",
     "Government",
@@ -10422,6 +10423,8 @@
         return typeof argument != "string" ? void 0 : context?.offeredTechs?.has(argument);
       case "ResearchComplete":
         return typeof argument != "string" ? void 0 : context?.grantedTechs?.has(argument);
+      case "ProjectUnlocked":
+        return typeof argument != "string" ? void 0 : context?.unlockedProjects?.has(argument);
       case "Boolean":
         return typeof argument == "boolean" ? argument : void 0;
       case "ResourceUnlocked": {
@@ -10545,15 +10548,15 @@
         if (readProperty(settings, "autoTrigger") !== !0) return NO_TARGETS;
         let rows = readRows(settings);
         if (rows.length === 0) return NO_TARGETS;
-        let root = rootState.readRoot(), offered = dependencies.readOfferedTechs?.(), offeredTechs = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech])), grantedTechs = dependencies.readGrantedTechs?.(), conditionContext = Object.freeze({
+        let root = rootState.readRoot(), offered = dependencies.readOfferedTechs?.(), offeredTechs = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech])), grantedTechs = dependencies.readGrantedTechs?.(), needProjects = rows.some(
+          (row) => row.actionType === "arpa" || row.requirementType === "ProjectUnlocked"
+        ), drawnProjects = dependencies.readOfferedProjects === void 0 || !needProjects ? void 0 : dependencies.readOfferedProjects(), offeredProjectsById = drawnProjects === void 0 ? void 0 : new Map(
+          drawnProjects.map((project) => [project.elementId, project])
+        ), conditionContext = Object.freeze({
           ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
-          ...grantedTechs === void 0 ? {} : { grantedTechs }
-        }), offeredProjectsById = dependencies.readOfferedProjects === void 0 || !rows.some((row) => row.actionType === "arpa") ? void 0 : new Map(
-          (dependencies.readOfferedProjects() ?? []).map((project) => [
-            project.elementId,
-            project
-          ])
-        ), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
+          ...grantedTechs === void 0 ? {} : { grantedTechs },
+          ...offeredProjectsById === void 0 ? {} : { unlockedProjects: new Set(offeredProjectsById.keys()) }
+        }), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
             let count2 = finiteValue2(
               readProperty(

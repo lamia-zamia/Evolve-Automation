@@ -21,7 +21,9 @@
  * - A technology the current path never draws — one belonging to another tech path, say — is in
  *   neither half of the research panel, so a trigger naming it is dropped. The compatibility
  *   runtime's DOM read reported the same technology as simply not researched.
- * - Conditions are limited to the operands `../../captured-conditions.ts` answers.
+ * - Conditions are limited to the operands `../../captured-conditions.ts` answers. `ProjectUnlocked`
+ *   is answered from the same drawn panel the A.R.P.A. prices come from, so a trigger naming one
+ *   draws the panel even when no trigger buys a project.
  */
 
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
@@ -218,27 +220,39 @@ export function createCapturedTriggers(
           ? undefined
           : new Map(offered.map((tech) => [tech.elementId, tech]));
       const grantedTechs = dependencies.readGrantedTechs?.();
-      // The condition evaluator answers the research operands from the same pass the actions are
-      // priced from, so a trigger's requirement and its target describe one moment.
+      // The project panel is the most expensive read on this path, so it is only drawn when a
+      // configured trigger actually needs it: an A.R.P.A. action to price, or a `ProjectUnlocked`
+      // condition to answer. The sample is the cycle's shared one, so a construction cycle later
+      // in the tick reuses these prices.
+      const needProjects = rows.some(
+        (row) =>
+          row.actionType === "arpa" ||
+          row.requirementType === "ProjectUnlocked",
+      );
+      // An unreadable panel stays `undefined` rather than collapsing to an empty sample: a panel
+      // that drew no projects is a real answer to `ProjectUnlocked`, and one that could not be
+      // read is not.
+      const drawnProjects =
+        dependencies.readOfferedProjects === undefined || !needProjects
+          ? undefined
+          : dependencies.readOfferedProjects();
+      const offeredProjectsById =
+        drawnProjects === undefined
+          ? undefined
+          : new Map(
+              drawnProjects.map((project) => [project.elementId, project]),
+            );
+      // The condition evaluator answers the research and project operands from the same passes the
+      // actions are priced from, so a trigger's requirement and its target describe one moment.
       const conditionContext = Object.freeze({
         ...(offeredTechs === undefined
           ? {}
           : { offeredTechs: new Set(offeredTechs.keys()) }),
         ...(grantedTechs === undefined ? {} : { grantedTechs }),
+        ...(offeredProjectsById === undefined
+          ? {}
+          : { unlockedProjects: new Set(offeredProjectsById.keys()) }),
       });
-      // The project panel is the most expensive read on this path, so it is only drawn when a
-      // configured trigger actually names an A.R.P.A. action. The sample is the cycle's shared
-      // one, so a construction cycle later in the tick reuses these prices.
-      const offeredProjectsById =
-        dependencies.readOfferedProjects === undefined ||
-        !rows.some((row) => row.actionType === "arpa")
-          ? undefined
-          : new Map(
-              (dependencies.readOfferedProjects() ?? []).map((project) => [
-                project.elementId,
-                project,
-              ]),
-            );
       const byPriority = new Map(rows.map((row) => [row.priority, row]));
 
       /** Whether the trigger's action has already been carried out, if that is knowable. */

@@ -7,14 +7,16 @@
  * calendar, the two build queues, the ascension level and pillar ranks, and the True Path fleet,
  * Mass Relay, and carport fields.
  *
- * It also answers the two research operands, which the root cannot supply: the game's grant keys
- * live in its private action catalog, so `ResearchUnlocked` and `ResearchComplete` are read from
- * the research panel the cycle already drew. Those come in through `CapturedConditionContext`, and
- * a condition naming one goes unanswered whenever the pass it needs was not taken.
+ * It also answers the operands the root cannot supply but a drawn panel can. The game's grant
+ * keys live in its private action catalog, so `ResearchUnlocked` and `ResearchComplete` are read
+ * from the research panel the cycle already drew; `ProjectUnlocked` is read the same way from the
+ * A.R.P.A. panel. Those come in through `CapturedConditionContext`, and a condition naming one
+ * goes unanswered whenever the pass it needs was not taken.
  *
  * Everything else a condition can name — script-computed resource fields, the settings layer,
- * custom expressions, building and project unlock states, manager-computed values, and anything
- * needing the module-level race catalog or a private action definition — is deliberately absent.
+ * custom expressions, building unlock and clickability states, manager-computed values, and
+ * anything needing the module-level race catalog or a private action definition — is deliberately
+ * absent.
  *
  * `undefined` has exactly one meaning here: the operand cannot be answered from what has been
  * captured. It is never "false" and never "zero", so a caller has to drop the condition rather
@@ -36,6 +38,8 @@ export interface CapturedConditionContext {
   readonly offeredTechs?: ReadonlySet<string>;
   /** Element ids the game has already granted. */
   readonly grantedTechs?: ReadonlySet<string>;
+  /** Element ids the A.R.P.A. panel drew, e.g. `arpalhc`. */
+  readonly unlockedProjects?: ReadonlySet<string>;
 }
 
 /**
@@ -48,6 +52,7 @@ const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "JobUnlocked",
   "ResearchUnlocked",
   "ResearchComplete",
+  "ProjectUnlocked",
   "Challenge",
   "Universe",
   "Government",
@@ -385,6 +390,15 @@ function readBoolean(
       // compatibility runtime's DOM read did.
       if (typeof argument !== "string") return undefined;
       return context?.grantedTechs?.has(argument);
+    }
+    case "ProjectUnlocked": {
+      // The A.R.P.A. panel draws exactly the projects the game is offering: one whose
+      // requirements are unmet, whose tech path excludes it, or which has reached its rank cap is
+      // drawn nowhere. That is the same thing the compatibility runtime's Vue-binding read
+      // reported, so panel membership is the whole answer — and a panel with no rows at all is a
+      // real "nothing unlocked", not an absent one.
+      if (typeof argument !== "string") return undefined;
+      return context?.unlockedProjects?.has(argument);
     }
     case "Boolean":
       return typeof argument === "boolean" ? argument : undefined;

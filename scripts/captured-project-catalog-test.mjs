@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { createGameDrawnProjectsReader } from "../src/adapters/browser/game-drawn-projects.ts";
 import { createCapturedProjectCatalog } from "../src/adapters/evolve/progression/research/captured-project-catalog.ts";
+import { createCapturedTriggers } from "../src/adapters/evolve/progression/build/captured-triggers.ts";
 import {
   MAIN_TAB_CONTROL,
   MAIN_TAB_SETTING,
@@ -266,6 +267,104 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
   });
   assert.equal(catalog.readProjects(), undefined);
   assert.deepEqual(reasons, ["the game root has not been captured yet"]);
+}
+
+// A `ProjectUnlocked` condition is answered by the rows this panel actually drew, through the
+// real drawn-projects reader and the real catalog: panel membership is the whole answer.
+{
+  const page = makeProjectDocument([
+    { id: "lhc", cost: { Money: 26250 } },
+    { id: "stock_exchange", cost: { Money: 1500 } },
+  ]);
+  const root = {
+    city: { mine: { count: 0 }, apartment: { count: 0 } },
+    arpa: {
+      lhc: { rank: 0, complete: 10 },
+      stock_exchange: { rank: 1, complete: 0 },
+    },
+    resource: { Money: { amount: 500000, max: 1000000, display: true } },
+  };
+  const BUILD_COSTS = {
+    "city-apartment": { Money: 875 },
+    "city-mine": { Money: 60 },
+  };
+  const catalog = createCapturedProjectCatalog({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    discovery: {
+      discover(_path, options = {}) {
+        options.whileDrawn?.();
+        return { outcome: { status: "succeeded" }, discovered: [] };
+      },
+    },
+    drawnProjects: createGameDrawnProjectsReader({
+      getDocument: () => page.document,
+      createMouseEvent: mouseEvent,
+    }),
+    controls: {
+      resolve: (elementId) => ({ elementId, generation: 1, methods: [] }),
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => [],
+    },
+  });
+  const projectTrigger = (requirementId, requirementCount, actionId) => ({
+    seq: 0,
+    priority: 0,
+    requirementType: "ProjectUnlocked",
+    requirementId,
+    requirementCount,
+    actionType: "build",
+    actionId,
+    actionCount: 1,
+  });
+  const triggersFor = (rows) =>
+    createCapturedTriggers({
+      rootState: { readRoot: () => root },
+      controls: {
+        resolve: (elementId) =>
+          elementId in BUILD_COSTS
+            ? { elementId, generation: 1, methods: [] }
+            : undefined,
+        invoke: () => ({ ok: true, value: undefined }),
+        capturedElementIds: () => Object.keys(BUILD_COSTS),
+      },
+      costs: { readCost: (actionId) => BUILD_COSTS[actionId] },
+      readSettings: () => ({ autoTrigger: true, triggers: rows }),
+      readOfferedProjects: () => catalog.readProjects(),
+    });
+
+  // A project the panel drew is unlocked.
+  assert.deepEqual(
+    triggersFor([projectTrigger("arpalhc", 1, "city-apartment")]).read(),
+    [
+      {
+        actionId: "city-apartment",
+        actionType: "build",
+        cost: BUILD_COSTS["city-apartment"],
+      },
+    ],
+  );
+  // One it did not draw is not, so the condition fails rather than going unanswered — which a
+  // condition asking for the project to be absent proves, since an unanswered one would drop.
+  assert.deepEqual(
+    triggersFor([projectTrigger("arpamonument", 1, "city-mine")]).read(),
+    [],
+  );
+  assert.deepEqual(
+    triggersFor([projectTrigger("arpamonument", 0, "city-mine")]).read(),
+    [
+      {
+        actionId: "city-mine",
+        actionType: "build",
+        cost: BUILD_COSTS["city-mine"],
+      },
+    ],
+  );
+  // The panel is left as it was found: every hover is undone.
+  assert.equal(page.hasPopper(), false);
 }
 
 console.log("captured-project-catalog ok");

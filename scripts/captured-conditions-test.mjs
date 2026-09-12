@@ -326,6 +326,75 @@ assert.equal(
   undefined,
 );
 
+// --- the project unlock operand, answered from the drawn A.R.P.A. panel ---
+
+// The panel draws exactly the projects the game offers, so membership is the whole answer.
+const arpaPanel = {
+  unlockedProjects: new Set(["arpalaunch_facility", "arpamonument"]),
+};
+assert.equal(
+  readCapturedOperand(
+    root,
+    "ProjectUnlocked",
+    "arpalaunch_facility",
+    arpaPanel,
+  ),
+  true,
+);
+// A project the panel did not draw is locked, off the current tech path, or finished at its rank
+// cap. The compatibility runtime's Vue-binding read reported every one of those as not unlocked.
+assert.equal(
+  readCapturedOperand(root, "ProjectUnlocked", "arpalhc", arpaPanel),
+  false,
+);
+// A drawn panel holding no projects at all is a real "nothing unlocked".
+assert.equal(
+  readCapturedOperand(root, "ProjectUnlocked", "arpalhc", {
+    unlockedProjects: new Set(),
+  }),
+  false,
+);
+// A pass that was not taken leaves the operand unanswered, never false.
+assert.equal(
+  readCapturedOperand(root, "ProjectUnlocked", "arpalaunch_facility"),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "ProjectUnlocked", "arpalaunch_facility", {
+    grantedTechs: research.grantedTechs,
+  }),
+  undefined,
+);
+// It is a boolean operand: the stored count is matched, not exceeded.
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "ProjectUnlocked",
+    "arpalaunch_facility",
+    1,
+    arpaPanel,
+  ),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "ProjectUnlocked",
+    "arpalaunch_facility",
+    0,
+    arpaPanel,
+  ),
+  false,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "ProjectUnlocked", "arpalhc", 0, arpaPanel),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "ProjectUnlocked", "arpalhc", 0),
+  undefined,
+);
+
 // Nothing the capture does not hold is guessed at.
 assert.equal(readCapturedOperand(root, "Eval", "1 + 1"), undefined);
 assert.equal(
