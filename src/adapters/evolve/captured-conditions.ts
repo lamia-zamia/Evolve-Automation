@@ -11,13 +11,13 @@
  * keys live in its private action catalog, so `ResearchUnlocked` and `ResearchComplete` are read
  * from the research panel the cycle already drew; `ProjectUnlocked` is read the same way from the
  * A.R.P.A. panel, and `BuildingUnlocked` from the region panels the buildings are drawn into.
- * Those come in through `CapturedConditionContext`, and a condition naming one goes unanswered
- * whenever the pass it needs was not taken.
+ * `BuildingAffordable` is the game's own `checkMaxCosts` over an already-adjusted cost the cycle
+ * priced. Those come in through `CapturedConditionContext`, and a condition naming one goes
+ * unanswered whenever the pass it needs was not taken.
  *
  * Everything else a condition can name — script-computed resource fields, the settings layer,
- * custom expressions, building clickability and affordability states, manager-computed values, and
- * anything needing the module-level race catalog or a private action definition — is deliberately
- * absent.
+ * custom expressions, building clickability, manager-computed values, and anything needing the
+ * module-level race catalog or a private action definition — is deliberately absent.
  *
  * `undefined` has exactly one meaning here: the operand cannot be answered from what has been
  * captured. It is never "false" and never "zero", so a caller has to drop the condition rather
@@ -25,6 +25,7 @@
  */
 
 import { isRecord, readProperty } from "../validation.ts";
+import { costFitsStorage, isRegionalSupply } from "./captured-affordability.ts";
 
 /** A condition compares an operand's value against its stored count. */
 export type CapturedOperandValue = boolean | number;
@@ -50,6 +51,14 @@ export interface CapturedConditionContext {
     readonly unlocked: ReadonlySet<string>;
     readonly regions: ReadonlySet<string>;
   };
+  /**
+   * The game's current adjusted cost for each building a condition asked about. A building absent
+   * from the map was not priced, which leaves its cost operands unanswered.
+   */
+  readonly buildingCosts?: ReadonlyMap<
+    string,
+    Readonly<Record<string, number>>
+  >;
 }
 
 /**
@@ -64,6 +73,7 @@ const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "ResearchComplete",
   "ProjectUnlocked",
   "BuildingUnlocked",
+  "BuildingAffordable",
   "Challenge",
   "Universe",
   "Government",
@@ -423,6 +433,19 @@ function readBoolean(
       if (sample === undefined) return undefined;
       if (!sample.regions.has(argument.slice(0, separator))) return undefined;
       return sample.unlocked.has(argument);
+    }
+    case "BuildingAffordable": {
+      // The game's `isAffordable(true)`: every positive cost has to name a displayed resource and
+      // fit under that resource's capacity. It asks nothing about whether the building is offered,
+      // so an unbuilt or locked building still has an answer — the cost is what is being judged.
+      if (typeof argument !== "string") return undefined;
+      const cost = context?.buildingCosts?.get(argument);
+      if (cost === undefined) return undefined;
+      // Above `tech.shadow >= 5` the game checks the paying region's share instead of the
+      // civilization's, and neither the action's pool nor the table of split resources is
+      // captured, so the comparison stops being exact rather than becoming optimistic.
+      if (isRegionalSupply(root)) return undefined;
+      return costFitsStorage(root, cost);
     }
     case "Boolean":
       return typeof argument === "boolean" ? argument : undefined;

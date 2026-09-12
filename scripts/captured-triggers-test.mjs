@@ -78,6 +78,7 @@ function triggers({
   projects = PROJECTS,
   readOfferedProjects,
   readBuildingUnlocks,
+  costs,
   controls,
 } = {}) {
   const offeredProjects = projects === null ? undefined : projects;
@@ -94,7 +95,7 @@ function triggers({
       invoke: () => ({ ok: true, value: undefined }),
       capturedElementIds: () => Object.keys(COSTS),
     },
-    costs: { readCost: (actionId) => COSTS[actionId] },
+    costs: { readCost: costs ?? ((actionId) => COSTS[actionId]) },
     readSettings: () => ({ autoTrigger: true, triggers: rows, ...settings }),
     readOfferedTechs: () => (offered === null ? undefined : offered),
     readGrantedTechs: () => granted,
@@ -351,6 +352,103 @@ assert.deepEqual(
   triggers({ triggers: projectLockedTrigger, projects: null }).read(),
   [],
 );
+
+// --- BuildingAffordable conditions are priced from the cycle's cost reader --
+
+// A named building is priced once for the condition pass however many rows name it, and the
+// answer is the game's storage-capacity comparison over that price.
+{
+  const asked = [];
+  const result = triggers({
+    triggers: [
+      trigger({
+        priority: 0,
+        requirementType: "BuildingAffordable",
+        requirementId: "city-apartment",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+      trigger({
+        priority: 1,
+        requirementType: "BuildingAffordable",
+        requirementId: "city-apartment",
+        requirementCount: 1,
+        actionId: "city-amphitheatre",
+      }),
+    ],
+    costs: (actionId) => {
+      asked.push(actionId);
+      return COSTS[actionId];
+    },
+  }).read();
+  // Both rows name the same building, and the condition pass prices it once.
+  assert.equal(asked.filter((id) => id === "city-apartment").length, 1);
+  // The apartment fits under Money and Lumber capacity, so both conditions hold; `city-mine`
+  // then claims Money and Lumber and the amphitheatre loses the ordinary conflict on Money.
+  assert.deepEqual(result, [
+    { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+  ]);
+}
+
+// Stone capacity is 60, well under the 200 the amphitheatre costs, so the condition is a real
+// refusal rather than unanswered, and the trigger is dropped.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingAffordable",
+        requirementId: "city-amphitheatre",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [],
+);
+// Asking for it to be unaffordable is answered, which is what separates a refusal from an
+// unanswered pass.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingAffordable",
+        requirementId: "city-amphitheatre",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// A building whose control the game never bound cannot be probed for a price, so its condition is
+// unanswered and the trigger is dropped rather than treated as unaffordable.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingAffordable",
+        requirementId: "space-never_bound",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [],
+);
+
+// No cost condition means nothing is priced for one: only the trigger's own action is.
+{
+  const asked = [];
+  triggers({
+    triggers: [trigger()],
+    costs: (actionId) => {
+      asked.push(actionId);
+      return COSTS[actionId];
+    },
+  }).read();
+  assert.deepEqual(asked, ["city-mine"]);
+}
 
 // --- BuildingUnlocked conditions draw only the regions they name -----------
 

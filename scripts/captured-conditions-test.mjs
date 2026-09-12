@@ -470,6 +470,77 @@ assert.equal(
   undefined,
 );
 
+// --- the building affordability operand, over the cycle's own prices ---
+
+// The game's `isAffordable(true)`: the cost has to fit under storage capacity, not be on hand.
+const priced = {
+  buildingCosts: new Map([
+    ["city-farm", { Money: 500 }],
+    ["city-bank", { Money: 5000 }],
+    ["city-shrine", { Money: 10, Soul_Gem: 1 }],
+    ["city-temple", { Morale: 2 }],
+  ]),
+};
+assert.equal(
+  readCapturedOperand(root, "BuildingAffordable", "city-farm", priced),
+  true,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingAffordable", "city-bank", priced),
+  false,
+);
+// It asks nothing about holdings: Money is 250 against a 500 cost and still affordable.
+assert.equal(readCapturedOperand(root, "ResourceQuantity", "Money"), 250);
+// A positive cost in a resource the game is not displaying is refused — Soul_Gem here.
+assert.equal(
+  readCapturedOperand(root, "BuildingAffordable", "city-shrine", priced),
+  false,
+);
+// A cost the comparison cannot make stays unanswered rather than guessing.
+assert.equal(
+  readCapturedOperand(root, "BuildingAffordable", "city-temple", priced),
+  undefined,
+);
+// A building the cycle did not price is unanswered, and so is every building without the pass.
+assert.equal(
+  readCapturedOperand(root, "BuildingAffordable", "city-mine", priced),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingAffordable", "city-farm"),
+  undefined,
+);
+// Once the game splits resources into regional pools the civilization-wide comparison is no longer
+// the game's, so the operand stops answering instead of answering optimistically.
+assert.equal(
+  readCapturedOperand(
+    { ...root, tech: { shadow: 5 } },
+    "BuildingAffordable",
+    "city-farm",
+    priced,
+  ),
+  undefined,
+);
+// It is a boolean operand: the stored count is matched, not exceeded.
+assert.equal(
+  evaluateCapturedCondition(root, "BuildingAffordable", "city-farm", 1, priced),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "BuildingAffordable", "city-bank", 0, priced),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "BuildingAffordable",
+    "city-temple",
+    0,
+    priced,
+  ),
+  undefined,
+);
+
 // Nothing the capture does not hold is guessed at.
 assert.equal(readCapturedOperand(root, "Eval", "1 + 1"), undefined);
 assert.equal(

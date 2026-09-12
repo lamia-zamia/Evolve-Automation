@@ -34,6 +34,7 @@ import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { evaluateCapturedCondition } from "../../captured-conditions.ts";
+import { costFitsStorage } from "../../captured-affordability.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
 /**
@@ -91,6 +92,11 @@ export interface CapturedTriggersDependencies {
     regions: ReadonlySet<string>,
   ) => Readonly<BuildingUnlockSample> | undefined;
 }
+
+/** The operand types whose answer needs the game's current cost for a named building. */
+const COST_CONDITION_TYPES: ReadonlySet<string> = new Set([
+  "BuildingAffordable",
+]);
 
 interface TriggerRow {
   readonly priority: number;
@@ -185,29 +191,19 @@ export function readTriggerActionStructure(
   return readProperty(region, actionId.slice(separator + 1));
 }
 
-/** Whether every cost fits in the storage the game currently has, the script's `isAffordable(true)`. */
+/**
+ * Whether every cost fits in the storage the game currently has, the script's `isAffordable(true)`.
+ *
+ * A cost the comparison cannot judge — a non-resource price such as Morale, or a resource the root
+ * has no entry for — is treated as not fitting, so an unjudgeable target raises no demand instead
+ * of being saved for. The condition operand over the same comparison keeps that case unanswered
+ * instead, because there a guess would be the answer rather than a missed opportunity.
+ */
 function fitsInStorage(
   root: unknown,
   cost: Readonly<Record<string, number>>,
 ): boolean {
-  const resources = readProperty(root, "resource");
-  for (const [resourceId, amount] of Object.entries(cost)) {
-    if (!Number.isFinite(amount) || amount <= 0) continue;
-    const maximum = finiteValue(
-      readProperty(readProperty(resources, resourceId), "max"),
-    );
-    // A cost naming something the root has no holdings for — a stored resource the game has not
-    // created yet, or a non-resource price such as Morale — cannot be judged here, so the trigger
-    // is not treated as possible.
-    if (maximum === undefined) return false;
-    // The game's own `checkMaxCosts` refuses a positive cost in a resource it is not displaying,
-    // whatever that resource's stored maximum says.
-    if (readProperty(readProperty(resources, resourceId), "display") !== true) {
-      return false;
-    }
-    if (maximum >= 0 && maximum < amount) return false;
-  }
-  return true;
+  return costFitsStorage(root, cost) === true;
 }
 
 export function createCapturedTriggers(
@@ -267,6 +263,20 @@ export function createCapturedTriggers(
         buildingRegions.size === 0
           ? undefined
           : dependencies.readBuildingUnlocks(buildingRegions);
+      // A cost operand is answered from the same prices the targets are chosen with. Only the
+      // buildings a condition actually names are priced, and a control the game never bound is
+      // not one the cost reader can probe, so it stays unanswered.
+      const buildingCosts = new Map<string, Readonly<Record<string, number>>>();
+      for (const row of rows) {
+        if (!COST_CONDITION_TYPES.has(row.requirementType)) continue;
+        const buildingId = row.requirementId;
+        if (typeof buildingId !== "string" || buildingCosts.has(buildingId)) {
+          continue;
+        }
+        if (controls.resolve(buildingId) === undefined) continue;
+        const cost = costs.readCost(buildingId);
+        if (cost !== undefined) buildingCosts.set(buildingId, cost);
+      }
       // The condition evaluator answers the research, project and building operands from the same
       // passes the actions are priced from, so a trigger's requirement and its target describe one
       // moment.
@@ -279,6 +289,7 @@ export function createCapturedTriggers(
           ? {}
           : { unlockedProjects: new Set(offeredProjectsById.keys()) }),
         ...(buildingUnlocks === undefined ? {} : { buildingUnlocks }),
+        ...(buildingCosts.size === 0 ? {} : { buildingCosts }),
       });
       const byPriority = new Map(rows.map((row) => [row.priority, row]));
 

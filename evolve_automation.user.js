@@ -10298,6 +10298,35 @@
     return Object.freeze({ reader, executor });
   }
 
+  // src/adapters/evolve/captured-affordability.ts
+  function finiteAmount(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function isRegionalSupply(root) {
+    let shadow = finiteAmount(
+      readProperty(readProperty(root, "tech"), "shadow")
+    );
+    return shadow !== void 0 && shadow >= 5;
+  }
+  function costResource(root, key) {
+    let resourceId = key === "Species" ? readProperty(readProperty(root, "race"), "species") : key;
+    if (typeof resourceId == "string")
+      return readProperty(readProperty(root, "resource"), resourceId);
+  }
+  function costFitsStorage(root, cost) {
+    for (let [key, amount] of Object.entries(cost)) {
+      if (!Number.isFinite(amount)) return;
+      if (amount === 0) continue;
+      let entry = costResource(root, key);
+      if (!isRecord(entry)) return;
+      if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
+      let capacity = finiteAmount(readProperty(entry, "max"));
+      if (capacity === void 0) return;
+      if (capacity >= 0 && amount > capacity) return !1;
+    }
+    return !0;
+  }
+
   // src/adapters/evolve/captured-conditions.ts
   var BOOLEAN_OPERANDS = /* @__PURE__ */ new Set([
     "Boolean",
@@ -10307,6 +10336,7 @@
     "ResearchComplete",
     "ProjectUnlocked",
     "BuildingUnlocked",
+    "BuildingAffordable",
     "Challenge",
     "Universe",
     "Government",
@@ -10533,6 +10563,11 @@
         let sample = context?.buildingUnlocks;
         return sample === void 0 || !sample.regions.has(argument.slice(0, separator)) ? void 0 : sample.unlocked.has(argument);
       }
+      case "BuildingAffordable": {
+        if (typeof argument != "string") return;
+        let cost = context?.buildingCosts?.get(argument);
+        return cost === void 0 || isRegionalSupply(root) ? void 0 : costFitsStorage(root, cost);
+      }
       case "Boolean":
         return typeof argument == "boolean" ? argument : void 0;
       case "ResourceUnlocked": {
@@ -10596,7 +10631,9 @@
   }
 
   // src/adapters/evolve/progression/build/captured-triggers.ts
-  var NO_TARGETS = Object.freeze(
+  var COST_CONDITION_TYPES = /* @__PURE__ */ new Set([
+    "BuildingAffordable"
+  ]), NO_TARGETS = Object.freeze(
     []
   ), ARPA_PREFIX = "arpa";
   function finiteValue2(value) {
@@ -10638,15 +10675,7 @@
     return readProperty(region, actionId.slice(separator + 1));
   }
   function fitsInStorage(root, cost) {
-    let resources = readProperty(root, "resource");
-    for (let [resourceId, amount] of Object.entries(cost)) {
-      if (!Number.isFinite(amount) || amount <= 0) continue;
-      let maximum = finiteValue2(
-        readProperty(readProperty(resources, resourceId), "max")
-      );
-      if (maximum === void 0 || readProperty(readProperty(resources, resourceId), "display") !== !0 || maximum >= 0 && maximum < amount) return !1;
-    }
-    return !0;
+    return costFitsStorage(root, cost) === !0;
   }
   function createCapturedTriggers(dependencies) {
     let { rootState, controls, costs, readSettings } = dependencies;
@@ -10666,11 +10695,20 @@
           let separator = row.requirementId.indexOf("-");
           separator <= 0 || buildingRegions.add(row.requirementId.slice(0, separator));
         }
-        let buildingUnlocks = dependencies.readBuildingUnlocks === void 0 || buildingRegions.size === 0 ? void 0 : dependencies.readBuildingUnlocks(buildingRegions), conditionContext = Object.freeze({
+        let buildingUnlocks = dependencies.readBuildingUnlocks === void 0 || buildingRegions.size === 0 ? void 0 : dependencies.readBuildingUnlocks(buildingRegions), buildingCosts = /* @__PURE__ */ new Map();
+        for (let row of rows) {
+          if (!COST_CONDITION_TYPES.has(row.requirementType)) continue;
+          let buildingId = row.requirementId;
+          if (typeof buildingId != "string" || buildingCosts.has(buildingId) || controls.resolve(buildingId) === void 0) continue;
+          let cost = costs.readCost(buildingId);
+          cost !== void 0 && buildingCosts.set(buildingId, cost);
+        }
+        let conditionContext = Object.freeze({
           ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
           ...grantedTechs === void 0 ? {} : { grantedTechs },
           ...offeredProjectsById === void 0 ? {} : { unlockedProjects: new Set(offeredProjectsById.keys()) },
-          ...buildingUnlocks === void 0 ? {} : { buildingUnlocks }
+          ...buildingUnlocks === void 0 ? {} : { buildingUnlocks },
+          ...buildingCosts.size === 0 ? {} : { buildingCosts }
         }), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
             let count2 = finiteValue2(
@@ -10782,7 +10820,7 @@
     "nerfed",
     "badgenes"
   ]);
-  function finiteAmount(value) {
+  function finiteAmount2(value) {
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function achievementAffix(universe) {
@@ -10813,15 +10851,15 @@
         return !1;
       let money = readProperty(readProperty(root, "resource"), "Money");
       if (!isRecord(money)) return !1;
-      let saveMinutes = finiteAmount(settings.inflationChallengeSaveMinutes);
+      let saveMinutes = finiteAmount2(settings.inflationChallengeSaveMinutes);
       if (saveMinutes === void 0) return !1;
-      let currentMoney = finiteAmount(money.amount), maxMoney = finiteAmount(money.max), moneyRate = finiteAmount(money.diff);
+      let currentMoney = finiteAmount2(money.amount), maxMoney = finiteAmount2(money.max), moneyRate = finiteAmount2(money.diff);
       if (currentMoney === void 0 || maxMoney === void 0 || moneyRate === void 0)
         return !1;
       let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), wheelbarrow = readProperty(achievements, "wheelbarrow"), affix = achievementAffix(readProperty(race, "universe"));
       if (!isRecord(stats) || !isRecord(achievements) || affix === void 0 || wheelbarrow != null && !isRecord(wheelbarrow))
         return !1;
-      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finiteAmount(rawStar);
+      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finiteAmount2(rawStar);
       if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
       let achievementLevel2 = 1;
       for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
