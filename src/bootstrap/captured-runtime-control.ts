@@ -110,6 +110,8 @@ import {
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
+import { createSettingsStore } from "../adapters/browser/settings-store.ts";
+import { createCapturedSettingsPanel } from "./captured-settings-panel-control.ts";
 import {
   createCapturedTabDiscovery,
   GOV_TABS_SETTING,
@@ -147,22 +149,10 @@ export interface CapturedRuntimeControlDependencies {
   readonly document: unknown;
   readonly mouseEvent: unknown;
   readonly storage: unknown;
+  /** The page's global object. The settings panel reads `document`, `navigator` and `location`. */
+  readonly settingsHostWindow: unknown;
   readonly diagnostics?: TickDiagnostics | undefined;
   readonly logError?: (message: string) => void;
-}
-
-function readStoredSettings(storageValue: unknown): Record<string, unknown> {
-  if (!isRecord(storageValue)) return {};
-  const getItem = readProperty(storageValue, "getItem");
-  if (typeof getItem !== "function") return {};
-  const raw = Reflect.apply(getItem, storageValue, ["settings"]);
-  if (typeof raw !== "string") return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return isRecord(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
@@ -203,6 +193,7 @@ export function startCapturedRuntime({
   document: documentValue,
   mouseEvent: mouseEventValue,
   storage,
+  settingsHostWindow,
   diagnostics,
   logError = () => {},
 }: CapturedRuntimeControlDependencies): () => void {
@@ -214,6 +205,15 @@ export function startCapturedRuntime({
           constructor(_type: "mouseover" | "mouseout") {}
         };
   const panels = createGamePanelWorkspace({ getDocument: () => document });
+  const settingsStore = createSettingsStore({
+    storage,
+    logError: (message) => logError(message),
+  });
+  const settingsPanel = createCapturedSettingsPanel({
+    capturedPanelWindow: settingsHostWindow,
+    settings: settingsStore,
+    logError: (message) => logError(message),
+  });
   const reported = new Set<string>();
   const reportOnce = (message: string) => {
     if (reported.has(message)) return;
@@ -241,11 +241,10 @@ export function startCapturedRuntime({
       createMouseEvent: (type) => new mouseEvent(type),
     }),
     costs: buildCosts,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     // The already-granted half of the research draw is only worth its cost to a configured
     // trigger, so the trigger settings decide whether each cycle's pass keeps it.
-    needGrantedTechs: () =>
-      triggersNeedGrantedTechs(readStoredSettings(storage)),
+    needGrantedTechs: () => triggersNeedGrantedTechs(settingsStore.readRaw()),
     readCapturedStorageRequired: (resourceIds) => {
       const sample = readDemand();
       return Object.freeze(
@@ -264,23 +263,23 @@ export function startCapturedRuntime({
   const gatherResources = createCapturedGatherResourcesControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
   });
   const tax = createCapturedTaxControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     nowMs: () => Date.now(),
   });
   const government = createCapturedGovernmentAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
   });
   const hell = createCapturedHellAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
   });
   const costs = createCapturedCraftCosts({
     rootState: pageCapture.rootState,
@@ -290,7 +289,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
     readBuildTargets: progression.readManagedBuildTargets,
     buildCosts,
@@ -298,12 +297,12 @@ export function startCapturedRuntime({
   const ordinaryJobs = createCapturedOrdinaryJobsAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
   });
   const fullJobs = createCapturedFullJobsAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     costs,
     readDemand: () => readDemand(),
     readBuildTargets: progression.readManagedBuildTargets,
@@ -312,17 +311,17 @@ export function startCapturedRuntime({
   const pylon = createCapturedPylonAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
   });
   const alchemy = createCapturedAlchemyAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
   });
   const miningDroid = createCapturedMiningDroidAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
   });
   const graphene = createCapturedGrapheneAutomation({
     rootState: pageCapture.rootState,
@@ -331,7 +330,7 @@ export function startCapturedRuntime({
   const replicator = createCapturedReplicatorAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
   // The demand sample is planned at most once per cycle and shared by everything that reads it.
@@ -363,7 +362,7 @@ export function startCapturedRuntime({
     construction: progression.observations,
     readOfferedTechs: progression.readOfferedTechs,
     reservations: queueReservations,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     craftCosts: costs,
     fleet: fleetDemand,
   });
@@ -374,7 +373,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs: buildCosts,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readOfferedTechs: progression.readOfferedTechs,
     readGrantedTechs: progression.readGrantedTechs,
     readOfferedProjects: progression.readProjects,
@@ -384,11 +383,11 @@ export function startCapturedRuntime({
     // it pulls in. Sampled lazily and only for a configured condition, like the granted-techs
     // pass, so other runs never pay for the second demand plan.
     readDemandSample: () =>
-      triggersNeedDemandSample(readStoredSettings(storage))
+      triggersNeedDemandSample(settingsStore.readRaw())
         ? readTriggerDemand()
         : undefined,
     readTechKnowledge: () =>
-      triggersNeedTechKnowledge(readStoredSettings(storage))
+      triggersNeedTechKnowledge(settingsStore.readRaw())
         ? progression.readKnowledgeRequiredByTechs()
         : undefined,
   });
@@ -403,7 +402,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     resources: createCapturedResourceSource(pageCapture.rootState),
     readTargets: readTriggerTargets,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readOfferedTechs: progression.readOfferedTechs,
     readOfferedProjects: progression.readProjects,
   });
@@ -415,7 +414,7 @@ export function startCapturedRuntime({
     construction: progression.observations,
     readOfferedTechs: progression.readOfferedTechs,
     reservations: queueReservations,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     craftCosts: costs,
     fleet: fleetDemand,
   });
@@ -424,7 +423,7 @@ export function startCapturedRuntime({
   const storagePorts = createCapturedStoragePorts({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readStorageRequired: (resourceId) =>
       readDemand().storageRequired(resourceId),
     reservations: queueReservations,
@@ -443,7 +442,7 @@ export function startCapturedRuntime({
   const galaxyMarketPorts = createCapturedGalaxyMarketPorts({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
   const galaxyMarketAutomation = Object.freeze({
@@ -456,7 +455,7 @@ export function startCapturedRuntime({
   const marketPorts = createCapturedMarketPorts({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
     onUnavailable: (resourceId, reason) =>
       reportOnce(`market skipped ${resourceId}: ${reason}`),
@@ -464,7 +463,7 @@ export function startCapturedRuntime({
   const tradeRoutes = createCapturedTradeRoutes({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
     onUnavailable: (reason) =>
       reportOnce(`trade routes unavailable: ${reason}`),
@@ -486,7 +485,7 @@ export function startCapturedRuntime({
   const ratios = createCapturedProductionRatios({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
   let completedPeriods = 1;
@@ -495,7 +494,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     costs,
     getDocument: () => document,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readPeriods: () => completedPeriods,
     readDemand: () => readDemand(),
   };
@@ -1133,36 +1132,36 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     getDocument: () => document,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
   });
   const smelter = createCapturedSmelterAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
   const nanite = createCapturedNaniteAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
   const ejector = createCapturedEjectorAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
   const supply = createCapturedSupplyAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
   const factory = createCapturedFactoryAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
     readBuildTargets: progression.readManagedBuildTargets,
     buildCosts,
@@ -1170,7 +1169,7 @@ export function startCapturedRuntime({
   const fleet = createCapturedFleetAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    readSettings: () => readStoredSettings(storage),
+    readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
 
@@ -1180,7 +1179,11 @@ export function startCapturedRuntime({
     triggerDemandThisCycle = undefined;
     progression.resetProjectSample();
     progression.resetBuildingUnlockSample();
-    const settings = readStoredSettings(storage);
+    // Drawn before the master-toggle guard below, and before any automation runs: a fresh profile
+    // carries no settings at all, so a script that only drew its interface while already enabled
+    // could never be switched on.
+    if (pageCapture.isComplete()) settingsPanel.ensurePanel();
+    const settings = settingsStore.readRaw();
     if (
       !pageCapture.isComplete() ||
       !isEnabled(settings, "masterScriptToggle")

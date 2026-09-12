@@ -6,14 +6,14 @@ import { createUserscriptEnvironment } from "./adapters/userscript/environment.t
 import { startCapturedRuntime } from "./bootstrap/captured-runtime-control.ts";
 
 // Must happen at document-start, before the page's Vue script and the game module run.
-const pageCapture = installPageCapture(
-  createUserscriptEnvironment(globalThis).pageWindow,
-);
+const settingsHostWindow = createUserscriptEnvironment(globalThis).pageWindow;
+const pageCapture = installPageCapture(settingsHostWindow);
 
 whenDocumentReady(globalThis, () => {
   const environment = createLegacyRuntimeEnvironment(globalThis);
   startCapturedRuntime({
     pageCapture,
+    settingsHostWindow,
     document: environment.document,
     mouseEvent: environment.MouseEvent,
     storage: environment.storage,

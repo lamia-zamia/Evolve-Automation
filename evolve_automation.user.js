@@ -4930,7 +4930,7 @@
   function createCapturedTaxAutomation({
     rootState,
     controls,
-    readSettings: readStoredSettings2,
+    readSettings: readStoredSettings,
     nowMs
   }) {
     let sequence = 0, session, reader = Object.freeze({
@@ -4978,7 +4978,7 @@
       runCycle() {
         let snapshot = reader.readSnapshot(), commands = planTax(
           snapshot,
-          readCapturedTaxSettings(readStoredSettings2)
+          readCapturedTaxSettings(readStoredSettings)
         );
         commands.length > 0 && executor.execute(commands[0]);
       }
@@ -8289,6 +8289,18 @@
       }
     });
   }
+
+  // src/config.ts
+  var numberSuffix = {
+    K: 1e3,
+    M: 1e6,
+    G: 1e9,
+    T: 1e12,
+    P: 1e15,
+    E: 1e18,
+    Z: 1e21,
+    Y: 1e24
+  };
 
   // src/domain/economy/production/graphene.ts
   function planGraphene(input) {
@@ -16157,20 +16169,1931 @@
     });
   }
 
-  // src/bootstrap/captured-runtime-control.ts
-  function readStoredSettings(storageValue) {
-    if (!isRecord(storageValue)) return {};
-    let getItem = readProperty(storageValue, "getItem");
-    if (typeof getItem != "function") return {};
-    let raw = Reflect.apply(getItem, storageValue, ["settings"]);
-    if (typeof raw != "string") return {};
+  // src/adapters/browser/settings-store.ts
+  function readSettingsText(storage) {
+    let getItem = readProperty(storage, "getItem");
+    if (typeof getItem != "function") return;
+    let raw = Reflect.apply(getItem, storage, ["settings"]);
+    return typeof raw == "string" ? raw : void 0;
+  }
+  function createSettingsStore({
+    storage,
+    logError = () => {
+    }
+  }) {
+    let record, load = () => {
+      let text = readSettingsText(storage);
+      if (text === void 0) return {};
+      try {
+        let parsed = JSON.parse(text);
+        return isNonArrayRecord(parsed) ? parsed : {};
+      } catch (error) {
+        return logError(
+          `settings could not be parsed, starting empty: ${String(error)}`
+        ), {};
+      }
+    };
+    return Object.freeze({
+      readRaw() {
+        return record ??= load(), record;
+      },
+      persist() {
+        let setItem = readProperty(storage, "setItem");
+        if (typeof setItem == "function")
+          try {
+            Reflect.apply(setItem, storage, [
+              "settings",
+              JSON.stringify(record ?? {})
+            ]);
+          } catch (error) {
+            logError(`settings could not be saved: ${String(error)}`);
+          }
+      }
+    });
+  }
+
+  // src/ui/automation-container.ts
+  function createAutomationContainer({
+    getSettingsRaw,
+    getJQuery,
+    getSafeMode,
+    getOverrideKeyLabel,
+    getActions
+  }) {
+    function ensureAutomationContainer() {
+      let settingsRaw = getSettingsRaw(), $ = getJQuery(), safeMode = getSafeMode(), overrideKeyLabel = getOverrideKeyLabel(), {
+        createSettingToggle,
+        updateSettingsFromState,
+        buildScriptSettings,
+        removeScriptSettings,
+        createMechInfo,
+        removeMechInfo,
+        createCraftToggles,
+        removeCraftToggles,
+        createBuildingToggles,
+        removeBuildingToggles,
+        createArpaToggles,
+        removeArpaToggles,
+        createStorageToggles,
+        removeStorageToggles,
+        createMarketToggles,
+        removeMarketToggles,
+        createEjectToggles,
+        removeEjectToggles,
+        createSupplyToggles,
+        removeSupplyToggles,
+        updateScriptData,
+        finalizeScriptData,
+        autoMarket
+      } = getActions(), created = !1, scriptNode = $("#autoScriptContainer");
+      if (scriptNode.length === 0) {
+        created = !0, $("#resources").append(`
+              <div id="autoScriptContainer" style="margin-top: 10px;">
+                <h3 id="toggleSettingsCollapsed" class="script-collapsible text-center has-text-success">Automation</h3>
+                <div id="scriptToggles">
+                  <label>More script options available in Settings tab<br>${overrideKeyLabel}+click options to open <span class="inactive-row">advanced configuration</span></label><br>
+                </div>
+              </div>`), safeMode && $("#resources").append(
+          "<p>⚠️ Safe mode active, masterScriptToggle is disabled</p>"
+        );
+        let collapsibleNode = $("#toggleSettingsCollapsed"), togglesNode = $("#scriptToggles");
+        collapsibleNode.toggleClass(
+          "script-contentactive",
+          !settingsRaw.toggleSettingsCollapsed
+        ), togglesNode.css(
+          "display",
+          settingsRaw.toggleSettingsCollapsed ? "none" : "block"
+        ), collapsibleNode.on("click", function() {
+          settingsRaw.toggleSettingsCollapsed = !settingsRaw.toggleSettingsCollapsed, collapsibleNode.toggleClass(
+            "script-contentactive",
+            !settingsRaw.toggleSettingsCollapsed
+          ), togglesNode.css(
+            "display",
+            settingsRaw.toggleSettingsCollapsed ? "none" : "block"
+          ), updateSettingsFromState();
+        }), createSettingToggle(
+          togglesNode,
+          "masterScriptToggle",
+          "Stop taking any actions on behalf of the player."
+        ), createSettingToggle(
+          togglesNode,
+          "showSettings",
+          "You can disable rendering of settings UI once you've done with configuring script, if you experiencing performance issues. It can help a little.",
+          buildScriptSettings,
+          removeScriptSettings
+        ), createSettingToggle(
+          togglesNode,
+          "autoPrestige",
+          "Allows script to finish current run after reaching configured goal. Prestige Type is recommended to be set even with manual resetting, as script uses that to make various decisions such as picking theology techs, or skipping buildings leading in wrong direction."
+        ), createSettingToggle(
+          togglesNode,
+          "autoEvolution",
+          "Runs through the evolution part of the game through to founding a settlement. In Auto Achievements mode will target races that you don't have extinction\\greatness achievements for yet."
+        ), createSettingToggle(
+          togglesNode,
+          "autoFight",
+          "Manage spies, and sends troops to battle whenever Soldiers are full and there are no wounded. Adds to your offensive battalion and switches attack type when offensive rating is greater than the rating cutoff for that attack type. Will not manage spies when Spy Operator governor task is active."
+        ), createSettingToggle(
+          togglesNode,
+          "autoHell",
+          "Sends soldiers to hell and sends them out on patrols. Adjusts maximum number of powered attractors based on threat."
+        ), createSettingToggle(
+          togglesNode,
+          "autoMech",
+          "Builds most effective large mechs for current spire floor. Least effective will be scrapped to make room for new ones. Will not build or scrap anything when Mech Constructor governor task is active.",
+          createMechInfo,
+          removeMechInfo
+        ), createSettingToggle(
+          togglesNode,
+          "autoFleet",
+          "Manages Andromeda fleet to supress piracy"
+        ), createSettingToggle(
+          togglesNode,
+          "autoTax",
+          "Adjusts tax rates if your current morale is greater than your maximum allowed morale. Will always keep morale above 100%. Disabled when Tax-Morale Balance governor task is active."
+        ), createSettingToggle(
+          togglesNode,
+          "autoGovernment",
+          "Manage changes of government and governor when they becomes available. Governor will be selected once, and won't be reassigned, unless manually fired."
+        ), createSettingToggle(
+          togglesNode,
+          "autoCraft",
+          "Automatically produce craftable resources, thresholds when it happens depends on current demands and stocks.",
+          createCraftToggles,
+          removeCraftToggles
+        ), createSettingToggle(
+          togglesNode,
+          "autoTrigger",
+          "Purchase triggered buildings, projects, and researches once conditions met"
+        ), createSettingToggle(
+          togglesNode,
+          "autoBuild",
+          "Construct buildings based on their weightings(user configured), and various rules(e.g. it won't build building which have no support to run)",
+          createBuildingToggles,
+          removeBuildingToggles
+        ), createSettingToggle(
+          togglesNode,
+          "autoARPA",
+          "Builds ARPA projects if user enables them to be built.",
+          createArpaToggles,
+          removeArpaToggles
+        ), createSettingToggle(
+          togglesNode,
+          "autoPower",
+          "Manages power based on a priority order of buildings. Also disables currently useless buildings to save up resources."
+        ), createSettingToggle(
+          togglesNode,
+          "autoStorage",
+          "Assigns crates and containers to resources needed for buildings enabled for Auto Build, queued buildings, researches, and enabled projects. Disabled when Crate/Container Manager governor task is active.",
+          createStorageToggles,
+          removeStorageToggles
+        ), createSettingToggle(
+          togglesNode,
+          "autoMarket",
+          "Allows for automatic buying and selling of resources once specific ratios are met. Also allows setting up trade routes until a minimum specified money per second is reached. The will trade in and out in an attempt to maximize your trade routes.",
+          createMarketToggles,
+          removeMarketToggles
+        ), createSettingToggle(
+          togglesNode,
+          "autoGalaxyMarket",
+          "Manages galaxy trade routes"
+        ), createSettingToggle(
+          togglesNode,
+          "autoResearch",
+          "Performs research when minimum requirements are met."
+        ), createSettingToggle(
+          togglesNode,
+          "autoJobs",
+          "Assigns jobs in a priority order with multiple breakpoints. Starts with a few jobs each and works up from there. Will try to put a minimum number on lumber / stone then fill up capped jobs first."
+        ), createSettingToggle(
+          togglesNode,
+          "autoCraftsmen",
+          "Manage foundry workers, switching between resources at given ratio."
+        ), createSettingToggle(
+          togglesNode,
+          "autoAlchemy",
+          "Manages alchemic transmutations"
+        ), createSettingToggle(togglesNode, "autoPylon", "Manages pylon rituals"), createSettingToggle(
+          togglesNode,
+          "autoQuarry",
+          "Manages rock quarry stone to chrysotile ratio for smoldering races"
+        ), createSettingToggle(
+          togglesNode,
+          "autoMine",
+          "Manages titan mine aluminium to adamantite ratio in true path"
+        ), createSettingToggle(
+          togglesNode,
+          "autoExtractor",
+          "Manages extractor ship mining ratios in true path"
+        ), createSettingToggle(
+          togglesNode,
+          "autoSmelter",
+          "Manages smelter fuel and production."
+        ), createSettingToggle(
+          togglesNode,
+          "autoFactory",
+          "Manages factory production."
+        ), createSettingToggle(
+          togglesNode,
+          "autoMiningDroid",
+          "Manages mining droid production."
+        ), createSettingToggle(
+          togglesNode,
+          "autoGraphenePlant",
+          "Manages graphene plant. Not user configurable - just uses least demanded resource for fuel."
+        ), createSettingToggle(
+          togglesNode,
+          "autoGenetics",
+          "Managed genetics settings, and automatically assembles genes more optimally than ingame sequencer"
+        ), createSettingToggle(
+          togglesNode,
+          "autoMinorTrait",
+          "Purchase minor traits using genes according to their weighting settings. Also manages Mimic genus, Psychic powers, Ocular powers and wishes."
+        ), createSettingToggle(
+          togglesNode,
+          "autoMutateTraits",
+          "Mutate in or out major and genus traits. WARNING: This will spend Plasmids and Anti-Plasmids."
+        ), createSettingToggle(
+          togglesNode,
+          "autoEject",
+          "Eject excess resources to black hole. Normal resources ejected when they close to storage cap, craftables - when above requirements. Disabled when Mass Ejector Optimizer governor task is active.",
+          createEjectToggles,
+          removeEjectToggles
+        ), createSettingToggle(
+          togglesNode,
+          "autoSupply",
+          "Send excess resources to Spire. Normal resources sent when they close to storage cap, craftables - when above requirements. Takes priority over ejector.",
+          createSupplyToggles,
+          removeSupplyToggles
+        ), createSettingToggle(
+          togglesNode,
+          "autoNanite",
+          "Consume resources to produce Nanite. Normal resources sent when they close to storage cap, craftables - when above requirements. Takes priority over supplies and ejector."
+        ), createSettingToggle(
+          togglesNode,
+          "autoReplicator",
+          "Use excess power to replicate resources."
+        ), togglesNode.append(
+          '<a class="button is-dark is-small" id="bulk-sell"><span>Bulk Sell</span></a>'
+        ), $("#bulk-sell").on("mouseup", function() {
+          updateScriptData(), finalizeScriptData(), autoMarket(!0, !0);
+        });
+      }
+      return { scriptNode, created };
+    }
+    return { ensureAutomationContainer };
+  }
+
+  // src/adapters/browser/autocomplete.ts
+  var ACTIVE_CLASS = "ui-state-active";
+  function readInput12(target) {
+    return !isRecord(target) || typeof target.value != "string" || typeof target.addEventListener != "function" || typeof target.getBoundingClientRect != "function" ? null : target;
+  }
+  function createAutocomplete({ getDocument }) {
+    function escapeRegex(term) {
+      return String(term).replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+    }
+    function attach(target, options) {
+      let found = readInput12(target);
+      if (found === null) return;
+      let input = found, document = getDocument(), menu = null, items = [], activeIndex = -1, valueAtFocus = input.value;
+      function close() {
+        menu?.remove(), menu = null, items = [], activeIndex = -1;
+      }
+      function fire(handler, item) {
+        if (handler === void 0) return;
+        let prevented = !1, event = {
+          preventDefault() {
+            prevented = !0;
+          }
+        }, ui = { item };
+        Reflect.apply(handler, input, [event, ui]), !prevented && ui.item !== null && (input.value = ui.item.label);
+      }
+      function setActive(index) {
+        let children = menu?.children;
+        children !== void 0 && (children[activeIndex]?.classList.remove(ACTIVE_CLASS), activeIndex = index, children[activeIndex]?.classList.add(ACTIVE_CLASS));
+      }
+      function choose(index) {
+        let item = items[index];
+        item !== void 0 && (close(), valueAtFocus = input.value, fire(options.select, item));
+      }
+      function open(suggestions) {
+        if (close(), suggestions.length === 0) return;
+        items = suggestions;
+        let list = document.createElement("ul");
+        list.className = "ui-autocomplete", suggestions.forEach((item, index) => {
+          let entry = document.createElement("li");
+          entry.className = "ui-menu-item", entry.textContent = item.label, entry.addEventListener("mousedown", (event) => {
+            event.preventDefault(), choose(index);
+          }), list.appendChild(entry);
+        });
+        let view = document.defaultView, rect = input.getBoundingClientRect();
+        list.style.left = `${rect.left + (view?.scrollX ?? 0)}px`, list.style.top = `${rect.bottom + (view?.scrollY ?? 0)}px`, list.style.width = `${rect.width}px`, document.body.appendChild(list), menu = list;
+      }
+      function search2() {
+        let term = input.value;
+        if (term.length < options.minLength) {
+          close();
+          return;
+        }
+        options.source({ term }, open);
+      }
+      input.addEventListener("focus", () => {
+        valueAtFocus = input.value;
+      }), input.addEventListener("input", search2), input.addEventListener("keydown", (event) => {
+        if (menu !== null)
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            let step = event.key === "ArrowDown" ? 1 : -1, next = (activeIndex + step + items.length) % items.length;
+            setActive(next);
+            let item = items[next];
+            item !== void 0 && fire(options.focus, item);
+          } else event.key === "Enter" ? activeIndex >= 0 && (event.preventDefault(), choose(activeIndex)) : event.key === "Escape" && close();
+      }), input.addEventListener("blur", () => {
+        close(), input.value !== valueAtFocus && (valueAtFocus = input.value, fire(options.change, null));
+      });
+    }
+    return Object.freeze({ attach, escapeRegex });
+  }
+
+  // src/domain/general-settings.ts
+  var priorityOptions = Object.freeze([
+    Object.freeze({ val: "ignore", label: "Ignore", hint: "Does nothing" }),
+    Object.freeze({
+      val: "save",
+      label: "Save",
+      hint: "Missing resources preserved from using."
+    }),
+    Object.freeze({
+      val: "req",
+      label: "Request",
+      hint: "Production and buying of missing resources will be prioritized."
+    }),
+    Object.freeze({
+      val: "savereq",
+      label: "Request & Save",
+      hint: "Missing resources will be prioritized, and preserved from using."
+    })
+  ]), generalSettingsReadModel = Object.freeze({
+    sectionId: "general",
+    sectionName: "General",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "number",
+        settingName: "tickRate",
+        label: "Script tick rate",
+        hint: "Script runs once per this amount of game ticks. Game tick every 250ms, thus with rate 4 script will run once per second. You can set it lower to make script act faster, or increase it if you have performance issues. Tick rate should be a positive integer."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "tickSchedule",
+        label: "Schedule script ticks",
+        hint: "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently."
+      }),
+      Object.freeze({ kind: "header", label: "Prioritization" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "useDemanded",
+        label: "Allow using prioritized resources for crafting",
+        hint: "When disabled script won't make craftables out of prioritized resources in foundry and factory."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "researchRequest",
+        label: "Prioritize resources for Pre-MAD researches",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "researchRequestSpace",
+        label: "Prioritize resources for Space+ researches",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "missionRequest",
+        label: "Prioritize resources for missions",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable missions. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeQueue",
+        label: "Queue",
+        hint: "Alter script behaviour to speed up queued items, prioritizing missing resources.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeTriggers",
+        label: "Triggers",
+        hint: "Alter script behaviour to speed up triggers, prioritizing missing resources.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeUnify",
+        label: "Unification",
+        hint: "Alter script behaviour to speed up unification, prioritizing money required to purchase foreign cities.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeOuterFleet",
+        label: "Ship Yard Blueprint (The True Path)",
+        hint: "Alter script behaviour to assist fleet building, prioritizing resources required for current design of ship.",
+        options: priorityOptions
+      }),
+      Object.freeze({ kind: "header", label: "Auto clicker" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildingAlwaysClick",
+        label: "Always autoclick resources",
+        hint: "By default script will click only during early stage of autoBuild, to bootstrap production. With this toggled on it will continue clicking forever"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "buildingClickPerTick",
+        label: "Maximum clicks per tick",
+        hint: "Number of clicks performed at once, each script tick. Will not ever click more than needed to fill storage."
+      }),
+      Object.freeze({ kind: "header", label: "Misc" }),
+      Object.freeze({
+        kind: "string",
+        settingName: "scriptSettingsExportFilename",
+        label: "Export Filename",
+        hint: "Configures the filename used when using the 'Script Settings as File' button. This is useful if you keep multiple different profiles around."
+      })
+    ])
+  });
+  function getGeneralSettingsReadModel() {
+    return generalSettingsReadModel;
+  }
+
+  // src/adapters/browser/settings-section.ts
+  function renderSettingsSectionContent({ scrollDocument, jquery, sectionId }, render) {
+    let scrollPosition = scrollDocument.documentElement.scrollTop || scrollDocument.body.scrollTop;
     try {
-      let parsed = JSON.parse(raw);
-      return isRecord(parsed) ? parsed : {};
-    } catch {
-      return {};
+      let contentNode = jquery(`#script_${sectionId}Content`);
+      contentNode.empty().off("*"), render(contentNode);
+    } finally {
+      scrollDocument.documentElement.scrollTop = scrollDocument.body.scrollTop = scrollPosition;
     }
   }
+
+  // src/adapters/browser/general-settings.ts
+  function createGeneralSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    let readModel = getGeneralSettingsReadModel();
+    function renderControl(node, control, actions) {
+      switch (control.kind) {
+        case "header":
+          actions.addSettingsHeader1(node, control.label);
+          return;
+        case "number":
+          actions.addSettingsNumber(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "select":
+          actions.addSettingsSelect(
+            node,
+            control.settingName,
+            control.label,
+            control.hint,
+            control.options
+          );
+          return;
+        case "string":
+          actions.addSettingsString(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "toggle":
+          actions.addSettingsToggle(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+      }
+    }
+    function buildGeneralSettings() {
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-general-settings" });
+        },
+        updateGeneralSettingsContent
+      );
+    }
+    function updateGeneralSettingsContent() {
+      let actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (let control of readModel.controls)
+            renderControl(currentNode, control, actions);
+        }
+      );
+    }
+    return Object.freeze({
+      buildGeneralSettings,
+      updateGeneralSettingsContent
+    });
+  }
+
+  // src/domain/options-modal.ts
+  var optionButtons = Object.freeze([
+    Object.freeze({
+      id: "s-government-options",
+      selector: "#government .tabs ul",
+      title: "Government",
+      builder: "government"
+    }),
+    Object.freeze({
+      id: "s-foreign-options",
+      selector: "#garrison div h2",
+      title: "Foreign Affairs",
+      builder: "war"
+    }),
+    Object.freeze({
+      id: "s-foreign-options2",
+      selector: "#c_garrison div h2",
+      title: "Foreign Affairs",
+      builder: "war"
+    }),
+    Object.freeze({
+      id: "s-hell-options",
+      selector: "#gFort div h3",
+      title: "Hell",
+      builder: "hell"
+    }),
+    Object.freeze({
+      id: "s-hell-options2",
+      selector: "#prtl_fortress div h3",
+      title: "Hell",
+      builder: "hell"
+    }),
+    Object.freeze({
+      id: "s-fleet-options",
+      selector: "#hfleet h3",
+      title: "Fleet",
+      builder: "fleet"
+    })
+  ]);
+  function getOptionsModalButtonDefinitions() {
+    return optionButtons;
+  }
+
+  // src/adapters/browser/options-modal.ts
+  function getBuilder(builders, key) {
+    return builders[key];
+  }
+  function createOptionsModalBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getWindow,
+    getSettingsReader,
+    getSettingsWriter,
+    getBuilders,
+    openOverrideModal
+  }) {
+    function createSettingToggle(node, settingName, title, enabledCallback, disabledCallback) {
+      let state = getSettingsReader().readToggle(settingName), toggle = getJQuery()(
+        `
+          <label class="switch script_bg_${settingName}" tabindex="0" title="${title}">
+            <input class="script_${settingName}" type="checkbox"${state.checked ? " checked" : ""}/>
+            <span class="check"></span><span>${settingName}</span>
+          </label><br>`
+      ).toggleClass("inactive-row", state.inactive);
+      state.checked && enabledCallback && enabledCallback(), toggle.on("change", "input", function() {
+        let writer = getSettingsWriter();
+        writer.setToggle(settingName, this.checked), writer.persist(), this.checked && enabledCallback && enabledCallback(), !this.checked && disabledCallback && disabledCallback();
+      }), toggle.on(
+        "click",
+        { label: `Toggle (${settingName})`, name: settingName, type: "boolean" },
+        openOverrideModal
+      ), node.append(toggle);
+    }
+    function updateOptionsUI() {
+      let builders = getBuilders();
+      for (let definition of getOptionsModalButtonDefinitions())
+        addOptionDefinition(definition, getBuilder(builders, definition.builder));
+    }
+    function addOptionUI(optionsId, querySelectorText, modalTitle, buildOptionsFunction) {
+      addOptionDefinition(
+        {
+          id: optionsId,
+          selector: querySelectorText,
+          title: modalTitle,
+          builder: "government"
+        },
+        buildOptionsFunction
+      );
+    }
+    function addOptionDefinition(definition, buildOptionsFunction) {
+      if (getDocument().getElementById(definition.id) !== null) return;
+      let sectionNode = getJQuery()(definition.selector);
+      if (sectionNode.length === 0) return;
+      let newOptionNode = getJQuery()(
+        `<span id="${definition.id}" class="s-options-button has-text-success" style="margin-right:0px">+</span>`
+      );
+      sectionNode.prepend(newOptionNode), newOptionNode.on(
+        "click",
+        () => openOptionsModal(definition.title, buildOptionsFunction)
+      );
+    }
+    function openOptionsModal(modalTitle, buildOptionsFunction) {
+      let jquery = getJQuery(), modalHeader = jquery("#scriptModalHeader");
+      modalHeader.empty().off("*"), modalHeader.append(`<span style="user-select: text">${modalTitle}</span>`), jquery(".script-modal-content").removeClass("custom-race-modal");
+      let modalBody = jquery("#scriptModalBody");
+      modalBody.empty().off("*").removeClass("celestialLab"), buildOptionsFunction(modalBody, "c_");
+      let modal = getDocument().getElementById("scriptModal");
+      modal && (jquery("html").css("overflow", "hidden"), modal.style.display = "block");
+    }
+    function createOptionsModal() {
+      let document = getDocument();
+      if (document.getElementById("scriptModal") !== null) return;
+      let jquery = getJQuery();
+      jquery(document.body).append(`
+          <div id="scriptModal" class="script-modal content">
+            <span id="scriptModalClose" class="script-modal-close">&times;</span>
+            <div class="script-modal-content">
+              <div id="scriptModalHeader" class="script-modal-header has-text-warning">
+                <p>You should never see this modal header...</p>
+              </div>
+              <div id="scriptModalBody" class="script-modal-body">
+                <p>You should never see this modal body...</p>
+              </div>
+            </div>
+          </div>`), jquery("#scriptModalClose").on("click", () => {
+        jquery("#scriptModal").css("display", "none"), jquery(".script-modal-content").removeClass(
+          "override-modal custom-race-modal"
+        ), jquery("html").css("overflow-y", "scroll");
+      }), jquery(getWindow()).on("click", (event) => {
+        event.target?.id === "scriptModal" && (jquery("#scriptModal").css("display", "none"), jquery(".script-modal-content").removeClass(
+          "override-modal custom-race-modal"
+        ), jquery("html").css("overflow-y", "scroll"));
+      });
+    }
+    return Object.freeze({
+      createSettingToggle,
+      updateOptionsUI,
+      addOptionUI,
+      openOptionsModal,
+      createOptionsModal
+    });
+  }
+
+  // src/adapters/browser/dom-selector.ts
+  var EXTENSION_PATTERN = /:(?:eq\((\d+)\)|visible)/;
+  function isVisible(element) {
+    let box = element;
+    return !!(box.offsetWidth || box.offsetHeight || element.getClientRects().length);
+  }
+  function isElement(node) {
+    return node.nodeType === 1;
+  }
+  function search(roots, chunk) {
+    let selector = chunk.trim();
+    if (selector === "")
+      return roots.filter(isElement);
+    let scoped = /^[>+~]/.test(selector) ? `:scope ${selector}` : selector, found = /* @__PURE__ */ new Set();
+    for (let root of roots)
+      for (let element of root.querySelectorAll(scoped)) found.add(element);
+    return [...found];
+  }
+  function queryAll(roots, selector) {
+    let current = [...roots], rest = selector;
+    for (; ; ) {
+      let extension = EXTENSION_PATTERN.exec(rest);
+      if (extension === null) break;
+      let matched = search(current, rest.slice(0, extension.index));
+      rest = rest.slice(extension.index + extension[0].length);
+      let index = extension[1];
+      if (index === void 0) {
+        current = matched.filter(isVisible);
+        continue;
+      }
+      let picked = matched[Number(index)];
+      current = picked === void 0 ? [] : [picked];
+    }
+    return search(current, rest);
+  }
+  function matchesSelector(element, selector) {
+    let trimmed = selector.trim();
+    if (!trimmed.includes(":visible")) return element.matches(trimmed);
+    if (!isVisible(element)) return !1;
+    let remaining = trimmed.replaceAll(":visible", "").trim();
+    return remaining === "" || element.matches(remaining);
+  }
+
+  // src/adapters/browser/dom.ts
+  function isNode(value) {
+    return typeof value == "object" && value !== null && typeof value.nodeType == "number";
+  }
+  function parseHtml(document, markup) {
+    let template = document.createElement("template");
+    return template.innerHTML = markup.trim(), [...template.content.childNodes].filter(
+      (node) => node.nodeType === 1
+    );
+  }
+  function splitClassNames(className) {
+    return className.split(/\s+/).filter((name) => name.length > 0);
+  }
+  function looksLikeMarkup(value) {
+    return value.trimStart().startsWith("<");
+  }
+  function toNodes(context, content) {
+    if (content == null) return [];
+    if (content instanceof DomList) return [...content.elements];
+    if (isNode(content)) return [content];
+    if (Array.isArray(content))
+      return content.flatMap((item) => toNodes(context, item));
+    let text = String(content);
+    return looksLikeMarkup(text) ? parseHtml(context.document, text) : [context.document.createTextNode(text)];
+  }
+  var DomList = class _DomList {
+    length;
+    /** @internal The matched elements, in document order. */
+    elements;
+    context;
+    previous;
+    constructor(context, elements, previous = null) {
+      this.context = context, this.elements = elements, this.previous = previous, this.length = elements.length, elements.forEach((element, index) => {
+        this[index] = element;
+      });
+    }
+    derive(elements) {
+      return new _DomList(this.context, elements, this);
+    }
+    get first_() {
+      return this.elements[0];
+    }
+    // --- iteration and narrowing -------------------------------------------------------------
+    each(callback) {
+      return this.elements.forEach((element, index) => {
+        callback.call(element, index, element);
+      }), this;
+    }
+    eq(index) {
+      let element = this.elements[index < 0 ? this.elements.length + index : index];
+      return this.derive(element === void 0 ? [] : [element]);
+    }
+    first() {
+      return this.eq(0);
+    }
+    last() {
+      return this.eq(-1);
+    }
+    filter(test) {
+      let keep = typeof test == "string" ? (_index, element) => matchesSelector(element, test) : test;
+      return this.derive(
+        this.elements.filter((element, index) => keep(index, element))
+      );
+    }
+    find(selector) {
+      return this.derive(queryAll(this.elements, selector));
+    }
+    children(selector) {
+      let found = this.elements.flatMap((element) => [...element.children]);
+      return this.derive(
+        selector === void 0 ? found : found.filter((child) => matchesSelector(child, selector))
+      );
+    }
+    parent() {
+      let found = /* @__PURE__ */ new Set();
+      for (let element of this.elements) {
+        let parent = element.parentElement;
+        parent !== null && found.add(parent);
+      }
+      return this.derive([...found]);
+    }
+    closest(selector) {
+      let found = /* @__PURE__ */ new Set();
+      for (let element of this.elements) {
+        let match = element.closest(selector);
+        match !== null && found.add(match);
+      }
+      return this.derive([...found]);
+    }
+    next() {
+      let found = [];
+      for (let element of this.elements) {
+        let sibling = element.nextElementSibling;
+        sibling !== null && found.push(sibling);
+      }
+      return this.derive(found);
+    }
+    end() {
+      return this.previous ?? this.derive([]);
+    }
+    is(selector) {
+      return this.elements.some((element) => matchesSelector(element, selector));
+    }
+    // --- classes, attributes, and properties -------------------------------------------------
+    addClass(className) {
+      let names = splitClassNames(className);
+      for (let element of this.elements) element.classList.add(...names);
+      return this;
+    }
+    removeClass(className) {
+      let names = splitClassNames(className);
+      for (let element of this.elements) element.classList.remove(...names);
+      return this;
+    }
+    toggleClass(className, state) {
+      let names = splitClassNames(className);
+      for (let element of this.elements)
+        for (let name of names) element.classList.toggle(name, state);
+      return this;
+    }
+    hasClass(className) {
+      return this.elements.some(
+        (element) => element.classList.contains(className)
+      );
+    }
+    attr(name, value) {
+      if (value === void 0)
+        return this.first_?.getAttribute(name) ?? void 0;
+      for (let element of this.elements)
+        element.setAttribute(name, String(value));
+      return this;
+    }
+    prop(name, value) {
+      if (value === void 0) {
+        let element = this.first_;
+        return element === void 0 ? void 0 : element[name];
+      }
+      for (let element of this.elements)
+        element[name] = value;
+      return this;
+    }
+    /**
+     * The `data-*` attribute, as text. See the module comment: jQuery's type coercion is deliberately
+     * not reproduced.
+     */
+    data(key) {
+      return this.first_?.getAttribute(`data-${key}`) ?? void 0;
+    }
+    val(value) {
+      if (value === void 0)
+        return this.first_?.value ?? "";
+      for (let element of this.elements)
+        element.value = String(value);
+      return this;
+    }
+    text(value) {
+      if (value === void 0) return this.first_?.textContent ?? "";
+      for (let element of this.elements) element.textContent = String(value);
+      return this;
+    }
+    html(value) {
+      if (value === void 0) return this.first_?.innerHTML ?? "";
+      for (let element of this.elements) element.innerHTML = String(value);
+      return this;
+    }
+    css(property, value) {
+      for (let element of this.elements)
+        element.style.setProperty(
+          property.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
+          String(value)
+        );
+      return this;
+    }
+    width(value) {
+      return value === void 0 ? this.first_?.offsetWidth ?? 0 : this.css("width", value);
+    }
+    outerHeight() {
+      return this.first_?.offsetHeight ?? 0;
+    }
+    // --- visibility --------------------------------------------------------------------------
+    show() {
+      for (let element of this.elements) {
+        let style = element.style;
+        style.display === "none" && (style.display = "");
+      }
+      return this;
+    }
+    hide() {
+      for (let element of this.elements)
+        element.style.display = "none";
+      return this;
+    }
+    toggle(state) {
+      if (state !== void 0) return state ? this.show() : this.hide();
+      for (let element of this.elements) {
+        let single = this.derive([element]);
+        isVisible(element) ? single.hide() : single.show();
+      }
+      return this;
+    }
+    // --- insertion and removal -----------------------------------------------------------------
+    append(content) {
+      let nodes = toNodes(this.context, content);
+      for (let element of this.elements)
+        for (let node of nodes) element.append(node);
+      return this;
+    }
+    prepend(content) {
+      let nodes = toNodes(this.context, content);
+      for (let element of this.elements)
+        element.prepend(...nodes);
+      return this;
+    }
+    before(content) {
+      let nodes = toNodes(this.context, content);
+      for (let element of this.elements) element.before(...nodes);
+      return this;
+    }
+    after(content) {
+      let nodes = toNodes(this.context, content);
+      for (let element of this.elements) element.after(...nodes);
+      return this;
+    }
+    appendTo(target) {
+      for (let node of toNodes(this.context, target))
+        for (let element of this.elements) node.appendChild(element);
+      return this;
+    }
+    insertBefore(target) {
+      for (let node of toNodes(this.context, target))
+        for (let element of this.elements)
+          node.before(element);
+      return this;
+    }
+    insertAfter(target) {
+      for (let node of toNodes(this.context, target))
+        for (let element of this.elements)
+          node.after(element);
+      return this;
+    }
+    empty() {
+      for (let element of this.elements) element.replaceChildren();
+      return this;
+    }
+    remove() {
+      for (let element of this.elements) element.remove();
+      return this;
+    }
+    // --- events ------------------------------------------------------------------------------
+    /**
+     * `on(types, handler)`, `on(types, selector, handler)` for delegation, and `on(types, data,
+     * handler)`, which hands `data` back to the handler as `event.data`.
+     */
+    on(types, second, third) {
+      let selector = typeof second == "string" ? second : null, handler = typeof third == "function" ? third : second;
+      if (typeof handler != "function") return this;
+      let data = selector === null && third !== void 0 ? second : void 0;
+      for (let type of types.trim().split(/\s+/))
+        if (type !== "")
+          for (let element of this.elements) {
+            let listener = (event) => {
+              if (data !== void 0 && Object.assign(event, { data }), selector === null) {
+                handler.call(element, event);
+                return;
+              }
+              let candidates = queryAll([element], selector), node = event.target;
+              for (; node !== null && node !== element; ) {
+                if (node.nodeType === 1 && candidates.includes(node)) {
+                  handler.call(node, event);
+                  return;
+                }
+                node = node.parentNode;
+              }
+            };
+            element.addEventListener(type, listener);
+            let records = this.context.listeners.get(element) ?? [];
+            records.push({ type, selector, listener }), this.context.listeners.set(element, records);
+          }
+      return this;
+    }
+    /** Removes handlers this helper registered. `"*"` removes all of them; see the module comment. */
+    off(types) {
+      let wanted = types.trim().split(/\s+/), all = wanted.includes("*");
+      for (let element of this.elements) {
+        let records = this.context.listeners.get(element);
+        if (records === void 0) continue;
+        let kept = records.filter((record) => !all && !wanted.includes(record.type) ? !0 : (element.removeEventListener(record.type, record.listener), !1));
+        this.context.listeners.set(element, kept);
+      }
+      return this;
+    }
+    click(handler) {
+      if (handler !== void 0) return this.on("click", handler);
+      for (let element of this.elements) {
+        let clickable = element;
+        typeof clickable.click == "function" && clickable.click();
+      }
+      return this;
+    }
+    ready(callback) {
+      return this.context.document.readyState === "loading" ? this.context.document.addEventListener(
+        "DOMContentLoaded",
+        () => callback(),
+        { once: !0 }
+      ) : this.context.schedule(callback), this;
+    }
+  };
+  function createDomQuery(dependencies) {
+    let context = {
+      document: dependencies.getDocument(),
+      listeners: /* @__PURE__ */ new WeakMap(),
+      schedule: dependencies.schedule
+    };
+    return (target) => target == null ? new DomList(context, []) : target instanceof DomList ? target : isNode(target) ? new DomList(
+      context,
+      target.nodeType === 1 ? [target] : []
+    ) : typeof target == "string" ? new DomList(
+      context,
+      looksLikeMarkup(target) ? parseHtml(context.document, target) : queryAll([context.document], target)
+    ) : Array.isArray(target) ? new DomList(
+      context,
+      target.filter(
+        (item) => isNode(item) && item.nodeType === 1
+      )
+    ) : new DomList(context, []);
+  }
+  function createBrowserDomQuery(globalObject) {
+    let documentValue = readProperty(globalObject, "document");
+    if (!isRecord(documentValue))
+      throw new Error("The page has no document");
+    let setTimeoutValue = readProperty(globalObject, "setTimeout");
+    return createDomQuery({
+      getDocument: () => documentValue,
+      schedule: typeof setTimeoutValue == "function" ? (callback) => {
+        Reflect.apply(setTimeoutValue, globalObject, [callback, 0]);
+      } : (callback) => {
+        callback();
+      }
+    });
+  }
+
+  // src/formatting/numbers.ts
+  function createNumberFormatting({
+    numberSuffix: numberSuffix2
+  }) {
+    function getRealNumber(amountText) {
+      if (amountText === "")
+        return 0;
+      let numericPortion = parseFloat(amountText), lastChar = amountText[amountText.length - 1], magnitude = lastChar === void 0 ? void 0 : numberSuffix2[lastChar];
+      return magnitude !== void 0 && (numericPortion *= magnitude), numericPortion;
+    }
+    function getNumberString(amountValue) {
+      let suffixes = Object.entries(numberSuffix2);
+      for (let i = suffixes.length - 1; i >= 0; i--) {
+        let entry = suffixes[i];
+        if (entry === void 0)
+          continue;
+        let [suffix, magnitude] = entry;
+        if (amountValue > magnitude)
+          return (amountValue / magnitude).toFixed(1) + suffix;
+      }
+      return Math.ceil(amountValue);
+    }
+    function getNiceNumber(amountValue) {
+      return parseFloat(
+        amountValue < 1 ? amountValue.toPrecision(2) : amountValue.toFixed(2)
+      );
+    }
+    return { getRealNumber, getNumberString, getNiceNumber };
+  }
+
+  // src/application/general-settings.ts
+  function createGeneralSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-general-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/domain/settings-defaults.ts
+  function computeGeneralDefaults() {
+    return {
+      def: {
+        masterScriptToggle: !0,
+        showSettings: !0,
+        autoPrestige: !1,
+        tickRate: 4,
+        tickSchedule: !1,
+        researchRequest: !0,
+        researchRequestSpace: !1,
+        missionRequest: !0,
+        useDemanded: !0,
+        prioritizeTriggers: "savereq",
+        prioritizeQueue: "savereq",
+        prioritizeUnify: "savereq",
+        prioritizeOuterFleet: "ignore",
+        buildingAlwaysClick: !1,
+        buildingClickPerTick: 50,
+        scriptSettingsExportFilename: "evolve-script-settings.json"
+      }
+    };
+  }
+
+  // src/ui/settings-controls.ts
+  function createSettingsControls({
+    getAutocomplete,
+    getJQuery,
+    getSettingsRaw,
+    getRealNumber,
+    getUpdateSettingsFromState,
+    openOverrideModal,
+    buildSelectOptions
+  }) {
+    let $ = getJQuery(), getRealNumberValue = (amountText) => getRealNumber()(amountText), updateSettingsFromState = () => getUpdateSettingsFromState()(), readListSetting = (settingName) => getSettingsRaw()[settingName];
+    function addSettingsToggle(node, settingName, labelText, hintText, enabledCallBack, disabledCallBack) {
+      return $(`
+          <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
+            <label title="${hintText}" tabindex="0" class="switch">
+              <input class="script_${settingName}" type="checkbox" ${getSettingsRaw()[settingName] ? " checked" : ""}><span class="check"></span>
+              <span style="margin-left: 10px;">${labelText}</span>
+            </label>
+          </div>`).toggleClass(
+        "inactive-row",
+        !!getSettingsRaw().overrides[settingName]
+      ).on("change", "input", function() {
+        getSettingsRaw()[settingName] = this.checked, updateSettingsFromState(), $(".script_" + settingName).prop(
+          "checked",
+          getSettingsRaw()[settingName]
+        ), getSettingsRaw()[settingName] && enabledCallBack && enabledCallBack(), !getSettingsRaw()[settingName] && disabledCallBack && disabledCallBack();
+      }).on(
+        "click",
+        {
+          label: `${labelText} (${settingName})`,
+          name: settingName,
+          type: "boolean"
+        },
+        openOverrideModal
+      ).appendTo(node);
+    }
+    function addSettingsNumber(node, settingName, labelText, hintText) {
+      return $(`
+          <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
+            <label title="${hintText}" tabindex="0">
+              <span>${labelText}</span>
+              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 150px; float: right;" value="${getSettingsRaw()[settingName]}"></input>
+            </label>
+          </div>`).toggleClass(
+        "inactive-row",
+        !!getSettingsRaw().overrides[settingName]
+      ).on("change", "input", function() {
+        let parsedValue = getRealNumberValue(this.value);
+        Number.isNaN(parsedValue) || (getSettingsRaw()[settingName] = parsedValue, updateSettingsFromState()), $(".script_" + settingName).val(getSettingsRaw()[settingName]);
+      }).on(
+        "click",
+        {
+          label: `${labelText} (${settingName})`,
+          name: settingName,
+          type: "number"
+        },
+        openOverrideModal
+      ).appendTo(node);
+    }
+    function addSettingsString(node, settingName, labelText, hintText) {
+      return $(`
+          <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
+            <label title="${hintText}" tabindex="0">
+              <span>${labelText}</span>
+              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 70%; float: right;" value="${getSettingsRaw()[settingName]}"></input>
+            </label>
+          </div>`).toggleClass(
+        "inactive-row",
+        !!getSettingsRaw().overrides[settingName]
+      ).on("change", "input", function() {
+        getSettingsRaw()[settingName] = this.value, updateSettingsFromState(), $(".script_" + settingName).val(getSettingsRaw()[settingName]);
+      }).on(
+        "click",
+        {
+          label: `${labelText} (${settingName})`,
+          name: settingName,
+          type: "string"
+        },
+        openOverrideModal
+      ).appendTo(node);
+    }
+    function addSettingsSelect(node, settingName, labelText, hintText, optionsList) {
+      let options = buildSelectOptions(optionsList);
+      return $(`
+          <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
+            <label title="${hintText}" tabindex="0">
+              <span>${labelText}</span>
+              <select class="script_${settingName}" style="width: 150px; float: right;">
+                ${options}
+              </select>
+            </label>
+          </div>`).toggleClass(
+        "inactive-row",
+        !!getSettingsRaw().overrides[settingName]
+      ).find("select").val(getSettingsRaw()[settingName]).on("change", function() {
+        getSettingsRaw()[settingName] = this.value, updateSettingsFromState(), $(".script_" + settingName).val(getSettingsRaw()[settingName]);
+      }).end().on(
+        "click",
+        {
+          label: `${labelText} (${settingName})`,
+          name: settingName,
+          type: "select",
+          options
+        },
+        openOverrideModal
+      ).appendTo(node);
+    }
+    function addSettingsList(node, settingName, labelText, hintText, list) {
+      let listBlock = $(`
+          <div class="script_bg_${settingName}" style="display: inline-block; width: 90%; margin-top: 6px;">
+            <label title="${hintText}" tabindex="0">
+              <span>${labelText}</span>
+              <input type="text" style="height: 25px; width: 150px; float: right;" placeholder="Research...">
+              <button class="button" style="height: 25px; float: right; margin-right: 4px; margin-left: 4px;">Remove</button>
+              <button class="button" style="height: 25px; float: right;">Add</button>
+            </label>
+            <br>
+            <textarea class="script_${settingName} textarea" style="margin-top: 12px" readonly></textarea>
+          </div>`).toggleClass(
+        "inactive-row",
+        !!getSettingsRaw().overrides[settingName]
+      ).on(
+        "click",
+        {
+          label: `Add or Remove (${settingName})`,
+          name: settingName,
+          type: "list",
+          options: { list, name: "name", id: "_vueBinding" }
+        },
+        openOverrideModal
+      ).appendTo(node), selectedItem = "", updateList = () => {
+        let names = readListSetting(settingName).map((id) => {
+          let entry = Object.values(list).find(
+            (candidate) => candidate._vueBinding === id
+          );
+          return entry === void 0 ? id : String(entry.name);
+        });
+        $(".script_" + settingName).val(names.join(", "));
+      }, onChange = function(event, ui) {
+        if (event.preventDefault(), ui.item === null) {
+          let typedName = Object.values(list).find(
+            (obj) => obj.name === this.value
+          );
+          typedName !== void 0 && (ui.item = { label: this.value, value: typedName._vueBinding });
+        }
+        ui.item !== null && Object.hasOwn(list, String(ui.item.value)) ? (this.value = ui.item.label, selectedItem = String(ui.item.value)) : (this.value = "", selectedItem = null);
+      }, autocomplete = getAutocomplete();
+      autocomplete.attach(listBlock.find("input")[0], {
+        minLength: 2,
+        source: function(request, response) {
+          let matcher = new RegExp(autocomplete.escapeRegex(request.term), "i");
+          response(
+            Object.values(list).filter((item) => matcher.test(String(item.name))).map((item) => ({
+              label: String(item.name),
+              value: item._vueBinding
+            }))
+          );
+        },
+        select: onChange,
+        // Dropdown list click
+        focus: onChange,
+        // Arrow keys press
+        change: onChange
+        // Keyboard type
+      }), listBlock.on("click", "button:eq(1)", function() {
+        let selected = readListSetting(settingName);
+        selectedItem && !selected.includes(selectedItem) && (selected.push(selectedItem), selected.sort(), updateSettingsFromState(), updateList());
+      }), listBlock.on("click", "button:eq(0)", function() {
+        let selected = readListSetting(settingName);
+        selectedItem && selected.includes(selectedItem) && (selected.splice(selected.indexOf(selectedItem), 1), selected.sort(), updateSettingsFromState(), updateList());
+      }), updateList();
+    }
+    function addInputCallbacks(node, settingKey) {
+      return node.on("change", function() {
+        let parsedValue = getRealNumberValue(this.value);
+        Number.isNaN(parsedValue) || (getSettingsRaw()[settingKey] = parsedValue, updateSettingsFromState()), $(".script_" + settingKey).val(getSettingsRaw()[settingKey]);
+      }).on(
+        "click",
+        { label: `Number (${settingKey})`, name: settingKey, type: "number" },
+        openOverrideModal
+      );
+    }
+    function addTableInput(node, settingKey) {
+      node.addClass(
+        "script_bg_" + settingKey + (getSettingsRaw().overrides[settingKey] ? " inactive-row" : "")
+      ).append(
+        addInputCallbacks(
+          $(
+            `<input class="script_${settingKey}" type="text" class="input is-small" style="height: 25px; width:100%" value="${getSettingsRaw()[settingKey]}"/>`
+          ),
+          settingKey
+        )
+      );
+    }
+    function addToggleCallbacks(node, settingKey) {
+      return node.on("change", "input", function() {
+        getSettingsRaw()[settingKey] = this.checked, updateSettingsFromState(), $(".script_" + settingKey).prop(
+          "checked",
+          getSettingsRaw()[settingKey]
+        );
+      }).on(
+        "click",
+        { label: `Toggle (${settingKey})`, name: settingKey, type: "boolean" },
+        openOverrideModal
+      );
+    }
+    function addTableToggle(node, settingKey) {
+      node.addClass(
+        "script_bg_" + settingKey + (getSettingsRaw().overrides[settingKey] ? " inactive-row" : "")
+      ).append(
+        addToggleCallbacks(
+          $(`
+          <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+            <input class="script_${settingKey}" type="checkbox"${getSettingsRaw()[settingKey] ? " checked" : ""}>
+            <span class="check" style="height:5px; max-width:15px"></span>
+            <span style="margin-left: 20px;"></span>
+          </label>`),
+          settingKey
+        )
+      );
+    }
+    function buildTableLabel(note, title = "", color = "has-text-info") {
+      return $(`<span class="${color}" title="${title}" >${note}</span>`);
+    }
+    function resetCheckbox(...items) {
+      items.forEach(
+        (item) => $(".script_" + item).prop("checked", getSettingsRaw()[item])
+      );
+    }
+    return {
+      addSettingsToggle,
+      addSettingsNumber,
+      addSettingsString,
+      addSettingsSelect,
+      addSettingsList,
+      addInputCallbacks,
+      addTableInput,
+      addToggleCallbacks,
+      addTableToggle,
+      buildTableLabel,
+      resetCheckbox
+    };
+  }
+
+  // src/ui/settings-inputs.ts
+  function createSettingsInputs({
+    getAutocomplete,
+    getJQuery,
+    getRealNumber
+  }) {
+    let $ = getJQuery();
+    function buildSelectOptions(optionsList) {
+      return optionsList.map(
+        (item) => `<option value="${item.val}" title="${item.hint ?? ""}">${item.label}</option>`
+      ).join();
+    }
+    function buildInputNode(type, options, value, callback) {
+      switch (type) {
+        case "string":
+          return $(`
+                  <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
+            callback(this.value);
+          });
+        case "number":
+          return $(`
+                  <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
+            let parsed = getRealNumber()(this.value), result = Number.isNaN(parsed) ? value : parsed;
+            this.value = String(result), callback(result);
+          });
+        case "boolean":
+          return $(`
+                  <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+                    <input type="checkbox">
+                    <span class="check" style="height:5px; max-width:15px"></span><span style="margin-left: 20px;"></span>
+                  </label>`).find("input").prop("checked", value).on("change", function() {
+            callback(this.checked);
+          }).end();
+        case "select":
+          return $(`
+                  <select style="width: 100%">${options}</select>`).val(value).on("change", function() {
+            callback(this.value);
+          });
+        case "select_cb":
+          return $(`
+                  <select style="width: 100%">${buildSelectOptions(
+            options()
+          )}</select>`).val(value).on("change", function() {
+            callback(this.value);
+          });
+        case "list": {
+          let source = options;
+          return buildObjectListInput(
+            source.list,
+            source.name,
+            source.id,
+            value,
+            callback
+          );
+        }
+        case "list_cb":
+          return buildObjectListInput(
+            options(),
+            "name",
+            "id",
+            value,
+            callback
+          );
+        default:
+          return "";
+      }
+    }
+    function buildObjectListInput(list, name, id, value, callback) {
+      let listNode = $('<input type="text" style="width:100%"></input>'), onChange = function(event, ui) {
+        if (event.preventDefault(), ui.item === null) {
+          let foundItem = Object.values(list).find(
+            (obj) => obj[name] === this.value
+          );
+          foundItem !== void 0 && (ui.item = { label: this.value, value: foundItem[id] });
+        }
+        ui.item !== null && Object.values(list).some((obj) => obj[id] === ui.item?.value) ? (this.value = ui.item.label, callback(ui.item.value)) : Object.hasOwn(list, String(value)) ? (this.value = String(list[String(value)]?.[name]), callback(value)) : (this.value = "", callback(null));
+      }, autocomplete = getAutocomplete();
+      return autocomplete.attach(listNode[0], {
+        minLength: 2,
+        source: function(request, response) {
+          let matcher = new RegExp(autocomplete.escapeRegex(request.term), "i");
+          response(
+            Object.values(list).filter((item) => matcher.test(String(item[name]))).map((item) => ({
+              label: String(item[name]),
+              value: item[id]
+            }))
+          );
+        },
+        select: onChange,
+        // Dropdown list click
+        focus: onChange,
+        // Arrow keys press
+        change: onChange
+        // Keyboard type
+      }), Object.values(list).some((obj) => obj[id] === value) && listNode.val(list[String(value)]?.[name]), listNode;
+    }
+    return { buildSelectOptions, buildInputNode, buildObjectListInput };
+  }
+
+  // src/ui/settings-shell.ts
+  function createSettingsShell({
+    $,
+    getDocument,
+    getSettingsRaw,
+    getSettings,
+    getGame,
+    buildPrestigeSettings,
+    buildGeneralSettings,
+    buildInterfaceSettings,
+    buildStateLogSettings,
+    buildAchievementGuardSettings,
+    buildChallengeHelperSettings,
+    buildGovernmentSettings,
+    buildAuthoritySettings,
+    buildEvolutionSettings,
+    buildPlanetSettings,
+    buildTraitSettings,
+    buildTriggerSettings,
+    buildResearchSettings,
+    buildWarSettings,
+    buildHellSettings,
+    buildMechSettings,
+    buildFleetSettings,
+    buildEjectorSettings,
+    buildMarketSettings,
+    buildStorageSettings,
+    buildMagicSettings,
+    buildProductionSettings,
+    buildJobSettings,
+    buildBuildingSettings,
+    buildWeightingSettings,
+    buildProjectSettings,
+    buildLoggingSettings,
+    filterBuildingSettingsTable,
+    updateSettingsFromState,
+    importSettings,
+    exportSettings,
+    triggerFileDownload,
+    confirm
+  }) {
+    function removeScriptSettings() {
+      $("#script_settings").remove();
+    }
+    function buildScriptSettings() {
+      if (getGame().global.settings.civTabs !== 7 || $("#script_settings").length !== 0)
+        return;
+      let currentScrollPosition = getDocument().documentElement.scrollTop || getDocument().body.scrollTop, scriptContentNode = $(
+        '<div id="script_settings" style="margin-top: 30px;"></div>'
+      );
+      $(".settings").append(scriptContentNode), buildImportExport(), buildPrestigeSettings(scriptContentNode, ""), buildGeneralSettings(), buildInterfaceSettings(), buildStateLogSettings(), buildAchievementGuardSettings(), buildChallengeHelperSettings(), buildGovernmentSettings(scriptContentNode, ""), buildAuthoritySettings(), buildEvolutionSettings(), buildPlanetSettings(), buildTraitSettings(), buildTriggerSettings(), buildResearchSettings(), buildWarSettings(scriptContentNode, ""), buildHellSettings(scriptContentNode, ""), buildMechSettings(), buildFleetSettings(scriptContentNode, ""), buildEjectorSettings(), buildMarketSettings(), buildStorageSettings(), buildMagicSettings(), buildProductionSettings(), buildJobSettings(), buildBuildingSettings(), buildWeightingSettings(), buildProjectSettings(), buildLoggingSettings(scriptContentNode, "");
+      let collapsibles = getDocument().querySelectorAll(
+        "#script_settings .script-collapsible"
+      );
+      for (let collapsible of collapsibles)
+        collapsible.addEventListener("click", () => {
+          collapsible.classList.toggle("script-contentactive");
+          let content = collapsible.nextElementSibling;
+          if (content.style.display === "block") {
+            getSettingsRaw()[collapsible.id] = !0, content.style.display = "none";
+            let [search2] = content.getElementsByClassName(
+              "script-searchsettings"
+            );
+            search2 !== void 0 && (search2.value = "", filterBuildingSettingsTable());
+          } else
+            getSettingsRaw()[collapsible.id] = !1, content.style.display = "block";
+          updateSettingsFromState();
+        });
+      getDocument().documentElement.scrollTop = getDocument().body.scrollTop = currentScrollPosition;
+    }
+    function buildImportExport() {
+      let importExportBase = $(".importExport").last();
+      if (importExportBase.length === 0 || getDocument().getElementById("script_importExportButtons") !== null)
+        return;
+      let importExportNode = $(
+        '<div id="script_importExportButtons" style="margin-top: 6px">'
+      );
+      importExportBase.after(importExportNode), importExportNode.append(
+        ' <button id="script_settingsImport" class="button">Import Script Settings</button>'
+      );
+      let importExportField = () => $("#importExport textarea");
+      $("#script_settingsImport").on("click", () => {
+        let str = importExportField().val();
+        str.length > 0 && importSettings(str) && importExportField().val("");
+      }), importExportNode.append(
+        ' <button id="script_settingsExport" class="button">Export Script Settings</button>'
+      ), $("#script_settingsExport").on("click", () => {
+        importExportField().val(exportSettings()), importExportField().select(), getDocument().execCommand("copy");
+      }), importExportNode.append(
+        ' <button id="script_settingsFile" class="button">Script Settings as File</button>'
+      ), $("#script_settingsFile").on("click", () => {
+        let json = JSON.stringify(getSettingsRaw(), void 0, 2);
+        triggerFileDownload(json, getSettings().scriptSettingsExportFilename);
+      });
+    }
+    function buildSettingsSectionImpl(parentNode, sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
+      let triggerID = `${sectionId}SettingsCollapsed`, resetID = `script_reset${sectionId}`, contentID = `script_${sectionId}Content`, section = $(`
+          <div id="script_${sectionId}Settings" style="margin-top: 10px;">
+            <h3 id="${triggerID}" class="script-collapsible text-center has-text-success">${sectionName} Settings</h3>
+            <div class="script-content">
+              <div style="margin-top: 10px;"><button id="${resetID}" class="button">Reset ${sectionName} Settings</button></div>
+              <div style="margin-top: 10px; margin-bottom: 10px;" id="${contentID}"></div>
+            </div>
+          </div>`);
+      if (parentNode.append(section), getSettingsRaw()[triggerID])
+        section.find(`> #${triggerID}`).on("click", () => {
+          section.find(`#${contentID}`).is(":empty") && updateSettingsContentFunction();
+        });
+      else {
+        updateSettingsContentFunction();
+        let element = getDocument().getElementById(triggerID);
+        element !== null && (element.classList.toggle("script-contentactive"), element.nextElementSibling.style.display = "block");
+      }
+      section.find(`#${resetID}`).on("click", () => genericResetFunction(resetFunction, sectionName));
+    }
+    function buildSettingsSection(sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
+      buildSettingsSectionImpl(
+        $("#script_settings"),
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateSettingsContentFunction
+      );
+    }
+    function buildSettingsSection2(parentNode, secondaryPrefix, sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
+      secondaryPrefix !== "" ? (parentNode.append(
+        `<div style="margin-top: 10px; margin-bottom: 10px;" id="script_${secondaryPrefix + sectionId}Content"></div>`
+      ), updateSettingsContentFunction(secondaryPrefix)) : buildSettingsSectionImpl(
+        parentNode,
+        sectionId,
+        sectionName,
+        resetFunction,
+        () => updateSettingsContentFunction("")
+      );
+    }
+    function genericResetFunction(resetFunction, sectionName) {
+      confirm("Are you sure you wish to reset " + sectionName + " Settings?") && resetFunction();
+    }
+    function addStandardHeading(node, heading) {
+      node.append(
+        `<div style="margin-top: 5px; width: 600px; text-align: left;"><span class="has-text-danger" style="margin-left: 10px;">${heading}</span></div>`
+      );
+    }
+    function addSettingsHeader1(node, headerText) {
+      node.append(
+        `<div style="margin: 4px; width: 100%; display: inline-block; text-align: left;"><span class="has-text-success" style="font-weight: bold;">${headerText}</span></div>`
+      );
+    }
+    function addSettingsHeader2(node, headerText) {
+      node.append(
+        `<div style="margin: 2px; width: 90%; display: inline-block; text-align: left;"><span class="has-text-caution">${headerText}</span></div>`
+      );
+    }
+    return {
+      removeScriptSettings,
+      buildScriptSettings,
+      buildImportExport,
+      buildSettingsSectionImpl,
+      buildSettingsSection,
+      buildSettingsSection2,
+      genericResetFunction,
+      addStandardHeading,
+      addSettingsHeader1,
+      addSettingsHeader2
+    };
+  }
+
+  // src/bootstrap/captured-settings-panel-control.ts
+  function overrideKeyLabelFor(capturedPanelWindow) {
+    let platform = readProperty(
+      readProperty(capturedPanelWindow, "navigator"),
+      "platform"
+    );
+    return typeof platform == "string" && platform.startsWith("Mac") ? "Alt" : "Ctrl";
+  }
+  function safeModeFor(capturedPanelWindow) {
+    let location = readProperty(capturedPanelWindow, "location");
+    return String(location ?? "").toLowerCase().includes("safemode");
+  }
+  function createCapturedSettingsPanel({
+    capturedPanelWindow,
+    settings,
+    logError = () => {
+    }
+  }) {
+    let documentValue = readProperty(capturedPanelWindow, "document"), reportedSections = /* @__PURE__ */ new Set(), query, queryUnavailable = !1, getQuery = () => {
+      if (query === void 0 && !queryUnavailable)
+        try {
+          query = createBrowserDomQuery(capturedPanelWindow);
+        } catch {
+          queryUnavailable = !0;
+        }
+      return query;
+    }, unported = (section) => () => {
+      reportedSections.has(section) || (reportedSections.add(section), logError(`settings panel section not ported yet: ${section}`));
+    }, generalDefaults = computeGeneralDefaults().def, prepareSettingsForUi = () => {
+      let raw = settings.readRaw();
+      (!isRecord(raw.overrides) || Array.isArray(raw.overrides)) && (raw.overrides = {});
+      for (let [key, value] of Object.entries(generalDefaults))
+        Object.hasOwn(raw, key) || (raw[key] = value);
+    }, settingsUi, ensureSettingsUi = (dom) => {
+      if (settingsUi !== void 0) return settingsUi;
+      let documentForUi = documentValue, autocomplete = createAutocomplete({
+        getDocument: () => documentValue
+      }), formatting = createNumberFormatting({
+        numberSuffix
+      }), getJQuery = () => dom, inputs = createSettingsInputs({
+        getAutocomplete: () => autocomplete,
+        getJQuery,
+        getRealNumber: () => formatting.getRealNumber
+      }), controls = createSettingsControls({
+        getAutocomplete: () => autocomplete,
+        getJQuery,
+        getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
+        getRealNumber: () => formatting.getRealNumber,
+        getUpdateSettingsFromState: () => () => settings.persist(),
+        openOverrideModal: unported("per-setting override editor"),
+        buildSelectOptions: inputs.buildSelectOptions
+      }), general, shell = createSettingsShell({
+        $: getJQuery(),
+        getDocument: () => documentForUi,
+        getSettingsRaw: () => settings.readRaw(),
+        getSettings: () => ({
+          scriptSettingsExportFilename: String(
+            settings.readRaw().scriptSettingsExportFilename ?? "evolve-script-settings.json"
+          )
+        }),
+        getGame: () => ({ global: { settings: { civTabs: 7 } } }),
+        buildPrestigeSettings: () => {
+        },
+        buildGeneralSettings: () => general?.buildGeneralSettings(),
+        buildInterfaceSettings: () => {
+        },
+        buildStateLogSettings: () => {
+        },
+        buildAchievementGuardSettings: () => {
+        },
+        buildChallengeHelperSettings: () => {
+        },
+        buildGovernmentSettings: () => {
+        },
+        buildAuthoritySettings: () => {
+        },
+        buildEvolutionSettings: () => {
+        },
+        buildPlanetSettings: () => {
+        },
+        buildTraitSettings: () => {
+        },
+        buildTriggerSettings: () => {
+        },
+        buildResearchSettings: () => {
+        },
+        buildWarSettings: () => {
+        },
+        buildHellSettings: () => {
+        },
+        buildMechSettings: () => {
+        },
+        buildFleetSettings: () => {
+        },
+        buildEjectorSettings: () => {
+        },
+        buildMarketSettings: () => {
+        },
+        buildStorageSettings: () => {
+        },
+        buildMagicSettings: () => {
+        },
+        buildProductionSettings: () => {
+        },
+        buildJobSettings: () => {
+        },
+        buildBuildingSettings: () => {
+        },
+        buildWeightingSettings: () => {
+        },
+        buildProjectSettings: () => {
+        },
+        buildLoggingSettings: () => {
+        },
+        filterBuildingSettingsTable: () => {
+        },
+        updateSettingsFromState: () => settings.persist(),
+        importSettings: () => !1,
+        exportSettings: () => JSON.stringify(settings.readRaw()),
+        triggerFileDownload: () => {
+        },
+        confirm: () => !1
+      }), generalIntent = createGeneralSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            let raw = settings.readRaw(), overrides = raw.overrides;
+            if (isRecord(overrides) && !Array.isArray(overrides))
+              for (let key of Object.keys(generalDefaults))
+                delete overrides[key];
+            Object.assign(raw, generalDefaults);
+          },
+          persist: () => settings.persist()
+        },
+        renderSettingsContent: () => general?.updateGeneralSettingsContent(),
+        effects: {
+          resetCheckboxes: () => {
+            for (let key of [
+              "masterScriptToggle",
+              "showSettings",
+              "autoPrestige"
+            ])
+              dom(`.script_${key}`).prop("checked", settings.readRaw()[key]);
+          }
+        }
+      });
+      return general = createGeneralSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery,
+        intents: { handle: (intent) => generalIntent.handle(intent) },
+        getActions: () => ({
+          buildSettingsSection: shell.buildSettingsSection,
+          addSettingsHeader1: shell.addSettingsHeader1,
+          addSettingsNumber: ((node, settingName, labelText, hintText) => controls.addSettingsNumber(
+            node,
+            settingName,
+            labelText,
+            hintText
+          )),
+          addSettingsSelect: ((node, settingName, labelText, hintText, options) => controls.addSettingsSelect(
+            node,
+            settingName,
+            labelText,
+            hintText,
+            options
+          )),
+          addSettingsString: ((node, settingName, labelText, hintText) => controls.addSettingsString(
+            node,
+            settingName,
+            labelText,
+            hintText
+          )),
+          addSettingsToggle: ((node, settingName, labelText, hintText) => controls.addSettingsToggle(
+            node,
+            settingName,
+            labelText,
+            hintText
+          ))
+        })
+      }), settingsUi = { general, shell }, settingsUi;
+    }, buildScriptSettings = () => {
+      let dom = getQuery();
+      if (dom === void 0 || dom(".settings").length === 0) return;
+      let ui = ensureSettingsUi(dom);
+      dom("#script_settings").length === 0 && dom(".settings").append(
+        '<div id="script_settings" style="margin-top: 30px;"></div>'
+      ), dom("#script_generalSettings").length === 0 && ui.general.buildGeneralSettings();
+    }, removeScriptSettings = () => {
+      getQuery()?.("#script_settings").remove();
+    }, optionsModal = createOptionsModalBrowserAdapter({
+      getDocument: () => documentValue,
+      getJQuery: () => getQuery(),
+      getWindow: () => capturedPanelWindow,
+      getSettingsReader: () => ({
+        readToggle: (settingName) => {
+          let raw = settings.readRaw(), overrides = raw.overrides;
+          return {
+            checked: !!raw[settingName],
+            inactive: isRecord(overrides) ? !!overrides[settingName] : !1
+          };
+        }
+      }),
+      getSettingsWriter: () => ({
+        setToggle: (settingName, checked) => {
+          settings.readRaw()[settingName] = checked;
+        },
+        persist: () => settings.persist()
+      }),
+      // TRANSITIONAL: the four secondary-option modals (Government, Foreign Affairs, Hell, Fleet)
+      // build their contents from legacy managers.
+      getBuilders: () => ({
+        government: unported("Government options"),
+        war: unported("Foreign Affairs options"),
+        hell: unported("Hell options"),
+        fleet: unported("Fleet options")
+      }),
+      openOverrideModal: unported("per-setting override editor")
+    }), { ensureAutomationContainer } = createAutomationContainer({
+      getSettingsRaw: () => settings.readRaw(),
+      getJQuery: () => getQuery(),
+      getSafeMode: () => safeModeFor(capturedPanelWindow),
+      getOverrideKeyLabel: () => overrideKeyLabelFor(capturedPanelWindow),
+      getActions: () => ({
+        // The panel and the toggle builder describe the same `DomList` through two independent narrow
+        // contracts, and the container's is the smaller of the two. The node here always came from the
+        // shared `$` above, so widening it back is a seam adaptation rather than an assumption.
+        createSettingToggle: (node, settingName, title, onEnable, onDisable) => optionsModal.createSettingToggle(
+          node,
+          settingName,
+          title,
+          onEnable,
+          onDisable
+        ),
+        updateSettingsFromState: () => settings.persist(),
+        buildScriptSettings,
+        removeScriptSettings,
+        createMechInfo: unported("mech info panel"),
+        removeMechInfo: unported("mech info panel"),
+        createCraftToggles: unported("craft toggles"),
+        removeCraftToggles: unported("craft toggles"),
+        createBuildingToggles: unported("building toggles"),
+        removeBuildingToggles: unported("building toggles"),
+        createArpaToggles: unported("ARPA toggles"),
+        removeArpaToggles: unported("ARPA toggles"),
+        createStorageToggles: unported("storage toggles"),
+        removeStorageToggles: unported("storage toggles"),
+        createMarketToggles: unported("market toggles"),
+        removeMarketToggles: unported("market toggles"),
+        createEjectToggles: unported("eject toggles"),
+        removeEjectToggles: unported("eject toggles"),
+        createSupplyToggles: unported("supply toggles"),
+        removeSupplyToggles: unported("supply toggles"),
+        updateScriptData: unported("script data readouts"),
+        finalizeScriptData: unported("script data readouts"),
+        autoMarket: unported("bulk sell button")
+      })
+    });
+    return Object.freeze({
+      ensurePanel() {
+        if (getQuery() !== void 0)
+          try {
+            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().showSettings === !0 && buildScriptSettings();
+          } catch (error) {
+            logError(`settings panel could not be drawn: ${String(error)}`);
+          }
+      }
+    });
+  }
+
+  // src/bootstrap/captured-runtime-control.ts
   var DEFAULT_SETTINGS2 = Object.freeze({
     masterScriptToggle: !0,
     autoBuild: !1,
@@ -16206,6 +18129,7 @@
     document: documentValue,
     mouseEvent: mouseEventValue,
     storage,
+    settingsHostWindow: settingsHostWindow2,
     diagnostics,
     logError = () => {
     }
@@ -16213,7 +18137,14 @@
     let document = documentValue, mouseEvent = typeof mouseEventValue == "function" ? mouseEventValue : class {
       constructor(_type) {
       }
-    }, panels = createGamePanelWorkspace({ getDocument: () => document }), reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
+    }, panels = createGamePanelWorkspace({ getDocument: () => document }), settingsStore = createSettingsStore({
+      storage,
+      logError: (message) => logError(message)
+    }), settingsPanel = createCapturedSettingsPanel({
+      capturedPanelWindow: settingsHostWindow2,
+      settings: settingsStore,
+      logError: (message) => logError(message)
+    }), reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
     }, readDemand = () => EMPTY_DEMAND_SAMPLE, buildCosts = createCapturedActionCostReader({
       rootState: pageCapture2.rootState,
@@ -16231,10 +18162,10 @@
         createMouseEvent: (type) => new mouseEvent(type)
       }),
       costs: buildCosts,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       // The already-granted half of the research draw is only worth its cost to a configured
       // trigger, so the trigger settings decide whether each cycle's pass keeps it.
-      needGrantedTechs: () => triggersNeedGrantedTechs(readStoredSettings(storage)),
+      needGrantedTechs: () => triggersNeedGrantedTechs(settingsStore.readRaw()),
       readCapturedStorageRequired: (resourceIds) => {
         let sample = readDemand();
         return Object.freeze(
@@ -16251,20 +18182,20 @@
     }), gatherResources = createCapturedGatherResourcesControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => settingsStore.readRaw()
     }), tax = createCapturedTaxControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       nowMs: () => Date.now()
     }), government = createCapturedGovernmentAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => settingsStore.readRaw()
     }), hell = createCapturedHellAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => settingsStore.readRaw()
     }), costs = createCapturedCraftCosts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
@@ -16272,18 +18203,18 @@
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand(),
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts
     }), ordinaryJobs = createCapturedOrdinaryJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => settingsStore.readRaw()
     }), fullJobs = createCapturedFullJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       costs,
       readDemand: () => readDemand(),
       readBuildTargets: progression.readManagedBuildTargets,
@@ -16291,22 +18222,22 @@
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => settingsStore.readRaw()
     }), alchemy = createCapturedAlchemyAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => settingsStore.readRaw()
     }), miningDroid = createCapturedMiningDroidAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => settingsStore.readRaw()
     }), graphene = createCapturedGrapheneAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
     }), replicator = createCapturedReplicatorAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
     }), queueReservations = createCapturedQueueReservationSource({
       rootState: pageCapture2.rootState,
@@ -16326,14 +18257,14 @@
       construction: progression.observations,
       readOfferedTechs: progression.readOfferedTechs,
       reservations: queueReservations,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       craftCosts: costs,
       fleet: fleetDemand
     }), triggerDemandThisCycle, readTriggerDemand = () => triggerDemandThisCycle ??= triggerDemand.sample(), triggers = createCapturedTriggers({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs: buildCosts,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readOfferedTechs: progression.readOfferedTechs,
       readGrantedTechs: progression.readGrantedTechs,
       readOfferedProjects: progression.readProjects,
@@ -16342,14 +18273,14 @@
       // cycle's own sample includes them, and the conditions are evaluated inside the sampling
       // it pulls in. Sampled lazily and only for a configured condition, like the granted-techs
       // pass, so other runs never pay for the second demand plan.
-      readDemandSample: () => triggersNeedDemandSample(readStoredSettings(storage)) ? readTriggerDemand() : void 0,
-      readTechKnowledge: () => triggersNeedTechKnowledge(readStoredSettings(storage)) ? progression.readKnowledgeRequiredByTechs() : void 0
+      readDemandSample: () => triggersNeedDemandSample(settingsStore.readRaw()) ? readTriggerDemand() : void 0,
+      readTechKnowledge: () => triggersNeedTechKnowledge(settingsStore.readRaw()) ? progression.readKnowledgeRequiredByTechs() : void 0
     }), triggerTargetsThisCycle, readTriggerTargets = () => triggerTargetsThisCycle ??= triggers.read(), triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       resources: createCapturedResourceSource(pageCapture2.rootState),
       readTargets: readTriggerTargets,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readOfferedTechs: progression.readOfferedTechs,
       readOfferedProjects: progression.readProjects
     }), demand = createCapturedResourceDemand({
@@ -16360,7 +18291,7 @@
       construction: progression.observations,
       readOfferedTechs: progression.readOfferedTechs,
       reservations: queueReservations,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       craftCosts: costs,
       fleet: fleetDemand
     }), demandThisCycle;
@@ -16368,7 +18299,7 @@
     let storagePorts = createCapturedStoragePorts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readStorageRequired: (resourceId) => readDemand().storageRequired(resourceId),
       reservations: queueReservations,
       construction: progression.observations,
@@ -16384,7 +18315,7 @@
     }), galaxyMarketPorts = createCapturedGalaxyMarketPorts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
     }), galaxyMarketAutomation = Object.freeze({
       run: () => runGalaxyMarketAutomation({
@@ -16394,13 +18325,13 @@
     }), marketPorts = createCapturedMarketPorts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand(),
       onUnavailable: (resourceId, reason) => reportOnce(`market skipped ${resourceId}: ${reason}`)
     }), tradeRoutes = createCapturedTradeRoutes({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand(),
       onUnavailable: (reason) => reportOnce(`trade routes unavailable: ${reason}`)
     }), marketAutomation = Object.freeze({
@@ -16418,14 +18349,14 @@
     }), ratios = createCapturedProductionRatios({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
     }), completedPeriods = 1, craftDependencies = {
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs,
       getDocument: () => document,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readPeriods: () => completedPeriods,
       readDemand: () => readDemand()
     }, craft = Object.freeze({
@@ -16810,42 +18741,42 @@
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       getDocument: () => document,
-      readSettings: () => readStoredSettings(storage)
+      readSettings: () => settingsStore.readRaw()
     }), smelter = createCapturedSmelterAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
     }), nanite = createCapturedNaniteAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
     }), ejector = createCapturedEjectorAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
     }), supply = createCapturedSupplyAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
     }), factory = createCapturedFactoryAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand(),
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts
     }), fleet = createCapturedFleetAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => readStoredSettings(storage),
+      readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
     }), runCycle = () => {
-      demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample();
-      let settings = readStoredSettings(storage);
+      demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), pageCapture2.isComplete() && settingsPanel.ensurePanel();
+      let settings = settingsStore.readRaw();
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {
           isEnabled(settings, "autoTrigger") && progression.ensureBuildControls(), isEnabled(settings, "autoFleet") && (readProperty(
@@ -16889,13 +18820,12 @@
   }
 
   // src/main.ts
-  var pageCapture = installPageCapture(
-    createUserscriptEnvironment(globalThis).pageWindow
-  );
+  var settingsHostWindow = createUserscriptEnvironment(globalThis).pageWindow, pageCapture = installPageCapture(settingsHostWindow);
   whenDocumentReady(globalThis, () => {
     let environment = createLegacyRuntimeEnvironment(globalThis);
     startCapturedRuntime({
       pageCapture,
+      settingsHostWindow,
       document: environment.document,
       mouseEvent: environment.MouseEvent,
       storage: environment.storage,

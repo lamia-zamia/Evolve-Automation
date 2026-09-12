@@ -1,0 +1,205 @@
+import assert from "node:assert/strict";
+
+import { createCapturedSettingsPanel } from "../src/bootstrap/captured-settings-panel-control.ts";
+import { createSettingsStore } from "../src/adapters/browser/settings-store.ts";
+import { createTestDocument, element } from "./dom-fixture.mjs";
+
+/** A `localStorage` stand-in that records what the panel writes back. */
+function createStorage(initial) {
+  const items = new Map(initial === undefined ? [] : [["settings", initial]]);
+  return {
+    getItem: (key) => (items.has(key) ? items.get(key) : null),
+    setItem: (key, value) => items.set(key, String(value)),
+    writes: () => items.get("settings"),
+  };
+}
+
+function createPage(
+  settingsText,
+  { platform = "Win32", url = "https://x/" } = {},
+) {
+  const root = element("div", { id: "root" });
+  const resources = element("div", { id: "resources" });
+  const settingsTab = element("div");
+  settingsTab.classList.add("settings");
+  root.appendChild(resources);
+  root.appendChild(settingsTab);
+  const document = createTestDocument(root);
+  const storage = createStorage(settingsText);
+  const logged = [];
+  const pageWindow = {
+    document,
+    navigator: { platform },
+    location: url,
+    setTimeout: (callback) => callback(),
+  };
+  const settings = createSettingsStore({
+    storage,
+    logError: (message) => logged.push(message),
+  });
+  const panel = createCapturedSettingsPanel({
+    capturedPanelWindow: pageWindow,
+    settings,
+    logError: (message) => logged.push(message),
+  });
+  return { panel, settings, storage, root, logged };
+}
+
+// --- the panel appears, and appears once ---------------------------------------------------------
+
+{
+  const { panel, root } = createPage(JSON.stringify({ autoBuild: true }));
+  assert.equal(root.querySelectorAll("#autoScriptContainer").length, 0);
+  panel.ensurePanel();
+  const container = root.querySelectorAll("#autoScriptContainer");
+  assert.equal(container.length, 1, "the panel must be drawn into #resources");
+  const toggles = root.querySelectorAll("#scriptToggles");
+  assert.equal(toggles.length, 1);
+  assert.equal(root.querySelectorAll("#script_settings").length, 1);
+  assert.equal(root.querySelectorAll("#script_generalSettings").length, 1);
+
+  const firstCount = root.querySelectorAll("label").length;
+  assert.ok(
+    firstCount > 20,
+    `expected the full toggle list, got ${firstCount}`,
+  );
+  panel.ensurePanel();
+  panel.ensurePanel();
+  assert.equal(
+    root.querySelectorAll("#autoScriptContainer").length,
+    1,
+    "a redraw must not stack a second panel",
+  );
+  assert.equal(root.querySelectorAll("label").length, firstCount);
+}
+
+// --- a fresh profile with no settings at all still gets a panel ----------------------------------
+
+{
+  const { panel, root, logged } = createPage(undefined);
+  panel.ensurePanel();
+  assert.equal(
+    root.querySelectorAll("#autoScriptContainer").length,
+    1,
+    "a profile with no stored settings is exactly the case that needs the panel",
+  );
+  assert.deepEqual(logged, []);
+}
+
+// --- a stored toggle renders checked, and flipping one writes and persists -----------------------
+
+{
+  const { panel, settings, storage, root } = createPage(
+    JSON.stringify({ autoBuild: true, autoResearch: false }),
+  );
+  panel.ensurePanel();
+  const checkbox = root.querySelectorAll(".script_autoResearch")[0];
+  assert.ok(checkbox, "every toggle gets a class-named input");
+  assert.equal(checkbox.checked, undefined);
+
+  const built = root.querySelectorAll(".script_autoBuild")[0];
+  assert.equal(built.getAttribute("checked"), "");
+
+  const tickRate = root.querySelectorAll(".script_tickRate")[0];
+  assert.equal(tickRate.getAttribute("value"), "4");
+  tickRate.value = "7";
+  tickRate.dispatch("change");
+  assert.equal(settings.readRaw()["tickRate"], 7);
+  assert.equal(JSON.parse(storage.writes())["tickRate"], 7);
+
+  // The handler is delegated from the toggle's own label, so the change has to bubble from the
+  // input the way a real one does.
+  checkbox.checked = true;
+  checkbox.dispatch("change");
+  assert.equal(settings.readRaw()["autoResearch"], true);
+  assert.equal(
+    JSON.parse(storage.writes())["autoResearch"],
+    true,
+    "a flipped toggle must be persisted, not just held in memory",
+  );
+}
+
+// --- an enable callback for an unported section is reported by name, once ------------------------
+
+{
+  const { panel, logged } = createPage(JSON.stringify({ autoMech: true }));
+  panel.ensurePanel();
+  const mech = logged.filter((line) => line.includes("mech info panel"));
+  assert.equal(mech.length, 1, `expected one report, got ${logged.length}`);
+  assert.match(mech[0], /not ported yet/);
+}
+
+// --- platform and safe mode -----------------------------------------------------------------------
+
+{
+  const { panel, root } = createPage(JSON.stringify({}), {
+    platform: "MacIntel",
+  });
+  panel.ensurePanel();
+  const label = root
+    .querySelectorAll("label")
+    .map((node) => node.textContent)
+    .join(" ");
+  assert.match(label, /Alt\+click/, "macOS uses Alt for the override chord");
+}
+
+{
+  const { panel, root } = createPage(JSON.stringify({}), {
+    url: "https://x/#safemode",
+  });
+  panel.ensurePanel();
+  const text = root
+    .querySelectorAll("p")
+    .map((node) => node.textContent)
+    .join(" ");
+  assert.match(text, /Safe mode active/);
+}
+
+// --- a host with no document has no panel, silently ----------------------------------------------
+
+{
+  const logged = [];
+  const panel = createCapturedSettingsPanel({
+    capturedPanelWindow: {},
+    settings: createSettingsStore({ storage: createStorage("{}") }),
+    logError: (message) => logged.push(message),
+  });
+  panel.ensurePanel();
+  panel.ensurePanel();
+  assert.deepEqual(
+    logged,
+    [],
+    "a host with no DOM is an expected shape, not an error to report",
+  );
+}
+
+// --- the store itself -----------------------------------------------------------------------------
+
+{
+  const corrupt = createStorage("not json");
+  const logged = [];
+  const store = createSettingsStore({
+    storage: corrupt,
+    logError: (message) => logged.push(message),
+  });
+  assert.deepEqual(store.readRaw(), {});
+  assert.equal(logged.length, 1);
+  assert.match(logged[0], /could not be parsed/);
+
+  // An array is a valid JSON document and an invalid settings blob.
+  const arrayStore = createSettingsStore({ storage: createStorage("[1,2]") });
+  assert.deepEqual(arrayStore.readRaw(), {});
+
+  // The record is the same object across reads, so a UI write is visible to the runtime at once.
+  const live = createSettingsStore({ storage: createStorage('{"a":1}') });
+  assert.equal(live.readRaw(), live.readRaw());
+  live.readRaw()["b"] = 2;
+  assert.equal(live.readRaw()["b"], 2);
+
+  // Absent storage is survivable rather than fatal: nothing to read, nothing to write.
+  const none = createSettingsStore({ storage: undefined });
+  assert.deepEqual(none.readRaw(), {});
+  none.persist();
+}
+
+console.log("captured settings panel tests passed");
