@@ -255,6 +255,44 @@ assert.equal(
   assert.equal(view.storageRatio, 0);
 }
 
+// `Species` is the game's own alias for the current race's population resource, and several
+// portal buildings and two technologies are priced in it. `setData` hands the alias back
+// unresolved, so a sample that read it literally would report nothing held and make every
+// `Species`-priced action permanently unaffordable.
+{
+  const sample = createCapturedResourceSource(
+    rootSource({
+      race: { species: "human" },
+      resource: { human: { display: true, amount: 42, max: 60, diff: 1 } },
+    }),
+  ).readResources(["Species"]);
+  const view = resourceView(sample, "Species");
+  assert.equal(view.amount, 42);
+  assert.equal(view.max, 60);
+  assert.equal(view.unlocked, true);
+}
+// The alias follows the race, and a race whose own resource the game has not created reads as
+// absent rather than throwing.
+{
+  const sample = createCapturedResourceSource(
+    rootSource({ race: { species: "sludge" }, resource: {} }),
+  ).readResources(["Species"]);
+  assert.equal(resourceView(sample, "Species").amount, 0);
+}
+// Nothing else is aliased: a resource genuinely named in the bag still wins.
+{
+  const sample = createCapturedResourceSource(
+    rootSource({
+      race: { species: "human" },
+      resource: {
+        human: { amount: 42 },
+        Money: { display: true, amount: 7, max: 9, diff: 0 },
+      },
+    }),
+  ).readResources(["Money"]);
+  assert.equal(resourceView(sample, "Money").amount, 7);
+}
+
 assert.equal(
   createCapturedResourceSource(NO_ROOT).readResources(["Money"]),
   undefined,

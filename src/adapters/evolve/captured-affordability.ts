@@ -27,13 +27,29 @@ export function isRegionalSupply(root: unknown): boolean {
   return shadow !== undefined && shadow >= 5;
 }
 
-/** The resource a cost key names. `Species` is the game's alias for the current race's own id. */
+/**
+ * The resource id a cost key names. `Species` is the game's own alias for the current race's
+ * population resource — `res === 'Species' ? global.race.species : res`, which upstream repeats at
+ * every point it charges a cost. Nothing else is aliased.
+ *
+ * This is the single owner of that rule. The build queue's `setData` hands the alias back
+ * unresolved, and the drawn action rows carry it unresolved too, so every reader that turns a cost
+ * key into holdings has to resolve it or report a `Species`-priced action as costing an absent
+ * resource.
+ */
+export function resolveCostResourceId(
+  root: unknown,
+  key: string,
+): string | undefined {
+  if (key !== "Species") return key;
+  const species = readProperty(readProperty(root, "race"), "species");
+  return typeof species === "string" ? species : undefined;
+}
+
+/** The resource record a cost key names, through the alias above. */
 function costResource(root: unknown, key: string): unknown {
-  const resourceId =
-    key === "Species"
-      ? readProperty(readProperty(root, "race"), "species")
-      : key;
-  if (typeof resourceId !== "string") return undefined;
+  const resourceId = resolveCostResourceId(root, key);
+  if (resourceId === undefined) return undefined;
   return readProperty(readProperty(root, "resource"), resourceId);
 }
 

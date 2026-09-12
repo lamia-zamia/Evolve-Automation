@@ -32,6 +32,7 @@ import type {
 } from "../../ports/game-world-state.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import { isRecord, readProperty } from "../validation.ts";
+import { resolveCostResourceId } from "./captured-affordability.ts";
 
 /** The game's `show*` settings are the record of which features it is currently offering. */
 const FEATURE_PREFIX = "show";
@@ -175,7 +176,19 @@ export function createCapturedResourceSource(
       const resource = readProperty(root, "resource");
       const resources = new Map<string, ResourceView>();
       for (const id of ids) {
-        resources.set(id, readResourceView(readProperty(resource, id)));
+        // Cost keys reach here exactly as the game wrote them, and `Species` is its alias for the
+        // race's own population resource. Resolving it through the one owner of that rule keeps a
+        // `Species`-priced action from reading as costing a resource nobody holds. The map stays
+        // keyed by what the caller asked for, so callers need not know the alias exists.
+        const resourceId = resolveCostResourceId(root, id);
+        resources.set(
+          id,
+          readResourceView(
+            resourceId === undefined
+              ? undefined
+              : readProperty(resource, resourceId),
+          ),
+        );
       }
       return Object.freeze({ resources });
     },

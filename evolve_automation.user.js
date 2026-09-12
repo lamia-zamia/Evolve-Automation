@@ -814,6 +814,36 @@
     return !0;
   }
 
+  // src/adapters/evolve/captured-affordability.ts
+  function isRegionalSupply(root) {
+    let shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
+    return shadow !== void 0 && shadow >= 5;
+  }
+  function resolveCostResourceId(root, key) {
+    if (key !== "Species") return key;
+    let species = readProperty(readProperty(root, "race"), "species");
+    return typeof species == "string" ? species : void 0;
+  }
+  function costResource(root, key) {
+    let resourceId = resolveCostResourceId(root, key);
+    if (resourceId !== void 0)
+      return readProperty(readProperty(root, "resource"), resourceId);
+  }
+  function costFitsStorage(root, cost, options) {
+    let zeroCapIsCeiling = options?.zeroCapIsCeiling ?? !0;
+    for (let [key, amount] of Object.entries(cost)) {
+      if (!Number.isFinite(amount)) return;
+      if (amount === 0) continue;
+      let entry = costResource(root, key);
+      if (!isRecord(entry)) return;
+      if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
+      let capacity = finite(readProperty(entry, "max"));
+      if (capacity === void 0) return;
+      if ((zeroCapIsCeiling ? capacity >= 0 : capacity > 0) && amount > capacity) return !1;
+    }
+    return !0;
+  }
+
   // src/adapters/evolve/captured-world-state.ts
   function readCounter(owner, key) {
     let value = Number(readProperty(owner, key));
@@ -864,8 +894,15 @@
         let root = rootState.readRoot();
         if (root === void 0) return;
         let resource = readProperty(root, "resource"), resources = /* @__PURE__ */ new Map();
-        for (let id of ids)
-          resources.set(id, readResourceView(readProperty(resource, id)));
+        for (let id of ids) {
+          let resourceId = resolveCostResourceId(root, id);
+          resources.set(
+            id,
+            readResourceView(
+              resourceId === void 0 ? void 0 : readProperty(resource, resourceId)
+            )
+          );
+        }
         return Object.freeze({ resources });
       }
     });
@@ -2381,31 +2418,6 @@
         return conflict === null ? NONE : Object.freeze({ status: "conflict", conflict });
       }
     });
-  }
-
-  // src/adapters/evolve/captured-affordability.ts
-  function isRegionalSupply(root) {
-    let shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
-    return shadow !== void 0 && shadow >= 5;
-  }
-  function costResource(root, key) {
-    let resourceId = key === "Species" ? readProperty(readProperty(root, "race"), "species") : key;
-    if (typeof resourceId == "string")
-      return readProperty(readProperty(root, "resource"), resourceId);
-  }
-  function costFitsStorage(root, cost, options) {
-    let zeroCapIsCeiling = options?.zeroCapIsCeiling ?? !0;
-    for (let [key, amount] of Object.entries(cost)) {
-      if (!Number.isFinite(amount)) return;
-      if (amount === 0) continue;
-      let entry = costResource(root, key);
-      if (!isRecord(entry)) return;
-      if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
-      let capacity = finite(readProperty(entry, "max"));
-      if (capacity === void 0) return;
-      if ((zeroCapIsCeiling ? capacity >= 0 : capacity > 0) && amount > capacity) return !1;
-    }
-    return !0;
   }
 
   // src/adapters/evolve/captured-queue-reservations.ts
