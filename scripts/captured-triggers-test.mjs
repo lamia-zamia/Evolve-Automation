@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   createCapturedTriggers,
+  triggersNeedDemandSample,
   triggersNeedGrantedTechs,
 } from "../src/adapters/evolve/progression/build/captured-triggers.ts";
 
@@ -79,6 +80,7 @@ function triggers({
   projects = PROJECTS,
   readOfferedProjects,
   readBuildingUnlocks,
+  demandSample,
   costs,
   controls,
 } = {}) {
@@ -102,6 +104,9 @@ function triggers({
     readGrantedTechs: () => granted,
     readOfferedProjects: readOfferedProjects ?? (() => offeredProjects),
     ...(readBuildingUnlocks === undefined ? {} : { readBuildingUnlocks }),
+    ...(demandSample === undefined
+      ? {}
+      : { readDemandSample: () => demandSample }),
   });
 }
 
@@ -668,6 +673,117 @@ assert.deepEqual(
       }),
     ],
     settings: { evolutionQueue: ["human", "elven"] },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// --- Demand-reading conditions ride the trigger-excluding sample ------------
+
+// The predicate fires only for the four demand operands with the feature on.
+assert.equal(
+  triggersNeedDemandSample({
+    autoTrigger: true,
+    triggers: [trigger({ requirementType: "ResourceDemanded" })],
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedDemandSample({
+    autoTrigger: true,
+    triggers: [trigger({ requirementType: "ResourceSatisfied" })],
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedDemandSample({
+    autoTrigger: true,
+    triggers: [trigger({ requirementType: "ResourceSatisfyRatio" })],
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedDemandSample({
+    autoTrigger: true,
+    triggers: [trigger({ requirementType: "ResourceMaxCost" })],
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedDemandSample({ autoTrigger: true, triggers: [trigger()] }),
+  false,
+);
+assert.equal(
+  triggersNeedDemandSample({
+    autoTrigger: false,
+    triggers: [trigger({ requirementType: "ResourceDemanded" })],
+  }),
+  false,
+);
+assert.equal(triggersNeedDemandSample({}), false);
+
+// A demanded resource makes its trigger a target through the shared sample.
+const demandSample = {
+  isDemanded: (id) => id === "Lumber",
+  storageRequired: () => 1,
+  maxCost: () => 0,
+};
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResourceDemanded",
+        requirementId: "Lumber",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    demandSample,
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+// An undemanded resource drops the trigger, and without the sample both drop.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResourceDemanded",
+        requirementId: "Money",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    demandSample,
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResourceDemanded",
+        requirementId: "Lumber",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [],
+);
+// The numeric demand operands travel the same context.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResourceMaxCost",
+        requirementId: "Lumber",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+    demandSample: {
+      ...demandSample,
+      maxCost: (id) => (id === "Lumber" ? 175 : 0),
+    },
   }).read(),
   [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
 );

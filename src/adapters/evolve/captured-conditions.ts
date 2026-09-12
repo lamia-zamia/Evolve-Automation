@@ -14,6 +14,14 @@
  * `SettingDefault` stays out: the captured composition keeps one stored blob, so the raw-versus-live
  * distinction the compatibility reader draws has no characterized counterpart here yet.
  *
+ * The demand-reading operands (`ResourceDemanded`, `ResourceSatisfied`, `ResourceSatisfyRatio`,
+ * `ResourceMaxCost`) answer from a demand sample that deliberately excludes the trigger targets:
+ * the cycle's own sample includes them, and the conditions are evaluated inside the sampling it
+ * pulls in, so reading it would recurse. With no commitments the sample degenerates to the values
+ * the compatibility reader sees after its own accumulator reset (nothing demanded, a storage
+ * requirement of 1, a max cost of 0); with commitments it answers what the compatibility ordering
+ * could never give its triggers.
+ *
  * It also answers the operands the root cannot supply but a drawn panel can. The game's grant
  * keys live in its private action catalog, so `ResearchUnlocked` and `ResearchComplete` are read
  * from the research panel the cycle already drew; `ProjectUnlocked` is read the same way from the
@@ -23,8 +31,8 @@
  * `CapturedConditionContext`, and a condition naming one goes
  * unanswered whenever the pass it needs was not taken.
  *
- * Everything else a condition can name — script-computed resource fields, custom expressions,
- * building clickability, manager-computed values, stored defaults, and anything needing the
+ * Everything else a condition can name — resource income, custom expressions, building
+ * clickability, manager-computed values, stored defaults, and anything needing the
  * module-level race catalog or a private action definition — is deliberately absent.
  *
  * `undefined` has exactly one meaning here: the operand cannot be answered from what has been
@@ -78,6 +86,23 @@ export interface CapturedConditionContext {
    * rather than game state. Absent leaves those operands unanswered.
    */
   readonly settings?: Readonly<Record<string, unknown>>;
+  /**
+   * The cycle's resource-demand commitments without the trigger targets, for the operands that
+   * read what something else is accumulating. Absent leaves those operands unanswered.
+   */
+  readonly demand?: CapturedConditionDemand;
+}
+
+/**
+ * What a trigger condition needs of a demand sample: whether something wants more of a resource
+ * than is held, how much storage the commitments need for it, and the largest single cost they
+ * name. The cycle's own demand sample satisfies this structurally; only the trigger-excluding
+ * pass may be shared, never the trigger-including one.
+ */
+export interface CapturedConditionDemand {
+  readonly isDemanded: (resourceId: string) => boolean;
+  readonly storageRequired: (resourceId: string) => number;
+  readonly maxCost?: (resourceId: string) => number;
 }
 
 /**
@@ -94,6 +119,8 @@ export const SWARM_SATELLITE_ACTION_ID = "space-swarm_satellite";
 const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "Boolean",
   "ResourceUnlocked",
+  "ResourceSatisfied",
+  "ResourceDemanded",
   "JobUnlocked",
   "ResearchUnlocked",
   "ResearchComplete",
@@ -139,6 +166,38 @@ function projectRecord(root: unknown, argument: unknown): unknown {
 function resourceRecord(root: unknown, argument: unknown): unknown {
   if (typeof argument !== "string") return undefined;
   return readProperty(readProperty(root, "resource"), argument);
+}
+
+/**
+ * The captured resource entry a demand operand names, or nothing when the game has no such
+ * resource. A resource the root does not hold is unanswerable rather than undemanded, matching
+ * every other resource operand.
+ */
+function demandResourceRecord(root: unknown, argument: unknown): unknown {
+  const record = resourceRecord(root, argument);
+  return isRecord(record) ? record : undefined;
+}
+
+/**
+ * The script's own usefulness ratio: holdings over the smaller of capacity and committed storage
+ * need, or 1 for an uncapped resource or one nothing is saving storage for. Needs both the
+ * captured entry and the demand pass; either missing leaves the operand unanswered.
+ */
+function demandUsefulRatio(
+  root: unknown,
+  demand: CapturedConditionDemand | undefined,
+  argument: unknown,
+): number | undefined {
+  if (demand === undefined) return undefined;
+  const record = demandResourceRecord(root, argument);
+  if (!isRecord(record)) return undefined;
+  const amount = finite(readProperty(record, "amount"));
+  const maximum = finite(readProperty(record, "max"));
+  if (amount === undefined || maximum === undefined) return undefined;
+  const required = finite(demand.storageRequired(String(argument)));
+  if (required === undefined) return undefined;
+  if (!(maximum > 0) || !(required > 0)) return 1;
+  return amount / Math.min(maximum, required);
 }
 
 /** One civic job entry by its stored id, e.g. `farmer` — not a crafting resource id. */
@@ -454,6 +513,15 @@ function readNumber(
       return finite(readProperty(resourceRecord(root, argument), "amount"));
     case "ResourceStorage":
       return finite(readProperty(resourceRecord(root, argument), "max"));
+    case "ResourceMaxCost": {
+      // The largest single cost the commitments name. Without the demand pass there is no
+      // accumulation to read, so unanswered rather than zero.
+      if (typeof argument !== "string") return undefined;
+      if (demandResourceRecord(root, argument) === undefined) return undefined;
+      return finite(context?.demand?.maxCost?.(argument));
+    }
+    case "ResourceSatisfyRatio":
+      return demandUsefulRatio(root, context?.demand, argument);
     case "ResourceRatio": {
       const amount = finite(
         readProperty(resourceRecord(root, argument), "amount"),
@@ -626,6 +694,17 @@ function readBoolean(
       return isRecord(entry)
         ? readProperty(entry, "display") === true
         : undefined;
+    }
+    case "ResourceDemanded": {
+      // Whether something else is accumulating the resource. Without the demand pass there is no
+      // accumulation to consult, so unanswered rather than content.
+      if (typeof argument !== "string") return undefined;
+      if (demandResourceRecord(root, argument) === undefined) return undefined;
+      return context?.demand?.isDemanded(argument);
+    }
+    case "ResourceSatisfied": {
+      const ratio = demandUsefulRatio(root, context?.demand, argument);
+      return ratio === undefined ? undefined : ratio >= 1;
     }
     case "JobUnlocked": {
       if (typeof argument !== "string") return undefined;

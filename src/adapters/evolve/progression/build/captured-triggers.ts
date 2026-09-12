@@ -34,6 +34,7 @@ import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import {
+  type CapturedConditionDemand,
   evaluateCapturedCondition,
   SWARM_SATELLITE_ACTION_ID,
 } from "../../captured-conditions.ts";
@@ -99,6 +100,13 @@ export interface CapturedTriggersDependencies {
   readonly readBuildingUnlocks?: (
     regions: ReadonlySet<string>,
   ) => Readonly<BuildingUnlockSample> | undefined;
+  /**
+   * The cycle's resource-demand commitments without the trigger targets, for the conditions that
+   * read what something else is accumulating. The cycle's own trigger-including sample cannot
+   * serve: the conditions are evaluated inside the sampling it pulls in. Absent leaves those
+   * conditions unanswered.
+   */
+  readonly readDemandSample?: () => CapturedConditionDemand | undefined;
 }
 
 interface TriggerRow {
@@ -196,6 +204,28 @@ export function triggersNeedGrantedTechs(settings: unknown): boolean {
     (row) =>
       row.actionType === "research" ||
       row.requirementType === "ResearchComplete",
+  );
+}
+
+/** The operand types whose answer needs the cycle's demand commitments. */
+const DEMAND_CONDITION_TYPES: ReadonlySet<string> = new Set([
+  "ResourceDemanded",
+  "ResourceSatisfied",
+  "ResourceSatisfyRatio",
+  "ResourceMaxCost",
+]);
+
+/**
+ * Whether this cycle's trigger sample has to carry the trigger-excluding demand commitments.
+ *
+ * Only four operands need them — the ones that read what something else is accumulating — and
+ * the demand pass prices queues and reads catalogs, so a player who configures none of them
+ * never pays for it.
+ */
+export function triggersNeedDemandSample(settings: unknown): boolean {
+  if (readProperty(settings, "autoTrigger") !== true) return false;
+  return readRows(settings).some((row) =>
+    DEMAND_CONDITION_TYPES.has(row.requirementType),
   );
 }
 
@@ -300,6 +330,9 @@ export function createCapturedTriggers(
       // moment. The stored settings travel with them for the operands that read the player's own
       // configuration rather than game state.
       const storedSettings = isRecord(settings) ? settings : undefined;
+      // The demand commitments travel only when the supplier carries them: the sample excludes
+      // the trigger targets, which the cycle's own trigger-including sample cannot supply here.
+      const demandSample = dependencies.readDemandSample?.();
       const conditionContext = Object.freeze({
         ...(offeredTechs === undefined
           ? {}
@@ -311,6 +344,7 @@ export function createCapturedTriggers(
         ...(buildingUnlocks === undefined ? {} : { buildingUnlocks }),
         ...(buildingCosts.size === 0 ? {} : { buildingCosts }),
         ...(storedSettings === undefined ? {} : { settings: storedSettings }),
+        ...(demandSample === undefined ? {} : { demand: demandSample }),
       });
       const byPriority = new Map(rows.map((row) => [row.priority, row]));
 

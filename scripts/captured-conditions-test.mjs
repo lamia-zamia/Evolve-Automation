@@ -586,6 +586,157 @@ assert.equal(
   false,
 );
 
+// --- the demand-reading operands, from the trigger-excluding sample ---------
+
+// Whether something else is accumulating the resource, how far holdings cover the committed
+// storage need, and the largest single committed cost.
+const accumulating = {
+  demand: {
+    isDemanded: (id) => id === "Money",
+    storageRequired: (id) => (id === "Money" ? 500 : 1),
+    maxCost: (id) => (id === "Money" ? 600 : 0),
+  },
+};
+assert.equal(
+  readCapturedOperand(root, "ResourceDemanded", "Money", accumulating),
+  true,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceDemanded", "Plywood", accumulating),
+  false,
+);
+// 250 held against a 500 need is not satisfied; 10 held against no need is.
+assert.equal(
+  readCapturedOperand(root, "ResourceSatisfied", "Money", accumulating),
+  false,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceSatisfied", "Plywood", accumulating),
+  true,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceSatisfyRatio", "Money", accumulating),
+  0.5,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceSatisfyRatio", "Plywood", accumulating),
+  10,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceMaxCost", "Money", accumulating),
+  600,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceMaxCost", "Plywood", accumulating),
+  0,
+);
+// Boolean operands match their stored count; numerics compare with `>=`.
+assert.equal(
+  evaluateCapturedCondition(root, "ResourceDemanded", "Money", 1, accumulating),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "ResourceDemanded", "Money", 0, accumulating),
+  false,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "ResourceSatisfied",
+    "Money",
+    0,
+    accumulating,
+  ),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "ResourceSatisfyRatio",
+    "Money",
+    0.5,
+    accumulating,
+  ),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "ResourceSatisfyRatio",
+    "Money",
+    0.6,
+    accumulating,
+  ),
+  false,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "ResourceMaxCost",
+    "Money",
+    600,
+    accumulating,
+  ),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "ResourceMaxCost",
+    "Money",
+    601,
+    accumulating,
+  ),
+  false,
+);
+
+// With no commitments the sample degenerates to the values the compatibility reader sees after
+// its own accumulator reset: nothing demanded, a storage need of 1, a max cost of 0.
+const uncommitted = {
+  demand: {
+    isDemanded: () => false,
+    storageRequired: () => 1,
+    maxCost: () => 0,
+  },
+};
+assert.equal(
+  readCapturedOperand(root, "ResourceDemanded", "Money", uncommitted),
+  false,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceSatisfied", "Money", uncommitted),
+  true,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceSatisfyRatio", "Money", uncommitted),
+  250,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceMaxCost", "Money", uncommitted),
+  0,
+);
+// An uncapped resource reports a satisfied ratio of 1 however little it holds.
+assert.equal(
+  readCapturedOperand(root, "ResourceSatisfied", "Soul_Gem", uncommitted),
+  true,
+);
+// A resource the root does not hold is unanswerable rather than undemanded, and so is every
+// operand without the demand pass.
+assert.equal(
+  readCapturedOperand(root, "ResourceDemanded", "Lumber", accumulating),
+  undefined,
+);
+assert.equal(readCapturedOperand(root, "ResourceDemanded", "Money"), undefined);
+assert.equal(
+  readCapturedOperand(root, "ResourceSatisfied", "Money"),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceSatisfyRatio", "Money"),
+  undefined,
+);
+assert.equal(readCapturedOperand(root, "ResourceMaxCost", "Money"), undefined);
+
 // --- the soldier operands, recomputed from the captured root ----------------
 
 // Garrison, fortress, and forward-base fields the game backfills or the manager zeroes read the

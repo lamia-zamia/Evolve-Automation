@@ -63,6 +63,16 @@ function withTargets(targets, settings = {}, saving = null, craftCosts) {
   assert.equal(sample.isDemanded("Copper"), false);
 }
 
+// The same commitments expose their largest single cost, or 0 when nothing names the resource.
+{
+  const sample = withTargets([
+    { name: "Cottage", cause: "Queue", cost: { Stone: 400, Lumber: 300 } },
+  ]).sample();
+  assert.equal(sample.maxCost?.("Stone"), 400);
+  assert.equal(sample.maxCost?.("Lumber"), 300);
+  assert.equal(sample.maxCost?.("Copper"), 0);
+}
+
 // Requests combine by maximum, as the script's own `requestQuantity` does.
 {
   const sample = withTargets([

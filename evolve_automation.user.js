@@ -9006,7 +9006,8 @@
   var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
     requestedQuantity: () => 0,
     isDemanded: () => !1,
-    storageRequired: () => NO_STORAGE_REQUIREMENT
+    storageRequired: () => NO_STORAGE_REQUIREMENT,
+    maxCost: () => 0
   });
   function settingString(settings, key, fallback) {
     let value = settings[key];
@@ -9609,10 +9610,13 @@
             resource.id,
             resource.storageRequired
           ])
+        ), maxCosts = new Map(
+          storage.resources.map((resource) => [resource.id, resource.maxCost])
         );
         return Object.freeze({
           storageRequired: (resourceId) => required.get(resourceId) ?? NO_STORAGE_REQUIREMENT,
           requestedQuantity: (resourceId) => requested.get(resourceId) ?? 0,
+          maxCost: (resourceId) => maxCosts.get(resourceId) ?? 0,
           isDemanded: (resourceId) => {
             let wanted = requested.get(resourceId);
             if (wanted === void 0) return !1;
@@ -10336,6 +10340,8 @@
   var SWARM_SATELLITE_ACTION_ID = "space-swarm_satellite", BOOLEAN_OPERANDS = /* @__PURE__ */ new Set([
     "Boolean",
     "ResourceUnlocked",
+    "ResourceSatisfied",
+    "ResourceDemanded",
     "JobUnlocked",
     "ResearchUnlocked",
     "ResearchComplete",
@@ -10370,6 +10376,20 @@
   function resourceRecord(root, argument) {
     if (typeof argument == "string")
       return readProperty(readProperty(root, "resource"), argument);
+  }
+  function demandResourceRecord(root, argument) {
+    let record = resourceRecord(root, argument);
+    return isRecord(record) ? record : void 0;
+  }
+  function demandUsefulRatio(root, demand, argument) {
+    if (demand === void 0) return;
+    let record = demandResourceRecord(root, argument);
+    if (!isRecord(record)) return;
+    let amount = finite(readProperty(record, "amount")), maximum = finite(readProperty(record, "max"));
+    if (amount === void 0 || maximum === void 0) return;
+    let required = finite(demand.storageRequired(String(argument)));
+    if (required !== void 0)
+      return !(maximum > 0) || !(required > 0) ? 1 : amount / Math.min(maximum, required);
   }
   function civicJob(root, argument) {
     if (typeof argument == "string")
@@ -10544,6 +10564,10 @@
         return finite(readProperty(resourceRecord(root, argument), "amount"));
       case "ResourceStorage":
         return finite(readProperty(resourceRecord(root, argument), "max"));
+      case "ResourceMaxCost":
+        return typeof argument != "string" || demandResourceRecord(root, argument) === void 0 ? void 0 : finite(context?.demand?.maxCost?.(argument));
+      case "ResourceSatisfyRatio":
+        return demandUsefulRatio(root, context?.demand, argument);
       case "ResourceRatio": {
         let amount = finite(
           readProperty(resourceRecord(root, argument), "amount")
@@ -10648,6 +10672,12 @@
       case "ResourceUnlocked": {
         let entry = resourceRecord(root, argument);
         return isRecord(entry) ? readProperty(entry, "display") === !0 : void 0;
+      }
+      case "ResourceDemanded":
+        return typeof argument != "string" || demandResourceRecord(root, argument) === void 0 ? void 0 : context?.demand?.isDemanded(argument);
+      case "ResourceSatisfied": {
+        let ratio = demandUsefulRatio(root, context?.demand, argument);
+        return ratio === void 0 ? void 0 : ratio >= 1;
       }
       case "JobUnlocked": {
         if (typeof argument != "string") return;
@@ -10754,6 +10784,17 @@
       (row) => row.actionType === "research" || row.requirementType === "ResearchComplete"
     );
   }
+  var DEMAND_CONDITION_TYPES = /* @__PURE__ */ new Set([
+    "ResourceDemanded",
+    "ResourceSatisfied",
+    "ResourceSatisfyRatio",
+    "ResourceMaxCost"
+  ]);
+  function triggersNeedDemandSample(settings) {
+    return readProperty(settings, "autoTrigger") !== !0 ? !1 : readRows(settings).some(
+      (row) => DEMAND_CONDITION_TYPES.has(row.requirementType)
+    );
+  }
   function readTriggerActionStructure(root, actionId) {
     let parts = splitActionId(actionId);
     if (parts === void 0) return;
@@ -10788,13 +10829,14 @@
           let cost = costs.readCost(buildingId);
           cost !== void 0 && buildingCosts.set(buildingId, cost);
         }
-        let storedSettings = isRecord(settings) ? settings : void 0, conditionContext = Object.freeze({
+        let storedSettings = isRecord(settings) ? settings : void 0, demandSample = dependencies.readDemandSample?.(), conditionContext = Object.freeze({
           ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
           ...grantedTechs === void 0 ? {} : { grantedTechs },
           ...offeredProjectsById === void 0 ? {} : { unlockedProjects: new Set(offeredProjectsById.keys()) },
           ...buildingUnlocks === void 0 ? {} : { buildingUnlocks },
           ...buildingCosts.size === 0 ? {} : { buildingCosts },
-          ...storedSettings === void 0 ? {} : { settings: storedSettings }
+          ...storedSettings === void 0 ? {} : { settings: storedSettings },
+          ...demandSample === void 0 ? {} : { demand: demandSample }
         }), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
             let count2 = finite(
@@ -16087,7 +16129,21 @@
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls
       })
-    }), triggers = createCapturedTriggers({
+    }), fleetDemand = createCapturedFleetDemand({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      getDocument: () => document
+    }), triggerDemand = createCapturedResourceDemand({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      costs: buildCosts,
+      construction: progression.observations,
+      readOfferedTechs: progression.readOfferedTechs,
+      reservations: queueReservations,
+      readSettings: () => readStoredSettings(storage),
+      craftCosts: costs,
+      fleet: fleetDemand
+    }), triggerDemandThisCycle, readTriggerDemand = () => triggerDemandThisCycle ??= triggerDemand.sample(), triggers = createCapturedTriggers({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs: buildCosts,
@@ -16095,7 +16151,12 @@
       readOfferedTechs: progression.readOfferedTechs,
       readGrantedTechs: progression.readGrantedTechs,
       readOfferedProjects: progression.readProjects,
-      readBuildingUnlocks: progression.readBuildingUnlocks
+      readBuildingUnlocks: progression.readBuildingUnlocks,
+      // The demand-reading conditions need the commitments without the trigger targets; the
+      // cycle's own sample includes them, and the conditions are evaluated inside the sampling
+      // it pulls in. Sampled lazily and only for a configured condition, like the granted-techs
+      // pass, so other runs never pay for the second demand plan.
+      readDemandSample: () => triggersNeedDemandSample(readStoredSettings(storage)) ? readTriggerDemand() : void 0
     }), triggerTargetsThisCycle, readTriggerTargets = () => triggerTargetsThisCycle ??= triggers.read(), triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -16114,11 +16175,7 @@
       reservations: queueReservations,
       readSettings: () => readStoredSettings(storage),
       craftCosts: costs,
-      fleet: createCapturedFleetDemand({
-        rootState: pageCapture2.rootState,
-        controls: pageCapture2.controls,
-        getDocument: () => document
-      })
+      fleet: fleetDemand
     }), demandThisCycle;
     readDemand = () => demandThisCycle ??= demand.sample();
     let storagePorts = createCapturedStoragePorts({
@@ -16600,7 +16657,7 @@
       readSettings: () => readStoredSettings(storage),
       readDemand: () => readDemand()
     }), runCycle = () => {
-      demandThisCycle = void 0, triggerTargetsThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample();
+      demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample();
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {

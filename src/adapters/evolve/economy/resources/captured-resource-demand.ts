@@ -80,6 +80,12 @@ export interface CapturedDemandSample {
    * 1 for a resource nothing is saving for, matching the script's own baseline.
    */
   storageRequired(resourceId: string): number;
+  /**
+   * The largest single cost in a resource the commitments name, or 0 when nothing does. Optional
+   * so readers that only need the three core answers are unaffected; the trigger-condition reader
+   * is currently its only consumer.
+   */
+  maxCost?: (resourceId: string) => number;
 }
 
 export interface CapturedResourceDemand {
@@ -94,6 +100,7 @@ export const EMPTY_DEMAND_SAMPLE: CapturedDemandSample = Object.freeze({
   requestedQuantity: () => 0,
   isDemanded: () => false,
   storageRequired: () => NO_STORAGE_REQUIREMENT,
+  maxCost: () => 0,
 });
 
 function settingString(
@@ -979,12 +986,16 @@ export function createCapturedResourceDemand(
           resource.storageRequired,
         ]),
       );
+      const maxCosts = new Map(
+        storage.resources.map((resource) => [resource.id, resource.maxCost]),
+      );
 
       return Object.freeze({
         storageRequired: (resourceId: string) =>
           required.get(resourceId) ?? NO_STORAGE_REQUIREMENT,
         requestedQuantity: (resourceId: string) =>
           requested.get(resourceId) ?? 0,
+        maxCost: (resourceId: string) => maxCosts.get(resourceId) ?? 0,
         isDemanded: (resourceId: string) => {
           const wanted = requested.get(resourceId);
           if (wanted === undefined) return false;

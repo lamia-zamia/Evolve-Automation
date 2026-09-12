@@ -45,6 +45,7 @@ import { createCapturedFleetAutomation } from "../adapters/evolve/combat/capture
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import {
   createCapturedTriggers,
+  triggersNeedDemandSample,
   triggersNeedGrantedTechs,
   type CapturedTriggerTarget,
 } from "../adapters/evolve/progression/build/captured-triggers.ts";
@@ -343,6 +344,31 @@ export function startCapturedRuntime({
       controls: pageCapture.controls,
     }),
   });
+  // The rendered shipyard cost is read-only, so one fleet demand reader serves both demand
+  // plans below instead of each drawing the panel's cost markup twice.
+  const fleetDemand = createCapturedFleetDemand({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    getDocument: () => document,
+  });
+  // The trigger conditions read what something else is accumulating, which needs the demand
+  // commitments without the trigger targets. Sampling the cycle's own demand from a condition
+  // would recurse through the trigger sampling it pulls in, so this second plan simply leaves
+  // the triggers out; everything else reads the same inputs at the same moment.
+  const triggerDemand = createCapturedResourceDemand({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    costs: buildCosts,
+    construction: progression.observations,
+    readOfferedTechs: progression.readOfferedTechs,
+    reservations: queueReservations,
+    readSettings: () => readStoredSettings(storage),
+    craftCosts: costs,
+    fleet: fleetDemand,
+  });
+  let triggerDemandThisCycle: CapturedDemandSample | undefined;
+  const readTriggerDemand = () =>
+    (triggerDemandThisCycle ??= triggerDemand.sample());
   const triggers = createCapturedTriggers({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -352,6 +378,14 @@ export function startCapturedRuntime({
     readGrantedTechs: progression.readGrantedTechs,
     readOfferedProjects: progression.readProjects,
     readBuildingUnlocks: progression.readBuildingUnlocks,
+    // The demand-reading conditions need the commitments without the trigger targets; the
+    // cycle's own sample includes them, and the conditions are evaluated inside the sampling
+    // it pulls in. Sampled lazily and only for a configured condition, like the granted-techs
+    // pass, so other runs never pay for the second demand plan.
+    readDemandSample: () =>
+      triggersNeedDemandSample(readStoredSettings(storage))
+        ? readTriggerDemand()
+        : undefined,
   });
   // One trigger sample per cycle, shared by the demand model and the trigger phase: what the
   // script saves for and what it clicks must be the same list.
@@ -378,11 +412,7 @@ export function startCapturedRuntime({
     reservations: queueReservations,
     readSettings: () => readStoredSettings(storage),
     craftCosts: costs,
-    fleet: createCapturedFleetDemand({
-      rootState: pageCapture.rootState,
-      controls: pageCapture.controls,
-      getDocument: () => document,
-    }),
+    fleet: fleetDemand,
   });
   let demandThisCycle: CapturedDemandSample | undefined;
   readDemand = () => (demandThisCycle ??= demand.sample());
@@ -1142,6 +1172,7 @@ export function startCapturedRuntime({
   const runCycle = () => {
     demandThisCycle = undefined;
     triggerTargetsThisCycle = undefined;
+    triggerDemandThisCycle = undefined;
     progression.resetProjectSample();
     progression.resetBuildingUnlockSample();
     const settings = readStoredSettings(storage);
