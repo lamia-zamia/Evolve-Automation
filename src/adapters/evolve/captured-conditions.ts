@@ -10,11 +10,12 @@
  * It also answers the operands the root cannot supply but a drawn panel can. The game's grant
  * keys live in its private action catalog, so `ResearchUnlocked` and `ResearchComplete` are read
  * from the research panel the cycle already drew; `ProjectUnlocked` is read the same way from the
- * A.R.P.A. panel. Those come in through `CapturedConditionContext`, and a condition naming one
- * goes unanswered whenever the pass it needs was not taken.
+ * A.R.P.A. panel, and `BuildingUnlocked` from the region panels the buildings are drawn into.
+ * Those come in through `CapturedConditionContext`, and a condition naming one goes unanswered
+ * whenever the pass it needs was not taken.
  *
  * Everything else a condition can name — script-computed resource fields, the settings layer,
- * custom expressions, building unlock and clickability states, manager-computed values, and
+ * custom expressions, building clickability and affordability states, manager-computed values, and
  * anything needing the module-level race catalog or a private action definition — is deliberately
  * absent.
  *
@@ -40,6 +41,15 @@ export interface CapturedConditionContext {
   readonly grantedTechs?: ReadonlySet<string>;
   /** Element ids the A.R.P.A. panel drew, e.g. `arpalhc`. */
   readonly unlockedProjects?: ReadonlySet<string>;
+  /**
+   * The drawn building rows, with the regions the sample speaks for. Both halves travel together:
+   * the ids alone cannot say whether a missing one was absent from a panel or in a panel nobody
+   * drew.
+   */
+  readonly buildingUnlocks?: {
+    readonly unlocked: ReadonlySet<string>;
+    readonly regions: ReadonlySet<string>;
+  };
 }
 
 /**
@@ -53,6 +63,7 @@ const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "ResearchUnlocked",
   "ResearchComplete",
   "ProjectUnlocked",
+  "BuildingUnlocked",
   "Challenge",
   "Universe",
   "Government",
@@ -399,6 +410,19 @@ function readBoolean(
       // real "nothing unlocked", not an absent one.
       if (typeof argument !== "string") return undefined;
       return context?.unlockedProjects?.has(argument);
+    }
+    case "BuildingUnlocked": {
+      // A building row is drawn for exactly the buildings that passed the game's own offer gate,
+      // and it stays drawn once built, so panel membership is the answer. Regions are per-sub-tab
+      // and each costs a pass, so only the sampled ones can be spoken for: an id under any other
+      // region is unanswered rather than reported as locked.
+      if (typeof argument !== "string") return undefined;
+      const separator = argument.indexOf("-");
+      if (separator <= 0) return undefined;
+      const sample = context?.buildingUnlocks;
+      if (sample === undefined) return undefined;
+      if (!sample.regions.has(argument.slice(0, separator))) return undefined;
+      return sample.unlocked.has(argument);
     }
     case "Boolean":
       return typeof argument === "boolean" ? argument : undefined;

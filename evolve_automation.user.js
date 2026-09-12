@@ -3648,6 +3648,92 @@
     });
   }
 
+  // src/adapters/evolve/progression/build/captured-building-unlocks.ts
+  var BUILDING_TAB_INDEX = 1, REGION_PANELS = Object.freeze({
+    city: Object.freeze([Object.freeze({ container: "#city", subTab: 0 })]),
+    space: Object.freeze([
+      Object.freeze({ container: "#space", subTab: 1 }),
+      Object.freeze({ container: "#outerSol", subTab: 5 })
+    ]),
+    interstellar: Object.freeze([
+      Object.freeze({ container: "#interstellar", subTab: 2 })
+    ]),
+    galaxy: Object.freeze([Object.freeze({ container: "#galaxy", subTab: 3 })]),
+    portal: Object.freeze([Object.freeze({ container: "#portal", subTab: 4 })]),
+    tauceti: Object.freeze([
+      Object.freeze({ container: "#tauceti", subTab: 6 })
+    ]),
+    eden: Object.freeze([Object.freeze({ container: "#eden", subTab: 7 })])
+  });
+  function createCapturedBuildingUnlocks(dependencies) {
+    let { rootState, discovery, drawnActions } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
+    });
+    return Object.freeze({
+      read(regions) {
+        if (regions.size === 0) return;
+        if (rootState.readRoot() === void 0) {
+          reportSkipped("*", "the game root has not been captured yet");
+          return;
+        }
+        let subTabControl = SUB_TAB_CONTROLS.spaceTabs;
+        if (subTabControl === void 0) {
+          reportSkipped("*", "the space-tab control is unavailable");
+          return;
+        }
+        let unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set();
+        for (let region of regions) {
+          let panels = REGION_PANELS[region];
+          if (panels === void 0) {
+            reportSkipped(region, "not a building region");
+            continue;
+          }
+          let ids = [], complete = !0;
+          for (let panel of panels) {
+            let path = Object.freeze([
+              Object.freeze({
+                setting: MAIN_TAB_SETTING,
+                control: MAIN_TAB_CONTROL,
+                index: BUILDING_TAB_INDEX
+              }),
+              Object.freeze({
+                setting: "spaceTabs",
+                control: subTabControl,
+                index: panel.subTab
+              })
+            ]), read = !1, result = discovery.discover(path, {
+              isPanelDrawn: () => drawnActions.exists(panel.container),
+              whileDrawn: () => {
+                if (drawnActions.exists(panel.container)) {
+                  for (let action of drawnActions.read(
+                    `${panel.container} .action`
+                  ))
+                    ids.push(action.id);
+                  read = !0;
+                }
+              }
+            });
+            if (result.outcome.status !== "succeeded" || !read) {
+              complete = !1, reportSkipped(
+                region,
+                result.outcome.status === "succeeded" ? `${panel.container} was not drawn` : result.outcome.failure?.message ?? result.outcome.status
+              );
+              break;
+            }
+          }
+          if (complete) {
+            for (let id of ids) unlocked.add(id);
+            sampled3.add(region);
+          }
+        }
+        if (sampled3.size !== 0)
+          return Object.freeze({
+            unlocked: Object.freeze(unlocked),
+            regions: Object.freeze(sampled3)
+          });
+      }
+    });
+  }
+
   // src/bootstrap/captured-progression-control.ts
   var NO_RESERVATIONS3 = Object.freeze({
     targets: Object.freeze([]),
@@ -3735,7 +3821,19 @@
       ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) }
     }), projectSampled = !1, lastProjects, resetProjectSample = () => {
       projectSampled = !1, lastProjects = void 0;
-    }, readProjects = () => (projectSampled || (projectSampled = !0, lastProjects = projectCatalog.readProjects()), lastProjects), readKnowledge = createCapturedKnowledgeReader({
+    }, readProjects = () => (projectSampled || (projectSampled = !0, lastProjects = projectCatalog.readProjects()), lastProjects), buildingUnlocks = createCapturedBuildingUnlocks({
+      rootState,
+      discovery,
+      drawnActions,
+      ...onSkipped === void 0 ? {} : {
+        onSkipped: (region, reason) => onSkipped(`building-unlocks ${region}`, reason)
+      }
+    }), buildingUnlockKey, lastBuildingUnlocks, resetBuildingUnlockSample = () => {
+      buildingUnlockKey = void 0, lastBuildingUnlocks = void 0;
+    }, readBuildingUnlocks = (regions) => {
+      let key = [...regions].sort().join(",");
+      return buildingUnlockKey !== key && (buildingUnlockKey = key, lastBuildingUnlocks = buildingUnlocks.read(regions)), lastBuildingUnlocks;
+    }, readKnowledge = createCapturedKnowledgeReader({
       rootState,
       resources,
       readLastOfferedTechs: () => lastOffered,
@@ -3810,6 +3908,8 @@
       readGrantedTechs: () => lastGranted,
       readProjects,
       resetProjectSample,
+      readBuildingUnlocks,
+      resetBuildingUnlockSample,
       observations: construction.observations,
       readManagedBuildTargets,
       ensureBuildControls
@@ -10206,6 +10306,7 @@
     "ResearchUnlocked",
     "ResearchComplete",
     "ProjectUnlocked",
+    "BuildingUnlocked",
     "Challenge",
     "Universe",
     "Government",
@@ -10425,6 +10526,13 @@
         return typeof argument != "string" ? void 0 : context?.grantedTechs?.has(argument);
       case "ProjectUnlocked":
         return typeof argument != "string" ? void 0 : context?.unlockedProjects?.has(argument);
+      case "BuildingUnlocked": {
+        if (typeof argument != "string") return;
+        let separator = argument.indexOf("-");
+        if (separator <= 0) return;
+        let sample = context?.buildingUnlocks;
+        return sample === void 0 || !sample.regions.has(argument.slice(0, separator)) ? void 0 : sample.unlocked.has(argument);
+      }
       case "Boolean":
         return typeof argument == "boolean" ? argument : void 0;
       case "ResourceUnlocked": {
@@ -10552,10 +10660,17 @@
           (row) => row.actionType === "arpa" || row.requirementType === "ProjectUnlocked"
         ), drawnProjects = dependencies.readOfferedProjects === void 0 || !needProjects ? void 0 : dependencies.readOfferedProjects(), offeredProjectsById = drawnProjects === void 0 ? void 0 : new Map(
           drawnProjects.map((project) => [project.elementId, project])
-        ), conditionContext = Object.freeze({
+        ), buildingRegions = /* @__PURE__ */ new Set();
+        for (let row of rows) {
+          if (row.requirementType !== "BuildingUnlocked" || typeof row.requirementId != "string") continue;
+          let separator = row.requirementId.indexOf("-");
+          separator <= 0 || buildingRegions.add(row.requirementId.slice(0, separator));
+        }
+        let buildingUnlocks = dependencies.readBuildingUnlocks === void 0 || buildingRegions.size === 0 ? void 0 : dependencies.readBuildingUnlocks(buildingRegions), conditionContext = Object.freeze({
           ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
           ...grantedTechs === void 0 ? {} : { grantedTechs },
-          ...offeredProjectsById === void 0 ? {} : { unlockedProjects: new Set(offeredProjectsById.keys()) }
+          ...offeredProjectsById === void 0 ? {} : { unlockedProjects: new Set(offeredProjectsById.keys()) },
+          ...buildingUnlocks === void 0 ? {} : { buildingUnlocks }
         }), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
             let count2 = finiteValue2(
@@ -15893,7 +16008,8 @@
       readSettings: () => readStoredSettings(storage),
       readOfferedTechs: progression.readOfferedTechs,
       readGrantedTechs: progression.readGrantedTechs,
-      readOfferedProjects: progression.readProjects
+      readOfferedProjects: progression.readProjects,
+      readBuildingUnlocks: progression.readBuildingUnlocks
     }), triggerTargetsThisCycle, readTriggerTargets = () => triggerTargetsThisCycle ??= triggers.read(), triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -16342,7 +16458,7 @@
       readSettings: () => readStoredSettings(storage),
       readDemand: () => readDemand()
     }), runCycle = () => {
-      demandThisCycle = void 0, triggerTargetsThisCycle = void 0, progression.resetProjectSample();
+      demandThisCycle = void 0, triggerTargetsThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample();
       let settings = readStoredSettings(storage);
       if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
         try {

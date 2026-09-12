@@ -34,6 +34,8 @@ import type { ConstructionObservations } from "../ports/game-construction-observ
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameBuildTarget } from "../ports/game-build-targets.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
+import type { BuildingUnlockSample } from "../ports/game-building-unlocks.ts";
+import { createCapturedBuildingUnlocks } from "../adapters/evolve/progression/build/captured-building-unlocks.ts";
 import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
@@ -102,6 +104,15 @@ export interface CapturedProgressionControl {
    * construction would keep repricing from the previous cycle's panel.
    */
   readonly resetProjectSample: () => void;
+  /**
+   * The drawn building rows for the named regions, sampled once per cycle. Each region costs a
+   * panel draw, so a caller asks only for what it needs and an unsampled region stays unanswered.
+   */
+  readonly readBuildingUnlocks: (
+    regions: ReadonlySet<string>,
+  ) => Readonly<BuildingUnlockSample> | undefined;
+  /** Drops the shared building-unlock sample, for the same reason as the A.R.P.A. one. */
+  readonly resetBuildingUnlockSample: () => void;
   /** What the last construction cycle was saving for, for the features that read demand. */
   readonly observations: ConstructionObservations;
   /** Managed captured construction targets, used by production modes that weight against builds. */
@@ -248,6 +259,33 @@ export function createCapturedProgressionControl(
     }
     return lastProjects;
   };
+  const buildingUnlocks = createCapturedBuildingUnlocks({
+    rootState,
+    discovery,
+    drawnActions,
+    ...(onSkipped === undefined
+      ? {}
+      : {
+          onSkipped: (region: string, reason: string) =>
+            onSkipped(`building-unlocks ${region}`, reason),
+        }),
+  });
+  // The sample is keyed by the regions it was taken for, so a later caller asking for a region the
+  // first one did not request takes a fresh pass instead of being told that region is unanswerable.
+  let buildingUnlockKey: string | undefined;
+  let lastBuildingUnlocks: Readonly<BuildingUnlockSample> | undefined;
+  const resetBuildingUnlockSample = () => {
+    buildingUnlockKey = undefined;
+    lastBuildingUnlocks = undefined;
+  };
+  const readBuildingUnlocks = (regions: ReadonlySet<string>) => {
+    const key = [...regions].sort().join(",");
+    if (buildingUnlockKey !== key) {
+      buildingUnlockKey = key;
+      lastBuildingUnlocks = buildingUnlocks.read(regions);
+    }
+    return lastBuildingUnlocks;
+  };
   const readKnowledge = createCapturedKnowledgeReader({
     rootState,
     resources,
@@ -363,6 +401,8 @@ export function createCapturedProgressionControl(
     readGrantedTechs: () => lastGranted,
     readProjects,
     resetProjectSample,
+    readBuildingUnlocks,
+    resetBuildingUnlockSample,
     observations: construction.observations,
     readManagedBuildTargets,
     ensureBuildControls,

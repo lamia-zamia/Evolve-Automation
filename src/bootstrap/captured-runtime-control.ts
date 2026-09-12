@@ -345,6 +345,7 @@ export function startCapturedRuntime({
     readOfferedTechs: progression.readOfferedTechs,
     readGrantedTechs: progression.readGrantedTechs,
     readOfferedProjects: progression.readProjects,
+    readBuildingUnlocks: progression.readBuildingUnlocks,
   });
   // One trigger sample per cycle, shared by the demand model and the trigger phase: what the
   // script saves for and what it clicks must be the same list.
@@ -1080,6 +1081,7 @@ export function startCapturedRuntime({
     demandThisCycle = undefined;
     triggerTargetsThisCycle = undefined;
     progression.resetProjectSample();
+    progression.resetBuildingUnlockSample();
     const settings = readStoredSettings(storage);
     if (
       !pageCapture.isComplete() ||

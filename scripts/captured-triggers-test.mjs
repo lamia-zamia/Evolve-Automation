@@ -77,6 +77,7 @@ function triggers({
   granted,
   projects = PROJECTS,
   readOfferedProjects,
+  readBuildingUnlocks,
   controls,
 } = {}) {
   const offeredProjects = projects === null ? undefined : projects;
@@ -98,6 +99,7 @@ function triggers({
     readOfferedTechs: () => (offered === null ? undefined : offered),
     readGrantedTechs: () => granted,
     readOfferedProjects: readOfferedProjects ?? (() => offeredProjects),
+    ...(readBuildingUnlocks === undefined ? {} : { readBuildingUnlocks }),
   });
 }
 
@@ -347,6 +349,98 @@ assert.deepEqual(
 );
 assert.deepEqual(
   triggers({ triggers: projectLockedTrigger, projects: null }).read(),
+  [],
+);
+
+// --- BuildingUnlocked conditions draw only the regions they name -----------
+
+// The reader is asked for exactly the regions the configured conditions name, and nothing else.
+{
+  const asked = [];
+  const rows = [
+    trigger({
+      priority: 0,
+      requirementType: "BuildingUnlocked",
+      requirementId: "city-bank",
+      requirementCount: 1,
+      actionId: "city-mine",
+    }),
+    trigger({
+      priority: 1,
+      requirementType: "BuildingUnlocked",
+      requirementId: "portal-carport",
+      requirementCount: 1,
+      actionId: "city-apartment",
+    }),
+    // A requirement on something other than a building adds no region to the pass.
+    trigger({ priority: 2, actionId: "city-amphitheatre" }),
+  ];
+  const result = triggers({
+    triggers: rows,
+    readBuildingUnlocks: (regions) => {
+      asked.push([...regions].sort());
+      return {
+        unlocked: new Set(["city-bank"]),
+        regions: new Set(["city"]),
+      };
+    },
+  }).read();
+  // Only the two building regions the conditions name, asked for in one pass. The third row's
+  // `BuildingCount` requirement needs no panel and adds no region.
+  assert.deepEqual(asked, [["city", "portal"]]);
+  // The city condition is answered from the sample, so `city-mine` is a target. The portal one
+  // names a region the sample could not speak for, so that trigger is dropped rather than treated
+  // as locked — and `city-amphitheatre` then loses the ordinary cost conflict on Money.
+  assert.deepEqual(result, [
+    { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+  ]);
+}
+
+// No BuildingUnlocked condition means no panel is drawn at all.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger()],
+    readBuildingUnlocks: () => {
+      throw new Error(
+        "must not draw a region panel without a building condition",
+      );
+    },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// A drawn region that did not draw the building answers a real false, which a condition asking for
+// the building to be absent tells apart from an unanswered one.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingUnlocked",
+        requirementId: "city-bank",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: () => ({
+      unlocked: new Set(["city-farm"]),
+      regions: new Set(["city"]),
+    }),
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+// An unreadable pass leaves it unanswered, so the same trigger is dropped.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingUnlocked",
+        requirementId: "city-bank",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: () => undefined,
+  }).read(),
   [],
 );
 

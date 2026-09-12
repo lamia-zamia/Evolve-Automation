@@ -23,10 +23,12 @@
  *   runtime's DOM read reported the same technology as simply not researched.
  * - Conditions are limited to the operands `../../captured-conditions.ts` answers. `ProjectUnlocked`
  *   is answered from the same drawn panel the A.R.P.A. prices come from, so a trigger naming one
- *   draws the panel even when no trigger buys a project.
+ *   draws the panel even when no trigger buys a project. `BuildingUnlocked` likewise draws the
+ *   region panels its conditions name, and only those.
  */
 
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
+import type { BuildingUnlockSample } from "../../../../ports/game-building-unlocks.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
@@ -81,6 +83,13 @@ export interface CapturedTriggersDependencies {
   /** The A.R.P.A. snapshot this cycle already captured, if any. */
   readonly readOfferedProjects?: () =>
     readonly Readonly<OfferedProject>[] | undefined;
+  /**
+   * Draws and reads the building region panels named by the configured `BuildingUnlocked`
+   * conditions. Absent leaves those conditions unanswered.
+   */
+  readonly readBuildingUnlocks?: (
+    regions: ReadonlySet<string>,
+  ) => Readonly<BuildingUnlockSample> | undefined;
 }
 
 interface TriggerRow {
@@ -242,8 +251,25 @@ export function createCapturedTriggers(
           : new Map(
               drawnProjects.map((project) => [project.elementId, project]),
             );
-      // The condition evaluator answers the research and project operands from the same passes the
-      // actions are priced from, so a trigger's requirement and its target describe one moment.
+      // Each building region is behind its own sub-tab and costs a pass to draw, so only the
+      // regions a configured `BuildingUnlocked` condition actually names are sampled. A row whose
+      // argument is not a `<region>-<id>` pair names no panel and is left to go unanswered.
+      const buildingRegions = new Set<string>();
+      for (const row of rows) {
+        if (row.requirementType !== "BuildingUnlocked") continue;
+        if (typeof row.requirementId !== "string") continue;
+        const separator = row.requirementId.indexOf("-");
+        if (separator <= 0) continue;
+        buildingRegions.add(row.requirementId.slice(0, separator));
+      }
+      const buildingUnlocks =
+        dependencies.readBuildingUnlocks === undefined ||
+        buildingRegions.size === 0
+          ? undefined
+          : dependencies.readBuildingUnlocks(buildingRegions);
+      // The condition evaluator answers the research, project and building operands from the same
+      // passes the actions are priced from, so a trigger's requirement and its target describe one
+      // moment.
       const conditionContext = Object.freeze({
         ...(offeredTechs === undefined
           ? {}
@@ -252,6 +278,7 @@ export function createCapturedTriggers(
         ...(offeredProjectsById === undefined
           ? {}
           : { unlockedProjects: new Set(offeredProjectsById.keys()) }),
+        ...(buildingUnlocks === undefined ? {} : { buildingUnlocks }),
       });
       const byPriority = new Map(rows.map((row) => [row.priority, row]));
 

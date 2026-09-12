@@ -395,6 +395,81 @@ assert.equal(
   undefined,
 );
 
+// --- the building unlock operand, answered from the drawn region panels ---
+
+// Each region is sampled separately, so the sample says which regions it can speak for.
+const cityAndSpace = {
+  buildingUnlocks: {
+    unlocked: new Set(["city-farm", "city-mine", "space-titan_spaceport"]),
+    regions: new Set(["city", "space"]),
+  },
+};
+assert.equal(
+  readCapturedOperand(root, "BuildingUnlocked", "city-farm", cityAndSpace),
+  true,
+);
+// A building the panel did not draw is not offered, and a built-out one stays drawn, so a missing
+// id never means "already finished".
+assert.equal(
+  readCapturedOperand(root, "BuildingUnlocked", "city-bank", cityAndSpace),
+  false,
+);
+// Outer-Sol rows carry the same `space-` prefix as inner ones, so one region covers both panels.
+assert.equal(
+  readCapturedOperand(
+    root,
+    "BuildingUnlocked",
+    "space-titan_spaceport",
+    cityAndSpace,
+  ),
+  true,
+);
+// A region the sample did not draw is unanswered, never false.
+assert.equal(
+  readCapturedOperand(root, "BuildingUnlocked", "portal-carport", cityAndSpace),
+  undefined,
+);
+// So is an argument that names no region at all, and an absent sample.
+assert.equal(
+  readCapturedOperand(root, "BuildingUnlocked", "farm", cityAndSpace),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingUnlocked", "city-farm"),
+  undefined,
+);
+// It is a boolean operand: the stored count is matched, not exceeded.
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "BuildingUnlocked",
+    "city-farm",
+    1,
+    cityAndSpace,
+  ),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "BuildingUnlocked",
+    "city-bank",
+    0,
+    cityAndSpace,
+  ),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "BuildingUnlocked",
+    "portal-carport",
+    0,
+    cityAndSpace,
+  ),
+  undefined,
+);
+
 // Nothing the capture does not hold is guessed at.
 assert.equal(readCapturedOperand(root, "Eval", "1 + 1"), undefined);
 assert.equal(
