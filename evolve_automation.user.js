@@ -1845,7 +1845,8 @@
   }
   function readTarget2(settings, city, elementId, context, onSkipped) {
     let binding = CITY_ELEMENT_BINDING_ALIASES[elementId] ?? elementId;
-    if (!binding.startsWith("city-") || binding.length === 5 || settings[`bat${binding}`] !== !0) return;
+    if (!binding.startsWith("city-") || binding.length === 5 || settings[`bat${binding}`] === !1 || settings[`bat${binding}`] === void 0 && settings.autoBuild !== !0)
+      return;
     let id = binding.slice(5), state = readProperty(city, id);
     if (!isRecord(state)) {
       onSkipped(binding, "captured city state is unavailable");
@@ -1991,7 +1992,8 @@
     if (!CAPTURED_BUILD_REGIONS.has(region) || region === "city")
       return;
     let binding = elementId;
-    if (settings[`bat${binding}`] !== !0) return;
+    if (settings[`bat${binding}`] === !1 || settings[`bat${binding}`] === void 0 && settings.autoBuild !== !0)
+      return;
     let id = parts.id, owner = readProperty(root, region), state = readProperty(owner, id);
     if (!isRecord(state)) {
       onSkipped(binding, `captured ${region} state is unavailable`);
@@ -6279,7 +6281,7 @@
         onSkipped(controlId, "ordinary job storage floor is unavailable");
         return;
       }
-      let kind = jobKind(id), jobHistory = readJobHistory?.(), race = readProperty(root, "race"), demonicLumber = kind === "hunter" && hasRaceFlag(race, "soul_eater") && hasRaceFlag(race, "evil") && readProperty(race, "species") !== "wendigo" && !hasRaceFlag(race, "kindling_kindred") && !hasRaceFlag(race, "smoldering"), unlocked = display, managed = unlocked && readProperty(settings, `job_${id}`) === !0, configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
+      let kind = jobKind(id), jobHistory = readJobHistory?.(), race = readProperty(root, "race"), demonicLumber = kind === "hunter" && hasRaceFlag(race, "soul_eater") && hasRaceFlag(race, "evil") && readProperty(race, "species") !== "wendigo" && !hasRaceFlag(race, "kindling_kindred") && !hasRaceFlag(race, "smoldering"), unlocked = display, setting = readProperty(settings, `job_${id}`), managed = unlocked && (setting === !0 || setting === void 0 && readProperty(settings, "autoJobs") === !0), configuredBreakpoints = readConfiguredBreakpoints(settings, id), normalized = normalizeBreakpoints(
         configuredBreakpoints,
         maximum,
         id,

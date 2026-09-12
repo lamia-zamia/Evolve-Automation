@@ -1316,10 +1316,14 @@ function readCatalog(
       readProperty(race, "species") !== "wendigo" &&
       !hasRaceFlag(race, "kindling_kindred") &&
       !hasRaceFlag(race, "smoldering");
-    // DeadSpace's job surface defines unlocked from civic.display and the script's managed
-    // setting is only effective for an unlocked job. Missing or malformed settings remain false.
+    // DeadSpace's job surface defines unlocked from civic.display. Missing target settings use the
+    // reset default only when autoJobs is enabled; an explicit false remains the opt-out.
     const unlocked = display;
-    const managed = unlocked && readProperty(settings, `job_${id}`) === true;
+    const setting = readProperty(settings, `job_${id}`);
+    const managed =
+      unlocked &&
+      (setting === true ||
+        (setting === undefined && readProperty(settings, "autoJobs") === true));
     const configuredBreakpoints = readConfiguredBreakpoints(settings, id);
     const normalized = normalizeBreakpoints(
       configuredBreakpoints,

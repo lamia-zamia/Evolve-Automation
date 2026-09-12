@@ -181,6 +181,26 @@ const absentSettingsReader = createCapturedBuildPolicyReader({
 });
 assert.deepEqual(absentSettingsReader().buildings, []);
 
+const partialSettingsReader = createCapturedBuildPolicyReader({
+  readKnowledge: () => openKnowledge,
+  rootState: {
+    readRoot: () => ({ city: { farm: { count: 2 } } }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => ["city-farm"],
+  },
+  getSettings: () => ({ autoBuild: true }),
+});
+assert.equal(
+  partialSettingsReader().buildings[0]?.id,
+  "farm",
+  "an absent per-building switch uses the enabled reset default",
+);
+
 const nonOperatingReader = createCapturedBuildPolicyReader({
   readKnowledge: () => openKnowledge,
   rootState: {

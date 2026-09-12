@@ -553,9 +553,15 @@ function readTarget(
   if (!binding.startsWith("city-") || binding.length === "city-".length) {
     return undefined;
   }
-  // `bat…` is the script's managed-building switch. Non-building city actions have no such key in
-  // the reset settings and therefore remain outside this adapter's construction family.
-  if (settings[`bat${binding}`] !== true) return undefined;
+  // `bat…` is the script's managed-building switch. Partial settings are common while the
+  // captured settings sections are being initialized, so absence uses the reset default (enabled)
+  // when autoBuild is on; an explicit false always disables a captured building.
+  if (
+    settings[`bat${binding}`] === false ||
+    (settings[`bat${binding}`] === undefined && settings.autoBuild !== true)
+  ) {
+    return undefined;
+  }
   const id = binding.slice("city-".length);
   const state = readProperty(city, id);
   if (!isRecord(state)) {
@@ -750,7 +756,12 @@ function readNonCityTarget(
     return undefined;
   }
   const binding = elementId;
-  if (settings[`bat${binding}`] !== true) return undefined;
+  if (
+    settings[`bat${binding}`] === false ||
+    (settings[`bat${binding}`] === undefined && settings.autoBuild !== true)
+  ) {
+    return undefined;
+  }
   const id = parts.id;
   const owner = readProperty(root, region);
   const state = readProperty(owner, id);

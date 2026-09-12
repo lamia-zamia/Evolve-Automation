@@ -80,6 +80,21 @@ assert.deepEqual(calls, [
   { elementId: "civ-farmer", method: "setDefault", args: ["farmer"] },
 ]);
 
+const partialSettingsRoot = structuredClone(root);
+partialSettingsRoot.civic.farmer.workers = 0;
+partialSettingsRoot.civic.unemployed.workers = 3;
+const partialSettingsAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => partialSettingsRoot },
+  controls,
+  readSettings: () => ({ autoJobs: true }),
+});
+const partialSettingsInput = partialSettingsAutomation.reader.readCycle(false);
+assert.equal(
+  partialSettingsInput.jobs.find(({ id }) => id === "farmer")?.managed,
+  true,
+  "an absent per-job switch uses the enabled reset default",
+);
+
 const authorityAutomation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => root },
   controls,
