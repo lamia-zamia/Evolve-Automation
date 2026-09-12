@@ -16718,6 +16718,480 @@
     });
   }
 
+  // src/domain/progression/prestige/achievement-guard-settings.ts
+  var achievementGuardSettingsReadModel = Object.freeze({
+    sectionId: "achievementGuard",
+    sectionName: "Achievement Guard",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "achievementGuards",
+        label: "Enable achievement guards",
+        hint: "Constrain automation so the current run stays eligible for the guarded achievements below. Each guard arms only while its achievement is still unearned at the current star level in the current universe, and releases as soon as it's earned, already lost this run, or out of scope for the current prestige type."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardPacifist",
+        label: "Pacifist",
+        hint: "Never attack foreign powers. Also allows unification researches regardless of the 'Perform unification' toggle. Foreign policies must be set to Annex/Purchase for unification to actually happen without attacking."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardDreaded",
+        label: "Dreaded",
+        hint: "Never build a Dreadnought during ascension runs. If the Chthonian Mission outcome is set to Dreadnought, it will be executed as High losses instead."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardCultOfPersonality",
+        label: "Cult of Personality",
+        hint: "Never unify - blocks unification researches. Yields to the Pacifist guard while both are armed, since Pacifist requires unification."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardAnarchist",
+        label: "Anarchist",
+        hint: "Never set a government during MAD runs, staying in Anarchy until reset."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardEnergetic",
+        label: "Energetic",
+        hint: "Never build a Thermal Collector during ascension runs."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardRedDead",
+        label: "Red Dead",
+        hint: "Never build a Red Spaceport during Whitehole or Vacuum Collapse runs, unless an active Pacifist, World Domination, or Syndicate guard needs it to unlock unification."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardSecondEvolution",
+        label: "Second Evolution",
+        hint: "Research Fanaticism instead of Anthropology while worshipping own species as gods."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardWorldDomination",
+        label: "World Domination",
+        hint: "While unearned and still possible, prefer Occupy for the three core foreign powers. Existing foreign policy settings resume if the path is lost or the achievement is earned. If both World Domination and Syndicate are enabled on a clean slate, World Domination is selected."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardSyndicate",
+        label: "Syndicate",
+        hint: "While unearned and still possible, prefer Purchase for the three core foreign powers. Existing foreign policy settings resume if the path is lost or the achievement is earned. Disable World Domination to select Syndicate from a clean slate."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardTradeFederation",
+        label: "Trade Federation",
+        hint: "When Trade Federation is still unearned and 750 city plus 50 galactic trade routes are already active, temporarily switch to Federation without changing route allocation. The preferred government resumes afterward."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardBananaRepublic",
+        label: "Banana Republic",
+        hint: "Block unification while the Banana Republic scenario still has unfinished objectives in the current universe, or while the 500 import and 500 export feat condition is still unmet. Also boosts World Collider and Monument weighting for unfinished Banana objectives."
+      })
+    ])
+  });
+  function getAchievementGuardSettingsReadModel() {
+    return achievementGuardSettingsReadModel;
+  }
+
+  // src/adapters/browser/achievement-guard-settings.ts
+  function createAchievementGuardSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    let readModel = getAchievementGuardSettingsReadModel();
+    function renderControl(node, control, actions) {
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function buildAchievementGuardSettings() {
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-achievement-guard-settings" });
+        },
+        updateAchievementGuardSettingsContent
+      );
+    }
+    function updateAchievementGuardSettingsContent() {
+      let actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (let control of readModel.controls)
+            renderControl(currentNode, control, actions);
+        }
+      );
+    }
+    return Object.freeze({
+      buildAchievementGuardSettings,
+      updateAchievementGuardSettingsContent
+    });
+  }
+
+  // src/domain/progression/prestige/challenge-helper-settings.ts
+  var challengeHelperSettingsReadModel = Object.freeze({
+    sectionId: "challengeHelper",
+    sectionName: "Challenge Helper",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "inflationChallengeAssist",
+        label: "Inflation challenge",
+        hint: "During Inflation, demand the $250B Wheelbarrow target, boost Money storage or income buildings as appropriate, and stop optional Money spending once the target can be reached soon."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "inflationChallengeSaveMinutes",
+        label: "Inflation save-up minutes",
+        hint: "When the $250B target is reachable within this many real-time minutes at current Money income, stop optional Money spending and imports until Wheelbarrow is earned. Set negative to disable the final save-up freeze while keeping the helper's weighting and demand."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "retirementChallengeAssist",
+        label: "Retirement preparation",
+        hint: "When the selected prestige is Retirement, boost the recommended pre-Isolation Tau buildings, reserve and stockpile 200M Graphene, and block Isolation Protocol until there are 20 Fusion Generators, 18 Factories, 11 Disease Labs, and the Graphene stockpile. Disable this to manage the irreversible transition manually."
+      })
+    ])
+  });
+  function getChallengeHelperSettingsReadModel() {
+    return challengeHelperSettingsReadModel;
+  }
+
+  // src/adapters/browser/challenge-helper-settings.ts
+  function createChallengeHelperSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    let readModel = getChallengeHelperSettingsReadModel();
+    function renderControl(node, control, actions) {
+      if (control.kind === "toggle") {
+        actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsNumber(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function buildChallengeHelperSettings() {
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-challenge-helper-settings" });
+        },
+        updateChallengeHelperSettingsContent
+      );
+    }
+    function updateChallengeHelperSettingsContent() {
+      let actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (let control of readModel.controls)
+            renderControl(currentNode, control, actions);
+        }
+      );
+    }
+    return Object.freeze({
+      buildChallengeHelperSettings,
+      updateChallengeHelperSettingsContent
+    });
+  }
+
+  // src/domain/interface-settings.ts
+  var interfaceSettingsReadModel = Object.freeze({
+    sectionId: "interface",
+    sectionName: "Interface",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "activeTargetsUI",
+        label: "Display detailed queue",
+        hint: "Add UI in right column to display currently active queued buildings, technologies, and triggers and their resources."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildPlannerUI",
+        label: "Display script planner",
+        hint: "Add UI below the message log showing the top buildings/projects autoBuild wants next, their weights, what's blocking them, and cumulative bottleneck statistics for the current run."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "displayPrestigeTypeInTopBar",
+        label: "Display prestige type in top bar",
+        hint: "Show the currently selected prestige type in the top bar"
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "displayTotalDaysTypeInTopBar",
+        label: "Display total days in top bar",
+        hint: "Show the total days next to this year's days"
+      }),
+      Object.freeze({
+        kind: "header",
+        label: "Experimental"
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "performanceHackAvoidDrawTech",
+        label: "Enable performance hack: drawTech avoidance",
+        hint: "Enables experimental performance hacks designed to avoid excessive redraws of expensive game tabs. The ARPA path preserves game behaviour; the repeat-building path is narrowly guarded but may still be risky if game internals change."
+      })
+    ])
+  });
+  function getInterfaceSettingsReadModel() {
+    return interfaceSettingsReadModel;
+  }
+
+  // src/adapters/browser/interface-settings.ts
+  function createInterfaceSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    let readModel = getInterfaceSettingsReadModel();
+    function renderControl(node, control, actions) {
+      if (control.kind === "header") {
+        actions.addSettingsHeader1(node, control.label);
+        return;
+      }
+      let callbacks = actions.controlEffects[control.settingName];
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        callbacks?.enabled,
+        callbacks?.disabled
+      );
+    }
+    function buildInterfaceSettings() {
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-interface-settings" });
+        },
+        updateInterfaceSettingsContent
+      );
+    }
+    function updateInterfaceSettingsContent() {
+      let actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (let control of readModel.controls)
+            renderControl(currentNode, control, actions);
+        }
+      );
+    }
+    return Object.freeze({
+      buildInterfaceSettings,
+      updateInterfaceSettingsContent
+    });
+  }
+
+  // src/domain/state-log-settings.ts
+  var stateLogSettingsReadModel = Object.freeze({
+    sectionId: "stateLog",
+    sectionName: "State Log",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "stateLogEnabled",
+        label: "Record state log",
+        hint: "Record compact bottleneck-focused snapshots of game state over the run into localStorage (key ea_state_log), for offline analysis. Retrieve via window.eaExportStateLog() in the console."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "stateLogAutoDownload",
+        label: "Auto-download log on reset",
+        hint: "When a reset (prestige) commits, automatically download the recorded state log as a JSON file."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "stateLogInterval",
+        label: "Sample every N ticks",
+        hint: "How often to record a state snapshot, counted in processed script ticks. A full run stays well under the 20000-sample cap at the default."
+      })
+    ])
+  });
+  function getStateLogSettingsReadModel() {
+    return stateLogSettingsReadModel;
+  }
+
+  // src/adapters/browser/state-log-settings.ts
+  function createStateLogSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    buildSettingsSection,
+    addSettingsToggle,
+    addSettingsNumber
+  }) {
+    let readModel = getStateLogSettingsReadModel();
+    function renderControl(node, control) {
+      if (control.kind === "toggle") {
+        addSettingsToggle(node, control.settingName, control.label, control.hint);
+        return;
+      }
+      addSettingsNumber(node, control.settingName, control.label, control.hint);
+    }
+    function buildStateLogSettings() {
+      buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-state-log-settings" }),
+        updateStateLogSettingsContent
+      );
+    }
+    function updateStateLogSettingsContent() {
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (let control of readModel.controls)
+            renderControl(currentNode, control);
+        }
+      );
+    }
+    return Object.freeze({
+      buildStateLogSettings,
+      updateStateLogSettingsContent
+    });
+  }
+
+  // src/domain/civic/authority-settings.ts
+  var authoritySettingsReadModel = Object.freeze({
+    sectionId: "authority",
+    sectionName: "Authority",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "authorityManage",
+        label: "Manage Authority",
+        hint: "Global switch for Authority automation. Controls morale capping, home and Hell soldier reserves, outer-fleet crew protection, and Authority-cap building weighting."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "generalMinimumAuthority",
+        label: "Target Authority",
+        hint: "Evil universe only. Authority below 100 causes a global production penalty of 0.35% per point. Set to -1 to target the current Authority maximum, or 0 to disable target-based management while leaving the global switch on."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "generalAuthorityMinPatrolPercent",
+        label: "Minimum Hell patrol percentage",
+        hint: "Only applies when Target Authority is -1. Reserves at least this percentage of available Hell soldiers for patrols and Soul Gem income before stationing the rest for Authority."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "buildingWeightingAuthority",
+        label: "Authority-cap building multiplier",
+        hint: "AutoBuild weighting multiplier for buildings that raise the Authority cap while it is below the configured target."
+      })
+    ])
+  });
+  function getAuthoritySettingsReadModel() {
+    return authoritySettingsReadModel;
+  }
+
+  // src/adapters/browser/authority-settings.ts
+  function createAuthoritySettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    let readModel = getAuthoritySettingsReadModel();
+    function renderControl(node, control, actions) {
+      if (control.kind === "toggle") {
+        actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsNumber(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function buildAuthoritySettings() {
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-authority-settings" });
+        },
+        updateAuthoritySettingsContent
+      );
+    }
+    function updateAuthoritySettingsContent() {
+      let actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (let control of readModel.controls)
+            renderControl(currentNode, control, actions);
+        }
+      );
+    }
+    return Object.freeze({
+      buildAuthoritySettings,
+      updateAuthoritySettingsContent
+    });
+  }
+
   // src/domain/options-modal.ts
   var optionButtons = Object.freeze([
     Object.freeze({
@@ -17291,6 +17765,84 @@
     });
   }
 
+  // src/application/achievement-guard-settings.ts
+  function createAchievementGuardSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-achievement-guard-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/challenge-helper-settings.ts
+  function createChallengeHelperSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-challenge-helper-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/interface-settings.ts
+  function createInterfaceSettingsIntentHandler({
+    writer,
+    reader,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-interface-settings") {
+          writer.resetToDefaults(), writer.persist(), effects.renderSettingsContent();
+          let state = reader.read();
+          effects.syncActiveTargetsUI(state.activeTargetsUI), effects.syncBuildPlannerUI(state.buildPlannerUI), effects.updatePrestigeInTopBar(), effects.updateTotalDaysInTopBar();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/state-log-settings.ts
+  function createStateLogSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-state-log-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/application/authority-settings.ts
+  function createAuthoritySettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-authority-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
+          return;
+        }
+      }
+    });
+  }
+
   // src/domain/settings-defaults.ts
   function computeGeneralDefaults() {
     return {
@@ -17311,6 +17863,64 @@
         buildingAlwaysClick: !1,
         buildingClickPerTick: 50,
         scriptSettingsExportFilename: "evolve-script-settings.json"
+      }
+    };
+  }
+  function computeInterfaceDefaults() {
+    return {
+      def: {
+        activeTargetsUI: !1,
+        buildPlannerUI: !0,
+        buildPlannerCollapsed: !1,
+        displayPrestigeTypeInTopBar: !0,
+        displayTotalDaysTypeInTopBar: !1,
+        performanceHackAvoidDrawTech: !1
+      }
+    };
+  }
+  function computeStateLogDefaults() {
+    return {
+      def: {
+        stateLogEnabled: !1,
+        stateLogAutoDownload: !1,
+        stateLogInterval: 20
+      }
+    };
+  }
+  function computeAchievementGuardDefaults() {
+    return {
+      def: {
+        achievementGuards: !1,
+        guardPacifist: !0,
+        guardDreaded: !0,
+        guardCultOfPersonality: !0,
+        guardAnarchist: !0,
+        guardEnergetic: !0,
+        guardRedDead: !0,
+        guardSecondEvolution: !0,
+        guardWorldDomination: !0,
+        guardSyndicate: !0,
+        guardTradeFederation: !0,
+        guardBananaRepublic: !0
+      }
+    };
+  }
+  function computeChallengeHelperDefaults() {
+    return {
+      def: {
+        inflationChallengeAssist: !0,
+        inflationChallengeSaveMinutes: 30,
+        retirementChallengeAssist: !0
+      }
+    };
+  }
+  function computeAuthorityDefaults() {
+    return {
+      def: {
+        authorityManage: !0,
+        generalMinimumAuthority: 100,
+        generalAuthorityMinPatrolPercent: 40,
+        buildingWeightingAuthority: 10
       }
     };
   }
@@ -17837,6 +18447,10 @@
     let location = readProperty(capturedPanelWindow, "location");
     return String(location ?? "").toLowerCase().includes("safemode");
   }
+  function confirmSettingsReset(capturedPanelWindow, message) {
+    let confirm = readProperty(capturedPanelWindow, "confirm");
+    return typeof confirm == "function" ? !!Reflect.apply(confirm, capturedPanelWindow, [message]) : !1;
+  }
   function createCapturedSettingsPanel({
     capturedPanelWindow,
     settings,
@@ -17853,11 +18467,24 @@
       return query;
     }, unported = (section) => () => {
       reportedSections.has(section) || (reportedSections.add(section), logError(`settings panel section not ported yet: ${section}`));
-    }, generalDefaults = computeGeneralDefaults().def, prepareSettingsForUi = () => {
+    }, generalDefaults = computeGeneralDefaults().def, capturedRecordDefaults = [
+      generalDefaults,
+      computeInterfaceDefaults().def,
+      computeStateLogDefaults().def,
+      computeAchievementGuardDefaults().def,
+      computeChallengeHelperDefaults().def,
+      computeAuthorityDefaults().def
+    ], prepareSettingsForUi = () => {
       let raw = settings.readRaw();
       (!isRecord(raw.overrides) || Array.isArray(raw.overrides)) && (raw.overrides = {});
-      for (let [key, value] of Object.entries(generalDefaults))
-        Object.hasOwn(raw, key) || (raw[key] = value);
+      for (let defaults of capturedRecordDefaults)
+        for (let [key, value] of Object.entries(defaults))
+          Object.hasOwn(raw, key) || (raw[key] = value);
+    }, resetCapturedSectionRecord = (defaults) => {
+      let raw = settings.readRaw(), overrides = raw.overrides;
+      if (isRecord(overrides) && !Array.isArray(overrides))
+        for (let key of Object.keys(defaults)) delete overrides[key];
+      Object.assign(raw, defaults);
     }, settingsUi, ensureSettingsUi = (dom) => {
       if (settingsUi !== void 0) return settingsUi;
       let documentForUi = documentValue, autocomplete = createAutocomplete({
@@ -17876,7 +18503,7 @@
         getUpdateSettingsFromState: () => () => settings.persist(),
         openOverrideModal: unported("per-setting override editor"),
         buildSelectOptions: inputs.buildSelectOptions
-      }), general, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -17889,18 +18516,13 @@
         buildPrestigeSettings: () => {
         },
         buildGeneralSettings: () => general?.buildGeneralSettings(),
-        buildInterfaceSettings: () => {
-        },
-        buildStateLogSettings: () => {
-        },
-        buildAchievementGuardSettings: () => {
-        },
-        buildChallengeHelperSettings: () => {
-        },
+        buildInterfaceSettings: () => interfaceSettings?.buildInterfaceSettings(),
+        buildStateLogSettings: () => stateLog?.buildStateLogSettings(),
+        buildAchievementGuardSettings: () => achievementGuard?.buildAchievementGuardSettings(),
+        buildChallengeHelperSettings: () => challengeHelper?.buildChallengeHelperSettings(),
         buildGovernmentSettings: () => {
         },
-        buildAuthoritySettings: () => {
-        },
+        buildAuthoritySettings: () => authority?.buildAuthoritySettings(),
         buildEvolutionSettings: () => {
         },
         buildPlanetSettings: () => {
@@ -17946,7 +18568,7 @@
         exportSettings: () => JSON.stringify(settings.readRaw()),
         triggerFileDownload: () => {
         },
-        confirm: () => !1
+        confirm: (message) => confirmSettingsReset(capturedPanelWindow, message)
       }), generalIntent = createGeneralSettingsIntentHandler({
         writer: {
           resetToDefaults: () => {
@@ -17970,7 +18592,7 @@
           }
         }
       });
-      return general = createGeneralSettingsBrowserAdapter({
+      general = createGeneralSettingsBrowserAdapter({
         getDocument: () => documentForUi,
         getJQuery,
         intents: { handle: (intent) => generalIntent.handle(intent) },
@@ -18003,14 +18625,121 @@
             hintText
           ))
         })
-      }), settingsUi = { general, shell }, settingsUi;
+      });
+      let simpleActions = {
+        buildSettingsSection: shell.buildSettingsSection,
+        addSettingsHeader1: shell.addSettingsHeader1,
+        addSettingsNumber: (node, settingName, label, hint) => controls.addSettingsNumber(
+          node,
+          settingName,
+          label,
+          hint
+        ),
+        addSettingsToggle: (node, settingName, label, hint) => controls.addSettingsToggle(
+          node,
+          settingName,
+          label,
+          hint
+        )
+      }, createSimpleWriter = (defaults) => ({
+        resetToDefaults: () => resetCapturedSectionRecord(defaults),
+        persist: () => settings.persist()
+      }), achievementIntent;
+      achievementIntent = createAchievementGuardSettingsIntentHandler({
+        writer: createSimpleWriter(computeAchievementGuardDefaults().def),
+        renderSettingsContent: () => achievementGuard?.updateAchievementGuardSettingsContent()
+      }), achievementGuard = createAchievementGuardSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery,
+        intents: achievementIntent,
+        getActions: () => simpleActions
+      });
+      let challengeIntent;
+      challengeIntent = createChallengeHelperSettingsIntentHandler({
+        writer: createSimpleWriter(computeChallengeHelperDefaults().def),
+        renderSettingsContent: () => challengeHelper?.updateChallengeHelperSettingsContent()
+      }), challengeHelper = createChallengeHelperSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery,
+        intents: challengeIntent,
+        getActions: () => simpleActions
+      });
+      let interfaceIntent;
+      interfaceIntent = createInterfaceSettingsIntentHandler({
+        writer: createSimpleWriter(computeInterfaceDefaults().def),
+        reader: {
+          read: () => ({
+            activeTargetsUI: settings.readRaw().activeTargetsUI === !0,
+            buildPlannerUI: settings.readRaw().buildPlannerUI === !0
+          })
+        },
+        effects: {
+          renderSettingsContent: () => interfaceSettings?.updateInterfaceSettingsContent(),
+          syncActiveTargetsUI: () => {
+          },
+          syncBuildPlannerUI: () => {
+          },
+          updatePrestigeInTopBar: () => {
+          },
+          updateTotalDaysInTopBar: () => {
+          }
+        }
+      }), interfaceSettings = createInterfaceSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery,
+        intents: interfaceIntent,
+        getActions: () => ({
+          ...simpleActions,
+          controlEffects: {}
+        })
+      });
+      let stateLogIntent;
+      stateLogIntent = createStateLogSettingsIntentHandler({
+        writer: createSimpleWriter(computeStateLogDefaults().def),
+        renderSettingsContent: () => stateLog?.updateStateLogSettingsContent()
+      }), stateLog = createStateLogSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery,
+        intents: stateLogIntent,
+        buildSettingsSection: shell.buildSettingsSection,
+        addSettingsToggle: (node, settingName, label, hint) => controls.addSettingsToggle(
+          node,
+          settingName,
+          label,
+          hint
+        ),
+        addSettingsNumber: (node, settingName, label, hint) => controls.addSettingsNumber(
+          node,
+          settingName,
+          label,
+          hint
+        )
+      });
+      let authorityIntent;
+      return authorityIntent = createAuthoritySettingsIntentHandler({
+        writer: createSimpleWriter(computeAuthorityDefaults().def),
+        renderSettingsContent: () => authority?.updateAuthoritySettingsContent()
+      }), authority = createAuthoritySettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery,
+        intents: authorityIntent,
+        getActions: () => simpleActions
+      }), settingsUi = {
+        general,
+        achievementGuard,
+        challengeHelper,
+        interface: interfaceSettings,
+        stateLog,
+        authority,
+        shell
+      }, settingsUi;
     }, buildScriptSettings = () => {
       let dom = getQuery();
       if (dom === void 0 || dom(".settings").length === 0) return;
       let ui = ensureSettingsUi(dom);
       dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && ui.general.buildGeneralSettings();
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings());
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
     }, optionsModal = createOptionsModalBrowserAdapter({

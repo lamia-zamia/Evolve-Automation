@@ -31,6 +31,7 @@ function createPage(
     document,
     navigator: { platform },
     location: url,
+    confirm: () => true,
     setTimeout: (callback) => callback(),
   };
   const settings = createSettingsStore({
@@ -57,6 +58,19 @@ function createPage(
   assert.equal(toggles.length, 1);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
   assert.equal(root.querySelectorAll("#script_generalSettings").length, 1);
+  for (const section of [
+    "interface",
+    "stateLog",
+    "achievementGuard",
+    "challengeHelper",
+    "authority",
+  ]) {
+    assert.equal(
+      root.querySelectorAll(`#script_${section}Settings`).length,
+      1,
+      `${section} settings should be rendered by the captured panel`,
+    );
+  }
 
   const firstCount = root.querySelectorAll("label").length;
   assert.ok(
@@ -71,6 +85,18 @@ function createPage(
     "a redraw must not stack a second panel",
   );
   assert.equal(root.querySelectorAll("label").length, firstCount);
+}
+
+// --- section resets use the host confirmation and update the shared record ----------------------
+
+{
+  const { panel, settings, root } = createPage(
+    JSON.stringify({ autoBuild: true, activeTargetsUI: true }),
+  );
+  panel.ensurePanel();
+  root.querySelectorAll("#script_resetinterface")[0].dispatch("click");
+  assert.equal(settings.readRaw()["activeTargetsUI"], false);
+  assert.equal(settings.readRaw()["buildPlannerUI"], true);
 }
 
 // --- a fresh profile with no settings at all still gets a panel ----------------------------------

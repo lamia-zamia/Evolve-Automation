@@ -19,12 +19,41 @@ import {
   createGeneralSettingsBrowserAdapter,
   type GeneralSettingsBrowserActions,
 } from "../adapters/browser/general-settings.ts";
+import {
+  createAchievementGuardSettingsBrowserAdapter,
+  type AchievementGuardSettingsBrowserActions,
+} from "../adapters/browser/achievement-guard-settings.ts";
+import {
+  createChallengeHelperSettingsBrowserAdapter,
+  type ChallengeHelperSettingsBrowserActions,
+} from "../adapters/browser/challenge-helper-settings.ts";
+import {
+  createInterfaceSettingsBrowserAdapter,
+  type InterfaceSettingsBrowserActions,
+} from "../adapters/browser/interface-settings.ts";
+import { createStateLogSettingsBrowserAdapter } from "../adapters/browser/state-log-settings.ts";
+import {
+  createAuthoritySettingsBrowserAdapter,
+  type AuthoritySettingsBrowserActions,
+} from "../adapters/browser/authority-settings.ts";
 import { createOptionsModalBrowserAdapter } from "../adapters/browser/options-modal.ts";
 import { createBrowserDomQuery } from "../adapters/browser/dom.ts";
 import { createNumberFormatting } from "../formatting/numbers.ts";
 import { numberSuffix as generalSettingsNumberSuffix } from "../config.ts";
 import { createGeneralSettingsIntentHandler } from "../application/general-settings.ts";
-import { computeGeneralDefaults } from "../domain/settings-defaults.ts";
+import { createAchievementGuardSettingsIntentHandler } from "../application/achievement-guard-settings.ts";
+import { createChallengeHelperSettingsIntentHandler } from "../application/challenge-helper-settings.ts";
+import { createInterfaceSettingsIntentHandler } from "../application/interface-settings.ts";
+import { createStateLogSettingsIntentHandler } from "../application/state-log-settings.ts";
+import { createAuthoritySettingsIntentHandler } from "../application/authority-settings.ts";
+import {
+  computeAchievementGuardDefaults,
+  computeAuthorityDefaults,
+  computeChallengeHelperDefaults,
+  computeGeneralDefaults,
+  computeInterfaceDefaults,
+  computeStateLogDefaults,
+} from "../domain/settings-defaults.ts";
 import type { SettingsStore } from "../adapters/browser/settings-store.ts";
 import { createSettingsControls } from "../ui/settings-controls.ts";
 import { createSettingsInputs } from "../ui/settings-inputs.ts";
@@ -51,6 +80,19 @@ type SettingsControlsDependencies = Parameters<
 type SettingsInputsDependencies = Parameters<typeof createSettingsInputs>[0];
 type SettingsShell = ReturnType<typeof createSettingsShell>;
 type GeneralSettings = ReturnType<typeof createGeneralSettingsBrowserAdapter>;
+type AchievementGuardSettings = ReturnType<
+  typeof createAchievementGuardSettingsBrowserAdapter
+>;
+type ChallengeHelperSettings = ReturnType<
+  typeof createChallengeHelperSettingsBrowserAdapter
+>;
+type InterfaceSettings = ReturnType<
+  typeof createInterfaceSettingsBrowserAdapter
+>;
+type StateLogSettings = ReturnType<typeof createStateLogSettingsBrowserAdapter>;
+type AuthoritySettings = ReturnType<
+  typeof createAuthoritySettingsBrowserAdapter
+>;
 type SettingsShellDependencies = Parameters<typeof createSettingsShell>[0];
 type SettingsControlNode = Parameters<
   ReturnType<typeof createSettingsControls>["addSettingsNumber"]
@@ -90,6 +132,16 @@ function safeModeFor(capturedPanelWindow: unknown): boolean {
     .includes("safemode");
 }
 
+function confirmSettingsReset(
+  capturedPanelWindow: unknown,
+  message: string,
+): boolean {
+  const confirm = readProperty(capturedPanelWindow, "confirm");
+  return typeof confirm === "function"
+    ? Boolean(Reflect.apply(confirm, capturedPanelWindow, [message]))
+    : false;
+}
+
 export function createCapturedSettingsPanel({
   capturedPanelWindow,
   settings,
@@ -124,18 +176,47 @@ export function createCapturedSettingsPanel({
   };
 
   const generalDefaults = computeGeneralDefaults().def;
+  const capturedRecordDefaults = [
+    generalDefaults,
+    computeInterfaceDefaults().def,
+    computeStateLogDefaults().def,
+    computeAchievementGuardDefaults().def,
+    computeChallengeHelperDefaults().def,
+    computeAuthorityDefaults().def,
+  ];
   const prepareSettingsForUi = () => {
     const raw = settings.readRaw();
     if (!isRecord(raw["overrides"]) || Array.isArray(raw["overrides"])) {
       raw["overrides"] = {};
     }
-    for (const [key, value] of Object.entries(generalDefaults)) {
-      if (!Object.hasOwn(raw, key)) raw[key] = value;
+    for (const defaults of capturedRecordDefaults) {
+      for (const [key, value] of Object.entries(defaults)) {
+        if (!Object.hasOwn(raw, key)) raw[key] = value;
+      }
     }
   };
 
+  const resetCapturedSectionRecord = (
+    defaults: Readonly<Record<string, unknown>>,
+  ) => {
+    const raw = settings.readRaw();
+    const overrides = raw["overrides"];
+    if (isRecord(overrides) && !Array.isArray(overrides)) {
+      for (const key of Object.keys(defaults)) delete overrides[key];
+    }
+    Object.assign(raw, defaults);
+  };
+
   let settingsUi:
-    | { readonly general: GeneralSettings; readonly shell: SettingsShell }
+    | {
+        readonly general: GeneralSettings;
+        readonly achievementGuard: AchievementGuardSettings;
+        readonly challengeHelper: ChallengeHelperSettings;
+        readonly interface: InterfaceSettings;
+        readonly stateLog: StateLogSettings;
+        readonly authority: AuthoritySettings;
+        readonly shell: SettingsShell;
+      }
     | undefined;
 
   const ensureSettingsUi = (dom: ReturnType<typeof createBrowserDomQuery>) => {
@@ -172,6 +253,11 @@ export function createCapturedSettingsPanel({
     });
 
     let general: GeneralSettings | undefined;
+    let achievementGuard: AchievementGuardSettings | undefined;
+    let challengeHelper: ChallengeHelperSettings | undefined;
+    let interfaceSettings: InterfaceSettings | undefined;
+    let stateLog: StateLogSettings | undefined;
+    let authority: AuthoritySettings | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -187,12 +273,14 @@ export function createCapturedSettingsPanel({
       getGame: () => ({ global: { settings: { civTabs: 7 } } }),
       buildPrestigeSettings: () => {},
       buildGeneralSettings: () => general?.buildGeneralSettings(),
-      buildInterfaceSettings: () => {},
-      buildStateLogSettings: () => {},
-      buildAchievementGuardSettings: () => {},
-      buildChallengeHelperSettings: () => {},
+      buildInterfaceSettings: () => interfaceSettings?.buildInterfaceSettings(),
+      buildStateLogSettings: () => stateLog?.buildStateLogSettings(),
+      buildAchievementGuardSettings: () =>
+        achievementGuard?.buildAchievementGuardSettings(),
+      buildChallengeHelperSettings: () =>
+        challengeHelper?.buildChallengeHelperSettings(),
       buildGovernmentSettings: () => {},
-      buildAuthoritySettings: () => {},
+      buildAuthoritySettings: () => authority?.buildAuthoritySettings(),
       buildEvolutionSettings: () => {},
       buildPlanetSettings: () => {},
       buildTraitSettings: () => {},
@@ -217,7 +305,7 @@ export function createCapturedSettingsPanel({
       importSettings: () => false,
       exportSettings: () => JSON.stringify(settings.readRaw()),
       triggerFileDownload: () => {},
-      confirm: () => false,
+      confirm: (message) => confirmSettingsReset(capturedPanelWindow, message),
     });
     const generalIntent = createGeneralSettingsIntentHandler({
       writer: {
@@ -284,7 +372,154 @@ export function createCapturedSettingsPanel({
           )) as GeneralSettingsBrowserActions["addSettingsToggle"],
       }),
     });
-    settingsUi = { general, shell };
+    const simpleActions = {
+      buildSettingsSection: shell.buildSettingsSection,
+      addSettingsHeader1: shell.addSettingsHeader1,
+      addSettingsNumber: (
+        node: unknown,
+        settingName: string,
+        label: string,
+        hint: string,
+      ) =>
+        controls.addSettingsNumber(
+          node as SettingsControlNode,
+          settingName,
+          label,
+          hint,
+        ),
+      addSettingsToggle: (
+        node: unknown,
+        settingName: string,
+        label: string,
+        hint: string,
+      ) =>
+        controls.addSettingsToggle(
+          node as SettingsControlNode,
+          settingName,
+          label,
+          hint,
+        ),
+    };
+    const createSimpleWriter = (
+      defaults: Readonly<Record<string, unknown>>,
+    ) => ({
+      resetToDefaults: () => resetCapturedSectionRecord(defaults),
+      persist: () => settings.persist(),
+    });
+    let achievementIntent: ReturnType<
+      typeof createAchievementGuardSettingsIntentHandler
+    >;
+    achievementIntent = createAchievementGuardSettingsIntentHandler({
+      writer: createSimpleWriter(computeAchievementGuardDefaults().def),
+      renderSettingsContent: () =>
+        achievementGuard?.updateAchievementGuardSettingsContent(),
+    });
+    achievementGuard = createAchievementGuardSettingsBrowserAdapter({
+      getDocument: () => documentForUi,
+      getJQuery: getJQuery as GeneralSettingsDependencies["getJQuery"],
+      intents: achievementIntent,
+      getActions: () =>
+        simpleActions as unknown as AchievementGuardSettingsBrowserActions,
+    });
+
+    let challengeIntent: ReturnType<
+      typeof createChallengeHelperSettingsIntentHandler
+    >;
+    challengeIntent = createChallengeHelperSettingsIntentHandler({
+      writer: createSimpleWriter(computeChallengeHelperDefaults().def),
+      renderSettingsContent: () =>
+        challengeHelper?.updateChallengeHelperSettingsContent(),
+    });
+    challengeHelper = createChallengeHelperSettingsBrowserAdapter({
+      getDocument: () => documentForUi,
+      getJQuery: getJQuery as GeneralSettingsDependencies["getJQuery"],
+      intents: challengeIntent,
+      getActions: () =>
+        simpleActions as unknown as ChallengeHelperSettingsBrowserActions,
+    });
+
+    let interfaceIntent: ReturnType<
+      typeof createInterfaceSettingsIntentHandler
+    >;
+    interfaceIntent = createInterfaceSettingsIntentHandler({
+      writer: createSimpleWriter(computeInterfaceDefaults().def),
+      reader: {
+        read: () => ({
+          activeTargetsUI: settings.readRaw()["activeTargetsUI"] === true,
+          buildPlannerUI: settings.readRaw()["buildPlannerUI"] === true,
+        }),
+      },
+      effects: {
+        renderSettingsContent: () =>
+          interfaceSettings?.updateInterfaceSettingsContent(),
+        syncActiveTargetsUI: () => {},
+        syncBuildPlannerUI: () => {},
+        updatePrestigeInTopBar: () => {},
+        updateTotalDaysInTopBar: () => {},
+      },
+    });
+    interfaceSettings = createInterfaceSettingsBrowserAdapter({
+      getDocument: () => documentForUi,
+      getJQuery: getJQuery as GeneralSettingsDependencies["getJQuery"],
+      intents: interfaceIntent,
+      getActions: () =>
+        ({
+          ...simpleActions,
+          controlEffects: {},
+        }) as unknown as InterfaceSettingsBrowserActions,
+    });
+
+    let stateLogIntent: ReturnType<typeof createStateLogSettingsIntentHandler>;
+    stateLogIntent = createStateLogSettingsIntentHandler({
+      writer: createSimpleWriter(computeStateLogDefaults().def),
+      renderSettingsContent: () => stateLog?.updateStateLogSettingsContent(),
+    });
+    stateLog = createStateLogSettingsBrowserAdapter({
+      getDocument: () => documentForUi,
+      getJQuery: getJQuery as Parameters<
+        typeof createStateLogSettingsBrowserAdapter
+      >[0]["getJQuery"],
+      intents: stateLogIntent,
+      buildSettingsSection: shell.buildSettingsSection,
+      addSettingsToggle: (node, settingName, label, hint) =>
+        controls.addSettingsToggle(
+          node as unknown as SettingsControlNode,
+          settingName,
+          label,
+          hint,
+        ),
+      addSettingsNumber: (node, settingName, label, hint) =>
+        controls.addSettingsNumber(
+          node as unknown as SettingsControlNode,
+          settingName,
+          label,
+          hint,
+        ),
+    });
+
+    let authorityIntent: ReturnType<
+      typeof createAuthoritySettingsIntentHandler
+    >;
+    authorityIntent = createAuthoritySettingsIntentHandler({
+      writer: createSimpleWriter(computeAuthorityDefaults().def),
+      renderSettingsContent: () => authority?.updateAuthoritySettingsContent(),
+    });
+    authority = createAuthoritySettingsBrowserAdapter({
+      getDocument: () => documentForUi,
+      getJQuery: getJQuery as GeneralSettingsDependencies["getJQuery"],
+      intents: authorityIntent,
+      getActions: () =>
+        simpleActions as unknown as AuthoritySettingsBrowserActions,
+    });
+    settingsUi = {
+      general,
+      achievementGuard,
+      challengeHelper,
+      interface: interfaceSettings,
+      stateLog,
+      authority,
+      shell,
+    };
     return settingsUi;
   };
 
@@ -299,6 +534,11 @@ export function createCapturedSettingsPanel({
     }
     if (dom("#script_generalSettings").length !== 0) return;
     ui.general.buildGeneralSettings();
+    ui.interface.buildInterfaceSettings();
+    ui.stateLog.buildStateLogSettings();
+    ui.achievementGuard.buildAchievementGuardSettings();
+    ui.challengeHelper.buildChallengeHelperSettings();
+    ui.authority.buildAuthoritySettings();
   };
 
   const removeScriptSettings = () => {
