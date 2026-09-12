@@ -11045,11 +11045,11 @@
         return !1;
       let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite(rawStar);
       if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
-      let achievementLevel2 = 1;
+      let achievementLevel3 = 1;
       for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
-        race[trait] && (achievementLevel2 += 1);
-      return achievementLevel2 = Math.min(achievementLevel2, 5), shouldSaveInflationMoney({
-        active: wheelbarrowStar < achievementLevel2 && readProperty(race, "inflation") !== !1,
+        race[trait] && (achievementLevel3 += 1);
+      return achievementLevel3 = Math.min(achievementLevel3, 5), shouldSaveInflationMoney({
+        active: wheelbarrowStar < achievementLevel3 && readProperty(race, "inflation") !== !1,
         saveMinutes,
         money: {
           targetMoney: INFLATION_CHALLENGE_MONEY,
@@ -14741,8 +14741,8 @@
     });
   }
 
-  // src/adapters/evolve/economy/market/captured-trade-routes.ts
-  var TRADE_RATIO = Object.freeze({
+  // src/adapters/evolve/economy/market/trade-price-mirror.ts
+  var TRADE_ROUTE_RATIO = Object.freeze({
     Food: 2,
     Lumber: 2,
     Chrysotile: 1,
@@ -14778,8 +14778,145 @@
     arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
     merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
     conniving: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
-    asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5])
-  }), BLACK_MARKET_VOLUMES = Object.freeze({
+    asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5]),
+    devious: Object.freeze([35, 30, 25, 20, 15, 10, 8])
+  }), TRAIT_VALS = Object.freeze({
+    arrogant: -2,
+    merchant: 3,
+    conniving: 4,
+    asymmetrical: -3,
+    devious: -4
+  }), EMPOWERED_RANGES = Object.freeze([
+    Object.freeze([-1, 2]),
+    Object.freeze([-2, 3]),
+    Object.freeze([-3, 4]),
+    Object.freeze([-4, 6]),
+    Object.freeze([-6, 9]),
+    Object.freeze([-8, 12]),
+    Object.freeze([-99, 99])
+  ]), EMPOWERED_RANK = Object.freeze([0.25, 0.5, 1, 2, 3, 4, 4]), GOBLIN_SELL_DIVISOR_PERCENT = 25, IMP_BUY_PERCENT = 5;
+  function rivalCollapsed(root) {
+    let shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
+    return shadow !== void 0 && shadow >= 3;
+  }
+  function traitPercent(race, trait) {
+    if (!race[trait]) return 0;
+    let rank = finite(race[trait]);
+    if (rank === void 0) return;
+    let index = TRAIT_RANKS2.indexOf(rank);
+    if (!(index < 0)) {
+      if (race.empowered) {
+        let empowered = finite(race.empowered);
+        if (empowered === void 0) return;
+        let empoweredIndex = TRAIT_RANKS2.indexOf(empowered);
+        if (empoweredIndex < 0) return;
+        let range = EMPOWERED_RANGES[empoweredIndex], val = TRAIT_VALS[trait];
+        if (range !== void 0 && val >= range[0] && val <= range[1]) {
+          let promoted = TRAIT_RANKS2.indexOf(EMPOWERED_RANK[index]);
+          if (promoted < 0) return;
+          index = promoted;
+        }
+      }
+      return TRAIT_VALUES2[trait][index];
+    }
+  }
+  function fathom(root, race, target) {
+    if (!race.unfathomable) return 0;
+    let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
+    if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
+    let housing = readProperty(city, "captive_housing"), workers = finite(
+      readProperty(
+        readProperty(readProperty(root, "civic"), "torturer"),
+        "workers"
+      )
+    ), index = dwellers.indexOf(target), active = finite(readProperty(housing, `race${index}`)), nightmare = readProperty(
+      readProperty(readProperty(root, "stats"), "achieve"),
+      "nightmare"
+    ), mg = finite(readProperty(nightmare, "mg"));
+    if (workers === void 0 || active === void 0) return;
+    let adjusted = Math.min(active, 100);
+    return adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3)), adjusted / 100 * ((mg ?? 0) / 5);
+  }
+  function structureCount2(container, id) {
+    let structure = readProperty(container, id);
+    if (structure === void 0 || structure === !1) return 0;
+    let count2 = finite(readProperty(structure, "count"));
+    return count2 === void 0 ? void 0 : count2;
+  }
+  function achievementLevel2(root, id) {
+    let achieve = readProperty(readProperty(root, "stats"), "achieve"), entry = readProperty(achieve, id);
+    if (entry === void 0) return 0;
+    let level = finite(readProperty(entry, "l"));
+    return level === void 0 ? 0 : level;
+  }
+  function railwayLevel(root) {
+    let railway = readProperty(readProperty(root, "tech"), "railway");
+    return railway ? finite(railway) : 0;
+  }
+  function hostility(root, race) {
+    if (!race.truepath || race.lone_survivor || rivalCollapsed(root))
+      return 0;
+    let gov3 = readProperty(
+      readProperty(readProperty(root, "civic"), "foreign"),
+      "gov3"
+    ), hstl = finite(readProperty(gov3, "hstl"));
+    return hstl === void 0 ? void 0 : hstl;
+  }
+  function suspicionExcess(root, race) {
+    if (!race.witch_hunter) return 0;
+    let amount = finite(
+      readProperty(readProperty(readProperty(root, "resource"), "Sus"), "amount")
+    );
+    if (amount !== void 0)
+      return amount > 50 ? amount - 50 : 0;
+  }
+  function inflationLevel(race) {
+    let inflation = race.inflation;
+    return inflation === void 0 || inflation === !1 ? 0 : finite(inflation);
+  }
+  function cunningSlotted(root) {
+    let slots = readProperty(readProperty(root, "race"), "geneSlots");
+    return Array.isArray(slots) ? slots.some(
+      (slot) => isRecord(slot) && readProperty(slot, "g") === "cunning"
+    ) : !1;
+  }
+  function psychicCashActive(root) {
+    let race = readProperty(root, "race"), powers = readProperty(race, "psychicPowers");
+    return !!(readProperty(readProperty(root, "tech"), "psychic") && readProperty(race, "psychic") && isRecord(powers) && Object.hasOwn(powers, "cash"));
+  }
+  function unsupportedTradePriceModifier(root) {
+    if (cunningSlotted(root)) return "a slotted Cunning gene";
+    if (psychicCashActive(root)) return "the psychic cash power";
+  }
+  function tradeRoutePrices(root, resourceId, resource) {
+    let ratio = TRADE_ROUTE_RATIO[resourceId], value = finite(resource.value), race = readProperty(root, "race");
+    if (ratio === void 0 || value === void 0 || value <= 0 || !isRecord(race) || unsupportedTradePriceModifier(root) !== void 0) return;
+    let arrogant = traitPercent(race, "arrogant"), conniving = traitPercent(race, "conniving"), merchant = traitPercent(race, "merchant"), asymmetrical = traitPercent(race, "asymmetrical"), devious = traitPercent(race, "devious"), goblin = fathom(root, race, "goblin"), imp = fathom(root, race, "imp"), wharf = structureCount2(readProperty(root, "city"), "wharf"), gps = structureCount2(readProperty(root, "space"), "gps"), underground = structureCount2(
+      readProperty(root, "underground"),
+      "trade"
+    ), railway = railwayLevel(root), banana = achievementLevel2(root, "banana"), hstl = hostility(root, race), suspicion = suspicionExcess(root, race), inflation = inflationLevel(race), quarantine = finite(race.quarantine ?? 0);
+    if (arrogant === void 0 || conniving === void 0 || merchant === void 0 || asymmetrical === void 0 || devious === void 0 || goblin === void 0 || imp === void 0 || wharf === void 0 || gps === void 0 || underground === void 0 || railway === void 0 || banana === void 0 || hstl === void 0 || suspicion === void 0 || inflation === void 0 || quarantine === void 0)
+      return;
+    let railwayBuyBoost = banana >= 1 ? 0.97 : 0.98, railwaySellBoost = banana >= 1 ? 0.03 : 0.02, gpsActive = gps > 3 ? gps : 0, buy = value * (1 + arrogant / 100) * (1 - conniving / 100);
+    buy *= 1 - imp * IMP_BUY_PERCENT / 100, buy *= ratio, buy *= 0.99 ** wharf, buy *= 0.99 ** gpsActive, buy *= railwayBuyBoost ** railway, buy *= 1 + hstl / 101, buy *= 1 + inflation / 300, race.quarantine && (buy *= 1 + Math.round(quarantine ** 3.5)), buy *= 1 + suspicion / 8, buy *= 0.99 ** underground;
+    let divide = 4;
+    if (divide *= 1 - merchant / 100, divide *= 1 - goblin * GOBLIN_SELL_DIVISOR_PERCENT / 100, divide *= 1 + asymmetrical / 100, divide *= 1 + devious / 100, race.conniving && (divide -= 1), !(divide > 0)) return;
+    let sell = value * ratio / divide;
+    sell *= 1 + wharf * 0.01, sell *= 1 + gpsActive * 0.01, sell *= 1 + railway * railwaySellBoost, sell *= 1 - hstl / 101, sell *= 1 + inflation / 500, sell *= 1 - suspicion / 52;
+    let buyPrice = Number(buy.toFixed(1)), sellPrice = Number(sell.toFixed(1));
+    return Number.isFinite(buyPrice) && Number.isFinite(sellPrice) ? Object.freeze({ buy: buyPrice, sell: sellPrice }) : void 0;
+  }
+  function tradeRouteSellQuantity(root, resourceId) {
+    let ratio = TRADE_ROUTE_RATIO[resourceId];
+    if (ratio === void 0) return;
+    let level = achievementLevel2(root, "trade");
+    if (level === void 0) return;
+    let rank = Math.min(5, level), quantity = ratio * (1 - rank / 100);
+    return quantity > 0 ? quantity : void 0;
+  }
+
+  // src/adapters/evolve/economy/market/captured-trade-routes.ts
+  var BLACK_MARKET_VOLUMES = Object.freeze({
     Food: 20,
     Lumber: 20,
     Chrysotile: 10,
@@ -14827,51 +14964,12 @@
   function settingsRecord3(value) {
     return isRecord(value) ? value : {};
   }
-  function traitPercent(race, trait) {
-    if (!race[trait]) return 0;
-    let rank = finite(race[trait]);
-    if (rank === void 0) return;
-    let index = TRAIT_RANKS2.indexOf(rank);
-    return index >= 0 ? TRAIT_VALUES2[trait][index] : void 0;
-  }
-  function fathom(root, race, target) {
-    if (!race.unfathomable) return 0;
-    let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
-    if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
-    let housing = readProperty(city, "captive_housing"), workers = finite(
-      readProperty(
-        readProperty(readProperty(root, "civic"), "torturer"),
-        "workers"
-      )
-    ), index = dwellers.indexOf(target), active = finite(readProperty(housing, `race${index}`)), nightmare = readProperty(
-      readProperty(readProperty(root, "stats"), "achieve"),
-      "nightmare"
-    ), mg = finite(readProperty(nightmare, "mg"));
-    if (workers === void 0 || active === void 0) return;
-    let adjusted = Math.min(active, 100);
-    return adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3)), adjusted / 100 * ((mg ?? 0) / 5);
-  }
-  function hasUnsupportedPriceModifier(root) {
-    let race = readProperty(root, "race"), genes = readProperty(root, "genes"), tech = readProperty(root, "tech"), city = readProperty(root, "city"), space = readProperty(root, "space"), underground = readProperty(root, "underground"), stats = readProperty(readProperty(root, "stats"), "achieve"), civic = readProperty(root, "civic"), foreign = readProperty(civic, "foreign"), gov3 = readProperty(foreign, "gov3");
-    return !!(readProperty(genes, "cunning") || readProperty(genes, "trader") || readProperty(race, "persuasive") || readProperty(race, "ocular_power") || readProperty(race, "devious") || readProperty(race, "empowered") || readProperty(race, "truepath") || readProperty(race, "quarantine") || readProperty(race, "witch_hunter") || readProperty(city, "wharf") || readProperty(space, "gps") || readProperty(tech, "railway") || readProperty(underground, "trade") || readProperty(stats, "trade") || readProperty(gov3, "hstl") !== void 0);
-  }
   function hasUnsupportedRegionalVolumeModifier(root) {
-    let race = readProperty(root, "race"), governor = readProperty(race, "governor"), governorType = readProperty(readProperty(governor, "g"), "bg");
-    return hasUnsupportedPriceModifier(root) || !!readProperty(race, "merchant") || !!readProperty(race, "devious") || !!readProperty(race, "unfathomable") || governorType === "dealmaker";
-  }
-  function routePrices(root, resource, ratio) {
-    let value = finite(resource.value), race = readProperty(root, "race");
-    if (value === void 0 || value <= 0 || !isRecord(race) || hasUnsupportedPriceModifier(root)) return;
-    let inflation = race.inflation;
-    if (inflation !== void 0 && inflation !== !1 && (typeof inflation != "number" || !Number.isFinite(inflation)))
-      return;
-    let inflationLevel = typeof inflation == "number" ? inflation : 0, arrogant = traitPercent(race, "arrogant"), conniving = traitPercent(race, "conniving"), merchant = traitPercent(race, "merchant"), asymmetrical = traitPercent(race, "asymmetrical"), goblin = fathom(root, race, "goblin"), imp = fathom(root, race, "imp");
-    if (arrogant === void 0 || conniving === void 0 || merchant === void 0 || asymmetrical === void 0 || goblin === void 0 || imp === void 0)
-      return;
-    let buy = value * ratio * (1 + arrogant / 100) * (1 - conniving / 100) * (1 - imp * 5 / 100) * (1 + inflationLevel / 300), divide = 4 * (1 - merchant / 100) * (1 - goblin * 25 / 100) * (1 + asymmetrical / 100);
-    race.conniving && (divide -= 1);
-    let sell = value * ratio / divide * (1 + inflationLevel / 500);
-    return Number.isFinite(buy) && Number.isFinite(sell) && divide > 0 ? Object.freeze({ buy, sell }) : void 0;
+    let race = readProperty(root, "race"), genes = readProperty(root, "genes"), governor = readProperty(race, "governor"), governorType = readProperty(readProperty(governor, "g"), "bg"), gov3 = readProperty(
+      readProperty(readProperty(root, "civic"), "foreign"),
+      "gov3"
+    ), achieve = readProperty(readProperty(root, "stats"), "achieve");
+    return !!(readProperty(genes, "trader") || readProperty(race, "persuasive") || readProperty(race, "ocular_power") || readProperty(race, "devious") || readProperty(race, "merchant") || readProperty(race, "empowered") || readProperty(race, "unfathomable") || readProperty(race, "truepath") || readProperty(achieve, "trade") || readProperty(gov3, "hstl") !== void 0 || governorType === "dealmaker");
   }
   function routeUnlocked(root, resourceId, resource) {
     if (resource.display !== !0) return !1;
@@ -14880,9 +14978,11 @@
   }
   function readRouteInput(dependencies) {
     let root = dependencies.rootState.readRoot();
-    if (root === void 0 || hasUnsupportedPriceModifier(root)) {
+    if (root === void 0) return;
+    let unsupported = unsupportedTradePriceModifier(root);
+    if (unsupported !== void 0) {
       dependencies.onUnavailable?.(
-        "trade-route price modifiers are not captured"
+        `trade-route prices do not model ${unsupported}`
       );
       return;
     }
@@ -14896,7 +14996,7 @@
       storageRequired: () => 1
     }, routeCounts = /* @__PURE__ */ new Map(), routeControls = /* @__PURE__ */ new Map(), priority = [];
     for (let [index, resourceId] of Object.keys(resources).entries()) {
-      let resource = readProperty(resources, resourceId), ratio = TRADE_RATIO[resourceId], trade = isRecord(resource) ? finite(resource.trade) : void 0;
+      let resource = readProperty(resources, resourceId), ratio = TRADE_ROUTE_RATIO[resourceId], trade = isRecord(resource) ? finite(resource.trade) : void 0;
       if (!isRecord(resource) || ratio === void 0 || trade === void 0)
         continue;
       if (!Number.isSafeInteger(trade)) return;
@@ -14914,9 +15014,9 @@
     for (let entry of priority) {
       let resource = readProperty(resources, entry.id);
       if (!isRecord(resource)) return;
-      let amount = finite(resource.amount), maximumResource = finite(resource.max), diff = finite(resource.diff), ratio = TRADE_RATIO[entry.id];
+      let amount = finite(resource.amount), maximumResource = finite(resource.max), diff = finite(resource.diff), ratio = tradeRouteSellQuantity(root, entry.id);
       if (ratio === void 0) return;
-      let prices = routePrices(root, resource, ratio), required = finite(demand.storageRequired(entry.id));
+      let prices = tradeRoutePrices(root, entry.id, resource), required = finite(demand.storageRequired(entry.id));
       if (amount === void 0 || maximumResource === void 0 || diff === void 0 || required === void 0 || prices === void 0 || maximumResource < 0 || required <= 0)
         return;
       let storageRatio2 = maximumResource > 0 ? amount / maximumResource : 1, usefulRatio = maximumResource > 0 ? amount / Math.min(maximumResource, required) : 1, buyEnabled = settings[`res_trade_buy_${entry.id}`] === !0, sellEnabled = settings[`res_trade_sell_${entry.id}`] === !0;
@@ -16697,7 +16797,7 @@
       result.outcome.status !== "succeeded" && logError(
         `production-ratio discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
-    }, structureCount2 = (region, id) => {
+    }, structureCount3 = (region, id) => {
       let value = readProperty(
         readProperty(readProperty(pageCapture2.rootState.readRoot(), region), id),
         "count"
@@ -16756,13 +16856,13 @@
             !!readProperty(
               readProperty(pageCapture2.rootState.readRoot(), "race"),
               "smoldering"
-            ) && structureCount2("city", "rock_quarry") >= 1
+            ) && structureCount3("city", "rock_quarry") >= 1
           ), ratios.quarry()), isEnabled(settings, "autoMine") && (ensureRatioControls(
             TITAN_MINE_CONTROL,
-            structureCount2("space", "titan_mine") >= 1
+            structureCount3("space", "titan_mine") >= 1
           ), ratios.titanMine()), isEnabled(settings, "autoExtractor") && (ensureRatioControls(
             MINING_SHIP_CONTROL,
-            structureCount2("tauceti", "mining_ship") >= 1
+            structureCount3("tauceti", "mining_ship") >= 1
           ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run());
           let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
           autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft);

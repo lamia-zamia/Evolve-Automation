@@ -14,6 +14,12 @@ import type { GameControlHandle } from "../../../../ports/game-control-registry.
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
+import {
+  TRADE_ROUTE_RATIO,
+  tradeRoutePrices,
+  tradeRouteSellQuantity,
+  unsupportedTradePriceModifier,
+} from "./trade-price-mirror.ts";
 
 interface CapturedTradeRoutesDependencies {
   readonly rootState: GameRootStateSource;
@@ -46,51 +52,6 @@ interface RegionalRouteCapture {
   readonly input: Readonly<RegionalTradeRoutesInput>;
   readonly session: RegionalRouteSession;
 }
-
-// This is the upstream tradeRatio catalog, not a second policy catalog. DeadSpace does not retain
-// the lexical map on the captured root; the route controls need the per-route unit quantity to
-// turn a resource's captured diff into a bounded export count.
-const TRADE_RATIO: Readonly<Record<string, number>> = Object.freeze({
-  Food: 2,
-  Lumber: 2,
-  Chrysotile: 1,
-  Stone: 2,
-  Crystal: 0.4,
-  Furs: 1,
-  Copper: 1,
-  Iron: 1,
-  Aluminium: 1,
-  Cement: 1,
-  Coal: 1,
-  Oil: 0.5,
-  Uranium: 0.12,
-  Steel: 0.5,
-  Titanium: 0.25,
-  Alloy: 0.2,
-  Polymer: 0.2,
-  Iridium: 0.1,
-  Helium_3: 0.1,
-  Deuterium: 0.1,
-  Elerium: 0.02,
-  Water: 2,
-  Neutronium: 0.05,
-  Adamantite: 0.05,
-  Infernite: 0.01,
-  Nano_Tube: 0.1,
-  Graphene: 0.1,
-  Stanene: 0.1,
-  Bolognium: 0.12,
-  Vitreloy: 0.12,
-  Orichalcum: 0.05,
-});
-
-const TRAIT_RANKS = Object.freeze([0.1, 0.25, 0.5, 1, 2, 3, 4]);
-const TRAIT_VALUES = Object.freeze({
-  arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
-  merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
-  conniving: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
-  asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5]),
-});
 
 const BLACK_MARKET_VOLUMES: Readonly<Record<string, number>> = Object.freeze({
   Food: 20,
@@ -144,141 +105,34 @@ function settingsRecord(value: unknown): Record<PropertyKey, unknown> {
   return isRecord(value) ? value : {};
 }
 
-function traitPercent(
-  race: Record<PropertyKey, unknown>,
-  trait: keyof typeof TRAIT_VALUES,
-): number | undefined {
-  if (!race[trait]) return 0;
-  const rank = finite(race[trait]);
-  if (rank === undefined) return undefined;
-  const index = TRAIT_RANKS.indexOf(rank);
-  return index >= 0 ? TRAIT_VALUES[trait][index] : undefined;
-}
-
-function fathom(
-  root: unknown,
-  race: Record<PropertyKey, unknown>,
-  target: string,
-): number | undefined {
-  if (!race["unfathomable"]) return 0;
-  const city = readProperty(root, "city");
-  const dwellers = readProperty(city, "surfaceDwellers");
-  if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
-  const housing = readProperty(city, "captive_housing");
-  const workers = finite(
-    readProperty(
-      readProperty(readProperty(root, "civic"), "torturer"),
-      "workers",
-    ),
-  );
-  const index = dwellers.indexOf(target);
-  const active = finite(readProperty(housing, `race${index}`));
-  const nightmare = readProperty(
-    readProperty(readProperty(root, "stats"), "achieve"),
-    "nightmare",
-  );
-  const mg = finite(readProperty(nightmare, "mg"));
-  if (workers === undefined || active === undefined) return undefined;
-  let adjusted = Math.min(active, 100);
-  if (adjusted > workers) adjusted -= Math.ceil((adjusted - workers) / 3);
-  return (adjusted / 100) * ((mg ?? 0) / 5);
-}
-
-function hasUnsupportedPriceModifier(root: unknown): boolean {
+/**
+ * The regional black-market path still restates upstream `tradeVolumeBonus()`, so it keeps its own
+ * bail list. Every term that function multiplies in and this adapter does not model belongs here.
+ * Trade-route *prices* are answered by `trade-price-mirror.ts` and are not gated by this.
+ */
+function hasUnsupportedRegionalVolumeModifier(root: unknown): boolean {
   const race = readProperty(root, "race");
   const genes = readProperty(root, "genes");
-  const tech = readProperty(root, "tech");
-  const city = readProperty(root, "city");
-  const space = readProperty(root, "space");
-  const underground = readProperty(root, "underground");
-  const stats = readProperty(readProperty(root, "stats"), "achieve");
-  const civic = readProperty(root, "civic");
-  const foreign = readProperty(civic, "foreign");
-  const gov3 = readProperty(foreign, "gov3");
-
+  const governor = readProperty(race, "governor");
+  const governorType = readProperty(readProperty(governor, "g"), "bg");
+  const gov3 = readProperty(
+    readProperty(readProperty(root, "civic"), "foreign"),
+    "gov3",
+  );
+  const achieve = readProperty(readProperty(root, "stats"), "achieve");
   return Boolean(
-    readProperty(genes, "cunning") ||
     readProperty(genes, "trader") ||
     readProperty(race, "persuasive") ||
     readProperty(race, "ocular_power") ||
     readProperty(race, "devious") ||
+    readProperty(race, "merchant") ||
     readProperty(race, "empowered") ||
+    readProperty(race, "unfathomable") ||
     readProperty(race, "truepath") ||
-    readProperty(race, "quarantine") ||
-    readProperty(race, "witch_hunter") ||
-    readProperty(city, "wharf") ||
-    readProperty(space, "gps") ||
-    readProperty(tech, "railway") ||
-    readProperty(underground, "trade") ||
-    readProperty(stats, "trade") ||
-    readProperty(gov3, "hstl") !== undefined,
+    readProperty(achieve, "trade") ||
+    readProperty(gov3, "hstl") !== undefined ||
+    governorType === "dealmaker",
   );
-}
-
-function hasUnsupportedRegionalVolumeModifier(root: unknown): boolean {
-  const race = readProperty(root, "race");
-  const governor = readProperty(race, "governor");
-  const governorType = readProperty(readProperty(governor, "g"), "bg");
-  return (
-    hasUnsupportedPriceModifier(root) ||
-    Boolean(readProperty(race, "merchant")) ||
-    Boolean(readProperty(race, "devious")) ||
-    Boolean(readProperty(race, "unfathomable")) ||
-    governorType === "dealmaker"
-  );
-}
-
-function routePrices(
-  root: unknown,
-  resource: Record<PropertyKey, unknown>,
-  ratio: number,
-): { readonly buy: number; readonly sell: number } | undefined {
-  const value = finite(resource["value"]);
-  const race = readProperty(root, "race");
-  if (value === undefined || value <= 0 || !isRecord(race)) return undefined;
-  if (hasUnsupportedPriceModifier(root)) return undefined;
-  const inflation = race["inflation"];
-  if (
-    inflation !== undefined &&
-    inflation !== false &&
-    (typeof inflation !== "number" || !Number.isFinite(inflation))
-  ) {
-    return undefined;
-  }
-  const inflationLevel = typeof inflation === "number" ? inflation : 0;
-  const arrogant = traitPercent(race, "arrogant");
-  const conniving = traitPercent(race, "conniving");
-  const merchant = traitPercent(race, "merchant");
-  const asymmetrical = traitPercent(race, "asymmetrical");
-  const goblin = fathom(root, race, "goblin");
-  const imp = fathom(root, race, "imp");
-  if (
-    arrogant === undefined ||
-    conniving === undefined ||
-    merchant === undefined ||
-    asymmetrical === undefined ||
-    goblin === undefined ||
-    imp === undefined
-  ) {
-    return undefined;
-  }
-  const buy =
-    value *
-    ratio *
-    (1 + arrogant / 100) *
-    (1 - conniving / 100) *
-    (1 - (imp * 5) / 100) *
-    (1 + inflationLevel / 300);
-  let divide =
-    4 *
-    (1 - merchant / 100) *
-    (1 - (goblin * 25) / 100) *
-    (1 + asymmetrical / 100);
-  if (race["conniving"]) divide -= 1;
-  const sell = ((value * ratio) / divide) * (1 + inflationLevel / 500);
-  return Number.isFinite(buy) && Number.isFinite(sell) && divide > 0
-    ? Object.freeze({ buy, sell })
-    : undefined;
 }
 
 function routeUnlocked(
@@ -307,9 +161,11 @@ function readRouteInput(
   | { readonly input: TradeRoutesInput; readonly session: RouteSession }
   | undefined {
   const root = dependencies.rootState.readRoot();
-  if (root === undefined || hasUnsupportedPriceModifier(root)) {
+  if (root === undefined) return undefined;
+  const unsupported = unsupportedTradePriceModifier(root);
+  if (unsupported !== undefined) {
     dependencies.onUnavailable?.(
-      "trade-route price modifiers are not captured",
+      `trade-route prices do not model ${unsupported}`,
     );
     return undefined;
   }
@@ -356,7 +212,7 @@ function readRouteInput(
   }[] = [];
   for (const [index, resourceId] of Object.keys(resources).entries()) {
     const resource = readProperty(resources, resourceId);
-    const ratio = TRADE_RATIO[resourceId];
+    const ratio = TRADE_ROUTE_RATIO[resourceId];
     const trade = isRecord(resource) ? finite(resource["trade"]) : undefined;
     if (!isRecord(resource) || ratio === undefined || trade === undefined)
       continue;
@@ -389,9 +245,9 @@ function readRouteInput(
     const amount = finite(resource["amount"]);
     const maximumResource = finite(resource["max"]);
     const diff = finite(resource["diff"]);
-    const ratio = TRADE_RATIO[entry.id];
+    const ratio = tradeRouteSellQuantity(root, entry.id);
     if (ratio === undefined) return undefined;
-    const prices = routePrices(root, resource, ratio);
+    const prices = tradeRoutePrices(root, entry.id, resource);
     const required = finite(demand.storageRequired(entry.id));
     if (
       amount === undefined ||
