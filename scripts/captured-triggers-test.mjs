@@ -450,6 +450,74 @@ assert.deepEqual(
   assert.deepEqual(asked, ["city-mine"]);
 }
 
+// --- BuildingCost conditions read one entry of the same priced pass --------
+
+// The dotted pair's building half is priced once for the condition pass, and the answer is that
+// price's entry for the resource half.
+{
+  const asked = [];
+  const result = triggers({
+    triggers: [
+      trigger({
+        priority: 0,
+        requirementType: "BuildingCost",
+        requirementId: "city-apartment.Money",
+        requirementCount: 875,
+        actionId: "city-mine",
+      }),
+      trigger({
+        priority: 1,
+        requirementType: "BuildingCost",
+        requirementId: "city-apartment.Lumber",
+        requirementCount: 601,
+        actionId: "city-amphitheatre",
+      }),
+    ],
+    costs: (actionId) => {
+      asked.push(actionId);
+      return COSTS[actionId];
+    },
+  }).read();
+  // Both rows name the same building, and the condition pass prices it once.
+  assert.equal(asked.filter((id) => id === "city-apartment").length, 1);
+  // The apartment's Money price is exactly 875, so the first condition holds; its Lumber price is
+  // 600 against 601, so the second trigger is dropped — and `city-mine` is the only target.
+  assert.deepEqual(result, [
+    { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+  ]);
+}
+
+// A priced building missing the named resource costs nothing in it, so asking for zero holds.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingCost",
+        requirementId: "city-mine.Stone",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// An argument naming no building half cannot be priced, so the trigger is dropped rather than
+// read as free.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingCost",
+        requirementId: "city-mine",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [],
+);
+
 // --- BuildingUnlocked conditions draw only the regions they name -----------
 
 // The reader is asked for exactly the regions the configured conditions name, and nothing else.

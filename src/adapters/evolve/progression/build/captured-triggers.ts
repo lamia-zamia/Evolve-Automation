@@ -98,11 +98,6 @@ export interface CapturedTriggersDependencies {
   ) => Readonly<BuildingUnlockSample> | undefined;
 }
 
-/** The operand types whose answer needs the game's current cost for a named building. */
-const COST_CONDITION_TYPES: ReadonlySet<string> = new Set([
-  "BuildingAffordable",
-]);
-
 interface TriggerRow {
   readonly priority: number;
   readonly requirementType: string;
@@ -118,6 +113,25 @@ const NO_TARGETS: readonly Readonly<CapturedTriggerTarget>[] = Object.freeze(
 );
 
 const ARPA_PREFIX = "arpa";
+
+/**
+ * The building whose current cost a condition needs priced: the named building itself for
+ * `BuildingAffordable`, the dotted pair's building half for `BuildingCost`. Anything else needs
+ * no price.
+ */
+function costConditionBuildingId(row: TriggerRow): string | undefined {
+  if (row.requirementType === "BuildingAffordable") {
+    return typeof row.requirementId === "string"
+      ? row.requirementId
+      : undefined;
+  }
+  if (row.requirementType === "BuildingCost") {
+    if (typeof row.requirementId !== "string") return undefined;
+    const dot = row.requirementId.indexOf(".");
+    return dot > 0 ? row.requirementId.slice(0, dot) : undefined;
+  }
+  return undefined;
+}
 
 /**
  * Validates one stored trigger. The editor writes every field, so a row missing one is a broken
@@ -267,9 +281,8 @@ export function createCapturedTriggers(
       // not one the cost reader can probe, so it stays unanswered.
       const buildingCosts = new Map<string, Readonly<Record<string, number>>>();
       for (const row of rows) {
-        if (!COST_CONDITION_TYPES.has(row.requirementType)) continue;
-        const buildingId = row.requirementId;
-        if (typeof buildingId !== "string" || buildingCosts.has(buildingId)) {
+        const buildingId = costConditionBuildingId(row);
+        if (buildingId === undefined || buildingCosts.has(buildingId)) {
           continue;
         }
         if (controls.resolve(buildingId) === undefined) continue;

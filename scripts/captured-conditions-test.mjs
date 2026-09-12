@@ -541,6 +541,127 @@ assert.equal(
   undefined,
 );
 
+// --- the soldier operands, recomputed from the captured root ----------------
+
+// Garrison, fortress, and forward-base fields the game backfills or the manager zeroes read the
+// same way: a missing bag is zero, matching the manager before its first update.
+const garrisoned = {
+  ...root,
+  civic: {
+    ...root.civic,
+    garrison: { workers: 10, max: 12, crew: 1, wounded: 2 },
+  },
+  portal: { fortress: { garrison: 5, patrols: 1, patrol_size: 2 } },
+  space: { ...root.space, fob: { troops: 1 } },
+};
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "workers"), 10);
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "max"), 12);
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "crew"), 1);
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "wounded"), 2);
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "deadSoldiers"), 2);
+assert.equal(
+  readCapturedOperand(garrisoned, "Soldiers", "currentCityGarrison"),
+  3,
+);
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "maxCityGarrison"), 6);
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "hellSoldiers"), 5);
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "hellPatrols"), 1);
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "hellPatrolSize"), 2);
+// The assault-forge reserve and the mercenary price need settings and catalogs no capture holds,
+// and anything but the twelve trackable fields names no operand at all.
+assert.equal(
+  readCapturedOperand(garrisoned, "Soldiers", "hellGarrison"),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(garrisoned, "Soldiers", "mercenaryCost"),
+  undefined,
+);
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "raid"), undefined);
+// Before the garrison exists every count is zero, like the manager before its first update.
+assert.equal(readCapturedOperand(root, "Soldiers", "workers"), 0);
+assert.equal(readCapturedOperand(root, "Soldiers", "currentCityGarrison"), 0);
+assert.equal(readCapturedOperand(root, "Soldiers", "hellSoldiers"), 0);
+// Numeric conditions compare with `>=`.
+assert.equal(
+  evaluateCapturedCondition(garrisoned, "Soldiers", "workers", 10),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(garrisoned, "Soldiers", "workers", 11),
+  false,
+);
+
+// --- the smelter slot operand, from the captured city bag -------------------
+
+// The script's own count is total capacity minus the separately managed Star slots.
+const smelting = {
+  ...root,
+  city: { ...root.city, smelter: { cap: 10, Star: 3 } },
+};
+assert.equal(readCapturedOperand(smelting, "Industry", "smelters"), 7);
+// A smelter the game never built leaves the operand unanswered, never zero, and factory slots
+// need building on/off state the root cannot answer.
+assert.equal(readCapturedOperand(root, "Industry", "smelters"), undefined);
+assert.equal(readCapturedOperand(smelting, "Industry", "factories"), undefined);
+assert.equal(
+  evaluateCapturedCondition(smelting, "Industry", "smelters", 7),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(smelting, "Industry", "smelters", 8),
+  false,
+);
+
+// --- the building cost operand, over the cycle's own prices -----------------
+
+// One entry of the priced building's adjusted cost, the same pass `BuildingAffordable` compares.
+const pricedCost = {
+  buildingCosts: new Map([["city-farm", { Money: 500, Wood: 200 }]]),
+};
+assert.equal(
+  readCapturedOperand(root, "BuildingCost", "city-farm.Money", pricedCost),
+  500,
+);
+// A priced building missing the named resource costs nothing in it.
+assert.equal(
+  readCapturedOperand(root, "BuildingCost", "city-farm.Stone", pricedCost),
+  0,
+);
+// A building the cycle never priced, and an argument naming no entry, stay unanswered.
+assert.equal(
+  readCapturedOperand(root, "BuildingCost", "city-mine.Money", pricedCost),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingCost", "city-farm", pricedCost),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingCost", "city-farm.Money"),
+  undefined,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "BuildingCost",
+    "city-farm.Money",
+    500,
+    pricedCost,
+  ),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "BuildingCost",
+    "city-farm.Money",
+    501,
+    pricedCost,
+  ),
+  false,
+);
+
 // Nothing the capture does not hold is guessed at.
 assert.equal(readCapturedOperand(root, "Eval", "1 + 1"), undefined);
 assert.equal(
@@ -552,8 +673,9 @@ assert.equal(readCapturedOperand(root, "Other", "rname"), undefined);
 assert.equal(readCapturedOperand(root, "RaceGenus", "humanoid"), undefined);
 assert.equal(readCapturedOperand(root, "Queue", "evo"), undefined);
 // Manager-computed and script-computed operands stay unanswered.
-assert.equal(readCapturedOperand(root, "Soldiers", "workers"), undefined);
-assert.equal(readCapturedOperand(root, "Industry", "smelters"), undefined);
+assert.equal(readCapturedOperand(root, "Industry", "factories"), undefined);
+assert.equal(readCapturedOperand(root, "Soldiers", "hellGarrison"), undefined);
+assert.equal(readCapturedOperand(root, "Soldiers", "mercenaryCost"), undefined);
 assert.equal(readCapturedOperand(root, "ResourceIncome", "Money"), undefined);
 assert.equal(
   readCapturedOperand(root, "ResourceSatisfied", "Money"),

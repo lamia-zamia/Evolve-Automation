@@ -4,15 +4,17 @@
  * A stored trigger condition names an operand type, an argument and a count. This module answers
  * the operand types whose whole input is the game's own root state: building and project counts,
  * civic job assignments, resource holdings, the appointed governor, the race and planet bags, the
- * calendar, the two build queues, the ascension level and pillar ranks, and the True Path fleet,
- * Mass Relay, and carport fields.
+ * calendar, the two build queues, the ascension level and pillar ranks, the True Path fleet,
+ * Mass Relay, and carport fields, the garrison and Hell fortress counts, and the smelter slot
+ * count.
  *
  * It also answers the operands the root cannot supply but a drawn panel can. The game's grant
  * keys live in its private action catalog, so `ResearchUnlocked` and `ResearchComplete` are read
  * from the research panel the cycle already drew; `ProjectUnlocked` is read the same way from the
  * A.R.P.A. panel, and `BuildingUnlocked` from the region panels the buildings are drawn into.
  * `BuildingAffordable` is the game's own `checkMaxCosts` over an already-adjusted cost the cycle
- * priced. Those come in through `CapturedConditionContext`, and a condition naming one goes
+ * priced, and `BuildingCost` reads one entry of that same price. Those come in through
+ * `CapturedConditionContext`, and a condition naming one goes
  * unanswered whenever the pass it needs was not taken.
  *
  * Everything else a condition can name — script-computed resource fields, the settings layer,
@@ -276,6 +278,103 @@ function queueLength(root: unknown, key: string): number | undefined {
   return Array.isArray(entries) ? entries.length : undefined;
 }
 
+/**
+ * The script's own smelter slot count: total capacity minus the Star slots, which the script
+ * manages separately as extra operating capacity. Both fields are created with the smelter
+ * structure itself, so a missing smelter bag leaves the operand unanswered rather than zero.
+ * Factory slots need building on/off state the root cannot answer and stay unanswered.
+ */
+function smelterSlots(root: unknown): number | undefined {
+  const smelter = readProperty(readProperty(root, "city"), "smelter");
+  if (!isRecord(smelter)) return undefined;
+  const cap = finite(readProperty(smelter, "cap"));
+  const star = finite(readProperty(smelter, "Star"));
+  if (cap === undefined || star === undefined) return undefined;
+  return cap - star;
+}
+
+/**
+ * The script's own war-manager counts, recomputed from the captured root. Fields the game
+ * backfills or the manager zeroes read the same way: a missing garrison, fortress, or
+ * forward-base bag reads as zero, matching the manager before its first update. Two operands
+ * stay unanswered: `hellGarrison` subtracts the assault-forge reserve, which needs settings,
+ * buildings, and the army rating, and `mercenaryCost` needs the trait catalog on top.
+ *
+ * `currentCityGarrison` reproduces the manager's own subtraction, which does not know the Eden
+ * pillbox or the Warlord soul-forge deductions the game's `garrisonSize()` applies: exact for
+ * the script's operand, optimistic next to the game in those two scenarios.
+ */
+function soldierCount(root: unknown, argument: unknown): number | undefined {
+  if (typeof argument !== "string") return undefined;
+  const garrison = readProperty(readProperty(root, "civic"), "garrison");
+  const workers = isRecord(garrison)
+    ? (finite(readProperty(garrison, "workers")) ?? 0)
+    : 0;
+  const max = isRecord(garrison)
+    ? (finite(readProperty(garrison, "max")) ?? 0)
+    : 0;
+  const crew = isRecord(garrison)
+    ? (finite(readProperty(garrison, "crew")) ?? 0)
+    : 0;
+  const wounded = isRecord(garrison)
+    ? (finite(readProperty(garrison, "wounded")) ?? 0)
+    : 0;
+  const fortress = readProperty(readProperty(root, "portal"), "fortress");
+  const hellSoldiers = isRecord(fortress)
+    ? (finite(readProperty(fortress, "garrison")) ?? 0)
+    : 0;
+  const fobTroops =
+    finite(
+      readProperty(readProperty(readProperty(root, "space"), "fob"), "troops"),
+    ) ?? 0;
+  switch (argument) {
+    case "workers":
+      return workers;
+    case "max":
+      return max;
+    case "crew":
+      return crew;
+    case "wounded":
+      return wounded;
+    case "deadSoldiers":
+      return max - workers;
+    case "currentCityGarrison":
+      return workers - crew - hellSoldiers - fobTroops;
+    case "maxCityGarrison":
+      return max - crew - hellSoldiers;
+    case "hellSoldiers":
+      return hellSoldiers;
+    case "hellPatrols":
+      return isRecord(fortress)
+        ? (finite(readProperty(fortress, "patrols")) ?? 0)
+        : 0;
+    case "hellPatrolSize":
+      return isRecord(fortress)
+        ? (finite(readProperty(fortress, "patrol_size")) ?? 0)
+        : 0;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * One entry of the cycle's own adjusted price for a building, stored as
+ * `<building>.<resource>`. A priced building missing the named resource costs nothing in it,
+ * exactly as the script's own `?? 0` reads; a building the cycle never priced leaves the
+ * operand unanswered. An argument with no dot names no entry.
+ */
+function buildingCostAmount(
+  context: Readonly<CapturedConditionContext> | undefined,
+  argument: unknown,
+): number | undefined {
+  if (typeof argument !== "string") return undefined;
+  const [buildingId, resourceId] = argument.split(".");
+  if (buildingId === undefined || resourceId === undefined) return undefined;
+  const cost = context?.buildingCosts?.get(buildingId);
+  if (cost === undefined) return undefined;
+  return finite(cost[resourceId]) ?? 0;
+}
+
 function readDate(root: unknown, argument: unknown): number | undefined {
   const days = finite(readProperty(readProperty(root, "stats"), "days"));
   if (argument === "total") return days;
@@ -301,8 +400,11 @@ function readNumber(
   root: unknown,
   type: string,
   argument: unknown,
+  context?: Readonly<CapturedConditionContext>,
 ): number | undefined {
   switch (type) {
+    case "BuildingCost":
+      return buildingCostAmount(context, argument);
     case "BuildingCount":
       return finite(readProperty(structureState(root, argument), "count"));
     case "ProjectCount":
@@ -378,6 +480,11 @@ function readNumber(
       if (argument === "queue") return queueLength(root, "queue");
       if (argument === "r_queue") return queueLength(root, "r_queue");
       return undefined;
+    case "Industry":
+      if (argument === "smelters") return smelterSlots(root);
+      return undefined;
+    case "Soldiers":
+      return soldierCount(root, argument);
     default:
       return undefined;
   }
@@ -519,7 +626,7 @@ export function readCapturedOperand(
   if (typeof type !== "string") return undefined;
   return BOOLEAN_OPERANDS.has(type)
     ? readBoolean(root, type, argument, context)
-    : readNumber(root, type, argument);
+    : readNumber(root, type, argument, context);
 }
 
 /**

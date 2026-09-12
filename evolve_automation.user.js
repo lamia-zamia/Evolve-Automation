@@ -10459,6 +10459,51 @@
     let entries = readProperty(readProperty(root, key), "queue");
     return Array.isArray(entries) ? entries.length : void 0;
   }
+  function smelterSlots(root) {
+    let smelter = readProperty(readProperty(root, "city"), "smelter");
+    if (!isRecord(smelter)) return;
+    let cap = finite(readProperty(smelter, "cap")), star = finite(readProperty(smelter, "Star"));
+    if (!(cap === void 0 || star === void 0))
+      return cap - star;
+  }
+  function soldierCount(root, argument) {
+    if (typeof argument != "string") return;
+    let garrison = readProperty(readProperty(root, "civic"), "garrison"), workers = isRecord(garrison) ? finite(readProperty(garrison, "workers")) ?? 0 : 0, max = isRecord(garrison) ? finite(readProperty(garrison, "max")) ?? 0 : 0, crew = isRecord(garrison) ? finite(readProperty(garrison, "crew")) ?? 0 : 0, wounded = isRecord(garrison) ? finite(readProperty(garrison, "wounded")) ?? 0 : 0, fortress = readProperty(readProperty(root, "portal"), "fortress"), hellSoldiers = isRecord(fortress) ? finite(readProperty(fortress, "garrison")) ?? 0 : 0, fobTroops = finite(
+      readProperty(readProperty(readProperty(root, "space"), "fob"), "troops")
+    ) ?? 0;
+    switch (argument) {
+      case "workers":
+        return workers;
+      case "max":
+        return max;
+      case "crew":
+        return crew;
+      case "wounded":
+        return wounded;
+      case "deadSoldiers":
+        return max - workers;
+      case "currentCityGarrison":
+        return workers - crew - hellSoldiers - fobTroops;
+      case "maxCityGarrison":
+        return max - crew - hellSoldiers;
+      case "hellSoldiers":
+        return hellSoldiers;
+      case "hellPatrols":
+        return isRecord(fortress) ? finite(readProperty(fortress, "patrols")) ?? 0 : 0;
+      case "hellPatrolSize":
+        return isRecord(fortress) ? finite(readProperty(fortress, "patrol_size")) ?? 0 : 0;
+      default:
+        return;
+    }
+  }
+  function buildingCostAmount(context, argument) {
+    if (typeof argument != "string") return;
+    let [buildingId, resourceId] = argument.split(".");
+    if (buildingId === void 0 || resourceId === void 0) return;
+    let cost = context?.buildingCosts?.get(buildingId);
+    if (cost !== void 0)
+      return finite(cost[resourceId]) ?? 0;
+  }
   function readDate(root, argument) {
     let days = finite(readProperty(readProperty(root, "stats"), "days"));
     if (argument === "total") return days;
@@ -10476,8 +10521,10 @@
         )
       );
   }
-  function readNumber2(root, type, argument) {
+  function readNumber2(root, type, argument, context) {
     switch (type) {
+      case "BuildingCost":
+        return buildingCostAmount(context, argument);
       case "BuildingCount":
         return finite(readProperty(structureState(root, argument), "count"));
       case "ProjectCount":
@@ -10540,6 +10587,10 @@
         return readDate(root, argument);
       case "Queue":
         return argument === "queue" ? queueLength(root, "queue") : argument === "r_queue" ? queueLength(root, "r_queue") : void 0;
+      case "Industry":
+        return argument === "smelters" ? smelterSlots(root) : void 0;
+      case "Soldiers":
+        return soldierCount(root, argument);
       default:
         return;
     }
@@ -10616,7 +10667,7 @@
   }
   function readCapturedOperand(root, type, argument, context) {
     if (typeof type == "string")
-      return BOOLEAN_OPERANDS.has(type) ? readBoolean(root, type, argument, context) : readNumber2(root, type, argument);
+      return BOOLEAN_OPERANDS.has(type) ? readBoolean(root, type, argument, context) : readNumber2(root, type, argument, context);
   }
   function evaluateCapturedCondition(root, type, argument, count2, context) {
     let value = readCapturedOperand(root, type, argument, context);
@@ -10627,11 +10678,18 @@
   }
 
   // src/adapters/evolve/progression/build/captured-triggers.ts
-  var COST_CONDITION_TYPES = /* @__PURE__ */ new Set([
-    "BuildingAffordable"
-  ]), NO_TARGETS = Object.freeze(
+  var NO_TARGETS = Object.freeze(
     []
   ), ARPA_PREFIX = "arpa";
+  function costConditionBuildingId(row) {
+    if (row.requirementType === "BuildingAffordable")
+      return typeof row.requirementId == "string" ? row.requirementId : void 0;
+    if (row.requirementType === "BuildingCost") {
+      if (typeof row.requirementId != "string") return;
+      let dot = row.requirementId.indexOf(".");
+      return dot > 0 ? row.requirementId.slice(0, dot) : void 0;
+    }
+  }
   function readRow(raw) {
     if (!isRecord(raw)) return;
     let priority = finite(readProperty(raw, "priority")), requirementType = readProperty(raw, "requirementType"), actionType = readProperty(raw, "actionType"), actionId = readProperty(raw, "actionId"), actionCount = finite(readProperty(raw, "actionCount"));
@@ -10690,9 +10748,8 @@
         }
         let buildingUnlocks = dependencies.readBuildingUnlocks === void 0 || buildingRegions.size === 0 ? void 0 : dependencies.readBuildingUnlocks(buildingRegions), buildingCosts = /* @__PURE__ */ new Map();
         for (let row of rows) {
-          if (!COST_CONDITION_TYPES.has(row.requirementType)) continue;
-          let buildingId = row.requirementId;
-          if (typeof buildingId != "string" || buildingCosts.has(buildingId) || controls.resolve(buildingId) === void 0) continue;
+          let buildingId = costConditionBuildingId(row);
+          if (buildingId === void 0 || buildingCosts.has(buildingId) || controls.resolve(buildingId) === void 0) continue;
           let cost = costs.readCost(buildingId);
           cost !== void 0 && buildingCosts.set(buildingId, cost);
         }
