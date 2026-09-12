@@ -284,12 +284,10 @@ function makeHeading(id, display, searchInputs = []) {
 const elements = {
   script_importExportButtons: { id: "script_importExportButtons" },
 };
-let collapsibles = [];
 const document = {
   documentElement: { scrollTop: 31 },
   body: { scrollTop: 9 },
   getElementById: (id) => elements[id] ?? null,
-  querySelectorAll: () => collapsibles,
   execCommand: (command) => {
     trace.push(`execCommand:${command}`);
     return true;
@@ -341,30 +339,40 @@ let reset = 0;
 shell.genericResetFunction(() => reset++, "Demo");
 assert.equal(reset, 1);
 
-// A collapsible heading records its own state under its id and clears any search box it closes.
+// A collapsible heading records its own state under its id, lazily builds on open, and clears any
+// search box it closes.
 const search = { value: "carbon" };
-collapsibles = [makeHeading("BuildingSettingsCollapsed", "block", [search])];
+const collapsible = makeHeading("BuildingSettingsCollapsed", "block", [search]);
+elements.BuildingSettingsCollapsed = collapsible;
 shellContext.game = { global: { settings: { civTabs: 7 } } };
-shellContext.settingsRaw = {};
+shellContext.settingsRaw = { BuildingSettingsCollapsed: true };
+emptyNodes.add("#script_BuildingContent");
 trace.length = 0;
-shell.buildScriptSettings();
-const collapse = handlers.findLast(
-  ({ label }) => label === "BuildingSettingsCollapsed",
+shell.buildSettingsSection(
+  "Building",
+  "Building",
+  () => {},
+  () => trace.push("lazy-build"),
+);
+const collapse = handlers.findLast(({ label }) =>
+  label.endsWith("#BuildingSettingsCollapsed"),
 ).args[1];
 
 collapse();
+assert.equal(shellContext.settingsRaw.BuildingSettingsCollapsed, false);
+assert.equal(collapsible.nextElementSibling.style.display, "block");
+assert.ok(trace.includes("lazy-build"));
+
+collapse();
 assert.equal(shellContext.settingsRaw.BuildingSettingsCollapsed, true);
-assert.equal(collapsibles[0].nextElementSibling.style.display, "none");
+assert.equal(collapsible.nextElementSibling.style.display, "none");
 assert.equal(search.value, "");
 assert.ok(trace.includes("filter"));
 assert.ok(
   trace.includes("toggle:BuildingSettingsCollapsed:script-contentactive"),
 );
 assert.ok(trace.includes("persist-shell"));
-
-collapse();
-assert.equal(shellContext.settingsRaw.BuildingSettingsCollapsed, false);
-assert.equal(collapsibles[0].nextElementSibling.style.display, "block");
+emptyNodes.delete("#script_BuildingContent");
 
 // The import/export buttons attach after the game's own, and each drives its own action.
 delete elements.script_importExportButtons;
@@ -480,7 +488,7 @@ shell.buildSettingsSection(
   () => contentBuilds++,
 );
 assert.equal(contentBuilds, 0);
-const openSection = clickOn("> #DemoSettingsCollapsed");
+const openSection = clickOn("DemoSettingsCollapsed");
 emptyNodes.add("#script_DemoContent");
 openSection();
 assert.equal(contentBuilds, 1);
@@ -517,10 +525,10 @@ shell.buildSettingsSection2(
 );
 assert.ok(trace.some((entry) => entry.startsWith("append:host:")));
 emptyNodes.add("#script_DemoContent");
-clickOn("> #DemoSettingsCollapsed")();
+clickOn("DemoSettingsCollapsed")();
 assert.deepEqual(prefixes, ["warSecondary", ""]);
 
-// The headings are plain markup appended to whatever node the caller owns.
+// The headings are markup appended to whatever node the caller owns.
 trace.length = 0;
 shell.addStandardHeading(host, "Outer Solar");
 shell.addSettingsHeader1(host, "Fighter");

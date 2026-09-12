@@ -50,7 +50,6 @@ interface SectionHeading {
 interface ShellDocument {
   readonly documentElement: { scrollTop: number };
   readonly body: { scrollTop: number };
-  querySelectorAll(selector: string): Iterable<SectionHeading>;
   getElementById(id: string): SectionHeading | null;
   execCommand(command: string): boolean;
 }
@@ -203,33 +202,6 @@ export function createSettingsShell({
     buildProjectSettings();
     buildLoggingSettings(scriptContentNode, "");
 
-    const collapsibles = getDocument().querySelectorAll(
-      "#script_settings .script-collapsible",
-    );
-    for (const collapsible of collapsibles) {
-      collapsible.addEventListener("click", () => {
-        collapsible.classList.toggle("script-contentactive");
-        const content = collapsible.nextElementSibling;
-        if (content.style.display === "block") {
-          getSettingsRaw()[collapsible.id] = true;
-          content.style.display = "none";
-
-          const [search] = content.getElementsByClassName(
-            "script-searchsettings",
-          );
-          if (search !== undefined) {
-            search.value = "";
-            filterBuildingSettingsTable();
-          }
-        } else {
-          getSettingsRaw()[collapsible.id] = false;
-          content.style.display = "block";
-        }
-
-        updateSettingsFromState();
-      });
-    }
-
     getDocument().documentElement.scrollTop = getDocument().body.scrollTop =
       currentScrollPosition;
   }
@@ -301,7 +273,7 @@ export function createSettingsShell({
 
     const section = $(`
           <div id="script_${sectionId}Settings" style="margin-top: 10px;">
-            <h3 id="${triggerID}" class="script-collapsible text-center has-text-success">${sectionName} Settings</h3>
+            <button type="button" id="${triggerID}" class="script-collapsible text-center has-text-success" style="display:block; color:inherit; cursor:pointer; padding:12px 18px; width:100%; border:1px solid currentColor; border-radius:4px; background:transparent; text-align:left; font-size:15px;">${sectionName} Settings</button>
             <div class="script-content">
               <div style="margin-top: 10px;"><button id="${resetID}" class="button">Reset ${sectionName} Settings</button></div>
               <div style="margin-top: 10px; margin-bottom: 10px;" id="${contentID}"></div>
@@ -310,22 +282,44 @@ export function createSettingsShell({
 
     parentNode.append(section);
 
-    if (!getSettingsRaw()[triggerID]) {
-      // The section is open initially - build it now
+    const collapsed = Boolean(getSettingsRaw()[triggerID]);
+    if (!collapsed) {
+      // The section is open initially - build it now.
       updateSettingsContentFunction();
+    }
 
-      // The heading was just appended, so it is missing only when the parent is detached.
-      const element = getDocument().getElementById(triggerID);
-      if (element !== null) {
+    const element = getDocument().getElementById(triggerID);
+    if (element !== null) {
+      const content = element.nextElementSibling;
+      if (collapsed) {
+        content.style.display = "none";
+      } else {
         element.classList.toggle("script-contentactive");
-        element.nextElementSibling.style.display = "block";
+        content.style.display = "block";
       }
-    } else {
-      // The section is closed - build it only once it's open
-      section.find(`> #${triggerID}`).on("click", () => {
-        if (section.find(`#${contentID}`).is(":empty")) {
-          updateSettingsContentFunction();
+
+      section.find(`#${triggerID}`).on("click", () => {
+        element.classList.toggle("script-contentactive");
+        if (content.style.display === "block") {
+          getSettingsRaw()[element.id] = true;
+          content.style.display = "none";
+
+          const [search] = content.getElementsByClassName(
+            "script-searchsettings",
+          );
+          if (search !== undefined) {
+            search.value = "";
+            filterBuildingSettingsTable();
+          }
+        } else {
+          getSettingsRaw()[element.id] = false;
+          if (section.find(`#${contentID}`).is(":empty")) {
+            updateSettingsContentFunction();
+          }
+          content.style.display = "block";
         }
+
+        updateSettingsFromState();
       });
     }
 

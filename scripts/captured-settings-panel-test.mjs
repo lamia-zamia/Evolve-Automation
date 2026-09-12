@@ -49,7 +49,9 @@ function createPage(
 // --- the panel appears, and appears once ---------------------------------------------------------
 
 {
-  const { panel, root } = createPage(JSON.stringify({ autoBuild: true }));
+  const { panel, settings, root } = createPage(
+    JSON.stringify({ autoBuild: true }),
+  );
   assert.equal(root.querySelectorAll("#autoScriptContainer").length, 0);
   panel.ensurePanel();
   const container = root.querySelectorAll("#autoScriptContainer");
@@ -57,12 +59,8 @@ function createPage(
   const toggles = root.querySelectorAll("#scriptToggles");
   assert.equal(toggles.length, 1);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
-  assert.equal(root.querySelectorAll("#script_settingsVisibility").length, 1);
-  assert.equal(
-    root.querySelectorAll("#script_settingsVisibility")[0].textContent,
-    "Hide settings",
-  );
   assert.equal(root.querySelectorAll("#script_generalSettings").length, 1);
+  assert.equal(root.querySelectorAll("button.script-collapsible").length, 6);
   for (const section of [
     "interface",
     "stateLog",
@@ -90,6 +88,15 @@ function createPage(
     "a redraw must not stack a second panel",
   );
   assert.equal(root.querySelectorAll("label").length, firstCount);
+
+  const generalHeading = root.querySelectorAll("#generalSettingsCollapsed")[0];
+  const generalContent = generalHeading.nextElementSibling;
+  generalHeading.dispatch("click");
+  assert.equal(settings.readRaw()["generalSettingsCollapsed"], true);
+  assert.equal(generalContent.style.display, "none");
+  generalHeading.dispatch("click");
+  assert.equal(settings.readRaw()["generalSettingsCollapsed"], false);
+  assert.equal(generalContent.style.display, "block");
 }
 
 // --- section resets use the host confirmation and update the shared record ----------------------
@@ -120,18 +127,11 @@ function createPage(
   showSettings.checked = false;
   showSettings.dispatch("change");
   assert.equal(settings.readRaw()["showSettings"], false);
-  assert.equal(root.querySelectorAll("#script_settings").length, 1);
-  assert.equal(
-    root.querySelectorAll("#script_generalSettings")[0].style.display,
-    "none",
-  );
-  assert.equal(
-    root.querySelectorAll("#script_settingsVisibility")[0].textContent,
-    "Show settings",
-  );
+  assert.equal(root.querySelectorAll("#script_settings").length, 0);
   panel.ensurePanel();
-  assert.equal(root.querySelectorAll("#script_settings").length, 1);
-  root.querySelectorAll("#script_settingsVisibility")[0].dispatch("click");
+  assert.equal(root.querySelectorAll("#script_settings").length, 0);
+  showSettings.checked = true;
+  showSettings.dispatch("change");
   assert.equal(settings.readRaw()["showSettings"], true);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
 }

@@ -325,7 +325,7 @@ trace = [];
 hooks.productionSettings.buildProductionSettings();
 assert.ok(trace.includes("append:#script_settings:section:production"));
 assert.ok(
-  handlers.has("section:production|find:> #productionSettingsCollapsed:click:"),
+  handlers.has("section:production|find:#productionSettingsCollapsed:click:"),
 );
 assert.ok(
   handlers.has("section:production|find:#script_resetproduction:click:"),

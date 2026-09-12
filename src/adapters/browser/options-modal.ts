@@ -65,10 +65,7 @@ type JQuery = (selector: unknown) => JQueryNode;
 type Action = () => void;
 type OptionsBuilder = (node: JQueryNode, prefix: string) => void;
 
-export function settingToggleCaption(
-  settingName: string,
-  checked: boolean,
-): string {
+function settingToggleCaption(settingName: string, checked: boolean): string {
   if (settingName === "showSettings") {
     return checked ? "Hide settings" : "Show settings";
   }
@@ -162,11 +159,6 @@ export function createOptionsModalBrowserAdapter({
       toggle
         .find(".script-setting-label")
         .text(settingToggleCaption(settingName, this.checked));
-      if (settingName === "showSettings") {
-        getJQuery()("#script_settingsVisibility").text(
-          settingToggleCaption(settingName, this.checked),
-        );
-      }
       if (this.checked && enabledCallback) enabledCallback();
       if (!this.checked && disabledCallback) disabledCallback();
     };

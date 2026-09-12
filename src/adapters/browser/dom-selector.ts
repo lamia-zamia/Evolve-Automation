@@ -6,6 +6,7 @@
  *   cannot be handed to `querySelectorAll`, so a selector containing it is evaluated in stages.
  * - `:visible` keeps only elements that occupy layout, which is how the script tests whether a
  *   panel it rendered is currently on screen.
+ * - `:empty` checks whether a lazy settings-content node has been populated yet.
  *
  * Anything else is passed to the browser untouched, so ordinary selectors cost one native call.
  */
@@ -78,13 +79,16 @@ export function queryAll(
 }
 
 /**
- * `element.matches`, extended with `:visible`.
+ * `element.matches`, extended with `:visible` and `:empty`.
  *
  * Positional `:eq(n)` is deliberately not accepted: it describes a position in a match set and has
  * no meaning against a single element. Every call site that uses it is a query, not a predicate.
  */
 export function matchesSelector(element: Element, selector: string): boolean {
   const trimmed = selector.trim();
+  if (trimmed === ":empty") {
+    return element.children.length === 0 && element.textContent === "";
+  }
   if (!trimmed.includes(":visible")) return element.matches(trimmed);
   if (!isVisible(element)) return false;
   const remaining = trimmed.replaceAll(":visible", "").trim();

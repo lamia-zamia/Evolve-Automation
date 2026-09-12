@@ -17262,9 +17262,7 @@
       state.checked && enabledCallback && enabledCallback();
       let updateToggle = function() {
         let writer = getSettingsWriter();
-        writer.setToggle(settingName, this.checked), writer.persist(), toggle.find(".script-setting-label").text(settingToggleCaption(settingName, this.checked)), settingName === "showSettings" && getJQuery()("#script_settingsVisibility").text(
-          settingToggleCaption(settingName, this.checked)
-        ), this.checked && enabledCallback && enabledCallback(), !this.checked && disabledCallback && disabledCallback();
+        writer.setToggle(settingName, this.checked), writer.persist(), toggle.find(".script-setting-label").text(settingToggleCaption(settingName, this.checked)), this.checked && enabledCallback && enabledCallback(), !this.checked && disabledCallback && disabledCallback();
       };
       toggle.find("input").on("change", updateToggle), toggle.on(
         "click",
@@ -17379,6 +17377,8 @@
   }
   function matchesSelector(element, selector) {
     let trimmed = selector.trim();
+    if (trimmed === ":empty")
+      return element.children.length === 0 && element.textContent === "";
     if (!trimmed.includes(":visible")) return element.matches(trimmed);
     if (!isVisible(element)) return !1;
     let remaining = trimmed.replaceAll(":visible", "").trim();
@@ -18325,25 +18325,7 @@
       let currentScrollPosition = getDocument().documentElement.scrollTop || getDocument().body.scrollTop, scriptContentNode = $(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
       );
-      $(".settings").append(scriptContentNode), buildImportExport(), buildPrestigeSettings(scriptContentNode, ""), buildGeneralSettings(), buildInterfaceSettings(), buildStateLogSettings(), buildAchievementGuardSettings(), buildChallengeHelperSettings(), buildGovernmentSettings(scriptContentNode, ""), buildAuthoritySettings(), buildEvolutionSettings(), buildPlanetSettings(), buildTraitSettings(), buildTriggerSettings(), buildResearchSettings(), buildWarSettings(scriptContentNode, ""), buildHellSettings(scriptContentNode, ""), buildMechSettings(), buildFleetSettings(scriptContentNode, ""), buildEjectorSettings(), buildMarketSettings(), buildStorageSettings(), buildMagicSettings(), buildProductionSettings(), buildJobSettings(), buildBuildingSettings(), buildWeightingSettings(), buildProjectSettings(), buildLoggingSettings(scriptContentNode, "");
-      let collapsibles = getDocument().querySelectorAll(
-        "#script_settings .script-collapsible"
-      );
-      for (let collapsible of collapsibles)
-        collapsible.addEventListener("click", () => {
-          collapsible.classList.toggle("script-contentactive");
-          let content = collapsible.nextElementSibling;
-          if (content.style.display === "block") {
-            getSettingsRaw()[collapsible.id] = !0, content.style.display = "none";
-            let [search2] = content.getElementsByClassName(
-              "script-searchsettings"
-            );
-            search2 !== void 0 && (search2.value = "", filterBuildingSettingsTable());
-          } else
-            getSettingsRaw()[collapsible.id] = !1, content.style.display = "block";
-          updateSettingsFromState();
-        });
-      getDocument().documentElement.scrollTop = getDocument().body.scrollTop = currentScrollPosition;
+      $(".settings").append(scriptContentNode), buildImportExport(), buildPrestigeSettings(scriptContentNode, ""), buildGeneralSettings(), buildInterfaceSettings(), buildStateLogSettings(), buildAchievementGuardSettings(), buildChallengeHelperSettings(), buildGovernmentSettings(scriptContentNode, ""), buildAuthoritySettings(), buildEvolutionSettings(), buildPlanetSettings(), buildTraitSettings(), buildTriggerSettings(), buildResearchSettings(), buildWarSettings(scriptContentNode, ""), buildHellSettings(scriptContentNode, ""), buildMechSettings(), buildFleetSettings(scriptContentNode, ""), buildEjectorSettings(), buildMarketSettings(), buildStorageSettings(), buildMagicSettings(), buildProductionSettings(), buildJobSettings(), buildBuildingSettings(), buildWeightingSettings(), buildProjectSettings(), buildLoggingSettings(scriptContentNode, ""), getDocument().documentElement.scrollTop = getDocument().body.scrollTop = currentScrollPosition;
     }
     function buildImportExport() {
       let importExportBase = $(".importExport").last();
@@ -18373,20 +18355,29 @@
     function buildSettingsSectionImpl(parentNode, sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
       let triggerID = `${sectionId}SettingsCollapsed`, resetID = `script_reset${sectionId}`, contentID = `script_${sectionId}Content`, section = $(`
           <div id="script_${sectionId}Settings" style="margin-top: 10px;">
-            <h3 id="${triggerID}" class="script-collapsible text-center has-text-success">${sectionName} Settings</h3>
+            <button type="button" id="${triggerID}" class="script-collapsible text-center has-text-success" style="display:block; color:inherit; cursor:pointer; padding:12px 18px; width:100%; border:1px solid currentColor; border-radius:4px; background:transparent; text-align:left; font-size:15px;">${sectionName} Settings</button>
             <div class="script-content">
               <div style="margin-top: 10px;"><button id="${resetID}" class="button">Reset ${sectionName} Settings</button></div>
               <div style="margin-top: 10px; margin-bottom: 10px;" id="${contentID}"></div>
             </div>
           </div>`);
-      if (parentNode.append(section), getSettingsRaw()[triggerID])
-        section.find(`> #${triggerID}`).on("click", () => {
-          section.find(`#${contentID}`).is(":empty") && updateSettingsContentFunction();
+      parentNode.append(section);
+      let collapsed = !!getSettingsRaw()[triggerID];
+      collapsed || updateSettingsContentFunction();
+      let element = getDocument().getElementById(triggerID);
+      if (element !== null) {
+        let content = element.nextElementSibling;
+        collapsed ? content.style.display = "none" : (element.classList.toggle("script-contentactive"), content.style.display = "block"), section.find(`#${triggerID}`).on("click", () => {
+          if (element.classList.toggle("script-contentactive"), content.style.display === "block") {
+            getSettingsRaw()[element.id] = !0, content.style.display = "none";
+            let [search2] = content.getElementsByClassName(
+              "script-searchsettings"
+            );
+            search2 !== void 0 && (search2.value = "", filterBuildingSettingsTable());
+          } else
+            getSettingsRaw()[element.id] = !1, section.find(`#${contentID}`).is(":empty") && updateSettingsContentFunction(), content.style.display = "block";
+          updateSettingsFromState();
         });
-      else {
-        updateSettingsContentFunction();
-        let element = getDocument().getElementById(triggerID);
-        element !== null && (element.classList.toggle("script-contentactive"), element.nextElementSibling.style.display = "block");
       }
       section.find(`#${resetID}`).on("click", () => genericResetFunction(resetFunction, sectionName));
     }
@@ -18746,30 +18737,9 @@
       let ui = ensureSettingsUi(dom);
       dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_settings").children().filter((_index, element) => element.id !== "script_settingsVisibility").show(), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings());
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings());
     }, removeScriptSettings = () => {
-      getQuery()?.("#script_settings").children().filter((_index, element) => element.id !== "script_settingsVisibility").hide();
-    }, syncSettingsVisibilityControls = (checked) => {
-      let dom = getQuery();
-      if (dom === void 0) return;
-      let caption = settingToggleCaption("showSettings", checked);
-      dom("#script_settingsVisibility").text(caption), dom(".script_showSettings").prop("checked", checked), dom(".script_bg_showSettings").find(".script-setting-label").text(caption);
-    }, ensureSettingsVisibilityControl = () => {
-      let dom = getQuery();
-      if (!(dom === void 0 || dom(".settings").length === 0)) {
-        if (dom("#script_settings").length === 0 && dom(".settings").append(
-          '<div id="script_settings" style="margin-top: 30px;"></div>'
-        ), dom("#script_settingsVisibility").length === 0) {
-          let button = dom(
-            `<button id="script_settingsVisibility" type="button" style="margin:4px 0 12px; padding:5px 10px; border:1px solid currentColor; border-radius:4px; background:transparent; color:inherit; cursor:pointer;" title="Show or hide the script settings">${settingToggleCaption("showSettings", settings.readRaw().showSettings === !0)}</button>`
-          );
-          dom("#script_settings").prepend(button), button.on("click", () => {
-            let checked = settings.readRaw().showSettings !== !0;
-            settings.readRaw().showSettings = checked, settings.persist(), syncSettingsVisibilityControls(checked), checked ? buildScriptSettings() : removeScriptSettings();
-          });
-        }
-        syncSettingsVisibilityControls(settings.readRaw().showSettings === !0);
-      }
+      getQuery()?.("#script_settings").remove();
     }, optionsModal = createOptionsModalBrowserAdapter({
       getDocument: () => documentValue,
       getJQuery: () => getQuery(),
@@ -18842,7 +18812,7 @@
       ensurePanel() {
         if (getQuery() !== void 0)
           try {
-            prepareSettingsForUi(), ensureAutomationContainer(), ensureSettingsVisibilityControl(), settings.readRaw().showSettings === !0 ? buildScriptSettings() : removeScriptSettings();
+            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().showSettings === !0 && buildScriptSettings();
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }

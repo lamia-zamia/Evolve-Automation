@@ -170,6 +170,12 @@ export class TestElement {
     return current;
   }
 
+  getElementsByClassName(className) {
+    return descendants(this).filter((child) =>
+      child.classList.contains(className),
+    );
+  }
+
   getClientRects() {
     return this.offsetWidth === 0 && this.offsetHeight === 0 ? [] : [{}];
   }
