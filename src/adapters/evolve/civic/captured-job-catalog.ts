@@ -15,7 +15,12 @@ import type {
   JobsJobInput,
 } from "../../../domain/civic/jobs.ts";
 import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
-import { finite, isRecord, readProperty } from "../../validation.ts";
+import {
+  finite,
+  finiteNonNegative,
+  isRecord,
+  readProperty,
+} from "../../validation.ts";
 
 export interface CapturedJobCatalogEntry {
   readonly id: string;
@@ -184,12 +189,6 @@ export function toCapturedJobsCycleInput(
     splitEntries: catalog.splitEntries,
     defaultPreference: catalog.defaultPreference,
   });
-}
-
-function finiteNonNegative(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : undefined;
 }
 
 function finiteMaximum(value: unknown): number | undefined {

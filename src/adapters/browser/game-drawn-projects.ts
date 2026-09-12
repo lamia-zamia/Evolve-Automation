@@ -29,6 +29,9 @@ export interface GameDrawnProjectsDependencies {
   readonly createMouseEvent: (type: "mouseover" | "mouseout") => unknown;
 }
 
+/** The game's single hover-popover element, rewritten per control. */
+const POPPER_SELECTOR = "#popper";
+
 function collectCost(
   popper: ProjectElement,
   resources: ReadonlyMap<string, string>,
@@ -61,7 +64,8 @@ export function createGameDrawnProjectsReader({
       resourceNames: readonly string[],
     ): readonly Readonly<DrawnProject>[] | undefined {
       const document = getDocument();
-      if (document.querySelectorAll("#popper").length > 0) return undefined;
+      if (document.querySelectorAll(POPPER_SELECTOR).length > 0)
+        return undefined;
       const resources = new Map(
         resourceNames.map((name) => [name.toLowerCase(), name]),
       );
@@ -82,7 +86,9 @@ export function createGameDrawnProjectsReader({
 
         button.dispatchEvent(createMouseEvent("mouseover"));
         try {
-          const poppers = Array.from(document.querySelectorAll("#popper"));
+          const poppers = Array.from(
+            document.querySelectorAll(POPPER_SELECTOR),
+          );
           if (poppers.length !== 1) return undefined;
           const cost = collectCost(poppers[0] as ProjectElement, resources);
           if (Object.keys(cost).length === 0) return undefined;
@@ -96,7 +102,8 @@ export function createGameDrawnProjectsReader({
         } finally {
           button.dispatchEvent(createMouseEvent("mouseout"));
         }
-        if (document.querySelectorAll("#popper").length > 0) return undefined;
+        if (document.querySelectorAll(POPPER_SELECTOR).length > 0)
+          return undefined;
       }
       return Object.freeze(projects);
     },

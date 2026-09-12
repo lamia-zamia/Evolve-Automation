@@ -119,6 +119,15 @@ export function isNonNegativeNumber(value: unknown): value is number {
 }
 
 /**
+ * As `finite`, for the game counts and quantities that cannot be negative.
+ * Single owner for the module-local `finiteNonNegative` guards the captured
+ * adapters used to carry one each.
+ */
+export function finiteNonNegative(value: unknown): number | undefined {
+  return isNonNegativeNumber(value) ? value : undefined;
+}
+
+/**
  * Reads one property from a value that may not carry any. Objects and functions do; everything
  * else answers `undefined` instead of throwing. This is the lenient probe the browser adapters use
  * against external objects — a DOM element that may not hold a Vue marker, a global that may not

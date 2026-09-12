@@ -13,7 +13,12 @@ import type { JobsExecutor, JobsReader } from "../../../ports/jobs.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
-import { finite, isRecord, readProperty } from "../../validation.ts";
+import {
+  finite,
+  finiteNonNegative,
+  isRecord,
+  readProperty,
+} from "../../validation.ts";
 import {
   createCapturedJobCatalogReader,
   toCapturedJobsCycleInput,
@@ -140,12 +145,6 @@ function unavailableInput(): Readonly<JobsCycleInput> {
     splitEntries: Object.freeze([]),
     defaultPreference: Object.freeze([]),
   });
-}
-
-function finiteNonNegative(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : undefined;
 }
 
 /** DeadSpace's haveTask("tax") is membership in the governor task values. */

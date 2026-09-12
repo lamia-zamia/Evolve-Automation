@@ -74,6 +74,12 @@
   function finite(value) {
     return isFiniteNumber(value) ? value : void 0;
   }
+  function isNonNegativeNumber(value) {
+    return isFiniteNumber(value) && value >= 0;
+  }
+  function finiteNonNegative(value) {
+    return isNonNegativeNumber(value) ? value : void 0;
+  }
   function readProperty(owner, key) {
     return typeof owner == "object" && owner !== null || typeof owner == "function" ? owner[key] : void 0;
   }
@@ -5628,9 +5634,6 @@
         defaultPreference: catalog.defaultPreference
       });
   }
-  function finiteNonNegative(value) {
-    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
-  }
   function finiteMaximum(value) {
     return typeof value == "number" && Number.isFinite(value) && value >= -1 ? value : void 0;
   }
@@ -7010,9 +7013,6 @@
       defaultPreference: Object.freeze([])
     });
   }
-  function finiteNonNegative2(value) {
-    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
-  }
   function readTaxTaskActive(root) {
     let race = readProperty(root, "race");
     if (!isRecord(race)) return;
@@ -7069,7 +7069,7 @@
       return unavailableInput().authority;
     let resources = readProperty(root, "resource"), authority = readProperty(resources, "Authority"), morale = readProperty(resources, "Morale");
     if (!isRecord(authority) || !isRecord(morale)) return;
-    let current = finiteNonNegative2(readProperty(authority, "amount")), maximum = finiteNonNegative2(readProperty(authority, "max")), moraleCurrent = finite(readProperty(morale, "amount")), moralePotential = finite(readProperty(morale, "diff")), moraleMaximum = finite(readProperty(morale, "max"));
+    let current = finiteNonNegative(readProperty(authority, "amount")), maximum = finiteNonNegative(readProperty(authority, "max")), moraleCurrent = finite(readProperty(morale, "amount")), moralePotential = finite(readProperty(morale, "diff")), moraleMaximum = finite(readProperty(morale, "max"));
     if (current === void 0 || maximum === void 0 || moraleCurrent === void 0 || moralePotential === void 0 || moraleMaximum === void 0)
       return;
     let display = readProperty(authority, "display");
@@ -7078,7 +7078,7 @@
     let target = Math.max(
       100,
       configuredTarget < 0 ? maximum : configuredTarget
-    ), taxes = readProperty(readProperty(root, "civic"), "taxes"), taxDisplay = readProperty(taxes, "display"), taxRate = finiteNonNegative2(readProperty(taxes, "tax_rate"));
+    ), taxes = readProperty(readProperty(root, "civic"), "taxes"), taxDisplay = readProperty(taxes, "display"), taxRate = finiteNonNegative(readProperty(taxes, "tax_rate"));
     if (taxRate === void 0 || taxDisplay !== void 0 && typeof taxDisplay != "boolean")
       return;
     let government = readProperty(readProperty(root, "civic"), "govern"), governmentType = readProperty(government, "type");
@@ -7111,7 +7111,7 @@
       return;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
-    let theatreValue = readProperty(tech, "theatre"), theatre = theatreValue === void 0 ? 0 : finiteNonNegative2(theatreValue), musical = traitValue(race, "musical", MUSICAL_MORALE, "raw"), emotionless = traitValue(
+    let theatreValue = readProperty(tech, "theatre"), theatre = theatreValue === void 0 ? 0 : finiteNonNegative(theatreValue), musical = traitValue(race, "musical", MUSICAL_MORALE, "raw"), emotionless = traitValue(
       race,
       "emotionless",
       EMOTIONLESS_REDUCTION,
@@ -7124,7 +7124,7 @@
     );
     if (theatre === void 0 || musical === void 0 || emotionless === void 0 || highPopulation === void 0)
       return;
-    let entertainerMorale = (theatre + musical) * emotionless * highPopulation * (readProperty(race, "lone_survivor") ? 25 : 1), superstarValue = readProperty(tech, "superstar"), superstar = superstarValue === void 0 ? 0 : finiteNonNegative2(superstarValue);
+    let entertainerMorale = (theatre + musical) * emotionless * highPopulation * (readProperty(race, "lone_survivor") ? 25 : 1), superstarValue = readProperty(tech, "superstar"), superstar = superstarValue === void 0 ? 0 : finiteNonNegative(superstarValue);
     if (superstar === void 0) return;
     let superstarMorale = superstar > 0 ? highPopulation : 0, moraleCeiling = null;
     if (!canTax) {
@@ -7159,7 +7159,7 @@
   function readCycle(root, settingsValue, catalogReader, previousAuthorityCap) {
     let settings = isRecord(settingsValue) ? settingsValue : {}, authority = readAuthorityInput(root, settings, previousAuthorityCap);
     if (authority === void 0) return;
-    let population = finiteNonNegative2(
+    let population = finiteNonNegative(
       readProperty(
         readProperty(readProperty(root, "resource"), "Population"),
         "amount"
@@ -8929,9 +8929,6 @@
   }
 
   // src/adapters/evolve/economy/production/captured-factory-capacity.ts
-  function finiteNonNegative3(value) {
-    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
-  }
   function readRegionalFactoryOn(root, region, id) {
     let owner = readProperty(root, region);
     if (owner === void 0) return 0;
@@ -8939,7 +8936,7 @@
     let structure = readProperty(owner, id);
     if (structure === void 0) return 0;
     if (!isRecord(structure)) return;
-    let count2 = finiteNonNegative3(structure.count), on = finiteNonNegative3(structure.on);
+    let count2 = finiteNonNegative(structure.count), on = finiteNonNegative(structure.on);
     if (!(count2 === void 0 || on === void 0 || !Number.isSafeInteger(count2) || !Number.isSafeInteger(on) || on > count2))
       return on;
   }
@@ -8969,13 +8966,13 @@
     let owner = readProperty(root, region), structure = readProperty(owner, id);
     if (structure === void 0) return 0;
     if (!isRecord(structure)) return;
-    let rankValue = structure.rank, rank = rankValue == null ? 1 : finiteNonNegative3(rankValue);
+    let rankValue = structure.rank, rank = rankValue == null ? 1 : finiteNonNegative(rankValue);
     return rank !== void 0 && Number.isSafeInteger(rank) && rank >= 1 ? 3 + rank : void 0;
   }
   function readCapturedFactoryCapacity(root) {
     let cityFactory = readProperty(readProperty(root, "city"), "factory");
     if (!isRecord(cityFactory)) return;
-    let cityOn = finiteNonNegative3(cityFactory.on);
+    let cityOn = finiteNonNegative(cityFactory.on);
     if (cityOn === void 0 || !Number.isSafeInteger(cityOn)) return;
     let redOn = readRegionalFactoryOn(root, "space", "red_factory"), interstellarOn = readRegionalFactoryOn(
       root,
@@ -8997,7 +8994,7 @@
       let craterWorker = readProperty(
         readProperty(readProperty(root, "civic"), "crater_worker"),
         "workers"
-      ), workers = finiteNonNegative3(craterWorker);
+      ), workers = finiteNonNegative(craterWorker);
       if (workers === void 0) return;
       craterLines = Math.floor(surfaceOn / 2 * (workers / highPopulationScale2));
     }
@@ -12868,13 +12865,10 @@
     Nano: 3,
     Stanene: 3
   });
-  function finiteNonNegative4(value) {
-    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
-  }
   function readResource3(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id);
     if (!isRecord(resource)) return;
-    let amount = finiteNonNegative4(resource.amount), max = finite(resource.max), diff = finite(resource.diff);
+    let amount = finiteNonNegative(resource.amount), max = finite(resource.max), diff = finite(resource.diff);
     if (!(amount === void 0 || max === void 0 || diff === void 0))
       return Object.freeze({
         amount,
@@ -13086,7 +13080,7 @@
     if (maximum === void 0) return;
     let lines = [];
     for (let id of CAPTURED_FACTORY_LINES) {
-      let current = finiteNonNegative4(factory[id]);
+      let current = finiteNonNegative(factory[id]);
       if (current === void 0 || !Number.isSafeInteger(current))
         return;
       lines.push(Object.freeze({ id, current }));
@@ -13098,7 +13092,7 @@
     if (!isRecord(factory)) return;
     let total = 0;
     for (let id of CAPTURED_FACTORY_LINES) {
-      let value = finiteNonNegative4(factory[id]);
+      let value = finiteNonNegative(factory[id]);
       if (value === void 0) return;
       total += value;
     }
@@ -15745,6 +15739,7 @@
   }
 
   // src/adapters/browser/game-drawn-projects.ts
+  var POPPER_SELECTOR = "#popper";
   function collectCost(popper, resources) {
     let cost = {}, elements = [
       popper,
@@ -15765,7 +15760,8 @@
     return Object.freeze({
       read(selector, resourceNames) {
         let document = getDocument();
-        if (document.querySelectorAll("#popper").length > 0) return;
+        if (document.querySelectorAll(POPPER_SELECTOR).length > 0)
+          return;
         let resources = new Map(
           resourceNames.map((name) => [name.toLowerCase(), name])
         ), projects = [];
@@ -15775,7 +15771,9 @@
             return;
           button.dispatchEvent(createMouseEvent("mouseover"));
           try {
-            let poppers = Array.from(document.querySelectorAll("#popper"));
+            let poppers = Array.from(
+              document.querySelectorAll(POPPER_SELECTOR)
+            );
             if (poppers.length !== 1) return;
             let cost = collectCost(poppers[0], resources);
             if (Object.keys(cost).length === 0) return;
@@ -15789,7 +15787,8 @@
           } finally {
             button.dispatchEvent(createMouseEvent("mouseout"));
           }
-          if (document.querySelectorAll("#popper").length > 0) return;
+          if (document.querySelectorAll(POPPER_SELECTOR).length > 0)
+            return;
         }
         return Object.freeze(projects);
       },

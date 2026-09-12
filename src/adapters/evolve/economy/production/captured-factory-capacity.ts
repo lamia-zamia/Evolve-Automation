@@ -1,12 +1,10 @@
 /** Validated DeadSpace factory capacity shared by allocation and demand samples. */
 
-import { isRecord, readProperty } from "../../../validation.ts";
-
-function finiteNonNegative(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : undefined;
-}
+import {
+  finiteNonNegative,
+  isRecord,
+  readProperty,
+} from "../../../validation.ts";
 
 function readRegionalFactoryOn(
   root: unknown,
