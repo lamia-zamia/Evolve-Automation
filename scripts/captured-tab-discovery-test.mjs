@@ -2,9 +2,17 @@ import assert from "node:assert/strict";
 
 import {
   createCapturedTabDiscovery,
+  GOV_TABS_SETTING,
+  GOV_TAB_INDEX,
   MAIN_TAB_CONTROL,
+  MAIN_TAB_INDEX,
   MAIN_TAB_PANELS,
   MAIN_TAB_SETTING,
+  MARKET_TABS_SETTING,
+  MARKET_TAB_INDEX,
+  SPACE_TABS_SETTING,
+  SPACE_TAB_INDEX,
+  SPACE_TAB_SWEEP,
   SUB_TAB_CONTROLS,
 } from "../src/adapters/evolve/captured-tab-discovery.ts";
 
@@ -665,5 +673,72 @@ function discoveryFor(page) {
   assert.equal(result.outcome.status, "succeeded");
   assert.equal(seen, 1);
 }
+
+// The shared tab coordinates, in upstream `b-tab-item` order. Every discovery path reads these,
+// so an upstream renumbering is one edit to the table, not a grep over the callers.
+assert.deepEqual(
+  { ...MAIN_TAB_INDEX },
+  {
+    civilization: 1,
+    civic: 2,
+    research: 3,
+    resources: 4,
+    arpa: 5,
+    stats: 6,
+  },
+);
+assert.deepEqual(
+  { ...SPACE_TAB_INDEX },
+  {
+    city: 0,
+    space: 1,
+    interstellar: 2,
+    galaxy: 3,
+    portal: 4,
+    outerSol: 5,
+    tauceti: 6,
+    eden: 7,
+    underground: 8,
+    surface: 9,
+  },
+);
+assert.deepEqual([...SPACE_TAB_SWEEP], [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+assert.deepEqual(
+  { ...GOV_TAB_INDEX },
+  {
+    civic: 0,
+    industry: 1,
+    powerGrid: 2,
+    military: 3,
+    perkUnderground: 4,
+    mechLab: 5,
+    dwarfShipYard: 6,
+    psychicPowers: 7,
+    supernatural: 8,
+  },
+);
+assert.deepEqual(
+  { ...MARKET_TAB_INDEX },
+  {
+    market: 0,
+    storage: 1,
+    ejector: 2,
+    supply: 3,
+    alchemy: 4,
+    supplyZones: 5,
+  },
+);
+// Each sub-tab setting names its own control group.
+assert.equal(SPACE_TABS_SETTING, "spaceTabs");
+assert.equal(GOV_TABS_SETTING, "govTabs");
+assert.equal(MARKET_TABS_SETTING, "marketTabs");
+assert.deepEqual(
+  { ...SUB_TAB_CONTROLS },
+  {
+    spaceTabs: "mTabCivil",
+    govTabs: "mTabCivic",
+    marketTabs: "mTabResource",
+  },
+);
 
 console.log("captured-tab-discovery ok");

@@ -10,6 +10,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { GameTabDiscovery } from "../../../../ports/game-tab-discovery.ts";
 import {
   MAIN_TAB_CONTROL,
+  MAIN_TAB_INDEX,
   MAIN_TAB_SETTING,
 } from "../../captured-tab-discovery.ts";
 import { requireCount, requireNonArrayRecord } from "../../../validation.ts";
@@ -20,7 +21,7 @@ const ARPA_TAB_PATH = Object.freeze([
   Object.freeze({
     setting: MAIN_TAB_SETTING,
     control: MAIN_TAB_CONTROL,
-    index: 5,
+    index: MAIN_TAB_INDEX.arpa,
   }),
 ]);
 

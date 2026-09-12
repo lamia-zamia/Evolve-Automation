@@ -11,7 +11,10 @@ import { createCapturedResourceSource } from "../adapters/evolve/captured-world-
 import {
   createCapturedTabDiscovery,
   MAIN_TAB_CONTROL,
+  MAIN_TAB_INDEX,
   MAIN_TAB_SETTING,
+  SPACE_TABS_SETTING,
+  SPACE_TAB_SWEEP,
   SUB_TAB_CONTROLS,
 } from "../adapters/evolve/captured-tab-discovery.ts";
 import {
@@ -185,22 +188,22 @@ export function createCapturedProgressionControl(
     const main = Object.freeze({
       setting: MAIN_TAB_SETTING,
       control: MAIN_TAB_CONTROL,
-      index: 1,
+      index: MAIN_TAB_INDEX.civilization,
     });
-    const spaceTabControl = SUB_TAB_CONTROLS.spaceTabs;
+    const spaceTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
     if (spaceTabControl === undefined) {
       onSkipped?.("build-discovery", "space-tab control is unavailable");
       return;
     }
     const paths = [
       Object.freeze([main]),
-      ...Array.from({ length: 9 }, (_, index) =>
+      ...SPACE_TAB_SWEEP.map((index) =>
         Object.freeze([
           main,
           Object.freeze({
-            setting: "spaceTabs",
+            setting: SPACE_TABS_SETTING,
             control: spaceTabControl,
-            index: index + 1,
+            index,
           }),
         ]),
       ),

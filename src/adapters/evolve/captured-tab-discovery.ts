@@ -58,15 +58,23 @@ export const MAIN_TAB_CONTROL = "#mainColumn div.content";
 export const MAIN_TAB_SETTING = "civTabs";
 
 /**
+ * The sub-tab setting each group writes. The setting name and the `SUB_TAB_CONTROLS` key are the
+ * same string upstream; naming each once keeps a rename to one edit.
+ */
+export const SPACE_TABS_SETTING = "spaceTabs";
+export const GOV_TABS_SETTING = "govTabs";
+export const MARKET_TABS_SETTING = "marketTabs";
+
+/**
  * The game's sub-tab groups, straight from `index.js`: each main tab that has sub-tabs binds one
  * component holding them, and that component's `swapTab` writes the setting. These three are all
  * there are, and a gated panel is reached by a main-tab step followed by its sub-tab step.
  */
 export const SUB_TAB_CONTROLS: Readonly<Record<string, string>> = Object.freeze(
   {
-    spaceTabs: "mTabCivil",
-    govTabs: "mTabCivic",
-    marketTabs: "mTabResource",
+    [SPACE_TABS_SETTING]: "mTabCivil",
+    [GOV_TABS_SETTING]: "mTabCivic",
+    [MARKET_TABS_SETTING]: "mTabResource",
   },
 );
 
@@ -82,6 +90,78 @@ export const MAIN_TAB_PANELS: Readonly<Record<number, string>> = Object.freeze({
   4: "mTabResource",
   5: "mTabArpa",
   6: "mTabStats",
+});
+
+/**
+ * Main-tab indices in `civTabs` order (`index.js:mainTabPanel`). Every discovery path starts with
+ * one of these; an upstream renumbering is one edit here instead of a grep over every caller.
+ * Evolution (0) draws no panel and is absent, like in `MAIN_TAB_PANELS`.
+ */
+export const MAIN_TAB_INDEX = Object.freeze({
+  civilization: 1,
+  civic: 2,
+  research: 3,
+  resources: 4,
+  arpa: 5,
+  stats: 6,
+});
+
+/**
+ * `spaceTabs` selections in `b-tab-item` order (the civilization tab in `index.js`): 0 city,
+ * 1 inner system, 2 interstellar, 3 galaxy, 4 hell fortress, 5 outer system, 6 Tau Ceti, 7 Eden,
+ * 8 underground, 9 surface.
+ */
+export const SPACE_TAB_INDEX = Object.freeze({
+  city: 0,
+  space: 1,
+  interstellar: 2,
+  galaxy: 3,
+  portal: 4,
+  outerSol: 5,
+  tauceti: 6,
+  eden: 7,
+  underground: 8,
+  surface: 9,
+});
+
+/**
+ * The build-control sweep covers every space tab but the city: the bare main-tab path draws
+ * whatever the player already has selected, and each of these gets its own pass. Derived from
+ * the table so a new upstream tab joins the sweep with it.
+ */
+export const SPACE_TAB_SWEEP: readonly number[] = Object.freeze(
+  Object.values(SPACE_TAB_INDEX).filter(
+    (index) => index !== SPACE_TAB_INDEX.city,
+  ),
+);
+
+/**
+ * `govTabs` selections in `b-tab-item` order (the civics tab in `index.js`): 0 government,
+ * 1 industry, 2 power grid, 3 military, and the gated perk tabs after it.
+ */
+export const GOV_TAB_INDEX = Object.freeze({
+  civic: 0,
+  industry: 1,
+  powerGrid: 2,
+  military: 3,
+  perkUnderground: 4,
+  mechLab: 5,
+  dwarfShipYard: 6,
+  psychicPowers: 7,
+  supernatural: 8,
+});
+
+/**
+ * `marketTabs` selections in `b-tab-item` order (the resources tab in `index.js`): 0 market,
+ * 1 storage, 2 ejector, 3 supply, 4 alchemy, 5 supply zones.
+ */
+export const MARKET_TAB_INDEX = Object.freeze({
+  market: 0,
+  storage: 1,
+  ejector: 2,
+  supply: 3,
+  alchemy: 4,
+  supplyZones: 5,
 });
 
 const NOTHING: readonly string[] = Object.freeze([]);

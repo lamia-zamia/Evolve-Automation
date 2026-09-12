@@ -110,8 +110,15 @@ import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-pr
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
 import {
   createCapturedTabDiscovery,
+  GOV_TABS_SETTING,
+  GOV_TAB_INDEX,
   MAIN_TAB_CONTROL,
+  MAIN_TAB_INDEX,
   MAIN_TAB_SETTING,
+  MARKET_TABS_SETTING,
+  MARKET_TAB_INDEX,
+  SPACE_TABS_SETTING,
+  SPACE_TAB_INDEX,
   SUB_TAB_CONTROLS,
 } from "../adapters/evolve/captured-tab-discovery.ts";
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
@@ -476,7 +483,7 @@ export function startCapturedRuntime({
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 2,
+        index: MAIN_TAB_INDEX.civic,
       }),
     ]);
     if (result.outcome.status !== "succeeded") {
@@ -490,16 +497,20 @@ export function startCapturedRuntime({
     if (pageCapture.controls.resolve("fleet") !== undefined) return;
     if (galaxyFleetDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const spaceTabs = SUB_TAB_CONTROLS.spaceTabs;
+    const spaceTabs = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
     if (spaceTabs === undefined) return;
     galaxyFleetDiscoveryAttempted = true;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 1,
+        index: MAIN_TAB_INDEX.civilization,
       }),
-      Object.freeze({ setting: "spaceTabs", control: spaceTabs, index: 3 }),
+      Object.freeze({
+        setting: SPACE_TABS_SETTING,
+        control: spaceTabs,
+        index: SPACE_TAB_INDEX.galaxy,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -516,7 +527,7 @@ export function startCapturedRuntime({
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 1,
+        index: MAIN_TAB_INDEX.civilization,
       }),
     ]);
     if (result.outcome.status !== "succeeded") {
@@ -543,7 +554,7 @@ export function startCapturedRuntime({
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 1,
+        index: MAIN_TAB_INDEX.civilization,
       }),
     ]);
     if (result.outcome.status !== "succeeded") {
@@ -574,15 +585,19 @@ export function startCapturedRuntime({
     }
     alchemyDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 4,
+        index: MAIN_TAB_INDEX.resources,
       }),
-      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 4 }),
+      Object.freeze({
+        setting: MARKET_TABS_SETTING,
+        control: marketTabs,
+        index: MARKET_TAB_INDEX.alchemy,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -608,15 +623,19 @@ export function startCapturedRuntime({
     }
     miningDroidDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 2,
+        index: MAIN_TAB_INDEX.civic,
       }),
-      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.industry,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -644,15 +663,19 @@ export function startCapturedRuntime({
     }
     grapheneDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 2,
+        index: MAIN_TAB_INDEX.civic,
       }),
-      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.industry,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -683,15 +706,19 @@ export function startCapturedRuntime({
     }
     replicatorDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 2,
+        index: MAIN_TAB_INDEX.civic,
       }),
-      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.industry,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -730,15 +757,19 @@ export function startCapturedRuntime({
     if (smelterDiscoveryAttempted) return;
     smelterDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 2,
+        index: MAIN_TAB_INDEX.civic,
       }),
-      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.industry,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -765,15 +796,19 @@ export function startCapturedRuntime({
     }
     naniteDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 2,
+        index: MAIN_TAB_INDEX.civic,
       }),
-      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.industry,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -807,16 +842,20 @@ export function startCapturedRuntime({
       return;
     }
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
     ejectorDiscoveryAttempted = true;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 4,
+        index: MAIN_TAB_INDEX.resources,
       }),
-      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 2 }),
+      Object.freeze({
+        setting: MARKET_TABS_SETTING,
+        control: marketTabs,
+        index: MARKET_TAB_INDEX.ejector,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -849,16 +888,20 @@ export function startCapturedRuntime({
       return;
     }
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
     supplyDiscoveryAttempted = true;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 4,
+        index: MAIN_TAB_INDEX.resources,
       }),
-      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 3 }),
+      Object.freeze({
+        setting: MARKET_TABS_SETTING,
+        control: marketTabs,
+        index: MARKET_TAB_INDEX.supply,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -883,16 +926,20 @@ export function startCapturedRuntime({
     ) {
       return;
     }
-    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
     storageDiscoveryAttempted = true;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 4,
+        index: MAIN_TAB_INDEX.resources,
       }),
-      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 1 }),
+      Object.freeze({
+        setting: MARKET_TABS_SETTING,
+        control: marketTabs,
+        index: MARKET_TAB_INDEX.storage,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -914,16 +961,20 @@ export function startCapturedRuntime({
     if (readProperty(readProperty(root, "settings"), "showMarket") !== true) {
       return;
     }
-    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
     galaxyMarketDiscoveryAttempted = true;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 4,
+        index: MAIN_TAB_INDEX.resources,
       }),
-      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 0 }),
+      Object.freeze({
+        setting: MARKET_TABS_SETTING,
+        control: marketTabs,
+        index: MARKET_TAB_INDEX.market,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -942,16 +993,20 @@ export function startCapturedRuntime({
     if (readProperty(readProperty(root, "settings"), "showMarket") !== true) {
       return;
     }
-    const marketTabs = SUB_TAB_CONTROLS.marketTabs;
+    const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
     marketDiscoveryAttempted = true;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 4,
+        index: MAIN_TAB_INDEX.resources,
       }),
-      Object.freeze({ setting: "marketTabs", control: marketTabs, index: 0 }),
+      Object.freeze({
+        setting: MARKET_TABS_SETTING,
+        control: marketTabs,
+        index: MARKET_TAB_INDEX.market,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -975,15 +1030,19 @@ export function startCapturedRuntime({
     }
     factoryDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 2,
+        index: MAIN_TAB_INDEX.civic,
       }),
-      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.industry,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(
@@ -1003,16 +1062,20 @@ export function startCapturedRuntime({
     ) {
       return;
     }
-    const govTabs = SUB_TAB_CONTROLS.govTabs;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
     ratioDiscoveryAttempted = true;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 2,
+        index: MAIN_TAB_INDEX.civic,
       }),
-      Object.freeze({ setting: "govTabs", control: govTabs, index: 1 }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.industry,
+      }),
     ]);
     if (result.outcome.status !== "succeeded") {
       logError(

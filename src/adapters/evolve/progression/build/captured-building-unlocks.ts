@@ -24,12 +24,12 @@ import type {
 } from "../../../../ports/game-building-unlocks.ts";
 import {
   MAIN_TAB_CONTROL,
+  MAIN_TAB_INDEX,
   MAIN_TAB_SETTING,
+  SPACE_TABS_SETTING,
+  SPACE_TAB_INDEX,
   SUB_TAB_CONTROLS,
 } from "../../captured-tab-discovery.ts";
-
-/** The main tab every building region is drawn under. */
-const BUILDING_TAB_INDEX = 1;
 
 interface RegionPanel {
   /** The container the region's `setAction` calls append into. */
@@ -40,24 +40,42 @@ interface RegionPanel {
 
 /**
  * Region key to the panels that hold its rows. A region with more than one panel is only answered
- * when every one of them was read.
+ * when every one of them was read. The selections are the shared `spaceTabs` coordinates; the
+ * containers stay here because they name what each region draws into, not which tab that is.
  */
 const REGION_PANELS: Readonly<Record<string, readonly RegionPanel[]>> =
   Object.freeze({
-    city: Object.freeze([Object.freeze({ container: "#city", subTab: 0 })]),
+    city: Object.freeze([
+      Object.freeze({ container: "#city", subTab: SPACE_TAB_INDEX.city }),
+    ]),
     space: Object.freeze([
-      Object.freeze({ container: "#space", subTab: 1 }),
-      Object.freeze({ container: "#outerSol", subTab: 5 }),
+      Object.freeze({ container: "#space", subTab: SPACE_TAB_INDEX.space }),
+      Object.freeze({
+        container: "#outerSol",
+        subTab: SPACE_TAB_INDEX.outerSol,
+      }),
     ]),
     interstellar: Object.freeze([
-      Object.freeze({ container: "#interstellar", subTab: 2 }),
+      Object.freeze({
+        container: "#interstellar",
+        subTab: SPACE_TAB_INDEX.interstellar,
+      }),
     ]),
-    galaxy: Object.freeze([Object.freeze({ container: "#galaxy", subTab: 3 })]),
-    portal: Object.freeze([Object.freeze({ container: "#portal", subTab: 4 })]),
+    galaxy: Object.freeze([
+      Object.freeze({ container: "#galaxy", subTab: SPACE_TAB_INDEX.galaxy }),
+    ]),
+    portal: Object.freeze([
+      Object.freeze({ container: "#portal", subTab: SPACE_TAB_INDEX.portal }),
+    ]),
     tauceti: Object.freeze([
-      Object.freeze({ container: "#tauceti", subTab: 6 }),
+      Object.freeze({
+        container: "#tauceti",
+        subTab: SPACE_TAB_INDEX.tauceti,
+      }),
     ]),
-    eden: Object.freeze([Object.freeze({ container: "#eden", subTab: 7 })]),
+    eden: Object.freeze([
+      Object.freeze({ container: "#eden", subTab: SPACE_TAB_INDEX.eden }),
+    ]),
   });
 
 export interface CapturedBuildingUnlocksDependencies {
@@ -83,7 +101,7 @@ export function createCapturedBuildingUnlocks(
         reportSkipped("*", "the game root has not been captured yet");
         return undefined;
       }
-      const subTabControl = SUB_TAB_CONTROLS["spaceTabs"];
+      const subTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
       if (subTabControl === undefined) {
         reportSkipped("*", "the space-tab control is unavailable");
         return undefined;
@@ -108,10 +126,10 @@ export function createCapturedBuildingUnlocks(
             Object.freeze({
               setting: MAIN_TAB_SETTING,
               control: MAIN_TAB_CONTROL,
-              index: BUILDING_TAB_INDEX,
+              index: MAIN_TAB_INDEX.civilization,
             }),
             Object.freeze({
-              setting: "spaceTabs",
+              setting: SPACE_TABS_SETTING,
               control: subTabControl,
               index: panel.subTab,
             }),

@@ -866,11 +866,11 @@
   }
 
   // src/adapters/evolve/captured-tab-discovery.ts
-  var MAIN_TAB_CONTROL = "#mainColumn div.content", MAIN_TAB_SETTING = "civTabs", SUB_TAB_CONTROLS = Object.freeze(
+  var MAIN_TAB_CONTROL = "#mainColumn div.content", MAIN_TAB_SETTING = "civTabs", SPACE_TABS_SETTING = "spaceTabs", GOV_TABS_SETTING = "govTabs", MARKET_TABS_SETTING = "marketTabs", SUB_TAB_CONTROLS = Object.freeze(
     {
-      spaceTabs: "mTabCivil",
-      govTabs: "mTabCivic",
-      marketTabs: "mTabResource"
+      [SPACE_TABS_SETTING]: "mTabCivil",
+      [GOV_TABS_SETTING]: "mTabCivic",
+      [MARKET_TABS_SETTING]: "mTabResource"
     }
   ), MAIN_TAB_PANELS = Object.freeze({
     1: "mTabCivil",
@@ -879,6 +879,45 @@
     4: "mTabResource",
     5: "mTabArpa",
     6: "mTabStats"
+  }), MAIN_TAB_INDEX = Object.freeze({
+    civilization: 1,
+    civic: 2,
+    research: 3,
+    resources: 4,
+    arpa: 5,
+    stats: 6
+  }), SPACE_TAB_INDEX = Object.freeze({
+    city: 0,
+    space: 1,
+    interstellar: 2,
+    galaxy: 3,
+    portal: 4,
+    outerSol: 5,
+    tauceti: 6,
+    eden: 7,
+    underground: 8,
+    surface: 9
+  }), SPACE_TAB_SWEEP = Object.freeze(
+    Object.values(SPACE_TAB_INDEX).filter(
+      (index) => index !== SPACE_TAB_INDEX.city
+    )
+  ), GOV_TAB_INDEX = Object.freeze({
+    civic: 0,
+    industry: 1,
+    powerGrid: 2,
+    military: 3,
+    perkUnderground: 4,
+    mechLab: 5,
+    dwarfShipYard: 6,
+    psychicPowers: 7,
+    supernatural: 8
+  }), MARKET_TAB_INDEX = Object.freeze({
+    market: 0,
+    storage: 1,
+    ejector: 2,
+    supply: 3,
+    alchemy: 4,
+    supplyZones: 5
   }), NOTHING = Object.freeze([]);
   function failure(code, message) {
     return Object.freeze({
@@ -1240,14 +1279,14 @@
   }
 
   // src/adapters/evolve/progression/research/captured-tech-catalog.ts
-  var RESEARCH_TAB_INDEX = 3, OFFERED_TECH_SELECTOR = "#tech .action", GRANTED_TECH_SELECTOR = "#oldTech .action", RESEARCH_PANEL_SELECTOR = "#tech", UNREAD_RESEARCH_CONTENT = Object.freeze({
+  var OFFERED_TECH_SELECTOR = "#tech .action", GRANTED_TECH_SELECTOR = "#oldTech .action", RESEARCH_PANEL_SELECTOR = "#tech", UNREAD_RESEARCH_CONTENT = Object.freeze({
     afterBinding: "#resContent",
     containers: Object.freeze(["oldTech"])
   }), RESEARCH_TAB_PATH = Object.freeze([
     Object.freeze({
       setting: MAIN_TAB_SETTING,
       control: MAIN_TAB_CONTROL,
-      index: RESEARCH_TAB_INDEX
+      index: MAIN_TAB_INDEX.research
     })
   ]);
   function createCapturedTechCatalog(dependencies) {
@@ -1303,7 +1342,7 @@
     Object.freeze({
       setting: MAIN_TAB_SETTING,
       control: MAIN_TAB_CONTROL,
-      index: 5
+      index: MAIN_TAB_INDEX.arpa
     })
   ]);
   function createCapturedProjectCatalog(dependencies) {
@@ -3658,21 +3697,38 @@
   }
 
   // src/adapters/evolve/progression/build/captured-building-unlocks.ts
-  var BUILDING_TAB_INDEX = 1, REGION_PANELS = Object.freeze({
-    city: Object.freeze([Object.freeze({ container: "#city", subTab: 0 })]),
+  var REGION_PANELS = Object.freeze({
+    city: Object.freeze([
+      Object.freeze({ container: "#city", subTab: SPACE_TAB_INDEX.city })
+    ]),
     space: Object.freeze([
-      Object.freeze({ container: "#space", subTab: 1 }),
-      Object.freeze({ container: "#outerSol", subTab: 5 })
+      Object.freeze({ container: "#space", subTab: SPACE_TAB_INDEX.space }),
+      Object.freeze({
+        container: "#outerSol",
+        subTab: SPACE_TAB_INDEX.outerSol
+      })
     ]),
     interstellar: Object.freeze([
-      Object.freeze({ container: "#interstellar", subTab: 2 })
+      Object.freeze({
+        container: "#interstellar",
+        subTab: SPACE_TAB_INDEX.interstellar
+      })
     ]),
-    galaxy: Object.freeze([Object.freeze({ container: "#galaxy", subTab: 3 })]),
-    portal: Object.freeze([Object.freeze({ container: "#portal", subTab: 4 })]),
+    galaxy: Object.freeze([
+      Object.freeze({ container: "#galaxy", subTab: SPACE_TAB_INDEX.galaxy })
+    ]),
+    portal: Object.freeze([
+      Object.freeze({ container: "#portal", subTab: SPACE_TAB_INDEX.portal })
+    ]),
     tauceti: Object.freeze([
-      Object.freeze({ container: "#tauceti", subTab: 6 })
+      Object.freeze({
+        container: "#tauceti",
+        subTab: SPACE_TAB_INDEX.tauceti
+      })
     ]),
-    eden: Object.freeze([Object.freeze({ container: "#eden", subTab: 7 })])
+    eden: Object.freeze([
+      Object.freeze({ container: "#eden", subTab: SPACE_TAB_INDEX.eden })
+    ])
   });
   function createCapturedBuildingUnlocks(dependencies) {
     let { rootState, discovery, drawnActions } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
@@ -3684,7 +3740,7 @@
           reportSkipped("*", "the game root has not been captured yet");
           return;
         }
-        let subTabControl = SUB_TAB_CONTROLS.spaceTabs;
+        let subTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
         if (subTabControl === void 0) {
           reportSkipped("*", "the space-tab control is unavailable");
           return;
@@ -3702,10 +3758,10 @@
               Object.freeze({
                 setting: MAIN_TAB_SETTING,
                 control: MAIN_TAB_CONTROL,
-                index: BUILDING_TAB_INDEX
+                index: MAIN_TAB_INDEX.civilization
               }),
               Object.freeze({
-                setting: "spaceTabs",
+                setting: SPACE_TABS_SETTING,
                 control: subTabControl,
                 index: panel.subTab
               })
@@ -3786,22 +3842,21 @@
       let main = Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: 1
-      }), spaceTabControl = SUB_TAB_CONTROLS.spaceTabs;
+        index: MAIN_TAB_INDEX.civilization
+      }), spaceTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
       if (spaceTabControl === void 0) {
         onSkipped?.("build-discovery", "space-tab control is unavailable");
         return;
       }
       let paths = [
         Object.freeze([main]),
-        ...Array.from(
-          { length: 9 },
-          (_, index) => Object.freeze([
+        ...SPACE_TAB_SWEEP.map(
+          (index) => Object.freeze([
             main,
             Object.freeze({
-              setting: "spaceTabs",
+              setting: SPACE_TABS_SETTING,
               control: spaceTabControl,
-              index: index + 1
+              index
             })
           ])
         )
@@ -16130,7 +16185,7 @@
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 2
+          index: MAIN_TAB_INDEX.civic
         })
       ]);
       result.outcome.status !== "succeeded" && logError(
@@ -16138,16 +16193,20 @@
       );
     }, galaxyFleetDiscoveryAttempted = !1, ensureGalaxyFleetControls = () => {
       if (pageCapture2.controls.resolve("fleet") !== void 0 || galaxyFleetDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      let spaceTabs = SUB_TAB_CONTROLS.spaceTabs;
+      let spaceTabs = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
       if (spaceTabs === void 0) return;
       galaxyFleetDiscoveryAttempted = !0;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 1
+          index: MAIN_TAB_INDEX.civilization
         }),
-        Object.freeze({ setting: "spaceTabs", control: spaceTabs, index: 3 })
+        Object.freeze({
+          setting: SPACE_TABS_SETTING,
+          control: spaceTabs,
+          index: SPACE_TAB_INDEX.galaxy
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `galaxy fleet discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16159,7 +16218,7 @@
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 1
+          index: MAIN_TAB_INDEX.civilization
         })
       ]);
       result.outcome.status !== "succeeded" && logError(
@@ -16175,7 +16234,7 @@
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 1
+          index: MAIN_TAB_INDEX.civilization
         })
       ]);
       result.outcome.status !== "succeeded" && logError(
@@ -16186,15 +16245,19 @@
         return;
       let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), techLevel3 = readProperty(tech, "alchemy");
       if (typeof techLevel3 != "number" || !Number.isFinite(techLevel3) || techLevel3 < 1 || alchemyDiscoveryAttempted || (alchemyDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
-      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
       if (marketTabs === void 0) return;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 4
+          index: MAIN_TAB_INDEX.resources
         }),
-        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 4 })
+        Object.freeze({
+          setting: MARKET_TABS_SETTING,
+          control: marketTabs,
+          index: MARKET_TAB_INDEX.alchemy
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `alchemy discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16204,15 +16267,19 @@
         return;
       let root = pageCapture2.rootState.readRoot(), interstellar = readProperty(root, "interstellar"), droids = readProperty(interstellar, "mining_droid"), count2 = readProperty(droids, "count");
       if (typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || miningDroidDiscoveryAttempted || (miningDroidDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
-      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
       if (govTabs === void 0) return;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 2
+          index: MAIN_TAB_INDEX.civic
         }),
-        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.industry
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `mining-droid discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16221,15 +16288,19 @@
       if (pageCapture2.controls.resolve(GRAPHENE_CONTROL) !== void 0) return;
       let root = pageCapture2.rootState.readRoot(), race = readProperty(root, "race"), interstellar = readProperty(root, "interstellar"), plant = readProperty(interstellar, "g_factory"), count2 = readProperty(plant, "count");
       if (typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || readProperty(race, "truepath") || readProperty(race, "warlord") || grapheneDiscoveryAttempted || (grapheneDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
-      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
       if (govTabs === void 0) return;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 2
+          index: MAIN_TAB_INDEX.civic
         }),
-        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.industry
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16239,15 +16310,19 @@
         return;
       let root = pageCapture2.rootState.readRoot(), race = readProperty(root, "race"), tech = readProperty(root, "tech"), techLevel3 = readProperty(tech, "replicator");
       if (!isRecord(readProperty(race, "replicator")) || typeof techLevel3 != "number" || !Number.isFinite(techLevel3) || techLevel3 < 1 || replicatorDiscoveryAttempted || (replicatorDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
-      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
       if (govTabs === void 0) return;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 2
+          index: MAIN_TAB_INDEX.civic
         }),
-        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.industry
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `replicator discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16259,15 +16334,19 @@
         "isolation"
       ) || !!readProperty(race, "warlord");
       if ((typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1) && !exempt || smelterDiscoveryAttempted || (smelterDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
-      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
       if (govTabs === void 0) return;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 2
+          index: MAIN_TAB_INDEX.civic
         }),
-        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.industry
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `smelter discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16279,15 +16358,19 @@
         "nanite_factory"
       );
       if (!readProperty(race, "deconstructor") || !isRecord(naniteFactory) || naniteDiscoveryAttempted || (naniteDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
-      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
       if (govTabs === void 0) return;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 2
+          index: MAIN_TAB_INDEX.civic
         }),
-        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.industry
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `nanite discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16300,16 +16383,20 @@
         "mass_ejector"
       ), count2 = readProperty(ejector2, "count");
       if (!isRecord(ejector2) || typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || ejectorDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
       if (marketTabs === void 0) return;
       ejectorDiscoveryAttempted = !0;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 4
+          index: MAIN_TAB_INDEX.resources
         }),
-        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 2 })
+        Object.freeze({
+          setting: MARKET_TABS_SETTING,
+          control: marketTabs,
+          index: MARKET_TAB_INDEX.ejector
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `ejector discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16322,16 +16409,20 @@
         "transport"
       ), count2 = readProperty(transport, "count");
       if (!isRecord(transport) || typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || supplyDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
       if (marketTabs === void 0) return;
       supplyDiscoveryAttempted = !0;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 4
+          index: MAIN_TAB_INDEX.resources
         }),
-        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 3 })
+        Object.freeze({
+          setting: MARKET_TABS_SETTING,
+          control: marketTabs,
+          index: MARKET_TAB_INDEX.supply
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `supply discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16342,16 +16433,20 @@
         "showStorage"
       ) !== !0)
         return;
-      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
       if (marketTabs === void 0) return;
       storageDiscoveryAttempted = !0;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 4
+          index: MAIN_TAB_INDEX.resources
         }),
-        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 1 })
+        Object.freeze({
+          setting: MARKET_TABS_SETTING,
+          control: marketTabs,
+          index: MARKET_TAB_INDEX.storage
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `storage discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16361,16 +16456,20 @@
       let root = pageCapture2.rootState.readRoot();
       if (!isRecord(readProperty(readProperty(root, "galaxy"), "trade")) || readProperty(readProperty(root, "settings"), "showMarket") !== !0)
         return;
-      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
       if (marketTabs === void 0) return;
       galaxyMarketDiscoveryAttempted = !0;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 4
+          index: MAIN_TAB_INDEX.resources
         }),
-        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 0 })
+        Object.freeze({
+          setting: MARKET_TABS_SETTING,
+          control: marketTabs,
+          index: MARKET_TAB_INDEX.market
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `galaxy market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16380,16 +16479,20 @@
       let root = pageCapture2.rootState.readRoot();
       if (readProperty(readProperty(root, "settings"), "showMarket") !== !0)
         return;
-      let marketTabs = SUB_TAB_CONTROLS.marketTabs;
+      let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
       if (marketTabs === void 0) return;
       marketDiscoveryAttempted = !0;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 4
+          index: MAIN_TAB_INDEX.resources
         }),
-        Object.freeze({ setting: "marketTabs", control: marketTabs, index: 0 })
+        Object.freeze({
+          setting: MARKET_TABS_SETTING,
+          control: marketTabs,
+          index: MARKET_TAB_INDEX.market
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16398,15 +16501,19 @@
       if (pageCapture2.controls.resolve(FACTORY_CONTROL) !== void 0) return;
       let city = readProperty(pageCapture2.rootState.readRoot(), "city"), factoryState = readProperty(city, "factory"), count2 = readProperty(factoryState, "count");
       if (typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || factoryDiscoveryAttempted || (factoryDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
-      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
       if (govTabs === void 0) return;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 2
+          index: MAIN_TAB_INDEX.civic
         }),
-        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.industry
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `factory discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
@@ -16414,16 +16521,20 @@
     }, ratioDiscoveryAttempted = !1, ensureRatioControls = (control, unlocked) => {
       if (!unlocked || ratioDiscoveryAttempted || pageCapture2.controls.resolve(control) !== void 0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
         return;
-      let govTabs = SUB_TAB_CONTROLS.govTabs;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
       if (govTabs === void 0) return;
       ratioDiscoveryAttempted = !0;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: 2
+          index: MAIN_TAB_INDEX.civic
         }),
-        Object.freeze({ setting: "govTabs", control: govTabs, index: 1 })
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.industry
+        })
       ]);
       result.outcome.status !== "succeeded" && logError(
         `production-ratio discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
