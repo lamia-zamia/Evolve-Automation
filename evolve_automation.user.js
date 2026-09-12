@@ -10342,6 +10342,7 @@
     "ProjectUnlocked",
     "BuildingUnlocked",
     "BuildingAffordable",
+    "BuildingQueued",
     "Challenge",
     "Universe",
     "Government",
@@ -10632,6 +10633,15 @@
         if (typeof argument != "string") return;
         let cost = context?.buildingCosts?.get(argument);
         return cost === void 0 || isRegionalSupply(root) ? void 0 : costFitsStorage(root, cost);
+      }
+      case "BuildingQueued": {
+        if (typeof argument != "string" || splitActionId(argument) === void 0) return;
+        let queue = readProperty(root, "queue");
+        if (!isRecord(queue) || !readProperty(queue, "display")) return !1;
+        let entries = readProperty(queue, "queue");
+        if (!Array.isArray(entries)) return !1;
+        let settings = readProperty(root, "settings");
+        return (readProperty(settings, "qAny") ? entries : entries.slice(0, 1)).some((entry) => readProperty(entry, "id") === argument);
       }
       case "Boolean":
         return typeof argument == "boolean" ? argument : void 0;

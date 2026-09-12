@@ -4,7 +4,7 @@
  * A stored trigger condition names an operand type, an argument and a count. This module answers
  * the operand types whose whole input is the game's own root state: building and project counts,
  * civic job assignments, resource holdings, the appointed governor, the race and planet bags, the
- * calendar, the two build queues, the ascension level and pillar ranks, the True Path fleet,
+ * calendar, the two build queues and build-queue membership, the ascension level and pillar ranks, the True Path fleet,
  * Mass Relay, and carport fields, the garrison and Hell fortress counts, and the smelter slot
  * count.
  *
@@ -100,6 +100,7 @@ const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "ProjectUnlocked",
   "BuildingUnlocked",
   "BuildingAffordable",
+  "BuildingQueued",
   "Challenge",
   "Universe",
   "Government",
@@ -598,6 +599,25 @@ function readBoolean(
       // captured, so the comparison stops being exact rather than becoming optimistic.
       if (isRegionalSupply(root)) return undefined;
       return costFitsStorage(root, cost);
+    }
+    case "BuildingQueued": {
+      // Membership in the game build queue, which is what the script's own queued-target list
+      // holds for buildings: the displayed queue's first entry, or every entry with the queue's
+      // "buy any affordable" setting on. A hidden queue is an empty list, so false rather than
+      // unanswered — but an argument naming no `<region>-<id>` pair names no building at all. The
+      // pause flag is deliberately not consulted: the script lists a paused queue's entries just
+      // the same, while the reservation sample (which asks what is being saved for) honors it.
+      if (typeof argument !== "string") return undefined;
+      if (splitActionId(argument) === undefined) return undefined;
+      const queue = readProperty(root, "queue");
+      if (!isRecord(queue) || !readProperty(queue, "display")) return false;
+      const entries = readProperty(queue, "queue");
+      if (!Array.isArray(entries)) return false;
+      const settings = readProperty(root, "settings");
+      const considered = readProperty(settings, "qAny")
+        ? entries
+        : entries.slice(0, 1);
+      return considered.some((entry) => readProperty(entry, "id") === argument);
     }
     case "Boolean":
       return typeof argument === "boolean" ? argument : undefined;

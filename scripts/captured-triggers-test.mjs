@@ -519,6 +519,46 @@ assert.deepEqual(
   [],
 );
 
+// --- BuildingQueued conditions read the captured game queue ------------------
+
+// The requirement needs no priced pass and no panel: the displayed queue's first entry answers
+// it straight from the root.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingQueued",
+        requirementId: "city-farm",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    rootValue: {
+      ...root,
+      queue: { display: true, queue: [{ id: "city-farm" }] },
+    },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+// Asking for a building the queue does not hold drops the trigger.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingQueued",
+        requirementId: "city-bank",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    rootValue: {
+      ...root,
+      queue: { display: true, queue: [{ id: "city-farm" }] },
+    },
+  }).read(),
+  [],
+);
+
 // --- Other/satcost conditions price the swarm satellite ----------------------
 
 // A satcost condition prices the satellite through the same probe pass, once however many rows

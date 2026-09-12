@@ -541,6 +541,51 @@ assert.equal(
   undefined,
 );
 
+// --- the queued-building operand, from the captured game queue --------------
+
+// Membership in the displayed build queue: the first entry, or every entry with the queue's
+// "buy any affordable" setting on.
+const queued = {
+  ...root,
+  settings: { qAny: false },
+  queue: { display: true, queue: [{ id: "city-farm" }, { id: "city-mine" }] },
+};
+assert.equal(readCapturedOperand(queued, "BuildingQueued", "city-farm"), true);
+assert.equal(readCapturedOperand(queued, "BuildingQueued", "city-mine"), false);
+assert.equal(
+  readCapturedOperand(
+    { ...queued, settings: { qAny: true } },
+    "BuildingQueued",
+    "city-mine",
+  ),
+  true,
+);
+// A hidden queue — or none at all — is an empty list, so false rather than unanswered.
+assert.equal(
+  readCapturedOperand(
+    { ...queued, queue: { display: false, queue: [{ id: "city-farm" }] } },
+    "BuildingQueued",
+    "city-farm",
+  ),
+  false,
+);
+assert.equal(readCapturedOperand(root, "BuildingQueued", "city-farm"), false);
+// An argument naming no `<region>-<id>` pair names no building at all.
+assert.equal(readCapturedOperand(queued, "BuildingQueued", "farm"), undefined);
+// It is a boolean operand: the stored count is matched, not exceeded.
+assert.equal(
+  evaluateCapturedCondition(queued, "BuildingQueued", "city-farm", 1),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(queued, "BuildingQueued", "city-mine", 0),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(queued, "BuildingQueued", "city-farm", 0),
+  false,
+);
+
 // --- the soldier operands, recomputed from the captured root ----------------
 
 // Garrison, fortress, and forward-base fields the game backfills or the manager zeroes read the
