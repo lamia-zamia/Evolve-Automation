@@ -535,6 +535,10 @@ export function createCapturedSettingsPanel({
         '<div id="script_settings" style="margin-top: 30px;"></div>',
       );
     }
+    dom("#script_settings")
+      .children()
+      .filter((_index, element) => element.id !== "script_settingsVisibility")
+      .show();
     if (dom("#script_generalSettings").length !== 0) return;
     ui.general.buildGeneralSettings();
     ui.interface.buildInterfaceSettings();
@@ -545,7 +549,10 @@ export function createCapturedSettingsPanel({
   };
 
   const removeScriptSettings = () => {
-    getQuery()?.("#script_settings").remove();
+    getQuery()?.(`#script_settings`)
+      .children()
+      .filter((_index, element) => element.id !== "script_settingsVisibility")
+      .hide();
   };
 
   const syncSettingsVisibilityControls = (checked: boolean) => {
@@ -560,11 +567,16 @@ export function createCapturedSettingsPanel({
   const ensureSettingsVisibilityControl = () => {
     const dom = getQuery();
     if (dom === undefined || dom(".settings").length === 0) return;
+    if (dom("#script_settings").length === 0) {
+      dom(".settings").append(
+        '<div id="script_settings" style="margin-top: 30px;"></div>',
+      );
+    }
     if (dom("#script_settingsVisibility").length === 0) {
       const button = dom(
         `<button id="script_settingsVisibility" type="button" style="margin:4px 0 12px; padding:5px 10px; border:1px solid currentColor; border-radius:4px; background:transparent; color:inherit; cursor:pointer;" title="Show or hide the script settings">${settingToggleCaption("showSettings", settings.readRaw()["showSettings"] === true)}</button>`,
       );
-      dom(".settings").prepend(button);
+      dom("#script_settings").prepend(button);
       button.on("click", () => {
         const checked = settings.readRaw()["showSettings"] !== true;
         settings.readRaw()["showSettings"] = checked;
@@ -660,6 +672,7 @@ export function createCapturedSettingsPanel({
         ensureAutomationContainer();
         ensureSettingsVisibilityControl();
         if (settings.readRaw()["showSettings"] === true) buildScriptSettings();
+        else removeScriptSettings();
       } catch (error) {
         // A panel that fails to draw must never stop the automation tick.
         logError(`settings panel could not be drawn: ${String(error)}`);

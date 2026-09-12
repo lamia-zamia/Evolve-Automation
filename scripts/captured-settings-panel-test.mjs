@@ -120,13 +120,17 @@ function createPage(
   showSettings.checked = false;
   showSettings.dispatch("change");
   assert.equal(settings.readRaw()["showSettings"], false);
-  assert.equal(root.querySelectorAll("#script_settings").length, 0);
+  assert.equal(root.querySelectorAll("#script_settings").length, 1);
+  assert.equal(
+    root.querySelectorAll("#script_generalSettings")[0].style.display,
+    "none",
+  );
   assert.equal(
     root.querySelectorAll("#script_settingsVisibility")[0].textContent,
     "Show settings",
   );
   panel.ensurePanel();
-  assert.equal(root.querySelectorAll("#script_settings").length, 0);
+  assert.equal(root.querySelectorAll("#script_settings").length, 1);
   root.querySelectorAll("#script_settingsVisibility")[0].dispatch("click");
   assert.equal(settings.readRaw()["showSettings"], true);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
