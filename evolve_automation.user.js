@@ -17236,6 +17236,9 @@
   }
 
   // src/adapters/browser/options-modal.ts
+  function settingToggleCaption(settingName, checked) {
+    return settingName === "showSettings" ? checked ? "Hide settings" : "Show settings" : settingName;
+  }
   function getBuilder(builders, key) {
     return builders[key];
   }
@@ -17249,16 +17252,16 @@
     openOverrideModal
   }) {
     function createSettingToggle(node, settingName, title, enabledCallback, disabledCallback) {
-      let state = getSettingsReader().readToggle(settingName), toggle = getJQuery()(
+      let state = getSettingsReader().readToggle(settingName), caption = settingToggleCaption(settingName, state.checked), presentation = settingName === "showSettings" ? ' style="display:inline-flex; align-items:center; gap:8px; margin:4px 0; padding:5px 10px; border:1px solid currentColor; border-radius:4px; cursor:pointer;"' : "", toggle = getJQuery()(
         `
-          <label class="switch script_bg_${settingName}" tabindex="0" title="${title}">
+          <label class="switch script_bg_${settingName}"${presentation} tabindex="0" title="${title}">
             <input class="script_${settingName}" type="checkbox"${state.checked ? " checked" : ""}/>
-            <span class="check"></span><span>${settingName}</span>
+            <span class="check"></span><span class="script-setting-label">${caption}</span>
           </label><br>`
       ).toggleClass("inactive-row", state.inactive);
       state.checked && enabledCallback && enabledCallback(), toggle.on("change", "input", function() {
         let writer = getSettingsWriter();
-        writer.setToggle(settingName, this.checked), writer.persist(), this.checked && enabledCallback && enabledCallback(), !this.checked && disabledCallback && disabledCallback();
+        writer.setToggle(settingName, this.checked), writer.persist(), toggle.find(".script-setting-label").text(settingToggleCaption(settingName, this.checked)), this.checked && enabledCallback && enabledCallback(), !this.checked && disabledCallback && disabledCallback();
       }), toggle.on(
         "click",
         { label: `Toggle (${settingName})`, name: settingName, type: "boolean" },

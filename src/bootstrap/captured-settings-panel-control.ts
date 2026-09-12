@@ -1,9 +1,9 @@
 /**
  * The script's settings panel, composed for the captured runtime.
  *
- * The captured runtime owns the top-level automation toggles and the General settings section. This
- * control wires those existing typed browser builders to the captured settings record instead of to
- * the legacy closure; game-backed sections remain outside this slice until their captures exist.
+ * The captured runtime owns the top-level automation toggles and the record-only settings sections.
+ * This control wires those existing typed browser builders to the captured settings record instead
+ * of to the legacy closure; game-backed sections remain outside this slice until their captures exist.
  *
  * TRANSITIONAL: the per-section builders (the Settings tab, and the toggle strips injected into the
  * game's own Craft/Building/ARPA/Storage/Market/Eject/Supply panels) still reach the mutable

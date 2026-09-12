@@ -53,6 +53,13 @@ function makeNode(label, length = 1) {
       trace.push(`prepend:${label}:${String(content).slice(0, 10)}`);
       return node;
     },
+    find(selector) {
+      return makeNode(`${label} ${selector}`);
+    },
+    text(value) {
+      trace.push(`text:${label}:${value}`);
+      return node;
+    },
     toggleClass(className, value) {
       trace.push(`toggle:${label}:${className}:${value}`);
       return node;

@@ -37,6 +37,8 @@ interface JQueryNode {
   off(events: string): JQueryNode;
   append(content: unknown): JQueryNode;
   prepend(content: unknown): JQueryNode;
+  find(selector: string): JQueryNode;
+  text(value: string): JQueryNode;
   toggleClass(className: string, value: boolean): JQueryNode;
   removeClass(className: string): JQueryNode;
   css(property: string, value: string): JQueryNode;
@@ -58,6 +60,13 @@ interface JQueryNode {
 type JQuery = (selector: unknown) => JQueryNode;
 type Action = () => void;
 type OptionsBuilder = (node: JQueryNode, prefix: string) => void;
+
+function settingToggleCaption(settingName: string, checked: boolean): string {
+  if (settingName === "showSettings") {
+    return checked ? "Hide settings" : "Show settings";
+  }
+  return settingName;
+}
 
 /** Builders for every secondary-option button, keyed by the domain builder key. */
 export type OptionsModalBrowserBuilders = Record<
@@ -122,13 +131,18 @@ export function createOptionsModalBrowserAdapter({
     disabledCallback?: Action,
   ): void {
     const state = getSettingsReader().readToggle(settingName);
+    const caption = settingToggleCaption(settingName, state.checked);
+    const presentation =
+      settingName === "showSettings"
+        ? ' style="display:inline-flex; align-items:center; gap:8px; margin:4px 0; padding:5px 10px; border:1px solid currentColor; border-radius:4px; cursor:pointer;"'
+        : "";
     const toggle = getJQuery()(
       `
-          <label class="switch script_bg_${settingName}" tabindex="0" title="${title}">
+          <label class="switch script_bg_${settingName}"${presentation} tabindex="0" title="${title}">
             <input class="script_${settingName}" type="checkbox"${
               state.checked ? " checked" : ""
             }/>
-            <span class="check"></span><span>${settingName}</span>
+            <span class="check"></span><span class="script-setting-label">${caption}</span>
           </label><br>`,
     ).toggleClass("inactive-row", state.inactive);
 
@@ -138,6 +152,9 @@ export function createOptionsModalBrowserAdapter({
       const writer = getSettingsWriter();
       writer.setToggle(settingName, this.checked);
       writer.persist();
+      toggle
+        .find(".script-setting-label")
+        .text(settingToggleCaption(settingName, this.checked));
       if (this.checked && enabledCallback) enabledCallback();
       if (!this.checked && disabledCallback) disabledCallback();
     });

@@ -99,6 +99,31 @@ function createPage(
   assert.equal(settings.readRaw()["buildPlannerUI"], true);
 }
 
+// --- show settings has a usable caption and removes the panel when disabled ---------------------
+
+{
+  const { panel, settings, root } = createPage(JSON.stringify({}));
+  panel.ensurePanel();
+  const showSettings = root.querySelectorAll(".script_showSettings")[0];
+  assert.ok(showSettings, "the show-settings toggle should be rendered");
+  assert.equal(
+    root
+      .querySelectorAll(".script-setting-label")
+      .some(({ textContent }) => textContent.includes("Hide settings")),
+    true,
+  );
+  showSettings.checked = false;
+  showSettings.dispatch("change");
+  assert.equal(settings.readRaw()["showSettings"], false);
+  assert.equal(root.querySelectorAll("#script_settings").length, 0);
+  panel.ensurePanel();
+  assert.equal(root.querySelectorAll("#script_settings").length, 0);
+  showSettings.checked = true;
+  showSettings.dispatch("change");
+  assert.equal(settings.readRaw()["showSettings"], true);
+  assert.equal(root.querySelectorAll("#script_settings").length, 1);
+}
+
 // --- a fresh profile with no settings at all still gets a panel ----------------------------------
 
 {
