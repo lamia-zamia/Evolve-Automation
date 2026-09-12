@@ -48,6 +48,7 @@ import {
   splitActionId,
 } from "../validation.ts";
 import { costFitsStorage, isRegionalSupply } from "./captured-affordability.ts";
+import { readCapturedFactoryCapacity } from "./economy/production/captured-factory-capacity.ts";
 
 /** A condition compares an operand's value against its stored count. */
 export type CapturedOperandValue = boolean | number;
@@ -371,13 +372,6 @@ function queueLength(root: unknown, key: string): number | undefined {
 }
 
 /**
- * The script's own smelter slot count: total capacity minus the Star slots, which the script
- * manages separately as extra operating capacity. Both fields are created with the smelter
- * structure itself, so a missing smelter bag leaves the operand unanswered rather than zero.
- * Factory slots are a different figure again — the industry panel's own operating
- * capacity, drawn behind `#iFactory` — and stay unanswered here.
- */
-/**
  * One half of a building's rendered power switch. The switch exists only for a building whose own
  * gate passed — `switchable()`, or `powered` with `high_tech >= 2` and `checkPowerRequirements` —
  * and every input to that gate is the module-lexical action definition, so the drawn row is the
@@ -403,6 +397,37 @@ function switchedCount(
   }
   if (!sample.unlocked.has(argument)) return undefined;
   return sample.states.get(argument)?.[half] ?? 0;
+}
+
+/**
+ * The script's own smelter slot count: total capacity minus the Star slots, which the script
+ * manages separately as extra operating capacity. Both fields are created with the smelter
+ * structure itself, so a missing smelter bag leaves the operand unanswered rather than zero.
+ */
+/**
+ * The factory line pool, which is `factoryData.factoryCapacity()` upstream: the lines held by every
+ * switched-on factory across all eight structures that carry them. `readCapturedFactoryCapacity`
+ * already owns that rule for the captured runtime — the factory planner and the demand sample both
+ * read it — so this operand calls it rather than restating the sum a third time. A game whose
+ * factory bag does not exist yet is unanswered rather than zero, like the smelter above.
+ *
+ * Two deliberate divergences from the compatibility reader, which answers
+ * `FactoryManager.maxOperating()`:
+ *
+ * - That manager knows five factory buildings where 1.5.0 has eight, so it undercounts on any run
+ *   reaching Tau Ceti, the underground, the surface, or Venus. The captured pool counts all eight.
+ * - It then subtracts the lines assigned to productions the *script* has disabled. That mixes
+ *   automation configuration into an operand that reads as game state, and the captured
+ *   composition has no equivalent of the manager's per-production `enabled` flag. The pool the
+ *   game offers is reported instead.
+ *
+ * Upstream's other figure, `actualCapacity()`, is what the industry panel draws as its maximum and
+ * counts only lines that are actually powered or supported. It is not this operand: upstream's own
+ * comment on `factoryCapacity()` calls that one "the size of the pool lines are assigned out of",
+ * which is what a slot count means.
+ */
+function factorySlots(root: unknown): number | undefined {
+  return readCapturedFactoryCapacity(root);
 }
 
 function smelterSlots(root: unknown): number | undefined {
@@ -656,6 +681,9 @@ function readNumber(
       return undefined;
     case "Industry":
       if (argument === "smelters") return smelterSlots(root);
+      // The factory line pool, from the one module that owns that upstream rule for the captured
+      // runtime. See `factorySlots` for what this answers and what it deliberately does not.
+      if (argument === "factories") return factorySlots(root);
       return undefined;
     case "Soldiers":
       return soldierCount(root, argument);

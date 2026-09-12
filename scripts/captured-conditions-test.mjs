@@ -840,10 +840,48 @@ const smelting = {
   city: { ...root.city, smelter: { cap: 10, Star: 3 } },
 };
 assert.equal(readCapturedOperand(smelting, "Industry", "smelters"), 7);
-// A smelter the game never built leaves the operand unanswered, never zero, and factory slots
-// need building on/off state the root cannot answer.
+// A smelter the game never built leaves the operand unanswered, never zero, and so does a factory
+// bag the game has not created.
 assert.equal(readCapturedOperand(root, "Industry", "smelters"), undefined);
 assert.equal(readCapturedOperand(smelting, "Industry", "factories"), undefined);
+
+// Factory slots are the line pool: every switched-on factory across all eight structures that
+// carry lines, which is upstream's own `factoryCapacity()`.
+const factories = {
+  ...root,
+  city: { ...root.city, factory: { count: 4, on: 3 } },
+};
+assert.equal(readCapturedOperand(factories, "Industry", "factories"), 3);
+// The seven regional structures each contribute at their own upstream rate: red 1x,
+// interstellar 2x, portal `3 + rank`, underground 2x, Venus 2x, and Tau Ceti 3x without the
+// isolation technology.
+const spreadFactories = {
+  ...root,
+  tech: { ...root.tech },
+  city: { ...root.city, factory: { count: 2, on: 2 } },
+  space: {
+    ...root.space,
+    red_factory: { count: 1, on: 1 },
+    industrial_complex: { count: 1, on: 1 },
+  },
+  interstellar: { int_factory: { count: 1, on: 1 } },
+  portal: { hell_factory: { count: 1, on: 1, rank: 2 } },
+  underground: { under_factory: { count: 1, on: 1 } },
+  tauceti: { tau_factory: { count: 1, on: 1 } },
+};
+assert.equal(
+  readCapturedOperand(spreadFactories, "Industry", "factories"),
+  2 + 1 + 2 + 5 + 2 + 2 + 3,
+);
+// A switched-off factory holds no lines, so the pool follows `on` and not `count`.
+assert.equal(
+  readCapturedOperand(
+    { ...root, city: { ...root.city, factory: { count: 9, on: 0 } } },
+    "Industry",
+    "factories",
+  ),
+  0,
+);
 assert.equal(
   evaluateCapturedCondition(smelting, "Industry", "smelters", 7),
   true,
@@ -1067,7 +1105,6 @@ assert.equal(readCapturedOperand(root, "Other", "tknow", stored), undefined);
 assert.equal(readCapturedOperand(root, "RaceGenus", "humanoid"), undefined);
 assert.equal(readCapturedOperand(root, "Queue", "evo"), undefined);
 // Manager-computed and script-computed operands stay unanswered.
-assert.equal(readCapturedOperand(root, "Industry", "factories"), undefined);
 assert.equal(readCapturedOperand(root, "Soldiers", "hellGarrison"), undefined);
 assert.equal(readCapturedOperand(root, "Soldiers", "mercenaryCost"), undefined);
 assert.equal(readCapturedOperand(root, "ResourceIncome", "Money"), undefined);

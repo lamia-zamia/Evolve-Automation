@@ -10512,6 +10512,9 @@
     if (!(sample === void 0 || !sample.regions.has(parts.region)) && sample.unlocked.has(argument))
       return sample.states.get(argument)?.[half] ?? 0;
   }
+  function factorySlots(root) {
+    return readCapturedFactoryCapacity(root);
+  }
   function smelterSlots(root) {
     let smelter = readProperty(readProperty(root, "city"), "smelter");
     if (!isRecord(smelter)) return;
@@ -10667,7 +10670,7 @@
         }
         return;
       case "Industry":
-        return argument === "smelters" ? smelterSlots(root) : void 0;
+        return argument === "smelters" ? smelterSlots(root) : argument === "factories" ? factorySlots(root) : void 0;
       case "Soldiers":
         return soldierCount(root, argument);
       default:
