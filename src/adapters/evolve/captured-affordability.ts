@@ -46,6 +46,17 @@ function costResource(root: unknown, key: string): unknown {
 }
 
 /**
+ * Strictness of the capacity comparison. Upstream `checkMaxCosts` compares `cap >= 0`, so a
+ * zero capacity is a ceiling there. The queue-reservation test passes `false`: a resource the
+ * game reports with no capacity yet is not a known ceiling, and erring loose there only delays
+ * a build while erring tight would spend resources out from under something the game is
+ * genuinely saving for.
+ */
+export interface StorageFitOptions {
+  readonly zeroCapIsCeiling?: boolean;
+}
+
+/**
  * The game's `checkMaxCosts` in global-pool mode: every positive cost must name a resource the
  * game is displaying, and must fit under that resource's capacity. A negative capacity is the
  * game's "no limit" and passes.
@@ -56,7 +67,9 @@ function costResource(root: unknown, key: string): unknown {
 export function costFitsStorage(
   root: unknown,
   cost: Readonly<Record<string, number>>,
+  options?: StorageFitOptions,
 ): boolean | undefined {
+  const zeroCapIsCeiling = options?.zeroCapIsCeiling ?? true;
   for (const [key, amount] of Object.entries(cost)) {
     if (!Number.isFinite(amount)) return undefined;
     // A zero cost is never refused, whatever the resource's state.
@@ -66,7 +79,8 @@ export function costFitsStorage(
     if (amount > 0 && readProperty(entry, "display") !== true) return false;
     const capacity = finiteAmount(readProperty(entry, "max"));
     if (capacity === undefined) return undefined;
-    if (capacity >= 0 && amount > capacity) return false;
+    const isCeiling = zeroCapIsCeiling ? capacity >= 0 : capacity > 0;
+    if (isCeiling && amount > capacity) return false;
   }
   return true;
 }

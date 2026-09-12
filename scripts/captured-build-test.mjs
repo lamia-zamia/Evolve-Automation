@@ -679,4 +679,42 @@ function reservationPage(options = {}) {
   );
 }
 
+// --- the queue-ignore gate is the strict storage test --------------------------------------------
+// These manage the queued warehouse itself with reservations off, so the only thing deciding
+// between the warehouse and the farm is whether the gate reads the queued entry as one the game
+// is saving for. An ignored warehouse yields to the farm; a written-off one competes and wins.
+
+/** The queued warehouse competing with the farm, with nothing else reserving against either. */
+function ignoreGateControl(page) {
+  return makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("warehouse", 50), target("farm", 40)], {
+      respectReservations: false,
+    }),
+  });
+}
+
+{
+  // A zero capacity IS a ceiling here, matching upstream `cap >= 0`: the queued 400-Money
+  // warehouse can never be stored, so it is not ignored and outranks the farm.
+  const page = reservationPage({
+    queue: [queued("city-warehouse", "Warehouse")],
+    resources: { Money: { amount: 500, max: 0 } },
+  });
+  assert.equal(ignoreGateControl(page).runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["city-warehouse"]);
+}
+
+{
+  // A positive cost in a resource the game is not displaying is one the game refuses to save
+  // for, so the queued warehouse competes instead of yielding.
+  const page = reservationPage({
+    queue: [queued("city-warehouse", "Warehouse")],
+    resources: { Money: { amount: 500, max: 10000, display: false } },
+  });
+  assert.equal(ignoreGateControl(page).runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["city-warehouse"]);
+}
+
 console.log("captured-build ok");

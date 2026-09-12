@@ -135,7 +135,6 @@ export function createCapturedConstructionControl(
   });
   const reservations = createCapturedQueueReservationSource({
     rootState,
-    resources,
     costs,
     ...(readOfferedTechs === undefined
       ? {}
@@ -173,7 +172,6 @@ export function createCapturedConstructionControl(
         rootState,
         controls,
         costs,
-        resources,
         readTargets: () => readPolicy().buildings,
         ...(dependencies.ensureBuildControls === undefined
           ? {}

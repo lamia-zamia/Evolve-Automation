@@ -81,7 +81,6 @@ export function createCapturedResearchControl(
   let offeredThisCycle: readonly Readonly<OfferedTech>[] | undefined;
   const reservations = createCapturedQueueReservationSource({
     rootState,
-    resources,
     readOfferedTechs: () => offeredThisCycle,
     costs: createCapturedActionCostReader({
       rootState,

@@ -22,9 +22,9 @@ import type {
 } from "../../../../ports/construction-candidates.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
-import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
+import { costFitsStorage } from "../../captured-affordability.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
 /** One building the caller manages, with the settings the planners need. */
@@ -52,7 +52,6 @@ export interface CapturedBuildDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly costs: GameActionCostReader;
-  readonly resources: GameResourceSource;
   readonly readTargets: () => readonly Readonly<CapturedBuildTarget>[];
   /** Ensures the game has built the relevant action controls before target sampling. */
   readonly ensureControls?: () => void;
@@ -76,25 +75,9 @@ function readBuilding(
   return isRecord(building) ? building : undefined;
 }
 
-function isMaximumAffordable(
-  resources: GameResourceSource,
-  cost: Readonly<Record<string, number>>,
-): boolean {
-  const sample = resources.readResources(Object.keys(cost));
-  if (sample === undefined) return false;
-  for (const [id, amount] of Object.entries(cost)) {
-    if (amount <= 0) continue;
-    const resource = sample.resources.get(id);
-    if (resource === undefined) return false;
-    if (resource.max >= 0 && resource.max < amount) return false;
-  }
-  return true;
-}
-
 function readQueuedIds(
   root: unknown,
   candidates: readonly Readonly<CycleCandidate>[],
-  resources: GameResourceSource,
 ): ReadonlySet<string> {
   const queue = readProperty(root, "queue");
   if (!readProperty(queue, "display")) return new Set();
@@ -111,7 +94,7 @@ function readQueuedIds(
       const candidate = byElementId.get(id);
       if (
         candidate !== undefined &&
-        isMaximumAffordable(resources, candidate.candidate.cost)
+        costFitsStorage(root, candidate.candidate.cost) === true
       ) {
         ids.add(id);
       }
@@ -124,7 +107,7 @@ function readQueuedIds(
 export function createCapturedBuildSource(
   dependencies: CapturedBuildDependencies,
 ): ConstructionCandidateSource {
-  const { rootState, controls, costs, resources, readTargets } = dependencies;
+  const { rootState, controls, costs, readTargets } = dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
   let cycle: ReadonlyMap<string, CycleCandidate> = new Map();
 
@@ -162,7 +145,7 @@ export function createCapturedBuildSource(
           }),
         });
       }
-      const queued = readQueuedIds(root, [...entries.values()], resources);
+      const queued = readQueuedIds(root, [...entries.values()]);
       cycle = entries;
       return Object.freeze(
         [...entries.values()].map((entry) =>

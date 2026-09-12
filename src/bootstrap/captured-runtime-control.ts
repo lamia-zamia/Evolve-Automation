@@ -330,7 +330,6 @@ export function startCapturedRuntime({
   // reservations and demand on one catalog without buying another discovery pass.
   const queueReservations = createCapturedQueueReservationSource({
     rootState: pageCapture.rootState,
-    resources: createCapturedResourceSource(pageCapture.rootState),
     readOfferedTechs: progression.readOfferedTechs,
     costs: createCapturedActionCostReader({
       rootState: pageCapture.rootState,

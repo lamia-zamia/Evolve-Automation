@@ -37,6 +37,44 @@ assert.equal(costFitsStorage(root, {}), true);
 assert.equal(costFitsStorage(root, { Species: 12 }), true);
 assert.equal(costFitsStorage(root, { Species: 13 }), false);
 
+// A zero capacity is a ceiling by default, matching upstream `cap >= 0`.
+assert.equal(
+  costFitsStorage(
+    { resource: { Money: { max: 0, display: true } } },
+    { Money: 1 },
+  ),
+  false,
+);
+assert.equal(
+  costFitsStorage(
+    { resource: { Money: { max: 0, display: true } } },
+    { Money: 0 },
+  ),
+  true,
+);
+// The queue-reservation test opts out: a resource with no capacity yet is not a known ceiling.
+assert.equal(
+  costFitsStorage(
+    { resource: { Money: { max: 0, display: true } } },
+    { Money: 1 },
+    { zeroCapIsCeiling: false },
+  ),
+  true,
+);
+assert.equal(
+  costFitsStorage(root, { Money: 1001 }, { zeroCapIsCeiling: false }),
+  false,
+  "an ordinary ceiling still refuses under the loose comparison",
+);
+assert.equal(
+  costFitsStorage(root, { Soul_Gem: 1e9 }, { zeroCapIsCeiling: false }),
+  true,
+);
+assert.equal(
+  costFitsStorage(root, { Nanite: 1 }, { zeroCapIsCeiling: false }),
+  false,
+  "the loose comparison only relaxes the zero cap, not the display refusal",
+);
 // A cost the comparison cannot make is unjudgeable, never false: the special upstream branches for
 // Morale, Army, Troops, Structs and the prestige currencies read state this does not hold.
 assert.equal(costFitsStorage(root, { Morale: 5 }), undefined);

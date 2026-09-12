@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { createCapturedQueueReservationSource } from "../src/adapters/evolve/captured-queue-reservations.ts";
-import { createCapturedResourceSource } from "../src/adapters/evolve/captured-world-state.ts";
 
 /**
  * Prices any id present in `prices`; anything else is unpriceable, as the game's own oracle is.
@@ -17,7 +16,6 @@ function makeSource(root, prices = {}, onUnavailable, research) {
   const reads = [];
   const source = createCapturedQueueReservationSource({
     rootState,
-    resources: createCapturedResourceSource(rootState),
     costs: { readCost: (id) => prices[id] },
     ...(research === undefined
       ? {}
@@ -51,6 +49,7 @@ function makeRoot({
     settings: { qAny, qAny_res: research?.qAnyRes ?? false },
     queue: { display, pause, queue },
     resource,
+    race: { species: "human" },
     tech: {},
   };
   if (research !== undefined) {
@@ -178,6 +177,68 @@ for (const [label, root] of [
       resources: { Money: { amount: 0, max: -1 } },
     }),
     PRICES,
+  ).readReservations();
+  assert.equal(sample.targets.length, 1);
+}
+
+{
+  // A zero capacity is not read as a ceiling here: the test errs loose on purpose, because
+  // over-reserving only delays a build while under-reserving spends resources out from under
+  // something the game is genuinely saving for.
+  const sample = makeSource(
+    makeRoot({
+      queue: [{ id: "city-warehouse", label: "Warehouse" }],
+      resources: { Money: { amount: 0, max: 0 } },
+    }),
+    PRICES,
+  ).readReservations();
+  assert.equal(sample.targets.length, 1);
+}
+
+{
+  // A positive cost in a resource the game is not displaying is one the game itself refuses to
+  // save for (`cna`), so it reserves nothing — matching the game's own write-off exactly.
+  const sample = makeSource(
+    makeRoot({
+      queue: [{ id: "city-warehouse", label: "Warehouse" }],
+      resources: { Money: { amount: 1000, max: 10000, display: false } },
+    }),
+    PRICES,
+  ).readReservations();
+  assert.deepEqual([...sample.targets], []);
+  assert.equal(sample.unavailable, false);
+}
+
+{
+  // `Species` is the game's alias for the current race's own resource, resolved the same way.
+  const prices = { "city-hatchery": { Species: 4 } };
+  const reserved = makeSource(
+    makeRoot({
+      queue: [{ id: "city-hatchery", label: "Hatchery" }],
+      resources: { human: { amount: 4, max: 12 } },
+    }),
+    prices,
+  ).readReservations();
+  assert.equal(reserved.targets.length, 1);
+  const writtenOff = makeSource(
+    makeRoot({
+      queue: [{ id: "city-hatchery", label: "Hatchery" }],
+      resources: { human: { amount: 4, max: 3 } },
+    }),
+    prices,
+  ).readReservations();
+  assert.deepEqual([...writtenOff.targets], []);
+}
+
+{
+  // A cost nothing can judge still reserves: with no known ceiling the loose answer is to hold
+  // the resources rather than spend out from under the commitment.
+  const sample = makeSource(
+    makeRoot({
+      queue: [{ id: "city-warehouse", label: "Warehouse" }],
+      resources: {},
+    }),
+    { "city-warehouse": { Elerium: 10 } },
   ).readReservations();
   assert.equal(sample.targets.length, 1);
 }

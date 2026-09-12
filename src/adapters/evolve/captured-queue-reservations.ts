@@ -29,8 +29,8 @@ import type {
   CostReservationSource,
 } from "../../ports/game-cost-reservations.ts";
 import type { OfferedTech } from "../../ports/game-tech-catalog.ts";
-import type { GameResourceSource } from "../../ports/game-world-state.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
+import { costFitsStorage } from "./captured-affordability.ts";
 import { readProperty } from "../validation.ts";
 
 const NO_RESERVATIONS: CostReservationSample = Object.freeze({
@@ -45,7 +45,6 @@ const RESEARCH_QUEUE_CAUSE = "Research queue";
 
 export interface CapturedQueueReservationDependencies {
   readonly rootState: GameRootStateSource;
-  readonly resources: GameResourceSource;
   readonly costs: GameActionCostReader;
   /**
    * The technologies the game is offering, which is the only captured route to a technology's
@@ -123,34 +122,26 @@ function readQueuedResearch(root: unknown): readonly QueuedItem[] | undefined {
 }
 
 /**
- * Whether storage could ever hold this cost. The game refuses to save for a queued item it can
- * never pay for, and reserving one anyway would stall every build that shares a resource with it.
- * An uncapped resource (`max` below zero) and one the game has not created yet both pass: neither
- * is a known ceiling.
+ * Whether storage could ever hold this cost, which is the game's own `checkMaxCosts` judgement:
+ * the game refuses to save for a queued item it can never pay for (writing `cna` on the entry),
+ * and reserving one anyway would stall every build that shares a resource with it.
  *
- * Regional supply pools can cap a payment below the civilisation-wide `max`, so this is the looser
- * of the two tests. Erring loose reserves an item the game would have written off, which delays a
- * build; erring tight would spend resources out from under one the game is genuinely saving for.
+ * This is the looser of the two storage tests on purpose. A zero capacity is not read as a
+ * ceiling, and a cost the comparison cannot judge at all still reserves: neither is a known
+ * ceiling. Erring loose reserves an item the game would have written off, which delays a build;
+ * erring tight would spend resources out from under one the game is genuinely saving for.
  */
 function couldBeStored(
-  resources: GameResourceSource,
+  root: unknown,
   cost: Readonly<Record<string, number>>,
 ): boolean {
-  const sample = resources.readResources(Object.keys(cost));
-  if (sample === undefined) return false;
-  for (const [id, amount] of Object.entries(cost)) {
-    if (amount <= 0) continue;
-    const view = sample.resources.get(id);
-    if (view === undefined) continue;
-    if (view.max > 0 && view.max < amount) return false;
-  }
-  return true;
+  return costFitsStorage(root, cost, { zeroCapIsCeiling: false }) !== false;
 }
 
 export function createCapturedQueueReservationSource(
   dependencies: CapturedQueueReservationDependencies,
 ): CostReservationSource {
-  const { rootState, resources, costs } = dependencies;
+  const { rootState, costs } = dependencies;
   const readOfferedTechs = dependencies.readOfferedTechs;
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
 
@@ -188,7 +179,7 @@ export function createCapturedQueueReservationSource(
           unavailable = true;
           return;
         }
-        if (!couldBeStored(resources, cost)) return;
+        if (!couldBeStored(root, cost)) return;
         targets.push(
           Object.freeze({
             name: item.label,

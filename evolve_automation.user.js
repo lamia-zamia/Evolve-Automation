@@ -2327,6 +2327,36 @@
     });
   }
 
+  // src/adapters/evolve/captured-affordability.ts
+  function finiteAmount(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function isRegionalSupply(root) {
+    let shadow = finiteAmount(
+      readProperty(readProperty(root, "tech"), "shadow")
+    );
+    return shadow !== void 0 && shadow >= 5;
+  }
+  function costResource(root, key) {
+    let resourceId = key === "Species" ? readProperty(readProperty(root, "race"), "species") : key;
+    if (typeof resourceId == "string")
+      return readProperty(readProperty(root, "resource"), resourceId);
+  }
+  function costFitsStorage(root, cost, options) {
+    let zeroCapIsCeiling = options?.zeroCapIsCeiling ?? !0;
+    for (let [key, amount] of Object.entries(cost)) {
+      if (!Number.isFinite(amount)) return;
+      if (amount === 0) continue;
+      let entry = costResource(root, key);
+      if (!isRecord(entry)) return;
+      if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
+      let capacity = finiteAmount(readProperty(entry, "max"));
+      if (capacity === void 0) return;
+      if ((zeroCapIsCeiling ? capacity >= 0 : capacity > 0) && amount > capacity) return !1;
+    }
+    return !0;
+  }
+
   // src/adapters/evolve/captured-queue-reservations.ts
   var NO_RESERVATIONS2 = Object.freeze({
     targets: Object.freeze([]),
@@ -2371,19 +2401,11 @@
     }
     return items;
   }
-  function couldBeStored(resources, cost) {
-    let sample = resources.readResources(Object.keys(cost));
-    if (sample === void 0) return !1;
-    for (let [id, amount] of Object.entries(cost)) {
-      if (amount <= 0) continue;
-      let view = sample.resources.get(id);
-      if (view !== void 0 && view.max > 0 && view.max < amount)
-        return !1;
-    }
-    return !0;
+  function couldBeStored(root, cost) {
+    return costFitsStorage(root, cost, { zeroCapIsCeiling: !1 }) !== !1;
   }
   function createCapturedQueueReservationSource(dependencies) {
-    let { rootState, resources, costs } = dependencies, readOfferedTechs = dependencies.readOfferedTechs, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    let { rootState, costs } = dependencies, readOfferedTechs = dependencies.readOfferedTechs, reportUnavailable = dependencies.onUnavailable ?? (() => {
     });
     function reserving(items, buyAnyQueued) {
       let eligible = items.filter((item) => item.requirementsMet);
@@ -2399,7 +2421,7 @@
             reportUnavailable(item.id, reason), unavailable = !0;
             return;
           }
-          couldBeStored(resources, cost) && targets.push(
+          couldBeStored(root, cost) && targets.push(
             Object.freeze({
               name: item.label,
               cause,
@@ -2447,17 +2469,7 @@
     let region = readProperty(root, target.region), building = readProperty(region, target.id);
     return isRecord(building) ? building : void 0;
   }
-  function isMaximumAffordable(resources, cost) {
-    let sample = resources.readResources(Object.keys(cost));
-    if (sample === void 0) return !1;
-    for (let [id, amount] of Object.entries(cost)) {
-      if (amount <= 0) continue;
-      let resource = sample.resources.get(id);
-      if (resource === void 0 || resource.max >= 0 && resource.max < amount) return !1;
-    }
-    return !0;
-  }
-  function readQueuedIds(root, candidates, resources) {
+  function readQueuedIds(root, candidates) {
     let queue = readProperty(root, "queue");
     if (!readProperty(queue, "display")) return /* @__PURE__ */ new Set();
     let entries = readProperty(queue, "queue");
@@ -2469,14 +2481,14 @@
       let id = readProperty(entry, "id");
       if (typeof id == "string") {
         let candidate = byElementId.get(id);
-        candidate !== void 0 && isMaximumAffordable(resources, candidate.candidate.cost) && ids.add(id);
+        candidate !== void 0 && costFitsStorage(root, candidate.candidate.cost) === !0 && ids.add(id);
       }
       if (!buyAny) break;
     }
     return ids;
   }
   function createCapturedBuildSource(dependencies) {
-    let { rootState, controls, costs, resources, readTargets } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
+    let { rootState, controls, costs, readTargets } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
     }), cycle = /* @__PURE__ */ new Map();
     return Object.freeze({
       family: "buildings",
@@ -2508,7 +2520,7 @@
             })
           });
         }
-        let queued = readQueuedIds(root, [...entries.values()], resources);
+        let queued = readQueuedIds(root, [...entries.values()]);
         return cycle = entries, Object.freeze(
           [...entries.values()].map(
             (entry) => Object.freeze({
@@ -3386,7 +3398,6 @@
       ...onSkipped === void 0 ? {} : { onUnavailable: onSkipped }
     }), reservations = createCapturedQueueReservationSource({
       rootState,
-      resources,
       costs,
       ...readOfferedTechs === void 0 ? {} : { readOfferedTechs: readOfferedTechsOnce },
       ...onSkipped === void 0 ? {} : { onUnavailable: onSkipped }
@@ -3413,7 +3424,6 @@
           rootState,
           controls,
           costs,
-          resources,
           readTargets: () => readPolicy().buildings,
           ...dependencies.ensureBuildControls === void 0 ? {} : { ensureControls: dependencies.ensureBuildControls },
           ...onSkipped === void 0 ? {} : { onSkipped }
@@ -3612,7 +3622,6 @@
       ...onUnavailable === void 0 ? {} : { onUnavailable }
     }), offeredThisCycle, reservations = createCapturedQueueReservationSource({
       rootState,
-      resources,
       readOfferedTechs: () => offeredThisCycle,
       costs: createCapturedActionCostReader({
         rootState,
@@ -10298,35 +10307,6 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/evolve/captured-affordability.ts
-  function finiteAmount(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
-  function isRegionalSupply(root) {
-    let shadow = finiteAmount(
-      readProperty(readProperty(root, "tech"), "shadow")
-    );
-    return shadow !== void 0 && shadow >= 5;
-  }
-  function costResource(root, key) {
-    let resourceId = key === "Species" ? readProperty(readProperty(root, "race"), "species") : key;
-    if (typeof resourceId == "string")
-      return readProperty(readProperty(root, "resource"), resourceId);
-  }
-  function costFitsStorage(root, cost) {
-    for (let [key, amount] of Object.entries(cost)) {
-      if (!Number.isFinite(amount)) return;
-      if (amount === 0) continue;
-      let entry = costResource(root, key);
-      if (!isRecord(entry)) return;
-      if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
-      let capacity = finiteAmount(readProperty(entry, "max"));
-      if (capacity === void 0) return;
-      if (capacity >= 0 && amount > capacity) return !1;
-    }
-    return !0;
-  }
-
   // src/adapters/evolve/captured-conditions.ts
   var BOOLEAN_OPERANDS = /* @__PURE__ */ new Set([
     "Boolean",
@@ -16033,7 +16013,6 @@
       readDemand: () => readDemand()
     }), queueReservations = createCapturedQueueReservationSource({
       rootState: pageCapture2.rootState,
-      resources: createCapturedResourceSource(pageCapture2.rootState),
       readOfferedTechs: progression.readOfferedTechs,
       costs: createCapturedActionCostReader({
         rootState: pageCapture2.rootState,
