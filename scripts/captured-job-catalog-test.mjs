@@ -341,7 +341,7 @@ const teamsterReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({
       ...root,
-      race: { teamster: 9 },
+      race: { gravity_well: true, teamster: 9 },
       tech: { transport: 3, railway: 1 },
       civic: {
         ...root.civic,
@@ -367,6 +367,38 @@ assert.equal(
   teamsterReader().jobs.find(({ id }) => id === "teamster")?.smartMaximum,
   3,
   "Teamster smart maximum uses the captured race and technology levels",
+);
+const nonGravityTeamsterReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...root,
+      race: {},
+      tech: { railway: 1 },
+      civic: {
+        ...root.civic,
+        teamster: {
+          job: "teamster",
+          assigned: 0,
+          workers: 0,
+          max: -1,
+          display: true,
+        },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-teamster"],
+  },
+  readSettings: () => ({ job_s_teamster: true }),
+});
+assert.equal(
+  nonGravityTeamsterReader().jobs.find(({ id }) => id === "teamster")
+    ?.smartMaximum,
+  null,
+  "non-Gravity Well races do not require a Teamster smart maximum",
 );
 
 const spaceMinerReader = createCapturedJobCatalogReader({
@@ -1690,6 +1722,37 @@ assert.equal(
   lowFoodRescueReader().jobs[0].smartMaximum,
   1,
   "an empty normal-race Farmer pool enters the low-Food rescue branch",
+);
+const lowFoodExistingFarmerReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => ({
+      ...foodRoot,
+      civic: {
+        d_job: "farmer",
+        farmer: {
+          job: "farmer",
+          assigned: 3,
+          workers: 3,
+          max: -1,
+          display: true,
+        },
+      },
+      city: { farm: { count: 3 } },
+      resource: {
+        ...foodRoot.resource,
+        Food: { amount: 10, max: 100, diff: -1 },
+      },
+    }),
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: foodControls,
+  readSettings: () => ({ job_s_farmer: true }),
+});
+assert.equal(
+  lowFoodExistingFarmerReader().jobs[0].smartMaximum,
+  3,
+  "an existing Farmer pool remains capped when source-level Food production is unavailable",
 );
 
 const slowScriptFoodReader = createCapturedJobCatalogReader({

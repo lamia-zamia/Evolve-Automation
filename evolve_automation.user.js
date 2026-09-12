@@ -5707,14 +5707,15 @@
     if (id === "crystal_miner")
       return readCrystalMinerSmartMaximum(root, readDemand);
     if (id === "miner")
-      return readMinerSmartMaximum(root, settings, readDemand);
+      return readMinerSmartMaximum(root, readDemand);
     if (id === "coal_miner")
-      return readCoalMinerSmartMaximum(root, settings, readDemand);
+      return readCoalMinerSmartMaximum(root, readDemand);
     if (id === "cement_worker")
       return readCementWorkerSmartMaximum(root, settings, count2, readDemand);
     if (id !== "teamster") return null;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
+    if (!hasRaceFlag(race, "gravity_well")) return null;
     let teamster = finiteNonNegative(readProperty(race, "teamster")), transport = optionalFiniteNumber(tech, "transport"), railway = optionalFiniteNumber(tech, "railway");
     if (teamster === void 0 || transport === void 0 || railway === void 0)
       return;
@@ -5747,6 +5748,12 @@
     let factors = readHighPopulationFactors(readProperty(root, "race"));
     return factors === void 0 ? void 0 : factors?.workerEffect ?? 1;
   }
+  function readCapturedPopulationResource(root) {
+    let resources = readProperty(root, "resource");
+    if (!isRecord(resources)) return;
+    let species = readProperty(readProperty(root, "race"), "species"), key = typeof species == "string" && species.length > 0 ? species : "Population", population = readProperty(resources, key);
+    return isRecord(population) ? population : void 0;
+  }
   function readSpaceBuildingOn(root, id) {
     let space = readProperty(root, "space"), building = readProperty(space, id);
     return building === void 0 ? 0 : finiteNonNegative(readProperty(building, "on"));
@@ -5776,7 +5783,7 @@
     return Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
   }
   function readHellSurveyorSmartMaximum(root) {
-    let fortress = readProperty(readProperty(root, "portal"), "fortress"), threat = readProperty(fortress, "threat"), population = readProperty(readProperty(root, "resource"), "Population"), amount = readProperty(population, "amount"), maximum = readProperty(population, "max");
+    let fortress = readProperty(readProperty(root, "portal"), "fortress"), threat = readProperty(fortress, "threat"), population = readCapturedPopulationResource(root), amount = readProperty(population, "amount"), maximum = readProperty(population, "max");
     if (typeof threat != "number" || !Number.isFinite(threat) || typeof amount != "number" || !Number.isFinite(amount) || typeof maximum != "number" || !Number.isFinite(maximum))
       return;
     let storageRatio2 = maximum > 0 ? amount / maximum : 0;
@@ -5821,10 +5828,7 @@
       return;
     if (amount >= maximum) return 0;
     let population = finiteNonNegative(
-      readProperty(
-        readProperty(readProperty(root, "resource"), "Population"),
-        "amount"
-      )
+      readProperty(readCapturedPopulationResource(root), "amount")
     ), minimumFood = maximum * 0.2, maximumFood = maximum * 0.6, specialFoodRule = hasRaceFlag(race, "ravenous") || hasRaceFlag(race, "carnivore");
     if (hasRaceFlag(race, "ravenous")) {
       let rank = readProperty(race, "ravenous"), stockpileDivisor = typeof rank == "number" ? {
@@ -5860,15 +5864,7 @@
       let populationChange = population - history.lastPopulationCount, farmerChange = count2 - history.lastFarmerCount;
       populationChange === farmerChange && rate > 0 && (foodMaximum = Math.max(0, count2 - populationChange));
     }
-    if (foodMaximum === null)
-      if (count2 === 0 && amount < minimumFood && nextTickFood < minimumFood)
-        foodMaximum = 1;
-      else {
-        if (count2 > 0 && nextTickFood < minimumFood)
-          return;
-        foodMaximum = specialFoodRule ? amount > maximumFood && rate > 0 ? Math.max(0, count2 - 1) : count2 : count2 === 0 && amount < maximum * 0.2 && rate <= 0 ? 1 : amount > maximum * 0.6 && rate > 0 ? Math.max(0, count2 - 1) : null;
-      }
-    if (!applyFarmCapacity) return foodMaximum;
+    if (foodMaximum === null && (count2 === 0 && amount < minimumFood && nextTickFood < minimumFood ? foodMaximum = 1 : count2 > 0 && nextTickFood < minimumFood ? foodMaximum = count2 : foodMaximum = specialFoodRule ? amount > maximumFood && rate > 0 ? Math.max(0, count2 - 1) : count2 : count2 === 0 && amount < maximum * 0.2 && rate <= 0 ? 1 : amount > maximum * 0.6 && rate > 0 ? Math.max(0, count2 - 1) : null), !applyFarmCapacity) return foodMaximum;
     let farm = readProperty(readProperty(root, "city"), "farm");
     if (farm === void 0) return foodMaximum;
     if (!isRecord(farm)) return;
@@ -5978,8 +5974,7 @@
     }
     return resources;
   }
-  function readMinerSmartMaximum(root, settings, readDemand) {
-    if (readProperty(settings, "jobDisableMiners") === !0) return;
+  function readMinerSmartMaximum(root, readDemand) {
     let race = readProperty(root, "race");
     if (hasRaceFlag(race, "warlord")) return null;
     let tech = readProperty(root, "tech"), resources = ["Copper"], sappyResources = hasRaceFlag(race, "sappy") ? readUsefulUnlockedResources(root, ["Aluminium", "Chrysotile"]) : [];
@@ -5989,8 +5984,7 @@
     if (ironUnlocked !== void 0)
       return ironUnlocked && resources.push("Iron"), readAnyUsefulSmartMaximum(root, resources, readDemand);
   }
-  function readCoalMinerSmartMaximum(root, settings, readDemand) {
-    if (readProperty(settings, "jobDisableMiners") === !0) return;
+  function readCoalMinerSmartMaximum(root, readDemand) {
     let uraniumUnlocked = readResourceUnlocked(root, "Uranium");
     return uraniumUnlocked === void 0 ? void 0 : readAnyUsefulSmartMaximum(root, uraniumUnlocked ? ["Uranium", "Coal"] : ["Coal"], readDemand);
   }
@@ -6262,7 +6256,7 @@
         onSkipped(controlId, "ordinary job servant count is not finite");
         return;
       }
-      let smart = readProperty(settings, `job_s_${id}`) === !0, smartMaximum = readSmartMaximum(
+      let smart = display && readProperty(settings, `job_s_${id}`) === !0, smartMaximum = readSmartMaximum(
         root,
         id,
         smart,
@@ -7182,23 +7176,23 @@
   function tokenFor(catalog, id) {
     return catalog.jobs.find((job) => job.id === id)?.token ?? null;
   }
+  var JOBS_WITHOUT_ORDINARY_CONTROL = /* @__PURE__ */ new Set(["craftsman"]);
   function hasCompleteJobCatalog(root, catalog) {
     let civic = readProperty(root, "civic");
     if (!isRecord(civic)) return !1;
     let capturedIds = new Set(catalog.jobs.map((job) => job.id));
     for (let [id, value] of Object.entries(civic))
-      if (isRecord(value) && typeof readProperty(value, "job") == "string" && !capturedIds.has(id))
-        return !1;
+      if (isRecord(value) && typeof readProperty(value, "job") == "string") {
+        if (JOBS_WITHOUT_ORDINARY_CONTROL.has(id)) continue;
+        if (!capturedIds.has(id)) return !1;
+      }
     return !0;
   }
   function readCycle(root, settingsValue, catalogReader, previousAuthorityCap) {
     let settings = isRecord(settingsValue) ? settingsValue : {}, authority = readAuthorityInput(root, settings, previousAuthorityCap);
     if (authority === void 0) return;
     let population = finiteNonNegative(
-      readProperty(
-        readProperty(readProperty(root, "resource"), "Population"),
-        "amount"
-      )
+      readProperty(readCapturedPopulationResource(root), "amount")
     );
     if (population === void 0) return;
     let catalog = catalogReader();
@@ -7394,12 +7388,14 @@
   function createCapturedOrdinaryJobsAutomation({
     rootState,
     controls,
-    readSettings
+    readSettings,
+    onSkipped
   }) {
     let history, historyRoot, authorityCap = null, catalogReader = createCapturedJobCatalogReader({
       rootState,
       controls,
       readSettings,
+      ...onSkipped === void 0 ? {} : { onSkipped },
       readJobHistory: () => historyRoot === rootState.readRoot() ? history : void 0
     }), controlsPort = createCapturedJobControls({ controls }), sessionRef = {
       value: void 0
@@ -7468,6 +7464,7 @@
     rootState,
     controls,
     readSettings,
+    onSkipped,
     costs,
     readDemand,
     readBuildTargets,
@@ -7477,6 +7474,7 @@
       rootState,
       controls,
       readSettings,
+      ...onSkipped === void 0 ? {} : { onSkipped },
       readJobHistory: () => historyRoot === rootState.readRoot() ? history : void 0,
       ...readDemand === void 0 ? {} : { readDemand }
     }), controlsPort = createCapturedJobControls({ controls }), sessionRef = {
@@ -18210,11 +18208,13 @@
     }), ordinaryJobs = createCapturedOrdinaryJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => settingsStore.readRaw()
+      readSettings: () => settingsStore.readRaw(),
+      onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`)
     }), fullJobs = createCapturedFullJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
+      onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
       costs,
       readDemand: () => readDemand(),
       readBuildTargets: progression.readManagedBuildTargets,

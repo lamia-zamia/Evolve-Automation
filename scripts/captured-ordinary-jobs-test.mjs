@@ -4,7 +4,10 @@ import {
   createCapturedFullJobsAutomation,
   createCapturedOrdinaryJobsAutomation,
 } from "../src/adapters/evolve/civic/captured-ordinary-jobs.ts";
-import { createCapturedJobCatalogReader } from "../src/adapters/evolve/civic/captured-job-catalog.ts";
+import {
+  createCapturedJobCatalogReader,
+  readCapturedPopulationResource,
+} from "../src/adapters/evolve/civic/captured-job-catalog.ts";
 
 const root = {
   civic: {
@@ -24,7 +27,8 @@ const root = {
       display: true,
     },
   },
-  resource: { Population: { amount: 3, max: 10 } },
+  race: { species: "elven" },
+  resource: { elven: { amount: 3, max: 10 } },
 };
 const calls = [];
 const controls = {
@@ -61,6 +65,11 @@ assert.ok(decision);
 assert.equal(automation.executor.execute(decision).status, "succeeded");
 assert.equal(root.civic.farmer.workers, 3);
 assert.equal(root.civic.d_job, "farmer");
+assert.equal(
+  readCapturedPopulationResource(root)?.amount,
+  3,
+  "DeadSpace population is read from the current race resource",
+);
 assert.deepEqual(calls, [
   { elementId: "civ-unemployed", method: "sub", args: [] },
   { elementId: "civ-unemployed", method: "sub", args: [] },
@@ -316,7 +325,8 @@ const fullRoot = {
       max: -1,
       display: true,
     },
-    craftsman: { workers: 1, max: 2 },
+    // DeadSpace keeps Craftsman in civic state but exposes its worker control through #foundry.
+    craftsman: { job: "craftsman", workers: 1, max: 2 },
   },
   city: {
     foundry: {

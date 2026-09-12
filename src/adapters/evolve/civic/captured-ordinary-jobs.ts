@@ -21,6 +21,7 @@ import {
 } from "../../validation.ts";
 import {
   createCapturedJobCatalogReader,
+  readCapturedPopulationResource,
   toCapturedJobsCycleInput,
   type CapturedJobCatalog,
   type CapturedJobHistory,
@@ -43,6 +44,7 @@ export interface CapturedOrdinaryJobsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
+  readonly onSkipped?: (controlId: string, reason: string) => void;
 }
 
 export interface CapturedFullJobsDependencies extends CapturedOrdinaryJobsDependencies {
@@ -366,6 +368,10 @@ function tokenFor(
   return catalog.jobs.find((job) => job.id === id)?.token ?? null;
 }
 
+// DeadSpace defines Craftsman in the ordinary job list but exposes no civ-craftsman Vue control;
+// its worker pool is owned by the shared #foundry control instead.
+const JOBS_WITHOUT_ORDINARY_CONTROL = new Set(["craftsman"]);
+
 function hasCompleteJobCatalog(
   root: unknown,
   catalog: Readonly<CapturedJobCatalog>,
@@ -375,6 +381,7 @@ function hasCompleteJobCatalog(
   const capturedIds = new Set(catalog.jobs.map((job) => job.id));
   for (const [id, value] of Object.entries(civic)) {
     if (isRecord(value) && typeof readProperty(value, "job") === "string") {
+      if (JOBS_WITHOUT_ORDINARY_CONTROL.has(id)) continue;
       if (!capturedIds.has(id)) return false;
     }
   }
@@ -397,10 +404,7 @@ function readCycle(
   const authority = readAuthorityInput(root, settings, previousAuthorityCap);
   if (authority === undefined) return undefined;
   const population = finiteNonNegative(
-    readProperty(
-      readProperty(readProperty(root, "resource"), "Population"),
-      "amount",
-    ),
+    readProperty(readCapturedPopulationResource(root), "amount"),
   );
   if (population === undefined) return undefined;
   const catalog = catalogReader();
@@ -739,6 +743,7 @@ export function createCapturedOrdinaryJobsAutomation({
   rootState,
   controls,
   readSettings,
+  onSkipped,
 }: CapturedOrdinaryJobsDependencies): {
   readonly reader: JobsReader;
   readonly executor: JobsExecutor;
@@ -750,6 +755,7 @@ export function createCapturedOrdinaryJobsAutomation({
     rootState,
     controls,
     readSettings,
+    ...(onSkipped === undefined ? {} : { onSkipped }),
     readJobHistory: () =>
       historyRoot === rootState.readRoot() ? history : undefined,
   });
@@ -858,6 +864,7 @@ export function createCapturedFullJobsAutomation({
   rootState,
   controls,
   readSettings,
+  onSkipped,
   costs,
   readDemand,
   readBuildTargets,
@@ -874,6 +881,7 @@ export function createCapturedFullJobsAutomation({
     rootState,
     controls,
     readSettings,
+    ...(onSkipped === undefined ? {} : { onSkipped }),
     readJobHistory: () =>
       historyRoot === rootState.readRoot() ? history : undefined,
     ...(readDemand === undefined ? {} : { readDemand }),

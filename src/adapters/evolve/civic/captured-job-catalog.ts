@@ -265,10 +265,10 @@ function readSmartMaximum(
     return readCrystalMinerSmartMaximum(root, readDemand);
   }
   if (id === "miner") {
-    return readMinerSmartMaximum(root, settings, readDemand);
+    return readMinerSmartMaximum(root, readDemand);
   }
   if (id === "coal_miner") {
-    return readCoalMinerSmartMaximum(root, settings, readDemand);
+    return readCoalMinerSmartMaximum(root, readDemand);
   }
   if (id === "cement_worker") {
     return readCementWorkerSmartMaximum(root, settings, count, readDemand);
@@ -277,6 +277,9 @@ function readSmartMaximum(
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
   if (!isRecord(race) || !isRecord(tech)) return undefined;
+  // DeadSpace only applies the Teamster cap to Gravity Well races; for every other race the
+  // upstream teamsterCap() leaves transport at zero and the job has no smart maximum.
+  if (!hasRaceFlag(race, "gravity_well")) return null;
   const teamster = finiteNonNegative(readProperty(race, "teamster"));
   const transport = optionalFiniteNumber(tech, "transport");
   const railway = optionalFiniteNumber(tech, "railway");
@@ -325,6 +328,23 @@ function readHighPopulationFactors(
 function readHighPopulationWorkerEffect(root: unknown): number | undefined {
   const factors = readHighPopulationFactors(readProperty(root, "race"));
   return factors === undefined ? undefined : (factors?.workerEffect ?? 1);
+}
+
+/**
+ * DeadSpace stores population under the current race id (`resource[race.species]`), not under
+ * the legacy compatibility name `resource.Population`. Fixtures without a race id retain the
+ * older name so the adapter stays lenient for the pre-race initialization state.
+ */
+export function readCapturedPopulationResource(
+  root: unknown,
+): Record<PropertyKey, unknown> | undefined {
+  const resources = readProperty(root, "resource");
+  if (!isRecord(resources)) return undefined;
+  const species = readProperty(readProperty(root, "race"), "species");
+  const key =
+    typeof species === "string" && species.length > 0 ? species : "Population";
+  const population = readProperty(resources, key);
+  return isRecord(population) ? population : undefined;
 }
 
 function readSpaceBuildingOn(root: unknown, id: string): number | undefined {
@@ -380,7 +400,7 @@ function readTorturerSmartMaximum(root: unknown): number | undefined {
 function readHellSurveyorSmartMaximum(root: unknown): number | undefined {
   const fortress = readProperty(readProperty(root, "portal"), "fortress");
   const threat = readProperty(fortress, "threat");
-  const population = readProperty(readProperty(root, "resource"), "Population");
+  const population = readCapturedPopulationResource(root);
   const amount = readProperty(population, "amount");
   const maximum = readProperty(population, "max");
   if (
@@ -526,10 +546,7 @@ function readFarmerSmartMaximum(
   }
   if (amount >= maximum) return 0;
   const population = finiteNonNegative(
-    readProperty(
-      readProperty(readProperty(root, "resource"), "Population"),
-      "amount",
-    ),
+    readProperty(readCapturedPopulationResource(root), "amount"),
   );
   let minimumFood = maximum * 0.2;
   let maximumFood = maximum * 0.6;
@@ -618,8 +635,9 @@ function readFarmerSmartMaximum(
       foodMaximum = 1;
     } else if (count > 0 && nextTickFood < minimumFood) {
       // The upstream fallback divides by each source's live production. The captured root has no
-      // equivalent source breakdown, so special-race pools with existing workers remain unknown.
-      return undefined;
+      // equivalent source breakdown, so preserve the currently allocated pool as a conservative
+      // cap instead of making every ordinary job unavailable.
+      foodMaximum = count;
     } else {
       foodMaximum = specialFoodRule
         ? amount > maximumFood && rate > 0
@@ -831,13 +849,10 @@ function readUsefulUnlockedResources(
 
 function readMinerSmartMaximum(
   root: unknown,
-  settings: Record<PropertyKey, unknown> | undefined,
   readDemand?: () => CapturedDemandSample,
 ): number | null | undefined {
-  // The raw root does not expose the Gateway Starbase lookup used by the legacy
-  // jobDisableMiners gate. Do not claim a useful-resource result while that option
-  // could disable the whole branch.
-  if (readProperty(settings, "jobDisableMiners") === true) return undefined;
+  // DeadSpace's jobs surface no longer applies the legacy Gateway Starbase/jobDisableMiners gate;
+  // the captured adapter therefore follows the upstream useful-resource rule directly.
   const race = readProperty(root, "race");
   if (hasRaceFlag(race, "warlord")) return null;
   const tech = readProperty(root, "tech");
@@ -861,10 +876,8 @@ function readMinerSmartMaximum(
 
 function readCoalMinerSmartMaximum(
   root: unknown,
-  settings: Record<PropertyKey, unknown> | undefined,
   readDemand?: () => CapturedDemandSample,
 ): number | undefined {
-  if (readProperty(settings, "jobDisableMiners") === true) return undefined;
   const uraniumUnlocked = readResourceUnlocked(root, "Uranium");
   if (uraniumUnlocked === undefined) return undefined;
   const resources = uraniumUnlocked ? ["Uranium", "Coal"] : ["Coal"];
@@ -1265,7 +1278,10 @@ function readCatalog(
       onSkipped(controlId, "ordinary job servant count is not finite");
       return undefined;
     }
-    const smart = readProperty(settings, `job_s_${id}`) === true;
+    // Locked DeadSpace jobs still expose civic records and controls, but their smart settings are
+    // irrelevant until the job is displayed. Do not let an unavailable locked-job input disable
+    // the whole ordinary-job catalog.
+    const smart = display && readProperty(settings, `job_s_${id}`) === true;
     const smartMaximum = readSmartMaximum(
       root,
       id,

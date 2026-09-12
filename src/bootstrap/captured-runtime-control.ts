@@ -298,11 +298,13 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
+    onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
   });
   const fullJobs = createCapturedFullJobsAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
+    onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
     costs,
     readDemand: () => readDemand(),
     readBuildTargets: progression.readManagedBuildTargets,
