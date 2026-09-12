@@ -40,13 +40,13 @@ function makePage(containers) {
   };
 }
 
-function makeReader(containers, { failFor = new Set() } = {}) {
+function makeReader(containers, { failFor = new Set(), settings = {} } = {}) {
   const page = makePage(containers);
   const paths = [];
   const skipped = [];
   const reader = createCapturedBuildingUnlocks({
     rootState: {
-      readRoot: () => ({}),
+      readRoot: () => ({ settings }),
       isReactivitySuppressed: () => false,
       subscribeRootReplaced: () => () => {},
     },
@@ -251,6 +251,78 @@ for (const [region, container, subTab] of [
     on: 2,
     off: 1,
   });
+}
+
+// --- the two 1.5.0 regions that gate before they clear ---
+
+// `renderSurface` returns on `global.settings.showSurface` before clearing `#surface`, so a hidden
+// tab can still hold rows from before it was hidden. The flag answers the region instead: the tab
+// is not shown, nothing in it is offered, and no pass is spent on it.
+{
+  const { reader, paths } = makeReader({
+    "#surface .action": ["surface-woodcutter"],
+  });
+  const sample = reader.read(new Set(["surface"]));
+  assert.deepEqual([...sample.regions], ["surface"]);
+  assert.equal(sample.unlocked.has("surface-woodcutter"), false);
+  assert.deepEqual(paths, []);
+}
+// With the flag on, the panel is drawn and read like any other.
+{
+  const { reader, paths } = makeReader(
+    { "#surface .action": ["surface-woodcutter"] },
+    { settings: { showSurface: true } },
+  );
+  const sample = reader.read(new Set(["surface"]));
+  assert.equal(sample.unlocked.has("surface-woodcutter"), true);
+  assert.deepEqual(paths, [
+    [
+      ["civTabs", MAIN_TAB_CONTROL, 1],
+      ["spaceTabs", "mTabCivil", 9],
+    ],
+  ]);
+}
+
+// `underground` spans two panels under two different main tabs: `#underground` is a civilization
+// sub-tab and `#perkUnderground` is a civics one, and the cave perks drawn into the second carry
+// the same `underground-` prefix. Reading only the first would report every perk as not offered.
+{
+  const { reader, paths } = makeReader(
+    {
+      "#underground .action": ["underground-pylon"],
+      "#perkUnderground .action": ["underground-core_tap_perk"],
+    },
+    { settings: { showUnderground: true } },
+  );
+  const sample = reader.read(new Set(["underground"]));
+  assert.equal(sample.unlocked.has("underground-pylon"), true);
+  assert.equal(sample.unlocked.has("underground-core_tap_perk"), true);
+  assert.deepEqual(paths, [
+    [
+      ["civTabs", MAIN_TAB_CONTROL, 1],
+      ["spaceTabs", "mTabCivil", 8],
+    ],
+    [
+      ["civTabs", MAIN_TAB_CONTROL, 2],
+      ["govTabs", "mTabCivic", 4],
+    ],
+  ]);
+}
+// `drawPerkUnderground` clears before it decides, so the perk half is answered by drawing it even
+// while the main underground tab is hidden.
+{
+  const { reader, paths } = makeReader({
+    "#perkUnderground .action": ["underground-core_tap_perk"],
+  });
+  const sample = reader.read(new Set(["underground"]));
+  assert.deepEqual([...sample.regions], ["underground"]);
+  assert.equal(sample.unlocked.has("underground-core_tap_perk"), true);
+  assert.deepEqual(paths, [
+    [
+      ["civTabs", MAIN_TAB_CONTROL, 2],
+      ["govTabs", "mTabCivic", 4],
+    ],
+  ]);
 }
 
 console.log("captured-building-unlocks ok");

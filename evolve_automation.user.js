@@ -3709,37 +3709,49 @@
   }
 
   // src/adapters/evolve/progression/build/captured-building-unlocks.ts
+  var SHOW_UNDERGROUND_SETTING = "showUnderground", SHOW_SURFACE_SETTING = "showSurface";
+  function isPanelShown(gameSettings, flag) {
+    return isRecord(gameSettings) ? readProperty(gameSettings, flag) === !0 : !1;
+  }
+  function spacePanel(container, subTab, extra) {
+    return Object.freeze({
+      container,
+      mainTab: MAIN_TAB_INDEX.civilization,
+      subTabSetting: SPACE_TABS_SETTING,
+      subTab,
+      ...extra ?? {}
+    });
+  }
   var REGION_PANELS = Object.freeze({
-    city: Object.freeze([
-      Object.freeze({ container: "#city", subTab: SPACE_TAB_INDEX.city })
-    ]),
+    city: Object.freeze([spacePanel("#city", SPACE_TAB_INDEX.city)]),
     space: Object.freeze([
-      Object.freeze({ container: "#space", subTab: SPACE_TAB_INDEX.space }),
-      Object.freeze({
-        container: "#outerSol",
-        subTab: SPACE_TAB_INDEX.outerSol
-      })
+      spacePanel("#space", SPACE_TAB_INDEX.space),
+      spacePanel("#outerSol", SPACE_TAB_INDEX.outerSol)
     ]),
     interstellar: Object.freeze([
+      spacePanel("#interstellar", SPACE_TAB_INDEX.interstellar)
+    ]),
+    galaxy: Object.freeze([spacePanel("#galaxy", SPACE_TAB_INDEX.galaxy)]),
+    portal: Object.freeze([spacePanel("#portal", SPACE_TAB_INDEX.portal)]),
+    tauceti: Object.freeze([spacePanel("#tauceti", SPACE_TAB_INDEX.tauceti)]),
+    eden: Object.freeze([spacePanel("#eden", SPACE_TAB_INDEX.eden)]),
+    underground: Object.freeze([
+      spacePanel("#underground", SPACE_TAB_INDEX.underground, {
+        shownBy: SHOW_UNDERGROUND_SETTING
+      }),
+      // The cave perks are a civics sub-tab, not a civilization one, and they carry the same
+      // `underground-` prefix as the rows above.
       Object.freeze({
-        container: "#interstellar",
-        subTab: SPACE_TAB_INDEX.interstellar
+        container: "#perkUnderground",
+        mainTab: MAIN_TAB_INDEX.civic,
+        subTabSetting: GOV_TABS_SETTING,
+        subTab: GOV_TAB_INDEX.perkUnderground
       })
     ]),
-    galaxy: Object.freeze([
-      Object.freeze({ container: "#galaxy", subTab: SPACE_TAB_INDEX.galaxy })
-    ]),
-    portal: Object.freeze([
-      Object.freeze({ container: "#portal", subTab: SPACE_TAB_INDEX.portal })
-    ]),
-    tauceti: Object.freeze([
-      Object.freeze({
-        container: "#tauceti",
-        subTab: SPACE_TAB_INDEX.tauceti
+    surface: Object.freeze([
+      spacePanel("#surface", SPACE_TAB_INDEX.surface, {
+        shownBy: SHOW_SURFACE_SETTING
       })
-    ]),
-    eden: Object.freeze([
-      Object.freeze({ container: "#eden", subTab: SPACE_TAB_INDEX.eden })
     ])
   });
   function createCapturedBuildingUnlocks(dependencies) {
@@ -3748,16 +3760,12 @@
     return Object.freeze({
       read(regions) {
         if (regions.size === 0) return;
-        if (rootState.readRoot() === void 0) {
+        let root = rootState.readRoot();
+        if (root === void 0) {
           reportSkipped("*", "the game root has not been captured yet");
           return;
         }
-        let subTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
-        if (subTabControl === void 0) {
-          reportSkipped("*", "the space-tab control is unavailable");
-          return;
-        }
-        let unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switchStates = /* @__PURE__ */ new Map();
+        let gameSettings = readProperty(root, "settings"), unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switchStates = /* @__PURE__ */ new Map();
         for (let region of regions) {
           let panels = REGION_PANELS[region];
           if (panels === void 0) {
@@ -3766,14 +3774,24 @@
           }
           let ids = [], states = /* @__PURE__ */ new Map(), complete = !0;
           for (let panel of panels) {
+            if (panel.shownBy !== void 0 && !isPanelShown(gameSettings, panel.shownBy))
+              continue;
+            let subTabControl = SUB_TAB_CONTROLS[panel.subTabSetting];
+            if (subTabControl === void 0) {
+              complete = !1, reportSkipped(
+                region,
+                `the ${panel.subTabSetting} control is unavailable`
+              );
+              break;
+            }
             let path = Object.freeze([
               Object.freeze({
                 setting: MAIN_TAB_SETTING,
                 control: MAIN_TAB_CONTROL,
-                index: MAIN_TAB_INDEX.civilization
+                index: panel.mainTab
               }),
               Object.freeze({
-                setting: SPACE_TABS_SETTING,
+                setting: panel.subTabSetting,
                 control: subTabControl,
                 index: panel.subTab
               })
