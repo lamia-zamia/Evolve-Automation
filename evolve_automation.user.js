@@ -60,6 +60,14 @@
   function isNonArrayRecord(value) {
     return typeof value == "object" && value !== null && !Array.isArray(value);
   }
+  function splitActionId(value) {
+    let separator = value.indexOf("-");
+    if (!(separator <= 0))
+      return Object.freeze({
+        region: value.slice(0, separator),
+        id: value.slice(separator + 1)
+      });
+  }
   function isFiniteNumber(value) {
     return typeof value == "number" && Number.isFinite(value);
   }
@@ -1934,14 +1942,14 @@
     });
   }
   function readNonCityTarget(settings, root, elementId, context, onSkipped) {
-    let separator = elementId.indexOf("-");
-    if (separator <= 0) return;
-    let region = elementId.slice(0, separator);
+    let parts = splitActionId(elementId);
+    if (parts === void 0) return;
+    let region = parts.region;
     if (!CAPTURED_BUILD_REGIONS.has(region) || region === "city")
       return;
     let binding = elementId;
     if (settings[`bat${binding}`] !== !0) return;
-    let id = elementId.slice(separator + 1), owner = readProperty(root, region), state = readProperty(owner, id);
+    let id = parts.id, owner = readProperty(root, region), state = readProperty(owner, id);
     if (!isRecord(state)) {
       onSkipped(binding, `captured ${region} state is unavailable`);
       return;
@@ -2185,7 +2193,7 @@
     return Array.isArray(entries) ? entries : void 0;
   }
   function probeEntry(actionId) {
-    let separator = actionId.indexOf("-"), type = separator === -1 ? actionId : actionId.slice(separator + 1), action = separator === -1 ? actionId : actionId.slice(0, separator);
+    let parts = splitActionId(actionId), type = parts?.id ?? actionId, action = parts?.region ?? actionId;
     return {
       id: actionId,
       action,
@@ -10348,10 +10356,10 @@
   ]);
   function structureState(root, argument) {
     if (typeof argument != "string") return;
-    let separator = argument.indexOf("-");
-    if (separator <= 0) return;
-    let region = readProperty(root, argument.slice(0, separator));
-    return readProperty(region, argument.slice(separator + 1));
+    let parts = splitActionId(argument);
+    if (parts === void 0) return;
+    let region = readProperty(root, parts.region);
+    return readProperty(region, parts.id);
   }
   function projectRecord(root, argument) {
     if (!(typeof argument != "string" || !argument.startsWith("arpa")))
@@ -10549,10 +10557,10 @@
         return typeof argument != "string" ? void 0 : context?.unlockedProjects?.has(argument);
       case "BuildingUnlocked": {
         if (typeof argument != "string") return;
-        let separator = argument.indexOf("-");
-        if (separator <= 0) return;
+        let parts = splitActionId(argument);
+        if (parts === void 0) return;
         let sample = context?.buildingUnlocks;
-        return sample === void 0 || !sample.regions.has(argument.slice(0, separator)) ? void 0 : sample.unlocked.has(argument);
+        return sample === void 0 || !sample.regions.has(parts.region) ? void 0 : sample.unlocked.has(argument);
       }
       case "BuildingAffordable": {
         if (typeof argument != "string") return;
@@ -10657,10 +10665,10 @@
     );
   }
   function readTriggerActionStructure(root, actionId) {
-    let separator = actionId.indexOf("-");
-    if (separator <= 0) return;
-    let region = readProperty(root, actionId.slice(0, separator));
-    return readProperty(region, actionId.slice(separator + 1));
+    let parts = splitActionId(actionId);
+    if (parts === void 0) return;
+    let region = readProperty(root, parts.region);
+    return readProperty(region, parts.id);
   }
   function fitsInStorage(root, cost) {
     return costFitsStorage(root, cost) === !0;
@@ -10680,8 +10688,8 @@
         ), buildingRegions = /* @__PURE__ */ new Set();
         for (let row of rows) {
           if (row.requirementType !== "BuildingUnlocked" || typeof row.requirementId != "string") continue;
-          let separator = row.requirementId.indexOf("-");
-          separator <= 0 || buildingRegions.add(row.requirementId.slice(0, separator));
+          let parts = splitActionId(row.requirementId);
+          parts !== void 0 && buildingRegions.add(parts.region);
         }
         let buildingUnlocks = dependencies.readBuildingUnlocks === void 0 || buildingRegions.size === 0 ? void 0 : dependencies.readBuildingUnlocks(buildingRegions), buildingCosts = /* @__PURE__ */ new Map();
         for (let row of rows) {
@@ -11460,11 +11468,11 @@
       return value;
   }
   function elementParts(elementId) {
-    let separator = elementId.indexOf("-");
-    if (!(separator <= 0 || separator === elementId.length - 1))
+    let parts = splitActionId(elementId);
+    if (!(parts === void 0 || parts.id.length === 0))
       return Object.freeze({
-        region: elementId.slice(0, separator),
-        binding: elementId.slice(separator + 1)
+        region: parts.region,
+        binding: parts.id
       });
   }
   function highPopulationScale(root) {

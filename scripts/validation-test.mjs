@@ -5,11 +5,13 @@ import {
   callNumber,
   callVoid,
   coerceNumber,
+  finite,
   isFiniteNumber,
   isNonArrayRecord,
   isNonNegativeNumber,
   isRecord,
   readProperty,
+  readRecord,
   requireArray,
   requireBoolean,
   requireCount,
@@ -19,6 +21,7 @@ import {
   requireNumber,
   requireRecord,
   requireString,
+  splitActionId,
 } from "../src/adapters/validation.ts";
 
 function messageOf(run) {
@@ -283,5 +286,40 @@ assert.equal(
   readProperty(readProperty({}, "__vue_app__"), "_instance"),
   undefined,
 );
+
+// The shared value-or-undefined guards: the finite number itself, or the bag itself.
+assert.equal(finite(3), 3);
+assert.equal(finite(0), 0);
+for (const rejected of [
+  "5",
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  undefined,
+  null,
+  {},
+]) {
+  assert.equal(finite(rejected), undefined);
+}
+const sharedBag = { Types: 1 };
+assert.equal(readRecord(sharedBag), sharedBag);
+// Like `isRecord`, arrays count as keyed bags here.
+assert.deepEqual(readRecord([]), []);
+for (const rejected of [null, undefined, 7, "game"]) {
+  assert.equal(readRecord(rejected), undefined);
+}
+
+// An action id's two halves split at the first dash: `city-farm` is region `city`, id `farm`.
+assert.deepEqual(splitActionId("city-farm"), { region: "city", id: "farm" });
+assert.deepEqual(splitActionId("space-titan_spaceport"), {
+  region: "space",
+  id: "titan_spaceport",
+});
+assert.deepEqual(splitActionId("a-b-c"), { region: "a", id: "b-c" });
+// A leading dash names no region and is unanswerable; a missing dash is the caller's to judge.
+assert.equal(splitActionId("-farm"), undefined);
+assert.equal(splitActionId("farm"), undefined);
+assert.equal(splitActionId(""), undefined);
+// A trailing dash still splits: sites that refuse an empty id keep that check themselves.
+assert.deepEqual(splitActionId("city-"), { region: "city", id: "" });
 
 console.log("Adapter validation reporting tests passed");

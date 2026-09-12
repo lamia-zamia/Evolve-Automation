@@ -6,7 +6,12 @@ import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import { finite, isRecord, readProperty } from "../../../validation.ts";
+import {
+  finite,
+  isRecord,
+  readProperty,
+  splitActionId,
+} from "../../../validation.ts";
 
 interface WarningElement {
   readonly parentElement?: { readonly id?: unknown } | null;
@@ -41,11 +46,13 @@ function warningDocument(value: unknown): WarningDocument | undefined {
 function elementParts(
   elementId: string,
 ): { readonly region: string; readonly binding: string } | undefined {
-  const separator = elementId.indexOf("-");
-  if (separator <= 0 || separator === elementId.length - 1) return undefined;
+  const parts = splitActionId(elementId);
+  // An empty binding names no building: the shared parser answers the shape, this site keeps
+  // its own refusal of a trailing dash.
+  if (parts === undefined || parts.id.length === 0) return undefined;
   return Object.freeze({
-    region: elementId.slice(0, separator),
-    binding: elementId.slice(separator + 1),
+    region: parts.region,
+    binding: parts.id,
   });
 }
 

@@ -35,7 +35,12 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { evaluateCapturedCondition } from "../../captured-conditions.ts";
 import { costFitsStorage } from "../../captured-affordability.ts";
-import { finite, isRecord, readProperty } from "../../../validation.ts";
+import {
+  finite,
+  isRecord,
+  readProperty,
+  splitActionId,
+} from "../../../validation.ts";
 
 /**
  * One trigger action the game could buy now, priced at the game's own current cost.
@@ -179,10 +184,10 @@ export function readTriggerActionStructure(
   root: unknown,
   actionId: string,
 ): unknown {
-  const separator = actionId.indexOf("-");
-  if (separator <= 0) return undefined;
-  const region = readProperty(root, actionId.slice(0, separator));
-  return readProperty(region, actionId.slice(separator + 1));
+  const parts = splitActionId(actionId);
+  if (parts === undefined) return undefined;
+  const region = readProperty(root, parts.region);
+  return readProperty(region, parts.id);
 }
 
 /**
@@ -248,9 +253,9 @@ export function createCapturedTriggers(
       for (const row of rows) {
         if (row.requirementType !== "BuildingUnlocked") continue;
         if (typeof row.requirementId !== "string") continue;
-        const separator = row.requirementId.indexOf("-");
-        if (separator <= 0) continue;
-        buildingRegions.add(row.requirementId.slice(0, separator));
+        const parts = splitActionId(row.requirementId);
+        if (parts === undefined) continue;
+        buildingRegions.add(parts.region);
       }
       const buildingUnlocks =
         dependencies.readBuildingUnlocks === undefined ||

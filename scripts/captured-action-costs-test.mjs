@@ -49,6 +49,7 @@ function rootSource(root) {
 const prices = {
   "city-basic_housing": { Money: 119, Lumber: 109 },
   "space-spaceport": { Money: 47500, Iridium: 1750 },
+  storehouse: { Money: 10 },
 };
 const seen = [];
 const root = makeRoot([{ id: "city-farm", label: "player's own queued item" }]);
@@ -95,6 +96,16 @@ assert.deepEqual(seen.at(-1), {
 assert.deepEqual(costs.readCost("space-spaceport"), {
   Money: 47500,
   Iridium: 1750,
+});
+
+// An id with no dash stands in for both halves, so the probe still runs.
+assert.deepEqual(costs.readCost("storehouse"), { Money: 10 });
+assert.deepEqual(seen.at(-1), {
+  index: 1,
+  prefix: "res",
+  id: "storehouse",
+  type: "storehouse",
+  action: "storehouse",
 });
 
 // The player's queue is exactly as it was: the probe entry is appended and removed in one step.

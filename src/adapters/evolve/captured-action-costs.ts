@@ -17,7 +17,7 @@
 import type { GameActionCostReader } from "../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
-import { isRecord, readProperty } from "../validation.ts";
+import { isRecord, readProperty, splitActionId } from "../validation.ts";
 
 const QUEUE_ELEMENT_ID = "buildQueue";
 const COST_PREFIX = "res";
@@ -37,9 +37,12 @@ function readQueueArray(rootState: GameRootStateSource): unknown[] | undefined {
 
 /** `city-basic_housing` is queued as id `city-basic_housing`, type `basic_housing`. */
 function probeEntry(actionId: string): Record<string, unknown> {
-  const separator = actionId.indexOf("-");
-  const type = separator === -1 ? actionId : actionId.slice(separator + 1);
-  const action = separator === -1 ? actionId : actionId.slice(0, separator);
+  // No dash names no region: the whole id stands in for both halves, exactly as before, so the
+  // probe fails the same way at the game's own lookup. A leading dash keeps the whole id too —
+  // the old split read an empty action there, and both end at "cost unavailable".
+  const parts = splitActionId(actionId);
+  const type = parts?.id ?? actionId;
+  const action = parts?.region ?? actionId;
   return {
     id: actionId,
     action,

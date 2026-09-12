@@ -33,7 +33,7 @@ import type { ConstructionCycleOptions } from "../../../../ports/construction-ca
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { isRecord, readProperty, splitActionId } from "../../../validation.ts";
 import type { CapturedBuildTarget } from "./captured-build.ts";
 import type { ScriptBuildPolicy } from "./script-build-policy.ts";
 
@@ -743,15 +743,15 @@ function readNonCityTarget(
   context: Readonly<CityRuleContext>,
   onSkipped: (key: string, reason: string) => void,
 ): Readonly<CapturedBuildTarget> | undefined {
-  const separator = elementId.indexOf("-");
-  if (separator <= 0) return undefined;
-  const region = elementId.slice(0, separator);
+  const parts = splitActionId(elementId);
+  if (parts === undefined) return undefined;
+  const region = parts.region;
   if (!CAPTURED_BUILD_REGIONS.has(region) || region === "city") {
     return undefined;
   }
   const binding = elementId;
   if (settings[`bat${binding}`] !== true) return undefined;
-  const id = elementId.slice(separator + 1);
+  const id = parts.id;
   const owner = readProperty(root, region);
   const state = readProperty(owner, id);
   if (!isRecord(state)) {

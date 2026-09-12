@@ -79,6 +79,26 @@ export function isNonArrayRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * An action id's two halves: `city-farm` is region `city`, id `farm`. Every tabbed structure,
+ * queue entry and trigger row names its game object this way, so an upstream id-shape change is
+ * one edit here. A leading dash names no region and is unanswerable; a missing dash is left to
+ * the caller (the queue probe reads the whole id as both halves).
+ */
+export interface ActionIdParts {
+  readonly region: string;
+  readonly id: string;
+}
+
+export function splitActionId(value: string): ActionIdParts | undefined {
+  const separator = value.indexOf("-");
+  if (separator <= 0) return undefined;
+  return Object.freeze({
+    region: value.slice(0, separator),
+    id: value.slice(separator + 1),
+  });
+}
+
 /** Non-throwing counterpart of `requireNumber`. `NaN` and both infinities are rejected. */
 export function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);

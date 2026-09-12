@@ -24,7 +24,12 @@
  * than decide on it.
  */
 
-import { finite, isRecord, readProperty } from "../validation.ts";
+import {
+  finite,
+  isRecord,
+  readProperty,
+  splitActionId,
+} from "../validation.ts";
 import { costFitsStorage, isRegionalSupply } from "./captured-affordability.ts";
 
 /** A condition compares an operand's value against its stored count. */
@@ -91,10 +96,10 @@ const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
  */
 function structureState(root: unknown, argument: unknown): unknown {
   if (typeof argument !== "string") return undefined;
-  const separator = argument.indexOf("-");
-  if (separator <= 0) return undefined;
-  const region = readProperty(root, argument.slice(0, separator));
-  return readProperty(region, argument.slice(separator + 1));
+  const parts = splitActionId(argument);
+  if (parts === undefined) return undefined;
+  const region = readProperty(root, parts.region);
+  return readProperty(region, parts.id);
 }
 
 /** A.R.P.A. ids are stored as the panel binding, `arpa` followed by the project id. */
@@ -415,11 +420,11 @@ function readBoolean(
       // and each costs a pass, so only the sampled ones can be spoken for: an id under any other
       // region is unanswered rather than reported as locked.
       if (typeof argument !== "string") return undefined;
-      const separator = argument.indexOf("-");
-      if (separator <= 0) return undefined;
+      const parts = splitActionId(argument);
+      if (parts === undefined) return undefined;
       const sample = context?.buildingUnlocks;
       if (sample === undefined) return undefined;
-      if (!sample.regions.has(argument.slice(0, separator))) return undefined;
+      if (!sample.regions.has(parts.region)) return undefined;
       return sample.unlocked.has(argument);
     }
     case "BuildingAffordable": {
