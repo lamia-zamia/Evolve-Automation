@@ -5,8 +5,8 @@
  * This control wires those existing typed browser builders to the captured settings record instead
  * of to the legacy closure; game-backed sections remain outside this slice until their captures exist.
  *
- * TRANSITIONAL: the per-section builders (the Settings tab, and the toggle strips injected into the
- * game's own Craft/Building/ARPA/Storage/Market/Eject/Supply panels) still reach the mutable
+ * TRANSITIONAL: the remaining per-section builders (the Settings tab, and the toggle strips
+ * injected into the game's own Building/ARPA/Storage/Market/Eject/Supply panels) still reach the mutable
  * managers under `src/game/`, which are not in the production bundle. They are reported once by name
  * rather than silently doing nothing, and each is replaced by its captured equivalent in a later
  * slice. Automation itself does not depend on any of them — it reads the same settings record this
@@ -14,6 +14,13 @@
  */
 
 import { createAutomationContainer } from "../ui/automation-container.ts";
+import {
+  createCraftToggleBrowserAdapter,
+  type CraftToggleBrowserDependencies,
+} from "../adapters/browser/craft-toggles.ts";
+import { createCapturedCraftToggleReader } from "../adapters/evolve/economy/production/captured-craft-toggles.ts";
+import type { GameControlRegistry } from "../ports/game-control-registry.ts";
+import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import { createAutocomplete } from "../adapters/browser/autocomplete.ts";
 import {
   createGeneralSettingsBrowserAdapter,
@@ -97,11 +104,19 @@ type SettingsShellDependencies = Parameters<typeof createSettingsShell>[0];
 type SettingsControlNode = Parameters<
   ReturnType<typeof createSettingsControls>["addSettingsNumber"]
 >[0];
+type CraftToggles = ReturnType<typeof createCraftToggleBrowserAdapter>;
+type CraftToggleJQuery = ReturnType<
+  CraftToggleBrowserDependencies["getJQuery"]
+>;
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
   readonly capturedPanelWindow: unknown;
   readonly settings: SettingsStore;
+  readonly craftToggles?: {
+    readonly rootState: GameRootStateSource;
+    readonly controls: GameControlRegistry;
+  };
   readonly logError?: (message: string) => void;
 }
 
@@ -145,6 +160,7 @@ function confirmSettingsReset(
 export function createCapturedSettingsPanel({
   capturedPanelWindow,
   settings,
+  craftToggles: capturedCraftToggles,
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
   const documentValue = readProperty(capturedPanelWindow, "document");
@@ -215,6 +231,7 @@ export function createCapturedSettingsPanel({
         readonly interface: InterfaceSettings;
         readonly stateLog: StateLogSettings;
         readonly authority: AuthoritySettings;
+        readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
     | undefined;
@@ -251,6 +268,24 @@ export function createCapturedSettingsPanel({
       openOverrideModal: unported("per-setting override editor"),
       buildSelectOptions: inputs.buildSelectOptions,
     });
+    const craftToggles =
+      capturedCraftToggles === undefined
+        ? undefined
+        : createCraftToggleBrowserAdapter({
+            getJQuery: () => getJQuery() as unknown as CraftToggleJQuery,
+            reader: createCapturedCraftToggleReader({
+              rootState: capturedCraftToggles.rootState,
+              controls: capturedCraftToggles.controls,
+              getDocument: () =>
+                documentValue as { getElementById(id: string): unknown },
+              getSettingsRaw: () => settings.readRaw(),
+            }),
+            addToggleCallbacks: (node, settingKey) =>
+              controls.addToggleCallbacks(
+                node as unknown as SettingsControlNode,
+                settingKey,
+              ) as unknown as typeof node,
+          });
 
     let general: GeneralSettings | undefined;
     let achievementGuard: AchievementGuardSettings | undefined;
@@ -518,6 +553,7 @@ export function createCapturedSettingsPanel({
       interface: interfaceSettings,
       stateLog,
       authority,
+      craftToggles,
       shell,
     };
     return settingsUi;
@@ -543,6 +579,28 @@ export function createCapturedSettingsPanel({
 
   const removeScriptSettings = () => {
     getQuery()?.("#script_settings").remove();
+  };
+
+  const createCraftToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).craftToggles;
+    if (adapter === undefined) {
+      unported("craft toggles")();
+      return;
+    }
+    adapter.createCraftToggles();
+  };
+
+  const removeCraftToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).craftToggles;
+    if (adapter === undefined) {
+      unported("craft toggles")();
+      return;
+    }
+    adapter.removeCraftToggles();
   };
 
   const optionsModal = createOptionsModalBrowserAdapter({
@@ -600,8 +658,8 @@ export function createCapturedSettingsPanel({
       removeScriptSettings,
       createMechInfo: unported("mech info panel"),
       removeMechInfo: unported("mech info panel"),
-      createCraftToggles: unported("craft toggles"),
-      removeCraftToggles: unported("craft toggles"),
+      createCraftToggles,
+      removeCraftToggles,
       createBuildingToggles: unported("building toggles"),
       removeBuildingToggles: unported("building toggles"),
       createArpaToggles: unported("ARPA toggles"),

@@ -212,6 +212,10 @@ export function startCapturedRuntime({
   const settingsPanel = createCapturedSettingsPanel({
     capturedPanelWindow: settingsHostWindow,
     settings: settingsStore,
+    craftToggles: {
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+    },
     logError: (message) => logError(message),
   });
   // The settings UI is useful even when document-start capture was missed (for example, when a

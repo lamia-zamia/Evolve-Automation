@@ -16444,6 +16444,72 @@
     return { ensureAutomationContainer };
   }
 
+  // src/adapters/browser/craft-toggles.ts
+  function createToggleMarkup(item) {
+    return `
+                  <label tabindex="0" class="switch ea-craft-toggle">
+                    <input class="script_${item.settingKey}" type="checkbox"${item.enabled ? " checked" : ""}/>
+                    <span class="check" style="height:5px;"></span>
+                  </label>`;
+  }
+  function createCraftToggleBrowserAdapter({
+    getJQuery,
+    reader,
+    addToggleCallbacks
+  }) {
+    function createCraftToggles() {
+      removeCraftToggles();
+      let $ = getJQuery();
+      for (let item of reader.readItems()) {
+        let craftableElement = $("#res" + item.craftableId + " h3");
+        if (craftableElement.length === 0) continue;
+        craftableElement.parent().css("position", "relative"), addToggleCallbacks(
+          $(createToggleMarkup(item)),
+          item.settingKey
+        ).insertAfter(craftableElement);
+      }
+    }
+    function removeCraftToggles() {
+      getJQuery()("#resources .ea-craft-toggle").remove();
+    }
+    return Object.freeze({ createCraftToggles, removeCraftToggles });
+  }
+
+  // src/adapters/evolve/economy/production/captured-craft-toggles.ts
+  var CAPTURED_CRAFT_TOGGLE_BUTTON_PREFIX = "inc", CAPTURED_CRAFT_TOGGLE_BUTTON_SUFFIX = "A";
+  function capturedCraftToggleEnabled(settings, resourceId) {
+    return isRecord(settings) && settings[`craft${resourceId}`] === !0;
+  }
+  function capturedCraftToggleButtonExists(getDocument, resourceId) {
+    let element = getDocument().getElementById(
+      `${CAPTURED_CRAFT_TOGGLE_BUTTON_PREFIX}${resourceId}${CAPTURED_CRAFT_TOGGLE_BUTTON_SUFFIX}`
+    );
+    return element != null;
+  }
+  function createCapturedCraftToggleReader({
+    rootState,
+    controls,
+    getDocument,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readItems() {
+        let resources = readProperty(rootState.readRoot(), "resource");
+        if (!isRecord(resources)) return Object.freeze([]);
+        let items = [];
+        for (let resourceId of Object.keys(resources))
+          controls.resolve(`${CRAFT_ROW_PREFIX}${resourceId}`) === void 0 || !capturedCraftToggleButtonExists(getDocument, resourceId) || items.push(
+            Object.freeze({
+              craftableId: resourceId,
+              settingKey: `craft${resourceId}`,
+              enabled: capturedCraftToggleEnabled(getSettingsRaw(), resourceId)
+            })
+          );
+        return Object.freeze(items);
+      }
+    });
+  }
+
   // src/adapters/browser/autocomplete.ts
   var ACTIVE_CLASS = "ui-state-active";
   function readInput12(target) {
@@ -18452,6 +18518,7 @@
   function createCapturedSettingsPanel({
     capturedPanelWindow,
     settings,
+    craftToggles: capturedCraftToggles,
     logError = () => {
     }
   }) {
@@ -18501,6 +18568,18 @@
         getUpdateSettingsFromState: () => () => settings.persist(),
         openOverrideModal: unported("per-setting override editor"),
         buildSelectOptions: inputs.buildSelectOptions
+      }), craftToggles = capturedCraftToggles === void 0 ? void 0 : createCraftToggleBrowserAdapter({
+        getJQuery: () => getJQuery(),
+        reader: createCapturedCraftToggleReader({
+          rootState: capturedCraftToggles.rootState,
+          controls: capturedCraftToggles.controls,
+          getDocument: () => documentValue,
+          getSettingsRaw: () => settings.readRaw()
+        }),
+        addToggleCallbacks: (node, settingKey) => controls.addToggleCallbacks(
+          node,
+          settingKey
+        )
       }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
@@ -18729,6 +18808,7 @@
         interface: interfaceSettings,
         stateLog,
         authority,
+        craftToggles,
         shell
       }, settingsUi;
     }, buildScriptSettings = () => {
@@ -18740,6 +18820,20 @@
       ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings());
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
+    }, createCraftToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).craftToggles;
+      if (adapter === void 0) {
+        unported("craft toggles")();
+        return;
+      }
+      adapter.createCraftToggles();
+    }, removeCraftToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).craftToggles;
+      if (adapter === void 0) {
+        unported("craft toggles")();
+        return;
+      }
+      adapter.removeCraftToggles();
     }, optionsModal = createOptionsModalBrowserAdapter({
       getDocument: () => documentValue,
       getJQuery: () => getQuery(),
@@ -18789,8 +18883,8 @@
         removeScriptSettings,
         createMechInfo: unported("mech info panel"),
         removeMechInfo: unported("mech info panel"),
-        createCraftToggles: unported("craft toggles"),
-        removeCraftToggles: unported("craft toggles"),
+        createCraftToggles,
+        removeCraftToggles,
         createBuildingToggles: unported("building toggles"),
         removeBuildingToggles: unported("building toggles"),
         createArpaToggles: unported("ARPA toggles"),
@@ -18870,6 +18964,10 @@
     }), settingsPanel = createCapturedSettingsPanel({
       capturedPanelWindow: settingsHostWindow2,
       settings: settingsStore,
+      craftToggles: {
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls
+      },
       logError: (message) => logError(message)
     });
     settingsPanel.ensurePanel();
