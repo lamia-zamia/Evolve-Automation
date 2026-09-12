@@ -121,6 +121,11 @@ export interface CapturedProgressionControl {
   /** Managed captured construction targets, used by production modes that weight against builds. */
   readonly readManagedBuildTargets: () => readonly Readonly<GameBuildTarget>[];
   /**
+   * The Knowledge the most expensive offered technology costs, from the knowledge gate's own
+   * sample. 0 when no catalog has been read.
+   */
+  readonly readKnowledgeRequiredByTechs: () => number;
+  /**
    * Discovers the construction action controls once, for features that act on build actions
    * without running the construction cycle.
    */
@@ -409,5 +414,9 @@ export function createCapturedProgressionControl(
     observations: construction.observations,
     readManagedBuildTargets,
     ensureBuildControls,
+    // The Tech Knowledge figure behind the trigger operand of the same name: the knowledge
+    // gate's own sample, which shares the cycle's already-captured research catalog.
+    readKnowledgeRequiredByTechs: () =>
+      readKnowledge().knowledgeRequiredByTechs,
   });
 }

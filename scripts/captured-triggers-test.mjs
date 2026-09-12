@@ -4,6 +4,7 @@ import {
   createCapturedTriggers,
   triggersNeedDemandSample,
   triggersNeedGrantedTechs,
+  triggersNeedTechKnowledge,
 } from "../src/adapters/evolve/progression/build/captured-triggers.ts";
 
 const root = {
@@ -81,6 +82,7 @@ function triggers({
   readOfferedProjects,
   readBuildingUnlocks,
   demandSample,
+  techKnowledge,
   costs,
   controls,
 } = {}) {
@@ -107,6 +109,9 @@ function triggers({
     ...(demandSample === undefined
       ? {}
       : { readDemandSample: () => demandSample }),
+    ...(techKnowledge === undefined
+      ? {}
+      : { readTechKnowledge: () => techKnowledge }),
   });
 }
 
@@ -662,6 +667,21 @@ assert.deepEqual(
   }).read(),
   [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
 );
+// Stored defaults read the same blob the rows came from.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "SettingDefault",
+        requirementId: "tickRate",
+        requirementCount: 8,
+        actionId: "city-mine",
+      }),
+    ],
+    settings: { tickRate: 8 },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
 assert.deepEqual(
   triggers({
     triggers: [
@@ -786,6 +806,74 @@ assert.deepEqual(
     },
   }).read(),
   [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// --- Tech Knowledge conditions read the knowledge gate's figure --------------
+
+// The predicate fires only for a tknow condition with the feature on.
+assert.equal(
+  triggersNeedTechKnowledge({
+    autoTrigger: true,
+    triggers: [trigger({ requirementType: "Other", requirementId: "tknow" })],
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedTechKnowledge({
+    autoTrigger: true,
+    triggers: [trigger()],
+  }),
+  false,
+);
+assert.equal(
+  triggersNeedTechKnowledge({
+    autoTrigger: false,
+    triggers: [trigger({ requirementType: "Other", requirementId: "tknow" })],
+  }),
+  false,
+);
+assert.equal(triggersNeedTechKnowledge({}), false);
+// The figure answers the condition straight from the supplier, with no other pass.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "Other",
+        requirementId: "tknow",
+        requirementCount: 12000,
+        actionId: "city-mine",
+      }),
+    ],
+    techKnowledge: 12000,
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "Other",
+        requirementId: "tknow",
+        requirementCount: 12001,
+        actionId: "city-mine",
+      }),
+    ],
+    techKnowledge: 12000,
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "Other",
+        requirementId: "tknow",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [],
 );
 
 // --- BuildingUnlocked conditions draw only the regions they name -----------

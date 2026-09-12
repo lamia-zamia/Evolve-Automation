@@ -107,6 +107,11 @@ export interface CapturedTriggersDependencies {
    * conditions unanswered.
    */
   readonly readDemandSample?: () => CapturedConditionDemand | undefined;
+  /**
+   * The Knowledge the most expensive offered technology costs, from the knowledge gate's own
+   * figure. Absent leaves the operand unanswered; 0 means no catalog has been read.
+   */
+  readonly readTechKnowledge?: () => number | undefined;
 }
 
 interface TriggerRow {
@@ -229,6 +234,18 @@ export function triggersNeedDemandSample(settings: unknown): boolean {
   );
 }
 
+/**
+ * Whether this cycle's trigger sample has to carry the knowledge gate's Tech Knowledge figure.
+ * Only the `Other/tknow` operand reads it, and the gate itself costs no new pass — it shares the
+ * cycle's already-captured research catalog — so this only skips the call.
+ */
+export function triggersNeedTechKnowledge(settings: unknown): boolean {
+  if (readProperty(settings, "autoTrigger") !== true) return false;
+  return readRows(settings).some(
+    (row) => row.requirementType === "Other" && row.requirementId === "tknow",
+  );
+}
+
 /** The structure record behind a build action id: `city-farm` is `city.farm`. */
 export function readTriggerActionStructure(
   root: unknown,
@@ -332,7 +349,9 @@ export function createCapturedTriggers(
       const storedSettings = isRecord(settings) ? settings : undefined;
       // The demand commitments travel only when the supplier carries them: the sample excludes
       // the trigger targets, which the cycle's own trigger-including sample cannot supply here.
+      // The Tech Knowledge figure travels the same way, from the knowledge gate's own sample.
       const demandSample = dependencies.readDemandSample?.();
+      const techKnowledge = dependencies.readTechKnowledge?.();
       const conditionContext = Object.freeze({
         ...(offeredTechs === undefined
           ? {}
@@ -345,6 +364,9 @@ export function createCapturedTriggers(
         ...(buildingCosts.size === 0 ? {} : { buildingCosts }),
         ...(storedSettings === undefined ? {} : { settings: storedSettings }),
         ...(demandSample === undefined ? {} : { demand: demandSample }),
+        ...(techKnowledge === undefined
+          ? {}
+          : { knowledgeRequiredByTechs: techKnowledge }),
       });
       const byPriority = new Map(rows.map((row) => [row.priority, row]));
 

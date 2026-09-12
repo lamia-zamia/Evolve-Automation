@@ -47,6 +47,7 @@ import {
   createCapturedTriggers,
   triggersNeedDemandSample,
   triggersNeedGrantedTechs,
+  triggersNeedTechKnowledge,
   type CapturedTriggerTarget,
 } from "../adapters/evolve/progression/build/captured-triggers.ts";
 import { createCapturedTriggerActions } from "../adapters/evolve/progression/build/captured-trigger-actions.ts";
@@ -385,6 +386,10 @@ export function startCapturedRuntime({
     readDemandSample: () =>
       triggersNeedDemandSample(readStoredSettings(storage))
         ? readTriggerDemand()
+        : undefined,
+    readTechKnowledge: () =>
+      triggersNeedTechKnowledge(readStoredSettings(storage))
+        ? progression.readKnowledgeRequiredByTechs()
         : undefined,
   });
   // One trigger sample per cycle, shared by the demand model and the trigger phase: what the

@@ -9,10 +9,11 @@
  * count.
  *
  * The cycle's own stored settings answer the rest of what needs no game read: the prestige type,
- * a numeric or boolean setting value, and the evolution-queue length. The settings ride the same
+ * numeric or boolean setting values, and the evolution-queue length. The settings ride the same
  * condition context as the priced costs, because the trigger sample already holds the stored blob.
- * `SettingDefault` stays out: the captured composition keeps one stored blob, so the raw-versus-live
- * distinction the compatibility reader draws has no characterized counterpart here yet.
+ * `SettingDefault` reads the same blob: the captured runtime parses stored settings fresh on every
+ * read and no automation tick writes them back, so there is no live-mutated layer for a default to
+ * differ from — both operands answer the configured value.
  *
  * The demand-reading operands (`ResourceDemanded`, `ResourceSatisfied`, `ResourceSatisfyRatio`,
  * `ResourceMaxCost`) answer from a demand sample that deliberately excludes the trigger targets:
@@ -32,7 +33,7 @@
  * unanswered whenever the pass it needs was not taken.
  *
  * Everything else a condition can name — resource income, custom expressions, building
- * clickability, manager-computed values, stored defaults, and anything needing the
+ * clickability, manager-computed values, and anything needing the
  * module-level race catalog or a private action definition — is deliberately absent.
  *
  * `undefined` has exactly one meaning here: the operand cannot be answered from what has been
@@ -86,6 +87,11 @@ export interface CapturedConditionContext {
    * rather than game state. Absent leaves those operands unanswered.
    */
   readonly settings?: Readonly<Record<string, unknown>>;
+  /**
+   * The Knowledge the most expensive offered technology costs, for the operand that waits on the
+   * research path. Absent leaves it unanswered; 0 means no catalog has been read.
+   */
+  readonly knowledgeRequiredByTechs?: number;
   /**
    * The cycle's resource-demand commitments without the trigger targets, for the operands that
    * read what something else is accumulating. Absent leaves those operands unanswered.
@@ -502,6 +508,7 @@ function readNumber(
     case "BuildingCost":
       return buildingCostAmount(context, argument);
     case "SettingCurrent":
+    case "SettingDefault":
       return storedSettingNumber(context, argument);
     case "BuildingCount":
       return finite(readProperty(structureState(root, argument), "count"));
@@ -586,6 +593,13 @@ function readNumber(
         const cost = context?.buildingCosts?.get(SWARM_SATELLITE_ACTION_ID);
         if (cost === undefined) return undefined;
         return finite(cost["Money"]) ?? 0;
+      }
+      if (argument === "tknow") {
+        // The Knowledge the most expensive offered technology costs, from the knowledge gate's
+        // own figure: queue, trigger, and build-target Knowledge are not research, so the gate
+        // (and this operand, per its own description) counts technologies only. Without the
+        // sample there is nothing to answer from.
+        return finite(context?.knowledgeRequiredByTechs);
       }
       return undefined;
     }

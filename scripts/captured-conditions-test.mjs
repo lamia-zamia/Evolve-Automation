@@ -884,6 +884,35 @@ assert.equal(
   false,
 );
 
+// --- the Tech Knowledge operand, from the knowledge gate's figure ------------
+
+// The Knowledge the most expensive offered technology costs; 0 means no catalog has been read,
+// while a missing sample leaves the operand unanswered.
+assert.equal(
+  readCapturedOperand(root, "Other", "tknow", {
+    knowledgeRequiredByTechs: 12000,
+  }),
+  12000,
+);
+assert.equal(
+  readCapturedOperand(root, "Other", "tknow", { knowledgeRequiredByTechs: 0 }),
+  0,
+);
+assert.equal(readCapturedOperand(root, "Other", "tknow", pricedSat), undefined);
+assert.equal(readCapturedOperand(root, "Other", "tknow"), undefined);
+assert.equal(
+  evaluateCapturedCondition(root, "Other", "tknow", 12000, {
+    knowledgeRequiredByTechs: 12000,
+  }),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "Other", "tknow", 12001, {
+    knowledgeRequiredByTechs: 12000,
+  }),
+  false,
+);
+
 // --- the stored-settings operands, from the cycle's own settings ------------
 
 // The reset type, a setting value, and the evolution-queue length all come from the stored
@@ -922,6 +951,28 @@ assert.equal(
 assert.equal(
   readCapturedOperand(root, "SettingCurrent", "autoBuild", stored),
   1,
+);
+// Stored defaults read the same blob: the runtime parses stored settings fresh on every read
+// and no automation tick writes them back, so there is no live layer for a default to differ.
+assert.equal(
+  readCapturedOperand(root, "SettingDefault", "tickRate", stored),
+  8,
+);
+assert.equal(
+  readCapturedOperand(root, "SettingDefault", "autoBuild", stored),
+  1,
+);
+assert.equal(
+  readCapturedOperand(root, "SettingDefault", "customName", stored),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "SettingDefault", "tickRate"),
+  undefined,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "SettingDefault", "tickRate", 8, stored),
+  true,
 );
 // Anything that is neither — strings, absent keys, a missing sample — stays unanswered.
 assert.equal(
@@ -965,14 +1016,9 @@ assert.equal(
   readCapturedOperand(root, "SettingCurrent", "autoBuild"),
   undefined,
 );
-// Stored defaults have no characterized counterpart to the raw-versus-live distinction yet.
-assert.equal(
-  readCapturedOperand(root, "SettingDefault", "tickRate", stored),
-  undefined,
-);
 // `rname` needs the module-level race catalog, which nothing captures.
 assert.equal(readCapturedOperand(root, "Other", "rname"), undefined);
-// `tknow` is the knowledge gate's own sample, which no pass carries yet.
+// `tknow` without the gate's figure, like every operand without its pass, is unanswered.
 assert.equal(readCapturedOperand(root, "Other", "tknow", stored), undefined);
 assert.equal(readCapturedOperand(root, "RaceGenus", "humanoid"), undefined);
 assert.equal(readCapturedOperand(root, "Queue", "evo"), undefined);

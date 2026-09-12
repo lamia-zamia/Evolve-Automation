@@ -3988,7 +3988,10 @@
       resetBuildingUnlockSample,
       observations: construction.observations,
       readManagedBuildTargets,
-      ensureBuildControls
+      ensureBuildControls,
+      // The Tech Knowledge figure behind the trigger operand of the same name: the knowledge
+      // gate's own sample, which shares the cycle's already-captured research catalog.
+      readKnowledgeRequiredByTechs: () => readKnowledge().knowledgeRequiredByTechs
     });
   }
 
@@ -10553,6 +10556,7 @@
       case "BuildingCost":
         return buildingCostAmount(context, argument);
       case "SettingCurrent":
+      case "SettingDefault":
         return storedSettingNumber(context, argument);
       case "BuildingCount":
         return finite(readProperty(structureState(root, argument), "count"));
@@ -10618,7 +10622,7 @@
           let cost = context?.buildingCosts?.get(SWARM_SATELLITE_ACTION_ID);
           return cost === void 0 ? void 0 : finite(cost.Money) ?? 0;
         }
-        return;
+        return argument === "tknow" ? finite(context?.knowledgeRequiredByTechs) : void 0;
       }
       case "Date":
         return readDate(root, argument);
@@ -10795,6 +10799,11 @@
       (row) => DEMAND_CONDITION_TYPES.has(row.requirementType)
     );
   }
+  function triggersNeedTechKnowledge(settings) {
+    return readProperty(settings, "autoTrigger") !== !0 ? !1 : readRows(settings).some(
+      (row) => row.requirementType === "Other" && row.requirementId === "tknow"
+    );
+  }
   function readTriggerActionStructure(root, actionId) {
     let parts = splitActionId(actionId);
     if (parts === void 0) return;
@@ -10829,14 +10838,15 @@
           let cost = costs.readCost(buildingId);
           cost !== void 0 && buildingCosts.set(buildingId, cost);
         }
-        let storedSettings = isRecord(settings) ? settings : void 0, demandSample = dependencies.readDemandSample?.(), conditionContext = Object.freeze({
+        let storedSettings = isRecord(settings) ? settings : void 0, demandSample = dependencies.readDemandSample?.(), techKnowledge = dependencies.readTechKnowledge?.(), conditionContext = Object.freeze({
           ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
           ...grantedTechs === void 0 ? {} : { grantedTechs },
           ...offeredProjectsById === void 0 ? {} : { unlockedProjects: new Set(offeredProjectsById.keys()) },
           ...buildingUnlocks === void 0 ? {} : { buildingUnlocks },
           ...buildingCosts.size === 0 ? {} : { buildingCosts },
           ...storedSettings === void 0 ? {} : { settings: storedSettings },
-          ...demandSample === void 0 ? {} : { demand: demandSample }
+          ...demandSample === void 0 ? {} : { demand: demandSample },
+          ...techKnowledge === void 0 ? {} : { knowledgeRequiredByTechs: techKnowledge }
         }), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
             let count2 = finite(
@@ -16156,7 +16166,8 @@
       // cycle's own sample includes them, and the conditions are evaluated inside the sampling
       // it pulls in. Sampled lazily and only for a configured condition, like the granted-techs
       // pass, so other runs never pay for the second demand plan.
-      readDemandSample: () => triggersNeedDemandSample(readStoredSettings(storage)) ? readTriggerDemand() : void 0
+      readDemandSample: () => triggersNeedDemandSample(readStoredSettings(storage)) ? readTriggerDemand() : void 0,
+      readTechKnowledge: () => triggersNeedTechKnowledge(readStoredSettings(storage)) ? progression.readKnowledgeRequiredByTechs() : void 0
     }), triggerTargetsThisCycle, readTriggerTargets = () => triggerTargetsThisCycle ??= triggers.read(), triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
