@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { createCapturedTriggers } from "../src/adapters/evolve/progression/build/captured-triggers.ts";
+import {
+  createCapturedTriggers,
+  triggersNeedGrantedTechs,
+} from "../src/adapters/evolve/progression/build/captured-triggers.ts";
 
 const root = {
   race: { species: "human" },
@@ -71,6 +74,7 @@ function triggers({
   triggers: rows = [],
   rootValue = root,
   offered = OFFERED,
+  granted,
   projects = PROJECTS,
   readOfferedProjects,
   controls,
@@ -92,6 +96,7 @@ function triggers({
     costs: { readCost: (actionId) => COSTS[actionId] },
     readSettings: () => ({ autoTrigger: true, triggers: rows, ...settings }),
     readOfferedTechs: () => (offered === null ? undefined : offered),
+    readGrantedTechs: () => granted,
     readOfferedProjects: readOfferedProjects ?? (() => offeredProjects),
   });
 }
@@ -113,15 +118,26 @@ assert.deepEqual(
   triggers({ triggers: [trigger({ requirementCount: 4 })] }).read(),
   [],
 );
+// A `ResearchComplete` requirement is answered from the granted half of the research pass, and is
+// unanswerable — so the trigger is dropped — when that half was not kept.
+const researchRequirement = [
+  trigger({
+    requirementType: "ResearchComplete",
+    requirementId: "tech-mad",
+    // A boolean operand matches its stored count rather than exceeding it.
+    requirementCount: 1,
+  }),
+];
+assert.deepEqual(triggers({ triggers: researchRequirement }).read(), []);
 assert.deepEqual(
   triggers({
-    triggers: [
-      trigger({
-        requirementType: "ResearchComplete",
-        requirementId: "tech-mad",
-      }),
-    ],
+    triggers: researchRequirement,
+    granted: new Set(["tech-mad"]),
   }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({ triggers: researchRequirement, granted: new Set() }).read(),
   [],
 );
 
@@ -355,15 +371,75 @@ assert.deepEqual(
     },
   ],
 );
-// Completion of a research action is not captured, so what is chained behind it is dropped.
+// A research action still being offered has demonstrably not been researched, so what is chained
+// behind it waits.
+const chainedBehindResearch = [
+  trigger({ priority: 0, actionType: "research", actionId: "tech-mad" }),
+  chained[1],
+];
+assert.deepEqual(triggers({ triggers: chainedBehindResearch }).read(), [
+  { actionId: "tech-mad", actionType: "research", cost: { Knowledge: 600 } },
+]);
+// Once the pass reports it granted, the research trigger is done and the chain moves on.
+assert.deepEqual(
+  triggers({
+    triggers: chainedBehindResearch,
+    granted: new Set(["tech-mad"]),
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+// A technology in neither half of the draw is off the current tech path: it is not decidable, so
+// the trigger and everything chained behind it are dropped.
 assert.deepEqual(
   triggers({
     triggers: [
-      trigger({ priority: 0, actionType: "research", actionId: "tech-mad" }),
+      trigger({ priority: 0, actionType: "research", actionId: "tech-wheel" }),
       chained[1],
     ],
+    granted: new Set(["tech-mad"]),
   }).read(),
-  [{ actionId: "tech-mad", actionType: "research", cost: { Knowledge: 600 } }],
+  [],
+);
+
+// Which passes a configured trigger list needs. Keeping the granted half of the research draw is
+// the larger part of it, so only a research action or a `ResearchComplete` condition asks for it.
+assert.equal(triggersNeedGrantedTechs(undefined), false);
+assert.equal(
+  triggersNeedGrantedTechs({ autoTrigger: true, triggers: [trigger()] }),
+  false,
+);
+assert.equal(
+  triggersNeedGrantedTechs({
+    autoTrigger: false,
+    triggers: chainedBehindResearch,
+  }),
+  false,
+);
+assert.equal(
+  triggersNeedGrantedTechs({
+    autoTrigger: true,
+    triggers: chainedBehindResearch,
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedGrantedTechs({
+    autoTrigger: true,
+    triggers: researchRequirement,
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedGrantedTechs({
+    autoTrigger: true,
+    triggers: [
+      trigger({
+        requirementType: "ResearchUnlocked",
+        requirementId: "tech-mad",
+      }),
+    ],
+  }),
+  false,
 );
 
 // Two triggers competing for the same resource: only the higher-priority one is a target.
@@ -388,6 +464,22 @@ assert.deepEqual(
     { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
     { actionId: "tech-mad", actionType: "research", cost: { Knowledge: 600 } },
   ],
+);
+
+// The game's own `checkMaxCosts` refuses a positive cost in a resource it is not displaying,
+// whatever that resource's stored maximum says.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger()],
+    rootValue: {
+      ...root,
+      resource: {
+        ...root.resource,
+        Lumber: { amount: 100, max: 5000, display: false },
+      },
+    },
+  }).read(),
+  [],
 );
 
 console.log("Captured trigger source tests passed");

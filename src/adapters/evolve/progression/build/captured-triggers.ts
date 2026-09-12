@@ -18,10 +18,10 @@
  *   multiplied by the remaining percent. The drawn 1% price is rounded for display while the game
  *   charges the unrounded fraction per step, so the product slightly overstates the charge — the
  *   safe direction for both saving and the executor's affordability gate.
- * - Research completion is not captured: the game's grant keys live in its private action catalog,
- *   so a technology is only known to be incomplete while the research panel still offers it. A
- *   trigger chained behind a research trigger is therefore dropped until that one is offered.
- * - Conditions are limited to the operands `../../captured-conditions.ts` answers from the root.
+ * - A technology the current path never draws — one belonging to another tech path, say — is in
+ *   neither half of the research panel, so a trigger naming it is dropped. The compatibility
+ *   runtime's DOM read reported the same technology as simply not researched.
+ * - Conditions are limited to the operands `../../captured-conditions.ts` answers.
  */
 
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
@@ -71,6 +71,11 @@ export interface CapturedTriggersDependencies {
   /** The offered-technology snapshot this cycle already captured, if any. */
   readonly readOfferedTechs?: () =>
     readonly Readonly<OfferedTech>[] | undefined;
+  /**
+   * The granted-technology set from that same pass, when it was asked for. Absent means the pass
+   * did not keep it, not that nothing is granted.
+   */
+  readonly readGrantedTechs?: () => ReadonlySet<string> | undefined;
   /** The A.R.P.A. snapshot this cycle already captured, if any. */
   readonly readOfferedProjects?: () =>
     readonly Readonly<OfferedProject>[] | undefined;
@@ -141,6 +146,23 @@ function readRows(settings: unknown): readonly TriggerRow[] {
   return Object.freeze(rows.sort((a, b) => a.priority - b.priority));
 }
 
+/**
+ * Whether this cycle's research pass has to keep the already-granted half of the draw.
+ *
+ * Only two things need it: a `research` trigger, whose completion is otherwise undecidable, and a
+ * `ResearchComplete` condition. Everything else the research panel answers comes from the offer
+ * set the pass reads anyway, and keeping the granted half costs the larger part of the draw, so a
+ * player who configures neither never pays for it.
+ */
+export function triggersNeedGrantedTechs(settings: unknown): boolean {
+  if (readProperty(settings, "autoTrigger") !== true) return false;
+  return readRows(settings).some(
+    (row) =>
+      row.actionType === "research" ||
+      row.requirementType === "ResearchComplete",
+  );
+}
+
 /** The structure record behind a build action id: `city-farm` is `city.farm`. */
 export function readTriggerActionStructure(
   root: unknown,
@@ -167,6 +189,11 @@ function fitsInStorage(
     // created yet, or a non-resource price such as Morale — cannot be judged here, so the trigger
     // is not treated as possible.
     if (maximum === undefined) return false;
+    // The game's own `checkMaxCosts` refuses a positive cost in a resource it is not displaying,
+    // whatever that resource's stored maximum says.
+    if (readProperty(readProperty(resources, resourceId), "display") !== true) {
+      return false;
+    }
     if (maximum >= 0 && maximum < amount) return false;
   }
   return true;
@@ -190,6 +217,15 @@ export function createCapturedTriggers(
         offered === undefined
           ? undefined
           : new Map(offered.map((tech) => [tech.elementId, tech]));
+      const grantedTechs = dependencies.readGrantedTechs?.();
+      // The condition evaluator answers the research operands from the same pass the actions are
+      // priced from, so a trigger's requirement and its target describe one moment.
+      const conditionContext = Object.freeze({
+        ...(offeredTechs === undefined
+          ? {}
+          : { offeredTechs: new Set(offeredTechs.keys()) }),
+        ...(grantedTechs === undefined ? {} : { grantedTechs }),
+      });
       // The project panel is the most expensive read on this path, so it is only drawn when a
       // configured trigger actually names an A.R.P.A. action. The sample is the cycle's shared
       // one, so a construction cycle later in the tick reuses these prices.
@@ -230,10 +266,12 @@ export function createCapturedTriggers(
           return rank === undefined ? undefined : rank >= row.actionCount;
         }
         if (row.actionType === "research") {
-          // An offered technology has demonstrably not been researched. Anything else — already
-          // researched, or not yet available — is indistinguishable without the game's own grant
-          // keys, so it stays unknown.
-          return offeredTechs?.has(row.actionId) === true ? false : undefined;
+          // The research panel draws every technology on the current path in one of two halves:
+          // granted, or offered. Either answer is the game's own. A technology in neither — off
+          // the current tech path — is not one this can decide.
+          if (grantedTechs?.has(row.actionId) === true) return true;
+          if (offeredTechs?.has(row.actionId) === true) return false;
+          return undefined;
         }
         return undefined;
       };
@@ -249,6 +287,7 @@ export function createCapturedTriggers(
           row.requirementType,
           row.requirementId,
           row.requirementCount,
+          conditionContext,
         );
       };
 

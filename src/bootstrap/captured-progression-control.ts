@@ -57,6 +57,11 @@ export interface CapturedProgressionControlDependencies {
   /** Persisted script settings. Required: without them nothing is managed and nothing is built. */
   readonly readSettings: () => unknown;
   /**
+   * Whether this cycle's research pass has to keep the already-granted half of the draw, which is
+   * the larger part of it. Omitted means no caller needs it, so the pass drops that half.
+   */
+  readonly needGrantedTechs?: () => boolean;
+  /**
    * Legacy script inputs. The captured path deliberately runs without all three: it plans its own
    * build policy, has no script cost reservations, leaves the Knowledge gate ungated and leaves
    * storage requirements unknown. Each absence is the conservative direction, and each is a feature
@@ -83,6 +88,11 @@ export interface CapturedProgressionControl {
   readonly runResearchCycle: () => CommandExecutionOutcome;
   /** The most recently captured offered-technology snapshot, if one exists. */
   readonly readOfferedTechs: () => readonly Readonly<OfferedTech>[] | undefined;
+  /**
+   * The granted-technology set from the last catalog pass, or `undefined` when that pass did not
+   * keep it. Absent is "not read", never "nothing granted".
+   */
+  readonly readGrantedTechs: () => ReadonlySet<string> | undefined;
   /** A fresh captured A.R.P.A. project snapshot, if it can be read. */
   readonly readProjects: () => readonly Readonly<OfferedProject>[] | undefined;
   /**
@@ -197,10 +207,17 @@ export function createCapturedProgressionControl(
   // The catalog a discovery pass already paid for, shared with the Knowledge gate so it never buys
   // one of its own. It is the last catalog read, which may be the previous cycle's.
   let lastOffered: readonly Readonly<OfferedTech>[] | undefined;
+  // The already-granted half is only drawn when a configured trigger needs it, so this stays
+  // undefined — "not read" — for every player who has not configured one.
+  let lastGranted: ReadonlySet<string> | undefined;
   const readOfferedTechs = () => {
-    const value = offered.readOffered();
-    if (value !== undefined) lastOffered = value;
-    return value;
+    const includeGranted = dependencies.needGrantedTechs?.() === true;
+    const value = offered.read(includeGranted ? { includeGranted } : undefined);
+    if (value !== undefined) {
+      lastOffered = value.offered;
+      lastGranted = value.granted;
+    }
+    return value?.offered;
   };
   const offered = createCapturedTechCatalog({
     rootState,
@@ -343,6 +360,7 @@ export function createCapturedProgressionControl(
     },
     runResearchCycle: () => research.runCycle(),
     readOfferedTechs: () => lastOffered,
+    readGrantedTechs: () => lastGranted,
     readProjects,
     resetProjectSample,
     observations: construction.observations,

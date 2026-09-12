@@ -5,9 +5,15 @@
  * the operand types whose whole input is the game's own root state: building and project counts,
  * civic job assignments, resource holdings, the appointed governor, the race and planet bags, the
  * calendar, the two build queues, and the True Path fleet, Mass Relay, and carport fields.
+ *
+ * It also answers the two research operands, which the root cannot supply: the game's grant keys
+ * live in its private action catalog, so `ResearchUnlocked` and `ResearchComplete` are read from
+ * the research panel the cycle already drew. Those come in through `CapturedConditionContext`, and
+ * a condition naming one goes unanswered whenever the pass it needs was not taken.
+ *
  * Everything else a condition can name — script-computed resource fields, the settings layer,
- * custom expressions, research and unlock catalogs, manager-computed values, and anything needing
- * a drawn catalog or a private action definition — is deliberately absent.
+ * custom expressions, building and project unlock states, manager-computed values, and anything
+ * needing a private action definition — is deliberately absent.
  *
  * `undefined` has exactly one meaning here: the operand cannot be answered from what has been
  * captured. It is never "false" and never "zero", so a caller has to drop the condition rather
@@ -20,6 +26,18 @@ import { isRecord, readProperty } from "../validation.ts";
 export type CapturedOperandValue = boolean | number;
 
 /**
+ * What a cycle captured beyond the root, for the operands the root cannot answer. Every field is
+ * optional and an absent one leaves its operands unanswered, so a caller supplies only the passes
+ * it actually took.
+ */
+export interface CapturedConditionContext {
+  /** Element ids the research panel was offering, e.g. `tech-mining`. */
+  readonly offeredTechs?: ReadonlySet<string>;
+  /** Element ids the game has already granted. */
+  readonly grantedTechs?: ReadonlySet<string>;
+}
+
+/**
  * Operand types whose value is compared for equality instead of `>=`, mirroring the script's own
  * `retBools` list. Only the entries this module answers are listed.
  */
@@ -27,6 +45,8 @@ const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "Boolean",
   "ResourceUnlocked",
   "JobUnlocked",
+  "ResearchUnlocked",
+  "ResearchComplete",
   "Challenge",
   "Universe",
   "Government",
@@ -276,8 +296,23 @@ function readBoolean(
   root: unknown,
   type: string,
   argument: unknown,
+  context: Readonly<CapturedConditionContext> | undefined,
 ): boolean | undefined {
   switch (type) {
+    case "ResearchUnlocked": {
+      // The research panel's own offer set: path, qualifications and requirements all met and not
+      // yet granted. Without that pass there is nothing to answer from.
+      if (typeof argument !== "string") return undefined;
+      return context?.offeredTechs?.has(argument);
+    }
+    case "ResearchComplete": {
+      // The game renders every granted technology under its own action id, which is the only
+      // captured route to completion: the grant keys are private to its action catalog. A
+      // technology the current path never draws at all reads as incomplete, exactly as the
+      // compatibility runtime's DOM read did.
+      if (typeof argument !== "string") return undefined;
+      return context?.grantedTechs?.has(argument);
+    }
     case "Boolean":
       return typeof argument === "boolean" ? argument : undefined;
     case "ResourceUnlocked": {
@@ -345,20 +380,22 @@ function readBoolean(
   }
 }
 
-/** One operand's current value, or `undefined` when the captured root cannot answer it. */
+/** One operand's current value, or `undefined` when the capture cannot answer it. */
 export function readCapturedOperand(
   root: unknown,
   type: unknown,
   argument: unknown,
+  context?: Readonly<CapturedConditionContext>,
 ): CapturedOperandValue | undefined {
   if (typeof type !== "string") return undefined;
   return BOOLEAN_OPERANDS.has(type)
-    ? readBoolean(root, type, argument)
+    ? readBoolean(root, type, argument, context)
     : readNumber(root, type, argument);
 }
 
 /**
  * Whether a stored condition holds right now, or `undefined` when its operand is not captured.
+ * `context` carries the cycle's non-root passes; omitting it leaves their operands unanswered.
  *
  * Boolean operands compare equal to the stored count and numeric ones compare `>=`, which is the
  * script's own rule. The count is coerced the same way the script's `==` did: `true` matches 1 and
@@ -369,8 +406,9 @@ export function evaluateCapturedCondition(
   type: unknown,
   argument: unknown,
   count: unknown,
+  context?: Readonly<CapturedConditionContext>,
 ): boolean | undefined {
-  const value = readCapturedOperand(root, type, argument);
+  const value = readCapturedOperand(root, type, argument, context);
   if (value === undefined) return undefined;
   const target = Number(count);
   if (!Number.isFinite(target)) return undefined;

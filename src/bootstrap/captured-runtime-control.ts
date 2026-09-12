@@ -45,6 +45,7 @@ import { createCapturedFleetAutomation } from "../adapters/evolve/combat/capture
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import {
   createCapturedTriggers,
+  triggersNeedGrantedTechs,
   type CapturedTriggerTarget,
 } from "../adapters/evolve/progression/build/captured-triggers.ts";
 import { createCapturedTriggerActions } from "../adapters/evolve/progression/build/captured-trigger-actions.ts";
@@ -232,6 +233,10 @@ export function startCapturedRuntime({
     }),
     costs: buildCosts,
     readSettings: () => readStoredSettings(storage),
+    // The already-granted half of the research draw is only worth its cost to a configured
+    // trigger, so the trigger settings decide whether each cycle's pass keeps it.
+    needGrantedTechs: () =>
+      triggersNeedGrantedTechs(readStoredSettings(storage)),
     readCapturedStorageRequired: (resourceIds) => {
       const sample = readDemand();
       return Object.freeze(
@@ -338,6 +343,7 @@ export function startCapturedRuntime({
     costs: buildCosts,
     readSettings: () => readStoredSettings(storage),
     readOfferedTechs: progression.readOfferedTechs,
+    readGrantedTechs: progression.readGrantedTechs,
     readOfferedProjects: progression.readProjects,
   });
   // One trigger sample per cycle, shared by the demand model and the trigger phase: what the

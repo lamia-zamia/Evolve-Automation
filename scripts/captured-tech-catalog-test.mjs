@@ -42,8 +42,10 @@ function element(id, prices = {}, extraAttributes = {}) {
   };
 }
 
-function documentOf(elements) {
-  return { querySelectorAll: () => elements };
+function documentOf(elements, bySelector = {}) {
+  return {
+    querySelectorAll: (selector) => bySelector[selector] ?? elements,
+  };
 }
 
 {
@@ -100,7 +102,7 @@ function documentOf(elements) {
  * how often it ran and what it was asked. The last entry repeats, so a read that skipped the draw
  * shows up as a pass that never happened.
  */
-function makePage({ offered = [[]], generations = {} } = {}) {
+function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
   const root = { tech: { primitive: 3 }, settings: { civTabs: 4 } };
   const passes = [];
   const panelChecks = [];
@@ -133,7 +135,8 @@ function makePage({ offered = [[]], generations = {} } = {}) {
     },
     discovery,
     drawnActions: createGameDrawnActionsReader({
-      getDocument: () => documentOf(drawn),
+      getDocument: () =>
+        documentOf(drawn, { "#oldTech .action": granted, "#tech": drawn }),
     }),
     controls: {
       resolve: (elementId) =>
@@ -175,7 +178,7 @@ function makePage({ offered = [[]], generations = {} } = {}) {
     generations: { "tech-theology": 4, "tech-mining": 1 },
   });
 
-  const first = page.catalog.readOffered();
+  const first = page.catalog.read().offered;
   assert.deepEqual(
     first.map((tech) => tech.elementId),
     ["tech-theology", "tech-mining"],
@@ -192,7 +195,7 @@ function makePage({ offered = [[]], generations = {} } = {}) {
   // Every read asks the game again. Nothing is held across cycles, so a change no signature over
   // `global.tech` could have seen — a trait change, an arbitrary `condition()`, a redrawn panel —
   // is picked up like any other.
-  const second = page.catalog.readOffered();
+  const second = page.catalog.read().offered;
   assert.deepEqual(
     second.map((tech) => tech.elementId),
     ["tech-smelting"],
@@ -201,13 +204,43 @@ function makePage({ offered = [[]], generations = {} } = {}) {
 }
 
 {
-  // The already-granted half of the panel is never read, so the pass is told to drop its container
-  // the moment the game has made it — which is when it binds the component between the two.
+  // The already-granted half of the panel is not read unless it was asked for, so the pass is told
+  // to drop its container the moment the game has made it — which is when it binds the component
+  // between the two.
   const page = makePage({ offered: [[element("tech-a", { Knowledge: 1 })]] });
-  page.catalog.readOffered();
+  page.catalog.read();
   assert.deepEqual(page.discards, [
     { afterBinding: "#resContent", containers: ["oldTech"] },
   ]);
+  // Not read is not the same as nothing granted.
+  assert.equal(page.catalog.read().granted, undefined);
+  assert.equal(page.catalog.read({ includeGranted: false }).granted, undefined);
+  assert.equal(page.discards.length, 3);
+}
+
+{
+  // A pass asked for the granted set keeps the container instead and reads the ids out of it. The
+  // game renders a researched entry under its own action id with no price markup.
+  const page = makePage({
+    offered: [[element("tech-smelting", { Knowledge: 9000 })]],
+    granted: [element("tech-mining"), element("tech-theology")],
+  });
+  const snapshot = page.catalog.read({ includeGranted: true });
+  assert.deepEqual(
+    snapshot.offered.map((tech) => tech.elementId),
+    ["tech-smelting"],
+  );
+  assert.deepEqual([...snapshot.granted], ["tech-mining", "tech-theology"]);
+  // The container the other passes drop is kept, so the game fills it.
+  assert.deepEqual(page.discards, []);
+}
+
+{
+  // The granted half can be empty on a fresh game, which is a real answer rather than "not read".
+  const page = makePage({ offered: [[element("tech-a", { Knowledge: 1 })]] });
+  const snapshot = page.catalog.read({ includeGranted: true });
+  assert.deepEqual([...snapshot.granted], []);
+  assert.notEqual(snapshot.granted, undefined);
 }
 
 {
@@ -217,7 +250,7 @@ function makePage({ offered = [[]], generations = {} } = {}) {
     offered: [[element("tech-a", { Knowledge: 1 })]],
     generations: {},
   });
-  assert.equal(page.catalog.readOffered()[0].generation, 0);
+  assert.equal(page.catalog.read().offered[0].generation, 0);
 }
 
 {
@@ -225,10 +258,10 @@ function makePage({ offered = [[]], generations = {} } = {}) {
   // drawing one the player is looking at.
   const page = makePage({ offered: [[element("tech-a", { Knowledge: 1 })]] });
   assert.deepEqual(page.panelChecks, []);
-  page.catalog.readOffered();
+  page.catalog.read();
   assert.deepEqual(page.panelChecks, [false]);
   // Once the panel has been drawn, the same check answers true on the next read.
-  page.catalog.readOffered();
+  page.catalog.read();
   assert.deepEqual(page.panelChecks, [false, true]);
 }
 
@@ -236,12 +269,12 @@ function makePage({ offered = [[]], generations = {} } = {}) {
   // A pass that failed leaves no catalog at all. Answering from the previous offer set would spend
   // on a technology the game may already have granted.
   const page = makePage({ offered: [[element("tech-a", { Knowledge: 1 })]] });
-  assert.equal(page.catalog.readOffered().length, 1);
+  assert.equal(page.catalog.read().offered.length, 1);
   page.fail({
     status: "rejected",
     failure: { code: "tab-control-missing", message: "no captured control" },
   });
-  assert.equal(page.catalog.readOffered(), undefined);
+  assert.equal(page.catalog.read(), undefined);
   assert.deepEqual(page.reasons, ["no captured control"]);
 }
 
@@ -249,7 +282,7 @@ function makePage({ offered = [[]], generations = {} } = {}) {
   // The game drew the panel and there was nothing in it: an empty offer set is a real answer, not
   // a failure.
   const page = makePage({ offered: [[]] });
-  assert.deepEqual(page.catalog.readOffered(), []);
+  assert.deepEqual(page.catalog.read().offered, []);
   assert.deepEqual(page.reasons, []);
 }
 
@@ -273,7 +306,7 @@ function makePage({ offered = [[]], generations = {} } = {}) {
       capturedElementIds: () => [],
     },
   });
-  assert.equal(catalog.readOffered(), undefined);
+  assert.equal(catalog.read(), undefined);
 }
 
 console.log("captured-tech-catalog ok");

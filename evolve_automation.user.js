@@ -1240,7 +1240,7 @@
   }
 
   // src/adapters/evolve/progression/research/captured-tech-catalog.ts
-  var RESEARCH_TAB_INDEX = 3, OFFERED_TECH_SELECTOR = "#tech .action", RESEARCH_PANEL_SELECTOR = "#tech", UNREAD_RESEARCH_CONTENT = Object.freeze({
+  var RESEARCH_TAB_INDEX = 3, OFFERED_TECH_SELECTOR = "#tech .action", GRANTED_TECH_SELECTOR = "#oldTech .action", RESEARCH_PANEL_SELECTOR = "#tech", UNREAD_RESEARCH_CONTENT = Object.freeze({
     afterBinding: "#resContent",
     containers: Object.freeze(["oldTech"])
   }), RESEARCH_TAB_PATH = Object.freeze([
@@ -1254,16 +1254,16 @@
     let { rootState, discovery, drawnActions, controls } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
     });
     return Object.freeze({
-      readOffered() {
+      read(options) {
         if (rootState.readRoot() === void 0) {
           reportUnavailable("the game root has not been captured yet");
           return;
         }
-        let drawn, result = discovery.discover(RESEARCH_TAB_PATH, {
+        let includeGranted = options?.includeGranted === !0, drawn, result = discovery.discover(RESEARCH_TAB_PATH, {
           isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
-          discard: UNREAD_RESEARCH_CONTENT,
+          ...includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT },
           whileDrawn: () => {
-            drawn = Object.freeze(
+            let offered = Object.freeze(
               drawnActions.read(OFFERED_TECH_SELECTOR).map(
                 (action) => Object.freeze({
                   elementId: action.id,
@@ -1274,6 +1274,16 @@
                   generation: controls.resolve(action.id)?.generation ?? 0
                 })
               )
+            );
+            drawn = Object.freeze(
+              includeGranted ? {
+                offered,
+                granted: Object.freeze(
+                  new Set(
+                    drawnActions.read(GRANTED_TECH_SELECTOR).map((action) => action.id)
+                  )
+                )
+              } : { offered }
             );
           }
         });
@@ -3621,7 +3631,7 @@
     return Object.freeze({
       runCycle() {
         if (rootState.readRoot() === void 0) return NOT_CAPTURED2;
-        offeredThisCycle = sharedReadOfferedTechs === void 0 ? catalog.readOffered() : sharedReadOfferedTechs();
+        offeredThisCycle = sharedReadOfferedTechs === void 0 ? catalog.read()?.offered : sharedReadOfferedTechs();
         try {
           let { reader, executor } = createCapturedResearchAdapter({
             rootState,
@@ -3708,9 +3718,9 @@
           result.outcome.failure?.message ?? result.outcome.status
         );
       }
-    }, lastOffered, readOfferedTechs = () => {
-      let value = offered.readOffered();
-      return value !== void 0 && (lastOffered = value), value;
+    }, lastOffered, lastGranted, readOfferedTechs = () => {
+      let includeGranted = dependencies.needGrantedTechs?.() === !0, value = offered.read(includeGranted ? { includeGranted } : void 0);
+      return value !== void 0 && (lastOffered = value.offered, lastGranted = value.granted), value?.offered;
     }, offered = createCapturedTechCatalog({
       rootState,
       discovery,
@@ -3797,6 +3807,7 @@
       },
       runResearchCycle: () => research.runCycle(),
       readOfferedTechs: () => lastOffered,
+      readGrantedTechs: () => lastGranted,
       readProjects,
       resetProjectSample,
       observations: construction.observations,
@@ -10192,6 +10203,8 @@
     "Boolean",
     "ResourceUnlocked",
     "JobUnlocked",
+    "ResearchUnlocked",
+    "ResearchComplete",
     "Challenge",
     "Universe",
     "Government",
@@ -10367,8 +10380,12 @@
         return;
     }
   }
-  function readBoolean(root, type, argument) {
+  function readBoolean(root, type, argument, context) {
     switch (type) {
+      case "ResearchUnlocked":
+        return typeof argument != "string" ? void 0 : context?.offeredTechs?.has(argument);
+      case "ResearchComplete":
+        return typeof argument != "string" ? void 0 : context?.grantedTechs?.has(argument);
       case "Boolean":
         return typeof argument == "boolean" ? argument : void 0;
       case "ResourceUnlocked": {
@@ -10417,12 +10434,12 @@
         return;
     }
   }
-  function readCapturedOperand(root, type, argument) {
+  function readCapturedOperand(root, type, argument, context) {
     if (typeof type == "string")
-      return BOOLEAN_OPERANDS.has(type) ? readBoolean(root, type, argument) : readNumber2(root, type, argument);
+      return BOOLEAN_OPERANDS.has(type) ? readBoolean(root, type, argument, context) : readNumber2(root, type, argument);
   }
-  function evaluateCapturedCondition(root, type, argument, count2) {
-    let value = readCapturedOperand(root, type, argument);
+  function evaluateCapturedCondition(root, type, argument, count2, context) {
+    let value = readCapturedOperand(root, type, argument, context);
     if (value === void 0) return;
     let target = Number(count2);
     if (Number.isFinite(target))
@@ -10460,6 +10477,11 @@
     }
     return Object.freeze(rows.sort((a, b) => a.priority - b.priority));
   }
+  function triggersNeedGrantedTechs(settings) {
+    return readProperty(settings, "autoTrigger") !== !0 ? !1 : readRows(settings).some(
+      (row) => row.actionType === "research" || row.requirementType === "ResearchComplete"
+    );
+  }
   function readTriggerActionStructure(root, actionId) {
     let separator = actionId.indexOf("-");
     if (separator <= 0) return;
@@ -10473,7 +10495,7 @@
       let maximum = finiteValue2(
         readProperty(readProperty(resources, resourceId), "max")
       );
-      if (maximum === void 0 || maximum >= 0 && maximum < amount) return !1;
+      if (maximum === void 0 || readProperty(readProperty(resources, resourceId), "display") !== !0 || maximum >= 0 && maximum < amount) return !1;
     }
     return !0;
   }
@@ -10485,7 +10507,10 @@
         if (readProperty(settings, "autoTrigger") !== !0) return NO_TARGETS;
         let rows = readRows(settings);
         if (rows.length === 0) return NO_TARGETS;
-        let root = rootState.readRoot(), offered = dependencies.readOfferedTechs?.(), offeredTechs = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech])), offeredProjectsById = dependencies.readOfferedProjects === void 0 || !rows.some((row) => row.actionType === "arpa") ? void 0 : new Map(
+        let root = rootState.readRoot(), offered = dependencies.readOfferedTechs?.(), offeredTechs = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech])), grantedTechs = dependencies.readGrantedTechs?.(), conditionContext = Object.freeze({
+          ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
+          ...grantedTechs === void 0 ? {} : { grantedTechs }
+        }), offeredProjectsById = dependencies.readOfferedProjects === void 0 || !rows.some((row) => row.actionType === "arpa") ? void 0 : new Map(
           (dependencies.readOfferedProjects() ?? []).map((project) => [
             project.elementId,
             project
@@ -10510,7 +10535,7 @@
             return rank === void 0 ? void 0 : rank >= row.actionCount;
           }
           if (row.actionType === "research")
-            return offeredTechs?.has(row.actionId) === !0 ? !1 : void 0;
+            return grantedTechs?.has(row.actionId) === !0 ? !0 : offeredTechs?.has(row.actionId) === !0 ? !1 : void 0;
         }, requirementMet = (row) => {
           if (row.requirementType === "chain") {
             if (row.priority < 1) return !0;
@@ -10521,7 +10546,8 @@
             root,
             row.requirementType,
             row.requirementId,
-            row.requirementCount
+            row.requirementCount,
+            conditionContext
           );
         }, price = (row) => {
           if (row.actionType === "research")
@@ -15735,6 +15761,9 @@
       }),
       costs: buildCosts,
       readSettings: () => readStoredSettings(storage),
+      // The already-granted half of the research draw is only worth its cost to a configured
+      // trigger, so the trigger settings decide whether each cycle's pass keeps it.
+      needGrantedTechs: () => triggersNeedGrantedTechs(readStoredSettings(storage)),
       readCapturedStorageRequired: (resourceIds) => {
         let sample = readDemand();
         return Object.freeze(
@@ -15822,6 +15851,7 @@
       costs: buildCosts,
       readSettings: () => readStoredSettings(storage),
       readOfferedTechs: progression.readOfferedTechs,
+      readGrantedTechs: progression.readGrantedTechs,
       readOfferedProjects: progression.readProjects
     }), triggerTargetsThisCycle, readTriggerTargets = () => triggerTargetsThisCycle ??= triggers.read(), triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,

@@ -112,7 +112,7 @@ export function createCapturedResearchControl(
       // and it goes out of scope with the cycle rather than ageing into the next one.
       offeredThisCycle =
         sharedReadOfferedTechs === undefined
-          ? catalog.readOffered()
+          ? catalog.read()?.offered
           : sharedReadOfferedTechs();
       try {
         const { reader, executor } = createCapturedResearchAdapter({

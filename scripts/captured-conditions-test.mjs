@@ -163,11 +163,86 @@ assert.equal(readCapturedOperand(root, "PlanetBiome", "forest"), true);
 assert.equal(readCapturedOperand(root, "PlanetTrait", "trashed"), true);
 assert.equal(readCapturedOperand(root, "PlanetTrait", "unstable"), false);
 
-// Nothing the captured root does not hold is guessed at.
+// --- the research operands, answered from the drawn panel ------------------
+
+// The research panel draws each technology on the current path in one of two halves. Both come in
+// through the condition context, because the game's own grant keys are private to its catalog.
+const research = {
+  offeredTechs: new Set(["tech-smelting", "tech-theology"]),
+  grantedTechs: new Set(["tech-mad", "tech-mining"]),
+};
+assert.equal(
+  readCapturedOperand(root, "ResearchComplete", "tech-mad", research),
+  true,
+);
+assert.equal(
+  readCapturedOperand(root, "ResearchComplete", "tech-smelting", research),
+  false,
+);
+assert.equal(
+  readCapturedOperand(root, "ResearchUnlocked", "tech-smelting", research),
+  true,
+);
+assert.equal(
+  readCapturedOperand(root, "ResearchUnlocked", "tech-mad", research),
+  false,
+);
+// A technology in neither half — off the current tech path — is drawn nowhere, which the
+// compatibility runtime's DOM read also reported as neither offered nor researched.
+assert.equal(
+  readCapturedOperand(root, "ResearchUnlocked", "tech-elsewhere", research),
+  false,
+);
+assert.equal(
+  readCapturedOperand(root, "ResearchComplete", "tech-elsewhere", research),
+  false,
+);
+// A pass that was not taken leaves its operand unanswered, never false.
+assert.equal(
+  readCapturedOperand(root, "ResearchComplete", "tech-mad", {
+    offeredTechs: research.offeredTechs,
+  }),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "ResearchUnlocked", "tech-smelting", {
+    grantedTechs: research.grantedTechs,
+  }),
+  undefined,
+);
 assert.equal(
   readCapturedOperand(root, "ResearchComplete", "tech-mad"),
   undefined,
 );
+assert.equal(
+  readCapturedOperand(root, "ResearchUnlocked", "tech-mad"),
+  undefined,
+);
+// Both are boolean operands: the stored count is matched, not exceeded.
+assert.equal(
+  evaluateCapturedCondition(root, "ResearchComplete", "tech-mad", 1, research),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "ResearchComplete", "tech-mad", 0, research),
+  false,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "ResearchComplete",
+    "tech-smelting",
+    0,
+    research,
+  ),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(root, "ResearchComplete", "tech-mad", 1),
+  undefined,
+);
+
+// Nothing the capture does not hold is guessed at.
 assert.equal(readCapturedOperand(root, "Eval", "1 + 1"), undefined);
 assert.equal(
   readCapturedOperand(root, "SettingCurrent", "autoBuild"),
@@ -217,10 +292,6 @@ assert.equal(evaluateCapturedCondition(root, "JobCount", "farmer", 5), false);
 assert.equal(evaluateCapturedCondition(root, "Governor", "soldier", 1), true);
 assert.equal(evaluateCapturedCondition(root, "Governor", "mayor", 1), false);
 assert.equal(evaluateCapturedCondition(root, "JobUnlocked", "miner", 0), true);
-assert.equal(
-  evaluateCapturedCondition(root, "ResearchComplete", "tech-mad", 1),
-  undefined,
-);
 assert.equal(
   evaluateCapturedCondition(root, "BuildingCount", "city-farm", "nope"),
   undefined,

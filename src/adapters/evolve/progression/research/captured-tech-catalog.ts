@@ -1,6 +1,6 @@
 /**
- * The technologies the game is currently offering, obtained by asking it to draw the research
- * panel and reading what it drew.
+ * The technologies the game is currently offering — and, when asked, the ones it has already
+ * granted — obtained by asking it to draw the research panel and reading what it drew.
  *
  * There is no other route. `drawTech` decides the offered set with `checkTechPath`,
  * `checkOldTech`, `checkTechQualifications` and `checkTechRequirements`, all module-lexical, and
@@ -10,10 +10,15 @@
  * the game's own offer order — era, then ascending Knowledge cost — which is the same source of
  * truth the compatibility runtime reads, only without needing the tab to stay open.
  *
+ * The already-researched half is drawn under `#oldTech` and is the captured answer to whether a
+ * technology is complete, so a caller that needs that asks for it and pays for it; every other
+ * caller drops the container before the game fills it.
+ *
  * **Every call asks the game again.** There is no cross-tick cache and there does not need to be:
- * the pass keeps the player's panel instead of rebuilding it and drops the half of the draw nobody
- * reads, which measured 8 ms on an early save and 14 ms on a late one — and 1.5 ms when the player
- * is already on Research. A cache would have to be a heuristic, because the offered set depends on
+ * the pass keeps the player's panel instead of rebuilding it and, unless the granted set was
+ * asked for, drops the half of the draw nobody reads, which measured 8 ms on an early save and
+ * 14 ms on a late one — and 1.5 ms when the player is already on Research. A cache would have to
+ * be a heuristic, because the offered set depends on
  * `checkTechPath`, arbitrary action `condition()` functions, research-queue prediction and adjusted
  * prices, none of which a signature over `global.tech` covers. Take the snapshot once per
  * application cycle and let it die with that cycle.
@@ -22,6 +27,8 @@
 import type {
   GameTechCatalog,
   OfferedTech,
+  TechCatalogReadOptions,
+  TechCatalogSnapshot,
 } from "../../../../ports/game-tech-catalog.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameDrawnActionsReader } from "../../../../ports/game-drawn-actions.ts";
@@ -39,17 +46,25 @@ const RESEARCH_TAB_INDEX = 3;
 const OFFERED_TECH_SELECTOR = "#tech .action";
 
 /**
+ * The already-granted half of the same draw. The game renders each researched entry under its own
+ * action id with an `.oldTech` child and no price markup, so the ids are the whole answer.
+ */
+const GRANTED_TECH_SELECTOR = "#oldTech .action";
+
+/**
  * The container `drawTech` fills. The game appends it as raw markup before binding the component
  * around it, so its presence says the Research panel is there whether or not Vue mounted anything.
  */
 const RESEARCH_PANEL_SELECTOR = "#tech";
 
 /**
- * `drawTech` fills two lists and this reads one. The already-granted half is the larger by far —
- * 194 entries against 6 offers on a late save — and dropping its container before the game reaches
- * it turns every one of those appends into a discarded element. `#resContent` is the component
- * `loadTab` binds between creating the two containers and calling `drawTech`, which is the only
- * moment `#oldTech` exists and is still empty.
+ * `drawTech` fills two lists and a pass normally reads one. The already-granted half is the larger
+ * by far — 194 entries against 6 offers on a late save — and dropping its container before the
+ * game reaches it turns every one of those appends into a discarded element. `#resContent` is the
+ * component `loadTab` binds between creating the two containers and calling `drawTech`, which is
+ * the only moment `#oldTech` exists and is still empty.
+ *
+ * A pass asked for the granted set keeps the container and pays for that half instead.
  */
 const UNREAD_RESEARCH_CONTENT = Object.freeze({
   afterBinding: "#resContent",
@@ -80,18 +95,21 @@ export function createCapturedTechCatalog(
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
 
   return Object.freeze({
-    readOffered(): readonly Readonly<OfferedTech>[] | undefined {
+    read(
+      options?: Readonly<TechCatalogReadOptions>,
+    ): Readonly<TechCatalogSnapshot> | undefined {
       if (rootState.readRoot() === undefined) {
         reportUnavailable("the game root has not been captured yet");
         return undefined;
       }
+      const includeGranted = options?.includeGranted === true;
 
-      let drawn: readonly Readonly<OfferedTech>[] | undefined;
+      let drawn: Readonly<TechCatalogSnapshot> | undefined;
       const result = discovery.discover(RESEARCH_TAB_PATH, {
         isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
-        discard: UNREAD_RESEARCH_CONTENT,
+        ...(includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT }),
         whileDrawn: () => {
-          drawn = Object.freeze(
+          const offered: readonly Readonly<OfferedTech>[] = Object.freeze(
             drawnActions.read(OFFERED_TECH_SELECTOR).map((action) =>
               Object.freeze({
                 elementId: action.id,
@@ -102,6 +120,20 @@ export function createCapturedTechCatalog(
                 generation: controls.resolve(action.id)?.generation ?? 0,
               }),
             ),
+          );
+          drawn = Object.freeze(
+            includeGranted
+              ? {
+                  offered,
+                  granted: Object.freeze(
+                    new Set(
+                      drawnActions
+                        .read(GRANTED_TECH_SELECTOR)
+                        .map((action) => action.id),
+                    ),
+                  ) as ReadonlySet<string>,
+                }
+              : { offered },
           );
         },
       });
