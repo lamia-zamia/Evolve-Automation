@@ -36,7 +36,10 @@ import {
   createAuthoritySettingsBrowserAdapter,
   type AuthoritySettingsBrowserActions,
 } from "../adapters/browser/authority-settings.ts";
-import { createOptionsModalBrowserAdapter } from "../adapters/browser/options-modal.ts";
+import {
+  createOptionsModalBrowserAdapter,
+  settingToggleCaption,
+} from "../adapters/browser/options-modal.ts";
 import { createBrowserDomQuery } from "../adapters/browser/dom.ts";
 import { createNumberFormatting } from "../formatting/numbers.ts";
 import { numberSuffix as generalSettingsNumberSuffix } from "../config.ts";
@@ -545,6 +548,35 @@ export function createCapturedSettingsPanel({
     getQuery()?.("#script_settings").remove();
   };
 
+  const syncSettingsVisibilityControls = (checked: boolean) => {
+    const dom = getQuery();
+    if (dom === undefined) return;
+    const caption = settingToggleCaption("showSettings", checked);
+    dom("#script_settingsVisibility").text(caption);
+    dom(".script_showSettings").prop("checked", checked);
+    dom(".script_bg_showSettings").find(".script-setting-label").text(caption);
+  };
+
+  const ensureSettingsVisibilityControl = () => {
+    const dom = getQuery();
+    if (dom === undefined || dom(".settings").length === 0) return;
+    if (dom("#script_settingsVisibility").length === 0) {
+      const button = dom(
+        `<button id="script_settingsVisibility" type="button" style="margin:4px 0 12px; padding:5px 10px; border:1px solid currentColor; border-radius:4px; background:transparent; color:inherit; cursor:pointer;" title="Show or hide the script settings">${settingToggleCaption("showSettings", settings.readRaw()["showSettings"] === true)}</button>`,
+      );
+      dom(".settings").prepend(button);
+      button.on("click", () => {
+        const checked = settings.readRaw()["showSettings"] !== true;
+        settings.readRaw()["showSettings"] = checked;
+        settings.persist();
+        syncSettingsVisibilityControls(checked);
+        if (checked) buildScriptSettings();
+        else removeScriptSettings();
+      });
+    }
+    syncSettingsVisibilityControls(settings.readRaw()["showSettings"] === true);
+  };
+
   const optionsModal = createOptionsModalBrowserAdapter({
     getDocument: () => documentValue as OptionsModalDocument,
     getJQuery: () => getQuery() as unknown as OptionsModalQuery,
@@ -626,6 +658,7 @@ export function createCapturedSettingsPanel({
       try {
         prepareSettingsForUi();
         ensureAutomationContainer();
+        ensureSettingsVisibilityControl();
         if (settings.readRaw()["showSettings"] === true) buildScriptSettings();
       } catch (error) {
         // A panel that fails to draw must never stop the automation tick.

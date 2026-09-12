@@ -17262,7 +17262,9 @@
       state.checked && enabledCallback && enabledCallback();
       let updateToggle = function() {
         let writer = getSettingsWriter();
-        writer.setToggle(settingName, this.checked), writer.persist(), toggle.find(".script-setting-label").text(settingToggleCaption(settingName, this.checked)), this.checked && enabledCallback && enabledCallback(), !this.checked && disabledCallback && disabledCallback();
+        writer.setToggle(settingName, this.checked), writer.persist(), toggle.find(".script-setting-label").text(settingToggleCaption(settingName, this.checked)), settingName === "showSettings" && getJQuery()("#script_settingsVisibility").text(
+          settingToggleCaption(settingName, this.checked)
+        ), this.checked && enabledCallback && enabledCallback(), !this.checked && disabledCallback && disabledCallback();
       };
       toggle.find("input").on("change", updateToggle), toggle.on(
         "click",
@@ -18747,6 +18749,25 @@
       ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings());
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
+    }, syncSettingsVisibilityControls = (checked) => {
+      let dom = getQuery();
+      if (dom === void 0) return;
+      let caption = settingToggleCaption("showSettings", checked);
+      dom("#script_settingsVisibility").text(caption), dom(".script_showSettings").prop("checked", checked), dom(".script_bg_showSettings").find(".script-setting-label").text(caption);
+    }, ensureSettingsVisibilityControl = () => {
+      let dom = getQuery();
+      if (!(dom === void 0 || dom(".settings").length === 0)) {
+        if (dom("#script_settingsVisibility").length === 0) {
+          let button = dom(
+            `<button id="script_settingsVisibility" type="button" style="margin:4px 0 12px; padding:5px 10px; border:1px solid currentColor; border-radius:4px; background:transparent; color:inherit; cursor:pointer;" title="Show or hide the script settings">${settingToggleCaption("showSettings", settings.readRaw().showSettings === !0)}</button>`
+          );
+          dom(".settings").prepend(button), button.on("click", () => {
+            let checked = settings.readRaw().showSettings !== !0;
+            settings.readRaw().showSettings = checked, settings.persist(), syncSettingsVisibilityControls(checked), checked ? buildScriptSettings() : removeScriptSettings();
+          });
+        }
+        syncSettingsVisibilityControls(settings.readRaw().showSettings === !0);
+      }
     }, optionsModal = createOptionsModalBrowserAdapter({
       getDocument: () => documentValue,
       getJQuery: () => getQuery(),
@@ -18819,7 +18840,7 @@
       ensurePanel() {
         if (getQuery() !== void 0)
           try {
-            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().showSettings === !0 && buildScriptSettings();
+            prepareSettingsForUi(), ensureAutomationContainer(), ensureSettingsVisibilityControl(), settings.readRaw().showSettings === !0 && buildScriptSettings();
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }

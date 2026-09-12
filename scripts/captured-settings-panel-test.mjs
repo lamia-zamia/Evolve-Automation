@@ -57,6 +57,11 @@ function createPage(
   const toggles = root.querySelectorAll("#scriptToggles");
   assert.equal(toggles.length, 1);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
+  assert.equal(root.querySelectorAll("#script_settingsVisibility").length, 1);
+  assert.equal(
+    root.querySelectorAll("#script_settingsVisibility")[0].textContent,
+    "Hide settings",
+  );
   assert.equal(root.querySelectorAll("#script_generalSettings").length, 1);
   for (const section of [
     "interface",
@@ -116,10 +121,13 @@ function createPage(
   showSettings.dispatch("change");
   assert.equal(settings.readRaw()["showSettings"], false);
   assert.equal(root.querySelectorAll("#script_settings").length, 0);
+  assert.equal(
+    root.querySelectorAll("#script_settingsVisibility")[0].textContent,
+    "Show settings",
+  );
   panel.ensurePanel();
   assert.equal(root.querySelectorAll("#script_settings").length, 0);
-  showSettings.checked = true;
-  showSettings.dispatch("change");
+  root.querySelectorAll("#script_settingsVisibility")[0].dispatch("click");
   assert.equal(settings.readRaw()["showSettings"], true);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
 }
