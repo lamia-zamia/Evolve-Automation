@@ -801,4 +801,129 @@ assert.equal(unsubscribeCount, 1);
   assert.equal(countCycles(4, [12]), 1);
 }
 
+// A feature that throws is reported once and skips only itself: every later phase still runs. Before
+// the per-phase boundary a single `try` covered the whole cycle, so an unavailable control in an
+// early feature silently cost every feature after it — measured against the real game at zero
+// build-queue cost probes over 600 periods while the market phase threw each cycle.
+{
+  const root = {
+    race: { deconstructor: true },
+    resource: {
+      Nanite: { amount: 0, max: 100, display: true },
+      Supply: { amount: 0, max: 100, display: true },
+      Copper: { amount: 100, max: 100, diff: 0, display: true },
+    },
+    interstellar: { mass_ejector: { count: 1, on: 1, Copper: 0 } },
+    city: {
+      powered: true,
+      power: -1,
+      nanite_factory: { count: 1, Copper: 0 },
+      mill: { count: 2, on: 0 },
+    },
+    portal: {
+      bireme: { count: 1, on: 1 },
+      transport: { count: 1, on: 1, cargo: { max: 2, Copper: 0 } },
+    },
+  };
+  const invoked = [];
+  const reported = [];
+  let cycle;
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: {
+        resolve: (elementId) => {
+          // Nanite disposal runs first of these three. Its control throwing stands in for any
+          // feature whose own state has gone out from under it mid-run.
+          if (elementId === "iNFactory") {
+            throw new Error("nanite control exploded");
+          }
+          if (elementId === "ejectCopper") {
+            return {
+              elementId,
+              generation: 1,
+              methods: ["ejectMore", "ejectLess"],
+            };
+          }
+          if (elementId === "supplyCopper") {
+            return {
+              elementId,
+              generation: 1,
+              methods: ["supplyMore", "supplyLess"],
+            };
+          }
+          return undefined;
+        },
+        invoke: (handle, method, args = []) => {
+          invoked.push(`${handle.elementId}.${method}`);
+          if (handle.elementId === "ejectCopper") {
+            root.interstellar.mass_ejector[args[0]] +=
+              method === "ejectMore" ? 1 : -1;
+          } else if (handle.elementId === "supplyCopper") {
+            root.portal.transport.cargo[args[0]] +=
+              method === "supplyMore" ? 1 : -1;
+          }
+          return { ok: true, value: undefined };
+        },
+        capturedElementIds: () => ["supplyCopper", "ejectCopper"],
+      },
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          tickRate: 1,
+          autoNanite: true,
+          naniteMode: "cap",
+          autoSupply: true,
+          supplyMode: "cap",
+          autoEject: true,
+          ejectMode: "cap",
+          res_naniteCopper: true,
+          res_supplyCopper: true,
+          res_ejectCopper: true,
+        }),
+    },
+    logError: (message) => reported.push(message),
+  });
+  cycle({ periods: 1 });
+  cycle({ periods: 1 });
+  cycle({ periods: 1 });
+  stopCycle();
+
+  // The failing phase is named, and named once rather than every cycle.
+  const failures = reported.filter((message) => message.includes("autoNanite"));
+  assert.equal(
+    failures.length,
+    1,
+    `expected one autoNanite failure: ${JSON.stringify(reported)}`,
+  );
+  assert.match(failures[0], /autoNanite stopped: .*nanite control exploded/);
+  // Both later phases still ran, which is the whole point of the boundary.
+  assert.ok(
+    invoked.some((entry) => entry === "supplyCopper.supplyMore"),
+    `autoSupply was skipped by autoNanite's throw: ${JSON.stringify(invoked)}`,
+  );
+  assert.ok(
+    invoked.some((entry) => entry === "ejectCopper.ejectMore"),
+    `autoEject was skipped by autoNanite's throw: ${JSON.stringify(invoked)}`,
+  );
+}
+
 console.log("captured-runtime-control ok");

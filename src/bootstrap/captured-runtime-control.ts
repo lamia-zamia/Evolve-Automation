@@ -230,6 +230,24 @@ export function startCapturedRuntime({
     reported.add(message);
     logError(message);
   };
+  /**
+   * One feature's phase of the cycle. A throw inside it is reported once and skips that feature for
+   * this cycle; every phase after it still runs, because a control that has gone missing in one
+   * feature says nothing about the others. Before this boundary existed a single `try` covered the
+   * whole cycle, so one unavailable control cost every later feature silently — measured at zero
+   * build-queue cost probes over 600 periods while the market phase threw each cycle.
+   *
+   * Returns whether the phase completed, for the two places where a later phase depends on it.
+   */
+  const runPhase = (name: string, body: () => void): boolean => {
+    try {
+      body();
+      return true;
+    } catch (error) {
+      reportOnce(`${name} stopped: ${String(error)}`);
+      return false;
+    }
+  };
   // The demand sample both reads the construction cycle's observations and answers its storage
   // question, so one of the two has to be late-bound. This one is, with a real empty sample until
   // the cycle exists, rather than a mutable object either side could hold a stale reference to.
@@ -1210,173 +1228,241 @@ export function startCapturedRuntime({
     const workStartedAtMs = profiling?.nowMs();
     try {
       if (isEnabled(settings, "autoTrigger")) {
-        // Trigger targets are only the actions whose controls were captured, so the sample the
-        // demand model shares has to be taken after construction discovery, not before it.
-        progression.ensureBuildControls();
+        runPhase("autoTrigger discovery", () => {
+          // Trigger targets are only the actions whose controls were captured, so the sample the
+          // demand model shares has to be taken after construction discovery, not before it.
+          progression.ensureBuildControls();
+        });
       }
       if (isEnabled(settings, "autoFleet")) {
-        const truepath =
-          readProperty(
-            readProperty(pageCapture.rootState.readRoot(), "race"),
-            "truepath",
-          ) === true;
-        if (truepath) ensureCivicControls();
-        else ensureGalaxyFleetControls();
+        runPhase("autoFleet discovery", () => {
+          const truepath =
+            readProperty(
+              readProperty(pageCapture.rootState.readRoot(), "race"),
+              "truepath",
+            ) === true;
+          if (truepath) ensureCivicControls();
+          else ensureGalaxyFleetControls();
+        });
       }
       if (isEnabled(settings, "autoMarket")) {
-        ensureMarketControls();
-        marketAutomation.run();
+        runPhase("autoMarket", () => {
+          ensureMarketControls();
+          marketAutomation.run();
+        });
       }
       if (isEnabled(settings, "autoGalaxyMarket")) {
-        ensureGalaxyMarketControls();
-        galaxyMarketAutomation.run();
+        runPhase("autoGalaxyMarket", () => {
+          ensureGalaxyMarketControls();
+          galaxyMarketAutomation.run();
+        });
       }
       if (isEnabled(settings, "autoStorage")) {
-        ensureStorageControls();
-        storageAutomation.run();
+        runPhase("autoStorage", () => {
+          ensureStorageControls();
+          storageAutomation.run();
+        });
       }
       if (
         isEnabled(settings, "autoBuild") ||
         isEnabled(settings, "buildingAlwaysClick")
       ) {
-        gatherResources();
+        runPhase("buildingAlwaysClick", () => gatherResources());
       }
       if (isEnabled(settings, "autoTax")) {
-        ensureCivicControls();
-        tax.autoTax();
+        runPhase("autoTax", () => {
+          ensureCivicControls();
+          tax.autoTax();
+        });
       }
       if (isEnabled(settings, "autoGovernment")) {
-        ensureCivicControls();
-        runCapturedGovernmentAutomation(government);
+        runPhase("autoGovernment", () => {
+          ensureCivicControls();
+          runCapturedGovernmentAutomation(government);
+        });
       }
       if (isEnabled(settings, "autoHell")) {
-        ensureCivicControls();
-        hell.run();
+        runPhase("autoHell", () => {
+          ensureCivicControls();
+          hell.run();
+        });
       }
       if (isEnabled(settings, "autoMiningDroid")) {
-        ensureMiningDroidControls();
-        miningDroid.run();
+        runPhase("autoMiningDroid", () => {
+          ensureMiningDroidControls();
+          miningDroid.run();
+        });
       }
       if (isEnabled(settings, "autoGraphenePlant")) {
-        ensureGrapheneControls();
-        graphene.run();
+        runPhase("autoGraphenePlant", () => {
+          ensureGrapheneControls();
+          graphene.run();
+        });
       }
       if (isEnabled(settings, "autoReplicator")) {
-        ensureReplicatorControls();
-        replicator.run();
+        runPhase("autoReplicator", () => {
+          ensureReplicatorControls();
+          replicator.run();
+        });
       }
       if (isEnabled(settings, "autoQuarry")) {
-        ensureRatioControls(
-          QUARRY_CONTROL,
-          Boolean(
-            readProperty(
-              readProperty(pageCapture.rootState.readRoot(), "race"),
-              "smoldering",
-            ),
-          ) && structureCount("city", "rock_quarry") >= 1,
-        );
-        ratios.quarry();
+        runPhase("autoQuarry", () => {
+          ensureRatioControls(
+            QUARRY_CONTROL,
+            Boolean(
+              readProperty(
+                readProperty(pageCapture.rootState.readRoot(), "race"),
+                "smoldering",
+              ),
+            ) && structureCount("city", "rock_quarry") >= 1,
+          );
+          ratios.quarry();
+        });
       }
       if (isEnabled(settings, "autoMine")) {
-        ensureRatioControls(
-          TITAN_MINE_CONTROL,
-          structureCount("space", "titan_mine") >= 1,
-        );
-        ratios.titanMine();
+        runPhase("autoMine", () => {
+          ensureRatioControls(
+            TITAN_MINE_CONTROL,
+            structureCount("space", "titan_mine") >= 1,
+          );
+          ratios.titanMine();
+        });
       }
       if (isEnabled(settings, "autoExtractor")) {
-        ensureRatioControls(
-          MINING_SHIP_CONTROL,
-          structureCount("tauceti", "mining_ship") >= 1,
-        );
-        ratios.miningShip();
+        runPhase("autoExtractor", () => {
+          ensureRatioControls(
+            MINING_SHIP_CONTROL,
+            structureCount("tauceti", "mining_ship") >= 1,
+          );
+          ratios.miningShip();
+        });
       }
       if (isEnabled(settings, "autoAlchemy")) {
-        ensureAlchemyControls();
-        alchemy.run();
+        runPhase("autoAlchemy", () => {
+          ensureAlchemyControls();
+          alchemy.run();
+        });
       }
       if (isEnabled(settings, "autoPylon")) {
-        ensurePylonControls();
-        pylon.run();
+        runPhase("autoPylon", () => {
+          ensurePylonControls();
+          pylon.run();
+        });
       }
       const autoJobs = isEnabled(settings, "autoJobs");
       const autoCraftsmen = isEnabled(settings, "autoCraftsmen");
       let combinedJobs = false;
       if (autoJobs && autoCraftsmen) {
-        ensureCivicControls();
-        combinedJobs = fullJobs.isAvailable();
-        if (combinedJobs) runJobsAutomation(fullJobs, false);
+        const completed = runPhase("autoJobs with autoCraftsmen", () => {
+          ensureCivicControls();
+          combinedJobs = fullJobs.isAvailable();
+          if (combinedJobs) runJobsAutomation(fullJobs, false);
+        });
+        // The combined pass may have assigned some of the workers before it threw, and the split
+        // passes below would assign the same civics a second time. Treat a failed combined pass as
+        // having handled them.
+        if (!completed) combinedJobs = true;
       }
       if (autoJobs && !combinedJobs) {
-        ensureCivicControls();
-        runJobsAutomation(ordinaryJobs, false);
+        runPhase("autoJobs", () => {
+          ensureCivicControls();
+          runJobsAutomation(ordinaryJobs, false);
+        });
       }
       if (autoCraftsmen && !combinedJobs) {
-        ensureCivicControls();
-        runJobsAutomation(craftsmen, true);
+        runPhase("autoCraftsmen", () => {
+          ensureCivicControls();
+          runJobsAutomation(craftsmen, true);
+        });
       }
       if (isEnabled(settings, "autoCraft")) {
-        runCraftAutomation(craft);
+        runPhase("autoCraft", () => {
+          runCraftAutomation(craft);
+        });
       }
       // Triggers are commitments: when one of them buys something this cycle, construction and
       // research stand down so they cannot spend what the next trigger is saving for.
-      const triggerActive =
-        isEnabled(settings, "autoTrigger") &&
-        triggerPhaseActive(
-          runTriggerAutomation({
-            reader: triggerActions.reader,
-            executor: triggerActions.executor,
-          }),
-        );
+      let triggerActive = false;
+      if (isEnabled(settings, "autoTrigger")) {
+        const completed = runPhase("autoTrigger", () => {
+          triggerActive = triggerPhaseActive(
+            runTriggerAutomation({
+              reader: triggerActions.reader,
+              executor: triggerActions.executor,
+            }),
+          );
+        });
+        // A trigger phase that threw may already have pressed something, and cannot say what the
+        // rest of the list was saving for. Construction and research stand down rather than spend
+        // it — which is what the whole-cycle `try` did for this case, and the only part of that
+        // behavior worth keeping.
+        if (!completed) triggerActive = true;
+      }
       if (
         !triggerActive &&
         (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))
       ) {
-        progression.runConstructionCycle();
+        runPhase("autoBuild", () => progression.runConstructionCycle());
       }
       if (isEnabled(settings, "autoNanite")) {
-        ensureNaniteControls();
-        nanite.run();
+        runPhase("autoNanite", () => {
+          ensureNaniteControls();
+          nanite.run();
+        });
       }
       if (isEnabled(settings, "autoSupply")) {
-        ensureSupplyControls();
-        supply.run();
+        runPhase("autoSupply", () => {
+          ensureSupplyControls();
+          supply.run();
+        });
       }
       if (isEnabled(settings, "autoEject")) {
-        ensureEjectorControls();
-        ejector.run();
+        runPhase("autoEject", () => {
+          ensureEjectorControls();
+          ejector.run();
+        });
       }
       if (isEnabled(settings, "autoPower")) {
-        ensureCityControls();
-        powerProducers.run();
-        powerWarnings.run();
+        runPhase("autoPower", () => {
+          ensureCityControls();
+          powerProducers.run();
+          powerWarnings.run();
+        });
       }
       if (isEnabled(settings, "autoSmelter")) {
-        ensureSmelterControls();
-        smelter.run();
+        runPhase("autoSmelter", () => {
+          ensureSmelterControls();
+          smelter.run();
+        });
       }
       if (isEnabled(settings, "autoFactory")) {
-        ensureFactoryControls();
-        factory.run();
+        runPhase("autoFactory", () => {
+          ensureFactoryControls();
+          factory.run();
+        });
       }
       if (isEnabled(settings, "autoFleet")) {
-        const truepath =
-          readProperty(
-            readProperty(pageCapture.rootState.readRoot(), "race"),
-            "truepath",
-          ) === true;
-        if (!truepath) {
-          ensureGalaxyFleetControls();
-          runFleetAutomation({
-            reader: fleet.reader,
-            executor: fleet.executor,
-          });
-        }
+        runPhase("autoFleet", () => {
+          const truepath =
+            readProperty(
+              readProperty(pageCapture.rootState.readRoot(), "race"),
+              "truepath",
+            ) === true;
+          if (!truepath) {
+            ensureGalaxyFleetControls();
+            runFleetAutomation({
+              reader: fleet.reader,
+              executor: fleet.executor,
+            });
+          }
+        });
       }
       if (!triggerActive && isEnabled(settings, "autoResearch")) {
-        progression.runResearchCycle();
+        runPhase("autoResearch", () => progression.runResearchCycle());
       }
     } catch (error) {
+      // Backstop for anything outside a phase boundary. Each feature now catches its own throw, so
+      // reaching here means the cycle's own scaffolding failed and there is no one feature to blame.
       logError(String(error));
     } finally {
       if (profiling !== undefined && workStartedAtMs !== undefined) {

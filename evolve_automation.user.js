@@ -19558,6 +19558,12 @@ Only continue if you trust the source. Injected code:
     settingsPanel.ensurePanel();
     let reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
+    }, runPhase = (name, body) => {
+      try {
+        return body(), !0;
+      } catch (error) {
+        return reportOnce(`${name} stopped: ${String(error)}`), !1;
+      }
     }, readDemand = () => EMPTY_DEMAND_SAMPLE, buildCosts = createCapturedActionCostReader({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
@@ -20196,37 +20202,93 @@ Only continue if you trust the source. Injected code:
         return;
       let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs();
       try {
-        isEnabled(settings, "autoTrigger") && progression.ensureBuildControls(), isEnabled(settings, "autoFleet") && (readProperty(
-          readProperty(pageCapture2.rootState.readRoot(), "race"),
-          "truepath"
-        ) === !0 ? ensureCivicControls() : ensureGalaxyFleetControls()), isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoGovernment") && (ensureCivicControls(), runCapturedGovernmentAutomation(government)), isEnabled(settings, "autoHell") && (ensureCivicControls(), hell.run()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
-          QUARRY_CONTROL,
-          !!readProperty(
+        isEnabled(settings, "autoTrigger") && runPhase("autoTrigger discovery", () => {
+          progression.ensureBuildControls();
+        }), isEnabled(settings, "autoFleet") && runPhase("autoFleet discovery", () => {
+          readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),
-            "smoldering"
-          ) && structureCount3("city", "rock_quarry") >= 1
-        ), ratios.quarry()), isEnabled(settings, "autoMine") && (ensureRatioControls(
-          TITAN_MINE_CONTROL,
-          structureCount3("space", "titan_mine") >= 1
-        ), ratios.titanMine()), isEnabled(settings, "autoExtractor") && (ensureRatioControls(
-          MINING_SHIP_CONTROL,
-          structureCount3("tauceti", "mining_ship") >= 1
-        ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run());
+            "truepath"
+          ) === !0 ? ensureCivicControls() : ensureGalaxyFleetControls();
+        }), isEnabled(settings, "autoMarket") && runPhase("autoMarket", () => {
+          ensureMarketControls(), marketAutomation.run();
+        }), isEnabled(settings, "autoGalaxyMarket") && runPhase("autoGalaxyMarket", () => {
+          ensureGalaxyMarketControls(), galaxyMarketAutomation.run();
+        }), isEnabled(settings, "autoStorage") && runPhase("autoStorage", () => {
+          ensureStorageControls(), storageAutomation.run();
+        }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && runPhase("buildingAlwaysClick", () => gatherResources()), isEnabled(settings, "autoTax") && runPhase("autoTax", () => {
+          ensureCivicControls(), tax.autoTax();
+        }), isEnabled(settings, "autoGovernment") && runPhase("autoGovernment", () => {
+          ensureCivicControls(), runCapturedGovernmentAutomation(government);
+        }), isEnabled(settings, "autoHell") && runPhase("autoHell", () => {
+          ensureCivicControls(), hell.run();
+        }), isEnabled(settings, "autoMiningDroid") && runPhase("autoMiningDroid", () => {
+          ensureMiningDroidControls(), miningDroid.run();
+        }), isEnabled(settings, "autoGraphenePlant") && runPhase("autoGraphenePlant", () => {
+          ensureGrapheneControls(), graphene.run();
+        }), isEnabled(settings, "autoReplicator") && runPhase("autoReplicator", () => {
+          ensureReplicatorControls(), replicator.run();
+        }), isEnabled(settings, "autoQuarry") && runPhase("autoQuarry", () => {
+          ensureRatioControls(
+            QUARRY_CONTROL,
+            !!readProperty(
+              readProperty(pageCapture2.rootState.readRoot(), "race"),
+              "smoldering"
+            ) && structureCount3("city", "rock_quarry") >= 1
+          ), ratios.quarry();
+        }), isEnabled(settings, "autoMine") && runPhase("autoMine", () => {
+          ensureRatioControls(
+            TITAN_MINE_CONTROL,
+            structureCount3("space", "titan_mine") >= 1
+          ), ratios.titanMine();
+        }), isEnabled(settings, "autoExtractor") && runPhase("autoExtractor", () => {
+          ensureRatioControls(
+            MINING_SHIP_CONTROL,
+            structureCount3("tauceti", "mining_ship") >= 1
+          ), ratios.miningShip();
+        }), isEnabled(settings, "autoAlchemy") && runPhase("autoAlchemy", () => {
+          ensureAlchemyControls(), alchemy.run();
+        }), isEnabled(settings, "autoPylon") && runPhase("autoPylon", () => {
+          ensurePylonControls(), pylon.run();
+        });
         let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
-        autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft);
-        let triggerActive = isEnabled(settings, "autoTrigger") && triggerPhaseActive(
-          runTriggerAutomation({
-            reader: triggerActions.reader,
-            executor: triggerActions.executor
-          })
-        );
-        !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoNanite") && (ensureNaniteControls(), nanite.run()), isEnabled(settings, "autoSupply") && (ensureSupplyControls(), supply.run()), isEnabled(settings, "autoEject") && (ensureEjectorControls(), ejector.run()), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run(), powerWarnings.run()), isEnabled(settings, "autoSmelter") && (ensureSmelterControls(), smelter.run()), isEnabled(settings, "autoFactory") && (ensureFactoryControls(), factory.run()), isEnabled(settings, "autoFleet") && (readProperty(
-          readProperty(pageCapture2.rootState.readRoot(), "race"),
-          "truepath"
-        ) === !0 || (ensureGalaxyFleetControls(), runFleetAutomation({
-          reader: fleet.reader,
-          executor: fleet.executor
-        }))), !triggerActive && isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+        autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
+          ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1);
+        }) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPhase("autoJobs", () => {
+          ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1);
+        }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
+          ensureCivicControls(), runJobsAutomation(craftsmen, !0);
+        }), isEnabled(settings, "autoCraft") && runPhase("autoCraft", () => {
+          runCraftAutomation(craft);
+        });
+        let triggerActive = !1;
+        isEnabled(settings, "autoTrigger") && (runPhase("autoTrigger", () => {
+          triggerActive = triggerPhaseActive(
+            runTriggerAutomation({
+              reader: triggerActions.reader,
+              executor: triggerActions.executor
+            })
+          );
+        }) || (triggerActive = !0)), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && runPhase("autoBuild", () => progression.runConstructionCycle()), isEnabled(settings, "autoNanite") && runPhase("autoNanite", () => {
+          ensureNaniteControls(), nanite.run();
+        }), isEnabled(settings, "autoSupply") && runPhase("autoSupply", () => {
+          ensureSupplyControls(), supply.run();
+        }), isEnabled(settings, "autoEject") && runPhase("autoEject", () => {
+          ensureEjectorControls(), ejector.run();
+        }), isEnabled(settings, "autoPower") && runPhase("autoPower", () => {
+          ensureCityControls(), powerProducers.run(), powerWarnings.run();
+        }), isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
+          ensureSmelterControls(), smelter.run();
+        }), isEnabled(settings, "autoFactory") && runPhase("autoFactory", () => {
+          ensureFactoryControls(), factory.run();
+        }), isEnabled(settings, "autoFleet") && runPhase("autoFleet", () => {
+          readProperty(
+            readProperty(pageCapture2.rootState.readRoot(), "race"),
+            "truepath"
+          ) === !0 || (ensureGalaxyFleetControls(), runFleetAutomation({
+            reader: fleet.reader,
+            executor: fleet.executor
+          }));
+        }), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle());
       } catch (error) {
         logError(String(error));
       } finally {
