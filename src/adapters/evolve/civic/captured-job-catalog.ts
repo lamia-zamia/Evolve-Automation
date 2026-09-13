@@ -88,6 +88,8 @@ export interface CapturedJobDefaultCandidate {
 
 export interface CapturedJobCatalog {
   readonly defaultJobId: string;
+  /** False when the settings blob has never been through a job settings reset. */
+  readonly jobSettingsConfigured: boolean;
   /** Whether the current race uses Hunter as the unemployed allocation pool. */
   readonly hunterActsAsUnemployed: boolean;
   /** Crew reserve needed before selecting a new default job, when crew state exists. */
@@ -139,6 +141,8 @@ export type CapturedJobsCycleOptions = Omit<
 export function toCapturedJobsJobInputs(
   catalog: Readonly<CapturedJobCatalog>,
 ): readonly Readonly<JobsJobInput>[] | undefined {
+  // Nothing in this blob says what any job should be staffed to; see `readCatalog`.
+  if (!catalog.jobSettingsConfigured) return undefined;
   // Absent `job_p_<id>` settings fall back to the catalog position, which is the order the
   // defaults assign priorities in, so a partially ported settings blob keeps upstream's order.
   const managed = catalog.jobs
@@ -172,8 +176,13 @@ export function toCapturedJobsJobInputs(
         serves: job.serves,
         split: job.split,
         isDefault: job.isDefault,
-        breakpoints: job.breakpoints ?? ([0, 0, 0] as const),
-        uncappedBreakpoints: job.uncappedBreakpoints ?? ([0, 0, 0] as const),
+        // A job with no `job_b1..3_<id>` settings at all has no configured target, which is not
+        // the same as a configured target of zero: the planner reads a zero breakpoint as "empty
+        // this job" and would strip a partially ported settings blob down to the split jobs.
+        // Retaining the current pool keeps an absent setting an absence.
+        breakpoints: job.breakpoints ?? retainedBreakpoints(job.count),
+        uncappedBreakpoints:
+          job.uncappedBreakpoints ?? retainedBreakpoints(job.count),
         smartMaximum: job.smartMaximumKnown
           ? job.smartMaximum
           : retainedWorkerCap(job.count),
@@ -805,6 +814,11 @@ function retainedWorkerCap(count: number): number {
   return count;
 }
 
+/** The same retained pool, as the breakpoint triple a job with no configured target reads as. */
+function retainedBreakpoints(count: number): readonly [number, number, number] {
+  return Object.freeze([count, count, count] as [number, number, number]);
+}
+
 function readLumberjackSmartMaximum(
   root: unknown,
   count: number,
@@ -1412,6 +1426,21 @@ function readCatalog(
   }
 
   if (!jobs.some((job) => job.id === defaultJobId)) return undefined;
+  // `computeJobDefaults` writes `job_b1..3_<id>`, `job_p_<id>` and `job_s_<id>` for every job, and
+  // it is still only reachable from the compatibility runtime. A blob that has never been through
+  // a job settings reset carries none of them, and every one of those absences would otherwise be
+  // read as a decision — a zero target, no priority, no smart rule. The catalog decides that here
+  // and says so once; only the ordinary planner projection refuses to act on it, because the
+  // foundry reader shares this catalog and crafting does not depend on job breakpoints.
+  const jobSettingsConfigured = jobs.some(
+    (job) => job.configuredBreakpoints !== null,
+  );
+  if (!jobSettingsConfigured) {
+    onSkipped(
+      "civ-jobs",
+      "no job breakpoints are configured; reset the job settings to populate them",
+    );
+  }
   const byId = new Map(jobs.map((job) => [job.id, job]));
   const splitEntries: CapturedJobSplitEntry[] = [];
   for (const split of SPLIT_SETTINGS) {
@@ -1457,6 +1486,7 @@ function readCatalog(
   }
   return Object.freeze({
     defaultJobId,
+    jobSettingsConfigured,
     hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
     minimumDefault,
     servantModifier,

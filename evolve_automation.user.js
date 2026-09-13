@@ -5638,6 +5638,7 @@
 
   // src/adapters/evolve/civic/captured-job-catalog.ts
   function toCapturedJobsJobInputs(catalog) {
+    if (!catalog.jobSettingsConfigured) return;
     let managed = catalog.jobs.map((job, position) => ({ job, position })).filter(({ job }) => job.managed).sort(
       (left, right) => (left.job.configuredPriority ?? left.position) - (right.job.configuredPriority ?? right.position) || left.position - right.position
     ).map(({ job }) => job);
@@ -5659,8 +5660,12 @@
             serves: job.serves,
             split: job.split,
             isDefault: job.isDefault,
-            breakpoints: job.breakpoints ?? [0, 0, 0],
-            uncappedBreakpoints: job.uncappedBreakpoints ?? [0, 0, 0],
+            // A job with no `job_b1..3_<id>` settings at all has no configured target, which is not
+            // the same as a configured target of zero: the planner reads a zero breakpoint as "empty
+            // this job" and would strip a partially ported settings blob down to the split jobs.
+            // Retaining the current pool keeps an absent setting an absence.
+            breakpoints: job.breakpoints ?? retainedBreakpoints(job.count),
+            uncappedBreakpoints: job.uncappedBreakpoints ?? retainedBreakpoints(job.count),
             smartMaximum: job.smartMaximumKnown ? job.smartMaximum : job.count,
             farmerMinimum: job.farmerMinimum,
             storageBackedMinimum: job.storageBackedMinimum,
@@ -5946,6 +5951,9 @@
     if (ratio < 0.99 || readDemand?.().isDemanded(id) === !0) return !0;
     let diff = resourceDiff(root, id);
     if (diff !== void 0 && diff < 0) return !0;
+  }
+  function retainedBreakpoints(count2) {
+    return Object.freeze([count2, count2, count2]);
   }
   function readLumberjackSmartMaximum(root, count2, readDemand) {
     let race = readProperty(root, "race");
@@ -6344,6 +6352,13 @@
       );
     }
     if (!jobs.some((job) => job.id === defaultJobId)) return;
+    let jobSettingsConfigured = jobs.some(
+      (job) => job.configuredBreakpoints !== null
+    );
+    jobSettingsConfigured || onSkipped(
+      "civ-jobs",
+      "no job breakpoints are configured; reset the job settings to populate them"
+    );
     let byId = new Map(jobs.map((job) => [job.id, job])), splitEntries = [];
     for (let split of SPLIT_SETTINGS) {
       let job = byId.get(split.id);
@@ -6383,6 +6398,7 @@
     }
     return Object.freeze({
       defaultJobId,
+      jobSettingsConfigured,
       hunterActsAsUnemployed: readHunterActsAsUnemployed(root),
       minimumDefault,
       servantModifier,

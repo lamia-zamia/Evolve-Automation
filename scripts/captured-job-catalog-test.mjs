@@ -66,6 +66,7 @@ const reader = createCapturedJobCatalogReader({
 
 assert.deepEqual(reader(), {
   defaultJobId: "unemployed",
+  jobSettingsConfigured: true,
   hunterActsAsUnemployed: false,
   minimumDefault: null,
   servantModifier: 1,

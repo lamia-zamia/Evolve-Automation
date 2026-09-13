@@ -48,6 +48,15 @@ const controls = {
     return { ok: true, value: undefined };
   },
 };
+// The captured catalog refuses to plan from a blob that has never been through a job settings
+// reset, because every absent `job_b*`/`job_p_*`/`job_s_*` would otherwise read as a decision.
+// Fixtures that expect a plan declare the reset-written breakpoints once, here.
+const resetBreakpoints = Object.freeze({
+  job_b1_farmer: -1,
+  job_b2_farmer: -1,
+  job_b3_farmer: -1,
+});
+
 const automation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => root },
   controls,
@@ -55,6 +64,13 @@ const automation = createCapturedOrdinaryJobsAutomation({
     job_unemployed: true,
     job_farmer: true,
     jobSetDefault: true,
+    // A blob that has been through a job settings reset, which is what carries breakpoints.
+    job_b1_unemployed: 0,
+    job_b2_unemployed: 0,
+    job_b3_unemployed: 0,
+    job_b1_farmer: -1,
+    job_b2_farmer: -1,
+    job_b3_farmer: -1,
   }),
 });
 
@@ -86,7 +102,12 @@ partialSettingsRoot.civic.unemployed.workers = 3;
 const partialSettingsAutomation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => partialSettingsRoot },
   controls,
-  readSettings: () => ({ autoJobs: true }),
+  readSettings: () => ({
+    autoJobs: true,
+    job_b1_farmer: -1,
+    job_b2_farmer: -1,
+    job_b3_farmer: -1,
+  }),
 });
 const partialSettingsInput = partialSettingsAutomation.reader.readCycle(false);
 assert.equal(
@@ -94,6 +115,33 @@ assert.equal(
   true,
   "an absent per-job switch uses the enabled reset default",
 );
+assert.deepEqual(
+  partialSettingsInput.jobs.find(({ id }) => id === "unemployed")?.breakpoints,
+  [3, 3, 3],
+  "a job with no configured breakpoints retains its current pool rather than targeting zero",
+);
+
+const uninitialisedSkips = [];
+const uninitialisedAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => partialSettingsRoot },
+  controls,
+  // `autoJobs` with no job configuration at all: the blob has never been through a job settings
+  // reset, so every breakpoint, priority and smart toggle is absent.
+  readSettings: () => ({ autoJobs: true }),
+  onSkipped: (id, reason) => uninitialisedSkips.push({ id, reason }),
+});
+assert.equal(
+  uninitialisedAutomation.reader.readCycle(false).available,
+  false,
+  "an uninitialised job settings blob plans nothing rather than reading every absence as a zero target",
+);
+assert.deepEqual(uninitialisedSkips, [
+  {
+    id: "civ-jobs",
+    reason:
+      "no job breakpoints are configured; reset the job settings to populate them",
+  },
+]);
 
 const authorityAutomation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => root },
@@ -109,8 +157,13 @@ const disabledAuthorityAutomation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => root },
   controls,
   readSettings: () => ({
+    ...resetBreakpoints,
     authorityManage: true,
     generalMinimumAuthority: 0,
+    autoJobs: true,
+    job_b1_farmer: -1,
+    job_b2_farmer: -1,
+    job_b3_farmer: -1,
   }),
 });
 assert.equal(
@@ -167,6 +220,7 @@ const capturedAuthority = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => authorityRoot },
   controls: authorityControls,
   readSettings: () => ({
+    ...resetBreakpoints,
     authorityManage: true,
     generalMinimumAuthority: 100,
     job_unemployed: true,
@@ -196,6 +250,7 @@ const nanMoraleAutomation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => nanMoraleRoot },
   controls: authorityControls,
   readSettings: () => ({
+    ...resetBreakpoints,
     authorityManage: true,
     generalMinimumAuthority: 100,
     job_unemployed: true,
@@ -218,6 +273,7 @@ const taxTaskAuthority = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => taxTaskAuthorityRoot },
   controls: authorityControls,
   readSettings: () => ({
+    ...resetBreakpoints,
     authorityManage: true,
     generalMinimumAuthority: 100,
   }),
@@ -234,6 +290,7 @@ const malformedTaxTaskAuthority = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => malformedTaxTaskAuthorityRoot },
   controls: authorityControls,
   readSettings: () => ({
+    ...resetBreakpoints,
     authorityManage: true,
     generalMinimumAuthority: 100,
   }),
@@ -252,6 +309,7 @@ const nobleAuthority = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => nobleAuthorityRoot },
   controls: authorityControls,
   readSettings: () => ({
+    ...resetBreakpoints,
     authorityManage: true,
     generalMinimumAuthority: 100,
     autoTax: true,
@@ -272,6 +330,7 @@ const terrifyingAuthority = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => terrifyingAuthorityRoot },
   controls: authorityControls,
   readSettings: () => ({
+    ...resetBreakpoints,
     authorityManage: true,
     generalMinimumAuthority: 100,
     autoTax: true,
@@ -292,6 +351,7 @@ const wishAuthority = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => wishAuthorityRoot },
   controls: authorityControls,
   readSettings: () => ({
+    ...resetBreakpoints,
     authorityManage: true,
     generalMinimumAuthority: 100,
     autoTax: true,
@@ -312,6 +372,7 @@ const oligarchyAuthority = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => oligarchyAuthorityRoot },
   controls: authorityControls,
   readSettings: () => ({
+    ...resetBreakpoints,
     authorityManage: true,
     generalMinimumAuthority: 100,
     autoTax: true,
@@ -460,6 +521,7 @@ const fullAutomation = createCapturedFullJobsAutomation({
   rootState: { readRoot: () => fullRoot },
   controls: fullControls,
   readSettings: () => ({
+    ...resetBreakpoints,
     job_unemployed: true,
     job_farmer: true,
     job_lumberjack: false,
@@ -542,6 +604,9 @@ const fullConsumedResourceCatalog = createCapturedJobCatalogReader({
   readSettings: () => ({
     job_s_lumberjack: true,
     job_lumberjack: true,
+    job_b1_lumberjack: -1,
+    job_b2_lumberjack: -1,
+    job_b3_lumberjack: -1,
   }),
 });
 assert.equal(
@@ -569,6 +634,9 @@ const idleFullResourceCatalog = createCapturedJobCatalogReader({
   readSettings: () => ({
     job_s_lumberjack: true,
     job_lumberjack: true,
+    job_b1_lumberjack: -1,
+    job_b2_lumberjack: -1,
+    job_b3_lumberjack: -1,
   }),
 });
 assert.equal(
@@ -584,6 +652,7 @@ const servantlessAutomation = createCapturedOrdinaryJobsAutomation({
   rootState: { readRoot: () => servantlessRoot },
   controls,
   readSettings: () => ({
+    ...resetBreakpoints,
     autoJobs: true,
     jobManageServants: true,
   }),
