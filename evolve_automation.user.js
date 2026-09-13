@@ -4187,7 +4187,7 @@
       ), !1);
       sweptSelectedTab || (sweptSelectedTab = report(discovery.discover(Object.freeze([main]))));
       for (let index of pending) {
-        let container = SPACE_TAB_PANELS[index], drew = !1, result = discovery.discover(
+        let result = discovery.discover(
           Object.freeze([
             main,
             Object.freeze({
@@ -4195,14 +4195,9 @@
               control: spaceTabControl,
               index
             })
-          ]),
-          container === void 0 ? void 0 : {
-            whileDrawn: () => {
-              drew = drawnActions.exists(`${container} .action`);
-            }
-          }
+          ])
         );
-        report(result) && drew && latchedSpaceTabs.add(index);
+        report(result) && latchedSpaceTabs.add(index);
       }
       return `${sweptSelectedTab ? "1" : "0"}:${[...latchedSpaceTabs].sort((left, right) => left - right).join(",")}`;
     }, ensureBuildControls = () => {

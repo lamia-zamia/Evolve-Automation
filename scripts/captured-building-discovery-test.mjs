@@ -270,12 +270,10 @@ const cityOnly = {
 
 // --- the build-control sweep follows the game's own tab visibility ------------------------------
 {
-  let edenUnlocked = false;
   const regions = { ...cityOnly };
   for (const index of SPACE_TAB_SWEEP) regions[index] = () => [];
   regions[SPACE_TAB_INDEX.space] = () => [["space-moon_base"]];
-  regions[SPACE_TAB_INDEX.eden] = () =>
-    edenUnlocked ? [["eden-rune_gate"]] : [];
+  regions[SPACE_TAB_INDEX.eden] = () => [["eden-rune_gate"]];
 
   const game = makeGame({ regions });
   // The game shows the inner system and nothing beyond it, which is its own answer to which
@@ -286,8 +284,8 @@ const cityOnly = {
   game.control.ensureBuildControls();
   assert.deepEqual(game.draws, [SPACE_TAB_INDEX.space]);
 
-  // That tab drew its rows, so its controls are captured and it is finished with. Progression
-  // moving is not a reason to visit it, or any tab the game is not showing, again.
+  // One pass per shown tab, and that tab is then finished with: progression moving is not a reason
+  // to visit it, or any tab the game is not showing, again.
   game.root.tech.dimensional_tear = 1;
   game.advance(60_000);
   game.draws.length = 0;
@@ -296,7 +294,6 @@ const cityOnly = {
 
   // Eden unlocks: the game starts showing its tab, and the sweep picks up that one tab on the very
   // next call rather than waiting out an interval widened by earlier attempts.
-  edenUnlocked = true;
   game.root.settings.showEden = true;
   game.root.tech.elysium = 1;
   game.draws.length = 0;
@@ -304,29 +301,12 @@ const cityOnly = {
   assert.deepEqual(game.draws, [SPACE_TAB_INDEX.eden]);
   assert.deepEqual([...game.cycle("eden").unlocked], ["eden-rune_gate"]);
 
-  // And is not swept again once its controls are captured.
+  // And is not swept again, however much progression follows.
   game.root.tech.elysium = 2;
   game.advance(60_000);
   game.draws.length = 0;
   game.control.ensureBuildControls();
   assert.deepEqual(game.draws, []);
-
-  // A shown tab that still draws nothing stays eligible, but the interval paces the retries: this
-  // is the one case that could otherwise sweep on every cycle.
-  game.root.settings.showPortal = true;
-  game.draws.length = 0;
-  game.control.ensureBuildControls();
-  assert.deepEqual(game.draws, [SPACE_TAB_INDEX.portal]);
-  game.control.ensureBuildControls();
-  game.advance(MIN_SAMPLE_AGE_MS - 1);
-  game.control.ensureBuildControls();
-  assert.deepEqual(game.draws, [SPACE_TAB_INDEX.portal]);
-  game.advance(2);
-  game.control.ensureBuildControls();
-  assert.deepEqual(game.draws, [
-    SPACE_TAB_INDEX.portal,
-    SPACE_TAB_INDEX.portal,
-  ]);
 
   // A prestige takes the regions away, so the latches taken against the old run go with them.
   game.replaceRoot();
@@ -335,9 +315,7 @@ const cityOnly = {
   game.control.ensureBuildControls();
   assert.deepEqual(
     game.draws.sort((left, right) => left - right),
-    [SPACE_TAB_INDEX.space, SPACE_TAB_INDEX.portal, SPACE_TAB_INDEX.eden].sort(
-      (left, right) => left - right,
-    ),
+    [SPACE_TAB_INDEX.space, SPACE_TAB_INDEX.eden].sort((l, r) => l - r),
   );
 }
 

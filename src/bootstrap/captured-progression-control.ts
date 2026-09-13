@@ -20,7 +20,6 @@ import {
   MAIN_TAB_INDEX,
   MAIN_TAB_SETTING,
   SPACE_TABS_SETTING,
-  SPACE_TAB_PANELS,
   SPACE_TAB_SHOWN_BY,
   SPACE_TAB_SWEEP,
   SUB_TAB_CONTROLS,
@@ -287,8 +286,6 @@ export function createCapturedProgressionControl(
       sweptSelectedTab = report(discovery.discover(Object.freeze([main])));
     }
     for (const index of pending) {
-      const container = SPACE_TAB_PANELS[index];
-      let drew = false;
       const result = discovery.discover(
         Object.freeze([
           main,
@@ -298,17 +295,13 @@ export function createCapturedProgressionControl(
             index,
           }),
         ]),
-        container === undefined
-          ? undefined
-          : {
-              whileDrawn: () => {
-                drew = drawnActions.exists(`${container} .action`);
-              },
-            },
       );
-      // A pass that drew rows has bound their controls, and that panel is finished with. A shown
-      // tab that still draws nothing is a region mid-unlock, and stays eligible.
-      if (report(result) && drew) latchedSpaceTabs.add(index);
+      // One pass per tab the game is showing. Whether that pass actually bound anything is
+      // deliberately not the latch: a discovery draw suppresses mounting, and a civilization
+      // sub-panel is its tab component's own render, so the pass cannot see the rows it produced
+      // (see the scratch-container entry in docs/feature-backlog.md). Latching on rows would
+      // re-sweep every shown region for the whole session.
+      if (report(result)) latchedSpaceTabs.add(index);
     }
     return `${sweptSelectedTab ? "1" : "0"}:${[...latchedSpaceTabs].sort((left, right) => left - right).join(",")}`;
   };
