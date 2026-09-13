@@ -26,19 +26,27 @@
  * rows the game is no longer offering, so it is answered from the flag instead of being drawn: the
  * tab is hidden, nothing in it is offered, and the stale markup is never read.
  *
- * The same rows carry the power switch. `setAction` draws a `span.on`/`span.off` pair onto a
- * building whose own gate passed and draws neither onto one whose gate did not, so this pass
- * answers how many copies are on and off without a second draw for the regions it already paid
- * for.
+ * The same rows say which buildings have a power switch at all. `setAction` draws a
+ * `span.on`/`span.off` pair onto a building whose own gate passed — `switchable()`, or `powered`
+ * with `high_tech >= 2` and `checkPowerRequirements`, all of them reads of the module-lexical
+ * definition — and draws neither onto one whose gate did not. That is a discovery answer and is
+ * kept here.
+ *
+ * The counts in those spans are not. `on` is a live field of the game's own state record and the
+ * ceiling is the row component's own `on_cap()`, both readable at any time, so re-reading a
+ * player's power allocation must not cost a draw. What this pass records instead is where each
+ * switch's state record lives — see `BuildingStateAddress`, and `captured-building-switch-states`
+ * for the cycle-rate read that uses it.
  */
 
+import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameDrawnActionsReader } from "../../../../ports/game-drawn-actions.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { GameTabDiscovery } from "../../../../ports/game-tab-discovery.ts";
 import type {
-  BuildingSwitchState,
-  BuildingUnlockSample,
-  GameBuildingUnlockReader,
+  BuildingStateAddress,
+  BuildingUnlockCatalog,
+  GameBuildingUnlockCatalogReader,
 } from "../../../../ports/game-building-unlocks.ts";
 import {
   GOV_TABS_SETTING,
@@ -48,6 +56,8 @@ import {
   MAIN_TAB_SETTING,
   SPACE_TABS_SETTING,
   SPACE_TAB_INDEX,
+  SPACE_TAB_PANELS,
+  SPACE_TAB_SHOWN_BY,
   SUB_TAB_CONTROLS,
 } from "../../captured-tab-discovery.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
@@ -70,9 +80,22 @@ interface RegionPanel {
   readonly shownBy?: string;
 }
 
-/** The two `global.settings` flags whose regions return before clearing their container. */
-const SHOW_UNDERGROUND_SETTING = "showUnderground";
-const SHOW_SURFACE_SETTING = "showSurface";
+/**
+ * The two regions whose draw returns on their visibility flag *before* clearing their container.
+ * Every space tab has such a flag; only these two are answered from it, because only for these two
+ * does a hidden tab mean the container still holds rows the game has stopped offering.
+ */
+const SHOW_UNDERGROUND_SETTING = shownBySetting(SPACE_TAB_INDEX.underground);
+const SHOW_SURFACE_SETTING = shownBySetting(SPACE_TAB_INDEX.surface);
+
+/** The visibility flag a space tab is listed under, refusing an index the table does not name. */
+function shownBySetting(subTab: number): string {
+  const setting = SPACE_TAB_SHOWN_BY[subTab];
+  if (setting === undefined) {
+    throw new Error(`no visibility flag for spaceTabs ${subTab}`);
+  }
+  return setting;
+}
 
 /**
  * Whether the game is currently showing a panel's tab. The flag is created only when the region
@@ -84,12 +107,19 @@ function isPanelShown(gameSettings: unknown, flag: string): boolean {
   return readProperty(gameSettings, flag) === true;
 }
 
-/** A panel behind a civilization sub-tab, which is all but one of them. */
+/**
+ * A panel behind a civilization sub-tab, which is all but one of them. The container comes from
+ * the shared tab table rather than being repeated here, so the sweep that only knows tab indices
+ * and this table that only knows region keys name the same element.
+ */
 function spacePanel(
-  container: string,
   subTab: number,
   extra?: { readonly shownBy: string },
 ): RegionPanel {
+  const container = SPACE_TAB_PANELS[subTab];
+  if (container === undefined) {
+    throw new Error(`no panel container for spaceTabs ${subTab}`);
+  }
   return Object.freeze({
     container,
     mainTab: MAIN_TAB_INDEX.civilization,
@@ -101,25 +131,22 @@ function spacePanel(
 
 /**
  * Region key to the panels that hold its rows. A region with more than one panel is only answered
- * when every one of them was read. The tab selections are the shared discovery coordinates; the
- * containers stay here because they name what each region draws into, not which tab that is.
+ * when every one of them was read.
  */
 const REGION_PANELS: Readonly<Record<string, readonly RegionPanel[]>> =
   Object.freeze({
-    city: Object.freeze([spacePanel("#city", SPACE_TAB_INDEX.city)]),
+    city: Object.freeze([spacePanel(SPACE_TAB_INDEX.city)]),
     space: Object.freeze([
-      spacePanel("#space", SPACE_TAB_INDEX.space),
-      spacePanel("#outerSol", SPACE_TAB_INDEX.outerSol),
+      spacePanel(SPACE_TAB_INDEX.space),
+      spacePanel(SPACE_TAB_INDEX.outerSol),
     ]),
-    interstellar: Object.freeze([
-      spacePanel("#interstellar", SPACE_TAB_INDEX.interstellar),
-    ]),
-    galaxy: Object.freeze([spacePanel("#galaxy", SPACE_TAB_INDEX.galaxy)]),
-    portal: Object.freeze([spacePanel("#portal", SPACE_TAB_INDEX.portal)]),
-    tauceti: Object.freeze([spacePanel("#tauceti", SPACE_TAB_INDEX.tauceti)]),
-    eden: Object.freeze([spacePanel("#eden", SPACE_TAB_INDEX.eden)]),
+    interstellar: Object.freeze([spacePanel(SPACE_TAB_INDEX.interstellar)]),
+    galaxy: Object.freeze([spacePanel(SPACE_TAB_INDEX.galaxy)]),
+    portal: Object.freeze([spacePanel(SPACE_TAB_INDEX.portal)]),
+    tauceti: Object.freeze([spacePanel(SPACE_TAB_INDEX.tauceti)]),
+    eden: Object.freeze([spacePanel(SPACE_TAB_INDEX.eden)]),
     underground: Object.freeze([
-      spacePanel("#underground", SPACE_TAB_INDEX.underground, {
+      spacePanel(SPACE_TAB_INDEX.underground, {
         shownBy: SHOW_UNDERGROUND_SETTING,
       }),
       // The cave perks are a civics sub-tab, not a civilization one, and they carry the same
@@ -132,30 +159,116 @@ const REGION_PANELS: Readonly<Record<string, readonly RegionPanel[]>> =
       }),
     ]),
     surface: Object.freeze([
-      spacePanel("#surface", SPACE_TAB_INDEX.surface, {
+      spacePanel(SPACE_TAB_INDEX.surface, {
         shownBy: SHOW_SURFACE_SETTING,
       }),
     ]),
   });
 
+/**
+ * Recovers the two keys that address a drawn switch's state record in the game root.
+ *
+ * The binding the game hands its own row component says which record it drew from: `data.act` *is*
+ * `global[action][type]`. That reference is used once, here, while the draw is still on screen,
+ * and then thrown away — the game reassigns `global` on every save load, prestige and reactivity
+ * restore, and the superseded proxy stays readable and silently wrong. What is kept is the pair of
+ * plain keys, which still names the right record in whatever root comes next.
+ *
+ * The element id is only a hint. `city-farm` is `global.city.farm` and the check costs one lookup,
+ * but a definition carrying its own `region` keeps its id and moves its record — a cataclysm start
+ * draws `space-nanite_factory` out of `global.city` — so a miss falls back to the same key under
+ * another region, and then, if even that misses, to identity alone.
+ */
+function locateBuildingState(
+  root: unknown,
+  elementId: string,
+  act: unknown,
+): Readonly<BuildingStateAddress> | undefined {
+  if (!isRecord(root) || !isRecord(act)) return undefined;
+  const separator = elementId.indexOf("-");
+  const type = separator > 0 ? elementId.slice(separator + 1) : "";
+  if (type.length > 0) {
+    const region = elementId.slice(0, separator);
+    if (readProperty(readProperty(root, region), type) === act) {
+      return Object.freeze({ region, type });
+    }
+    for (const candidate of Object.keys(root)) {
+      const record = root[candidate];
+      if (isRecord(record) && readProperty(record, type) === act) {
+        return Object.freeze({ region: candidate, type });
+      }
+    }
+  }
+  for (const candidate of Object.keys(root)) {
+    const record = root[candidate];
+    if (!isRecord(record)) continue;
+    for (const key of Object.keys(record)) {
+      if (record[key] === act) {
+        return Object.freeze({ region: candidate, type: key });
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Whether two catalogs are the same answer, which is what lets an unchanged resample widen the
+ * interval before the next draw. Deliberately blind to power state: none of it is here.
+ */
+export function sameBuildingUnlockCatalog(
+  previous: Readonly<BuildingUnlockCatalog>,
+  next: Readonly<BuildingUnlockCatalog>,
+): boolean {
+  if (
+    previous.unlocked.size !== next.unlocked.size ||
+    previous.regions.size !== next.regions.size ||
+    previous.switches.size !== next.switches.size
+  ) {
+    return false;
+  }
+  for (const id of previous.unlocked) if (!next.unlocked.has(id)) return false;
+  for (const region of previous.regions) {
+    if (!next.regions.has(region)) return false;
+  }
+  for (const [id, address] of previous.switches) {
+    const after = next.switches.get(id);
+    if (
+      after === undefined ||
+      after.region !== address.region ||
+      after.type !== address.type
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export interface CapturedBuildingUnlocksDependencies {
   readonly rootState: GameRootStateSource;
   readonly discovery: GameTabDiscovery;
   readonly drawnActions: GameDrawnActionsReader;
+  /** Supplies each drawn row's own Vue binding, which is how its state record is addressed. */
+  readonly controls: GameControlRegistry;
   /** Reports a region that could not be drawn. That region is omitted, never guessed at. */
   readonly onSkipped?: (region: string, reason: string) => void;
+  /**
+   * Reports a drawn switch whose state record could not be found in the current root. That row
+   * keeps its place in the offer set and loses only its power counts.
+   */
+  readonly onUnlocatedSwitch?: (elementId: string) => void;
 }
 
 export function createCapturedBuildingUnlocks(
   dependencies: CapturedBuildingUnlocksDependencies,
-): GameBuildingUnlockReader {
-  const { rootState, discovery, drawnActions } = dependencies;
+): GameBuildingUnlockCatalogReader {
+  const { rootState, discovery, drawnActions, controls } = dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
+  const reportUnlocated = dependencies.onUnlocatedSwitch ?? (() => {});
 
   return Object.freeze({
     read(
       regions: ReadonlySet<string>,
-    ): Readonly<BuildingUnlockSample> | undefined {
+    ): Readonly<BuildingUnlockCatalog> | undefined {
       if (regions.size === 0) return undefined;
       const root = rootState.readRoot();
       if (root === undefined) {
@@ -166,7 +279,7 @@ export function createCapturedBuildingUnlocks(
 
       const unlocked = new Set<string>();
       const sampled = new Set<string>();
-      const switchStates = new Map<string, Readonly<BuildingSwitchState>>();
+      const switches = new Map<string, Readonly<BuildingStateAddress>>();
       for (const region of regions) {
         const panels = REGION_PANELS[region];
         if (panels === undefined) {
@@ -178,7 +291,7 @@ export function createCapturedBuildingUnlocks(
         // A region is only answered when every panel holding its rows was read, because a missed
         // panel would report the buildings in it as not offered.
         const ids: string[] = [];
-        const states = new Map<string, Readonly<BuildingSwitchState>>();
+        const addresses = new Map<string, Readonly<BuildingStateAddress>>();
         let complete = true;
         for (const panel of panels) {
           // A panel whose draw checks its visibility flag before clearing is answered from that
@@ -225,12 +338,18 @@ export function createCapturedBuildingUnlocks(
                 `${panel.container} .action`,
               )) {
                 ids.push(action.id);
-                // Only the rows the game drew a switch onto report one. A row without the pair
-                // has no power state, which is a different answer from a region nobody drew and
-                // is kept apart from one by the region set the sample carries.
-                if (action.state !== undefined) {
-                  states.set(action.id, action.state);
-                }
+                // Only the rows the game drew a switch onto have a power state at all. The counts
+                // it rendered into those spans are deliberately not taken: they are restated live
+                // every cycle, and reading them here would tie a player's power allocation to the
+                // next draw.
+                if (action.state === undefined) continue;
+                const address = locateBuildingState(
+                  root,
+                  action.id,
+                  readProperty(controls.resolve(action.id)?.data, "act"),
+                );
+                if (address === undefined) reportUnlocated(action.id);
+                else addresses.set(action.id, address);
               }
               read = true;
             },
@@ -248,16 +367,16 @@ export function createCapturedBuildingUnlocks(
         }
         if (!complete) continue;
         for (const id of ids) unlocked.add(id);
-        for (const [id, state] of states) switchStates.set(id, state);
+        for (const [id, address] of addresses) switches.set(id, address);
         sampled.add(region);
       }
       if (sampled.size === 0) return undefined;
       return Object.freeze({
         unlocked: Object.freeze(unlocked) as ReadonlySet<string>,
         regions: Object.freeze(sampled) as ReadonlySet<string>,
-        states: Object.freeze(switchStates) as ReadonlyMap<
+        switches: Object.freeze(switches) as ReadonlyMap<
           string,
-          Readonly<BuildingSwitchState>
+          Readonly<BuildingStateAddress>
         >,
       });
     },

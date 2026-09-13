@@ -132,6 +132,47 @@ export const SPACE_TAB_INDEX = Object.freeze({
 });
 
 /**
+ * The container each `spaceTabs` panel appends its action rows into, from the region draws in
+ * `space.js`, `portal.js`, `truepath.js` and `edenic.js`. One map so a caller that has a tab index
+ * — the build-control sweep — and one that has a region key — the unlock catalog — cannot drift
+ * apart on what an upstream rename did.
+ */
+export const SPACE_TAB_PANELS: Readonly<Record<number, string>> = Object.freeze(
+  {
+    [SPACE_TAB_INDEX.city]: "#city",
+    [SPACE_TAB_INDEX.space]: "#space",
+    [SPACE_TAB_INDEX.interstellar]: "#interstellar",
+    [SPACE_TAB_INDEX.galaxy]: "#galaxy",
+    [SPACE_TAB_INDEX.portal]: "#portal",
+    [SPACE_TAB_INDEX.outerSol]: "#outerSol",
+    [SPACE_TAB_INDEX.tauceti]: "#tauceti",
+    [SPACE_TAB_INDEX.eden]: "#eden",
+    [SPACE_TAB_INDEX.underground]: "#underground",
+    [SPACE_TAB_INDEX.surface]: "#surface",
+  },
+);
+
+/**
+ * The `global.settings` flag whose truth makes each space sub-tab visible, from the `b-tab-item`
+ * list in `index.js`. The game sets these as a run reaches each region, so they are its own answer
+ * to "does this tab exist yet" — free to read, and the only thing that makes drawing a region tab
+ * worth the pass.
+ */
+export const SPACE_TAB_SHOWN_BY: Readonly<Record<number, string>> =
+  Object.freeze({
+    [SPACE_TAB_INDEX.city]: "showCity",
+    [SPACE_TAB_INDEX.space]: "showSpace",
+    [SPACE_TAB_INDEX.interstellar]: "showDeep",
+    [SPACE_TAB_INDEX.galaxy]: "showGalactic",
+    [SPACE_TAB_INDEX.portal]: "showPortal",
+    [SPACE_TAB_INDEX.outerSol]: "showOuter",
+    [SPACE_TAB_INDEX.tauceti]: "showTau",
+    [SPACE_TAB_INDEX.eden]: "showEden",
+    [SPACE_TAB_INDEX.underground]: "showUnderground",
+    [SPACE_TAB_INDEX.surface]: "showSurface",
+  });
+
+/**
  * The build-control sweep covers every space tab but the city: the bare main-tab path draws
  * whatever the player already has selected, and each of these gets its own pass. Derived from
  * the table so a new upstream tab joins the sweep with it.

@@ -960,7 +960,7 @@
         tally.count(`discovery.resample ${scope}`);
         let sample = take();
         if (sample === void 0) {
-          entries.delete(scope);
+          tally.count(`discovery.failed ${scope}`), entries.delete(scope);
           return;
         }
         let unchanged = entry !== void 0 && entry.epoch === epoch && isSameAnswer !== void 0 && isSameAnswer(entry.sample, sample);
@@ -1083,6 +1083,30 @@
     eden: 7,
     underground: 8,
     surface: 9
+  }), SPACE_TAB_PANELS = Object.freeze(
+    {
+      [SPACE_TAB_INDEX.city]: "#city",
+      [SPACE_TAB_INDEX.space]: "#space",
+      [SPACE_TAB_INDEX.interstellar]: "#interstellar",
+      [SPACE_TAB_INDEX.galaxy]: "#galaxy",
+      [SPACE_TAB_INDEX.portal]: "#portal",
+      [SPACE_TAB_INDEX.outerSol]: "#outerSol",
+      [SPACE_TAB_INDEX.tauceti]: "#tauceti",
+      [SPACE_TAB_INDEX.eden]: "#eden",
+      [SPACE_TAB_INDEX.underground]: "#underground",
+      [SPACE_TAB_INDEX.surface]: "#surface"
+    }
+  ), SPACE_TAB_SHOWN_BY = Object.freeze({
+    [SPACE_TAB_INDEX.city]: "showCity",
+    [SPACE_TAB_INDEX.space]: "showSpace",
+    [SPACE_TAB_INDEX.interstellar]: "showDeep",
+    [SPACE_TAB_INDEX.galaxy]: "showGalactic",
+    [SPACE_TAB_INDEX.portal]: "showPortal",
+    [SPACE_TAB_INDEX.outerSol]: "showOuter",
+    [SPACE_TAB_INDEX.tauceti]: "showTau",
+    [SPACE_TAB_INDEX.eden]: "showEden",
+    [SPACE_TAB_INDEX.underground]: "showUnderground",
+    [SPACE_TAB_INDEX.surface]: "showSurface"
   }), SPACE_TAB_SWEEP = Object.freeze(
     Object.values(SPACE_TAB_INDEX).filter(
       (index) => index !== SPACE_TAB_INDEX.city
@@ -3869,11 +3893,20 @@
   }
 
   // src/adapters/evolve/progression/build/captured-building-unlocks.ts
-  var SHOW_UNDERGROUND_SETTING = "showUnderground", SHOW_SURFACE_SETTING = "showSurface";
+  var SHOW_UNDERGROUND_SETTING = shownBySetting(SPACE_TAB_INDEX.underground), SHOW_SURFACE_SETTING = shownBySetting(SPACE_TAB_INDEX.surface);
+  function shownBySetting(subTab) {
+    let setting = SPACE_TAB_SHOWN_BY[subTab];
+    if (setting === void 0)
+      throw new Error(`no visibility flag for spaceTabs ${subTab}`);
+    return setting;
+  }
   function isPanelShown(gameSettings, flag) {
     return isRecord(gameSettings) ? readProperty(gameSettings, flag) === !0 : !1;
   }
-  function spacePanel(container, subTab, extra) {
+  function spacePanel(subTab, extra) {
+    let container = SPACE_TAB_PANELS[subTab];
+    if (container === void 0)
+      throw new Error(`no panel container for spaceTabs ${subTab}`);
     return Object.freeze({
       container,
       mainTab: MAIN_TAB_INDEX.civilization,
@@ -3883,20 +3916,18 @@
     });
   }
   var REGION_PANELS = Object.freeze({
-    city: Object.freeze([spacePanel("#city", SPACE_TAB_INDEX.city)]),
+    city: Object.freeze([spacePanel(SPACE_TAB_INDEX.city)]),
     space: Object.freeze([
-      spacePanel("#space", SPACE_TAB_INDEX.space),
-      spacePanel("#outerSol", SPACE_TAB_INDEX.outerSol)
+      spacePanel(SPACE_TAB_INDEX.space),
+      spacePanel(SPACE_TAB_INDEX.outerSol)
     ]),
-    interstellar: Object.freeze([
-      spacePanel("#interstellar", SPACE_TAB_INDEX.interstellar)
-    ]),
-    galaxy: Object.freeze([spacePanel("#galaxy", SPACE_TAB_INDEX.galaxy)]),
-    portal: Object.freeze([spacePanel("#portal", SPACE_TAB_INDEX.portal)]),
-    tauceti: Object.freeze([spacePanel("#tauceti", SPACE_TAB_INDEX.tauceti)]),
-    eden: Object.freeze([spacePanel("#eden", SPACE_TAB_INDEX.eden)]),
+    interstellar: Object.freeze([spacePanel(SPACE_TAB_INDEX.interstellar)]),
+    galaxy: Object.freeze([spacePanel(SPACE_TAB_INDEX.galaxy)]),
+    portal: Object.freeze([spacePanel(SPACE_TAB_INDEX.portal)]),
+    tauceti: Object.freeze([spacePanel(SPACE_TAB_INDEX.tauceti)]),
+    eden: Object.freeze([spacePanel(SPACE_TAB_INDEX.eden)]),
     underground: Object.freeze([
-      spacePanel("#underground", SPACE_TAB_INDEX.underground, {
+      spacePanel(SPACE_TAB_INDEX.underground, {
         shownBy: SHOW_UNDERGROUND_SETTING
       }),
       // The cave perks are a civics sub-tab, not a civilization one, and they carry the same
@@ -3909,13 +3940,49 @@
       })
     ]),
     surface: Object.freeze([
-      spacePanel("#surface", SPACE_TAB_INDEX.surface, {
+      spacePanel(SPACE_TAB_INDEX.surface, {
         shownBy: SHOW_SURFACE_SETTING
       })
     ])
   });
+  function locateBuildingState(root, elementId, act) {
+    if (!isRecord(root) || !isRecord(act)) return;
+    let separator = elementId.indexOf("-"), type = separator > 0 ? elementId.slice(separator + 1) : "";
+    if (type.length > 0) {
+      let region = elementId.slice(0, separator);
+      if (readProperty(readProperty(root, region), type) === act)
+        return Object.freeze({ region, type });
+      for (let candidate of Object.keys(root)) {
+        let record = root[candidate];
+        if (isRecord(record) && readProperty(record, type) === act)
+          return Object.freeze({ region: candidate, type });
+      }
+    }
+    for (let candidate of Object.keys(root)) {
+      let record = root[candidate];
+      if (isRecord(record)) {
+        for (let key of Object.keys(record))
+          if (record[key] === act)
+            return Object.freeze({ region: candidate, type: key });
+      }
+    }
+  }
+  function sameBuildingUnlockCatalog(previous, next) {
+    if (previous.unlocked.size !== next.unlocked.size || previous.regions.size !== next.regions.size || previous.switches.size !== next.switches.size)
+      return !1;
+    for (let id of previous.unlocked) if (!next.unlocked.has(id)) return !1;
+    for (let region of previous.regions)
+      if (!next.regions.has(region)) return !1;
+    for (let [id, address] of previous.switches) {
+      let after = next.switches.get(id);
+      if (after === void 0 || after.region !== address.region || after.type !== address.type)
+        return !1;
+    }
+    return !0;
+  }
   function createCapturedBuildingUnlocks(dependencies) {
-    let { rootState, discovery, drawnActions } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
+    let { rootState, discovery, drawnActions, controls } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
+    }), reportUnlocated = dependencies.onUnlocatedSwitch ?? (() => {
     });
     return Object.freeze({
       read(regions) {
@@ -3925,14 +3992,14 @@
           reportSkipped("*", "the game root has not been captured yet");
           return;
         }
-        let gameSettings = readProperty(root, "settings"), unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switchStates = /* @__PURE__ */ new Map();
+        let gameSettings = readProperty(root, "settings"), unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switches = /* @__PURE__ */ new Map();
         for (let region of regions) {
           let panels = REGION_PANELS[region];
           if (panels === void 0) {
             reportSkipped(region, "not a building region");
             continue;
           }
-          let ids = [], states = /* @__PURE__ */ new Map(), complete = !0;
+          let ids = [], addresses = /* @__PURE__ */ new Map(), complete = !0;
           for (let panel of panels) {
             if (panel.shownBy !== void 0 && !isPanelShown(gameSettings, panel.shownBy))
               continue;
@@ -3961,8 +4028,15 @@
                 if (drawnActions.exists(panel.container)) {
                   for (let action of drawnActions.read(
                     `${panel.container} .action`
-                  ))
-                    ids.push(action.id), action.state !== void 0 && states.set(action.id, action.state);
+                  )) {
+                    if (ids.push(action.id), action.state === void 0) continue;
+                    let address = locateBuildingState(
+                      root,
+                      action.id,
+                      readProperty(controls.resolve(action.id)?.data, "act")
+                    );
+                    address === void 0 ? reportUnlocated(action.id) : addresses.set(action.id, address);
+                  }
                   read = !0;
                 }
               }
@@ -3977,7 +4051,7 @@
           }
           if (complete) {
             for (let id of ids) unlocked.add(id);
-            for (let [id, state] of states) switchStates.set(id, state);
+            for (let [id, address] of addresses) switches.set(id, address);
             sampled3.add(region);
           }
         }
@@ -3985,14 +4059,68 @@
           return Object.freeze({
             unlocked: Object.freeze(unlocked),
             regions: Object.freeze(sampled3),
-            states: Object.freeze(switchStates)
+            switches: Object.freeze(switches)
           });
       }
     });
   }
 
+  // src/adapters/evolve/progression/build/captured-building-switch-states.ts
+  var ON_CAP_METHOD = "on_cap";
+  function switchCount(value) {
+    return typeof value == "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+  }
+  function createCapturedBuildingSwitchStates(dependencies) {
+    let { rootState, controls, diagnostics } = dependencies;
+    return Object.freeze({
+      read(catalog) {
+        let states = /* @__PURE__ */ new Map();
+        if (catalog.switches.size === 0) return states;
+        let tally = createCountTally(diagnostics), root = rootState.readRoot();
+        if (root === void 0)
+          return tally.count("building-switch.no-root"), states;
+        for (let [elementId, address] of catalog.switches) {
+          let record = readProperty(
+            readProperty(root, address.region),
+            address.type
+          );
+          if (!isRecord(record)) {
+            tally.count("building-switch.unresolved-state");
+            continue;
+          }
+          if (!Object.hasOwn(record, "on")) {
+            tally.count("building-switch.unswitchable");
+            continue;
+          }
+          let on = switchCount(record.on);
+          if (on === void 0) {
+            tally.count("building-switch.unresolved-state");
+            continue;
+          }
+          let handle = controls.resolve(elementId);
+          if (handle === void 0) {
+            tally.count("building-switch.on-cap-unavailable");
+            continue;
+          }
+          let result = controls.invoke(handle, ON_CAP_METHOD), cap = result.ok ? switchCount(result.value) : void 0;
+          if (cap === void 0) {
+            tally.count("building-switch.on-cap-unavailable");
+            continue;
+          }
+          let off = cap - on;
+          if (off < 0) {
+            tally.count("building-switch.unresolved-state");
+            continue;
+          }
+          tally.count("building-switch.read"), states.set(elementId, Object.freeze({ on, off }));
+        }
+        return states;
+      }
+    });
+  }
+
   // src/bootstrap/captured-progression-control.ts
-  var RESEARCH_SCOPE = "research", RESEARCH_GRANTED_SCOPE = "research+granted", ARPA_SCOPE = "arpa", NO_RESERVATIONS3 = Object.freeze({
+  var RESEARCH_SCOPE = "research", RESEARCH_GRANTED_SCOPE = "research+granted", ARPA_SCOPE = "arpa", BUILDING_UNLOCK_SCOPE = "building-unlocks", BUILD_CONTROLS_SCOPE = "build-controls", NO_RESERVATIONS3 = Object.freeze({
     targets: Object.freeze([]),
     unavailable: !1
   }), NO_OBSERVATIONS = Object.freeze({
@@ -4030,43 +4158,62 @@
       mountSuppression,
       panels,
       diagnostics
-    }), buildControlsDiscoveryAttempted = !1, ensureBuildControls = () => {
-      if (buildControlsDiscoveryAttempted || controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      buildControlsDiscoveryAttempted = !0;
+    }), epoch = createProgressionEpochReader(rootState), scopes = createDiscoveryScopeCache({
+      readEpoch: epoch.read,
+      nowMs,
+      diagnostics
+    }), latchedSpaceTabs = /* @__PURE__ */ new Set(), sweptSelectedTab = !1, pendingSpaceTabs = () => {
+      let gameSettings = readProperty(rootState.readRoot(), "settings");
+      return SPACE_TAB_SWEEP.filter((index) => {
+        if (latchedSpaceTabs.has(index)) return !1;
+        let shownBy = SPACE_TAB_SHOWN_BY[index];
+        return shownBy !== void 0 && readProperty(gameSettings, shownBy) === !0;
+      });
+    };
+    rootState.subscribeRootReplaced(() => {
+      latchedSpaceTabs.clear(), sweptSelectedTab = !1;
+    });
+    let sweepBuildControls = (pending) => {
+      let spaceTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
+      if (spaceTabControl === void 0)
+        return onSkipped?.("build-discovery", "space-tab control is unavailable"), "unavailable";
       let main = Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
         index: MAIN_TAB_INDEX.civilization
-      }), spaceTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
-      if (spaceTabControl === void 0) {
-        onSkipped?.("build-discovery", "space-tab control is unavailable");
-        return;
-      }
-      let paths = [
-        Object.freeze([main]),
-        ...SPACE_TAB_SWEEP.map(
-          (index) => Object.freeze([
+      }), report = (result) => result.outcome.status === "succeeded" ? !0 : (onSkipped?.(
+        "build-discovery",
+        result.outcome.failure?.message ?? result.outcome.status
+      ), !1);
+      sweptSelectedTab || (sweptSelectedTab = report(discovery.discover(Object.freeze([main]))));
+      for (let index of pending) {
+        let container = SPACE_TAB_PANELS[index], drew = !1, result = discovery.discover(
+          Object.freeze([
             main,
             Object.freeze({
               setting: SPACE_TABS_SETTING,
               control: spaceTabControl,
               index
             })
-          ])
-        )
-      ];
-      for (let path of paths) {
-        let result = discovery.discover(path);
-        result.outcome.status !== "succeeded" && onSkipped?.(
-          "build-discovery",
-          result.outcome.failure?.message ?? result.outcome.status
+          ]),
+          container === void 0 ? void 0 : {
+            whileDrawn: () => {
+              drew = drawnActions.exists(`${container} .action`);
+            }
+          }
         );
+        report(result) && drew && latchedSpaceTabs.add(index);
       }
-    }, epoch = createProgressionEpochReader(rootState), scopes = createDiscoveryScopeCache({
-      readEpoch: epoch.read,
-      nowMs,
-      diagnostics
-    }), lastOffered, lastGranted, readOfferedTechs = () => {
+      return `${sweptSelectedTab ? "1" : "0"}:${[...latchedSpaceTabs].sort((left, right) => left - right).join(",")}`;
+    }, ensureBuildControls = () => {
+      if (controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let pending = pendingSpaceTabs();
+      sweptSelectedTab && pending.length === 0 || scopes.read(
+        `${BUILD_CONTROLS_SCOPE} ${pending.join(",")}`,
+        () => sweepBuildControls(pending),
+        (previous, next) => previous === next
+      );
+    }, lastOffered, lastGranted, readOfferedTechs = () => {
       let includeGranted = dependencies.needGrantedTechs?.() === !0, held = scopes.read(
         includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
         () => offered.read(includeGranted ? { includeGranted } : void 0),
@@ -4105,14 +4252,36 @@
       rootState,
       discovery,
       drawnActions,
+      controls,
       ...onSkipped === void 0 ? {} : {
-        onSkipped: (region, reason) => onSkipped(`building-unlocks ${region}`, reason)
+        onSkipped: (region, reason) => onSkipped(`building-unlocks ${region}`, reason),
+        onUnlocatedSwitch: (elementId) => onSkipped(
+          `building-unlocks ${elementId}`,
+          "the drawn switch names no state record in the current root"
+        )
       }
+    }), buildingSwitchStates = createCapturedBuildingSwitchStates({
+      rootState,
+      controls,
+      diagnostics
     }), buildingUnlockKey, lastBuildingUnlocks, resetBuildingUnlockSample = () => {
       buildingUnlockKey = void 0, lastBuildingUnlocks = void 0;
     }, readBuildingUnlocks = (regions) => {
       let key = [...regions].sort().join(",");
-      return buildingUnlockKey !== key && (buildingUnlockKey = key, lastBuildingUnlocks = buildingUnlocks.read(regions)), lastBuildingUnlocks;
+      if (buildingUnlockKey !== key) {
+        buildingUnlockKey = key;
+        let catalog = scopes.read(
+          `${BUILDING_UNLOCK_SCOPE} ${key}`,
+          () => buildingUnlocks.read(regions),
+          sameBuildingUnlockCatalog
+        );
+        lastBuildingUnlocks = catalog === void 0 ? void 0 : Object.freeze({
+          unlocked: catalog.unlocked,
+          regions: catalog.regions,
+          states: buildingSwitchStates.read(catalog)
+        });
+      }
+      return lastBuildingUnlocks;
     }, readKnowledge = createCapturedKnowledgeReader({
       rootState,
       resources,

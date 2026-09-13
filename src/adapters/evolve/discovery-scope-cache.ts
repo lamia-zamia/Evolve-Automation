@@ -136,7 +136,10 @@ export function createDiscoveryScopeCache(
       const sample = take();
       if (sample === undefined) {
         // A failed read is not an answer. Drop what was held rather than let a caller act on a
-        // sample the game has since replaced.
+        // sample the game has since replaced. Counted, because a scope whose take keeps failing
+        // resamples forever and is otherwise indistinguishable in the counters from one whose
+        // answer keeps changing.
+        tally.count(`discovery.failed ${scope}`);
         entries.delete(scope);
         return undefined;
       }
