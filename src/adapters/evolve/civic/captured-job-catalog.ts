@@ -127,21 +127,36 @@ export type CapturedJobsCycleOptions = Omit<
 /**
  * Projects the validated ordinary catalog into the pure planner's per-job input shape.
  *
+ * The planner's input is the managed priority list, exactly as `JobManager.managedPriorityList()`
+ * built it: the jobs the player unlocked and left enabled, ordered by their configured priority.
+ * The planner assigns from breakpoints alone and never re-checks `managed`, so a catalog handed
+ * over whole would staff jobs the player has not unlocked and ignore the priority order. The
+ * catalog itself stays complete — the ordinary-job completeness check reads it.
+ *
  * Unknown controls remain visible in the read-only catalog, but they cannot be assigned safely
  * until a canonical planner token and command contract are characterized.
  */
 export function toCapturedJobsJobInputs(
   catalog: Readonly<CapturedJobCatalog>,
 ): readonly Readonly<JobsJobInput>[] | undefined {
-  if (
-    catalog.jobs.some(
-      (job) => job.token === null || (job.smart && !job.smartMaximumKnown),
+  // Absent `job_p_<id>` settings fall back to the catalog position, which is the order the
+  // defaults assign priorities in, so a partially ported settings blob keeps upstream's order.
+  const managed = catalog.jobs
+    .map((job, position) => ({ job, position }))
+    .filter(({ job }) => job.managed)
+    .sort(
+      (left, right) =>
+        (left.job.configuredPriority ?? left.position) -
+          (right.job.configuredPriority ?? right.position) ||
+        left.position - right.position,
     )
-  ) {
-    return undefined;
-  }
+    .map(({ job }) => job);
+  // An unknown token names a job this adapter cannot command at all, so the projection still
+  // refuses it. An uncharacterized smart rule is narrower than that: it is one job's cap, and it
+  // degrades to that job's retained pool rather than disabling every job in the run.
+  if (managed.some((job) => job.token === null)) return undefined;
   return Object.freeze(
-    catalog.jobs.map((job) =>
+    managed.map((job) =>
       Object.freeze({
         token: job.token!,
         id: job.id,
@@ -159,7 +174,9 @@ export function toCapturedJobsJobInputs(
         isDefault: job.isDefault,
         breakpoints: job.breakpoints ?? ([0, 0, 0] as const),
         uncappedBreakpoints: job.uncappedBreakpoints ?? ([0, 0, 0] as const),
-        smartMaximum: job.smartMaximum,
+        smartMaximum: job.smartMaximumKnown
+          ? job.smartMaximum
+          : retainedWorkerCap(job.count),
         farmerMinimum: job.farmerMinimum,
         storageBackedMinimum: job.storageBackedMinimum,
         demonicLumber: job.demonicLumber,
@@ -256,19 +273,19 @@ function readSmartMaximum(
     return readHunterSmartMaximum(root, count, readDemand, settings, history);
   }
   if (id === "lumberjack") {
-    return readLumberjackSmartMaximum(root, readDemand);
+    return readLumberjackSmartMaximum(root, count, readDemand);
   }
   if (id === "quarry_worker") {
-    return readQuarryWorkerSmartMaximum(root, readDemand);
+    return readQuarryWorkerSmartMaximum(root, count, readDemand);
   }
   if (id === "crystal_miner") {
-    return readCrystalMinerSmartMaximum(root, readDemand);
+    return readCrystalMinerSmartMaximum(root, count, readDemand);
   }
   if (id === "miner") {
-    return readMinerSmartMaximum(root, readDemand);
+    return readMinerSmartMaximum(root, count, readDemand);
   }
   if (id === "coal_miner") {
-    return readCoalMinerSmartMaximum(root, readDemand);
+    return readCoalMinerSmartMaximum(root, count, readDemand);
   }
   if (id === "cement_worker") {
     return readCementWorkerSmartMaximum(root, settings, count, readDemand);
@@ -707,7 +724,7 @@ function readHunterSmartMaximum(
   }
 
   // The ordinary Farmer/Hunter food formula still needs live consumption and history fields.
-  return uncertain ? undefined : null;
+  return uncertain ? retainedWorkerCap(count) : null;
 }
 
 function readFarmerMinimum(root: unknown, id: string): number | null {
@@ -772,12 +789,25 @@ function readResourceUseful(
   if (diff !== undefined && diff < 0) return true;
   // DeadSpace no longer exposes the legacy eject/supply/store-overflow flags or the
   // per-source production breakdown. A full, undemanded resource with no negative live rate is
-  // therefore not provably useful or useless, and its busy-worker fallback remains unavailable.
+  // therefore not provably useful or useless.
   return undefined;
+}
+
+/**
+ * The smart cap for a job whose resources the capture cannot prove useless.
+ *
+ * Upstream answers this case with `getBusyWorkers`, which divides a resource's consumption by each
+ * source's live production; DeadSpace captures no per-source breakdown, so that figure is out of
+ * reach. Retaining the pool the player already has is the same conservative answer the Food path
+ * takes: the job stops growing, and one unprovable resource never takes every ordinary job with it.
+ */
+function retainedWorkerCap(count: number): number {
+  return count;
 }
 
 function readLumberjackSmartMaximum(
   root: unknown,
+  count: number,
   readDemand?: () => CapturedDemandSample,
 ): number | undefined {
   const race = readProperty(root, "race");
@@ -790,7 +820,7 @@ function readLumberjackSmartMaximum(
   }
   return readResourceUseful(root, "Lumber", readDemand) === true
     ? Number.MAX_SAFE_INTEGER
-    : undefined;
+    : retainedWorkerCap(count);
 }
 
 function readResourceUnlocked(root: unknown, id: string): boolean | undefined {
@@ -803,6 +833,7 @@ function readResourceUnlocked(root: unknown, id: string): boolean | undefined {
 function readAnyUsefulSmartMaximum(
   root: unknown,
   ids: readonly string[],
+  count: number,
   readDemand?: () => CapturedDemandSample,
 ): number | undefined {
   let uncertain = false;
@@ -811,11 +842,12 @@ function readAnyUsefulSmartMaximum(
     if (useful === true) return Number.MAX_SAFE_INTEGER;
     uncertain = true;
   }
-  return uncertain ? undefined : 0;
+  return uncertain ? retainedWorkerCap(count) : 0;
 }
 
 function readQuarryWorkerSmartMaximum(
   root: unknown,
+  count: number,
   readDemand?: () => CapturedDemandSample,
 ): number | undefined {
   const resources = ["Stone"];
@@ -824,14 +856,15 @@ function readQuarryWorkerSmartMaximum(
     if (unlocked === undefined) return undefined;
     if (unlocked) resources.unshift(id);
   }
-  return readAnyUsefulSmartMaximum(root, resources, readDemand);
+  return readAnyUsefulSmartMaximum(root, resources, count, readDemand);
 }
 
 function readCrystalMinerSmartMaximum(
   root: unknown,
+  count: number,
   readDemand?: () => CapturedDemandSample,
 ): number | undefined {
-  return readAnyUsefulSmartMaximum(root, ["Crystal"], readDemand);
+  return readAnyUsefulSmartMaximum(root, ["Crystal"], count, readDemand);
 }
 
 function readUsefulUnlockedResources(
@@ -849,6 +882,7 @@ function readUsefulUnlockedResources(
 
 function readMinerSmartMaximum(
   root: unknown,
+  count: number,
   readDemand?: () => CapturedDemandSample,
 ): number | null | undefined {
   // DeadSpace's jobs surface no longer applies the legacy Gateway Starbase/jobDisableMiners gate;
@@ -871,17 +905,18 @@ function readMinerSmartMaximum(
   const ironUnlocked = readResourceUnlocked(root, "Iron");
   if (ironUnlocked === undefined) return undefined;
   if (ironUnlocked) resources.push("Iron");
-  return readAnyUsefulSmartMaximum(root, resources, readDemand);
+  return readAnyUsefulSmartMaximum(root, resources, count, readDemand);
 }
 
 function readCoalMinerSmartMaximum(
   root: unknown,
+  count: number,
   readDemand?: () => CapturedDemandSample,
 ): number | undefined {
   const uraniumUnlocked = readResourceUnlocked(root, "Uranium");
   if (uraniumUnlocked === undefined) return undefined;
   const resources = uraniumUnlocked ? ["Uranium", "Coal"] : ["Coal"];
-  return readAnyUsefulSmartMaximum(root, resources, readDemand);
+  return readAnyUsefulSmartMaximum(root, resources, count, readDemand);
 }
 
 function readCementWorkerSmartMaximum(
@@ -898,7 +933,7 @@ function readCementWorkerSmartMaximum(
   const cementUseful = readResourceUseful(root, "Cement", readDemand) === true;
   // A full, non-demanded Cement store may still be useful because of an eject/supply modifier;
   // its fallback also needs per-source production, which the DeadSpace root does not capture.
-  if (!cementUseful) return undefined;
+  if (!cementUseful) return retainedWorkerCap(count);
   let maximum = Number.MAX_SAFE_INTEGER;
   if (stoneRatio < 0.1) {
     let stoneRate = stoneDiff + count * 3 - 5;

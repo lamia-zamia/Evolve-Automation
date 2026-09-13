@@ -149,8 +149,9 @@ const authorityRoot = {
   resource: {
     Population: { amount: 3, max: 10 },
     Authority: { amount: 120, max: 200, display: true },
-    Morale: { amount: 110, max: 200, diff: 0.5 },
   },
+  // The game keeps morale in `global.city.morale`; there is no `resource.Morale`.
+  city: { morale: { current: 110, cap: 200, potential: 0.5 } },
   race: {},
   tech: { theatre: 2 },
 };
@@ -187,6 +188,28 @@ assert.deepEqual(authorityInput.authority, {
   previousCap: null,
   debug: false,
 });
+
+const nanMoraleRoot = structuredClone(authorityRoot);
+nanMoraleRoot.city.morale.current = Number.NaN;
+nanMoraleRoot.city.morale.potential = Number.NaN;
+const nanMoraleAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => nanMoraleRoot },
+  controls: authorityControls,
+  readSettings: () => ({
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+    job_unemployed: true,
+    job_farmer: true,
+    job_entertainer: true,
+  }),
+});
+const nanMoraleInput = nanMoraleAutomation.reader.readCycle(false);
+assert.equal(
+  nanMoraleInput.available,
+  true,
+  "a migrated save's non-finite morale stands authority down instead of disabling every job",
+);
+assert.equal(nanMoraleInput.authority.enabled, false);
 
 const taxTaskAuthorityRoot = structuredClone(authorityRoot);
 taxTaskAuthorityRoot.resource.Authority.amount = 50;
@@ -340,6 +363,16 @@ const fullRoot = {
       max: -1,
       display: true,
     },
+    // Unlocked but switched off, so the catalog carries it and the planner input does not. The
+    // full-jobs executor finds the first crafting job by the ordinary command list's length, so a
+    // command list built from the catalog rather than the input would misaddress every craft job.
+    lumberjack: {
+      job: "lumberjack",
+      assigned: 0,
+      workers: 0,
+      max: -1,
+      display: true,
+    },
     // DeadSpace keeps Craftsman in civic state but exposes its worker control through #foundry.
     craftsman: { job: "craftsman", workers: 1, max: 2 },
   },
@@ -374,6 +407,7 @@ const fullControls = {
   capturedElementIds: () => [
     "civ-unemployed",
     "civ-farmer",
+    "civ-lumberjack",
     "servant-farmer",
     "foundry",
     "scraftPlywood",
@@ -428,6 +462,7 @@ const fullAutomation = createCapturedFullJobsAutomation({
   readSettings: () => ({
     job_unemployed: true,
     job_farmer: true,
+    job_lumberjack: false,
     productionCraftsmen: "always",
     jobManageServants: true,
     craftPlywood: true,
@@ -466,6 +501,12 @@ assert.equal(
   fullCalls.some(({ elementId }) => elementId === "servant-farmer"),
   true,
 );
+assert.equal(
+  fullCalls.some(({ elementId }) => elementId === "civ-lumberjack"),
+  false,
+  "a switched-off job is left alone rather than commanded",
+);
+assert.equal(fullRoot.civic.lumberjack.workers, 0);
 
 const fullConsumedResourceRoot = {
   civic: {
@@ -508,5 +549,51 @@ assert.equal(
   Number.MAX_SAFE_INTEGER,
   "a full resource with a negative live rate remains useful to its smart worker",
 );
+
+const idleFullResourceRoot = structuredClone(fullConsumedResourceRoot);
+idleFullResourceRoot.resource.Lumber.diff = 0;
+const idleFullResourceCatalog = createCapturedJobCatalogReader({
+  rootState: { readRoot: () => idleFullResourceRoot },
+  controls: {
+    capturedElementIds: () => ["civ-lumberjack"],
+    resolve: (elementId) =>
+      elementId === "civ-lumberjack"
+        ? {
+            elementId,
+            generation: 1,
+            methods: ["add", "sub", "setDefault"],
+          }
+        : undefined,
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+  },
+  readSettings: () => ({
+    job_s_lumberjack: true,
+    job_lumberjack: true,
+  }),
+});
+assert.equal(
+  idleFullResourceCatalog()?.jobs[0]?.smartMaximum,
+  1,
+  "a resource the capture cannot prove useless retains its current pool instead of taking the whole catalog down",
+);
+
+const servantlessRoot = structuredClone(root);
+servantlessRoot.civic.unemployed.workers = 3;
+servantlessRoot.civic.farmer.workers = 0;
+const servantlessAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => servantlessRoot },
+  controls,
+  readSettings: () => ({
+    autoJobs: true,
+    jobManageServants: true,
+  }),
+});
+const servantlessInput = servantlessAutomation.reader.readCycle(false);
+assert.equal(
+  servantlessInput.available,
+  true,
+  "a race without servants keeps the ordinary cycle available while jobManageServants is on",
+);
+assert.equal(servantlessInput.servantsMaximum, 0);
 
 console.log("captured-ordinary-jobs ok");

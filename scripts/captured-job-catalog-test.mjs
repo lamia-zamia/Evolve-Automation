@@ -220,10 +220,41 @@ assert.deepEqual(skipped, [
   { id: "civ-missing", reason: "ordinary job control is incomplete" },
 ]);
 const plannerInputs = toCapturedJobsJobInputs(reader());
+assert.deepEqual(
+  plannerInputs?.map(({ id }) => id),
+  ["unemployed"],
+  "the planner projection is the managed priority list, not the whole catalog",
+);
+
+const unknownTokenRoot = {
+  civic: {
+    d_job: "unemployed",
+    unemployed: {
+      job: "unemployed",
+      assigned: 1,
+      workers: 1,
+      max: 0,
+      display: true,
+    },
+    hidden: { job: "hidden", assigned: 0, workers: 0, max: 0, display: true },
+  },
+};
+const unknownTokenReader = createCapturedJobCatalogReader({
+  rootState: {
+    readRoot: () => unknownTokenRoot,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-hidden"],
+  },
+  readSettings: () => ({ autoJobs: true }),
+});
 assert.equal(
-  plannerInputs,
+  toCapturedJobsJobInputs(unknownTokenReader()),
   undefined,
-  "the planner projection rejects a catalog containing an unknown token",
+  "a managed job with an unknown token still rejects the planner projection",
 );
 const knownPlannerReader = createCapturedJobCatalogReader({
   rootState: {
@@ -237,10 +268,15 @@ const knownPlannerReader = createCapturedJobCatalogReader({
   },
   readSettings: () => ({
     job_unemployed: true,
+    job_farmer: true,
+    job_forager: true,
     job_b1_unemployed: 0,
     job_b2_unemployed: 1,
     job_b3_unemployed: -1,
     job_s_farmer: true,
+    job_p_unemployed: 0,
+    job_p_forager: 1,
+    job_p_farmer: 2,
   }),
 });
 assert.deepEqual(
@@ -262,21 +298,21 @@ assert.deepEqual(
       smartMaximum: null,
     },
     {
-      id: "farmer",
-      token: 3,
-      kind: "farmer",
-      crafting: false,
-      smartMaximum: null,
-    },
-    {
       id: "forager",
       token: 2,
       kind: "forager",
       crafting: false,
       smartMaximum: null,
     },
+    {
+      id: "farmer",
+      token: 3,
+      kind: "farmer",
+      crafting: false,
+      smartMaximum: null,
+    },
   ],
-  "the planner projection preserves canonical known jobs",
+  "the planner projection preserves canonical known jobs in configured priority order",
 );
 const knownCatalog = knownPlannerReader();
 const projectedCycle = toCapturedJobsCycleInput(knownCatalog, {
@@ -326,10 +362,10 @@ assert.deepEqual(
   projectedCycle?.jobs.map(({ id, token }) => ({ id, token })),
   [
     { id: "unemployed", token: 0 },
-    { id: "farmer", token: 3 },
     { id: "forager", token: 2 },
+    { id: "farmer", token: 3 },
   ],
-  "cycle projection carries catalog jobs into the pure planner input",
+  "cycle projection carries the managed priority list into the pure planner input",
 );
 assert.deepEqual(
   projectedCycle?.splitEntries,

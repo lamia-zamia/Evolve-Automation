@@ -38,6 +38,7 @@ import {
 } from "./captured-craftsmen.ts";
 import type { CapturedCraftCosts } from "../economy/production/captured-craft-costs.ts";
 import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
+import { readCapturedMorale } from "./captured-morale.ts";
 import { readCapturedTaxLimits } from "./captured-tax.ts";
 
 export interface CapturedOrdinaryJobsDependencies {
@@ -226,25 +227,24 @@ function readAuthorityInput(
   }
   const resources = readProperty(root, "resource");
   const authority = readProperty(resources, "Authority");
-  const morale = readProperty(resources, "Morale");
-  if (!isRecord(authority) || !isRecord(morale)) return undefined;
-  const current = finiteNonNegative(readProperty(authority, "amount"));
-  const maximum = finiteNonNegative(readProperty(authority, "max"));
-  const moraleCurrent = finite(readProperty(morale, "amount"));
-  const moralePotential = finite(readProperty(morale, "diff"));
-  const moraleMaximum = finite(readProperty(morale, "max"));
-  if (
-    current === undefined ||
-    maximum === undefined ||
-    moraleCurrent === undefined ||
-    moralePotential === undefined ||
-    moraleMaximum === undefined
-  ) {
-    return undefined;
-  }
+  if (!isRecord(authority)) return undefined;
+  // The legacy input gated the whole authority block on `Authority.isUnlocked()`, which is this
+  // flag. Reading it first keeps a run that never unlocks Authority from needing the rest.
   const display = readProperty(authority, "display");
   if (display !== undefined && typeof display !== "boolean") return undefined;
   if (display === false) return unavailableInput().authority;
+  // A 1.4.x save migrated into 1.5.0 can carry `city.morale.current` and `.potential` as NaN (see
+  // the open question in docs/deadspace-port.md). Authority is the only part of the cycle that
+  // needs morale, so an unreadable figure stands that part down rather than taking every job with
+  // it — the same answer a locked Authority resource gets above.
+  const morale = readCapturedMorale(root);
+  if (morale === undefined) return unavailableInput().authority;
+  const current = finiteNonNegative(readProperty(authority, "amount"));
+  const maximum = finiteNonNegative(readProperty(authority, "max"));
+  if (current === undefined || maximum === undefined) return undefined;
+  const moraleCurrent = morale.current;
+  const moralePotential = morale.potential;
+  const moraleMaximum = morale.maximum;
 
   const target = Math.max(
     100,
@@ -411,8 +411,10 @@ function readCycle(
   if (catalog === undefined) return undefined;
   if (!hasCompleteJobCatalog(root, catalog)) return undefined;
   const servantState = catalog.servantState;
+  // A race without servants reports a null servant state, which the catalog documents as a valid
+  // zero. The legacy input kept `manageServants` as the player's setting and let the servant
+  // maximum be zero, so the planner allocates none; it is not an incomplete sample.
   const manageServants = settings["jobManageServants"] === true;
-  if (manageServants && servantState === null) return undefined;
   const defaultJobToken = catalog.jobs.find((job) => job.isDefault)?.token;
   if (defaultJobToken === undefined || defaultJobToken === null)
     return undefined;
@@ -470,21 +472,20 @@ function readCycle(
   return Object.freeze({
     catalog,
     input,
+    // The command state mirrors the planner input job for job. A decision only ever names jobs
+    // the planner was given, and the full-jobs executor locates the first crafting job by this
+    // list's length, so the two must stay one list in two shapes.
     commandState: Object.freeze({
       manageServants,
       jobs: Object.freeze(
-        catalog.jobs.flatMap((job) =>
-          job.token === null
-            ? []
-            : [
-                Object.freeze({
-                  token: job.token,
-                  id: job.id,
-                  workers: job.workers,
-                  servants: job.servants,
-                  serves: job.serves,
-                }),
-              ],
+        input.jobs.map((job) =>
+          Object.freeze({
+            token: job.token,
+            id: job.id,
+            workers: job.workers,
+            servants: job.servants,
+            serves: job.serves,
+          }),
         ),
       ),
     }),
@@ -578,8 +579,15 @@ function readFullCycle(
       ? weightingValue
       : ("other" as const);
   const noCraft = Boolean(readProperty(readProperty(root, "race"), "no_craft"));
+  // Crafting tokens continue past every ordinary token the catalog knows, not just the ones the
+  // planner was given: a job the player switched off keeps its canonical token, and a crafting job
+  // reusing it would address that job's control instead of the foundry.
   const baseToken =
-    Math.max(-1, ...ordinary.input.jobs.map((job) => job.token)) + 1;
+    Math.max(
+      -1,
+      ...ordinary.catalog.jobs.map((job) => job.token ?? -1),
+      ...ordinary.input.jobs.map((job) => job.token),
+    ) + 1;
   const skilledById = new Map(
     foundry.skilledSamples.map((sample) => [sample.id, sample.servants]),
   );

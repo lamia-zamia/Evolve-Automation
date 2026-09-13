@@ -4787,6 +4787,15 @@
     });
   }
 
+  // src/adapters/evolve/civic/captured-morale.ts
+  function readCapturedMorale(root) {
+    let morale = readProperty(readProperty(root, "city"), "morale");
+    if (!isRecord(morale)) return;
+    let current = finite(readProperty(morale, "current")), maximum = finite(readProperty(morale, "cap")), potential = finite(readProperty(morale, "potential"));
+    if (!(current === void 0 || maximum === void 0 || potential === void 0))
+      return Object.freeze({ current, maximum, potential });
+  }
+
   // src/adapters/evolve/civic/captured-tax.ts
   var TAX_CONTROL = "tax_rates", DEFAULT_SETTINGS = Object.freeze({
     requestedRate: -1,
@@ -4887,18 +4896,18 @@
     let metadata = createSnapshotMetadata({
       id: `captured-tax-${sequence}`,
       capturedAtMs: nowMs
-    }), civic = readProperty(root, "civic"), taxes = readProperty(civic, "taxes"), morale = capturedTaxResource(root, "Morale"), money = capturedTaxResource(root, "Money"), authority = capturedTaxResource(root, "Authority");
+    }), civic = readProperty(root, "civic"), taxes = readProperty(civic, "taxes"), morale = readCapturedMorale(root), money = capturedTaxResource(root, "Money"), authority = capturedTaxResource(root, "Authority");
     if (!isRecord(taxes) || morale === void 0 || money === void 0 || authority === void 0)
       return Object.freeze({
         metadata,
         status: "unavailable",
         reason: "taxes-hidden"
       });
-    if (taxes.display !== !0 || morale.incomeAdusted === !0)
+    if (taxes.display !== !0)
       return Object.freeze({
         metadata,
         status: "unavailable",
-        reason: morale.incomeAdusted === !0 ? "morale-already-adjusted" : "taxes-hidden"
+        reason: "taxes-hidden"
       });
     let race = readProperty(root, "race"), caps = readCapturedTaxLimits(root), amount = capturedTaxQuantity(money, "amount"), maximum = capturedTaxQuantity(money, "max");
     return Object.freeze({
@@ -4910,9 +4919,9 @@
         maximumRate: caps[1]
       }),
       morale: Object.freeze({
-        current: capturedTaxQuantity(morale, "amount"),
-        projected: capturedTaxFinite(morale.diff, 0),
-        maximum: capturedTaxQuantity(morale, "max")
+        current: morale.current,
+        projected: morale.potential,
+        maximum: morale.maximum
       }),
       money: Object.freeze({
         storageRatio: maximum > 0 ? amount / maximum : 0,
@@ -5629,11 +5638,12 @@
 
   // src/adapters/evolve/civic/captured-job-catalog.ts
   function toCapturedJobsJobInputs(catalog) {
-    if (!catalog.jobs.some(
-      (job) => job.token === null || job.smart && !job.smartMaximumKnown
-    ))
+    let managed = catalog.jobs.map((job, position) => ({ job, position })).filter(({ job }) => job.managed).sort(
+      (left, right) => (left.job.configuredPriority ?? left.position) - (right.job.configuredPriority ?? right.position) || left.position - right.position
+    ).map(({ job }) => job);
+    if (!managed.some((job) => job.token === null))
       return Object.freeze(
-        catalog.jobs.map(
+        managed.map(
           (job) => Object.freeze({
             token: job.token,
             id: job.id,
@@ -5651,7 +5661,7 @@
             isDefault: job.isDefault,
             breakpoints: job.breakpoints ?? [0, 0, 0],
             uncappedBreakpoints: job.uncappedBreakpoints ?? [0, 0, 0],
-            smartMaximum: job.smartMaximum,
+            smartMaximum: job.smartMaximumKnown ? job.smartMaximum : job.count,
             farmerMinimum: job.farmerMinimum,
             storageBackedMinimum: job.storageBackedMinimum,
             demonicLumber: job.demonicLumber,
@@ -5703,15 +5713,15 @@
     if (id === "hunter")
       return readHunterSmartMaximum(root, count2, readDemand, settings, history);
     if (id === "lumberjack")
-      return readLumberjackSmartMaximum(root, readDemand);
+      return readLumberjackSmartMaximum(root, count2, readDemand);
     if (id === "quarry_worker")
-      return readQuarryWorkerSmartMaximum(root, readDemand);
+      return readQuarryWorkerSmartMaximum(root, count2, readDemand);
     if (id === "crystal_miner")
-      return readCrystalMinerSmartMaximum(root, readDemand);
+      return readCrystalMinerSmartMaximum(root, count2, readDemand);
     if (id === "miner")
-      return readMinerSmartMaximum(root, readDemand);
+      return readMinerSmartMaximum(root, count2, readDemand);
     if (id === "coal_miner")
-      return readCoalMinerSmartMaximum(root, readDemand);
+      return readCoalMinerSmartMaximum(root, count2, readDemand);
     if (id === "cement_worker")
       return readCementWorkerSmartMaximum(root, settings, count2, readDemand);
     if (id !== "teamster") return null;
@@ -5898,7 +5908,7 @@
       if (food === void 0) return;
       if (!uncertain && food !== null) return food;
     }
-    return uncertain ? void 0 : null;
+    return uncertain ? count2 : null;
   }
   function readFarmerMinimum(root, id) {
     if (id !== "farmer" && id !== "hunter") return null;
@@ -5937,9 +5947,9 @@
     let diff = resourceDiff(root, id);
     if (diff !== void 0 && diff < 0) return !0;
   }
-  function readLumberjackSmartMaximum(root, readDemand) {
+  function readLumberjackSmartMaximum(root, count2, readDemand) {
     let race = readProperty(root, "race");
-    return hasRaceFlag(race, "evil") && !hasRaceFlag(race, "soul_eater") && readResourceUseful(root, "Furs", readDemand) === !0 || readResourceUseful(root, "Lumber", readDemand) === !0 ? Number.MAX_SAFE_INTEGER : void 0;
+    return hasRaceFlag(race, "evil") && !hasRaceFlag(race, "soul_eater") && readResourceUseful(root, "Furs", readDemand) === !0 || readResourceUseful(root, "Lumber", readDemand) === !0 ? Number.MAX_SAFE_INTEGER : count2;
   }
   function readResourceUnlocked(root, id) {
     let resource = readProperty(readProperty(root, "resource"), id);
@@ -5947,25 +5957,25 @@
     let display = readProperty(resource, "display");
     return typeof display == "boolean" ? display : void 0;
   }
-  function readAnyUsefulSmartMaximum(root, ids, readDemand) {
+  function readAnyUsefulSmartMaximum(root, ids, count2, readDemand) {
     let uncertain = !1;
     for (let id of ids) {
       if (readResourceUseful(root, id, readDemand) === !0) return Number.MAX_SAFE_INTEGER;
       uncertain = !0;
     }
-    return uncertain ? void 0 : 0;
+    return uncertain ? count2 : 0;
   }
-  function readQuarryWorkerSmartMaximum(root, readDemand) {
+  function readQuarryWorkerSmartMaximum(root, count2, readDemand) {
     let resources = ["Stone"];
     for (let id of ["Aluminium", "Chrysotile"]) {
       let unlocked = readResourceUnlocked(root, id);
       if (unlocked === void 0) return;
       unlocked && resources.unshift(id);
     }
-    return readAnyUsefulSmartMaximum(root, resources, readDemand);
+    return readAnyUsefulSmartMaximum(root, resources, count2, readDemand);
   }
-  function readCrystalMinerSmartMaximum(root, readDemand) {
-    return readAnyUsefulSmartMaximum(root, ["Crystal"], readDemand);
+  function readCrystalMinerSmartMaximum(root, count2, readDemand) {
+    return readAnyUsefulSmartMaximum(root, ["Crystal"], count2, readDemand);
   }
   function readUsefulUnlockedResources(root, ids) {
     let resources = [];
@@ -5976,7 +5986,7 @@
     }
     return resources;
   }
-  function readMinerSmartMaximum(root, readDemand) {
+  function readMinerSmartMaximum(root, count2, readDemand) {
     let race = readProperty(root, "race");
     if (hasRaceFlag(race, "warlord")) return null;
     let tech = readProperty(root, "tech"), resources = ["Copper"], sappyResources = hasRaceFlag(race, "sappy") ? readUsefulUnlockedResources(root, ["Aluminium", "Chrysotile"]) : [];
@@ -5984,15 +5994,17 @@
     resources.push(...sappyResources), (optionalFiniteNumber(isRecord(tech) ? tech : void 0, "titanium") ?? 0) >= 2 && resources.push("Titanium");
     let ironUnlocked = readResourceUnlocked(root, "Iron");
     if (ironUnlocked !== void 0)
-      return ironUnlocked && resources.push("Iron"), readAnyUsefulSmartMaximum(root, resources, readDemand);
+      return ironUnlocked && resources.push("Iron"), readAnyUsefulSmartMaximum(root, resources, count2, readDemand);
   }
-  function readCoalMinerSmartMaximum(root, readDemand) {
+  function readCoalMinerSmartMaximum(root, count2, readDemand) {
     let uraniumUnlocked = readResourceUnlocked(root, "Uranium");
-    return uraniumUnlocked === void 0 ? void 0 : readAnyUsefulSmartMaximum(root, uraniumUnlocked ? ["Uranium", "Coal"] : ["Coal"], readDemand);
+    return uraniumUnlocked === void 0 ? void 0 : readAnyUsefulSmartMaximum(root, uraniumUnlocked ? ["Uranium", "Coal"] : ["Coal"], count2, readDemand);
   }
   function readCementWorkerSmartMaximum(root, settings, count2, readDemand) {
     let stoneRatio = resourceStorageRatio(root, "Stone"), stoneDiff = resourceDiff(root, "Stone");
-    if (stoneRatio === void 0 || stoneDiff === void 0 || !(readResourceUseful(root, "Cement", readDemand) === !0)) return;
+    if (stoneRatio === void 0 || stoneDiff === void 0)
+      return;
+    if (!(readResourceUseful(root, "Cement", readDemand) === !0)) return count2;
     let maximum = Number.MAX_SAFE_INTEGER;
     if (stoneRatio < 0.1) {
       let stoneRate = stoneDiff + count2 * 3 - 5;
@@ -7098,15 +7110,16 @@
     if (configuredTarget === void 0) return;
     if (configuredTarget === 0)
       return unavailableInput().authority;
-    let resources = readProperty(root, "resource"), authority = readProperty(resources, "Authority"), morale = readProperty(resources, "Morale");
-    if (!isRecord(authority) || !isRecord(morale)) return;
-    let current = finiteNonNegative(readProperty(authority, "amount")), maximum = finiteNonNegative(readProperty(authority, "max")), moraleCurrent = finite(readProperty(morale, "amount")), moralePotential = finite(readProperty(morale, "diff")), moraleMaximum = finite(readProperty(morale, "max"));
-    if (current === void 0 || maximum === void 0 || moraleCurrent === void 0 || moralePotential === void 0 || moraleMaximum === void 0)
-      return;
+    let resources = readProperty(root, "resource"), authority = readProperty(resources, "Authority");
+    if (!isRecord(authority)) return;
     let display = readProperty(authority, "display");
     if (display !== void 0 && typeof display != "boolean") return;
     if (display === !1) return unavailableInput().authority;
-    let target = Math.max(
+    let morale = readCapturedMorale(root);
+    if (morale === void 0) return unavailableInput().authority;
+    let current = finiteNonNegative(readProperty(authority, "amount")), maximum = finiteNonNegative(readProperty(authority, "max"));
+    if (current === void 0 || maximum === void 0) return;
+    let moraleCurrent = morale.current, moralePotential = morale.potential, moraleMaximum = morale.maximum, target = Math.max(
       100,
       configuredTarget < 0 ? maximum : configuredTarget
     ), taxes = readProperty(readProperty(root, "civic"), "taxes"), taxDisplay = readProperty(taxes, "display"), taxRate = finiteNonNegative(readProperty(taxes, "tax_rate"));
@@ -7199,9 +7212,7 @@
     if (population === void 0) return;
     let catalog = catalogReader();
     if (catalog === void 0 || !hasCompleteJobCatalog(root, catalog)) return;
-    let servantState = catalog.servantState, manageServants = settings.jobManageServants === !0;
-    if (manageServants && servantState === null) return;
-    let defaultJobToken = catalog.jobs.find((job) => job.isDefault)?.token;
+    let servantState = catalog.servantState, manageServants = settings.jobManageServants === !0, defaultJobToken = catalog.jobs.find((job) => job.isDefault)?.token;
     if (defaultJobToken == null)
       return;
     let farmerToken = !!readProperty(readProperty(root, "race"), "artifical") ? null : catalog.hunterActsAsUnemployed ? tokenFor(catalog, "hunter") : Math.max(
@@ -7242,19 +7253,20 @@
       return Object.freeze({
         catalog,
         input,
+        // The command state mirrors the planner input job for job. A decision only ever names jobs
+        // the planner was given, and the full-jobs executor locates the first crafting job by this
+        // list's length, so the two must stay one list in two shapes.
         commandState: Object.freeze({
           manageServants,
           jobs: Object.freeze(
-            catalog.jobs.flatMap(
-              (job) => job.token === null ? [] : [
-                Object.freeze({
-                  token: job.token,
-                  id: job.id,
-                  workers: job.workers,
-                  servants: job.servants,
-                  serves: job.serves
-                })
-              ]
+            input.jobs.map(
+              (job) => Object.freeze({
+                token: job.token,
+                id: job.id,
+                workers: job.workers,
+                servants: job.servants,
+                serves: job.serves
+              })
             )
           )
         })
@@ -7292,7 +7304,11 @@
       (sample) => !foundry.input.jobs.some((job) => job.id === sample.id)
     ))
       return;
-    let settings = isRecord(settingsValue) ? settingsValue : {}, modeValue = settings.productionCraftsmen, craftsmenMode2 = modeValue === "always" || modeValue === "nocraft" || modeValue === "servants" ? modeValue : "other", weightingValue = settings.productionFoundryWeighting, foundryWeighting2 = weightingValue === "buildings" || weightingValue === "demanded" ? weightingValue : "other", noCraft = !!readProperty(readProperty(root, "race"), "no_craft"), baseToken = Math.max(-1, ...ordinary.input.jobs.map((job) => job.token)) + 1, skilledById = new Map(
+    let settings = isRecord(settingsValue) ? settingsValue : {}, modeValue = settings.productionCraftsmen, craftsmenMode2 = modeValue === "always" || modeValue === "nocraft" || modeValue === "servants" ? modeValue : "other", weightingValue = settings.productionFoundryWeighting, foundryWeighting2 = weightingValue === "buildings" || weightingValue === "demanded" ? weightingValue : "other", noCraft = !!readProperty(readProperty(root, "race"), "no_craft"), baseToken = Math.max(
+      -1,
+      ...ordinary.catalog.jobs.map((job) => job.token ?? -1),
+      ...ordinary.input.jobs.map((job) => job.token)
+    ) + 1, skilledById = new Map(
       foundry.skilledSamples.map((sample) => [sample.id, sample.servants])
     ), craftJobs = foundry.input.jobs.map(
       (job, index) => craftJob(job, baseToken + index, skilledById.get(job.id) ?? 0)

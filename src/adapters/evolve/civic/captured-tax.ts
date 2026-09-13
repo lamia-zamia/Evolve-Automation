@@ -19,6 +19,7 @@ import type { GameReader } from "../../../ports/game-reader.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../validation.ts";
+import { readCapturedMorale } from "./captured-morale.ts";
 
 const TAX_CONTROL = "tax_rates";
 
@@ -195,7 +196,7 @@ function readCapturedTaxSnapshot(
   });
   const civic = readProperty(root, "civic");
   const taxes = readProperty(civic, "taxes");
-  const morale = capturedTaxResource(root, "Morale");
+  const morale = readCapturedMorale(root);
   const money = capturedTaxResource(root, "Money");
   const authority = capturedTaxResource(root, "Authority");
   if (
@@ -210,14 +211,11 @@ function readCapturedTaxSnapshot(
       reason: "taxes-hidden",
     });
   }
-  if (taxes["display"] !== true || morale["incomeAdusted"] === true) {
+  if (taxes["display"] !== true) {
     return Object.freeze({
       metadata,
       status: "unavailable",
-      reason:
-        morale["incomeAdusted"] === true
-          ? "morale-already-adjusted"
-          : "taxes-hidden",
+      reason: "taxes-hidden",
     });
   }
   const race = readProperty(root, "race");
@@ -233,9 +231,9 @@ function readCapturedTaxSnapshot(
       maximumRate: caps[1],
     }),
     morale: Object.freeze({
-      current: capturedTaxQuantity(morale, "amount"),
-      projected: capturedTaxFinite(morale["diff"], 0),
-      maximum: capturedTaxQuantity(morale, "max"),
+      current: morale.current,
+      projected: morale.potential,
+      maximum: morale.maximum,
     }),
     money: Object.freeze({
       storageRatio: maximum > 0 ? amount / maximum : 0,
