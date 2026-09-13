@@ -16,23 +16,52 @@ function createStorage(initial) {
 
 function createPage(
   settingsText,
-  { platform = "Win32", url = "https://x/" } = {},
+  { platform = "Win32", url = "https://x/", confirmAnswer = true } = {},
 ) {
   const root = element("div", { id: "root" });
   const resources = element("div", { id: "resources" });
   const settingsTab = element("div");
   settingsTab.classList.add("settings");
+  // The game's own save import/export block, plus the Google Drive block 1.5.0 added after it.
+  // The script's buttons belong under the first, which is the one holding `#importExport`.
+  const saveTransfer = element("div");
+  saveTransfer.classList.add("importExport");
+  const saveField = element("div", { id: "importExport" });
+  const saveText = element("textarea");
+  saveField.appendChild(saveText);
+  saveTransfer.appendChild(saveField);
+  const driveTransfer = element("div");
+  driveTransfer.classList.add("importExport");
+  settingsTab.appendChild(saveTransfer);
+  settingsTab.appendChild(driveTransfer);
   root.appendChild(resources);
   root.appendChild(settingsTab);
   const document = createTestDocument(root);
   const storage = createStorage(settingsText);
   const logged = [];
+  const confirmed = [];
+  const downloads = [];
   const pageWindow = {
     document,
     navigator: { platform },
     location: url,
-    confirm: () => true,
+    confirm: (message) => {
+      confirmed.push(message);
+      return confirmAnswer;
+    },
     setTimeout: (callback) => callback(),
+    URL: {
+      createObjectURL: (blob) => {
+        downloads.push(blob.parts.join(""));
+        return "blob:settings";
+      },
+      revokeObjectURL: () => {},
+    },
+    Blob: class {
+      constructor(parts) {
+        this.parts = parts;
+      }
+    },
   };
   const settings = createSettingsStore({
     storage,
@@ -43,7 +72,16 @@ function createPage(
     settings,
     logError: (message) => logged.push(message),
   });
-  return { panel, settings, storage, root, logged };
+  return {
+    panel,
+    settings,
+    storage,
+    root,
+    logged,
+    confirmed,
+    downloads,
+    saveText,
+  };
 }
 
 // --- the panel appears, and appears once ---------------------------------------------------------
@@ -233,6 +271,101 @@ function createPage(
     [],
     "a host with no DOM is an expected shape, not an error to report",
   );
+}
+
+// --- import/export buttons: the player's way to configure every ported feature ------------------
+
+{
+  const { panel, root, saveText, settings, storage, downloads } = createPage(
+    JSON.stringify({ autoBuild: true }),
+  );
+  panel.ensurePanel();
+  const buttons = root.querySelectorAll("#script_importExportButtons");
+  assert.equal(buttons.length, 1, "the script's buttons should be drawn once");
+  // Anchored under the block holding the game's own save field, not under the Google Drive block
+  // 1.5.0 appended after it.
+  const siblings = buttons[0].parentElement.children;
+  const precedingBlock = siblings[siblings.indexOf(buttons[0]) - 1];
+  assert.equal(precedingBlock.querySelectorAll("#importExport").length, 1);
+  panel.ensurePanel();
+  assert.equal(root.querySelectorAll("#script_importExportButtons").length, 1);
+
+  // Export writes the live record into the game's field and copies it.
+  root.querySelectorAll("#script_settingsExport")[0].dispatch("click");
+  assert.deepEqual(JSON.parse(saveText.value), settings.readRaw());
+
+  // Import replaces the record, persists it, and clears the field.
+  saveText.value = JSON.stringify({ autoBuild: false, autoResearch: true });
+  root.querySelectorAll("#script_settingsImport")[0].dispatch("click");
+  assert.equal(saveText.value, "");
+  assert.equal(settings.readRaw()["autoBuild"], false);
+  assert.equal(settings.readRaw()["autoResearch"], true);
+  assert.equal(JSON.parse(storage.writes())["autoResearch"], true);
+  // The panel drawn from the replaced record is gone, and the next tick rebuilds it.
+  assert.equal(root.querySelectorAll("#autoScriptContainer").length, 0);
+  panel.ensurePanel();
+  assert.equal(root.querySelectorAll("#autoScriptContainer").length, 1);
+
+  // The file button hands the page a pretty-printed copy.
+  root.querySelectorAll("#script_settingsFile")[0].dispatch("click");
+  assert.equal(downloads.length, 1);
+  assert.equal(JSON.parse(downloads[0])["autoResearch"], true);
+  assert.ok(
+    downloads[0].split("\n").length > 1,
+    "the file copy is pretty printed",
+  );
+}
+
+// --- a blob that is not settings is refused, and one carrying code asks first ---------------------
+
+{
+  const { panel, root, saveText, settings, logged } = createPage(
+    JSON.stringify({ autoBuild: true }),
+  );
+  panel.ensurePanel();
+  const importButton = root.querySelectorAll("#script_settingsImport")[0];
+
+  for (const [text, reason] of [
+    ["{", /not valid JSON/],
+    ["[1,2]", /not a settings object/],
+    ["{}", /empty/],
+  ]) {
+    saveText.value = text;
+    importButton.dispatch("click");
+    assert.equal(settings.readRaw()["autoBuild"], true, text);
+    assert.match(logged.at(-1), reason);
+    assert.equal(saveText.value, text, "a refused blob stays in the field");
+  }
+}
+
+{
+  // An imported custom expression is code the evaluator will run, so it is shown and confirmed.
+  const withEval = JSON.stringify({
+    autoBuild: false,
+    triggers: [{ requirementType: "Eval", requirementId: "fetch('/x')" }],
+    overrides: {
+      autoResearch: [{ type1: "Eval", arg1: "alert(1)", type2: "Number" }],
+      log_prestige_format: [{ ret: "{eval:document.cookie}" }],
+    },
+  });
+
+  const refused = createPage(JSON.stringify({ autoBuild: true }), {
+    confirmAnswer: false,
+  });
+  refused.panel.ensurePanel();
+  refused.saveText.value = withEval;
+  refused.root.querySelectorAll("#script_settingsImport")[0].dispatch("click");
+  assert.equal(refused.settings.readRaw()["autoBuild"], true);
+  const warning = refused.confirmed.at(-1);
+  for (const source of ["alert(1)", "fetch('/x')", "{eval:document.cookie}"]) {
+    assert.ok(warning.includes(source), `${source} should be shown`);
+  }
+
+  const accepted = createPage(JSON.stringify({ autoBuild: true }));
+  accepted.panel.ensurePanel();
+  accepted.saveText.value = withEval;
+  accepted.root.querySelectorAll("#script_settingsImport")[0].dispatch("click");
+  assert.equal(accepted.settings.readRaw()["autoBuild"], false);
 }
 
 // --- the store itself -----------------------------------------------------------------------------

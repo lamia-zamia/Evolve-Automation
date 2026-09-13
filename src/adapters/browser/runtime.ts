@@ -1,20 +1,11 @@
 import { createVueAdapter, type VueAdapterDependencies } from "./vue.ts";
+import {
+  createFileDownload,
+  type FileDownloadDependencies,
+} from "./file-download.ts";
 
-interface BrowserRuntimeDependencies extends VueAdapterDependencies {
-  getDocument: () => {
-    createElement(name: "a"): {
-      download: string;
-      href: string;
-      click(): void;
-    };
-  };
-  getUrlApi: () => {
-    createObjectURL(blob: unknown): string;
-    revokeObjectURL(url: string): void;
-  };
-  getBlobConstructor: () => new (parts: string[]) => unknown;
-  schedule: (callback: () => void, delay: number) => unknown;
-}
+interface BrowserRuntimeDependencies
+  extends VueAdapterDependencies, FileDownloadDependencies {}
 
 export function createBrowserRuntime({
   getWin,
@@ -32,18 +23,12 @@ export function createBrowserRuntime({
     resolveVueMethod,
   } = createVueAdapter({ getWin, diagnostics });
 
-  function triggerFileDownload(contents: string, filename: string) {
-    const UrlApi = getUrlApi();
-    const BlobConstructor = getBlobConstructor();
-    const url = UrlApi.createObjectURL(new BlobConstructor([contents]));
-    const anchor = getDocument().createElement("a");
-    anchor.download = filename;
-    anchor.href = url;
-    anchor.click();
-    schedule(() => {
-      UrlApi.revokeObjectURL(url);
-    }, 60 * 1000);
-  }
+  const { triggerFileDownload } = createFileDownload({
+    getDocument,
+    getUrlApi,
+    getBlobConstructor,
+    schedule,
+  });
 
   return {
     callVueMethod,

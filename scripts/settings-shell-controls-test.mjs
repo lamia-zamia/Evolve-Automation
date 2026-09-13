@@ -18,6 +18,9 @@ function makeNode(label, length = 1) {
       handlers.push({ label, args });
       return node;
     },
+    closest(selector) {
+      return jquery(selector);
+    },
     find(selector) {
       return makeNode(`${label} ${selector}`);
     },

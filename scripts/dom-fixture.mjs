@@ -204,6 +204,10 @@ export class TestElement {
     return event;
   }
 
+  select() {
+    this.selected = (this.selected ?? 0) + 1;
+  }
+
   click() {
     this.clicked = (this.clicked ?? 0) + 1;
   }

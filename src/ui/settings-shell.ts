@@ -15,6 +15,7 @@ interface AppendableNode {
 interface ShellNode {
   after(content: ShellNode): ShellNode;
   append(content: unknown): ShellNode;
+  closest(selector: string): ShellNode;
   find(selector: string): ShellNode;
   is(selector: string): boolean;
   last(): ShellNode;
@@ -207,7 +208,9 @@ export function createSettingsShell({
   }
 
   function buildImportExport() {
-    const importExportBase = $(".importExport").last();
+    // Anchored on the game's own save field rather than on the last `.importExport` block: 1.5.0
+    // added a Google Drive block after the save one, so `.last()` now lands under Drive.
+    const importExportBase = $("#importExport").closest(".importExport");
     if (importExportBase.length === 0) {
       return;
     }

@@ -62,6 +62,11 @@ import {
   computeStateLogDefaults,
 } from "../domain/settings-defaults.ts";
 import type { SettingsStore } from "../adapters/browser/settings-store.ts";
+import { inspectImportedSettings } from "../adapters/browser/settings-import.ts";
+import {
+  createFileDownload,
+  type FileDownloadDependencies,
+} from "../adapters/browser/file-download.ts";
 import { createSettingsControls } from "../ui/settings-controls.ts";
 import { createSettingsInputs } from "../ui/settings-inputs.ts";
 import { createSettingsShell } from "../ui/settings-shell.ts";
@@ -147,7 +152,7 @@ function safeModeFor(capturedPanelWindow: unknown): boolean {
     .includes("safemode");
 }
 
-function confirmSettingsReset(
+function confirmInPanelWindow(
   capturedPanelWindow: unknown,
   message: string,
 ): boolean {
@@ -155,6 +160,40 @@ function confirmSettingsReset(
   return typeof confirm === "function"
     ? Boolean(Reflect.apply(confirm, capturedPanelWindow, [message]))
     : false;
+}
+
+/**
+ * The page's own "save this text as a file" gesture, or `undefined` when the page does not offer
+ * the pieces it needs. A test page without `URL`/`Blob` gets the absent case rather than a throw.
+ */
+function panelFileDownloadFor(
+  capturedPanelWindow: unknown,
+  documentValue: unknown,
+): ((contents: string, filename: string) => void) | undefined {
+  const urlApi = readProperty(capturedPanelWindow, "URL");
+  const blobConstructor = readProperty(capturedPanelWindow, "Blob");
+  const schedule = readProperty(capturedPanelWindow, "setTimeout");
+  if (
+    typeof readProperty(urlApi, "createObjectURL") !== "function" ||
+    typeof readProperty(urlApi, "revokeObjectURL") !== "function" ||
+    typeof blobConstructor !== "function" ||
+    typeof schedule !== "function" ||
+    typeof readProperty(documentValue, "createElement") !== "function"
+  ) {
+    return undefined;
+  }
+  return createFileDownload({
+    getDocument: () =>
+      documentValue as ReturnType<FileDownloadDependencies["getDocument"]>,
+    getUrlApi: () =>
+      urlApi as ReturnType<FileDownloadDependencies["getUrlApi"]>,
+    getBlobConstructor: () =>
+      blobConstructor as ReturnType<
+        FileDownloadDependencies["getBlobConstructor"]
+      >,
+    schedule: (callback, delay) =>
+      Reflect.apply(schedule, capturedPanelWindow, [callback, delay]),
+  }).triggerFileDownload;
 }
 
 export function createCapturedSettingsPanel({
@@ -189,6 +228,13 @@ export function createCapturedSettingsPanel({
     if (reportedSections.has(section)) return;
     reportedSections.add(section);
     logError(`settings panel section not ported yet: ${section}`);
+  };
+
+  const fileDownload = panelFileDownloadFor(capturedPanelWindow, documentValue);
+  const reportNoFileDownload = () => {
+    if (reportedSections.has("settings file download")) return;
+    reportedSections.add("settings file download");
+    logError("this page cannot offer a settings file download");
   };
 
   const generalDefaults = computeGeneralDefaults().def;
@@ -337,10 +383,10 @@ export function createCapturedSettingsPanel({
       buildLoggingSettings: () => {},
       filterBuildingSettingsTable: () => {},
       updateSettingsFromState: () => settings.persist(),
-      importSettings: () => false,
+      importSettings: importScriptSettings,
       exportSettings: () => JSON.stringify(settings.readRaw()),
-      triggerFileDownload: () => {},
-      confirm: (message) => confirmSettingsReset(capturedPanelWindow, message),
+      triggerFileDownload: fileDownload ?? reportNoFileDownload,
+      confirm: (message) => confirmInPanelWindow(capturedPanelWindow, message),
     });
     const generalIntent = createGeneralSettingsIntentHandler({
       writer: {
@@ -559,10 +605,40 @@ export function createCapturedSettingsPanel({
     return settingsUi;
   };
 
+  const importScriptSettings = (serialized: string): boolean => {
+    const inspection = inspectImportedSettings(serialized);
+    if (!inspection.ok) {
+      logError(`script settings were not imported: ${inspection.reason}`);
+      return false;
+    }
+    if (
+      inspection.evalSources.length > 0 &&
+      !confirmInPanelWindow(
+        capturedPanelWindow,
+        "Warning! Imported settings include evaluated code, which will have full access to " +
+          "the browser page, and can be potentially dangerous.\n" +
+          "Only continue if you trust the source. Injected code:\n" +
+          inspection.evalSources.join("\n"),
+      )
+    ) {
+      return false;
+    }
+    settings.replaceRaw(inspection.settings);
+    settings.persist();
+    // Everything drawn from the replaced record goes, so the next `ensurePanel` rebuilds the
+    // container and every section from the imported one. The import/export buttons sit outside
+    // both and keep working. Automation needs no signal: it reads the store on every cycle.
+    const dom = getQuery();
+    dom?.("#script_settings").remove();
+    dom?.("#autoScriptContainer").remove();
+    return true;
+  };
+
   const buildScriptSettings = () => {
     const dom = getQuery();
     if (dom === undefined || dom(".settings").length === 0) return;
     const ui = ensureSettingsUi(dom);
+    ui.shell.buildImportExport();
     if (dom("#script_settings").length === 0) {
       dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>',

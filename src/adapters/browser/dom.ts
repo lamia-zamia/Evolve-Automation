@@ -286,6 +286,13 @@ export class DomList {
     return this;
   }
 
+  /** Selects the first element's text, so a copy gesture has something to copy. */
+  select(): DomList {
+    const element = this.first_ as { select?: () => void } | undefined;
+    element?.select?.();
+    return this;
+  }
+
   text(): string;
   text(value: unknown): DomList;
   text(value?: unknown): string | DomList {

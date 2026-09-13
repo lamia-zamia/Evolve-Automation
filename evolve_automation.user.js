@@ -16431,6 +16431,9 @@
       readRaw() {
         return record ??= load(), record;
       },
+      replaceRaw(next) {
+        record = next;
+      },
       persist() {
         let setItem = readProperty(storage, "setItem");
         if (typeof setItem == "function")
@@ -17840,6 +17843,10 @@
         element.value = String(value);
       return this;
     }
+    /** Selects the first element's text, so a copy gesture has something to copy. */
+    select() {
+      return this.first_?.select?.(), this;
+    }
     text(value) {
       if (value === void 0) return this.first_?.textContent ?? "";
       for (let element of this.elements) element.textContent = String(value);
@@ -18228,6 +18235,60 @@
         generalMinimumAuthority: 100,
         generalAuthorityMinPatrolPercent: 40,
         buildingWeightingAuthority: 10
+      }
+    };
+  }
+
+  // src/adapters/browser/settings-import.ts
+  var EMBEDDED_EVAL_MARKER = "{eval:";
+  function collectOverrideEvalSources(overrides, collected) {
+    if (isNonArrayRecord(overrides)) {
+      for (let list of Object.values(overrides))
+        if (Array.isArray(list))
+          for (let override of list) {
+            let type1 = readProperty(override, "type1"), type2 = readProperty(override, "type2"), arg1 = readProperty(override, "arg1"), arg2 = readProperty(override, "arg2"), ret = readProperty(override, "ret");
+            type1 === "Eval" && typeof arg1 == "string" && collected.push(arg1), type2 === "Eval" && typeof arg2 == "string" && collected.push(arg2), typeof ret == "string" && ret.includes(EMBEDDED_EVAL_MARKER) && collected.push(ret);
+          }
+    }
+  }
+  function collectTriggerEvalSources(triggers, collected) {
+    if (Array.isArray(triggers))
+      for (let trigger of triggers) {
+        if (readProperty(trigger, "requirementType") !== "Eval") continue;
+        let requirementId = readProperty(trigger, "requirementId");
+        typeof requirementId == "string" && collected.push(requirementId);
+      }
+  }
+  function inspectImportedSettings(text) {
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (error) {
+      return { ok: !1, reason: `not valid JSON (${String(error)})` };
+    }
+    if (!isNonArrayRecord(parsed))
+      return { ok: !1, reason: "not a settings object" };
+    if (Object.keys(parsed).length === 0)
+      return { ok: !1, reason: "settings object is empty" };
+    let evalSources = [];
+    collectOverrideEvalSources(readProperty(parsed, "overrides"), evalSources), collectTriggerEvalSources(readProperty(parsed, "triggers"), evalSources);
+    let prestigeFormat = readProperty(parsed, "log_prestige_format");
+    return typeof prestigeFormat == "string" && prestigeFormat.includes(EMBEDDED_EVAL_MARKER) && evalSources.push(prestigeFormat), { ok: !0, settings: parsed, evalSources };
+  }
+
+  // src/adapters/browser/file-download.ts
+  function createFileDownload({
+    getDocument,
+    getUrlApi,
+    getBlobConstructor,
+    schedule
+  }) {
+    return {
+      triggerFileDownload(contents, filename) {
+        let urlApi = getUrlApi(), BlobConstructor = getBlobConstructor(), url = urlApi.createObjectURL(new BlobConstructor([contents])), anchor = getDocument().createElement("a");
+        anchor.download = filename, anchor.href = url, anchor.click(), schedule(() => {
+          urlApi.revokeObjectURL(url);
+        }, 60 * 1e3);
       }
     };
   }
@@ -18628,7 +18689,7 @@
       $(".settings").append(scriptContentNode), buildImportExport(), buildPrestigeSettings(scriptContentNode, ""), buildGeneralSettings(), buildInterfaceSettings(), buildStateLogSettings(), buildAchievementGuardSettings(), buildChallengeHelperSettings(), buildGovernmentSettings(scriptContentNode, ""), buildAuthoritySettings(), buildEvolutionSettings(), buildPlanetSettings(), buildTraitSettings(), buildTriggerSettings(), buildResearchSettings(), buildWarSettings(scriptContentNode, ""), buildHellSettings(scriptContentNode, ""), buildMechSettings(), buildFleetSettings(scriptContentNode, ""), buildEjectorSettings(), buildMarketSettings(), buildStorageSettings(), buildMagicSettings(), buildProductionSettings(), buildJobSettings(), buildBuildingSettings(), buildWeightingSettings(), buildProjectSettings(), buildLoggingSettings(scriptContentNode, ""), getDocument().documentElement.scrollTop = getDocument().body.scrollTop = currentScrollPosition;
     }
     function buildImportExport() {
-      let importExportBase = $(".importExport").last();
+      let importExportBase = $("#importExport").closest(".importExport");
       if (importExportBase.length === 0 || getDocument().getElementById("script_importExportButtons") !== null)
         return;
       let importExportNode = $(
@@ -18745,9 +18806,19 @@
     let location = readProperty(capturedPanelWindow, "location");
     return String(location ?? "").toLowerCase().includes("safemode");
   }
-  function confirmSettingsReset(capturedPanelWindow, message) {
+  function confirmInPanelWindow(capturedPanelWindow, message) {
     let confirm = readProperty(capturedPanelWindow, "confirm");
     return typeof confirm == "function" ? !!Reflect.apply(confirm, capturedPanelWindow, [message]) : !1;
+  }
+  function panelFileDownloadFor(capturedPanelWindow, documentValue) {
+    let urlApi = readProperty(capturedPanelWindow, "URL"), blobConstructor = readProperty(capturedPanelWindow, "Blob"), schedule = readProperty(capturedPanelWindow, "setTimeout");
+    if (!(typeof readProperty(urlApi, "createObjectURL") != "function" || typeof readProperty(urlApi, "revokeObjectURL") != "function" || typeof blobConstructor != "function" || typeof schedule != "function" || typeof readProperty(documentValue, "createElement") != "function"))
+      return createFileDownload({
+        getDocument: () => documentValue,
+        getUrlApi: () => urlApi,
+        getBlobConstructor: () => blobConstructor,
+        schedule: (callback, delay) => Reflect.apply(schedule, capturedPanelWindow, [callback, delay])
+      }).triggerFileDownload;
   }
   function createCapturedSettingsPanel({
     capturedPanelWindow,
@@ -18766,6 +18837,8 @@
       return query;
     }, unported = (section) => () => {
       reportedSections.has(section) || (reportedSections.add(section), logError(`settings panel section not ported yet: ${section}`));
+    }, fileDownload = panelFileDownloadFor(capturedPanelWindow, documentValue), reportNoFileDownload = () => {
+      reportedSections.has("settings file download") || (reportedSections.add("settings file download"), logError("this page cannot offer a settings file download"));
     }, generalDefaults = computeGeneralDefaults().def, capturedRecordDefaults = [
       generalDefaults,
       computeInterfaceDefaults().def,
@@ -18875,11 +18948,10 @@
         filterBuildingSettingsTable: () => {
         },
         updateSettingsFromState: () => settings.persist(),
-        importSettings: () => !1,
+        importSettings: importScriptSettings,
         exportSettings: () => JSON.stringify(settings.readRaw()),
-        triggerFileDownload: () => {
-        },
-        confirm: (message) => confirmSettingsReset(capturedPanelWindow, message)
+        triggerFileDownload: fileDownload ?? reportNoFileDownload,
+        confirm: (message) => confirmInPanelWindow(capturedPanelWindow, message)
       }), generalIntent = createGeneralSettingsIntentHandler({
         writer: {
           resetToDefaults: () => {
@@ -19045,11 +19117,26 @@
         craftToggles,
         shell
       }, settingsUi;
+    }, importScriptSettings = (serialized) => {
+      let inspection = inspectImportedSettings(serialized);
+      if (!inspection.ok)
+        return logError(`script settings were not imported: ${inspection.reason}`), !1;
+      if (inspection.evalSources.length > 0 && !confirmInPanelWindow(
+        capturedPanelWindow,
+        `Warning! Imported settings include evaluated code, which will have full access to the browser page, and can be potentially dangerous.
+Only continue if you trust the source. Injected code:
+` + inspection.evalSources.join(`
+`)
+      ))
+        return !1;
+      settings.replaceRaw(inspection.settings), settings.persist();
+      let dom = getQuery();
+      return dom?.("#script_settings").remove(), dom?.("#autoScriptContainer").remove(), !0;
     }, buildScriptSettings = () => {
       let dom = getQuery();
       if (dom === void 0 || dom(".settings").length === 0) return;
       let ui = ensureSettingsUi(dom);
-      dom("#script_settings").length === 0 && dom(".settings").append(
+      ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
       ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings());
     }, removeScriptSettings = () => {
