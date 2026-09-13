@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createCapturedQueueReservationSource } from "../src/adapters/evolve/captured-queue-reservations.ts";
+import { priceLookup } from "./test-support/action-price.mjs";
 
 /**
  * Prices any id present in `prices`; anything else is unpriceable, as the game's own oracle is.
@@ -16,7 +17,7 @@ function makeSource(root, prices = {}, onUnavailable, research) {
   const reads = [];
   const source = createCapturedQueueReservationSource({
     rootState,
-    costs: { readCost: (id) => prices[id] },
+    costs: { readCost: priceLookup(prices) },
     ...(research === undefined
       ? {}
       : {

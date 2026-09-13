@@ -23,7 +23,10 @@
  */
 
 import type { ReservedCostTarget } from "../../domain/cost-conflicts.ts";
-import type { GameActionCostReader } from "../../ports/game-action-costs.ts";
+import type {
+  GameActionCostReader,
+  GameActionPrice,
+} from "../../ports/game-action-costs.ts";
 import type {
   CostReservationSample,
   CostReservationSource,
@@ -131,11 +134,13 @@ function readQueuedResearch(root: unknown): readonly QueuedItem[] | undefined {
  * ceiling. Erring loose reserves an item the game would have written off, which delays a build;
  * erring tight would spend resources out from under one the game is genuinely saving for.
  */
-function couldBeStored(
-  root: unknown,
-  cost: Readonly<Record<string, number>>,
-): boolean {
-  return costFitsStorage(root, cost, { zeroCapIsCeiling: false }) !== false;
+function couldBeStored(root: unknown, price: GameActionPrice): boolean {
+  return (
+    costFitsStorage(root, price.cost, {
+      zeroCapIsCeiling: false,
+      pool: price.pool,
+    }) !== false
+  );
 }
 
 export function createCapturedQueueReservationSource(
@@ -169,22 +174,22 @@ export function createCapturedQueueReservationSource(
       function reserve(
         item: QueuedItem,
         cause: string,
-        cost: Readonly<Record<string, number>> | undefined,
+        price: GameActionPrice | undefined,
         reason: string,
       ): void {
-        if (cost === undefined) {
+        if (price === undefined) {
           // Something is being saved for and this cannot say what. Reporting no reservation would
           // let the caller spend exactly the resources it cannot see the commitment to.
           reportUnavailable(item.id, reason);
           unavailable = true;
           return;
         }
-        if (!couldBeStored(root, cost)) return;
+        if (!couldBeStored(root, price)) return;
         targets.push(
           Object.freeze({
             name: item.label,
             cause,
-            cost: Object.freeze({ ...cost }),
+            cost: Object.freeze({ ...price.cost }),
           }),
         );
       }
@@ -213,7 +218,14 @@ export function createCapturedQueueReservationSource(
           const prices =
             offered === undefined
               ? undefined
-              : new Map(offered.map((tech) => [tech.elementId, tech.cost]));
+              : // Research draws on the whole civilization — upstream `supplyOf` returns its ANYWHERE
+                // sentinel for every `tech-` action — so no pool narrows the comparison.
+                new Map(
+                  offered.map((tech) => [
+                    tech.elementId,
+                    { cost: tech.cost, pool: undefined },
+                  ]),
+                );
           for (const item of queued) {
             reserve(
               item,

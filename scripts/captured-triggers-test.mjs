@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { priceLookup } from "./test-support/action-price.mjs";
 
 import {
   createCapturedTriggers,
@@ -100,7 +101,7 @@ function triggers({
       invoke: () => ({ ok: true, value: undefined }),
       capturedElementIds: () => Object.keys(COSTS),
     },
-    costs: { readCost: costs ?? ((actionId) => COSTS[actionId]) },
+    costs: { readCost: costs ?? priceLookup(COSTS) },
     readSettings: () => ({ autoTrigger: true, triggers: rows, ...settings }),
     readOfferedTechs: () => (offered === null ? undefined : offered),
     readGrantedTechs: () => granted,
@@ -389,7 +390,7 @@ assert.deepEqual(
     ],
     costs: (actionId) => {
       asked.push(actionId);
-      return COSTS[actionId];
+      return priceLookup(COSTS)(actionId);
     },
   }).read();
   // Both rows name the same building, and the condition pass prices it once.
@@ -455,7 +456,7 @@ assert.deepEqual(
     triggers: [trigger()],
     costs: (actionId) => {
       asked.push(actionId);
-      return COSTS[actionId];
+      return priceLookup(COSTS)(actionId);
     },
   }).read();
   assert.deepEqual(asked, ["city-mine"]);
@@ -486,7 +487,7 @@ assert.deepEqual(
     ],
     costs: (actionId) => {
       asked.push(actionId);
-      return COSTS[actionId];
+      return priceLookup(COSTS)(actionId);
     },
   }).read();
   // Both rows name the same building, and the condition pass prices it once.
@@ -594,7 +595,7 @@ assert.deepEqual(
     ],
     costs: (actionId) => {
       asked.push(actionId);
-      return COSTS[actionId];
+      return priceLookup(COSTS)(actionId);
     },
   }).read();
   assert.equal(asked.filter((id) => id === "space-swarm_satellite").length, 1);

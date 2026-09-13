@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { actionPrice } from "./test-support/action-price.mjs";
 
 import {
   evaluateCapturedCondition,
@@ -519,10 +520,10 @@ assert.equal(
 // The game's `isAffordable(true)`: the cost has to fit under storage capacity, not be on hand.
 const priced = {
   buildingCosts: new Map([
-    ["city-farm", { Money: 500 }],
-    ["city-bank", { Money: 5000 }],
-    ["city-shrine", { Money: 10, Soul_Gem: 1 }],
-    ["city-temple", { Morale: 2 }],
+    ["city-farm", actionPrice({ Money: 500 })],
+    ["city-bank", actionPrice({ Money: 5000 })],
+    ["city-shrine", actionPrice({ Money: 10, Soul_Gem: 1 })],
+    ["city-temple", actionPrice({ Morale: 2 })],
   ]),
 };
 assert.equal(
@@ -554,17 +555,94 @@ assert.equal(
   readCapturedOperand(root, "BuildingAffordable", "city-farm"),
   undefined,
 );
-// Once the game splits resources into regional pools the civilization-wide comparison is no longer
-// the game's, so the operand stops answering instead of answering optimistically.
-assert.equal(
-  readCapturedOperand(
-    { ...root, tech: { shadow: 5 } },
-    "BuildingAffordable",
-    "city-farm",
-    priced,
-  ),
-  undefined,
-);
+// --- once the game splits resources by supply zone ---
+
+// Above `tech.shadow >= 5` the capacity compared against is the paying pool's share, which the same
+// probe that priced the building reported. A resource whose `regMax` ledger has any entry in it is
+// one the game has split (upstream's own `capsKnown`), and the named pool's share is the ceiling.
+{
+  const regional = {
+    ...root,
+    tech: { shadow: 5 },
+    resource: {
+      ...root.resource,
+      Money: {
+        ...root.resource.Money,
+        max: 100000,
+        regMax: { spc_home: 1000, spc_moon: 250 },
+      },
+    },
+  };
+  const pooled = {
+    buildingCosts: new Map([
+      ["city-farm", actionPrice({ Money: 500 }, "spc_home")],
+      ["space-moon_base", actionPrice({ Money: 500 }, "spc_moon")],
+      // No pool named: a civilization-wide cost, judged against the combined capacity.
+      ["city-bank", actionPrice({ Money: 5000 })],
+      // The game's ANYWHERE sentinel is the same civilization-wide question.
+      ["city-wharf", actionPrice({ Money: 5000 }, "*")],
+      // A pool the ledger does not name holds nothing at all, so nothing fits in it.
+      ["portal-carport", actionPrice({ Money: 1 }, "spc_hell")],
+    ]),
+  };
+  assert.equal(
+    readCapturedOperand(regional, "BuildingAffordable", "city-farm", pooled),
+    true,
+  );
+  // The same cost against the smaller world's share does not fit.
+  assert.equal(
+    readCapturedOperand(
+      regional,
+      "BuildingAffordable",
+      "space-moon_base",
+      pooled,
+    ),
+    false,
+  );
+  assert.equal(
+    readCapturedOperand(regional, "BuildingAffordable", "city-bank", pooled),
+    true,
+  );
+  assert.equal(
+    readCapturedOperand(regional, "BuildingAffordable", "city-wharf", pooled),
+    true,
+  );
+  assert.equal(
+    readCapturedOperand(
+      regional,
+      "BuildingAffordable",
+      "portal-carport",
+      pooled,
+    ),
+    false,
+  );
+  // An empty ledger cannot say whether the resource is split at all, so the comparison stays
+  // civilization-wide — exactly right for a resource the game never splits, and the same optimistic
+  // answer as before for one whose first storage pass has not run.
+  const unsplit = {
+    ...regional,
+    resource: {
+      ...regional.resource,
+      Money: { ...regional.resource.Money, max: 100000, regMax: {} },
+    },
+  };
+  assert.equal(
+    readCapturedOperand(unsplit, "BuildingAffordable", "city-farm", pooled),
+    true,
+  );
+  // An uncapped resource is uncapped in every pool, which is the game's own `-1`.
+  const uncapped = {
+    ...regional,
+    resource: {
+      ...regional.resource,
+      Money: { ...regional.resource.Money, max: -1, regMax: { spc_home: 0 } },
+    },
+  };
+  assert.equal(
+    readCapturedOperand(uncapped, "BuildingAffordable", "city-farm", pooled),
+    true,
+  );
+}
 // It is a boolean operand: the stored count is matched, not exceeded.
 assert.equal(
   evaluateCapturedCondition(root, "BuildingAffordable", "city-farm", 1, priced),
@@ -895,7 +973,9 @@ assert.equal(
 
 // One entry of the priced building's adjusted cost, the same pass `BuildingAffordable` compares.
 const pricedCost = {
-  buildingCosts: new Map([["city-farm", { Money: 500, Wood: 200 }]]),
+  buildingCosts: new Map([
+    ["city-farm", actionPrice({ Money: 500, Wood: 200 })],
+  ]),
 };
 assert.equal(
   readCapturedOperand(root, "BuildingCost", "city-farm.Money", pricedCost),
@@ -944,13 +1024,15 @@ assert.equal(
 
 // The swarm satellite's next-copy Money price, under its game action id.
 const pricedSat = {
-  buildingCosts: new Map([["space-swarm_satellite", { Money: 5000 }]]),
+  buildingCosts: new Map([
+    ["space-swarm_satellite", actionPrice({ Money: 5000 })],
+  ]),
 };
 assert.equal(readCapturedOperand(root, "Other", "satcost", pricedSat), 5000);
 // A priced satellite missing the Money entry costs nothing in it.
 assert.equal(
   readCapturedOperand(root, "Other", "satcost", {
-    buildingCosts: new Map([["space-swarm_satellite", {}]]),
+    buildingCosts: new Map([["space-swarm_satellite", actionPrice({})]]),
   }),
   0,
 );

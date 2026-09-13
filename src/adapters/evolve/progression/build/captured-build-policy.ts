@@ -339,10 +339,10 @@ function readFuelState(
   let maximumOilCost = 0;
   let maximumHeliumCost = 0;
   for (const missionId of missionIds) {
-    const cost = costs.readCost(missionId);
-    if (cost === undefined) return undefined;
-    const oilCost = cost["Oil"];
-    const heliumCost = cost["Helium_3"];
+    const price = costs.readCost(missionId);
+    if (price === undefined) return undefined;
+    const oilCost = price.cost["Oil"];
+    const heliumCost = price.cost["Helium_3"];
     if (
       (oilCost !== undefined &&
         (typeof oilCost !== "number" ||

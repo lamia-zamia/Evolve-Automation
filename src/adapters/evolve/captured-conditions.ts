@@ -47,7 +47,8 @@ import {
   readProperty,
   splitActionId,
 } from "../validation.ts";
-import { costFitsStorage, isRegionalSupply } from "./captured-affordability.ts";
+import { costFitsStorage } from "./captured-affordability.ts";
+import type { GameActionPrice } from "../../ports/game-action-costs.ts";
 import { readCapturedFactoryCapacity } from "./economy/production/captured-factory-capacity.ts";
 
 /** A condition compares an operand's value against its stored count. */
@@ -81,14 +82,11 @@ export interface CapturedConditionContext {
     readonly states: ReadonlyMap<string, Readonly<{ on: number; off: number }>>;
   };
   /**
-   * The game's current adjusted cost for each building a condition asked about. A building absent
-   * from the map was not priced, which leaves its cost operands unanswered. The satellite entry
-   * answers `Other/satcost` under its game action id.
+   * The game's current adjusted price for each building a condition asked about, with the supply
+   * pool that would pay it. A building absent from the map was not priced, which leaves its cost
+   * operands unanswered. The satellite entry answers `Other/satcost` under its game action id.
    */
-  readonly buildingCosts?: ReadonlyMap<
-    string,
-    Readonly<Record<string, number>>
-  >;
+  readonly buildingCosts?: ReadonlyMap<string, GameActionPrice>;
   /**
    * The cycle's stored script settings, for the operands that read the player's own configuration
    * rather than game state. Absent leaves those operands unanswered.
@@ -532,9 +530,9 @@ function buildingCostAmount(
   if (typeof argument !== "string") return undefined;
   const [buildingId, resourceId] = argument.split(".");
   if (buildingId === undefined || resourceId === undefined) return undefined;
-  const cost = context?.buildingCosts?.get(buildingId);
-  if (cost === undefined) return undefined;
-  return finite(cost[resourceId]) ?? 0;
+  const price = context?.buildingCosts?.get(buildingId);
+  if (price === undefined) return undefined;
+  return finite(price.cost[resourceId]) ?? 0;
 }
 
 function readDate(root: unknown, argument: unknown): number | undefined {
@@ -654,9 +652,9 @@ function readNumber(
         // The satellite's next-copy Money price from the cycle's shared priced pass. A cost the
         // game never bound a control for is not one the cost reader can probe, so it stays
         // unanswered rather than reading as free.
-        const cost = context?.buildingCosts?.get(SWARM_SATELLITE_ACTION_ID);
-        if (cost === undefined) return undefined;
-        return finite(cost["Money"]) ?? 0;
+        const price = context?.buildingCosts?.get(SWARM_SATELLITE_ACTION_ID);
+        if (price === undefined) return undefined;
+        return finite(price.cost["Money"]) ?? 0;
       }
       if (argument === "tknow") {
         // The Knowledge the most expensive offered technology costs, from the knowledge gate's
@@ -741,13 +739,11 @@ function readBoolean(
       // fit under that resource's capacity. It asks nothing about whether the building is offered,
       // so an unbuilt or locked building still has an answer — the cost is what is being judged.
       if (typeof argument !== "string") return undefined;
-      const cost = context?.buildingCosts?.get(argument);
-      if (cost === undefined) return undefined;
-      // Above `tech.shadow >= 5` the game checks the paying region's share instead of the
-      // civilization's, and neither the action's pool nor the table of split resources is
-      // captured, so the comparison stops being exact rather than becoming optimistic.
-      if (isRegionalSupply(root)) return undefined;
-      return costFitsStorage(root, cost);
+      const price = context?.buildingCosts?.get(argument);
+      if (price === undefined) return undefined;
+      // Once the game splits its resources by supply zone the capacity compared against is the
+      // paying pool's share, which the same probe that priced the building reported.
+      return costFitsStorage(root, price.cost, { pool: price.pool });
     }
     case "BuildingQueued": {
       // Membership in the game build queue, which is what the script's own queued-target list

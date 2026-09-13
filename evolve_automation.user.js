@@ -853,6 +853,7 @@
     let shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
     return shadow !== void 0 && shadow >= 5;
   }
+  var ANYWHERE_POOL = "*";
   function resolveCostResourceId(root, key) {
     if (key !== "Species") return key;
     let species = readProperty(readProperty(root, "race"), "species");
@@ -863,15 +864,22 @@
     if (resourceId !== void 0)
       return readProperty(readProperty(root, "resource"), resourceId);
   }
+  function capturedPoolCap(resource, pool, regional) {
+    let capacity = finite(readProperty(resource, "max"));
+    if (capacity === void 0) return;
+    if (!regional || pool === void 0 || pool === ANYWHERE_POOL || capacity < 0) return capacity;
+    let ledger = readProperty(resource, "regMax");
+    return !isRecord(ledger) || Object.keys(ledger).length === 0 ? capacity : finite(readProperty(ledger, pool)) ?? 0;
+  }
   function costFitsStorage(root, cost, options) {
-    let zeroCapIsCeiling = options?.zeroCapIsCeiling ?? !0;
+    let zeroCapIsCeiling = options?.zeroCapIsCeiling ?? !0, regional = isRegionalSupply(root);
     for (let [key, amount] of Object.entries(cost)) {
       if (!Number.isFinite(amount)) return;
       if (amount === 0) continue;
       let entry = costResource(root, key);
       if (!isRecord(entry)) return;
       if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
-      let capacity = finite(readProperty(entry, "max"));
+      let capacity = capturedPoolCap(entry, options?.pool, regional);
       if (capacity === void 0) return;
       if ((zeroCapIsCeiling ? capacity >= 0 : capacity > 0) && amount > capacity) return !1;
     }
@@ -1957,9 +1965,9 @@
     if (missionIds.length === 0) return;
     let maximumOilCost = 0, maximumHeliumCost = 0;
     for (let missionId of missionIds) {
-      let cost = costs.readCost(missionId);
-      if (cost === void 0) return;
-      let oilCost = cost.Oil, heliumCost = cost.Helium_3;
+      let price = costs.readCost(missionId);
+      if (price === void 0) return;
+      let oilCost = price.cost.Oil, heliumCost = price.cost.Helium_3;
       if (oilCost !== void 0 && (typeof oilCost != "number" || !Number.isFinite(oilCost) || oilCost < 0) || heliumCost !== void 0 && (typeof heliumCost != "number" || !Number.isFinite(heliumCost) || heliumCost < 0))
         return;
       maximumOilCost = Math.max(maximumOilCost, oilCost ?? 0), maximumHeliumCost = Math.max(maximumHeliumCost, heliumCost ?? 0);
@@ -2463,7 +2471,7 @@
   }
 
   // src/adapters/evolve/captured-action-costs.ts
-  var QUEUE_ELEMENT_ID = "buildQueue", COST_PREFIX = "res";
+  var QUEUE_ELEMENT_ID = "buildQueue", COST_PREFIX = "data", POOL_KEY = "data-pool";
   function readQueueArray(rootState) {
     let queue = readProperty(rootState.readRoot(), "queue"), entries = readProperty(queue, "queue");
     return Array.isArray(entries) ? entries : void 0;
@@ -2483,16 +2491,21 @@
       bres: !1
     };
   }
-  function parseCosts(value) {
+  function parsePrice(value) {
     if (!isRecord(value)) return;
     let costs = {};
     for (let key of Object.keys(value)) {
+      if (key === POOL_KEY) continue;
       let amount = value[key];
       if (typeof amount != "number" || !Number.isFinite(amount)) continue;
       let name = key.startsWith(`${COST_PREFIX}-`) ? key.slice(COST_PREFIX.length + 1) : key;
       name.length > 0 && (costs[name] = amount);
     }
-    return Object.freeze(costs);
+    let pool = value[POOL_KEY];
+    return Object.freeze({
+      cost: Object.freeze(costs),
+      pool: typeof pool == "string" && pool.length > 0 ? pool : void 0
+    });
   }
   function createCapturedActionCostReader(dependencies) {
     let { rootState, controls } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
@@ -2521,12 +2534,12 @@
           reportUnavailable(actionId, `${result.reason}: ${result.detail ?? ""}`);
           return;
         }
-        let costs = parseCosts(result.value);
-        if (costs === void 0) {
+        let price = parsePrice(result.value);
+        if (price === void 0) {
           reportUnavailable(actionId, "cost result was not a record");
           return;
         }
-        return costs;
+        return price;
       }
     });
   }
@@ -2697,8 +2710,11 @@
     }
     return items;
   }
-  function couldBeStored(root, cost) {
-    return costFitsStorage(root, cost, { zeroCapIsCeiling: !1 }) !== !1;
+  function couldBeStored(root, price) {
+    return costFitsStorage(root, price.cost, {
+      zeroCapIsCeiling: !1,
+      pool: price.pool
+    }) !== !1;
   }
   function createCapturedQueueReservationSource(dependencies) {
     let { rootState, costs } = dependencies, readOfferedTechs = dependencies.readOfferedTechs, reportUnavailable = dependencies.onUnavailable ?? (() => {
@@ -2712,16 +2728,16 @@
         let root = rootState.readRoot();
         if (root === void 0) return NO_RESERVATIONS2;
         let settings = readProperty(root, "settings"), targets = [], unavailable = !1;
-        function reserve(item, cause, cost, reason) {
-          if (cost === void 0) {
+        function reserve(item, cause, price, reason) {
+          if (price === void 0) {
             reportUnavailable(item.id, reason), unavailable = !0;
             return;
           }
-          couldBeStored(root, cost) && targets.push(
+          couldBeStored(root, price) && targets.push(
             Object.freeze({
               name: item.label,
               cause,
-              cost: Object.freeze({ ...cost })
+              cost: Object.freeze({ ...price.cost })
             })
           );
         }
@@ -2741,7 +2757,16 @@
             !!readProperty(settings, "qAny_res")
           );
           if (queued.length > 0) {
-            let offered = readOfferedTechs(), prices = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech.cost]));
+            let offered = readOfferedTechs(), prices = offered === void 0 ? void 0 : (
+              // Research draws on the whole civilization — upstream `supplyOf` returns its ANYWHERE
+              // sentinel for every `tech-` action — so no pool narrows the comparison.
+              new Map(
+                offered.map((tech) => [
+                  tech.elementId,
+                  { cost: tech.cost, pool: void 0 }
+                ])
+              )
+            );
             for (let item of queued)
               reserve(
                 item,
@@ -2777,7 +2802,9 @@
       let id = readProperty(entry, "id");
       if (typeof id == "string") {
         let candidate = byElementId.get(id);
-        candidate !== void 0 && costFitsStorage(root, candidate.candidate.cost) === !0 && ids.add(id);
+        candidate !== void 0 && costFitsStorage(root, candidate.candidate.cost, {
+          pool: candidate.pool
+        }) === !0 && ids.add(id);
       }
       if (!buyAny) break;
     }
@@ -2798,17 +2825,18 @@
             continue;
           }
           if (Number(building.count) >= target.maximum) continue;
-          let cost = costs.readCost(target.elementId);
-          if (cost === void 0) {
+          let price = costs.readCost(target.elementId);
+          if (price === void 0) {
             reportSkipped(target.key, "cost unavailable");
             continue;
           }
           entries.set(target.key, {
             target,
+            pool: price.pool,
             candidate: Object.freeze({
               key: target.key,
               weighting: target.weighting,
-              cost,
+              cost: price.cost,
               ignored: !1,
               knowledge: target.knowledge ?? !1,
               important: target.important,
@@ -6963,9 +6991,9 @@
     ), samples = [];
     for (let target of ordered) {
       if (!Number.isFinite(target.weighting)) return;
-      let cost = costs.readCost(target.elementId);
-      if (cost === void 0) return;
-      samples.push(Object.freeze({ target, cost }));
+      let price = costs.readCost(target.elementId);
+      if (price === void 0) return;
+      samples.push(Object.freeze({ target, cost: price.cost }));
     }
     return Object.freeze(samples);
   }
@@ -9699,9 +9727,9 @@
       let actionId = mission.actionId, completion = finite(readProperty(tech, mission.completionTech));
       if (controls.resolve(actionId) === void 0 || settingBoolean3(settings, `bat${actionId}`, !0) === !1 || completion === void 0 || completion >= mission.completionLevel)
         continue;
-      let cost = costs.readCost(actionId);
-      if (cost === void 0) continue;
-      let missionCosts = toCosts(cost);
+      let price = costs.readCost(actionId);
+      if (price === void 0) continue;
+      let missionCosts = toCosts(price.cost);
       missionCosts.length !== 0 && missions.push({
         isUnlocked: !0,
         autoBuildEnabled: !0,
@@ -11016,9 +11044,9 @@
     if (typeof argument != "string") return;
     let [buildingId, resourceId] = argument.split(".");
     if (buildingId === void 0 || resourceId === void 0) return;
-    let cost = context?.buildingCosts?.get(buildingId);
-    if (cost !== void 0)
-      return finite(cost[resourceId]) ?? 0;
+    let price = context?.buildingCosts?.get(buildingId);
+    if (price !== void 0)
+      return finite(price.cost[resourceId]) ?? 0;
   }
   function readDate(root, argument) {
     let days = finite(readProperty(readProperty(root, "stats"), "days"));
@@ -11109,8 +11137,8 @@
           return typeof damaged == "number" ? damaged : 0;
         }
         if (argument === "satcost") {
-          let cost = context?.buildingCosts?.get(SWARM_SATELLITE_ACTION_ID);
-          return cost === void 0 ? void 0 : finite(cost.Money) ?? 0;
+          let price = context?.buildingCosts?.get(SWARM_SATELLITE_ACTION_ID);
+          return price === void 0 ? void 0 : finite(price.cost.Money) ?? 0;
         }
         return argument === "tknow" ? finite(context?.knowledgeRequiredByTechs) : void 0;
       }
@@ -11149,8 +11177,8 @@
       }
       case "BuildingAffordable": {
         if (typeof argument != "string") return;
-        let cost = context?.buildingCosts?.get(argument);
-        return cost === void 0 || isRegionalSupply(root) ? void 0 : costFitsStorage(root, cost);
+        let price = context?.buildingCosts?.get(argument);
+        return price === void 0 ? void 0 : costFitsStorage(root, price.cost, { pool: price.pool });
       }
       case "BuildingQueued": {
         if (typeof argument != "string" || splitActionId(argument) === void 0) return;
@@ -11302,8 +11330,8 @@
     let region = readProperty(root, parts.region);
     return readProperty(region, parts.id);
   }
-  function fitsInStorage(root, cost) {
-    return costFitsStorage(root, cost) === !0;
+  function fitsInStorage(root, price) {
+    return costFitsStorage(root, price.cost, { pool: price.pool }) === !0;
   }
   function createCapturedTriggers(dependencies) {
     let { rootState, controls, costs, readSettings } = dependencies;
@@ -11327,8 +11355,8 @@
         for (let row of rows) {
           let buildingId = costConditionBuildingId(row);
           if (buildingId === void 0 || buildingCosts.has(buildingId) || controls.resolve(buildingId) === void 0) continue;
-          let cost = costs.readCost(buildingId);
-          cost !== void 0 && buildingCosts.set(buildingId, cost);
+          let price2 = costs.readCost(buildingId);
+          price2 !== void 0 && buildingCosts.set(buildingId, price2);
         }
         let storedSettings = isRecord(settings) ? settings : void 0, demandSample = dependencies.readDemandSample?.(), techKnowledge = dependencies.readTechKnowledge?.(), conditionContext = Object.freeze({
           ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
@@ -11374,8 +11402,10 @@
             conditionContext
           );
         }, price = (row) => {
-          if (row.actionType === "research")
-            return offeredTechs?.get(row.actionId)?.cost;
+          if (row.actionType === "research") {
+            let cost = offeredTechs?.get(row.actionId)?.cost;
+            return cost === void 0 ? void 0 : { cost, pool: void 0 };
+          }
           if (row.actionType === "build" && controls.resolve(row.actionId) !== void 0)
             return costs.readCost(row.actionId);
         }, priceArpa = (row) => {
@@ -11392,7 +11422,7 @@
           }
           if (Object.keys(cost).length === 0) return;
           let total = Object.freeze(cost);
-          if (fitsInStorage(root, total))
+          if (fitsInStorage(root, { cost: total, pool: void 0 }))
             return Object.freeze({
               actionId: row.actionId,
               actionType: "arpa",
@@ -11418,8 +11448,14 @@
             claim(target);
             continue;
           }
-          let cost = price(row);
-          cost === void 0 || !fitsInStorage(root, cost) || claim(Object.freeze({ actionId: row.actionId, actionType, cost }));
+          let priced = price(row);
+          priced === void 0 || !fitsInStorage(root, priced) || claim(
+            Object.freeze({
+              actionId: row.actionId,
+              actionType,
+              cost: priced.cost
+            })
+          );
         }
         return Object.freeze(targets);
       }
@@ -13572,9 +13608,9 @@
     let samples = [];
     for (let target of targets) {
       if (!Number.isFinite(target.weighting)) return;
-      let cost = costs.readCost(target.elementId);
-      if (cost === void 0) return;
-      samples.push(Object.freeze({ target, cost }));
+      let price = costs.readCost(target.elementId);
+      if (price === void 0) return;
+      samples.push(Object.freeze({ target, cost: price.cost }));
     }
     return Object.freeze(samples);
   }
@@ -14041,14 +14077,15 @@
         );
         return;
       }
-      let cost = dependencies.costs.readCost(target.elementId);
-      if (cost === void 0) {
+      let price = dependencies.costs.readCost(target.elementId);
+      if (price === void 0) {
         dependencies.onSkipped?.(
           target.key,
           "captured build target cost is unavailable"
         );
         return;
       }
+      let cost = price.cost;
       if (!isRecord(cost) || Object.values(cost).some(
         (quantity) => typeof quantity != "number" || !Number.isFinite(quantity)
       )) {

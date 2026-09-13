@@ -180,9 +180,9 @@ function readBuildingCosts(
   const samples: BuildingCostSample[] = [];
   for (const target of ordered) {
     if (!Number.isFinite(target.weighting)) return undefined;
-    const cost = costs.readCost(target.elementId);
-    if (cost === undefined) return undefined;
-    samples.push(Object.freeze({ target, cost }));
+    const price = costs.readCost(target.elementId);
+    if (price === undefined) return undefined;
+    samples.push(Object.freeze({ target, cost: price.cost }));
   }
   return Object.freeze(samples);
 }

@@ -278,14 +278,15 @@ function readBuildingTargets(
       );
       return undefined;
     }
-    const cost = dependencies.costs.readCost(target.elementId);
-    if (cost === undefined) {
+    const price = dependencies.costs.readCost(target.elementId);
+    if (price === undefined) {
       dependencies.onSkipped?.(
         target.key,
         "captured build target cost is unavailable",
       );
       return undefined;
     }
+    const cost = price.cost;
     if (
       !isRecord(cost) ||
       Object.values(cost).some(

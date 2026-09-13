@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createStorageAllocationAutomation } from "../src/application/storage-allocation.ts";
 import { createCapturedStoragePorts } from "../src/adapters/evolve/economy/storage/captured-storage.ts";
+import { priceLookup } from "./test-support/action-price.mjs";
 
 function makeHarness({
   freeCrates = 0,
@@ -110,7 +111,7 @@ function makeHarness({
     costs: {
       readCost: (elementId) => {
         costLookups.push(elementId);
-        return buildCosts[elementId];
+        return priceLookup(buildCosts)(elementId);
       },
     },
     ...(offeredTechs === undefined

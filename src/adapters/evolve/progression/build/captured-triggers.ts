@@ -27,7 +27,10 @@
  *   region panels its conditions name, and only those.
  */
 
-import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
+import type {
+  GameActionCostReader,
+  GameActionPrice,
+} from "../../../../ports/game-action-costs.ts";
 import type { BuildingUnlockSample } from "../../../../ports/game-building-unlocks.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
@@ -274,11 +277,8 @@ export function readTriggerActionStructure(
  * of being saved for. The condition operand over the same comparison keeps that case unanswered
  * instead, because there a guess would be the answer rather than a missed opportunity.
  */
-function fitsInStorage(
-  root: unknown,
-  cost: Readonly<Record<string, number>>,
-): boolean {
-  return costFitsStorage(root, cost) === true;
+function fitsInStorage(root: unknown, price: GameActionPrice): boolean {
+  return costFitsStorage(root, price.cost, { pool: price.pool }) === true;
 }
 
 export function createCapturedTriggers(
@@ -343,15 +343,15 @@ export function createCapturedTriggers(
       // A cost operand is answered from the same prices the targets are chosen with. Only the
       // buildings a condition actually names are priced, and a control the game never bound is
       // not one the cost reader can probe, so it stays unanswered.
-      const buildingCosts = new Map<string, Readonly<Record<string, number>>>();
+      const buildingCosts = new Map<string, GameActionPrice>();
       for (const row of rows) {
         const buildingId = costConditionBuildingId(row);
         if (buildingId === undefined || buildingCosts.has(buildingId)) {
           continue;
         }
         if (controls.resolve(buildingId) === undefined) continue;
-        const cost = costs.readCost(buildingId);
-        if (cost !== undefined) buildingCosts.set(buildingId, cost);
+        const price = costs.readCost(buildingId);
+        if (price !== undefined) buildingCosts.set(buildingId, price);
       }
       // The condition evaluator answers the research, project and building operands from the same
       // passes the actions are priced from, so a trigger's requirement and its target describe one
@@ -432,11 +432,12 @@ export function createCapturedTriggers(
       };
 
       /** The game's current price for the action, when it is one the game could buy now. */
-      const price = (
-        row: TriggerRow,
-      ): Readonly<Record<string, number>> | undefined => {
+      const price = (row: TriggerRow): GameActionPrice | undefined => {
         if (row.actionType === "research") {
-          return offeredTechs?.get(row.actionId)?.cost;
+          const cost = offeredTechs?.get(row.actionId)?.cost;
+          // Research draws civilization-wide — upstream `supplyOf` answers its ANYWHERE sentinel
+          // for every `tech-` action — so no pool narrows the comparison.
+          return cost === undefined ? undefined : { cost, pool: undefined };
         }
         if (row.actionType !== "build") return undefined;
         // A control the game has never built is an action it is not offering; the cost reader
@@ -475,7 +476,12 @@ export function createCapturedTriggers(
         }
         if (Object.keys(cost).length === 0) return undefined;
         const total = Object.freeze(cost);
-        if (!fitsInStorage(root, total)) return undefined;
+        // A project pays civilization-wide even once resources are split by supply zone: upstream
+        // `payArpaCosts` draws each partitioned resource through `drawPools`, across every pool, and
+        // `checkArpaCosts` compares against the combined total. So no pool narrows this comparison.
+        if (!fitsInStorage(root, { cost: total, pool: undefined })) {
+          return undefined;
+        }
         return Object.freeze({
           actionId: row.actionId,
           actionType: "arpa",
@@ -516,9 +522,15 @@ export function createCapturedTriggers(
           claim(target);
           continue;
         }
-        const cost = price(row);
-        if (cost === undefined || !fitsInStorage(root, cost)) continue;
-        claim(Object.freeze({ actionId: row.actionId, actionType, cost }));
+        const priced = price(row);
+        if (priced === undefined || !fitsInStorage(root, priced)) continue;
+        claim(
+          Object.freeze({
+            actionId: row.actionId,
+            actionType,
+            cost: priced.cost,
+          }),
+        );
       }
       return Object.freeze(targets);
     },

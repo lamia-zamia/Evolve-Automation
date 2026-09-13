@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { priceLookup } from "./test-support/action-price.mjs";
 
 import { planCapturedFactoryTrim } from "../src/domain/economy/production/captured-factory.ts";
 import {
@@ -207,8 +208,7 @@ const fullAutomation = createCapturedFactoryAutomation({
     { key: "alloy-target", elementId: "city-alloy", weighting: 20 },
   ],
   buildCosts: {
-    readCost: (elementId) =>
-      elementId === "city-alloy" ? { Alloy: 200 } : undefined,
+    readCost: priceLookup({ "city-alloy": { Alloy: 200 } }),
   },
 });
 assert.deepEqual(fullAutomation.run(), { status: "succeeded" });

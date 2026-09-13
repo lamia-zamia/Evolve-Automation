@@ -51,6 +51,8 @@ const prices = {
   "space-spaceport": { Money: 47500, Iridium: 1750 },
   storehouse: { Money: 10 },
 };
+// The game adds `data-pool` to the result for exactly the `data` prefix, from its own `actionPool`.
+const pools = { "space-spaceport": "spc_home" };
 const seen = [];
 const root = makeRoot([{ id: "city-farm", label: "player's own queued item" }]);
 const registry = makeRegistry({
@@ -66,12 +68,16 @@ const registry = makeRegistry({
     const price = prices[entry.id];
     if (price === undefined)
       throw new TypeError("Cannot read properties of undefined");
-    return Object.fromEntries(
+    const result = Object.fromEntries(
       Object.entries(price).map(([res, amount]) => [
         `${prefix}-${res}`,
         amount,
       ]),
     );
+    if (prefix === "data" && pools[entry.id] !== undefined) {
+      result["data-pool"] = pools[entry.id];
+    }
+    return result;
   },
 });
 
@@ -82,27 +88,33 @@ const costs = createCapturedActionCostReader({
   onUnavailable: (id, reason) => unavailable.push([id, reason]),
 });
 
+// An action the game names no pool for — which is every action below `tech.shadow >= 5`, where the
+// game has no regional pools at all — is priced with no pool rather than a guessed one.
 assert.deepEqual(costs.readCost("city-basic_housing"), {
-  Money: 119,
-  Lumber: 109,
+  cost: { Money: 119, Lumber: 109 },
+  pool: undefined,
 });
 assert.deepEqual(seen.at(-1), {
   index: 1,
-  prefix: "res",
+  prefix: "data",
   id: "city-basic_housing",
   type: "basic_housing",
   action: "city",
 });
+// The paying pool rides along in the same invocation, and is not mistaken for a cost.
 assert.deepEqual(costs.readCost("space-spaceport"), {
-  Money: 47500,
-  Iridium: 1750,
+  cost: { Money: 47500, Iridium: 1750 },
+  pool: "spc_home",
 });
 
 // An id with no dash stands in for both halves, so the probe still runs.
-assert.deepEqual(costs.readCost("storehouse"), { Money: 10 });
+assert.deepEqual(costs.readCost("storehouse"), {
+  cost: { Money: 10 },
+  pool: undefined,
+});
 assert.deepEqual(seen.at(-1), {
   index: 1,
-  prefix: "res",
+  prefix: "data",
   id: "storehouse",
   type: "storehouse",
   action: "storehouse",
@@ -131,17 +143,23 @@ const emptyCosts = createCapturedActionCostReader({
   rootState: rootSource(root),
   controls: emptyRegistry,
 });
-assert.deepEqual(emptyCosts.readCost("arpalaunch_facility"), {});
+assert.deepEqual(emptyCosts.readCost("arpalaunch_facility"), {
+  cost: {},
+  pool: undefined,
+});
 
 // --- non-numeric and unprefixed values --------------------------------------------------------------
 
 const oddRegistry = makeRegistry({
   setData: () => ({
-    "res-Money": 10,
-    "res-Bad": "lots",
+    "data-Money": 10,
+    "data-Bad": "lots",
     Plain: 5,
-    "res-": 1,
-    "res-NaN": Number.NaN,
+    "data-": 1,
+    "data-NaN": Number.NaN,
+    // Not a name, so not a pool. The game omits the key entirely rather than reporting `false`,
+    // but a reader that trusted it would treat that as a pool called "false".
+    "data-pool": false,
   }),
 });
 assert.deepEqual(
@@ -149,7 +167,7 @@ assert.deepEqual(
     rootState: rootSource(root),
     controls: oddRegistry,
   }).readCost("city-farm"),
-  { Money: 10, Plain: 5 },
+  { cost: { Money: 10, Plain: 5 }, pool: undefined },
 );
 
 // --- nothing captured yet -----------------------------------------------------------------------------
@@ -185,7 +203,7 @@ assert.equal(noQueueArray.readCost("city-farm"), undefined);
 // --- a superseded queue control ---------------------------------------------------------------------
 
 const staleRegistry = makeRegistry(
-  { setData: () => ({ "res-Money": 1 }) },
+  { setData: () => ({ "data-Money": 1 }) },
   { generation: 1 },
 );
 const staleReader = createCapturedActionCostReader({

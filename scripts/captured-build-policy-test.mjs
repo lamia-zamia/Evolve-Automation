@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createCapturedBuildPolicyReader } from "../src/adapters/evolve/progression/build/captured-build-policy.ts";
+import { priceLookup } from "./test-support/action-price.mjs";
 
 const skipped = [];
 /** Nothing is known about Knowledge, so neither Knowledge rule applies. */
@@ -381,12 +382,10 @@ const fuelReader = createCapturedBuildPolicyReader({
     ],
   },
   costs: {
-    readCost: (id) =>
-      id === "space-moon_mission"
-        ? { Oil: 500 }
-        : id === "space-gas_moon_mission"
-          ? { Helium_3: 500 }
-          : undefined,
+    readCost: priceLookup({
+      "space-moon_mission": { Oil: 500 },
+      "space-gas_moon_mission": { Helium_3: 500 },
+    }),
   },
   getSettings: () => ({
     "batcity-oil_well": true,

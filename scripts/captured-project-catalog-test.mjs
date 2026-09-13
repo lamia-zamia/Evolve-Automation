@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { priceLookup } from "./test-support/action-price.mjs";
 
 import { createGameDrawnProjectsReader } from "../src/adapters/browser/game-drawn-projects.ts";
 import { createCapturedProjectCatalog } from "../src/adapters/evolve/progression/research/captured-project-catalog.ts";
@@ -333,7 +334,7 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
         invoke: () => ({ ok: true, value: undefined }),
         capturedElementIds: () => Object.keys(BUILD_COSTS),
       },
-      costs: { readCost: (actionId) => BUILD_COSTS[actionId] },
+      costs: { readCost: priceLookup(BUILD_COSTS) },
       readSettings: () => ({ autoTrigger: true, triggers: rows }),
       readOfferedProjects: () => catalog.readProjects(),
     });

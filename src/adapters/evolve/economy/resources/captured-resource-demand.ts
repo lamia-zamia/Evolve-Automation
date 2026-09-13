@@ -379,9 +379,9 @@ function readCapturedSpaceMissionDemand(
     ) {
       continue;
     }
-    const cost = costs.readCost(actionId);
-    if (cost === undefined) continue;
-    const missionCosts = toCosts(cost);
+    const price = costs.readCost(actionId);
+    if (price === undefined) continue;
+    const missionCosts = toCosts(price.cost);
     if (missionCosts.length === 0) continue;
     missions.push({
       isUnlocked: true,

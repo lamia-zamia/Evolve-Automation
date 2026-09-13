@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
+import { actionPrice } from "./test-support/action-price.mjs";
 
 const root = {
   race: {},
@@ -188,7 +189,9 @@ function spaceMissionDemand({
       invoke: () => ({ ok: true, value: undefined }),
       capturedElementIds: () => (control ? [missionId] : []),
     },
-    costs: { readCost: () => (costUnavailable ? undefined : cost) },
+    costs: {
+      readCost: () => (costUnavailable ? undefined : actionPrice(cost)),
+    },
     readSettings: () => ({
       missionRequest: true,
       [`bat${missionId}`]: true,
@@ -507,7 +510,7 @@ for (const [missionId, completionTech, completionLevel] of [
         invoke: () => ({ ok: true, value: undefined }),
         capturedElementIds: () => ["interstellar-jump_ship"],
       },
-      costs: { readCost: () => ({ Money: 2000 }) },
+      costs: { readCost: () => actionPrice({ Money: 2000 }) },
       readSettings: () => settings,
     }).sample();
   assert.equal(

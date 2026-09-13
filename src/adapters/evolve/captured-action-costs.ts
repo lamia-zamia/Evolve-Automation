@@ -14,13 +14,24 @@
  * which time the entry is gone again.
  */
 
-import type { GameActionCostReader } from "../../ports/game-action-costs.ts";
+import type {
+  GameActionCostReader,
+  GameActionPrice,
+} from "../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import { isRecord, readProperty, splitActionId } from "../validation.ts";
 
 const QUEUE_ELEMENT_ID = "buildQueue";
-const COST_PREFIX = "res";
+/**
+ * `data`, not the `res` this used to pass, because the game adds the paying supply pool to the
+ * result for exactly that prefix: `if (prefix === 'data'){ ... final_costs['data-pool'] = pool }`.
+ * The prefix changes nothing else about what `setData` computes — it only names the keys — so the
+ * pool comes free in the one invocation the probe already makes.
+ */
+const COST_PREFIX = "data";
+/** The game's own key for the paying pool inside that result, alongside the `data-<Resource>` prices. */
+const POOL_KEY = "data-pool";
 
 export interface CapturedActionCostsDependencies {
   readonly rootState: GameRootStateSource;
@@ -57,10 +68,11 @@ function probeEntry(actionId: string): Record<string, unknown> {
   };
 }
 
-function parseCosts(value: unknown): Record<string, number> | undefined {
+function parsePrice(value: unknown): GameActionPrice | undefined {
   if (!isRecord(value)) return undefined;
   const costs: Record<string, number> = {};
   for (const key of Object.keys(value)) {
+    if (key === POOL_KEY) continue;
     const amount = value[key];
     if (typeof amount !== "number" || !Number.isFinite(amount)) continue;
     const name = key.startsWith(`${COST_PREFIX}-`)
@@ -68,7 +80,13 @@ function parseCosts(value: unknown): Record<string, number> | undefined {
       : key;
     if (name.length > 0) costs[name] = amount;
   }
-  return Object.freeze(costs);
+  // `actionPool` answers `false` in global mode and for an action with no place of its own, and the
+  // game then omits the key entirely; anything but a name is no pool.
+  const pool = value[POOL_KEY];
+  return Object.freeze({
+    cost: Object.freeze(costs),
+    pool: typeof pool === "string" && pool.length > 0 ? pool : undefined,
+  });
 }
 
 export function createCapturedActionCostReader(
@@ -78,7 +96,7 @@ export function createCapturedActionCostReader(
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
 
   return Object.freeze({
-    readCost(actionId: string): Readonly<Record<string, number>> | undefined {
+    readCost(actionId: string): GameActionPrice | undefined {
       const handle = controls.resolve(QUEUE_ELEMENT_ID);
       if (handle === undefined) {
         reportUnavailable(actionId, "build queue control not captured");
@@ -104,12 +122,12 @@ export function createCapturedActionCostReader(
         reportUnavailable(actionId, `${result.reason}: ${result.detail ?? ""}`);
         return undefined;
       }
-      const costs = parseCosts(result.value);
-      if (costs === undefined) {
+      const price = parsePrice(result.value);
+      if (price === undefined) {
         reportUnavailable(actionId, "cost result was not a record");
         return undefined;
       }
-      return costs;
+      return price;
     },
   });
 }

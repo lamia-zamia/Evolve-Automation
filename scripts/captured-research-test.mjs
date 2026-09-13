@@ -212,7 +212,9 @@ const SMELTING = {
   });
   page.controls.set("buildQueue", {
     generation: 1,
-    methods: { setData: () => ({ "res-Knowledge": 800 }) },
+    methods: {
+      setData: (_index, prefix) => ({ [`${prefix}-Knowledge`]: 800 }),
+    },
   });
   assert.equal(page.control.runCycle().status, "succeeded");
   assert.deepEqual(page.clicks, []);
@@ -228,7 +230,9 @@ const SMELTING = {
   });
   page.controls.set("buildQueue", {
     generation: 1,
-    methods: { setData: () => ({ "res-Knowledge": 800 }) },
+    methods: {
+      setData: (_index, prefix) => ({ [`${prefix}-Knowledge`]: 800 }),
+    },
   });
   assert.equal(page.control.runCycle().status, "succeeded");
   assert.deepEqual(page.clicks, ["tech-theology"]);

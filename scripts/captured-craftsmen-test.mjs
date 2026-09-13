@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { runJobsAutomation } from "../src/application/jobs.ts";
 import { planJobs } from "../src/domain/civic/jobs.ts";
 import { createCapturedCraftsmenAutomation } from "../src/adapters/evolve/civic/captured-craftsmen.ts";
+import { priceLookup } from "./test-support/action-price.mjs";
 
 function source(root) {
   return {
@@ -88,8 +89,10 @@ const costs = {
 };
 
 const buildCosts = {
-  readCost: (id) =>
-    id === "city-high" || id === "city-low" ? { Plywood: 10 } : undefined,
+  readCost: priceLookup({
+    "city-high": { Plywood: 10 },
+    "city-low": { Plywood: 10 },
+  }),
 };
 
 const root = makeRoot();

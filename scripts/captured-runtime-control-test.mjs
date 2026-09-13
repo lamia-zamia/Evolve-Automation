@@ -93,10 +93,10 @@ assert.equal(unsubscribeCount, 1);
       },
       controls: {
         resolve: (id) => handles.get(id),
-        invoke: (handle, method) => {
+        invoke: (handle, method, args = []) => {
           invoked.push(`${handle.elementId}.${method}`);
           return method === "setData"
-            ? { ok: true, value: { "res-Money": 500 } }
+            ? { ok: true, value: { [`${args[1]}-Money`]: 500 } }
             : { ok: true, value: undefined };
         },
         capturedElementIds: () => [...handles.keys()],
@@ -227,7 +227,10 @@ assert.equal(unsubscribeCount, 1);
         invoke: (handle, method, args = []) => {
           if (method === "setData") {
             const entry = root.queue.queue[args[0]];
-            return { ok: true, value: { "res-Money": prices[entry.id] } };
+            return {
+              ok: true,
+              value: { [`${args[1]}-Money`]: prices[entry.id] },
+            };
           }
           invoked.push(handle.elementId);
           return { ok: true, value: undefined };
