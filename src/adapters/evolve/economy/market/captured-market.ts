@@ -13,6 +13,7 @@ import type { MarketReader } from "../../../../ports/market.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 import { readScriptCyclesPerSecond } from "../../captured-tick-rate.ts";
+import { isRegionalSupply } from "../../captured-affordability.ts";
 
 export const MARKET_QUANTITY_CONTROL = "market-qty";
 
@@ -271,7 +272,15 @@ export function createCapturedMarketPorts(
       const settings = readProperty(root, "settings");
       const race = readProperty(root, "race");
       return Object.freeze({
-        unlocked: readProperty(settings, "showMarket") === true,
+        // Once resources are split by supply zone the ordinary trade market does not exist.
+        // `drawResourceTab`'s market branch calls `loadBlackMarket()` and returns before it creates
+        // `#market-qty`, and `loadMarket` returns on the same condition, so the quantity control
+        // this feature drives is never bound and the trade routes are not drawn either. That is
+        // nothing to automate rather than a control to wait for: without this the session read threw
+        // every cycle. Automating the per-zone black market is a separate feature.
+        unlocked:
+          readProperty(settings, "showMarket") === true &&
+          !isRegionalSupply(root),
         noTrade: Boolean(readProperty(race, "no_trade")),
       });
     },

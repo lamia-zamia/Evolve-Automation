@@ -95,6 +95,33 @@ const ports = createCapturedMarketPorts({
 });
 
 assert.deepEqual(ports.reader.readGate(), { unlocked: true, noTrade: false });
+
+// Once the game splits resources by supply zone the ordinary trade market is gone: the market tab
+// draws a per-zone black market and never creates `#market-qty`, so there is nothing to automate.
+// The gate closes rather than letting the session read throw once per cycle.
+{
+  const regionalRoot = { ...root, tech: { ...(root.tech ?? {}), shadow: 5 } };
+  const regionalPorts = createCapturedMarketPorts({
+    rootState: { readRoot: () => regionalRoot },
+    controls: registry,
+    readSettings: () => ({ tickRate: 4 }),
+  });
+  assert.deepEqual(regionalPorts.reader.readGate(), {
+    unlocked: false,
+    noTrade: false,
+  });
+  // One level below is still the ordinary market.
+  const belowRoot = { ...root, tech: { ...(root.tech ?? {}), shadow: 4 } };
+  assert.equal(
+    createCapturedMarketPorts({
+      rootState: { readRoot: () => belowRoot },
+      controls: registry,
+      readSettings: () => ({ tickRate: 4 }),
+    }).reader.readGate().unlocked,
+    true,
+  );
+}
+
 assert.deepEqual(ports.reader.readSession(), {
   originalMultiplier: 1,
   maximumMultiplier: 5000,

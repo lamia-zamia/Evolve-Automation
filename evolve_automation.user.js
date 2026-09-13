@@ -14861,7 +14861,13 @@
         session = null;
         let root = dependencies.rootState.readRoot(), settings = readProperty(root, "settings"), race = readProperty(root, "race");
         return Object.freeze({
-          unlocked: readProperty(settings, "showMarket") === !0,
+          // Once resources are split by supply zone the ordinary trade market does not exist.
+          // `drawResourceTab`'s market branch calls `loadBlackMarket()` and returns before it creates
+          // `#market-qty`, and `loadMarket` returns on the same condition, so the quantity control
+          // this feature drives is never bound and the trade routes are not drawn either. That is
+          // nothing to automate rather than a control to wait for: without this the session read threw
+          // every cycle. Automating the per-zone black market is a separate feature.
+          unlocked: readProperty(settings, "showMarket") === !0 && !isRegionalSupply(root),
           noTrade: !!readProperty(race, "no_trade")
         });
       },
