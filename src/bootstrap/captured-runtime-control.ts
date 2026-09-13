@@ -1,4 +1,6 @@
 import { createCapturedProgressionControl } from "./captured-progression-control.ts";
+import { advancePeriodGate } from "../domain/tick.ts";
+import { readPeriodsPerScriptCycle } from "../adapters/evolve/captured-tick-rate.ts";
 import { runCraftAutomation } from "../application/craft.ts";
 import { runJobsAutomation } from "../application/jobs.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
@@ -499,14 +501,12 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
-  let completedPeriods = 1;
   const craftDependencies = {
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs,
     getDocument: () => document,
     readSettings: () => settingsStore.readRaw(),
-    readPeriods: () => completedPeriods,
     readDemand: () => readDemand(),
   };
   const craft = Object.freeze({
@@ -1389,8 +1389,18 @@ export function startCapturedRuntime({
     }
   };
 
+  // The game wakes the script on every completed period; `tickRate` decides how many of those one
+  // working cycle covers. Without this gate every automation decision, and every panel draw a cycle
+  // pays for, was re-made four times more often than the setting asks for.
+  let pendingPeriods = 0;
   return pageCapture.periods.subscribe((period) => {
-    completedPeriods = period.periods;
+    const gate = advancePeriodGate({
+      pendingPeriods,
+      completedPeriods: period.periods,
+      periodsPerCycle: readPeriodsPerScriptCycle(settingsStore.readRaw()),
+    });
+    pendingPeriods = gate.pendingPeriods;
+    if (!gate.run) return;
     runCycle();
   });
 }

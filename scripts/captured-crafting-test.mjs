@@ -79,8 +79,9 @@ function createWorld(overrides = {}) {
   const rendered = new Set(
     overrides.rendered ?? ["incPlywoodA", "incUselessA"],
   );
-  let settings = overrides.settings ?? {};
-  let periods = 1;
+  // tickRate 1 is one script cycle per game period, which is the income budget these fixtures
+  // were characterized against.
+  let settings = { tickRate: 1, ...(overrides.settings ?? {}) };
   const demanded = new Set(overrides.demanded ?? []);
   const required = overrides.storageRequired ?? {};
   const requested = overrides.requested ?? {};
@@ -100,7 +101,6 @@ function createWorld(overrides = {}) {
       getElementById: (id) => (rendered.has(id) ? { id } : null),
     }),
     readSettings: () => settings,
-    readPeriods: () => periods,
     readDemand: () => demand,
   };
   return {
@@ -112,7 +112,6 @@ function createWorld(overrides = {}) {
         executor: createCapturedCraftExecutor(dependencies),
       }),
     setSettings: (value) => (settings = value),
-    setPeriods: (value) => (periods = value),
   };
 }
 
@@ -126,10 +125,11 @@ function createWorld(overrides = {}) {
   assert.equal(world.root.resource.Plywood.amount, 6);
 }
 
-// The reported period count scales the income budget.
+// The configured tick rate scales the income budget: a cycle that covers eight game periods
+// accrues eight periods of income before this feature next acts.
 {
   const world = createWorld();
-  world.setPeriods(8);
+  world.setSettings({ tickRate: 8 });
   world.root.resource.Lumber.diff = 100;
   assert.deepEqual(world.run(), { status: "succeeded" });
   assert.deepEqual(world.calls, [{ resourceId: "Plywood", volume: 2 }]);

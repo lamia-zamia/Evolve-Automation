@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 
+// The captured runtime gates its cycles on the script's own `tickRate`, which defaults to four game
+// periods. These fixtures therefore deliver a four-period batch per intended cycle; the gate itself
+// is exercised separately at the end of this file.
+
 let listener;
 let unsubscribeCount = 0;
 let storageValue = null;
@@ -43,14 +47,14 @@ assert.equal(typeof listener, "function");
 
 // A fresh install inherits the game's defaults: the captured runtime must not start an
 // automation family merely because the script settings key is absent.
-listener({ periods: 1 });
+listener({ periods: 4 });
 assert.deepEqual(errors, []);
 
 storageValue = JSON.stringify({
   masterScriptToggle: false,
   autoResearch: true,
 });
-listener({ periods: 1 });
+listener({ periods: 4 });
 assert.deepEqual(errors, []);
 
 stop();
@@ -120,7 +124,7 @@ assert.equal(unsubscribeCount, 1);
     },
     logError: () => {},
   });
-  cycle({ periods: 1 });
+  cycle({ periods: 4 });
   stopCycle();
   assert.ok(
     invoked.includes("buildQueue.setData"),
@@ -176,8 +180,8 @@ assert.equal(unsubscribeCount, 1);
     },
     logError: (message) => reported.push(message),
   });
-  cycle({ periods: 1 });
-  cycle({ periods: 1 });
+  cycle({ periods: 4 });
+  cycle({ periods: 4 });
   stopCycle();
   const skipped = reported.filter((message) =>
     message.includes("city-cottage"),
@@ -256,11 +260,11 @@ assert.equal(unsubscribeCount, 1);
     logError: () => {},
   });
   // The first cycle has no reservation in force yet, so the cheap candidate is still bought.
-  cycle({ periods: 1 });
+  cycle({ periods: 4 });
   assert.deepEqual(invoked, ["city-farm"]);
   // The bank is now the published saving target, and its cost holds the farm back.
-  cycle({ periods: 1 });
-  cycle({ periods: 1 });
+  cycle({ periods: 4 });
+  cycle({ periods: 4 });
   stopCycle();
   assert.deepEqual(invoked, ["city-farm"]);
 }
@@ -315,7 +319,7 @@ assert.equal(unsubscribeCount, 1);
     },
     logError: () => {},
   });
-  cycle({ periods: 1 });
+  cycle({ periods: 4 });
   stopCycle();
   assert.deepEqual(invoked, ["city-mill.power_on"]);
   assert.equal(root.city.mill.on, 1);
@@ -406,7 +410,7 @@ assert.equal(unsubscribeCount, 1);
     },
     logError: () => {},
   });
-  cycle({ periods: 1 });
+  cycle({ periods: 4 });
   stopCycle();
   assert.deepEqual(invoked, [
     "civ-unemployed.sub",
@@ -567,7 +571,7 @@ assert.equal(unsubscribeCount, 1);
       throw new Error(message);
     },
   });
-  cycle({ periods: 1 });
+  cycle({ periods: 4 });
   stopCycle();
   assert.ok(invoked.some((entry) => entry.startsWith("foundry.")));
   assert.ok(invoked.some((entry) => entry.startsWith("scraft")));
@@ -696,7 +700,7 @@ assert.equal(unsubscribeCount, 1);
       throw new Error(message);
     },
   });
-  cycle({ periods: 1 });
+  cycle({ periods: 4 });
   stopCycle();
   const firstPower = invoked.findIndex(
     (entry) => entry === "city-mill.power_on",
@@ -724,6 +728,74 @@ assert.equal(unsubscribeCount, 1);
     JSON.stringify(invoked),
   );
   assert.equal(root.city.nanite_factory.Copper, 4);
+}
+
+// The `tickRate` gate: the game wakes the script on every period, and only every `tickRate`-th
+// period's worth of them completes a working cycle. One `isComplete()` call is one cycle.
+{
+  const countCycles = (tickRate, batches) => {
+    let cycles = 0;
+    let cycle;
+    const stopCycle = startCapturedRuntime({
+      pageCapture: {
+        isComplete: () => {
+          cycles++;
+          return false;
+        },
+        rootState: {
+          readRoot: () => undefined,
+          isReactivitySuppressed: () => false,
+          subscribeRootReplaced: () => () => {},
+        },
+        controls: {
+          resolve: () => undefined,
+          invoke: () => ({ ok: false, reason: "unknown-control" }),
+          capturedElementIds: () => [],
+        },
+        controlUsage: { readUsage: () => [] },
+        periods: {
+          subscribe(next) {
+            cycle = next;
+            return () => {};
+          },
+        },
+        mountSuppression: {
+          available: false,
+          withoutMounting: () => undefined,
+        },
+        uninstall: () => {},
+      },
+      document: { getElementById: () => null, querySelectorAll: () => [] },
+      mouseEvent: class {},
+      storage: {
+        getItem: () =>
+          tickRate === undefined ? "{}" : JSON.stringify({ tickRate }),
+      },
+      logError: () => {},
+    });
+    for (const periods of batches) cycle({ periods });
+    stopCycle();
+    return cycles;
+  };
+
+  // The default rate is four periods per cycle.
+  assert.equal(countCycles(undefined, [1, 1, 1]), 0);
+  assert.equal(countCycles(undefined, [1, 1, 1, 1]), 1);
+  assert.equal(countCycles(undefined, [1, 1, 1, 1, 1, 1, 1, 1]), 2);
+
+  // Rate 1 works on every period; a rate the script cannot honour is floored to that.
+  assert.equal(countCycles(1, [1, 1, 1]), 3);
+  assert.equal(countCycles(0, [1, 1, 1]), 3);
+
+  // A drift batch counts for every period it carries, so a throttled tab does not starve the
+  // script, and the remainder rides along: the three periods left over after a six-period batch
+  // mean one more period completes the next cycle rather than four.
+  assert.equal(countCycles(4, [1, 6]), 1);
+  assert.equal(countCycles(4, [1, 6, 1]), 2);
+  assert.equal(countCycles(4, [1, 1, 1, 1, 1, 1, 1]), 1);
+
+  // Whole cycles missed inside one batch collapse into one; the script cannot replay them.
+  assert.equal(countCycles(4, [12]), 1);
 }
 
 console.log("captured-runtime-control ok");

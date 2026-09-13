@@ -63,3 +63,44 @@ export function advanceStateLog(
   const next = current + 1;
   return { next, record: next % interval === 0 };
 }
+
+/** What the period gate is told about one batch of completed game periods. */
+export interface PeriodGateInput {
+  /** Periods counted since the last working cycle, carried from the previous call. */
+  readonly pendingPeriods: number;
+  /** Periods the game reported in this batch. The game reports more than one after timer drift. */
+  readonly completedPeriods: number;
+  /**
+   * Periods one working cycle covers — the script's own normalized `tickRate`. Must be at least 1;
+   * the adapter that reads the setting is the single owner of that floor.
+   */
+  readonly periodsPerCycle: number;
+}
+
+/** Whether this batch completes a working cycle, and the count to carry into the next batch. */
+export interface PeriodGateResult {
+  readonly run: boolean;
+  readonly pendingPeriods: number;
+}
+
+/**
+ * The script's `tickRate` gate, counted in game periods rather than in notifications. The captured
+ * runtime is woken once per completed period batch, which is four times a second at the game's
+ * unmodified rate, while `tickRate` asks for one cycle per that many periods.
+ *
+ * A batch that carries several periods — the game's own timer-drift catch-up — counts for all of
+ * them, so a throttled tab does not also starve the script. Whole cycles missed inside one batch
+ * collapse into one: the remainder is kept so the cadence does not drift, but the script cannot
+ * replay a cycle whose moment has passed.
+ */
+export function advancePeriodGate({
+  pendingPeriods,
+  completedPeriods,
+  periodsPerCycle,
+}: PeriodGateInput): PeriodGateResult {
+  const counted = pendingPeriods + Math.max(0, completedPeriods);
+  if (counted < periodsPerCycle) {
+    return { run: false, pendingPeriods: counted };
+  }
+  return { run: true, pendingPeriods: counted % periodsPerCycle };
+}

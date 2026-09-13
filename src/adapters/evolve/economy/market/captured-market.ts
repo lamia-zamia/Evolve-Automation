@@ -12,6 +12,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { MarketReader } from "../../../../ports/market.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
+import { readScriptCyclesPerSecond } from "../../captured-tick-rate.ts";
 
 export const MARKET_QUANTITY_CONTROL = "market-qty";
 
@@ -254,11 +255,6 @@ function readPriorityIds(
     .map((entry) => entry.id);
 }
 
-function readTicksPerSecond(settings: Record<PropertyKey, unknown>): number {
-  const tickRate = finite(settings["tickRate"]) ?? 4;
-  return tickRate > 0 ? 4 / tickRate : 1;
-}
-
 export function createCapturedMarketPorts(
   dependencies: CapturedMarketDependencies,
 ): {
@@ -369,7 +365,7 @@ export function createCapturedMarketPorts(
       const autoSellRatio = finite(settings[`res_sell_r_${resourceId}`]) ?? 0;
       const storageRatio = resourceStorageRatio(resource);
       const income = finite(resource["diff"]);
-      const ticksPerSecond = readTicksPerSecond(settings);
+      const ticksPerSecond = readScriptCyclesPerSecond(settings);
       if (
         currentQuantity === undefined ||
         moneyMaximum === undefined ||

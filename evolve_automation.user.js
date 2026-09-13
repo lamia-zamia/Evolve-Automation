@@ -4405,6 +4405,31 @@
     });
   }
 
+  // src/domain/tick.ts
+  function advancePeriodGate({
+    pendingPeriods,
+    completedPeriods,
+    periodsPerCycle
+  }) {
+    let counted = pendingPeriods + Math.max(0, completedPeriods);
+    return counted < periodsPerCycle ? { run: !1, pendingPeriods: counted } : { run: !0, pendingPeriods: counted % periodsPerCycle };
+  }
+
+  // src/domain/override-resolution.ts
+  function normalizeTickRate(rawTickRate) {
+    return Math.min(240, Math.max(1, Math.round(Number(rawTickRate) * 2)) / 2);
+  }
+
+  // src/adapters/evolve/captured-tick-rate.ts
+  var PERIODS_PER_SECOND = 4, DEFAULT_TICK_RATE = 4;
+  function readPeriodsPerScriptCycle(settings) {
+    let configured = readProperty(settings, "tickRate"), rate = configured === void 0 ? DEFAULT_TICK_RATE : normalizeTickRate(configured);
+    return Number.isFinite(rate) ? Math.max(1, rate) : DEFAULT_TICK_RATE;
+  }
+  function readScriptCyclesPerSecond(settings) {
+    return PERIODS_PER_SECOND / readPeriodsPerScriptCycle(settings);
+  }
+
   // src/domain/economy/production/craft.ts
   function shouldRunCraft(input) {
     return input.populationUnlocked && !input.noCraft;
@@ -6250,9 +6275,7 @@
         return;
       minimumFood = population, maximumFood = population * 2, amount > 10 && (rate += (amount - 10) * (rotPercent / 100) * 0.9 ** smokehouseCount);
     }
-    let tickRateValue = readProperty(settings, "tickRate"), tickRate = tickRateValue === void 0 ? 4 : finiteNonNegative(tickRateValue);
-    if (tickRate === void 0 || tickRate <= 0) return;
-    let nextTickFood = amount + rate / (4 / tickRate), foodMaximum = null;
+    let nextTickFood = amount + rate / readScriptCyclesPerSecond(settings), foodMaximum = null;
     if (population !== void 0 && history !== void 0 && population > history.lastPopulationCount) {
       let populationChange = population - history.lastPopulationCount, farmerChange = count2 - history.lastFarmerCount;
       populationChange === farmerChange && rate > 0 && (foodMaximum = Math.max(0, count2 - populationChange));
@@ -14795,10 +14818,6 @@
       (left, right) => left.priority - right.priority || left.index - right.index
     ).map((entry) => entry.id);
   }
-  function readTicksPerSecond(settings) {
-    let tickRate = finite(settings.tickRate) ?? 4;
-    return tickRate > 0 ? 4 / tickRate : 1;
-  }
   function createCapturedMarketPorts(dependencies) {
     let session = null, lastResourceId = null, reader = Object.freeze({
       readGate() {
@@ -14850,7 +14869,7 @@
         let root = active.root, resources = readProperty(root, "resource"), resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
         if (!isRecord(resource) || !isRecord(money) || control === void 0 || !control.methods.includes("purchase") || !control.methods.includes("sell"))
           return emptySell(index, resourceId, ignoreSellRatio);
-        let currentQuantity2 = finite(resource.amount), maxQuantity = resourceMaximum(resource), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount), prices = readUnitPrices(root, resource), settings = settingsRecord2(dependencies.readSettings()), autoSellRatio = finite(settings[`res_sell_r_${resourceId}`]) ?? 0, storageRatio2 = resourceStorageRatio2(resource), income = finite(resource.diff), ticksPerSecond = readTicksPerSecond(settings);
+        let currentQuantity2 = finite(resource.amount), maxQuantity = resourceMaximum(resource), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount), prices = readUnitPrices(root, resource), settings = settingsRecord2(dependencies.readSettings()), autoSellRatio = finite(settings[`res_sell_r_${resourceId}`]) ?? 0, storageRatio2 = resourceStorageRatio2(resource), income = finite(resource.diff), ticksPerSecond = readScriptCyclesPerSecond(settings);
         return currentQuantity2 === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || prices === void 0 || income === void 0 || ticksPerSecond <= 0 ? (dependencies.onUnavailable?.(
           resourceId,
           "market price or quantity is unavailable"
@@ -16221,7 +16240,7 @@
   }
 
   // src/adapters/evolve/economy/production/captured-crafting.ts
-  var PERIODS_PER_SECOND = 4, UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
+  var UNCAPPED_MAXIMUM = -1, CRAFT_ALL_BUTTON_PREFIX = "inc", CRAFT_ALL_BUTTON_SUFFIX = "A", DEMAND_HEADROOM = 0.05, SPEND_EPSILON = 1e-6;
   function readSettingsRecord(value) {
     return isRecord(value) ? value : {};
   }
@@ -16293,12 +16312,14 @@
     let session = null;
     return Object.freeze({
       readGate() {
-        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0, periods = finite(dependencies.readPeriods());
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), resources = readProperty(root, "resource"), species = readProperty(race, "species"), citizens = typeof species == "string" ? readProperty(resources, species) : void 0;
         return session = Object.freeze({
           root,
           demand: dependencies.readDemand(),
           candidates: readCandidates(dependencies, root),
-          ticksPerSecond: periods !== void 0 && periods >= 1 ? PERIODS_PER_SECOND / periods : PERIODS_PER_SECOND
+          // The cycle's own cadence, not the last batch the game reported: a per-second game rate is
+          // converted into what accrues before this feature next acts.
+          ticksPerSecond: readScriptCyclesPerSecond(dependencies.readSettings())
         }), Object.freeze({
           populationUnlocked: readProperty(citizens, "display") === !0,
           noCraft: !!readProperty(race, "no_craft")
@@ -19708,13 +19729,12 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
-    }), completedPeriods = 1, craftDependencies = {
+    }), craftDependencies = {
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs,
       getDocument: () => document,
       readSettings: () => settingsStore.readRaw(),
-      readPeriods: () => completedPeriods,
       readDemand: () => readDemand()
     }, craft = Object.freeze({
       reader: createCapturedCraftReader(craftDependencies),
@@ -20178,9 +20198,14 @@ Only continue if you trust the source. Injected code:
           profiling.nowMs() - workStartedAtMs
         ), profiling.flushPerformance());
       }
-    };
+    }, pendingPeriods = 0;
     return pageCapture2.periods.subscribe((period) => {
-      completedPeriods = period.periods, runCycle();
+      let gate = advancePeriodGate({
+        pendingPeriods,
+        completedPeriods: period.periods,
+        periodsPerCycle: readPeriodsPerScriptCycle(settingsStore.readRaw())
+      });
+      pendingPeriods = gate.pendingPeriods, gate.run && runCycle();
     });
   }
 

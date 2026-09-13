@@ -5,8 +5,13 @@ import {
   advanceScriptTick,
   effectiveTickRate,
   isThrottledTick,
+  advancePeriodGate,
   advanceStateLog,
 } from "../src/domain/tick.ts";
+import {
+  readPeriodsPerScriptCycle,
+  readScriptCyclesPerSecond,
+} from "../src/adapters/evolve/captured-tick-rate.ts";
 import { createTickReader } from "../src/adapters/evolve/tick.ts";
 import { runTick } from "../src/application/tick.ts";
 // --- Pure domain unit tests ---------------------------------------------------------------------
@@ -46,6 +51,68 @@ assert.equal(isThrottledTick(6, 3, true), false);
 
 assert.deepEqual(advanceStateLog(0, 2), { next: 1, record: false });
 assert.deepEqual(advanceStateLog(1, 2), { next: 2, record: true });
+
+// The period gate counts game periods towards one working cycle.
+assert.deepEqual(
+  advancePeriodGate({
+    pendingPeriods: 2,
+    completedPeriods: 1,
+    periodsPerCycle: 4,
+  }),
+  { run: false, pendingPeriods: 3 },
+);
+assert.deepEqual(
+  advancePeriodGate({
+    pendingPeriods: 3,
+    completedPeriods: 1,
+    periodsPerCycle: 4,
+  }),
+  { run: true, pendingPeriods: 0 },
+);
+// A drift batch counts whole; the periods past this cycle carry into the next one.
+assert.deepEqual(
+  advancePeriodGate({
+    pendingPeriods: 1,
+    completedPeriods: 6,
+    periodsPerCycle: 4,
+  }),
+  { run: true, pendingPeriods: 3 },
+);
+// A rate of one period never carries anything, and a nonsense batch size cannot lose the count.
+assert.deepEqual(
+  advancePeriodGate({
+    pendingPeriods: 0,
+    completedPeriods: 1,
+    periodsPerCycle: 1,
+  }),
+  { run: true, pendingPeriods: 0 },
+);
+assert.deepEqual(
+  advancePeriodGate({
+    pendingPeriods: 2,
+    completedPeriods: -5,
+    periodsPerCycle: 4,
+  }),
+  { run: false, pendingPeriods: 2 },
+);
+
+// The single owner of the cycle's length in game periods, shared by the gate and by every feature
+// that converts a per-second game rate into a per-cycle amount.
+assert.equal(readPeriodsPerScriptCycle({ tickRate: 4 }), 4);
+assert.equal(readScriptCyclesPerSecond({ tickRate: 4 }), 1);
+assert.equal(readScriptCyclesPerSecond({ tickRate: 1 }), 4);
+// An unset rate takes the script's own default rather than running every period.
+assert.equal(readPeriodsPerScriptCycle({}), 4);
+assert.equal(readPeriodsPerScriptCycle(undefined), 4);
+// The script cannot act more often than the game wakes it, whatever the setting says, and it never
+// stops acting because the setting is nonsense.
+assert.equal(readPeriodsPerScriptCycle({ tickRate: 0 }), 1);
+assert.equal(readPeriodsPerScriptCycle({ tickRate: -10 }), 1);
+assert.equal(readPeriodsPerScriptCycle({ tickRate: 0.5 }), 1);
+assert.equal(readPeriodsPerScriptCycle({ tickRate: "slower" }), 4);
+// The normalizer's own range still applies.
+assert.equal(readPeriodsPerScriptCycle({ tickRate: 1000 }), 240);
+assert.equal(readPeriodsPerScriptCycle({ tickRate: 5.3 }), 5.5);
 
 // --- Adapter contract tests ---------------------------------------------------------------------
 

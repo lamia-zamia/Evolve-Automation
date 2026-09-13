@@ -21,6 +21,7 @@ import {
   isRecord,
   readProperty,
 } from "../../validation.ts";
+import { readScriptCyclesPerSecond } from "../captured-tick-rate.ts";
 
 export interface CapturedJobCatalogEntry {
   readonly id: string;
@@ -636,14 +637,10 @@ function readFarmerSmartMaximum(
       rate += (amount - 10) * (rotPercent / 100) * 0.9 ** smokehouseCount;
     }
   }
-  const tickRateValue = readProperty(settings, "tickRate");
-  const tickRate =
-    tickRateValue === undefined ? 4 : finiteNonNegative(tickRateValue);
-  if (tickRate === undefined || tickRate <= 0) return undefined;
-  // DeadSpace 1.5.0 leaves settings.at at zero permanently. The compatibility formula's
-  // normal-speed branch therefore projects one script tick with 4 / tickRate periods; do not
-  // revive the removed accelerated-time multiplier here.
-  const nextTickFood = amount + rate / (4 / tickRate);
+  // Food gained before the script next acts. The cycle's length in game periods is owned by
+  // readScriptCyclesPerSecond, which is also the period gate's threshold, so this projection and
+  // the cadence it projects over cannot disagree.
+  const nextTickFood = amount + rate / readScriptCyclesPerSecond(settings);
   let foodMaximum: number | null = null;
   if (
     population !== undefined &&

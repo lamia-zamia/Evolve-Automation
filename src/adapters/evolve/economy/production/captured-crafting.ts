@@ -38,9 +38,7 @@ import {
   type CapturedCraftCosts,
 } from "./captured-craft-costs.ts";
 import type { CapturedDemandSample } from "../resources/captured-resource-demand.ts";
-
-/** The game's worker period is 250 ms, so four game periods complete per second. */
-const PERIODS_PER_SECOND = 4;
+import { readScriptCyclesPerSecond } from "../../captured-tick-rate.ts";
 
 /** The game marks a manually craftable resource with an uncapped storage maximum. */
 const UNCAPPED_MAXIMUM = -1;
@@ -66,8 +64,6 @@ export interface CapturedCraftingDependencies {
   readonly costs: CapturedCraftCosts;
   readonly getDocument: () => CraftingDocument;
   readonly readSettings: () => unknown;
-  /** Game periods completed since the last run, as the game reported them. */
-  readonly readPeriods: () => number;
   /** The cycle's demand sample, shared with the other features that read it. */
   readonly readDemand: () => CapturedDemandSample;
 }
@@ -226,15 +222,13 @@ export function createCapturedCraftReader(
         typeof species === "string"
           ? readProperty(resources, species)
           : undefined;
-      const periods = finite(dependencies.readPeriods());
       session = Object.freeze({
         root,
         demand: dependencies.readDemand(),
         candidates: readCandidates(dependencies, root),
-        ticksPerSecond:
-          periods !== undefined && periods >= 1
-            ? PERIODS_PER_SECOND / periods
-            : PERIODS_PER_SECOND,
+        // The cycle's own cadence, not the last batch the game reported: a per-second game rate is
+        // converted into what accrues before this feature next acts.
+        ticksPerSecond: readScriptCyclesPerSecond(dependencies.readSettings()),
       });
       return Object.freeze({
         populationUnlocked: readProperty(citizens, "display") === true,
