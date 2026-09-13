@@ -53,6 +53,7 @@ import {
   GOV_TAB_INDEX,
   MAIN_TAB_CONTROL,
   MAIN_TAB_INDEX,
+  MAIN_TAB_PANELS,
   MAIN_TAB_SETTING,
   SPACE_TABS_SETTING,
   SPACE_TAB_INDEX,
@@ -61,6 +62,10 @@ import {
   SUB_TAB_CONTROLS,
 } from "../../captured-tab-discovery.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
+import {
+  createCountTally,
+  type PhaseTimingSink,
+} from "../../../../utils/performance.ts";
 
 interface RegionPanel {
   /** The container the region's `setAction` calls append into. */
@@ -182,9 +187,9 @@ const REGION_PANELS: Readonly<Record<string, readonly RegionPanel[]>> =
 function locateBuildingState(
   root: unknown,
   elementId: string,
-  act: unknown,
-): Readonly<BuildingStateAddress> | undefined {
-  if (!isRecord(root) || !isRecord(act)) return undefined;
+  act: Readonly<Record<string, unknown>>,
+): Readonly<BuildingStateAddress> | string {
+  if (!isRecord(root)) return "the game root is not a record";
   const separator = elementId.indexOf("-");
   const type = separator > 0 ? elementId.slice(separator + 1) : "";
   if (type.length > 0) {
@@ -208,7 +213,7 @@ function locateBuildingState(
       }
     }
   }
-  return undefined;
+  return "no record in the current root is that binding";
 }
 
 /**
@@ -252,16 +257,18 @@ export interface CapturedBuildingUnlocksDependencies {
   /** Reports a region that could not be drawn. That region is omitted, never guessed at. */
   readonly onSkipped?: (region: string, reason: string) => void;
   /**
-   * Reports a drawn switch whose state record could not be found in the current root. That row
-   * keeps its place in the offer set and loses only its power counts.
+   * Reports a drawn row whose state record could not be found in the current root, with why. That
+   * row keeps its place in the offer set and loses only its power counts.
    */
-  readonly onUnlocatedSwitch?: (elementId: string) => void;
+  readonly onUnlocatedSwitch?: (elementId: string, detail: string) => void;
+  readonly diagnostics?: PhaseTimingSink | undefined;
 }
 
 export function createCapturedBuildingUnlocks(
   dependencies: CapturedBuildingUnlocksDependencies,
 ): GameBuildingUnlockCatalogReader {
-  const { rootState, discovery, drawnActions, controls } = dependencies;
+  const { rootState, discovery, drawnActions, controls, diagnostics } =
+    dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
   const reportUnlocated = dependencies.onUnlocatedSwitch ?? (() => {});
 
@@ -270,6 +277,7 @@ export function createCapturedBuildingUnlocks(
       regions: ReadonlySet<string>,
     ): Readonly<BuildingUnlockCatalog> | undefined {
       if (regions.size === 0) return undefined;
+      const tally = createCountTally(diagnostics);
       const root = rootState.readRoot();
       if (root === undefined) {
         reportSkipped("*", "the game root has not been captured yet");
@@ -324,8 +332,15 @@ export function createCapturedBuildingUnlocks(
               index: panel.subTab,
             }),
           ]);
+          // The region containers are the main tab's own component render, not markup, so that one
+          // component has to be built for real or the game's region draw appends into nothing.
+          // Everything else the draw binds — every action row — stays suppressed.
+          const panelComponent = MAIN_TAB_PANELS[panel.mainTab];
           let read = false;
           const result = discovery.discover(path, {
+            ...(panelComponent === undefined
+              ? {}
+              : { mount: Object.freeze([`#${panelComponent}`]) }),
             isPanelDrawn: () => drawnActions.exists(panel.container),
             whileDrawn: () => {
               // The container has to be there before its emptiness means anything. Each region
@@ -334,22 +349,38 @@ export function createCapturedBuildingUnlocks(
               // never materialized is a panel nobody drew, and reading zero rows from it would
               // report every building in the region as locked.
               if (!drawnActions.exists(panel.container)) return;
-              for (const action of drawnActions.read(
-                `${panel.container} .action`,
-              )) {
+              const rows = drawnActions.read(`${panel.container} .action`);
+              // What the draw actually produced. A panel that is present but yields nothing is a
+              // real "none offered" — and it is also what a draw that silently failed looks like,
+              // so the two are told apart by counting rather than by guessing.
+              tally.count(`building-unlocks.rows ${region}`, rows.length);
+              for (const action of rows) {
                 ids.push(action.id);
-                // Only the rows the game drew a switch onto have a power state at all. The counts
-                // it rendered into those spans are deliberately not taken: they are restated live
-                // every cycle, and reading them here would tie a player's power allocation to the
-                // next draw.
-                if (action.state === undefined) continue;
-                const address = locateBuildingState(
-                  root,
-                  action.id,
-                  readProperty(controls.resolve(action.id)?.data, "act"),
+                // Where this row's state record lives, for every row the game bound one to.
+                //
+                // Whether it also has a power switch is decided live from that record's own `on`,
+                // never from the rendered spans. `setAction` fills those with `v-html`, and only
+                // the action components are still suppressed during a discovery pass, so on a
+                // panel the script drew for itself the spans are present but empty. Reading
+                // switchability from the render would answer "no switch" for every building on
+                // every panel the player is not currently looking at.
+                const act = readProperty(
+                  controls.resolve(action.id)?.data,
+                  "act",
                 );
-                if (address === undefined) reportUnlocated(action.id);
-                else addresses.set(action.id, address);
+                // A row with no state object is a mission or a one-shot, not a structure.
+                if (!isRecord(act)) {
+                  tally.count(`building-unlocks.stateless ${region}`);
+                  continue;
+                }
+                const address = locateBuildingState(root, action.id, act);
+                if (typeof address === "string") {
+                  tally.count(`building-unlocks.unlocated ${region}`);
+                  reportUnlocated(action.id, address);
+                } else {
+                  tally.count(`building-unlocks.addressed ${region}`);
+                  addresses.set(action.id, address);
+                }
               }
               read = true;
             },

@@ -18,6 +18,7 @@ import {
   createCapturedTabDiscovery,
   MAIN_TAB_CONTROL,
   MAIN_TAB_INDEX,
+  MAIN_TAB_PANELS,
   MAIN_TAB_SETTING,
   SPACE_TABS_SETTING,
   SPACE_TAB_SHOWN_BY,
@@ -285,6 +286,10 @@ export function createCapturedProgressionControl(
       // whose panel is not named here. It is worth exactly one pass.
       sweptSelectedTab = report(discovery.discover(Object.freeze([main])));
     }
+    // Same reason as the unlock catalog: without the tab component's own render there is no
+    // region container for the draw to fill, so `vBind` never reaches the action components and
+    // the sweep captures nothing at all.
+    const civilizationPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
     for (const index of pending) {
       const result = discovery.discover(
         Object.freeze([
@@ -295,6 +300,9 @@ export function createCapturedProgressionControl(
             index,
           }),
         ]),
+        civilizationPanel === undefined
+          ? undefined
+          : { mount: Object.freeze([`#${civilizationPanel}`]) },
       );
       // One pass per tab the game is showing. Whether that pass actually bound anything is
       // deliberately not the latch: a discovery draw suppresses mounting, and a civilization
@@ -389,16 +397,14 @@ export function createCapturedProgressionControl(
     discovery,
     drawnActions,
     controls,
+    diagnostics,
     ...(onSkipped === undefined
       ? {}
       : {
           onSkipped: (region: string, reason: string) =>
             onSkipped(`building-unlocks ${region}`, reason),
-          onUnlocatedSwitch: (elementId: string) =>
-            onSkipped(
-              `building-unlocks ${elementId}`,
-              "the drawn switch names no state record in the current root",
-            ),
+          onUnlocatedSwitch: (elementId: string, detail: string) =>
+            onSkipped(`building-unlocks ${elementId}`, detail),
         }),
   });
   const buildingSwitchStates = createCapturedBuildingSwitchStates({

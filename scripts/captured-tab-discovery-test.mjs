@@ -768,4 +768,22 @@ assert.deepEqual(
   },
 );
 
+// --- components a pass needs built for real ----------------------------------------------------
+
+// A civilization sub-panel is its tab component's render, not markup, so that one component must
+// mount or the game's region draw has nothing to append into. Everything else stays suppressed.
+{
+  const page = makePage({ civTabs: 4 });
+  discoveryFor(page).discover(mainTab(1), { mount: ["#mTabCivil"] });
+  const scope = page.suppression.scopeSeen;
+  assert.equal(scope.shouldMount("#mTabCivil"), true);
+  assert.equal(scope.shouldMount("#city-factory"), false);
+}
+// A pass that names nothing declares no opinion, so the scope suppresses everything as before.
+{
+  const page = makePage({ civTabs: 4 });
+  discoveryFor(page).discover(mainTab(3));
+  assert.equal(page.suppression.scopeSeen.shouldMount, undefined);
+}
+
 console.log("captured-tab-discovery ok");

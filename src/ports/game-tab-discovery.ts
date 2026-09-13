@@ -42,6 +42,12 @@ export interface TabDiscoveryOptions {
    */
   readonly isPanelDrawn?: () => boolean;
   /**
+   * Component selectors this pass needs built for real, because the containers the draw appends
+   * into are that component's own render rather than markup. Everything else the draw binds is
+   * still suppressed. Each one is torn down again before the pass returns.
+   */
+  readonly mount?: readonly string[] | undefined;
+  /**
    * Containers the draw fills that this pass never reads, so they can be dropped before the game
    * spends anything filling them. The game creates them partway through its own draw, so they are
    * named by the component whose binding is the first moment they exist.

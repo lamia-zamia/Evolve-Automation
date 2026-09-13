@@ -193,6 +193,11 @@ export function installVueCapture(
 
   let createAppHooked = false;
   const suppressionScopes: Array<Readonly<MountSuppressionScope>> = [];
+  /** Apps a scope let through, newest first, so a scope's end can take them down again. */
+  const mountedInScope: Array<{
+    readonly depth: number;
+    readonly app: unknown;
+  }> = [];
 
   let restoreVue: (() => void) | undefined;
 
@@ -371,6 +376,7 @@ export function installVueCapture(
           return Reflect.apply(original, this, args);
         }
         const selector = readProperty(args[0], "el");
+        let wanted = false;
         if (typeof selector === "string") {
           for (const scope of suppressionScopes) {
             try {
@@ -378,9 +384,20 @@ export function installVueCapture(
             } catch (error) {
               reportError("component-bound", String(error));
             }
+            try {
+              if (scope.shouldMount?.(selector) === true) wanted = true;
+            } catch (error) {
+              reportError("should-mount", String(error));
+            }
           }
         }
-        return createDisposableApp();
+        if (!wanted) return createDisposableApp();
+        // Built for real because the draw needs what it renders. It is remembered so the scope
+        // that asked for it can take it down again: an app left mounted on a discarded node keeps
+        // its reactive effects alive and re-renders on every later change to what it watched.
+        const app = Reflect.apply(original, this, args);
+        mountedInScope.push({ depth: suppressionScopes.length, app });
+        return app;
       };
     });
     if (restoreCreateApp !== undefined) {
@@ -527,10 +544,25 @@ export function installVueCapture(
         );
       }
       suppressionScopes.push(scope);
+      const depth = suppressionScopes.length;
       try {
         return draw();
       } finally {
         suppressionScopes.pop();
+        // Whatever this scope let through goes down with it, innermost first.
+        while (
+          mountedInScope.length > 0 &&
+          (mountedInScope[mountedInScope.length - 1]?.depth ?? 0) >= depth
+        ) {
+          const entry = mountedInScope.pop();
+          const unmount = asFunction(readProperty(entry?.app, "unmount"));
+          if (unmount === undefined) continue;
+          try {
+            Reflect.apply(unmount, entry?.app, []);
+          } catch (error) {
+            reportError("scope-unmount", String(error));
+          }
+        }
       }
     },
   });

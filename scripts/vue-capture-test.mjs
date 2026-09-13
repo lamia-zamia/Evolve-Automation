@@ -559,6 +559,113 @@ listenerCapture.uninstall();
   );
 }
 
+// --- letting one component through a suppressed scope --------------------------------------------
+
+{
+  const page = {};
+  const faults = [];
+  const capture = installVueCapture(page, {
+    onCaptureError: (stage, detail) => faults.push([stage, detail]),
+  });
+  const realApps = [];
+  const vue = makeVue();
+  vue.createApp = (options) => {
+    const app = {
+      options,
+      unmounted: false,
+      use: () => app,
+      mount: () => ({ $forceUpdate: () => {} }),
+      unmount() {
+        app.unmounted = true;
+      },
+    };
+    realApps.push(app);
+    return app;
+  };
+  page.Vue = vue;
+  const bind = (el) => page.Vue.createApp({ el, methods: { action: () => 1 } });
+
+  const asked = [];
+  const scope = {
+    shouldMount: (selector) => {
+      asked.push(selector);
+      return selector === "#mTabCivil";
+    },
+  };
+
+  let parent;
+  let row;
+  capture.mountSuppression.withoutMounting(() => {
+    // The panel whose render creates the containers the draw needs.
+    parent = bind("#mTabCivil");
+    // One of the hundreds of rows that render into them.
+    row = bind("#city-factory");
+  }, scope);
+
+  assert.deepEqual(asked, ["#mTabCivil", "#city-factory"]);
+  assert.equal(realApps.length, 1, "only the named component reached Vue");
+  assert.equal(realApps[0], parent);
+  assert.equal(
+    row[Symbol.for("evolve-automation.disposable-vue-app")],
+    true,
+    "the action row is still suppressed",
+  );
+  // The parent came down with the scope: an app left mounted on a discarded node keeps its
+  // reactive effects alive and re-renders for the rest of the session.
+  assert.equal(parent.unmounted, true);
+  // Both are captured either way, which is the whole point of recording from the options.
+  assert.notEqual(capture.controls.resolve("city-factory"), undefined);
+  assert.notEqual(capture.controls.resolve("mTabCivil"), undefined);
+  assert.deepEqual(faults, []);
+
+  // A scope that names nothing suppresses everything, as before.
+  realApps.length = 0;
+  capture.mountSuppression.withoutMounting(() => bind("#mTabCivil"));
+  assert.deepEqual(realApps, []);
+
+  // A draw that throws still takes down what it was allowed to mount.
+  realApps.length = 0;
+  assert.throws(
+    () =>
+      capture.mountSuppression.withoutMounting(() => {
+        bind("#mTabCivil");
+        throw new Error("draw exploded");
+      }, scope),
+    /draw exploded/,
+  );
+  assert.equal(realApps.length, 1);
+  assert.equal(realApps[0].unmounted, true);
+
+  // A nested scope's allowance ends with that scope, not with the outer one.
+  realApps.length = 0;
+  capture.mountSuppression.withoutMounting(() => {
+    capture.mountSuppression.withoutMounting(() => bind("#mTabCivil"), scope);
+    assert.equal(realApps.length, 1);
+    assert.equal(
+      realApps[0].unmounted,
+      true,
+      "unmounted when its own scope ended",
+    );
+    // The outer scope named nothing, so this one stays suppressed.
+    bind("#mTabCivil");
+    assert.equal(realApps.length, 1);
+  });
+
+  // A predicate that throws is a capture fault, not a mounted component.
+  realApps.length = 0;
+  capture.mountSuppression.withoutMounting(() => bind("#mTabCivil"), {
+    shouldMount: () => {
+      throw new Error("bad predicate");
+    },
+  });
+  assert.deepEqual(realApps, []);
+  assert.deepEqual(
+    faults.map(([stage]) => stage),
+    ["should-mount"],
+  );
+  capture.uninstall();
+}
+
 // --- the data a binding carries -----------------------------------------------------------------
 
 /** A page whose Vue is already attached, so each case below binds against a fresh registry. */

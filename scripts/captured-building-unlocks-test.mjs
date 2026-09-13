@@ -77,6 +77,7 @@ function makeReader(
   const page = makePage(containers);
   const { root, bindings } = makeGame(containers, stateAt, settings);
   const paths = [];
+  const mounted = [];
   const skipped = [];
   const unlocated = [];
   const reader = createCapturedBuildingUnlocks({
@@ -91,6 +92,7 @@ function makeReader(
         paths.push(
           path.map((step) => [step.setting, step.control, step.index]),
         );
+        mounted.push(options.mount);
         if (failFor.has(subTab)) {
           return {
             outcome: {
@@ -121,9 +123,10 @@ function makeReader(
       capturedElementIds: () => [],
     },
     onSkipped: (region, reason) => skipped.push([region, reason]),
-    onUnlocatedSwitch: (elementId) => unlocated.push(elementId),
+    onUnlocatedSwitch: (elementId, detail) =>
+      unlocated.push([elementId, detail]),
   });
-  return { reader, paths, skipped, unlocated, root };
+  return { reader, paths, mounted, skipped, unlocated, root };
 }
 
 // Every region is drawn under main tab 1 at its own `spaceTabs` selection, verified against
@@ -265,21 +268,41 @@ for (const [region, container, subTab] of [
 
 // --- which rows have a switch, and where its state lives ---
 
-// `setAction` appends the on/off pair only to a row whose own gate passed, so a row carrying the
-// spans is a switchable building and a row without them has no power state at all. Only the first
-// gets an address; the counts the spans held are not taken here at all.
+// Every row the game bound a state object to gets an address, whether or not it rendered a power
+// switch: the spans are `v-html` and stay empty on a panel the script drew for itself, so
+// switchability is decided live from the record's own `on` instead. A row with no state object at
+// all — a mission, a one-shot — is still an ordinary drawn row for the unlock operand.
 {
   const { reader } = makeReader({
-    "#city .action": [["city-factory", 3, 2], "city-farm"],
+    "#city .action": [
+      ["city-factory", 3, 2],
+      ["city-farm", 0, 0],
+      "city-mission",
+    ],
   });
   const catalog = reader.read(new Set(["city"]));
   assert.deepEqual(catalog.switches.get("city-factory"), {
     region: "city",
     type: "factory",
   });
-  assert.equal(catalog.switches.has("city-farm"), false);
-  // The row is still an ordinary drawn row for the unlock operand.
-  assert.equal(catalog.unlocked.has("city-farm"), true);
+  assert.deepEqual(catalog.switches.get("city-farm"), {
+    region: "city",
+    type: "farm",
+  });
+  assert.equal(catalog.switches.has("city-mission"), false);
+  assert.equal(catalog.unlocked.has("city-mission"), true);
+}
+// A row whose spans the draw left empty is addressed just the same. This is the case that matters:
+// it is every building on every panel the player is not looking at.
+{
+  const { reader } = makeReader({
+    "#city .action": [["city-factory", "", ""]],
+  });
+  const catalog = reader.read(new Set(["city"]));
+  assert.deepEqual(catalog.switches.get("city-factory"), {
+    region: "city",
+    type: "factory",
+  });
 }
 
 // A definition carrying its own `region` keeps the element id it was defined with and moves the
@@ -324,7 +347,9 @@ for (const [region, container, subTab] of [
   const catalog = reader.read(new Set(["city"]));
   assert.equal(catalog.switches.size, 0);
   assert.equal(catalog.unlocked.has("city-factory"), true);
-  assert.deepEqual(unlocated, ["city-factory"]);
+  assert.deepEqual(unlocated, [
+    ["city-factory", "no record in the current root is that binding"],
+  ]);
 }
 
 // A multi-panel region reports the switches from every panel it had to read.
@@ -464,6 +489,25 @@ for (const [region, container, subTab] of [
       ["govTabs", "mTabCivic", 4],
     ],
   ]);
+}
+
+// Each pass asks for the one component whose render creates the container it is about to read.
+// The civilization panels come from `mTabCivil`; the cave perks are a civics sub-tab, so theirs
+// come from `mTabCivic`. Without that render the region draw appends into nothing at all.
+{
+  const { reader, mounted } = makeReader({
+    "#space .action": ["space-moon_base"],
+    "#outerSol .action": ["space-titan_spaceport"],
+  });
+  reader.read(new Set(["space"]));
+  assert.deepEqual(mounted, [["#mTabCivil"], ["#mTabCivil"]]);
+}
+{
+  const { reader, mounted } = makeReader({
+    "#perkUnderground .action": ["underground-core_tap_perk"],
+  });
+  reader.read(new Set(["underground"]));
+  assert.deepEqual(mounted, [["#mTabCivic"]]);
 }
 
 console.log("captured-building-unlocks ok");

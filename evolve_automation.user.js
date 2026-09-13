@@ -356,7 +356,7 @@
     let isRootCandidate = options.isRootCandidate ?? isGameRootShape, reportError = options.onCaptureError ?? (() => {
     }), existingDescriptor = Object.getOwnPropertyDescriptor(pageWindow, "Vue"), existingMarker = readMarker(readProperty(readProperty(pageWindow, "Vue"), "reactive")) ?? readMarker(existingDescriptor?.get);
     if (existingMarker?.capture !== void 0) return existingMarker.capture;
-    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls = /* @__PURE__ */ new Map(), captureOrder = [], usage = /* @__PURE__ */ new Map(), createAppHooked = !1, suppressionScopes = [], restoreVue;
+    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls = /* @__PURE__ */ new Map(), captureOrder = [], usage = /* @__PURE__ */ new Map(), createAppHooked = !1, suppressionScopes = [], mountedInScope = [], restoreVue;
     function notifyRootReplaced() {
       for (let listener of [...rootListeners])
         try {
@@ -456,15 +456,23 @@
         }
         if (suppressionScopes.length === 0 || stopped)
           return Reflect.apply(original, this, args);
-        let selector = readProperty(args[0], "el");
+        let selector = readProperty(args[0], "el"), wanted = !1;
         if (typeof selector == "string")
-          for (let scope of suppressionScopes)
+          for (let scope of suppressionScopes) {
             try {
               scope.onComponentBound?.(selector);
             } catch (error) {
               reportError("component-bound", String(error));
             }
-        return createDisposableApp();
+            try {
+              scope.shouldMount?.(selector) === !0 && (wanted = !0);
+            } catch (error) {
+              reportError("should-mount", String(error));
+            }
+          }
+        if (!wanted) return createDisposableApp();
+        let app = Reflect.apply(original, this, args);
+        return mountedInScope.push({ depth: suppressionScopes.length, app }), app;
       });
       restoreCreateApp !== void 0 && (restores.push(restoreCreateApp), createAppHooked = !0), restoreVue = () => {
         for (let restore2 of restores) restore2();
@@ -570,10 +578,19 @@
             "Vue.createApp is not wrapped, so mounting cannot be suppressed"
           );
         suppressionScopes.push(scope);
+        let depth = suppressionScopes.length;
         try {
           return draw();
         } finally {
-          suppressionScopes.pop();
+          for (suppressionScopes.pop(); mountedInScope.length > 0 && (mountedInScope[mountedInScope.length - 1]?.depth ?? 0) >= depth; ) {
+            let entry = mountedInScope.pop(), unmount = asFunction(readProperty(entry?.app, "unmount"));
+            if (unmount !== void 0)
+              try {
+                Reflect.apply(unmount, entry?.app, []);
+              } catch (error) {
+                reportError("scope-unmount", String(error));
+              }
+          }
         }
       }
     }), capture = Object.freeze({
@@ -1174,7 +1191,7 @@
       discover(path, options = {}) {
         let tally = createCountTally(diagnostics), measureDraw = createPhaseMeasure(diagnostics);
         tally.count("discovery.request");
-        let refused = (code, message) => (tally.count("discovery.refused"), failure(code, message)), { whileDrawn, isPanelDrawn, discard } = options, first = path[0];
+        let refused = (code, message) => (tally.count("discovery.refused"), failure(code, message)), { whileDrawn, isPanelDrawn, discard, mount } = options, first = path[0];
         if (first === void 0)
           return refused("empty-tab-path", "a discovery path names no panel");
         if (!path.every(isValidStep))
@@ -1220,7 +1237,7 @@
           ]);
           return restore2.ok ? void 0 : restore2.detail ?? restore2.reason;
         }
-        let discardScope = discard === void 0 ? {} : {
+        let mountScope = mount === void 0 || mount.length === 0 ? {} : { shouldMount: (selector) => mount.includes(selector) }, discardScope = discard === void 0 ? {} : {
           onComponentBound: (selector) => {
             if (selector === discard.afterBinding)
               for (let container of discard.containers)
@@ -1231,34 +1248,37 @@
         let before = new Set(controls.capturedElementIds()), playerAnimation = settings.animated, stepFailure, restoreFailure, observerFailure, drawnPath = tally.enabled ? describeTabPath(path) : "";
         if (tally.enabled && (tally.count("discovery.draw"), tally.count(`discovery.draw ${drawnPath}`)), measureDraw("discovery.draw", () => {
           try {
-            settings.animated = !1, mountSuppression.withoutMounting(() => {
-              for (let step of path) {
-                let handle = controls.resolve(step.control);
-                if (handle === void 0) {
-                  stepFailure = failure(
-                    "tab-control-missing",
-                    `no captured control for ${step.control}`
-                  );
-                  break;
+            settings.animated = !1, mountSuppression.withoutMounting(
+              () => {
+                for (let step of path) {
+                  let handle = controls.resolve(step.control);
+                  if (handle === void 0) {
+                    stepFailure = failure(
+                      "tab-control-missing",
+                      `no captured control for ${step.control}`
+                    );
+                    break;
+                  }
+                  settings[step.setting] = step.index;
+                  let swap = controls.invoke(handle, "swapTab", [step.index]);
+                  if (!swap.ok) {
+                    let detail = swap.detail ?? swap.reason;
+                    stepFailure = Object.freeze({
+                      outcome: swap.reason === "stale-control" ? stale("stale-tab-control", detail) : rejected("tab-draw-failed", detail),
+                      discovered: NOTHING
+                    });
+                    break;
+                  }
                 }
-                settings[step.setting] = step.index;
-                let swap = controls.invoke(handle, "swapTab", [step.index]);
-                if (!swap.ok) {
-                  let detail = swap.detail ?? swap.reason;
-                  stepFailure = Object.freeze({
-                    outcome: swap.reason === "stale-control" ? stale("stale-tab-control", detail) : rejected("tab-draw-failed", detail),
-                    discovered: NOTHING
-                  });
-                  break;
-                }
-              }
-              if (stepFailure === void 0 && whileDrawn !== void 0)
-                try {
-                  whileDrawn();
-                } catch (error) {
-                  observerFailure = String(error);
-                }
-            }, discardScope);
+                if (stepFailure === void 0 && whileDrawn !== void 0)
+                  try {
+                    whileDrawn();
+                  } catch (error) {
+                    observerFailure = String(error);
+                  }
+              },
+              { ...discardScope, ...mountScope }
+            );
           } finally {
             for (let [setting, value] of playerTabs) settings[setting] = value;
             workspace === void 0 ? restoreFailure = restorePlayerView() : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back")), settings.animated = playerAnimation;
@@ -3963,7 +3983,7 @@
     ])
   });
   function locateBuildingState(root, elementId, act) {
-    if (!isRecord(root) || !isRecord(act)) return;
+    if (!isRecord(root)) return "the game root is not a record";
     let separator = elementId.indexOf("-"), type = separator > 0 ? elementId.slice(separator + 1) : "";
     if (type.length > 0) {
       let region = elementId.slice(0, separator);
@@ -3983,6 +4003,7 @@
             return Object.freeze({ region: candidate, type: key });
       }
     }
+    return "no record in the current root is that binding";
   }
   function sameBuildingUnlockCatalog(previous, next) {
     if (previous.unlocked.size !== next.unlocked.size || previous.regions.size !== next.regions.size || previous.switches.size !== next.switches.size)
@@ -3998,13 +4019,13 @@
     return !0;
   }
   function createCapturedBuildingUnlocks(dependencies) {
-    let { rootState, discovery, drawnActions, controls } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
+    let { rootState, discovery, drawnActions, controls, diagnostics } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
     }), reportUnlocated = dependencies.onUnlocatedSwitch ?? (() => {
     });
     return Object.freeze({
       read(regions) {
         if (regions.size === 0) return;
-        let root = rootState.readRoot();
+        let tally = createCountTally(diagnostics), root = rootState.readRoot();
         if (root === void 0) {
           reportSkipped("*", "the game root has not been captured yet");
           return;
@@ -4039,23 +4060,27 @@
                 control: subTabControl,
                 index: panel.subTab
               })
-            ]), read = !1, result = discovery.discover(path, {
+            ]), panelComponent = MAIN_TAB_PANELS[panel.mainTab], read = !1, result = discovery.discover(path, {
+              ...panelComponent === void 0 ? {} : { mount: Object.freeze([`#${panelComponent}`]) },
               isPanelDrawn: () => drawnActions.exists(panel.container),
               whileDrawn: () => {
-                if (drawnActions.exists(panel.container)) {
-                  for (let action of drawnActions.read(
-                    `${panel.container} .action`
-                  )) {
-                    if (ids.push(action.id), action.state === void 0) continue;
-                    let address = locateBuildingState(
-                      root,
-                      action.id,
-                      readProperty(controls.resolve(action.id)?.data, "act")
-                    );
-                    address === void 0 ? reportUnlocated(action.id) : addresses.set(action.id, address);
+                if (!drawnActions.exists(panel.container)) return;
+                let rows = drawnActions.read(`${panel.container} .action`);
+                tally.count(`building-unlocks.rows ${region}`, rows.length);
+                for (let action of rows) {
+                  ids.push(action.id);
+                  let act = readProperty(
+                    controls.resolve(action.id)?.data,
+                    "act"
+                  );
+                  if (!isRecord(act)) {
+                    tally.count(`building-unlocks.stateless ${region}`);
+                    continue;
                   }
-                  read = !0;
+                  let address = locateBuildingState(root, action.id, act);
+                  typeof address == "string" ? (tally.count(`building-unlocks.unlocated ${region}`), reportUnlocated(action.id, address)) : (tally.count(`building-unlocks.addressed ${region}`), addresses.set(action.id, address));
                 }
+                read = !0;
               }
             });
             if (result.outcome.status !== "succeeded" || !read) {
@@ -4203,6 +4228,7 @@
         result.outcome.failure?.message ?? result.outcome.status
       ), !1);
       sweptSelectedTab || (sweptSelectedTab = report(discovery.discover(Object.freeze([main]))));
+      let civilizationPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
       for (let index of pending) {
         let result = discovery.discover(
           Object.freeze([
@@ -4212,7 +4238,8 @@
               control: spaceTabControl,
               index
             })
-          ])
+          ]),
+          civilizationPanel === void 0 ? void 0 : { mount: Object.freeze([`#${civilizationPanel}`]) }
         );
         report(result) && latchedSpaceTabs.add(index);
       }
@@ -4265,12 +4292,10 @@
       discovery,
       drawnActions,
       controls,
+      diagnostics,
       ...onSkipped === void 0 ? {} : {
         onSkipped: (region, reason) => onSkipped(`building-unlocks ${region}`, reason),
-        onUnlocatedSwitch: (elementId) => onSkipped(
-          `building-unlocks ${elementId}`,
-          "the drawn switch names no state record in the current root"
-        )
+        onUnlocatedSwitch: (elementId, detail) => onSkipped(`building-unlocks ${elementId}`, detail)
       }
     }), buildingSwitchStates = createCapturedBuildingSwitchStates({
       rootState,

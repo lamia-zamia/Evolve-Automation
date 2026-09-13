@@ -13,6 +13,13 @@
  * way stay callable after the temporary markup is gone.
  *
  * The scope is deliberately small: the player's own view is rebuilt with real Vue, outside it.
+ *
+ * One kind of component has to be exempt. A panel whose sub-panels are its own component's render
+ * — the civilization tab, whose `#city`, `#space` and the rest are `b-tab-item` output — gives the
+ * game nothing to draw into unless that one component is really mounted. Suppressing it does not
+ * make the draw cheap, it makes the draw produce nothing, silently. A scope therefore names the
+ * components it needs built, and everything else in it is still suppressed: the parent renders, the
+ * hundreds of action components it then holds do not.
  */
 
 export interface MountSuppressionScope {
@@ -22,6 +29,15 @@ export interface MountSuppressionScope {
    * call, so a container the caller does not want filled can only be named once it exists.
    */
   readonly onComponentBound?: ((selector: string) => void) | undefined;
+  /**
+   * Whether this one component must be built for real. Answer `true` only for a component whose
+   * *render* the draw depends on; a component that merely displays what the draw already wrote is
+   * exactly what suppression exists to skip.
+   *
+   * A component allowed through is mounted with real Vue and is torn down again when the scope
+   * ends, so nothing it created outlives the pass.
+   */
+  readonly shouldMount?: ((selector: string) => boolean) | undefined;
 }
 
 export interface GameMountSuppression {
