@@ -908,6 +908,138 @@
     });
   }
 
+  // src/utils/performance.ts
+  var runUnmeasured = (_phase, action) => action();
+  function createPhaseMeasure(diagnostics) {
+    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? runUnmeasured : (phase, action) => {
+      let startedAtMs = diagnostics.nowMs();
+      try {
+        return action();
+      } finally {
+        diagnostics.recordPerformance(phase, diagnostics.nowMs() - startedAtMs);
+      }
+    };
+  }
+  var INERT_TALLY = Object.freeze({
+    enabled: !1,
+    count: () => {
+    }
+  });
+  function createCountTally(diagnostics) {
+    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? INERT_TALLY : Object.freeze({
+      enabled: !0,
+      count: (name, amount = 1) => diagnostics.recordCount(name, amount)
+    });
+  }
+
+  // src/adapters/evolve/discovery-scope-cache.ts
+  var MIN_SAMPLE_AGE_MS = 1e3, MAX_SAMPLE_AGE_MS = 16e3;
+  function sameOfferPrices(previous, next) {
+    if (previous.length !== next.length) return !1;
+    for (let [index, before] of previous.entries()) {
+      let after = next[index];
+      if (after === void 0 || before.elementId !== after.elementId)
+        return !1;
+      let names = Object.keys(before.cost);
+      if (names.length !== Object.keys(after.cost).length) return !1;
+      for (let name of names)
+        if (before.cost[name] !== after.cost[name]) return !1;
+    }
+    return !0;
+  }
+  function widenedAgeMs(currentMs, changed) {
+    return changed ? MIN_SAMPLE_AGE_MS : Math.min(currentMs * 2, MAX_SAMPLE_AGE_MS);
+  }
+  function createDiscoveryScopeCache(dependencies) {
+    let { readEpoch, nowMs, diagnostics } = dependencies, entries = /* @__PURE__ */ new Map();
+    return Object.freeze({
+      read(scope, take, isSameAnswer) {
+        let tally = createCountTally(diagnostics), epoch = readEpoch(), now = nowMs(), entry = entries.get(scope);
+        if (entry !== void 0 && entry.epoch === epoch && now - entry.takenAtMs < entry.ageMs)
+          return tally.count(`discovery.cached ${scope}`), entry.sample;
+        tally.count(`discovery.resample ${scope}`);
+        let sample = take();
+        if (sample === void 0) {
+          entries.delete(scope);
+          return;
+        }
+        let unchanged = entry !== void 0 && entry.epoch === epoch && isSameAnswer !== void 0 && isSameAnswer(entry.sample, sample);
+        return unchanged && tally.count(`discovery.unchanged ${scope}`), entries.set(scope, {
+          epoch,
+          takenAtMs: now,
+          ageMs: widenedAgeMs(entry?.ageMs ?? MIN_SAMPLE_AGE_MS, !unchanged),
+          sample
+        }), sample;
+      },
+      invalidate(scope) {
+        entries.delete(scope);
+      },
+      invalidateAll() {
+        entries.clear();
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression-epoch.ts
+  function tallyRecord(value) {
+    if (!isRecord(value)) return "-";
+    let keys = Object.keys(value), sum = 0;
+    for (let key of keys) {
+      let entry = value[key];
+      typeof entry == "number" && Number.isFinite(entry) ? sum += entry : entry === !0 && (sum += 1);
+    }
+    return `${keys.length}:${sum}`;
+  }
+  function countKeys(value) {
+    return isRecord(value) ? Object.keys(value).length : -1;
+  }
+  function tallyProjectRanks(value) {
+    if (!isRecord(value)) return -1;
+    let sum = 0;
+    for (let key of Object.keys(value)) {
+      let rank = readProperty(value[key], "rank");
+      typeof rank == "number" && Number.isFinite(rank) && (sum += rank);
+    }
+    return sum;
+  }
+  function scalarToken(value) {
+    return typeof value == "string" || typeof value == "number" ? String(value) : value === !0 ? "1" : value === !1 ? "0" : "-";
+  }
+  function createProgressionEpochReader(rootState) {
+    let rootReplacements = 0, unsubscribe = rootState.subscribeRootReplaced(() => {
+      rootReplacements += 1;
+    });
+    return Object.freeze({
+      read() {
+        let root = rootState.readRoot();
+        if (root === void 0) return `${rootReplacements}|no-root`;
+        let race = readProperty(root, "race"), stats = readProperty(root, "stats"), settings = readProperty(root, "settings"), civic = readProperty(root, "civic");
+        return [
+          rootReplacements,
+          // The dominant gate on every tech and project offer. Monotone within a run, and it drops
+          // on a reset, so the sum alone separates one run's progression from the next.
+          tallyRecord(readProperty(root, "tech")),
+          tallyRecord(readProperty(root, "genes")),
+          // Trait values are not all numbers, so traits are counted rather than summed. A trait that
+          // only changes rank keeps the same offers; one that appears or disappears does not.
+          countKeys(race),
+          scalarToken(readProperty(race, "species")),
+          scalarToken(readProperty(race, "universe")),
+          countKeys(readProperty(stats, "achieve")),
+          scalarToken(readProperty(stats, "psykill")),
+          // The script swaps the government form itself under autoGovernment, and a tech condition
+          // reads it.
+          scalarToken(readProperty(readProperty(civic, "govern"), "type")),
+          scalarToken(readProperty(settings, "showCivic")),
+          scalarToken(readProperty(settings, "showUnderground")),
+          scalarToken(readProperty(settings, "showSurface")),
+          tallyProjectRanks(readProperty(root, "arpa"))
+        ].join("|");
+      },
+      release: unsubscribe
+    });
+  }
+
   // src/adapters/command-outcomes.ts
   var SUCCEEDED = Object.freeze({
     status: "succeeded"
@@ -973,6 +1105,9 @@
     alchemy: 4,
     supplyZones: 5
   }), NOTHING = Object.freeze([]);
+  function describeTabPath(path) {
+    return path.map((step) => `${step.setting}:${step.index}`).join("/");
+  }
   function failure(code, message) {
     return Object.freeze({
       outcome: rejected(code, message),
@@ -993,42 +1128,44 @@
     return typeof readProperty(step, "setting") == "string" && typeof readProperty(step, "control") == "string" && typeof index == "number" && Number.isSafeInteger(index) && index >= 0;
   }
   function createCapturedTabDiscovery(dependencies) {
-    let { rootState, controls, mountSuppression, panels } = dependencies;
+    let { rootState, controls, mountSuppression, panels, diagnostics } = dependencies;
     return Object.freeze({
       discover(path, options = {}) {
-        let { whileDrawn, isPanelDrawn, discard } = options, first = path[0];
+        let tally = createCountTally(diagnostics), measureDraw = createPhaseMeasure(diagnostics);
+        tally.count("discovery.request");
+        let refused = (code, message) => (tally.count("discovery.refused"), failure(code, message)), { whileDrawn, isPanelDrawn, discard } = options, first = path[0];
         if (first === void 0)
-          return failure("empty-tab-path", "a discovery path names no panel");
+          return refused("empty-tab-path", "a discovery path names no panel");
         if (!path.every(isValidStep))
-          return failure(
+          return refused(
             "invalid-tab-step",
             "a discovery step needs a setting, a control, and a non-negative index"
           );
         let settings = readProperty(rootState.readRoot(), "settings");
         if (!isRecord(settings))
-          return failure(
+          return refused(
             "game-state-not-captured",
             "the game has not created its settings yet"
           );
         if (path.every((step) => settings[step.setting] === step.index) && (isPanelDrawn === void 0 || isPanelDrawn()))
-          return observed(whileDrawn);
+          return tally.count("discovery.observed"), observed(whileDrawn);
         let playerTabs = /* @__PURE__ */ new Map();
         for (let step of path) {
           let current = settings[step.setting];
           if (typeof current != "number" || !Number.isFinite(current))
-            return failure(
+            return refused(
               "unknown-player-tab",
               `the game has not recorded settings.${step.setting}`
             );
           playerTabs.has(step.setting) || playerTabs.set(step.setting, current);
         }
         if (controls.resolve(first.control) === void 0)
-          return failure(
+          return refused(
             "tab-control-missing",
             `no captured control for ${first.control}`
           );
         if (!mountSuppression.available)
-          return failure(
+          return refused(
             "mount-suppression-unavailable",
             "temporary component mounting cannot be suppressed"
           );
@@ -1050,43 +1187,45 @@
           }
         }, playerPanel = MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1], targetPanel = MAIN_TAB_PANELS[first.index], workspace;
         targetPanel !== void 0 && (workspace = panels.open({ keep: playerPanel, scratch: targetPanel }));
-        let before = new Set(controls.capturedElementIds()), playerAnimation = settings.animated, stepFailure, restoreFailure, observerFailure;
-        try {
-          settings.animated = !1, mountSuppression.withoutMounting(() => {
-            for (let step of path) {
-              let handle = controls.resolve(step.control);
-              if (handle === void 0) {
-                stepFailure = failure(
-                  "tab-control-missing",
-                  `no captured control for ${step.control}`
-                );
-                break;
+        let before = new Set(controls.capturedElementIds()), playerAnimation = settings.animated, stepFailure, restoreFailure, observerFailure, drawnPath = tally.enabled ? describeTabPath(path) : "";
+        if (tally.enabled && (tally.count("discovery.draw"), tally.count(`discovery.draw ${drawnPath}`)), measureDraw("discovery.draw", () => {
+          try {
+            settings.animated = !1, mountSuppression.withoutMounting(() => {
+              for (let step of path) {
+                let handle = controls.resolve(step.control);
+                if (handle === void 0) {
+                  stepFailure = failure(
+                    "tab-control-missing",
+                    `no captured control for ${step.control}`
+                  );
+                  break;
+                }
+                settings[step.setting] = step.index;
+                let swap = controls.invoke(handle, "swapTab", [step.index]);
+                if (!swap.ok) {
+                  let detail = swap.detail ?? swap.reason;
+                  stepFailure = Object.freeze({
+                    outcome: swap.reason === "stale-control" ? stale("stale-tab-control", detail) : rejected("tab-draw-failed", detail),
+                    discovered: NOTHING
+                  });
+                  break;
+                }
               }
-              settings[step.setting] = step.index;
-              let swap = controls.invoke(handle, "swapTab", [step.index]);
-              if (!swap.ok) {
-                let detail = swap.detail ?? swap.reason;
-                stepFailure = Object.freeze({
-                  outcome: swap.reason === "stale-control" ? stale("stale-tab-control", detail) : rejected("tab-draw-failed", detail),
-                  discovered: NOTHING
-                });
-                break;
-              }
-            }
-            if (stepFailure === void 0 && whileDrawn !== void 0)
-              try {
-                whileDrawn();
-              } catch (error) {
-                observerFailure = String(error);
-              }
-          }, discardScope);
-        } finally {
-          for (let [setting, value] of playerTabs) settings[setting] = value;
-          workspace === void 0 ? restoreFailure = restorePlayerView() : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back")), settings.animated = playerAnimation;
-        }
-        if (stepFailure !== void 0) return stepFailure;
+              if (stepFailure === void 0 && whileDrawn !== void 0)
+                try {
+                  whileDrawn();
+                } catch (error) {
+                  observerFailure = String(error);
+                }
+            }, discardScope);
+          } finally {
+            for (let [setting, value] of playerTabs) settings[setting] = value;
+            workspace === void 0 ? restoreFailure = restorePlayerView() : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back")), settings.animated = playerAnimation;
+          }
+        }), stepFailure !== void 0)
+          return tally.count("discovery.draw.failed"), stepFailure;
         let discovered = controls.capturedElementIds().filter((id) => !before.has(id));
-        return Object.freeze({
+        return tally.enabled && (discovered.length === 0 ? tally.count("discovery.barren") : (tally.count("discovery.found", discovered.length), tally.count(`discovery.found ${drawnPath}`, discovered.length))), Object.freeze({
           // The draw worked and the way back did not: the discovered controls are real, and leaving
           // someone on a tab they did not choose is not a detail to swallow.
           outcome: observerFailure !== void 0 ? rejected("tab-observer-failed", observerFailure) : restoreFailure === void 0 ? SUCCEEDED : rejected("tab-restore-failed", restoreFailure),
@@ -1387,6 +1526,19 @@
           return;
         }
         return drawn;
+      },
+      restate(snapshot) {
+        let offered = Object.freeze(
+          snapshot.offered.map(
+            (offer) => Object.freeze({
+              ...offer,
+              generation: controls.resolve(offer.elementId)?.generation ?? 0
+            })
+          )
+        );
+        return Object.freeze(
+          snapshot.granted === void 0 ? { offered } : { offered, granted: snapshot.granted }
+        );
       }
     });
   }
@@ -1399,9 +1551,38 @@
       index: MAIN_TAB_INDEX.arpa
     })
   ]);
+  function priceProjectRows(rows, arpa, controls) {
+    return Object.freeze(
+      rows.map((project) => {
+        let state = requireNonArrayRecord(
+          arpa[project.projectId],
+          `game.arpa.${project.projectId}`
+        );
+        return Object.freeze({
+          elementId: project.elementId,
+          projectId: project.projectId,
+          cost: project.cost,
+          rank: requireCount(
+            state.rank,
+            `game.arpa.${project.projectId}.rank`
+          ),
+          progress: requireCount(
+            state.complete,
+            `game.arpa.${project.projectId}.complete`
+          ),
+          generation: controls.resolve(project.elementId)?.generation ?? 0
+        });
+      })
+    );
+  }
   function createCapturedProjectCatalog(dependencies) {
     let { rootState, discovery, drawnProjects, controls } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
-    });
+    }), readProjectState2 = () => {
+      let root = rootState.readRoot();
+      if (root === void 0) return;
+      let game = requireNonArrayRecord(root, "game root");
+      return requireNonArrayRecord(game.arpa, "game.arpa");
+    };
     return Object.freeze({
       readProjects() {
         let root = rootState.readRoot();
@@ -1419,26 +1600,7 @@
               PROJECT_SELECTOR,
               Object.keys(resources)
             );
-            drawn !== void 0 && (projects = Object.freeze(
-              drawn.map((project) => {
-                let state = requireNonArrayRecord(
-                  arpa[project.projectId],
-                  `game.arpa.${project.projectId}`
-                );
-                return Object.freeze({
-                  ...project,
-                  rank: requireCount(
-                    state.rank,
-                    `game.arpa.${project.projectId}.rank`
-                  ),
-                  progress: requireCount(
-                    state.complete,
-                    `game.arpa.${project.projectId}.complete`
-                  ),
-                  generation: controls.resolve(project.elementId)?.generation ?? 0
-                });
-              })
-            ));
+            drawn !== void 0 && (projects = priceProjectRows(drawn, arpa, controls));
           }
         });
         if (result.outcome.status !== "succeeded" || projects === void 0) {
@@ -1448,6 +1610,14 @@
           return;
         }
         return projects;
+      },
+      restate(projects) {
+        let arpa = readProjectState2();
+        if (arpa === void 0) {
+          reportUnavailable("the game root has not been captured yet");
+          return;
+        }
+        return priceProjectRows(projects, arpa, controls);
       }
     });
   }
@@ -3336,30 +3506,6 @@
     });
   }
 
-  // src/utils/performance.ts
-  var runUnmeasured = (_phase, action) => action();
-  function createPhaseMeasure(diagnostics) {
-    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? runUnmeasured : (phase, action) => {
-      let startedAtMs = diagnostics.nowMs();
-      try {
-        return action();
-      } finally {
-        diagnostics.recordPerformance(phase, diagnostics.nowMs() - startedAtMs);
-      }
-    };
-  }
-  var INERT_TALLY = Object.freeze({
-    enabled: !1,
-    count: () => {
-    }
-  });
-  function createCountTally(diagnostics) {
-    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? INERT_TALLY : Object.freeze({
-      enabled: !0,
-      count: (name, amount = 1) => diagnostics.recordCount(name, amount)
-    });
-  }
-
   // src/application/build.ts
   var SUCCEEDED2 = Object.freeze({
     status: "succeeded"
@@ -3846,7 +3992,7 @@
   }
 
   // src/bootstrap/captured-progression-control.ts
-  var NO_RESERVATIONS3 = Object.freeze({
+  var RESEARCH_SCOPE = "research", RESEARCH_GRANTED_SCOPE = "research+granted", ARPA_SCOPE = "arpa", NO_RESERVATIONS3 = Object.freeze({
     targets: Object.freeze([]),
     unavailable: !1
   }), NO_OBSERVATIONS = Object.freeze({
@@ -3876,12 +4022,14 @@
       readSettings,
       getState,
       getResources,
+      nowMs,
       diagnostics
     } = dependencies, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
       rootState,
       controls,
       mountSuppression,
-      panels
+      panels,
+      diagnostics
     }), buildControlsDiscoveryAttempted = !1, ensureBuildControls = () => {
       if (buildControlsDiscoveryAttempted || controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       buildControlsDiscoveryAttempted = !0;
@@ -3914,9 +4062,20 @@
           result.outcome.failure?.message ?? result.outcome.status
         );
       }
-    }, lastOffered, lastGranted, readOfferedTechs = () => {
-      let includeGranted = dependencies.needGrantedTechs?.() === !0, value = offered.read(includeGranted ? { includeGranted } : void 0);
-      return value !== void 0 && (lastOffered = value.offered, lastGranted = value.granted), value?.offered;
+    }, epoch = createProgressionEpochReader(rootState), scopes = createDiscoveryScopeCache({
+      readEpoch: epoch.read,
+      nowMs,
+      diagnostics
+    }), lastOffered, lastGranted, readOfferedTechs = () => {
+      let includeGranted = dependencies.needGrantedTechs?.() === !0, held = scopes.read(
+        includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
+        () => offered.read(includeGranted ? { includeGranted } : void 0),
+        (previous, next) => sameOfferPrices(previous.offered, next.offered)
+      );
+      if (held !== void 0) {
+        let value = offered.restate(held);
+        return lastOffered = value.offered, lastGranted = value.granted, value.offered;
+      }
     }, offered = createCapturedTechCatalog({
       rootState,
       discovery,
@@ -3931,7 +4090,18 @@
       ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) }
     }), projectSampled = !1, lastProjects, resetProjectSample = () => {
       projectSampled = !1, lastProjects = void 0;
-    }, readProjects = () => (projectSampled || (projectSampled = !0, lastProjects = projectCatalog.readProjects()), lastProjects), buildingUnlocks = createCapturedBuildingUnlocks({
+    }, readProjects = () => {
+      if (!projectSampled) {
+        projectSampled = !0;
+        let held = scopes.read(
+          ARPA_SCOPE,
+          () => projectCatalog.readProjects(),
+          sameOfferPrices
+        );
+        lastProjects = held === void 0 ? void 0 : projectCatalog.restate(held);
+      }
+      return lastProjects;
+    }, buildingUnlocks = createCapturedBuildingUnlocks({
       rootState,
       discovery,
       drawnActions,
@@ -19069,6 +19239,7 @@
       // read is otherwise dropped in silence, which is how a composition gap survives a whole session.
       onSkipped: (key, reason) => reportOnce(`progression skipped ${key}: ${reason}`),
       onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
+      nowMs: () => Date.now(),
       diagnostics
     }), gatherResources = createCapturedGatherResourcesControl({
       rootState: pageCapture2.rootState,
@@ -19259,7 +19430,8 @@
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       mountSuppression: pageCapture2.mountSuppression,
-      panels
+      panels,
+      diagnostics
     }), civicControlsDiscoveryAttempted = !1, ensureCivicControls = () => {
       if (civicControlsDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       civicControlsDiscoveryAttempted = !0;
@@ -19670,42 +19842,49 @@
     }), runCycle = () => {
       demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel();
       let settings = settingsStore.readRaw();
-      if (!(!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")))
-        try {
-          isEnabled(settings, "autoTrigger") && progression.ensureBuildControls(), isEnabled(settings, "autoFleet") && (readProperty(
+      if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle"))
+        return;
+      let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs();
+      try {
+        isEnabled(settings, "autoTrigger") && progression.ensureBuildControls(), isEnabled(settings, "autoFleet") && (readProperty(
+          readProperty(pageCapture2.rootState.readRoot(), "race"),
+          "truepath"
+        ) === !0 ? ensureCivicControls() : ensureGalaxyFleetControls()), isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoGovernment") && (ensureCivicControls(), runCapturedGovernmentAutomation(government)), isEnabled(settings, "autoHell") && (ensureCivicControls(), hell.run()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
+          QUARRY_CONTROL,
+          !!readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),
-            "truepath"
-          ) === !0 ? ensureCivicControls() : ensureGalaxyFleetControls()), isEnabled(settings, "autoMarket") && (ensureMarketControls(), marketAutomation.run()), isEnabled(settings, "autoGalaxyMarket") && (ensureGalaxyMarketControls(), galaxyMarketAutomation.run()), isEnabled(settings, "autoStorage") && (ensureStorageControls(), storageAutomation.run()), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && gatherResources(), isEnabled(settings, "autoTax") && (ensureCivicControls(), tax.autoTax()), isEnabled(settings, "autoGovernment") && (ensureCivicControls(), runCapturedGovernmentAutomation(government)), isEnabled(settings, "autoHell") && (ensureCivicControls(), hell.run()), isEnabled(settings, "autoMiningDroid") && (ensureMiningDroidControls(), miningDroid.run()), isEnabled(settings, "autoGraphenePlant") && (ensureGrapheneControls(), graphene.run()), isEnabled(settings, "autoReplicator") && (ensureReplicatorControls(), replicator.run()), isEnabled(settings, "autoQuarry") && (ensureRatioControls(
-            QUARRY_CONTROL,
-            !!readProperty(
-              readProperty(pageCapture2.rootState.readRoot(), "race"),
-              "smoldering"
-            ) && structureCount3("city", "rock_quarry") >= 1
-          ), ratios.quarry()), isEnabled(settings, "autoMine") && (ensureRatioControls(
-            TITAN_MINE_CONTROL,
-            structureCount3("space", "titan_mine") >= 1
-          ), ratios.titanMine()), isEnabled(settings, "autoExtractor") && (ensureRatioControls(
-            MINING_SHIP_CONTROL,
-            structureCount3("tauceti", "mining_ship") >= 1
-          ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run());
-          let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
-          autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft);
-          let triggerActive = isEnabled(settings, "autoTrigger") && triggerPhaseActive(
-            runTriggerAutomation({
-              reader: triggerActions.reader,
-              executor: triggerActions.executor
-            })
-          );
-          !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoNanite") && (ensureNaniteControls(), nanite.run()), isEnabled(settings, "autoSupply") && (ensureSupplyControls(), supply.run()), isEnabled(settings, "autoEject") && (ensureEjectorControls(), ejector.run()), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run(), powerWarnings.run()), isEnabled(settings, "autoSmelter") && (ensureSmelterControls(), smelter.run()), isEnabled(settings, "autoFactory") && (ensureFactoryControls(), factory.run()), isEnabled(settings, "autoFleet") && (readProperty(
-            readProperty(pageCapture2.rootState.readRoot(), "race"),
-            "truepath"
-          ) === !0 || (ensureGalaxyFleetControls(), runFleetAutomation({
-            reader: fleet.reader,
-            executor: fleet.executor
-          }))), !triggerActive && isEnabled(settings, "autoResearch") && progression.runResearchCycle();
-        } catch (error) {
-          logError(String(error));
-        }
+            "smoldering"
+          ) && structureCount3("city", "rock_quarry") >= 1
+        ), ratios.quarry()), isEnabled(settings, "autoMine") && (ensureRatioControls(
+          TITAN_MINE_CONTROL,
+          structureCount3("space", "titan_mine") >= 1
+        ), ratios.titanMine()), isEnabled(settings, "autoExtractor") && (ensureRatioControls(
+          MINING_SHIP_CONTROL,
+          structureCount3("tauceti", "mining_ship") >= 1
+        ), ratios.miningShip()), isEnabled(settings, "autoAlchemy") && (ensureAlchemyControls(), alchemy.run()), isEnabled(settings, "autoPylon") && (ensurePylonControls(), pylon.run());
+        let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
+        autoJobs && autoCraftsmen && (ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1)), autoJobs && !combinedJobs && (ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1)), autoCraftsmen && !combinedJobs && (ensureCivicControls(), runJobsAutomation(craftsmen, !0)), isEnabled(settings, "autoCraft") && runCraftAutomation(craft);
+        let triggerActive = isEnabled(settings, "autoTrigger") && triggerPhaseActive(
+          runTriggerAutomation({
+            reader: triggerActions.reader,
+            executor: triggerActions.executor
+          })
+        );
+        !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && progression.runConstructionCycle(), isEnabled(settings, "autoNanite") && (ensureNaniteControls(), nanite.run()), isEnabled(settings, "autoSupply") && (ensureSupplyControls(), supply.run()), isEnabled(settings, "autoEject") && (ensureEjectorControls(), ejector.run()), isEnabled(settings, "autoPower") && (ensureCityControls(), powerProducers.run(), powerWarnings.run()), isEnabled(settings, "autoSmelter") && (ensureSmelterControls(), smelter.run()), isEnabled(settings, "autoFactory") && (ensureFactoryControls(), factory.run()), isEnabled(settings, "autoFleet") && (readProperty(
+          readProperty(pageCapture2.rootState.readRoot(), "race"),
+          "truepath"
+        ) === !0 || (ensureGalaxyFleetControls(), runFleetAutomation({
+          reader: fleet.reader,
+          executor: fleet.executor
+        }))), !triggerActive && isEnabled(settings, "autoResearch") && progression.runResearchCycle();
+      } catch (error) {
+        logError(String(error));
+      } finally {
+        profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance(
+          "tick",
+          profiling.nowMs() - workStartedAtMs
+        ), profiling.flushPerformance());
+      }
     };
     return pageCapture2.periods.subscribe((period) => {
       completedPeriods = period.periods, runCycle();

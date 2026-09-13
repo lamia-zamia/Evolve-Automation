@@ -29,6 +29,7 @@ const control = createCapturedProgressionControl({
   readSettings: () => ({}),
   getState: () => ({}),
   getResources: () => ({}),
+  nowMs: () => 0,
 });
 
 assert.deepEqual(control.runConstructionCycle(), {

@@ -147,5 +147,25 @@ export function createCapturedTechCatalog(
       }
       return drawn;
     },
+    restate(
+      snapshot: Readonly<TechCatalogSnapshot>,
+    ): Readonly<TechCatalogSnapshot> {
+      // One rule, one place: an offer's generation is whatever the registry holds for its element
+      // right now. The draw above records it at the moment of the draw and this records it at the
+      // moment of use, and both go through `controls.resolve`.
+      const offered = Object.freeze(
+        snapshot.offered.map((offer) =>
+          Object.freeze({
+            ...offer,
+            generation: controls.resolve(offer.elementId)?.generation ?? 0,
+          }),
+        ),
+      );
+      return Object.freeze(
+        snapshot.granted === undefined
+          ? { offered }
+          : { offered, granted: snapshot.granted },
+      );
+    },
   });
 }

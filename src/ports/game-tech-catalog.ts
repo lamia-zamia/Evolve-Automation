@@ -55,4 +55,16 @@ export interface GameTechCatalog {
   read(
     options?: Readonly<TechCatalogReadOptions>,
   ): Readonly<TechCatalogSnapshot> | undefined;
+  /**
+   * The same snapshot with everything that lives in game state rather than in the draw taken
+   * fresh — here, the captured-control generation of each offer.
+   *
+   * The game rebinds an action every time it draws the panel, and the capture records that on its
+   * own, so a snapshot held across ticks goes stale in its generations and nowhere else. Re-reading
+   * them costs a registry lookup per offer; re-drawing the panel to learn the same thing costs a
+   * `loadTab`.
+   */
+  restate(
+    snapshot: Readonly<TechCatalogSnapshot>,
+  ): Readonly<TechCatalogSnapshot>;
 }

@@ -54,7 +54,11 @@ export interface CapturedConstructionControlDependencies {
   readonly panels: GamePanelWorkspace;
   readonly drawnProjects: GameDrawnProjectsReader;
   /** Shared project catalog, so storage and construction consume one panel sample per cycle. */
-  readonly projectCatalog?: GameProjectCatalog;
+  /**
+   * Only the drawing half is used here; a caller that already owns a cached catalog passes its
+   * `readProjects` and keeps the restatement on its own side.
+   */
+  readonly projectCatalog?: Pick<GameProjectCatalog, "readProjects">;
   /** Optional one-time discovery of the game's Civilization action controls. */
   readonly ensureBuildControls?: () => void;
   readonly readPolicy: () => CapturedConstructionPolicy;

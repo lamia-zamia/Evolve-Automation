@@ -9,6 +9,11 @@
 
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
 import {
+  createDiscoveryScopeCache,
+  sameOfferPrices,
+} from "../adapters/evolve/discovery-scope-cache.ts";
+import { createProgressionEpochReader } from "../adapters/evolve/progression-epoch.ts";
+import {
   createCapturedTabDiscovery,
   MAIN_TAB_CONTROL,
   MAIN_TAB_INDEX,
@@ -83,6 +88,8 @@ export interface CapturedProgressionControlDependencies {
   readonly readCapturedStorageRequired?: (
     resourceIds: readonly string[],
   ) => Readonly<Record<string, number>> | undefined;
+  /** Injected clock, for the sampled-panel caches' maximum age. */
+  readonly nowMs: () => number;
   readonly diagnostics?: TickDiagnostics | undefined;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly onUnavailable?: (reason: string) => void;
@@ -132,6 +139,14 @@ export interface CapturedProgressionControl {
   readonly ensureBuildControls: () => void;
 }
 
+/**
+ * The sampled panels that hold their answer between draws. Each is one game panel, named once here
+ * so a caller cannot invent a second spelling of the same scope.
+ */
+const RESEARCH_SCOPE = "research";
+const RESEARCH_GRANTED_SCOPE = "research+granted";
+const ARPA_SCOPE = "arpa";
+
 const NO_RESERVATIONS = Object.freeze({
   targets: Object.freeze([]),
   unavailable: false,
@@ -174,6 +189,7 @@ export function createCapturedProgressionControl(
     readSettings,
     getState,
     getResources,
+    nowMs,
     diagnostics,
   } = dependencies;
   const onSkipped = dependencies.onSkipped;
@@ -184,6 +200,7 @@ export function createCapturedProgressionControl(
     controls,
     mountSuppression,
     panels,
+    diagnostics,
   });
   let buildControlsDiscoveryAttempted = false;
   const ensureBuildControls = () => {
@@ -223,6 +240,15 @@ export function createCapturedProgressionControl(
       }
     }
   };
+  // Which panel samples may be reused, and for how long. Every entry here is a `loadTab` draw that
+  // was otherwise paid for on every tick to re-derive an answer that had not moved; the scopes and
+  // what invalidates each are in docs/discovery-invalidation.md.
+  const epoch = createProgressionEpochReader(rootState);
+  const scopes = createDiscoveryScopeCache({
+    readEpoch: epoch.read,
+    nowMs,
+    diagnostics,
+  });
   // The catalog a discovery pass already paid for, shared with the Knowledge gate so it never buys
   // one of its own. It is the last catalog read, which may be the previous cycle's.
   let lastOffered: readonly Readonly<OfferedTech>[] | undefined;
@@ -231,12 +257,23 @@ export function createCapturedProgressionControl(
   let lastGranted: ReadonlySet<string> | undefined;
   const readOfferedTechs = () => {
     const includeGranted = dependencies.needGrantedTechs?.() === true;
-    const value = offered.read(includeGranted ? { includeGranted } : undefined);
-    if (value !== undefined) {
+    // The granted half is a different sample, so it is a different scope: a pass that dropped it
+    // must never answer the caller that asked for it.
+    const held = scopes.read(
+      includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
+      () => offered.read(includeGranted ? { includeGranted } : undefined),
+      (previous, next) => sameOfferPrices(previous.offered, next.offered),
+    );
+    if (held !== undefined) {
+      // The only part of a held snapshot that goes stale on its own: the game rebinds an action
+      // whenever it redraws the panel — the player opening the Research tab is enough — and the
+      // capture records that without being asked. Re-resolving beats re-drawing.
+      const value = offered.restate(held);
       lastOffered = value.offered;
       lastGranted = value.granted;
+      return value.offered;
     }
-    return value?.offered;
+    return undefined;
   };
   const offered = createCapturedTechCatalog({
     rootState,
@@ -254,6 +291,9 @@ export function createCapturedProgressionControl(
       ? {}
       : { onUnavailable: (reason: string) => onSkipped("arpa", reason) }),
   });
+  // One sample per cycle still, so the trigger phase and construction price from the same list even
+  // if the scope's age happens to expire between them. The scope below decides whether that sample
+  // costs a draw.
   let projectSampled = false;
   let lastProjects: readonly Readonly<OfferedProject>[] | undefined;
   const resetProjectSample = () => {
@@ -263,7 +303,15 @@ export function createCapturedProgressionControl(
   const readProjects = () => {
     if (!projectSampled) {
       projectSampled = true;
-      lastProjects = projectCatalog.readProjects();
+      const held = scopes.read(
+        ARPA_SCOPE,
+        () => projectCatalog.readProjects(),
+        sameOfferPrices,
+      );
+      // Rank, progress and generation live in `game.arpa` and the control registry; only the
+      // per-percent price came from the popover, and that moves with rank alone.
+      lastProjects =
+        held === undefined ? undefined : projectCatalog.restate(held);
     }
     return lastProjects;
   };

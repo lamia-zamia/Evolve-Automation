@@ -32,7 +32,8 @@ import { isNonArrayRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedProjectDependencies {
   readonly rootState: GameRootStateSource;
-  readonly catalog: GameProjectCatalog;
+  /** Only the drawing half: this source plans from one sample and never restates one. */
+  readonly catalog: Pick<GameProjectCatalog, "readProjects">;
   readonly resources: GameResourceSource;
   readonly controls: GameControlRegistry;
   /** What the prestige plan, challenge and race say about projects this run. */

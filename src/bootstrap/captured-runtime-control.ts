@@ -266,6 +266,7 @@ export function startCapturedRuntime({
     onSkipped: (key, reason) =>
       reportOnce(`progression skipped ${key}: ${reason}`),
     onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
+    nowMs: () => Date.now(),
     diagnostics,
   });
   const gatherResources = createCapturedGatherResourcesControl({
@@ -517,6 +518,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     mountSuppression: pageCapture.mountSuppression,
     panels,
+    diagnostics,
   });
   let civicControlsDiscoveryAttempted = false;
   const ensureCivicControls = () => {
@@ -1200,6 +1202,12 @@ export function startCapturedRuntime({
     ) {
       return;
     }
+    // The captured runtime is its own tick loop, so it owns the `tick` phase and the flush the
+    // diagnostics adapter counts work ticks against. Without them `window.eaPerformance` records
+    // samples on the production path and never emits a single summary.
+    const profiling =
+      diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
+    const workStartedAtMs = profiling?.nowMs();
     try {
       if (isEnabled(settings, "autoTrigger")) {
         // Trigger targets are only the actions whose controls were captured, so the sample the
@@ -1370,6 +1378,14 @@ export function startCapturedRuntime({
       }
     } catch (error) {
       logError(String(error));
+    } finally {
+      if (profiling !== undefined && workStartedAtMs !== undefined) {
+        profiling.recordPerformance(
+          "tick",
+          profiling.nowMs() - workStartedAtMs,
+        );
+        profiling.flushPerformance();
+      }
     }
   };
 

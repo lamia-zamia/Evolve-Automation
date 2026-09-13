@@ -186,6 +186,8 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
   });
   return {
     catalog,
+    root,
+    generations,
     paths,
     panelChecks,
     reasons,
@@ -365,6 +367,98 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
   );
   // The panel is left as it was found: every hover is undone.
   assert.equal(page.hasPopper(), false);
+}
+
+// --- restating a held sample ------------------------------------------------
+
+{
+  // Only the per-percent price comes from the popover, and that moves with rank alone. Rank,
+  // progress and the control generation live in the game and in the registry, so a sample held
+  // across ticks restates them instead of paying for another hover over the A.R.P.A. panel.
+  const page = makeCatalogPage({
+    projects: [
+      {
+        elementId: "arpalhc",
+        projectId: "lhc",
+        rank: 2,
+        progress: 40,
+        cost: { Money: 26250 },
+      },
+    ],
+    generations: { arpalhc: 5 },
+  });
+  const held = page.catalog.readProjects();
+  assert.deepEqual(held, [
+    {
+      elementId: "arpalhc",
+      projectId: "lhc",
+      cost: { Money: 26250 },
+      rank: 2,
+      progress: 40,
+      generation: 5,
+    },
+  ]);
+  const drawsBefore = page.paths.length;
+
+  // The script buys a percentage point and the game redraws the row, rebinding its control.
+  page.root.arpa.lhc.complete = 73;
+  page.generations["arpalhc"] = 6;
+  const restated = page.catalog.restate(held);
+  assert.equal(
+    page.paths.length,
+    drawsBefore,
+    "restating must not draw the A.R.P.A. panel",
+  );
+  assert.deepEqual(restated, [
+    {
+      elementId: "arpalhc",
+      projectId: "lhc",
+      cost: { Money: 26250 },
+      rank: 2,
+      progress: 73,
+      generation: 6,
+    },
+  ]);
+  assert.equal(held[0].progress, 40, "the held sample is not mutated");
+}
+
+{
+  // Before the game has built its state there is nothing to restate from, and an unanswerable
+  // read is reported rather than served from the sample handed in.
+  const reasons = [];
+  const catalog = createCapturedProjectCatalog({
+    rootState: {
+      readRoot: () => undefined,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    discovery: {
+      discover() {
+        throw new Error("must not draw while restating");
+      },
+    },
+    drawnProjects: { exists: () => false, read: () => undefined },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => [],
+    },
+    onUnavailable: (reason) => reasons.push(reason),
+  });
+  assert.equal(
+    catalog.restate([
+      {
+        elementId: "arpalhc",
+        projectId: "lhc",
+        cost: {},
+        rank: 1,
+        progress: 0,
+        generation: 1,
+      },
+    ]),
+    undefined,
+  );
+  assert.deepEqual(reasons, ["the game root has not been captured yet"]);
 }
 
 console.log("captured-project-catalog ok");

@@ -309,4 +309,88 @@ function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
   assert.equal(catalog.read(), undefined);
 }
 
+// --- restating a held snapshot ---------------------------------------------
+
+{
+  // The game rebinds an action every time it redraws the research panel, and the capture records
+  // that without being asked. A snapshot held across ticks therefore goes stale in its generations
+  // and nowhere else: restating re-resolves them, and draws nothing.
+  const page = makePage({
+    offered: [[element("tech-mining", { Knowledge: 6600 })]],
+    generations: { "tech-mining": 3 },
+  });
+  const held = page.catalog.read();
+  assert.deepEqual(
+    held.offered.map((tech) => tech.generation),
+    [3],
+  );
+  const drawsBefore = page.passes.length;
+
+  page.rebind("tech-mining");
+  const restated = page.catalog.restate(held);
+  assert.equal(
+    page.passes.length,
+    drawsBefore,
+    "restating must not draw the panel",
+  );
+  assert.deepEqual(
+    restated.offered.map((tech) => tech.generation),
+    [4],
+  );
+  assert.deepEqual(
+    restated.offered.map((tech) => tech.cost),
+    held.offered.map((tech) => tech.cost),
+    "the price came from the draw and is carried through untouched",
+  );
+  assert.equal(
+    held.offered[0].generation,
+    3,
+    "the held snapshot is not mutated",
+  );
+
+  // A control the game has since dropped resolves to nothing, which is generation 0 — the same
+  // answer a draw would have given for an action bound to no control.
+  const forgotten = createCapturedTechCatalog({
+    rootState: {
+      readRoot: () => ({ settings: {} }),
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    discovery: {
+      discover() {
+        throw new Error("must not draw while restating");
+      },
+    },
+    drawnActions: { read: () => [], exists: () => false },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => [],
+    },
+  });
+  assert.equal(forgotten.restate(held).offered[0].generation, 0);
+}
+
+{
+  // The granted half is the larger one and costs the draw that kept it, so a restatement carries
+  // it through rather than dropping it — and a snapshot that never had it must not gain one.
+  const page = makePage({
+    offered: [[element("tech-mining", { Knowledge: 6600 })]],
+    granted: [element("tech-theology", { Knowledge: 900 })],
+    generations: { "tech-mining": 1 },
+  });
+  const withGranted = page.catalog.read({ includeGranted: true });
+  assert.deepEqual(
+    [...page.catalog.restate(withGranted).granted],
+    [...withGranted.granted],
+  );
+  const withoutGranted = page.catalog.read();
+  assert.equal(withoutGranted.granted, undefined);
+  assert.equal(
+    "granted" in page.catalog.restate(withoutGranted),
+    false,
+    "absent means not read, and restating must not turn that into an empty set",
+  );
+}
+
 console.log("captured-tech-catalog ok");
