@@ -1,4 +1,5 @@
 import type { CostConflict } from "../domain/cost-conflicts.ts";
+import { GAME_TOOLTIP_ID } from "../adapters/browser/game-tooltip-element.ts";
 import type { GameUiSurfacePort } from "../ports/game-ui-surface.ts";
 
 /**
@@ -439,7 +440,7 @@ export function createTooltipUI({
     }
     mutations.forEach((mutation) =>
       mutation.addedNodes.forEach((node) => {
-        if (node.id === "popper") {
+        if (node.id === GAME_TOOLTIP_ID) {
           const popperObserver = new MutationObserver(() => {
             if (!node.querySelector(".script-tooltip")) {
               popperObserver.disconnect();

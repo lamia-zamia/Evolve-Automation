@@ -453,7 +453,7 @@
         return createDisposableApp();
       });
       restoreCreateApp !== void 0 && (restores.push(restoreCreateApp), createAppHooked = !0), restoreVue = () => {
-        for (let restore of restores) restore();
+        for (let restore2 of restores) restore2();
       };
     }
     let existingVue = readProperty(pageWindow, "Vue");
@@ -1037,10 +1037,10 @@
           let handle = controls.resolve(outermost.control);
           if (handle === void 0)
             return `no captured control for ${outermost.control}`;
-          let restore = controls.invoke(handle, "swapTab", [
+          let restore2 = controls.invoke(handle, "swapTab", [
             playerTabs.get(outermost.setting)
           ]);
-          return restore.ok ? void 0 : restore.detail ?? restore.reason;
+          return restore2.ok ? void 0 : restore2.detail ?? restore2.reason;
         }
         let discardScope = discard === void 0 ? {} : {
           onComponentBound: (selector) => {
@@ -15505,11 +15505,11 @@
       if (buy !== null && (tally.count("autoMarket.buys"), outcome = dependencies.executor.execute(buy), outcome.status !== "succeeded"))
         break;
     }
-    let restore = dependencies.executor.execute({
+    let restore2 = dependencies.executor.execute({
       kind: "restore-multiplier",
       multiplier: session.originalMultiplier
     });
-    return outcome.status === "succeeded" ? restore : outcome;
+    return outcome.status === "succeeded" ? restore2 : outcome;
   }
 
   // src/domain/economy/storage/storage-allocation.ts
@@ -16103,8 +16103,11 @@
     });
   }
 
+  // src/adapters/browser/game-tooltip-element.ts
+  var GAME_TOOLTIP_ID = "popper", GAME_TOOLTIP_SELECTOR = `#${GAME_TOOLTIP_ID}`, GAME_TOOLTIP_ANCHOR_ATTRIBUTE = "data-id";
+
   // src/adapters/browser/game-drawn-projects.ts
-  var POPPER_SELECTOR = "#popper";
+  var POPPER_SELECTOR = GAME_TOOLTIP_SELECTOR;
   function collectCost(popper, resources) {
     let cost = {}, elements = [
       popper,
@@ -16164,25 +16167,54 @@
   }
 
   // src/adapters/browser/game-panel-workspace.ts
-  function locate(document, id) {
-    let element = document.getElementById(id), parent = element?.parentNode;
-    if (!(element == null || parent === null || parent === void 0))
-      return { element, parent, nextSibling: element.nextSibling };
+  var ALIAS_PREFIX = "ea-aside-", ASIDE_STYLE = "position:absolute;left:-100000px;top:0;visibility:hidden;pointer-events:none";
+  function idsOf(root) {
+    let ids = root.id === "" ? [] : [{ element: root, id: root.id }], descendants = root.querySelectorAll("[id]");
+    for (let index = 0; index < descendants.length; index += 1) {
+      let element = descendants[index];
+      element !== void 0 && element.id !== "" && ids.push({ element, id: element.id });
+    }
+    return ids;
+  }
+  function alias(ids) {
+    for (let entry of ids) entry.element.id = `${ALIAS_PREFIX}${entry.id}`;
+  }
+  function restore(ids) {
+    for (let entry of ids) entry.element.id = entry.id;
+  }
+  function createAside(document, id) {
+    let element = document.createElement("div");
+    return element.id = id, element.setAttribute("style", ASIDE_STYLE), element;
+  }
+  function openTooltipStandIn(document, aliased) {
+    let tooltip = document.getElementById(GAME_TOOLTIP_ID);
+    if (tooltip == null) return;
+    let anchorId = tooltip.getAttribute(GAME_TOOLTIP_ANCHOR_ATTRIBUTE);
+    if (anchorId === null || anchorId === "" || !aliased.some((entry) => entry.id === anchorId)) return;
+    let body = document.body;
+    if (body == null) return;
+    let standIn = createAside(document, anchorId);
+    return body.insertBefore(standIn, null), standIn;
   }
   function createGamePanelWorkspace({
     getDocument
   }) {
     return Object.freeze({
       open(request) {
-        let { keep, scratch: scratchId } = request;
-        if (keep !== void 0 && keep === scratchId) return;
-        let document = getDocument(), target = locate(document, scratchId);
-        if (target === void 0) return;
-        let kept = keep === void 0 ? void 0 : locate(document, keep);
-        if (keep !== void 0 && kept === void 0) return;
-        let scratch = document.createElement("div");
-        scratch.id = scratchId, kept?.element.remove(), target.parent.replaceChild(scratch, target.element);
-        let released = !1;
+        let { keep, scratch: scratchId } = request, document = getDocument(), target = document.getElementById(scratchId), parent = target?.parentNode;
+        if (target == null || parent === null || parent === void 0)
+          return;
+        let kept = keep === void 0 ? void 0 : keep === scratchId ? target : document.getElementById(keep) ?? void 0;
+        if (keep !== void 0 && kept === void 0)
+          return;
+        let aliased = [
+          ...idsOf(target),
+          ...kept !== void 0 && kept !== target ? idsOf(kept) : []
+        ];
+        alias(aliased);
+        let scratch = createAside(document, scratchId);
+        parent.insertBefore(scratch, target);
+        let standIn = openTooltipStandIn(document, aliased), released = !1;
         return Object.freeze({
           discard(elementId) {
             if (released) return !1;
@@ -16190,11 +16222,11 @@
             return element == null || !scratch.contains(element) ? !1 : (element.remove(), !0);
           },
           release() {
-            released || (released = !0, target.parent.replaceChild(target.element, scratch), kept !== void 0 && kept.parent.insertBefore(kept.element, kept.nextSibling));
+            released || (released = !0, scratch.remove(), standIn?.remove(), restore(aliased));
           },
           isIntact() {
             let document2 = getDocument();
-            return released ? document2.getElementById(scratchId) === target.element && (keep === void 0 || document2.getElementById(keep) === kept?.element) : document2.getElementById(scratchId) === scratch;
+            return released ? document2.getElementById(scratchId) === target && (keep === void 0 || document2.getElementById(keep) === kept) : document2.getElementById(scratchId) === scratch && target.isConnected && (kept === void 0 || kept.isConnected);
           }
         });
       }

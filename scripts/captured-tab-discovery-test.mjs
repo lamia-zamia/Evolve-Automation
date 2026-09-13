@@ -95,10 +95,12 @@ function makePage({
   let keptPanel;
   const panelWorkspace = {
     open({ keep, scratch }) {
-      if (!openable || (keep !== undefined && keep === scratch))
-        return undefined;
+      if (!openable) return undefined;
       workspaceLog.opens.push({ keep, scratch });
       keptPanel = keep;
+      // What the player already had. A panel hidden by name keeps it; only what the draw itself
+      // built goes into the scratch container, and only that is dropped with it.
+      const kept = new Set(mounted);
       return {
         discard(elementId) {
           workspaceLog.discards.push(elementId);
@@ -109,7 +111,7 @@ function makePage({
           keptPanel = undefined;
           // Everything the draw produced goes with the container it went into.
           for (const id of [...mounted]) {
-            if (panelOf(id) === scratch) mounted.delete(id);
+            if (panelOf(id) === scratch && !kept.has(id)) mounted.delete(id);
           }
         },
         isIntact: () => intact,
@@ -352,8 +354,10 @@ function discoveryFor(page) {
 }
 
 {
-  // The player is on the tab but the panel is not there. A redraw is exactly the recovery, so the
-  // pass runs after all.
+  // The player is on the tab but the panel is not there, so there is nothing to observe in place
+  // and the pass runs after all. It reads its own draw and leaves the player's view exactly as it
+  // found it: drawing their panel is the game's business, and a pass that did it would be handing
+  // them content that nothing keeps.
   const page = makePage({ civTabs: 2 });
   page.mounted.clear();
   let seen = 0;
@@ -365,8 +369,8 @@ function discoveryFor(page) {
   });
   assert.equal(result.outcome.status, "succeeded");
   assert.equal(seen, 1);
-  assert.deepEqual(page.mainSwaps(), [2, 2]);
-  assert.equal(page.mounted.has("civ-farmer"), true);
+  assert.deepEqual(page.mainSwaps(), [2]);
+  assert.equal(page.mounted.has("civ-farmer"), false);
 }
 
 {
@@ -469,8 +473,31 @@ function discoveryFor(page) {
 }
 
 {
-  // No workspace to be had — the path draws into the panel the player is on — so the pass falls
-  // back to what it always did: draw, then redraw the player's own tab.
+  // A path into the main panel the player is on — their own tab, a sub-tab they are not looking at.
+  // One panel is both what the draw fills and what has to survive it, and the workspace hides it by
+  // name rather than rebuilding it: no restoring swap, and what their panel already had is still
+  // mounted afterwards.
+  const page = makePage({ civTabs: 1, spaceTabs: 0 });
+  const before = [...page.mounted].sort();
+  const result = discoveryFor(page).discover(subTab(1, SPACE_TABS_SETTING, 1));
+  assert.equal(result.outcome.status, "succeeded");
+  assert.deepEqual(page.workspaceLog.opens, [
+    { keep: "mTabCivil", scratch: "mTabCivil" },
+  ]);
+  assert.equal(page.workspaceLog.releases, 1);
+  assert.deepEqual(page.mainSwaps(), [1], "the player's view is never redrawn");
+  assert.deepEqual([...page.mounted].sort(), before);
+  assert.deepEqual([...result.discovered].sort(), [
+    "space-moon_base",
+    "space-spaceport",
+  ]);
+  assert.equal(page.settings.spaceTabs, 0);
+  assert.equal(page.settings.civTabs, 1);
+}
+
+{
+  // No workspace to be had — no panel this module can name — so the pass falls back to what it
+  // always did: draw, then redraw the player's own tab.
   const page = makePage({ civTabs: 4 });
   page.setOpenable(false);
   const result = discoveryFor(page).discover(mainTab(2));

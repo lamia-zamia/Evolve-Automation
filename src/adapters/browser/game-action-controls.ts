@@ -13,9 +13,10 @@ import type {
   GameActionPowerRequest,
 } from "../../ports/game-action-controls.ts";
 import { isRecord, requireFunction } from "../validation.ts";
+import { GAME_TOOLTIP_ID } from "./game-tooltip-element.ts";
 
 /** The element the page shows an action tooltip in, and the name it is parked under. */
-const TOOLTIP_ID = "popper";
+const TOOLTIP_ID = GAME_TOOLTIP_ID;
 const PARKED_TOOLTIP_ID = "TotallyNotAPopper";
 
 /** The subset of a jQuery selection of the tooltip this adapter touches. */

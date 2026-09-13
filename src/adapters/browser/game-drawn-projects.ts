@@ -8,6 +8,7 @@ import type {
   DrawnProject,
   GameDrawnProjectsReader,
 } from "../../ports/game-drawn-projects.ts";
+import { GAME_TOOLTIP_SELECTOR } from "./game-tooltip-element.ts";
 
 interface ProjectElement {
   readonly id?: unknown;
@@ -30,7 +31,7 @@ export interface GameDrawnProjectsDependencies {
 }
 
 /** The game's single hover-popover element, rewritten per control. */
-const POPPER_SELECTOR = "#popper";
+const POPPER_SELECTOR = GAME_TOOLTIP_SELECTOR;
 
 function collectCost(
   popper: ProjectElement,

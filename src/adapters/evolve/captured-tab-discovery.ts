@@ -17,10 +17,12 @@
  * game-owned closures from the component options. **The panel already in front of the player is
  * observed where it stands**, because drawing the tab someone is looking at, to put them back on
  * the tab they are already on, is two redraws that produce what was there to begin with. And
- * **the player's panel is kept rather than destroyed**: a workspace stands it aside for the length
- * of the draw, where `loadTab` cannot find it to clear it, so there is nothing to rebuild and no
- * restoring `swapTab` at all. Where a workspace cannot be opened — a path into the player's own
- * main panel — the pass falls back to the redraw, which is what it always did.
+ * **the player's panel is never touched**: a workspace hides it from the draw by aliasing the ids
+ * in it, so `loadTab` cannot find it to clear it while every node stays where it was — including
+ * the hover state and open tooltip a detach would cost — and there is nothing to rebuild and no
+ * restoring `swapTab` at all. That holds for a path into the player's own main panel too, which is
+ * both the panel the draw fills and the one that has to survive it. Only a path whose main tab
+ * draws no panel this module can name falls back to the redraw.
  *
  * `settings.animated` is switched off for the pass, and that is what keeps it a pass rather than a
  * visible detour. With it on, `clearTabPanels` retains each outgoing panel behind a 300 ms
@@ -270,9 +272,10 @@ export function createCapturedTabDiscovery(
       }
 
       /**
-       * Every setting is back to the player's own before this runs, and `loadTab` builds the
-       * sub-panels from the settings it finds, so one redraw of their main tab restores the whole
-       * view.
+       * The way back for a path this module cannot open a workspace for. Every setting is back to
+       * the player's own before it runs, and `loadTab` builds the sub-panels from the settings it
+       * finds, so one redraw of their main tab restores the whole view — at the cost of rebuilding
+       * it, which is why it is the fallback and not the path.
        */
       const outermost = { control: first.control, setting: first.setting };
       function restorePlayerView(): string | undefined {
@@ -286,8 +289,8 @@ export function createCapturedTabDiscovery(
         return restore.ok ? undefined : (restore.detail ?? restore.reason);
       }
 
-      // The player's own panel, stood aside for the draw. `loadTab` finds its panels through the
-      // document, so one that is not in it is one the draw can neither clear nor rebuild — and the
+      // The player's own panel, hidden from the draw by name. `loadTab` finds its panels by id, so
+      // one that does not answer to its id is one the draw can neither clear nor rebuild — and the
       // target panel becomes a disposable container whose whole output is dropped by one removal.
       const discardScope =
         discard === undefined
