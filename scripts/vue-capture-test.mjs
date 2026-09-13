@@ -559,4 +559,103 @@ listenerCapture.uninstall();
   );
 }
 
+// --- the data a binding carries -----------------------------------------------------------------
+
+/** A page whose Vue is already attached, so each case below binds against a fresh registry. */
+function makeBoundPage() {
+  const host = {};
+  const capture = installVueCapture(host);
+  host.Vue = makeVue();
+  return { page: host, capture };
+}
+
+// `vBind` rewrites the options before `Vue.createApp` sees them: `data: {...}` becomes a factory
+// returning `Vue.reactive(original)`. Recording the options verbatim therefore captures a function
+// for every component the game binds, and reading a field off it answers `undefined` — silently,
+// and for all of them at once. The registry calls the factory instead.
+{
+  const { page, capture } = makeBoundPage();
+  const act = { on: 3, count: 7 };
+  const original = { title: "Factory", act };
+  page.Vue.createApp({
+    el: "#city-factory",
+    // What vBind actually hands over.
+    data() {
+      return page.Vue.reactive(original);
+    },
+    methods: { on_cap: () => 7 },
+  });
+  const handle = capture.controls.resolve("city-factory");
+  assert.equal(
+    handle.data.act,
+    act,
+    "the row's own state object, not the factory",
+  );
+  assert.equal(handle.data.title, "Factory");
+  capture.uninstall();
+}
+
+// The factory is called once per binding, and only for a caller that asks for the data: a handle
+// resolved to invoke a method must not run arbitrary component code.
+{
+  const { page, capture } = makeBoundPage();
+  let calls = 0;
+  page.Vue.createApp({
+    el: "#city-farm",
+    data() {
+      calls += 1;
+      return { act: { count: 1 } };
+    },
+    methods: { on_cap: () => 1 },
+  });
+  const handle = capture.controls.resolve("city-farm");
+  assert.equal(calls, 0, "resolving alone must not run the factory");
+  capture.controls.invoke(handle, "on_cap");
+  assert.equal(calls, 0, "invoking a method must not run the factory");
+  void handle.data;
+  void capture.controls.resolve("city-farm").data;
+  assert.equal(calls, 1, "materialized once and remembered");
+  capture.uninstall();
+}
+
+// A redraw rebinds the row with fresh data, so the remembered value goes with the old generation.
+{
+  const { page, capture } = makeBoundPage();
+  const first = { act: { count: 1 } };
+  const second = { act: { count: 2 } };
+  const bind = (data) =>
+    page.Vue.createApp({
+      el: "#city-mine",
+      data: () => data,
+      methods: { on_cap: () => 1 },
+    });
+  bind(first);
+  assert.equal(capture.controls.resolve("city-mine").data, first);
+  bind(second);
+  assert.equal(capture.controls.resolve("city-mine").data, second);
+  capture.uninstall();
+}
+
+// A plain data object is still a plain data object, and a factory that throws leaves no data
+// rather than failing the caller.
+{
+  const { page, capture } = makeBoundPage();
+  const plain = { act: { count: 4 } };
+  page.Vue.createApp({
+    el: "#city-bank",
+    data: plain,
+    methods: { on_cap: () => 1 },
+  });
+  assert.equal(capture.controls.resolve("city-bank").data, plain);
+  page.Vue.createApp({
+    el: "#city-mill",
+    data() {
+      throw new Error("no");
+    },
+    methods: { on_cap: () => 1 },
+  });
+  assert.equal(capture.controls.resolve("city-mill").data, undefined);
+  capture.uninstall();
+}
+
 console.log("vue-capture ok");

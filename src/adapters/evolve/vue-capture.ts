@@ -102,7 +102,10 @@ interface CapturedControl {
   readonly elementId: string;
   generation: number;
   methods: Record<string, AnyFunction>;
+  /** Exactly what the options carried, which for a game component is a factory. See `bindingData`. */
   data: unknown;
+  /** The factory's one result, boxed so a legitimately absent value is not re-derived. */
+  materialized: { value: unknown } | undefined;
   receiver: Record<string, AnyFunction> | undefined;
 }
 
@@ -246,6 +249,7 @@ export function installVueCapture(
         generation: 1,
         methods,
         data: readProperty(optionsValue, "data"),
+        materialized: undefined,
         receiver: undefined,
       });
       return;
@@ -253,7 +257,43 @@ export function installVueCapture(
     existing.generation += 1;
     existing.methods = methods;
     existing.data = readProperty(optionsValue, "data");
+    existing.materialized = undefined;
     existing.receiver = undefined;
+  }
+
+  /**
+   * The binding data a control was given, as a value rather than as the factory the game wrapped it
+   * in.
+   *
+   * `vBind` rewrites the options before it calls `Vue.createApp`: `data: { title, act }` becomes
+   * `data(){ return Vue.reactive(original) }`, so what `createApp` receives — and therefore what is
+   * recorded here — is a function for every component the game binds. Reading a field off that
+   * answers `undefined`, which is silent and total: it is why every building row's `act` went
+   * missing at once. Vue would call the factory at mount, but a discovery pass suppresses mounting
+   * precisely so no component is built, so nothing else ever calls it.
+   *
+   * Called once per binding and only for a caller that actually asks for the data. That is narrow
+   * on purpose: `vBind` is the only route to `Vue.createApp` on this page and its factory does
+   * nothing but return `Vue.reactive(original)`, which has no side effects and is idempotent — but
+   * an arbitrary component's `data()` is not something to run speculatively. A factory that throws
+   * leaves the control with no data instead of failing its caller.
+   */
+  function bindingData(control: CapturedControl): unknown {
+    if (control.materialized === undefined) {
+      const recorded = control.data;
+      const factory = asFunction(recorded);
+      let value: unknown = recorded;
+      if (factory !== undefined) {
+        try {
+          value = Reflect.apply(factory, undefined, []);
+        } catch (error) {
+          reportError("control-data", `${control.elementId}: ${String(error)}`);
+          value = undefined;
+        }
+      }
+      control.materialized = { value };
+    }
+    return control.materialized.value;
   }
 
   function receiverFor(control: CapturedControl): Record<string, AnyFunction> {
@@ -411,7 +451,10 @@ export function installVueCapture(
         elementId: control.elementId,
         generation: control.generation,
         methods: Object.freeze(Object.keys(control.methods)),
-        data: control.data,
+        // Lazy: a handle resolved only to invoke a method never runs the game's data factory.
+        get data(): unknown {
+          return bindingData(control);
+        },
       });
     },
     invoke(

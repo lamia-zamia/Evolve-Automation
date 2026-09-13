@@ -391,11 +391,25 @@
           generation: 1,
           methods,
           data: readProperty(optionsValue, "data"),
+          materialized: void 0,
           receiver: void 0
         });
         return;
       }
-      existing.generation += 1, existing.methods = methods, existing.data = readProperty(optionsValue, "data"), existing.receiver = void 0;
+      existing.generation += 1, existing.methods = methods, existing.data = readProperty(optionsValue, "data"), existing.materialized = void 0, existing.receiver = void 0;
+    }
+    function bindingData(control) {
+      if (control.materialized === void 0) {
+        let recorded = control.data, factory = asFunction(recorded), value = recorded;
+        if (factory !== void 0)
+          try {
+            value = Reflect.apply(factory, void 0, []);
+          } catch (error) {
+            reportError("control-data", `${control.elementId}: ${String(error)}`), value = void 0;
+          }
+        control.materialized = { value };
+      }
+      return control.materialized.value;
     }
     function receiverFor(control) {
       if (control.receiver !== void 0) return control.receiver;
@@ -500,7 +514,10 @@
             elementId: control.elementId,
             generation: control.generation,
             methods: Object.freeze(Object.keys(control.methods)),
-            data: control.data
+            // Lazy: a handle resolved only to invoke a method never runs the game's data factory.
+            get data() {
+              return bindingData(control);
+            }
           });
       },
       invoke(handle, method, args = []) {
