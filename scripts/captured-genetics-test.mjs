@@ -19,7 +19,11 @@ function createFixture(overrides = {}) {
     tech: { genetics: overrides.level ?? 6 },
     race: { mutation: overrides.mutation ?? 0 },
     arpa: { sequence: overrides.sequenceMissing ? undefined : sequence },
-    settings: { arpa: { genetics: true } },
+    settings: {
+      arpa: { genetics: true },
+      keyMap: { x10: "Control", x25: "Shift", x100: "Alt" },
+      mKeys: true,
+    },
     resource: {
       Knowledge: {
         amount: overrides.knowledge ?? 0,
@@ -33,6 +37,7 @@ function createFixture(overrides = {}) {
   let generation = 1;
   let bound = overrides.bound ?? true;
   let keyMultiplier = overrides.keyMultiplier ?? 1;
+  const pressedKeys = new Set();
   const controls = {
     capturedElementIds: () => (bound ? [GENETICS_CONTROL] : []),
     resolve: (elementId) =>
@@ -67,6 +72,7 @@ function createFixture(overrides = {}) {
   };
   const genetics = createCapturedGenetics({
     rootState: { readRoot: () => root },
+    keyState: { readPressed: (key) => pressedKeys.has(key) },
     controls,
     readSettings: () => settings,
     readDemand: () => ({
@@ -91,6 +97,10 @@ function createFixture(overrides = {}) {
     setKeyMultiplier: (value) => {
       keyMultiplier = value;
     },
+    setPressed: (keys) => {
+      pressedKeys.clear();
+      for (const key of keys) pressedKeys.add(key);
+    },
   };
 }
 
@@ -100,6 +110,7 @@ function createFixture(overrides = {}) {
   let read = false;
   const genetics = createCapturedGenetics({
     rootState: { readRoot: () => fixture.root },
+    keyState: { readPressed: () => false },
     controls: {
       capturedElementIds: () => [],
       resolve: () => undefined,
@@ -127,6 +138,7 @@ function createFixture(overrides = {}) {
 // Each configured toggle presses its own captured method, once, and only when it disagrees.
 {
   const fixture = createFixture({
+    level: 7,
     sequenceMode: "enabled",
     boostMode: "enabled",
     assembleMode: "enabled",
@@ -152,7 +164,7 @@ function createFixture(overrides = {}) {
   assert.equal(fixture.sequence.on, false);
 }
 
-// The level gates are the pure policy's: no booster below 5, no auto or assembly below 6.
+// The level gates are the pure policy's: no booster below 5, no auto below 7, and no assembly below 6.
 {
   const fixture = createFixture({
     level: 4,
@@ -162,6 +174,18 @@ function createFixture(overrides = {}) {
   });
   assert.deepEqual(fixture.run(), { status: "succeeded" });
   assert.deepEqual(fixture.calls, ["toggle"]);
+}
+
+// Genetics 6 renders manual Novo but not the auto-sequencer toggle.
+{
+  const fixture = createFixture({
+    level: 6,
+    sequenceMode: "enabled",
+    boostMode: "enabled",
+    assembleMode: "enabled",
+  });
+  assert.deepEqual(fixture.run(), { status: "succeeded" });
+  assert.deepEqual(fixture.calls, ["toggle", "booster"]);
 }
 
 // Knowledge that would overflow before the next cycle is dumped into genes, one press per gene.
@@ -180,7 +204,7 @@ function createFixture(overrides = {}) {
   assert.equal(fixture.root.resource.Knowledge.amount, 600_000);
 }
 
-// A held multiplier key buys the whole count in one press; the loop counts genes, not presses.
+// A held multiplier key makes the transactional one-gene plan unsafe, so assembly waits without spending.
 {
   const fixture = createFixture({
     assembleMode: "auto",
@@ -189,9 +213,11 @@ function createFixture(overrides = {}) {
     knowledgeRate: 400_000,
   });
   fixture.setKeyMultiplier(10);
-  assert.deepEqual(fixture.run(), { status: "succeeded" });
-  assert.deepEqual(fixture.calls, ["novo"]);
-  assert.equal(fixture.root.resource.Genes.amount, 5);
+  fixture.setPressed(["Control"]);
+  assert.equal(fixture.run().status, "stale");
+  assert.deepEqual(fixture.calls, []);
+  assert.equal(fixture.root.resource.Genes.amount, 0);
+  assert.equal(fixture.root.resource.Knowledge.amount, 1_000_000);
 }
 
 // Knowledge something else is saving for is not spare Knowledge.
@@ -276,6 +302,7 @@ function createFixture(overrides = {}) {
   let root = fixture.root;
   const genetics = createCapturedGenetics({
     rootState: { readRoot: () => root },
+    keyState: { readPressed: () => false },
     controls: {
       capturedElementIds: () => [GENETICS_CONTROL],
       resolve: (id) =>

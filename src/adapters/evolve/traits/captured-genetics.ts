@@ -26,6 +26,7 @@ import type {
   GameControlHandle,
   GameControlRegistry,
 } from "../../../ports/game-control-registry.ts";
+import type { GameKeyStateReader } from "../../../ports/game-key-state.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type {
   GeneticsControls,
@@ -57,6 +58,7 @@ const TOGGLE_METHOD: Readonly<Record<GeneticsToggle, string>> = Object.freeze({
 
 export interface CapturedGeneticsDependencies {
   readonly rootState: GameRootStateSource;
+  readonly keyState: GameKeyStateReader;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
   /** The cycle's shared demand sample; Knowledge being saved for stands assembly down. */
@@ -103,6 +105,26 @@ function sequenceFlag(
   key: string,
 ): boolean {
   return readProperty(sequence, key) === true;
+}
+
+function readClickMultiplierState(
+  root: unknown,
+  keyState: GameKeyStateReader,
+): boolean | undefined {
+  const settings = readProperty(root, "settings");
+  if (!readProperty(settings, "mKeys")) return false;
+  const keyMap = readProperty(settings, "keyMap");
+  const keys: Array<string | number> = [];
+  for (const name of ["x10", "x25", "x100"]) {
+    const key = readProperty(keyMap, name);
+    if (typeof key !== "string" && typeof key !== "number") {
+      return undefined;
+    }
+    keys.push(key);
+  }
+  const pressed = keys.map((key) => keyState.readPressed(key));
+  if (pressed.some((value) => value === true)) return true;
+  return pressed.some((value) => value === undefined) ? undefined : false;
 }
 
 export function createCapturedGenetics(
@@ -178,7 +200,7 @@ export function createCapturedGenetics(
         boostMode: level >= 5 ? settingMode(settings, "geneticsBoost") : "none",
         boostOn: level >= 5 && sequenceFlag(sequence, "boost"),
         assembleMode,
-        autoOn: level >= 6 && sequenceFlag(sequence, "auto"),
+        autoOn: level >= 7 && sequenceFlag(sequence, "auto"),
         assembly,
       });
     },
@@ -302,9 +324,9 @@ export function createCapturedGenetics(
     ) {
       return stale("genetics-balances-changed", "genetics balances changed");
     }
-    // `novo` buys `min(keyMultiplier(), affordable)` per call and charges the game's own balances,
-    // so the loop counts Genes rather than presses: a player holding a multiplier key covers the
-    // count in fewer calls, and a press the game declines ends it instead of repeating.
+    // `novo` buys `min(keyMultiplier(), affordable)` per call. The plan's exact balances assume
+    // one Gene per call, so wait rather than release a user's held modifier or spend an oversized
+    // batch.
     for (let bought = 0; bought < decision.count;) {
       const before = finite(readProperty(genes, "amount"));
       const funds = finite(readProperty(knowledge, "amount"));
@@ -312,6 +334,20 @@ export function createCapturedGenetics(
         return stale("genetics-balances-changed", "genetics balances changed");
       }
       if (funds < GENE_KNOWLEDGE_COST) break;
+      const multiplierState = readClickMultiplierState(
+        active.root,
+        dependencies.keyState,
+      );
+      if (multiplierState !== false) {
+        return stale(
+          multiplierState === true
+            ? "genetics-click-multiplier-held"
+            : "genetics-click-multiplier-unknown",
+          multiplierState === true
+            ? "genetics click multiplier is held"
+            : "genetics click multiplier state is unavailable",
+        );
+      }
       const result = dependencies.controls.invoke(active.handle, "novo");
       if (!result.ok) {
         return rejected(

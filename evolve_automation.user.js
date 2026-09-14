@@ -6620,6 +6620,19 @@
   function sequenceFlag(sequence, key) {
     return readProperty(sequence, key) === !0;
   }
+  function readClickMultiplierState(root, keyState) {
+    let settings = readProperty(root, "settings");
+    if (!readProperty(settings, "mKeys")) return !1;
+    let keyMap = readProperty(settings, "keyMap"), keys = [];
+    for (let name of ["x10", "x25", "x100"]) {
+      let key = readProperty(keyMap, name);
+      if (typeof key != "string" && typeof key != "number")
+        return;
+      keys.push(key);
+    }
+    let pressed = keys.map((key) => keyState.readPressed(key));
+    return pressed.some((value) => value === !0) ? !0 : pressed.some((value) => value === void 0) ? void 0 : !1;
+  }
   function createCapturedGenetics(dependencies) {
     let session = null, handle, readLevel = (root) => finite(readProperty(readProperty(root, "tech"), "genetics")) ?? 0, reader = Object.freeze({
       readGate() {
@@ -6655,7 +6668,7 @@
           boostMode: level >= 5 ? settingMode(settings, "geneticsBoost") : "none",
           boostOn: level >= 5 && sequenceFlag(sequence, "boost"),
           assembleMode,
-          autoOn: level >= 6 && sequenceFlag(sequence, "auto"),
+          autoOn: level >= 7 && sequenceFlag(sequence, "auto"),
           assembly
         });
       }
@@ -6737,6 +6750,15 @@
         if (before === void 0 || funds === void 0)
           return stale("genetics-balances-changed", "genetics balances changed");
         if (funds < GENE_KNOWLEDGE_COST) break;
+        let multiplierState = readClickMultiplierState(
+          active.root,
+          dependencies.keyState
+        );
+        if (multiplierState !== !1)
+          return stale(
+            multiplierState === !0 ? "genetics-click-multiplier-held" : "genetics-click-multiplier-unknown",
+            multiplierState === !0 ? "genetics click multiplier is held" : "genetics click multiplier state is unavailable"
+          );
         let result = dependencies.controls.invoke(active.handle, "novo");
         if (!result.ok)
           return rejected(
@@ -6788,15 +6810,17 @@
         enabled: boostTarget
       })
     ), input.technologyLevel < 6) return Object.freeze(decisions);
-    let autoTarget = configuredTarget(input.assembleMode);
-    autoTarget !== null && autoTarget !== input.autoOn && decisions.push(
-      Object.freeze({
-        kind: "set-genetics-toggle",
-        toggle: "auto",
-        expected: input.autoOn,
-        enabled: autoTarget
-      })
-    );
+    if (input.technologyLevel >= 7) {
+      let autoTarget = configuredTarget(input.assembleMode);
+      autoTarget !== null && autoTarget !== input.autoOn && decisions.push(
+        Object.freeze({
+          kind: "set-genetics-toggle",
+          toggle: "auto",
+          expected: input.autoOn,
+          enabled: autoTarget
+        })
+      );
+    }
     let assembly = input.assembly;
     if (input.assembleMode !== "auto" || assembly === null || assembly.knowledgeCurrent < 2e5 || assembly.knowledgeDemanded)
       return Object.freeze(decisions);
@@ -20472,6 +20496,7 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw()
     }), genetics = createCapturedGenetics({
       rootState: pageCapture2.rootState,
+      keyState: pageCapture2.keyState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()

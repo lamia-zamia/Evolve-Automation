@@ -342,6 +342,7 @@ export function startCapturedRuntime({
   });
   const genetics = createCapturedGenetics({
     rootState: pageCapture.rootState,
+    keyState: pageCapture.keyState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),

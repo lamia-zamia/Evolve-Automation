@@ -82,16 +82,18 @@ export function planGenetics(
   }
   if (input.technologyLevel < 6) return Object.freeze(decisions);
 
-  const autoTarget = configuredTarget(input.assembleMode);
-  if (autoTarget !== null && autoTarget !== input.autoOn) {
-    decisions.push(
-      Object.freeze({
-        kind: "set-genetics-toggle",
-        toggle: "auto",
-        expected: input.autoOn,
-        enabled: autoTarget,
-      }),
-    );
+  if (input.technologyLevel >= 7) {
+    const autoTarget = configuredTarget(input.assembleMode);
+    if (autoTarget !== null && autoTarget !== input.autoOn) {
+      decisions.push(
+        Object.freeze({
+          kind: "set-genetics-toggle",
+          toggle: "auto",
+          expected: input.autoOn,
+          enabled: autoTarget,
+        }),
+      );
+    }
   }
 
   const assembly = input.assembly;

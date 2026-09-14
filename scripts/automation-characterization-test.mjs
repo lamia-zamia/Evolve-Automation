@@ -158,7 +158,6 @@ assert.deepEqual(uiActions, [
   ["shape", "aquatic"],
   ["genetics", "toggle"],
   ["genetics", "booster"],
-  ["genetics", "auto_seq"],
 ]);
 assert.deepEqual(clickActions, [
   ["click", "#wishKnow"],
