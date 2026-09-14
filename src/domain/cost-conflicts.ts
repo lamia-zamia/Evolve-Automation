@@ -3,6 +3,8 @@ export type ResourceCostMap = Readonly<Record<string, number | undefined>>;
 export interface ReservedCostTarget {
   readonly name: string;
   readonly cause: string;
+  /** The supply pool this commitment draws from, when the game names one. */
+  readonly pool?: string;
   readonly cost: ResourceCostMap;
 }
 

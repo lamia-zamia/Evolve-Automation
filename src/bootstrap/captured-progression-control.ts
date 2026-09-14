@@ -484,6 +484,7 @@ export function createCapturedProgressionControl(
               Object.freeze({
                 name: target.name,
                 cause: SAVING_CONFLICT_CAUSE,
+                ...(target.pool === undefined ? {} : { pool: target.pool }),
                 cost: target.cost,
               }),
             ]),

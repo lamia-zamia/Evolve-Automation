@@ -8,7 +8,7 @@ import { priceLookup } from "./test-support/action-price.mjs";
  * `research` wires the offered-technology source: absent means the caller cannot price technology,
  * `{ offered: undefined }` means the catalog read failed. `reads` counts how often it was asked.
  */
-function makeSource(root, prices = {}, onUnavailable, research) {
+function makeSource(root, prices = {}, onUnavailable, research, pools = {}) {
   const rootState = {
     readRoot: () => root,
     isReactivitySuppressed: () => false,
@@ -17,7 +17,7 @@ function makeSource(root, prices = {}, onUnavailable, research) {
   const reads = [];
   const source = createCapturedQueueReservationSource({
     rootState,
-    costs: { readCost: priceLookup(prices) },
+    costs: { readCost: priceLookup(prices, pools) },
     ...(research === undefined
       ? {}
       : {
@@ -113,6 +113,31 @@ for (const [label, root] of [
     [{ name: "Warehouse", cause: "Queue", cost: { Money: 400 } }],
   );
   assert.equal(sample.unavailable, false);
+}
+
+{
+  // The queue reservation keeps the action's regional ledger alongside its cost.
+  const sample = makeSource(
+    makeRoot({
+      queue: [{ id: "city-warehouse", label: "Home warehouse" }],
+      resources: { Money: { amount: 1000 } },
+    }),
+    PRICES,
+    undefined,
+    undefined,
+    { "city-warehouse": "spc_home" },
+  ).readReservations();
+  assert.deepEqual(
+    [...sample.targets],
+    [
+      {
+        name: "Home warehouse",
+        cause: "Queue",
+        pool: "spc_home",
+        cost: { Money: 400 },
+      },
+    ],
+  );
 }
 
 {

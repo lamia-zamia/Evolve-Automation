@@ -91,6 +91,7 @@ function makeCycle({
   rootState: suppliedRootState,
 } = {}) {
   const bought = [];
+  const evaluatedPools = [];
   const rootState = suppliedRootState ?? {
     readRoot() {
       return {
@@ -114,7 +115,12 @@ function makeCycle({
     ],
     resources: makeResources(holdings),
     rootState,
-    conflicts: { evaluate: () => conflict },
+    conflicts: {
+      evaluate: (_cost, pool) => {
+        evaluatedPools.push(pool);
+        return conflict;
+      },
+    },
     ...(knowledgeGate === undefined
       ? {}
       : { readKnowledgeGate: () => knowledgeGate }),
@@ -129,7 +135,7 @@ function makeCycle({
       saveWhiteholeGems: false,
     }),
   });
-  return { adapter, bought, holdings };
+  return { adapter, bought, holdings, evaluatedPools };
 }
 
 function runCycle(cycle) {
@@ -438,8 +444,18 @@ function runCycle(cycle) {
 {
   const cycle = makeCycle({
     city: [
-      { key: "city-bank", weighting: 30, cost: { Money: 5000 } },
-      { key: "city-farm", weighting: 20, cost: { Money: 50 } },
+      {
+        key: "city-bank",
+        weighting: 30,
+        cost: { Money: 5000 },
+        pool: "spc_home",
+      },
+      {
+        key: "city-farm",
+        weighting: 20,
+        cost: { Money: 50 },
+        pool: "spc_home",
+      },
     ],
     holdings: { Money: 100 },
   });
@@ -452,8 +468,10 @@ function runCycle(cycle) {
   runCycle(cycle);
   assert.deepEqual(cycle.adapter.observations.readSavingTarget(), {
     name: "city-bank",
+    pool: "spc_home",
     cost: { Money: 5000 },
   });
+  assert.equal(cycle.evaluatedPools.at(-1), "spc_home");
 }
 
 // A cost storage can never hold is not something to save for.

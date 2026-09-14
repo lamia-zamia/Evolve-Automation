@@ -189,6 +189,7 @@ export function createCapturedQueueReservationSource(
           Object.freeze({
             name: item.label,
             cause,
+            ...(price.pool === undefined ? {} : { pool: price.pool }),
             cost: Object.freeze({ ...price.cost }),
           }),
         );

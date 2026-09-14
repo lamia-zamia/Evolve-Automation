@@ -21,6 +21,8 @@
 export interface SavingTarget {
   /** The candidate's own key, as the family that offered it names it. */
   readonly name: string;
+  /** The supply pool the candidate draws from, when the game names one. */
+  readonly pool?: string;
   readonly cost: Readonly<Record<string, number>>;
 }
 

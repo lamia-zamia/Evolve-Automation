@@ -33,7 +33,7 @@ export function isRegionalSupply(root: unknown): boolean {
 }
 
 /** The game's sentinel pool for a cost that draws on the whole civilization; research uses it. */
-const ANYWHERE_POOL = "*";
+export const ANYWHERE_POOL = "*";
 
 function hasRegionalLedger(resource: Record<PropertyKey, unknown>): boolean {
   return (

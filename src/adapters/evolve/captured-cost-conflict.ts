@@ -13,6 +13,7 @@ import type { CostConflictResource } from "../../domain/cost-conflicts.ts";
 import { resourceView } from "../../domain/game-world.ts";
 import type { CostReservationSource } from "../../ports/game-cost-reservations.ts";
 import type { GameResourceSource } from "../../ports/game-world-state.ts";
+import { ANYWHERE_POOL } from "./captured-affordability.ts";
 
 export type CapturedCostConflict =
   | { readonly status: "none" }
@@ -35,7 +36,27 @@ export interface CapturedCostConflictDependencies {
 }
 
 export interface CapturedCostConflictReader {
-  evaluate(cost: Readonly<Record<string, number>>): CapturedCostConflict;
+  evaluate(
+    cost: Readonly<Record<string, number>>,
+    pool?: string,
+  ): CapturedCostConflict;
+}
+
+/**
+ * Named regional pools are independent. An omitted pool is civilization-wide, and `*` is the
+ * game's explicit all-pools sentinel, so either can contend with a named pool as well.
+ */
+function contendsWithPool(
+  targetPool: string | undefined,
+  actionPool: string | undefined,
+): boolean {
+  return (
+    targetPool === undefined ||
+    actionPool === undefined ||
+    targetPool === ANYWHERE_POOL ||
+    actionPool === ANYWHERE_POOL ||
+    targetPool === actionPool
+  );
 }
 
 export function createCapturedCostConflictReader(
@@ -45,11 +66,17 @@ export function createCapturedCostConflictReader(
   const additionalReservations = dependencies.additionalReservations;
 
   return Object.freeze({
-    evaluate(cost: Readonly<Record<string, number>>): CapturedCostConflict {
+    evaluate(
+      cost: Readonly<Record<string, number>>,
+      pool?: string,
+    ): CapturedCostConflict {
       const sample = reservations.readReservations();
       const additional = additionalReservations?.readReservations();
       if (sample.unavailable || additional?.unavailable) return UNAVAILABLE;
-      const targets = [...sample.targets, ...(additional?.targets ?? [])];
+      const targets = [
+        ...sample.targets,
+        ...(additional?.targets ?? []),
+      ].filter((target) => contendsWithPool(target.pool, pool));
       if (targets.length === 0) return NONE;
 
       // One holdings sample covers the action's own cost and every reserved cost, so the
@@ -58,7 +85,10 @@ export function createCapturedCostConflictReader(
       for (const target of targets) {
         for (const id of Object.keys(target.cost)) wanted.add(id);
       }
-      const held = resources.readResources(wanted);
+      const held = resources.readResources(
+        wanted,
+        pool === undefined ? undefined : { pool },
+      );
       if (held === undefined) return NONE;
       const holdings: Record<string, CostConflictResource> = {};
       for (const id of wanted) {

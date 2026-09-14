@@ -160,6 +160,7 @@ export function createCapturedConstructionAdapter(
     ) {
       cycleSavingTarget = Object.freeze({
         name: candidate.key,
+        ...(candidate.pool === undefined ? {} : { pool: candidate.pool }),
         cost: Object.freeze({ ...candidate.cost }),
       });
     }
@@ -236,7 +237,7 @@ export function createCapturedConstructionAdapter(
       if (!respectReservations) {
         return Object.freeze({ conflict: null, important });
       }
-      const evaluated = conflicts.evaluate(candidate.cost);
+      const evaluated = conflicts.evaluate(candidate.cost, candidate.pool);
       if (evaluated.status === "none") {
         return Object.freeze({ conflict: null, important });
       }

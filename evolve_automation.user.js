@@ -2709,18 +2709,27 @@
   var NONE = Object.freeze({ status: "none" }), UNAVAILABLE2 = Object.freeze({
     status: "unavailable"
   });
+  function contendsWithPool(targetPool, actionPool) {
+    return targetPool === void 0 || actionPool === void 0 || targetPool === ANYWHERE_POOL || actionPool === ANYWHERE_POOL || targetPool === actionPool;
+  }
   function createCapturedCostConflictReader(dependencies) {
     let { resources, reservations } = dependencies, additionalReservations = dependencies.additionalReservations;
     return Object.freeze({
-      evaluate(cost) {
+      evaluate(cost, pool) {
         let sample = reservations.readReservations(), additional = additionalReservations?.readReservations();
         if (sample.unavailable || additional?.unavailable) return UNAVAILABLE2;
-        let targets = [...sample.targets, ...additional?.targets ?? []];
+        let targets = [
+          ...sample.targets,
+          ...additional?.targets ?? []
+        ].filter((target) => contendsWithPool(target.pool, pool));
         if (targets.length === 0) return NONE;
         let wanted = new Set(Object.keys(cost));
         for (let target of targets)
           for (let id of Object.keys(target.cost)) wanted.add(id);
-        let held = resources.readResources(wanted);
+        let held = resources.readResources(
+          wanted,
+          pool === void 0 ? void 0 : { pool }
+        );
         if (held === void 0) return NONE;
         let holdings = {};
         for (let id of wanted)
@@ -2809,6 +2818,7 @@
             Object.freeze({
               name: item.label,
               cause,
+              ...price.pool === void 0 ? {} : { pool: price.pool },
               cost: Object.freeze({ ...price.cost })
             })
           );
@@ -3019,6 +3029,7 @@
         zeroCapIsCeiling: !1
       }) !== !1 && (cycleSavingTarget = Object.freeze({
         name: candidate.key,
+        ...candidate.pool === void 0 ? {} : { pool: candidate.pool },
         cost: Object.freeze({ ...candidate.cost })
       })), !1);
     }
@@ -3060,7 +3071,7 @@
         let { candidate } = entryAt(index), important = candidate.important;
         if (!respectReservations)
           return Object.freeze({ conflict: null, important });
-        let evaluated = conflicts.evaluate(candidate.cost);
+        let evaluated = conflicts.evaluate(candidate.cost, candidate.pool);
         return evaluated.status === "none" ? Object.freeze({ conflict: null, important }) : evaluated.status === "unavailable" ? Object.freeze({
           conflict: Object.freeze({
             unavailable: !0,
@@ -4725,6 +4736,7 @@
             Object.freeze({
               name: target.name,
               cause: SAVING_CONFLICT_CAUSE,
+              ...target.pool === void 0 ? {} : { pool: target.pool },
               cost: target.cost
             })
           ])
