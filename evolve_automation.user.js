@@ -11318,6 +11318,8 @@
         return isRecord(fortress) ? finite(readProperty(fortress, "patrols")) ?? 0 : 0;
       case "hellPatrolSize":
         return isRecord(fortress) ? finite(readProperty(fortress, "patrol_size")) ?? 0 : 0;
+      case "raid":
+        return isRecord(garrison) ? finite(readProperty(garrison, "raid")) ?? 0 : 0;
       default:
         return;
     }

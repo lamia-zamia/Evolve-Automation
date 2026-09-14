@@ -867,7 +867,7 @@ const garrisoned = {
   ...root,
   civic: {
     ...root.civic,
-    garrison: { workers: 10, max: 12, crew: 1, wounded: 2 },
+    garrison: { workers: 10, max: 12, crew: 1, wounded: 2, raid: 4 },
   },
   portal: { fortress: { garrison: 5, patrols: 1, patrol_size: 2 } },
   space: { ...root.space, fob: { troops: 1 } },
@@ -885,6 +885,7 @@ assert.equal(readCapturedOperand(garrisoned, "Soldiers", "maxCityGarrison"), 6);
 assert.equal(readCapturedOperand(garrisoned, "Soldiers", "hellSoldiers"), 5);
 assert.equal(readCapturedOperand(garrisoned, "Soldiers", "hellPatrols"), 1);
 assert.equal(readCapturedOperand(garrisoned, "Soldiers", "hellPatrolSize"), 2);
+assert.equal(readCapturedOperand(garrisoned, "Soldiers", "raid"), 4);
 // Hell Garrison uses the game's defender sample, not a second reserve calculation.
 for (const defenders of [0, 2, -1]) {
   const context = { hellGarrison: defenders };
@@ -930,11 +931,11 @@ assert.equal(
   readCapturedOperand(garrisoned, "Soldiers", "mercenaryCost"),
   undefined,
 );
-assert.equal(readCapturedOperand(garrisoned, "Soldiers", "raid"), undefined);
 // Before the garrison exists every count is zero, like the manager before its first update.
 assert.equal(readCapturedOperand(root, "Soldiers", "workers"), 0);
 assert.equal(readCapturedOperand(root, "Soldiers", "currentCityGarrison"), 0);
 assert.equal(readCapturedOperand(root, "Soldiers", "hellSoldiers"), 0);
+assert.equal(readCapturedOperand(root, "Soldiers", "raid"), 0);
 // Numeric conditions compare with `>=`.
 assert.equal(
   evaluateCapturedCondition(garrisoned, "Soldiers", "workers", 10),
