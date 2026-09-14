@@ -36,7 +36,7 @@ const root = {
   portal: { carport: { damaged: 1 } },
   arpa: { launch_facility: { rank: 1, complete: 42 } },
   resource: {
-    Money: { amount: 250, max: 1000, display: true },
+    Money: { amount: 250, max: 1000, display: true, diff: 12 },
     Plywood: { amount: 10, max: 100, display: true },
     Soul_Gem: { amount: 0, max: -1, display: false },
   },
@@ -1086,6 +1086,7 @@ const stored = {
     prestigeType: "mad",
     tickRate: 8,
     autoBuild: true,
+    autoMarket: false,
     customName: "yes",
     evolutionQueue: ["human", "elven", "orc"],
   },
@@ -1173,6 +1174,25 @@ assert.equal(
 );
 assert.equal(evaluateCapturedCondition(root, "Queue", "evo", 3, stored), true);
 assert.equal(evaluateCapturedCondition(root, "Queue", "evo", 4, stored), false);
+
+// ResourceIncome is exact when the finalized resource rate has no private market or decay
+// adjustment. The live diff is deliberately not guessed when either adjustment could apply.
+assert.equal(readCapturedOperand(root, "ResourceIncome", "Money", stored), 12);
+assert.equal(
+  readCapturedOperand(
+    { ...root, race: { ...root.race, decay: 1 } },
+    "ResourceIncome",
+    "Money",
+    stored,
+  ),
+  undefined,
+);
+assert.equal(
+  readCapturedOperand(root, "ResourceIncome", "Money", {
+    settings: { autoMarket: true },
+  }),
+  undefined,
+);
 
 // Nothing the capture does not hold is guessed at.
 assert.equal(readCapturedOperand(root, "Eval", "1 + 1"), undefined);

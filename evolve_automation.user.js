@@ -10897,6 +10897,10 @@
     if (required !== void 0)
       return !(maximum > 0) || !(required > 0) ? 1 : amount / Math.min(maximum, required);
   }
+  function resourceIncome(root, context, argument) {
+    if (!(typeof argument != "string" || context?.settings === void 0) && context.settings.autoMarket !== !0 && !readProperty(readProperty(root, "race"), "decay"))
+      return finite(readProperty(resourceRecord(root, argument), "diff"));
+  }
   function civicJob(root, argument) {
     if (typeof argument == "string")
       return readProperty(readProperty(root, "civic"), argument);
@@ -11086,6 +11090,8 @@
         return finite(readProperty(resourceRecord(root, argument), "amount"));
       case "ResourceStorage":
         return finite(readProperty(resourceRecord(root, argument), "max"));
+      case "ResourceIncome":
+        return resourceIncome(root, context, argument);
       case "ResourceMaxCost":
         return typeof argument != "string" || demandResourceRecord(root, argument) === void 0 ? void 0 : finite(context?.demand?.maxCost?.(argument));
       case "ResourceSatisfyRatio":

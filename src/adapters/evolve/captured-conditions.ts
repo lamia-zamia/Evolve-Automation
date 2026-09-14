@@ -32,7 +32,7 @@
  * `CapturedConditionContext`, and a condition naming one goes
  * unanswered whenever the pass it needs was not taken.
  *
- * Everything else a condition can name — resource income, custom expressions, building
+ * Everything else a condition can name — adjusted resource income, custom expressions, building
  * clickability, manager-computed values, and anything needing the
  * module-level race catalog or a private action definition — is deliberately absent.
  *
@@ -209,6 +209,25 @@ function demandUsefulRatio(
   if (required === undefined) return undefined;
   if (!(maximum > 0) || !(required > 0)) return 1;
   return amount / Math.min(maximum, required);
+}
+
+/**
+ * The legacy ResourceIncome operand reads the finalized rate, which adds market sells and decay
+ * back onto `resource.diff`. Without either adjustment, the captured diff is that exact value.
+ * Active market and decay runs stay unanswered until their private breakdown and trade-ratio
+ * inputs are captured.
+ */
+function resourceIncome(
+  root: unknown,
+  context: Readonly<CapturedConditionContext> | undefined,
+  argument: unknown,
+): number | undefined {
+  if (typeof argument !== "string" || context?.settings === undefined) {
+    return undefined;
+  }
+  if (context.settings["autoMarket"] === true) return undefined;
+  if (readProperty(readProperty(root, "race"), "decay")) return undefined;
+  return finite(readProperty(resourceRecord(root, argument), "diff"));
 }
 
 /** One civic job entry by its stored id, e.g. `farmer` — not a crafting resource id. */
@@ -582,6 +601,8 @@ function readNumber(
       return finite(readProperty(resourceRecord(root, argument), "amount"));
     case "ResourceStorage":
       return finite(readProperty(resourceRecord(root, argument), "max"));
+    case "ResourceIncome":
+      return resourceIncome(root, context, argument);
     case "ResourceMaxCost": {
       // The largest single cost the commitments name. Without the demand pass there is no
       // accumulation to read, so unanswered rather than zero.
