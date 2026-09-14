@@ -11,6 +11,11 @@ import {
 } from "../adapters/evolve/civic/captured-government.ts";
 import { createCapturedHellAutomation } from "../adapters/evolve/combat/captured-hell.ts";
 import {
+  createCapturedGenetics,
+  GENETICS_CONTROL,
+} from "../adapters/evolve/traits/captured-genetics.ts";
+import { runGeneticsAutomation } from "../application/genetics.ts";
+import {
   HELL_GARRISON_CONTROLS,
   readCapturedHellGarrison,
 } from "../adapters/evolve/combat/captured-hell-garrison.ts";
@@ -314,6 +319,12 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
   });
+  const genetics = createCapturedGenetics({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => settingsStore.readRaw(),
+    readDemand: () => readDemand(),
+  });
   const costs = createCapturedCraftCosts({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -611,6 +622,45 @@ export function startCapturedRuntime({
     if (result.outcome.status !== "succeeded") {
       logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+  let geneticsDiscoveryAttempted = false;
+  /**
+   * Draws the A.R.P.A. tab, where `loadTab` calls `arpa('Genetics')` in the same pass that draws the
+   * project panel, and `genetics()` binds `#arpaSequence`. Both of its own gates are checked first:
+   * `genetics()` returns before drawing anything unless `settings.arpa.genetics` is set, and the
+   * sequencer panel itself exists only above `tech.genetics` 1.
+   */
+  const ensureGeneticsControls = () => {
+    if (pageCapture.controls.resolve(GENETICS_CONTROL) !== undefined) return;
+    const root = pageCapture.rootState.readRoot();
+    const level = readProperty(readProperty(root, "tech"), "genetics");
+    const panelOffered = readProperty(
+      readProperty(readProperty(root, "settings"), "arpa"),
+      "genetics",
+    );
+    if (
+      typeof level !== "number" ||
+      !Number.isFinite(level) ||
+      level < 2 ||
+      panelOffered !== true
+    ) {
+      return;
+    }
+    if (geneticsDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    geneticsDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: MAIN_TAB_INDEX.arpa,
+      }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `genetics discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
     }
   };
@@ -1517,6 +1567,13 @@ export function startCapturedRuntime({
       }
       if (!triggerActive && isEnabled(settings, "autoResearch")) {
         runPhase("autoResearch", () => progression.runResearchCycle());
+      }
+      // After construction and research, so neither is outbid for the Knowledge a gene costs.
+      if (isEnabled(settings, "autoGenetics")) {
+        runPhase("autoGenetics", () => {
+          ensureGeneticsControls();
+          runGeneticsAutomation(genetics);
+        });
       }
     } catch (error) {
       // Backstop for anything outside a phase boundary. Each feature now catches its own throw, so

@@ -6091,6 +6091,253 @@
     });
   }
 
+  // src/adapters/evolve/traits/captured-genetics.ts
+  var GENETICS_CONTROL = "arpaSequence", GENE_KNOWLEDGE_COST = 2e5, TOGGLE_FLAG = Object.freeze({
+    sequence: "on",
+    boost: "boost",
+    auto: "auto"
+  }), TOGGLE_METHOD = Object.freeze({
+    sequence: "toggle",
+    boost: "booster",
+    auto: "auto_seq"
+  });
+  function lockedInput(level) {
+    return Object.freeze({
+      available: !1,
+      technologyLevel: level,
+      mutationCount: 0,
+      sequenceMode: "none",
+      sequenceOn: !1,
+      boostMode: "none",
+      boostOn: !1,
+      assembleMode: "none",
+      autoOn: !1,
+      assembly: null
+    });
+  }
+  function settingMode(settings, key) {
+    let value = readProperty(settings, key);
+    return typeof value == "string" ? value : "none";
+  }
+  function sequenceFlag(sequence, key) {
+    return readProperty(sequence, key) === !0;
+  }
+  function createCapturedGenetics(dependencies) {
+    let session = null, handle, readLevel = (root) => finite(readProperty(readProperty(root, "tech"), "genetics")) ?? 0, reader = Object.freeze({
+      readGate() {
+        let level = readLevel(dependencies.rootState.readRoot());
+        return level === 0 && (session = null), Object.freeze({ unlocked: level !== 0 });
+      },
+      readPlan() {
+        let root = dependencies.rootState.readRoot(), level = readLevel(root), sequence = readProperty(readProperty(root, "arpa"), "sequence");
+        if (level === 0 || !isRecord(sequence) || handle === void 0)
+          return session = null, lockedInput(level);
+        let settings = dependencies.readSettings(), assembleMode = level >= 6 ? settingMode(settings, "geneticsAssemble") : "none", resources = readProperty(root, "resource"), knowledge = readProperty(resources, "Knowledge"), genes = readProperty(resources, "Genes"), knowledgeCurrent = finite(readProperty(knowledge, "amount")), knowledgeMaximum = finite(readProperty(knowledge, "max")), assembly = assembleMode === "auto" && isRecord(knowledge) && isRecord(genes) && knowledgeCurrent !== void 0 && knowledgeMaximum !== void 0 && knowledgeMaximum >= 0 ? Object.freeze({
+          knowledgeCurrent,
+          knowledgeRate: finite(readProperty(knowledge, "diff")) ?? 0,
+          knowledgeMaximum,
+          knowledgeDemanded: dependencies.readDemand().isDemanded("Knowledge"),
+          genesCurrent: finite(readProperty(genes, "amount")) ?? 0,
+          // One working cycle is what the next press has to get ahead of, which is the same
+          // conversion the gate itself counts in.
+          ticksPerSecond: readScriptCyclesPerSecond(settings)
+        }) : null;
+        return session = Object.freeze({
+          root,
+          sequence,
+          knowledge: isRecord(knowledge) ? knowledge : void 0,
+          genes: isRecord(genes) ? genes : void 0,
+          handle
+        }), Object.freeze({
+          available: !0,
+          technologyLevel: level,
+          mutationCount: finite(readProperty(readProperty(root, "race"), "mutation")) ?? 0,
+          sequenceMode: settingMode(settings, "geneticsSequence"),
+          sequenceOn: sequenceFlag(sequence, "on"),
+          boostMode: level >= 5 ? settingMode(settings, "geneticsBoost") : "none",
+          boostOn: level >= 5 && sequenceFlag(sequence, "boost"),
+          assembleMode,
+          autoOn: level >= 6 && sequenceFlag(sequence, "auto"),
+          assembly
+        });
+      }
+    }), controls = Object.freeze({
+      capture() {
+        return handle = dependencies.controls.resolve(GENETICS_CONTROL), handle !== void 0;
+      },
+      toggle() {
+        return handle !== void 0;
+      },
+      assemble() {
+        return handle !== void 0;
+      }
+    }), openSession = () => {
+      let active = session;
+      if (active === null)
+        return {
+          outcome: stale(
+            "genetics-session-missing",
+            "genetics session is missing"
+          )
+        };
+      let root = dependencies.rootState.readRoot();
+      if (root !== active.root)
+        return {
+          outcome: stale("genetics-root-changed", "captured game root changed")
+        };
+      if (readLevel(root) === 0)
+        return {
+          outcome: stale("genetics-locked", "genetics became unavailable")
+        };
+      if (readProperty(readProperty(root, "arpa"), "sequence") !== active.sequence)
+        return {
+          outcome: stale(
+            "genetics-sequence-changed",
+            "genetics sequence changed"
+          )
+        };
+      let current = dependencies.controls.resolve(GENETICS_CONTROL);
+      return current === void 0 || current.generation !== active.handle.generation ? {
+        outcome: stale(
+          "genetics-control-stale",
+          "captured genetics control was rebound"
+        )
+      } : { active };
+    }, executeToggle = (decision, active) => {
+      let property = TOGGLE_FLAG[decision.toggle], method = TOGGLE_METHOD[decision.toggle];
+      if (property === void 0 || method === void 0)
+        return rejected(
+          "invalid-genetics-toggle",
+          "genetics toggle decision is invalid"
+        );
+      let actual = sequenceFlag(active.sequence, property);
+      if (actual !== decision.expected)
+        return stale("genetics-toggle-changed", "genetics toggle changed", {
+          toggle: decision.toggle,
+          expected: decision.expected,
+          actual
+        });
+      if (actual === decision.enabled) return SUCCEEDED;
+      let result = dependencies.controls.invoke(active.handle, method);
+      return result.ok ? SUCCEEDED : rejected("genetics-toggle-failed", result.detail ?? result.reason);
+    }, executeAssembly = (decision, active) => {
+      if (!Number.isSafeInteger(decision.count) || decision.count <= 0)
+        return rejected(
+          "invalid-genetics-assembly",
+          "genetics assembly must have a positive safe count"
+        );
+      let { knowledge, genes } = active;
+      if (knowledge === void 0 || genes === void 0)
+        return stale(
+          "genetics-resources-missing",
+          "genetics resources are missing"
+        );
+      if (finite(readProperty(knowledge, "amount")) !== decision.expectedKnowledge || finite(readProperty(genes, "amount")) !== decision.expectedGenes)
+        return stale("genetics-balances-changed", "genetics balances changed");
+      for (let bought = 0; bought < decision.count; ) {
+        let before = finite(readProperty(genes, "amount")), funds = finite(readProperty(knowledge, "amount"));
+        if (before === void 0 || funds === void 0)
+          return stale("genetics-balances-changed", "genetics balances changed");
+        if (funds < GENE_KNOWLEDGE_COST) break;
+        let result = dependencies.controls.invoke(active.handle, "novo");
+        if (!result.ok)
+          return rejected(
+            "genetics-assembly-failed",
+            result.detail ?? result.reason
+          );
+        let after = finite(readProperty(genes, "amount"));
+        if (after === void 0 || after <= before)
+          return stale(
+            "genetics-assembly-declined",
+            "genetics assembly bought no genes"
+          );
+        bought += after - before;
+      }
+      return SUCCEEDED;
+    }, executor = Object.freeze({
+      execute(decision) {
+        let opened = openSession();
+        return "outcome" in opened ? opened.outcome : decision.kind === "set-genetics-toggle" ? executeToggle(decision, opened.active) : decision.kind === "assemble-genes" ? executeAssembly(decision, opened.active) : rejected(
+          "invalid-genetics-decision",
+          "genetics decision is invalid"
+        );
+      }
+    });
+    return Object.freeze({ reader, executor, controls });
+  }
+
+  // src/domain/traits/genetics.ts
+  function configuredTarget(mode) {
+    return mode === "enabled" ? !0 : mode === "disabled" ? !1 : null;
+  }
+  function planGenetics(input) {
+    if (!input.available) return Object.freeze([]);
+    let decisions = [], sequenceTarget = input.sequenceMode === "decode" ? input.mutationCount < 1 : configuredTarget(input.sequenceMode);
+    if (sequenceTarget !== null && sequenceTarget !== input.sequenceOn && decisions.push(
+      Object.freeze({
+        kind: "set-genetics-toggle",
+        toggle: "sequence",
+        expected: input.sequenceOn,
+        enabled: sequenceTarget
+      })
+    ), input.technologyLevel < 5) return Object.freeze(decisions);
+    let boostTarget = configuredTarget(input.boostMode);
+    if (boostTarget !== null && boostTarget !== input.boostOn && decisions.push(
+      Object.freeze({
+        kind: "set-genetics-toggle",
+        toggle: "boost",
+        expected: input.boostOn,
+        enabled: boostTarget
+      })
+    ), input.technologyLevel < 6) return Object.freeze(decisions);
+    let autoTarget = configuredTarget(input.assembleMode);
+    autoTarget !== null && autoTarget !== input.autoOn && decisions.push(
+      Object.freeze({
+        kind: "set-genetics-toggle",
+        toggle: "auto",
+        expected: input.autoOn,
+        enabled: autoTarget
+      })
+    );
+    let assembly = input.assembly;
+    if (input.assembleMode !== "auto" || assembly === null || assembly.knowledgeCurrent < 2e5 || assembly.knowledgeDemanded)
+      return Object.freeze(decisions);
+    let overflowKnowledge = assembly.knowledgeCurrent + assembly.knowledgeRate / assembly.ticksPerSecond - assembly.knowledgeMaximum;
+    if (overflowKnowledge <= 0) return Object.freeze(decisions);
+    let count2 = Math.ceil(overflowKnowledge / 2e5);
+    return decisions.push(
+      Object.freeze({
+        kind: "assemble-genes",
+        count: count2,
+        expectedKnowledge: assembly.knowledgeCurrent,
+        expectedGenes: assembly.genesCurrent,
+        knowledgeAfter: assembly.knowledgeCurrent - 2e5 * count2,
+        genesAfter: assembly.genesCurrent + count2
+      })
+    ), Object.freeze(decisions);
+  }
+
+  // src/application/genetics.ts
+  var SUCCEEDED7 = Object.freeze({
+    status: "succeeded"
+  });
+  function runGeneticsAutomation(dependencies) {
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED7;
+    if (!dependencies.controls.capture())
+      return {
+        status: "stale",
+        failure: {
+          code: "genetics-controls-unavailable",
+          message: "genetics controls are unavailable"
+        }
+      };
+    for (let decision of planGenetics(dependencies.reader.readPlan())) {
+      let outcome = dependencies.executor.execute(decision);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED7;
+  }
+
   // src/adapters/evolve/civic/captured-job-catalog.ts
   function toCapturedJobsJobInputs(catalog) {
     if (!catalog.jobSettingsConfigured) return;
@@ -7575,9 +7822,9 @@
   });
   function readAuthorityInput(root, settings, previousCap) {
     if (settings.authorityManage !== !0) return unavailableInput().authority;
-    let configuredTarget = finite(settings.generalMinimumAuthority);
-    if (configuredTarget === void 0) return;
-    if (configuredTarget === 0)
+    let configuredTarget2 = finite(settings.generalMinimumAuthority);
+    if (configuredTarget2 === void 0) return;
+    if (configuredTarget2 === 0)
       return unavailableInput().authority;
     let resources = readProperty(root, "resource"), authority = readProperty(resources, "Authority");
     if (!isRecord(authority)) return;
@@ -7590,7 +7837,7 @@
     if (current === void 0 || maximum === void 0) return;
     let moraleCurrent = morale.current, moralePotential = morale.potential, moraleMaximum = morale.maximum, target = Math.max(
       100,
-      configuredTarget < 0 ? maximum : configuredTarget
+      configuredTarget2 < 0 ? maximum : configuredTarget2
     ), taxes = readProperty(readProperty(root, "civic"), "taxes"), taxDisplay = readProperty(taxes, "display"), taxRate = finiteNonNegative(readProperty(taxes, "tax_rate"));
     if (taxRate === void 0 || taxDisplay !== void 0 && typeof taxDisplay != "boolean")
       return;
@@ -15848,12 +16095,12 @@
   }
 
   // src/application/fleet.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function runFleetAutomation(dependencies) {
     let decision = planFleet(dependencies.reader.read());
-    return decision === null ? SUCCEEDED7 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED8 : dependencies.executor.execute(decision);
   }
 
   // src/domain/progression/build/trigger.ts
@@ -15866,7 +16113,7 @@
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function triggerResult(outcome, active) {
@@ -15877,7 +16124,7 @@
     for (; ; ) {
       let decision = planTrigger(dependencies.reader.read(index));
       if (decision === null)
-        return triggerResult(SUCCEEDED8, active);
+        return triggerResult(SUCCEEDED9, active);
       if (decision.kind === "click") {
         let execution = dependencies.executor.execute(decision);
         if (execution.outcome.status !== "succeeded")
@@ -15943,22 +16190,22 @@
   }
 
   // src/application/market.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function runMarketTradesAutomation(dependencies, bulkSell = !1, ignoreSellRatio = !1, adjustTradeRoutes = !1) {
     let measure = createPhaseMeasure(dependencies.diagnostics), tally = createCountTally(dependencies.diagnostics), gate = dependencies.reader.readGate();
     if (!gate.unlocked)
-      return SUCCEEDED9;
+      return SUCCEEDED10;
     if (adjustTradeRoutes) {
       let tradeRoutes = dependencies.tradeRoutes;
       if (tradeRoutes === void 0)
-        return SUCCEEDED9;
+        return SUCCEEDED10;
       measure("autoMarket.adjustTradeRoutes", () => tradeRoutes.adjust());
     }
     if (gate.noTrade)
-      return SUCCEEDED9;
-    let session = dependencies.reader.readSession(), outcome = SUCCEEDED9;
+      return SUCCEEDED10;
+    let session = dependencies.reader.readSession(), outcome = SUCCEEDED10;
     for (let index = 0; ; index++) {
       let sellInput = measure(
         "autoMarket.readSell",
@@ -16246,7 +16493,7 @@
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -16264,13 +16511,13 @@
           "autoStorage.expand",
           () => dependencies.expansion.expand(rawPlan.storageToBuild)
         ))
-          return SUCCEEDED10;
+          return SUCCEEDED11;
         let finalized = finalizeStorageAllocation(rawPlan, state), unfunded = unfundedStorageCapacity(finalized.decision);
         if (unfunded > 0 && measure(
           "autoStorage.expand",
           () => dependencies.expansion.expand(unfunded)
         ))
-          return SUCCEEDED10;
+          return SUCCEEDED11;
         let outcome = dependencies.executor.execute(finalized.decision);
         return outcome.status === "succeeded" && (state = finalized.nextState), outcome;
       },
@@ -19656,6 +19903,11 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw()
+    }), genetics = createCapturedGenetics({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => settingsStore.readRaw(),
+      readDemand: () => readDemand()
     }), costs = createCapturedCraftCosts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
@@ -19871,6 +20123,24 @@ Only continue if you trust the source. Injected code:
       ]);
       result.outcome.status !== "succeeded" && logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
+    }, geneticsDiscoveryAttempted = !1, ensureGeneticsControls = () => {
+      if (pageCapture2.controls.resolve(GENETICS_CONTROL) !== void 0) return;
+      let root = pageCapture2.rootState.readRoot(), level = readProperty(readProperty(root, "tech"), "genetics"), panelOffered = readProperty(
+        readProperty(readProperty(root, "settings"), "arpa"),
+        "genetics"
+      );
+      if (typeof level != "number" || !Number.isFinite(level) || level < 2 || panelOffered !== !0 || geneticsDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      geneticsDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.arpa
+        })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `genetics discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
     }, galaxyFleetDiscoveryAttempted = !1, ensureGalaxyFleetControls = () => {
       if (pageCapture2.controls.resolve("fleet") !== void 0 || galaxyFleetDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
@@ -20359,7 +20629,9 @@ Only continue if you trust the source. Injected code:
             reader: fleet.reader,
             executor: fleet.executor
           }));
-        }), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle());
+        }), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle()), isEnabled(settings, "autoGenetics") && runPhase("autoGenetics", () => {
+          ensureGeneticsControls(), runGeneticsAutomation(genetics);
+        });
       } catch (error) {
         logError(String(error));
       } finally {
