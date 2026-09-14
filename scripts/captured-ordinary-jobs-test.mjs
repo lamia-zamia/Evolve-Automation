@@ -191,8 +191,8 @@ const authorityRoot = {
     },
     entertainer: {
       job: "entertainer",
-      assigned: 1,
-      workers: 1,
+      assigned: 2,
+      workers: 2,
       max: -1,
       display: true,
     },
@@ -204,7 +204,7 @@ const authorityRoot = {
     Authority: { amount: 120, max: 200, display: true },
   },
   // The game keeps morale in `global.city.morale`; there is no `resource.Morale`.
-  city: { morale: { current: 110, cap: 200, potential: 0.5 } },
+  city: { morale: { current: 110, cap: 200, potential: 0.5, entertain: 4.8 } },
   race: {},
   tech: { theatre: 2 },
 };
@@ -237,7 +237,7 @@ assert.deepEqual(authorityInput.authority, {
   moralePotential: 0.5,
   moraleMaximum: 200,
   moraleCeiling: 132.22222222222223,
-  entertainerMorale: 2,
+  entertainerMorale: 2.4,
   superstarMorale: 0,
   previousCap: null,
   debug: false,
@@ -265,6 +265,52 @@ assert.equal(
   "a migrated save's non-finite morale stands authority down instead of disabling every job",
 );
 assert.equal(nanMoraleInput.authority.enabled, false);
+
+const zeroEntertainerRoot = structuredClone(authorityRoot);
+zeroEntertainerRoot.civic.entertainer.assigned = 0;
+zeroEntertainerRoot.civic.entertainer.workers = 0;
+zeroEntertainerRoot.city.morale.entertain = 0;
+const zeroEntertainerAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => zeroEntertainerRoot },
+  controls: authorityControls,
+  readSettings: () => ({
+    ...resetBreakpoints,
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+    job_unemployed: true,
+    job_farmer: true,
+    job_entertainer: true,
+  }),
+});
+const zeroEntertainerInput = zeroEntertainerAutomation.reader.readCycle(false);
+assert.equal(zeroEntertainerInput.available, true);
+assert.equal(
+  zeroEntertainerInput.authority.entertainerMorale,
+  0,
+  "zero Entertainers keep the authority contribution conservative",
+);
+
+const uninitializedEntertainmentRoot = structuredClone(authorityRoot);
+delete uninitializedEntertainmentRoot.city.morale.entertain;
+const uninitializedEntertainmentAutomation =
+  createCapturedOrdinaryJobsAutomation({
+    rootState: { readRoot: () => uninitializedEntertainmentRoot },
+    controls: authorityControls,
+    readSettings: () => ({
+      ...resetBreakpoints,
+      authorityManage: true,
+      generalMinimumAuthority: 100,
+      job_unemployed: true,
+      job_farmer: true,
+      job_entertainer: true,
+    }),
+  });
+assert.equal(
+  uninitializedEntertainmentAutomation.reader.readCycle(false).authority
+    .enabled,
+  false,
+  "an uninitialized entertainment field stands down only the authority cap",
+);
 
 const taxTaskAuthorityRoot = structuredClone(authorityRoot);
 taxTaskAuthorityRoot.resource.Authority.amount = 50;

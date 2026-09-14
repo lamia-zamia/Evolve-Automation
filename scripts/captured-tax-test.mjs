@@ -7,7 +7,7 @@ let root = {
     govern: { type: "democracy" },
   },
   // The game keeps morale in `global.city.morale`; there is no `resource.Morale`.
-  city: { morale: { current: 200, cap: 500, potential: 0 } },
+  city: { morale: { current: 200, cap: 500, potential: 0, entertain: 0 } },
   resource: {
     Money: {
       amount: 50,

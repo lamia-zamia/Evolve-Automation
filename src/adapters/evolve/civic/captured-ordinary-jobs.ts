@@ -184,26 +184,6 @@ function traitValue(
   return value;
 }
 
-const MUSICAL_MORALE: Readonly<Record<number, number>> = Object.freeze({
-  0.1: 0.15,
-  0.25: 0.25,
-  0.5: 0.5,
-  1: 1,
-  2: 1.1,
-  3: 1.2,
-  4: 1.25,
-});
-
-const EMOTIONLESS_REDUCTION: Readonly<Record<number, number>> = Object.freeze({
-  0.1: 55,
-  0.25: 50,
-  0.5: 45,
-  1: 35,
-  2: 25,
-  3: 20,
-  4: 18,
-});
-
 const HIGH_POPULATION_MORALE: Readonly<Record<number, number>> = Object.freeze({
   0.1: 50,
   0.25: 50,
@@ -306,15 +286,9 @@ function readAuthorityInput(
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
   if (!isRecord(race) || !isRecord(tech)) return undefined;
-  const theatreValue = readProperty(tech, "theatre");
-  const theatre =
-    theatreValue === undefined ? 0 : finiteNonNegative(theatreValue);
-  const musical = traitValue(race, "musical", MUSICAL_MORALE, "raw");
-  const emotionless = traitValue(
-    race,
-    "emotionless",
-    EMOTIONLESS_REDUCTION,
-    "factor",
+  const entertainer = readProperty(readProperty(root, "civic"), "entertainer");
+  const entertainerWorkers = finiteNonNegative(
+    readProperty(entertainer, "workers"),
   );
   const highPopulation = traitValue(
     race,
@@ -322,19 +296,20 @@ function readAuthorityInput(
     HIGH_POPULATION_MORALE,
     "percent",
   );
-  if (
-    theatre === undefined ||
-    musical === undefined ||
-    emotionless === undefined ||
-    highPopulation === undefined
-  ) {
+  if (entertainerWorkers === undefined || highPopulation === undefined)
     return undefined;
-  }
+  // DeadSpace writes a total to `city.morale.entertain`. `workerScale` is a multiplicative
+  // worker-count adjustment, so dividing by the captured pool recovers the current per-worker
+  // value without restating Theatre, traits, astronomy, or government effects. At zero workers
+  // that ratio has no answer; zero keeps authority conservative and prevents growth on an
+  // unproven contribution.
   const entertainerMorale =
-    (theatre + musical) *
-    emotionless *
-    highPopulation *
-    (readProperty(race, "lone_survivor") ? 25 : 1);
+    entertainerWorkers === 0
+      ? 0
+      : morale.entertainment === undefined
+        ? undefined
+        : finite(morale.entertainment / entertainerWorkers);
+  if (entertainerMorale === undefined) return undefined;
   const superstarValue = readProperty(tech, "superstar");
   const superstar =
     superstarValue === undefined ? 0 : finiteNonNegative(superstarValue);

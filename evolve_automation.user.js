@@ -5525,8 +5525,11 @@
     let morale = readProperty(readProperty(root, "city"), "morale");
     if (!isRecord(morale)) return;
     let current = finite(readProperty(morale, "current")), maximum = finite(readProperty(morale, "cap")), potential = finite(readProperty(morale, "potential"));
-    if (!(current === void 0 || maximum === void 0 || potential === void 0))
-      return Object.freeze({ current, maximum, potential });
+    if (current === void 0 || maximum === void 0 || potential === void 0)
+      return;
+    let entertainmentValue = readProperty(morale, "entertain"), entertainment = entertainmentValue === void 0 ? void 0 : finite(entertainmentValue);
+    if (!(entertainmentValue !== void 0 && entertainment === void 0))
+      return Object.freeze({ current, maximum, potential, entertainment });
   }
 
   // src/adapters/evolve/civic/captured-tax.ts
@@ -8099,23 +8102,7 @@
     if (value !== void 0)
       return operation2 === "factor" ? 1 - value / 100 : operation2 === "percent" ? value / 100 : value;
   }
-  var MUSICAL_MORALE = Object.freeze({
-    0.1: 0.15,
-    0.25: 0.25,
-    0.5: 0.5,
-    1: 1,
-    2: 1.1,
-    3: 1.2,
-    4: 1.25
-  }), EMOTIONLESS_REDUCTION = Object.freeze({
-    0.1: 55,
-    0.25: 50,
-    0.5: 45,
-    1: 35,
-    2: 25,
-    3: 20,
-    4: 18
-  }), HIGH_POPULATION_MORALE = Object.freeze({
+  var HIGH_POPULATION_MORALE = Object.freeze({
     0.1: 50,
     0.25: 50,
     0.5: 34,
@@ -8175,20 +8162,19 @@
       return;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     if (!isRecord(race) || !isRecord(tech)) return;
-    let theatreValue = readProperty(tech, "theatre"), theatre = theatreValue === void 0 ? 0 : finiteNonNegative(theatreValue), musical = traitValue(race, "musical", MUSICAL_MORALE, "raw"), emotionless = traitValue(
-      race,
-      "emotionless",
-      EMOTIONLESS_REDUCTION,
-      "factor"
+    let entertainer = readProperty(readProperty(root, "civic"), "entertainer"), entertainerWorkers = finiteNonNegative(
+      readProperty(entertainer, "workers")
     ), highPopulation = traitValue(
       race,
       "high_pop",
       HIGH_POPULATION_MORALE,
       "percent"
     );
-    if (theatre === void 0 || musical === void 0 || emotionless === void 0 || highPopulation === void 0)
+    if (entertainerWorkers === void 0 || highPopulation === void 0)
       return;
-    let entertainerMorale = (theatre + musical) * emotionless * highPopulation * (readProperty(race, "lone_survivor") ? 25 : 1), superstarValue = readProperty(tech, "superstar"), superstar = superstarValue === void 0 ? 0 : finiteNonNegative(superstarValue);
+    let entertainerMorale = entertainerWorkers === 0 ? 0 : morale.entertainment === void 0 ? void 0 : finite(morale.entertainment / entertainerWorkers);
+    if (entertainerMorale === void 0) return;
+    let superstarValue = readProperty(tech, "superstar"), superstar = superstarValue === void 0 ? 0 : finiteNonNegative(superstarValue);
     if (superstar === void 0) return;
     let superstarMorale = superstar > 0 ? highPopulation : 0, moraleCeiling = null;
     if (!canTax) {
