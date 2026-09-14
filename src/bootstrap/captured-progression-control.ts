@@ -148,8 +148,8 @@ export interface CapturedProgressionControl {
    */
   readonly readKnowledgeRequiredByTechs: () => number;
   /**
-   * Discovers the construction action controls once, for features that act on build actions
-   * without running the construction cycle.
+   * Discovers the construction action controls for shown space tabs, for features that act on
+   * build actions without running the construction cycle.
    */
   readonly ensureBuildControls: () => void;
   /** The game's own answer to whether one more copy of each named building can be queued. */
@@ -253,28 +253,12 @@ export function createCapturedProgressionControl(
     diagnostics,
   });
   /**
-   * Space tabs whose panel has drawn at least one row, so the game has bound the build controls in
-   * it and there is nothing left to discover there.
-   *
-   * A region the player has not reached draws an empty panel, and a single session-wide latch
-   * therefore locked in whatever existed at startup: Eden and Tau Ceti unlocked later could never
-   * have their controls captured at all. Latching per tab instead leaves exactly the empty ones
-   * eligible, and the scope below decides when to try them again — the epoch has to move, and an
-   * attempt that finds nothing new widens the interval before the next, so a run that is nowhere
-   * near those regions is not sweeping them on every progression event.
+   * The space tabs worth a pass: the game is showing them. Each tab owns a separate progression
+   * scope below, so a new offer reopens that tab without making the others pay the draw.
    */
-  const latchedSpaceTabs = new Set<number>();
-  let sweptSelectedTab = false;
-  /**
-   * The space tabs still worth a pass: the game is showing them and nothing has been captured out
-   * of them yet. Its own `b-tab-item` visibility flags answer the first half for free, so a run
-   * that has never left the city never draws a pass for Eden — and the tab appearing is what makes
-   * the region eligible, which is the event a session-wide latch could not see.
-   */
-  const pendingSpaceTabs = (): readonly number[] => {
+  const shownSpaceTabs = (): readonly number[] => {
     const gameSettings = readProperty(rootState.readRoot(), "settings");
     return SPACE_TAB_SWEEP.filter((index) => {
-      if (latchedSpaceTabs.has(index)) return false;
       const shownBy = SPACE_TAB_SHOWN_BY[index];
       return (
         shownBy !== undefined && readProperty(gameSettings, shownBy) === true
@@ -282,13 +266,10 @@ export function createCapturedProgressionControl(
     });
   };
   rootState.subscribeRootReplaced(() => {
-    // A prestige takes the regions away again, and the panels a fresh run draws are not the ones
-    // these latches were taken against.
-    latchedSpaceTabs.clear();
-    sweptSelectedTab = false;
+    scopes.invalidateAll();
   });
-  /** One pass over each named tab, reported as the set the sweep ended up latching. */
-  const sweepBuildControls = (pending: readonly number[]): string => {
+  /** One explicit pass over a shown space tab. */
+  const sweepBuildControls = (index: number): string => {
     const spaceTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
     if (spaceTabControl === undefined) {
       onSkipped?.("build-discovery", "space-tab control is unavailable");
@@ -307,50 +288,36 @@ export function createCapturedProgressionControl(
       );
       return false;
     };
-    if (!sweptSelectedTab) {
-      // The bare main-tab path draws whichever sub-tab the player is on, which is the one path
-      // whose panel is not named here. It is worth exactly one pass.
-      sweptSelectedTab = report(discovery.discover(Object.freeze([main])));
-    }
     // Same reason as the unlock catalog: without the tab component's own render there is no
     // region container for the draw to fill, so `vBind` never reaches the action components and
     // the sweep captures nothing at all.
     const civilizationPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
-    for (const index of pending) {
-      const result = discovery.discover(
-        Object.freeze([
-          main,
-          Object.freeze({
-            setting: SPACE_TABS_SETTING,
-            control: spaceTabControl,
-            index,
-          }),
-        ]),
-        civilizationPanel === undefined
-          ? undefined
-          : { mount: Object.freeze([`#${civilizationPanel}`]) },
-      );
-      // One pass per tab the game is showing. Whether that pass actually bound anything is
-      // deliberately not the latch: a discovery draw suppresses mounting, and a civilization
-      // sub-panel is its tab component's own render, so the pass cannot see the rows it produced
-      // (see the scratch-container entry in docs/feature-backlog.md). Latching on rows would
-      // re-sweep every shown region for the whole session.
-      if (report(result)) latchedSpaceTabs.add(index);
+    if (civilizationPanel === undefined) {
+      onSkipped?.("build-discovery", "civilization panel is unavailable");
+      return "unavailable";
     }
-    return `${sweptSelectedTab ? "1" : "0"}:${[...latchedSpaceTabs].sort((left, right) => left - right).join(",")}`;
+    const result = discovery.discover(
+      Object.freeze([
+        main,
+        Object.freeze({
+          setting: SPACE_TABS_SETTING,
+          control: spaceTabControl,
+          index,
+        }),
+      ]),
+      { mount: Object.freeze([`#${civilizationPanel}`]) },
+    );
+    return report(result) ? result.discovered.join(",") : "failed";
   };
   const ensureBuildControls = () => {
     if (controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const pending = pendingSpaceTabs();
-    if (sweptSelectedTab && pending.length === 0) return;
-    // Keyed by what is pending, so a tab the game has only just started showing is swept on the
-    // cycle it appears rather than waiting out the interval a previous set had widened to. What
-    // the interval then paces is the residue: a shown tab that keeps drawing nothing.
-    scopes.read(
-      `${BUILD_CONTROLS_SCOPE} ${pending.join(",")}`,
-      () => sweepBuildControls(pending),
-      (previous, next) => previous === next,
-    );
+    for (const index of shownSpaceTabs()) {
+      scopes.read(
+        `${BUILD_CONTROLS_SCOPE} ${index}`,
+        () => sweepBuildControls(index),
+        (previous, next) => previous === next,
+      );
+    }
   };
   // The catalog a discovery pass already paid for, shared with the Knowledge gate so it never buys
   // one of its own. It is the last catalog read, which may be the previous cycle's.

@@ -15,19 +15,33 @@
  */
 
 import { finite, isRecord, readProperty } from "../validation.ts";
+import type { ResourceView } from "../../domain/game-world.ts";
+import { ABSENT_RESOURCE } from "../../domain/game-world.ts";
 
 /**
- * Whether the game has split its resources into per-region supply pools — upstream `supplyMode()`,
- * which is `'regional'` at exactly this technology level. Below it `poolCap` is the civilization's
+ * Whether the game has split its resources into per-region supply pools — upstream `supplyMode()`
+ * requires both `supplyUnlocked()` and `race.supplySplit`. Below it `poolCap` is the civilization's
  * own `max` for every resource, whatever pool is named.
  */
 export function isRegionalSupply(root: unknown): boolean {
   const shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
-  return shadow !== undefined && shadow >= 5;
+  return (
+    shadow !== undefined &&
+    shadow >= 5 &&
+    readProperty(readProperty(root, "race"), "supplySplit") === true
+  );
 }
 
 /** The game's sentinel pool for a cost that draws on the whole civilization; research uses it. */
 const ANYWHERE_POOL = "*";
+
+function hasRegionalLedger(resource: Record<PropertyKey, unknown>): boolean {
+  return (
+    isRecord(readProperty(resource, "reg")) ||
+    isRecord(readProperty(resource, "regMax")) ||
+    isRecord(readProperty(resource, "regDiff"))
+  );
+}
 
 /**
  * The resource id a cost key names. `Species` is the game's own alias for the current race's
@@ -60,13 +74,10 @@ function costResource(root: unknown, key: string): unknown {
  * when the resource is not split between pools. `-1` (any negative) is the game's "no limit".
  *
  * Upstream reads `atomic_mass[res]` to decide whether a resource is partitioned, a module-level
- * table nothing captures. The `regMax` ledger stands in for it: its only writer is `setRegCaps`,
- * called from the storage pass under exactly `regional && atomic_mass[res]`, so a ledger with any
- * entry in it is upstream's own `capsKnown` and proves the resource is split. An empty ledger is
- * ambiguous — a resource that is not split, or one whose first storage pass since `shadow` reached
- * 5 has not run — and is answered with the civilization's `max`. That is exact in the first case
- * and, in the second, the same optimistic answer this comparison gave before pools existed, which
- * upstream resolves within one storage pass. It is never looser than upstream's own transient `-1`.
+ * table nothing captures. The `reg`, `regMax`, and `regDiff` ledgers are written only for
+ * partitioned resources, so their presence is the captured proof that a named pool is meaningful.
+ * An empty ledger is still a known partitioned ledger for amount reads; an absent ledger falls
+ * back to the civilization-wide value for resources that are not partitioned or not initialized.
  */
 function capturedPoolCap(
   resource: Record<PropertyKey, unknown>,
@@ -77,7 +88,12 @@ function capturedPoolCap(
   if (capacity === undefined) return undefined;
   // `poolCap` falls straight through to `max` with no pool named, and `regMax` answers the
   // civilization total for the ANYWHERE sentinel and for an uncapped resource.
-  if (!regional || pool === undefined || pool === ANYWHERE_POOL)
+  if (
+    !regional ||
+    pool === undefined ||
+    pool === ANYWHERE_POOL ||
+    !hasRegionalLedger(resource)
+  )
     return capacity;
   if (capacity < 0) return capacity;
   const ledger = readProperty(resource, "regMax");
@@ -95,13 +111,37 @@ function capturedPoolAmount(
   pool: string | undefined,
   regional: boolean,
 ): number | undefined {
-  if (!regional || pool === undefined || pool === ANYWHERE_POOL) {
+  if (
+    !regional ||
+    pool === undefined ||
+    pool === ANYWHERE_POOL ||
+    !hasRegionalLedger(resource)
+  ) {
     return finite(readProperty(resource, "amount"));
   }
   const ledger = readProperty(resource, "reg");
   if (!isRecord(ledger)) return 0;
   const amount = readProperty(ledger, pool);
   return amount === undefined ? 0 : finite(amount);
+}
+
+function capturedPoolRate(
+  resource: Record<PropertyKey, unknown>,
+  pool: string | undefined,
+  regional: boolean,
+): number | undefined {
+  if (
+    !regional ||
+    pool === undefined ||
+    pool === ANYWHERE_POOL ||
+    !hasRegionalLedger(resource)
+  ) {
+    return finite(readProperty(resource, "diff"));
+  }
+  const ledger = readProperty(resource, "regDiff");
+  if (!isRecord(ledger)) return 0;
+  const rate = readProperty(ledger, pool);
+  return rate === undefined ? 0 : finite(rate);
 }
 
 /**
@@ -176,4 +216,32 @@ export function costFitsNow(
     if (capacity >= 0 && amount > capacity) return false;
   }
   return true;
+}
+
+/** Read one resource through the same pool ledger used by the game's affordability comparison. */
+export function readCapturedResourceView(
+  root: unknown,
+  key: string,
+  pool?: string,
+): ResourceView {
+  const resourceId = resolveCostResourceId(root, key);
+  const resource =
+    resourceId === undefined
+      ? undefined
+      : readProperty(readProperty(root, "resource"), resourceId);
+  if (!isRecord(resource)) return ABSENT_RESOURCE;
+  const regional = isRegionalSupply(root);
+  // Resource records are created before all of their numeric fields are initialized. Keep the
+  // world's lenient Number(undefined) behavior for that state; affordability itself remains
+  // strict and reports an unjudgeable comparison for the same fields.
+  const amount = capturedPoolAmount(resource, pool, regional) ?? Number.NaN;
+  const max = capturedPoolCap(resource, pool, regional) ?? Number.NaN;
+  const rateOfChange = capturedPoolRate(resource, pool, regional) ?? Number.NaN;
+  return Object.freeze({
+    unlocked: Boolean(readProperty(resource, "display")),
+    amount,
+    max,
+    rateOfChange,
+    storageRatio: max > 0 ? amount / max : 0,
+  });
 }

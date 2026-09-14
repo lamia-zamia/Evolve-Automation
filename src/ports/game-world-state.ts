@@ -37,5 +37,13 @@ export interface GameRaceTraitSource {
 
 export interface GameResourceSource {
   /** Views for exactly `ids`; an id that names no stored resource reports as absent. */
-  readResources(ids: Iterable<string>): ResourceSample | undefined;
+  readResources(
+    ids: Iterable<string>,
+    options?: Readonly<GameResourceReadOptions>,
+  ): ResourceSample | undefined;
+}
+
+/** Optional payment pool for resources that the game partitions regionally. */
+export interface GameResourceReadOptions {
+  readonly pool?: string;
 }

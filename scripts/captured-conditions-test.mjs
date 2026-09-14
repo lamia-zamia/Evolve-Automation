@@ -637,6 +637,7 @@ assert.equal(
 {
   const regional = {
     ...root,
+    race: { ...root.race, supplySplit: true },
     tech: { shadow: 5 },
     resource: {
       ...root.resource,

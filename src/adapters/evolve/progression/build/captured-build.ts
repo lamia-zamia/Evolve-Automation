@@ -62,12 +62,6 @@ export interface CapturedBuildDependencies {
 interface CycleCandidate {
   readonly target: Readonly<CapturedBuildTarget>;
   readonly candidate: Readonly<ConstructionCandidate>;
-  /**
-   * The supply pool this building pays from, as the game's cost probe reported it. Kept beside the
-   * domain candidate rather than in it: which world holds the resources is an upstream storage
-   * detail, and the planner only ever needs the price.
-   */
-  readonly pool: string | undefined;
 }
 
 const NO_CONSUMPTION = Object.freeze([]);
@@ -101,7 +95,7 @@ function readQueuedIds(
       if (
         candidate !== undefined &&
         costFitsStorage(root, candidate.candidate.cost, {
-          pool: candidate.pool,
+          pool: candidate.candidate.pool,
         }) === true
       ) {
         ids.add(id);
@@ -140,7 +134,6 @@ export function createCapturedBuildSource(
         }
         entries.set(target.key, {
           target,
-          pool: price.pool,
           candidate: Object.freeze({
             key: target.key,
             weighting: target.weighting,
@@ -148,6 +141,7 @@ export function createCapturedBuildSource(
             ignored: false,
             knowledge: target.knowledge ?? false,
             important: target.important,
+            ...(price.pool === undefined ? {} : { pool: price.pool }),
             ...(target.consumption === undefined
               ? {}
               : { consumption: target.consumption }),

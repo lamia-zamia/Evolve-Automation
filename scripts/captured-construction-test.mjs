@@ -88,14 +88,32 @@ function makeCycle({
   knowledgeGate,
   storageRequired,
   consumptionMode = "unlimited",
+  rootState: suppliedRootState,
 } = {}) {
   const bought = [];
+  const rootState = suppliedRootState ?? {
+    readRoot() {
+      return {
+        tech: {},
+        race: { supplySplit: false },
+        resource: Object.fromEntries(
+          Object.entries(holdings).map(([id, amount]) => [
+            id,
+            { display: true, amount, max: 100000, diff: 10 },
+          ]),
+        ),
+      };
+    },
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  };
   const adapter = createCapturedConstructionAdapter({
     sources: [
       makeSource("city", () => city, holdings, bought),
       makeSource("arpa", () => arpa, holdings, bought),
     ],
     resources: makeResources(holdings),
+    rootState,
     conflicts: { evaluate: () => conflict },
     ...(knowledgeGate === undefined
       ? {}
@@ -119,6 +137,41 @@ function runCycle(cycle) {
     reader: cycle.adapter.reader,
     executor: cycle.adapter.executor,
   });
+}
+
+// Building costs are paid from the action's regional pool, not the summed resource total.
+{
+  const root = {
+    tech: { shadow: 5 },
+    race: { supplySplit: true },
+    resource: {
+      Money: {
+        display: true,
+        amount: 1000,
+        max: 10000,
+        reg: { spc_home: 50 },
+        regMax: { spc_home: 100 },
+      },
+    },
+  };
+  const cycle = makeCycle({
+    city: [
+      {
+        key: "regional-farm",
+        weighting: 90,
+        cost: { Money: 200 },
+        pool: "spc_home",
+      },
+    ],
+    holdings: { Money: 1000 },
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+  });
+  assert.equal(runBuildAutomation(cycle.adapter).status, "succeeded");
+  assert.deepEqual(cycle.bought, []);
 }
 
 // Per-resource consumption is sampled from the managed candidate and is remembered after the

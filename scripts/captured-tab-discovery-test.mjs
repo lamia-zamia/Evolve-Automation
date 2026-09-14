@@ -729,7 +729,7 @@ assert.deepEqual(
     surface: 9,
   },
 );
-assert.deepEqual([...SPACE_TAB_SWEEP], [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+assert.deepEqual([...SPACE_TAB_SWEEP], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 assert.deepEqual(
   { ...GOV_TAB_INDEX },
   {

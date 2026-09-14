@@ -22,17 +22,17 @@ import type {
   ResourceView,
   TechSample,
 } from "../../domain/game-world.ts";
-import { ABSENT_RESOURCE } from "../../domain/game-world.ts";
 import type {
   GameIdentitySource,
   GameRaceTraitSource,
   GameResourceSource,
+  GameResourceReadOptions,
   GameSettingsSource,
   GameTechSource,
 } from "../../ports/game-world-state.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import { isRecord, readProperty } from "../validation.ts";
-import { resolveCostResourceId } from "./captured-affordability.ts";
+import { readCapturedResourceView } from "./captured-affordability.ts";
 
 /** The game's `show*` settings are the record of which features it is currently offering. */
 const FEATURE_PREFIX = "show";
@@ -57,20 +57,6 @@ function readCounter(owner: unknown, key: string): number {
 function readRank(value: unknown): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   return value === true ? 1 : 0;
-}
-
-function readResourceView(resource: unknown): ResourceView {
-  if (!isRecord(resource)) return ABSENT_RESOURCE;
-  const amount = Number(resource["amount"]);
-  const max = Number(resource["max"]);
-  return Object.freeze({
-    unlocked: Boolean(resource["display"]),
-    amount,
-    max,
-    rateOfChange: Number(resource["diff"]),
-    // An uncapped resource is stored as max -1, and is never near a ceiling.
-    storageRatio: max > 0 ? amount / max : 0,
-  });
 }
 
 export function createCapturedIdentitySource(
@@ -170,25 +156,17 @@ export function createCapturedResourceSource(
   rootState: GameRootStateSource,
 ): GameResourceSource {
   return Object.freeze({
-    readResources(ids: Iterable<string>): ResourceSample | undefined {
+    readResources(
+      ids: Iterable<string>,
+      options?: Readonly<GameResourceReadOptions>,
+    ): ResourceSample | undefined {
       const root = rootState.readRoot();
       if (root === undefined) return undefined;
-      const resource = readProperty(root, "resource");
       const resources = new Map<string, ResourceView>();
       for (const id of ids) {
-        // Cost keys reach here exactly as the game wrote them, and `Species` is its alias for the
-        // race's own population resource. Resolving it through the one owner of that rule keeps a
-        // `Species`-priced action from reading as costing a resource nobody holds. The map stays
-        // keyed by what the caller asked for, so callers need not know the alias exists.
-        const resourceId = resolveCostResourceId(root, id);
-        resources.set(
-          id,
-          readResourceView(
-            resourceId === undefined
-              ? undefined
-              : readProperty(resource, resourceId),
-          ),
-        );
+        // The map stays keyed by the requested cost id, including `Species`; the affordability
+        // adapter owns alias resolution and the optional regional pool ledger.
+        resources.set(id, readCapturedResourceView(root, id, options?.pool));
       }
       return Object.freeze({ resources });
     },

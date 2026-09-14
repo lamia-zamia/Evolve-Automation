@@ -244,6 +244,34 @@ assert.equal(
   assert.equal(canAfford(sample, { Morale: 1 }), false);
 }
 
+// Regional construction reads the paying pool rather than the civilization-wide total.
+{
+  const sample = createCapturedResourceSource(
+    rootSource({
+      tech: { shadow: 5 },
+      race: { supplySplit: true },
+      resource: {
+        Money: {
+          display: true,
+          amount: 950,
+          max: 10000,
+          diff: 30,
+          reg: { spc_home: 50, spc_moon: 900 },
+          regMax: { spc_home: 100, spc_moon: 1000 },
+          regDiff: { spc_home: 2, spc_moon: 28 },
+        },
+      },
+    }),
+  ).readResources(["Money"], { pool: "spc_home" });
+  assert.deepEqual(resourceView(sample, "Money"), {
+    unlocked: true,
+    amount: 50,
+    max: 100,
+    rateOfChange: 2,
+    storageRatio: 0.5,
+  });
+}
+
 {
   // A resource the game has created but not yet filled in reads leniently, not as a rejection.
   const sample = createCapturedResourceSource(

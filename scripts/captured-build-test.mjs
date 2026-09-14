@@ -14,14 +14,19 @@ function makePage({
   queueDisplay = false,
   buyAnyQueued = false,
   researchQueue,
+  shadow,
+  supplySplit = false,
 }) {
   const root = {
     settings: { expose: false, qAny: buyAnyQueued },
-    race: { species: "human" },
+    race: { species: "human", supplySplit },
     stats: { days: 100 },
     resource: {},
     city: {},
-    tech: researchQueue === undefined ? {} : { r_queue: 1 },
+    tech: {
+      ...(researchQueue === undefined ? {} : { r_queue: 1 }),
+      ...(shadow === undefined ? {} : { shadow }),
+    },
     queue: { display: queueDisplay, queue: [...queue] },
     ...(researchQueue === undefined
       ? {}
@@ -59,11 +64,14 @@ function makePage({
         const entry = root.queue.queue[index];
         const building = buildings[entry.type];
         if (building === undefined) throw new TypeError("unknown action");
-        return Object.fromEntries(
+        const result = Object.fromEntries(
           Object.entries(building.priceAt(root.city[entry.type].count)).map(
             ([res, amount]) => [`${prefix}-${res}`, amount],
           ),
         );
+        if (building.pool !== undefined)
+          result[`${prefix}-pool`] = building.pool;
+        return result;
       },
     },
   });
@@ -259,6 +267,37 @@ function queued(id, label = id) {
   assert.equal(control.runCycle().status, "succeeded");
   assert.deepEqual(page.clicks, []);
   assert.equal(page.root.city.farm.count, 0);
+}
+
+// The build source carries the action oracle's regional pool into shared affordability; the
+// civilization-wide total must not make a Home action look affordable.
+{
+  const page = makePage({
+    buildings: {
+      regional_farm: {
+        count: 0,
+        pool: "spc_home",
+        priceAt: () => ({ Money: 200 }),
+      },
+    },
+    resources: {
+      Money: {
+        amount: 1000,
+        max: 10000,
+        reg: { spc_home: 50 },
+        regMax: { spc_home: 100 },
+      },
+    },
+    shadow: 5,
+    supplySplit: true,
+  });
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("regional_farm", 50)]),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
 }
 
 // --- a higher-weighted competitor protects its resource ------------------------------------------------
@@ -697,13 +736,14 @@ function ignoreGateControl(page) {
 
 {
   // A zero capacity IS a ceiling here, matching upstream `cap >= 0`: the queued 400-Money
-  // warehouse can never be stored, so it is not ignored and outranks the farm.
+  // warehouse can never be stored, so it is not ignored, and current affordability also refuses
+  // the purchase before the action closure is invoked.
   const page = reservationPage({
     queue: [queued("city-warehouse", "Warehouse")],
     resources: { Money: { amount: 500, max: 0 } },
   });
   assert.equal(ignoreGateControl(page).runCycle().status, "succeeded");
-  assert.deepEqual(page.clicks, ["city-warehouse"]);
+  assert.deepEqual(page.clicks, []);
 }
 
 {

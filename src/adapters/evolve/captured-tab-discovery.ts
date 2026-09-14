@@ -173,14 +173,11 @@ export const SPACE_TAB_SHOWN_BY: Readonly<Record<number, string>> =
   });
 
 /**
- * The build-control sweep covers every space tab but the city: the bare main-tab path draws
- * whatever the player already has selected, and each of these gets its own pass. Derived from
- * the table so a new upstream tab joins the sweep with it.
+ * Every Civilization space-tab index, in upstream tab order. Each caller that sweeps these tabs
+ * supplies the same explicit parent/sub-tab path, including City.
  */
 export const SPACE_TAB_SWEEP: readonly number[] = Object.freeze(
-  Object.values(SPACE_TAB_INDEX).filter(
-    (index) => index !== SPACE_TAB_INDEX.city,
-  ),
+  Object.values(SPACE_TAB_INDEX),
 );
 
 /**

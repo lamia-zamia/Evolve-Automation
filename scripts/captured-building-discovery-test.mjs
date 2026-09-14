@@ -167,6 +167,7 @@ function makeGame({ regions, tech = { primitive: 1 } } = {}) {
     root,
     control,
     draws,
+    capturedElementIds: () => controls.capturedElementIds(),
     replaceRoot: () => {
       for (const listener of rootListeners) listener();
     },
@@ -270,8 +271,17 @@ const cityOnly = {
 
 // --- the build-control sweep follows the game's own tab visibility ------------------------------
 {
+  let bankOffered = false;
   const regions = { ...cityOnly };
   for (const index of SPACE_TAB_SWEEP) regions[index] = () => [];
+  regions[SPACE_TAB_INDEX.city] = () =>
+    bankOffered
+      ? [
+          ["city-farm"],
+          ["city-factory", "city", "factory"],
+          ["city-bank", "city", "bank"],
+        ]
+      : cityOnly[SPACE_TAB_INDEX.city]();
   regions[SPACE_TAB_INDEX.space] = () => [["space-moon_base"]];
   regions[SPACE_TAB_INDEX.eden] = () => [["eden-rune_gate"]];
 
@@ -282,40 +292,51 @@ const cityOnly = {
   game.root.settings.showSpace = true;
 
   game.control.ensureBuildControls();
-  assert.deepEqual(game.draws, [SPACE_TAB_INDEX.space]);
+  assert.deepEqual(
+    game.draws.sort((left, right) => left - right),
+    [SPACE_TAB_INDEX.city, SPACE_TAB_INDEX.space],
+  );
+  assert.equal(game.capturedElementIds().includes("city-factory"), true);
 
-  // One pass per shown tab, and that tab is then finished with: progression moving is not a reason
-  // to visit it, or any tab the game is not showing, again.
-  game.root.tech.dimensional_tear = 1;
-  game.advance(60_000);
+  // An unchanged attempt is held by the per-tab scope.
   game.draws.length = 0;
   game.control.ensureBuildControls();
   assert.deepEqual(game.draws, []);
 
+  // Progression reopens every shown scope. The newly offered City control is captured even though
+  // the player remains parked on Research.
+  bankOffered = true;
+  game.root.tech.dimensional_tear = 1;
+  game.draws.length = 0;
+  game.control.ensureBuildControls();
+  assert.deepEqual(
+    game.draws.sort((left, right) => left - right),
+    [SPACE_TAB_INDEX.city, SPACE_TAB_INDEX.space],
+  );
+  assert.equal(game.capturedElementIds().includes("city-bank"), true);
+
   // Eden unlocks: the game starts showing its tab, and the sweep picks up that one tab on the very
   // next call rather than waiting out an interval widened by earlier attempts.
   game.root.settings.showEden = true;
-  game.root.tech.elysium = 1;
   game.draws.length = 0;
   game.control.ensureBuildControls();
   assert.deepEqual(game.draws, [SPACE_TAB_INDEX.eden]);
   assert.deepEqual([...game.cycle("eden").unlocked], ["eden-rune_gate"]);
 
-  // And is not swept again, however much progression follows.
-  game.root.tech.elysium = 2;
-  game.advance(60_000);
+  // An unchanged attempt after the new offer is still held.
   game.draws.length = 0;
   game.control.ensureBuildControls();
   assert.deepEqual(game.draws, []);
 
-  // A prestige takes the regions away, so the latches taken against the old run go with them.
+  // A prestige drops the cached scopes, so the shown panels from the fresh run are sampled again.
   game.replaceRoot();
-  game.advance(60_000);
   game.draws.length = 0;
   game.control.ensureBuildControls();
   assert.deepEqual(
     game.draws.sort((left, right) => left - right),
-    [SPACE_TAB_INDEX.space, SPACE_TAB_INDEX.eden].sort((l, r) => l - r),
+    [SPACE_TAB_INDEX.city, SPACE_TAB_INDEX.space, SPACE_TAB_INDEX.eden].sort(
+      (l, r) => l - r,
+    ),
   );
 }
 

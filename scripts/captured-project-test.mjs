@@ -214,6 +214,7 @@ function makeAdapter({
       }),
     ],
     resources,
+    rootState,
     conflicts: { evaluate: () => conflict },
     readOptions: () => ({
       consumptionMode: "unlimited",

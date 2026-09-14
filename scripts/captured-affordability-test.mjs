@@ -107,6 +107,7 @@ assert.equal(
   costFitsNow(
     {
       tech: { shadow: 5 },
+      race: { supplySplit: true },
       resource: {
         Money: {
           amount: 900,
@@ -126,6 +127,7 @@ assert.equal(
   costFitsNow(
     {
       tech: { shadow: 5 },
+      race: { supplySplit: true },
       resource: {
         Money: {
           amount: 900,
@@ -145,6 +147,7 @@ assert.equal(
   costFitsNow(
     {
       tech: { shadow: 5 },
+      race: { supplySplit: true },
       resource: {
         Money: { amount: 900, max: 10000, display: true, reg: {} },
       },
@@ -160,8 +163,18 @@ assert.equal(isRegionalSupply(root), false);
 assert.equal(isRegionalSupply({ tech: {} }), false);
 assert.equal(isRegionalSupply({ tech: { shadow: 4 } }), false);
 // At and above it the game checks the paying region's share instead.
-assert.equal(isRegionalSupply({ tech: { shadow: 5 } }), true);
-assert.equal(isRegionalSupply({ tech: { shadow: 6 } }), true);
+assert.equal(
+  isRegionalSupply({ tech: { shadow: 5 }, race: { supplySplit: false } }),
+  false,
+);
+assert.equal(
+  isRegionalSupply({ tech: { shadow: 5 }, race: { supplySplit: true } }),
+  true,
+);
+assert.equal(
+  isRegionalSupply({ tech: { shadow: 6 }, race: { supplySplit: true } }),
+  true,
+);
 assert.equal(isRegionalSupply(undefined), false);
 
 console.log("captured-affordability ok");

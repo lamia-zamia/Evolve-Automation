@@ -100,7 +100,11 @@ assert.deepEqual(ports.reader.readGate(), { unlocked: true, noTrade: false });
 // draws a per-zone black market and never creates `#market-qty`, so there is nothing to automate.
 // The gate closes rather than letting the session read throw once per cycle.
 {
-  const regionalRoot = { ...root, tech: { ...(root.tech ?? {}), shadow: 5 } };
+  const regionalRoot = {
+    ...root,
+    race: { ...(root.race ?? {}), supplySplit: true },
+    tech: { ...(root.tech ?? {}), shadow: 5 },
+  };
   const regionalPorts = createCapturedMarketPorts({
     rootState: { readRoot: () => regionalRoot },
     controls: registry,

@@ -30,6 +30,8 @@ export interface BuildCandidateView {
   readonly ignored: boolean;
   /** Legacy `building.is.knowledge`: building it raises the Knowledge cap. */
   readonly knowledge: boolean;
+  /** Payment supply pool; absent means the civilization-wide resource pool. */
+  readonly pool?: string;
   /** Candidate upkeep/support entries used by the per-resource consumption gate. */
   readonly consumption?: readonly Readonly<BuildConsumptionView>[];
 }
@@ -96,11 +98,26 @@ export interface BuildCompetitionRequest {
   readonly affordabilityKeys: readonly string[];
   /** Resources referenced by the candidate or any higher-weighted competitor. */
   readonly resourceIds: readonly string[];
+  /** Exact resource/pool pairs needed by the candidate and its competitors. */
+  readonly resourceScopes: readonly BuildResourceScope[];
+}
+
+export interface BuildResourceScope {
+  readonly resourceId: string;
+  readonly pool?: string;
+}
+
+export interface BuildScopedResourceSample {
+  readonly resourceId: string;
+  readonly pool?: string;
+  readonly view: BuildResourceView;
 }
 
 export interface BuildCompetitionSample {
   readonly affordability: Readonly<Record<string, boolean>>;
   readonly resources: Readonly<Record<string, BuildResourceView>>;
+  /** Pool-specific samples; `resources` remains the unpooled compatibility view. */
+  readonly scopedResources?: readonly BuildScopedResourceSample[];
 }
 
 export interface BuildEstimation {
@@ -330,6 +347,26 @@ export function competitionSampleRequest(
   const candidate = candidateAt(setup, index);
   const affordabilityKeys: string[] = [];
   const resourceIds = new Set<string>(Object.keys(candidate.cost));
+  const resourceScopes: BuildResourceScope[] = [];
+  const addScopes = (other: Readonly<BuildCandidateView>) => {
+    for (const resourceId of Object.keys(other.cost)) {
+      if (
+        resourceScopes.some(
+          (scope) =>
+            scope.resourceId === resourceId && scope.pool === other.pool,
+        )
+      ) {
+        continue;
+      }
+      resourceScopes.push(
+        Object.freeze({
+          resourceId,
+          ...(other.pool === undefined ? {} : { pool: other.pool }),
+        }),
+      );
+    }
+  };
+  addScopes(candidate);
   for (const other of setup.candidates) {
     const weightDiffRatio = other.weighting / candidate.weighting;
     if (weightDiffRatio <= 1.000001) {
@@ -338,6 +375,7 @@ export function competitionSampleRequest(
     for (const resourceId of Object.keys(other.cost)) {
       resourceIds.add(resourceId);
     }
+    addScopes(other);
     if (weightDiffRatio < 10 && state.affordable[other.key] === undefined) {
       affordabilityKeys.push(other.key);
     }
@@ -345,13 +383,26 @@ export function competitionSampleRequest(
   return Object.freeze({
     affordabilityKeys: Object.freeze(affordabilityKeys),
     resourceIds: Object.freeze([...resourceIds]),
+    resourceScopes: Object.freeze(resourceScopes),
   });
 }
 
 function resourceViewOf(
   sample: Readonly<BuildCompetitionSample>,
   resourceId: string,
+  pool: string | undefined,
 ): BuildResourceView {
+  const scoped = sample.scopedResources?.find(
+    (entry) => entry.resourceId === resourceId && entry.pool === pool,
+  );
+  if (scoped !== undefined) return scoped.view;
+  // Existing pure-policy callers provide only the civilization-wide map. Keep that fixture shape
+  // valid for unpooled candidates, while a pooled candidate must never silently use the total.
+  if (pool !== undefined) {
+    throw new TypeError(
+      `resource sample missing for ${resourceId} in pool ${pool}`,
+    );
+  }
   const view = sample.resources[resourceId];
   if (view === undefined) {
     throw new TypeError(`resource sample missing for ${resourceId}`);
@@ -366,7 +417,7 @@ function estimateBuildTime(
 ): BuildEstimation {
   const perResource: Record<string, number> = {};
   for (const [resourceId, quantity] of Object.entries(other.cost)) {
-    const resource = resourceViewOf(sample, resourceId);
+    const resource = resourceViewOf(sample, resourceId, other.pool);
     if (!resource.unlocked) {
       continue;
     }
@@ -445,7 +496,8 @@ export function planBuildCompetition(
   if (
     setup.buildIfStorageFull &&
     Object.keys(candidate.cost).some(
-      (resourceId) => resourceViewOf(sample, resourceId).storageRatio > 0.98,
+      (resourceId) =>
+        resourceViewOf(sample, resourceId, candidate.pool).storageRatio > 0.98,
     )
   ) {
     return build();
@@ -456,6 +508,15 @@ export function planBuildCompetition(
     // Sorted by weighting: everything after this point weighs the same or less.
     if (weightDiffRatio <= 1.000001) {
       break;
+    }
+    // Different regional pools do not contend for the same supply. An unpooled candidate still
+    // uses the civilization-wide total and may therefore contend with every regional candidate.
+    if (
+      candidate.pool !== undefined &&
+      other.pool !== undefined &&
+      candidate.pool !== other.pool
+    ) {
+      continue;
     }
     // An affordable higher-weighted competitor was already processed and is
     // blocked by something else; ignore its demands below the 10x ratio.
@@ -497,7 +558,7 @@ export function planBuildCompetition(
     let after = estimation.total;
     let worstResourceId = "";
     for (const [resourceId, thisQuantity] of Object.entries(candidate.cost)) {
-      const resource = resourceViewOf(sample, resourceId);
+      const resource = resourceViewOf(sample, resourceId, candidate.pool);
 
       // Ignore locked and capped resources.
       if (

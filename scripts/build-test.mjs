@@ -1055,6 +1055,75 @@ assert.deepEqual(
   assert.deepEqual([...request.resourceIds].sort(), ["Alloy"]);
 }
 
+// Regional pools are separate competition domains: a project waiting on Moon Money does not
+// delay a City purchase from Home Money, and the request preserves both exact ledgers.
+{
+  const regionalSetup = Object.freeze({
+    ...setup,
+    candidates: Object.freeze([
+      Object.freeze({
+        key: "moon",
+        weighting: 100,
+        cost: Object.freeze({ Money: 100 }),
+        pool: "spc_moon",
+        ignored: false,
+        knowledge: false,
+      }),
+      Object.freeze({
+        key: "home",
+        weighting: 1,
+        cost: Object.freeze({ Money: 100 }),
+        pool: "spc_home",
+        ignored: false,
+        knowledge: false,
+      }),
+    ]),
+  });
+  const request = competitionSampleRequest(
+    regionalSetup,
+    initialBuildLoopState(),
+    1,
+  );
+  assert.deepEqual(request.resourceScopes, [
+    { resourceId: "Money", pool: "spc_home" },
+    { resourceId: "Money", pool: "spc_moon" },
+  ]);
+  const plan = planBuildCompetition(
+    regionalSetup,
+    1,
+    {
+      affordability: { moon: false },
+      resources: {},
+      scopedResources: [
+        {
+          resourceId: "Money",
+          pool: "spc_home",
+          view: {
+            unlocked: true,
+            currentQuantity: 0,
+            rateOfChange: 1,
+            storageRatio: 0,
+            storageRequired: 0,
+          },
+        },
+        {
+          resourceId: "Money",
+          pool: "spc_moon",
+          view: {
+            unlocked: true,
+            currentQuantity: 0,
+            rateOfChange: 1,
+            storageRatio: 0,
+            storageRequired: 0,
+          },
+        },
+      ],
+    },
+    initialBuildLoopState(),
+  );
+  assert.equal(plan.kind, "build");
+}
+
 // Locked resources are skipped while estimating a competitor's build time,
 // and cache commits from the competition phase survive in the returned state.
 {

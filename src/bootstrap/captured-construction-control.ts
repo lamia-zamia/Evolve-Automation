@@ -198,6 +198,7 @@ export function createCapturedConstructionControl(
       }),
     ]),
     resources,
+    rootState,
     conflicts,
     readOptions: readPolicy,
     ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),

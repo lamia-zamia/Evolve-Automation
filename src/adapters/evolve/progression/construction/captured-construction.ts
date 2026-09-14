@@ -22,13 +22,10 @@ import type {
   BuildConflictSample,
   BuildCycleSetup,
   BuildResourceView,
+  BuildResourceScope,
   BuildSampleRequest,
 } from "../../../../domain/progression/build/build.ts";
-import {
-  canAfford,
-  canEverAfford,
-  resourceView,
-} from "../../../../domain/game-world.ts";
+import { resourceView } from "../../../../domain/game-world.ts";
 import type { ResourceView } from "../../../../domain/game-world.ts";
 import type {
   BuildClickResult,
@@ -48,11 +45,14 @@ import type {
 import type { KnowledgeGateLevels } from "../../../../domain/progression/build/building-weighting.ts";
 import { stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
+import { costFitsNow, costFitsStorage } from "../../captured-affordability.ts";
+import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 
 export interface CapturedConstructionDependencies {
   /** Families in the order they break weighting ties, matching the game's own list order. */
   readonly sources: readonly ConstructionCandidateSource[];
   readonly resources: GameResourceSource;
+  readonly rootState: GameRootStateSource;
   readonly conflicts: CapturedCostConflictReader;
   readonly readOptions: () => ConstructionCycleOptions;
   /** Optional script-computed Knowledge requirements; absent means no gate is applied. */
@@ -112,7 +112,8 @@ function toBuildResourceView(
 export function createCapturedConstructionAdapter(
   dependencies: CapturedConstructionDependencies,
 ): CapturedConstructionAdapter {
-  const { sources, resources, conflicts, readOptions } = dependencies;
+  const { sources, resources, rootState, conflicts, readOptions } =
+    dependencies;
   const readKnowledgeGate = dependencies.readKnowledgeGate;
   const readStorageRequired = dependencies.readStorageRequired;
   let cycle: readonly CycleEntry[] = Object.freeze([]);
@@ -139,19 +140,27 @@ export function createCapturedConstructionAdapter(
    * exactly the cost keys in question. Before the root is captured there are no holdings to
    * compare against, so nothing is affordable.
    */
-  function affordable(
-    key: string,
-    cost: Readonly<Record<string, number>>,
-  ): boolean {
-    const sample = resources.readResources(Object.keys(cost));
-    if (sample === undefined) return false;
-    if (canAfford(sample, cost)) return true;
+  function affordable(candidate: Readonly<ConstructionCandidate>): boolean {
+    const root = rootState.readRoot();
+    if (
+      root !== undefined &&
+      costFitsNow(root, candidate.cost, { pool: candidate.pool }) === true
+    ) {
+      return true;
+    }
     // The first candidate of the cycle that is wanted, storable and unaffordable is the one the
     // cycle is saving for. A cost storage can never hold is not something to save for.
-    if (cycleSavingTarget === null && canEverAfford(sample, cost)) {
+    if (
+      root !== undefined &&
+      cycleSavingTarget === null &&
+      costFitsStorage(root, candidate.cost, {
+        pool: candidate.pool,
+        zeroCapIsCeiling: false,
+      }) !== false
+    ) {
       cycleSavingTarget = Object.freeze({
-        name: key,
-        cost: Object.freeze({ ...cost }),
+        name: candidate.key,
+        cost: Object.freeze({ ...candidate.cost }),
       });
     }
     return false;
@@ -213,7 +222,7 @@ export function createCapturedConstructionAdapter(
         consumption?: readonly Readonly<BuildConsumptionView>[];
       } = {};
       if (request.needAffordability) {
-        sample.affordable = affordable(candidate.key, candidate.cost);
+        sample.affordable = affordable(candidate);
       }
       if (request.needConsumption) {
         sample.consumption = candidate.consumption ?? NO_CONSUMPTION;
@@ -261,43 +270,74 @@ export function createCapturedConstructionAdapter(
     ): BuildCompetitionSample {
       entryAt(index);
       const byKey = new Map(
-        cycle.map((entry) => [entry.candidate.key, entry.candidate.cost]),
+        cycle.map((entry) => [entry.candidate.key, entry.candidate]),
       );
-      // One sample covers every resource the request asks about and every resource the compared
-      // costs name, so the competition arithmetic reads one consistent set of holdings.
-      const wanted = new Set<string>(request.resourceIds);
       const compared: {
         readonly key: string;
-        readonly cost: Readonly<Record<string, number>>;
+        readonly candidate: Readonly<ConstructionCandidate>;
       }[] = [];
       for (const key of request.affordabilityKeys) {
-        const cost = byKey.get(key);
-        if (cost === undefined) {
+        const candidate = byKey.get(key);
+        if (candidate === undefined) {
           throw new TypeError(`unknown construction candidate ${key}`);
         }
-        compared.push({ key, cost });
-        for (const id of Object.keys(cost)) wanted.add(id);
+        compared.push({ key, candidate });
       }
-      const sample = resources.readResources(wanted);
       const storageRequired = readStorageRequired?.(request.resourceIds);
       const affordability: Record<string, boolean> = {};
+      const root = rootState.readRoot();
       for (const entry of compared) {
         affordability[entry.key] =
-          sample !== undefined && canAfford(sample, entry.cost);
+          root !== undefined &&
+          costFitsNow(root, entry.candidate.cost, {
+            pool: entry.candidate.pool,
+          }) === true;
       }
       const resourceViews: Record<string, BuildResourceView> = {};
-      for (const id of request.resourceIds) {
-        resourceViews[id] =
-          sample === undefined
-            ? LOCKED_RESOURCE
-            : toBuildResourceView(
-                resourceView(sample, id),
-                storageRequired?.[id] ?? Number.NaN,
-              );
+      const scopedResources: {
+        readonly resourceId: string;
+        readonly pool?: string;
+        readonly view: BuildResourceView;
+      }[] = [];
+      const scopes: readonly BuildResourceScope[] =
+        request.resourceScopes.length > 0
+          ? request.resourceScopes
+          : Object.freeze(
+              request.resourceIds.map((resourceId) =>
+                Object.freeze({ resourceId }),
+              ),
+            );
+      const scopesByPool = new Map<string | undefined, string[]>();
+      for (const scope of scopes) {
+        const ids = scopesByPool.get(scope.pool);
+        if (ids === undefined) scopesByPool.set(scope.pool, [scope.resourceId]);
+        else if (!ids.includes(scope.resourceId)) ids.push(scope.resourceId);
+      }
+      for (const [pool, ids] of scopesByPool) {
+        const sample = resources.readResources(
+          ids,
+          pool === undefined ? undefined : { pool },
+        );
+        for (const id of ids) {
+          const view =
+            sample === undefined
+              ? LOCKED_RESOURCE
+              : toBuildResourceView(
+                  resourceView(sample, id),
+                  storageRequired?.[id] ?? Number.NaN,
+                );
+          scopedResources.push({
+            resourceId: id,
+            ...(pool === undefined ? {} : { pool }),
+            view,
+          });
+          if (pool === undefined) resourceViews[id] = view;
+        }
       }
       return Object.freeze({
         affordability: Object.freeze(affordability),
         resources: Object.freeze(resourceViews),
+        scopedResources: Object.freeze(scopedResources),
       });
     },
   });

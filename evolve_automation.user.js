@@ -893,21 +893,16 @@
         return !1;
     return !0;
   }
-  function canEverAfford(sample, cost) {
-    for (let [id, amount] of Object.entries(cost)) {
-      if (amount <= 0) continue;
-      let max = resourceView(sample, id).max;
-      if (max > 0 && max < amount) return !1;
-    }
-    return !0;
-  }
 
   // src/adapters/evolve/captured-affordability.ts
   function isRegionalSupply(root) {
     let shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
-    return shadow !== void 0 && shadow >= 5;
+    return shadow !== void 0 && shadow >= 5 && readProperty(readProperty(root, "race"), "supplySplit") === !0;
   }
   var ANYWHERE_POOL = "*";
+  function hasRegionalLedger(resource) {
+    return isRecord(readProperty(resource, "reg")) || isRecord(readProperty(resource, "regMax")) || isRecord(readProperty(resource, "regDiff"));
+  }
   function resolveCostResourceId(root, key) {
     if (key !== "Species") return key;
     let species = readProperty(readProperty(root, "race"), "species");
@@ -921,17 +916,25 @@
   function capturedPoolCap(resource, pool, regional) {
     let capacity = finite(readProperty(resource, "max"));
     if (capacity === void 0) return;
-    if (!regional || pool === void 0 || pool === ANYWHERE_POOL || capacity < 0) return capacity;
+    if (!regional || pool === void 0 || pool === ANYWHERE_POOL || !hasRegionalLedger(resource) || capacity < 0) return capacity;
     let ledger = readProperty(resource, "regMax");
     return !isRecord(ledger) || Object.keys(ledger).length === 0 ? capacity : finite(readProperty(ledger, pool)) ?? 0;
   }
   function capturedPoolAmount(resource, pool, regional) {
-    if (!regional || pool === void 0 || pool === ANYWHERE_POOL)
+    if (!regional || pool === void 0 || pool === ANYWHERE_POOL || !hasRegionalLedger(resource))
       return finite(readProperty(resource, "amount"));
     let ledger = readProperty(resource, "reg");
     if (!isRecord(ledger)) return 0;
     let amount = readProperty(ledger, pool);
     return amount === void 0 ? 0 : finite(amount);
+  }
+  function capturedPoolRate(resource, pool, regional) {
+    if (!regional || pool === void 0 || pool === ANYWHERE_POOL || !hasRegionalLedger(resource))
+      return finite(readProperty(resource, "diff"));
+    let ledger = readProperty(resource, "regDiff");
+    if (!isRecord(ledger)) return 0;
+    let rate = readProperty(ledger, pool);
+    return rate === void 0 ? 0 : finite(rate);
   }
   function costFitsStorage(root, cost, options) {
     let zeroCapIsCeiling = options?.zeroCapIsCeiling ?? !0, regional = isRegionalSupply(root);
@@ -963,6 +966,18 @@
     }
     return !0;
   }
+  function readCapturedResourceView(root, key, pool) {
+    let resourceId = resolveCostResourceId(root, key), resource = resourceId === void 0 ? void 0 : readProperty(readProperty(root, "resource"), resourceId);
+    if (!isRecord(resource)) return ABSENT_RESOURCE;
+    let regional = isRegionalSupply(root), amount = capturedPoolAmount(resource, pool, regional) ?? Number.NaN, max = capturedPoolCap(resource, pool, regional) ?? Number.NaN, rateOfChange = capturedPoolRate(resource, pool, regional) ?? Number.NaN;
+    return Object.freeze({
+      unlocked: !!readProperty(resource, "display"),
+      amount,
+      max,
+      rateOfChange,
+      storageRatio: max > 0 ? amount / max : 0
+    });
+  }
 
   // src/adapters/evolve/captured-world-state.ts
   function readCounter(owner, key) {
@@ -971,18 +986,6 @@
   }
   function readRank(value) {
     return typeof value == "number" ? Number.isFinite(value) ? value : 0 : value === !0 ? 1 : 0;
-  }
-  function readResourceView(resource) {
-    if (!isRecord(resource)) return ABSENT_RESOURCE;
-    let amount = Number(resource.amount), max = Number(resource.max);
-    return Object.freeze({
-      unlocked: !!resource.display,
-      amount,
-      max,
-      rateOfChange: Number(resource.diff),
-      // An uncapped resource is stored as max -1, and is never near a ceiling.
-      storageRatio: max > 0 ? amount / max : 0
-    });
   }
   function createCapturedTechSource(rootState) {
     return Object.freeze({
@@ -1010,19 +1013,12 @@
   }
   function createCapturedResourceSource(rootState) {
     return Object.freeze({
-      readResources(ids) {
+      readResources(ids, options) {
         let root = rootState.readRoot();
         if (root === void 0) return;
-        let resource = readProperty(root, "resource"), resources = /* @__PURE__ */ new Map();
-        for (let id of ids) {
-          let resourceId = resolveCostResourceId(root, id);
-          resources.set(
-            id,
-            readResourceView(
-              resourceId === void 0 ? void 0 : readProperty(resource, resourceId)
-            )
-          );
-        }
+        let resources = /* @__PURE__ */ new Map();
+        for (let id of ids)
+          resources.set(id, readCapturedResourceView(root, id, options?.pool));
         return Object.freeze({ resources });
       }
     });
@@ -1228,9 +1224,7 @@
     [SPACE_TAB_INDEX.underground]: "showUnderground",
     [SPACE_TAB_INDEX.surface]: "showSurface"
   }), SPACE_TAB_SWEEP = Object.freeze(
-    Object.values(SPACE_TAB_INDEX).filter(
-      (index) => index !== SPACE_TAB_INDEX.city
-    )
+    Object.values(SPACE_TAB_INDEX)
   ), GOV_TAB_INDEX = Object.freeze({
     civic: 0,
     industry: 1,
@@ -2881,7 +2875,7 @@
       if (typeof id == "string") {
         let candidate = byElementId.get(id);
         candidate !== void 0 && costFitsStorage(root, candidate.candidate.cost, {
-          pool: candidate.pool
+          pool: candidate.candidate.pool
         }) === !0 && ids.add(id);
       }
       if (!buyAny) break;
@@ -2910,7 +2904,6 @@
           }
           entries.set(target.key, {
             target,
-            pool: price.pool,
             candidate: Object.freeze({
               key: target.key,
               weighting: target.weighting,
@@ -2918,6 +2911,7 @@
               ignored: !1,
               knowledge: target.knowledge ?? !1,
               important: target.important,
+              ...price.pool === void 0 ? {} : { pool: price.pool },
               ...target.consumption === void 0 ? {} : { consumption: target.consumption }
             })
           });
@@ -3007,7 +3001,7 @@
     });
   }
   function createCapturedConstructionAdapter(dependencies) {
-    let { sources, resources, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, savingTarget = null, cycleSavingTarget = null, knowledgeRequirement = 0;
+    let { sources, resources, rootState, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, savingTarget = null, cycleSavingTarget = null, knowledgeRequirement = 0;
     function entryAt(index) {
       let entry = cycle[index];
       if (entry === void 0)
@@ -3018,11 +3012,14 @@
       let entry = cycle[index];
       return entry !== void 0 && entry.candidate.key === key ? entry : null;
     }
-    function affordable(key, cost) {
-      let sample = resources.readResources(Object.keys(cost));
-      return sample === void 0 ? !1 : canAfford(sample, cost) ? !0 : (cycleSavingTarget === null && canEverAfford(sample, cost) && (cycleSavingTarget = Object.freeze({
-        name: key,
-        cost: Object.freeze({ ...cost })
+    function affordable(candidate) {
+      let root = rootState.readRoot();
+      return root !== void 0 && costFitsNow(root, candidate.cost, { pool: candidate.pool }) === !0 ? !0 : (root !== void 0 && cycleSavingTarget === null && costFitsStorage(root, candidate.cost, {
+        pool: candidate.pool,
+        zeroCapIsCeiling: !1
+      }) !== !1 && (cycleSavingTarget = Object.freeze({
+        name: candidate.key,
+        cost: Object.freeze({ ...candidate.cost })
       })), !1);
     }
     let reader = Object.freeze({
@@ -3057,7 +3054,7 @@
       },
       sampleCandidate(index, request) {
         let { candidate } = entryAt(index), sample = {};
-        return request.needAffordability && (sample.affordable = affordable(candidate.key, candidate.cost)), request.needConsumption && (sample.consumption = candidate.consumption ?? NO_CONSUMPTION2), Object.freeze(sample);
+        return request.needAffordability && (sample.affordable = affordable(candidate)), request.needConsumption && (sample.consumption = candidate.consumption ?? NO_CONSUMPTION2), Object.freeze(sample);
       },
       sampleConflict(index) {
         let { candidate } = entryAt(index), important = candidate.important;
@@ -3085,27 +3082,49 @@
       sampleCompetition(index, request) {
         entryAt(index);
         let byKey = new Map(
-          cycle.map((entry) => [entry.candidate.key, entry.candidate.cost])
-        ), wanted = new Set(request.resourceIds), compared = [];
+          cycle.map((entry) => [entry.candidate.key, entry.candidate])
+        ), compared = [];
         for (let key of request.affordabilityKeys) {
-          let cost = byKey.get(key);
-          if (cost === void 0)
+          let candidate = byKey.get(key);
+          if (candidate === void 0)
             throw new TypeError(`unknown construction candidate ${key}`);
-          compared.push({ key, cost });
-          for (let id of Object.keys(cost)) wanted.add(id);
+          compared.push({ key, candidate });
         }
-        let sample = resources.readResources(wanted), storageRequired = readStorageRequired?.(request.resourceIds), affordability = {};
+        let storageRequired = readStorageRequired?.(request.resourceIds), affordability = {}, root = rootState.readRoot();
         for (let entry of compared)
-          affordability[entry.key] = sample !== void 0 && canAfford(sample, entry.cost);
-        let resourceViews = {};
-        for (let id of request.resourceIds)
-          resourceViews[id] = sample === void 0 ? LOCKED_RESOURCE : toBuildResourceView(
-            resourceView(sample, id),
-            storageRequired?.[id] ?? Number.NaN
+          affordability[entry.key] = root !== void 0 && costFitsNow(root, entry.candidate.cost, {
+            pool: entry.candidate.pool
+          }) === !0;
+        let resourceViews = {}, scopedResources = [], scopes = request.resourceScopes.length > 0 ? request.resourceScopes : Object.freeze(
+          request.resourceIds.map(
+            (resourceId) => Object.freeze({ resourceId })
+          )
+        ), scopesByPool = /* @__PURE__ */ new Map();
+        for (let scope of scopes) {
+          let ids = scopesByPool.get(scope.pool);
+          ids === void 0 ? scopesByPool.set(scope.pool, [scope.resourceId]) : ids.includes(scope.resourceId) || ids.push(scope.resourceId);
+        }
+        for (let [pool, ids] of scopesByPool) {
+          let sample = resources.readResources(
+            ids,
+            pool === void 0 ? void 0 : { pool }
           );
+          for (let id of ids) {
+            let view = sample === void 0 ? LOCKED_RESOURCE : toBuildResourceView(
+              resourceView(sample, id),
+              storageRequired?.[id] ?? Number.NaN
+            );
+            scopedResources.push({
+              resourceId: id,
+              ...pool === void 0 ? {} : { pool },
+              view
+            }), pool === void 0 && (resourceViews[id] = view);
+          }
+        }
         return Object.freeze({
           affordability: Object.freeze(affordability),
-          resources: Object.freeze(resourceViews)
+          resources: Object.freeze(resourceViews),
+          scopedResources: Object.freeze(scopedResources)
         });
       }
     }), executor = Object.freeze({
@@ -3545,21 +3564,41 @@
     });
   }
   function competitionSampleRequest(setup, state, index) {
-    let candidate = candidateAt(setup, index), affordabilityKeys = [], resourceIds = new Set(Object.keys(candidate.cost));
+    let candidate = candidateAt(setup, index), affordabilityKeys = [], resourceIds = new Set(Object.keys(candidate.cost)), resourceScopes = [], addScopes = (other) => {
+      for (let resourceId of Object.keys(other.cost))
+        resourceScopes.some(
+          (scope) => scope.resourceId === resourceId && scope.pool === other.pool
+        ) || resourceScopes.push(
+          Object.freeze({
+            resourceId,
+            ...other.pool === void 0 ? {} : { pool: other.pool }
+          })
+        );
+    };
+    addScopes(candidate);
     for (let other of setup.candidates) {
       let weightDiffRatio = other.weighting / candidate.weighting;
       if (weightDiffRatio <= 1.000001)
         break;
       for (let resourceId of Object.keys(other.cost))
         resourceIds.add(resourceId);
-      weightDiffRatio < 10 && state.affordable[other.key] === void 0 && affordabilityKeys.push(other.key);
+      addScopes(other), weightDiffRatio < 10 && state.affordable[other.key] === void 0 && affordabilityKeys.push(other.key);
     }
     return Object.freeze({
       affordabilityKeys: Object.freeze(affordabilityKeys),
-      resourceIds: Object.freeze([...resourceIds])
+      resourceIds: Object.freeze([...resourceIds]),
+      resourceScopes: Object.freeze(resourceScopes)
     });
   }
-  function resourceViewOf(sample, resourceId) {
+  function resourceViewOf(sample, resourceId, pool) {
+    let scoped = sample.scopedResources?.find(
+      (entry) => entry.resourceId === resourceId && entry.pool === pool
+    );
+    if (scoped !== void 0) return scoped.view;
+    if (pool !== void 0)
+      throw new TypeError(
+        `resource sample missing for ${resourceId} in pool ${pool}`
+      );
     let view = sample.resources[resourceId];
     if (view === void 0)
       throw new TypeError(`resource sample missing for ${resourceId}`);
@@ -3568,7 +3607,7 @@
   function estimateBuildTime(setup, other, sample) {
     let perResource = {};
     for (let [resourceId, quantity] of Object.entries(other.cost)) {
-      let resource = resourceViewOf(sample, resourceId);
+      let resource = resourceViewOf(sample, resourceId, other.pool);
       resource.unlocked && (resource.rateOfChange > 0 ? perResource[resourceId] = (quantity - resource.currentQuantity) / resource.rateOfChange : setup.ignoreZeroRate && resource.storageRatio < 0.975 && resource.currentQuantity < quantity ? perResource[resourceId] = Number.MAX_SAFE_INTEGER : perResource[resourceId] = 0);
     }
     return Object.freeze({
@@ -3593,13 +3632,15 @@
       decision: Object.freeze({ index, key: candidate.key })
     });
     if (setup.buildIfStorageFull && Object.keys(candidate.cost).some(
-      (resourceId) => resourceViewOf(sample, resourceId).storageRatio > 0.98
+      (resourceId) => resourceViewOf(sample, resourceId, candidate.pool).storageRatio > 0.98
     ))
       return build();
     for (let other of setup.candidates) {
       let weightDiffRatio = other.weighting / candidate.weighting;
       if (weightDiffRatio <= 1.000001)
         break;
+      if (candidate.pool !== void 0 && other.pool !== void 0 && candidate.pool !== other.pool)
+        continue;
       if (weightDiffRatio < 10) {
         let otherAffordable = affordable[other.key];
         if (otherAffordable === void 0) {
@@ -3617,7 +3658,7 @@
       estimation === void 0 && (estimation = estimateBuildTime(setup, other, sample), cacheEstimation(other.key, estimation));
       let after = estimation.total, worstResourceId = "";
       for (let [resourceId, thisQuantity] of Object.entries(candidate.cost)) {
-        let resource = resourceViewOf(sample, resourceId);
+        let resource = resourceViewOf(sample, resourceId, candidate.pool);
         if (!resource.unlocked || resource.storageRatio > 0.99 && resource.currentQuantity >= resource.storageRequired)
           continue;
         let otherQuantity = other.cost[resourceId];
@@ -3822,6 +3863,7 @@
         })
       ]),
       resources,
+      rootState,
       conflicts,
       readOptions: readPolicy,
       ...readKnowledgeGate === void 0 ? {} : { readKnowledgeGate },
@@ -4542,18 +4584,17 @@
       readEpoch: epoch.read,
       nowMs,
       diagnostics
-    }), latchedSpaceTabs = /* @__PURE__ */ new Set(), sweptSelectedTab = !1, pendingSpaceTabs = () => {
+    }), shownSpaceTabs = () => {
       let gameSettings = readProperty(rootState.readRoot(), "settings");
       return SPACE_TAB_SWEEP.filter((index) => {
-        if (latchedSpaceTabs.has(index)) return !1;
         let shownBy = SPACE_TAB_SHOWN_BY[index];
         return shownBy !== void 0 && readProperty(gameSettings, shownBy) === !0;
       });
     };
     rootState.subscribeRootReplaced(() => {
-      latchedSpaceTabs.clear(), sweptSelectedTab = !1;
+      scopes.invalidateAll();
     });
-    let sweepBuildControls = (pending) => {
+    let sweepBuildControls = (index) => {
       let spaceTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
       if (spaceTabControl === void 0)
         return onSkipped?.("build-discovery", "space-tab control is unavailable"), "unavailable";
@@ -4561,35 +4602,32 @@
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
         index: MAIN_TAB_INDEX.civilization
-      }), report = (result) => result.outcome.status === "succeeded" ? !0 : (onSkipped?.(
+      }), report = (result2) => result2.outcome.status === "succeeded" ? !0 : (onSkipped?.(
         "build-discovery",
-        result.outcome.failure?.message ?? result.outcome.status
-      ), !1);
-      sweptSelectedTab || (sweptSelectedTab = report(discovery.discover(Object.freeze([main]))));
-      let civilizationPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
-      for (let index of pending) {
-        let result = discovery.discover(
-          Object.freeze([
-            main,
-            Object.freeze({
-              setting: SPACE_TABS_SETTING,
-              control: spaceTabControl,
-              index
-            })
-          ]),
-          civilizationPanel === void 0 ? void 0 : { mount: Object.freeze([`#${civilizationPanel}`]) }
-        );
-        report(result) && latchedSpaceTabs.add(index);
-      }
-      return `${sweptSelectedTab ? "1" : "0"}:${[...latchedSpaceTabs].sort((left, right) => left - right).join(",")}`;
-    }, ensureBuildControls = () => {
-      if (controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      let pending = pendingSpaceTabs();
-      sweptSelectedTab && pending.length === 0 || scopes.read(
-        `${BUILD_CONTROLS_SCOPE} ${pending.join(",")}`,
-        () => sweepBuildControls(pending),
-        (previous, next) => previous === next
+        result2.outcome.failure?.message ?? result2.outcome.status
+      ), !1), civilizationPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
+      if (civilizationPanel === void 0)
+        return onSkipped?.("build-discovery", "civilization panel is unavailable"), "unavailable";
+      let result = discovery.discover(
+        Object.freeze([
+          main,
+          Object.freeze({
+            setting: SPACE_TABS_SETTING,
+            control: spaceTabControl,
+            index
+          })
+        ]),
+        { mount: Object.freeze([`#${civilizationPanel}`]) }
       );
+      return report(result) ? result.discovered.join(",") : "failed";
+    }, ensureBuildControls = () => {
+      if (controls.resolve(MAIN_TAB_CONTROL) !== void 0)
+        for (let index of shownSpaceTabs())
+          scopes.read(
+            `${BUILD_CONTROLS_SCOPE} ${index}`,
+            () => sweepBuildControls(index),
+            (previous, next) => previous === next
+          );
     }, lastOffered, lastGranted, readOfferedTechs = () => {
       let includeGranted = dependencies.needGrantedTechs?.() === !0, held = scopes.read(
         includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
