@@ -11,8 +11,8 @@ import type { GameControlRegistry } from "../../../ports/game-control-registry.t
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
+import { HELL_FORTRESS_CONTROL } from "./captured-hell-garrison.ts";
 
-const FORT_CONTROL = "fort";
 const GARRISON_CONTROLS = ["garrison", "c_garrison"] as const;
 
 interface HellSession {
@@ -352,7 +352,7 @@ export function createCapturedHellAutomation(dependencies: {
           "the captured Hell plan is no longer valid",
         );
       }
-      const control = dependencies.controls.resolve(FORT_CONTROL);
+      const control = dependencies.controls.resolve(HELL_FORTRESS_CONTROL);
       if (decision.kind === "manage-hell") {
         return applyHellManagement(decision, control, dependencies.controls);
       }

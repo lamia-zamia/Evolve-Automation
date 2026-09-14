@@ -885,8 +885,43 @@ assert.equal(readCapturedOperand(garrisoned, "Soldiers", "maxCityGarrison"), 6);
 assert.equal(readCapturedOperand(garrisoned, "Soldiers", "hellSoldiers"), 5);
 assert.equal(readCapturedOperand(garrisoned, "Soldiers", "hellPatrols"), 1);
 assert.equal(readCapturedOperand(garrisoned, "Soldiers", "hellPatrolSize"), 2);
-// The assault-forge reserve and the mercenary price need settings and catalogs no capture holds,
-// and anything but the twelve trackable fields names no operand at all.
+// Hell Garrison uses the game's defender sample, not a second reserve calculation.
+for (const defenders of [0, 2, -1]) {
+  const context = { hellGarrison: defenders };
+  assert.equal(
+    readCapturedOperand(garrisoned, "Soldiers", "hellGarrison", context),
+    defenders,
+  );
+  assert.equal(
+    evaluateCapturedCondition(
+      garrisoned,
+      "Soldiers",
+      "hellGarrison",
+      defenders,
+      context,
+    ),
+    true,
+  );
+  assert.equal(
+    evaluateCapturedCondition(
+      garrisoned,
+      "Soldiers",
+      "hellGarrison",
+      defenders + 1,
+      context,
+    ),
+    false,
+  );
+}
+for (const invalid of [NaN, Infinity, "2"]) {
+  assert.equal(
+    readCapturedOperand(garrisoned, "Soldiers", "hellGarrison", {
+      hellGarrison: invalid,
+    }),
+    undefined,
+  );
+}
+// An unread defender sample and the uncaptured mercenary price remain unanswered.
 assert.equal(
   readCapturedOperand(garrisoned, "Soldiers", "hellGarrison"),
   undefined,

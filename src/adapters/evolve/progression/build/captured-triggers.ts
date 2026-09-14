@@ -115,6 +115,8 @@ export interface CapturedTriggersDependencies {
    * figure. Absent leaves the operand unanswered; 0 means no catalog has been read.
    */
   readonly readTechKnowledge?: () => number | undefined;
+  /** Actual fortress defenders. Read once only when a configured condition needs them. */
+  readonly readHellGarrison?: () => number | undefined;
 }
 
 interface TriggerRow {
@@ -363,6 +365,13 @@ export function createCapturedTriggers(
       // The Tech Knowledge figure travels the same way, from the knowledge gate's own sample.
       const demandSample = dependencies.readDemandSample?.();
       const techKnowledge = dependencies.readTechKnowledge?.();
+      const hellGarrison = rows.some(
+        (row) =>
+          row.requirementType === "Soldiers" &&
+          row.requirementId === "hellGarrison",
+      )
+        ? dependencies.readHellGarrison?.()
+        : undefined;
       const conditionContext = Object.freeze({
         ...(offeredTechs === undefined
           ? {}
@@ -378,6 +387,7 @@ export function createCapturedTriggers(
         ...(techKnowledge === undefined
           ? {}
           : { knowledgeRequiredByTechs: techKnowledge }),
+        ...(hellGarrison === undefined ? {} : { hellGarrison }),
       });
       const byPriority = new Map(rows.map((row) => [row.priority, row]));
 

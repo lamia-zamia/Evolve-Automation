@@ -10,6 +10,10 @@ import {
   runCapturedGovernmentAutomation,
 } from "../adapters/evolve/civic/captured-government.ts";
 import { createCapturedHellAutomation } from "../adapters/evolve/combat/captured-hell.ts";
+import {
+  HELL_GARRISON_CONTROLS,
+  readCapturedHellGarrison,
+} from "../adapters/evolve/combat/captured-hell-garrison.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import {
   createCapturedFullJobsAutomation,
@@ -401,6 +405,13 @@ export function startCapturedRuntime({
   const readTriggerDemand = () =>
     (triggerDemandThisCycle ??= triggerDemand.sample());
   const triggers = createCapturedTriggers({
+    readHellGarrison: () => {
+      ensureHellGarrisonControls();
+      return readCapturedHellGarrison(
+        pageCapture.rootState,
+        pageCapture.controls,
+      );
+    },
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs: buildCosts,
@@ -539,6 +550,53 @@ export function startCapturedRuntime({
     diagnostics,
   });
   let civicControlsDiscoveryAttempted = false;
+  let hellGarrisonDiscoveryAttempted = false;
+  /**
+   * Draws the civics military sub-tab, where `index.js` calls `buildFortress($('#fortress'),false)`
+   * and captures `gFort`. The same draw runs `defineGarrison()`, so a later slice that needs the
+   * `garrison` controls reuses this helper instead of adding a second military-tab discovery.
+   *
+   * Gates come before the latch, like the other conditional discoveries: the fortress is built
+   * mid-run, so a pre-fortress cycle must not spend the one attempt this run is allowed.
+   */
+  const ensureHellGarrisonControls = () => {
+    if (
+      HELL_GARRISON_CONTROLS.some((id) =>
+        pageCapture.controls.resolve(id)?.methods.includes("patrolling"),
+      )
+    ) {
+      return;
+    }
+    const root = pageCapture.rootState.readRoot();
+    if (
+      !isRecord(readProperty(readProperty(root, "portal"), "fortress")) ||
+      readProperty(readProperty(root, "race"), "warlord")
+    ) {
+      return;
+    }
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs === undefined) return;
+    if (hellGarrisonDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    hellGarrisonDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: MAIN_TAB_INDEX.civic,
+      }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.military,
+      }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `Hell garrison discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
   const ensureCivicControls = () => {
     if (civicControlsDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;

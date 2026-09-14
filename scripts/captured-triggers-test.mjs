@@ -84,6 +84,7 @@ function triggers({
   readBuildingUnlocks,
   demandSample,
   techKnowledge,
+  readHellGarrison,
   costs,
   controls,
 } = {}) {
@@ -113,10 +114,56 @@ function triggers({
     ...(techKnowledge === undefined
       ? {}
       : { readTechKnowledge: () => techKnowledge }),
+    ...(readHellGarrison === undefined ? {} : { readHellGarrison }),
   });
 }
 
 // A met requirement makes the action a target, at the game's own current cost.
+{
+  let reads = 0;
+  let defenders = 2;
+  const readHellGarrison = () => {
+    reads++;
+    return defenders;
+  };
+  const row = trigger({
+    requirementType: "Soldiers",
+    requirementId: "hellGarrison",
+    requirementCount: 2,
+  });
+  const subject = triggers({
+    triggers: [row, { ...row, priority: 1 }],
+    readHellGarrison,
+  });
+  assert.equal(subject.read().length, 1);
+  assert.equal(reads, 1, "all Hell conditions share one sample");
+  defenders = 1;
+  assert.deepEqual(subject.read(), []);
+  defenders = undefined;
+  assert.deepEqual(subject.read(), []);
+  defenders = 0;
+  assert.equal(
+    triggers({
+      triggers: [{ ...row, requirementCount: 0 }],
+      readHellGarrison,
+    }).read().length,
+    1,
+  );
+  assert.deepEqual(triggers({ triggers: [row] }).read(), []);
+  reads = 0;
+  triggers({ triggers: [trigger()], readHellGarrison }).read();
+  triggers({
+    triggers: [row],
+    settings: { autoTrigger: false },
+    readHellGarrison,
+  }).read();
+  assert.equal(
+    reads,
+    0,
+    "unrelated or disabled triggers do not query fortress controls",
+  );
+}
+
 assert.deepEqual(triggers({ triggers: [trigger()] }).read(), [
   { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
 ]);

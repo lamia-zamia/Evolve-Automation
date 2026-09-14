@@ -97,6 +97,8 @@ export interface CapturedConditionContext {
    * research path. Absent leaves it unanswered; 0 means no catalog has been read.
    */
   readonly knowledgeRequiredByTechs?: number;
+  /** Actual fortress defenders, from the game's `patrolling(f.garrison)` display method. */
+  readonly hellGarrison?: number;
   /**
    * The cycle's resource-demand commitments without the trigger targets, for the operands that
    * read what something else is accumulating. Absent leaves those operands unanswered.
@@ -459,9 +461,9 @@ function smelterSlots(root: unknown): number | undefined {
 /**
  * The script's own war-manager counts, recomputed from the captured root. Fields the game
  * backfills or the manager zeroes read the same way: a missing garrison, fortress, or
- * forward-base bag reads as zero, matching the manager before its first update. Two operands
- * stay unanswered: `hellGarrison` subtracts the assault-forge reserve, which needs settings,
- * buildings, and the army rating, and `mercenaryCost` needs the trait catalog on top.
+ * forward-base bag reads as zero, matching the manager before its first update. `hellGarrison`
+ * instead comes from the game's own displayed defender count through the condition context;
+ * `mercenaryCost` still needs an uncaptured price.
  *
  * `currentCityGarrison` reproduces the manager's own subtraction, which does not know the Eden
  * pillbox or the Warlord soul-forge deductions the game's `garrisonSize()` applies: exact for
@@ -705,6 +707,7 @@ function readNumber(
       if (argument === "factories") return factorySlots(root);
       return undefined;
     case "Soldiers":
+      if (argument === "hellGarrison") return finite(context?.hellGarrison);
       return soldierCount(root, argument);
     default:
       return undefined;

@@ -5782,8 +5782,34 @@
     );
   }
 
+  // src/adapters/evolve/combat/captured-hell-garrison.ts
+  var HELL_FORTRESS_CONTROL = "fort", HELL_GARRISON_CONTROLS = Object.freeze([
+    HELL_FORTRESS_CONTROL,
+    "gFort"
+  ]);
+  function readCapturedHellGarrison(rootState, controls) {
+    let root = rootState.readRoot(), race = readProperty(root, "race"), portal = readProperty(root, "portal");
+    if (!isNonArrayRecord(root) || !isNonArrayRecord(race) || !isNonArrayRecord(portal) || // Warlord's `#fort` is `buildEnemyFortress`, a different component with no `patrolling`;
+    // upstream skips `buildFortress` entirely for that trait, so neither id can answer here.
+    readProperty(race, "warlord"))
+      return;
+    let fortress = readProperty(portal, "fortress");
+    if (fortress === void 0) return 0;
+    if (!isNonArrayRecord(fortress)) return;
+    let garrison = finite(readProperty(fortress, "garrison"));
+    if (garrison === void 0 || finite(readProperty(fortress, "patrols")) === void 0 || finite(readProperty(fortress, "patrol_size")) === void 0)
+      return;
+    let control = HELL_GARRISON_CONTROLS.map((id) => controls.resolve(id)).find(
+      (candidate) => candidate?.methods.includes("patrolling")
+    );
+    if (control === void 0) return;
+    let result = controls.invoke(control, "patrolling", [garrison]);
+    if (!(!result.ok || rootState.readRoot() !== root || controls.resolve(control.elementId)?.generation !== control.generation))
+      return finite(result.value);
+  }
+
   // src/adapters/evolve/combat/captured-hell.ts
-  var FORT_CONTROL = "fort", GARRISON_CONTROLS = ["garrison", "c_garrison"];
+  var GARRISON_CONTROLS = ["garrison", "c_garrison"];
   function settingNumber(settings, key, fallback) {
     return finite(settings[key]) ?? fallback;
   }
@@ -6024,7 +6050,7 @@
             "hell-plan-no-longer-valid",
             "the captured Hell plan is no longer valid"
           );
-        let control = dependencies.controls.resolve(FORT_CONTROL);
+        let control = dependencies.controls.resolve(HELL_FORTRESS_CONTROL);
         if (decision.kind === "manage-hell")
           return applyHellManagement(decision, control, dependencies.controls);
         if (decision.kind === "calculate-hell-targets") {
@@ -11161,7 +11187,7 @@
       case "Industry":
         return argument === "smelters" ? smelterSlots(root) : argument === "factories" ? factorySlots(root) : void 0;
       case "Soldiers":
-        return soldierCount(root, argument);
+        return argument === "hellGarrison" ? finite(context?.hellGarrison) : soldierCount(root, argument);
       default:
         return;
     }
@@ -11364,7 +11390,9 @@
           let price2 = costs.readCost(buildingId);
           price2 !== void 0 && buildingCosts.set(buildingId, price2);
         }
-        let storedSettings = isRecord(settings) ? settings : void 0, demandSample = dependencies.readDemandSample?.(), techKnowledge = dependencies.readTechKnowledge?.(), conditionContext = Object.freeze({
+        let storedSettings = isRecord(settings) ? settings : void 0, demandSample = dependencies.readDemandSample?.(), techKnowledge = dependencies.readTechKnowledge?.(), hellGarrison = rows.some(
+          (row) => row.requirementType === "Soldiers" && row.requirementId === "hellGarrison"
+        ) ? dependencies.readHellGarrison?.() : void 0, conditionContext = Object.freeze({
           ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
           ...grantedTechs === void 0 ? {} : { grantedTechs },
           ...offeredProjectsById === void 0 ? {} : { unlockedProjects: new Set(offeredProjectsById.keys()) },
@@ -11372,7 +11400,8 @@
           ...buildingCosts.size === 0 ? {} : { buildingCosts },
           ...storedSettings === void 0 ? {} : { settings: storedSettings },
           ...demandSample === void 0 ? {} : { demand: demandSample },
-          ...techKnowledge === void 0 ? {} : { knowledgeRequiredByTechs: techKnowledge }
+          ...techKnowledge === void 0 ? {} : { knowledgeRequiredByTechs: techKnowledge },
+          ...hellGarrison === void 0 ? {} : { hellGarrison }
         }), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
             let count2 = finite(
@@ -19694,6 +19723,10 @@ Only continue if you trust the source. Injected code:
       craftCosts: costs,
       fleet: fleetDemand
     }), triggerDemandThisCycle, readTriggerDemand = () => triggerDemandThisCycle ??= triggerDemand.sample(), triggers = createCapturedTriggers({
+      readHellGarrison: () => (ensureHellGarrisonControls(), readCapturedHellGarrison(
+        pageCapture2.rootState,
+        pageCapture2.controls
+      )),
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs: buildCosts,
@@ -19800,7 +19833,33 @@ Only continue if you trust the source. Injected code:
       mountSuppression: pageCapture2.mountSuppression,
       panels,
       diagnostics
-    }), civicControlsDiscoveryAttempted = !1, ensureCivicControls = () => {
+    }), civicControlsDiscoveryAttempted = !1, hellGarrisonDiscoveryAttempted = !1, ensureHellGarrisonControls = () => {
+      if (HELL_GARRISON_CONTROLS.some(
+        (id) => pageCapture2.controls.resolve(id)?.methods.includes("patrolling")
+      ))
+        return;
+      let root = pageCapture2.rootState.readRoot();
+      if (!isRecord(readProperty(readProperty(root, "portal"), "fortress")) || readProperty(readProperty(root, "race"), "warlord"))
+        return;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      if (govTabs === void 0 || hellGarrisonDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      hellGarrisonDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.military
+        })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `Hell garrison discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
+    }, ensureCivicControls = () => {
       if (civicControlsDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       civicControlsDiscoveryAttempted = !0;
       let result = civicDiscovery.discover([
