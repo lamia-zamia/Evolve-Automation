@@ -11171,8 +11171,18 @@
       return !(maximum > 0) || !(required > 0) ? 1 : amount / Math.min(maximum, required);
   }
   function resourceIncome(root, context, argument) {
-    if (!(typeof argument != "string" || context?.settings === void 0) && context.settings.autoMarket !== !0 && !readProperty(readProperty(root, "race"), "decay"))
-      return finite(readProperty(resourceRecord(root, argument), "diff"));
+    if (typeof argument != "string" || context?.settings === void 0)
+      return;
+    let resource = resourceRecord(root, argument);
+    if (!isRecord(resource)) return;
+    let diff = finite(readProperty(resource, "diff")), amount = finite(readProperty(resource, "amount"));
+    if (!(diff === void 0 || amount === void 0) && !(readProperty(readProperty(root, "race"), "decay") && amount > 50)) {
+      if (context.settings.autoMarket === !0) {
+        let trade = finite(readProperty(resource, "trade"));
+        if (trade !== void 0 && trade < 0 && amount > 0) return;
+      }
+      return diff;
+    }
   }
   function civicJob(root, argument) {
     if (typeof argument == "string")

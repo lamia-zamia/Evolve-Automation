@@ -1211,7 +1211,8 @@ assert.equal(evaluateCapturedCondition(root, "Queue", "evo", 3, stored), true);
 assert.equal(evaluateCapturedCondition(root, "Queue", "evo", 4, stored), false);
 
 // ResourceIncome is exact when the finalized resource rate has no private market or decay
-// adjustment. The live diff is deliberately not guessed when either adjustment could apply.
+// adjustment. Captured thresholds prove that imports, empty exports, and low holdings need no
+// private correction; a live export or decay remains deliberately unanswered.
 assert.equal(readCapturedOperand(root, "ResourceIncome", "Money", stored), 12);
 assert.equal(
   readCapturedOperand(
@@ -1223,10 +1224,80 @@ assert.equal(
   undefined,
 );
 assert.equal(
-  readCapturedOperand(root, "ResourceIncome", "Money", {
-    settings: { autoMarket: true },
-  }),
+  readCapturedOperand(
+    {
+      ...root,
+      resource: {
+        ...root.resource,
+        Money: { ...root.resource.Money, amount: 50 },
+      },
+    },
+    "ResourceIncome",
+    "Money",
+    { settings: { autoMarket: true } },
+  ),
+  12,
+);
+assert.equal(
+  readCapturedOperand(
+    {
+      ...root,
+      resource: {
+        ...root.resource,
+        Money: { ...root.resource.Money, trade: 1 },
+      },
+    },
+    "ResourceIncome",
+    "Money",
+    { settings: { autoMarket: true } },
+  ),
+  12,
+);
+assert.equal(
+  readCapturedOperand(
+    {
+      ...root,
+      resource: {
+        ...root.resource,
+        Money: { ...root.resource.Money, trade: -1, amount: 0 },
+      },
+    },
+    "ResourceIncome",
+    "Money",
+    { settings: { autoMarket: true } },
+  ),
+  12,
+);
+assert.equal(
+  readCapturedOperand(
+    {
+      ...root,
+      resource: {
+        ...root.resource,
+        Money: { ...root.resource.Money, trade: -1 },
+      },
+    },
+    "ResourceIncome",
+    "Money",
+    { settings: { autoMarket: true } },
+  ),
   undefined,
+);
+assert.equal(
+  readCapturedOperand(
+    {
+      ...root,
+      race: { ...root.race, decay: 1 },
+      resource: {
+        ...root.resource,
+        Money: { ...root.resource.Money, amount: 50 },
+      },
+    },
+    "ResourceIncome",
+    "Money",
+    stored,
+  ),
+  12,
 );
 
 // Nothing the capture does not hold is guessed at.

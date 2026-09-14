@@ -32,8 +32,8 @@
  * `CapturedConditionContext`, and a condition naming one goes
  * unanswered whenever the pass it needs was not taken.
  *
- * Everything else a condition can name — adjusted resource income, custom expressions, building
- * clickability, manager-computed values, and anything needing the
+ * Everything else a condition can name — adjusted resource income when its private adjustments
+ * can apply, custom expressions, building clickability, manager-computed values, and anything needing the
  * module-level race catalog or a private action definition — is deliberately absent.
  *
  * `undefined` has exactly one meaning here: the operand cannot be answered from what has been
@@ -215,9 +215,10 @@ function demandUsefulRatio(
 
 /**
  * The legacy ResourceIncome operand reads the finalized rate, which adds market sells and decay
- * back onto `resource.diff`. Without either adjustment, the captured diff is that exact value.
- * Active market and decay runs stay unanswered until their private breakdown and trade-ratio
- * inputs are captured.
+ * back onto `resource.diff`. Imports stay in that diff; an absent/non-exporting route, or no
+ * holdings to export, proves no private market correction is needed. Decay cannot apply at or
+ * below the game's 50-unit threshold. Active export and decay stay unanswered until their
+ * private breakdown and trade-ratio inputs are captured.
  */
 function resourceIncome(
   root: unknown,
@@ -227,9 +228,19 @@ function resourceIncome(
   if (typeof argument !== "string" || context?.settings === undefined) {
     return undefined;
   }
-  if (context.settings["autoMarket"] === true) return undefined;
-  if (readProperty(readProperty(root, "race"), "decay")) return undefined;
-  return finite(readProperty(resourceRecord(root, argument), "diff"));
+  const resource = resourceRecord(root, argument);
+  if (!isRecord(resource)) return undefined;
+  const diff = finite(readProperty(resource, "diff"));
+  const amount = finite(readProperty(resource, "amount"));
+  if (diff === undefined || amount === undefined) return undefined;
+  if (readProperty(readProperty(root, "race"), "decay") && amount > 50) {
+    return undefined;
+  }
+  if (context.settings["autoMarket"] === true) {
+    const trade = finite(readProperty(resource, "trade"));
+    if (trade !== undefined && trade < 0 && amount > 0) return undefined;
+  }
+  return diff;
 }
 
 /** One civic job entry by its stored id, e.g. `farmer` — not a crafting resource id. */
