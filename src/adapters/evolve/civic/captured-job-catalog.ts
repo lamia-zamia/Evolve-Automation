@@ -22,6 +22,11 @@ import {
   readProperty,
 } from "../../validation.ts";
 import { readScriptCyclesPerSecond } from "../captured-tick-rate.ts";
+import { readCapturedMorale } from "./captured-morale.ts";
+import {
+  readCapturedTaxLimits,
+  readCapturedTaxTaskActive,
+} from "./captured-tax.ts";
 
 export interface CapturedJobCatalogEntry {
   readonly id: string;
@@ -259,6 +264,62 @@ function hasRaceFlag(race: unknown, key: string): boolean {
   return Boolean(readProperty(race, key));
 }
 
+function readEntertainerSmartMaximum(
+  root: unknown,
+  settings: Record<PropertyKey, unknown> | undefined,
+  count: number,
+): number | null | undefined {
+  const tech = readProperty(root, "tech");
+  if (!isRecord(tech)) return undefined;
+  const superstarValue = readProperty(tech, "superstar");
+  const superstar =
+    superstarValue === undefined ? 0 : finiteNonNegative(superstarValue);
+  if (superstar === undefined) return undefined;
+  // Superstar contributes a separate morale-cap term, so the legacy smart Entertainer rule does
+  // not apply once that technology is active.
+  if (superstar > 0) return null;
+  // With no current pool, the per-worker game answer is undefined. Retaining zero is the safe
+  // boundary: a smart setting cannot prove that the first worker is worthwhile from this sample.
+  if (count === 0) return 0;
+  const morale = readCapturedMorale(root);
+  if (morale === undefined || morale.entertainment === undefined)
+    return undefined;
+  const entertainerWorkers = finiteNonNegative(
+    readProperty(
+      readProperty(readProperty(root, "civic"), "entertainer"),
+      "workers",
+    ),
+  );
+  if (entertainerWorkers === undefined) return undefined;
+  // Servants contribute to the planner's effective count but not to the game's
+  // `workerScale(civic.entertainer.workers, "entertainer")` total.
+  if (entertainerWorkers === 0) return count;
+  const entertainerMorale = finite(morale.entertainment / entertainerWorkers);
+  if (entertainerMorale === undefined) return undefined;
+  if (entertainerMorale <= 0) return count;
+
+  const taxes = readProperty(readProperty(root, "civic"), "taxes");
+  const taxRate = finiteNonNegative(readProperty(taxes, "tax_rate"));
+  if (taxRate === undefined) return undefined;
+  const taxTaskActive = readCapturedTaxTaskActive(root);
+  if (taxTaskActive === undefined) return undefined;
+  const [, taxCap] = readCapturedTaxLimits(root);
+  const taxBuffer =
+    (settings?.["autoTax"] === true || taxTaskActive) && taxRate < taxCap
+      ? 1
+      : 0;
+  // This is the existing smart-cap policy, now fed by the game's captured morale answer rather
+  // than its former Theatre/trait reconstruction. Keep the formula in this one owner because the
+  // pure planner consumes the resulting cap, not the upstream game's ordinary job maximum.
+  const maximum =
+    count -
+    Math.floor(
+      (morale.potential - morale.maximum - taxBuffer) / entertainerMorale,
+    );
+  if (Number.isFinite(maximum)) return maximum;
+  return maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+}
+
 function readSmartMaximum(
   root: unknown,
   id: string,
@@ -275,6 +336,9 @@ function readSmartMaximum(
   if (id === "scientist") return readScientistSmartMaximum(root, count);
   if (id === "professor") return readProfessorSmartMaximum(root);
   if (id === "banker") return readBankerSmartMaximum(root, readDemand);
+  if (id === "entertainer") {
+    return readEntertainerSmartMaximum(root, settings, count);
+  }
   const history = readJobHistory?.();
   if (id === "farmer") {
     return readFarmerSmartMaximum(root, count, settings, history);
@@ -1057,6 +1121,7 @@ const SMART_MAXIMUM_IDS: ReadonlySet<string> = new Set([
   "coal_miner",
   "cement_worker",
   "teamster",
+  "entertainer",
 ]);
 
 const JOB_TOKENS: Readonly<Record<string, number>> = Object.freeze({

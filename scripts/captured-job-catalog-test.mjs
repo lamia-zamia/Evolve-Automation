@@ -438,6 +438,80 @@ assert.equal(
   "non-Gravity Well races do not require a Teamster smart maximum",
 );
 
+const entertainerRoot = {
+  ...root,
+  civic: {
+    ...root.civic,
+    taxes: { tax_rate: 20, display: true },
+    govern: { type: "democracy" },
+    entertainer: {
+      job: "entertainer",
+      assigned: 2,
+      workers: 2,
+      max: -1,
+      display: true,
+    },
+  },
+  city: { morale: { current: 110, cap: 200, potential: 0.5, entertain: 4.8 } },
+  race: {},
+  tech: { superstar: 0 },
+};
+const entertainerReader = createCapturedJobCatalogReader({
+  rootState: { readRoot: () => entertainerRoot },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-entertainer"],
+  },
+  readSettings: () => ({ job_s_entertainer: true, autoTax: true }),
+});
+assert.equal(
+  entertainerReader().jobs.find(({ id }) => id === "entertainer")?.smartMaximum,
+  86,
+  "Entertainer smart maximum uses captured morale and tax state",
+);
+assert.equal(
+  entertainerReader().jobs.find(({ id }) => id === "entertainer")
+    ?.smartMaximumKnown,
+  true,
+  "Entertainer smart maximum is characterized when its captured inputs exist",
+);
+
+const superstarEntertainerRoot = structuredClone(entertainerRoot);
+superstarEntertainerRoot.tech.superstar = 1;
+const superstarEntertainerReader = createCapturedJobCatalogReader({
+  rootState: { readRoot: () => superstarEntertainerRoot },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-entertainer"],
+  },
+  readSettings: () => ({ job_s_entertainer: true }),
+});
+assert.equal(
+  superstarEntertainerReader().jobs.find(({ id }) => id === "entertainer")
+    ?.smartMaximum,
+  null,
+  "Superstar leaves Entertainer smart mode uncapped by the non-Superstar rule",
+);
+
+const zeroEntertainerRoot = structuredClone(entertainerRoot);
+zeroEntertainerRoot.civic.entertainer.assigned = 0;
+zeroEntertainerRoot.civic.entertainer.workers = 0;
+zeroEntertainerRoot.city.morale.entertain = 0;
+const zeroEntertainerReader = createCapturedJobCatalogReader({
+  rootState: { readRoot: () => zeroEntertainerRoot },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-entertainer"],
+  },
+  readSettings: () => ({ job_s_entertainer: true }),
+});
+assert.equal(
+  zeroEntertainerReader().jobs.find(({ id }) => id === "entertainer")
+    ?.smartMaximum,
+  0,
+  "zero Entertainers retain a zero smart maximum",
+);
+
 const spaceMinerReader = createCapturedJobCatalogReader({
   rootState: {
     readRoot: () => ({

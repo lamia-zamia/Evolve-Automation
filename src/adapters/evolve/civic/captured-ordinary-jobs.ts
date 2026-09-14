@@ -39,7 +39,10 @@ import {
 import type { CapturedCraftCosts } from "../economy/production/captured-craft-costs.ts";
 import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
 import { readCapturedMorale } from "./captured-morale.ts";
-import { readCapturedTaxLimits } from "./captured-tax.ts";
+import {
+  readCapturedTaxLimits,
+  readCapturedTaxTaskActive,
+} from "./captured-tax.ts";
 
 export interface CapturedOrdinaryJobsDependencies {
   readonly rootState: GameRootStateSource;
@@ -150,22 +153,6 @@ function unavailableInput(): Readonly<JobsCycleInput> {
   });
 }
 
-/** DeadSpace's haveTask("tax") is membership in the governor task values. */
-function readTaxTaskActive(root: unknown): boolean | undefined {
-  const race = readProperty(root, "race");
-  if (!isRecord(race)) return undefined;
-  const governor = readProperty(race, "governor");
-  if (governor === undefined) return false;
-  if (!isRecord(governor)) return undefined;
-  const tasks = readProperty(governor, "tasks");
-  if (tasks === undefined) return false;
-  if (!isRecord(tasks)) return undefined;
-  for (const task of Object.values(tasks)) {
-    if (typeof task !== "string") return undefined;
-  }
-  return Object.values(tasks).includes("tax");
-}
-
 function traitValue(
   race: Record<PropertyKey, unknown>,
   id: string,
@@ -270,7 +257,7 @@ function readAuthorityInput(
     }
   }
   if (!autoTax && current < target && taxRate < taxCap) {
-    const capturedTaxTask = readTaxTaskActive(root);
+    const capturedTaxTask = readCapturedTaxTaskActive(root);
     if (capturedTaxTask === undefined) return undefined;
     taxTaskActive = capturedTaxTask;
   }

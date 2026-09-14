@@ -5623,6 +5623,20 @@
   function capturedTaxQuantity(value, key) {
     return capturedTaxFinite(readProperty(value, key), 0);
   }
+  function readCapturedTaxTaskActive(root) {
+    let race = readProperty(root, "race");
+    if (!isRecord(race)) return;
+    let governor = readProperty(race, "governor");
+    if (governor === void 0) return !1;
+    if (!isRecord(governor)) return;
+    let tasks = readProperty(governor, "tasks");
+    if (tasks === void 0) return !1;
+    if (isRecord(tasks)) {
+      for (let task of Object.values(tasks))
+        if (typeof task != "string") return;
+      return Object.values(tasks).includes("tax");
+    }
+  }
   function capturedTaxDemanded(money, banana) {
     if (banana) return !1;
     let method = money.isDemanded;
@@ -6713,6 +6727,36 @@
   function hasRaceFlag(race, key) {
     return !!readProperty(race, key);
   }
+  function readEntertainerSmartMaximum(root, settings, count2) {
+    let tech = readProperty(root, "tech");
+    if (!isRecord(tech)) return;
+    let superstarValue = readProperty(tech, "superstar"), superstar = superstarValue === void 0 ? 0 : finiteNonNegative(superstarValue);
+    if (superstar === void 0) return;
+    if (superstar > 0) return null;
+    if (count2 === 0) return 0;
+    let morale = readCapturedMorale(root);
+    if (morale === void 0 || morale.entertainment === void 0)
+      return;
+    let entertainerWorkers = finiteNonNegative(
+      readProperty(
+        readProperty(readProperty(root, "civic"), "entertainer"),
+        "workers"
+      )
+    );
+    if (entertainerWorkers === void 0) return;
+    if (entertainerWorkers === 0) return count2;
+    let entertainerMorale = finite(morale.entertainment / entertainerWorkers);
+    if (entertainerMorale === void 0) return;
+    if (entertainerMorale <= 0) return count2;
+    let taxes = readProperty(readProperty(root, "civic"), "taxes"), taxRate = finiteNonNegative(readProperty(taxes, "tax_rate"));
+    if (taxRate === void 0) return;
+    let taxTaskActive = readCapturedTaxTaskActive(root);
+    if (taxTaskActive === void 0) return;
+    let [, taxCap] = readCapturedTaxLimits(root), taxBuffer = (settings?.autoTax === !0 || taxTaskActive) && taxRate < taxCap ? 1 : 0, maximum = count2 - Math.floor(
+      (morale.potential - morale.maximum - taxBuffer) / entertainerMorale
+    );
+    return Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+  }
   function readSmartMaximum(root, id, smart, settings, count2, readDemand, readJobHistory) {
     if (!smart) return null;
     if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
@@ -6721,6 +6765,8 @@
     if (id === "scientist") return readScientistSmartMaximum(root, count2);
     if (id === "professor") return readProfessorSmartMaximum(root);
     if (id === "banker") return readBankerSmartMaximum(root, readDemand);
+    if (id === "entertainer")
+      return readEntertainerSmartMaximum(root, settings, count2);
     let history = readJobHistory?.();
     if (id === "farmer")
       return readFarmerSmartMaximum(root, count2, settings, history);
@@ -7088,7 +7134,8 @@
     "miner",
     "coal_miner",
     "cement_worker",
-    "teamster"
+    "teamster",
+    "entertainer"
   ]), JOB_TOKENS = Object.freeze({
     unemployed: 0,
     hunter: 1,
@@ -8079,20 +8126,6 @@
       defaultPreference: Object.freeze([])
     });
   }
-  function readTaxTaskActive(root) {
-    let race = readProperty(root, "race");
-    if (!isRecord(race)) return;
-    let governor = readProperty(race, "governor");
-    if (governor === void 0) return !1;
-    if (!isRecord(governor)) return;
-    let tasks = readProperty(governor, "tasks");
-    if (tasks === void 0) return !1;
-    if (isRecord(tasks)) {
-      for (let task of Object.values(tasks))
-        if (typeof task != "string") return;
-      return Object.values(tasks).includes("tax");
-    }
-  }
   function traitValue(race, id, values, operation2) {
     let rank = readProperty(race, id);
     if (rank === void 0 || rank === !1)
@@ -8153,7 +8186,7 @@
       }
     }
     if (!autoTax && current < target && taxRate < taxCap) {
-      let capturedTaxTask = readTaxTaskActive(root);
+      let capturedTaxTask = readCapturedTaxTaskActive(root);
       if (capturedTaxTask === void 0) return;
       taxTaskActive = capturedTaxTask;
     }
