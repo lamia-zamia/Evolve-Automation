@@ -82,6 +82,7 @@ function triggers({
   projects = PROJECTS,
   readOfferedProjects,
   readBuildingUnlocks,
+  readBuildingCapacity,
   demandSample,
   techKnowledge,
   readHellGarrison,
@@ -108,6 +109,7 @@ function triggers({
     readGrantedTechs: () => granted,
     readOfferedProjects: readOfferedProjects ?? (() => offeredProjects),
     ...(readBuildingUnlocks === undefined ? {} : { readBuildingUnlocks }),
+    ...(readBuildingCapacity === undefined ? {} : { readBuildingCapacity }),
     ...(demandSample === undefined
       ? {}
       : { readDemandSample: () => demandSample }),
@@ -508,6 +510,94 @@ assert.deepEqual(
   }).read();
   assert.deepEqual(asked, ["city-mine"]);
 }
+
+// --- BuildingClickable conditions use the game's capacity oracle separately ----------------
+
+{
+  const asked = [];
+  let capacityReads = 0;
+  const result = triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingClickable",
+        requirementId: "city-mine",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: (regions) => {
+      assert.deepEqual([...regions], ["city"]);
+      return {
+        unlocked: new Set(["city-mine"]),
+        regions: new Set(["city"]),
+        states: new Map(),
+      };
+    },
+    readBuildingCapacity: (ids) => {
+      capacityReads += 1;
+      assert.deepEqual([...ids], ["city-mine"]);
+      return new Map([["city-mine", true]]);
+    },
+    costs: (actionId) => {
+      asked.push(actionId);
+      return actionId === "city-mine"
+        ? { cost: { Money: 60, Lumber: 50 }, pool: undefined }
+        : priceLookup(COSTS)(actionId);
+    },
+  }).read();
+  assert.equal(capacityReads, 1);
+  assert.deepEqual(asked, ["city-mine", "city-mine"]);
+  assert.deepEqual(result, [
+    {
+      actionId: "city-mine",
+      actionType: "build",
+      cost: { Money: 60, Lumber: 50 },
+    },
+  ]);
+}
+
+// The capacity result is not an affordability result: a false capacity rejects the condition even
+// when the current price fits, while an unaffordable price rejects it even when capacity is true.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingClickable",
+        requirementId: "city-mine",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: () => ({
+      unlocked: new Set(["city-mine"]),
+      regions: new Set(["city"]),
+      states: new Map(),
+    }),
+    readBuildingCapacity: () => new Map([["city-mine", false]]),
+    costs: () => ({ cost: { Money: 60, Lumber: 50 }, pool: undefined }),
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingClickable",
+        requirementId: "city-mine",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: () => ({
+      unlocked: new Set(["city-mine"]),
+      regions: new Set(["city"]),
+      states: new Map(),
+    }),
+    readBuildingCapacity: () => new Map([["city-mine", true]]),
+    costs: () => ({ cost: { Money: 501 }, pool: undefined }),
+  }).read(),
+  [],
+);
 
 // --- BuildingCost conditions read one entry of the same priced pass --------
 

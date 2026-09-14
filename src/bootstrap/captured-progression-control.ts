@@ -55,18 +55,24 @@ import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
+import type { GameKeyStateReader } from "../ports/game-key-state.ts";
 import type {
   GameProjectCatalog,
   OfferedProject,
 } from "../ports/game-project-catalog.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+import { createCapturedBuildCapacity } from "../adapters/evolve/captured-build-capacity.ts";
 
 export interface CapturedProgressionControlDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly mountSuppression: GameMountSuppression;
   readonly panels: GamePanelWorkspace;
+  /** Native queue-key events and observed key state for the semantic build-capacity probe. */
+  readonly keyboard?: GameKeyboardHandlersPort;
+  readonly keyState?: GameKeyStateReader;
   readonly drawnActions: GameDrawnActionsReader;
   readonly drawnProjects: GameDrawnProjectsReader;
   /** Prices captured mission controls for the build weighting adapter. */
@@ -144,6 +150,10 @@ export interface CapturedProgressionControl {
    * without running the construction cycle.
    */
   readonly ensureBuildControls: () => void;
+  /** The game's own answer to whether one more copy of each named building can be queued. */
+  readonly readBuildingCapacity: (
+    actionIds: ReadonlySet<string>,
+  ) => ReadonlyMap<string, boolean | undefined>;
 }
 
 /**
@@ -221,6 +231,20 @@ export function createCapturedProgressionControl(
   // was otherwise paid for on every tick to re-derive an answer that had not moved; the scopes and
   // what invalidates each are in docs/discovery-invalidation.md.
   const epoch = createProgressionEpochReader(rootState);
+  const buildCapacity =
+    dependencies.keyboard === undefined || dependencies.keyState === undefined
+      ? undefined
+      : createCapturedBuildCapacity({
+          rootState,
+          controls,
+          panels,
+          mountSuppression,
+          keyboard: dependencies.keyboard,
+          keyState: dependencies.keyState,
+          readEpoch: epoch.read,
+          nowMs,
+          diagnostics,
+        });
   const scopes = createDiscoveryScopeCache({
     readEpoch: epoch.read,
     nowMs,
@@ -443,6 +467,13 @@ export function createCapturedProgressionControl(
     }
     return lastBuildingUnlocks;
   };
+  const readBuildingCapacity = (actionIds: ReadonlySet<string>) => {
+    const result = new Map<string, boolean | undefined>();
+    for (const actionId of actionIds) {
+      result.set(actionId, buildCapacity?.canBuildAnother(actionId));
+    }
+    return result;
+  };
   const readKnowledge = createCapturedKnowledgeReader({
     rootState,
     resources,
@@ -559,6 +590,7 @@ export function createCapturedProgressionControl(
     readProjects,
     resetProjectSample,
     readBuildingUnlocks,
+    readBuildingCapacity,
     resetBuildingUnlockSample,
     observations: construction.observations,
     readManagedBuildTargets,

@@ -31,9 +31,11 @@
  * priced, and `BuildingCost` reads one entry of that same price. Those come in through
  * `CapturedConditionContext`, and a condition naming one goes
  * unanswered whenever the pass it needs was not taken.
+ * `BuildingClickable` adds the current `checkCosts` result and the game's semantic queue-capacity
+ * answer to the same context.
  *
  * Everything else a condition can name — adjusted resource income when its private adjustments
- * can apply, custom expressions, building clickability, manager-computed values, and anything needing the
+ * can apply, custom expressions, manager-computed values, and anything needing the
  * module-level race catalog or a private action definition — is deliberately absent.
  *
  * `undefined` has exactly one meaning here: the operand cannot be answered from what has been
@@ -47,7 +49,7 @@ import {
   readProperty,
   splitActionId,
 } from "../validation.ts";
-import { costFitsStorage } from "./captured-affordability.ts";
+import { costFitsNow, costFitsStorage } from "./captured-affordability.ts";
 import type { GameActionPrice } from "../../ports/game-action-costs.ts";
 import { readCapturedFactoryCapacity } from "./economy/production/captured-factory-capacity.ts";
 
@@ -87,6 +89,8 @@ export interface CapturedConditionContext {
    * operands unanswered. The satellite entry answers `Other/satcost` under its game action id.
    */
   readonly buildingCosts?: ReadonlyMap<string, GameActionPrice>;
+  /** The game's own queue admission answer for each named building action. */
+  readonly buildingCapacity?: ReadonlyMap<string, boolean | undefined>;
   /**
    * The cycle's stored script settings, for the operands that read the player's own configuration
    * rather than game state. Absent leaves those operands unanswered.
@@ -140,6 +144,7 @@ const BOOLEAN_OPERANDS: ReadonlySet<string> = new Set([
   "ProjectUnlocked",
   "BuildingUnlocked",
   "BuildingAffordable",
+  "BuildingClickable",
   "BuildingQueued",
   "Challenge",
   "Universe",
@@ -783,6 +788,21 @@ function readBoolean(
       // Once the game splits its resources by supply zone the capacity compared against is the
       // paying pool's share, which the same probe that priced the building reported.
       return costFitsStorage(root, price.cost, { pool: price.pool });
+    }
+    case "BuildingClickable": {
+      // `isClickable()` is the action row's own conjunction. A locked building is a real false
+      // from the drawn row; an unlocked row still needs both its current cost and the queue oracle.
+      if (typeof argument !== "string") return undefined;
+      const parts = splitActionId(argument);
+      const sample = context?.buildingUnlocks;
+      if (parts === undefined || sample === undefined) return undefined;
+      if (!sample.regions.has(parts.region)) return undefined;
+      if (!sample.unlocked.has(argument)) return false;
+      const price = context?.buildingCosts?.get(argument);
+      if (price === undefined) return undefined;
+      const affordable = costFitsNow(root, price.cost, { pool: price.pool });
+      if (affordable !== true) return affordable;
+      return context?.buildingCapacity?.get(argument);
     }
     case "BuildingQueued": {
       // Membership in the game build queue, which is what the script's own queued-target list

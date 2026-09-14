@@ -407,6 +407,80 @@ const cityAndSpace = {
     states: new Map([["city-mine", { on: 4, off: 1 }]]),
   },
 };
+
+// --- BuildingClickable is the row's unlock + current affordability + game-owned capacity -------
+
+const clickable = {
+  ...cityAndSpace,
+  buildingUnlocks: {
+    ...cityAndSpace.buildingUnlocks,
+    unlocked: new Set(["city-farm", "city-bank"]),
+  },
+  buildingCosts: new Map([
+    ["city-farm", actionPrice({ Money: 200 })],
+    ["city-bank", actionPrice({ Money: 1 })],
+  ]),
+  buildingCapacity: new Map([
+    ["city-farm", true],
+    ["city-bank", false],
+  ]),
+};
+assert.equal(
+  readCapturedOperand(root, "BuildingClickable", "city-farm", clickable),
+  true,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingClickable", "city-bank", clickable),
+  false,
+  "capacity is a separate final predicate",
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "BuildingClickable",
+    "city-farm",
+    1,
+    clickable,
+  ),
+  true,
+);
+assert.equal(
+  evaluateCapturedCondition(
+    root,
+    "BuildingClickable",
+    "city-bank",
+    0,
+    clickable,
+  ),
+  true,
+);
+// A cost can fit in storage but not be on hand: clickable uses `checkCosts`, not `checkMaxCosts`.
+assert.equal(
+  readCapturedOperand(root, "BuildingClickable", "city-farm", {
+    ...clickable,
+    buildingCosts: new Map([["city-farm", actionPrice({ Money: 251 })]]),
+  }),
+  false,
+);
+// A locked row is false without asking for a price or capacity, while an unlocked row missing a
+// required sample is unanswered.
+assert.equal(
+  readCapturedOperand(root, "BuildingClickable", "city-bank", {
+    ...clickable,
+    buildingUnlocks: {
+      ...clickable.buildingUnlocks,
+      unlocked: new Set(["city-farm"]),
+    },
+  }),
+  false,
+);
+assert.equal(
+  readCapturedOperand(root, "BuildingClickable", "city-farm", {
+    ...clickable,
+    buildingCapacity: new Map(),
+  }),
+  undefined,
+);
 assert.equal(
   readCapturedOperand(root, "BuildingUnlocked", "city-farm", cityAndSpace),
   true,

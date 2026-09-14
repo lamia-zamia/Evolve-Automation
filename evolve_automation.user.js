@@ -297,6 +297,45 @@
     ]);
   }
 
+  // src/adapters/browser/game-key-state.ts
+  function observedKeys(event) {
+    let key = readProperty(event, "key"), keyCode = finite(readProperty(event, "keyCode")), keys = [];
+    return typeof key == "string" && key.length > 0 && keys.push(key), keyCode !== void 0 && keyCode > 0 && keys.push(keyCode), keys;
+  }
+  function createGameKeyStateCapture(getDocument) {
+    let pressed = /* @__PURE__ */ new Set(), document = getDocument();
+    if (typeof document != "object" || document === null)
+      return Object.freeze({
+        readPressed: () => {
+        },
+        uninstall: () => {
+        }
+      });
+    let pageDocument = document;
+    if (typeof pageDocument.addEventListener != "function" || typeof pageDocument.removeEventListener != "function")
+      return Object.freeze({
+        readPressed: () => {
+        },
+        uninstall: () => {
+        }
+      });
+    let onKeyDown = (event) => {
+      for (let key of observedKeys(event)) pressed.add(key);
+    }, onKeyUp = (event) => {
+      for (let key of observedKeys(event)) pressed.delete(key);
+    }, capturePhase = !0;
+    pageDocument.addEventListener("keydown", onKeyDown, capturePhase), pageDocument.addEventListener("keyup", onKeyUp, capturePhase);
+    let uninstalled = !1;
+    return Object.freeze({
+      readPressed(key) {
+        return pressed.has(key);
+      },
+      uninstall() {
+        uninstalled || (uninstalled = !0, pageDocument.removeEventListener("keydown", onKeyDown, capturePhase), pageDocument.removeEventListener("keyup", onKeyUp, capturePhase), pressed.clear());
+      }
+    });
+  }
+
   // src/adapters/evolve/vue-capture.ts
   var CAPTURE_MARKER = /* @__PURE__ */ Symbol.for("evolve-automation.vue-capture"), DISPOSABLE_APP_MARKER = /* @__PURE__ */ Symbol.for(
     "evolve-automation.disposable-vue-app"
@@ -713,15 +752,18 @@
   function installPageCapture(pageWindow, options = {}) {
     let installed = readInstalledCapture(pageWindow);
     if (installed !== void 0) return installed;
-    let vue = installVueCapture(pageWindow, options), worker = installWorkerCapture(pageWindow, options), capture = Object.freeze({
+    let vue = installVueCapture(pageWindow, options), worker = installWorkerCapture(pageWindow, options), keyState = createGameKeyStateCapture(
+      () => readProperty(pageWindow, "document")
+    ), capture = Object.freeze({
       rootState: vue.rootState,
+      keyState,
       controls: vue.controls,
       controlUsage: vue.controlUsage,
       periods: worker.periods,
       mountSuppression: vue.mountSuppression,
       isComplete: () => vue.rootState.readRoot() !== void 0 && worker.isCaptured(),
       uninstall() {
-        isRecord(pageWindow) && pageWindow[PAGE_CAPTURE_MARKER] === capture && delete pageWindow[PAGE_CAPTURE_MARKER], vue.uninstall(), worker.uninstall();
+        isRecord(pageWindow) && pageWindow[PAGE_CAPTURE_MARKER] === capture && delete pageWindow[PAGE_CAPTURE_MARKER], vue.uninstall(), worker.uninstall(), keyState.uninstall();
       }
     });
     return isRecord(pageWindow) && Object.defineProperty(pageWindow, PAGE_CAPTURE_MARKER, {
@@ -871,6 +913,14 @@
     let ledger = readProperty(resource, "regMax");
     return !isRecord(ledger) || Object.keys(ledger).length === 0 ? capacity : finite(readProperty(ledger, pool)) ?? 0;
   }
+  function capturedPoolAmount(resource, pool, regional) {
+    if (!regional || pool === void 0 || pool === ANYWHERE_POOL)
+      return finite(readProperty(resource, "amount"));
+    let ledger = readProperty(resource, "reg");
+    if (!isRecord(ledger)) return 0;
+    let amount = readProperty(ledger, pool);
+    return amount === void 0 ? 0 : finite(amount);
+  }
   function costFitsStorage(root, cost, options) {
     let zeroCapIsCeiling = options?.zeroCapIsCeiling ?? !0, regional = isRegionalSupply(root);
     for (let [key, amount] of Object.entries(cost)) {
@@ -882,6 +932,22 @@
       let capacity = capturedPoolCap(entry, options?.pool, regional);
       if (capacity === void 0) return;
       if ((zeroCapIsCeiling ? capacity >= 0 : capacity > 0) && amount > capacity) return !1;
+    }
+    return !0;
+  }
+  function costFitsNow(root, cost, options) {
+    let regional = isRegionalSupply(root);
+    for (let [key, amount] of Object.entries(cost)) {
+      if (!Number.isFinite(amount)) return;
+      if (amount === 0) continue;
+      let entry = costResource(root, key);
+      if (!isRecord(entry)) return;
+      let held = capturedPoolAmount(entry, options?.pool, regional);
+      if (held === void 0) return;
+      if (amount > held) return !1;
+      let capacity = capturedPoolCap(entry, options?.pool, regional);
+      if (capacity === void 0) return;
+      if (capacity >= 0 && amount > capacity) return !1;
     }
     return !0;
   }
@@ -4189,6 +4255,228 @@
     });
   }
 
+  // src/adapters/evolve/captured-build-capacity.ts
+  var BUILD_QUEUE_PANEL = "buildQueue", MESSAGE_QUEUE_PANEL = "msgQueue", QUEUE_KEY_SETTING = "q", CAPACITY_CACHE_AGE_MS = 1e3;
+  function snapshotRecord(value) {
+    if (isRecord(value))
+      return {
+        target: value,
+        values: new Map(Object.keys(value).map((key) => [key, value[key]]))
+      };
+  }
+  function restoreRecord(snapshot) {
+    let currentKeys = Object.keys(snapshot.target);
+    for (let key of currentKeys)
+      if (!snapshot.values.has(key) && !Reflect.deleteProperty(snapshot.target, key))
+        throw new Error(`could not delete restored property: ${key}`);
+    for (let [key, value] of snapshot.values)
+      if (!Reflect.set(snapshot.target, key, value))
+        throw new Error(`could not restore property: ${key}`);
+  }
+  function snapshotQueueEntry(value) {
+    let snapshot = snapshotRecord(value);
+    return snapshot === void 0 ? void 0 : { target: snapshot.target, values: snapshot.values };
+  }
+  function restoreQueueEntries(entries, original, snapshots) {
+    entries.splice(0, entries.length, ...original);
+    for (let snapshot of snapshots)
+      snapshot !== void 0 && restoreRecord(snapshot);
+  }
+  function scalarSignal(value) {
+    return typeof value == "string" ? `s:${value}` : typeof value == "number" && Number.isFinite(value) ? `n:${value}` : value === !0 ? "b:1" : value === !1 ? "b:0" : value === null ? "null" : "-";
+  }
+  function actionSignal(root, actionId) {
+    let parts = splitActionId(actionId), structure = parts === void 0 ? void 0 : readProperty(readProperty(root, parts.region), parts.id), structureSignal = isRecord(structure) ? Object.keys(structure).sort().map((key) => `${key}=${scalarSignal(readProperty(structure, key))}`).join(",") : "-", queue = readProperty(root, "queue"), entries = readProperty(queue, "queue"), queueSignal = Array.isArray(entries) ? entries.map(
+      (entry) => `${scalarSignal(readProperty(entry, "id"))}:${scalarSignal(
+        readProperty(entry, "q")
+      )}:${scalarSignal(readProperty(entry, "qs"))}`
+    ).join(";") : "-";
+    return `${structureSignal}|${queueSignal}|${scalarSignal(
+      readProperty(queue, "max")
+    )}`;
+  }
+  function queueUnits(entries, actionId) {
+    let units = 0;
+    for (let entry of entries) {
+      if (readProperty(entry, "id") !== actionId) continue;
+      let quantity = finite(readProperty(entry, "q"));
+      if (quantity === void 0 || quantity < 0) return;
+      units += quantity;
+    }
+    return units;
+  }
+  function queueWork(entries) {
+    let used = 0;
+    for (let entry of entries) {
+      let quantity = finite(readProperty(entry, "q")), batch = finite(readProperty(entry, "qs"));
+      if (quantity === void 0 || batch === void 0 || quantity < 0 || batch <= 0)
+        return;
+      used += Math.ceil(quantity / batch);
+    }
+    return used;
+  }
+  function queueKey(root) {
+    let settings = readProperty(root, "settings"), key = readProperty(readProperty(settings, "keyMap"), QUEUE_KEY_SETTING);
+    if (typeof key == "string" && key.length > 0) return key;
+    let number = finite(key);
+    return number === void 0 || number <= 0 ? void 0 : number;
+  }
+  function keyEventInit(key) {
+    return typeof key == "number" ? { keyCode: key, which: key } : { key };
+  }
+  function canUseAction(handle) {
+    return handle?.methods.includes("action") === !0;
+  }
+  function createCapturedBuildCapacity(dependencies) {
+    let {
+      rootState,
+      controls,
+      panels,
+      mountSuppression,
+      keyboard,
+      keyState,
+      readEpoch,
+      nowMs,
+      diagnostics
+    } = dependencies, cache = /* @__PURE__ */ new Map();
+    return Object.freeze({
+      canBuildAnother(actionId) {
+        let tally = createCountTally(diagnostics), unsupported = () => {
+          tally.count("build-capacity.unsupported"), cache.delete(actionId);
+        }, root, epoch, now;
+        try {
+          root = rootState.readRoot(), epoch = readEpoch(), now = nowMs();
+        } catch {
+          return unsupported();
+        }
+        let signal;
+        try {
+          signal = actionSignal(root, actionId);
+        } catch {
+          return unsupported();
+        }
+        let cached = cache.get(actionId);
+        if (cached !== void 0 && cached.root === root && cached.epoch === epoch && cached.signal === signal && now - cached.takenAtMs < CAPACITY_CACHE_AGE_MS)
+          return tally.count("build-capacity.cache-hit"), cached.value;
+        if (tally.count("build-capacity.probe"), typeof actionId != "string" || actionId.length === 0)
+          return unsupported();
+        let handle;
+        try {
+          handle = controls.resolve(actionId);
+        } catch {
+          return unsupported();
+        }
+        if (!canUseAction(handle)) return unsupported();
+        let key = queueKey(root);
+        if (key === void 0) return unsupported();
+        let keyWasPressed;
+        try {
+          keyWasPressed = keyState.readPressed(key);
+        } catch {
+          return unsupported();
+        }
+        if (keyWasPressed === void 0) return unsupported();
+        let gameHandlers;
+        try {
+          gameHandlers = keyboard.readGameKeyboardHandlers();
+        } catch {
+          return unsupported();
+        }
+        if (gameHandlers.keyDown === null || gameHandlers.keyUp === null)
+          return unsupported();
+        let settings, tech, queue;
+        try {
+          settings = readProperty(root, "settings"), tech = readProperty(root, "tech"), queue = readProperty(root, "queue");
+        } catch {
+          return unsupported();
+        }
+        if (!isRecord(settings) || !isRecord(tech) || !isRecord(queue))
+          return unsupported();
+        let entries;
+        try {
+          entries = readProperty(queue, "queue");
+        } catch {
+          return unsupported();
+        }
+        if (!Array.isArray(entries)) return unsupported();
+        let used, beforeUnits;
+        try {
+          used = queueWork(entries), beforeUnits = queueUnits(entries, actionId);
+        } catch {
+          return unsupported();
+        }
+        if (used === void 0 || beforeUnits === void 0) return unsupported();
+        let settingsSnapshot, techSnapshot, queueSnapshot, originalEntries, entrySnapshots;
+        try {
+          settingsSnapshot = snapshotRecord(settings), techSnapshot = snapshotRecord(tech), queueSnapshot = snapshotRecord(queue), originalEntries = entries.slice(), entrySnapshots = originalEntries.map(snapshotQueueEntry);
+        } catch {
+          return unsupported();
+        }
+        if (settingsSnapshot === void 0 || techSnapshot === void 0 || queueSnapshot === void 0 || entrySnapshots.some(
+          (snapshot, index) => snapshot === void 0 && isRecord(originalEntries[index])
+        ) || !mountSuppression.available) return unsupported();
+        let workspace;
+        try {
+          workspace = panels.open({
+            keep: MESSAGE_QUEUE_PANEL,
+            scratch: BUILD_QUEUE_PANEL
+          });
+        } catch {
+          return unsupported();
+        }
+        if (workspace === void 0) return unsupported();
+        let answer, restorationFailure = !1, restore2 = (operation2) => {
+          try {
+            operation2();
+          } catch {
+            restorationFailure = !0;
+          }
+        };
+        try {
+          if (!keyWasPressed && (gameHandlers.keyDown(keyEventInit(key)), keyState.readPressed(key) !== !0) || !Reflect.set(settings, "qKey", !0) || readProperty(settings, "qKey") !== !0 || !Reflect.set(tech, "queue", !0) || !readProperty(tech, "queue"))
+            return unsupported();
+          let forcedMax = used + 1;
+          if (!Reflect.set(queue, "max", forcedMax) || readProperty(queue, "max") !== forcedMax || !mountSuppression.withoutMounting(
+            () => controls.invoke(handle, "action"),
+            { shouldMount: () => !1 }
+          ).ok) return unsupported();
+          let afterUnits = queueUnits(entries, actionId);
+          if (afterUnits === void 0) return unsupported();
+          answer = afterUnits > beforeUnits, tally.count(
+            answer ? "build-capacity.accepted" : "build-capacity.rejected"
+          );
+        } catch {
+          answer = void 0, tally.count("build-capacity.unsupported");
+        } finally {
+          restore2(() => {
+            let currentKeyState = keyState.readPressed(key);
+            if (currentKeyState !== keyWasPressed) {
+              if (!keyWasPressed && currentKeyState === !0) {
+                if (gameHandlers.keyUp(keyEventInit(key)), keyState.readPressed(key) !== !1)
+                  throw new Error("queue key state was not restored");
+                return;
+              }
+              throw new Error("queue key state changed during probe");
+            }
+          }), restore2(() => restoreRecord(settingsSnapshot)), restore2(() => restoreRecord(techSnapshot)), restore2(() => restoreRecord(queueSnapshot)), restore2(
+            () => restoreQueueEntries(entries, originalEntries, entrySnapshots)
+          ), restore2(() => workspace.release()), restore2(() => {
+            if (!workspace.isIntact())
+              throw new Error("queue workspace was not restored");
+          }), restorationFailure && (tally.count("build-capacity.restoration-failure"), answer = void 0);
+        }
+        if (answer !== void 0)
+          return cache.set(actionId, {
+            root,
+            epoch,
+            signal,
+            takenAtMs: now,
+            value: answer
+          }), answer;
+      }
+    });
+  }
+
   // src/bootstrap/captured-progression-control.ts
   var RESEARCH_SCOPE = "research", RESEARCH_GRANTED_SCOPE = "research+granted", ARPA_SCOPE = "arpa", BUILDING_UNLOCK_SCOPE = "building-unlocks", BUILD_CONTROLS_SCOPE = "build-controls", NO_RESERVATIONS3 = Object.freeze({
     targets: Object.freeze([]),
@@ -4228,7 +4516,17 @@
       mountSuppression,
       panels,
       diagnostics
-    }), epoch = createProgressionEpochReader(rootState), scopes = createDiscoveryScopeCache({
+    }), epoch = createProgressionEpochReader(rootState), buildCapacity = dependencies.keyboard === void 0 || dependencies.keyState === void 0 ? void 0 : createCapturedBuildCapacity({
+      rootState,
+      controls,
+      panels,
+      mountSuppression,
+      keyboard: dependencies.keyboard,
+      keyState: dependencies.keyState,
+      readEpoch: epoch.read,
+      nowMs,
+      diagnostics
+    }), scopes = createDiscoveryScopeCache({
       readEpoch: epoch.read,
       nowMs,
       diagnostics
@@ -4347,6 +4645,11 @@
         });
       }
       return lastBuildingUnlocks;
+    }, readBuildingCapacity = (actionIds) => {
+      let result = /* @__PURE__ */ new Map();
+      for (let actionId of actionIds)
+        result.set(actionId, buildCapacity?.canBuildAnother(actionId));
+      return result;
     }, readKnowledge = createCapturedKnowledgeReader({
       rootState,
       resources,
@@ -4423,6 +4726,7 @@
       readProjects,
       resetProjectSample,
       readBuildingUnlocks,
+      readBuildingCapacity,
       resetBuildingUnlockSample,
       observations: construction.observations,
       readManagedBuildTargets,
@@ -11127,6 +11431,7 @@
     "ProjectUnlocked",
     "BuildingUnlocked",
     "BuildingAffordable",
+    "BuildingClickable",
     "BuildingQueued",
     "Challenge",
     "Universe",
@@ -11471,6 +11776,16 @@
         let price = context?.buildingCosts?.get(argument);
         return price === void 0 ? void 0 : costFitsStorage(root, price.cost, { pool: price.pool });
       }
+      case "BuildingClickable": {
+        if (typeof argument != "string") return;
+        let parts = splitActionId(argument), sample = context?.buildingUnlocks;
+        if (parts === void 0 || sample === void 0 || !sample.regions.has(parts.region)) return;
+        if (!sample.unlocked.has(argument)) return !1;
+        let price = context?.buildingCosts?.get(argument);
+        if (price === void 0) return;
+        let affordable = costFitsNow(root, price.cost, { pool: price.pool });
+        return affordable !== !0 ? affordable : context?.buildingCapacity?.get(argument);
+      }
       case "BuildingQueued": {
         if (typeof argument != "string" || splitActionId(argument) === void 0) return;
         let queue = readProperty(root, "queue");
@@ -11557,10 +11872,15 @@
   var NO_TARGETS = Object.freeze(
     []
   ), ARPA_PREFIX = "arpa", REGION_PANEL_CONDITIONS = Object.freeze(
-    /* @__PURE__ */ new Set(["BuildingUnlocked", "BuildingEnabled", "BuildingDisabled"])
+    /* @__PURE__ */ new Set([
+      "BuildingUnlocked",
+      "BuildingClickable",
+      "BuildingEnabled",
+      "BuildingDisabled"
+    ])
   );
   function costConditionBuildingId(row) {
-    if (row.requirementType === "BuildingAffordable")
+    if (row.requirementType === "BuildingAffordable" || row.requirementType === "BuildingClickable")
       return typeof row.requirementId == "string" ? row.requirementId : void 0;
     if (row.requirementType === "BuildingCost") {
       if (typeof row.requirementId != "string") return;
@@ -11649,7 +11969,10 @@
           let price2 = costs.readCost(buildingId);
           price2 !== void 0 && buildingCosts.set(buildingId, price2);
         }
-        let storedSettings = isRecord(settings) ? settings : void 0, demandSample = dependencies.readDemandSample?.(), techKnowledge = dependencies.readTechKnowledge?.(), hellGarrison = rows.some(
+        let buildingCapacityIds = /* @__PURE__ */ new Set();
+        for (let row of rows)
+          row.requirementType === "BuildingClickable" && typeof row.requirementId == "string" && buildingCapacityIds.add(row.requirementId);
+        let buildingCapacity = dependencies.readBuildingCapacity === void 0 || buildingCapacityIds.size === 0 ? void 0 : dependencies.readBuildingCapacity(buildingCapacityIds), storedSettings = isRecord(settings) ? settings : void 0, demandSample = dependencies.readDemandSample?.(), techKnowledge = dependencies.readTechKnowledge?.(), hellGarrison = rows.some(
           (row) => row.requirementType === "Soldiers" && row.requirementId === "hellGarrison"
         ) ? dependencies.readHellGarrison?.() : void 0, conditionContext = Object.freeze({
           ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
@@ -11657,6 +11980,7 @@
           ...offeredProjectsById === void 0 ? {} : { unlockedProjects: new Set(offeredProjectsById.keys()) },
           ...buildingUnlocks === void 0 ? {} : { buildingUnlocks },
           ...buildingCosts.size === 0 ? {} : { buildingCosts },
+          ...buildingCapacity === void 0 ? {} : { buildingCapacity },
           ...storedSettings === void 0 ? {} : { settings: storedSettings },
           ...demandSample === void 0 ? {} : { demand: demandSample },
           ...techKnowledge === void 0 ? {} : { knowledgeRequiredByTechs: techKnowledge },
@@ -19799,6 +20123,34 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/adapters/browser/game-keyboard-handlers.ts
+  function createGameKeyboardHandlers(dependencies) {
+    let { getDocument, getKeyboardEvent } = dependencies;
+    function synthesizeKeyEvent(type) {
+      return (event) => {
+        let documentValue = requireRecord(getDocument(), "document"), dispatch = readProperty(documentValue, "dispatchEvent");
+        if (typeof dispatch != "function")
+          return;
+        let KeyboardEventConstructor = getKeyboardEvent();
+        if (typeof KeyboardEventConstructor != "function")
+          return;
+        let keyboardEvent = new KeyboardEventConstructor(type, event);
+        Reflect.apply(dispatch, documentValue, [keyboardEvent]);
+      };
+    }
+    return Object.freeze({
+      readGameKeyboardHandlers() {
+        return {
+          keyDown: synthesizeKeyEvent("keydown"),
+          keyUp: synthesizeKeyEvent("keyup"),
+          // The game no longer exposes a combined modifier binding to replay, so the key manager
+          // always drives each modifier key on its own.
+          moveAll: null
+        };
+      }
+    });
+  }
+
   // src/bootstrap/captured-runtime-control.ts
   var DEFAULT_SETTINGS2 = Object.freeze({
     masterScriptToggle: !0,
@@ -19833,6 +20185,7 @@ Only continue if you trust the source. Injected code:
   function startCapturedRuntime({
     pageCapture: pageCapture2,
     document: documentValue,
+    keyboardEvent: keyboardEventValue,
     mouseEvent: mouseEventValue,
     storage,
     settingsHostWindow: settingsHostWindow2,
@@ -19840,7 +20193,10 @@ Only continue if you trust the source. Injected code:
     logError = () => {
     }
   }) {
-    let document = documentValue, mouseEvent = typeof mouseEventValue == "function" ? mouseEventValue : class {
+    let document = documentValue, keyboard = typeof keyboardEventValue == "function" && typeof readProperty(document, "dispatchEvent") == "function" ? createGameKeyboardHandlers({
+      getDocument: () => document,
+      getKeyboardEvent: () => keyboardEventValue
+    }) : void 0, mouseEvent = typeof mouseEventValue == "function" ? mouseEventValue : class {
       constructor(_type) {
       }
     }, panels = createGamePanelWorkspace({ getDocument: () => document }), settingsStore = createSettingsStore({
@@ -19872,6 +20228,8 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       mountSuppression: pageCapture2.mountSuppression,
       panels,
+      ...keyboard === void 0 ? {} : { keyboard },
+      keyState: pageCapture2.keyState,
       drawnActions: createGameDrawnActionsReader({
         getDocument: () => document
       }),
@@ -19999,6 +20357,7 @@ Only continue if you trust the source. Injected code:
       readGrantedTechs: progression.readGrantedTechs,
       readOfferedProjects: progression.readProjects,
       readBuildingUnlocks: progression.readBuildingUnlocks,
+      readBuildingCapacity: progression.readBuildingCapacity,
       // The demand-reading conditions need the commitments without the trigger targets; the
       // cycle's own sample includes them, and the conditions are evaluated inside the sampling
       // it pulls in. Sampled lazily and only for a configured condition, like the granted-techs
@@ -20671,6 +21030,7 @@ Only continue if you trust the source. Injected code:
       pageCapture,
       settingsHostWindow,
       document: environment.document,
+      keyboardEvent: environment.KeyboardEvent,
       mouseEvent: environment.MouseEvent,
       storage: environment.storage,
       diagnostics: createBrowserDiagnostics(globalThis),

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  costFitsNow,
   costFitsStorage,
   isRegionalSupply,
 } from "../src/adapters/evolve/captured-affordability.ts";
@@ -87,6 +88,72 @@ assert.equal(costFitsStorage(root, { Money: Number.NaN }), undefined);
 // A refusal is reported even when another key in the same cost is unjudgeable, only when the
 // refusal is reached first — the walk stops at whichever it meets, so order decides.
 assert.equal(costFitsStorage({ resource: {} }, { Money: 1 }), undefined);
+
+// `checkCosts` adds on-hand holdings to the same capacity comparison.
+assert.equal(costFitsNow(root, { Money: 250 }), true);
+assert.equal(costFitsNow(root, { Money: 251 }), false);
+assert.equal(costFitsNow(root, { Lumber: 101 }), false);
+assert.equal(costFitsNow(root, { Lumber: 5000 }), false);
+assert.equal(costFitsNow(root, { Soul_Gem: 0 }), true);
+assert.equal(costFitsNow(root, { Soul_Gem: 1 }), false);
+assert.equal(costFitsNow(root, { Nanite: 1 }), false);
+assert.equal(costFitsNow(root, { Species: 4 }), true);
+assert.equal(costFitsNow(root, { Species: 5 }), false);
+assert.equal(costFitsNow(root, { Morale: 1 }), undefined);
+assert.equal(costFitsNow(root, { Elerium: 1 }), undefined);
+
+// Regional holdings and caps use the paying pool's own ledgers; an absent pool reads as zero.
+assert.equal(
+  costFitsNow(
+    {
+      tech: { shadow: 5 },
+      resource: {
+        Money: {
+          amount: 900,
+          max: 10000,
+          display: true,
+          reg: { spc_home: 50, spc_moon: 900 },
+          regMax: { spc_home: 100, spc_moon: 1000 },
+        },
+      },
+    },
+    { Money: 50 },
+    { pool: "spc_home" },
+  ),
+  true,
+);
+assert.equal(
+  costFitsNow(
+    {
+      tech: { shadow: 5 },
+      resource: {
+        Money: {
+          amount: 900,
+          max: 10000,
+          display: true,
+          reg: { spc_home: 50, spc_moon: 900 },
+          regMax: { spc_home: 100, spc_moon: 1000 },
+        },
+      },
+    },
+    { Money: 51 },
+    { pool: "spc_home" },
+  ),
+  false,
+);
+assert.equal(
+  costFitsNow(
+    {
+      tech: { shadow: 5 },
+      resource: {
+        Money: { amount: 900, max: 10000, display: true, reg: {} },
+      },
+    },
+    { Money: 1 },
+    { pool: "spc_moon" },
+  ),
+  false,
+);
 
 // Below `tech.shadow >= 5` the civilization-wide comparison is the game's own.
 assert.equal(isRegionalSupply(root), false);

@@ -15,6 +15,7 @@ whenDocumentReady(globalThis, () => {
     pageCapture,
     settingsHostWindow,
     document: environment.document,
+    keyboardEvent: environment.KeyboardEvent,
     mouseEvent: environment.MouseEvent,
     storage: environment.storage,
     diagnostics: createBrowserDiagnostics(globalThis),

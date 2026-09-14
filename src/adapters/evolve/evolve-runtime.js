@@ -183,6 +183,7 @@ import { createCapturedProgressionControl } from "../../bootstrap/captured-progr
 import { createGameDrawnActionsReader } from "../browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../browser/game-panel-workspace.ts";
+import { createGameKeyboardHandlers } from "../browser/game-keyboard-handlers.ts";
 import { startCapturedRuntime } from "../../bootstrap/captured-runtime-control.ts";
 
 export function startEvolveRuntime(
@@ -195,6 +196,7 @@ export function startEvolveRuntime(
     startCapturedRuntime({
       pageCapture,
       document: runtimeEnvironment.document,
+      keyboardEvent: runtimeEnvironment.KeyboardEvent,
       mouseEvent: runtimeEnvironment.MouseEvent,
       storage: runtimeEnvironment.storage,
       diagnostics,
@@ -1266,6 +1268,11 @@ export function startEvolveRuntimeComposition(
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
       mountSuppression: pageCapture.mountSuppression,
+      keyboard: createGameKeyboardHandlers({
+        getDocument: () => runtimeEnvironment.document,
+        getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
+      }),
+      keyState: pageCapture.keyState,
       panels: createGamePanelWorkspace({
         getDocument: () => runtimeEnvironment.document,
       }),

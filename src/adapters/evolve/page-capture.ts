@@ -13,7 +13,9 @@ import type { GameControlUsageReader } from "../../ports/game-control-usage.ts";
 import type { GameMountSuppression } from "../../ports/game-mount-suppression.ts";
 import type { GamePeriodSource } from "../../ports/game-period-source.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
+import type { GameKeyStateReader } from "../../ports/game-key-state.ts";
 import { isRecord, readProperty } from "../validation.ts";
+import { createGameKeyStateCapture } from "../browser/game-key-state.ts";
 import { installVueCapture, type VueCaptureOptions } from "./vue-capture.ts";
 import {
   installWorkerCapture,
@@ -22,6 +24,8 @@ import {
 
 export interface PageCapture {
   readonly rootState: GameRootStateSource;
+  /** Observed page key state, installed before the game's native keyboard listeners. */
+  readonly keyState: GameKeyStateReader;
   readonly controls: GameControlRegistry;
   readonly controlUsage: GameControlUsageReader;
   readonly periods: GamePeriodSource;
@@ -57,8 +61,12 @@ export function installPageCapture(
 
   const vue = installVueCapture(pageWindow, options);
   const worker = installWorkerCapture(pageWindow, options);
+  const keyState = createGameKeyStateCapture(() =>
+    readProperty(pageWindow, "document"),
+  );
   const capture: PageCapture = Object.freeze({
     rootState: vue.rootState,
+    keyState,
     controls: vue.controls,
     controlUsage: vue.controlUsage,
     periods: worker.periods,
@@ -71,6 +79,7 @@ export function installPageCapture(
       }
       vue.uninstall();
       worker.uninstall();
+      keyState.uninstall();
     },
   });
   if (isRecord(pageWindow)) {

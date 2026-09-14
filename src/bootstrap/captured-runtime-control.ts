@@ -137,6 +137,7 @@ import {
   SUB_TAB_CONTROLS,
 } from "../adapters/evolve/captured-tab-discovery.ts";
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
+import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-handlers.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
 
@@ -158,6 +159,8 @@ export interface CapturedRuntimeControlDependencies {
   readonly pageCapture: PageCapture;
   /** Browser adapter output; the feature readers narrow it at their own boundaries. */
   readonly document: unknown;
+  /** The page's KeyboardEvent constructor, used only by the queue-capacity oracle. */
+  readonly keyboardEvent: unknown;
   readonly mouseEvent: unknown;
   readonly storage: unknown;
   /** The page's global object. The settings panel reads `document`, `navigator` and `location`. */
@@ -202,6 +205,7 @@ function isEnabled(settings: Record<string, unknown>, key: string): boolean {
 export function startCapturedRuntime({
   pageCapture,
   document: documentValue,
+  keyboardEvent: keyboardEventValue,
   mouseEvent: mouseEventValue,
   storage,
   settingsHostWindow,
@@ -209,6 +213,15 @@ export function startCapturedRuntime({
   logError = () => {},
 }: CapturedRuntimeControlDependencies): () => void {
   const document = documentValue as CapturedDocument;
+  const keyboard =
+    typeof keyboardEventValue === "function" &&
+    typeof readProperty(document, "dispatchEvent") === "function"
+      ? createGameKeyboardHandlers({
+          getDocument: () => document,
+          getKeyboardEvent: () =>
+            keyboardEventValue as new (type: string, init: unknown) => unknown,
+        })
+      : undefined;
   const mouseEvent =
     typeof mouseEventValue === "function"
       ? (mouseEventValue as new (type: "mouseover" | "mouseout") => unknown)
@@ -270,6 +283,8 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     mountSuppression: pageCapture.mountSuppression,
     panels,
+    ...(keyboard === undefined ? {} : { keyboard }),
+    keyState: pageCapture.keyState,
     drawnActions: createGameDrawnActionsReader({
       getDocument: () => document,
     }),
@@ -431,6 +446,7 @@ export function startCapturedRuntime({
     readGrantedTechs: progression.readGrantedTechs,
     readOfferedProjects: progression.readProjects,
     readBuildingUnlocks: progression.readBuildingUnlocks,
+    readBuildingCapacity: progression.readBuildingCapacity,
     // The demand-reading conditions need the commitments without the trigger targets; the
     // cycle's own sample includes them, and the conditions are evaluated inside the sampling
     // it pulls in. Sampled lazily and only for a configured condition, like the granted-techs

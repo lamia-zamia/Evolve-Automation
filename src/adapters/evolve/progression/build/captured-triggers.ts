@@ -103,6 +103,10 @@ export interface CapturedTriggersDependencies {
   readonly readBuildingUnlocks?: (
     regions: ReadonlySet<string>,
   ) => Readonly<BuildingUnlockSample> | undefined;
+  /** Reads the game's semantic queue-capacity answer for named building actions. */
+  readonly readBuildingCapacity?: (
+    actionIds: ReadonlySet<string>,
+  ) => ReadonlyMap<string, boolean | undefined>;
   /**
    * The cycle's resource-demand commitments without the trigger targets, for the conditions that
    * read what something else is accumulating. The cycle's own trigger-including sample cannot
@@ -141,7 +145,12 @@ const ARPA_PREFIX = "arpa";
  * switch counts.
  */
 const REGION_PANEL_CONDITIONS: ReadonlySet<string> = Object.freeze(
-  new Set(["BuildingUnlocked", "BuildingEnabled", "BuildingDisabled"]),
+  new Set([
+    "BuildingUnlocked",
+    "BuildingClickable",
+    "BuildingEnabled",
+    "BuildingDisabled",
+  ]),
 );
 
 /**
@@ -150,7 +159,10 @@ const REGION_PANEL_CONDITIONS: ReadonlySet<string> = Object.freeze(
  * satellite for `Other/satcost`. Anything else needs no price.
  */
 function costConditionBuildingId(row: TriggerRow): string | undefined {
-  if (row.requirementType === "BuildingAffordable") {
+  if (
+    row.requirementType === "BuildingAffordable" ||
+    row.requirementType === "BuildingClickable"
+  ) {
     return typeof row.requirementId === "string"
       ? row.requirementId
       : undefined;
@@ -326,9 +338,9 @@ export function createCapturedTriggers(
             );
       // Each building region is behind its own sub-tab and costs a pass to draw, so only the
       // regions a configured condition actually names are sampled. The same draw answers all
-      // three panel operands: `BuildingUnlocked` from a row's presence, and the two switch counts
-      // from the on/off spans that row carries. A row whose argument is not a `<region>-<id>`
-      // pair names no panel and is left to go unanswered.
+      // four panel operands: `BuildingUnlocked`/`BuildingClickable` from a row's presence, and
+      // the two switch counts from the on/off spans that row carries. A row whose argument is not
+      // a `<region>-<id>` pair names no panel and is left to go unanswered.
       const buildingRegions = new Set<string>();
       for (const row of rows) {
         if (!REGION_PANEL_CONDITIONS.has(row.requirementType)) continue;
@@ -355,6 +367,20 @@ export function createCapturedTriggers(
         const price = costs.readCost(buildingId);
         if (price !== undefined) buildingCosts.set(buildingId, price);
       }
+      const buildingCapacityIds = new Set<string>();
+      for (const row of rows) {
+        if (
+          row.requirementType === "BuildingClickable" &&
+          typeof row.requirementId === "string"
+        ) {
+          buildingCapacityIds.add(row.requirementId);
+        }
+      }
+      const buildingCapacity =
+        dependencies.readBuildingCapacity === undefined ||
+        buildingCapacityIds.size === 0
+          ? undefined
+          : dependencies.readBuildingCapacity(buildingCapacityIds);
       // The condition evaluator answers the research, project and building operands from the same
       // passes the actions are priced from, so a trigger's requirement and its target describe one
       // moment. The stored settings travel with them for the operands that read the player's own
@@ -382,6 +408,7 @@ export function createCapturedTriggers(
           : { unlockedProjects: new Set(offeredProjectsById.keys()) }),
         ...(buildingUnlocks === undefined ? {} : { buildingUnlocks }),
         ...(buildingCosts.size === 0 ? {} : { buildingCosts }),
+        ...(buildingCapacity === undefined ? {} : { buildingCapacity }),
         ...(storedSettings === undefined ? {} : { settings: storedSettings }),
         ...(demandSample === undefined ? {} : { demand: demandSample }),
         ...(techKnowledge === undefined

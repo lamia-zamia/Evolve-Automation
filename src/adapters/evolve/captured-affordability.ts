@@ -89,6 +89,21 @@ function capturedPoolCap(
   return share ?? 0;
 }
 
+/** The game's `regAmount(res, pool)`, without creating a ledger on a read-only capture. */
+function capturedPoolAmount(
+  resource: Record<PropertyKey, unknown>,
+  pool: string | undefined,
+  regional: boolean,
+): number | undefined {
+  if (!regional || pool === undefined || pool === ANYWHERE_POOL) {
+    return finite(readProperty(resource, "amount"));
+  }
+  const ledger = readProperty(resource, "reg");
+  if (!isRecord(ledger)) return 0;
+  const amount = readProperty(ledger, pool);
+  return amount === undefined ? 0 : finite(amount);
+}
+
 /**
  * Strictness of the capacity comparison. Upstream `checkMaxCosts` compares `cap >= 0`, so a
  * zero capacity is a ceiling there. The queue-reservation test passes `false`: a resource the
@@ -132,6 +147,33 @@ export function costFitsStorage(
     if (capacity === undefined) return undefined;
     const isCeiling = zeroCapIsCeiling ? capacity >= 0 : capacity > 0;
     if (isCeiling && amount > capacity) return false;
+  }
+  return true;
+}
+
+/**
+ * The game's `checkCosts`: every positive cost must be on hand in its paying pool and still fit
+ * under that pool's capacity. Unlike `checkMaxCosts`, this branch does not consult `display`.
+ * Special costs remain unanswered because their upstream
+ * branches do not read an ordinary captured resource record.
+ */
+export function costFitsNow(
+  root: unknown,
+  cost: Readonly<Record<string, number>>,
+  options?: StorageFitOptions,
+): boolean | undefined {
+  const regional = isRegionalSupply(root);
+  for (const [key, amount] of Object.entries(cost)) {
+    if (!Number.isFinite(amount)) return undefined;
+    if (amount === 0) continue;
+    const entry = costResource(root, key);
+    if (!isRecord(entry)) return undefined;
+    const held = capturedPoolAmount(entry, options?.pool, regional);
+    if (held === undefined) return undefined;
+    if (amount > held) return false;
+    const capacity = capturedPoolCap(entry, options?.pool, regional);
+    if (capacity === undefined) return undefined;
+    if (capacity >= 0 && amount > capacity) return false;
   }
   return true;
 }
