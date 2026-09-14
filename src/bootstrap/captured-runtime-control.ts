@@ -585,7 +585,7 @@ export function startCapturedRuntime({
   });
   let civicControlsDiscoveryAttempted = false;
   let hellGarrisonDiscoveryAttempted = false;
-  let madDiscoveryAttempted = false;
+  let madDiscoveryAttemptedEpoch: string | undefined;
   /**
    * Draws the civics military sub-tab, where `index.js` calls `buildFortress($('#fortress'),false)`
    * and captures `gFort`. The same draw runs `defineGarrison()`, so a later slice that needs the
@@ -668,11 +668,12 @@ export function startCapturedRuntime({
     const root = pageCapture.rootState.readRoot();
     const mad = readProperty(readProperty(root, "civic"), "mad");
     if (!isRecord(mad) || readProperty(mad, "display") !== true) return;
-    if (madDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    madDiscoveryAttempted = true;
+    const progressionEpoch = progression.readProgressionEpoch();
+    if (madDiscoveryAttemptedEpoch === progressionEpoch) return;
+    madDiscoveryAttemptedEpoch = progressionEpoch;
     const result = civicDiscovery.discover([
       Object.freeze({
         setting: MAIN_TAB_SETTING,

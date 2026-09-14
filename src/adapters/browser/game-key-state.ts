@@ -1,8 +1,8 @@
 /**
- * Observes the page's keydown/keyup stream so a transactional game probe can restore a modifier
- * or queue key exactly as it found it. The listener is installed at document-start by the page
- * capture, before the game's own native listeners. It does not synthesize state and never writes
- * to the document.
+ * Observes the page's keydown/keyup stream and modifier flags from mousemove so a transactional
+ * game probe can restore a modifier or queue key exactly as it found it. The listener is installed
+ * at document-start by the page capture, before the game's own native listeners. It does not
+ * synthesize state and never writes to the document.
  */
 
 import type { GameKeyStateReader } from "../../ports/game-key-state.ts";
@@ -20,6 +20,21 @@ interface KeyStateDocument {
     options?: unknown,
   ) => void;
 }
+
+interface GameKeyStateMouseModifierBinding {
+  readonly eventProperty: string;
+  readonly key: string;
+  readonly keyCode: number;
+}
+
+/** DeadSpace updates these same aliases from every mousemove, not only from keydown/keyup. */
+const GAME_KEY_STATE_MOUSE_MODIFIER_BINDINGS: readonly GameKeyStateMouseModifierBinding[] =
+  Object.freeze([
+    Object.freeze({ eventProperty: "shiftKey", key: "Shift", keyCode: 16 }),
+    Object.freeze({ eventProperty: "ctrlKey", key: "Control", keyCode: 17 }),
+    Object.freeze({ eventProperty: "altKey", key: "Alt", keyCode: 18 }),
+    Object.freeze({ eventProperty: "metaKey", key: "Meta", keyCode: 91 }),
+  ]);
 
 function observedKeys(event: unknown): readonly (string | number)[] {
   const key = readProperty(event, "key");
@@ -58,9 +73,22 @@ export function createGameKeyStateCapture(
   const onKeyUp = (event: unknown): void => {
     for (const key of observedKeys(event)) pressed.delete(key);
   };
+  const onMouseMove = (event: unknown): void => {
+    for (const binding of GAME_KEY_STATE_MOUSE_MODIFIER_BINDINGS) {
+      const isPressed = readProperty(event, binding.eventProperty) === true;
+      if (isPressed) {
+        pressed.add(binding.key);
+        pressed.add(binding.keyCode);
+      } else {
+        pressed.delete(binding.key);
+        pressed.delete(binding.keyCode);
+      }
+    }
+  };
   const capturePhase = true;
   pageDocument.addEventListener("keydown", onKeyDown, capturePhase);
   pageDocument.addEventListener("keyup", onKeyUp, capturePhase);
+  pageDocument.addEventListener("mousemove", onMouseMove, capturePhase);
   let uninstalled = false;
   return Object.freeze({
     readPressed(key: string | number): boolean {
@@ -71,6 +99,7 @@ export function createGameKeyStateCapture(
       uninstalled = true;
       pageDocument.removeEventListener!("keydown", onKeyDown, capturePhase);
       pageDocument.removeEventListener!("keyup", onKeyUp, capturePhase);
+      pageDocument.removeEventListener!("mousemove", onMouseMove, capturePhase);
       pressed.clear();
     },
   });

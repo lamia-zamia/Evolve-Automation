@@ -109,6 +109,8 @@ export interface CapturedProgressionControlDependencies {
 }
 
 export interface CapturedProgressionControl {
+  /** Current progression epoch, for retrying conditional discoveries after a game-state change. */
+  readonly readProgressionEpoch: () => string;
   readonly runConstructionCycle: () => CommandExecutionOutcome;
   readonly runResearchCycle: () => CommandExecutionOutcome;
   /** The most recently captured offered-technology snapshot, if one exists. */
@@ -577,6 +579,7 @@ export function createCapturedProgressionControl(
   };
 
   return Object.freeze({
+    readProgressionEpoch: epoch.read,
     runConstructionCycle: () => {
       try {
         return construction.runCycle();

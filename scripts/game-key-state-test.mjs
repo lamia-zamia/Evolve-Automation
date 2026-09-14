@@ -28,6 +28,36 @@ documentStub.dispatch("keyup", { key: "q", keyCode: 81 });
 assert.equal(capture.readPressed("q"), false);
 assert.equal(capture.readPressed(81), false);
 
+documentStub.dispatch("keydown", { key: "a", keyCode: 65 });
+documentStub.dispatch("mousemove", {
+  shiftKey: true,
+  ctrlKey: true,
+  altKey: true,
+  metaKey: true,
+});
+for (const key of ["Shift", 16, "Control", 17, "Alt", 18, "Meta", 91]) {
+  assert.equal(
+    capture.readPressed(key),
+    true,
+    `modifier should be pressed: ${key}`,
+  );
+}
+assert.equal(capture.readPressed("a"), true);
+documentStub.dispatch("mousemove", {
+  shiftKey: false,
+  ctrlKey: false,
+  altKey: false,
+  metaKey: false,
+});
+for (const key of ["Shift", 16, "Control", 17, "Alt", 18, "Meta", 91]) {
+  assert.equal(
+    capture.readPressed(key),
+    false,
+    `modifier should be released: ${key}`,
+  );
+}
+assert.equal(capture.readPressed("a"), true);
+
 capture.uninstall();
 assert.equal(listeners.size, 0);
 documentStub.dispatch("keydown", { key: "q", keyCode: 81 });

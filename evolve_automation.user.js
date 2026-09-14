@@ -301,6 +301,12 @@
   }
 
   // src/adapters/browser/game-key-state.ts
+  var GAME_KEY_STATE_MOUSE_MODIFIER_BINDINGS = Object.freeze([
+    Object.freeze({ eventProperty: "shiftKey", key: "Shift", keyCode: 16 }),
+    Object.freeze({ eventProperty: "ctrlKey", key: "Control", keyCode: 17 }),
+    Object.freeze({ eventProperty: "altKey", key: "Alt", keyCode: 18 }),
+    Object.freeze({ eventProperty: "metaKey", key: "Meta", keyCode: 91 })
+  ]);
   function observedKeys(event) {
     let key = readProperty(event, "key"), keyCode = finite(readProperty(event, "keyCode")), keys = [];
     return typeof key == "string" && key.length > 0 && keys.push(key), keyCode !== void 0 && keyCode > 0 && keys.push(keyCode), keys;
@@ -326,15 +332,18 @@
       for (let key of observedKeys(event)) pressed.add(key);
     }, onKeyUp = (event) => {
       for (let key of observedKeys(event)) pressed.delete(key);
+    }, onMouseMove = (event) => {
+      for (let binding of GAME_KEY_STATE_MOUSE_MODIFIER_BINDINGS)
+        readProperty(event, binding.eventProperty) === !0 ? (pressed.add(binding.key), pressed.add(binding.keyCode)) : (pressed.delete(binding.key), pressed.delete(binding.keyCode));
     }, capturePhase = !0;
-    pageDocument.addEventListener("keydown", onKeyDown, capturePhase), pageDocument.addEventListener("keyup", onKeyUp, capturePhase);
+    pageDocument.addEventListener("keydown", onKeyDown, capturePhase), pageDocument.addEventListener("keyup", onKeyUp, capturePhase), pageDocument.addEventListener("mousemove", onMouseMove, capturePhase);
     let uninstalled = !1;
     return Object.freeze({
       readPressed(key) {
         return pressed.has(key);
       },
       uninstall() {
-        uninstalled || (uninstalled = !0, pageDocument.removeEventListener("keydown", onKeyDown, capturePhase), pageDocument.removeEventListener("keyup", onKeyUp, capturePhase), pressed.clear());
+        uninstalled || (uninstalled = !0, pageDocument.removeEventListener("keydown", onKeyDown, capturePhase), pageDocument.removeEventListener("keyup", onKeyUp, capturePhase), pageDocument.removeEventListener("mousemove", onMouseMove, capturePhase), pressed.clear());
       }
     });
   }
@@ -4716,6 +4725,7 @@
     readObservations = () => construction.observations;
     let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings);
     return Object.freeze({
+      readProgressionEpoch: epoch.read,
       runConstructionCycle: () => {
         try {
           return construction.runCycle();
@@ -20678,7 +20688,7 @@ Only continue if you trust the source. Injected code:
       mountSuppression: pageCapture2.mountSuppression,
       panels,
       diagnostics
-    }), civicControlsDiscoveryAttempted = !1, hellGarrisonDiscoveryAttempted = !1, madDiscoveryAttempted = !1, ensureHellGarrisonControls = () => {
+    }), civicControlsDiscoveryAttempted = !1, hellGarrisonDiscoveryAttempted = !1, madDiscoveryAttemptedEpoch, ensureHellGarrisonControls = () => {
       if (HELL_GARRISON_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("patrolling")
       ))
@@ -20721,10 +20731,12 @@ Only continue if you trust the source. Injected code:
       if (pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("arm") && pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("launch"))
         return;
       let root = pageCapture2.rootState.readRoot(), mad = readProperty(readProperty(root, "civic"), "mad");
-      if (!isRecord(mad) || readProperty(mad, "display") !== !0 || madDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      if (!isRecord(mad) || readProperty(mad, "display") !== !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
       if (govTabs === void 0) return;
-      madDiscoveryAttempted = !0;
+      let progressionEpoch = progression.readProgressionEpoch();
+      if (madDiscoveryAttemptedEpoch === progressionEpoch) return;
+      madDiscoveryAttemptedEpoch = progressionEpoch;
       let result = civicDiscovery.discover([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
