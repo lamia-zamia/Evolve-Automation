@@ -118,6 +118,9 @@
       );
     return value;
   }
+  function coerceNumber(value) {
+    return Number(value);
+  }
   function requireCount(value, path) {
     if (typeof value != "number" || !Number.isSafeInteger(value) || value < 0)
       throw new TypeError(
@@ -5106,6 +5109,180 @@
   function runJobsAutomation(dependencies, craftOnly = !1) {
     let decision = planJobs(dependencies.reader.readCycle(craftOnly));
     return decision === null ? SUCCEEDED5 : dependencies.executor.execute(decision);
+  }
+
+  // src/domain/progression/prestige/prestige.ts
+  var WITCH_ASCENSION_ACT = [
+    { kind: "reset-modifier-keys" },
+    { kind: "log-prestige" },
+    { kind: "absorption-chamber-action" },
+    { kind: "set-goal", goal: "GameOverMan" }
+  ];
+  function tryReset(goal, check, act) {
+    return check ? goal !== "Reset" ? [{ kind: "set-goal", goal: "Reset" }] : act : [];
+  }
+  function planPrestige(input) {
+    let { goal, branch } = input;
+    switch (branch.type) {
+      case "noop":
+        return [];
+      case "mad": {
+        let act = [];
+        return branch.armed && act.push({ kind: "arm-mad" }), (!branch.waitForPopulation || branch.currentSoldiers >= branch.maxSoldiers && branch.currentPopulation >= branch.maxPopulation && branch.currentSoldiers + branch.currentPopulation >= branch.requiredPopulation) && act.push(
+          { kind: "set-goal", goal: "GameOverMan" },
+          { kind: "log-prestige" },
+          { kind: "launch-mad" }
+        ), tryReset(goal, branch.eligible, act);
+      }
+      case "bioseed": {
+        let act = branch.launchUnlocked ? [{ kind: "click-building", id: "GasSpaceDockLaunch" }] : branch.prepUnlocked ? [{ kind: "click-building", id: "GasSpaceDockPrepForLaunch" }] : [{ kind: "cache-building-options", id: "GasSpaceDock" }];
+        return tryReset(goal, branch.eligible, act);
+      }
+      case "cataclysm": {
+        let act = [];
+        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push(
+          { kind: "log-prestige" },
+          { kind: "click-tech", id: "tech-dial_it_to_11" }
+        ), tryReset(goal, branch.eligible, act);
+      }
+      case "whitehole": {
+        if (branch.whiteholeLevel >= 4)
+          return [];
+        let act = [];
+        branch.exoticInfusionReady && act.push({ kind: "log-prestige" });
+        for (let id of [
+          "tech-infusion_confirm",
+          "tech-infusion_check",
+          "tech-exotic_infusion"
+        ])
+          act.push({ kind: "click-tech", id });
+        return branch.confirmReady && act.push({ kind: "mark-whitehole-reset-started" }), tryReset(goal, branch.eligible, act);
+      }
+      case "apocalypse":
+        return tryReset(goal, branch.eligible, [
+          { kind: "log-prestige" },
+          { kind: "click-tech", id: "tech-protocol66" },
+          { kind: "click-tech", id: "tech-protocol66a" }
+        ]);
+      case "ascension":
+        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
+          { kind: "reset-modifier-keys" },
+          { kind: "click-building", id: "SiriusAscend" }
+        ]);
+      case "demonic":
+        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
+          { kind: "log-prestige" },
+          {
+            kind: "click-tech",
+            id: branch.fasting ? "tech-final_ingredient" : "tech-demonic_infusion"
+          }
+        ]);
+      case "building-reset":
+        return tryReset(goal, branch.unlocked, [
+          { kind: "reset-modifier-keys" },
+          { kind: "click-building", id: branch.building }
+        ]);
+    }
+  }
+
+  // src/application/prestige.ts
+  function runPrestige({
+    reader,
+    executor
+  }) {
+    for (let command of planPrestige(reader.samplePrestige()))
+      executor.execute(command);
+  }
+
+  // src/adapters/evolve/progression/prestige/captured-mad.ts
+  var CAPTURED_MAD_CONTROL = "mad";
+  function capturedMadSettingsRecord(raw) {
+    return isNonArrayRecord(raw) ? raw : {};
+  }
+  function capturedMadSettingBoolean(settings, key, fallback) {
+    let value = settings[key];
+    return value === void 0 ? fallback : !!value;
+  }
+  function capturedMadSettingNumber(settings, key, fallback) {
+    return finite(settings[key]) ?? fallback;
+  }
+  function readCapturedMadBranch(root, rawSettings) {
+    let settings = capturedMadSettingsRecord(rawSettings), civic = readProperty(root, "civic"), mad = readProperty(civic, "mad"), tech = readProperty(root, "tech"), garrison = readProperty(civic, "garrison"), population = readProperty(readProperty(root, "resource"), "Population"), currentSoldiers = coerceNumber(readProperty(garrison, "workers")) - coerceNumber(readProperty(garrison, "crew")), maxSoldiers = coerceNumber(readProperty(garrison, "max")) - coerceNumber(readProperty(garrison, "crew")), madDisplay = readProperty(mad, "display") === !0, madLevel = coerceNumber(readProperty(tech, "mad"));
+    return Object.freeze({
+      type: "mad",
+      // `tech.mad` is the captured grant that the upstream `haveTech('mad')` gate reports; display
+      // is the separate `civic.mad.display` flag written by the game's tech action.
+      eligible: madDisplay && madLevel > 0,
+      armed: !!readProperty(mad, "armed"),
+      waitForPopulation: capturedMadSettingBoolean(
+        settings,
+        "prestigeMADWait",
+        !0
+      ),
+      currentSoldiers,
+      maxSoldiers,
+      currentPopulation: coerceNumber(readProperty(population, "amount")),
+      maxPopulation: coerceNumber(readProperty(population, "max")),
+      requiredPopulation: capturedMadSettingNumber(
+        settings,
+        "prestigeMADPopulation",
+        1
+      )
+    });
+  }
+  function invokeMadControl(controls, method) {
+    let control = controls.resolve(CAPTURED_MAD_CONTROL);
+    if (control === void 0 || !control.methods.includes(method))
+      throw new Error(`captured MAD control lacks ${method}`);
+    let result = controls.invoke(control, method);
+    if (!result.ok)
+      throw new Error(
+        `captured MAD ${method} failed: ${result.detail ?? result.reason}`
+      );
+  }
+  function createCapturedMadPrestige(dependencies) {
+    let sampledRoot, reader = Object.freeze({
+      samplePrestige() {
+        let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot();
+        sampledRoot = root;
+        let branch = (typeof settings.prestigeType == "string" ? settings.prestigeType : "none") === "mad" ? readCapturedMadBranch(root, settings) : { type: "noop" };
+        return Object.freeze({
+          goal: dependencies.readGoal(),
+          branch: Object.freeze(branch)
+        });
+      }
+    }), executor = Object.freeze({
+      execute(command) {
+        switch (command.kind) {
+          case "set-goal":
+            dependencies.setGoal(command.goal);
+            return;
+          case "arm-mad":
+          case "launch-mad":
+            if (dependencies.rootState.readRoot() !== sampledRoot)
+              throw new Error("captured MAD root changed after sampling");
+            invokeMadControl(
+              dependencies.controls,
+              command.kind === "arm-mad" ? "arm" : "launch"
+            );
+            return;
+          case "log-prestige":
+            dependencies.onPrestige?.();
+            return;
+          default:
+            return;
+        }
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/bootstrap/captured-prestige-control.ts
+  function createCapturedPrestigeControl(dependencies) {
+    let { reader, executor } = createCapturedMadPrestige(dependencies);
+    return Object.freeze({
+      run: () => runPrestige({ reader, executor })
+    });
   }
 
   // src/adapters/evolve/economy/resources/captured-gather-resources.ts
@@ -20173,6 +20350,7 @@ Only continue if you trust the source. Injected code:
   // src/bootstrap/captured-runtime-control.ts
   var DEFAULT_SETTINGS2 = Object.freeze({
     masterScriptToggle: !0,
+    autoPrestige: !1,
     autoBuild: !1,
     autoARPA: !1,
     autoResearch: !1,
@@ -20231,7 +20409,7 @@ Only continue if you trust the source. Injected code:
       logError: (message) => logError(message)
     });
     settingsPanel.ensurePanel();
-    let reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
+    let capturedPrestigeGoal = "Standard", reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
     }, runPhase = (name, body) => {
       try {
@@ -20475,7 +20653,7 @@ Only continue if you trust the source. Injected code:
       mountSuppression: pageCapture2.mountSuppression,
       panels,
       diagnostics
-    }), civicControlsDiscoveryAttempted = !1, hellGarrisonDiscoveryAttempted = !1, ensureHellGarrisonControls = () => {
+    }), civicControlsDiscoveryAttempted = !1, hellGarrisonDiscoveryAttempted = !1, madDiscoveryAttempted = !1, ensureHellGarrisonControls = () => {
       if (HELL_GARRISON_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("patrolling")
       ))
@@ -20514,7 +20692,38 @@ Only continue if you trust the source. Injected code:
       result.outcome.status !== "succeeded" && logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
-    }, geneticsDiscoveryAttempted = !1, ensureGeneticsControls = () => {
+    }, ensureMadControls = () => {
+      if (pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("arm") && pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("launch"))
+        return;
+      let root = pageCapture2.rootState.readRoot(), mad = readProperty(readProperty(root, "civic"), "mad");
+      if (!isRecord(mad) || readProperty(mad, "display") !== !0 || madDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      if (govTabs === void 0) return;
+      madDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.military
+        })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `MAD discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
+    }, prestige = createCapturedPrestigeControl({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => settingsStore.readRaw(),
+      readGoal: () => capturedPrestigeGoal,
+      setGoal: (goal) => {
+        capturedPrestigeGoal = goal;
+      }
+    }), geneticsDiscoveryAttempted = !1, ensureGeneticsControls = () => {
       if (pageCapture2.controls.resolve(GENETICS_CONTROL) !== void 0) return;
       let root = pageCapture2.rootState.readRoot(), level = readProperty(readProperty(root, "tech"), "genetics"), panelOffered = readProperty(
         readProperty(readProperty(root, "settings"), "arpa"),
@@ -21021,6 +21230,10 @@ Only continue if you trust the source. Injected code:
           }));
         }), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle()), isEnabled(settings, "autoGenetics") && runPhase("autoGenetics", () => {
           ensureGeneticsControls(), runGeneticsAutomation(genetics);
+        }), isEnabled(settings, "autoPrestige") && settings.prestigeType === "mad" && capturedPrestigeGoal !== "GameOverMan" && runPhase("autoPrestige", () => {
+          ensureMadControls();
+          let mad = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL);
+          mad === void 0 || !mad.methods.includes("arm") || !mad.methods.includes("launch") || prestige.run();
         });
       } catch (error) {
         logError(String(error));

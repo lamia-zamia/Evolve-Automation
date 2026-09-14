@@ -3,6 +3,7 @@ import { advancePeriodGate } from "../domain/tick.ts";
 import { readPeriodsPerScriptCycle } from "../adapters/evolve/captured-tick-rate.ts";
 import { runCraftAutomation } from "../application/craft.ts";
 import { runJobsAutomation } from "../application/jobs.ts";
+import { createCapturedPrestigeControl } from "./captured-prestige-control.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { createCapturedTaxControl } from "./captured-tax-control.ts";
 import {
@@ -19,6 +20,7 @@ import {
   HELL_GARRISON_CONTROLS,
   readCapturedHellGarrison,
 } from "../adapters/evolve/combat/captured-hell-garrison.ts";
+import { CAPTURED_MAD_CONTROL } from "../adapters/evolve/progression/prestige/captured-mad.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import {
   createCapturedFullJobsAutomation,
@@ -171,6 +173,7 @@ export interface CapturedRuntimeControlDependencies {
 
 const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   masterScriptToggle: true,
+  autoPrestige: false,
   autoBuild: false,
   autoARPA: false,
   autoResearch: false,
@@ -246,6 +249,9 @@ export function startCapturedRuntime({
   // local bundle is loaded after the game). Automation still fails closed below until capture is
   // complete, but configuration should not disappear with it.
   settingsPanel.ensurePanel();
+  // The captured runtime has no compatibility state object. This application-instance goal is
+  // only the one-tick handoff used by the captured prestige planner and is discarded on reload.
+  let capturedPrestigeGoal = "Standard";
   const reported = new Set<string>();
   const reportOnce = (message: string) => {
     if (reported.has(message)) return;
@@ -578,6 +584,7 @@ export function startCapturedRuntime({
   });
   let civicControlsDiscoveryAttempted = false;
   let hellGarrisonDiscoveryAttempted = false;
+  let madDiscoveryAttempted = false;
   /**
    * Draws the civics military sub-tab, where `index.js` calls `buildFortress($('#fortress'),false)`
    * and captures `gFort`. The same draw runs `defineGarrison()`, so a later slice that needs the
@@ -641,6 +648,57 @@ export function startCapturedRuntime({
       );
     }
   };
+  /**
+   * Draws the civics military sub-tab, where `defineGarrison()` also binds the game's `#mad`
+   * control. The display flag is written by the game's `tech.mad` action, so it is the gate for
+   * spending a military discovery pass before the prestige route exists.
+   */
+  const ensureMadControls = () => {
+    if (
+      pageCapture.controls
+        .resolve(CAPTURED_MAD_CONTROL)
+        ?.methods.includes("arm") &&
+      pageCapture.controls
+        .resolve(CAPTURED_MAD_CONTROL)
+        ?.methods.includes("launch")
+    ) {
+      return;
+    }
+    const root = pageCapture.rootState.readRoot();
+    const mad = readProperty(readProperty(root, "civic"), "mad");
+    if (!isRecord(mad) || readProperty(mad, "display") !== true) return;
+    if (madDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs === undefined) return;
+    madDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: MAIN_TAB_INDEX.civic,
+      }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.military,
+      }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `MAD discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+  const prestige = createCapturedPrestigeControl({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => settingsStore.readRaw(),
+    readGoal: () => capturedPrestigeGoal,
+    setGoal: (goal) => {
+      capturedPrestigeGoal = goal;
+    },
+  });
   let geneticsDiscoveryAttempted = false;
   /**
    * Draws the A.R.P.A. tab, where `loadTab` calls `arpa('Genetics')` in the same pass that draws the
@@ -1589,6 +1647,24 @@ export function startCapturedRuntime({
         runPhase("autoGenetics", () => {
           ensureGeneticsControls();
           runGeneticsAutomation(genetics);
+        });
+      }
+      if (
+        isEnabled(settings, "autoPrestige") &&
+        settings["prestigeType"] === "mad" &&
+        capturedPrestigeGoal !== "GameOverMan"
+      ) {
+        runPhase("autoPrestige", () => {
+          ensureMadControls();
+          const mad = pageCapture.controls.resolve(CAPTURED_MAD_CONTROL);
+          if (
+            mad === undefined ||
+            !mad.methods.includes("arm") ||
+            !mad.methods.includes("launch")
+          ) {
+            return;
+          }
+          prestige.run();
         });
       }
     } catch (error) {
