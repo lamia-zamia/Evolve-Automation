@@ -5478,6 +5478,10 @@
           { kind: "reset-modifier-keys" },
           { kind: "click-building", id: branch.building }
         ]);
+      case "celestial-lab":
+        return tryReset(goal, branch.eligible, [
+          { kind: "complete-celestial-lab", mode: branch.mode }
+        ]);
     }
   }
 
@@ -5556,7 +5560,7 @@
     ...CAPTURED_DEMONIC_TECH_IDS,
     ...CAPTURED_WHITEHOLE_TECH_IDS,
     CAPTURED_WHITEHOLE_REPAIR_TECH
-  ]), CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
+  ]), CAPTURED_CELESTIAL_LAB = "celestialLab", CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
     terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
     ascension: Object.freeze({
       elementId: "interstellar-ascend",
@@ -5579,6 +5583,15 @@
       value
     );
   }
+  var CAPTURED_RESET_STAT_BY_TYPE = Object.freeze({
+    terraform: "terraform",
+    ascension: "ascend",
+    matrix: "matrix",
+    retire: "retired",
+    eden: "eden",
+    apotheosis: "apotheosis",
+    descend: "descend"
+  });
   function capturedMadSettingsRecord(raw) {
     return isNonArrayRecord(raw) ? raw : {};
   }
@@ -5588,6 +5601,59 @@
   }
   function capturedMadSettingNumber(settings, key, fallback) {
     return finite(settings[key]) ?? fallback;
+  }
+  function readCapturedResetCount(root, type) {
+    return finite(
+      readProperty(
+        readProperty(root, "stats"),
+        CAPTURED_RESET_STAT_BY_TYPE[type]
+      )
+    );
+  }
+  function readCapturedWitchResetStat(root, type) {
+    return type === "demonic" && finite(readProperty(readProperty(root, "tech"), "forbidden")) === 5 ? "descend" : "ascension";
+  }
+  function celestialLabMethod(mode) {
+    return mode === "terraform" ? "setPlanet" : "setRace";
+  }
+  function readCapturedCelestialLabMode(controls, pending) {
+    return pending === void 0 ? void 0 : controls.resolve(CAPTURED_CELESTIAL_LAB)?.methods.includes(celestialLabMethod(pending)) ? pending : void 0;
+  }
+  function invokeCapturedPrestigeAction(rootState, controls, handle) {
+    let settings = readProperty(rootState.readRoot(), "settings");
+    if (!isNonArrayRecord(settings))
+      return {
+        ok: !1,
+        reason: "threw",
+        detail: "captured prestige game settings are unavailable"
+      };
+    let snapshots = [
+      Object.freeze({
+        key: "qKey",
+        present: Object.prototype.hasOwnProperty.call(settings, "qKey"),
+        value: readProperty(settings, "qKey")
+      }),
+      Object.freeze({
+        key: "touch",
+        present: Object.prototype.hasOwnProperty.call(settings, "touch"),
+        value: readProperty(settings, "touch")
+      })
+    ], setDisabled = (key) => Reflect.set(settings, key, !1) && readProperty(settings, key) === !1, result, restoreFailure;
+    try {
+      !setDisabled("qKey") || !setDisabled("touch") ? result = {
+        ok: !1,
+        reason: "threw",
+        detail: "captured prestige game action modifiers could not be disabled"
+      } : result = controls.invoke(handle, "action");
+    } finally {
+      for (let snapshot of snapshots)
+        snapshot.present ? (!Reflect.set(settings, snapshot.key, snapshot.value) || readProperty(settings, snapshot.key) !== snapshot.value) && (restoreFailure ??= `captured prestige game setting ${snapshot.key} was not restored`) : Reflect.deleteProperty(settings, snapshot.key) || (restoreFailure ??= `captured prestige game setting ${snapshot.key} was not removed`);
+    }
+    return restoreFailure === void 0 ? result ?? {
+      ok: !1,
+      reason: "threw",
+      detail: "captured prestige game action was not invoked"
+    } : { ok: !1, reason: "threw", detail: restoreFailure };
   }
   function readCapturedBioseedCount(root, region, type) {
     return finite(
@@ -5599,7 +5665,7 @@
     return handle !== void 0 && handle.methods.includes("action");
   }
   function readCapturedEdenResetCount(root) {
-    return finite(readProperty(readProperty(root, "stats"), "eden"));
+    return readCapturedResetCount(root, "eden");
   }
   function readCapturedBioseedBranch(root, settings, controls) {
     let stats = readProperty(root, "stats"), achievement = readProperty(readProperty(stats, "achieve"), "lamentis"), requiredGecks = finite(settings.prestigeGECK) ?? Number.NaN, requiredProbes = finite(settings.prestigeBioseedProbes) ?? Number.NaN, gecks = readCapturedBioseedCount(root, "starDock", "geck"), shipSegments = readCapturedBioseedCount(root, "starDock", "seeder"), probes = readCapturedBioseedCount(root, "starDock", "probes"), genesis = finite(readProperty(readProperty(root, "tech"), "genesis")) ?? 0, eligibility = {
@@ -5746,12 +5812,22 @@
       );
   }
   function createCapturedMadPrestige(dependencies) {
-    let sampledRoot, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, sampledEdenCount, resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1, reader = Object.freeze({
+    let sampledRoot, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, sampledEdenCount, sampledBuildingType, sampledBuildingResetCount, pendingCelestialLabMode, pendingWitchCelestialLab = !1, pendingWitchDirectReset = !1, resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1, reader = Object.freeze({
       samplePrestige() {
         let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot();
-        sampledRoot = root, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, sampledEdenCount = void 0, apocalypseFirstActionDone = !1;
+        sampledRoot = root, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, sampledEdenCount = void 0, sampledBuildingType = void 0, sampledBuildingResetCount = void 0, apocalypseFirstActionDone = !1;
         let prestigeType = typeof settings.prestigeType == "string" ? settings.prestigeType : "none", branch = { type: "noop" };
-        if (!resetCommitted && prestigeType === "mad")
+        if (!resetCommitted && pendingCelestialLabMode !== void 0) {
+          let mode = pendingCelestialLabMode;
+          sampledBuildingResetCount = readCapturedResetCount(root, mode), branch = {
+            type: "celestial-lab",
+            mode,
+            eligible: readCapturedCelestialLabMode(
+              dependencies.controls,
+              pendingCelestialLabMode
+            ) !== void 0 && sampledBuildingResetCount !== void 0
+          };
+        } else if (!resetCommitted && prestigeType === "mad")
           branch = readCapturedMadBranch(root, settings);
         else if (!resetCommitted && prestigeType === "ascension" && readProperty(readProperty(root, "race"), "witch_hunter")) {
           let offered = dependencies.readBuildingResetActions?.(["portal"]);
@@ -5773,7 +5849,10 @@
           let action = CAPTURED_BUILDING_PRESTIGE_ACTIONS[prestigeType], offered = dependencies.readBuildingResetActions?.([
             action.region
           ]);
-          offered !== void 0 && (action.elementId === CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId && (sampledEdenCount = readCapturedEdenResetCount(root)), branch = {
+          offered !== void 0 && (sampledBuildingType = prestigeType, sampledBuildingResetCount = readCapturedResetCount(
+            root,
+            prestigeType
+          ), action.elementId === CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId && (sampledEdenCount = readCapturedEdenResetCount(root)), branch = {
             type: "building-reset",
             building: action.elementId,
             unlocked: offered.has(action.elementId) && (action.elementId !== CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId || sampledEdenCount !== void 0)
@@ -5887,6 +5966,8 @@
       execute(command) {
         switch (command.kind) {
           case "set-goal":
+            if (command.goal === "GameOverMan" && (pendingCelestialLabMode !== void 0 || pendingWitchDirectReset))
+              return;
             dependencies.setGoal(command.goal);
             return;
           case "arm-mad":
@@ -5919,17 +6000,59 @@
             );
             if (currentHandle === void 0 || currentHandle.generation !== handle.generation || !currentHandle.methods.includes("action"))
               throw new Error("captured Witch-Hunter action was redrawn");
-            let result = dependencies.controls.invoke(currentHandle, "action");
+            let prestigeType = capturedMadSettingsRecord(
+              dependencies.readSettings()
+            ).prestigeType, resetStat = readCapturedWitchResetStat(
+              sampledRoot,
+              prestigeType === "demonic" ? "demonic" : "ascension"
+            ), resetCountBefore = readCapturedResetCount(
+              sampledRoot,
+              resetStat
+            ), result = invokeCapturedPrestigeAction(
+              dependencies.rootState,
+              dependencies.controls,
+              currentHandle
+            );
             if (!result.ok)
               throw new Error(
                 `captured Witch-Hunter action failed: ${result.detail ?? result.reason}`
               );
-            if (result.value === !1) return;
-            resetCommitted = !0, dependencies.onActivity?.({
+            let resetCountAfter = readCapturedResetCount(
+              dependencies.rootState.readRoot(),
+              resetStat
+            );
+            resetCountBefore !== void 0 && resetCountAfter !== void 0 && resetCountAfter > resetCountBefore ? (pendingWitchDirectReset = !1, resetCommitted = !0, dependencies.onActivity?.({
               message: "Prestiged",
               color: "info",
               tags: Object.freeze(["achievements"])
-            });
+            })) : resetStat === "ascension" ? (pendingCelestialLabMode = "ascension", pendingWitchCelestialLab = !0) : pendingWitchDirectReset = !0;
+            return;
+          }
+          case "complete-celestial-lab": {
+            if (dependencies.rootState.readRoot() !== sampledRoot)
+              throw new Error(
+                "captured celestial lab root changed after sampling"
+              );
+            if (pendingCelestialLabMode !== command.mode) return;
+            let handle = dependencies.controls.resolve(CAPTURED_CELESTIAL_LAB), method = celestialLabMethod(command.mode);
+            if (handle === void 0 || !handle.methods.includes(method)) return;
+            let resetCountBefore = sampledBuildingResetCount, result = dependencies.controls.invoke(handle, method);
+            if (!result.ok)
+              throw new Error(
+                `captured celestial lab ${method} failed: ${result.detail ?? result.reason}`
+              );
+            let resetCountAfter = readCapturedResetCount(
+              dependencies.rootState.readRoot(),
+              command.mode
+            );
+            if (resetCountBefore === void 0 || resetCountAfter === void 0 || resetCountAfter <= resetCountBefore)
+              return;
+            let completeWitchCelestialLab = pendingWitchCelestialLab;
+            pendingCelestialLabMode = void 0, pendingWitchCelestialLab = !1, resetCommitted = !0, dependencies.onActivity?.({
+              message: "Prestiged",
+              color: "info",
+              tags: Object.freeze(["achievements"])
+            }), completeWitchCelestialLab && dependencies.setGoal("GameOverMan");
             return;
           }
           case "cache-building-options": {
@@ -5962,7 +6085,11 @@
               throw new Error(
                 `captured prestige action ${command.id} was redrawn`
               );
-            let result = dependencies.controls.invoke(currentHandle, "action");
+            let result = invokeCapturedPrestigeAction(
+              dependencies.rootState,
+              dependencies.controls,
+              currentHandle
+            );
             if (!result.ok)
               throw new Error(
                 `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`
@@ -5992,7 +6119,29 @@
               });
               return;
             }
-            result.value === !0 && (resetCommitted = !0);
+            if (sampledBuildingType !== void 0) {
+              let resetCountAfter = readCapturedResetCount(
+                dependencies.rootState.readRoot(),
+                sampledBuildingType
+              );
+              if (sampledBuildingResetCount !== void 0 && resetCountAfter !== void 0 && resetCountAfter > sampledBuildingResetCount) {
+                resetCommitted = !0, dependencies.onActivity?.({
+                  message: "Prestiged",
+                  color: "info",
+                  tags: Object.freeze(["achievements"])
+                });
+                return;
+              }
+              if (sampledBuildingType === "matrix") {
+                resetCommitted = !0, dependencies.onActivity?.({
+                  message: "Prestiged",
+                  color: "info",
+                  tags: Object.freeze(["achievements"])
+                });
+                return;
+              }
+              (sampledBuildingType === "terraform" || sampledBuildingType === "ascension" || sampledBuildingType === "apotheosis") && (pendingCelestialLabMode = sampledBuildingType === "terraform" ? "terraform" : sampledBuildingType);
+            }
             return;
           }
           case "click-tech": {
@@ -6037,7 +6186,11 @@
                 readProperty(dependencies.rootState.readRoot(), "tech"),
                 "whitehole"
               )
-            ) ?? 0 : 0, result = dependencies.controls.invoke(handle, "action");
+            ) ?? 0 : 0, result = invokeCapturedPrestigeAction(
+              dependencies.rootState,
+              dependencies.controls,
+              handle
+            );
             if (!result.ok)
               throw new Error(
                 `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`

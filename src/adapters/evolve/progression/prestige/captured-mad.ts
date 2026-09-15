@@ -5,8 +5,8 @@
  * use on the reactive root. The panel's own `arm` and `launch` methods are captured when the
  * military tab is drawn, so this adapter never reaches for the private `warhead` function.
  * DeadSpace's ordinary prestige actions are also lexical definitions, but their action rows are
- * captured by the same page surface: `space-terraform`, `interstellar-ascend`,
- * `tauceti-goe_facility`, and `eden-apotheosis` call the game's own reset paths.
+ * captured by the same page surface: Terraform, Ascension, and Apotheosis open the celestial lab;
+ * Matrix, Retirement, and Eden own their direct or delayed reset paths.
  */
 
 import {
@@ -19,11 +19,13 @@ import {
 import {
   WHITEHOLE_REPAIR_TECH_ID,
   WHITEHOLE_RESET_LEVEL,
+  type CelestialLabMode,
   type PrestigeBranch,
   type PrestigeCommand,
   type PrestigeInput,
 } from "../../../../domain/progression/prestige/prestige.ts";
 import type {
+  GameControlResult,
   GameControlHandle,
   GameControlRegistry,
 } from "../../../../ports/game-control-registry.ts";
@@ -108,7 +110,10 @@ const CAPTURED_PRESTIGE_TECH_IDS = Object.freeze([
   CAPTURED_WHITEHOLE_REPAIR_TECH,
 ]);
 
-/** DeadSpace action rows that commit the captured building-shaped prestige branches. */
+/** The Vue component that owns the post-opener Terraform/Ascension controls. */
+export const CAPTURED_CELESTIAL_LAB = "celestialLab";
+
+/** DeadSpace action rows that begin or commit the captured building-shaped prestige branches. */
 export const CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
   terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
   ascension: Object.freeze({
@@ -149,6 +154,19 @@ type WitchBranch = Extract<
   PrestigeBranch,
   { readonly type: "ascension" | "demonic" }
 >;
+
+type CapturedResetStat = CapturedBuildingPrestigeType | "descend";
+
+const CAPTURED_RESET_STAT_BY_TYPE: Readonly<Record<CapturedResetStat, string>> =
+  Object.freeze({
+    terraform: "terraform",
+    ascension: "ascend",
+    matrix: "matrix",
+    retire: "retired",
+    eden: "eden",
+    apotheosis: "apotheosis",
+    descend: "descend",
+  });
 
 export interface CapturedMadPrestigeDependencies {
   readonly rootState: GameRootStateSource;
@@ -192,6 +210,111 @@ function capturedMadSettingNumber(
   return finite(settings[key]) ?? fallback;
 }
 
+function readCapturedResetCount(
+  root: unknown,
+  type: CapturedResetStat,
+): number | undefined {
+  return finite(
+    readProperty(
+      readProperty(root, "stats"),
+      CAPTURED_RESET_STAT_BY_TYPE[type],
+    ),
+  );
+}
+
+function readCapturedWitchResetStat(
+  root: unknown,
+  type: "ascension" | "demonic",
+): CapturedResetStat {
+  return type === "demonic" &&
+    finite(readProperty(readProperty(root, "tech"), "forbidden")) === 5
+    ? "descend"
+    : "ascension";
+}
+
+function celestialLabMethod(mode: CelestialLabMode): string {
+  return mode === "terraform" ? "setPlanet" : "setRace";
+}
+
+function readCapturedCelestialLabMode(
+  controls: GameControlRegistry,
+  pending: CelestialLabMode | undefined,
+): CelestialLabMode | undefined {
+  if (pending === undefined) return undefined;
+  const control = controls.resolve(CAPTURED_CELESTIAL_LAB);
+  return control?.methods.includes(celestialLabMethod(pending))
+    ? pending
+    : undefined;
+}
+
+/**
+ * DeadSpace's action-row Vue wrapper returns `undefined` and can silently stop on the touch
+ * popover or q-key paths before it reaches the action definition. Temporarily disabling those two
+ * game-owned gates makes this one transaction equivalent to an ordinary click, then restores the
+ * user's settings even when the captured method fails.
+ */
+function invokeCapturedPrestigeAction(
+  rootState: GameRootStateSource,
+  controls: GameControlRegistry,
+  handle: GameControlHandle,
+): GameControlResult {
+  const settings = readProperty(rootState.readRoot(), "settings");
+  if (!isNonArrayRecord(settings)) {
+    return {
+      ok: false,
+      reason: "threw",
+      detail: "captured prestige game settings are unavailable",
+    };
+  }
+  const snapshots = [
+    Object.freeze({
+      key: "qKey",
+      present: Object.prototype.hasOwnProperty.call(settings, "qKey"),
+      value: readProperty(settings, "qKey"),
+    }),
+    Object.freeze({
+      key: "touch",
+      present: Object.prototype.hasOwnProperty.call(settings, "touch"),
+      value: readProperty(settings, "touch"),
+    }),
+  ];
+  const setDisabled = (key: string): boolean =>
+    Reflect.set(settings, key, false) && readProperty(settings, key) === false;
+  let result: GameControlResult | undefined;
+  let restoreFailure: string | undefined;
+  try {
+    if (!setDisabled("qKey") || !setDisabled("touch")) {
+      result = {
+        ok: false,
+        reason: "threw",
+        detail: "captured prestige game action modifiers could not be disabled",
+      };
+    } else {
+      result = controls.invoke(handle, "action");
+    }
+  } finally {
+    for (const snapshot of snapshots) {
+      if (snapshot.present) {
+        if (
+          !Reflect.set(settings, snapshot.key, snapshot.value) ||
+          readProperty(settings, snapshot.key) !== snapshot.value
+        ) {
+          restoreFailure ??= `captured prestige game setting ${snapshot.key} was not restored`;
+        }
+      } else if (!Reflect.deleteProperty(settings, snapshot.key)) {
+        restoreFailure ??= `captured prestige game setting ${snapshot.key} was not removed`;
+      }
+    }
+  }
+  return restoreFailure === undefined
+    ? (result ?? {
+        ok: false,
+        reason: "threw",
+        detail: "captured prestige game action was not invoked",
+      })
+    : { ok: false, reason: "threw", detail: restoreFailure };
+}
+
 function readCapturedBioseedCount(
   root: unknown,
   region: string,
@@ -218,7 +341,7 @@ function capturedBioseedActionAvailable(
  * counter is the only captured success answer for Eden.
  */
 function readCapturedEdenResetCount(root: unknown): number | undefined {
-  return finite(readProperty(readProperty(root, "stats"), "eden"));
+  return readCapturedResetCount(root, "eden");
 }
 
 function readCapturedBioseedBranch(
@@ -519,6 +642,11 @@ export function createCapturedMadPrestige(
   let sampledBioseedControls = new Map<string, Readonly<GameControlHandle>>();
   let sampledWitchControl: Readonly<GameControlHandle> | undefined;
   let sampledEdenCount: number | undefined;
+  let sampledBuildingType: CapturedBuildingPrestigeType | undefined;
+  let sampledBuildingResetCount: number | undefined;
+  let pendingCelestialLabMode: CelestialLabMode | undefined;
+  let pendingWitchCelestialLab = false;
+  let pendingWitchDirectReset = false;
   let resetCommitted = false;
   let apocalypseFirstActionDone = false;
   let bioseedModalRequested = false;
@@ -531,13 +659,27 @@ export function createCapturedMadPrestige(
       sampledBioseedControls = new Map();
       sampledWitchControl = undefined;
       sampledEdenCount = undefined;
+      sampledBuildingType = undefined;
+      sampledBuildingResetCount = undefined;
       apocalypseFirstActionDone = false;
       const prestigeType =
         typeof settings["prestigeType"] === "string"
           ? settings["prestigeType"]
           : "none";
       let branch: PrestigeBranch = { type: "noop" };
-      if (!resetCommitted && prestigeType === "mad") {
+      if (!resetCommitted && pendingCelestialLabMode !== undefined) {
+        const mode = pendingCelestialLabMode;
+        sampledBuildingResetCount = readCapturedResetCount(root, mode);
+        branch = {
+          type: "celestial-lab",
+          mode,
+          eligible:
+            readCapturedCelestialLabMode(
+              dependencies.controls,
+              pendingCelestialLabMode,
+            ) !== undefined && sampledBuildingResetCount !== undefined,
+        };
+      } else if (!resetCommitted && prestigeType === "mad") {
         branch = readCapturedMadBranch(root, settings);
       } else if (
         !resetCommitted &&
@@ -572,6 +714,11 @@ export function createCapturedMadPrestige(
         // A missing panel sample is an unknown gate, not a locked reset. The planner only
         // receives a boolean after the game has answered whether it drew the action row.
         if (offered !== undefined) {
+          sampledBuildingType = prestigeType;
+          sampledBuildingResetCount = readCapturedResetCount(
+            root,
+            prestigeType,
+          );
           if (
             action.elementId ===
             CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId
@@ -743,6 +890,15 @@ export function createCapturedMadPrestige(
     execute(command: PrestigeCommand): void {
       switch (command.kind) {
         case "set-goal":
+          // Witch-Hunter Ascension opens the celestial lab first. The pure legacy act places
+          // this guard after the opener, but doing so here would prevent the following tick from
+          // reaching the captured `setRace()` completion method.
+          if (
+            command.goal === "GameOverMan" &&
+            (pendingCelestialLabMode !== undefined || pendingWitchDirectReset)
+          ) {
+            return;
+          }
           dependencies.setGoal(command.goal);
           return;
         case "arm-mad":
@@ -770,8 +926,8 @@ export function createCapturedMadPrestige(
           // command would report an attempted prestige before the game actually reset.
           return;
         case "reset-modifier-keys":
-          // The captured action has no modifier-key semantics; keep the planner's legacy command
-          // inert until a future action needs a captured keyboard port here.
+          // Action transactions disable the game-owned q/touch gates around their own invocation.
+          // This planner command remains a compatibility no-op for captured prestige.
           return;
         case "absorption-chamber-action": {
           if (dependencies.rootState.readRoot() !== sampledRoot) {
@@ -793,19 +949,91 @@ export function createCapturedMadPrestige(
           ) {
             throw new Error("captured Witch-Hunter action was redrawn");
           }
-          const result = dependencies.controls.invoke(currentHandle, "action");
+          const prestigeType = capturedMadSettingsRecord(
+            dependencies.readSettings(),
+          )["prestigeType"];
+          const resetStat = readCapturedWitchResetStat(
+            sampledRoot,
+            prestigeType === "demonic" ? "demonic" : "ascension",
+          );
+          const resetCountBefore = readCapturedResetCount(
+            sampledRoot,
+            resetStat,
+          );
+          const result = invokeCapturedPrestigeAction(
+            dependencies.rootState,
+            dependencies.controls,
+            currentHandle,
+          );
           if (!result.ok) {
             throw new Error(
               `captured Witch-Hunter action failed: ${result.detail ?? result.reason}`,
             );
           }
-          if (result.value === false) return;
+          const resetCountAfter = readCapturedResetCount(
+            dependencies.rootState.readRoot(),
+            resetStat,
+          );
+          if (
+            resetCountBefore !== undefined &&
+            resetCountAfter !== undefined &&
+            resetCountAfter > resetCountBefore
+          ) {
+            pendingWitchDirectReset = false;
+            resetCommitted = true;
+            dependencies.onActivity?.({
+              message: "Prestiged",
+              color: "info",
+              tags: Object.freeze(["achievements"]),
+            });
+          } else if (resetStat === "ascension") {
+            pendingCelestialLabMode = "ascension";
+            pendingWitchCelestialLab = true;
+          } else {
+            pendingWitchDirectReset = true;
+          }
+          return;
+        }
+        case "complete-celestial-lab": {
+          if (dependencies.rootState.readRoot() !== sampledRoot) {
+            throw new Error(
+              "captured celestial lab root changed after sampling",
+            );
+          }
+          if (pendingCelestialLabMode !== command.mode) return;
+          const handle = dependencies.controls.resolve(CAPTURED_CELESTIAL_LAB);
+          const method = celestialLabMethod(command.mode);
+          if (handle === undefined || !handle.methods.includes(method)) return;
+          const resetCountBefore = sampledBuildingResetCount;
+          const result = dependencies.controls.invoke(handle, method);
+          if (!result.ok) {
+            throw new Error(
+              `captured celestial lab ${method} failed: ${result.detail ?? result.reason}`,
+            );
+          }
+          const resetCountAfter = readCapturedResetCount(
+            dependencies.rootState.readRoot(),
+            command.mode,
+          );
+          if (
+            resetCountBefore === undefined ||
+            resetCountAfter === undefined ||
+            resetCountAfter <= resetCountBefore
+          ) {
+            return;
+          }
+          const completeWitchCelestialLab = pendingWitchCelestialLab;
+          pendingCelestialLabMode = undefined;
+          pendingWitchCelestialLab = false;
           resetCommitted = true;
           dependencies.onActivity?.({
             message: "Prestiged",
             color: "info",
             tags: Object.freeze(["achievements"]),
           });
+          if (completeWitchCelestialLab) {
+            dependencies.setGoal("GameOverMan");
+          }
           return;
         }
         case "cache-building-options": {
@@ -859,7 +1087,11 @@ export function createCapturedMadPrestige(
               `captured prestige action ${command.id} was redrawn`,
             );
           }
-          const result = dependencies.controls.invoke(currentHandle, "action");
+          const result = invokeCapturedPrestigeAction(
+            dependencies.rootState,
+            dependencies.controls,
+            currentHandle,
+          );
           if (!result.ok) {
             throw new Error(
               `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`,
@@ -903,9 +1135,47 @@ export function createCapturedMadPrestige(
             });
             return;
           }
-          // DeadSpace's reset action returns true after it has scheduled the browser reload. Keep
-          // the old root from receiving a duplicate click if that reload is still pending.
-          if (result.value === true) resetCommitted = true;
+          if (sampledBuildingType !== undefined) {
+            const resetCountAfter = readCapturedResetCount(
+              dependencies.rootState.readRoot(),
+              sampledBuildingType,
+            );
+            if (
+              sampledBuildingResetCount !== undefined &&
+              resetCountAfter !== undefined &&
+              resetCountAfter > sampledBuildingResetCount
+            ) {
+              resetCommitted = true;
+              dependencies.onActivity?.({
+                message: "Prestiged",
+                color: "info",
+                tags: Object.freeze(["achievements"]),
+              });
+              return;
+            }
+            if (sampledBuildingType === "matrix") {
+              // Matrix installs its overlay and schedules `matrix()` five seconds later. The
+              // successful modifier-neutralized wrapper call is the commit; never click it again
+              // while that delayed reset is pending.
+              resetCommitted = true;
+              dependencies.onActivity?.({
+                message: "Prestiged",
+                color: "info",
+                tags: Object.freeze(["achievements"]),
+              });
+              return;
+            }
+            if (
+              sampledBuildingType === "terraform" ||
+              sampledBuildingType === "ascension" ||
+              sampledBuildingType === "apotheosis"
+            ) {
+              pendingCelestialLabMode =
+                sampledBuildingType === "terraform"
+                  ? "terraform"
+                  : sampledBuildingType;
+            }
+          }
           return;
         }
         case "click-tech": {
@@ -989,7 +1259,11 @@ export function createCapturedMadPrestige(
                   ),
                 ) ?? 0)
               : 0;
-          const result = dependencies.controls.invoke(handle, "action");
+          const result = invokeCapturedPrestigeAction(
+            dependencies.rootState,
+            dependencies.controls,
+            handle,
+          );
           if (!result.ok) {
             throw new Error(
               `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`,

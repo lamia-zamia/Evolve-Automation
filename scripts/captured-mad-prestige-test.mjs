@@ -9,6 +9,7 @@ import {
   CAPTURED_BIOSEED_ACTIONS,
   CAPTURED_WHITEHOLE_TECHS,
   CAPTURED_WHITEHOLE_REPAIR_TECH,
+  CAPTURED_CELESTIAL_LAB,
   createCapturedMadPrestige,
   readCapturedMadBranch,
 } from "../src/adapters/evolve/progression/prestige/captured-mad.ts";
@@ -16,11 +17,21 @@ import { runPrestige } from "../src/application/prestige.ts";
 
 function buildRoot(overrides = {}) {
   return {
+    settings: { qKey: false, touch: false },
     civic: {
       mad: { display: true, armed: true },
       garrison: { workers: 12, max: 20, crew: 2 },
     },
     tech: { mad: 1 },
+    stats: {
+      terraform: 0,
+      ascend: 0,
+      matrix: 0,
+      retired: 0,
+      eden: 0,
+      apotheosis: 0,
+      descend: 0,
+    },
     resource: { Population: { amount: 30, max: 30 } },
     ...overrides,
   };
@@ -136,9 +147,8 @@ const settings = {
 }
 
 // DeadSpace's reset action rows are the captured unlock answer for the building-shaped prestige
-// branches. The planner's old command shape is retained; the captured
-// adapter maps the command to the game's `action()` method and suppresses a duplicate while the
-// browser reload is pending.
+// branches. The action-row Vue wrapper returns undefined, so the adapter uses each reset's own
+// counter or delayed-transaction contract instead of the wrapper's return value.
 {
   for (const expected of [
     {
@@ -174,22 +184,61 @@ const settings = {
   ]) {
     const trace = [];
     let goal = "Normal";
-    const root = buildRoot({ stats: { eden: 0 } });
+    let modalOpen = false;
+    const root = buildRoot();
+    if (expected.prestigeType === "matrix") {
+      root.settings.qKey = true;
+      root.settings.touch = true;
+    }
     const controls = {
       resolve(id) {
-        return id === expected.elementId
-          ? { elementId: id, generation: 1, methods: ["action"] }
-          : undefined;
+        if (id === expected.elementId) {
+          return { elementId: id, generation: 1, methods: ["action"] };
+        }
+        if (
+          modalOpen &&
+          id === CAPTURED_CELESTIAL_LAB &&
+          ["terraform", "ascension", "apotheosis"].includes(
+            expected.prestigeType,
+          )
+        ) {
+          return {
+            elementId: id,
+            generation: 2,
+            methods: [
+              expected.prestigeType === "terraform" ? "setPlanet" : "setRace",
+            ],
+          };
+        }
+        return undefined;
       },
       invoke(handle, method) {
-        assert.equal(handle.elementId, expected.elementId);
-        assert.equal(method, "action");
-        trace.push(method);
-        if (expected.prestigeType === "eden") {
-          root.stats.eden += 1;
-          return { ok: true, value: false };
+        if (method === "action") {
+          assert.equal(handle.elementId, expected.elementId);
+          assert.equal(root.settings.qKey, false);
+          assert.equal(root.settings.touch, false);
+          trace.push(method);
+          if (expected.prestigeType === "eden") {
+            root.stats.eden += 1;
+          } else if (expected.prestigeType === "retire") {
+            root.stats.retired += 1;
+          } else if (
+            ["terraform", "ascension", "apotheosis"].includes(
+              expected.prestigeType,
+            )
+          ) {
+            modalOpen = true;
+          }
+        } else {
+          assert.equal(handle.elementId, CAPTURED_CELESTIAL_LAB);
+          trace.push([handle.elementId, method]);
+          root.stats[
+            expected.prestigeType === "ascension"
+              ? "ascend"
+              : expected.prestigeType
+          ] += 1;
         }
-        return { ok: true, value: true };
+        return { ok: true, value: undefined };
       },
       capturedElementIds() {
         return [expected.elementId];
@@ -213,14 +262,28 @@ const settings = {
     assert.equal(goal, "Reset");
     runPrestige(prestige);
     runPrestige(prestige);
-    assert.deepEqual(trace, ["action"]);
+    runPrestige(prestige);
+    assert.deepEqual(
+      trace,
+      ["action"].concat(
+        ["terraform", "ascension", "apotheosis"].includes(expected.prestigeType)
+          ? [
+              [
+                CAPTURED_CELESTIAL_LAB,
+                expected.prestigeType === "terraform" ? "setPlanet" : "setRace",
+              ],
+            ]
+          : [],
+      ),
+    );
+    assert.equal(root.settings.qKey, expected.prestigeType === "matrix");
+    assert.equal(root.settings.touch, expected.prestigeType === "matrix");
   }
 }
 
-// Eden must not be invoked when its post-action counter is unavailable: the action returns false
-// on both the unpaid and successful paths, so there would be no safe way to suppress a retry.
+// A failed Eden action still has no counter transition and must remain retryable.
 {
-  let goal = "Reset";
+  let goal = "Normal";
   let invocations = 0;
   const root = buildRoot();
   const prestige = createCapturedMadPrestige({
@@ -233,7 +296,42 @@ const settings = {
       }),
       invoke: () => {
         invocations += 1;
-        return { ok: true, value: false };
+        return { ok: true, value: undefined };
+      },
+      capturedElementIds: () => ["tauceti-goe_facility"],
+    },
+    readSettings: () => ({ prestigeType: "eden" }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+    },
+    readBuildingResetActions: () => new Set(["tauceti-goe_facility"]),
+  });
+
+  runPrestige(prestige);
+  runPrestige(prestige);
+  assert.equal(invocations, 1);
+  runPrestige(prestige);
+  assert.equal(invocations, 2);
+}
+
+// Eden must not be invoked when its post-action counter is unavailable: the action returns false
+// on both the unpaid and successful paths, so there would be no safe way to suppress a retry.
+{
+  let goal = "Reset";
+  let invocations = 0;
+  const root = buildRoot({ stats: {} });
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls: {
+      resolve: () => ({
+        elementId: "tauceti-goe_facility",
+        generation: 1,
+        methods: ["action"],
+      }),
+      invoke: () => {
+        invocations += 1;
+        return { ok: true, value: undefined };
       },
       capturedElementIds: () => ["tauceti-goe_facility"],
     },
@@ -413,7 +511,7 @@ for (const scenario of [
 }
 
 // The Witch-Hunter variant must not enter the ordinary research path while its absorption-chamber
-// controls remain unported.
+// control is unavailable.
 {
   const trace = [];
   let goal = "Normal";
@@ -514,6 +612,7 @@ for (const scenario of [
 ]) {
   const trace = [];
   let goal = "Normal";
+  let modalOpen = false;
   const root = buildRoot({
     race: {
       species: "human",
@@ -530,19 +629,33 @@ for (const scenario of [
   });
   const controls = {
     resolve(id) {
-      return id === CAPTURED_WITCH_ASCENSION_ACTION
-        ? {
-            elementId: id,
-            generation: 1,
-            methods: ["action"],
-          }
+      if (id === CAPTURED_WITCH_ASCENSION_ACTION) {
+        return {
+          elementId: id,
+          generation: 1,
+          methods: ["action"],
+        };
+      }
+      return modalOpen && id === CAPTURED_CELESTIAL_LAB
+        ? { elementId: id, generation: 2, methods: ["setRace"] }
         : undefined;
     },
     invoke(handle, method) {
-      assert.equal(handle.elementId, CAPTURED_WITCH_ASCENSION_ACTION);
-      assert.equal(method, "action");
-      trace.push(handle.elementId);
-      return { ok: true, value: true };
+      if (method === "action") {
+        assert.equal(handle.elementId, CAPTURED_WITCH_ASCENSION_ACTION);
+        trace.push(handle.elementId);
+        if (scenario.prestigeType === "ascension") {
+          modalOpen = true;
+        } else {
+          root.stats.descend += 1;
+        }
+      } else {
+        assert.equal(handle.elementId, CAPTURED_CELESTIAL_LAB);
+        assert.equal(method, "setRace");
+        root.stats.ascend += 1;
+        trace.push([handle.elementId, method]);
+      }
+      return { ok: true, value: undefined };
     },
     capturedElementIds() {
       return [CAPTURED_WITCH_ASCENSION_ACTION];
@@ -576,11 +689,17 @@ for (const scenario of [
   assert.deepEqual(trace, [["goal", "Reset"]]);
   goal = "Reset";
   runPrestige(prestige);
+  runPrestige(prestige);
   assert.deepEqual(trace, [
     ["goal", "Reset"],
     CAPTURED_WITCH_ASCENSION_ACTION,
-    "Prestiged",
-    ["goal", "GameOverMan"],
+    ...(scenario.prestigeType === "ascension"
+      ? [
+          [CAPTURED_CELESTIAL_LAB, "setRace"],
+          "Prestiged",
+          ["goal", "GameOverMan"],
+        ]
+      : ["Prestiged", ["goal", "GameOverMan"]]),
   ]);
 }
 
@@ -967,7 +1086,7 @@ for (const scenario of [
 {
   const trace = [];
   let goal = "Normal";
-  const root = buildRoot();
+  const root = buildRoot({ settings: { qKey: true, touch: true } });
   const controls = {
     resolve(id) {
       return id === CAPTURED_CATACLYSM_TECH
@@ -977,6 +1096,8 @@ for (const scenario of [
     invoke(handle, method) {
       assert.equal(handle.elementId, CAPTURED_CATACLYSM_TECH);
       assert.equal(method, "action");
+      assert.equal(root.settings.qKey, false);
+      assert.equal(root.settings.touch, false);
       trace.push(method);
       return { ok: true, value: undefined };
     },
@@ -1014,6 +1135,8 @@ for (const scenario of [
   runPrestige(prestige);
   runPrestige(prestige);
   assert.deepEqual(trace, [["goal", "Reset"], "action", "Prestiged"]);
+  assert.equal(root.settings.qKey, true);
+  assert.equal(root.settings.touch, true);
 }
 
 // A missing research draw is unknown, not a locked cataclysm. The captured branch must not set

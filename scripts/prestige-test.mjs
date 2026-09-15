@@ -505,6 +505,23 @@ assert.deepEqual(
   [],
 );
 
+// A captured celestial lab is the second half of an opener action; it owns the final reset
+// submission and therefore has its own planner command.
+assert.deepEqual(
+  planPrestige({
+    goal: "Normal",
+    branch: { type: "celestial-lab", mode: "terraform", eligible: true },
+  }),
+  [{ kind: "set-goal", goal: "Reset" }],
+);
+assert.deepEqual(
+  planPrestige({
+    goal: "Reset",
+    branch: { type: "celestial-lab", mode: "ascension", eligible: true },
+  }),
+  [{ kind: "complete-celestial-lab", mode: "ascension" }],
+);
+
 // MAD without waiting still arms before launching.
 assert.deepEqual(
   planPrestige({

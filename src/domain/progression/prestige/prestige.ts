@@ -10,12 +10,16 @@
 
 export type PrestigeGoal = "Reset" | "GameOverMan";
 
+/** The two zero-argument methods exposed by DeadSpace's celestial lab. */
+export type CelestialLabMode = "terraform" | "ascension" | "apotheosis";
+
 export type PrestigeCommand =
   | { readonly kind: "set-goal"; readonly goal: PrestigeGoal }
   | { readonly kind: "log-prestige" }
   | { readonly kind: "arm-mad" }
   | { readonly kind: "launch-mad" }
   | { readonly kind: "click-building"; readonly id: string }
+  | { readonly kind: "complete-celestial-lab"; readonly mode: CelestialLabMode }
   | { readonly kind: "cache-building-options"; readonly id: string }
   | { readonly kind: "click-tech"; readonly id: string }
   | { readonly kind: "reset-modifier-keys" }
@@ -85,6 +89,11 @@ export type PrestigeBranch =
       readonly type: "building-reset";
       readonly building: string;
       readonly unlocked: boolean;
+    }
+  | {
+      readonly type: "celestial-lab";
+      readonly mode: CelestialLabMode;
+      readonly eligible: boolean;
     };
 
 export interface PrestigeInput {
@@ -253,6 +262,11 @@ export function planPrestige(input: PrestigeInput): readonly PrestigeCommand[] {
       return tryReset(goal, branch.unlocked, [
         { kind: "reset-modifier-keys" },
         { kind: "click-building", id: branch.building },
+      ]);
+
+    case "celestial-lab":
+      return tryReset(goal, branch.eligible, [
+        { kind: "complete-celestial-lab", mode: branch.mode },
       ]);
   }
 }
