@@ -74,7 +74,7 @@ const settings = {
   assert.equal(readCapturedMadBranch(root, settings).currentPopulation, 12);
 }
 
-// The captured reader exposes only MAD; other selected prestige types remain inert.
+// The captured MAD branch still follows the one-tick planner delay and logs its goal transition.
 {
   const trace = [];
   let goal = "Normal";
@@ -126,6 +126,91 @@ const settings = {
     "launch",
     "Prestiged",
   ]);
+}
+
+// DeadSpace's reset action rows are the captured unlock answer for the three ordinary
+// building-shaped prestige branches. The planner's old command shape is retained; the captured
+// adapter maps the command to the game's `action()` method and suppresses a duplicate while the
+// browser reload is pending.
+{
+  for (const expected of [
+    {
+      prestigeType: "terraform",
+      region: "space",
+      elementId: "space-terraform",
+    },
+    {
+      prestigeType: "ascension",
+      region: "interstellar",
+      elementId: "interstellar-ascend",
+    },
+    {
+      prestigeType: "apotheosis",
+      region: "eden",
+      elementId: "eden-apotheosis",
+    },
+  ]) {
+    const trace = [];
+    let goal = "Normal";
+    const root = buildRoot();
+    const controls = {
+      resolve(id) {
+        return id === expected.elementId
+          ? { elementId: id, generation: 1, methods: ["action"] }
+          : undefined;
+      },
+      invoke(handle, method) {
+        assert.equal(handle.elementId, expected.elementId);
+        assert.equal(method, "action");
+        trace.push(method);
+        return { ok: true, value: true };
+      },
+      capturedElementIds() {
+        return [expected.elementId];
+      },
+    };
+    const prestige = createCapturedMadPrestige({
+      rootState: { readRoot: () => root },
+      controls,
+      readSettings: () => ({ prestigeType: expected.prestigeType }),
+      readGoal: () => goal,
+      setGoal: (next) => {
+        goal = next;
+      },
+      readBuildingResetActions: (regions) => {
+        assert.deepEqual(regions, [expected.region]);
+        return new Set([expected.elementId]);
+      },
+    });
+
+    runPrestige(prestige);
+    assert.equal(goal, "Reset");
+    runPrestige(prestige);
+    runPrestige(prestige);
+    assert.deepEqual(trace, ["action"]);
+  }
+}
+
+// A panel that could not be sampled is unknown, so it must not be treated as a locked reset.
+{
+  let goal = "Normal";
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: buildRoot },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: true, value: true }),
+      capturedElementIds: () => [],
+    },
+    readSettings: () => ({ prestigeType: "terraform" }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+    },
+    readBuildingResetActions: () => undefined,
+  });
+
+  runPrestige(prestige);
+  assert.equal(goal, "Normal");
 }
 
 {

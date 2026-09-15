@@ -5485,7 +5485,23 @@
   }
 
   // src/adapters/evolve/progression/prestige/captured-mad.ts
-  var CAPTURED_MAD_CONTROL = "mad";
+  var CAPTURED_MAD_CONTROL = "mad", CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
+    terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
+    ascension: Object.freeze({
+      elementId: "interstellar-ascend",
+      region: "interstellar"
+    }),
+    apotheosis: Object.freeze({
+      elementId: "eden-apotheosis",
+      region: "eden"
+    })
+  });
+  function isCapturedBuildingPrestigeType(value) {
+    return typeof value == "string" && Object.prototype.hasOwnProperty.call(
+      CAPTURED_BUILDING_PRESTIGE_ACTIONS,
+      value
+    );
+  }
   function capturedMadSettingsRecord(raw) {
     return isNonArrayRecord(raw) ? raw : {};
   }
@@ -5531,11 +5547,23 @@
       );
   }
   function createCapturedMadPrestige(dependencies) {
-    let sampledRoot, reader = Object.freeze({
+    let sampledRoot, resetCommitted = !1, reader = Object.freeze({
       samplePrestige() {
         let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot();
         sampledRoot = root;
-        let branch = (typeof settings.prestigeType == "string" ? settings.prestigeType : "none") === "mad" ? readCapturedMadBranch(root, settings) : { type: "noop" };
+        let prestigeType = typeof settings.prestigeType == "string" ? settings.prestigeType : "none", branch = { type: "noop" };
+        if (!resetCommitted && prestigeType === "mad")
+          branch = readCapturedMadBranch(root, settings);
+        else if (!resetCommitted && isCapturedBuildingPrestigeType(prestigeType)) {
+          let action = CAPTURED_BUILDING_PRESTIGE_ACTIONS[prestigeType], offered = dependencies.readBuildingResetActions?.([
+            action.region
+          ]);
+          offered !== void 0 && (branch = {
+            type: "building-reset",
+            building: action.elementId,
+            unlocked: offered.has(action.elementId)
+          });
+        }
         return Object.freeze({
           goal: dependencies.readGoal(),
           branch: Object.freeze(branch)
@@ -5562,6 +5590,22 @@
             return;
           case "log-prestige":
             return;
+          case "click-building": {
+            if (dependencies.rootState.readRoot() !== sampledRoot)
+              throw new Error("captured prestige root changed after sampling");
+            let handle = dependencies.controls.resolve(command.id);
+            if (handle === void 0 || !handle.methods.includes("action"))
+              throw new Error(
+                `captured prestige action ${command.id} is unavailable`
+              );
+            let result = dependencies.controls.invoke(handle, "action");
+            if (!result.ok)
+              throw new Error(
+                `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`
+              );
+            result.value === !0 && (resetCommitted = !0);
+            return;
+          }
           default:
             return;
         }
@@ -21120,7 +21164,8 @@ Only continue if you trust the source. Injected code:
       readGoal: () => capturedPrestigeGoal,
       setGoal: (goal) => {
         capturedPrestigeGoal = goal;
-      }
+      },
+      readBuildingResetActions: (regions) => progression.readBuildingUnlocks(new Set(regions))?.unlocked
     }), geneticsDiscoveryAttempted = !1, ensureGeneticsControls = () => {
       if (pageCapture2.controls.resolve(GENETICS_CONTROL) !== void 0) return;
       let root = pageCapture2.rootState.readRoot(), level = readProperty(readProperty(root, "tech"), "genetics"), panelOffered = readProperty(
@@ -21635,10 +21680,16 @@ Only continue if you trust the source. Injected code:
           }));
         }), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle()), isEnabled(settings, "autoGenetics") && runPhase("autoGenetics", () => {
           ensureGeneticsControls(), runGeneticsAutomation(genetics);
-        }), isEnabled(settings, "autoPrestige") && settings.prestigeType === "mad" && capturedPrestigeGoal !== "GameOverMan" && runPhase("autoPrestige", () => {
-          ensureMadControls();
-          let mad = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL);
-          mad === void 0 || !mad.methods.includes("arm") || !mad.methods.includes("launch") || prestige.run();
+        });
+        let prestigeType = settings.prestigeType;
+        isEnabled(settings, "autoPrestige") && (prestigeType === "mad" || isCapturedBuildingPrestigeType(prestigeType)) && capturedPrestigeGoal !== "GameOverMan" && runPhase("autoPrestige", () => {
+          if (prestigeType === "mad") {
+            ensureMadControls();
+            let mad = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL);
+            if (mad === void 0 || !mad.methods.includes("arm") || !mad.methods.includes("launch"))
+              return;
+          }
+          prestige.run();
         });
       } catch (error) {
         logError(String(error));

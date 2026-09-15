@@ -22,7 +22,10 @@ import {
   HELL_GARRISON_CONTROLS,
   readCapturedHellGarrison,
 } from "../adapters/evolve/combat/captured-hell-garrison.ts";
-import { CAPTURED_MAD_CONTROL } from "../adapters/evolve/progression/prestige/captured-mad.ts";
+import {
+  CAPTURED_MAD_CONTROL,
+  isCapturedBuildingPrestigeType,
+} from "../adapters/evolve/progression/prestige/captured-mad.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import {
   createCapturedFullJobsAutomation,
@@ -721,6 +724,8 @@ export function startCapturedRuntime({
     setGoal: (goal) => {
       capturedPrestigeGoal = goal;
     },
+    readBuildingResetActions: (regions) =>
+      progression.readBuildingUnlocks(new Set(regions))?.unlocked,
   });
   let geneticsDiscoveryAttempted = false;
   /**
@@ -1680,20 +1685,24 @@ export function startCapturedRuntime({
           runGeneticsAutomation(genetics);
         });
       }
+      const prestigeType = settings["prestigeType"];
       if (
         isEnabled(settings, "autoPrestige") &&
-        settings["prestigeType"] === "mad" &&
+        (prestigeType === "mad" ||
+          isCapturedBuildingPrestigeType(prestigeType)) &&
         capturedPrestigeGoal !== "GameOverMan"
       ) {
         runPhase("autoPrestige", () => {
-          ensureMadControls();
-          const mad = pageCapture.controls.resolve(CAPTURED_MAD_CONTROL);
-          if (
-            mad === undefined ||
-            !mad.methods.includes("arm") ||
-            !mad.methods.includes("launch")
-          ) {
-            return;
+          if (prestigeType === "mad") {
+            ensureMadControls();
+            const mad = pageCapture.controls.resolve(CAPTURED_MAD_CONTROL);
+            if (
+              mad === undefined ||
+              !mad.methods.includes("arm") ||
+              !mad.methods.includes("launch")
+            ) {
+              return;
+            }
           }
           prestige.run();
         });

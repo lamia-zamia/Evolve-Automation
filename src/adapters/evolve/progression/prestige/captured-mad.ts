@@ -1,9 +1,12 @@
 /**
- * Captured MAD prestige input and commands for the independent runtime.
+ * Captured prestige input and commands for the independent runtime.
  *
  * DeadSpace keeps the MAD definition lexical, but publishes the facts its panel and reset gate
  * use on the reactive root. The panel's own `arm` and `launch` methods are captured when the
  * military tab is drawn, so this adapter never reaches for the private `warhead` function.
+ * DeadSpace's ordinary prestige actions are also lexical definitions, but their action rows are
+ * captured by the same page surface: `space-terraform`, `interstellar-ascend`, and
+ * `eden-apotheosis` call the game's own Terraform, Ascension, and Apotheosis reset paths.
  */
 
 import type {
@@ -27,6 +30,34 @@ import {
 
 export const CAPTURED_MAD_CONTROL = "mad";
 
+/** DeadSpace action rows that commit the ordinary building-shaped prestige branches. */
+export const CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
+  terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
+  ascension: Object.freeze({
+    elementId: "interstellar-ascend",
+    region: "interstellar",
+  }),
+  apotheosis: Object.freeze({
+    elementId: "eden-apotheosis",
+    region: "eden",
+  }),
+});
+
+export type CapturedBuildingPrestigeType =
+  keyof typeof CAPTURED_BUILDING_PRESTIGE_ACTIONS;
+
+export function isCapturedBuildingPrestigeType(
+  value: unknown,
+): value is CapturedBuildingPrestigeType {
+  return (
+    typeof value === "string" &&
+    Object.prototype.hasOwnProperty.call(
+      CAPTURED_BUILDING_PRESTIGE_ACTIONS,
+      value,
+    )
+  );
+}
+
 type MadBranch = Extract<PrestigeBranch, { readonly type: "mad" }>;
 
 export interface CapturedMadPrestigeDependencies {
@@ -35,6 +66,10 @@ export interface CapturedMadPrestigeDependencies {
   readonly readSettings: () => unknown;
   readonly readGoal: () => string;
   readonly setGoal: (goal: string) => void;
+  /** Reads the game's offered action rows for the named prestige panel. */
+  readonly readBuildingResetActions?: (
+    regions: readonly string[],
+  ) => ReadonlySet<string> | undefined;
   /** Reports a prestige after the launch replaced the captured game root. */
   readonly onActivity?: GameActivitySink;
 }
@@ -128,6 +163,7 @@ export function createCapturedMadPrestige(
   dependencies: CapturedMadPrestigeDependencies,
 ): { readonly reader: PrestigeReader; readonly executor: PrestigeExecutor } {
   let sampledRoot: unknown;
+  let resetCommitted = false;
   const reader: PrestigeReader = Object.freeze({
     samplePrestige(): PrestigeInput {
       const settings = capturedMadSettingsRecord(dependencies.readSettings());
@@ -137,10 +173,27 @@ export function createCapturedMadPrestige(
         typeof settings["prestigeType"] === "string"
           ? settings["prestigeType"]
           : "none";
-      const branch: PrestigeBranch =
-        prestigeType === "mad"
-          ? readCapturedMadBranch(root, settings)
-          : { type: "noop" };
+      let branch: PrestigeBranch = { type: "noop" };
+      if (!resetCommitted && prestigeType === "mad") {
+        branch = readCapturedMadBranch(root, settings);
+      } else if (
+        !resetCommitted &&
+        isCapturedBuildingPrestigeType(prestigeType)
+      ) {
+        const action = CAPTURED_BUILDING_PRESTIGE_ACTIONS[prestigeType];
+        const offered = dependencies.readBuildingResetActions?.([
+          action.region,
+        ]);
+        // A missing panel sample is an unknown gate, not a locked reset. The planner only
+        // receives a boolean after the game has answered whether it drew the action row.
+        if (offered !== undefined) {
+          branch = {
+            type: "building-reset",
+            building: action.elementId,
+            unlocked: offered.has(action.elementId),
+          };
+        }
+      }
       return Object.freeze({
         goal: dependencies.readGoal(),
         branch: Object.freeze(branch),
@@ -178,8 +231,29 @@ export function createCapturedMadPrestige(
           // The activity sink observes the root transition after launch; logging this planner
           // command would report an attempted prestige before the game actually reset.
           return;
+        case "click-building": {
+          if (dependencies.rootState.readRoot() !== sampledRoot) {
+            throw new Error("captured prestige root changed after sampling");
+          }
+          const handle = dependencies.controls.resolve(command.id);
+          if (handle === undefined || !handle.methods.includes("action")) {
+            throw new Error(
+              `captured prestige action ${command.id} is unavailable`,
+            );
+          }
+          const result = dependencies.controls.invoke(handle, "action");
+          if (!result.ok) {
+            throw new Error(
+              `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`,
+            );
+          }
+          // DeadSpace's reset action returns true after it has scheduled the browser reload. Keep
+          // the old root from receiving a duplicate click if that reload is still pending.
+          if (result.value === true) resetCommitted = true;
+          return;
+        }
         default:
-          // Non-MAD branches are intentionally represented as noop by this bounded reader.
+          // Unsupported branches are intentionally represented as noop by this bounded reader.
           return;
       }
     },

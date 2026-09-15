@@ -4,7 +4,7 @@ import {
   type CapturedMadPrestigeDependencies,
 } from "../adapters/evolve/progression/prestige/captured-mad.ts";
 
-/** The captured runtime's currently supported prestige branch. */
+/** The captured runtime's currently supported prestige branches. */
 export interface CapturedPrestigeControl {
   readonly run: () => void;
 }
