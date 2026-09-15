@@ -1581,12 +1581,13 @@ export function startCapturedRuntime({
               executor: triggerActions.executor,
             }),
           );
+          return true;
         });
         // A trigger phase that threw may already have pressed something, and cannot say what the
         // rest of the list was saving for. Construction and research stand down rather than spend
         // it — which is what the whole-cycle `try` did for this case, and the only part of that
         // behavior worth keeping.
-        if (!completed) triggerActive = true;
+        if (completed !== true) triggerActive = true;
       }
       if (
         !triggerActive &&

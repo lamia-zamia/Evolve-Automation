@@ -21307,14 +21307,12 @@ Only continue if you trust the source. Injected code:
           runCraftAutomation(craft);
         });
         let triggerActive = !1;
-        if (isEnabled(settings, "autoTrigger") && (runPhase("autoTrigger", () => {
-          triggerActive = triggerPhaseActive(
-            runTriggerAutomation({
-              reader: triggerActions.reader,
-              executor: triggerActions.executor
-            })
-          );
-        }) || (triggerActive = !0)), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
+        if (isEnabled(settings, "autoTrigger") && runPhase("autoTrigger", () => (triggerActive = triggerPhaseActive(
+          runTriggerAutomation({
+            reader: triggerActions.reader,
+            executor: triggerActions.executor
+          })
+        ), !0)) !== !0 && (triggerActive = !0), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
           let outcome = runPhase(
             "autoBuild",
             () => progression.runConstructionCycle()

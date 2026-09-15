@@ -60,8 +60,8 @@ assert.deepEqual(errors, []);
 stop();
 assert.equal(unsubscribeCount, 1);
 
-// The persisted settings must reach the construction policy: without them no managed building is
-// ever a candidate and autoBuild silently builds nothing.
+// The persisted settings must reach the construction policy: a quiet trigger phase — including a
+// configured trigger whose building is not captured yet — must not suppress autoBuild.
 {
   const invoked = [];
   const root = {
@@ -118,6 +118,18 @@ assert.equal(unsubscribeCount, 1);
         JSON.stringify({
           masterScriptToggle: true,
           autoBuild: true,
+          autoTrigger: true,
+          triggers: [
+            {
+              priority: 0,
+              requirementType: "BuildingCount",
+              requirementId: "city-cottage",
+              requirementCount: 0,
+              actionType: "build",
+              actionId: "city-not-yet-unlocked",
+              actionCount: 1,
+            },
+          ],
           "batcity-cottage": true,
           "bld_w_city-cottage": 100,
         }),
