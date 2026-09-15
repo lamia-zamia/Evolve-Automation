@@ -19,6 +19,7 @@ whenDocumentReady(globalThis, () => {
     mouseEvent: environment.MouseEvent,
     storage: environment.storage,
     diagnostics: createBrowserDiagnostics(globalThis),
+    log: environment.log,
     logError: environment.error,
   });
 });

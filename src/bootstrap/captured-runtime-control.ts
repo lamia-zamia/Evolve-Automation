@@ -168,6 +168,7 @@ export interface CapturedRuntimeControlDependencies {
   /** The page's global object. The settings panel reads `document`, `navigator` and `location`. */
   readonly settingsHostWindow: unknown;
   readonly diagnostics?: TickDiagnostics | undefined;
+  readonly log?: (message: string) => void;
   readonly logError?: (message: string) => void;
 }
 
@@ -213,6 +214,7 @@ export function startCapturedRuntime({
   storage,
   settingsHostWindow,
   diagnostics,
+  log = () => {},
   logError = () => {},
 }: CapturedRuntimeControlDependencies): () => void {
   const document = documentValue as CapturedDocument;
@@ -258,6 +260,9 @@ export function startCapturedRuntime({
     reported.add(message);
     logError(message);
   };
+  const reportDiagnostic = (message: string) => {
+    if (diagnostics?.readPerformanceEnabled() === true) log(message);
+  };
   /**
    * One feature's phase of the cycle. A throw inside it is reported once and skips that feature for
    * this cycle; every phase after it still runs, because a control that has gone missing in one
@@ -265,15 +270,15 @@ export function startCapturedRuntime({
    * whole cycle, so one unavailable control cost every later feature silently — measured at zero
    * build-queue cost probes over 600 periods while the market phase threw each cycle.
    *
-   * Returns whether the phase completed, for the two places where a later phase depends on it.
+   * Returns the phase value, or undefined when the phase throws, for the two places where a later
+   * phase depends on it.
    */
-  const runPhase = (name: string, body: () => void): boolean => {
+  const runPhase = <T>(name: string, body: () => T): T | undefined => {
     try {
-      body();
-      return true;
+      return body();
     } catch (error) {
       reportOnce(`${name} stopped: ${String(error)}`);
-      return false;
+      return undefined;
     }
   };
   // The demand sample both reads the construction cycle's observations and answers its storage
@@ -318,6 +323,7 @@ export function startCapturedRuntime({
     onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
     nowMs: () => Date.now(),
     diagnostics,
+    onDiagnostic: reportDiagnostic,
   });
   const gatherResources = createCapturedGatherResourcesControl({
     rootState: pageCapture.rootState,
@@ -1586,7 +1592,14 @@ export function startCapturedRuntime({
         !triggerActive &&
         (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))
       ) {
-        runPhase("autoBuild", () => progression.runConstructionCycle());
+        const outcome = runPhase("autoBuild", () =>
+          progression.runConstructionCycle(),
+        );
+        if (outcome !== undefined && outcome.status !== "succeeded") {
+          reportOnce(
+            `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`,
+          );
+        }
       }
       if (isEnabled(settings, "autoNanite")) {
         runPhase("autoNanite", () => {

@@ -104,6 +104,8 @@ export interface CapturedProgressionControlDependencies {
   /** Injected clock, for the sampled-panel caches' maximum age. */
   readonly nowMs: () => number;
   readonly diagnostics?: TickDiagnostics | undefined;
+  /** Reports candidate and executor diagnostics when explicitly enabled by the caller. */
+  readonly onDiagnostic?: (message: string) => void;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly onUnavailable?: (reason: string) => void;
 }
@@ -219,6 +221,7 @@ export function createCapturedProgressionControl(
     nowMs,
     diagnostics,
   } = dependencies;
+  const onDiagnostic = dependencies.onDiagnostic;
   const onSkipped = dependencies.onSkipped;
   const onUnavailable = dependencies.onUnavailable;
   const resources = createCapturedResourceSource(rootState);
@@ -525,6 +528,7 @@ export function createCapturedProgressionControl(
     readKnowledgeGate,
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
     readOfferedTechs,
+    ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
     ...(onSkipped === undefined ? {} : { onSkipped }),
     diagnostics,
   });

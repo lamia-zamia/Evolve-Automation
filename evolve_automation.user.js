@@ -2892,8 +2892,13 @@
     }
     return ids;
   }
+  function readQueueLength(root) {
+    let entries = readProperty(readProperty(root, "queue"), "queue");
+    return Array.isArray(entries) ? entries.length : 0;
+  }
   function createCapturedBuildSource(dependencies) {
     let { rootState, controls, costs, readTargets } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
+    }), reportDiagnostic = dependencies.onDiagnostic ?? (() => {
     }), cycle = /* @__PURE__ */ new Map();
     return Object.freeze({
       family: "buildings",
@@ -2958,30 +2963,25 @@
             ),
             ...base
           });
-        let before = Number(
-          readProperty(
-            readBuilding(rootState.readRoot(), candidate.target),
-            "count"
-          )
-        ), result = controls.invoke(handle, "action");
-        if (!result.ok)
-          return Object.freeze({
-            outcome: result.reason === "stale-control" ? stale("stale-build-control", result.detail ?? result.reason, {
-              key
-            }) : rejected("build-click-failed", result.detail ?? result.reason),
-            ...base
-          });
-        let after = Number(
-          readProperty(
-            readBuilding(rootState.readRoot(), candidate.target),
-            "count"
-          )
-        );
-        return Object.freeze({
+        let rootBefore = rootState.readRoot(), before = Number(
+          readProperty(readBuilding(rootBefore, candidate.target), "count")
+        ), queueBefore = readQueueLength(rootBefore), touch = readProperty(readProperty(rootBefore, "settings"), "touch") === !0;
+        reportDiagnostic(`build.execute.attempt ${key}`), reportDiagnostic(`build.execute.touch ${touch}`), reportDiagnostic(`build.execute.before ${before}`), reportDiagnostic(`build.execute.queueBefore ${queueBefore}`);
+        let result = controls.invoke(handle, "action");
+        reportDiagnostic(`build.execute.invokeOk ${result.ok}`);
+        let rootAfter = rootState.readRoot(), after = Number(
+          readProperty(readBuilding(rootAfter, candidate.target), "count")
+        ), queueAfter = readQueueLength(rootAfter), built = after > before, queued = queueAfter > queueBefore;
+        return reportDiagnostic(`build.execute.after ${after}`), reportDiagnostic(`build.execute.queueAfter ${queueAfter}`), reportDiagnostic(`build.execute.built ${built}`), reportDiagnostic(`build.execute.queued ${queued}`), reportDiagnostic(`build.execute.noop ${!built && !queued}`), result.ok ? Object.freeze({
           outcome: SUCCEEDED,
-          clicked: after > before,
+          clicked: built,
           mission: !1,
           consumption: NO_CONSUMPTION
+        }) : Object.freeze({
+          outcome: result.reason === "stale-control" ? stale("stale-build-control", result.detail ?? result.reason, {
+            key
+          }) : rejected("build-click-failed", result.detail ?? result.reason),
+          ...base
         });
       }
     });
@@ -3730,8 +3730,13 @@
     status: "succeeded"
   }), EMPTY_SAMPLE = Object.freeze({});
   function runBuildAutomation(dependencies) {
-    let { reader, executor, diagnostics } = dependencies, measure = createPhaseMeasure(diagnostics), setup = measure("autoBuild.beginCycle", () => reader.beginCycle()), state = initialBuildLoopState();
+    let { reader, executor, diagnostics } = dependencies, reportDiagnostic = dependencies.onDiagnostic ?? (() => {
+    }), measure = createPhaseMeasure(diagnostics), setup = measure("autoBuild.beginCycle", () => reader.beginCycle());
+    reportDiagnostic(`autoBuild.candidates ${setup.candidates.length}`);
+    let state = initialBuildLoopState();
     for (let index = 0; index < setup.candidates.length; index++) {
+      let candidate = setup.candidates[index];
+      if (candidate === void 0) continue;
       let needs = measure(
         "autoBuild.sampleNeeds",
         () => candidateSampleNeeds(setup, state, index)
@@ -3745,7 +3750,7 @@
         "autoBuild.planGate",
         () => planBuildGate(setup, index, sample, state)
       );
-      if (state = gate.state, gate.kind === "skip")
+      if (state = gate.state, state.affordable[candidate.key] === !0 && reportDiagnostic(`autoBuild.affordable ${candidate.key}`), gate.kind === "skip")
         continue;
       let conflict = measure(
         "autoBuild.planConflict",
@@ -3788,11 +3793,12 @@
           return outcome;
         continue;
       }
+      reportDiagnostic(`autoBuild.decision ${competition.decision.key}`);
       let result = measure(
         "autoBuild.executeClick",
         () => executor.executeClick(competition.decision)
       );
-      if (result.outcome.status !== "succeeded")
+      if (reportDiagnostic(`autoBuild.outcome ${result.outcome.status}`), result.outcome.status !== "succeeded")
         return result.outcome;
       let application = measure(
         "autoBuild.applyClickResult",
@@ -3822,7 +3828,7 @@
       readPolicy,
       readSettings,
       diagnostics
-    } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
+    } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, onDiagnostic = dependencies.onDiagnostic, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
       rootState,
       controls,
       ...onSkipped === void 0 ? {} : { onUnavailable: onSkipped }
@@ -3856,7 +3862,8 @@
           costs,
           readTargets: () => readPolicy().buildings,
           ...dependencies.ensureBuildControls === void 0 ? {} : { ensureControls: dependencies.ensureBuildControls },
-          ...onSkipped === void 0 ? {} : { onSkipped }
+          ...onSkipped === void 0 ? {} : { onSkipped },
+          ...onDiagnostic === void 0 ? {} : { onDiagnostic }
         }),
         createCapturedProjectSource({
           rootState,
@@ -3885,7 +3892,12 @@
         if (rootState.readRoot() === void 0) return NOT_CAPTURED;
         offeredThisCycle = void 0;
         try {
-          return runBuildAutomation({ reader, executor, diagnostics });
+          return runBuildAutomation({
+            reader,
+            executor,
+            diagnostics,
+            ...onDiagnostic === void 0 ? {} : { onDiagnostic }
+          });
         } finally {
           offeredThisCycle = void 0;
         }
@@ -4575,7 +4587,7 @@
       getResources,
       nowMs,
       diagnostics
-    } = dependencies, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
+    } = dependencies, onDiagnostic = dependencies.onDiagnostic, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
       rootState,
       controls,
       mountSuppression,
@@ -4760,6 +4772,7 @@
       readKnowledgeGate,
       ...readStorageRequired === void 0 ? {} : { readStorageRequired },
       readOfferedTechs,
+      ...onDiagnostic === void 0 ? {} : { onDiagnostic },
       ...onSkipped === void 0 ? {} : { onSkipped },
       diagnostics
     }), research = createCapturedResearchControl({
@@ -20471,6 +20484,8 @@ Only continue if you trust the source. Injected code:
     storage,
     settingsHostWindow: settingsHostWindow2,
     diagnostics,
+    log = () => {
+    },
     logError = () => {
     }
   }) {
@@ -20495,11 +20510,14 @@ Only continue if you trust the source. Injected code:
     settingsPanel.ensurePanel();
     let capturedPrestigeGoal = "Standard", reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
+    }, reportDiagnostic = (message) => {
+      diagnostics?.readPerformanceEnabled() === !0 && log(message);
     }, runPhase = (name, body) => {
       try {
-        return body(), !0;
+        return body();
       } catch (error) {
-        return reportOnce(`${name} stopped: ${String(error)}`), !1;
+        reportOnce(`${name} stopped: ${String(error)}`);
+        return;
       }
     }, readDemand = () => EMPTY_DEMAND_SAMPLE, buildCosts = createCapturedActionCostReader({
       rootState: pageCapture2.rootState,
@@ -20536,7 +20554,8 @@ Only continue if you trust the source. Injected code:
       onSkipped: (key, reason) => reportOnce(`progression skipped ${key}: ${reason}`),
       onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
       nowMs: () => Date.now(),
-      diagnostics
+      diagnostics,
+      onDiagnostic: reportDiagnostic
     }), gatherResources = createCapturedGatherResourcesControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -21288,14 +21307,23 @@ Only continue if you trust the source. Injected code:
           runCraftAutomation(craft);
         });
         let triggerActive = !1;
-        isEnabled(settings, "autoTrigger") && (runPhase("autoTrigger", () => {
+        if (isEnabled(settings, "autoTrigger") && (runPhase("autoTrigger", () => {
           triggerActive = triggerPhaseActive(
             runTriggerAutomation({
               reader: triggerActions.reader,
               executor: triggerActions.executor
             })
           );
-        }) || (triggerActive = !0)), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && runPhase("autoBuild", () => progression.runConstructionCycle()), isEnabled(settings, "autoNanite") && runPhase("autoNanite", () => {
+        }) || (triggerActive = !0)), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
+          let outcome = runPhase(
+            "autoBuild",
+            () => progression.runConstructionCycle()
+          );
+          outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
+            `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`
+          );
+        }
+        isEnabled(settings, "autoNanite") && runPhase("autoNanite", () => {
           ensureNaniteControls(), nanite.run();
         }), isEnabled(settings, "autoSupply") && runPhase("autoSupply", () => {
           ensureSupplyControls(), supply.run();
@@ -21353,6 +21381,7 @@ Only continue if you trust the source. Injected code:
       mouseEvent: environment.MouseEvent,
       storage: environment.storage,
       diagnostics: createBrowserDiagnostics(globalThis),
+      log: environment.log,
       logError: environment.error
     });
   });

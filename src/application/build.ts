@@ -17,6 +17,7 @@ export interface BuildAutomationDependencies {
   readonly reader: BuildReader;
   readonly executor: BuildExecutor;
   readonly diagnostics?: TickDiagnostics | undefined;
+  readonly onDiagnostic?: (message: string) => void;
 }
 
 const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
@@ -35,11 +36,15 @@ export function runBuildAutomation(
   dependencies: BuildAutomationDependencies,
 ): CommandExecutionOutcome {
   const { reader, executor, diagnostics } = dependencies;
+  const reportDiagnostic = dependencies.onDiagnostic ?? (() => {});
   const measure = createPhaseMeasure(diagnostics);
 
   const setup = measure("autoBuild.beginCycle", () => reader.beginCycle());
+  reportDiagnostic(`autoBuild.candidates ${setup.candidates.length}`);
   let state = initialBuildLoopState();
   for (let index = 0; index < setup.candidates.length; index++) {
+    const candidate = setup.candidates[index];
+    if (candidate === undefined) continue;
     const needs = measure("autoBuild.sampleNeeds", () =>
       candidateSampleNeeds(setup, state, index),
     );
@@ -57,6 +62,9 @@ export function runBuildAutomation(
       planBuildGate(setup, index, sample, state),
     );
     state = gate.state;
+    if (state.affordable[candidate.key] === true) {
+      reportDiagnostic(`autoBuild.affordable ${candidate.key}`);
+    }
     if (gate.kind === "skip") {
       continue;
     }
@@ -102,9 +110,11 @@ export function runBuildAutomation(
       continue;
     }
 
+    reportDiagnostic(`autoBuild.decision ${competition.decision.key}`);
     const result = measure("autoBuild.executeClick", () =>
       executor.executeClick(competition.decision),
     );
+    reportDiagnostic(`autoBuild.outcome ${result.outcome.status}`);
     if (result.outcome.status !== "succeeded") {
       return result.outcome;
     }

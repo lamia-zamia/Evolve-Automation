@@ -16,9 +16,10 @@ function makePage({
   researchQueue,
   shadow,
   supplySplit = false,
+  touch = false,
 }) {
   const root = {
-    settings: { expose: false, qAny: buyAnyQueued },
+    settings: { expose: false, qAny: buyAnyQueued, touch },
     race: { species: "human", supplySplit },
     stats: { days: 100 },
     resource: {},
@@ -44,6 +45,7 @@ function makePage({
       methods: {
         action() {
           clicks.push(`city-${id}`);
+          if (building.noop === true) return;
           const price = building.priceAt(root.city[id].count);
           for (const [res, amount] of Object.entries(price)) {
             if (root.resource[res] === undefined) return;
@@ -250,6 +252,64 @@ function queued(id, label = id) {
   assert.equal(page.root.resource.Lumber.amount, 500 - 64);
   assert.deepEqual(skipped, []);
   assert.deepEqual(page.root.queue.queue, [], "the cost probe left no trace");
+}
+
+// The executor exposes the full decision-to-effect boundary when diagnostics are enabled.
+{
+  const page = makePage({
+    buildings: {
+      farm: { count: 0, priceAt: () => ({ Money: 10 }) },
+    },
+    resources: { Money: { amount: 500 } },
+  });
+  const messages = [];
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)]),
+    onDiagnostic: (message) => messages.push(message),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(messages, [
+    "autoBuild.candidates 1",
+    "autoBuild.affordable city-farm",
+    "autoBuild.decision city-farm",
+    "build.execute.attempt city-farm",
+    "build.execute.touch false",
+    "build.execute.before 0",
+    "build.execute.queueBefore 0",
+    "build.execute.invokeOk true",
+    "build.execute.after 1",
+    "build.execute.queueAfter 0",
+    "build.execute.built true",
+    "build.execute.queued false",
+    "build.execute.noop false",
+    "autoBuild.outcome succeeded",
+  ]);
+}
+
+// A successful invocation that changes neither count nor queue is observable as a no-op.
+{
+  const page = makePage({
+    touch: true,
+    buildings: {
+      farm: { count: 0, noop: true, priceAt: () => ({ Money: 10 }) },
+    },
+    resources: { Money: { amount: 500 } },
+  });
+  const messages = [];
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)]),
+    onDiagnostic: (message) => messages.push(message),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.ok(messages.includes("build.execute.touch true"));
+  assert.ok(messages.includes("build.execute.invokeOk true"));
+  assert.ok(messages.includes("build.execute.built false"));
+  assert.ok(messages.includes("build.execute.queued false"));
+  assert.ok(messages.includes("build.execute.noop true"));
 }
 
 // --- unaffordable is a decision, not an error ---------------------------------------------------------

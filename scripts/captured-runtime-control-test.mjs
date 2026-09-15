@@ -132,6 +132,85 @@ assert.equal(unsubscribeCount, 1);
   );
 }
 
+// A returned construction rejection is surfaced by the runtime phase instead of being mistaken
+// for a completed autoBuild pass.
+{
+  const reported = [];
+  const diagnostics = {
+    readPerformanceEnabled: () => true,
+    nowMs: () => 0,
+    recordPerformance: () => {},
+    recordCount: () => {},
+    flushPerformance: () => {},
+  };
+  const diagnosticLog = [];
+  const root = {
+    race: {},
+    tech: {},
+    city: { cottage: { count: 0 } },
+    space: {},
+    queue: { display: true, pause: false, queue: [] },
+    settings: {},
+    resource: {
+      Money: { amount: 1000, max: 100000, display: true, diff: 0, name: "$" },
+    },
+  };
+  const handles = new Map(
+    ["buildQueue", "city-cottage"].map((id) => [
+      id,
+      { elementId: id, generation: 1, methods: ["setData", "action"] },
+    ]),
+  );
+  let cycle;
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: {
+        resolve: (id) => handles.get(id),
+        invoke: (_handle, method, args = []) =>
+          method === "setData"
+            ? { ok: true, value: { [`${args[1]}-Money`]: 10 } }
+            : { ok: false, reason: "unknown-method" },
+        capturedElementIds: () => [...handles.keys()],
+      },
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: { getElementById: () => null, querySelectorAll: () => [] },
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          autoBuild: true,
+          "batcity-cottage": true,
+          "bld_w_city-cottage": 100,
+        }),
+    },
+    diagnostics,
+    log: (message) => diagnosticLog.push(message),
+    logError: (message) => reported.push(message),
+  });
+  cycle({ periods: 4 });
+  stopCycle();
+  assert.deepEqual(reported, ["autoBuild: build-click-failed: unknown-method"]);
+  assert.ok(diagnosticLog.includes("autoBuild.candidates 1"));
+  assert.ok(diagnosticLog.includes("build.execute.invokeOk false"));
+  assert.ok(diagnosticLog.includes("autoBuild.outcome rejected"));
+}
+
 // A candidate the cycle cannot supply is reported, and reported once rather than every period.
 {
   const reported = [];

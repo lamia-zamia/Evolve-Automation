@@ -81,6 +81,8 @@ export interface CapturedConstructionControlDependencies {
   readonly readOfferedTechs?: () =>
     readonly Readonly<OfferedTech>[] | undefined;
   readonly diagnostics?: TickDiagnostics | undefined;
+  /** Reports candidate and executor diagnostics when explicitly enabled by the caller. */
+  readonly onDiagnostic?: (message: string) => void;
   /** Reports a candidate, price, or catalog the capture could not supply. */
   readonly onSkipped?: (key: string, reason: string) => void;
 }
@@ -120,6 +122,7 @@ export function createCapturedConstructionControl(
   const scriptReservations = dependencies.scriptReservations;
   const readKnowledgeGate = dependencies.readKnowledgeGate;
   const readStorageRequired = dependencies.readStorageRequired;
+  const onDiagnostic = dependencies.onDiagnostic;
   // The offered-technology catalog is asked for at most once per cycle, and only if something in
   // the cycle actually needs it. Every candidate consults the same reservations, so without this
   // the cycle would pay for one discovery pass per candidate.
@@ -181,6 +184,7 @@ export function createCapturedConstructionControl(
           ? {}
           : { ensureControls: dependencies.ensureBuildControls }),
         ...(onSkipped === undefined ? {} : { onSkipped }),
+        ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
       }),
       createCapturedProjectSource({
         rootState,
@@ -210,7 +214,12 @@ export function createCapturedConstructionControl(
       if (rootState.readRoot() === undefined) return NOT_CAPTURED;
       offeredThisCycle = undefined;
       try {
-        return runBuildAutomation({ reader, executor, diagnostics });
+        return runBuildAutomation({
+          reader,
+          executor,
+          diagnostics,
+          ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
+        });
       } finally {
         offeredThisCycle = undefined;
       }

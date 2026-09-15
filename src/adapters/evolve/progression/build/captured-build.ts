@@ -57,6 +57,8 @@ export interface CapturedBuildDependencies {
   readonly ensureControls?: () => void;
   /** Reports a candidate that could not be evaluated. It is dropped, never guessed at. */
   readonly onSkipped?: (key: string, reason: string) => void;
+  /** Reports the captured action boundary while performance diagnostics are enabled. */
+  readonly onDiagnostic?: (message: string) => void;
 }
 
 interface CycleCandidate {
@@ -106,11 +108,17 @@ function readQueuedIds(
   return ids;
 }
 
+function readQueueLength(root: unknown): number {
+  const entries = readProperty(readProperty(root, "queue"), "queue");
+  return Array.isArray(entries) ? entries.length : 0;
+}
+
 export function createCapturedBuildSource(
   dependencies: CapturedBuildDependencies,
 ): ConstructionCandidateSource {
   const { rootState, controls, costs, readTargets } = dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
+  const reportDiagnostic = dependencies.onDiagnostic ?? (() => {});
   let cycle: ReadonlyMap<string, CycleCandidate> = new Map();
 
   return Object.freeze({
@@ -187,13 +195,31 @@ export function createCapturedBuildSource(
           ...base,
         });
       }
+      const rootBefore = rootState.readRoot();
       const before = Number(
-        readProperty(
-          readBuilding(rootState.readRoot(), candidate.target),
-          "count",
-        ),
+        readProperty(readBuilding(rootBefore, candidate.target), "count"),
       );
+      const queueBefore = readQueueLength(rootBefore);
+      const touch =
+        readProperty(readProperty(rootBefore, "settings"), "touch") === true;
+      reportDiagnostic(`build.execute.attempt ${key}`);
+      reportDiagnostic(`build.execute.touch ${touch}`);
+      reportDiagnostic(`build.execute.before ${before}`);
+      reportDiagnostic(`build.execute.queueBefore ${queueBefore}`);
       const result = controls.invoke(handle, "action");
+      reportDiagnostic(`build.execute.invokeOk ${result.ok}`);
+      const rootAfter = rootState.readRoot();
+      const after = Number(
+        readProperty(readBuilding(rootAfter, candidate.target), "count"),
+      );
+      const queueAfter = readQueueLength(rootAfter);
+      const built = after > before;
+      const queued = queueAfter > queueBefore;
+      reportDiagnostic(`build.execute.after ${after}`);
+      reportDiagnostic(`build.execute.queueAfter ${queueAfter}`);
+      reportDiagnostic(`build.execute.built ${built}`);
+      reportDiagnostic(`build.execute.queued ${queued}`);
+      reportDiagnostic(`build.execute.noop ${!built && !queued}`);
       if (!result.ok) {
         return Object.freeze({
           outcome:
@@ -205,16 +231,10 @@ export function createCapturedBuildSource(
           ...base,
         });
       }
-      const after = Number(
-        readProperty(
-          readBuilding(rootState.readRoot(), candidate.target),
-          "count",
-        ),
-      );
       // The game's own action reports nothing useful; the count it changed does.
       return Object.freeze({
         outcome: SUCCEEDED,
-        clicked: after > before,
+        clicked: built,
         mission: false,
         consumption: NO_CONSUMPTION,
       });
