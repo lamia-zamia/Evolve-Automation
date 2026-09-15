@@ -25,6 +25,7 @@ import type {
   BuildResourceScope,
   BuildSampleRequest,
 } from "../../../../domain/progression/build/build.ts";
+import { storageRequirementScopeKey } from "../../../../domain/economy/storage/storage-requirements.ts";
 import { resourceView } from "../../../../domain/game-world.ts";
 import type { ResourceView } from "../../../../domain/game-world.ts";
 import type {
@@ -60,6 +61,7 @@ export interface CapturedConstructionDependencies {
   /** Script storage-planner values; missing ids remain unknown rather than treated as capped. */
   readonly readStorageRequired?: (
     resourceIds: readonly string[],
+    resourceScopes?: readonly BuildResourceScope[],
   ) => Readonly<Record<string, number>> | undefined;
 }
 
@@ -284,7 +286,18 @@ export function createCapturedConstructionAdapter(
         }
         compared.push({ key, candidate });
       }
-      const storageRequired = readStorageRequired?.(request.resourceIds);
+      const scopes: readonly BuildResourceScope[] =
+        request.resourceScopes.length > 0
+          ? request.resourceScopes
+          : Object.freeze(
+              request.resourceIds.map((resourceId) =>
+                Object.freeze({ resourceId }),
+              ),
+            );
+      const storageRequired = readStorageRequired?.(
+        request.resourceIds,
+        scopes,
+      );
       const affordability: Record<string, boolean> = {};
       const root = rootState.readRoot();
       for (const entry of compared) {
@@ -300,14 +313,6 @@ export function createCapturedConstructionAdapter(
         readonly pool?: string;
         readonly view: BuildResourceView;
       }[] = [];
-      const scopes: readonly BuildResourceScope[] =
-        request.resourceScopes.length > 0
-          ? request.resourceScopes
-          : Object.freeze(
-              request.resourceIds.map((resourceId) =>
-                Object.freeze({ resourceId }),
-              ),
-            );
       const scopesByPool = new Map<string | undefined, string[]>();
       for (const scope of scopes) {
         const ids = scopesByPool.get(scope.pool);
@@ -325,7 +330,9 @@ export function createCapturedConstructionAdapter(
               ? LOCKED_RESOURCE
               : toBuildResourceView(
                   resourceView(sample, id),
-                  storageRequired?.[id] ?? Number.NaN,
+                  storageRequired?.[storageRequirementScopeKey(id, pool)] ??
+                    storageRequired?.[id] ??
+                    Number.NaN,
                 );
           scopedResources.push({
             resourceId: id,

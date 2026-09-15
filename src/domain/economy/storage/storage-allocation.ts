@@ -2,6 +2,8 @@ export const STORAGE_ALLOCATION_DEBOUNCE_TICKS = 3;
 
 export interface StorageAllocationResourceInput {
   readonly id: string;
+  /** Omitted for civilization-wide storage; named values are regional ledgers. */
+  readonly pool?: string;
   readonly unlocked: boolean;
   readonly managed: boolean;
   readonly currentQuantity: number;
@@ -19,10 +21,12 @@ export interface StorageAllocationResourceInput {
 export interface StorageCostInput {
   readonly resourceId: string;
   readonly quantity: number;
+  readonly pool?: string;
 }
 
 export interface StorageTargetInput {
   readonly costs: readonly StorageCostInput[];
+  readonly pool?: string;
   readonly isList: boolean;
   readonly label: string;
   readonly unlocked: boolean;
@@ -64,6 +68,7 @@ export interface StorageAllocationInput {
 
 export interface StorageRawAssignment {
   readonly resourceId: string;
+  readonly pool?: string;
   readonly expectedCrates: number;
   readonly expectedContainers: number;
   readonly desiredCrates: number;
@@ -101,6 +106,7 @@ export interface StorageAllocationState {
 
 export interface StorageAdjustment {
   readonly resourceId: string;
+  readonly pool?: string;
   readonly expectedCrates: number;
   readonly expectedContainers: number;
   readonly crateDelta: number;
@@ -137,6 +143,12 @@ interface AllocationItem {
   readonly costs: ReadonlyMap<string, number>;
 }
 
+function allocationScopeKey(resourceId: string, pool?: string): string {
+  return pool === undefined || pool === "*"
+    ? resourceId
+    : `${resourceId}\u0000${pool}`;
+}
+
 function mapValue<K, V>(map: ReadonlyMap<K, V>, key: K, label: string): V {
   const value = map.get(key);
   if (value === undefined) {
@@ -166,24 +178,50 @@ function targetEligible(
 
 function buildAllocationItems(
   input: Readonly<StorageAllocationInput>,
-  managedIds: readonly string[],
+  managedScopes: readonly StorageAllocationResourceInput[],
 ): readonly AllocationItem[] {
   const result: AllocationItem[] = [];
   const managedIndexes = new Map(
-    managedIds.map((resourceId, index) => [resourceId, index]),
+    managedScopes.map((resource, index) => [
+      allocationScopeKey(resource.id, resource.pool),
+      index,
+    ]),
+  );
+  const knownScopes = new Set(
+    input.resources.map((resource) =>
+      allocationScopeKey(resource.id, resource.pool),
+    ),
+  );
+  const knownResourceIds = new Set(
+    input.resources.map((resource) => resource.id),
   );
   for (const source of input.targetSources) {
     if (!sourceEnabled(source, input)) continue;
-    const groups: AllocationItem[][] = managedIds.map(() => []);
+    const groups: AllocationItem[][] = managedScopes.map(() => []);
     for (const target of source.targets) {
       if (!targetEligible(source, target)) continue;
+      let regionalScopeMissing = false;
       const costs = new Map(
-        target.costs.map((cost) => [cost.resourceId, cost.quantity]),
+        target.costs.map((cost) => {
+          const pool = cost.pool ?? target.pool;
+          const key = allocationScopeKey(cost.resourceId, pool);
+          if (
+            cost.quantity > 0 &&
+            knownResourceIds.has(cost.resourceId) &&
+            !knownScopes.has(key) &&
+            pool !== undefined &&
+            pool !== "*"
+          ) {
+            regionalScopeMissing = true;
+          }
+          return [key, cost.quantity] as const;
+        }),
       );
+      if (regionalScopeMissing) continue;
       let firstManagedIndex: number | undefined;
-      for (const [resourceId, quantity] of costs) {
+      for (const [scope, quantity] of costs) {
         if (!quantity) continue;
-        const managedIndex = managedIndexes.get(resourceId);
+        const managedIndex = managedIndexes.get(scope);
         if (
           managedIndex !== undefined &&
           (firstManagedIndex === undefined || managedIndex < firstManagedIndex)
@@ -195,8 +233,11 @@ function buildAllocationItems(
         groups[firstManagedIndex]!.push({ target, costs });
       }
     }
-    for (let index = 0; index < managedIds.length; index++) {
-      const resourceId = managedIds[index]!;
+    for (let index = 0; index < managedScopes.length; index++) {
+      const resourceId = allocationScopeKey(
+        managedScopes[index]!.id,
+        managedScopes[index]!.pool,
+      );
       const group = groups[index]!;
       group.sort(
         (left, right) =>
@@ -270,23 +311,27 @@ export function planStorageAllocation(
     return null;
   }
   const resources = new Map(
-    input.resources.map((resource) => [resource.id, resource]),
+    input.resources.map((resource) => [
+      allocationScopeKey(resource.id, resource.pool),
+      resource,
+    ]),
   );
   if (resources.size !== input.resources.length) {
     throw new TypeError("duplicate storage resource id");
   }
-  const managedIds = input.priorityResourceIds.filter((id) => {
-    const resource = mapValue(resources, id, `storage resource ${id}`);
-    return resource.unlocked && resource.managed;
-  });
-  if (managedIds.length === 0) return null;
+  const managedScopes = input.priorityResourceIds.flatMap((id) =>
+    input.resources.filter(
+      (resource) => resource.id === id && resource.unlocked && resource.managed,
+    ),
+  );
+  if (managedScopes.length === 0) return null;
 
   let totalCrates = input.freeCrates;
   let totalContainers = input.freeContainers;
   const adjustments = new Map<string, MutableAssignment>();
   const modifiers = new Map<string, number>();
-  for (const id of managedIds) {
-    const resource = mapValue(resources, id, `storage resource ${id}`);
+  for (const resource of managedScopes) {
+    const id = allocationScopeKey(resource.id, resource.pool);
     const sellAllowed =
       !input.noTrade &&
       input.autoMarket &&
@@ -320,7 +365,7 @@ export function planStorageAllocation(
     storageToBuildDriver = label;
   };
   const drivers = new Map<string, string>();
-  const items = buildAllocationItems(input, managedIds);
+  const items = buildAllocationItems(input, managedScopes);
   nextItem: for (const item of items) {
     const currentAssignment = new Map<
       string,
@@ -332,7 +377,7 @@ export function planStorageAllocation(
       const resource = mapValue(
         resources,
         resourceId,
-        `target resource ${resourceId}`,
+        `target scope ${resourceId}`,
       );
       const adjustment = adjustments.get(resourceId);
       const modifier = item.target.isList
@@ -433,19 +478,16 @@ export function planStorageAllocation(
     storageToBuild,
     storageToBuildDriver,
     assignments: Object.freeze(
-      managedIds.map((resourceId) => {
-        const resource = mapValue(
-          resources,
-          resourceId,
-          `storage resource ${resourceId}`,
-        );
+      managedScopes.map((resource) => {
+        const resourceId = allocationScopeKey(resource.id, resource.pool);
         const adjustment = mapValue(
           adjustments,
           resourceId,
           `storage adjustment ${resourceId}`,
         );
         return Object.freeze({
-          resourceId,
+          resourceId: resource.id,
+          ...(resource.pool === undefined ? {} : { pool: resource.pool }),
           expectedCrates: resource.currentCrates,
           expectedContainers: resource.currentContainers,
           desiredCrates: adjustment.crate,
@@ -494,12 +536,9 @@ export function finalizeStorageAllocation(
     );
   }
   for (const assignment of plan.assignments) {
-    const crateEntry =
-      crateState[assignment.resourceId] ??
-      (crateState[assignment.resourceId] = {});
-    const containerEntry =
-      containerState[assignment.resourceId] ??
-      (containerState[assignment.resourceId] = {});
+    const key = allocationScopeKey(assignment.resourceId, assignment.pool);
+    const crateEntry = crateState[key] ?? (crateState[key] = {});
+    const containerEntry = containerState[key] ?? (containerState[key] = {});
     const targetCrates = debounce(
       crateEntry,
       assignment.desiredCrates,
@@ -515,6 +554,7 @@ export function finalizeStorageAllocation(
     adjustments.push(
       Object.freeze({
         resourceId: assignment.resourceId,
+        ...(assignment.pool === undefined ? {} : { pool: assignment.pool }),
         expectedCrates: assignment.expectedCrates,
         expectedContainers: assignment.expectedContainers,
         crateDelta,

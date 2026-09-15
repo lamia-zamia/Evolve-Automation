@@ -16,10 +16,14 @@ export interface DemandRequest {
 export interface DemandCost {
   readonly resourceId: string;
   readonly amount: number;
+  /** The supply pool that pays this cost, when the game names one. */
+  readonly pool?: string;
 }
 
 export interface DemandTarget {
   readonly costs: readonly DemandCost[];
+  /** The target's payment pool, retained for consumers that need the whole target scope. */
+  readonly pool?: string;
   readonly isProject: boolean;
   /**
    * ARPA progress, or null when absent. Legacy reads `progress! < 99`, so an
@@ -137,6 +141,7 @@ export interface DemandPrioritizationInput {
 /** The build target being saved for, named so its reservation can say why. */
 export interface DemandSavingTarget {
   readonly name: string;
+  readonly pool?: string;
   readonly costs: readonly DemandCost[];
 }
 

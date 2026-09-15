@@ -28,6 +28,7 @@ import { runBuildAutomation } from "../application/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import type { ConstructionObservations } from "../ports/game-construction-observations.ts";
 import type { ConstructionCycleOptions } from "../ports/construction-candidates.ts";
+import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
@@ -71,6 +72,7 @@ export interface CapturedConstructionControlDependencies {
   /** Script storage-planner values, keyed by captured resource id. */
   readonly readStorageRequired?: (
     resourceIds: readonly string[],
+    resourceScopes?: readonly BuildResourceScope[],
   ) => Readonly<Record<string, number>> | undefined;
   /**
    * The technologies the game is offering, which is the only captured route to a technology's

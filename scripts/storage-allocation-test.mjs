@@ -107,6 +107,66 @@ const reverse = finalizeStorageAllocation(reversePlan, {
 assert.equal(reverse.nextState.crates.Iron.locked, 2);
 assert.equal(reverse.decision.adjustments[0].crateDelta, 0);
 
+const regionalTarget = Object.freeze({
+  costs: Object.freeze([
+    Object.freeze({ resourceId: "Iron", quantity: 100, pool: "spc_mars" }),
+  ]),
+  pool: "spc_mars",
+  isList: false,
+  label: "Mars depot",
+  unlocked: true,
+  autoBuildEnabled: true,
+});
+const regionalPlan = planStorageAllocation(
+  allocationInput({
+    crateValue: 100,
+    freeCrates: 1,
+    freeContainers: 0,
+    resources: [
+      storageResource("Iron", { maxQuantity: 100 }),
+      storageResource("Iron", { pool: "spc_mars", maxQuantity: 0 }),
+    ],
+    priorityResourceIds: ["Iron"],
+    targetSources: [source("queued", [regionalTarget])],
+  }),
+);
+assert.equal(
+  regionalPlan.assignments.find(({ pool }) => pool === "spc_mars")
+    .desiredCrates,
+  1,
+);
+assert.equal(
+  regionalPlan.assignments.find(({ pool }) => pool === undefined).desiredCrates,
+  0,
+);
+let regionalState = EMPTY_STORAGE_ALLOCATION_STATE;
+let regionalDecision;
+for (let tick = 0; tick < 3; tick++) {
+  regionalDecision = finalizeStorageAllocation(regionalPlan, regionalState);
+  regionalState = regionalDecision.nextState;
+}
+assert.deepEqual(
+  regionalDecision.decision.adjustments.find(({ pool }) => pool === "spc_mars"),
+  {
+    resourceId: "Iron",
+    pool: "spc_mars",
+    expectedCrates: 0,
+    expectedContainers: 0,
+    crateDelta: 1,
+    containerDelta: 0,
+    expectedMaximum: 0,
+  },
+);
+
+const missingRegionalPlan = planStorageAllocation(
+  allocationInput({
+    freeCrates: 1,
+    freeContainers: 0,
+    targetSources: [source("queued", [regionalTarget])],
+  }),
+);
+assert.equal(missingRegionalPlan.assignments[0].desiredCrates, 0);
+
 function liveResource(id, overrides = {}) {
   let crates = overrides.currentCrates ?? 0;
   let containers = overrides.currentContainers ?? 0;

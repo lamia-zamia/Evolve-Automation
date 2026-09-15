@@ -20,7 +20,10 @@
  * nothing wants, so every consumer degrades the same way the bounded slices already do.
  */
 
-import { planStorageRequirements } from "../../../../domain/economy/storage/storage-requirements.ts";
+import {
+  planStorageRequirements,
+  storageRequirementScopeKey,
+} from "../../../../domain/economy/storage/storage-requirements.ts";
 import type { StorageResourceState } from "../../../../domain/economy/storage/storage-requirements.ts";
 import { CONSUMPTION_BALANCE_TARGET } from "../../../../config.ts";
 import {
@@ -44,6 +47,7 @@ import type { CapturedCraftCosts } from "../production/captured-craft-costs.ts";
 import type { CapturedFleetDemand } from "../../combat/captured-fleet-demand.ts";
 import type { CapturedTriggers } from "../../progression/build/captured-triggers.ts";
 import { readCapturedFactoryCapacity } from "../production/captured-factory-capacity.ts";
+import { isRegionalSupply } from "../../captured-affordability.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedResourceDemandDependencies {
@@ -79,7 +83,7 @@ export interface CapturedDemandSample {
    * how much of it is wanted now: a target is only reachable if its cost fits in storage at all.
    * 1 for a resource nothing is saving for, matching the script's own baseline.
    */
-  storageRequired(resourceId: string): number;
+  storageRequired(resourceId: string, pool?: string): number;
   /**
    * The largest single cost in a resource the commitments name, or 0 when nothing does. Optional
    * so readers that only need the three core answers are unaffected; the trigger-condition reader
@@ -192,13 +196,20 @@ function readSettingsInput(
  */
 function toCosts(
   cost: Readonly<Record<string, number | undefined>>,
+  pool?: string,
 ): readonly DemandCost[] {
   return Object.freeze(
     Object.entries(cost).flatMap(([resourceId, amount]) => {
       const value = finite(amount);
       return value === undefined
         ? []
-        : [Object.freeze({ resourceId, amount: value })];
+        : [
+            Object.freeze({
+              resourceId,
+              amount: value,
+              ...(pool === undefined ? {} : { pool }),
+            }),
+          ];
     }),
   );
 }
@@ -209,9 +220,10 @@ function toTargets(
   return Object.freeze(
     targets.map((target) =>
       Object.freeze({
+        ...(target.pool === undefined ? {} : { pool: target.pool }),
         isProject: false,
         progress: null,
-        costs: toCosts(target.cost),
+        costs: toCosts(target.cost, target.pool),
       }),
     ),
   );
@@ -381,7 +393,7 @@ function readCapturedSpaceMissionDemand(
     }
     const price = costs.readCost(actionId);
     if (price === undefined) continue;
-    const missionCosts = toCosts(price.cost);
+    const missionCosts = toCosts(price.cost, price.pool);
     if (missionCosts.length === 0) continue;
     missions.push({
       isUnlocked: true,
@@ -393,6 +405,7 @@ function readCapturedSpaceMissionDemand(
       target: Object.freeze({
         isProject: false,
         progress: null,
+        ...(price.pool === undefined ? {} : { pool: price.pool }),
         costs: missionCosts,
       }),
     });
@@ -443,25 +456,42 @@ function toOfferedTechs(
  */
 function readStorageResources(
   resources: Record<PropertyKey, unknown>,
+  root: unknown,
   settings: Record<PropertyKey, unknown>,
 ): readonly StorageResourceState[] {
   const states: StorageResourceState[] = [];
+  const regional = isRegionalSupply(root);
   for (const id of Object.keys(resources)) {
     const resource = resources[id];
     const maximum = finite(readProperty(resource, "max"));
     if (maximum === undefined) continue;
     const ratio = finite(settings[`res_sell_r_${id}`]);
-    states.push(
-      Object.freeze({
-        id,
-        maxQuantity: maximum >= 0 ? maximum : Number.MAX_SAFE_INTEGER,
-        maxCost: 0,
-        storageRequired: NO_STORAGE_REQUIREMENT,
-        hasStorage: readProperty(resource, "stackable") === true,
-        autoSellEnabled: settings[`sell${id}`] === true,
-        autoSellRatio: ratio !== undefined && ratio > 0 ? ratio : 0,
-      }),
-    );
+    const pools = isRecord(readProperty(resource, "regMax"))
+      ? Object.keys(readProperty(resource, "regMax") as Record<string, unknown>)
+      : [];
+    const scopes = regional ? pools : [];
+    const add = (pool?: string): void => {
+      const scopedMaximum =
+        pool === undefined
+          ? maximum
+          : finite(readProperty(readProperty(resource, "regMax"), pool));
+      if (scopedMaximum === undefined) return;
+      states.push(
+        Object.freeze({
+          id,
+          ...(pool === undefined ? {} : { pool }),
+          maxQuantity:
+            scopedMaximum >= 0 ? scopedMaximum : Number.MAX_SAFE_INTEGER,
+          maxCost: 0,
+          storageRequired: NO_STORAGE_REQUIREMENT,
+          hasStorage: readProperty(resource, "stackable") === true,
+          autoSellEnabled: settings[`sell${id}`] === true,
+          autoSellRatio: ratio !== undefined && ratio > 0 ? ratio : 0,
+        }),
+      );
+    };
+    add();
+    for (const pool of scopes) add(pool);
   }
   return Object.freeze(states);
 }
@@ -792,7 +822,13 @@ export function createCapturedResourceDemand(
             // doubling the pure planner gives any part-built project target.
             isProject: target.actionType === "arpa",
             progress: target.actionType === "arpa" ? target.progress : null,
-            costs: toCosts(target.cost),
+            ...("pool" in target && target.pool !== undefined
+              ? { pool: target.pool }
+              : {}),
+            costs: toCosts(
+              target.cost,
+              "pool" in target ? target.pool : undefined,
+            ),
           }),
         ),
       );
@@ -839,7 +875,8 @@ export function createCapturedResourceDemand(
       ) {
         return EMPTY_DEMAND_SAMPLE;
       }
-      const savingCosts = saving === null ? null : toCosts(saving.cost);
+      const savingCosts =
+        saving === null ? null : toCosts(saving.cost, saving.pool);
 
       const baseInput = Object.freeze({
         settings: readSettingsInput(settingsValue),
@@ -855,7 +892,11 @@ export function createCapturedResourceDemand(
         savingTarget:
           saving === null || savingCosts === null
             ? null
-            : Object.freeze({ name: saving.name, costs: savingCosts }),
+            : Object.freeze({
+                name: saving.name,
+                ...(saving.pool === undefined ? {} : { pool: saving.pool }),
+                costs: savingCosts,
+              }),
         missions,
         unlockedTechs: toOfferedTechs(resources, offered),
         spyPurchaseMoney: 0,
@@ -966,7 +1007,15 @@ export function createCapturedResourceDemand(
           toTargets(queued),
           savingCosts === null
             ? Object.freeze([])
-            : Object.freeze([Object.freeze({ costs: savingCosts })]),
+            : Object.freeze([
+                Object.freeze({
+                  ...(saving === null || saving.pool === undefined
+                    ? {}
+                    : { pool: saving.pool }),
+                  costs: savingCosts,
+                }),
+              ]),
+          triggerTargets,
           factoryStorageTargets,
         ]),
         // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
@@ -976,26 +1025,31 @@ export function createCapturedResourceDemand(
           reservedTargets: Object.freeze([]),
           buildCandidates: Object.freeze([]),
         }),
-        resources: readStorageResources(resources, settings),
+        resources: readStorageResources(resources, root, settings),
         inflationMoney: null,
         retirementGraphene: null,
       });
       const required = new Map(
         storage.resources.map((resource) => [
-          resource.id,
+          storageRequirementScopeKey(resource.id, resource.pool),
           resource.storageRequired,
         ]),
       );
       const maxCosts = new Map(
-        storage.resources.map((resource) => [resource.id, resource.maxCost]),
+        storage.resources.map((resource) => [
+          storageRequirementScopeKey(resource.id, resource.pool),
+          resource.maxCost,
+        ]),
       );
 
       return Object.freeze({
-        storageRequired: (resourceId: string) =>
-          required.get(resourceId) ?? NO_STORAGE_REQUIREMENT,
+        storageRequired: (resourceId: string, pool?: string) =>
+          required.get(storageRequirementScopeKey(resourceId, pool)) ??
+          NO_STORAGE_REQUIREMENT,
         requestedQuantity: (resourceId: string) =>
           requested.get(resourceId) ?? 0,
-        maxCost: (resourceId: string) => maxCosts.get(resourceId) ?? 0,
+        maxCost: (resourceId: string) =>
+          maxCosts.get(storageRequirementScopeKey(resourceId)) ?? 0,
         isDemanded: (resourceId: string) => {
           const wanted = requested.get(resourceId);
           if (wanted === undefined) return false;

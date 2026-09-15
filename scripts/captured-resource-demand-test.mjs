@@ -828,4 +828,39 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.equal(focusOff.requestedQuantity("Lumber"), 0);
 }
 
+// DeadSpace regional storage is scoped by the paying pool. A Mars cost that exceeds Mars's
+// ledger must fail closed even when the civilization-wide cap could hold it.
+{
+  const regionalRoot = {
+    race: { supplySplit: true },
+    tech: { shadow: 5 },
+    resource: {
+      Iron: {
+        amount: 0,
+        max: 1000,
+        stackable: false,
+        reg: { spc_mars: 0 },
+        regMax: { spc_mars: 100 },
+      },
+    },
+  };
+  const sample = createCapturedResourceDemand({
+    rootState: { readRoot: () => regionalRoot },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    construction: {
+      readSavingTarget: () => ({
+        name: "Mars depot",
+        pool: "spc_mars",
+        cost: { Iron: 150 },
+      }),
+      readKnowledgeRequirement: () => 0,
+    },
+    readSettings: () => ({}),
+  }).sample();
+  assert.equal(sample.storageRequired("Iron", "spc_mars"), 1);
+  assert.equal(sample.storageRequired("Iron"), 1);
+}
+
 console.log("Captured resource-demand adapter tests passed");

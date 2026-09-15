@@ -6,6 +6,8 @@ import { priceLookup } from "./test-support/action-price.mjs";
 function makeHarness({
   freeCrates = 0,
   savingCost = { Iron: 600 },
+  savingPool,
+  regional = false,
   buildTargets = [],
   buildCosts = {},
   offeredTechs,
@@ -17,8 +19,8 @@ function makeHarness({
 } = {}) {
   const root = {
     settings: {},
-    race: {},
-    tech: {},
+    race: regional ? { supplySplit: true } : {},
+    tech: regional ? { shadow: 5 } : {},
     stats: {},
     city: { library: { count: 0 } },
     resource: {
@@ -33,6 +35,14 @@ function makeHarness({
         stackable: true,
         crates: 0,
         containers: 0,
+        ...(regional
+          ? {
+              reg: { spc_mars: 0 },
+              regMax: { spc_mars: 0 },
+              regCrate: { spc_mars: 0 },
+              regCon: { spc_mars: 0 },
+            }
+          : {}),
       },
     },
   };
@@ -74,8 +84,14 @@ function makeHarness({
       if (handle.elementId === "stack-Iron" && method === "addCrate") {
         if (mutateAssignments) {
           root.resource.Crates.amount -= 1;
-          root.resource.Iron.crates += 1;
-          root.resource.Iron.max += 350;
+          const pool = args[1];
+          if (pool === undefined) {
+            root.resource.Iron.crates += 1;
+            root.resource.Iron.max += 350;
+          } else {
+            root.resource.Iron.regCrate[pool] += 1;
+            root.resource.Iron.regMax[pool] += 350;
+          }
         }
         return { ok: true, value: undefined };
       }
@@ -105,7 +121,11 @@ function makeHarness({
       readReservations: () => ({ unavailable: false, targets: [] }),
     },
     construction: {
-      readSavingTarget: () => ({ name: "saved", cost: savingCost }),
+      readSavingTarget: () => ({
+        name: "saved",
+        cost: savingCost,
+        ...(savingPool === undefined ? {} : { pool: savingPool }),
+      }),
     },
     readBuildTargets: () => buildTargets,
     costs: {
@@ -319,6 +339,56 @@ function makeHarness({
   assert.equal(root.resource.Iron.crates, 1);
   assert.equal(root.resource.Iron.max, 350);
   assert.deepEqual(calls.at(-1), ["stack-Iron", "addCrate", "Iron"]);
+}
+
+{
+  const { ports } = makeHarness({
+    regional: true,
+    freeCrates: 1,
+    savingCost: { Iron: 300 },
+    savingPool: "spc_mars",
+  });
+  const input = ports.reader.read();
+  const queued = input.targetSources.find(({ kind }) => kind === "queued");
+  assert.deepEqual(queued.targets[0], {
+    costs: [{ resourceId: "Iron", quantity: 300, pool: "spc_mars" }],
+    pool: "spc_mars",
+    isList: false,
+    label: "saved",
+    unlocked: true,
+    autoBuildEnabled: true,
+  });
+  assert.deepEqual(
+    input.resources
+      .filter(({ id }) => id === "Iron")
+      .map(({ pool, maxQuantity }) => ({ pool, maxQuantity })),
+    [
+      { pool: undefined, maxQuantity: 0 },
+      { pool: "spc_mars", maxQuantity: 0 },
+    ],
+  );
+}
+
+{
+  const { root, calls, automation } = makeHarness({
+    regional: true,
+    freeCrates: 1,
+    savingCost: { Iron: 300 },
+    savingPool: "spc_mars",
+  });
+  automation.run();
+  automation.run();
+  assert.equal(automation.run().status, "succeeded");
+  assert.equal(root.resource.Crates.amount, 0);
+  assert.equal(root.resource.Iron.crates, 0);
+  assert.equal(root.resource.Iron.regCrate.spc_mars, 1);
+  assert.equal(root.resource.Iron.regMax.spc_mars, 350);
+  assert.deepEqual(calls.at(-1), [
+    "stack-Iron",
+    "addCrate",
+    "Iron",
+    "spc_mars",
+  ]);
 }
 
 {

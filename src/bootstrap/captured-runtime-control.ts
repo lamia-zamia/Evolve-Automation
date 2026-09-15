@@ -1,5 +1,7 @@
 import { createCapturedProgressionControl } from "./captured-progression-control.ts";
 import { advancePeriodGate } from "../domain/tick.ts";
+import type { BuildResourceScope } from "../domain/progression/build/build.ts";
+import { storageRequirementScopeKey } from "../domain/economy/storage/storage-requirements.ts";
 import { readPeriodsPerScriptCycle } from "../adapters/evolve/captured-tick-rate.ts";
 import { runCraftAutomation } from "../application/craft.ts";
 import { runJobsAutomation } from "../application/jobs.ts";
@@ -308,11 +310,18 @@ export function startCapturedRuntime({
     // The already-granted half of the research draw is only worth its cost to a configured
     // trigger, so the trigger settings decide whether each cycle's pass keeps it.
     needGrantedTechs: () => triggersNeedGrantedTechs(settingsStore.readRaw()),
-    readCapturedStorageRequired: (resourceIds) => {
+    readCapturedStorageRequired: (_resourceIds, resourceScopes = []) => {
       const sample = readDemand();
+      const scopes: readonly BuildResourceScope[] =
+        resourceScopes.length > 0
+          ? resourceScopes
+          : _resourceIds.map((resourceId) => ({ resourceId }));
       return Object.freeze(
         Object.fromEntries(
-          resourceIds.map((id) => [id, sample.storageRequired(id)]),
+          scopes.map((scope) => [
+            storageRequirementScopeKey(scope.resourceId, scope.pool),
+            sample.storageRequired(scope.resourceId, scope.pool),
+          ]),
         ),
       );
     },
@@ -506,8 +515,8 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readStorageRequired: (resourceId) =>
-      readDemand().storageRequired(resourceId),
+    readStorageRequired: (resourceId, pool) =>
+      readDemand().storageRequired(resourceId, pool),
     reservations: queueReservations,
     construction: progression.observations,
     readBuildTargets: progression.readManagedBuildTargets,

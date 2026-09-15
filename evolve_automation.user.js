@@ -2987,6 +2987,84 @@
     });
   }
 
+  // src/domain/economy/storage/storage-requirements.ts
+  function storageRequirementScopeKey(resourceId, pool) {
+    return `${resourceId}\0${pool === void 0 || pool === "*" ? "*" : pool}`;
+  }
+  function planStorageRequirements(input) {
+    let bufferMult = input.storageAssignExtra ? 1.03 : 1, acc = /* @__PURE__ */ new Map(), resourceIds = /* @__PURE__ */ new Set();
+    for (let resource of input.resources)
+      acc.set(storageRequirementScopeKey(resource.id, resource.pool), {
+        maxCost: resource.maxCost,
+        storageRequired: resource.storageRequired,
+        maxQuantity: resource.maxQuantity,
+        hasStorage: resource.hasStorage,
+        autoSellEnabled: resource.autoSellEnabled,
+        autoSellRatio: resource.autoSellRatio
+      }), resourceIds.add(resource.id);
+    function requestStorageFor(list) {
+      for (let target of list) {
+        let storageSuffient = !0;
+        for (let cost of target.costs) {
+          let resource = acc.get(
+            storageRequirementScopeKey(cost.resourceId, cost.pool ?? target.pool)
+          );
+          if (resource === void 0) {
+            resourceIds.has(cost.resourceId) && cost.amount > 0 && (storageSuffient = !1);
+            continue;
+          }
+          resource.maxCost = Math.max(cost.amount, resource.maxCost), resource.maxQuantity < cost.amount && !resource.hasStorage && (storageSuffient = !1);
+        }
+        if (storageSuffient)
+          for (let cost of target.costs) {
+            let resource = acc.get(
+              storageRequirementScopeKey(cost.resourceId, cost.pool ?? target.pool)
+            );
+            if (resource === void 0) continue;
+            let assumeCost = cost.amount * bufferMult;
+            resource.maxQuantity < assumeCost && !resource.hasStorage && (assumeCost = (cost.amount + resource.maxQuantity) / 2), resource.storageRequired = Math.max(
+              assumeCost,
+              resource.storageRequired
+            );
+          }
+      }
+    }
+    for (let list of input.requestLists)
+      requestStorageFor(list);
+    if (input.inflationMoney !== null) {
+      let money = acc.get(storageRequirementScopeKey("Money"));
+      money !== void 0 && (money.maxCost = Math.max(money.maxCost, input.inflationMoney), money.storageRequired = Math.max(
+        money.storageRequired,
+        input.inflationMoney
+      ));
+    }
+    if (input.retirementGraphene !== null) {
+      let graphene = acc.get(storageRequirementScopeKey("Graphene"));
+      graphene !== void 0 && (graphene.maxCost = Math.max(graphene.maxCost, input.retirementGraphene), graphene.storageRequired = Math.max(
+        graphene.storageRequired,
+        input.retirementGraphene
+      ));
+    }
+    if (input.storageAssignExtra && !input.noTrade && input.autoMarket)
+      for (let resource of acc.values())
+        resource.autoSellEnabled && resource.autoSellRatio > 0 && (resource.storageRequired /= resource.autoSellRatio);
+    let resources = input.resources.map((resource) => {
+      let state = acc.get(
+        storageRequirementScopeKey(resource.id, resource.pool)
+      );
+      return Object.freeze({
+        id: resource.id,
+        ...resource.pool === void 0 ? {} : { pool: resource.pool },
+        maxCost: state === void 0 ? resource.maxCost : state.maxCost,
+        storageRequired: state === void 0 ? resource.storageRequired : state.storageRequired
+      });
+    });
+    return Object.freeze({
+      resources: Object.freeze(resources),
+      knowledge: calculateKnowledgeRequirements(input.knowledge)
+    });
+  }
+
   // src/adapters/evolve/progression/construction/captured-construction.ts
   var NO_CONSUMPTION2 = Object.freeze(
     []
@@ -3101,16 +3179,19 @@
             throw new TypeError(`unknown construction candidate ${key}`);
           compared.push({ key, candidate });
         }
-        let storageRequired = readStorageRequired?.(request.resourceIds), affordability = {}, root = rootState.readRoot();
+        let scopes = request.resourceScopes.length > 0 ? request.resourceScopes : Object.freeze(
+          request.resourceIds.map(
+            (resourceId) => Object.freeze({ resourceId })
+          )
+        ), storageRequired = readStorageRequired?.(
+          request.resourceIds,
+          scopes
+        ), affordability = {}, root = rootState.readRoot();
         for (let entry of compared)
           affordability[entry.key] = root !== void 0 && costFitsNow(root, entry.candidate.cost, {
             pool: entry.candidate.pool
           }) === !0;
-        let resourceViews = {}, scopedResources = [], scopes = request.resourceScopes.length > 0 ? request.resourceScopes : Object.freeze(
-          request.resourceIds.map(
-            (resourceId) => Object.freeze({ resourceId })
-          )
-        ), scopesByPool = /* @__PURE__ */ new Map();
+        let resourceViews = {}, scopedResources = [], scopesByPool = /* @__PURE__ */ new Map();
         for (let scope of scopes) {
           let ids = scopesByPool.get(scope.pool);
           ids === void 0 ? scopesByPool.set(scope.pool, [scope.resourceId]) : ids.includes(scope.resourceId) || ids.push(scope.resourceId);
@@ -3123,7 +3204,7 @@
           for (let id of ids) {
             let view = sample === void 0 ? LOCKED_RESOURCE : toBuildResourceView(
               resourceView(sample, id),
-              storageRequired?.[id] ?? Number.NaN
+              storageRequired?.[storageRequirementScopeKey(id, pool)] ?? storageRequired?.[id] ?? Number.NaN
             );
             scopedResources.push({
               resourceId: id,
@@ -10180,70 +10261,6 @@
     });
   }
 
-  // src/domain/economy/storage/storage-requirements.ts
-  function planStorageRequirements(input) {
-    let bufferMult = input.storageAssignExtra ? 1.03 : 1, acc = /* @__PURE__ */ new Map();
-    for (let resource of input.resources)
-      acc.set(resource.id, {
-        maxCost: resource.maxCost,
-        storageRequired: resource.storageRequired,
-        maxQuantity: resource.maxQuantity,
-        hasStorage: resource.hasStorage,
-        autoSellEnabled: resource.autoSellEnabled,
-        autoSellRatio: resource.autoSellRatio
-      });
-    function requestStorageFor(list) {
-      for (let target of list) {
-        let storageSuffient = !0;
-        for (let cost of target.costs) {
-          let resource = acc.get(cost.resourceId);
-          resource !== void 0 && (resource.maxCost = Math.max(cost.amount, resource.maxCost), resource.maxQuantity < cost.amount && !resource.hasStorage && (storageSuffient = !1));
-        }
-        if (storageSuffient)
-          for (let cost of target.costs) {
-            let resource = acc.get(cost.resourceId);
-            if (resource === void 0) continue;
-            let assumeCost = cost.amount * bufferMult;
-            resource.maxQuantity < assumeCost && !resource.hasStorage && (assumeCost = (cost.amount + resource.maxQuantity) / 2), resource.storageRequired = Math.max(
-              assumeCost,
-              resource.storageRequired
-            );
-          }
-      }
-    }
-    for (let list of input.requestLists)
-      requestStorageFor(list);
-    if (input.inflationMoney !== null) {
-      let money = acc.get("Money");
-      money !== void 0 && (money.maxCost = Math.max(money.maxCost, input.inflationMoney), money.storageRequired = Math.max(
-        money.storageRequired,
-        input.inflationMoney
-      ));
-    }
-    if (input.retirementGraphene !== null) {
-      let graphene = acc.get("Graphene");
-      graphene !== void 0 && (graphene.maxCost = Math.max(graphene.maxCost, input.retirementGraphene), graphene.storageRequired = Math.max(
-        graphene.storageRequired,
-        input.retirementGraphene
-      ));
-    }
-    if (input.storageAssignExtra && !input.noTrade && input.autoMarket)
-      for (let resource of acc.values())
-        resource.autoSellEnabled && resource.autoSellRatio > 0 && (resource.storageRequired /= resource.autoSellRatio);
-    let resources = input.resources.map((resource) => {
-      let state = acc.get(resource.id);
-      return Object.freeze({
-        id: resource.id,
-        maxCost: state === void 0 ? resource.maxCost : state.maxCost,
-        storageRequired: state === void 0 ? resource.storageRequired : state.storageRequired
-      });
-    });
-    return Object.freeze({
-      resources: Object.freeze(resources),
-      knowledge: calculateKnowledgeRequirements(input.knowledge)
-    });
-  }
-
   // src/domain/economy/resources/demand-prioritization.ts
   function projectDoubles(target) {
     return target.isProject && target.progress !== null && target.progress < 99;
@@ -10435,11 +10452,17 @@
       productionFactoryMinIngredients: finite(settings.productionFactoryMinIngredients) ?? 0
     });
   }
-  function toCosts(cost) {
+  function toCosts(cost, pool) {
     return Object.freeze(
       Object.entries(cost).flatMap(([resourceId, amount]) => {
         let value = finite(amount);
-        return value === void 0 ? [] : [Object.freeze({ resourceId, amount: value })];
+        return value === void 0 ? [] : [
+          Object.freeze({
+            resourceId,
+            amount: value,
+            ...pool === void 0 ? {} : { pool }
+          })
+        ];
       })
     );
   }
@@ -10447,9 +10470,10 @@
     return Object.freeze(
       targets.map(
         (target) => Object.freeze({
+          ...target.pool === void 0 ? {} : { pool: target.pool },
           isProject: !1,
           progress: null,
-          costs: toCosts(target.cost)
+          costs: toCosts(target.cost, target.pool)
         })
       )
     );
@@ -10599,7 +10623,7 @@
         continue;
       let price = costs.readCost(actionId);
       if (price === void 0) continue;
-      let missionCosts = toCosts(price.cost);
+      let missionCosts = toCosts(price.cost, price.pool);
       missionCosts.length !== 0 && missions.push({
         isUnlocked: !0,
         autoBuildEnabled: !0,
@@ -10608,6 +10632,7 @@
         target: Object.freeze({
           isProject: !1,
           progress: null,
+          ...price.pool === void 0 ? {} : { pool: price.pool },
           costs: missionCosts
         })
       });
@@ -10637,23 +10662,28 @@
       })
     ));
   }
-  function readStorageResources(resources, settings) {
-    let states = [];
+  function readStorageResources(resources, root, settings) {
+    let states = [], regional = isRegionalSupply(root);
     for (let id of Object.keys(resources)) {
       let resource = resources[id], maximum = finite(readProperty(resource, "max"));
       if (maximum === void 0) continue;
-      let ratio = finite(settings[`res_sell_r_${id}`]);
-      states.push(
-        Object.freeze({
-          id,
-          maxQuantity: maximum >= 0 ? maximum : Number.MAX_SAFE_INTEGER,
-          maxCost: 0,
-          storageRequired: NO_STORAGE_REQUIREMENT,
-          hasStorage: readProperty(resource, "stackable") === !0,
-          autoSellEnabled: settings[`sell${id}`] === !0,
-          autoSellRatio: ratio !== void 0 && ratio > 0 ? ratio : 0
-        })
-      );
+      let ratio = finite(settings[`res_sell_r_${id}`]), pools = isRecord(readProperty(resource, "regMax")) ? Object.keys(readProperty(resource, "regMax")) : [], scopes = regional ? pools : [], add = (pool) => {
+        let scopedMaximum = pool === void 0 ? maximum : finite(readProperty(readProperty(resource, "regMax"), pool));
+        scopedMaximum !== void 0 && states.push(
+          Object.freeze({
+            id,
+            ...pool === void 0 ? {} : { pool },
+            maxQuantity: scopedMaximum >= 0 ? scopedMaximum : Number.MAX_SAFE_INTEGER,
+            maxCost: 0,
+            storageRequired: NO_STORAGE_REQUIREMENT,
+            hasStorage: readProperty(resource, "stackable") === !0,
+            autoSellEnabled: settings[`sell${id}`] === !0,
+            autoSellRatio: ratio !== void 0 && ratio > 0 ? ratio : 0
+          })
+        );
+      };
+      add();
+      for (let pool of scopes) add(pool);
     }
     return Object.freeze(states);
   }
@@ -10863,7 +10893,11 @@
               // doubling the pure planner gives any part-built project target.
               isProject: target.actionType === "arpa",
               progress: target.actionType === "arpa" ? target.progress : null,
-              costs: toCosts(target.cost)
+              ..."pool" in target && target.pool !== void 0 ? { pool: target.pool } : {},
+              costs: toCosts(
+                target.cost,
+                "pool" in target ? target.pool : void 0
+              )
             })
           )
         ), missions = readCapturedSpaceMissionDemand(
@@ -10883,7 +10917,7 @@
         ) && fleet?.nextShipAffordable === !0 && fleet.nextShipCost.length > 0;
         if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand)
           return EMPTY_DEMAND_SAMPLE;
-        let savingCosts = saving === null ? null : toCosts(saving.cost), baseInput = Object.freeze({
+        let savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
           // The captured offer list is the game's own technology qualification result. The reader
           // only recomputes affordability from current holdings; it never recreates tech gates.
@@ -10894,7 +10928,11 @@
           retirementGraphene: null,
           queuedTargets: toTargets(queued),
           triggerTargets,
-          savingTarget: saving === null || savingCosts === null ? null : Object.freeze({ name: saving.name, costs: savingCosts }),
+          savingTarget: saving === null || savingCosts === null ? null : Object.freeze({
+            name: saving.name,
+            ...saving.pool === void 0 ? {} : { pool: saving.pool },
+            costs: savingCosts
+          }),
           missions,
           unlockedTechs: toOfferedTechs(resources, offered),
           spyPurchaseMoney: 0,
@@ -10968,7 +11006,13 @@
           // The same commitments the demand pass just used, in the same order.
           requestLists: Object.freeze([
             toTargets(queued),
-            Object.freeze(savingCosts === null ? [] : [Object.freeze({ costs: savingCosts })]),
+            Object.freeze(savingCosts === null ? [] : [
+              Object.freeze({
+                ...saving === null || saving.pool === void 0 ? {} : { pool: saving.pool },
+                costs: savingCosts
+              })
+            ]),
+            triggerTargets,
             factoryStorageTargets
           ]),
           // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
@@ -10978,21 +11022,24 @@
             reservedTargets: Object.freeze([]),
             buildCandidates: Object.freeze([])
           }),
-          resources: readStorageResources(resources, settings),
+          resources: readStorageResources(resources, root, settings),
           inflationMoney: null,
           retirementGraphene: null
         }), required = new Map(
           storage.resources.map((resource) => [
-            resource.id,
+            storageRequirementScopeKey(resource.id, resource.pool),
             resource.storageRequired
           ])
         ), maxCosts = new Map(
-          storage.resources.map((resource) => [resource.id, resource.maxCost])
+          storage.resources.map((resource) => [
+            storageRequirementScopeKey(resource.id, resource.pool),
+            resource.maxCost
+          ])
         );
         return Object.freeze({
-          storageRequired: (resourceId) => required.get(resourceId) ?? NO_STORAGE_REQUIREMENT,
+          storageRequired: (resourceId, pool) => required.get(storageRequirementScopeKey(resourceId, pool)) ?? NO_STORAGE_REQUIREMENT,
           requestedQuantity: (resourceId) => requested.get(resourceId) ?? 0,
-          maxCost: (resourceId) => maxCosts.get(resourceId) ?? 0,
+          maxCost: (resourceId) => maxCosts.get(storageRequirementScopeKey(resourceId)) ?? 0,
           isDemanded: (resourceId) => {
             let wanted = requested.get(resourceId);
             if (wanted === void 0) return !1;
@@ -12345,9 +12392,12 @@
             });
         }, targets = [], claimed = /* @__PURE__ */ new Set(), claim = (target) => {
           let resourceIds = Object.keys(target.cost);
-          if (resourceIds.some((resourceId) => claimed.has(resourceId)))
+          if (resourceIds.some(
+            (resourceId) => claimed.has(`${resourceId}\0${target.pool ?? "*"}`)
+          ))
             return !1;
-          for (let resourceId of resourceIds) claimed.add(resourceId);
+          for (let resourceId of resourceIds)
+            claimed.add(`${resourceId}\0${target.pool ?? "*"}`);
           return targets.push(target), !0;
         };
         for (let row of rows) {
@@ -12364,7 +12414,8 @@
             Object.freeze({
               actionId: row.actionId,
               actionType,
-              cost: priced.cost
+              cost: priced.cost,
+              ...priced.pool === void 0 ? {} : { pool: priced.pool }
             })
           );
         }
@@ -14891,13 +14942,20 @@
     let highTech = finite(readProperty(tech, "high_tech")) ?? 0;
     return readProperty(race, "truepath") || readProperty(race, "sludge") || readProperty(race, "ultra_sludge") ? highTech < 7 : (finite(readProperty(tech, "mad")) ?? 0) < 1;
   }
-  function targetFromCost(label, cost) {
+  function targetFromCost(label, cost, pool) {
     return Object.freeze({
       costs: Object.freeze(
         Object.entries(cost).flatMap(
-          ([resourceId, quantity]) => quantity === void 0 || !Number.isFinite(quantity) ? [] : [Object.freeze({ resourceId, quantity })]
+          ([resourceId, quantity]) => quantity === void 0 || !Number.isFinite(quantity) ? [] : [
+            Object.freeze({
+              resourceId,
+              quantity,
+              ...pool === void 0 ? {} : { pool }
+            })
+          ]
         )
       ),
+      ...pool === void 0 ? {} : { pool },
       isList: !1,
       label,
       unlocked: !0,
@@ -15006,19 +15064,28 @@
         );
         return;
       }
-      result.push(targetFromCost(target.key, cost));
+      result.push(targetFromCost(target.key, cost, price.pool));
     }
     return Object.freeze(result);
   }
-  function readResource4(resources, settings, id, readStorageRequired) {
+  function readResource4(resources, settings, id, readStorageRequired, pool) {
     let resource = readProperty(resources, id);
     if (!isRecord(resource)) return;
-    let currentQuantity2 = finite(resource.amount), rawMax = finite(resource.max), currentCrates = readStorageCount(resource.crates), currentContainers = readStorageCount(resource.containers), storageRequired = readStorageRequired(id);
+    let regional = pool !== void 0 && pool !== "*", amountLedger = regional ? readProperty(resource, "reg") : resource, maxLedger = regional ? readProperty(resource, "regMax") : resource, crateLedger = regional ? readProperty(resource, "regCrate") : resource, containerLedger = regional ? readProperty(resource, "regCon") : resource, currentQuantity2 = finite(
+      regional ? readProperty(amountLedger, pool) ?? 0 : resource.amount
+    ), rawMax = finite(
+      regional ? readProperty(maxLedger, pool) : resource.max
+    ), currentCrates = readStorageCount(
+      regional ? readProperty(crateLedger, pool) : resource.crates
+    ), currentContainers = readStorageCount(
+      regional ? readProperty(containerLedger, pool) : resource.containers
+    ), storageRequired = readStorageRequired(id, pool);
     if (currentQuantity2 === void 0 || rawMax === void 0 || currentCrates === void 0 || currentContainers === void 0 || !Number.isFinite(storageRequired))
       return;
     let maxStorage = finite(settings[`res_max_store${id}`]) ?? -1, minStorage = finite(settings[`res_min_store${id}`]) ?? 1, autoSellRatio = finite(settings[`res_sell_r_${id}`]);
     return Object.freeze({
       id,
+      ...pool === void 0 ? {} : { pool },
       unlocked: resource.display === !0,
       managed: resource.stackable === !0 && settings[`res_storage${id}`] === !0,
       currentQuantity: currentQuantity2,
@@ -15032,6 +15099,12 @@
       autoSellEnabled: settings[`sell${id}`] === !0,
       autoSellRatio: autoSellRatio !== void 0 && autoSellRatio > 0 ? autoSellRatio : 0
     });
+  }
+  function readScopedResourceNumber(resource, pool, globalField, regionalField) {
+    if (pool === void 0 || pool === "*")
+      return finite(readProperty(resource, globalField));
+    let ledger = readProperty(resource, regionalField), value = readProperty(ledger, pool);
+    return finite(value === void 0 ? 0 : value);
   }
   function readInput11(dependencies) {
     let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource"), race = readProperty(root, "race");
@@ -15088,9 +15161,21 @@
       priority: finite(settings[`res_storage_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
     })).sort(
       (left, right) => left.priority - right.priority || left.index - right.index
-    ).map(({ id }) => id), resourceInputs = priorityResourceIds.map(
-      (id) => readResource4(resources, settings, id, dependencies.readStorageRequired)
-    );
+    ).map(({ id }) => id), regional = isRegionalSupply(root), resourceInputs = priorityResourceIds.flatMap((id) => {
+      let resource = readProperty(resources, id), regMax = readProperty(resource, "regMax"), pools = regional && isRecord(regMax) ? Object.keys(regMax) : [];
+      return [
+        readResource4(resources, settings, id, dependencies.readStorageRequired),
+        ...pools.map(
+          (pool) => readResource4(
+            resources,
+            settings,
+            id,
+            dependencies.readStorageRequired,
+            pool
+          )
+        )
+      ];
+    });
     if (resourceInputs.some((resource) => resource === void 0))
       return {
         input: Object.freeze({
@@ -15116,13 +15201,17 @@
     ), targets = [], reservations = dependencies.reservations.readReservations();
     if (!reservations.unavailable)
       for (let target of reservations.targets)
-        targets.push(targetFromCost(target.name, target.cost));
+        targets.push(targetFromCost(target.name, target.cost, target.pool));
     let saving = dependencies.construction?.readSavingTarget() ?? null;
-    saving !== null && targets.push(targetFromCost(saving.name, saving.cost));
+    saving !== null && targets.push(targetFromCost(saving.name, saving.cost, saving.pool));
     let requiredTargets = resourcesInput.filter((resource) => resource.unlocked && resource.managed).map(
-      (resource) => targetFromCost(`storageRequired/${resource.id}`, {
-        [resource.id]: resource.storageRequired
-      })
+      (resource) => targetFromCost(
+        `storageRequired/${resource.id}`,
+        {
+          [resource.id]: resource.storageRequired
+        },
+        resource.pool
+      )
     ), buildingTargets = readBuildingTargets(dependencies), technologyTargets = settings.autoResearch === !0 ? readTechnologyTargets(dependencies) : Object.freeze([]), projectTargets = settings.autoARPA === !0 ? readProjectTargets(dependencies, settings) : Object.freeze([]);
     return {
       input: Object.freeze({
@@ -15175,7 +15264,10 @@
         freeContainers,
         priorityResourceIds: Object.freeze(priorityResourceIds),
         resources: new Map(
-          resourcesInput.map((resource) => [resource.id, resource])
+          resourcesInput.map((resource) => [
+            storageRequirementScopeKey(resource.id, resource.pool),
+            resource
+          ])
         )
       })
     };
@@ -15299,11 +15391,28 @@
           );
         let adjustments = decision.adjustments;
         for (let adjustment of adjustments) {
-          let resource = session.resources.get(adjustment.resourceId), rootResource = readProperty(
+          let resource = session.resources.get(
+            storageRequirementScopeKey(adjustment.resourceId, adjustment.pool)
+          ), rootResource = readProperty(
             readProperty(dependencies.rootState.readRoot(), "resource"),
             adjustment.resourceId
           );
-          if (resource === void 0 || finite(readProperty(rootResource, "crates")) !== adjustment.expectedCrates || finite(readProperty(rootResource, "containers")) !== adjustment.expectedContainers || finite(readProperty(rootResource, "max")) !== adjustment.expectedMaximum)
+          if (resource === void 0 || readScopedResourceNumber(
+            rootResource,
+            adjustment.pool,
+            "crates",
+            "regCrate"
+          ) !== adjustment.expectedCrates || readScopedResourceNumber(
+            rootResource,
+            adjustment.pool,
+            "containers",
+            "regCon"
+          ) !== adjustment.expectedContainers || readScopedResourceNumber(
+            rootResource,
+            adjustment.pool,
+            "max",
+            "regMax"
+          ) !== adjustment.expectedMaximum)
             return stale(
               "captured-storage-resource-changed",
               `${adjustment.resourceId}: storage allocation changed`
@@ -15343,8 +15452,8 @@
                   `${adjustment.resourceId}: ${method} control is unavailable`
                 );
               for (let index = 0; index < Math.abs(delta); index += 1) {
-                let result = dependencies.controls.invoke(handle, method, [
-                  adjustment.resourceId
+                let args = adjustment.pool === void 0 || adjustment.pool === "*" ? [adjustment.resourceId] : [adjustment.resourceId, adjustment.pool], result = dependencies.controls.invoke(handle, method, [
+                  ...args
                 ]);
                 if (!result.ok)
                   return rejected(
@@ -15377,9 +15486,22 @@
             "storage pool counts did not match the requested allocation"
           );
         for (let adjustment of adjustments) {
-          let resource = readProperty(finalResources, adjustment.resourceId), finalCrateCount = finite(readProperty(resource, "crates")), finalContainerCount = finite(
-            readProperty(resource, "containers")
-          ), finalMaximum = finite(readProperty(resource, "max")), expectedMaximum = adjustment.expectedMaximum + adjustment.crateDelta * session.crateValue + adjustment.containerDelta * session.containerValue;
+          let resource = readProperty(finalResources, adjustment.resourceId), finalCrateCount = readScopedResourceNumber(
+            resource,
+            adjustment.pool,
+            "crates",
+            "regCrate"
+          ), finalContainerCount = readScopedResourceNumber(
+            resource,
+            adjustment.pool,
+            "containers",
+            "regCon"
+          ), finalMaximum = readScopedResourceNumber(
+            resource,
+            adjustment.pool,
+            "max",
+            "regMax"
+          ), expectedMaximum = adjustment.expectedMaximum + adjustment.crateDelta * session.crateValue + adjustment.containerDelta * session.containerValue;
           if (finalCrateCount !== adjustment.expectedCrates + adjustment.crateDelta || finalContainerCount !== adjustment.expectedContainers + adjustment.containerDelta || finalMaximum !== expectedMaximum)
             return rejected(
               "captured-storage-assignment-unchanged",
@@ -16862,6 +16984,9 @@
   }
 
   // src/domain/economy/storage/storage-allocation.ts
+  function allocationScopeKey(resourceId, pool) {
+    return pool === void 0 || pool === "*" ? resourceId : `${resourceId}\0${pool}`;
+  }
   function mapValue(map, key, label) {
     let value = map.get(key);
     if (value === void 0)
@@ -16874,27 +16999,44 @@
   function targetEligible(source, target) {
     return source.kind !== "project" && source.kind !== "building" ? !0 : target.unlocked && target.autoBuildEnabled;
   }
-  function buildAllocationItems(input, managedIds) {
+  function buildAllocationItems(input, managedScopes) {
     let result = [], managedIndexes = new Map(
-      managedIds.map((resourceId, index) => [resourceId, index])
+      managedScopes.map((resource, index) => [
+        allocationScopeKey(resource.id, resource.pool),
+        index
+      ])
+    ), knownScopes = new Set(
+      input.resources.map(
+        (resource) => allocationScopeKey(resource.id, resource.pool)
+      )
+    ), knownResourceIds = new Set(
+      input.resources.map((resource) => resource.id)
     );
     for (let source of input.targetSources) {
       if (!sourceEnabled(source, input)) continue;
-      let groups = managedIds.map(() => []);
+      let groups = managedScopes.map(() => []);
       for (let target of source.targets) {
         if (!targetEligible(source, target)) continue;
-        let costs = new Map(
-          target.costs.map((cost) => [cost.resourceId, cost.quantity])
-        ), firstManagedIndex;
-        for (let [resourceId, quantity] of costs) {
+        let regionalScopeMissing = !1, costs = new Map(
+          target.costs.map((cost) => {
+            let pool = cost.pool ?? target.pool, key = allocationScopeKey(cost.resourceId, pool);
+            return cost.quantity > 0 && knownResourceIds.has(cost.resourceId) && !knownScopes.has(key) && pool !== void 0 && pool !== "*" && (regionalScopeMissing = !0), [key, cost.quantity];
+          })
+        );
+        if (regionalScopeMissing) continue;
+        let firstManagedIndex;
+        for (let [scope, quantity] of costs) {
           if (!quantity) continue;
-          let managedIndex = managedIndexes.get(resourceId);
+          let managedIndex = managedIndexes.get(scope);
           managedIndex !== void 0 && (firstManagedIndex === void 0 || managedIndex < firstManagedIndex) && (firstManagedIndex = managedIndex);
         }
         firstManagedIndex !== void 0 && groups[firstManagedIndex].push({ target, costs });
       }
-      for (let index = 0; index < managedIds.length; index++) {
-        let resourceId = managedIds[index], group = groups[index];
+      for (let index = 0; index < managedScopes.length; index++) {
+        let resourceId = allocationScopeKey(
+          managedScopes[index].id,
+          managedScopes[index].pool
+        ), group = groups[index];
         group.sort(
           (left, right) => (right.costs.get(resourceId) ?? 0) - (left.costs.get(resourceId) ?? 0)
         ), result.push(...group);
@@ -16927,18 +17069,22 @@
     if (!input.initialized || input.crateValue <= 0 || input.containerValue <= 0)
       return null;
     let resources = new Map(
-      input.resources.map((resource) => [resource.id, resource])
+      input.resources.map((resource) => [
+        allocationScopeKey(resource.id, resource.pool),
+        resource
+      ])
     );
     if (resources.size !== input.resources.length)
       throw new TypeError("duplicate storage resource id");
-    let managedIds = input.priorityResourceIds.filter((id) => {
-      let resource = mapValue(resources, id, `storage resource ${id}`);
-      return resource.unlocked && resource.managed;
-    });
-    if (managedIds.length === 0) return null;
+    let managedScopes = input.priorityResourceIds.flatMap(
+      (id) => input.resources.filter(
+        (resource) => resource.id === id && resource.unlocked && resource.managed
+      )
+    );
+    if (managedScopes.length === 0) return null;
     let totalCrates = input.freeCrates, totalContainers = input.freeContainers, adjustments = /* @__PURE__ */ new Map(), modifiers = /* @__PURE__ */ new Map();
-    for (let id of managedIds) {
-      let resource = mapValue(resources, id, `storage resource ${id}`), sellAllowed = !input.noTrade && input.autoMarket && resource.autoSellEnabled && resource.autoSellRatio > 0;
+    for (let resource of managedScopes) {
+      let id = allocationScopeKey(resource.id, resource.pool), sellAllowed = !input.noTrade && input.autoMarket && resource.autoSellEnabled && resource.autoSellRatio > 0;
       modifiers.set(
         id,
         input.assignExtra ? sellAllowed ? 1.03 / resource.autoSellRatio : 1.03 : 1
@@ -16950,14 +17096,14 @@
     }
     let storageToBuild = 0, storageToBuildDriver = null, raiseStorageToBuild = (value, label) => {
       value <= storageToBuild || (storageToBuild = value, storageToBuildDriver = label);
-    }, drivers = /* @__PURE__ */ new Map(), items = buildAllocationItems(input, managedIds);
+    }, drivers = /* @__PURE__ */ new Map(), items = buildAllocationItems(input, managedScopes);
     nextItem: for (let item of items) {
       let currentAssignment = /* @__PURE__ */ new Map(), remainingCrates = totalCrates, remainingContainers = totalContainers;
       for (let [resourceId, quantity] of item.costs) {
         let resource = mapValue(
           resources,
           resourceId,
-          `target resource ${resourceId}`
+          `target scope ${resourceId}`
         ), adjustment = adjustments.get(resourceId), modifier = item.target.isList || adjustment === void 0 ? 1 : mapValue(modifiers, resourceId, `storage modifier ${resourceId}`);
         if (adjustment === void 0 || adjustment.amount >= quantity * modifier) continue;
         if (!item.target.isList && resource.maxStorage >= 0 && resource.maxStorage < quantity * modifier)
@@ -17018,18 +17164,15 @@
       storageToBuild,
       storageToBuildDriver,
       assignments: Object.freeze(
-        managedIds.map((resourceId) => {
-          let resource = mapValue(
-            resources,
-            resourceId,
-            `storage resource ${resourceId}`
-          ), adjustment = mapValue(
+        managedScopes.map((resource) => {
+          let resourceId = allocationScopeKey(resource.id, resource.pool), adjustment = mapValue(
             adjustments,
             resourceId,
             `storage adjustment ${resourceId}`
           );
           return Object.freeze({
-            resourceId,
+            resourceId: resource.id,
+            ...resource.pool === void 0 ? {} : { pool: resource.pool },
             expectedCrates: resource.currentCrates,
             expectedContainers: resource.currentContainers,
             desiredCrates: adjustment.crate,
@@ -17058,7 +17201,7 @@
       `[storage] plan storageToBuild=${plan.storageToBuild.toFixed(1)}, freeCrates=${plan.expectedFreeCrates}, freeContainers=${plan.expectedFreeContainers}, crateValue=${plan.crateValue}, containerValue=${plan.containerValue}, driver=${plan.storageToBuildDriver ?? "none"}`
     );
     for (let assignment of plan.assignments) {
-      let crateEntry = crateState[assignment.resourceId] ?? (crateState[assignment.resourceId] = {}), containerEntry = containerState[assignment.resourceId] ?? (containerState[assignment.resourceId] = {}), targetCrates = debounce(
+      let key = allocationScopeKey(assignment.resourceId, assignment.pool), crateEntry = crateState[key] ?? (crateState[key] = {}), containerEntry = containerState[key] ?? (containerState[key] = {}), targetCrates = debounce(
         crateEntry,
         assignment.desiredCrates,
         assignment.expectedCrates
@@ -17070,6 +17213,7 @@
       if (adjustments.push(
         Object.freeze({
           resourceId: assignment.resourceId,
+          ...assignment.pool === void 0 ? {} : { pool: assignment.pool },
           expectedCrates: assignment.expectedCrates,
           expectedContainers: assignment.expectedContainers,
           crateDelta,
@@ -20541,11 +20685,14 @@ Only continue if you trust the source. Injected code:
       // The already-granted half of the research draw is only worth its cost to a configured
       // trigger, so the trigger settings decide whether each cycle's pass keeps it.
       needGrantedTechs: () => triggersNeedGrantedTechs(settingsStore.readRaw()),
-      readCapturedStorageRequired: (resourceIds) => {
-        let sample = readDemand();
+      readCapturedStorageRequired: (_resourceIds, resourceScopes = []) => {
+        let sample = readDemand(), scopes = resourceScopes.length > 0 ? resourceScopes : _resourceIds.map((resourceId) => ({ resourceId }));
         return Object.freeze(
           Object.fromEntries(
-            resourceIds.map((id) => [id, sample.storageRequired(id)])
+            scopes.map((scope) => [
+              storageRequirementScopeKey(scope.resourceId, scope.pool),
+              sample.storageRequired(scope.resourceId, scope.pool)
+            ])
           )
         );
       },
@@ -20690,7 +20837,7 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readStorageRequired: (resourceId) => readDemand().storageRequired(resourceId),
+      readStorageRequired: (resourceId, pool) => readDemand().storageRequired(resourceId, pool),
       reservations: queueReservations,
       construction: progression.observations,
       readBuildTargets: progression.readManagedBuildTargets,

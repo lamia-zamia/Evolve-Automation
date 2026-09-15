@@ -6,6 +6,8 @@ import {
 
 export interface StorageResourceState {
   readonly id: string;
+  /** Omitted for civilization-wide storage; named pools are DeadSpace regional ledgers. */
+  readonly pool?: string;
   readonly maxQuantity: number;
   /** Current (post-reset) maxCost; accumulated with Math.max. */
   readonly maxCost: number;
@@ -19,10 +21,12 @@ export interface StorageResourceState {
 export interface StorageRequestCost {
   readonly resourceId: string;
   readonly amount: number;
+  readonly pool?: string;
 }
 
 export interface StorageRequestTarget {
   readonly costs: readonly StorageRequestCost[];
+  readonly pool?: string;
 }
 
 export interface StorageRequirementsInput {
@@ -41,6 +45,7 @@ export interface StorageRequirementsInput {
 
 export interface StorageResourceRequirement {
   readonly id: string;
+  readonly pool?: string;
   readonly maxCost: number;
   readonly storageRequired: number;
 }
@@ -59,6 +64,14 @@ interface Accumulator {
   readonly autoSellRatio: number;
 }
 
+/** Global and named-pool requirements must never share an accumulator. */
+export function storageRequirementScopeKey(
+  resourceId: string,
+  pool?: string,
+): string {
+  return `${resourceId}\u0000${pool === undefined || pool === "*" ? "*" : pool}`;
+}
+
 /**
  * Pure equivalent of the legacy `calculateRequiredStorages`. Replays the
  * sequential `requestStorageFor` accumulation over immutable inputs: maxCost is
@@ -72,8 +85,9 @@ export function planStorageRequirements(
 ): StorageRequirementsResult {
   const bufferMult = input.storageAssignExtra ? 1.03 : 1;
   const acc = new Map<string, Accumulator>();
+  const resourceIds = new Set<string>();
   for (const resource of input.resources) {
-    acc.set(resource.id, {
+    acc.set(storageRequirementScopeKey(resource.id, resource.pool), {
       maxCost: resource.maxCost,
       storageRequired: resource.storageRequired,
       maxQuantity: resource.maxQuantity,
@@ -81,14 +95,22 @@ export function planStorageRequirements(
       autoSellEnabled: resource.autoSellEnabled,
       autoSellRatio: resource.autoSellRatio,
     });
+    resourceIds.add(resource.id);
   }
 
   function requestStorageFor(list: readonly StorageRequestTarget[]): void {
     for (const target of list) {
       let storageSuffient = true;
       for (const cost of target.costs) {
-        const resource = acc.get(cost.resourceId);
-        if (resource === undefined) continue;
+        const resource = acc.get(
+          storageRequirementScopeKey(cost.resourceId, cost.pool ?? target.pool),
+        );
+        if (resource === undefined) {
+          if (resourceIds.has(cost.resourceId) && cost.amount > 0) {
+            storageSuffient = false;
+          }
+          continue;
+        }
         resource.maxCost = Math.max(cost.amount, resource.maxCost);
         if (resource.maxQuantity < cost.amount && !resource.hasStorage) {
           storageSuffient = false;
@@ -96,7 +118,9 @@ export function planStorageRequirements(
       }
       if (!storageSuffient) continue;
       for (const cost of target.costs) {
-        const resource = acc.get(cost.resourceId);
+        const resource = acc.get(
+          storageRequirementScopeKey(cost.resourceId, cost.pool ?? target.pool),
+        );
         if (resource === undefined) continue;
         let assumeCost = cost.amount * bufferMult;
         if (resource.maxQuantity < assumeCost && !resource.hasStorage) {
@@ -115,7 +139,7 @@ export function planStorageRequirements(
   }
 
   if (input.inflationMoney !== null) {
-    const money = acc.get("Money");
+    const money = acc.get(storageRequirementScopeKey("Money"));
     if (money !== undefined) {
       money.maxCost = Math.max(money.maxCost, input.inflationMoney);
       money.storageRequired = Math.max(
@@ -125,7 +149,7 @@ export function planStorageRequirements(
     }
   }
   if (input.retirementGraphene !== null) {
-    const graphene = acc.get("Graphene");
+    const graphene = acc.get(storageRequirementScopeKey("Graphene"));
     if (graphene !== undefined) {
       graphene.maxCost = Math.max(graphene.maxCost, input.retirementGraphene);
       graphene.storageRequired = Math.max(
@@ -144,9 +168,12 @@ export function planStorageRequirements(
   }
 
   const resources = input.resources.map((resource) => {
-    const state = acc.get(resource.id);
+    const state = acc.get(
+      storageRequirementScopeKey(resource.id, resource.pool),
+    );
     return Object.freeze({
       id: resource.id,
+      ...(resource.pool === undefined ? {} : { pool: resource.pool }),
       maxCost: state === undefined ? resource.maxCost : state.maxCost,
       storageRequired:
         state === undefined ? resource.storageRequired : state.storageRequired,

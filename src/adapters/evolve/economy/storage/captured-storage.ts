@@ -6,6 +6,7 @@ import type {
   StorageAllocationResourceInput,
   StorageTargetInput,
 } from "../../../../domain/economy/storage/storage-allocation.ts";
+import { storageRequirementScopeKey } from "../../../../domain/economy/storage/storage-requirements.ts";
 import {
   planStorageExpansion,
   type CraftableStorageView,
@@ -30,6 +31,7 @@ import type {
 import { createSnapshotMetadata } from "../../../../domain/snapshot.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
+import { isRegionalSupply } from "../../captured-affordability.ts";
 
 export const STORAGE_CONSTRUCTION_CONTROL = "createHead";
 
@@ -37,7 +39,7 @@ interface CapturedStorageDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
-  readonly readStorageRequired: (resourceId: string) => number;
+  readonly readStorageRequired: (resourceId: string, pool?: string) => number;
   readonly reservations: CostReservationSource;
   readonly construction?: ConstructionObservations;
   /** Managed construction targets, sampled from the same captured build policy as autoBuild. */
@@ -149,15 +151,23 @@ function earlyGame(root: unknown): boolean {
 function targetFromCost(
   label: string,
   cost: Readonly<Record<string, number | undefined>>,
+  pool?: string,
 ): StorageTargetInput {
   return Object.freeze({
     costs: Object.freeze(
       Object.entries(cost).flatMap(([resourceId, quantity]) =>
         quantity === undefined || !Number.isFinite(quantity)
           ? []
-          : [Object.freeze({ resourceId, quantity })],
+          : [
+              Object.freeze({
+                resourceId,
+                quantity,
+                ...(pool === undefined ? {} : { pool }),
+              }),
+            ],
       ),
     ),
+    ...(pool === undefined ? {} : { pool }),
     isList: false,
     label,
     unlocked: true,
@@ -300,7 +310,7 @@ function readBuildingTargets(
       );
       return undefined;
     }
-    result.push(targetFromCost(target.key, cost));
+    result.push(targetFromCost(target.key, cost, price.pool));
   }
   return Object.freeze(result);
 }
@@ -309,15 +319,31 @@ function readResource(
   resources: Record<PropertyKey, unknown>,
   settings: Record<PropertyKey, unknown>,
   id: string,
-  readStorageRequired: (resourceId: string) => number,
+  readStorageRequired: (resourceId: string, pool?: string) => number,
+  pool?: string,
 ): StorageAllocationResourceInput | undefined {
   const resource = readProperty(resources, id);
   if (!isRecord(resource)) return undefined;
-  const currentQuantity = finite(resource["amount"]);
-  const rawMax = finite(resource["max"]);
-  const currentCrates = readStorageCount(resource["crates"]);
-  const currentContainers = readStorageCount(resource["containers"]);
-  const storageRequired = readStorageRequired(id);
+  const regional = pool !== undefined && pool !== "*";
+  const amountLedger = regional ? readProperty(resource, "reg") : resource;
+  const maxLedger = regional ? readProperty(resource, "regMax") : resource;
+  const crateLedger = regional ? readProperty(resource, "regCrate") : resource;
+  const containerLedger = regional
+    ? readProperty(resource, "regCon")
+    : resource;
+  const currentQuantity = finite(
+    regional ? (readProperty(amountLedger, pool) ?? 0) : resource["amount"],
+  );
+  const rawMax = finite(
+    regional ? readProperty(maxLedger, pool) : resource["max"],
+  );
+  const currentCrates = readStorageCount(
+    regional ? readProperty(crateLedger, pool) : resource["crates"],
+  );
+  const currentContainers = readStorageCount(
+    regional ? readProperty(containerLedger, pool) : resource["containers"],
+  );
+  const storageRequired = readStorageRequired(id, pool);
   if (
     currentQuantity === undefined ||
     rawMax === undefined ||
@@ -332,6 +358,7 @@ function readResource(
   const autoSellRatio = finite(settings[`res_sell_r_${id}`]);
   return Object.freeze({
     id,
+    ...(pool === undefined ? {} : { pool }),
     unlocked: resource["display"] === true,
     managed:
       resource["stackable"] === true && settings[`res_storage${id}`] === true,
@@ -347,6 +374,20 @@ function readResource(
     autoSellRatio:
       autoSellRatio !== undefined && autoSellRatio > 0 ? autoSellRatio : 0,
   });
+}
+
+function readScopedResourceNumber(
+  resource: unknown,
+  pool: string | undefined,
+  globalField: string,
+  regionalField: string,
+): number | undefined {
+  if (pool === undefined || pool === "*") {
+    return finite(readProperty(resource, globalField));
+  }
+  const ledger = readProperty(resource, regionalField);
+  const value = readProperty(ledger, pool);
+  return finite(value === undefined ? 0 : value);
 }
 
 function readInput(dependencies: CapturedStorageDependencies): {
@@ -429,9 +470,24 @@ function readInput(dependencies: CapturedStorageDependencies): {
         left.priority - right.priority || left.index - right.index,
     )
     .map(({ id }) => id);
-  const resourceInputs = priorityResourceIds.map((id) =>
-    readResource(resources, settings, id, dependencies.readStorageRequired),
-  );
+  const regional = isRegionalSupply(root);
+  const resourceInputs = priorityResourceIds.flatMap((id) => {
+    const resource = readProperty(resources, id);
+    const regMax = readProperty(resource, "regMax");
+    const pools = regional && isRecord(regMax) ? Object.keys(regMax) : [];
+    return [
+      readResource(resources, settings, id, dependencies.readStorageRequired),
+      ...pools.map((pool) =>
+        readResource(
+          resources,
+          settings,
+          id,
+          dependencies.readStorageRequired,
+          pool,
+        ),
+      ),
+    ];
+  });
   if (resourceInputs.some((resource) => resource === undefined)) {
     return {
       input: Object.freeze({
@@ -460,17 +516,23 @@ function readInput(dependencies: CapturedStorageDependencies): {
   const reservations = dependencies.reservations.readReservations();
   if (!reservations.unavailable) {
     for (const target of reservations.targets) {
-      targets.push(targetFromCost(target.name, target.cost));
+      targets.push(targetFromCost(target.name, target.cost, target.pool));
     }
   }
   const saving = dependencies.construction?.readSavingTarget() ?? null;
-  if (saving !== null) targets.push(targetFromCost(saving.name, saving.cost));
+  if (saving !== null) {
+    targets.push(targetFromCost(saving.name, saving.cost, saving.pool));
+  }
   const requiredTargets = resourcesInput
     .filter((resource) => resource.unlocked && resource.managed)
     .map((resource) =>
-      targetFromCost(`storageRequired/${resource.id}`, {
-        [resource.id]: resource.storageRequired,
-      }),
+      targetFromCost(
+        `storageRequired/${resource.id}`,
+        {
+          [resource.id]: resource.storageRequired,
+        },
+        resource.pool,
+      ),
     );
   const buildingTargets = readBuildingTargets(dependencies);
   const technologyTargets =
@@ -534,7 +596,10 @@ function readInput(dependencies: CapturedStorageDependencies): {
       freeContainers,
       priorityResourceIds: Object.freeze(priorityResourceIds),
       resources: new Map(
-        resourcesInput.map((resource) => [resource.id, resource]),
+        resourcesInput.map((resource) => [
+          storageRequirementScopeKey(resource.id, resource.pool),
+          resource,
+        ]),
       ),
     }),
   };
@@ -706,19 +771,33 @@ function storageExecutor(
       }
       const adjustments = decision.adjustments;
       for (const adjustment of adjustments) {
-        const resource = session.resources.get(adjustment.resourceId);
+        const resource = session.resources.get(
+          storageRequirementScopeKey(adjustment.resourceId, adjustment.pool),
+        );
         const rootResource = readProperty(
           readProperty(dependencies.rootState.readRoot(), "resource"),
           adjustment.resourceId,
         );
         if (
           resource === undefined ||
-          finite(readProperty(rootResource, "crates")) !==
-            adjustment.expectedCrates ||
-          finite(readProperty(rootResource, "containers")) !==
-            adjustment.expectedContainers ||
-          finite(readProperty(rootResource, "max")) !==
-            adjustment.expectedMaximum
+          readScopedResourceNumber(
+            rootResource,
+            adjustment.pool,
+            "crates",
+            "regCrate",
+          ) !== adjustment.expectedCrates ||
+          readScopedResourceNumber(
+            rootResource,
+            adjustment.pool,
+            "containers",
+            "regCon",
+          ) !== adjustment.expectedContainers ||
+          readScopedResourceNumber(
+            rootResource,
+            adjustment.pool,
+            "max",
+            "regMax",
+          ) !== adjustment.expectedMaximum
         ) {
           return stale(
             "captured-storage-resource-changed",
@@ -762,8 +841,12 @@ function storageExecutor(
               `${adjustment.resourceId}: ${method} control is unavailable`,
             );
           for (let index = 0; index < Math.abs(delta); index += 1) {
+            const args =
+              adjustment.pool === undefined || adjustment.pool === "*"
+                ? [adjustment.resourceId]
+                : [adjustment.resourceId, adjustment.pool];
             const result = dependencies.controls.invoke(handle, method, [
-              adjustment.resourceId,
+              ...args,
             ]);
             if (!result.ok)
               return rejected(
@@ -804,11 +887,24 @@ function storageExecutor(
         );
       for (const adjustment of adjustments) {
         const resource = readProperty(finalResources, adjustment.resourceId);
-        const finalCrateCount = finite(readProperty(resource, "crates"));
-        const finalContainerCount = finite(
-          readProperty(resource, "containers"),
+        const finalCrateCount = readScopedResourceNumber(
+          resource,
+          adjustment.pool,
+          "crates",
+          "regCrate",
         );
-        const finalMaximum = finite(readProperty(resource, "max"));
+        const finalContainerCount = readScopedResourceNumber(
+          resource,
+          adjustment.pool,
+          "containers",
+          "regCon",
+        );
+        const finalMaximum = readScopedResourceNumber(
+          resource,
+          adjustment.pool,
+          "max",
+          "regMax",
+        );
         const expectedMaximum =
           adjustment.expectedMaximum +
           adjustment.crateDelta * session.crateValue +

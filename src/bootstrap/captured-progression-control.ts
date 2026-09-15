@@ -63,6 +63,7 @@ import type {
 } from "../ports/game-project-catalog.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import { createCapturedBuildCapacity } from "../adapters/evolve/captured-build-capacity.ts";
 
 export interface CapturedProgressionControlDependencies {
@@ -100,6 +101,7 @@ export interface CapturedProgressionControlDependencies {
    */
   readonly readCapturedStorageRequired?: (
     resourceIds: readonly string[],
+    resourceScopes?: readonly BuildResourceScope[],
   ) => Readonly<Record<string, number>> | undefined;
   /** Injected clock, for the sampled-panel caches' maximum age. */
   readonly nowMs: () => number;

@@ -61,11 +61,13 @@ export type CapturedTriggerTarget =
       readonly actionId: string;
       readonly actionType: "build" | "research";
       readonly cost: Readonly<Record<string, number>>;
+      readonly pool?: string;
     }
   | {
       readonly actionId: string;
       readonly actionType: "arpa";
       readonly cost: Readonly<Record<string, number>>;
+      readonly pool?: string;
       /** The project id the game's own `build` method takes, e.g. `lhc`. */
       readonly projectId: string;
       /** The whole remaining project in percent: the steps one press buys. */
@@ -536,10 +538,16 @@ export function createCapturedTriggers(
        * hold it against the other, so only the higher-priority one is a target. */
       const claim = (target: Readonly<CapturedTriggerTarget>): boolean => {
         const resourceIds = Object.keys(target.cost);
-        if (resourceIds.some((resourceId) => claimed.has(resourceId))) {
+        if (
+          resourceIds.some((resourceId) =>
+            claimed.has(`${resourceId}\u0000${target.pool ?? "*"}`),
+          )
+        ) {
           return false;
         }
-        for (const resourceId of resourceIds) claimed.add(resourceId);
+        for (const resourceId of resourceIds) {
+          claimed.add(`${resourceId}\u0000${target.pool ?? "*"}`);
+        }
         targets.push(target);
         return true;
       };
@@ -566,6 +574,7 @@ export function createCapturedTriggers(
             actionId: row.actionId,
             actionType,
             cost: priced.cost,
+            ...(priced.pool === undefined ? {} : { pool: priced.pool }),
           }),
         );
       }
