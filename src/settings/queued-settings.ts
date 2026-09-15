@@ -1,3 +1,5 @@
+import { applyQueuedSettings } from "../utils/queued-settings.ts";
+
 interface QueuedSettingsConfiguration {
   evolutionQueueEnabled: boolean;
   evolutionQueueRepeat: boolean;
@@ -43,28 +45,21 @@ export function createQueuedSettings({
       settingsRaw.evolutionQueue.length > 0
     ) {
       getState().evolutionAttempts++;
-      const queuedEvolution = settingsRaw.evolutionQueue.shift()!;
-      for (const [settingName, settingValue] of Object.entries(
-        queuedEvolution,
-      )) {
-        if (typeof settingsRaw[settingName] === typeof settingValue) {
-          settingsRaw[settingName] = settingValue;
-        } else {
+      const applied = applyQueuedSettings({
+        enabled: settings.evolutionQueueEnabled,
+        repeat: settings.evolutionQueueRepeat,
+        settingsRaw,
+        evolutionQueue: settingsRaw.evolutionQueue,
+        onTypeMismatch: (settingName, currentValue, queuedValue) => {
           getGameLog().logDanger(
             "special",
-            `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof settingsRaw[
-              settingName
-            ]}, value: ${
-              settingsRaw[settingName]
-            }; queuedEvolution.${settingName} type: ${typeof settingValue}, value: ${settingValue};`,
+            `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof currentValue}, value: ${currentValue}; queuedEvolution.${settingName} type: ${typeof queuedValue}, value: ${queuedValue};`,
             ["events", "major_events"],
           );
-        }
-      }
+        },
+      });
+      if (!applied) return;
       getUpdateOverrides()();
-      if (settings.evolutionQueueRepeat) {
-        settingsRaw.evolutionQueue.push(queuedEvolution);
-      }
       getUpdateStandAloneSettings()();
       getUpdateStateFromSettings()();
       getUpdateSettingsFromState()();

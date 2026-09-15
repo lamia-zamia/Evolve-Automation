@@ -130,6 +130,7 @@ import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-pr
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
 import { createGameModalCloser } from "../adapters/browser/game-modal.ts";
 import { createSettingsStore } from "../adapters/browser/settings-store.ts";
+import { createCapturedQueuedSettings } from "../adapters/evolve/progression/evolution/captured-queued-settings.ts";
 import { createCapturedSettingsPanel } from "./captured-settings-panel-control.ts";
 import {
   createCapturedTabDiscovery,
@@ -265,6 +266,11 @@ export function startCapturedRuntime({
     },
     onDiagnostic: (message) => reportDiagnostic(message),
     logError: (message) => logError(message),
+  });
+  const queuedSettings = createCapturedQueuedSettings({
+    settings: settingsStore,
+    refreshSettings: settingsPanel.refreshSettings,
+    onWarning: (message) => logError(message),
   });
   // The settings UI is useful even when document-start capture was missed (for example, when a
   // local bundle is loaded after the game). Automation still fails closed below until capture is
@@ -735,6 +741,7 @@ export function startCapturedRuntime({
     readBuildingResetActions: (regions) =>
       progression.readBuildingUnlocks(new Set(regions))?.unlocked,
     closeBioseedModal,
+    loadQueuedSettings: queuedSettings.loadQueuedSettings,
   });
   let geneticsDiscoveryAttempted = false;
   /**

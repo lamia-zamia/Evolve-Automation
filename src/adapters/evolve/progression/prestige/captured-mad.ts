@@ -185,6 +185,8 @@ export interface CapturedMadPrestigeDependencies {
   ) => ReadonlySet<string> | undefined;
   /** Closes a Bioseed options modal after its action controls have been captured. */
   readonly closeBioseedModal?: () => void;
+  /** Applies one queued evolution settings record before a cataclysm research click. */
+  readonly loadQueuedSettings?: () => void;
   /** Reports a prestige after the launch replaced the captured game root. */
   readonly onActivity?: GameActivitySink;
 }
@@ -749,7 +751,7 @@ export function createCapturedMadPrestige(
             // requirements and condition have passed. The row is therefore
             // the eligibility answer; affordability is a separate live gate.
             eligible: tech !== undefined,
-            loadQueuedSettings: false,
+            loadQueuedSettings: Boolean(settings["autoEvolution"]),
             dialClickable:
               tech !== undefined &&
               capturedTechIsAffordable(tech, dependencies.resources),
@@ -1333,6 +1335,9 @@ export function createCapturedMadPrestige(
           });
           return;
         }
+        case "load-queued-settings":
+          dependencies.loadQueuedSettings?.();
+          return;
         default:
           // Unsupported branches are intentionally represented as noop by this bounded reader.
           return;

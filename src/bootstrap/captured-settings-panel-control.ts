@@ -132,6 +132,8 @@ export interface CapturedSettingsPanel {
    * Safe to call every tick: the container's own guard is a single selector lookup.
    */
   ensurePanel(): void;
+  /** Rebuilds only the script-owned settings section after a queued settings load. */
+  refreshSettings(): void;
 }
 
 /** `Alt` on macOS, where `Ctrl`+click is already the secondary click. */
@@ -766,6 +768,15 @@ export function createCapturedSettingsPanel({
       } catch (error) {
         // A panel that fails to draw must never stop the automation tick.
         logError(`settings panel could not be drawn: ${String(error)}`);
+      }
+    },
+    refreshSettings() {
+      if (settings.readRaw()["showSettings"] !== true) return;
+      try {
+        removeScriptSettings();
+        buildScriptSettings();
+      } catch (error) {
+        logError(`settings panel could not be refreshed: ${String(error)}`);
       }
     },
   });

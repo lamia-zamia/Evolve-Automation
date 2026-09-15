@@ -5869,7 +5869,7 @@
               // requirements and condition have passed. The row is therefore
               // the eligibility answer; affordability is a separate live gate.
               eligible: tech !== void 0,
-              loadQueuedSettings: !1,
+              loadQueuedSettings: !!settings.autoEvolution,
               dialClickable: tech !== void 0 && capturedTechIsAffordable(tech, dependencies.resources)
             };
           }
@@ -6236,6 +6236,9 @@
             });
             return;
           }
+          case "load-queued-settings":
+            dependencies.loadQueuedSettings?.();
+            return;
           default:
             return;
         }
@@ -18579,6 +18582,49 @@
     });
   }
 
+  // src/utils/queued-settings.ts
+  function applyQueuedSettings({
+    enabled,
+    repeat,
+    settingsRaw,
+    evolutionQueue,
+    onTypeMismatch
+  }) {
+    if (!enabled || evolutionQueue.length === 0) return !1;
+    let queuedEvolution = evolutionQueue.shift();
+    if (queuedEvolution === void 0) return !1;
+    for (let [settingName, settingValue] of Object.entries(queuedEvolution))
+      typeof settingsRaw[settingName] == typeof settingValue ? settingsRaw[settingName] = settingValue : onTypeMismatch(settingName, settingsRaw[settingName], settingValue);
+    return repeat && evolutionQueue.push(queuedEvolution), !0;
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-queued-settings.ts
+  function createCapturedQueuedSettings({
+    settings,
+    refreshSettings,
+    onWarning = () => {
+    }
+  }) {
+    let evolutionAttempts = 0;
+    return Object.freeze({
+      loadQueuedSettings() {
+        let settingsRaw = settings.readRaw(), rawQueue = settingsRaw.evolutionQueue, evolutionQueue = Array.isArray(rawQueue) ? rawQueue : void 0, queuedEvolution = evolutionQueue?.[0];
+        settingsRaw.evolutionQueueEnabled !== !0 || evolutionQueue === void 0 || queuedEvolution === void 0 || !isNonArrayRecord(queuedEvolution) || !applyQueuedSettings({
+          enabled: !0,
+          repeat: settingsRaw.evolutionQueueRepeat === !0,
+          settingsRaw,
+          evolutionQueue,
+          onTypeMismatch: (settingName, currentValue2, queuedValue) => {
+            onWarning(
+              `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof currentValue2}, value: ${currentValue2}; queuedEvolution.${settingName} type: ${typeof queuedValue}, value: ${queuedValue};`
+            );
+          }
+        }) || (evolutionAttempts += 1, settings.persist(), settingsRaw.showSettings === !0 && refreshSettings?.());
+      },
+      readEvolutionAttempts: () => evolutionAttempts
+    });
+  }
+
   // src/ui/automation-container.ts
   function createAutomationContainer({
     getSettingsRaw,
@@ -21363,6 +21409,14 @@ Only continue if you trust the source. Injected code:
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }
+      },
+      refreshSettings() {
+        if (settings.readRaw().showSettings === !0)
+          try {
+            removeScriptSettings(), buildScriptSettings();
+          } catch (error) {
+            logError(`settings panel could not be refreshed: ${String(error)}`);
+          }
       }
     });
   }
@@ -21464,6 +21518,10 @@ Only continue if you trust the source. Injected code:
       },
       onDiagnostic: (message) => reportDiagnostic(message),
       logError: (message) => logError(message)
+    }), queuedSettings = createCapturedQueuedSettings({
+      settings: settingsStore,
+      refreshSettings: settingsPanel.refreshSettings,
+      onWarning: (message) => logError(message)
     });
     settingsPanel.ensurePanel();
     let capturedPrestigeGoal = "Standard", reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
@@ -21792,7 +21850,8 @@ Only continue if you trust the source. Injected code:
       readOfferedTechs: progression.readOfferedTechs,
       resources: createCapturedResourceSource(pageCapture2.rootState),
       readBuildingResetActions: (regions) => progression.readBuildingUnlocks(new Set(regions))?.unlocked,
-      closeBioseedModal
+      closeBioseedModal,
+      loadQueuedSettings: queuedSettings.loadQueuedSettings
     }), geneticsDiscoveryAttempted = !1, ensureGeneticsControls = () => {
       if (pageCapture2.controls.resolve(GENETICS_CONTROL) !== void 0) return;
       let root = pageCapture2.rootState.readRoot(), level = readProperty(readProperty(root, "tech"), "genetics"), panelOffered = readProperty(

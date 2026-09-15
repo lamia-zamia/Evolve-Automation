@@ -1086,6 +1086,7 @@ for (const scenario of [
 {
   const trace = [];
   let goal = "Normal";
+  let queueLoads = 0;
   const root = buildRoot({ settings: { qKey: true, touch: true } });
   const controls = {
     resolve(id) {
@@ -1114,6 +1115,10 @@ for (const scenario of [
       goal = next;
       trace.push(["goal", next]);
     },
+    loadQueuedSettings: () => {
+      queueLoads += 1;
+      trace.push("load queued settings");
+    },
     readOfferedTechs: () => [
       {
         elementId: CAPTURED_CATACLYSM_TECH,
@@ -1134,7 +1139,13 @@ for (const scenario of [
   goal = "Reset";
   runPrestige(prestige);
   runPrestige(prestige);
-  assert.deepEqual(trace, [["goal", "Reset"], "action", "Prestiged"]);
+  assert.deepEqual(trace, [
+    ["goal", "Reset"],
+    "load queued settings",
+    "action",
+    "Prestiged",
+  ]);
+  assert.equal(queueLoads, 1);
   assert.equal(root.settings.qKey, true);
   assert.equal(root.settings.touch, true);
 }
