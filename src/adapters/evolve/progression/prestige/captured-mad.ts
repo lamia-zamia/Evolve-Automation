@@ -101,7 +101,7 @@ const CAPTURED_PRESTIGE_TECH_IDS = Object.freeze([
   ...CAPTURED_WHITEHOLE_TECH_IDS,
 ]);
 
-/** DeadSpace action rows that commit the ordinary building-shaped prestige branches. */
+/** DeadSpace action rows that commit the captured building-shaped prestige branches. */
 export const CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
   terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
   ascension: Object.freeze({
@@ -109,6 +109,10 @@ export const CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
     region: "interstellar",
   }),
   matrix: Object.freeze({ elementId: "tauceti-blue_pill", region: "tauceti" }),
+  retire: Object.freeze({
+    elementId: "tauceti-alien_space_station",
+    region: "tauceti",
+  }),
   apotheosis: Object.freeze({
     elementId: "eden-apotheosis",
     region: "eden",

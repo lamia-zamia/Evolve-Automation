@@ -156,6 +156,11 @@ const settings = {
       elementId: "tauceti-blue_pill",
     },
     {
+      prestigeType: "retire",
+      region: "tauceti",
+      elementId: "tauceti-alien_space_station",
+    },
+    {
       prestigeType: "apotheosis",
       region: "eden",
       elementId: "eden-apotheosis",

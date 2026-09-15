@@ -5556,6 +5556,10 @@
       region: "interstellar"
     }),
     matrix: Object.freeze({ elementId: "tauceti-blue_pill", region: "tauceti" }),
+    retire: Object.freeze({
+      elementId: "tauceti-alien_space_station",
+      region: "tauceti"
+    }),
     apotheosis: Object.freeze({
       elementId: "eden-apotheosis",
       region: "eden"
