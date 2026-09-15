@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   CAPTURED_MAD_CONTROL,
+  CAPTURED_CATACLYSM_TECH,
   createCapturedMadPrestige,
   readCapturedMadBranch,
 } from "../src/adapters/evolve/progression/prestige/captured-mad.ts";
@@ -189,6 +190,84 @@ const settings = {
     runPrestige(prestige);
     assert.deepEqual(trace, ["action"]);
   }
+}
+
+// Cataclysm is committed by a research action rather than a building or Vue panel method. The
+// drawn row is the game's eligibility answer, its captured price is checked against live holdings,
+// and the successful wrapper call is treated as committed because the upstream action schedules
+// its reset asynchronously and the Vue wrapper does not return the lexical boolean.
+{
+  const trace = [];
+  let goal = "Normal";
+  const root = buildRoot();
+  const controls = {
+    resolve(id) {
+      return id === CAPTURED_CATACLYSM_TECH
+        ? { elementId: id, generation: 3, methods: ["action"] }
+        : undefined;
+    },
+    invoke(handle, method) {
+      assert.equal(handle.elementId, CAPTURED_CATACLYSM_TECH);
+      assert.equal(method, "action");
+      trace.push(method);
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds() {
+      return [CAPTURED_CATACLYSM_TECH];
+    },
+  };
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls,
+    readSettings: () => ({ prestigeType: "cataclysm", autoEvolution: true }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+      trace.push(["goal", next]);
+    },
+    readOfferedTechs: () => [
+      {
+        elementId: CAPTURED_CATACLYSM_TECH,
+        cost: { Knowledge: 500000 },
+        generation: 3,
+      },
+    ],
+    resources: {
+      readResources: () => ({
+        resources: new Map([["Knowledge", { amount: 500000 }]]),
+      }),
+    },
+    onActivity: (activityEntry) => trace.push(activityEntry.message),
+  });
+
+  runPrestige(prestige);
+  assert.deepEqual(trace, [["goal", "Reset"]]);
+  goal = "Reset";
+  runPrestige(prestige);
+  runPrestige(prestige);
+  assert.deepEqual(trace, [["goal", "Reset"], "action", "Prestiged"]);
+}
+
+// A missing research draw is unknown, not a locked cataclysm. The captured branch must not set
+// the reset goal when it cannot establish that the upstream action is offered.
+{
+  let goal = "Normal";
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: buildRoot },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: true, value: undefined }),
+      capturedElementIds: () => [],
+    },
+    readSettings: () => ({ prestigeType: "cataclysm" }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+    },
+    readOfferedTechs: () => undefined,
+  });
+  runPrestige(prestige);
+  assert.equal(goal, "Normal");
 }
 
 // A panel that could not be sampled is unknown, so it must not be treated as a locked reset.

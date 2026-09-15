@@ -21,6 +21,9 @@ import type {
   PrestigeReader,
 } from "../../../../ports/prestige.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
+import { canAfford } from "../../../../domain/game-world.ts";
+import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
+import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import {
   coerceNumber,
   finite,
@@ -29,6 +32,9 @@ import {
 } from "../../../validation.ts";
 
 export const CAPTURED_MAD_CONTROL = "mad";
+
+/** The captured research action that commits the cataclysm reset. */
+export const CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11";
 
 /** DeadSpace action rows that commit the ordinary building-shaped prestige branches. */
 export const CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
@@ -66,6 +72,11 @@ export interface CapturedMadPrestigeDependencies {
   readonly readSettings: () => unknown;
   readonly readGoal: () => string;
   readonly setGoal: (goal: string) => void;
+  /** The current research draw, including the game's own price and control generation. */
+  readonly readOfferedTechs?: () =>
+    readonly Readonly<OfferedTech>[] | undefined;
+  /** Captured holdings used to answer the selected research action's affordability. */
+  readonly resources?: GameResourceSource;
   /** Reads the game's offered action rows for the named prestige panel. */
   readonly readBuildingResetActions?: (
     regions: readonly string[],
@@ -163,12 +174,14 @@ export function createCapturedMadPrestige(
   dependencies: CapturedMadPrestigeDependencies,
 ): { readonly reader: PrestigeReader; readonly executor: PrestigeExecutor } {
   let sampledRoot: unknown;
+  let sampledCataclysmTech: Readonly<OfferedTech> | undefined;
   let resetCommitted = false;
   const reader: PrestigeReader = Object.freeze({
     samplePrestige(): PrestigeInput {
       const settings = capturedMadSettingsRecord(dependencies.readSettings());
       const root = dependencies.rootState.readRoot();
       sampledRoot = root;
+      sampledCataclysmTech = undefined;
       const prestigeType =
         typeof settings["prestigeType"] === "string"
           ? settings["prestigeType"]
@@ -191,6 +204,30 @@ export function createCapturedMadPrestige(
             type: "building-reset",
             building: action.elementId,
             unlocked: offered.has(action.elementId),
+          };
+        }
+      } else if (!resetCommitted && prestigeType === "cataclysm") {
+        const offered = dependencies.readOfferedTechs?.();
+        if (offered !== undefined) {
+          const tech = offered.find(
+            (entry) => entry.elementId === CAPTURED_CATACLYSM_TECH,
+          );
+          if (tech !== undefined) sampledCataclysmTech = tech;
+          const resources =
+            tech === undefined
+              ? undefined
+              : dependencies.resources?.readResources(Object.keys(tech.cost));
+          branch = {
+            type: "cataclysm",
+            // The game only draws an unresearched action after its own
+            // requirements and condition have passed. The row is therefore
+            // the eligibility answer; affordability is a separate live gate.
+            eligible: tech !== undefined,
+            loadQueuedSettings: false,
+            dialClickable:
+              tech !== undefined &&
+              resources !== undefined &&
+              canAfford(resources, tech.cost),
           };
         }
       }
@@ -250,6 +287,46 @@ export function createCapturedMadPrestige(
           // DeadSpace's reset action returns true after it has scheduled the browser reload. Keep
           // the old root from receiving a duplicate click if that reload is still pending.
           if (result.value === true) resetCommitted = true;
+          return;
+        }
+        case "click-tech": {
+          if (command.id !== CAPTURED_CATACLYSM_TECH) return;
+          if (dependencies.rootState.readRoot() !== sampledRoot) {
+            throw new Error("captured prestige root changed after sampling");
+          }
+          const sampled = sampledCataclysmTech;
+          if (sampled === undefined) {
+            throw new Error(
+              `captured prestige action ${command.id} was not offered`,
+            );
+          }
+          const handle = dependencies.controls.resolve(command.id);
+          if (handle === undefined || !handle.methods.includes("action")) {
+            throw new Error(
+              `captured prestige action ${command.id} is unavailable`,
+            );
+          }
+          if (handle.generation !== sampled.generation) {
+            throw new Error(
+              `captured prestige action ${command.id} was redrawn`,
+            );
+          }
+          const result = dependencies.controls.invoke(handle, "action");
+          if (!result.ok) {
+            throw new Error(
+              `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`,
+            );
+          }
+          // The Vue wrapper does not return the lexical action's boolean. The
+          // drawn row and live affordability already gated this call, so a
+          // successful wrapper invocation is the only synchronous commit fact
+          // available before the game's delayed reset.
+          resetCommitted = true;
+          dependencies.onActivity?.({
+            message: "Prestiged",
+            color: "info",
+            tags: Object.freeze(["achievements"]),
+          });
           return;
         }
         default:

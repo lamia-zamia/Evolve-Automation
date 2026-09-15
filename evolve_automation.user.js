@@ -5485,7 +5485,7 @@
   }
 
   // src/adapters/evolve/progression/prestige/captured-mad.ts
-  var CAPTURED_MAD_CONTROL = "mad", CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
+  var CAPTURED_MAD_CONTROL = "mad", CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11", CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
     terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
     ascension: Object.freeze({
       elementId: "interstellar-ascend",
@@ -5547,10 +5547,10 @@
       );
   }
   function createCapturedMadPrestige(dependencies) {
-    let sampledRoot, resetCommitted = !1, reader = Object.freeze({
+    let sampledRoot, sampledCataclysmTech, resetCommitted = !1, reader = Object.freeze({
       samplePrestige() {
         let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot();
-        sampledRoot = root;
+        sampledRoot = root, sampledCataclysmTech = void 0;
         let prestigeType = typeof settings.prestigeType == "string" ? settings.prestigeType : "none", branch = { type: "noop" };
         if (!resetCommitted && prestigeType === "mad")
           branch = readCapturedMadBranch(root, settings);
@@ -5563,6 +5563,24 @@
             building: action.elementId,
             unlocked: offered.has(action.elementId)
           });
+        } else if (!resetCommitted && prestigeType === "cataclysm") {
+          let offered = dependencies.readOfferedTechs?.();
+          if (offered !== void 0) {
+            let tech = offered.find(
+              (entry) => entry.elementId === CAPTURED_CATACLYSM_TECH
+            );
+            tech !== void 0 && (sampledCataclysmTech = tech);
+            let resources = tech === void 0 ? void 0 : dependencies.resources?.readResources(Object.keys(tech.cost));
+            branch = {
+              type: "cataclysm",
+              // The game only draws an unresearched action after its own
+              // requirements and condition have passed. The row is therefore
+              // the eligibility answer; affordability is a separate live gate.
+              eligible: tech !== void 0,
+              loadQueuedSettings: !1,
+              dialClickable: tech !== void 0 && resources !== void 0 && canAfford(resources, tech.cost)
+            };
+          }
         }
         return Object.freeze({
           goal: dependencies.readGoal(),
@@ -5604,6 +5622,36 @@
                 `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`
               );
             result.value === !0 && (resetCommitted = !0);
+            return;
+          }
+          case "click-tech": {
+            if (command.id !== CAPTURED_CATACLYSM_TECH) return;
+            if (dependencies.rootState.readRoot() !== sampledRoot)
+              throw new Error("captured prestige root changed after sampling");
+            let sampled3 = sampledCataclysmTech;
+            if (sampled3 === void 0)
+              throw new Error(
+                `captured prestige action ${command.id} was not offered`
+              );
+            let handle = dependencies.controls.resolve(command.id);
+            if (handle === void 0 || !handle.methods.includes("action"))
+              throw new Error(
+                `captured prestige action ${command.id} is unavailable`
+              );
+            if (handle.generation !== sampled3.generation)
+              throw new Error(
+                `captured prestige action ${command.id} was redrawn`
+              );
+            let result = dependencies.controls.invoke(handle, "action");
+            if (!result.ok)
+              throw new Error(
+                `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`
+              );
+            resetCommitted = !0, dependencies.onActivity?.({
+              message: "Prestiged",
+              color: "info",
+              tags: Object.freeze(["achievements"])
+            });
             return;
           }
           default:
@@ -21165,6 +21213,8 @@ Only continue if you trust the source. Injected code:
       setGoal: (goal) => {
         capturedPrestigeGoal = goal;
       },
+      readOfferedTechs: progression.readOfferedTechs,
+      resources: createCapturedResourceSource(pageCapture2.rootState),
       readBuildingResetActions: (regions) => progression.readBuildingUnlocks(new Set(regions))?.unlocked
     }), geneticsDiscoveryAttempted = !1, ensureGeneticsControls = () => {
       if (pageCapture2.controls.resolve(GENETICS_CONTROL) !== void 0) return;
@@ -21682,7 +21732,7 @@ Only continue if you trust the source. Injected code:
           ensureGeneticsControls(), runGeneticsAutomation(genetics);
         });
         let prestigeType = settings.prestigeType;
-        isEnabled(settings, "autoPrestige") && (prestigeType === "mad" || isCapturedBuildingPrestigeType(prestigeType)) && capturedPrestigeGoal !== "GameOverMan" && runPhase("autoPrestige", () => {
+        isEnabled(settings, "autoPrestige") && (prestigeType === "mad" || prestigeType === "cataclysm" || isCapturedBuildingPrestigeType(prestigeType)) && capturedPrestigeGoal !== "GameOverMan" && runPhase("autoPrestige", () => {
           if (prestigeType === "mad") {
             ensureMadControls();
             let mad = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL);

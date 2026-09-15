@@ -724,6 +724,8 @@ export function startCapturedRuntime({
     setGoal: (goal) => {
       capturedPrestigeGoal = goal;
     },
+    readOfferedTechs: progression.readOfferedTechs,
+    resources: createCapturedResourceSource(pageCapture.rootState),
     readBuildingResetActions: (regions) =>
       progression.readBuildingUnlocks(new Set(regions))?.unlocked,
   });
@@ -1689,6 +1691,7 @@ export function startCapturedRuntime({
       if (
         isEnabled(settings, "autoPrestige") &&
         (prestigeType === "mad" ||
+          prestigeType === "cataclysm" ||
           isCapturedBuildingPrestigeType(prestigeType)) &&
         capturedPrestigeGoal !== "GameOverMan"
       ) {
