@@ -8,6 +8,7 @@ import {
   CAPTURED_WITCH_ASCENSION_ACTION,
   CAPTURED_BIOSEED_ACTIONS,
   CAPTURED_WHITEHOLE_TECHS,
+  CAPTURED_WHITEHOLE_REPAIR_TECH,
   createCapturedMadPrestige,
   readCapturedMadBranch,
 } from "../src/adapters/evolve/progression/prestige/captured-mad.ts";
@@ -762,6 +763,201 @@ for (const scenario of [
     CAPTURED_WHITEHOLE_TECHS.confirm,
     "Prestiged",
   ]);
+}
+
+// A fresh page with whitehole 4 has an interrupted reset. The captured repair row takes priority
+// over the normal infusion sequence, and success is committed only after the game-owned grant and
+// exotic mass postconditions are visible.
+{
+  const trace = [];
+  let goal = "Normal";
+  let invocations = 0;
+  const root = buildRoot({
+    interstellar: { stellar_engine: { mass: 10, exotic: 2 } },
+    tech: { mad: 1, whitehole: 4 },
+  });
+  const repairOffer = {
+    elementId: CAPTURED_WHITEHOLE_REPAIR_TECH,
+    cost: { Knowledge: 1500000, Neutronium: 20000 },
+    generation: 1,
+  };
+  const controls = {
+    resolve(id) {
+      return id === CAPTURED_WHITEHOLE_REPAIR_TECH
+        ? {
+            elementId: id,
+            generation: repairOffer.generation,
+            methods: ["action"],
+            data: { title: "Stabilize Blackhole" },
+          }
+        : undefined;
+    },
+    invoke(handle, method) {
+      assert.equal(handle.elementId, CAPTURED_WHITEHOLE_REPAIR_TECH);
+      assert.equal(method, "action");
+      invocations += 1;
+      delete root.tech.whitehole;
+      root.interstellar.stellar_engine.exotic = 0;
+      return { ok: true, value: true };
+    },
+    capturedElementIds() {
+      return [CAPTURED_WHITEHOLE_REPAIR_TECH];
+    },
+  };
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls,
+    readSettings: () => ({ prestigeType: "whitehole" }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+      trace.push(["goal", next]);
+    },
+    readOfferedTechs: () => [repairOffer],
+    resources: {
+      readResources: () => ({
+        resources: new Map([
+          ["Knowledge", { amount: 1500000 }],
+          ["Neutronium", { amount: 20000 }],
+        ]),
+      }),
+    },
+    onActivity: (activityEntry) => trace.push(activityEntry.message),
+  });
+
+  runPrestige(prestige);
+  assert.equal(goal, "Reset");
+  runPrestige(prestige);
+  assert.deepEqual(trace, [
+    ["goal", "Reset"],
+    "Researched Stabilize Blackhole",
+  ]);
+  assert.equal(invocations, 1);
+  assert.equal(root.tech.whitehole, undefined);
+  assert.equal(root.interstellar.stellar_engine.exotic, 0);
+  runPrestige(prestige);
+  assert.equal(invocations, 1);
+}
+
+// The repair row is a real eligibility answer, but an unaffordable captured price must not click.
+{
+  let goal = "Normal";
+  let invocations = 0;
+  const root = buildRoot({ tech: { mad: 1, whitehole: 4 } });
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls: {
+      resolve: () => ({
+        elementId: CAPTURED_WHITEHOLE_REPAIR_TECH,
+        generation: 1,
+        methods: ["action"],
+      }),
+      invoke: () => {
+        invocations += 1;
+        return { ok: true, value: true };
+      },
+      capturedElementIds: () => [CAPTURED_WHITEHOLE_REPAIR_TECH],
+    },
+    readSettings: () => ({ prestigeType: "whitehole" }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+    },
+    readOfferedTechs: () => [
+      {
+        elementId: CAPTURED_WHITEHOLE_REPAIR_TECH,
+        cost: { Knowledge: 1500000 },
+        generation: 1,
+      },
+    ],
+    resources: {
+      readResources: () => ({
+        resources: new Map([["Knowledge", { amount: 1499999 }]]),
+      }),
+    },
+  });
+
+  runPrestige(prestige);
+  assert.equal(goal, "Reset");
+  runPrestige(prestige);
+  assert.equal(invocations, 0);
+}
+
+// An offered repair without a captured control is a capture gap, not permission to invoke an
+// unverified method; the branch stands down until a later draw binds the row.
+{
+  let goal = "Normal";
+  const root = buildRoot({ tech: { mad: 1, whitehole: 4 } });
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: true, value: true }),
+      capturedElementIds: () => [],
+    },
+    readSettings: () => ({ prestigeType: "whitehole" }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+    },
+    readOfferedTechs: () => [
+      {
+        elementId: CAPTURED_WHITEHOLE_REPAIR_TECH,
+        cost: { Knowledge: 1 },
+        generation: 1,
+      },
+    ],
+    resources: {
+      readResources: () => ({
+        resources: new Map([["Knowledge", { amount: 1 }]]),
+      }),
+    },
+  });
+
+  runPrestige(prestige);
+  assert.equal(goal, "Reset");
+  assert.doesNotThrow(() => runPrestige(prestige));
+}
+
+// A redrawn repair control is rejected by the same generation guard as every other captured
+// prestige action, but the recovery branch stands down until the next draw instead of throwing.
+{
+  let goal = "Normal";
+  let generation = 1;
+  const root = buildRoot({ tech: { mad: 1, whitehole: 4 } });
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls: {
+      resolve: () => ({
+        elementId: CAPTURED_WHITEHOLE_REPAIR_TECH,
+        generation,
+        methods: ["action"],
+      }),
+      invoke: () => ({ ok: true, value: true }),
+      capturedElementIds: () => [CAPTURED_WHITEHOLE_REPAIR_TECH],
+    },
+    readSettings: () => ({ prestigeType: "whitehole" }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+    },
+    readOfferedTechs: () => [
+      {
+        elementId: CAPTURED_WHITEHOLE_REPAIR_TECH,
+        cost: { Knowledge: 1 },
+        generation: 1,
+      },
+    ],
+    resources: {
+      readResources: () => ({
+        resources: new Map([["Knowledge", { amount: 1 }]]),
+      }),
+    },
+  });
+
+  runPrestige(prestige);
+  generation = 2;
+  assert.doesNotThrow(() => runPrestige(prestige));
 }
 
 // Cataclysm is committed by a research action rather than a building or Vue panel method. The

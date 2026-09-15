@@ -528,6 +528,42 @@ assert.deepEqual(
   ],
 );
 
+// An interrupted whitehole reset is a distinct act: it waits for the ordinary one-tick goal
+// transition, then buys the captured stabilization action only when its sampled price is ready.
+assert.deepEqual(
+  planPrestige({
+    goal: "Normal",
+    branch: {
+      type: "whitehole-repair",
+      eligible: true,
+      repairReady: true,
+    },
+  }),
+  [{ kind: "set-goal", goal: "Reset" }],
+);
+assert.deepEqual(
+  planPrestige({
+    goal: "Reset",
+    branch: {
+      type: "whitehole-repair",
+      eligible: true,
+      repairReady: true,
+    },
+  }),
+  [{ kind: "click-tech", id: "tech-stabilize_blackhole" }],
+);
+assert.deepEqual(
+  planPrestige({
+    goal: "Reset",
+    branch: {
+      type: "whitehole-repair",
+      eligible: true,
+      repairReady: false,
+    },
+  }),
+  [],
+);
+
 console.log("Prestige planner unit tests passed");
 
 // --- Adapter contract tests --------------------------------------------------

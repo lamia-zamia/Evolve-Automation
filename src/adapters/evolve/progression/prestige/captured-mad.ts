@@ -16,10 +16,12 @@ import {
   type BioseedPrestigeInput,
   type DemonicPrestigeInput,
 } from "../../../../domain/progression/prestige/prestige-eligibility.ts";
-import type {
-  PrestigeBranch,
-  PrestigeCommand,
-  PrestigeInput,
+import {
+  WHITEHOLE_REPAIR_TECH_ID,
+  WHITEHOLE_RESET_LEVEL,
+  type PrestigeBranch,
+  type PrestigeCommand,
+  type PrestigeInput,
 } from "../../../../domain/progression/prestige/prestige.ts";
 import type {
   GameControlHandle,
@@ -41,6 +43,7 @@ import {
   isNonArrayRecord,
   readProperty,
 } from "../../../validation.ts";
+import { readCapturedControlLabel } from "../../captured-control-label.ts";
 
 export const CAPTURED_MAD_CONTROL = "mad";
 
@@ -90,6 +93,9 @@ export const CAPTURED_WHITEHOLE_TECHS = Object.freeze({
   exotic: "tech-exotic_infusion",
 });
 
+/** The captured research action that repairs an interrupted whitehole reset. */
+export const CAPTURED_WHITEHOLE_REPAIR_TECH = WHITEHOLE_REPAIR_TECH_ID;
+
 const CAPTURED_WHITEHOLE_TECH_IDS = Object.freeze(
   Object.values(CAPTURED_WHITEHOLE_TECHS),
 );
@@ -99,6 +105,7 @@ const CAPTURED_PRESTIGE_TECH_IDS = Object.freeze([
   ...CAPTURED_APOCALYPSE_TECH_IDS,
   ...CAPTURED_DEMONIC_TECH_IDS,
   ...CAPTURED_WHITEHOLE_TECH_IDS,
+  CAPTURED_WHITEHOLE_REPAIR_TECH,
 ]);
 
 /** DeadSpace action rows that commit the captured building-shaped prestige branches. */
@@ -260,6 +267,42 @@ function capturedTechIsAffordable(
   return sample !== undefined && canAfford(sample, tech.cost);
 }
 
+function readCapturedWhiteholeLevel(root: unknown): number {
+  return finite(readProperty(readProperty(root, "tech"), "whitehole")) ?? 0;
+}
+
+function readCapturedWhiteholeRepairBranch(
+  root: unknown,
+  offered: readonly Readonly<OfferedTech>[],
+  resources: GameResourceSource | undefined,
+): Extract<PrestigeBranch, { readonly type: "whitehole-repair" }> | undefined {
+  if (readCapturedWhiteholeLevel(root) < WHITEHOLE_RESET_LEVEL)
+    return undefined;
+  const repair = offered.find(
+    (entry) => entry.elementId === CAPTURED_WHITEHOLE_REPAIR_TECH,
+  );
+  if (repair === undefined) return undefined;
+  return {
+    type: "whitehole-repair",
+    eligible: true,
+    repairReady: capturedTechIsAffordable(repair, resources),
+  };
+}
+
+function capturedWhiteholeRepairSucceeded(root: unknown): boolean {
+  const tech = readProperty(root, "tech");
+  const engine = readProperty(
+    readProperty(root, "interstellar"),
+    "stellar_engine",
+  );
+  return (
+    isNonArrayRecord(tech) &&
+    readProperty(tech, "whitehole") === undefined &&
+    isNonArrayRecord(engine) &&
+    finite(readProperty(engine, "exotic")) === 0
+  );
+}
+
 function readCapturedWhiteholeBranch(
   root: unknown,
   settings: Record<PropertyKey, unknown>,
@@ -272,8 +315,7 @@ function readCapturedWhiteholeBranch(
   );
   const mass = finite(readProperty(engine, "mass")) ?? 0;
   const exotic = finite(readProperty(engine, "exotic")) ?? 0;
-  const whiteholeLevel =
-    finite(readProperty(readProperty(root, "tech"), "whitehole")) ?? 0;
+  const whiteholeLevel = readCapturedWhiteholeLevel(root);
   const findOffer = (id: string) =>
     offered.find((entry) => entry.elementId === id);
   const exoticOffer = findOffer(CAPTURED_WHITEHOLE_TECHS.exotic);
@@ -631,19 +673,34 @@ export function createCapturedMadPrestige(
       } else if (!resetCommitted && prestigeType === "whitehole") {
         const offered = dependencies.readOfferedTechs?.();
         if (offered !== undefined) {
-          for (const tech of offered) {
-            if (
-              CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === tech.elementId)
-            ) {
-              sampledPrestigeTechs.set(tech.elementId, tech);
-            }
-          }
-          branch = readCapturedWhiteholeBranch(
+          const repairBranch = readCapturedWhiteholeRepairBranch(
             root,
-            settings,
             offered,
             dependencies.resources,
           );
+          if (repairBranch !== undefined) {
+            const repair = offered.find(
+              (entry) => entry.elementId === CAPTURED_WHITEHOLE_REPAIR_TECH,
+            );
+            if (repair !== undefined) {
+              sampledPrestigeTechs.set(repair.elementId, repair);
+            }
+            branch = repairBranch;
+          } else {
+            for (const tech of offered) {
+              if (
+                CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === tech.elementId)
+              ) {
+                sampledPrestigeTechs.set(tech.elementId, tech);
+              }
+            }
+            branch = readCapturedWhiteholeBranch(
+              root,
+              settings,
+              offered,
+              dependencies.resources,
+            );
+          }
         }
       } else if (!resetCommitted && prestigeType === "bioseed") {
         const offered = dependencies.readBuildingResetActions?.(["space"]);
@@ -884,7 +941,8 @@ export function createCapturedMadPrestige(
             return;
           if (
             sampled === undefined &&
-            CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === command.id)
+            (CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === command.id) ||
+              command.id === CAPTURED_WHITEHOLE_REPAIR_TECH)
           )
             return;
           if (sampled === undefined) {
@@ -894,11 +952,13 @@ export function createCapturedMadPrestige(
           }
           const handle = dependencies.controls.resolve(command.id);
           if (handle === undefined || !handle.methods.includes("action")) {
+            if (command.id === CAPTURED_WHITEHOLE_REPAIR_TECH) return;
             throw new Error(
               `captured prestige action ${command.id} is unavailable`,
             );
           }
           if (handle.generation !== sampled.generation) {
+            if (command.id === CAPTURED_WHITEHOLE_REPAIR_TECH) return;
             throw new Error(
               `captured prestige action ${command.id} was redrawn`,
             );
@@ -914,7 +974,8 @@ export function createCapturedMadPrestige(
             (command.id === CAPTURED_CATACLYSM_TECH ||
               CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) ||
               command.id === CAPTURED_APOCALYPSE_TECHS.final ||
-              command.id === CAPTURED_WHITEHOLE_TECHS.confirm) &&
+              command.id === CAPTURED_WHITEHOLE_TECHS.confirm ||
+              command.id === CAPTURED_WHITEHOLE_REPAIR_TECH) &&
             !capturedTechIsAffordable(sampled, dependencies.resources)
           ) {
             return;
@@ -959,6 +1020,25 @@ export function createCapturedMadPrestige(
               ) ?? 0;
             if (whiteholeLevelAfter <= whiteholeLevelBefore) return;
             resetCommitted = true;
+          }
+          if (command.id === CAPTURED_WHITEHOLE_REPAIR_TECH) {
+            if (
+              !capturedWhiteholeRepairSucceeded(
+                dependencies.rootState.readRoot(),
+              )
+            ) {
+              return;
+            }
+            const label = readCapturedControlLabel(
+              handle,
+              "Stabilize Blackhole",
+            );
+            dependencies.onActivity?.({
+              message: `Researched ${label}`,
+              color: "success",
+              tags: Object.freeze(["queue", "research_queue"]),
+            });
+            return;
           }
           if (
             command.id !== CAPTURED_CATACLYSM_TECH &&

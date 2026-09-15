@@ -62,6 +62,13 @@ export type PrestigeBranch =
       /** `tech-infusion_confirm` is offered and affordable right now. */
       readonly confirmReady: boolean;
     }
+  | {
+      readonly type: "whitehole-repair";
+      /** The game's research draw offered `tech-stabilize_blackhole`. */
+      readonly eligible: boolean;
+      /** The drawn action price fits the current captured holdings. */
+      readonly repairReady: boolean;
+    }
   | { readonly type: "apocalypse"; readonly eligible: boolean }
   | {
       readonly type: "ascension";
@@ -88,6 +95,9 @@ export interface PrestigeInput {
 
 /** `tech.whitehole` once `tech-infusion_confirm` has committed the reset. */
 export const WHITEHOLE_RESET_LEVEL = 4;
+
+/** The captured research action that repairs a whitehole reset interrupted by a page reload. */
+export const WHITEHOLE_REPAIR_TECH_ID = "tech-stabilize_blackhole";
 
 /** The witch-hunter ascension/demonic act is identical for both types. */
 const WITCH_ASCENSION_ACT: readonly PrestigeCommand[] = [
@@ -201,6 +211,15 @@ export function planPrestige(input: PrestigeInput): readonly PrestigeCommand[] {
       }
       return tryReset(goal, branch.eligible, act);
     }
+
+    case "whitehole-repair":
+      return tryReset(
+        goal,
+        branch.eligible,
+        branch.repairReady
+          ? [{ kind: "click-tech", id: WHITEHOLE_REPAIR_TECH_ID }]
+          : [],
+      );
 
     case "apocalypse":
       return tryReset(goal, branch.eligible, [

@@ -5402,7 +5402,7 @@
   }
 
   // src/domain/progression/prestige/prestige.ts
-  var WITCH_ASCENSION_ACT = [
+  var WHITEHOLE_REPAIR_TECH_ID = "tech-stabilize_blackhole", WITCH_ASCENSION_ACT = [
     { kind: "reset-modifier-keys" },
     { kind: "log-prestige" },
     { kind: "absorption-chamber-action" },
@@ -5448,6 +5448,12 @@
           act.push({ kind: "click-tech", id });
         return branch.confirmReady && act.push({ kind: "mark-whitehole-reset-started" }), tryReset(goal, branch.eligible, act);
       }
+      case "whitehole-repair":
+        return tryReset(
+          goal,
+          branch.eligible,
+          branch.repairReady ? [{ kind: "click-tech", id: WHITEHOLE_REPAIR_TECH_ID }] : []
+        );
       case "apocalypse":
         return tryReset(goal, branch.eligible, [
           { kind: "log-prestige" },
@@ -5542,13 +5548,14 @@
     confirm: "tech-infusion_confirm",
     check: "tech-infusion_check",
     exotic: "tech-exotic_infusion"
-  }), CAPTURED_WHITEHOLE_TECH_IDS = Object.freeze(
+  }), CAPTURED_WHITEHOLE_REPAIR_TECH = WHITEHOLE_REPAIR_TECH_ID, CAPTURED_WHITEHOLE_TECH_IDS = Object.freeze(
     Object.values(CAPTURED_WHITEHOLE_TECHS)
   ), CAPTURED_PRESTIGE_TECH_IDS = Object.freeze([
     CAPTURED_CATACLYSM_TECH,
     ...CAPTURED_APOCALYPSE_TECH_IDS,
     ...CAPTURED_DEMONIC_TECH_IDS,
-    ...CAPTURED_WHITEHOLE_TECH_IDS
+    ...CAPTURED_WHITEHOLE_TECH_IDS,
+    CAPTURED_WHITEHOLE_REPAIR_TECH
   ]), CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
     terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
     ascension: Object.freeze({
@@ -5614,11 +5621,34 @@
     let sample = resources.readResources(Object.keys(tech.cost));
     return sample !== void 0 && canAfford(sample, tech.cost);
   }
+  function readCapturedWhiteholeLevel(root) {
+    return finite(readProperty(readProperty(root, "tech"), "whitehole")) ?? 0;
+  }
+  function readCapturedWhiteholeRepairBranch(root, offered, resources) {
+    if (readCapturedWhiteholeLevel(root) < 4)
+      return;
+    let repair = offered.find(
+      (entry) => entry.elementId === CAPTURED_WHITEHOLE_REPAIR_TECH
+    );
+    if (repair !== void 0)
+      return {
+        type: "whitehole-repair",
+        eligible: !0,
+        repairReady: capturedTechIsAffordable(repair, resources)
+      };
+  }
+  function capturedWhiteholeRepairSucceeded(root) {
+    let tech = readProperty(root, "tech"), engine = readProperty(
+      readProperty(root, "interstellar"),
+      "stellar_engine"
+    );
+    return isNonArrayRecord(tech) && readProperty(tech, "whitehole") === void 0 && isNonArrayRecord(engine) && finite(readProperty(engine, "exotic")) === 0;
+  }
   function readCapturedWhiteholeBranch(root, settings, offered, resources) {
     let engine = readProperty(
       readProperty(root, "interstellar"),
       "stellar_engine"
-    ), mass = finite(readProperty(engine, "mass")) ?? 0, exotic = finite(readProperty(engine, "exotic")) ?? 0, whiteholeLevel = finite(readProperty(readProperty(root, "tech"), "whitehole")) ?? 0, findOffer = (id) => offered.find((entry) => entry.elementId === id), exoticOffer = findOffer(CAPTURED_WHITEHOLE_TECHS.exotic), confirmOffer = findOffer(CAPTURED_WHITEHOLE_TECHS.confirm);
+    ), mass = finite(readProperty(engine, "mass")) ?? 0, exotic = finite(readProperty(engine, "exotic")) ?? 0, whiteholeLevel = readCapturedWhiteholeLevel(root), findOffer = (id) => offered.find((entry) => entry.elementId === id), exoticOffer = findOffer(CAPTURED_WHITEHOLE_TECHS.exotic), confirmOffer = findOffer(CAPTURED_WHITEHOLE_TECHS.confirm);
     return {
       type: "whitehole",
       eligible: mass + exotic >= (finite(settings.prestigeWhiteholeMinMass) ?? Number.NaN) && CAPTURED_WHITEHOLE_TECH_IDS.some((id) => findOffer(id) !== void 0),
@@ -5809,14 +5839,26 @@
         } else if (!resetCommitted && prestigeType === "whitehole") {
           let offered = dependencies.readOfferedTechs?.();
           if (offered !== void 0) {
-            for (let tech of offered)
-              CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === tech.elementId) && sampledPrestigeTechs.set(tech.elementId, tech);
-            branch = readCapturedWhiteholeBranch(
+            let repairBranch = readCapturedWhiteholeRepairBranch(
               root,
-              settings,
               offered,
               dependencies.resources
             );
+            if (repairBranch !== void 0) {
+              let repair = offered.find(
+                (entry) => entry.elementId === CAPTURED_WHITEHOLE_REPAIR_TECH
+              );
+              repair !== void 0 && sampledPrestigeTechs.set(repair.elementId, repair), branch = repairBranch;
+            } else {
+              for (let tech of offered)
+                CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === tech.elementId) && sampledPrestigeTechs.set(tech.elementId, tech);
+              branch = readCapturedWhiteholeBranch(
+                root,
+                settings,
+                offered,
+                dependencies.resources
+              );
+            }
           }
         } else if (!resetCommitted && prestigeType === "bioseed") {
           let offered = dependencies.readBuildingResetActions?.(["space"]);
@@ -5965,26 +6007,30 @@
               );
               tech !== void 0 && (sampledPrestigeTechs.set(tech.elementId, tech), sampled3 = tech);
             }
-            if (sampled3 === void 0 && command.id === CAPTURED_APOCALYPSE_TECHS.first || sampled3 === void 0 && CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === command.id))
+            if (sampled3 === void 0 && command.id === CAPTURED_APOCALYPSE_TECHS.first || sampled3 === void 0 && (CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === command.id) || command.id === CAPTURED_WHITEHOLE_REPAIR_TECH))
               return;
             if (sampled3 === void 0)
               throw new Error(
                 `captured prestige action ${command.id} was not offered`
               );
             let handle = dependencies.controls.resolve(command.id);
-            if (handle === void 0 || !handle.methods.includes("action"))
+            if (handle === void 0 || !handle.methods.includes("action")) {
+              if (command.id === CAPTURED_WHITEHOLE_REPAIR_TECH) return;
               throw new Error(
                 `captured prestige action ${command.id} is unavailable`
               );
-            if (handle.generation !== sampled3.generation)
+            }
+            if (handle.generation !== sampled3.generation) {
+              if (command.id === CAPTURED_WHITEHOLE_REPAIR_TECH) return;
               throw new Error(
                 `captured prestige action ${command.id} was redrawn`
               );
+            }
             let corruptedAiBefore = command.id === CAPTURED_APOCALYPSE_TECHS.first ? readProperty(
               readProperty(dependencies.rootState.readRoot(), "tech"),
               "corrupted_ai"
             ) : void 0;
-            if ((command.id === CAPTURED_CATACLYSM_TECH || CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) || command.id === CAPTURED_APOCALYPSE_TECHS.final || command.id === CAPTURED_WHITEHOLE_TECHS.confirm) && !capturedTechIsAffordable(sampled3, dependencies.resources))
+            if ((command.id === CAPTURED_CATACLYSM_TECH || CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) || command.id === CAPTURED_APOCALYPSE_TECHS.final || command.id === CAPTURED_WHITEHOLE_TECHS.confirm || command.id === CAPTURED_WHITEHOLE_REPAIR_TECH) && !capturedTechIsAffordable(sampled3, dependencies.resources))
               return;
             let whiteholeLevelBefore = command.id === CAPTURED_WHITEHOLE_TECHS.confirm ? finite(
               readProperty(
@@ -6011,6 +6057,22 @@
                 )
               ) ?? 0) <= whiteholeLevelBefore) return;
               resetCommitted = !0;
+            }
+            if (command.id === CAPTURED_WHITEHOLE_REPAIR_TECH) {
+              if (!capturedWhiteholeRepairSucceeded(
+                dependencies.rootState.readRoot()
+              ))
+                return;
+              let label = readCapturedControlLabel(
+                handle,
+                "Stabilize Blackhole"
+              );
+              dependencies.onActivity?.({
+                message: `Researched ${label}`,
+                color: "success",
+                tags: Object.freeze(["queue", "research_queue"])
+              });
+              return;
             }
             if (command.id !== CAPTURED_CATACLYSM_TECH && !CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) && command.id !== CAPTURED_APOCALYPSE_TECHS.final && command.id !== CAPTURED_WHITEHOLE_TECHS.confirm)
               return;
