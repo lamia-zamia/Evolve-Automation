@@ -21804,6 +21804,12 @@ Only continue if you trust the source. Injected code:
     ))
       if (reader.sampleRaceTrait(candidate.trait) !== 1 && executor.clickEvolution(candidate.id) && candidate.cycleEnding)
         return;
+    let finalMenuImitation = reader.sampleImitation();
+    if (finalMenuImitation.evoFinalMenu) {
+      let imitation2 = planImitation(finalMenuImitation);
+      imitation2.kind === "click" ? executor.clickImitation(imitation2.imitateRace) || executor.logImitationUnavailable(imitation2.imitateRace) : imitation2.kind === "log-no-race" && executor.logImitationNoRace();
+      return;
+    }
     let targetId = reader.storedTargetId();
     if (targetId === null)
       throw new TypeError("evolution target missing after selection phase");

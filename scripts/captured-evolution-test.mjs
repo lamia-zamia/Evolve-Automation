@@ -119,6 +119,31 @@ assert.deepEqual(trace, [
 ]);
 assert.equal(evolution.reader.storedTargetId(), "human");
 
+// DeadSpace's final menu exposes imitation rows only. The configured imitation must win even if
+// another row appears first in the DOM.
+settings.imitateRace = "human";
+root.race.evoFinalMenu = "synth";
+actionRows.unshift({ id: "evolution-s-other", cost: {} });
+actionRows.push({ id: "evolution-s-human", cost: {} });
+handles.set("evolution-s-human", {
+  elementId: "evolution-s-human",
+  generation: 1,
+  methods: ["action"],
+});
+runEvolution({
+  reader: evolution.reader,
+  executor: evolution.executor,
+  runUniverseSelection: evolution.runUniverseSelection,
+  runPlanetSelection: () => {},
+  challengeGroups: [],
+});
+assert.deepEqual(trace, [
+  ["queue"],
+  ["activity", "Attempting evolution of human."],
+  ["invoke", "evolution-bunker"],
+  ["invoke", "evolution-s-human"],
+]);
+
 // Auto selection cannot be guessed from the root; the pure planner therefore waits rather than
 // importing or duplicating DeadSpace's private Race catalog.
 settings.userEvolutionTarget = "auto";

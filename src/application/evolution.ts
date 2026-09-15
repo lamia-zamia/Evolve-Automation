@@ -72,6 +72,22 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
     }
   }
 
+  // DeadSpace's final menu contains only `evolution-s-*` imitation rows. Handle that menu before
+  // the ordinary tree/cell phases so the configured imitation is selected rather than whichever
+  // imitation row happens to be first in the DOM.
+  const finalMenuImitation = reader.sampleImitation();
+  if (finalMenuImitation.evoFinalMenu) {
+    const imitation = planImitation(finalMenuImitation);
+    if (imitation.kind === "click") {
+      if (!executor.clickImitation(imitation.imitateRace)) {
+        executor.logImitationUnavailable(imitation.imitateRace);
+      }
+    } else if (imitation.kind === "log-no-race") {
+      executor.logImitationNoRace();
+    }
+    return;
+  }
+
   const targetId = reader.storedTargetId();
   if (targetId === null) {
     throw new TypeError("evolution target missing after selection phase");
