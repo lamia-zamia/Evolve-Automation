@@ -5560,6 +5560,7 @@
       elementId: "tauceti-alien_space_station",
       region: "tauceti"
     }),
+    eden: Object.freeze({ elementId: "tauceti-goe_facility", region: "tauceti" }),
     apotheosis: Object.freeze({
       elementId: "eden-apotheosis",
       region: "eden"
@@ -5589,6 +5590,9 @@
   function capturedBioseedActionAvailable(controls, elementId) {
     let handle = controls.resolve(elementId);
     return handle !== void 0 && handle.methods.includes("action");
+  }
+  function readCapturedEdenResetCount(root) {
+    return finite(readProperty(readProperty(root, "stats"), "eden"));
   }
   function readCapturedBioseedBranch(root, settings, controls) {
     let stats = readProperty(root, "stats"), achievement = readProperty(readProperty(stats, "achieve"), "lamentis"), requiredGecks = finite(settings.prestigeGECK) ?? Number.NaN, requiredProbes = finite(settings.prestigeBioseedProbes) ?? Number.NaN, gecks = readCapturedBioseedCount(root, "starDock", "geck"), shipSegments = readCapturedBioseedCount(root, "starDock", "seeder"), probes = readCapturedBioseedCount(root, "starDock", "probes"), genesis = finite(readProperty(readProperty(root, "tech"), "genesis")) ?? 0, eligibility = {
@@ -5712,10 +5716,10 @@
       );
   }
   function createCapturedMadPrestige(dependencies) {
-    let sampledRoot, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1, reader = Object.freeze({
+    let sampledRoot, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, sampledEdenCount, resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1, reader = Object.freeze({
       samplePrestige() {
         let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot();
-        sampledRoot = root, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, apocalypseFirstActionDone = !1;
+        sampledRoot = root, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, sampledEdenCount = void 0, apocalypseFirstActionDone = !1;
         let prestigeType = typeof settings.prestigeType == "string" ? settings.prestigeType : "none", branch = { type: "noop" };
         if (!resetCommitted && prestigeType === "mad")
           branch = readCapturedMadBranch(root, settings);
@@ -5739,10 +5743,10 @@
           let action = CAPTURED_BUILDING_PRESTIGE_ACTIONS[prestigeType], offered = dependencies.readBuildingResetActions?.([
             action.region
           ]);
-          offered !== void 0 && (branch = {
+          offered !== void 0 && (action.elementId === CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId && (sampledEdenCount = readCapturedEdenResetCount(root)), branch = {
             type: "building-reset",
             building: action.elementId,
-            unlocked: offered.has(action.elementId)
+            unlocked: offered.has(action.elementId) && (action.elementId !== CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId || sampledEdenCount !== void 0)
           });
         } else if (!resetCommitted && prestigeType === "cataclysm") {
           let offered = dependencies.readOfferedTechs?.();
@@ -5931,6 +5935,19 @@
             }
             if (command.id === CAPTURED_BIOSEED_COMMANDS.prep) {
               dependencies.closeBioseedModal?.();
+              return;
+            }
+            if (command.id === CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId) {
+              let edenCountAfter = readCapturedEdenResetCount(
+                dependencies.rootState.readRoot()
+              );
+              if (sampledEdenCount === void 0 || edenCountAfter === void 0 || edenCountAfter <= sampledEdenCount)
+                return;
+              resetCommitted = !0, dependencies.onActivity?.({
+                message: "Prestiged",
+                color: "info",
+                tags: Object.freeze(["achievements"])
+              });
               return;
             }
             result.value === !0 && (resetCommitted = !0);

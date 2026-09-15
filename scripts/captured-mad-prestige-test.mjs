@@ -134,8 +134,8 @@ const settings = {
   ]);
 }
 
-// DeadSpace's reset action rows are the captured unlock answer for the three ordinary
-// building-shaped prestige branches. The planner's old command shape is retained; the captured
+// DeadSpace's reset action rows are the captured unlock answer for the building-shaped prestige
+// branches. The planner's old command shape is retained; the captured
 // adapter maps the command to the game's `action()` method and suppresses a duplicate while the
 // browser reload is pending.
 {
@@ -161,6 +161,11 @@ const settings = {
       elementId: "tauceti-alien_space_station",
     },
     {
+      prestigeType: "eden",
+      region: "tauceti",
+      elementId: "tauceti-goe_facility",
+    },
+    {
       prestigeType: "apotheosis",
       region: "eden",
       elementId: "eden-apotheosis",
@@ -168,7 +173,7 @@ const settings = {
   ]) {
     const trace = [];
     let goal = "Normal";
-    const root = buildRoot();
+    const root = buildRoot({ stats: { eden: 0 } });
     const controls = {
       resolve(id) {
         return id === expected.elementId
@@ -179,6 +184,10 @@ const settings = {
         assert.equal(handle.elementId, expected.elementId);
         assert.equal(method, "action");
         trace.push(method);
+        if (expected.prestigeType === "eden") {
+          root.stats.eden += 1;
+          return { ok: true, value: false };
+        }
         return { ok: true, value: true };
       },
       capturedElementIds() {
@@ -205,6 +214,39 @@ const settings = {
     runPrestige(prestige);
     assert.deepEqual(trace, ["action"]);
   }
+}
+
+// Eden must not be invoked when its post-action counter is unavailable: the action returns false
+// on both the unpaid and successful paths, so there would be no safe way to suppress a retry.
+{
+  let goal = "Reset";
+  let invocations = 0;
+  const root = buildRoot();
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls: {
+      resolve: () => ({
+        elementId: "tauceti-goe_facility",
+        generation: 1,
+        methods: ["action"],
+      }),
+      invoke: () => {
+        invocations += 1;
+        return { ok: true, value: false };
+      },
+      capturedElementIds: () => ["tauceti-goe_facility"],
+    },
+    readSettings: () => ({ prestigeType: "eden" }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+    },
+    readBuildingResetActions: () => new Set(["tauceti-goe_facility"]),
+  });
+
+  runPrestige(prestige);
+  runPrestige(prestige);
+  assert.equal(invocations, 0);
 }
 
 // Bioseed's options are rendered only inside the Space Dock modal. The captured adapter opens the

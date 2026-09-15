@@ -5,8 +5,8 @@
  * use on the reactive root. The panel's own `arm` and `launch` methods are captured when the
  * military tab is drawn, so this adapter never reaches for the private `warhead` function.
  * DeadSpace's ordinary prestige actions are also lexical definitions, but their action rows are
- * captured by the same page surface: `space-terraform`, `interstellar-ascend`, and
- * `eden-apotheosis` call the game's own Terraform, Ascension, and Apotheosis reset paths.
+ * captured by the same page surface: `space-terraform`, `interstellar-ascend`,
+ * `tauceti-goe_facility`, and `eden-apotheosis` call the game's own reset paths.
  */
 
 import {
@@ -113,6 +113,7 @@ export const CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
     elementId: "tauceti-alien_space_station",
     region: "tauceti",
   }),
+  eden: Object.freeze({ elementId: "tauceti-goe_facility", region: "tauceti" }),
   apotheosis: Object.freeze({
     elementId: "eden-apotheosis",
     region: "eden",
@@ -202,6 +203,15 @@ function capturedBioseedActionAvailable(
 ): boolean {
   const handle = controls.resolve(elementId);
   return handle !== undefined && handle.methods.includes("action");
+}
+
+/**
+ * DeadSpace increments `stats.eden` inside `gardenOfEden()` before it asks the browser to reload.
+ * The action row returns `false` both when it cannot pay and after that reset path runs, so this
+ * counter is the only captured success answer for Eden.
+ */
+function readCapturedEdenResetCount(root: unknown): number | undefined {
+  return finite(readProperty(readProperty(root, "stats"), "eden"));
 }
 
 function readCapturedBioseedBranch(
@@ -466,6 +476,7 @@ export function createCapturedMadPrestige(
   let sampledPrestigeTechs = new Map<string, Readonly<OfferedTech>>();
   let sampledBioseedControls = new Map<string, Readonly<GameControlHandle>>();
   let sampledWitchControl: Readonly<GameControlHandle> | undefined;
+  let sampledEdenCount: number | undefined;
   let resetCommitted = false;
   let apocalypseFirstActionDone = false;
   let bioseedModalRequested = false;
@@ -477,6 +488,7 @@ export function createCapturedMadPrestige(
       sampledPrestigeTechs = new Map();
       sampledBioseedControls = new Map();
       sampledWitchControl = undefined;
+      sampledEdenCount = undefined;
       apocalypseFirstActionDone = false;
       const prestigeType =
         typeof settings["prestigeType"] === "string"
@@ -518,10 +530,20 @@ export function createCapturedMadPrestige(
         // A missing panel sample is an unknown gate, not a locked reset. The planner only
         // receives a boolean after the game has answered whether it drew the action row.
         if (offered !== undefined) {
+          if (
+            action.elementId ===
+            CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId
+          ) {
+            sampledEdenCount = readCapturedEdenResetCount(root);
+          }
           branch = {
             type: "building-reset",
             building: action.elementId,
-            unlocked: offered.has(action.elementId),
+            unlocked:
+              offered.has(action.elementId) &&
+              (action.elementId !==
+                CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId ||
+                sampledEdenCount !== undefined),
           };
         }
       } else if (!resetCommitted && prestigeType === "cataclysm") {
@@ -799,6 +821,29 @@ export function createCapturedMadPrestige(
             // `prep_ship` redraws the same modal after granting genesis 7. Its captured launch
             // control survives that redraw, so close the modal before the next cycle can act.
             dependencies.closeBioseedModal?.();
+            return;
+          }
+          if (
+            command.id === CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId
+          ) {
+            const edenCountAfter = readCapturedEdenResetCount(
+              dependencies.rootState.readRoot(),
+            );
+            // `goe_facility.action()` returns false even after `gardenOfEden()` has run. Do not
+            // treat a successful control call as a reset unless the game's own counter moved.
+            if (
+              sampledEdenCount === undefined ||
+              edenCountAfter === undefined ||
+              edenCountAfter <= sampledEdenCount
+            ) {
+              return;
+            }
+            resetCommitted = true;
+            dependencies.onActivity?.({
+              message: "Prestiged",
+              color: "info",
+              tags: Object.freeze(["achievements"]),
+            });
             return;
           }
           // DeadSpace's reset action returns true after it has scheduled the browser reload. Keep
