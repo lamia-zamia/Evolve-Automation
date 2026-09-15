@@ -5491,6 +5491,33 @@
   function isDemonicPrestigeReady(input) {
     return input.mechReady && input.spireFloor >= input.minimumSpireFloor && input.resetTechUnlocked && input.resetTechAffordable;
   }
+  function isPillarFinished(view) {
+    if (view.game.ascensionLevel === 0) return !0;
+    let pillarLevel = view.game.speciesPillarLevel, outsideMicro = view.game.universe !== "micro", canPillar = !pillarLevel && view.resources.harmony >= 1 && outsideMicro, canUpgrade = pillarLevel !== void 0 && pillarLevel !== 0 && pillarLevel < view.game.ascensionLevel && outsideMicro;
+    return !view.settings.requirePillar || !canPillar && !canUpgrade;
+  }
+  function isWitchAscensionPrestigeAvailable(view, demonic = !1) {
+    return demonic && (!view.tech.forbiddenLevelFive || view.game.fasting && !view.tech.dishLevelTwo) ? !1 : view.buildings.absorptionChambers >= 100 && view.buildings.soulCapacitorEnergy >= 1e8 && isPillarFinished(view);
+  }
+
+  // src/adapters/evolve/ascension-level.ts
+  var ASCENSION_CHALLENGE_FLAGS = Object.freeze([
+    "no_plasmid",
+    "no_trade",
+    "no_craft",
+    "no_crispr",
+    "weak_mastery",
+    "nerfed",
+    "badgenes"
+  ]);
+  function readCapturedAscensionLevel(root) {
+    let race = readProperty(root, "race");
+    if (!isRecord(race)) return;
+    let level = 1;
+    for (let flag of ASCENSION_CHALLENGE_FLAGS)
+      readProperty(race, flag) && level++;
+    return level > 5 ? 5 : level;
+  }
 
   // src/adapters/evolve/progression/prestige/captured-mad.ts
   var CAPTURED_MAD_CONTROL = "mad", CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11", CAPTURED_APOCALYPSE_TECHS = Object.freeze({
@@ -5499,7 +5526,7 @@
   }), CAPTURED_DEMONIC_TECHS = Object.freeze({
     demonic: "tech-demonic_infusion",
     final: "tech-final_ingredient"
-  }), CAPTURED_BIOSEED_ACTIONS = Object.freeze({
+  }), CAPTURED_WITCH_ASCENSION_ACTION = "portal-absorption_chamber", CAPTURED_BIOSEED_ACTIONS = Object.freeze({
     opener: "space-star_dock",
     probe: "starDock-probes",
     prep: "starDock-prep_ship",
@@ -5608,6 +5635,43 @@
       eligible: !witchHunter && isDemonicPrestigeReady(input)
     };
   }
+  function readCapturedResourceAmount(resources, id) {
+    return resources?.readResources([id])?.resources.get(id)?.amount ?? Number.NaN;
+  }
+  function readCapturedWitchBranch(root, settings, resources, controls, offered, type) {
+    let race = readProperty(root, "race"), fasting = !!readProperty(race, "fasting"), species = readProperty(race, "species"), universe = readProperty(race, "universe"), pillars = readProperty(root, "pillars"), speciesPillarLevel = typeof species == "string" ? finite(readProperty(pillars, species)) : void 0, ascensionLevel = readCapturedAscensionLevel(root) ?? Number.NaN, pillarView = {
+      settings: {
+        requirePillar: capturedMadSettingBoolean(
+          settings,
+          "prestigeAscensionPillar",
+          !0
+        )
+      },
+      game: {
+        universe: typeof universe == "string" ? universe : "",
+        ascensionLevel,
+        ...speciesPillarLevel === void 0 ? {} : { speciesPillarLevel }
+      },
+      resources: { harmony: readCapturedResourceAmount(resources, "Harmony") }
+    }, portal = readProperty(root, "portal"), absorptionChambers = finite(readProperty(readProperty(portal, "absorption_chamber"), "count")) ?? Number.NaN, soulCapacitorEnergy = finite(readProperty(readProperty(portal, "soul_capacitor"), "energy")) ?? Number.NaN, tech = readProperty(root, "tech"), eligible = isWitchAscensionPrestigeAvailable(
+      {
+        ...pillarView,
+        game: { ...pillarView.game, fasting },
+        buildings: { absorptionChambers, soulCapacitorEnergy },
+        tech: {
+          forbiddenLevelFive: (finite(readProperty(tech, "forbidden")) ?? 0) >= 5,
+          dishLevelTwo: (finite(readProperty(tech, "dish_reset")) ?? 0) >= 2
+        }
+      },
+      type === "demonic"
+    ), control = controls.resolve(CAPTURED_WITCH_ASCENSION_ACTION), actionAvailable = offered.has(CAPTURED_WITCH_ASCENSION_ACTION) && control !== void 0 && control.methods.includes("action");
+    return type === "demonic" ? {
+      type,
+      witchHunter: !0,
+      fasting,
+      eligible: eligible && actionAvailable
+    } : { type, witchHunter: !0, eligible: eligible && actionAvailable };
+  }
   function readCapturedMadBranch(root, rawSettings) {
     let settings = capturedMadSettingsRecord(rawSettings), civic = readProperty(root, "civic"), mad = readProperty(civic, "mad"), tech = readProperty(root, "tech"), garrison = readProperty(civic, "garrison"), population = readProperty(readProperty(root, "resource"), "Population"), currentSoldiers = coerceNumber(readProperty(garrison, "workers")) - coerceNumber(readProperty(garrison, "crew")), maxSoldiers = coerceNumber(readProperty(garrison, "max")) - coerceNumber(readProperty(garrison, "crew")), madDisplay = readProperty(mad, "display") === !0, madLevel = coerceNumber(readProperty(tech, "mad"));
     return Object.freeze({
@@ -5643,14 +5707,30 @@
       );
   }
   function createCapturedMadPrestige(dependencies) {
-    let sampledRoot, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1, reader = Object.freeze({
+    let sampledRoot, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1, reader = Object.freeze({
       samplePrestige() {
         let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot();
-        sampledRoot = root, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), apocalypseFirstActionDone = !1;
+        sampledRoot = root, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, apocalypseFirstActionDone = !1;
         let prestigeType = typeof settings.prestigeType == "string" ? settings.prestigeType : "none", branch = { type: "noop" };
         if (!resetCommitted && prestigeType === "mad")
           branch = readCapturedMadBranch(root, settings);
-        else if (!resetCommitted && isCapturedBuildingPrestigeType(prestigeType)) {
+        else if (!resetCommitted && prestigeType === "ascension" && readProperty(readProperty(root, "race"), "witch_hunter")) {
+          let offered = dependencies.readBuildingResetActions?.(["portal"]);
+          if (offered !== void 0) {
+            branch = readCapturedWitchBranch(
+              root,
+              settings,
+              dependencies.resources,
+              dependencies.controls,
+              offered,
+              "ascension"
+            );
+            let control = dependencies.controls.resolve(
+              CAPTURED_WITCH_ASCENSION_ACTION
+            );
+            control !== void 0 && control.methods.includes("action") && (sampledWitchControl = control);
+          }
+        } else if (!resetCommitted && isCapturedBuildingPrestigeType(prestigeType)) {
           let action = CAPTURED_BUILDING_PRESTIGE_ACTIONS[prestigeType], offered = dependencies.readBuildingResetActions?.([
             action.region
           ]);
@@ -5689,6 +5769,22 @@
                 (id) => sampledPrestigeTechs.has(id)
               )
             };
+          }
+        } else if (!resetCommitted && prestigeType === "demonic" && readProperty(readProperty(root, "race"), "witch_hunter")) {
+          let offered = dependencies.readBuildingResetActions?.(["portal"]);
+          if (offered !== void 0) {
+            branch = readCapturedWitchBranch(
+              root,
+              settings,
+              dependencies.resources,
+              dependencies.controls,
+              offered,
+              "demonic"
+            );
+            let control = dependencies.controls.resolve(
+              CAPTURED_WITCH_ASCENSION_ACTION
+            );
+            control !== void 0 && control.methods.includes("action") && (sampledWitchControl = control);
           }
         } else if (!resetCommitted && prestigeType === "demonic") {
           let offered = dependencies.readOfferedTechs?.();
@@ -5757,6 +5853,34 @@
             return;
           case "log-prestige":
             return;
+          case "reset-modifier-keys":
+            return;
+          case "absorption-chamber-action": {
+            if (dependencies.rootState.readRoot() !== sampledRoot)
+              throw new Error(
+                "captured Witch-Hunter root changed after sampling"
+              );
+            let handle = sampledWitchControl;
+            if (handle === void 0)
+              throw new Error("captured Witch-Hunter action is unavailable");
+            let currentHandle = dependencies.controls.resolve(
+              CAPTURED_WITCH_ASCENSION_ACTION
+            );
+            if (currentHandle === void 0 || currentHandle.generation !== handle.generation || !currentHandle.methods.includes("action"))
+              throw new Error("captured Witch-Hunter action was redrawn");
+            let result = dependencies.controls.invoke(currentHandle, "action");
+            if (!result.ok)
+              throw new Error(
+                `captured Witch-Hunter action failed: ${result.detail ?? result.reason}`
+              );
+            if (result.value === !1) return;
+            resetCommitted = !0, dependencies.onActivity?.({
+              message: "Prestiged",
+              color: "info",
+              tags: Object.freeze(["achievements"])
+            });
+            return;
+          }
           case "cache-building-options": {
             if (command.id !== "GasSpaceDock") return;
             if (dependencies.rootState.readRoot() !== sampledRoot)
@@ -12336,23 +12460,6 @@
     if (servants !== void 0 && !(servants > 0 && readProperty(readProperty(root, "race"), "high_pop")))
       return workers + servants;
   }
-  var ASCENSION_CHALLENGE_FLAGS = Object.freeze([
-    "no_plasmid",
-    "no_trade",
-    "no_craft",
-    "no_crispr",
-    "weak_mastery",
-    "nerfed",
-    "badgenes"
-  ]);
-  function ascensionLevel(root) {
-    let race = readProperty(root, "race");
-    if (!isRecord(race)) return;
-    let level = 1;
-    for (let flag of ASCENSION_CHALLENGE_FLAGS)
-      readProperty(race, flag) && level++;
-    return level > 5 ? 5 : level;
-  }
   function resolveRaceId(root, argument) {
     let race = readProperty(root, "race");
     return argument === "species" || argument === "gods" || argument === "old_gods" ? readProperty(race, argument) : argument === "srace" ? readProperty(race, "srace") ?? "protoplasm" : argument;
@@ -12360,7 +12467,7 @@
   function racePillared(root, argument) {
     let pillars = readProperty(root, "pillars");
     if (!isRecord(pillars)) return;
-    let level = ascensionLevel(root);
+    let level = readCapturedAscensionLevel(root);
     if (level === void 0) return;
     let raceId = resolveRaceId(root, argument);
     if (typeof raceId != "string") return !1;
@@ -12514,7 +12621,7 @@
             )
           ) / 1e4;
         if (argument === "alevel") {
-          let level = ascensionLevel(root);
+          let level = readCapturedAscensionLevel(root);
           return level === void 0 ? void 0 : level - 1;
         }
         if (argument === "bcar") {

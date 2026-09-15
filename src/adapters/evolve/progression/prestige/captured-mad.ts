@@ -12,6 +12,7 @@
 import {
   isBioseedPrestigeReady,
   isDemonicPrestigeReady,
+  isWitchAscensionPrestigeAvailable,
   type BioseedPrestigeInput,
   type DemonicPrestigeInput,
 } from "../../../../domain/progression/prestige/prestige-eligibility.ts";
@@ -33,6 +34,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { canAfford } from "../../../../domain/game-world.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
+import { readCapturedAscensionLevel } from "../../ascension-level.ts";
 import {
   coerceNumber,
   finite,
@@ -56,6 +58,9 @@ export const CAPTURED_DEMONIC_TECHS = Object.freeze({
   demonic: "tech-demonic_infusion",
   final: "tech-final_ingredient",
 });
+
+/** The captured Hell action shared by the Witch-Hunter Ascension and Demonic paths. */
+export const CAPTURED_WITCH_ASCENSION_ACTION = "portal-absorption_chamber";
 
 /** The captured opener and modal actions for the upstream Bioseed dock. */
 export const CAPTURED_BIOSEED_ACTIONS = Object.freeze({
@@ -127,6 +132,10 @@ export function isCapturedBuildingPrestigeType(
 type MadBranch = Extract<PrestigeBranch, { readonly type: "mad" }>;
 type BioseedBranch = Extract<PrestigeBranch, { readonly type: "bioseed" }>;
 type WhiteholeBranch = Extract<PrestigeBranch, { readonly type: "whitehole" }>;
+type WitchBranch = Extract<
+  PrestigeBranch,
+  { readonly type: "ascension" | "demonic" }
+>;
 
 export interface CapturedMadPrestigeDependencies {
   readonly rootState: GameRootStateSource;
@@ -303,6 +312,84 @@ function readCapturedDemonicBranch(
   };
 }
 
+function readCapturedResourceAmount(
+  resources: GameResourceSource | undefined,
+  id: string,
+): number {
+  return (
+    resources?.readResources([id])?.resources.get(id)?.amount ?? Number.NaN
+  );
+}
+
+function readCapturedWitchBranch(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+  resources: GameResourceSource | undefined,
+  controls: GameControlRegistry,
+  offered: ReadonlySet<string>,
+  type: "ascension" | "demonic",
+): WitchBranch {
+  const race = readProperty(root, "race");
+  const fasting = Boolean(readProperty(race, "fasting"));
+  const species = readProperty(race, "species");
+  const universe = readProperty(race, "universe");
+  const pillars = readProperty(root, "pillars");
+  const speciesPillarLevel =
+    typeof species === "string"
+      ? finite(readProperty(pillars, species))
+      : undefined;
+  const ascensionLevel = readCapturedAscensionLevel(root) ?? Number.NaN;
+  const pillarView = {
+    settings: {
+      requirePillar: capturedMadSettingBoolean(
+        settings,
+        "prestigeAscensionPillar",
+        true,
+      ),
+    },
+    game: {
+      universe: typeof universe === "string" ? universe : "",
+      ascensionLevel,
+      ...(speciesPillarLevel === undefined ? {} : { speciesPillarLevel }),
+    },
+    resources: { harmony: readCapturedResourceAmount(resources, "Harmony") },
+  };
+  const portal = readProperty(root, "portal");
+  const absorptionChambers =
+    finite(readProperty(readProperty(portal, "absorption_chamber"), "count")) ??
+    Number.NaN;
+  const soulCapacitorEnergy =
+    finite(readProperty(readProperty(portal, "soul_capacitor"), "energy")) ??
+    Number.NaN;
+  const tech = readProperty(root, "tech");
+  const eligible = isWitchAscensionPrestigeAvailable(
+    {
+      ...pillarView,
+      game: { ...pillarView.game, fasting },
+      buildings: { absorptionChambers, soulCapacitorEnergy },
+      tech: {
+        forbiddenLevelFive: (finite(readProperty(tech, "forbidden")) ?? 0) >= 5,
+        dishLevelTwo: (finite(readProperty(tech, "dish_reset")) ?? 0) >= 2,
+      },
+    },
+    type === "demonic",
+  );
+  const control = controls.resolve(CAPTURED_WITCH_ASCENSION_ACTION);
+  const actionAvailable =
+    offered.has(CAPTURED_WITCH_ASCENSION_ACTION) &&
+    control !== undefined &&
+    control.methods.includes("action");
+
+  return type === "demonic"
+    ? {
+        type,
+        witchHunter: true,
+        fasting,
+        eligible: eligible && actionAvailable,
+      }
+    : { type, witchHunter: true, eligible: eligible && actionAvailable };
+}
+
 /**
  * Reads the MAD branch from one root. Missing numeric bags preserve DeadSpace's arithmetic
  * behavior as `NaN`: an uninitialized count cannot satisfy the wait-for-population gate, but it
@@ -373,6 +460,7 @@ export function createCapturedMadPrestige(
   let sampledRoot: unknown;
   let sampledPrestigeTechs = new Map<string, Readonly<OfferedTech>>();
   let sampledBioseedControls = new Map<string, Readonly<GameControlHandle>>();
+  let sampledWitchControl: Readonly<GameControlHandle> | undefined;
   let resetCommitted = false;
   let apocalypseFirstActionDone = false;
   let bioseedModalRequested = false;
@@ -383,6 +471,7 @@ export function createCapturedMadPrestige(
       sampledRoot = root;
       sampledPrestigeTechs = new Map();
       sampledBioseedControls = new Map();
+      sampledWitchControl = undefined;
       apocalypseFirstActionDone = false;
       const prestigeType =
         typeof settings["prestigeType"] === "string"
@@ -391,6 +480,28 @@ export function createCapturedMadPrestige(
       let branch: PrestigeBranch = { type: "noop" };
       if (!resetCommitted && prestigeType === "mad") {
         branch = readCapturedMadBranch(root, settings);
+      } else if (
+        !resetCommitted &&
+        prestigeType === "ascension" &&
+        Boolean(readProperty(readProperty(root, "race"), "witch_hunter"))
+      ) {
+        const offered = dependencies.readBuildingResetActions?.(["portal"]);
+        if (offered !== undefined) {
+          branch = readCapturedWitchBranch(
+            root,
+            settings,
+            dependencies.resources,
+            dependencies.controls,
+            offered,
+            "ascension",
+          );
+          const control = dependencies.controls.resolve(
+            CAPTURED_WITCH_ASCENSION_ACTION,
+          );
+          if (control !== undefined && control.methods.includes("action")) {
+            sampledWitchControl = control;
+          }
+        }
       } else if (
         !resetCommitted &&
         isCapturedBuildingPrestigeType(prestigeType)
@@ -447,6 +558,28 @@ export function createCapturedMadPrestige(
               sampledPrestigeTechs.has(id),
             ),
           };
+        }
+      } else if (
+        !resetCommitted &&
+        prestigeType === "demonic" &&
+        Boolean(readProperty(readProperty(root, "race"), "witch_hunter"))
+      ) {
+        const offered = dependencies.readBuildingResetActions?.(["portal"]);
+        if (offered !== undefined) {
+          branch = readCapturedWitchBranch(
+            root,
+            settings,
+            dependencies.resources,
+            dependencies.controls,
+            offered,
+            "demonic",
+          );
+          const control = dependencies.controls.resolve(
+            CAPTURED_WITCH_ASCENSION_ACTION,
+          );
+          if (control !== undefined && control.methods.includes("action")) {
+            sampledWitchControl = control;
+          }
         }
       } else if (!resetCommitted && prestigeType === "demonic") {
         const offered = dependencies.readOfferedTechs?.();
@@ -552,6 +685,45 @@ export function createCapturedMadPrestige(
           // The activity sink observes the root transition after launch; logging this planner
           // command would report an attempted prestige before the game actually reset.
           return;
+        case "reset-modifier-keys":
+          // The captured action has no modifier-key semantics; keep the planner's legacy command
+          // inert until a future action needs a captured keyboard port here.
+          return;
+        case "absorption-chamber-action": {
+          if (dependencies.rootState.readRoot() !== sampledRoot) {
+            throw new Error(
+              "captured Witch-Hunter root changed after sampling",
+            );
+          }
+          const handle = sampledWitchControl;
+          if (handle === undefined) {
+            throw new Error("captured Witch-Hunter action is unavailable");
+          }
+          const currentHandle = dependencies.controls.resolve(
+            CAPTURED_WITCH_ASCENSION_ACTION,
+          );
+          if (
+            currentHandle === undefined ||
+            currentHandle.generation !== handle.generation ||
+            !currentHandle.methods.includes("action")
+          ) {
+            throw new Error("captured Witch-Hunter action was redrawn");
+          }
+          const result = dependencies.controls.invoke(currentHandle, "action");
+          if (!result.ok) {
+            throw new Error(
+              `captured Witch-Hunter action failed: ${result.detail ?? result.reason}`,
+            );
+          }
+          if (result.value === false) return;
+          resetCommitted = true;
+          dependencies.onActivity?.({
+            message: "Prestiged",
+            color: "info",
+            tags: Object.freeze(["achievements"]),
+          });
+          return;
+        }
         case "cache-building-options": {
           if (command.id !== "GasSpaceDock") return;
           if (dependencies.rootState.readRoot() !== sampledRoot) {

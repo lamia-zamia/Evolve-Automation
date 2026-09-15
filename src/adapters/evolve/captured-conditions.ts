@@ -51,6 +51,7 @@ import {
 } from "../validation.ts";
 import { costFitsNow, costFitsStorage } from "./captured-affordability.ts";
 import type { GameActionPrice } from "../../ports/game-action-costs.ts";
+import { readCapturedAscensionLevel } from "./ascension-level.ts";
 import { readCapturedFactoryCapacity } from "./economy/production/captured-factory-capacity.ts";
 
 /** A condition compares an operand's value against its stored count. */
@@ -337,35 +338,6 @@ function jobCount(root: unknown, argument: unknown): number | undefined {
 }
 
 /**
- * The flags `alevel()` counts, in the game's own order. Each is a challenge the player took on, and
- * each raises the ascension level by one.
- */
-const ASCENSION_CHALLENGE_FLAGS: readonly string[] = Object.freeze([
-  "no_plasmid",
-  "no_trade",
-  "no_craft",
-  "no_crispr",
-  "weak_mastery",
-  "nerfed",
-  "badgenes",
-]);
-
-/**
- * The game's `alevel()`: one plus the challenges taken, capped at five. It lives in the game's
- * achievement module rather than on any state it exposes, but every input is a flag on the race
- * bag, so the captured root answers it exactly.
- */
-function ascensionLevel(root: unknown): number | undefined {
-  const race = readProperty(root, "race");
-  if (!isRecord(race)) return undefined;
-  let level = 1;
-  for (const flag of ASCENSION_CHALLENGE_FLAGS) {
-    if (readProperty(race, flag)) level++;
-  }
-  return level > 5 ? 5 : level;
-}
-
-/**
  * The race an argument names: one of the three ids the race bag itself carries, the Sludge host
  * species, or a literal race id the editor stored.
  */
@@ -393,7 +365,7 @@ function resolveRaceId(root: unknown, argument: unknown): unknown {
 function racePillared(root: unknown, argument: unknown): boolean | undefined {
   const pillars = readProperty(root, "pillars");
   if (!isRecord(pillars)) return undefined;
-  const level = ascensionLevel(root);
+  const level = readCapturedAscensionLevel(root);
   if (level === undefined) return undefined;
   const raceId = resolveRaceId(root, argument);
   if (typeof raceId !== "string") return false;
@@ -681,7 +653,7 @@ function readNumber(
       if (argument === "alevel") {
         // The script reports the level as the number of challenges taken, so one less than the
         // game's own count.
-        const level = ascensionLevel(root);
+        const level = readCapturedAscensionLevel(root);
         return level === undefined ? undefined : level - 1;
       }
       if (argument === "bcar") {

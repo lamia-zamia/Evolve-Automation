@@ -5,6 +5,7 @@ import {
   CAPTURED_CATACLYSM_TECH,
   CAPTURED_APOCALYPSE_TECHS,
   CAPTURED_DEMONIC_TECHS,
+  CAPTURED_WITCH_ASCENSION_ACTION,
   CAPTURED_BIOSEED_ACTIONS,
   CAPTURED_WHITEHOLE_TECHS,
   createCapturedMadPrestige,
@@ -448,6 +449,86 @@ for (const scenario of [
 
   runPrestige(prestige);
   assert.deepEqual(trace, []);
+}
+
+// Witch-Hunter Ascension and Demonic share the captured absorption-chamber action. The pure
+// eligibility gate still requires a completed chamber, full soul energy, and the configured pillar
+// state; Demonic additionally requires the forbidden grant (and fasting's final ingredient grant).
+for (const scenario of [
+  { prestigeType: "ascension", fasting: false },
+  { prestigeType: "demonic", fasting: false },
+  { prestigeType: "demonic", fasting: true },
+]) {
+  const trace = [];
+  let goal = "Normal";
+  const root = buildRoot({
+    race: {
+      species: "human",
+      universe: "magic",
+      witch_hunter: true,
+      fasting: scenario.fasting,
+    },
+    pillars: { human: 1 },
+    portal: {
+      absorption_chamber: { count: 100 },
+      soul_capacitor: { energy: 100000000 },
+    },
+    tech: { forbidden: 5, dish_reset: 2 },
+  });
+  const controls = {
+    resolve(id) {
+      return id === CAPTURED_WITCH_ASCENSION_ACTION
+        ? {
+            elementId: id,
+            generation: 1,
+            methods: ["action"],
+          }
+        : undefined;
+    },
+    invoke(handle, method) {
+      assert.equal(handle.elementId, CAPTURED_WITCH_ASCENSION_ACTION);
+      assert.equal(method, "action");
+      trace.push(handle.elementId);
+      return { ok: true, value: true };
+    },
+    capturedElementIds() {
+      return [CAPTURED_WITCH_ASCENSION_ACTION];
+    },
+  };
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls,
+    readSettings: () => ({
+      prestigeType: scenario.prestigeType,
+      prestigeAscensionPillar: true,
+    }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+      trace.push(["goal", next]);
+    },
+    readBuildingResetActions: (regions) => {
+      assert.deepEqual(regions, ["portal"]);
+      return new Set([CAPTURED_WITCH_ASCENSION_ACTION]);
+    },
+    resources: {
+      readResources: () => ({
+        resources: new Map([["Harmony", { amount: 1 }]]),
+      }),
+    },
+    onActivity: (activityEntry) => trace.push(activityEntry.message),
+  });
+
+  runPrestige(prestige);
+  assert.deepEqual(trace, [["goal", "Reset"]]);
+  goal = "Reset";
+  runPrestige(prestige);
+  assert.deepEqual(trace, [
+    ["goal", "Reset"],
+    CAPTURED_WITCH_ASCENSION_ACTION,
+    "Prestiged",
+    ["goal", "GameOverMan"],
+  ]);
 }
 
 // Apocalypse may expose protocol 66 first and protocol 66a only after the first action grants its
