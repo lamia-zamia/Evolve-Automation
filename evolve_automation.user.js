@@ -22057,6 +22057,158 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({ reader, executor });
   }
 
+  // src/adapters/evolve/combat/captured-mech.ts
+  var CAPTURED_MECH_ASSEMBLY_CONTROL = "mechAssembly";
+  function capturedMechUnavailable() {
+    return Object.freeze({
+      available: !1,
+      enabled: !1,
+      buildMode: "none",
+      queueKeyEnabled: !1,
+      infernal: !1,
+      designSize: "",
+      designSpace: 0,
+      designSupply: 0,
+      designSoul: 0,
+      baySpace: 0,
+      purifierSupply: 0,
+      soulGems: 0
+    });
+  }
+  function readControlNumber(controls, control, method, args) {
+    let result = controls.invoke(control, method, args);
+    return result.ok ? finite(result.value) : void 0;
+  }
+  function readCapturedMechSample(rootState, controls, settingsValue) {
+    let root = rootState.readRoot();
+    if (!isNonArrayRecord(root)) return;
+    let settings = isNonArrayRecord(settingsValue) ? settingsValue : void 0;
+    if (settings?.autoMech !== !0 || settings.mechBuild !== "user")
+      return;
+    let gameSettings = readProperty(root, "settings"), queueKeyEnabled = readProperty(gameSettings, "qKey") === !0, portal = readProperty(root, "portal"), mechbay = readProperty(portal, "mechbay"), blueprint = readProperty(mechbay, "blueprint"), purifier = readProperty(portal, "purifier"), resources = readProperty(root, "resource"), soulGem = readProperty(resources, "Soul_Gem");
+    if (!isNonArrayRecord(mechbay) || !isNonArrayRecord(blueprint) || !isNonArrayRecord(purifier) || !isNonArrayRecord(soulGem))
+      return;
+    let designSize = blueprint.size;
+    if (typeof designSize != "string" || designSize.length === 0)
+      return;
+    let control = controls.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL);
+    if (control === void 0 || !control.methods.includes("build") || !control.methods.includes("bay") || !control.methods.includes("price") || !control.methods.includes("soul"))
+      return;
+    let maximum = finite(mechbay.max), occupied = finite(mechbay.bay), purifierSupply = finite(purifier.supply), soulGems = finite(soulGem.amount), designSpace = readControlNumber(controls, control, "bay", [designSize]), designSupply = readControlNumber(controls, control, "price", [
+      designSize
+    ]), designSoul = readControlNumber(controls, control, "soul", [designSize]);
+    if (!(maximum === void 0 || occupied === void 0 || purifierSupply === void 0 || soulGems === void 0 || designSpace === void 0 || designSupply === void 0 || designSoul === void 0 || maximum < occupied))
+      return Object.freeze({
+        root,
+        control,
+        input: Object.freeze({
+          available: !0,
+          enabled: !0,
+          buildMode: "user",
+          queueKeyEnabled,
+          // The settings hint says infernal designs are never automatic. A missing legacy field is
+          // falsy in the game's own `mechCost` call, so the capture keeps that lazy coercion.
+          infernal: !!blueprint.infernal,
+          designSize,
+          designSpace,
+          designSupply,
+          designSoul,
+          baySpace: maximum - occupied,
+          purifierSupply,
+          soulGems
+        })
+      });
+  }
+  function sameCapturedMechInput(left, right) {
+    return left.available === right.available && left.enabled === right.enabled && left.buildMode === right.buildMode && left.queueKeyEnabled === right.queueKeyEnabled && left.infernal === right.infernal && left.designSize === right.designSize && left.designSpace === right.designSpace && left.designSupply === right.designSupply && left.designSoul === right.designSoul && left.baySpace === right.baySpace && left.purifierSupply === right.purifierSupply && left.soulGems === right.soulGems;
+  }
+  function createCapturedMech(dependencies) {
+    let session, reader = Object.freeze({
+      read() {
+        session = void 0;
+        let sample = readCapturedMechSample(
+          dependencies.rootState,
+          dependencies.controls,
+          dependencies.readSettings()
+        );
+        return sample === void 0 ? capturedMechUnavailable() : (session = sample, sample.input);
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        let active = session;
+        if (active === void 0)
+          return stale(
+            "captured-mech-session-missing",
+            "captured mech session is missing"
+          );
+        if (dependencies.rootState.readRoot() !== active.root)
+          return stale(
+            "captured-mech-root-changed",
+            "captured game root changed"
+          );
+        let currentControl = dependencies.controls.resolve(
+          CAPTURED_MECH_ASSEMBLY_CONTROL
+        );
+        if (currentControl === void 0 || currentControl.generation !== active.control.generation)
+          return stale(
+            "captured-mech-control-changed",
+            "captured mech assembly control changed"
+          );
+        if (decision.kind !== "build-captured-mech" || decision.designSize !== active.input.designSize || decision.expectedBaySpace !== active.input.baySpace || decision.expectedPurifierSupply !== active.input.purifierSupply || decision.expectedSoulGems !== active.input.soulGems)
+          return rejected(
+            "invalid-captured-mech-decision",
+            "captured mech decision does not match the sample"
+          );
+        let current = readCapturedMechSample(
+          dependencies.rootState,
+          dependencies.controls,
+          dependencies.readSettings()
+        );
+        if (current === void 0 || current.control.generation !== active.control.generation || !sameCapturedMechInput(current.input, active.input))
+          return stale(
+            "captured-mech-state-changed",
+            "captured mech state changed"
+          );
+        let result = dependencies.controls.invoke(active.control, "build");
+        if (!result.ok)
+          return stale(
+            "captured-mech-control-failed",
+            `captured mech build failed: ${result.reason}`
+          );
+        let after = readCapturedMechSample(
+          dependencies.rootState,
+          dependencies.controls,
+          dependencies.readSettings()
+        );
+        return after === void 0 || after.input.baySpace !== active.input.baySpace - active.input.designSpace || after.input.purifierSupply !== active.input.purifierSupply - active.input.designSupply || after.input.soulGems !== active.input.soulGems - active.input.designSoul ? stale(
+          "captured-mech-not-built",
+          "the game did not commit the captured mech build"
+        ) : (session = void 0, SUCCEEDED);
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/domain/combat/captured-mech.ts
+  function planCapturedMechBuild(input) {
+    return !input.available || !input.enabled || input.buildMode !== "user" || input.queueKeyEnabled || input.infernal || input.designSize.length === 0 || !Number.isFinite(input.designSpace) || input.designSpace <= 0 || !Number.isFinite(input.designSupply) || input.designSupply < 0 || !Number.isFinite(input.designSoul) || input.designSoul < 0 || !Number.isFinite(input.baySpace) || input.baySpace < input.designSpace || !Number.isFinite(input.purifierSupply) || input.purifierSupply < input.designSupply || !Number.isFinite(input.soulGems) || input.soulGems < input.designSoul ? null : Object.freeze({
+      kind: "build-captured-mech",
+      designSize: input.designSize,
+      expectedBaySpace: input.baySpace,
+      expectedPurifierSupply: input.purifierSupply,
+      expectedSoulGems: input.soulGems
+    });
+  }
+
+  // src/application/captured-mech.ts
+  var CAPTURED_MECH_SUCCEEDED = Object.freeze({
+    status: "succeeded"
+  });
+  function runCapturedMech(dependencies) {
+    let decision = planCapturedMechBuild(dependencies.reader.read());
+    return decision === null ? CAPTURED_MECH_SUCCEEDED : dependencies.executor.execute(decision);
+  }
+
   // src/adapters/browser/game-keyboard-handlers.ts
   function createGameKeyboardHandlers(dependencies) {
     let { getDocument, getKeyboardEvent } = dependencies;
@@ -22111,7 +22263,8 @@ Only continue if you trust the source. Injected code:
     autoJobs: !1,
     autoGalaxyMarket: !1,
     autoGovernment: !1,
-    autoHell: !1
+    autoHell: !1,
+    autoMech: !1
   });
   function isEnabled(settings, key) {
     let value = settings[key];
@@ -22175,6 +22328,10 @@ Only continue if you trust the source. Injected code:
       challengeGroups: evolutionChallengeGroups,
       onActivity
     }), capturedSpyTraining = createCapturedSpyTraining({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => settingsStore.readRaw()
+    }), capturedMech = createCapturedMech({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw()
@@ -22440,7 +22597,7 @@ Only continue if you trust the source. Injected code:
       mountSuppression: pageCapture2.mountSuppression,
       panels,
       diagnostics
-    }), civicControlsDiscoveryAttempted = !1, hellGarrisonDiscoveryAttempted = !1, madDiscoveryAttemptedEpoch, ensureHellGarrisonControls = () => {
+    }), civicControlsDiscoveryAttempted = !1, mechDiscoveryAttempted = !1, hellGarrisonDiscoveryAttempted = !1, madDiscoveryAttemptedEpoch, ensureHellGarrisonControls = () => {
       if (HELL_GARRISON_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("patrolling")
       ))
@@ -22478,6 +22635,29 @@ Only continue if you trust the source. Injected code:
       ]);
       result.outcome.status !== "succeeded" && logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
+    }, ensureMechControls = () => {
+      if (pageCapture2.controls.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL)?.methods.includes("build"))
+        return;
+      let root = pageCapture2.rootState.readRoot(), portal = readProperty(root, "portal"), mechbay = readProperty(portal, "mechbay"), gameSettings = readProperty(root, "settings"), race = readProperty(root, "race");
+      if (!isRecord(mechbay) || readProperty(gameSettings, "showMechLab") !== !0 || readProperty(race, "species") === "protoplasm" || readProperty(race, "start_cataclysm") === !0 || mechDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      if (govTabs === void 0) return;
+      mechDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.mechLab
+        })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `mech discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
     }, ensureMadControls = () => {
       if (pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("arm") && pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("launch"))
@@ -23018,7 +23198,13 @@ Only continue if you trust the source. Injected code:
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`
           );
         }
-        isEnabled(settings, "autoNanite") && runPhase("autoNanite", () => {
+        isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
+          ensureMechControls();
+          let outcome = runCapturedMech(capturedMech);
+          outcome.status !== "succeeded" && reportOnce(
+            `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`
+          );
+        }), isEnabled(settings, "autoNanite") && runPhase("autoNanite", () => {
           ensureNaniteControls(), nanite.run();
         }), isEnabled(settings, "autoSupply") && runPhase("autoSupply", () => {
           ensureSupplyControls(), supply.run();

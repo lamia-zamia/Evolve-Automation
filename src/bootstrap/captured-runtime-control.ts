@@ -139,6 +139,11 @@ import { runCapturedSpyTraining } from "../application/captured-spy-training.ts"
 import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runtime-catalogs.ts";
 import { createCapturedSpyTraining } from "../adapters/evolve/combat/captured-spy-training.ts";
 import {
+  CAPTURED_MECH_ASSEMBLY_CONTROL,
+  createCapturedMech,
+} from "../adapters/evolve/combat/captured-mech.ts";
+import { runCapturedMech } from "../application/captured-mech.ts";
+import {
   createCapturedTabDiscovery,
   GOV_TABS_SETTING,
   GOV_TAB_INDEX,
@@ -216,6 +221,7 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoGalaxyMarket: false,
   autoGovernment: false,
   autoHell: false,
+  autoMech: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -297,6 +303,11 @@ export function startCapturedRuntime({
     onActivity,
   });
   const capturedSpyTraining = createCapturedSpyTraining({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => settingsStore.readRaw(),
+  });
+  const capturedMech = createCapturedMech({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
@@ -659,6 +670,7 @@ export function startCapturedRuntime({
     diagnostics,
   });
   let civicControlsDiscoveryAttempted = false;
+  let mechDiscoveryAttempted = false;
   let hellGarrisonDiscoveryAttempted = false;
   let madDiscoveryAttemptedEpoch: string | undefined;
   /**
@@ -721,6 +733,50 @@ export function startCapturedRuntime({
     if (result.outcome.status !== "succeeded") {
       logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+  const ensureMechControls = () => {
+    if (
+      pageCapture.controls
+        .resolve(CAPTURED_MECH_ASSEMBLY_CONTROL)
+        ?.methods.includes("build")
+    ) {
+      return;
+    }
+    const root = pageCapture.rootState.readRoot();
+    const portal = readProperty(root, "portal");
+    const mechbay = readProperty(portal, "mechbay");
+    const gameSettings = readProperty(root, "settings");
+    const race = readProperty(root, "race");
+    if (
+      !isRecord(mechbay) ||
+      readProperty(gameSettings, "showMechLab") !== true ||
+      readProperty(race, "species") === "protoplasm" ||
+      readProperty(race, "start_cataclysm") === true
+    ) {
+      return;
+    }
+    if (mechDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs === undefined) return;
+    mechDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: MAIN_TAB_INDEX.civic,
+      }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.mechLab,
+      }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `mech discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
     }
   };
@@ -1697,6 +1753,17 @@ export function startCapturedRuntime({
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`,
           );
         }
+      }
+      if (isEnabled(settings, "autoMech")) {
+        runPhase("autoMech", () => {
+          ensureMechControls();
+          const outcome = runCapturedMech(capturedMech);
+          if (outcome.status !== "succeeded") {
+            reportOnce(
+              `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`,
+            );
+          }
+        });
       }
       if (isEnabled(settings, "autoNanite")) {
         runPhase("autoNanite", () => {
