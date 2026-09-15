@@ -97,7 +97,11 @@ export function planEvolutionTarget(
     const byWeighting = input.races
       .filter(isReachable)
       .sort((a, b) => b.weighting - a.weighting);
-    if (input.massExtinction) {
+    if (byWeighting.length === 0) {
+      // A captured adapter may not be able to expose a module-lexical race
+      // catalog yet. Leave selection to a later sample instead of guessing.
+      target = undefined;
+    } else if (input.massExtinction) {
       // With Mass Extinction any race is reachable; take the best one.
       target = byWeighting[0];
     } else {

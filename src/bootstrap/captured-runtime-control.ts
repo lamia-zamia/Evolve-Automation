@@ -131,7 +131,11 @@ import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspa
 import { createGameModalCloser } from "../adapters/browser/game-modal.ts";
 import { createSettingsStore } from "../adapters/browser/settings-store.ts";
 import { createCapturedQueuedSettings } from "../adapters/evolve/progression/evolution/captured-queued-settings.ts";
+import { createCapturedEvolution } from "../adapters/evolve/progression/evolution/captured-evolution.ts";
 import { createCapturedSettingsPanel } from "./captured-settings-panel-control.ts";
+import { createUniverseSelectionControls } from "../adapters/browser/progression-controls.ts";
+import { runEvolution } from "../application/evolution.ts";
+import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runtime-catalogs.ts";
 import {
   createCapturedTabDiscovery,
   GOV_TABS_SETTING,
@@ -272,6 +276,34 @@ export function startCapturedRuntime({
     refreshSettings: settingsPanel.refreshSettings,
     onWarning: (message) => logError(message),
   });
+  const evolutionChallengeGroups = Object.freeze(
+    evolutionChallengeCatalog.map((members) =>
+      Object.freeze({ members: Object.freeze(members) }),
+    ),
+  );
+  const capturedEvolution = createCapturedEvolution({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    drawnActions: createGameDrawnActionsReader({
+      getDocument: () => document,
+    }),
+    readSettings: () => settingsStore.readRaw(),
+    readEvolutionAttempts: queuedSettings.readEvolutionAttempts,
+    loadQueuedSettings: queuedSettings.loadQueuedSettings,
+    universeControls: createUniverseSelectionControls(() => document),
+    challengeGroups: evolutionChallengeGroups,
+    onActivity,
+  });
+  const runCapturedEvolution = () =>
+    runEvolution({
+      reader: capturedEvolution.reader,
+      executor: capturedEvolution.executor,
+      runUniverseSelection: capturedEvolution.runUniverseSelection,
+      // DeadSpace keeps planet candidates inside the lexical setPlanet closure. Until that
+      // metadata is exposed by the page, manual planet selection remains the safe captured path.
+      runPlanetSelection: () => {},
+      challengeGroups: evolutionChallengeGroups,
+    });
   // The settings UI is useful even when document-start capture was missed (for example, when a
   // local bundle is loaded after the game). Automation still fails closed below until capture is
   // complete, but configuration should not disappear with it.
@@ -1453,6 +1485,16 @@ export function startCapturedRuntime({
       diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
     const workStartedAtMs = profiling?.nowMs();
     try {
+      // Evolution is a separate game phase: while the root still carries the protoplasm species,
+      // do only its controls, matching the tick runner's Evolution-goal short circuit. A landed
+      // evolution page can therefore progress without spending resources on ordinary automation.
+      if (
+        isEnabled(settings, "autoEvolution") &&
+        capturedEvolution.reader.sampleSpecies() === "protoplasm"
+      ) {
+        runPhase("autoEvolution", runCapturedEvolution);
+        return;
+      }
       if (isEnabled(settings, "autoTrigger")) {
         runPhase("autoTrigger discovery", () => {
           // Trigger targets are only the actions whose controls were captured, so the sample the

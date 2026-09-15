@@ -18625,6 +18625,233 @@
     });
   }
 
+  // src/domain/progression/evolution/universe-selection.ts
+  function planUniverseSelection(input) {
+    return !input.hasBigbang || input.universe !== "bigbang" || input.targetName === "none" ? null : input.targetName;
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-evolution.ts
+  var EVOLUTION_ACTION_PREFIX = "evolution-", EVOLUTION_ACTION_SELECTOR = "#evolution > .action", RESOURCE_ACTION_IDS = /* @__PURE__ */ new Set(["rna", "dna"]);
+  function capturedEvolutionRecord(value) {
+    return isNonArrayRecord(value) ? value : void 0;
+  }
+  function rootRecord(rootState) {
+    return capturedEvolutionRecord(rootState.readRoot());
+  }
+  function nestedRecord(owner, key) {
+    return capturedEvolutionRecord(readProperty(owner, key));
+  }
+  function readRace(rootState) {
+    return nestedRecord(rootRecord(rootState), "race");
+  }
+  function capturedEvolutionReadSettings(getSettings) {
+    return capturedEvolutionRecord(getSettings());
+  }
+  function readActionRows(drawnActions) {
+    return drawnActions.read(EVOLUTION_ACTION_SELECTOR).filter((action) => action.id.startsWith(EVOLUTION_ACTION_PREFIX));
+  }
+  function capturedEvolutionActionId(rowId) {
+    return rowId.slice(EVOLUTION_ACTION_PREFIX.length);
+  }
+  function resourceAmount(rootState, id, field) {
+    let root = rootRecord(rootState), resource = nestedRecord(nestedRecord(root, "resource"), id);
+    return Number(readProperty(resource, field));
+  }
+  function evolutionCount(rootState, id) {
+    let root = rootRecord(rootState), evolution = nestedRecord(nestedRecord(root, "evolution"), id);
+    return Number(readProperty(evolution, "count"));
+  }
+  function actionRowsForTree(rows, challengeIds, targetId, rootState) {
+    let targetRow = rows.find(
+      (row) => capturedEvolutionActionId(row.id) === targetId
+    );
+    return typeof readProperty(readRace(rootState), "evoFinalMenu") == "string" && targetRow !== void 0 ? Object.freeze([targetRow]) : Object.freeze(
+      rows.filter((row) => {
+        let id = capturedEvolutionActionId(row.id);
+        return !challengeIds.has(id) && !RESOURCE_ACTION_IDS.has(id);
+      })
+    );
+  }
+  function explicitTarget(settings) {
+    let target = settings?.userEvolutionTarget;
+    return typeof target == "string" && target.length > 0 && target !== "auto" && target !== "none" ? target : void 0;
+  }
+  function createCapturedEvolution(dependencies) {
+    let challengeTraitById = /* @__PURE__ */ new Map(), challengeIds = /* @__PURE__ */ new Set();
+    for (let group of dependencies.challengeGroups)
+      for (let member of group.members)
+        challengeIds.add(member.id), challengeTraitById.set(member.id, member.trait);
+    let storedTarget, lastSpecies, reportActivity = dependencies.onActivity ?? (() => {
+    }), reader = Object.freeze({
+      sampleSpecies() {
+        let species = readProperty(readRace(dependencies.rootState), "species"), value = typeof species == "string" ? species : "";
+        return lastSpecies === "protoplasm" && value !== "protoplasm" && (storedTarget = void 0), lastSpecies = value, value;
+      },
+      sampleLandingGate() {
+        let race = readRace(dependencies.rootState), universe = readProperty(race, "universe");
+        return Object.freeze({
+          universe: typeof universe == "string" ? universe : null,
+          seeded: !!readProperty(race, "seeded"),
+          chose: !!readProperty(race, "chose")
+        });
+      },
+      hasStoredTarget() {
+        return storedTarget !== void 0;
+      },
+      storedTargetId() {
+        return storedTarget?.id ?? null;
+      },
+      sampleTargetSelection() {
+        let settings = capturedEvolutionReadSettings(dependencies.readSettings), target = explicitTarget(settings), races = Object.freeze(target ? [
+          Object.freeze({
+            id: target,
+            weighting: 0,
+            habitability: 1,
+            genus: "captured",
+            name: target
+          })
+        ] : []), stats = nestedRecord(rootRecord(dependencies.rootState), "stats"), achieve = nestedRecord(stats, "achieve"), queue = settings?.evolutionQueue;
+        return Object.freeze({
+          races,
+          userEvolutionTarget: typeof settings?.userEvolutionTarget == "string" ? settings.userEvolutionTarget : "unreadable",
+          massExtinction: !!achieve?.mass_extinction,
+          queueEnabled: settings?.evolutionQueueEnabled === !0,
+          queueLength: Array.isArray(queue) ? queue.length : 0,
+          queueRepeat: settings?.evolutionQueueRepeat === !0,
+          evolutionAttempts: dependencies.readEvolutionAttempts()
+        });
+      },
+      sampleRaceTrait(trait) {
+        return Number(readProperty(readRace(dependencies.rootState), trait));
+      },
+      sampleCosts(targetId) {
+        let rows = actionRowsForTree(
+          readActionRows(dependencies.drawnActions),
+          challengeIds,
+          targetId,
+          dependencies.rootState
+        ), maxRna = 0, maxDna = 0;
+        for (let row of rows)
+          maxRna = Math.max(maxRna, row.cost.RNA ?? 0), maxDna = Math.max(maxDna, row.cost.DNA ?? 0);
+        return Object.freeze({
+          maxRna,
+          maxDna,
+          rnaCurrent: resourceAmount(dependencies.rootState, "RNA", "amount"),
+          rnaMax: resourceAmount(dependencies.rootState, "RNA", "max"),
+          dnaCurrent: resourceAmount(dependencies.rootState, "DNA", "amount"),
+          dnaMax: resourceAmount(dependencies.rootState, "DNA", "max")
+        });
+      },
+      sampleEvolutionTree(targetId) {
+        let rows = actionRowsForTree(
+          readActionRows(dependencies.drawnActions),
+          challengeIds,
+          targetId,
+          dependencies.rootState
+        ), race = readRace(dependencies.rootState);
+        return Object.freeze(
+          rows.map((row) => {
+            let id = capturedEvolutionActionId(row.id), trait = challengeTraitById.get(id);
+            return Object.freeze({
+              id,
+              unlocked: !0,
+              activeChallenge: trait !== void 0 && Number(readProperty(race, trait)) === 1
+            });
+          })
+        );
+      },
+      sampleCells() {
+        return Object.freeze({
+          mitochondriaCount: evolutionCount(
+            dependencies.rootState,
+            "mitochondria"
+          ),
+          eukaryoticCellCount: evolutionCount(
+            dependencies.rootState,
+            "eukaryotic_cell"
+          ),
+          nucleusCount: evolutionCount(dependencies.rootState, "nucleus"),
+          organellesCount: evolutionCount(dependencies.rootState, "organelles"),
+          rnaMax: resourceAmount(dependencies.rootState, "RNA", "max"),
+          dnaMax: resourceAmount(dependencies.rootState, "DNA", "max")
+        });
+      },
+      sampleImitation() {
+        let race = readRace(dependencies.rootState), settings = capturedEvolutionReadSettings(dependencies.readSettings), imitateRace = typeof settings?.imitateRace == "string" ? settings.imitateRace : "", wanted = `${EVOLUTION_ACTION_PREFIX}s-${imitateRace}`, imitationExists = readActionRows(dependencies.drawnActions).some(
+          (row) => row.id === wanted
+        );
+        return Object.freeze({
+          evoFinalMenu: !!readProperty(race, "evoFinalMenu"),
+          imitationExists,
+          imitateRace
+        });
+      },
+      sampleChallengeEnabled(groupIds) {
+        let settings = capturedEvolutionReadSettings(dependencies.readSettings), enabled = {};
+        for (let id of groupIds)
+          enabled[id] = settings?.[`challenge_${id}`] === !0;
+        return Object.freeze(enabled);
+      }
+    }), invokeAction = (id) => {
+      let handle = dependencies.controls.resolve(
+        `${EVOLUTION_ACTION_PREFIX}${id}`
+      );
+      return handle === void 0 ? !1 : dependencies.controls.invoke(handle, "action").ok;
+    }, invokeRepeated = (id, count2) => {
+      for (let index = 0; index < count2; index++)
+        if (!invokeAction(id))
+          throw new TypeError(`captured evolution control unavailable: ${id}`);
+    }, executor = Object.freeze({
+      loadQueuedSettings() {
+        dependencies.loadQueuedSettings();
+      },
+      commitTarget(id, name) {
+        storedTarget = { id, name }, reportActivity({
+          message: `Attempting evolution of ${name}.`,
+          color: "success",
+          tags: Object.freeze(["progress"])
+        });
+      },
+      clickEvolution(id) {
+        return invokeAction(id);
+      },
+      accumulateResources(command) {
+        invokeRepeated("rna", command.rnaForDna), invokeRepeated("dna", command.dnaForEvolution), invokeRepeated("rna", command.rnaForEvolution);
+      },
+      clickImitation(imitateRace) {
+        return invokeAction(`s-${imitateRace}`);
+      },
+      logImitationUnavailable(imitateRace) {
+        reportActivity({
+          message: `${imitateRace} not available for imitation. Please select an available race.`,
+          color: "danger",
+          tags: Object.freeze(["progress", "achievements"])
+        });
+      },
+      logImitationNoRace() {
+        reportActivity({
+          message: "No race selected for imitation. Please select an available race to continue.",
+          color: "danger",
+          tags: Object.freeze(["progress", "achievements"])
+        });
+      }
+    });
+    return Object.freeze({
+      reader,
+      executor,
+      runUniverseSelection: () => {
+        let race = readRace(dependencies.rootState), targetName = capturedEvolutionReadSettings(dependencies.readSettings)?.userUniverseTargetName;
+        if (typeof targetName != "string") return;
+        let universe = readProperty(race, "universe"), target = planUniverseSelection({
+          hasBigbang: !!readProperty(race, "bigbang"),
+          universe: typeof universe == "string" ? universe : null,
+          targetName
+        });
+        target !== null && dependencies.universeControls.selectUniverse(target);
+      }
+    });
+  }
+
   // src/ui/automation-container.ts
   function createAutomationContainer({
     getSettingsRaw,
@@ -21421,6 +21648,228 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/adapters/browser/progression-controls.ts
+  function createUniverseSelectionControls(getDocument) {
+    return Object.freeze({
+      selectUniverse(name) {
+        let document = requireRecord(getDocument(), "document"), getElementById = requireFunction(
+          document.getElementById,
+          "document.getElementById"
+        ), value = Reflect.apply(getElementById, document, [`uni-${name}`]);
+        if (typeof value != "object" || value === null)
+          return !1;
+        let children = requireRecord(value, `document#uni-${name}`).children;
+        if (typeof children != "object" && !Array.isArray(children) || children === null)
+          return !1;
+        let first = children[0];
+        if (typeof first != "object" || first === null)
+          return !1;
+        let child = requireRecord(first, `document#uni-${name}.children[0]`);
+        if (typeof child.click != "function")
+          return !1;
+        let click = requireFunction(
+          child.click,
+          `document#uni-${name}.children[0].click`
+        );
+        return Reflect.apply(click, child, []), !0;
+      }
+    });
+  }
+
+  // src/domain/progression/evolution/evolution.ts
+  var CYCLE_ENDING_CHALLENGES = Object.freeze([
+    "junker",
+    "sludge",
+    "ultra_sludge",
+    "warlord"
+  ]);
+  function shouldEvolve(species) {
+    return species === "protoplasm";
+  }
+  function hasLandedSomewhere(gate) {
+    return !(gate.universe === "bigbang" || gate.seeded && !gate.chose);
+  }
+  function raceById(races, id) {
+    return races.find((race) => race.id === id);
+  }
+  function isReachable(race) {
+    return race.habitability > 0;
+  }
+  function planEvolutionTarget(input) {
+    let target;
+    if (input.userEvolutionTarget === "auto") {
+      let byWeighting = input.races.filter(isReachable).sort((a, b) => b.weighting - a.weighting);
+      if (byWeighting.length === 0)
+        target = void 0;
+      else if (input.massExtinction)
+        target = byWeighting[0];
+      else {
+        let bestGenus = [...byWeighting.map((race) => race.genus).filter((genus, index, all) => all.indexOf(genus) === index).map(
+          (genus) => [
+            genus,
+            byWeighting.filter((race) => race.genus === genus).map((race) => race.weighting).reduce((sum, next) => sum + next)
+          ]
+        )].sort((a, b) => b[1] - a[1])[0][0];
+        target = byWeighting.find((race) => race.genus === bestGenus);
+      }
+    } else {
+      let userRace = raceById(input.races, input.userEvolutionTarget);
+      userRace && isReachable(userRace) && (target = userRace);
+    }
+    if (target === void 0 && input.queueEnabled && input.queueLength > 0 && (!input.queueRepeat || input.evolutionAttempts < input.queueLength))
+      return Object.freeze({ kind: "wait" });
+    if (target === void 0) {
+      let custom = raceById(input.races, "custom");
+      if (custom && isReachable(custom))
+        target = custom;
+      else {
+        let entish = raceById(input.races, "entish");
+        target = entish && isReachable(entish) ? entish : void 0;
+      }
+    }
+    return Object.freeze(target === void 0 ? { kind: "wait" } : { kind: "target", id: target.id, name: target.name });
+  }
+  function evolutionChallengeCandidates(groups, enabled) {
+    let candidates = [];
+    for (let group of groups) {
+      let groupId = group.members[0]?.id;
+      if (!(groupId === void 0 || enabled[groupId] !== !0))
+        for (let member of group.members)
+          candidates.push(
+            Object.freeze({
+              id: member.id,
+              trait: member.trait,
+              cycleEnding: CYCLE_ENDING_CHALLENGES.includes(member.id)
+            })
+          );
+    }
+    return Object.freeze(candidates);
+  }
+  function planResourceAccumulation(maxRna, maxDna, levels) {
+    let dnaForEvolution = Math.min(
+      maxDna - levels.dnaCurrent,
+      levels.dnaMax - levels.dnaCurrent,
+      levels.rnaMax / 2
+    ), rnaForDna = Math.min(
+      dnaForEvolution * 2 - levels.rnaCurrent,
+      levels.rnaMax - levels.rnaCurrent
+    ), rnaRemaining = levels.rnaCurrent + rnaForDna - dnaForEvolution * 2, rnaForEvolution = Math.min(
+      maxRna - rnaRemaining,
+      levels.rnaMax - rnaRemaining
+    );
+    return Object.freeze({
+      rnaForDna,
+      dnaForEvolution,
+      rnaForEvolution,
+      newRna: rnaRemaining + rnaForEvolution,
+      newDna: levels.dnaCurrent + dnaForEvolution
+    });
+  }
+  function planEvolutionTreeClick(tree) {
+    for (let action of tree)
+      if (action.unlocked && !action.activeChallenge)
+        return Object.freeze({ kind: "click", id: action.id });
+    return Object.freeze({ kind: "none" });
+  }
+  function planEvolutionCells(input, maxRna, maxDna) {
+    let clicks = [];
+    return (input.mitochondriaCount < 1 || input.rnaMax < maxRna || input.dnaMax < maxDna) && clicks.push("mitochondria"), (input.eukaryoticCellCount < 1 || input.dnaMax < maxDna) && clicks.push("eukaryotic_cell"), input.rnaMax < maxRna && clicks.push("membrane"), input.nucleusCount < 10 && clicks.push("nucleus"), input.organellesCount < 10 && clicks.push("organelles"), Object.freeze(clicks);
+  }
+  function planImitation(input) {
+    return input.evoFinalMenu ? input.imitationExists ? Object.freeze({ kind: "click", imitateRace: input.imitateRace }) : Object.freeze({ kind: "log-no-race" }) : Object.freeze({ kind: "skip" });
+  }
+
+  // src/application/evolution.ts
+  function runEvolution(dependencies) {
+    let {
+      reader,
+      executor,
+      runUniverseSelection,
+      runPlanetSelection,
+      challengeGroups
+    } = dependencies;
+    if (!shouldEvolve(reader.sampleSpecies()) || (runUniverseSelection(), runPlanetSelection(), !hasLandedSomewhere(reader.sampleLandingGate())))
+      return;
+    if (!reader.hasStoredTarget()) {
+      executor.loadQueuedSettings();
+      let decision = planEvolutionTarget(reader.sampleTargetSelection());
+      if (decision.kind === "wait")
+        return;
+      executor.commitTarget(decision.id, decision.name);
+    }
+    let groupIds = challengeGroups.map((group) => group.members[0]?.id).filter((id) => id !== void 0), enabled = reader.sampleChallengeEnabled(groupIds);
+    for (let candidate of evolutionChallengeCandidates(
+      challengeGroups,
+      enabled
+    ))
+      if (reader.sampleRaceTrait(candidate.trait) !== 1 && executor.clickEvolution(candidate.id) && candidate.cycleEnding)
+        return;
+    let targetId = reader.storedTargetId();
+    if (targetId === null)
+      throw new TypeError("evolution target missing after selection phase");
+    let costs = reader.sampleCosts(targetId);
+    executor.accumulateResources(
+      planResourceAccumulation(costs.maxRna, costs.maxDna, {
+        rnaCurrent: costs.rnaCurrent,
+        rnaMax: costs.rnaMax,
+        dnaCurrent: costs.dnaCurrent,
+        dnaMax: costs.dnaMax
+      })
+    );
+    let treePlan = planEvolutionTreeClick(reader.sampleEvolutionTree(targetId));
+    if (treePlan.kind === "click" && executor.clickEvolution(treePlan.id))
+      return;
+    let cellClicks = planEvolutionCells(
+      reader.sampleCells(),
+      costs.maxRna,
+      costs.maxDna
+    );
+    for (let id of cellClicks)
+      executor.clickEvolution(id);
+    let imitation = planImitation(reader.sampleImitation());
+    imitation.kind === "click" ? executor.clickImitation(imitation.imitateRace) || executor.logImitationUnavailable(imitation.imitateRace) : imitation.kind === "log-no-race" && executor.logImitationNoRace();
+  }
+
+  // src/adapters/evolve/runtime-catalogs.ts
+  var challenges = [
+    [
+      { id: "plasmid", trait: "no_plasmid" },
+      { id: "mastery", trait: "weak_mastery" },
+      { id: "nerfed", trait: "nerfed" }
+    ],
+    [
+      { id: "crispr", trait: "no_crispr" },
+      { id: "badgenes", trait: "badgenes" }
+    ],
+    [{ id: "trade", trait: "no_trade" }],
+    [{ id: "craft", trait: "no_craft" }],
+    [{ id: "joyless", trait: "joyless" }],
+    [{ id: "steelen", trait: "steelen" }],
+    [{ id: "decay", trait: "decay" }],
+    [{ id: "emfield", trait: "emfield" }],
+    [{ id: "inflation", trait: "inflation" }],
+    [{ id: "sludge", trait: "sludge" }],
+    [{ id: "ultra_sludge", trait: "ultra_sludge" }],
+    [{ id: "orbit_decay", trait: "orbit_decay" }],
+    [
+      { id: "gravity_well", trait: "gravity_well" },
+      { id: "witch_hunter", trait: "witch_hunter" },
+      { id: "warlord", trait: "warlord" }
+    ],
+    [{ id: "junker", trait: "junker" }],
+    [{ id: "cataclysm", trait: "cataclysm" }],
+    [{ id: "banana", trait: "banana" }],
+    [{ id: "truepath", trait: "truepath" }],
+    [{ id: "lone_survivor", trait: "lone_survivor" }],
+    [{ id: "fasting", trait: "fasting" }]
+  ];
+  var evolutionSettingsToStore = [
+    "userEvolutionTarget",
+    "userEvolutionGenus",
+    "prestigeType",
+    ...challenges.map((c) => "challenge_" + c[0].id)
+  ];
+
   // src/adapters/browser/game-keyboard-handlers.ts
   function createGameKeyboardHandlers(dependencies) {
     let { getDocument, getKeyboardEvent } = dependencies;
@@ -21522,6 +21971,31 @@ Only continue if you trust the source. Injected code:
       settings: settingsStore,
       refreshSettings: settingsPanel.refreshSettings,
       onWarning: (message) => logError(message)
+    }), evolutionChallengeGroups = Object.freeze(
+      challenges.map(
+        (members) => Object.freeze({ members: Object.freeze(members) })
+      )
+    ), capturedEvolution = createCapturedEvolution({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      drawnActions: createGameDrawnActionsReader({
+        getDocument: () => document
+      }),
+      readSettings: () => settingsStore.readRaw(),
+      readEvolutionAttempts: queuedSettings.readEvolutionAttempts,
+      loadQueuedSettings: queuedSettings.loadQueuedSettings,
+      universeControls: createUniverseSelectionControls(() => document),
+      challengeGroups: evolutionChallengeGroups,
+      onActivity
+    }), runCapturedEvolution = () => runEvolution({
+      reader: capturedEvolution.reader,
+      executor: capturedEvolution.executor,
+      runUniverseSelection: capturedEvolution.runUniverseSelection,
+      // DeadSpace keeps planet candidates inside the lexical setPlanet closure. Until that
+      // metadata is exposed by the page, manual planet selection remains the safe captured path.
+      runPlanetSelection: () => {
+      },
+      challengeGroups: evolutionChallengeGroups
     });
     settingsPanel.ensurePanel();
     let capturedPrestigeGoal = "Standard", reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
@@ -22271,6 +22745,10 @@ Only continue if you trust the source. Injected code:
         return;
       let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs();
       try {
+        if (isEnabled(settings, "autoEvolution") && capturedEvolution.reader.sampleSpecies() === "protoplasm") {
+          runPhase("autoEvolution", runCapturedEvolution);
+          return;
+        }
         isEnabled(settings, "autoTrigger") && runPhase("autoTrigger discovery", () => {
           progression.ensureBuildControls();
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet discovery", () => {
