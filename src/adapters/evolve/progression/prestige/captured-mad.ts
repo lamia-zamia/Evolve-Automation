@@ -34,11 +34,8 @@ export interface CapturedMadPrestigeDependencies {
   readonly readSettings: () => unknown;
   readonly readGoal: () => string;
   readonly setGoal: (goal: string) => void;
-  /**
-   * The captured runtime has no game-log port yet. A caller that owns one may observe the
-   * planner's log command; absence is deliberately a no-op for this bounded control slice.
-   */
-  readonly onPrestige?: () => void;
+  /** Reports a prestige after the launch replaced the captured game root. */
+  readonly onActivity?: (message: string) => void;
 }
 
 function capturedMadSettingsRecord(raw: unknown): Record<PropertyKey, unknown> {
@@ -165,12 +162,16 @@ export function createCapturedMadPrestige(
             dependencies.controls,
             command.kind === "arm-mad" ? "arm" : "launch",
           );
+          if (
+            command.kind === "launch-mad" &&
+            dependencies.rootState.readRoot() !== sampledRoot
+          ) {
+            dependencies.onActivity?.("Prestiged");
+          }
           return;
         case "log-prestige":
-          // TRANSITIONAL: The independent runtime has no captured game-log/state-log port yet.
-          // Keep the planner command in the shared policy and make the missing sink inert until a
-          // narrow logging port replaces this callback.
-          dependencies.onPrestige?.();
+          // The activity sink observes the root transition after launch; logging this planner
+          // command would report an attempted prestige before the game actually reset.
           return;
         default:
           // Non-MAD branches are intentionally represented as noop by this bounded reader.

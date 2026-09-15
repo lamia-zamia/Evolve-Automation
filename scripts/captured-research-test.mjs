@@ -101,6 +101,7 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
   const panels = { open: () => undefined };
 
   const unavailable = [];
+  const activity = [];
   return {
     root,
     clicks,
@@ -118,7 +119,9 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
       mountSuppression,
       panels,
       onUnavailable: (reason) => unavailable.push(reason),
+      onActivity: (message) => activity.push(message),
     }),
+    activity,
   };
 }
 
@@ -149,6 +152,7 @@ const SMELTING = {
   assert.deepEqual(page.clicks, ["tech-theology"]);
   assert.equal(page.root.resource.Knowledge.amount, 100);
   assert.equal(page.root.tech.theology, 1);
+  assert.deepEqual(page.activity, ["Researched tech-theology"]);
   // The player's tab is where it was.
   assert.equal(page.root.settings.civTabs, 4);
   assert.equal(page.root.settings.animated, true);

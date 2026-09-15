@@ -39,6 +39,8 @@ export interface CapturedResearchDependencies {
   readonly resources: GameResourceSource;
   readonly conflicts: CapturedCostConflictReader;
   readonly controls: GameControlRegistry;
+  /** Reports a successful research after the captured technology state changed. */
+  readonly onActivity?: (message: string) => void;
 }
 
 export interface CapturedResearchAdapter {
@@ -61,6 +63,7 @@ export function createCapturedResearchAdapter(
   dependencies: CapturedResearchDependencies,
 ): CapturedResearchAdapter {
   const { rootState, offered, resources, conflicts, controls } = dependencies;
+  const reportActivity = dependencies.onActivity ?? (() => {});
 
   function isAffordable(cost: Readonly<Record<string, number>>): boolean {
     const sample = resources.readResources(Object.keys(cost));
@@ -154,10 +157,9 @@ export function createCapturedResearchAdapter(
       }
       // The game's own action reports nothing useful; the state it changed does. A click the game
       // declined is a decision that produced no research, not a failure.
-      return executionResult(
-        SUCCEEDED,
-        readCapturedTechState(rootState.readRoot()) !== before,
-      );
+      const researched = readCapturedTechState(rootState.readRoot()) !== before;
+      if (researched) reportActivity(`Researched ${decision.techId}`);
+      return executionResult(SUCCEEDED, researched);
     },
   });
 

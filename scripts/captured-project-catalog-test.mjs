@@ -143,6 +143,7 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
   const paths = [];
   const panelChecks = [];
   const reasons = [];
+  const diagnostics = [];
   let unavailable = false;
   let failure;
   const catalog = createCapturedProjectCatalog({
@@ -184,6 +185,7 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
       capturedElementIds: () => Object.keys(generations),
     },
     onUnavailable: (reason) => reasons.push(reason),
+    onDiagnostic: (reason) => diagnostics.push(reason),
   });
   return {
     catalog,
@@ -192,6 +194,7 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
     paths,
     panelChecks,
     reasons,
+    diagnostics,
     unavailable: () => {
       unavailable = true;
     },
@@ -247,8 +250,8 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
   assert.equal(page.catalog.readProjects(), undefined);
   assert.deepEqual(page.reasons, [
     "the project panel could not supply exact costs",
-    "no captured control",
   ]);
+  assert.deepEqual(page.diagnostics, ["no captured control"]);
 }
 
 {

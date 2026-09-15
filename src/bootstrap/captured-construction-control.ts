@@ -85,6 +85,8 @@ export interface CapturedConstructionControlDependencies {
   readonly diagnostics?: TickDiagnostics | undefined;
   /** Reports candidate and executor diagnostics when explicitly enabled by the caller. */
   readonly onDiagnostic?: (message: string) => void;
+  /** Reports successful captured activity after the game state changed. */
+  readonly onActivity?: (message: string) => void;
   /** Reports a candidate, price, or catalog the capture could not supply. */
   readonly onSkipped?: (key: string, reason: string) => void;
 }
@@ -125,6 +127,7 @@ export function createCapturedConstructionControl(
   const readKnowledgeGate = dependencies.readKnowledgeGate;
   const readStorageRequired = dependencies.readStorageRequired;
   const onDiagnostic = dependencies.onDiagnostic;
+  const onActivity = dependencies.onActivity;
   // The offered-technology catalog is asked for at most once per cycle, and only if something in
   // the cycle actually needs it. Every candidate consults the same reservations, so without this
   // the cycle would pay for one discovery pass per candidate.
@@ -172,6 +175,12 @@ export function createCapturedConstructionControl(
       ...(onSkipped === undefined
         ? {}
         : { onUnavailable: (reason: string) => onSkipped("arpa", reason) }),
+      ...(onDiagnostic === undefined
+        ? {}
+        : {
+            onDiagnostic: (reason: string) =>
+              onDiagnostic(`progression diagnostic arpa: ${reason}`),
+          }),
     });
   const { reader, executor, observations } = createCapturedConstructionAdapter({
     // City buildings first, matching the game's own list order, so a project only outranks a
@@ -187,6 +196,7 @@ export function createCapturedConstructionControl(
           : { ensureControls: dependencies.ensureBuildControls }),
         ...(onSkipped === undefined ? {} : { onSkipped }),
         ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
+        ...(onActivity === undefined ? {} : { onActivity }),
       }),
       createCapturedProjectSource({
         rootState,
@@ -201,6 +211,7 @@ export function createCapturedConstructionControl(
           readSettings,
         }),
         readSettings,
+        ...(onActivity === undefined ? {} : { onActivity }),
       }),
     ]),
     resources,

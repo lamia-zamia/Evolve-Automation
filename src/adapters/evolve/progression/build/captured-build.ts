@@ -59,6 +59,8 @@ export interface CapturedBuildDependencies {
   readonly onSkipped?: (key: string, reason: string) => void;
   /** Reports the captured action boundary while performance diagnostics are enabled. */
   readonly onDiagnostic?: (message: string) => void;
+  /** Reports a successful build after the game's count changed. */
+  readonly onActivity?: (message: string) => void;
 }
 
 interface CycleCandidate {
@@ -119,6 +121,7 @@ export function createCapturedBuildSource(
   const { rootState, controls, costs, readTargets } = dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
   const reportDiagnostic = dependencies.onDiagnostic ?? (() => {});
+  const reportActivity = dependencies.onActivity ?? (() => {});
   let cycle: ReadonlyMap<string, CycleCandidate> = new Map();
 
   return Object.freeze({
@@ -231,6 +234,7 @@ export function createCapturedBuildSource(
           ...base,
         });
       }
+      if (built) reportActivity(`Built ${candidate.target.key} (${after})`);
       // The game's own action reports nothing useful; the count it changed does.
       return Object.freeze({
         outcome: SUCCEEDED,

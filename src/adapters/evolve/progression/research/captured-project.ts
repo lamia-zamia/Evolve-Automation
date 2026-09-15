@@ -40,6 +40,8 @@ export interface CapturedProjectDependencies {
   readonly context: CapturedProjectContextReader;
   /** Persisted script settings are external input and are normalized here. */
   readonly readSettings: () => unknown;
+  /** Reports a successful project build after rank or progress changed. */
+  readonly onActivity?: (message: string) => void;
 }
 
 interface CycleProject {
@@ -129,6 +131,7 @@ export function createCapturedProjectSource(
 ): ConstructionCandidateSource {
   const { rootState, catalog, resources, controls, context, readSettings } =
     dependencies;
+  const reportActivity = dependencies.onActivity ?? (() => {});
   let cycle: ReadonlyMap<string, CycleProject> = new Map();
 
   return Object.freeze({
@@ -243,6 +246,13 @@ export function createCapturedProjectSource(
         candidate.project.projectId,
         candidate.project.steps,
       ]);
+      const after = projectState(
+        rootState.readRoot(),
+        candidate.project.projectId,
+      );
+      const clicked =
+        after !== undefined &&
+        (after.rank > before.rank || after.progress > before.progress);
       if (!result.ok) {
         return Object.freeze({
           outcome:
@@ -255,13 +265,11 @@ export function createCapturedProjectSource(
           ...base,
         });
       }
-      const after = projectState(
-        rootState.readRoot(),
-        candidate.project.projectId,
-      );
-      const clicked =
-        after !== undefined &&
-        (after.rank > before.rank || after.progress > before.progress);
+      if (clicked) {
+        reportActivity(
+          `Built ${candidate.project.projectId} (${after.rank}:${after.progress}%)`,
+        );
+      }
       return Object.freeze({
         outcome: SUCCEEDED,
         clicked,

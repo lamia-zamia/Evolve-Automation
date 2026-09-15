@@ -39,6 +39,7 @@ function createPage(
   const document = createTestDocument(root);
   const storage = createStorage(settingsText);
   const logged = [];
+  const diagnostics = [];
   const confirmed = [];
   const downloads = [];
   const pageWindow = {
@@ -70,6 +71,7 @@ function createPage(
   const panel = createCapturedSettingsPanel({
     capturedPanelWindow: pageWindow,
     settings,
+    onDiagnostic: (message) => diagnostics.push(message),
     logError: (message) => logged.push(message),
   });
   return {
@@ -78,6 +80,7 @@ function createPage(
     storage,
     root,
     logged,
+    diagnostics,
     confirmed,
     downloads,
     saveText,
@@ -222,11 +225,18 @@ function createPage(
 // --- an enable callback for an unported section is reported by name, once ------------------------
 
 {
-  const { panel, logged } = createPage(JSON.stringify({ autoMech: true }));
+  const { panel, logged, diagnostics } = createPage(
+    JSON.stringify({ autoMech: true }),
+  );
   panel.ensurePanel();
-  const mech = logged.filter((line) => line.includes("mech info panel"));
-  assert.equal(mech.length, 1, `expected one report, got ${logged.length}`);
+  const mech = diagnostics.filter((line) => line.includes("mech info panel"));
+  assert.equal(
+    mech.length,
+    1,
+    `expected one diagnostic, got ${diagnostics.length}`,
+  );
   assert.match(mech[0], /not ported yet/);
+  assert.deepEqual(logged, []);
 }
 
 // --- platform and safe mode -----------------------------------------------------------------------

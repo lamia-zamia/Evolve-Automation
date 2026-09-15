@@ -31,6 +31,7 @@ export interface CapturedProjectCatalogDependencies {
   readonly drawnProjects: GameDrawnProjectsReader;
   readonly controls: GameControlRegistry;
   readonly onUnavailable?: (reason: string) => void;
+  readonly onDiagnostic?: (reason: string) => void;
 }
 
 /** The half of a row that the draw supplies: everything but the live-state figures below. */
@@ -79,6 +80,7 @@ export function createCapturedProjectCatalog(
 ): GameProjectCatalog {
   const { rootState, discovery, drawnProjects, controls } = dependencies;
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
+  const reportDiagnostic = dependencies.onDiagnostic ?? (() => {});
 
   /** The `game.arpa` record, or `undefined` before the game has built one. */
   const readProjectState = ():
@@ -114,12 +116,14 @@ export function createCapturedProjectCatalog(
           projects = priceProjectRows(drawn, arpa, controls);
         },
       });
-      if (result.outcome.status !== "succeeded" || projects === undefined) {
-        reportUnavailable(
-          result.outcome.status === "succeeded"
-            ? "the project panel could not supply exact costs"
-            : (result.outcome.failure?.message ?? result.outcome.status),
+      if (result.outcome.status !== "succeeded") {
+        reportDiagnostic(
+          result.outcome.failure?.message ?? result.outcome.status,
         );
+        return undefined;
+      }
+      if (projects === undefined) {
+        reportUnavailable("the project panel could not supply exact costs");
         return undefined;
       }
       return projects;

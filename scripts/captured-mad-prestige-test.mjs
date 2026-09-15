@@ -94,6 +94,7 @@ const settings = {
       assert.equal(handle.elementId, CAPTURED_MAD_CONTROL);
       trace.push(method);
       if (method === "arm") root.civic.mad.armed = false;
+      if (method === "launch") root = buildRoot();
       return { ok: true, value: undefined };
     },
     capturedElementIds() {
@@ -109,7 +110,7 @@ const settings = {
       goal = next;
       trace.push(["goal", next]);
     },
-    onPrestige: () => trace.push("log"),
+    onActivity: (message) => trace.push(message),
   });
 
   runPrestige(prestige);
@@ -122,8 +123,8 @@ const settings = {
     ["goal", "Reset"],
     "arm",
     ["goal", "GameOverMan"],
-    "log",
     "launch",
+    "Prestiged",
   ]);
 }
 

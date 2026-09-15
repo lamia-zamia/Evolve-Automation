@@ -565,7 +565,11 @@ function readTarget(
   const id = binding.slice("city-".length);
   const state = readProperty(city, id);
   if (!isRecord(state)) {
-    onSkipped(binding, "captured city state is unavailable");
+    // A captured city control is broader than the building list: gather/resource/special controls
+    // also use the `city-*` namespace. Without a matching state record there is no positive
+    // building identity, so leave the control out of this scan rather than reporting it as a
+    // skipped building. A positively identified building is validated below and can still report
+    // a malformed count or setting.
     return undefined;
   }
   const weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);

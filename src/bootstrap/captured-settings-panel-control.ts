@@ -7,10 +7,10 @@
  *
  * TRANSITIONAL: the remaining per-section builders (the Settings tab, and the toggle strips
  * injected into the game's own Building/ARPA/Storage/Market/Eject/Supply panels) still reach the mutable
- * managers under `src/game/`, which are not in the production bundle. They are reported once by name
- * rather than silently doing nothing, and each is replaced by its captured equivalent in a later
- * slice. Automation itself does not depend on any of them — it reads the same settings record this
- * panel writes.
+ * managers under `src/game/`, which are not in the production bundle. They are diagnosed once by
+ * name rather than silently doing nothing, and each is replaced by its captured equivalent in a
+ * later slice. Automation itself does not depend on any of them — it reads the same settings
+ * record this panel writes.
  */
 
 import { createAutomationContainer } from "../ui/automation-container.ts";
@@ -122,6 +122,7 @@ export interface CapturedSettingsPanelDependencies {
     readonly rootState: GameRootStateSource;
     readonly controls: GameControlRegistry;
   };
+  readonly onDiagnostic?: (message: string) => void;
   readonly logError?: (message: string) => void;
 }
 
@@ -200,6 +201,7 @@ export function createCapturedSettingsPanel({
   capturedPanelWindow,
   settings,
   craftToggles: capturedCraftToggles,
+  onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
   const documentValue = readProperty(capturedPanelWindow, "document");
@@ -227,7 +229,7 @@ export function createCapturedSettingsPanel({
   const unported = (section: string) => () => {
     if (reportedSections.has(section)) return;
     reportedSections.add(section);
-    logError(`settings panel section not ported yet: ${section}`);
+    onDiagnostic(`settings panel section not ported yet: ${section}`);
   };
 
   const fileDownload = panelFileDownloadFor(capturedPanelWindow, documentValue);

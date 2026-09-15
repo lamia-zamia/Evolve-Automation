@@ -33,6 +33,8 @@ export interface CapturedResearchControlDependencies {
   readonly readOfferedTechs?: () =>
     readonly Readonly<OfferedTech>[] | undefined;
   readonly diagnostics?: TickDiagnostics | undefined;
+  /** Reports successful captured research after the technology state changed. */
+  readonly onActivity?: (message: string) => void;
   /** Reports a catalog or price the capture could not supply. */
   readonly onUnavailable?: (reason: string) => void;
 }
@@ -62,6 +64,7 @@ export function createCapturedResearchControl(
     diagnostics,
   } = dependencies;
   const onUnavailable = dependencies.onUnavailable;
+  const onActivity = dependencies.onActivity;
   const sharedReadOfferedTechs = dependencies.readOfferedTechs;
   const resources = createCapturedResourceSource(rootState);
   const catalog = createCapturedTechCatalog({
@@ -120,6 +123,7 @@ export function createCapturedResearchControl(
           resources,
           conflicts,
           controls,
+          ...(onActivity === undefined ? {} : { onActivity }),
         });
         return runResearchAutomation({ reader, executor, diagnostics });
       } finally {

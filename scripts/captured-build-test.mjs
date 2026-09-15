@@ -229,11 +229,13 @@ function queued(id, label = id) {
     resources: { Money: { amount: 500 }, Lumber: { amount: 500 } },
   });
   const skipped = [];
+  const activity = [];
   const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
     readPolicy: policy([target("basic_housing", 100)]),
     onSkipped: (key, reason) => skipped.push([key, reason]),
+    onActivity: (message) => activity.push(message),
   });
 
   const outcome = control.runCycle();
@@ -251,6 +253,7 @@ function queued(id, label = id) {
   );
   assert.equal(page.root.resource.Lumber.amount, 500 - 64);
   assert.deepEqual(skipped, []);
+  assert.deepEqual(activity, ["Built city-basic_housing (10)"]);
   assert.deepEqual(page.root.queue.queue, [], "the cost probe left no trace");
 }
 

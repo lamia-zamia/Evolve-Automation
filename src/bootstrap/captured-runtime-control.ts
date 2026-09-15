@@ -170,6 +170,8 @@ export interface CapturedRuntimeControlDependencies {
   /** The page's global object. The settings panel reads `document`, `navigator` and `location`. */
   readonly settingsHostWindow: unknown;
   readonly diagnostics?: TickDiagnostics | undefined;
+  /** User-visible activity emitted after a captured state transition. */
+  readonly onActivity?: (message: string) => void;
   readonly log?: (message: string) => void;
   readonly logError?: (message: string) => void;
 }
@@ -216,6 +218,7 @@ export function startCapturedRuntime({
   storage,
   settingsHostWindow,
   diagnostics,
+  onActivity = () => {},
   log = () => {},
   logError = () => {},
 }: CapturedRuntimeControlDependencies): () => void {
@@ -240,6 +243,9 @@ export function startCapturedRuntime({
     storage,
     logError: (message) => logError(message),
   });
+  const reportDiagnostic = (message: string) => {
+    if (diagnostics?.readPerformanceEnabled() === true) log(message);
+  };
   const settingsPanel = createCapturedSettingsPanel({
     capturedPanelWindow: settingsHostWindow,
     settings: settingsStore,
@@ -247,6 +253,7 @@ export function startCapturedRuntime({
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
     },
+    onDiagnostic: (message) => reportDiagnostic(message),
     logError: (message) => logError(message),
   });
   // The settings UI is useful even when document-start capture was missed (for example, when a
@@ -261,9 +268,6 @@ export function startCapturedRuntime({
     if (reported.has(message)) return;
     reported.add(message);
     logError(message);
-  };
-  const reportDiagnostic = (message: string) => {
-    if (diagnostics?.readPerformanceEnabled() === true) log(message);
   };
   /**
    * One feature's phase of the cycle. A throw inside it is reported once and skips that feature for
@@ -333,6 +337,7 @@ export function startCapturedRuntime({
     nowMs: () => Date.now(),
     diagnostics,
     onDiagnostic: reportDiagnostic,
+    onActivity,
   });
   const gatherResources = createCapturedGatherResourcesControl({
     rootState: pageCapture.rootState,

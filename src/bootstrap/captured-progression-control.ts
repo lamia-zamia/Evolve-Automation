@@ -108,6 +108,8 @@ export interface CapturedProgressionControlDependencies {
   readonly diagnostics?: TickDiagnostics | undefined;
   /** Reports candidate and executor diagnostics when explicitly enabled by the caller. */
   readonly onDiagnostic?: (message: string) => void;
+  /** Reports successful captured activity after the game state changed. */
+  readonly onActivity?: (message: string) => void;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly onUnavailable?: (reason: string) => void;
 }
@@ -224,6 +226,7 @@ export function createCapturedProgressionControl(
     diagnostics,
   } = dependencies;
   const onDiagnostic = dependencies.onDiagnostic;
+  const onActivity = dependencies.onActivity;
   const onSkipped = dependencies.onSkipped;
   const onUnavailable = dependencies.onUnavailable;
   const resources = createCapturedResourceSource(rootState);
@@ -365,6 +368,12 @@ export function createCapturedProgressionControl(
     ...(onSkipped === undefined
       ? {}
       : { onUnavailable: (reason: string) => onSkipped("arpa", reason) }),
+    ...(onDiagnostic === undefined
+      ? {}
+      : {
+          onDiagnostic: (reason: string) =>
+            onDiagnostic(`progression diagnostic arpa: ${reason}`),
+        }),
   });
   // One sample per cycle still, so the trigger phase and construction price from the same list even
   // if the scope's age happens to expire between them. The scope below decides whether that sample
@@ -531,6 +540,7 @@ export function createCapturedProgressionControl(
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
     readOfferedTechs,
     ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
+    ...(onActivity === undefined ? {} : { onActivity }),
     ...(onSkipped === undefined ? {} : { onSkipped }),
     diagnostics,
   });
@@ -542,6 +552,7 @@ export function createCapturedProgressionControl(
     panels,
     readOfferedTechs,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
+    ...(onActivity === undefined ? {} : { onActivity }),
     diagnostics,
   });
 

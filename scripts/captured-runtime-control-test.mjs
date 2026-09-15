@@ -223,7 +223,8 @@ assert.equal(unsubscribeCount, 1);
   assert.ok(diagnosticLog.includes("autoBuild.outcome rejected"));
 }
 
-// A candidate the cycle cannot supply is reported, and reported once rather than every period.
+// A city control with no matching state record is not a positive building identity, so it is
+// ignored rather than reported as a skipped building candidate.
 {
   const reported = [];
   const root = {
@@ -274,12 +275,10 @@ assert.equal(unsubscribeCount, 1);
   cycle({ periods: 4 });
   cycle({ periods: 4 });
   stopCycle();
-  const skipped = reported.filter((message) =>
-    message.includes("city-cottage"),
+  assert.deepEqual(
+    reported.filter((message) => message.includes("city-cottage")),
+    [],
   );
-  assert.deepEqual(skipped, [
-    "progression skipped city-cottage: captured city state is unavailable",
-  ]);
 }
 
 // What the cycle is saving for is held back from the cheaper candidates that arrive after it: the

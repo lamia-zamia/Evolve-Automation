@@ -143,6 +143,7 @@ function makeAdapter({
     queue: { queue },
   };
   const calls = [];
+  const activity = [];
   const controls = {
     resolve: (elementId) => ({ elementId, generation, methods: ["build"] }),
     capturedElementIds: () => ["arpalhc"],
@@ -211,6 +212,7 @@ function makeAdapter({
         controls,
         context: { readContext: () => context },
         readSettings: () => settings,
+        onActivity: (message) => activity.push(message),
       }),
     ],
     resources,
@@ -223,7 +225,7 @@ function makeAdapter({
       respectReservations: true,
     }),
   });
-  return { adapter, root, calls, reads: () => catalogReads };
+  return { adapter, root, calls, activity, reads: () => catalogReads };
 }
 
 // The captured row's build method advances the sampled project and no redraw method is involved.
@@ -231,6 +233,7 @@ function makeAdapter({
   const page = makeAdapter();
   assert.equal(runBuildAutomation(page.adapter).status, "succeeded");
   assert.deepEqual(page.calls, [["arpalhc", "build", "lhc", 5]]);
+  assert.deepEqual(page.activity, ["Built lhc (1:25%)"]);
   assert.equal(page.root.arpa.lhc.complete, 25);
   assert.equal(page.root.resource.Money.amount, 950);
 }

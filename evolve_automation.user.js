@@ -1718,6 +1718,7 @@
   }
   function createCapturedProjectCatalog(dependencies) {
     let { rootState, discovery, drawnProjects, controls } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    }), reportDiagnostic = dependencies.onDiagnostic ?? (() => {
     }), readProjectState2 = () => {
       let root = rootState.readRoot();
       if (root === void 0) return;
@@ -1744,10 +1745,14 @@
             drawn !== void 0 && (projects = priceProjectRows(drawn, arpa, controls));
           }
         });
-        if (result.outcome.status !== "succeeded" || projects === void 0) {
-          reportUnavailable(
-            result.outcome.status === "succeeded" ? "the project panel could not supply exact costs" : result.outcome.failure?.message ?? result.outcome.status
+        if (result.outcome.status !== "succeeded") {
+          reportDiagnostic(
+            result.outcome.failure?.message ?? result.outcome.status
           );
+          return;
+        }
+        if (projects === void 0) {
+          reportUnavailable("the project panel could not supply exact costs");
           return;
         }
         return projects;
@@ -2159,10 +2164,8 @@
     if (!binding.startsWith("city-") || binding.length === 5 || settings[`bat${binding}`] === !1 || settings[`bat${binding}`] === void 0 && settings.autoBuild !== !0)
       return;
     let id = binding.slice(5), state = readProperty(city, id);
-    if (!isRecord(state)) {
-      onSkipped(binding, "captured city state is unavailable");
+    if (!isRecord(state))
       return;
-    }
     let weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);
     if (weighting === void 0) {
       onSkipped(binding, "configured weighting is not finite");
@@ -2899,6 +2902,7 @@
   function createCapturedBuildSource(dependencies) {
     let { rootState, controls, costs, readTargets } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
     }), reportDiagnostic = dependencies.onDiagnostic ?? (() => {
+    }), reportActivity = dependencies.onActivity ?? (() => {
     }), cycle = /* @__PURE__ */ new Map();
     return Object.freeze({
       family: "buildings",
@@ -2972,12 +2976,12 @@
         let rootAfter = rootState.readRoot(), after = Number(
           readProperty(readBuilding(rootAfter, candidate.target), "count")
         ), queueAfter = readQueueLength(rootAfter), built = after > before, queued = queueAfter > queueBefore;
-        return reportDiagnostic(`build.execute.after ${after}`), reportDiagnostic(`build.execute.queueAfter ${queueAfter}`), reportDiagnostic(`build.execute.built ${built}`), reportDiagnostic(`build.execute.queued ${queued}`), reportDiagnostic(`build.execute.noop ${!built && !queued}`), result.ok ? Object.freeze({
+        return reportDiagnostic(`build.execute.after ${after}`), reportDiagnostic(`build.execute.queueAfter ${queueAfter}`), reportDiagnostic(`build.execute.built ${built}`), reportDiagnostic(`build.execute.queued ${queued}`), reportDiagnostic(`build.execute.noop ${!built && !queued}`), result.ok ? (built && reportActivity(`Built ${candidate.target.key} (${after})`), Object.freeze({
           outcome: SUCCEEDED,
           clicked: built,
           mission: !1,
           consumption: NO_CONSUMPTION
-        }) : Object.freeze({
+        })) : Object.freeze({
           outcome: result.reason === "stale-control" ? stale("stale-build-control", result.detail ?? result.reason, {
             key
           }) : rejected("build-click-failed", result.detail ?? result.reason),
@@ -3466,7 +3470,8 @@
     return ids;
   }
   function createCapturedProjectSource(dependencies) {
-    let { rootState, catalog, resources, controls, context, readSettings } = dependencies, cycle = /* @__PURE__ */ new Map();
+    let { rootState, catalog, resources, controls, context, readSettings } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
+    }), cycle = /* @__PURE__ */ new Map();
     return Object.freeze({
       family: "arpa",
       beginCycle() {
@@ -3555,24 +3560,23 @@
         let result = controls.invoke(handle, "build", [
           candidate.project.projectId,
           candidate.project.steps
-        ]);
-        if (!result.ok)
-          return Object.freeze({
-            outcome: result.reason === "stale-control" ? stale("stale-project-control", result.detail ?? result.reason) : rejected(
-              "project-build-failed",
-              result.detail ?? result.reason
-            ),
-            ...base
-          });
-        let after = projectState(
+        ]), after = projectState(
           rootState.readRoot(),
           candidate.project.projectId
         ), clicked = after !== void 0 && (after.rank > before.rank || after.progress > before.progress);
-        return Object.freeze({
+        return result.ok ? (clicked && reportActivity(
+          `Built ${candidate.project.projectId} (${after.rank}:${after.progress}%)`
+        ), Object.freeze({
           outcome: SUCCEEDED,
           clicked,
           mission: !1,
           consumption: NO_CONSUMPTION3
+        })) : Object.freeze({
+          outcome: result.reason === "stale-control" ? stale("stale-project-control", result.detail ?? result.reason) : rejected(
+            "project-build-failed",
+            result.detail ?? result.reason
+          ),
+          ...base
         });
       }
     });
@@ -3909,7 +3913,7 @@
       readPolicy,
       readSettings,
       diagnostics
-    } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, onDiagnostic = dependencies.onDiagnostic, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
+    } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, onDiagnostic = dependencies.onDiagnostic, onActivity = dependencies.onActivity, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
       rootState,
       controls,
       ...onSkipped === void 0 ? {} : { onUnavailable: onSkipped }
@@ -3932,7 +3936,10 @@
       }),
       drawnProjects,
       controls,
-      ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) }
+      ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) },
+      ...onDiagnostic === void 0 ? {} : {
+        onDiagnostic: (reason) => onDiagnostic(`progression diagnostic arpa: ${reason}`)
+      }
     }), { reader, executor, observations } = createCapturedConstructionAdapter({
       // City buildings first, matching the game's own list order, so a project only outranks a
       // building by weighting rather than by being sampled first.
@@ -3944,7 +3951,8 @@
           readTargets: () => readPolicy().buildings,
           ...dependencies.ensureBuildControls === void 0 ? {} : { ensureControls: dependencies.ensureBuildControls },
           ...onSkipped === void 0 ? {} : { onSkipped },
-          ...onDiagnostic === void 0 ? {} : { onDiagnostic }
+          ...onDiagnostic === void 0 ? {} : { onDiagnostic },
+          ...onActivity === void 0 ? {} : { onActivity }
         }),
         createCapturedProjectSource({
           rootState,
@@ -3958,7 +3966,8 @@
             achievements: createCapturedAchievementSource(rootState),
             readSettings
           }),
-          readSettings
+          readSettings,
+          ...onActivity === void 0 ? {} : { onActivity }
         })
       ]),
       resources,
@@ -4040,7 +4049,8 @@
     return Object.freeze({ outcome, researched });
   }
   function createCapturedResearchAdapter(dependencies) {
-    let { rootState, offered, resources, conflicts, controls } = dependencies;
+    let { rootState, offered, resources, conflicts, controls } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
+    });
     function isAffordable(cost) {
       let sample = resources.readResources(Object.keys(cost));
       return sample !== void 0 && canAfford(sample, cost);
@@ -4103,15 +4113,15 @@
             !1
           );
         let before = readCapturedTechState(rootState.readRoot()), result = controls.invoke(handle, "action");
-        return result.ok ? executionResult(
-          SUCCEEDED,
-          readCapturedTechState(rootState.readRoot()) !== before
-        ) : executionResult(
-          result.reason === "stale-control" ? stale("stale-research-control", result.detail ?? result.reason, {
-            techId: decision.techId
-          }) : rejected("research-click-failed", result.detail ?? result.reason),
-          !1
-        );
+        if (!result.ok)
+          return executionResult(
+            result.reason === "stale-control" ? stale("stale-research-control", result.detail ?? result.reason, {
+              techId: decision.techId
+            }) : rejected("research-click-failed", result.detail ?? result.reason),
+            !1
+          );
+        let researched = readCapturedTechState(rootState.readRoot()) !== before;
+        return researched && reportActivity(`Researched ${decision.techId}`), executionResult(SUCCEEDED, researched);
       }
     });
     return Object.freeze({ reader, executor });
@@ -4133,7 +4143,7 @@
       mountSuppression,
       panels,
       diagnostics
-    } = dependencies, onUnavailable = dependencies.onUnavailable, sharedReadOfferedTechs = dependencies.readOfferedTechs, resources = createCapturedResourceSource(rootState), catalog = createCapturedTechCatalog({
+    } = dependencies, onUnavailable = dependencies.onUnavailable, onActivity = dependencies.onActivity, sharedReadOfferedTechs = dependencies.readOfferedTechs, resources = createCapturedResourceSource(rootState), catalog = createCapturedTechCatalog({
       rootState,
       discovery: createCapturedTabDiscovery({
         rootState,
@@ -4171,7 +4181,8 @@
             offered: offeredThisCycle,
             resources,
             conflicts,
-            controls
+            controls,
+            ...onActivity === void 0 ? {} : { onActivity }
           });
           return runResearchAutomation({ reader, executor, diagnostics });
         } finally {
@@ -4668,7 +4679,7 @@
       getResources,
       nowMs,
       diagnostics
-    } = dependencies, onDiagnostic = dependencies.onDiagnostic, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
+    } = dependencies, onDiagnostic = dependencies.onDiagnostic, onActivity = dependencies.onActivity, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
       rootState,
       controls,
       mountSuppression,
@@ -4753,7 +4764,10 @@
       discovery,
       drawnProjects,
       controls,
-      ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) }
+      ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) },
+      ...onDiagnostic === void 0 ? {} : {
+        onDiagnostic: (reason) => onDiagnostic(`progression diagnostic arpa: ${reason}`)
+      }
     }), projectSampled = !1, lastProjects, resetProjectSample = () => {
       projectSampled = !1, lastProjects = void 0;
     }, readProjects = () => {
@@ -4854,6 +4868,7 @@
       ...readStorageRequired === void 0 ? {} : { readStorageRequired },
       readOfferedTechs,
       ...onDiagnostic === void 0 ? {} : { onDiagnostic },
+      ...onActivity === void 0 ? {} : { onActivity },
       ...onSkipped === void 0 ? {} : { onSkipped },
       diagnostics
     }), research = createCapturedResearchControl({
@@ -4864,6 +4879,7 @@
       panels,
       readOfferedTechs,
       ...onUnavailable === void 0 ? {} : { onUnavailable },
+      ...onActivity === void 0 ? {} : { onActivity },
       diagnostics
     });
     readObservations = () => construction.observations;
@@ -5418,10 +5434,9 @@
             invokeMadControl(
               dependencies.controls,
               command.kind === "arm-mad" ? "arm" : "launch"
-            );
+            ), command.kind === "launch-mad" && dependencies.rootState.readRoot() !== sampledRoot && dependencies.onActivity?.("Prestiged");
             return;
           case "log-prestige":
-            dependencies.onPrestige?.();
             return;
           default:
             return;
@@ -20149,6 +20164,8 @@
     capturedPanelWindow,
     settings,
     craftToggles: capturedCraftToggles,
+    onDiagnostic = () => {
+    },
     logError = () => {
     }
   }) {
@@ -20161,7 +20178,7 @@
         }
       return query;
     }, unported = (section) => () => {
-      reportedSections.has(section) || (reportedSections.add(section), logError(`settings panel section not ported yet: ${section}`));
+      reportedSections.has(section) || (reportedSections.add(section), onDiagnostic(`settings panel section not ported yet: ${section}`));
     }, fileDownload = panelFileDownloadFor(capturedPanelWindow, documentValue), reportNoFileDownload = () => {
       reportedSections.has("settings file download") || (reportedSections.add("settings file download"), logError("this page cannot offer a settings file download"));
     }, generalDefaults = computeGeneralDefaults().def, capturedRecordDefaults = [
@@ -20628,6 +20645,8 @@ Only continue if you trust the source. Injected code:
     storage,
     settingsHostWindow: settingsHostWindow2,
     diagnostics,
+    onActivity = () => {
+    },
     log = () => {
     },
     logError = () => {
@@ -20642,20 +20661,21 @@ Only continue if you trust the source. Injected code:
     }, panels = createGamePanelWorkspace({ getDocument: () => document }), settingsStore = createSettingsStore({
       storage,
       logError: (message) => logError(message)
-    }), settingsPanel = createCapturedSettingsPanel({
+    }), reportDiagnostic = (message) => {
+      diagnostics?.readPerformanceEnabled() === !0 && log(message);
+    }, settingsPanel = createCapturedSettingsPanel({
       capturedPanelWindow: settingsHostWindow2,
       settings: settingsStore,
       craftToggles: {
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls
       },
+      onDiagnostic: (message) => reportDiagnostic(message),
       logError: (message) => logError(message)
     });
     settingsPanel.ensurePanel();
     let capturedPrestigeGoal = "Standard", reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
-    }, reportDiagnostic = (message) => {
-      diagnostics?.readPerformanceEnabled() === !0 && log(message);
     }, runPhase = (name, body) => {
       try {
         return body();
@@ -20702,7 +20722,8 @@ Only continue if you trust the source. Injected code:
       onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
       nowMs: () => Date.now(),
       diagnostics,
-      onDiagnostic: reportDiagnostic
+      onDiagnostic: reportDiagnostic,
+      onActivity
     }), gatherResources = createCapturedGatherResourcesControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -21526,6 +21547,7 @@ Only continue if you trust the source. Injected code:
       mouseEvent: environment.MouseEvent,
       storage: environment.storage,
       diagnostics: createBrowserDiagnostics(globalThis),
+      onActivity: environment.log,
       log: environment.log,
       logError: environment.error
     });
