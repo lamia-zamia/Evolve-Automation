@@ -104,6 +104,14 @@ export interface BioseedPrestigeInput {
   readonly requiredProbes: number;
 }
 
+export interface DemonicPrestigeInput {
+  readonly spireFloor: number;
+  readonly minimumSpireFloor: number;
+  readonly resetTechUnlocked: boolean;
+  readonly resetTechAffordable: boolean;
+  readonly mechReady: boolean;
+}
+
 export function isPrestigeAllowed(
   view: Readonly<PrestigePermissionView>,
   type?: string,
@@ -136,6 +144,17 @@ export function isBioseedPrestigeReady(
     input.spaceDock >= 1 &&
     input.shipSegments >= 100 &&
     input.probes >= input.requiredProbes
+  );
+}
+
+export function isDemonicPrestigeReady(
+  input: Readonly<DemonicPrestigeInput>,
+): boolean {
+  return (
+    input.mechReady &&
+    input.spireFloor >= input.minimumSpireFloor &&
+    input.resetTechUnlocked &&
+    input.resetTechAffordable
   );
 }
 
@@ -223,13 +242,6 @@ export function isWitchAscensionPrestigeAvailable(
 export function isDemonicPrestigeAvailable(
   view: Readonly<PrestigeEligibilityView>,
 ): boolean {
-  if (
-    view.settings.autoMech &&
-    ((view.mech.active && view.settings.maximumMechPotential < 1) ||
-      view.mech.potential > view.settings.maximumMechPotential)
-  ) {
-    return false;
-  }
   const resetTechUnlocked = view.game.fasting
     ? view.tech.finalIngredientUnlocked
     : view.tech.demonicInfusionUnlocked;
@@ -239,9 +251,16 @@ export function isDemonicPrestigeAvailable(
 
   // The configured value is explicitly the minimum floor. Power and mech
   // automation already use >= at this same boundary.
-  return (
-    view.buildings.spireFloor >= view.settings.minimumSpireFloor &&
-    resetTechUnlocked &&
-    resetTechAffordable
-  );
+  return isDemonicPrestigeReady({
+    spireFloor: view.buildings.spireFloor,
+    minimumSpireFloor: view.settings.minimumSpireFloor,
+    resetTechUnlocked,
+    resetTechAffordable,
+    mechReady:
+      !view.settings.autoMech ||
+      !(
+        (view.mech.active && view.settings.maximumMechPotential < 1) ||
+        view.mech.potential > view.settings.maximumMechPotential
+      ),
+  });
 }

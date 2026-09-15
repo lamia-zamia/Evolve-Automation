@@ -1700,6 +1700,7 @@ export function startCapturedRuntime({
         (prestigeType === "mad" ||
           prestigeType === "cataclysm" ||
           prestigeType === "apocalypse" ||
+          prestigeType === "demonic" ||
           prestigeType === "whitehole" ||
           prestigeType === "bioseed" ||
           isCapturedBuildingPrestigeType(prestigeType)) &&

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   isAscensionPrestigeAvailable,
   isBioseedPrestigeAvailable,
+  isDemonicPrestigeReady,
   isDemonicPrestigeAvailable,
 } from "../src/domain/progression/prestige/prestige-eligibility.ts";
 
@@ -85,6 +86,26 @@ const exactPotential = makeView({
   mech: { active: false, potential: 0.5 },
 });
 assert.equal(isDemonicPrestigeAvailable(exactPotential), true);
+assert.equal(
+  isDemonicPrestigeReady({
+    spireFloor: 75,
+    minimumSpireFloor: 75,
+    resetTechUnlocked: true,
+    resetTechAffordable: true,
+    mechReady: true,
+  }),
+  true,
+);
+assert.equal(
+  isDemonicPrestigeReady({
+    spireFloor: 74,
+    minimumSpireFloor: 75,
+    resetTechUnlocked: true,
+    resetTechAffordable: true,
+    mechReady: true,
+  }),
+  false,
+);
 
 assert.equal(
   isBioseedPrestigeAvailable(makeView()),

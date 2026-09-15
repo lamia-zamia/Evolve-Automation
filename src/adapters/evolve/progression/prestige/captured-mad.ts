@@ -11,7 +11,9 @@
 
 import {
   isBioseedPrestigeReady,
+  isDemonicPrestigeReady,
   type BioseedPrestigeInput,
+  type DemonicPrestigeInput,
 } from "../../../../domain/progression/prestige/prestige-eligibility.ts";
 import type {
   PrestigeBranch,
@@ -49,6 +51,12 @@ export const CAPTURED_APOCALYPSE_TECHS = Object.freeze({
   final: "tech-protocol66a",
 });
 
+/** The captured research action selected by the upstream non-Witch-Hunter Demonic path. */
+export const CAPTURED_DEMONIC_TECHS = Object.freeze({
+  demonic: "tech-demonic_infusion",
+  final: "tech-final_ingredient",
+});
+
 /** The captured opener and modal actions for the upstream Bioseed dock. */
 export const CAPTURED_BIOSEED_ACTIONS = Object.freeze({
   opener: "space-star_dock",
@@ -66,6 +74,10 @@ const CAPTURED_APOCALYPSE_TECH_IDS = Object.freeze(
   Object.values(CAPTURED_APOCALYPSE_TECHS),
 );
 
+const CAPTURED_DEMONIC_TECH_IDS = Object.freeze(
+  Object.values(CAPTURED_DEMONIC_TECHS),
+);
+
 /** The three captured research actions in the upstream whitehole sequence. */
 export const CAPTURED_WHITEHOLE_TECHS = Object.freeze({
   confirm: "tech-infusion_confirm",
@@ -80,6 +92,7 @@ const CAPTURED_WHITEHOLE_TECH_IDS = Object.freeze(
 const CAPTURED_PRESTIGE_TECH_IDS = Object.freeze([
   CAPTURED_CATACLYSM_TECH,
   ...CAPTURED_APOCALYPSE_TECH_IDS,
+  ...CAPTURED_DEMONIC_TECH_IDS,
   ...CAPTURED_WHITEHOLE_TECH_IDS,
 ]);
 
@@ -254,6 +267,42 @@ function readCapturedWhiteholeBranch(
   };
 }
 
+function readCapturedDemonicBranch(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+  offered: readonly Readonly<OfferedTech>[],
+  resources: GameResourceSource | undefined,
+): Extract<PrestigeBranch, { readonly type: "demonic" }> {
+  const race = readProperty(root, "race");
+  const fasting = Boolean(readProperty(race, "fasting"));
+  const witchHunter = Boolean(readProperty(race, "witch_hunter"));
+  const targetId = fasting
+    ? CAPTURED_DEMONIC_TECHS.final
+    : CAPTURED_DEMONIC_TECHS.demonic;
+  const target = offered.find((entry) => entry.elementId === targetId);
+  const portal = readProperty(root, "portal");
+  const spireFloor =
+    finite(readProperty(readProperty(portal, "spire"), "count")) ?? Number.NaN;
+  const minimumSpireFloor =
+    finite(settings["prestigeDemonicFloor"]) ?? Number.NaN;
+  const input: DemonicPrestigeInput = {
+    spireFloor,
+    minimumSpireFloor,
+    resetTechUnlocked: target !== undefined,
+    resetTechAffordable: capturedTechIsAffordable(target, resources),
+    // The independent runtime cannot answer the manager-owned mech potential yet. Stand down
+    // whenever its automation is enabled instead of reconstructing that live formula here.
+    mechReady: !capturedMadSettingBoolean(settings, "autoMech", false),
+  };
+
+  return {
+    type: "demonic",
+    witchHunter,
+    fasting,
+    eligible: !witchHunter && isDemonicPrestigeReady(input),
+  };
+}
+
 /**
  * Reads the MAD branch from one root. Missing numeric bags preserve DeadSpace's arithmetic
  * behavior as `NaN`: an uninitialized count cannot satisfy the wait-for-population gate, but it
@@ -398,6 +447,26 @@ export function createCapturedMadPrestige(
               sampledPrestigeTechs.has(id),
             ),
           };
+        }
+      } else if (!resetCommitted && prestigeType === "demonic") {
+        const offered = dependencies.readOfferedTechs?.();
+        if (offered !== undefined) {
+          const demonicBranch = readCapturedDemonicBranch(
+            root,
+            settings,
+            offered,
+            dependencies.resources,
+          );
+          const targetId = demonicBranch.fasting
+            ? CAPTURED_DEMONIC_TECHS.final
+            : CAPTURED_DEMONIC_TECHS.demonic;
+          const tech = offered.find((entry) => entry.elementId === targetId);
+          if (tech !== undefined)
+            sampledPrestigeTechs.set(tech.elementId, tech);
+          // Witch-Hunter uses the separate absorption-chamber act. Keep that path inert until its
+          // controls and delayed reset contract are captured; the non-Witch-Hunter research path
+          // remains fully answered by the drawn row and root floor above.
+          branch = demonicBranch;
         }
       } else if (!resetCommitted && prestigeType === "whitehole") {
         const offered = dependencies.readOfferedTechs?.();
@@ -621,6 +690,7 @@ export function createCapturedMadPrestige(
               : undefined;
           if (
             (command.id === CAPTURED_CATACLYSM_TECH ||
+              CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) ||
               command.id === CAPTURED_APOCALYPSE_TECHS.final ||
               command.id === CAPTURED_WHITEHOLE_TECHS.confirm) &&
             !capturedTechIsAffordable(sampled, dependencies.resources)
@@ -652,6 +722,7 @@ export function createCapturedMadPrestige(
           }
           if (
             command.id === CAPTURED_CATACLYSM_TECH ||
+            CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) ||
             command.id === CAPTURED_APOCALYPSE_TECHS.final
           ) {
             resetCommitted = true;
@@ -669,6 +740,7 @@ export function createCapturedMadPrestige(
           }
           if (
             command.id !== CAPTURED_CATACLYSM_TECH &&
+            !CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) &&
             command.id !== CAPTURED_APOCALYPSE_TECHS.final &&
             command.id !== CAPTURED_WHITEHOLE_TECHS.confirm
           ) {

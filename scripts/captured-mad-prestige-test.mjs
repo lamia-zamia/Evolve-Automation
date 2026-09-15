@@ -4,6 +4,7 @@ import {
   CAPTURED_MAD_CONTROL,
   CAPTURED_CATACLYSM_TECH,
   CAPTURED_APOCALYPSE_TECHS,
+  CAPTURED_DEMONIC_TECHS,
   CAPTURED_BIOSEED_ACTIONS,
   CAPTURED_WHITEHOLE_TECHS,
   createCapturedMadPrestige,
@@ -295,6 +296,158 @@ const settings = {
     CAPTURED_BIOSEED_ACTIONS.launch,
     "Prestiged",
   ]);
+}
+
+// Demonic's ordinary path uses the game's drawn research row. Fasting selects the final
+// ingredient row, while Witch-Hunter and autoMech remain inert until their manager-owned acts are
+// captured separately.
+for (const scenario of [
+  { fasting: false, expected: CAPTURED_DEMONIC_TECHS.demonic },
+  { fasting: true, expected: CAPTURED_DEMONIC_TECHS.final },
+]) {
+  const trace = [];
+  let goal = "Normal";
+  const root = buildRoot({
+    race: { fasting: scenario.fasting, witch_hunter: false },
+    portal: { spire: { count: 75 } },
+  });
+  const controls = {
+    resolve(id) {
+      return id === scenario.expected
+        ? { elementId: id, generation: 1, methods: ["action"] }
+        : undefined;
+    },
+    invoke(handle, method) {
+      assert.equal(method, "action");
+      trace.push(handle.elementId);
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds() {
+      return [scenario.expected];
+    },
+  };
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls,
+    readSettings: () => ({
+      prestigeType: "demonic",
+      prestigeDemonicFloor: 75,
+      autoMech: false,
+    }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+      trace.push(["goal", next]);
+    },
+    readOfferedTechs: () => [
+      { elementId: scenario.expected, cost: { Knowledge: 5 }, generation: 1 },
+    ],
+    resources: {
+      readResources: () => ({
+        resources: new Map([["Knowledge", { amount: 5 }]]),
+      }),
+    },
+    onActivity: (activityEntry) => trace.push(activityEntry.message),
+  });
+
+  runPrestige(prestige);
+  assert.deepEqual(trace, [["goal", "Reset"]]);
+  goal = "Reset";
+  runPrestige(prestige);
+  runPrestige(prestige);
+  assert.deepEqual(trace, [["goal", "Reset"], scenario.expected, "Prestiged"]);
+}
+
+// The Witch-Hunter variant must not enter the ordinary research path while its absorption-chamber
+// controls remain unported.
+{
+  const trace = [];
+  let goal = "Normal";
+  const root = buildRoot({
+    race: { fasting: false, witch_hunter: true },
+    portal: { spire: { count: 75 } },
+  });
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: true, value: undefined }),
+      capturedElementIds: () => [],
+    },
+    readSettings: () => ({
+      prestigeType: "demonic",
+      prestigeDemonicFloor: 75,
+      autoMech: false,
+    }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+      trace.push(["goal", next]);
+    },
+    readOfferedTechs: () => [
+      {
+        elementId: CAPTURED_DEMONIC_TECHS.demonic,
+        cost: { Knowledge: 5 },
+        generation: 1,
+      },
+    ],
+    resources: {
+      readResources: () => ({
+        resources: new Map([["Knowledge", { amount: 5 }]]),
+      }),
+    },
+  });
+
+  runPrestige(prestige);
+  assert.deepEqual(trace, []);
+}
+
+// The independent runtime cannot answer manager-owned mech potential, so autoMech conservatively
+// blocks the reset even when the research row and all other gates are ready.
+{
+  const trace = [];
+  let goal = "Normal";
+  const root = buildRoot({
+    race: { fasting: false, witch_hunter: false },
+    portal: { spire: { count: 75 } },
+  });
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls: {
+      resolve: () => ({
+        elementId: CAPTURED_DEMONIC_TECHS.demonic,
+        generation: 1,
+        methods: ["action"],
+      }),
+      invoke: () => ({ ok: true, value: undefined }),
+      capturedElementIds: () => [CAPTURED_DEMONIC_TECHS.demonic],
+    },
+    readSettings: () => ({
+      prestigeType: "demonic",
+      prestigeDemonicFloor: 75,
+      autoMech: true,
+    }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+      trace.push(["goal", next]);
+    },
+    readOfferedTechs: () => [
+      {
+        elementId: CAPTURED_DEMONIC_TECHS.demonic,
+        cost: { Knowledge: 5 },
+        generation: 1,
+      },
+    ],
+    resources: {
+      readResources: () => ({
+        resources: new Map([["Knowledge", { amount: 5 }]]),
+      }),
+    },
+  });
+
+  runPrestige(prestige);
+  assert.deepEqual(trace, []);
 }
 
 // Apocalypse may expose protocol 66 first and protocol 66a only after the first action grants its
