@@ -135,7 +135,9 @@ import { createCapturedEvolution } from "../adapters/evolve/progression/evolutio
 import { createCapturedSettingsPanel } from "./captured-settings-panel-control.ts";
 import { createUniverseSelectionControls } from "../adapters/browser/progression-controls.ts";
 import { runEvolution } from "../application/evolution.ts";
+import { runCapturedSpyTraining } from "../application/captured-spy-training.ts";
 import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runtime-catalogs.ts";
+import { createCapturedSpyTraining } from "../adapters/evolve/combat/captured-spy-training.ts";
 import {
   createCapturedTabDiscovery,
   GOV_TABS_SETTING,
@@ -293,6 +295,11 @@ export function startCapturedRuntime({
     universeControls: createUniverseSelectionControls(() => document),
     challengeGroups: evolutionChallengeGroups,
     onActivity,
+  });
+  const capturedSpyTraining = createCapturedSpyTraining({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => settingsStore.readRaw(),
   });
   const runCapturedEvolution = () =>
     runEvolution({
@@ -1647,6 +1654,17 @@ export function startCapturedRuntime({
         runPhase("autoCraft", () => {
           runCraftAutomation(craft);
         });
+      }
+      if (isEnabled(settings, "autoFight")) {
+        const outcome = runPhase("autoFight.spy", () => {
+          ensureCivicControls();
+          return runCapturedSpyTraining(capturedSpyTraining);
+        });
+        if (outcome !== undefined && outcome.status !== "succeeded") {
+          reportOnce(
+            `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`,
+          );
+        }
       }
       // Triggers are commitments: when one of them buys something this cycle, construction and
       // research stand down so they cannot spend what the next trigger is saving for.

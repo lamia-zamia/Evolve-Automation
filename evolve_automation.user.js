@@ -21830,6 +21830,35 @@ Only continue if you trust the source. Injected code:
     imitation.kind === "click" ? executor.clickImitation(imitation.imitateRace) || executor.logImitationUnavailable(imitation.imitateRace) : imitation.kind === "log-no-race" && executor.logImitationNoRace();
   }
 
+  // src/domain/combat/captured-spy-training.ts
+  function planCapturedSpyTraining(input) {
+    return !input.enabled || !Number.isFinite(input.maximum) || input.maximum < 1 || !Number.isSafeInteger(input.governmentIndex) || !input.visible || input.disabled || input.training > 0 || input.occupied || input.annexed || input.purchased || input.spyCount >= input.maximum ? null : Object.freeze({
+      kind: "train-spy",
+      governmentIndex: input.governmentIndex,
+      expectedSpyCount: input.spyCount,
+      expectedTraining: input.training
+    });
+  }
+
+  // src/application/captured-spy-training.ts
+  var CAPTURED_SPY_TRAINING_SUCCEEDED = Object.freeze({
+    status: "succeeded"
+  });
+  function runCapturedSpyTraining(dependencies) {
+    let cycle = dependencies.reader.readCycle();
+    if (!cycle.available) return CAPTURED_SPY_TRAINING_SUCCEEDED;
+    for (let index = 0; index < cycle.governmentCount; index += 1) {
+      let decision = planCapturedSpyTraining(
+        dependencies.reader.readGovernment(index)
+      );
+      if (decision !== null) {
+        let outcome = dependencies.executor.execute(decision);
+        if (outcome.status !== "succeeded") return outcome;
+      }
+    }
+    return CAPTURED_SPY_TRAINING_SUCCEEDED;
+  }
+
   // src/adapters/evolve/runtime-catalogs.ts
   var challenges = [
     [
@@ -21869,6 +21898,158 @@ Only continue if you trust the source. Injected code:
     "prestigeType",
     ...challenges.map((c) => "challenge_" + c[0].id)
   ];
+
+  // src/adapters/evolve/combat/captured-spy-training.ts
+  var CAPTURED_FOREIGN_CONTROL = "foreign", MAX_CAPTURED_FOREIGN_INDEX = 4;
+  function emptyCapturedSpyTrainingInput(index) {
+    return Object.freeze({
+      enabled: !1,
+      maximum: 0,
+      governmentIndex: index,
+      visible: !1,
+      disabled: !0,
+      spyCount: 0,
+      training: 0,
+      occupied: !1,
+      annexed: !1,
+      purchased: !1
+    });
+  }
+  function readBooleanControl(controls, control, method, args) {
+    let result = controls.invoke(control, method, args);
+    return result.ok && typeof result.value == "boolean" ? result.value : void 0;
+  }
+  function readForeignGovernment(root, index) {
+    let civic = readProperty(root, "civic"), foreign = readProperty(civic, "foreign"), value = readProperty(foreign, `gov${index}`);
+    return isRecord(value) && !Array.isArray(value) ? value : void 0;
+  }
+  function readTrainingValue(government, key) {
+    return finite(government[key]) ?? 0;
+  }
+  function readCycleInput2(rootState, controls, settingsValue) {
+    let root = rootState.readRoot();
+    if (!isRecord(root)) return;
+    let control = controls.resolve(CAPTURED_FOREIGN_CONTROL);
+    if (control === void 0 || !control.methods.includes("vis") || !control.methods.includes("gvis") || !control.methods.includes("spy_disabled") || !control.methods.includes("spy") || readBooleanControl(controls, control, "vis", []) !== !0)
+      return;
+    let tech = readProperty(root, "tech");
+    if ((finite(readProperty(tech, "spy")) ?? 0) < 1) return;
+    let settings = isRecord(settingsValue) ? settingsValue : {};
+    if (settings.foreignTrainSpy !== !0) return;
+    let maximum = finite(settings.foreignSpyMax);
+    if (maximum === void 0 || maximum < 1) return;
+    let governmentCount = 0;
+    for (let index = 0; index <= MAX_CAPTURED_FOREIGN_INDEX; index += 1) {
+      let visible = readBooleanControl(controls, control, "gvis", [index]);
+      if (visible === void 0) return;
+      visible && (governmentCount = index + 1);
+    }
+    return Object.freeze({ root, control, maximum, governmentCount });
+  }
+  function createCapturedSpyTraining(dependencies) {
+    let session, lastInput;
+    function readGovernment(active, index) {
+      if (index < 0 || index >= active.governmentCount || !Number.isSafeInteger(index))
+        return emptyCapturedSpyTrainingInput(index);
+      let government = readForeignGovernment(active.root, index);
+      if (government === void 0) return emptyCapturedSpyTrainingInput(index);
+      let visible = readBooleanControl(
+        dependencies.controls,
+        active.control,
+        "gvis",
+        [index]
+      ), disabled = visible === !0 ? readBooleanControl(
+        dependencies.controls,
+        active.control,
+        "spy_disabled",
+        [index]
+      ) : !0;
+      return visible === void 0 || disabled === void 0 ? emptyCapturedSpyTrainingInput(index) : Object.freeze({
+        enabled: !0,
+        maximum: active.maximum,
+        governmentIndex: index,
+        visible,
+        disabled,
+        spyCount: readTrainingValue(government, "spy"),
+        training: readTrainingValue(government, "trn"),
+        occupied: !!government.occ,
+        annexed: !!government.anx,
+        purchased: !!government.buy
+      });
+    }
+    let reader = Object.freeze({
+      readCycle() {
+        session = void 0, lastInput = void 0;
+        let sample = readCycleInput2(
+          dependencies.rootState,
+          dependencies.controls,
+          dependencies.readSettings()
+        );
+        return sample === void 0 ? Object.freeze({ available: !1, governmentCount: 0 }) : (session = Object.freeze(sample), Object.freeze({
+          available: !0,
+          governmentCount: sample.governmentCount
+        }));
+      },
+      readGovernment(index) {
+        if (session === void 0) {
+          let input2 = emptyCapturedSpyTrainingInput(index);
+          return lastInput = input2, input2;
+        }
+        let input = readGovernment(session, index);
+        return lastInput = input, input;
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        let active = session, sampled3 = lastInput;
+        if (active === void 0 || sampled3 === void 0)
+          return stale(
+            "captured-spy-training-session-missing",
+            "captured spy-training session is missing"
+          );
+        if (dependencies.rootState.readRoot() !== active.root)
+          return stale(
+            "captured-spy-training-root-changed",
+            "captured game root changed"
+          );
+        let currentControl = dependencies.controls.resolve(
+          CAPTURED_FOREIGN_CONTROL
+        );
+        if (currentControl === void 0 || currentControl.generation !== active.control.generation)
+          return stale(
+            "captured-spy-training-control-changed",
+            "captured foreign control changed"
+          );
+        if (decision.kind !== "train-spy" || decision.governmentIndex !== sampled3.governmentIndex || decision.expectedSpyCount !== sampled3.spyCount || decision.expectedTraining !== sampled3.training)
+          return rejected(
+            "invalid-captured-spy-training-decision",
+            "captured spy-training decision does not match the sample"
+          );
+        let current = readGovernment(active, decision.governmentIndex);
+        if (current.governmentIndex !== sampled3.governmentIndex || current.visible !== sampled3.visible || current.disabled !== sampled3.disabled || current.spyCount !== sampled3.spyCount || current.training !== sampled3.training || current.occupied !== sampled3.occupied || current.annexed !== sampled3.annexed || current.purchased !== sampled3.purchased)
+          return stale(
+            "captured-spy-training-state-changed",
+            "captured foreign government state changed"
+          );
+        let result = dependencies.controls.invoke(active.control, "spy", [
+          decision.governmentIndex
+        ]);
+        if (!result.ok)
+          return stale(
+            "captured-spy-training-control-failed",
+            `captured spy training failed: ${result.reason}`
+          );
+        let after = readForeignGovernment(
+          dependencies.rootState.readRoot(),
+          decision.governmentIndex
+        );
+        return (finite(readProperty(after, "trn")) ?? 0) <= sampled3.training ? stale(
+          "captured-spy-training-not-started",
+          "the game did not start spy training"
+        ) : (lastInput = void 0, SUCCEEDED);
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
 
   // src/adapters/browser/game-keyboard-handlers.ts
   function createGameKeyboardHandlers(dependencies) {
@@ -21987,6 +22168,10 @@ Only continue if you trust the source. Injected code:
       universeControls: createUniverseSelectionControls(() => document),
       challengeGroups: evolutionChallengeGroups,
       onActivity
+    }), capturedSpyTraining = createCapturedSpyTraining({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => settingsStore.readRaw()
     }), runCapturedEvolution = () => runEvolution({
       reader: capturedEvolution.reader,
       executor: capturedEvolution.executor,
@@ -22798,7 +22983,7 @@ Only continue if you trust the source. Injected code:
           ensurePylonControls(), pylon.run();
         });
         let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
-        autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
+        if (autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
           ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1);
         }) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPhase("autoJobs", () => {
           ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1);
@@ -22806,7 +22991,12 @@ Only continue if you trust the source. Injected code:
           ensureCivicControls(), runJobsAutomation(craftsmen, !0);
         }), isEnabled(settings, "autoCraft") && runPhase("autoCraft", () => {
           runCraftAutomation(craft);
-        });
+        }), isEnabled(settings, "autoFight")) {
+          let outcome = runPhase("autoFight.spy", () => (ensureCivicControls(), runCapturedSpyTraining(capturedSpyTraining)));
+          outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
+            `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`
+          );
+        }
         let triggerActive = !1;
         if (isEnabled(settings, "autoTrigger") && runPhase("autoTrigger", () => (triggerActive = triggerPhaseActive(
           runTriggerAutomation({
