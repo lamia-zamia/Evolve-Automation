@@ -12,19 +12,38 @@ export interface PlanetSelectionGate {
   readonly targetName: string | null;
 }
 
+/** The game has not committed a planet and can still accept a planet row. */
+export function isPlanetSelectionAvailable(
+  gate: Readonly<PlanetSelectionGate>,
+): boolean {
+  return gate.universe !== "bigbang" && gate.seeded && !gate.chose;
+}
+
 export function shouldSelectPlanet(
   gate: Readonly<PlanetSelectionGate>,
 ): boolean {
-  if (gate.universe === "bigbang") {
-    return false;
-  }
-  if (!gate.seeded || gate.chose) {
+  if (!isPlanetSelectionAvailable(gate)) {
     return false;
   }
   if (gate.targetName === "none") {
     return false;
   }
   return true;
+}
+
+/**
+ * Select the only row the game drew. Its id is the complete game-owned answer
+ * when no ordering or generated planet metadata is needed; multiple rows stay
+ * unanswered until that metadata can be captured.
+ */
+export function planSinglePlanetSelection(
+  gate: Readonly<PlanetSelectionGate>,
+  candidateIds: readonly string[],
+): PlanetSelectionDecision | null {
+  if (!shouldSelectPlanet(gate) || candidateIds.length !== 1) {
+    return null;
+  }
+  return Object.freeze({ elementId: candidateIds[0]! });
 }
 
 export interface PlanetCandidate {

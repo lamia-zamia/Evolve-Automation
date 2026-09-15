@@ -132,9 +132,14 @@ import { createGameModalCloser } from "../adapters/browser/game-modal.ts";
 import { createSettingsStore } from "../adapters/browser/settings-store.ts";
 import { createCapturedQueuedSettings } from "../adapters/evolve/progression/evolution/captured-queued-settings.ts";
 import { createCapturedEvolution } from "../adapters/evolve/progression/evolution/captured-evolution.ts";
+import { createCapturedPlanetSelection } from "../adapters/evolve/progression/evolution/captured-planet-selection.ts";
 import { createCapturedSettingsPanel } from "./captured-settings-panel-control.ts";
-import { createUniverseSelectionControls } from "../adapters/browser/progression-controls.ts";
+import {
+  createPlanetSelectionControls,
+  createUniverseSelectionControls,
+} from "../adapters/browser/progression-controls.ts";
 import { runEvolution } from "../application/evolution.ts";
+import { runCapturedPlanetSelection } from "../application/captured-planet-selection.ts";
 import { runCapturedSpyTraining } from "../application/captured-spy-training.ts";
 import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runtime-catalogs.ts";
 import { createCapturedSpyTraining } from "../adapters/evolve/combat/captured-spy-training.ts";
@@ -289,18 +294,28 @@ export function startCapturedRuntime({
       Object.freeze({ members: Object.freeze(members) }),
     ),
   );
+  const drawnActions = createGameDrawnActionsReader({
+    getDocument: () => document,
+  });
   const capturedEvolution = createCapturedEvolution({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    drawnActions: createGameDrawnActionsReader({
-      getDocument: () => document,
-    }),
+    drawnActions,
     readSettings: () => settingsStore.readRaw(),
     readEvolutionAttempts: queuedSettings.readEvolutionAttempts,
     loadQueuedSettings: queuedSettings.loadQueuedSettings,
     universeControls: createUniverseSelectionControls(() => document),
     challengeGroups: evolutionChallengeGroups,
     onActivity,
+  });
+  const capturedPlanetSelection = createCapturedPlanetSelection({
+    rootState: pageCapture.rootState,
+    drawnActions,
+    readSettings: () => settingsStore.readRaw(),
+    controls: createPlanetSelectionControls(
+      () => document,
+      () => mouseEvent,
+    ),
   });
   const capturedSpyTraining = createCapturedSpyTraining({
     rootState: pageCapture.rootState,
@@ -317,9 +332,14 @@ export function startCapturedRuntime({
       reader: capturedEvolution.reader,
       executor: capturedEvolution.executor,
       runUniverseSelection: capturedEvolution.runUniverseSelection,
-      // DeadSpace keeps planet candidates inside the lexical setPlanet closure. Until that
-      // metadata is exposed by the page, manual planet selection remains the safe captured path.
-      runPlanetSelection: () => {},
+      runPlanetSelection: () => {
+        const outcome = runCapturedPlanetSelection(capturedPlanetSelection);
+        if (outcome.status !== "succeeded") {
+          reportOnce(
+            `autoEvolution: ${outcome.failure.code}: ${outcome.failure.message}`,
+          );
+        }
+      },
       challengeGroups: evolutionChallengeGroups,
     });
   // The settings UI is useful even when document-start capture was missed (for example, when a

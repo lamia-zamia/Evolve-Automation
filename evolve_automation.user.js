@@ -18852,6 +18852,67 @@
     });
   }
 
+  // src/domain/progression/evolution/planet-selection.ts
+  function isPlanetSelectionAvailable(gate) {
+    return gate.universe !== "bigbang" && gate.seeded && !gate.chose;
+  }
+  function shouldSelectPlanet(gate) {
+    return !(!isPlanetSelectionAvailable(gate) || gate.targetName === "none");
+  }
+  function planSinglePlanetSelection(gate, candidateIds) {
+    return !shouldSelectPlanet(gate) || candidateIds.length !== 1 ? null : Object.freeze({ elementId: candidateIds[0] });
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-planet-selection.ts
+  var PLANET_ACTION_SELECTOR = "#evolution > .action";
+  function capturedPlanetRecord(value) {
+    return isNonArrayRecord(value) ? value : void 0;
+  }
+  function readRace2(rootState) {
+    return capturedPlanetRecord(
+      readProperty(capturedPlanetRecord(rootState.readRoot()), "race")
+    );
+  }
+  function readGate(rootState, readSettings) {
+    let race = readRace2(rootState), targetName = capturedPlanetRecord(readSettings())?.userPlanetTargetName, universe = race?.universe;
+    return Object.freeze({
+      universe: typeof universe == "string" ? universe : null,
+      seeded: !!race?.seeded,
+      chose: !!race?.chose,
+      // Keep the game's lenient non-string comparison: only the literal "none"
+      // disables selection, while other values use the sole-row safe path.
+      targetName: typeof targetName == "string" ? targetName : null
+    });
+  }
+  function createCapturedPlanetSelection({
+    rootState,
+    drawnActions,
+    readSettings,
+    controls
+  }) {
+    let reader = Object.freeze({
+      sample() {
+        let candidateIds = drawnActions.read(PLANET_ACTION_SELECTOR).map((action) => action.id);
+        return Object.freeze({
+          gate: readGate(rootState, readSettings),
+          candidateIds: Object.freeze(candidateIds)
+        });
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        let gate = readGate(rootState, readSettings);
+        return isPlanetSelectionAvailable(gate) ? controls.selectPlanet(decision.elementId) ? SUCCEEDED : stale(
+          "planet-control-unavailable",
+          "planet selection control became unavailable"
+        ) : stale(
+          "planet-selection-unavailable",
+          "planet selection became unavailable"
+        );
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
   // src/ui/automation-container.ts
   function createAutomationContainer({
     getSettingsRaw,
@@ -21675,6 +21736,48 @@ Only continue if you trust the source. Injected code:
       }
     });
   }
+  function createPlanetSelectionControls(getDocument, getMouseEventConstructor) {
+    return Object.freeze({
+      selectPlanet(elementId) {
+        let document = requireRecord(getDocument(), "document"), getElementById = requireFunction(
+          document.getElementById,
+          "document.getElementById"
+        ), value = Reflect.apply(getElementById, document, [elementId]);
+        if (typeof value != "object" || value === null)
+          return !1;
+        let element = requireRecord(value, `document#${elementId}`);
+        if (typeof element.dispatchEvent != "function")
+          return !1;
+        let children = element.children;
+        if (typeof children != "object" && !Array.isArray(children) || children === null)
+          return !1;
+        let first = children[0];
+        if (typeof first != "object" || first === null)
+          return !1;
+        let child = requireRecord(first, `document#${elementId}.children[0]`);
+        if (typeof child.click != "function")
+          return !1;
+        let MouseEventConstructor = getMouseEventConstructor();
+        if (typeof MouseEventConstructor != "function")
+          return !1;
+        let dispatchEvent = requireFunction(
+          element.dispatchEvent,
+          `document#${elementId}.dispatchEvent`
+        );
+        Reflect.apply(dispatchEvent, element, [
+          Reflect.construct(
+            MouseEventConstructor,
+            ["mouseover", {}]
+          )
+        ]);
+        let click = requireFunction(
+          child.click,
+          `document#${elementId}.children[0].click`
+        );
+        return Reflect.apply(click, child, []), !0;
+      }
+    });
+  }
 
   // src/domain/progression/evolution/evolution.ts
   var CYCLE_ENDING_CHALLENGES = Object.freeze([
@@ -21834,6 +21937,18 @@ Only continue if you trust the source. Injected code:
       executor.clickEvolution(id);
     let imitation = planImitation(reader.sampleImitation());
     imitation.kind === "click" ? executor.clickImitation(imitation.imitateRace) || executor.logImitationUnavailable(imitation.imitateRace) : imitation.kind === "log-no-race" && executor.logImitationNoRace();
+  }
+
+  // src/application/captured-planet-selection.ts
+  var CAPTURED_PLANET_SELECTION_SUCCEEDED = Object.freeze({
+    status: "succeeded"
+  });
+  function runCapturedPlanetSelection({
+    reader,
+    executor
+  }) {
+    let sample = reader.sample(), decision = planSinglePlanetSelection(sample.gate, sample.candidateIds);
+    return decision === null ? CAPTURED_PLANET_SELECTION_SUCCEEDED : executor.execute(decision);
   }
 
   // src/domain/combat/captured-spy-training.ts
@@ -22315,18 +22430,26 @@ Only continue if you trust the source. Injected code:
       challenges.map(
         (members) => Object.freeze({ members: Object.freeze(members) })
       )
-    ), capturedEvolution = createCapturedEvolution({
+    ), drawnActions = createGameDrawnActionsReader({
+      getDocument: () => document
+    }), capturedEvolution = createCapturedEvolution({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      drawnActions: createGameDrawnActionsReader({
-        getDocument: () => document
-      }),
+      drawnActions,
       readSettings: () => settingsStore.readRaw(),
       readEvolutionAttempts: queuedSettings.readEvolutionAttempts,
       loadQueuedSettings: queuedSettings.loadQueuedSettings,
       universeControls: createUniverseSelectionControls(() => document),
       challengeGroups: evolutionChallengeGroups,
       onActivity
+    }), capturedPlanetSelection = createCapturedPlanetSelection({
+      rootState: pageCapture2.rootState,
+      drawnActions,
+      readSettings: () => settingsStore.readRaw(),
+      controls: createPlanetSelectionControls(
+        () => document,
+        () => mouseEvent
+      )
     }), capturedSpyTraining = createCapturedSpyTraining({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -22339,9 +22462,11 @@ Only continue if you trust the source. Injected code:
       reader: capturedEvolution.reader,
       executor: capturedEvolution.executor,
       runUniverseSelection: capturedEvolution.runUniverseSelection,
-      // DeadSpace keeps planet candidates inside the lexical setPlanet closure. Until that
-      // metadata is exposed by the page, manual planet selection remains the safe captured path.
       runPlanetSelection: () => {
+        let outcome = runCapturedPlanetSelection(capturedPlanetSelection);
+        outcome.status !== "succeeded" && reportOnce(
+          `autoEvolution: ${outcome.failure.code}: ${outcome.failure.message}`
+        );
       },
       challengeGroups: evolutionChallengeGroups
     });
