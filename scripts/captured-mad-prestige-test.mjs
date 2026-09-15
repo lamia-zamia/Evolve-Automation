@@ -151,6 +151,11 @@ const settings = {
       elementId: "interstellar-ascend",
     },
     {
+      prestigeType: "matrix",
+      region: "tauceti",
+      elementId: "tauceti-blue_pill",
+    },
+    {
       prestigeType: "apotheosis",
       region: "eden",
       elementId: "eden-apotheosis",

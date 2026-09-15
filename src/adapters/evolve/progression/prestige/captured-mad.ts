@@ -108,6 +108,7 @@ export const CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
     elementId: "interstellar-ascend",
     region: "interstellar",
   }),
+  matrix: Object.freeze({ elementId: "tauceti-blue_pill", region: "tauceti" }),
   apotheosis: Object.freeze({
     elementId: "eden-apotheosis",
     region: "eden",

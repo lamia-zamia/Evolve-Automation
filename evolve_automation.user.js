@@ -5555,6 +5555,7 @@
       elementId: "interstellar-ascend",
       region: "interstellar"
     }),
+    matrix: Object.freeze({ elementId: "tauceti-blue_pill", region: "tauceti" }),
     apotheosis: Object.freeze({
       elementId: "eden-apotheosis",
       region: "eden"
