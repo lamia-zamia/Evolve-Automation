@@ -1693,6 +1693,7 @@ export function startCapturedRuntime({
         (prestigeType === "mad" ||
           prestigeType === "cataclysm" ||
           prestigeType === "apocalypse" ||
+          prestigeType === "whitehole" ||
           isCapturedBuildingPrestigeType(prestigeType)) &&
         capturedPrestigeGoal !== "GameOverMan"
       ) {

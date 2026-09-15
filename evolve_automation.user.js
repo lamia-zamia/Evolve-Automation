@@ -5490,7 +5490,17 @@
     final: "tech-protocol66a"
   }), CAPTURED_APOCALYPSE_TECH_IDS = Object.freeze(
     Object.values(CAPTURED_APOCALYPSE_TECHS)
-  ), CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
+  ), CAPTURED_WHITEHOLE_TECHS = Object.freeze({
+    confirm: "tech-infusion_confirm",
+    check: "tech-infusion_check",
+    exotic: "tech-exotic_infusion"
+  }), CAPTURED_WHITEHOLE_TECH_IDS = Object.freeze(
+    Object.values(CAPTURED_WHITEHOLE_TECHS)
+  ), CAPTURED_PRESTIGE_TECH_IDS = Object.freeze([
+    CAPTURED_CATACLYSM_TECH,
+    ...CAPTURED_APOCALYPSE_TECH_IDS,
+    ...CAPTURED_WHITEHOLE_TECH_IDS
+  ]), CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
     terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
     ascension: Object.freeze({
       elementId: "interstellar-ascend",
@@ -5516,6 +5526,24 @@
   }
   function capturedMadSettingNumber(settings, key, fallback) {
     return finite(settings[key]) ?? fallback;
+  }
+  function capturedTechIsAffordable(tech, resources) {
+    if (tech === void 0 || resources === void 0) return !1;
+    let sample = resources.readResources(Object.keys(tech.cost));
+    return sample !== void 0 && canAfford(sample, tech.cost);
+  }
+  function readCapturedWhiteholeBranch(root, settings, offered, resources) {
+    let engine = readProperty(
+      readProperty(root, "interstellar"),
+      "stellar_engine"
+    ), mass = finite(readProperty(engine, "mass")) ?? 0, exotic = finite(readProperty(engine, "exotic")) ?? 0, whiteholeLevel = finite(readProperty(readProperty(root, "tech"), "whitehole")) ?? 0, findOffer = (id) => offered.find((entry) => entry.elementId === id), exoticOffer = findOffer(CAPTURED_WHITEHOLE_TECHS.exotic), confirmOffer = findOffer(CAPTURED_WHITEHOLE_TECHS.confirm);
+    return {
+      type: "whitehole",
+      eligible: mass + exotic >= (finite(settings.prestigeWhiteholeMinMass) ?? Number.NaN) && CAPTURED_WHITEHOLE_TECH_IDS.some((id) => findOffer(id) !== void 0),
+      exoticInfusionReady: capturedTechIsAffordable(exoticOffer, resources),
+      whiteholeLevel,
+      confirmReady: capturedTechIsAffordable(confirmOffer, resources)
+    };
   }
   function readCapturedMadBranch(root, rawSettings) {
     let settings = capturedMadSettingsRecord(rawSettings), civic = readProperty(root, "civic"), mad = readProperty(civic, "mad"), tech = readProperty(root, "tech"), garrison = readProperty(civic, "garrison"), population = readProperty(readProperty(root, "resource"), "Population"), currentSoldiers = coerceNumber(readProperty(garrison, "workers")) - coerceNumber(readProperty(garrison, "crew")), maxSoldiers = coerceNumber(readProperty(garrison, "max")) - coerceNumber(readProperty(garrison, "crew")), madDisplay = readProperty(mad, "display") === !0, madLevel = coerceNumber(readProperty(tech, "mad"));
@@ -5574,16 +5602,14 @@
             let tech = offered.find(
               (entry) => entry.elementId === CAPTURED_CATACLYSM_TECH
             );
-            tech !== void 0 && sampledPrestigeTechs.set(tech.elementId, tech);
-            let resources = tech === void 0 ? void 0 : dependencies.resources?.readResources(Object.keys(tech.cost));
-            branch = {
+            tech !== void 0 && sampledPrestigeTechs.set(tech.elementId, tech), branch = {
               type: "cataclysm",
               // The game only draws an unresearched action after its own
               // requirements and condition have passed. The row is therefore
               // the eligibility answer; affordability is a separate live gate.
               eligible: tech !== void 0,
               loadQueuedSettings: !1,
-              dialClickable: tech !== void 0 && resources !== void 0 && canAfford(resources, tech.cost)
+              dialClickable: tech !== void 0 && capturedTechIsAffordable(tech, dependencies.resources)
             };
           }
         } else if (!resetCommitted && prestigeType === "apocalypse") {
@@ -5600,6 +5626,18 @@
                 (id) => sampledPrestigeTechs.has(id)
               )
             };
+          }
+        } else if (!resetCommitted && prestigeType === "whitehole") {
+          let offered = dependencies.readOfferedTechs?.();
+          if (offered !== void 0) {
+            for (let tech of offered)
+              CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === tech.elementId) && sampledPrestigeTechs.set(tech.elementId, tech);
+            branch = readCapturedWhiteholeBranch(
+              root,
+              settings,
+              offered,
+              dependencies.resources
+            );
           }
         }
         return Object.freeze({
@@ -5645,7 +5683,7 @@
             return;
           }
           case "click-tech": {
-            if (command.id !== CAPTURED_CATACLYSM_TECH && !CAPTURED_APOCALYPSE_TECH_IDS.some((id) => id === command.id))
+            if (!CAPTURED_PRESTIGE_TECH_IDS.some((id) => id === command.id))
               return;
             if (dependencies.rootState.readRoot() !== sampledRoot)
               throw new Error("captured prestige root changed after sampling");
@@ -5656,7 +5694,7 @@
               );
               tech !== void 0 && (sampledPrestigeTechs.set(tech.elementId, tech), sampled3 = tech);
             }
-            if (sampled3 === void 0 && command.id === CAPTURED_APOCALYPSE_TECHS.first)
+            if (sampled3 === void 0 && command.id === CAPTURED_APOCALYPSE_TECHS.first || sampled3 === void 0 && CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === command.id))
               return;
             if (sampled3 === void 0)
               throw new Error(
@@ -5671,16 +5709,41 @@
               throw new Error(
                 `captured prestige action ${command.id} was redrawn`
               );
-            let result = dependencies.controls.invoke(handle, "action");
+            let corruptedAiBefore = command.id === CAPTURED_APOCALYPSE_TECHS.first ? readProperty(
+              readProperty(dependencies.rootState.readRoot(), "tech"),
+              "corrupted_ai"
+            ) : void 0;
+            if ((command.id === CAPTURED_CATACLYSM_TECH || command.id === CAPTURED_APOCALYPSE_TECHS.final || command.id === CAPTURED_WHITEHOLE_TECHS.confirm) && !capturedTechIsAffordable(sampled3, dependencies.resources))
+              return;
+            let whiteholeLevelBefore = command.id === CAPTURED_WHITEHOLE_TECHS.confirm ? finite(
+              readProperty(
+                readProperty(dependencies.rootState.readRoot(), "tech"),
+                "whitehole"
+              )
+            ) ?? 0 : 0, result = dependencies.controls.invoke(handle, "action");
             if (!result.ok)
               throw new Error(
                 `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`
               );
             if (command.id === CAPTURED_APOCALYPSE_TECHS.first) {
-              apocalypseFirstActionDone = !0;
+              apocalypseFirstActionDone = readProperty(
+                readProperty(dependencies.rootState.readRoot(), "tech"),
+                "corrupted_ai"
+              ) !== corruptedAiBefore;
               return;
             }
-            resetCommitted = !0, dependencies.onActivity?.({
+            if ((command.id === CAPTURED_CATACLYSM_TECH || command.id === CAPTURED_APOCALYPSE_TECHS.final) && (resetCommitted = !0), command.id === CAPTURED_WHITEHOLE_TECHS.confirm) {
+              if ((finite(
+                readProperty(
+                  readProperty(dependencies.rootState.readRoot(), "tech"),
+                  "whitehole"
+                )
+              ) ?? 0) <= whiteholeLevelBefore) return;
+              resetCommitted = !0;
+            }
+            if (command.id !== CAPTURED_CATACLYSM_TECH && command.id !== CAPTURED_APOCALYPSE_TECHS.final && command.id !== CAPTURED_WHITEHOLE_TECHS.confirm)
+              return;
+            dependencies.onActivity?.({
               message: "Prestiged",
               color: "info",
               tags: Object.freeze(["achievements"])
@@ -21765,7 +21828,7 @@ Only continue if you trust the source. Injected code:
           ensureGeneticsControls(), runGeneticsAutomation(genetics);
         });
         let prestigeType = settings.prestigeType;
-        isEnabled(settings, "autoPrestige") && (prestigeType === "mad" || prestigeType === "cataclysm" || prestigeType === "apocalypse" || isCapturedBuildingPrestigeType(prestigeType)) && capturedPrestigeGoal !== "GameOverMan" && runPhase("autoPrestige", () => {
+        isEnabled(settings, "autoPrestige") && (prestigeType === "mad" || prestigeType === "cataclysm" || prestigeType === "apocalypse" || prestigeType === "whitehole" || isCapturedBuildingPrestigeType(prestigeType)) && capturedPrestigeGoal !== "GameOverMan" && runPhase("autoPrestige", () => {
           if (prestigeType === "mad") {
             ensureMadControls();
             let mad = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL);

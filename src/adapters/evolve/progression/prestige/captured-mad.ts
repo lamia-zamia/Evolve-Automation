@@ -46,6 +46,23 @@ const CAPTURED_APOCALYPSE_TECH_IDS = Object.freeze(
   Object.values(CAPTURED_APOCALYPSE_TECHS),
 );
 
+/** The three captured research actions in the upstream whitehole sequence. */
+export const CAPTURED_WHITEHOLE_TECHS = Object.freeze({
+  confirm: "tech-infusion_confirm",
+  check: "tech-infusion_check",
+  exotic: "tech-exotic_infusion",
+});
+
+const CAPTURED_WHITEHOLE_TECH_IDS = Object.freeze(
+  Object.values(CAPTURED_WHITEHOLE_TECHS),
+);
+
+const CAPTURED_PRESTIGE_TECH_IDS = Object.freeze([
+  CAPTURED_CATACLYSM_TECH,
+  ...CAPTURED_APOCALYPSE_TECH_IDS,
+  ...CAPTURED_WHITEHOLE_TECH_IDS,
+]);
+
 /** DeadSpace action rows that commit the ordinary building-shaped prestige branches. */
 export const CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
   terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
@@ -75,6 +92,7 @@ export function isCapturedBuildingPrestigeType(
 }
 
 type MadBranch = Extract<PrestigeBranch, { readonly type: "mad" }>;
+type WhiteholeBranch = Extract<PrestigeBranch, { readonly type: "whitehole" }>;
 
 export interface CapturedMadPrestigeDependencies {
   readonly rootState: GameRootStateSource;
@@ -114,6 +132,46 @@ function capturedMadSettingNumber(
   fallback: number,
 ): number {
   return finite(settings[key]) ?? fallback;
+}
+
+function capturedTechIsAffordable(
+  tech: Readonly<OfferedTech> | undefined,
+  resources: GameResourceSource | undefined,
+): boolean {
+  if (tech === undefined || resources === undefined) return false;
+  const sample = resources.readResources(Object.keys(tech.cost));
+  return sample !== undefined && canAfford(sample, tech.cost);
+}
+
+function readCapturedWhiteholeBranch(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+  offered: readonly Readonly<OfferedTech>[],
+  resources: GameResourceSource | undefined,
+): WhiteholeBranch {
+  const engine = readProperty(
+    readProperty(root, "interstellar"),
+    "stellar_engine",
+  );
+  const mass = finite(readProperty(engine, "mass")) ?? 0;
+  const exotic = finite(readProperty(engine, "exotic")) ?? 0;
+  const whiteholeLevel =
+    finite(readProperty(readProperty(root, "tech"), "whitehole")) ?? 0;
+  const findOffer = (id: string) =>
+    offered.find((entry) => entry.elementId === id);
+  const exoticOffer = findOffer(CAPTURED_WHITEHOLE_TECHS.exotic);
+  const confirmOffer = findOffer(CAPTURED_WHITEHOLE_TECHS.confirm);
+
+  return {
+    type: "whitehole",
+    eligible:
+      mass + exotic >=
+        (finite(settings["prestigeWhiteholeMinMass"]) ?? Number.NaN) &&
+      CAPTURED_WHITEHOLE_TECH_IDS.some((id) => findOffer(id) !== undefined),
+    exoticInfusionReady: capturedTechIsAffordable(exoticOffer, resources),
+    whiteholeLevel,
+    confirmReady: capturedTechIsAffordable(confirmOffer, resources),
+  };
 }
 
 /**
@@ -226,10 +284,6 @@ export function createCapturedMadPrestige(
           );
           if (tech !== undefined)
             sampledPrestigeTechs.set(tech.elementId, tech);
-          const resources =
-            tech === undefined
-              ? undefined
-              : dependencies.resources?.readResources(Object.keys(tech.cost));
           branch = {
             type: "cataclysm",
             // The game only draws an unresearched action after its own
@@ -239,8 +293,7 @@ export function createCapturedMadPrestige(
             loadQueuedSettings: false,
             dialClickable:
               tech !== undefined &&
-              resources !== undefined &&
-              canAfford(resources, tech.cost),
+              capturedTechIsAffordable(tech, dependencies.resources),
           };
         }
       } else if (!resetCommitted && prestigeType === "apocalypse") {
@@ -262,6 +315,23 @@ export function createCapturedMadPrestige(
               sampledPrestigeTechs.has(id),
             ),
           };
+        }
+      } else if (!resetCommitted && prestigeType === "whitehole") {
+        const offered = dependencies.readOfferedTechs?.();
+        if (offered !== undefined) {
+          for (const tech of offered) {
+            if (
+              CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === tech.elementId)
+            ) {
+              sampledPrestigeTechs.set(tech.elementId, tech);
+            }
+          }
+          branch = readCapturedWhiteholeBranch(
+            root,
+            settings,
+            offered,
+            dependencies.resources,
+          );
         }
       }
       return Object.freeze({
@@ -323,10 +393,7 @@ export function createCapturedMadPrestige(
           return;
         }
         case "click-tech": {
-          if (
-            command.id !== CAPTURED_CATACLYSM_TECH &&
-            !CAPTURED_APOCALYPSE_TECH_IDS.some((id) => id === command.id)
-          )
+          if (!CAPTURED_PRESTIGE_TECH_IDS.some((id) => id === command.id))
             return;
           if (dependencies.rootState.readRoot() !== sampledRoot) {
             throw new Error("captured prestige root changed after sampling");
@@ -356,6 +423,11 @@ export function createCapturedMadPrestige(
             command.id === CAPTURED_APOCALYPSE_TECHS.first
           )
             return;
+          if (
+            sampled === undefined &&
+            CAPTURED_WHITEHOLE_TECH_IDS.some((id) => id === command.id)
+          )
+            return;
           if (sampled === undefined) {
             throw new Error(
               `captured prestige action ${command.id} was not offered`,
@@ -372,6 +444,30 @@ export function createCapturedMadPrestige(
               `captured prestige action ${command.id} was redrawn`,
             );
           }
+          const corruptedAiBefore =
+            command.id === CAPTURED_APOCALYPSE_TECHS.first
+              ? readProperty(
+                  readProperty(dependencies.rootState.readRoot(), "tech"),
+                  "corrupted_ai",
+                )
+              : undefined;
+          if (
+            (command.id === CAPTURED_CATACLYSM_TECH ||
+              command.id === CAPTURED_APOCALYPSE_TECHS.final ||
+              command.id === CAPTURED_WHITEHOLE_TECHS.confirm) &&
+            !capturedTechIsAffordable(sampled, dependencies.resources)
+          ) {
+            return;
+          }
+          const whiteholeLevelBefore =
+            command.id === CAPTURED_WHITEHOLE_TECHS.confirm
+              ? (finite(
+                  readProperty(
+                    readProperty(dependencies.rootState.readRoot(), "tech"),
+                    "whitehole",
+                  ),
+                ) ?? 0)
+              : 0;
           const result = dependencies.controls.invoke(handle, "action");
           if (!result.ok) {
             throw new Error(
@@ -379,14 +475,41 @@ export function createCapturedMadPrestige(
             );
           }
           if (command.id === CAPTURED_APOCALYPSE_TECHS.first) {
-            apocalypseFirstActionDone = true;
+            const corruptedAiAfter = readProperty(
+              readProperty(dependencies.rootState.readRoot(), "tech"),
+              "corrupted_ai",
+            );
+            apocalypseFirstActionDone = corruptedAiAfter !== corruptedAiBefore;
+            return;
+          }
+          if (
+            command.id === CAPTURED_CATACLYSM_TECH ||
+            command.id === CAPTURED_APOCALYPSE_TECHS.final
+          ) {
+            resetCommitted = true;
+          }
+          if (command.id === CAPTURED_WHITEHOLE_TECHS.confirm) {
+            const whiteholeLevelAfter =
+              finite(
+                readProperty(
+                  readProperty(dependencies.rootState.readRoot(), "tech"),
+                  "whitehole",
+                ),
+              ) ?? 0;
+            if (whiteholeLevelAfter <= whiteholeLevelBefore) return;
+            resetCommitted = true;
+          }
+          if (
+            command.id !== CAPTURED_CATACLYSM_TECH &&
+            command.id !== CAPTURED_APOCALYPSE_TECHS.final &&
+            command.id !== CAPTURED_WHITEHOLE_TECHS.confirm
+          ) {
             return;
           }
           // The Vue wrapper does not return the lexical action's boolean. The
           // drawn row and live affordability already gated this call, so a
           // successful wrapper invocation is the only synchronous commit fact
           // available before the game's delayed reset.
-          resetCommitted = true;
           dependencies.onActivity?.({
             message: "Prestiged",
             color: "info",

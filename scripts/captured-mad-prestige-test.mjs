@@ -4,6 +4,7 @@ import {
   CAPTURED_MAD_CONTROL,
   CAPTURED_CATACLYSM_TECH,
   CAPTURED_APOCALYPSE_TECHS,
+  CAPTURED_WHITEHOLE_TECHS,
   createCapturedMadPrestige,
   readCapturedMadBranch,
 } from "../src/adapters/evolve/progression/prestige/captured-mad.ts";
@@ -215,6 +216,9 @@ const settings = {
     invoke(handle, method) {
       assert.equal(method, "action");
       trace.push(handle.elementId);
+      if (handle.elementId === CAPTURED_APOCALYPSE_TECHS.first) {
+        root.tech.corrupted_ai = 1;
+      }
       return { ok: true, value: undefined };
     },
     capturedElementIds() {
@@ -248,6 +252,11 @@ const settings = {
             },
           ];
     },
+    resources: {
+      readResources: () => ({
+        resources: new Map([["Knowledge", { amount: 5000000 }]]),
+      }),
+    },
   });
 
   runPrestige(prestige);
@@ -259,6 +268,110 @@ const settings = {
     ["goal", "Reset"],
     CAPTURED_APOCALYPSE_TECHS.first,
     CAPTURED_APOCALYPSE_TECHS.final,
+  ]);
+}
+
+// Whitehole research is a sequential reset action. Each successful infusion grants the next
+// action, and the final confirm raises the captured whitehole level before its delayed reset.
+{
+  const trace = [];
+  let goal = "Normal";
+  const root = buildRoot({
+    interstellar: { stellar_engine: { mass: 10, exotic: 0 } },
+    tech: { mad: 1, whitehole: 1 },
+  });
+  const offers = [
+    {
+      id: CAPTURED_WHITEHOLE_TECHS.exotic,
+      cost: { Knowledge: 1500000, Soul_Gem: 10 },
+      generation: 1,
+    },
+    {
+      id: CAPTURED_WHITEHOLE_TECHS.check,
+      cost: { Knowledge: 1500000, Soul_Gem: 10 },
+      generation: 2,
+    },
+    {
+      id: CAPTURED_WHITEHOLE_TECHS.confirm,
+      cost: { Knowledge: 1500000, Soul_Gem: 10 },
+      generation: 3,
+    },
+  ];
+  const controls = {
+    resolve(id) {
+      const offer = offers.find((entry) => entry.id === id);
+      return offer === undefined
+        ? undefined
+        : {
+            elementId: id,
+            generation: offer.generation,
+            methods: ["action"],
+          };
+    },
+    invoke(handle, method) {
+      assert.equal(method, "action");
+      trace.push(handle.elementId);
+      if (handle.elementId === CAPTURED_WHITEHOLE_TECHS.exotic) {
+        root.tech.whitehole = 2;
+      } else if (handle.elementId === CAPTURED_WHITEHOLE_TECHS.check) {
+        root.tech.whitehole = 3;
+      } else if (handle.elementId === CAPTURED_WHITEHOLE_TECHS.confirm) {
+        root.tech.whitehole = 4;
+      }
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds() {
+      return offers.map((entry) => entry.id);
+    },
+  };
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls,
+    readSettings: () => ({
+      prestigeType: "whitehole",
+      prestigeWhiteholeMinMass: 1,
+    }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+      trace.push(["goal", next]);
+    },
+    readOfferedTechs: () => {
+      const offer = offers[root.tech.whitehole - 1];
+      return offer === undefined
+        ? []
+        : [
+            {
+              elementId: offer.id,
+              cost: offer.cost,
+              generation: offer.generation,
+            },
+          ];
+    },
+    resources: {
+      readResources: () => ({
+        resources: new Map([
+          ["Knowledge", { amount: 1500000 }],
+          ["Soul_Gem", { amount: 10 }],
+        ]),
+      }),
+    },
+    onActivity: (activityEntry) => trace.push(activityEntry.message),
+  });
+
+  runPrestige(prestige);
+  assert.deepEqual(trace, [["goal", "Reset"]]);
+  goal = "Reset";
+  runPrestige(prestige);
+  runPrestige(prestige);
+  runPrestige(prestige);
+  runPrestige(prestige);
+  assert.deepEqual(trace, [
+    ["goal", "Reset"],
+    CAPTURED_WHITEHOLE_TECHS.exotic,
+    CAPTURED_WHITEHOLE_TECHS.check,
+    CAPTURED_WHITEHOLE_TECHS.confirm,
+    "Prestiged",
   ]);
 }
 
