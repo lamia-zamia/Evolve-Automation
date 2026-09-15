@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   isAscensionPrestigeAvailable,
+  isBioseedPrestigeAvailable,
   isDemonicPrestigeAvailable,
 } from "../src/domain/progression/prestige/prestige-eligibility.ts";
 
@@ -84,6 +85,27 @@ const exactPotential = makeView({
   mech: { active: false, potential: 0.5 },
 });
 assert.equal(isDemonicPrestigeAvailable(exactPotential), true);
+
+assert.equal(
+  isBioseedPrestigeAvailable(makeView()),
+  true,
+  "Bioseed accepts the exact dock, ship, and probe thresholds",
+);
+assert.equal(
+  isBioseedPrestigeAvailable(makeView({ buildings: { probes: 24 } })),
+  false,
+  "Bioseed requires every configured probe",
+);
+assert.equal(
+  isBioseedPrestigeAvailable(
+    makeView({
+      achievement: { lamentisStandardFive: true },
+      buildings: { gecks: 0 },
+    }),
+  ),
+  false,
+  "Bioseed remains gated by the standard Lamentis G.E.C.K. requirement",
+);
 
 assert.equal(
   isAscensionPrestigeAvailable(

@@ -9,12 +9,19 @@
  * `eden-apotheosis` call the game's own Terraform, Ascension, and Apotheosis reset paths.
  */
 
+import {
+  isBioseedPrestigeReady,
+  type BioseedPrestigeInput,
+} from "../../../../domain/progression/prestige/prestige-eligibility.ts";
 import type {
   PrestigeBranch,
   PrestigeCommand,
   PrestigeInput,
 } from "../../../../domain/progression/prestige/prestige.ts";
-import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type {
+  GameControlHandle,
+  GameControlRegistry,
+} from "../../../../ports/game-control-registry.ts";
 import type { GameActivitySink } from "../../../../ports/game-message-log.ts";
 import type {
   PrestigeExecutor,
@@ -40,6 +47,19 @@ export const CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11";
 export const CAPTURED_APOCALYPSE_TECHS = Object.freeze({
   first: "tech-protocol66",
   final: "tech-protocol66a",
+});
+
+/** The captured opener and modal actions for the upstream Bioseed dock. */
+export const CAPTURED_BIOSEED_ACTIONS = Object.freeze({
+  opener: "space-star_dock",
+  probe: "starDock-probes",
+  prep: "starDock-prep_ship",
+  launch: "starDock-launch_ship",
+});
+
+const CAPTURED_BIOSEED_COMMANDS = Object.freeze({
+  prep: "GasSpaceDockPrepForLaunch",
+  launch: "GasSpaceDockLaunch",
 });
 
 const CAPTURED_APOCALYPSE_TECH_IDS = Object.freeze(
@@ -92,6 +112,7 @@ export function isCapturedBuildingPrestigeType(
 }
 
 type MadBranch = Extract<PrestigeBranch, { readonly type: "mad" }>;
+type BioseedBranch = Extract<PrestigeBranch, { readonly type: "bioseed" }>;
 type WhiteholeBranch = Extract<PrestigeBranch, { readonly type: "whitehole" }>;
 
 export interface CapturedMadPrestigeDependencies {
@@ -109,6 +130,8 @@ export interface CapturedMadPrestigeDependencies {
   readonly readBuildingResetActions?: (
     regions: readonly string[],
   ) => ReadonlySet<string> | undefined;
+  /** Closes a Bioseed options modal after its action controls have been captured. */
+  readonly closeBioseedModal?: () => void;
   /** Reports a prestige after the launch replaced the captured game root. */
   readonly onActivity?: GameActivitySink;
 }
@@ -132,6 +155,63 @@ function capturedMadSettingNumber(
   fallback: number,
 ): number {
   return finite(settings[key]) ?? fallback;
+}
+
+function readCapturedBioseedCount(
+  root: unknown,
+  region: string,
+  type: string,
+): number {
+  return (
+    finite(
+      readProperty(readProperty(readProperty(root, region), type), "count"),
+    ) ?? 0
+  );
+}
+
+function capturedBioseedActionAvailable(
+  controls: GameControlRegistry,
+  elementId: string,
+): boolean {
+  const handle = controls.resolve(elementId);
+  return handle !== undefined && handle.methods.includes("action");
+}
+
+function readCapturedBioseedBranch(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+  controls: GameControlRegistry,
+): BioseedBranch {
+  const stats = readProperty(root, "stats");
+  const achievement = readProperty(readProperty(stats, "achieve"), "lamentis");
+  const requiredGecks = finite(settings["prestigeGECK"]) ?? Number.NaN;
+  const requiredProbes =
+    finite(settings["prestigeBioseedProbes"]) ?? Number.NaN;
+  const gecks = readCapturedBioseedCount(root, "starDock", "geck");
+  const shipSegments = readCapturedBioseedCount(root, "starDock", "seeder");
+  const probes = readCapturedBioseedCount(root, "starDock", "probes");
+  const genesis =
+    finite(readProperty(readProperty(root, "tech"), "genesis")) ?? 0;
+  const geckNeeded =
+    (finite(readProperty(achievement, "l")) ?? 0) >= 5 && gecks < requiredGecks;
+  const eligibility: BioseedPrestigeInput = {
+    geckNeeded,
+    spaceDock: readCapturedBioseedCount(root, "space", "star_dock"),
+    shipSegments,
+    probes,
+    requiredProbes,
+  };
+
+  return {
+    type: "bioseed",
+    eligible: isBioseedPrestigeReady(eligibility),
+    launchUnlocked:
+      genesis >= 7 &&
+      capturedBioseedActionAvailable(controls, CAPTURED_BIOSEED_ACTIONS.launch),
+    prepUnlocked:
+      genesis === 6 &&
+      capturedBioseedActionAvailable(controls, CAPTURED_BIOSEED_ACTIONS.prep),
+  };
 }
 
 function capturedTechIsAffordable(
@@ -243,14 +323,17 @@ export function createCapturedMadPrestige(
 ): { readonly reader: PrestigeReader; readonly executor: PrestigeExecutor } {
   let sampledRoot: unknown;
   let sampledPrestigeTechs = new Map<string, Readonly<OfferedTech>>();
+  let sampledBioseedControls = new Map<string, Readonly<GameControlHandle>>();
   let resetCommitted = false;
   let apocalypseFirstActionDone = false;
+  let bioseedModalRequested = false;
   const reader: PrestigeReader = Object.freeze({
     samplePrestige(): PrestigeInput {
       const settings = capturedMadSettingsRecord(dependencies.readSettings());
       const root = dependencies.rootState.readRoot();
       sampledRoot = root;
       sampledPrestigeTechs = new Map();
+      sampledBioseedControls = new Map();
       apocalypseFirstActionDone = false;
       const prestigeType =
         typeof settings["prestigeType"] === "string"
@@ -333,6 +416,35 @@ export function createCapturedMadPrestige(
             dependencies.resources,
           );
         }
+      } else if (!resetCommitted && prestigeType === "bioseed") {
+        const offered = dependencies.readBuildingResetActions?.(["space"]);
+        if (
+          offered !== undefined &&
+          offered.has(CAPTURED_BIOSEED_ACTIONS.opener)
+        ) {
+          branch = readCapturedBioseedBranch(
+            root,
+            settings,
+            dependencies.controls,
+          );
+          for (const [commandId, elementId] of [
+            [CAPTURED_BIOSEED_COMMANDS.prep, CAPTURED_BIOSEED_ACTIONS.prep],
+            [CAPTURED_BIOSEED_COMMANDS.launch, CAPTURED_BIOSEED_ACTIONS.launch],
+          ] as const) {
+            const handle = dependencies.controls.resolve(elementId);
+            if (handle !== undefined && handle.methods.includes("action")) {
+              sampledBioseedControls.set(commandId, handle);
+            }
+          }
+          if (
+            bioseedModalRequested &&
+            dependencies.controls.resolve(CAPTURED_BIOSEED_ACTIONS.probe) !==
+              undefined
+          ) {
+            dependencies.closeBioseedModal?.();
+            bioseedModalRequested = false;
+          }
+        }
       }
       return Object.freeze({
         goal: dependencies.readGoal(),
@@ -371,21 +483,77 @@ export function createCapturedMadPrestige(
           // The activity sink observes the root transition after launch; logging this planner
           // command would report an attempted prestige before the game actually reset.
           return;
+        case "cache-building-options": {
+          if (command.id !== "GasSpaceDock") return;
+          if (dependencies.rootState.readRoot() !== sampledRoot) {
+            throw new Error("captured bioseed root changed after sampling");
+          }
+          const opener = dependencies.controls.resolve(
+            CAPTURED_BIOSEED_ACTIONS.opener,
+          );
+          if (opener === undefined || !opener.methods.includes("trigModal")) {
+            throw new Error("captured Bioseed dock opener is unavailable");
+          }
+          const result = dependencies.controls.invoke(opener, "trigModal");
+          if (!result.ok) {
+            throw new Error(
+              `captured Bioseed dock opener failed: ${result.detail ?? result.reason}`,
+            );
+          }
+          bioseedModalRequested = true;
+          return;
+        }
         case "click-building": {
           if (dependencies.rootState.readRoot() !== sampledRoot) {
             throw new Error("captured prestige root changed after sampling");
           }
-          const handle = dependencies.controls.resolve(command.id);
+          const bioseedElementId =
+            command.id === CAPTURED_BIOSEED_COMMANDS.prep
+              ? CAPTURED_BIOSEED_ACTIONS.prep
+              : command.id === CAPTURED_BIOSEED_COMMANDS.launch
+                ? CAPTURED_BIOSEED_ACTIONS.launch
+                : undefined;
+          const handle =
+            bioseedElementId === undefined
+              ? dependencies.controls.resolve(command.id)
+              : sampledBioseedControls.get(command.id);
           if (handle === undefined || !handle.methods.includes("action")) {
             throw new Error(
               `captured prestige action ${command.id} is unavailable`,
             );
           }
-          const result = dependencies.controls.invoke(handle, "action");
+          const currentHandle =
+            bioseedElementId === undefined
+              ? handle
+              : dependencies.controls.resolve(bioseedElementId);
+          if (
+            currentHandle === undefined ||
+            currentHandle.generation !== handle.generation
+          ) {
+            throw new Error(
+              `captured prestige action ${command.id} was redrawn`,
+            );
+          }
+          const result = dependencies.controls.invoke(currentHandle, "action");
           if (!result.ok) {
             throw new Error(
               `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`,
             );
+          }
+          if (command.id === CAPTURED_BIOSEED_COMMANDS.launch) {
+            resetCommitted = true;
+            dependencies.onActivity?.({
+              message: "Prestiged",
+              color: "info",
+              tags: Object.freeze(["achievements"]),
+            });
+            return;
+          }
+          if (command.id === CAPTURED_BIOSEED_COMMANDS.prep) {
+            // `prep_ship` redraws the same modal after granting genesis 7. Its captured launch
+            // control survives that redraw, so close the modal before the next cycle can act.
+            dependencies.closeBioseedModal?.();
+            return;
           }
           // DeadSpace's reset action returns true after it has scheduled the browser reload. Keep
           // the old root from receiving a duplicate click if that reload is still pending.

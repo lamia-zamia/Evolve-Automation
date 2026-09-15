@@ -170,3 +170,15 @@ export function createGameModal({
     },
   });
 }
+
+/** Closes a game modal opened by a captured action after its controls were recorded. */
+export function createGameModalCloser({
+  getDocument,
+}: {
+  readonly getDocument: () => Pick<ModalDocument, "querySelector">;
+}): () => void {
+  return () => {
+    const close = getDocument().querySelector(".modal .modal-close");
+    close?.click?.();
+  };
+}

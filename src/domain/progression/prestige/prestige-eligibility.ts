@@ -96,6 +96,14 @@ export interface GeckEligibilityView {
   readonly achievement: PrestigeEligibilityView["achievement"];
 }
 
+export interface BioseedPrestigeInput {
+  readonly geckNeeded: boolean;
+  readonly spaceDock: number;
+  readonly shipSegments: number;
+  readonly probes: number;
+  readonly requiredProbes: number;
+}
+
 export function isPrestigeAllowed(
   view: Readonly<PrestigePermissionView>,
   type?: string,
@@ -117,6 +125,17 @@ export function isGeckNeeded(view: Readonly<GeckEligibilityView>): boolean {
   return (
     view.achievement.lamentisStandardFive &&
     view.buildings.gecks < view.settings.requiredGecks
+  );
+}
+
+export function isBioseedPrestigeReady(
+  input: Readonly<BioseedPrestigeInput>,
+): boolean {
+  return (
+    !input.geckNeeded &&
+    input.spaceDock >= 1 &&
+    input.shipSegments >= 100 &&
+    input.probes >= input.requiredProbes
   );
 }
 
@@ -147,12 +166,17 @@ export function isCataclysmPrestigeAvailable(
 export function isBioseedPrestigeAvailable(
   view: Readonly<PrestigeEligibilityView>,
 ): boolean {
-  return (
-    !isGeckNeeded(view) &&
-    view.buildings.spaceDock >= 1 &&
-    view.buildings.shipSegments >= 100 &&
-    view.buildings.probes >= view.settings.requiredBioseedProbes
-  );
+  return isBioseedPrestigeReady({
+    geckNeeded: isGeckNeeded({
+      settings: { requiredGecks: view.settings.requiredGecks },
+      buildings: { gecks: view.buildings.gecks },
+      achievement: view.achievement,
+    }),
+    spaceDock: view.buildings.spaceDock,
+    shipSegments: view.buildings.shipSegments,
+    probes: view.buildings.probes,
+    requiredProbes: view.settings.requiredBioseedProbes,
+  });
 }
 
 export function isWhiteholePrestigeAvailable(

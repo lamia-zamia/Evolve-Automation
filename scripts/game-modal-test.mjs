@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { createGameModal } from "../src/adapters/browser/game-modal.ts";
+import {
+  createGameModal,
+  createGameModalCloser,
+} from "../src/adapters/browser/game-modal.ts";
 
 let elements = {};
 let selectors = {};
@@ -180,5 +183,15 @@ gameModal.open({
 });
 assert.deepEqual(trace, []);
 assert.equal(gameModal.isAwaitingScriptModal(), false);
+
+reset();
+const closeModal = createGameModalCloser({
+  getDocument: () => documentStub,
+});
+closeModal();
+assert.deepEqual(trace, []);
+selectors[".modal .modal-close"] = { click: () => trace.push("close-click") };
+closeModal();
+assert.deepEqual(trace, ["close-click"]);
 
 console.log("Game modal adapter tests passed");

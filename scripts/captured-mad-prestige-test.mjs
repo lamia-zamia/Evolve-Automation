@@ -4,6 +4,7 @@ import {
   CAPTURED_MAD_CONTROL,
   CAPTURED_CATACLYSM_TECH,
   CAPTURED_APOCALYPSE_TECHS,
+  CAPTURED_BIOSEED_ACTIONS,
   CAPTURED_WHITEHOLE_TECHS,
   createCapturedMadPrestige,
   readCapturedMadBranch,
@@ -192,6 +193,108 @@ const settings = {
     runPrestige(prestige);
     assert.deepEqual(trace, ["action"]);
   }
+}
+
+// Bioseed's options are rendered only inside the Space Dock modal. The captured adapter opens the
+// game's own modal opener, keeps its controls after the modal is closed, and then follows the
+// prep -> launch state transition without using the compatibility ModalAction wrappers.
+{
+  const trace = [];
+  let goal = "Normal";
+  let modalOpen = false;
+  let prepCaptured = false;
+  let launchCaptured = false;
+  const root = buildRoot({
+    space: { star_dock: { count: 1 } },
+    starDock: { seeder: { count: 100 }, probes: { count: 3 } },
+    stats: { achieve: { lamentis: { l: 0 } } },
+    tech: { mad: 1, genesis: 6 },
+  });
+  const controls = {
+    resolve(id) {
+      if (id === CAPTURED_BIOSEED_ACTIONS.opener) {
+        return {
+          elementId: id,
+          generation: 1,
+          methods: ["trigModal"],
+        };
+      }
+      if (id === CAPTURED_BIOSEED_ACTIONS.probe && modalOpen) {
+        return { elementId: id, generation: 2, methods: ["action"] };
+      }
+      if (id === CAPTURED_BIOSEED_ACTIONS.prep && (modalOpen || prepCaptured)) {
+        prepCaptured = true;
+        return { elementId: id, generation: 2, methods: ["action"] };
+      }
+      if (
+        id === CAPTURED_BIOSEED_ACTIONS.launch &&
+        (modalOpen || launchCaptured)
+      ) {
+        return { elementId: id, generation: 3, methods: ["action"] };
+      }
+      return undefined;
+    },
+    invoke(handle, method) {
+      assert.equal(
+        method,
+        handle.elementId === CAPTURED_BIOSEED_ACTIONS.opener
+          ? "trigModal"
+          : "action",
+      );
+      trace.push(handle.elementId);
+      if (handle.elementId === CAPTURED_BIOSEED_ACTIONS.opener) {
+        modalOpen = true;
+      } else if (handle.elementId === CAPTURED_BIOSEED_ACTIONS.prep) {
+        root.tech.genesis = 7;
+        launchCaptured = true;
+      }
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds() {
+      return [
+        CAPTURED_BIOSEED_ACTIONS.opener,
+        CAPTURED_BIOSEED_ACTIONS.probe,
+        CAPTURED_BIOSEED_ACTIONS.prep,
+        CAPTURED_BIOSEED_ACTIONS.launch,
+      ];
+    },
+  };
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls,
+    readSettings: () => ({
+      prestigeType: "bioseed",
+      prestigeBioseedProbes: 3,
+      prestigeGECK: 0,
+    }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+      trace.push(["goal", next]);
+    },
+    readBuildingResetActions: (regions) => {
+      assert.deepEqual(regions, ["space"]);
+      return new Set([CAPTURED_BIOSEED_ACTIONS.opener]);
+    },
+    closeBioseedModal: () => {
+      modalOpen = false;
+    },
+    onActivity: (activityEntry) => trace.push(activityEntry.message),
+  });
+
+  runPrestige(prestige);
+  assert.deepEqual(trace, [["goal", "Reset"]]);
+  goal = "Reset";
+  runPrestige(prestige);
+  runPrestige(prestige);
+  runPrestige(prestige);
+  assert.deepEqual(trace, [
+    ["goal", "Reset"],
+    CAPTURED_BIOSEED_ACTIONS.opener,
+    CAPTURED_BIOSEED_ACTIONS.prep,
+    CAPTURED_BIOSEED_ACTIONS.launch,
+    "Prestiged",
+  ]);
 }
 
 // Apocalypse may expose protocol 66 first and protocol 66a only after the first action grants its

@@ -128,6 +128,7 @@ import {
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
 import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
+import { createGameModalCloser } from "../adapters/browser/game-modal.ts";
 import { createSettingsStore } from "../adapters/browser/settings-store.ts";
 import { createCapturedSettingsPanel } from "./captured-settings-panel-control.ts";
 import {
@@ -161,7 +162,9 @@ type DrawnProjectsDocument = ReturnType<
 type CapturedDocument = WorkspaceDocument &
   DrawnActionsDocument &
   DrawnProjectsDocument &
-  CraftingDocument;
+  CraftingDocument & {
+    querySelector(selector: string): { click?(): void } | null;
+  };
 
 export interface CapturedRuntimeControlDependencies {
   readonly pageCapture: PageCapture;
@@ -227,6 +230,9 @@ export function startCapturedRuntime({
   logError = () => {},
 }: CapturedRuntimeControlDependencies): () => void {
   const document = documentValue as CapturedDocument;
+  const closeBioseedModal = createGameModalCloser({
+    getDocument: () => document,
+  });
   const keyboard =
     typeof keyboardEventValue === "function" &&
     typeof readProperty(document, "dispatchEvent") === "function"
@@ -728,6 +734,7 @@ export function startCapturedRuntime({
     resources: createCapturedResourceSource(pageCapture.rootState),
     readBuildingResetActions: (regions) =>
       progression.readBuildingUnlocks(new Set(regions))?.unlocked,
+    closeBioseedModal,
   });
   let geneticsDiscoveryAttempted = false;
   /**
@@ -1694,6 +1701,7 @@ export function startCapturedRuntime({
           prestigeType === "cataclysm" ||
           prestigeType === "apocalypse" ||
           prestigeType === "whitehole" ||
+          prestigeType === "bioseed" ||
           isCapturedBuildingPrestigeType(prestigeType)) &&
         capturedPrestigeGoal !== "GameOverMan"
       ) {
