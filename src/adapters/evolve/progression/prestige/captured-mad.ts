@@ -36,6 +36,16 @@ export const CAPTURED_MAD_CONTROL = "mad";
 /** The captured research action that commits the cataclysm reset. */
 export const CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11";
 
+/** The two captured research actions in the upstream True Path apocalypse sequence. */
+export const CAPTURED_APOCALYPSE_TECHS = Object.freeze({
+  first: "tech-protocol66",
+  final: "tech-protocol66a",
+});
+
+const CAPTURED_APOCALYPSE_TECH_IDS = Object.freeze(
+  Object.values(CAPTURED_APOCALYPSE_TECHS),
+);
+
 /** DeadSpace action rows that commit the ordinary building-shaped prestige branches. */
 export const CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
   terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
@@ -174,14 +184,16 @@ export function createCapturedMadPrestige(
   dependencies: CapturedMadPrestigeDependencies,
 ): { readonly reader: PrestigeReader; readonly executor: PrestigeExecutor } {
   let sampledRoot: unknown;
-  let sampledCataclysmTech: Readonly<OfferedTech> | undefined;
+  let sampledPrestigeTechs = new Map<string, Readonly<OfferedTech>>();
   let resetCommitted = false;
+  let apocalypseFirstActionDone = false;
   const reader: PrestigeReader = Object.freeze({
     samplePrestige(): PrestigeInput {
       const settings = capturedMadSettingsRecord(dependencies.readSettings());
       const root = dependencies.rootState.readRoot();
       sampledRoot = root;
-      sampledCataclysmTech = undefined;
+      sampledPrestigeTechs = new Map();
+      apocalypseFirstActionDone = false;
       const prestigeType =
         typeof settings["prestigeType"] === "string"
           ? settings["prestigeType"]
@@ -212,7 +224,8 @@ export function createCapturedMadPrestige(
           const tech = offered.find(
             (entry) => entry.elementId === CAPTURED_CATACLYSM_TECH,
           );
-          if (tech !== undefined) sampledCataclysmTech = tech;
+          if (tech !== undefined)
+            sampledPrestigeTechs.set(tech.elementId, tech);
           const resources =
             tech === undefined
               ? undefined
@@ -228,6 +241,26 @@ export function createCapturedMadPrestige(
               tech !== undefined &&
               resources !== undefined &&
               canAfford(resources, tech.cost),
+          };
+        }
+      } else if (!resetCommitted && prestigeType === "apocalypse") {
+        const offered = dependencies.readOfferedTechs?.();
+        if (offered !== undefined) {
+          for (const tech of offered) {
+            if (
+              CAPTURED_APOCALYPSE_TECH_IDS.some((id) => id === tech.elementId)
+            ) {
+              sampledPrestigeTechs.set(tech.elementId, tech);
+            }
+          }
+          branch = {
+            type: "apocalypse",
+            // `drawTech` only emits these True Path rows after the game's own
+            // path, requirement, and qualification checks. Either row is the
+            // same eligibility answer as the compatibility `isUnlocked` gate.
+            eligible: CAPTURED_APOCALYPSE_TECH_IDS.some((id) =>
+              sampledPrestigeTechs.has(id),
+            ),
           };
         }
       }
@@ -290,11 +323,39 @@ export function createCapturedMadPrestige(
           return;
         }
         case "click-tech": {
-          if (command.id !== CAPTURED_CATACLYSM_TECH) return;
+          if (
+            command.id !== CAPTURED_CATACLYSM_TECH &&
+            !CAPTURED_APOCALYPSE_TECH_IDS.some((id) => id === command.id)
+          )
+            return;
           if (dependencies.rootState.readRoot() !== sampledRoot) {
             throw new Error("captured prestige root changed after sampling");
           }
-          const sampled = sampledCataclysmTech;
+          let sampled = sampledPrestigeTechs.get(command.id);
+          // Protocol 66 grants the prerequisite synchronously and calls the
+          // game's own `drawTech`; refresh the catalog before the planner's
+          // second command so protocol 66a can be captured in the same act.
+          if (
+            sampled === undefined &&
+            command.id === CAPTURED_APOCALYPSE_TECHS.final &&
+            apocalypseFirstActionDone
+          ) {
+            const offered = dependencies.readOfferedTechs?.();
+            const tech = offered?.find(
+              (entry) => entry.elementId === command.id,
+            );
+            if (tech !== undefined) {
+              sampledPrestigeTechs.set(tech.elementId, tech);
+              sampled = tech;
+            }
+          }
+          // Protocol 66 is optional in the legacy sequence: when protocol 66a
+          // was already the offered row, its preceding click was a no-op.
+          if (
+            sampled === undefined &&
+            command.id === CAPTURED_APOCALYPSE_TECHS.first
+          )
+            return;
           if (sampled === undefined) {
             throw new Error(
               `captured prestige action ${command.id} was not offered`,
@@ -316,6 +377,10 @@ export function createCapturedMadPrestige(
             throw new Error(
               `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`,
             );
+          }
+          if (command.id === CAPTURED_APOCALYPSE_TECHS.first) {
+            apocalypseFirstActionDone = true;
+            return;
           }
           // The Vue wrapper does not return the lexical action's boolean. The
           // drawn row and live affordability already gated this call, so a

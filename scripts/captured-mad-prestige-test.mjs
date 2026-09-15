@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   CAPTURED_MAD_CONTROL,
   CAPTURED_CATACLYSM_TECH,
+  CAPTURED_APOCALYPSE_TECHS,
   createCapturedMadPrestige,
   readCapturedMadBranch,
 } from "../src/adapters/evolve/progression/prestige/captured-mad.ts";
@@ -190,6 +191,75 @@ const settings = {
     runPrestige(prestige);
     assert.deepEqual(trace, ["action"]);
   }
+}
+
+// Apocalypse may expose protocol 66 first and protocol 66a only after the first action grants its
+// prerequisite. The executor refreshes the game's own research draw between those two planner
+// commands, then suppresses further commands while the delayed reset is pending.
+{
+  const trace = [];
+  let goal = "Normal";
+  let readCount = 0;
+  const root = buildRoot();
+  const controls = {
+    resolve(id) {
+      return id === CAPTURED_APOCALYPSE_TECHS.first ||
+        id === CAPTURED_APOCALYPSE_TECHS.final
+        ? {
+            elementId: id,
+            generation: id === CAPTURED_APOCALYPSE_TECHS.first ? 1 : 2,
+            methods: ["action"],
+          }
+        : undefined;
+    },
+    invoke(handle, method) {
+      assert.equal(method, "action");
+      trace.push(handle.elementId);
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds() {
+      return [CAPTURED_APOCALYPSE_TECHS.first, CAPTURED_APOCALYPSE_TECHS.final];
+    },
+  };
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls,
+    readSettings: () => ({ prestigeType: "apocalypse" }),
+    readGoal: () => goal,
+    setGoal: (next) => {
+      goal = next;
+      trace.push(["goal", next]);
+    },
+    readOfferedTechs: () => {
+      readCount += 1;
+      return readCount <= 2
+        ? [
+            {
+              elementId: CAPTURED_APOCALYPSE_TECHS.first,
+              cost: { Knowledge: 5000000 },
+              generation: 1,
+            },
+          ]
+        : [
+            {
+              elementId: CAPTURED_APOCALYPSE_TECHS.final,
+              cost: { Knowledge: 5000000 },
+              generation: 2,
+            },
+          ];
+    },
+  });
+
+  runPrestige(prestige);
+  assert.deepEqual(trace, [["goal", "Reset"]]);
+  goal = "Reset";
+  runPrestige(prestige);
+  runPrestige(prestige);
+  assert.deepEqual(trace, [
+    ["goal", "Reset"],
+    CAPTURED_APOCALYPSE_TECHS.first,
+    CAPTURED_APOCALYPSE_TECHS.final,
+  ]);
 }
 
 // Cataclysm is committed by a research action rather than a building or Vue panel method. The

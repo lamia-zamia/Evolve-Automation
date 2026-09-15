@@ -1692,6 +1692,7 @@ export function startCapturedRuntime({
         isEnabled(settings, "autoPrestige") &&
         (prestigeType === "mad" ||
           prestigeType === "cataclysm" ||
+          prestigeType === "apocalypse" ||
           isCapturedBuildingPrestigeType(prestigeType)) &&
         capturedPrestigeGoal !== "GameOverMan"
       ) {

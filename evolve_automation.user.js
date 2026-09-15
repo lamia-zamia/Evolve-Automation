@@ -5485,7 +5485,12 @@
   }
 
   // src/adapters/evolve/progression/prestige/captured-mad.ts
-  var CAPTURED_MAD_CONTROL = "mad", CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11", CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
+  var CAPTURED_MAD_CONTROL = "mad", CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11", CAPTURED_APOCALYPSE_TECHS = Object.freeze({
+    first: "tech-protocol66",
+    final: "tech-protocol66a"
+  }), CAPTURED_APOCALYPSE_TECH_IDS = Object.freeze(
+    Object.values(CAPTURED_APOCALYPSE_TECHS)
+  ), CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
     terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
     ascension: Object.freeze({
       elementId: "interstellar-ascend",
@@ -5547,10 +5552,10 @@
       );
   }
   function createCapturedMadPrestige(dependencies) {
-    let sampledRoot, sampledCataclysmTech, resetCommitted = !1, reader = Object.freeze({
+    let sampledRoot, sampledPrestigeTechs = /* @__PURE__ */ new Map(), resetCommitted = !1, apocalypseFirstActionDone = !1, reader = Object.freeze({
       samplePrestige() {
         let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot();
-        sampledRoot = root, sampledCataclysmTech = void 0;
+        sampledRoot = root, sampledPrestigeTechs = /* @__PURE__ */ new Map(), apocalypseFirstActionDone = !1;
         let prestigeType = typeof settings.prestigeType == "string" ? settings.prestigeType : "none", branch = { type: "noop" };
         if (!resetCommitted && prestigeType === "mad")
           branch = readCapturedMadBranch(root, settings);
@@ -5569,7 +5574,7 @@
             let tech = offered.find(
               (entry) => entry.elementId === CAPTURED_CATACLYSM_TECH
             );
-            tech !== void 0 && (sampledCataclysmTech = tech);
+            tech !== void 0 && sampledPrestigeTechs.set(tech.elementId, tech);
             let resources = tech === void 0 ? void 0 : dependencies.resources?.readResources(Object.keys(tech.cost));
             branch = {
               type: "cataclysm",
@@ -5579,6 +5584,21 @@
               eligible: tech !== void 0,
               loadQueuedSettings: !1,
               dialClickable: tech !== void 0 && resources !== void 0 && canAfford(resources, tech.cost)
+            };
+          }
+        } else if (!resetCommitted && prestigeType === "apocalypse") {
+          let offered = dependencies.readOfferedTechs?.();
+          if (offered !== void 0) {
+            for (let tech of offered)
+              CAPTURED_APOCALYPSE_TECH_IDS.some((id) => id === tech.elementId) && sampledPrestigeTechs.set(tech.elementId, tech);
+            branch = {
+              type: "apocalypse",
+              // `drawTech` only emits these True Path rows after the game's own
+              // path, requirement, and qualification checks. Either row is the
+              // same eligibility answer as the compatibility `isUnlocked` gate.
+              eligible: CAPTURED_APOCALYPSE_TECH_IDS.some(
+                (id) => sampledPrestigeTechs.has(id)
+              )
             };
           }
         }
@@ -5625,10 +5645,19 @@
             return;
           }
           case "click-tech": {
-            if (command.id !== CAPTURED_CATACLYSM_TECH) return;
+            if (command.id !== CAPTURED_CATACLYSM_TECH && !CAPTURED_APOCALYPSE_TECH_IDS.some((id) => id === command.id))
+              return;
             if (dependencies.rootState.readRoot() !== sampledRoot)
               throw new Error("captured prestige root changed after sampling");
-            let sampled3 = sampledCataclysmTech;
+            let sampled3 = sampledPrestigeTechs.get(command.id);
+            if (sampled3 === void 0 && command.id === CAPTURED_APOCALYPSE_TECHS.final && apocalypseFirstActionDone) {
+              let tech = dependencies.readOfferedTechs?.()?.find(
+                (entry) => entry.elementId === command.id
+              );
+              tech !== void 0 && (sampledPrestigeTechs.set(tech.elementId, tech), sampled3 = tech);
+            }
+            if (sampled3 === void 0 && command.id === CAPTURED_APOCALYPSE_TECHS.first)
+              return;
             if (sampled3 === void 0)
               throw new Error(
                 `captured prestige action ${command.id} was not offered`
@@ -5647,6 +5676,10 @@
               throw new Error(
                 `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`
               );
+            if (command.id === CAPTURED_APOCALYPSE_TECHS.first) {
+              apocalypseFirstActionDone = !0;
+              return;
+            }
             resetCommitted = !0, dependencies.onActivity?.({
               message: "Prestiged",
               color: "info",
@@ -21732,7 +21765,7 @@ Only continue if you trust the source. Injected code:
           ensureGeneticsControls(), runGeneticsAutomation(genetics);
         });
         let prestigeType = settings.prestigeType;
-        isEnabled(settings, "autoPrestige") && (prestigeType === "mad" || prestigeType === "cataclysm" || isCapturedBuildingPrestigeType(prestigeType)) && capturedPrestigeGoal !== "GameOverMan" && runPhase("autoPrestige", () => {
+        isEnabled(settings, "autoPrestige") && (prestigeType === "mad" || prestigeType === "cataclysm" || prestigeType === "apocalypse" || isCapturedBuildingPrestigeType(prestigeType)) && capturedPrestigeGoal !== "GameOverMan" && runPhase("autoPrestige", () => {
           if (prestigeType === "mad") {
             ensureMadControls();
             let mad = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL);
