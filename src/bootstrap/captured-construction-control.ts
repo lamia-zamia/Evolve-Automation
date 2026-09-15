@@ -30,6 +30,7 @@ import type { ConstructionObservations } from "../ports/game-construction-observ
 import type { ConstructionCycleOptions } from "../ports/construction-candidates.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
+import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
@@ -86,7 +87,7 @@ export interface CapturedConstructionControlDependencies {
   /** Reports candidate and executor diagnostics when explicitly enabled by the caller. */
   readonly onDiagnostic?: (message: string) => void;
   /** Reports successful captured activity after the game state changed. */
-  readonly onActivity?: (message: string) => void;
+  readonly onActivity?: GameActivitySink;
   /** Reports a candidate, price, or catalog the capture could not supply. */
   readonly onSkipped?: (key: string, reason: string) => void;
 }

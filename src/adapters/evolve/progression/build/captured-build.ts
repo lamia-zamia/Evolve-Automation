@@ -22,9 +22,11 @@ import type {
 } from "../../../../ports/construction-candidates.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type { GameActivitySink } from "../../../../ports/game-message-log.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { costFitsStorage } from "../../captured-affordability.ts";
+import { readCapturedControlLabel } from "../../captured-control-label.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
 /** One building the caller manages, with the settings the planners need. */
@@ -60,7 +62,7 @@ export interface CapturedBuildDependencies {
   /** Reports the captured action boundary while performance diagnostics are enabled. */
   readonly onDiagnostic?: (message: string) => void;
   /** Reports a successful build after the game's count changed. */
-  readonly onActivity?: (message: string) => void;
+  readonly onActivity?: GameActivitySink;
 }
 
 interface CycleCandidate {
@@ -234,7 +236,14 @@ export function createCapturedBuildSource(
           ...base,
         });
       }
-      if (built) reportActivity(`Built ${candidate.target.key} (${after})`);
+      if (built) {
+        const label = readCapturedControlLabel(handle, candidate.target.id);
+        reportActivity({
+          message: `Built ${label} (${after})`,
+          color: "success",
+          tags: Object.freeze(["queue", "building_queue"]),
+        });
+      }
       // The game's own action reports nothing useful; the count it changed does.
       return Object.freeze({
         outcome: SUCCEEDED,

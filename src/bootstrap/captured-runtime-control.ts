@@ -143,6 +143,7 @@ import {
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-handlers.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+import type { GameActivitySink } from "../ports/game-message-log.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
 
 type WorkspaceDocument = ReturnType<
@@ -171,7 +172,7 @@ export interface CapturedRuntimeControlDependencies {
   readonly settingsHostWindow: unknown;
   readonly diagnostics?: TickDiagnostics | undefined;
   /** User-visible activity emitted after a captured state transition. */
-  readonly onActivity?: (message: string) => void;
+  readonly onActivity?: GameActivitySink;
   readonly log?: (message: string) => void;
   readonly logError?: (message: string) => void;
 }

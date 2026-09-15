@@ -145,7 +145,12 @@ function makeAdapter({
   const calls = [];
   const activity = [];
   const controls = {
-    resolve: (elementId) => ({ elementId, generation, methods: ["build"] }),
+    resolve: (elementId) => ({
+      elementId,
+      generation,
+      methods: ["build"],
+      data: { title: "Large Hadron Collider" },
+    }),
     capturedElementIds: () => ["arpalhc"],
     invoke(handle, method, args = []) {
       calls.push([handle.elementId, method, ...args]);
@@ -212,7 +217,7 @@ function makeAdapter({
         controls,
         context: { readContext: () => context },
         readSettings: () => settings,
-        onActivity: (message) => activity.push(message),
+        onActivity: (activityEntry) => activity.push(activityEntry.message),
       }),
     ],
     resources,
@@ -233,7 +238,7 @@ function makeAdapter({
   const page = makeAdapter();
   assert.equal(runBuildAutomation(page.adapter).status, "succeeded");
   assert.deepEqual(page.calls, [["arpalhc", "build", "lhc", 5]]);
-  assert.deepEqual(page.activity, ["Built lhc (1:25%)"]);
+  assert.deepEqual(page.activity, ["Built Large Hadron Collider (1:25%)"]);
   assert.equal(page.root.arpa.lhc.complete, 25);
   assert.equal(page.root.resource.Money.amount, 950);
 }

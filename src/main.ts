@@ -20,7 +20,10 @@ whenDocumentReady(globalThis, () => {
     mouseEvent: environment.MouseEvent,
     storage: environment.storage,
     diagnostics: createBrowserDiagnostics(globalThis),
-    onActivity: createGameMessageLog(environment.document),
+    onActivity: createGameMessageLog(
+      environment.document,
+      pageCapture.controls,
+    ),
     log: environment.log,
     logError: environment.error,
   });

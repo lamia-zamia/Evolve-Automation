@@ -225,9 +225,53 @@
   var GAME_MESSAGE_LOG_ELEMENT_ID = "msgQueueLog";
 
   // src/adapters/browser/game-message-log.ts
-  function createGameMessageLog(documentValue) {
-    return (message) => {
-      if (!isRecord(documentValue)) return;
+  function readMessageLogState(controls) {
+    let data = controls?.resolve("msgQueue")?.data, logs = readProperty(data, "m");
+    if (!isNonArrayRecord(logs)) return;
+    let filters = readProperty(data, "s");
+    return {
+      logs,
+      filters: isNonArrayRecord(filters) ? filters : void 0
+    };
+  }
+  function activityTags(activity) {
+    return /* @__PURE__ */ new Set(["all", ...activity.tags]);
+  }
+  function readMaximum(state, tag) {
+    let filter = readProperty(state.filters, tag), maximum = readProperty(filter, "max");
+    return typeof maximum == "number" && Number.isSafeInteger(maximum) && maximum > 0 ? maximum : void 0;
+  }
+  function rememberActivity(state, activity) {
+    let tags = activityTags(activity);
+    for (let tag of tags) {
+      let log = readProperty(state.logs, tag);
+      if (!Array.isArray(log)) continue;
+      log.unshift({ msg: activity.message, color: activity.color });
+      let maximum = readMaximum(state, tag);
+      maximum !== void 0 && log.splice(maximum);
+    }
+  }
+  function isActivityVisibleInMessageLog(state, activity) {
+    if (state === void 0) return !0;
+    let view = readProperty(state.logs, "view");
+    return typeof view != "string" || activityTags(activity).has(view);
+  }
+  function trimRenderedLog(log, maximum) {
+    let children = readProperty(log, "children");
+    if (isRecord(children))
+      for (; typeof children.length == "number" && children.length > maximum; ) {
+        let last = children[children.length - 1];
+        if (!isRecord(last)) return;
+        let remove = readProperty(last, "remove");
+        if (typeof remove != "function") return;
+        Reflect.apply(remove, last, []);
+      }
+  }
+  function createGameMessageLog(documentValue, controls) {
+    return (activity) => {
+      let state = readMessageLogState(controls);
+      if (state !== void 0 && rememberActivity(state, activity), !isActivityVisibleInMessageLog(state, activity) || !isRecord(documentValue))
+        return;
       let getElementById = readProperty(documentValue, "getElementById");
       if (typeof getElementById != "function") return;
       let log = Reflect.apply(
@@ -244,10 +288,15 @@
         ["p"]
       );
       if (!isRecord(entry)) return;
-      entry.className = "has-text-success", entry.textContent = message;
+      entry.className = `has-text-${activity.color}`, entry.textContent = activity.message;
       let prepend = readProperty(log, "prepend");
       if (typeof prepend == "function") {
         Reflect.apply(prepend, log, [entry]);
+        let view = state === void 0 ? void 0 : readProperty(state.logs, "view");
+        if (state !== void 0 && typeof view == "string") {
+          let maximum = readMaximum(state, view);
+          maximum !== void 0 && trimRenderedLog(log, maximum);
+        }
         return;
       }
       let append = readProperty(log, "append");
@@ -2903,6 +2952,14 @@
     });
   }
 
+  // src/adapters/evolve/captured-control-label.ts
+  function readCapturedControlLabel(handle, fallback) {
+    let data = handle.data;
+    if (!isRecord(data)) return fallback;
+    let title = readProperty(data, "title");
+    return typeof title == "string" && title.trim().length > 0 ? title : fallback;
+  }
+
   // src/adapters/evolve/progression/build/captured-build.ts
   var NO_CONSUMPTION = Object.freeze([]);
   function readBuilding(root, target) {
@@ -3010,16 +3067,26 @@
         let rootAfter = rootState.readRoot(), after = Number(
           readProperty(readBuilding(rootAfter, candidate.target), "count")
         ), queueAfter = readQueueLength(rootAfter), built = after > before, queued = queueAfter > queueBefore;
-        return reportDiagnostic(`build.execute.after ${after}`), reportDiagnostic(`build.execute.queueAfter ${queueAfter}`), reportDiagnostic(`build.execute.built ${built}`), reportDiagnostic(`build.execute.queued ${queued}`), reportDiagnostic(`build.execute.noop ${!built && !queued}`), result.ok ? (built && reportActivity(`Built ${candidate.target.key} (${after})`), Object.freeze({
+        if (reportDiagnostic(`build.execute.after ${after}`), reportDiagnostic(`build.execute.queueAfter ${queueAfter}`), reportDiagnostic(`build.execute.built ${built}`), reportDiagnostic(`build.execute.queued ${queued}`), reportDiagnostic(`build.execute.noop ${!built && !queued}`), !result.ok)
+          return Object.freeze({
+            outcome: result.reason === "stale-control" ? stale("stale-build-control", result.detail ?? result.reason, {
+              key
+            }) : rejected("build-click-failed", result.detail ?? result.reason),
+            ...base
+          });
+        if (built) {
+          let label = readCapturedControlLabel(handle, candidate.target.id);
+          reportActivity({
+            message: `Built ${label} (${after})`,
+            color: "success",
+            tags: Object.freeze(["queue", "building_queue"])
+          });
+        }
+        return Object.freeze({
           outcome: SUCCEEDED,
           clicked: built,
           mission: !1,
           consumption: NO_CONSUMPTION
-        })) : Object.freeze({
-          outcome: result.reason === "stale-control" ? stale("stale-build-control", result.detail ?? result.reason, {
-            key
-          }) : rejected("build-click-failed", result.detail ?? result.reason),
-          ...base
         });
       }
     });
@@ -3598,19 +3665,30 @@
           rootState.readRoot(),
           candidate.project.projectId
         ), clicked = after !== void 0 && (after.rank > before.rank || after.progress > before.progress);
-        return result.ok ? (clicked && reportActivity(
-          `Built ${candidate.project.projectId} (${after.rank}:${after.progress}%)`
-        ), Object.freeze({
+        if (!result.ok)
+          return Object.freeze({
+            outcome: result.reason === "stale-control" ? stale("stale-project-control", result.detail ?? result.reason) : rejected(
+              "project-build-failed",
+              result.detail ?? result.reason
+            ),
+            ...base
+          });
+        if (clicked) {
+          let label = readCapturedControlLabel(
+            handle,
+            candidate.project.projectId
+          );
+          reportActivity({
+            message: `Built ${label} (${after.rank}:${after.progress}%)`,
+            color: "success",
+            tags: Object.freeze(["queue", "building_queue"])
+          });
+        }
+        return Object.freeze({
           outcome: SUCCEEDED,
           clicked,
           mission: !1,
           consumption: NO_CONSUMPTION3
-        })) : Object.freeze({
-          outcome: result.reason === "stale-control" ? stale("stale-project-control", result.detail ?? result.reason) : rejected(
-            "project-build-failed",
-            result.detail ?? result.reason
-          ),
-          ...base
         });
       }
     });
@@ -4155,7 +4233,15 @@
             !1
           );
         let researched = readCapturedTechState(rootState.readRoot()) !== before;
-        return researched && reportActivity(`Researched ${decision.techId}`), executionResult(SUCCEEDED, researched);
+        if (researched) {
+          let label = readCapturedControlLabel(handle, decision.techId);
+          reportActivity({
+            message: `Researched ${label}`,
+            color: "success",
+            tags: Object.freeze(["queue", "research_queue"])
+          });
+        }
+        return executionResult(SUCCEEDED, researched);
       }
     });
     return Object.freeze({ reader, executor });
@@ -5468,7 +5554,11 @@
             invokeMadControl(
               dependencies.controls,
               command.kind === "arm-mad" ? "arm" : "launch"
-            ), command.kind === "launch-mad" && dependencies.rootState.readRoot() !== sampledRoot && dependencies.onActivity?.("Prestiged");
+            ), command.kind === "launch-mad" && dependencies.rootState.readRoot() !== sampledRoot && dependencies.onActivity?.({
+              message: "Prestiged",
+              color: "info",
+              tags: Object.freeze(["achievements"])
+            });
             return;
           case "log-prestige":
             return;
@@ -21581,7 +21671,10 @@ Only continue if you trust the source. Injected code:
       mouseEvent: environment.MouseEvent,
       storage: environment.storage,
       diagnostics: createBrowserDiagnostics(globalThis),
-      onActivity: createGameMessageLog(environment.document),
+      onActivity: createGameMessageLog(
+        environment.document,
+        pageCapture.controls
+      ),
       log: environment.log,
       logError: environment.error
     });

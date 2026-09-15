@@ -12,6 +12,7 @@ import type {
   PrestigeInput,
 } from "../../../../domain/progression/prestige/prestige.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type { GameActivitySink } from "../../../../ports/game-message-log.ts";
 import type {
   PrestigeExecutor,
   PrestigeReader,
@@ -35,7 +36,7 @@ export interface CapturedMadPrestigeDependencies {
   readonly readGoal: () => string;
   readonly setGoal: (goal: string) => void;
   /** Reports a prestige after the launch replaced the captured game root. */
-  readonly onActivity?: (message: string) => void;
+  readonly onActivity?: GameActivitySink;
 }
 
 function capturedMadSettingsRecord(raw: unknown): Record<PropertyKey, unknown> {
@@ -166,7 +167,11 @@ export function createCapturedMadPrestige(
             command.kind === "launch-mad" &&
             dependencies.rootState.readRoot() !== sampledRoot
           ) {
-            dependencies.onActivity?.("Prestiged");
+            dependencies.onActivity?.({
+              message: "Prestiged",
+              color: "info",
+              tags: Object.freeze(["achievements"]),
+            });
           }
           return;
         case "log-prestige":

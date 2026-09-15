@@ -36,6 +36,7 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
   for (const entry of offered) {
     controls.set(entry.id, {
       generation: 1,
+      title: entry.title,
       methods: {
         action() {
           clicks.push(entry.id);
@@ -61,6 +62,7 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
             elementId,
             generation: control.generation,
             methods: Object.keys(control.methods),
+            data: { title: control.title ?? elementId },
           };
     },
     capturedElementIds: () => [...controls.keys()],
@@ -119,7 +121,7 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
       mountSuppression,
       panels,
       onUnavailable: (reason) => unavailable.push(reason),
-      onActivity: (message) => activity.push(message),
+      onActivity: (activityEntry) => activity.push(activityEntry.message),
     }),
     activity,
   };
@@ -127,16 +129,19 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
 
 const THEOLOGY = {
   id: "tech-theology",
+  title: "Theology",
   grant: "theology",
   cost: { Knowledge: 900 },
 };
 const MINING = {
   id: "tech-mining",
+  title: "Mining",
   grant: "mining",
   cost: { Knowledge: 6600 },
 };
 const SMELTING = {
   id: "tech-smelting",
+  title: "Smelting",
   grant: "smelting",
   cost: { Knowledge: 9000, Iron: 500 },
 };
@@ -152,7 +157,7 @@ const SMELTING = {
   assert.deepEqual(page.clicks, ["tech-theology"]);
   assert.equal(page.root.resource.Knowledge.amount, 100);
   assert.equal(page.root.tech.theology, 1);
-  assert.deepEqual(page.activity, ["Researched tech-theology"]);
+  assert.deepEqual(page.activity, ["Researched Theology"]);
   // The player's tab is where it was.
   assert.equal(page.root.settings.civTabs, 4);
   assert.equal(page.root.settings.animated, true);

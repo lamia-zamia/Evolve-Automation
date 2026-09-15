@@ -16,6 +16,7 @@ import { createCapturedActionCostReader } from "../adapters/evolve/captured-acti
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
 import { createCapturedResearchAdapter } from "../adapters/evolve/progression/research/captured-research.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
+import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
@@ -34,7 +35,7 @@ export interface CapturedResearchControlDependencies {
     readonly Readonly<OfferedTech>[] | undefined;
   readonly diagnostics?: TickDiagnostics | undefined;
   /** Reports successful captured research after the technology state changed. */
-  readonly onActivity?: (message: string) => void;
+  readonly onActivity?: GameActivitySink;
   /** Reports a catalog or price the capture could not supply. */
   readonly onUnavailable?: (reason: string) => void;
 }

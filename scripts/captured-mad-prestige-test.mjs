@@ -110,7 +110,7 @@ const settings = {
       goal = next;
       trace.push(["goal", next]);
     },
-    onActivity: (message) => trace.push(message),
+    onActivity: (activityEntry) => trace.push(activityEntry.message),
   });
 
   runPrestige(prestige);

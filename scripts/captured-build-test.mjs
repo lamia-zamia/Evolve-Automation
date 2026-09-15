@@ -42,6 +42,7 @@ function makePage({
     root.city[id] = { count: building.count ?? 0 };
     controls.set(`city-${id}`, {
       generation: building.generation ?? 1,
+      title: building.title,
       methods: {
         action() {
           clicks.push(`city-${id}`);
@@ -87,6 +88,7 @@ function makePage({
             elementId,
             generation: control.generation,
             methods: Object.keys(control.methods),
+            data: { title: control.title ?? elementId },
           };
     },
     capturedElementIds: () => [...controls.keys()],
@@ -223,6 +225,7 @@ function queued(id, label = id) {
     buildings: {
       basic_housing: {
         count: 9,
+        title: "Basic Housing",
         priceAt: (count) => ({ Money: 20 + count * 8, Lumber: 10 + count * 6 }),
       },
     },
@@ -235,7 +238,7 @@ function queued(id, label = id) {
     controls: page.registry,
     readPolicy: policy([target("basic_housing", 100)]),
     onSkipped: (key, reason) => skipped.push([key, reason]),
-    onActivity: (message) => activity.push(message),
+    onActivity: (activityEntry) => activity.push(activityEntry.message),
   });
 
   const outcome = control.runCycle();
@@ -253,7 +256,7 @@ function queued(id, label = id) {
   );
   assert.equal(page.root.resource.Lumber.amount, 500 - 64);
   assert.deepEqual(skipped, []);
-  assert.deepEqual(activity, ["Built city-basic_housing (10)"]);
+  assert.deepEqual(activity, ["Built Basic Housing (10)"]);
   assert.deepEqual(page.root.queue.queue, [], "the cost probe left no trace");
 }
 

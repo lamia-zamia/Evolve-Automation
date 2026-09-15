@@ -25,12 +25,14 @@ import type {
   ResearchReader,
 } from "../../../../ports/research.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type { GameActivitySink } from "../../../../ports/game-message-log.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
 import { readCapturedTechState } from "../../captured-tech-state.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
+import { readCapturedControlLabel } from "../../captured-control-label.ts";
 
 export interface CapturedResearchDependencies {
   readonly rootState: GameRootStateSource;
@@ -40,7 +42,7 @@ export interface CapturedResearchDependencies {
   readonly conflicts: CapturedCostConflictReader;
   readonly controls: GameControlRegistry;
   /** Reports a successful research after the captured technology state changed. */
-  readonly onActivity?: (message: string) => void;
+  readonly onActivity?: GameActivitySink;
 }
 
 export interface CapturedResearchAdapter {
@@ -158,7 +160,14 @@ export function createCapturedResearchAdapter(
       // The game's own action reports nothing useful; the state it changed does. A click the game
       // declined is a decision that produced no research, not a failure.
       const researched = readCapturedTechState(rootState.readRoot()) !== before;
-      if (researched) reportActivity(`Researched ${decision.techId}`);
+      if (researched) {
+        const label = readCapturedControlLabel(handle, decision.techId);
+        reportActivity({
+          message: `Researched ${label}`,
+          color: "success",
+          tags: Object.freeze(["queue", "research_queue"]),
+        });
+      }
       return executionResult(SUCCEEDED, researched);
     },
   });

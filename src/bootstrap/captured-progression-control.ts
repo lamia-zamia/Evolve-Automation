@@ -43,6 +43,7 @@ import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
 import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { ConstructionObservations } from "../ports/game-construction-observations.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
+import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameBuildTarget } from "../ports/game-build-targets.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
 import type { BuildingUnlockSample } from "../ports/game-building-unlocks.ts";
@@ -109,7 +110,7 @@ export interface CapturedProgressionControlDependencies {
   /** Reports candidate and executor diagnostics when explicitly enabled by the caller. */
   readonly onDiagnostic?: (message: string) => void;
   /** Reports successful captured activity after the game state changed. */
-  readonly onActivity?: (message: string) => void;
+  readonly onActivity?: GameActivitySink;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly onUnavailable?: (reason: string) => void;
 }

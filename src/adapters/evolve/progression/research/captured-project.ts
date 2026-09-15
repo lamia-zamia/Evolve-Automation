@@ -20,6 +20,7 @@ import type {
   ConstructionCandidateSource,
 } from "../../../../ports/construction-candidates.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type { GameActivitySink } from "../../../../ports/game-message-log.ts";
 import type {
   GameProjectCatalog,
   OfferedProject,
@@ -28,6 +29,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { CapturedProjectContextReader } from "./captured-project-context.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
+import { readCapturedControlLabel } from "../../captured-control-label.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedProjectDependencies {
@@ -41,7 +43,7 @@ export interface CapturedProjectDependencies {
   /** Persisted script settings are external input and are normalized here. */
   readonly readSettings: () => unknown;
   /** Reports a successful project build after rank or progress changed. */
-  readonly onActivity?: (message: string) => void;
+  readonly onActivity?: GameActivitySink;
 }
 
 interface CycleProject {
@@ -266,9 +268,15 @@ export function createCapturedProjectSource(
         });
       }
       if (clicked) {
-        reportActivity(
-          `Built ${candidate.project.projectId} (${after.rank}:${after.progress}%)`,
+        const label = readCapturedControlLabel(
+          handle,
+          candidate.project.projectId,
         );
+        reportActivity({
+          message: `Built ${label} (${after.rank}:${after.progress}%)`,
+          color: "success",
+          tags: Object.freeze(["queue", "building_queue"]),
+        });
       }
       return Object.freeze({
         outcome: SUCCEEDED,
