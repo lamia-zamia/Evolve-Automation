@@ -24,3 +24,6 @@ export interface GamePageShellPort {
    */
   isPageReady(): boolean;
 }
+
+/** Upstream DeadSpace's rendered in-game message log. */
+export const GAME_MESSAGE_LOG_ELEMENT_ID = "msgQueueLog";

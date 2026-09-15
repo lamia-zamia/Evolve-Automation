@@ -221,6 +221,40 @@
     });
   }
 
+  // src/ports/game-page-shell.ts
+  var GAME_MESSAGE_LOG_ELEMENT_ID = "msgQueueLog";
+
+  // src/adapters/browser/game-message-log.ts
+  function createGameMessageLog(documentValue) {
+    return (message) => {
+      if (!isRecord(documentValue)) return;
+      let getElementById = readProperty(documentValue, "getElementById");
+      if (typeof getElementById != "function") return;
+      let log = Reflect.apply(
+        getElementById,
+        documentValue,
+        [GAME_MESSAGE_LOG_ELEMENT_ID]
+      );
+      if (!isRecord(log)) return;
+      let createElement = readProperty(documentValue, "createElement");
+      if (typeof createElement != "function") return;
+      let entry = Reflect.apply(
+        createElement,
+        documentValue,
+        ["p"]
+      );
+      if (!isRecord(entry)) return;
+      entry.className = "has-text-success", entry.textContent = message;
+      let prepend = readProperty(log, "prepend");
+      if (typeof prepend == "function") {
+        Reflect.apply(prepend, log, [entry]);
+        return;
+      }
+      let append = readProperty(log, "append");
+      typeof append == "function" && Reflect.apply(append, log, [entry]);
+    };
+  }
+
   // src/adapters/browser/legacy-runtime-environment.ts
   function bindFunction(owner, key, fallback) {
     let candidate = readProperty(owner, key);
@@ -21547,7 +21581,7 @@ Only continue if you trust the source. Injected code:
       mouseEvent: environment.MouseEvent,
       storage: environment.storage,
       diagnostics: createBrowserDiagnostics(globalThis),
-      onActivity: environment.log,
+      onActivity: createGameMessageLog(environment.document),
       log: environment.log,
       logError: environment.error
     });

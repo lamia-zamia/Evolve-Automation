@@ -4,7 +4,10 @@
 // with the Vue 3 update's lifecycle hooks and bundled UI.
 
 import type { GameModalPort } from "../../ports/game-modal.ts";
-import type { GamePageShellPort } from "../../ports/game-page-shell.ts";
+import {
+  GAME_MESSAGE_LOG_ELEMENT_ID,
+  type GamePageShellPort,
+} from "../../ports/game-page-shell.ts";
 import { isRecord, readProperty, requireRecord } from "../validation.ts";
 
 export interface GamePageShellDependencies {
@@ -173,7 +176,7 @@ export function createGamePageShell({
         },
         { subtree: true },
       );
-      observeNode(byId("msgQueueLog"), getLogFilter());
+      observeNode(byId(GAME_MESSAGE_LOG_ELEMENT_ID), getLogFilter());
     },
 
     isPageReady(): boolean {

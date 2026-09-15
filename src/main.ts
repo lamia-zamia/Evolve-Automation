@@ -1,4 +1,5 @@
 import { createBrowserDiagnostics } from "./adapters/browser/diagnostics.ts";
+import { createGameMessageLog } from "./adapters/browser/game-message-log.ts";
 import { createLegacyRuntimeEnvironment } from "./adapters/browser/legacy-runtime-environment.ts";
 import { whenDocumentReady } from "./adapters/browser/document-ready.ts";
 import { installPageCapture } from "./adapters/evolve/page-capture.ts";
@@ -19,7 +20,7 @@ whenDocumentReady(globalThis, () => {
     mouseEvent: environment.MouseEvent,
     storage: environment.storage,
     diagnostics: createBrowserDiagnostics(globalThis),
-    onActivity: environment.log,
+    onActivity: createGameMessageLog(environment.document),
     log: environment.log,
     logError: environment.error,
   });
