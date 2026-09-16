@@ -11,6 +11,12 @@ import type {
   LaunchBattleDecision,
 } from "../../../domain/combat/battle.ts";
 import { planBattle } from "../../../domain/combat/battle.ts";
+import {
+  planForeignAchievementGoal,
+  type ForeignAchievementGoal,
+  type ForeignAchievementState,
+} from "../../../domain/combat/foreign-achievements.ts";
+import { isAchievementGuardActive } from "../../../domain/progression/prestige/achievement-guards.ts";
 import type { BattleExecutor, BattleReader } from "../../../ports/battle.ts";
 import type { GameActivitySink } from "../../../ports/game-message-log.ts";
 import type {
@@ -21,6 +27,7 @@ import type { GameKeyStateReader } from "../../../ports/game-key-state.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
+import { readCapturedAscensionLevel } from "../ascension-level.ts";
 import {
   HELL_GARRISON_CONTROLS,
   readCapturedHellGarrison,
@@ -47,6 +54,9 @@ interface CapturedBattleGovernment {
   readonly input: BattlePlunderTargetInput;
   readonly government: Record<string, unknown>;
   readonly rank: CapturedBattleForeignRank;
+  readonly hostility: number | undefined;
+  readonly unrest: number | undefined;
+  readonly economy: number | undefined;
 }
 
 interface CapturedBattleCycle {
@@ -58,6 +68,7 @@ interface CapturedBattleCycle {
   readonly currentTactic: number;
   readonly raid: number;
   readonly attacks: number;
+  readonly occupationSupported: boolean;
 }
 
 interface CapturedBattleSession {
@@ -72,6 +83,7 @@ interface CapturedBattleSession {
   readonly currentTactic: number;
   readonly raid: number;
   readonly attacks: number;
+  readonly occupationSupported: boolean;
 }
 
 export interface CapturedBattleDependencies {
@@ -184,7 +196,14 @@ function capturedBattleReadGovernment(
     minimumSoldiers: CAPTURED_BATTLE_EMPTY_TACTICS,
     maximumSoldiers: CAPTURED_BATTLE_EMPTY_TACTICS,
   });
-  return Object.freeze({ input, government, rank });
+  return Object.freeze({
+    input,
+    government,
+    rank,
+    hostility: finite(government["hstl"]),
+    unrest: finite(government["unrest"]),
+    economy: finite(government["eco"]),
+  });
 }
 
 // DeadSpace exposes `battleAssessment(gov)` as localized prose rather than a numeric
@@ -267,11 +286,387 @@ function capturedBattlePolicy(
   });
 }
 
-function capturedBattleOccupationCost(root: unknown): number {
+function capturedBattleOccupationCost(root: unknown): number | undefined {
+  const race = readProperty(root, "race");
+  // DeadSpace applies jobScale() inside jobStack(). Its high_pop multiplier is
+  // not exposed by the captured garrison, so an Occupy plan is unsafe here.
+  if (readProperty(race, "high_pop")) return undefined;
   const government = readProperty(readProperty(root, "civic"), "govern");
-  // `jobStack` is module-lexical in DeadSpace. Keep the exposed base branch here;
-  // the captured adapter must not copy the old manager's trait reconstruction.
   return readProperty(government, "type") === "federation" ? 15 : 20;
+}
+
+function capturedBattleAchievementAffix(root: unknown): string | undefined {
+  const universe = readProperty(readProperty(root, "race"), "universe");
+  if (typeof universe !== "string") return undefined;
+  switch (universe) {
+    case "evil":
+      return "e";
+    case "antimatter":
+      return "a";
+    case "heavy":
+      return "h";
+    case "micro":
+      return "m";
+    case "magic":
+      return "mg";
+    default:
+      return "l";
+  }
+}
+
+function capturedBattleAchievementStar(
+  root: unknown,
+  achievementId: string,
+): number | undefined {
+  const stats = readProperty(root, "stats");
+  const achievements = readProperty(stats, "achieve");
+  const affix = capturedBattleAchievementAffix(root);
+  if (!isRecord(achievements) || affix === undefined) return undefined;
+  const achievement = readProperty(achievements, achievementId);
+  if (achievement === undefined || achievement === null) return 0;
+  if (!isRecord(achievement)) return undefined;
+  const star = readProperty(achievement, affix);
+  return star === undefined || star === null ? 0 : finite(star);
+}
+
+function capturedBattlePacifistGuardActive(
+  root: unknown,
+  settings: Record<string, unknown>,
+): boolean {
+  if (
+    settings["achievementGuards"] !== true ||
+    settings["guardPacifist"] === false
+  ) {
+    return false;
+  }
+  const attacks = finite(readProperty(readProperty(root, "stats"), "attacks"));
+  const earnedStar = capturedBattleAchievementStar(root, "pacifist");
+  const targetStar = readCapturedAscensionLevel(root);
+  // An enabled achievement guard with an incomplete capture must not be
+  // treated as inactive before an automatic campaign is launched.
+  if (
+    attacks === undefined ||
+    earnedStar === undefined ||
+    targetStar === undefined
+  )
+    return true;
+  return isAchievementGuardActive({
+    guard: "guardPacifist",
+    enabled: true,
+    earnedStar,
+    targetStar,
+    attacks,
+  });
+}
+
+function capturedBattleAchievementGoal(
+  root: unknown,
+  settings: Record<string, unknown>,
+  governments: readonly CapturedBattleGovernment[],
+): ForeignAchievementGoal | null {
+  if (settings["achievementGuards"] !== true) return null;
+  const guardWorldDomination = capturedBattleSettingBoolean(
+    settings,
+    "guardWorldDomination",
+    true,
+  );
+  const guardSyndicate = capturedBattleSettingBoolean(
+    settings,
+    "guardSyndicate",
+    true,
+  );
+  if (!guardWorldDomination && !guardSyndicate) return null;
+  const states: ForeignAchievementState[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    const target = governments.find(
+      (candidate) => candidate.input.governmentId === index,
+    );
+    if (target === undefined) return null;
+    states.push({
+      occupied: target.input.occupied,
+      annexed: target.input.annexed,
+      purchased: target.input.purchased,
+    });
+  }
+  const worldDominationUnlocked = guardWorldDomination
+    ? capturedBattleAchievementStar(root, "world_domination")
+    : 0;
+  const syndicateUnlocked = guardSyndicate
+    ? capturedBattleAchievementStar(root, "syndicate")
+    : 0;
+  if (
+    (guardWorldDomination && worldDominationUnlocked === undefined) ||
+    (guardSyndicate && syndicateUnlocked === undefined)
+  ) {
+    return null;
+  }
+  return planForeignAchievementGoal({
+    guardWorldDomination,
+    guardSyndicate,
+    worldDominationUnlocked:
+      guardWorldDomination && worldDominationUnlocked !== undefined
+        ? worldDominationUnlocked >= 1
+        : false,
+    syndicateUnlocked:
+      guardSyndicate && syndicateUnlocked !== undefined
+        ? syndicateUnlocked >= 1
+        : false,
+    pacifistGuardActive: capturedBattlePacifistGuardActive(root, settings),
+    foreignStates: states,
+  });
+}
+
+function capturedBattleResourceAmount(
+  root: unknown,
+  resourceId: string,
+): number | undefined {
+  const resource = readProperty(readProperty(root, "resource"), resourceId);
+  return (
+    finite(readProperty(resource, "amount")) ??
+    finite(readProperty(resource, "currentQuantity"))
+  );
+}
+
+function capturedBattleGovernmentPrice(
+  target: CapturedBattleGovernment,
+): number | undefined {
+  const military = finite(target.government["mil"]);
+  if (
+    target.economy === undefined ||
+    target.hostility === undefined ||
+    target.unrest === undefined ||
+    military === undefined
+  ) {
+    return undefined;
+  }
+  // Mirrors the upstream module-lexical govPrice(gov); no captured price
+  // closure is exposed by the foreign component.
+  const price =
+    target.economy *
+    15384 *
+    (1 + (target.hostility * 1.6) / 100) *
+    (1 - (target.unrest * 0.25) / 100);
+  return Number.isFinite(price) ? Math.round(price) : undefined;
+}
+
+function capturedBattleEspionageUseful(
+  root: unknown,
+  target: CapturedBattleGovernment,
+  espionage: "influence" | "sabotage" | "annex" | "purchase",
+): boolean {
+  const military = finite(target.government["mil"]);
+  const spies = target.input.spyCount;
+  if (military === undefined) return false;
+  switch (espionage) {
+    case "influence":
+      return (
+        target.hostility !== undefined &&
+        target.hostility > (spies > 0 ? 0 : 10)
+      );
+    case "sabotage":
+      return spies < 1 || military > (spies > 1 ? 50 : 74);
+    case "annex": {
+      const morale = finite(
+        readProperty(readProperty(root, "city"), "morale") &&
+          readProperty(
+            readProperty(readProperty(root, "city"), "morale"),
+            "current",
+          ),
+      );
+      return (
+        target.hostility !== undefined &&
+        target.unrest !== undefined &&
+        target.hostility <= 50 &&
+        target.unrest >= 50 &&
+        morale !== undefined &&
+        morale >= 200 + target.hostility - target.unrest
+      );
+    }
+    case "purchase": {
+      const price = capturedBattleGovernmentPrice(target);
+      const money = capturedBattleResourceAmount(root, "Money");
+      return (
+        spies >= 3 &&
+        price !== undefined &&
+        money !== undefined &&
+        money >= price
+      );
+    }
+  }
+}
+
+function capturedBattleWithPolicy(
+  target: CapturedBattleGovernment,
+  policy: string,
+): CapturedBattleGovernment {
+  if (target.input.policy === policy) return target;
+  return Object.freeze({
+    ...target,
+    input: Object.freeze({ ...target.input, policy }),
+  });
+}
+
+interface CapturedBattleForeignStrategy {
+  readonly governments: readonly CapturedBattleGovernment[];
+  readonly currentTargetId: number | null;
+}
+
+function capturedBattleForeignStrategy(
+  root: unknown,
+  settings: Record<string, unknown>,
+  governments: readonly CapturedBattleGovernment[],
+): CapturedBattleForeignStrategy {
+  const achievementGoal = capturedBattleAchievementGoal(
+    root,
+    settings,
+    governments,
+  );
+  const achievementPolicy =
+    achievementGoal === "world-domination"
+      ? "Occupy"
+      : achievementGoal === "syndicate"
+        ? "Purchase"
+        : null;
+  const active = governments.map((target) =>
+    target.input.governmentId < 3 && achievementPolicy !== null
+      ? capturedBattleWithPolicy(target, achievementPolicy)
+      : target,
+  );
+  const unificationRequested =
+    capturedBattleSettingBoolean(settings, "foreignUnification", true) ||
+    achievementGoal !== null;
+  const controlledForeigns = active.filter(
+    (target) =>
+      (target.input.annexed && target.input.policy === "Annex") ||
+      (target.input.purchased && target.input.policy === "Purchase") ||
+      (target.input.occupied && target.input.policy === "Occupy"),
+  ).length;
+  let currentTarget = active.find(
+    (target) =>
+      target.rank === "Inferior" &&
+      !target.input.annexed &&
+      !target.input.purchased,
+  );
+  currentTarget =
+    currentTarget ??
+    active.find((target) => target.input.occupied) ??
+    active[0];
+  if (currentTarget === undefined) {
+    return Object.freeze({
+      governments: Object.freeze(active),
+      currentTargetId: null,
+    });
+  }
+
+  const readyToUnify =
+    unificationRequested &&
+    controlledForeigns >= 2 &&
+    readProperty(readProperty(root, "tech"), "unify") === 1;
+  if (
+    !readyToUnify &&
+    (currentTarget.input.policy === "Annex" ||
+      currentTarget.input.policy === "Purchase") &&
+    capturedBattleEspionageUseful(
+      root,
+      currentTarget,
+      currentTarget.input.policy === "Annex" ? "annex" : "purchase",
+    )
+  ) {
+    const replacement = capturedBattleWithPolicy(currentTarget, "Ignore");
+    active.splice(
+      active.findIndex(
+        (candidate) =>
+          candidate.input.governmentId === replacement.input.governmentId,
+      ),
+      1,
+      replacement,
+    );
+    currentTarget = replacement;
+  }
+  if (
+    !readyToUnify &&
+    capturedBattleSettingBoolean(settings, "foreignForceSabotage", true) &&
+    currentTarget.input.governmentId !== 3 &&
+    capturedBattleEspionageUseful(root, currentTarget, "sabotage")
+  ) {
+    const replacement = capturedBattleWithPolicy(currentTarget, "Sabotage");
+    active.splice(
+      active.findIndex(
+        (candidate) =>
+          candidate.input.governmentId === replacement.input.governmentId,
+      ),
+      1,
+      replacement,
+    );
+    currentTarget = replacement;
+  }
+  if (
+    unificationRequested &&
+    capturedBattleSettingBoolean(settings, "foreignOccupyLast", true) &&
+    !readProperty(readProperty(root, "tech"), "world_control")
+  ) {
+    const superiorPolicy = capturedBattleSettingString(
+      settings,
+      "foreignPolicySuperior",
+      "Ignore",
+    );
+    const lastTargetId = ["Occupy", "Sabotage"].includes(superiorPolicy)
+      ? 2
+      : currentTarget.input.governmentId;
+    const lastTargetIndex = active.findIndex(
+      (candidate) => candidate.input.governmentId === lastTargetId,
+    );
+    if (lastTargetIndex >= 0) {
+      active.splice(
+        lastTargetIndex,
+        1,
+        capturedBattleWithPolicy(
+          active[lastTargetIndex]!,
+          readyToUnify ? (achievementPolicy ?? "Occupy") : "Sabotage",
+        ),
+      );
+    }
+  }
+  const refreshedTarget = active.find(
+    (candidate) =>
+      candidate.input.governmentId === currentTarget!.input.governmentId,
+  );
+  const stopTarget =
+    refreshedTarget === undefined ||
+    refreshedTarget.input.policy === "Influence" ||
+    (readyToUnify && refreshedTarget.input.policy !== "Occupy") ||
+    (refreshedTarget.input.policy === "Betrayal" &&
+      finite(refreshedTarget.government["mil"])! > 75);
+  return Object.freeze({
+    governments: Object.freeze(active),
+    currentTargetId: stopTarget ? null : refreshedTarget!.input.governmentId,
+  });
+}
+
+function capturedBattleHellReserveKnown(
+  root: unknown,
+  settings: Record<string, unknown>,
+): boolean {
+  const portal = readProperty(root, "portal");
+  const soulForge = readProperty(portal, "soul_forge");
+  if (isRecord(soulForge) && (finite(soulForge["count"]) ?? 0) > 0)
+    return false;
+  const guardPost = readProperty(portal, "guard_post");
+  if (isRecord(guardPost) && (finite(guardPost["count"]) ?? 0) > 0)
+    return false;
+  const assaultForge = readProperty(portal, "assault_forge");
+  const hellPit = finite(readProperty(readProperty(root, "tech"), "hell_pit"));
+  if (
+    capturedBattleSettingBoolean(settings, "autoBuild", false) &&
+    capturedBattleSettingBoolean(settings, "hellAssaultReserve", true) &&
+    (hellPit === 2 ||
+      (isRecord(assaultForge) && (finite(assaultForge["count"]) ?? 0) === 0))
+  ) {
+    // The captured root cannot answer isAutoBuildable() or the live forge
+    // costs, so Hell is not available while a future reserve may be due.
+    return false;
+  }
+  return true;
 }
 
 function capturedBattleEmptyCycle(): BattleCycleInput {
@@ -340,7 +735,10 @@ function capturedBattleReadCycle(
 
   const settingsValue = dependencies.readSettings();
   const settings = isRecord(settingsValue) ? settingsValue : {};
-  if (capturedBattleSettingBoolean(settings, "foreignPacifist", false)) {
+  if (
+    capturedBattleSettingBoolean(settings, "foreignPacifist", false) ||
+    capturedBattlePacifistGuardActive(root, settings)
+  ) {
     return undefined;
   }
   const foreign = capturedBattleResolveControl(
@@ -408,12 +806,23 @@ function capturedBattleReadCycle(
   const race = readProperty(root, "race");
   const city = readProperty(root, "city");
   const planetTraits = readProperty(city, "ptrait");
+  if (
+    protectMode !== "never" &&
+    (Boolean(readProperty(race, "frail")) ||
+      Boolean(readProperty(race, "high_pop")))
+  ) {
+    // The fallback trait values below are not safe for protected planning.
+    return undefined;
+  }
+  const occupationCost = capturedBattleOccupationCost(root);
+  const occupationSupported = occupationCost !== undefined;
   const autoHell = capturedBattleSettingBoolean(settings, "autoHell", false);
   let hell: GameControlHandle | undefined;
   let hellSoldiers = 0;
   let hellGarrison = 0;
   let hellPatrolSize = 1;
   let hellAvailable = false;
+  const hellReserveKnown = capturedBattleHellReserveKnown(root, settings);
   const fortress = readProperty(readProperty(root, "portal"), "fortress");
   if (
     autoHell &&
@@ -448,6 +857,15 @@ function capturedBattleReadCycle(
     } else {
       hell = undefined;
     }
+  }
+  if (!hellReserveKnown) {
+    // `patrolling()` answers current defenders, not future automation reserves.
+    // Do not expose Hell as withdrawable until those planned reserves are captured.
+    hell = undefined;
+    hellAvailable = false;
+    hellSoldiers = 0;
+    hellGarrison = 0;
+    hellPatrolSize = 1;
   }
 
   const input: BattleCycleInput = Object.freeze({
@@ -505,7 +923,7 @@ function capturedBattleReadCycle(
     hellSoldiers,
     hellGarrison,
     hellPatrolSize,
-    occupationCost: capturedBattleOccupationCost(root),
+    occupationCost: occupationCost ?? 0,
     portalVisible:
       readProperty(readProperty(root, "settings"), "showPortal") === true,
     unificationEnabled: capturedBattleSettingBoolean(
@@ -528,6 +946,7 @@ function capturedBattleReadCycle(
     currentTactic,
     raid,
     attacks,
+    occupationSupported,
   });
 }
 
@@ -555,27 +974,6 @@ function capturedBattleReadTarget(
   return visible === true
     ? capturedBattleReadGovernment(root, index, policy.policy, policy.rank)
     : undefined;
-}
-
-function capturedBattleSelectTarget(
-  governments: readonly CapturedBattleGovernment[],
-): CapturedBattleGovernment | undefined {
-  const actionable = governments.filter(
-    (candidate) =>
-      candidate.input.policy !== "Ignore" &&
-      candidate.input.policy !== "Influence" &&
-      !(candidate.input.occupied && candidate.input.policy === "Occupy"),
-  );
-  return (
-    actionable.find(
-      (candidate) =>
-        candidate.rank === "Inferior" &&
-        !candidate.input.annexed &&
-        !candidate.input.purchased,
-    ) ??
-    actionable.find((candidate) => candidate.input.occupied) ??
-    actionable[0]
-  );
 }
 
 function capturedBattleReadPlunderTarget(
@@ -807,9 +1205,23 @@ export function createCapturedBattle(
         if (target !== undefined) governments.set(index, target);
       }
 
+      const strategy = capturedBattleForeignStrategy(active.root, settings, [
+        ...governments.values(),
+      ]);
+      const effectiveGovernments = new Map(
+        strategy.governments.map((target) => [
+          target.input.governmentId,
+          target,
+        ]),
+      );
       const occupationTargets: BattleOccupationTargetInput[] = [];
-      for (const target of governments.values()) {
-        if (target.input.policy !== "Occupy" || target.input.occupied) continue;
+      for (const target of strategy.governments) {
+        if (
+          !active.occupationSupported ||
+          target.input.policy !== "Occupy" ||
+          target.input.occupied
+        )
+          continue;
         const rating = capturedBattleEnemyRating(active.root, target, 4);
         if (rating === undefined) continue;
         const minimumSiegeSoldiers = capturedBattleSoldiersForRating(
@@ -848,16 +1260,25 @@ export function createCapturedBattle(
         );
       }
 
-      const selected = capturedBattleSelectTarget([...governments.values()]);
+      const selected =
+        strategy.currentTargetId === null
+          ? undefined
+          : effectiveGovernments.get(strategy.currentTargetId);
+      const plunderTarget =
+        selected !== undefined &&
+        !active.occupationSupported &&
+        selected.input.policy === "Occupy"
+          ? undefined
+          : selected;
       const currentTarget =
-        selected === undefined
+        plunderTarget === undefined
           ? null
           : capturedBattleReadPlunderTarget(
               active.root,
               dependencies.controls,
               active.garrison,
               parameters,
-              selected,
+              plunderTarget,
             );
       const battlefield: BattlefieldInput = Object.freeze({
         currentTarget: currentTarget ?? null,
@@ -867,7 +1288,7 @@ export function createCapturedBattle(
         ...active,
         parameters,
         battlefield,
-        governments,
+        governments: effectiveGovernments,
       });
       return battlefield;
     },

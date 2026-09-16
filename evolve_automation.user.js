@@ -22324,6 +22324,34 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({ reader, executor });
   }
 
+  // src/domain/combat/foreign-achievements.ts
+  function planForeignAchievementGoal(input) {
+    if (input.foreignStates.length !== 3) return null;
+    let worldPossible = input.guardWorldDomination && !input.pacifistGuardActive && !input.worldDominationUnlocked && input.foreignStates.every((state) => !state.annexed && !state.purchased), syndicatePossible = input.guardSyndicate && !input.syndicateUnlocked && input.foreignStates.every((state) => !state.annexed && !state.occupied);
+    return !worldPossible && !syndicatePossible ? null : worldPossible && input.foreignStates.some((state) => state.occupied) ? "world-domination" : syndicatePossible && input.foreignStates.some((state) => state.purchased) ? "syndicate" : worldPossible ? "world-domination" : "syndicate";
+  }
+
+  // src/domain/progression/prestige/achievement-guards.ts
+  function isAchievementGuardActive(input) {
+    if (!input.enabled || input.earnedStar >= input.targetStar) return !1;
+    switch (input.guard) {
+      case "guardPacifist":
+        return input.attacks === 0;
+      case "guardDreaded":
+        return input.prestigeType === "ascension" && input.dreadnoughts === 0;
+      case "guardCultOfPersonality":
+        return !isAchievementGuardActive(input.pacifist);
+      case "guardAnarchist":
+        return input.prestigeType === "mad" && input.government === "anarchy";
+      case "guardEnergetic":
+        return input.prestigeType === "ascension" && input.thermalCollectors === 0;
+      case "guardRedDead":
+        return (input.prestigeType === "whitehole" || input.prestigeType === "vacuum") && input.redSpaceports === 0;
+      case "guardSecondEvolution":
+        return input.gods === input.species;
+    }
+  }
+
   // src/adapters/evolve/combat/battle.ts
   var CAPTURED_BATTLE_FOREIGN_CONTROL = "foreign", CAPTURED_BATTLE_GARRISON_CONTROLS = ["garrison", "c_garrison"], CAPTURED_BATTLE_MAX_FOREIGN_INDEX = 4, CAPTURED_BATTLE_ENEMY_FACTORS = Object.freeze([
     5,
@@ -22384,7 +22412,14 @@ Only continue if you trust the source. Injected code:
       minimumSoldiers: CAPTURED_BATTLE_EMPTY_TACTICS,
       maximumSoldiers: CAPTURED_BATTLE_EMPTY_TACTICS
     });
-    return Object.freeze({ input, government, rank });
+    return Object.freeze({
+      input,
+      government,
+      rank,
+      hostility: finite(government.hstl),
+      unrest: finite(government.unrest),
+      economy: finite(government.eco)
+    });
   }
   function capturedBattleEnemyRating(root, government, tactic) {
     let factor = CAPTURED_BATTLE_ENEMY_FACTORS[tactic], military = finite(government.government.mil);
@@ -22431,8 +22466,200 @@ Only continue if you trust the source. Injected code:
     });
   }
   function capturedBattleOccupationCost(root) {
+    let race = readProperty(root, "race");
+    if (readProperty(race, "high_pop")) return;
     let government = readProperty(readProperty(root, "civic"), "govern");
     return readProperty(government, "type") === "federation" ? 15 : 20;
+  }
+  function capturedBattleAchievementAffix(root) {
+    let universe = readProperty(readProperty(root, "race"), "universe");
+    if (typeof universe == "string")
+      switch (universe) {
+        case "evil":
+          return "e";
+        case "antimatter":
+          return "a";
+        case "heavy":
+          return "h";
+        case "micro":
+          return "m";
+        case "magic":
+          return "mg";
+        default:
+          return "l";
+      }
+  }
+  function capturedBattleAchievementStar(root, achievementId) {
+    let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), affix = capturedBattleAchievementAffix(root);
+    if (!isRecord(achievements) || affix === void 0) return;
+    let achievement = readProperty(achievements, achievementId);
+    if (achievement == null) return 0;
+    if (!isRecord(achievement)) return;
+    let star = readProperty(achievement, affix);
+    return star == null ? 0 : finite(star);
+  }
+  function capturedBattlePacifistGuardActive(root, settings) {
+    if (settings.achievementGuards !== !0 || settings.guardPacifist === !1)
+      return !1;
+    let attacks = finite(readProperty(readProperty(root, "stats"), "attacks")), earnedStar = capturedBattleAchievementStar(root, "pacifist"), targetStar = readCapturedAscensionLevel(root);
+    return attacks === void 0 || earnedStar === void 0 || targetStar === void 0 ? !0 : isAchievementGuardActive({
+      guard: "guardPacifist",
+      enabled: !0,
+      earnedStar,
+      targetStar,
+      attacks
+    });
+  }
+  function capturedBattleAchievementGoal(root, settings, governments) {
+    if (settings.achievementGuards !== !0) return null;
+    let guardWorldDomination = capturedBattleSettingBoolean(
+      settings,
+      "guardWorldDomination",
+      !0
+    ), guardSyndicate = capturedBattleSettingBoolean(
+      settings,
+      "guardSyndicate",
+      !0
+    );
+    if (!guardWorldDomination && !guardSyndicate) return null;
+    let states = [];
+    for (let index = 0; index < 3; index += 1) {
+      let target = governments.find(
+        (candidate) => candidate.input.governmentId === index
+      );
+      if (target === void 0) return null;
+      states.push({
+        occupied: target.input.occupied,
+        annexed: target.input.annexed,
+        purchased: target.input.purchased
+      });
+    }
+    let worldDominationUnlocked = guardWorldDomination ? capturedBattleAchievementStar(root, "world_domination") : 0, syndicateUnlocked = guardSyndicate ? capturedBattleAchievementStar(root, "syndicate") : 0;
+    return guardWorldDomination && worldDominationUnlocked === void 0 || guardSyndicate && syndicateUnlocked === void 0 ? null : planForeignAchievementGoal({
+      guardWorldDomination,
+      guardSyndicate,
+      worldDominationUnlocked: guardWorldDomination && worldDominationUnlocked !== void 0 ? worldDominationUnlocked >= 1 : !1,
+      syndicateUnlocked: guardSyndicate && syndicateUnlocked !== void 0 ? syndicateUnlocked >= 1 : !1,
+      pacifistGuardActive: capturedBattlePacifistGuardActive(root, settings),
+      foreignStates: states
+    });
+  }
+  function capturedBattleResourceAmount(root, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId);
+    return finite(readProperty(resource, "amount")) ?? finite(readProperty(resource, "currentQuantity"));
+  }
+  function capturedBattleGovernmentPrice(target) {
+    let military = finite(target.government.mil);
+    if (target.economy === void 0 || target.hostility === void 0 || target.unrest === void 0 || military === void 0)
+      return;
+    let price = target.economy * 15384 * (1 + target.hostility * 1.6 / 100) * (1 - target.unrest * 0.25 / 100);
+    return Number.isFinite(price) ? Math.round(price) : void 0;
+  }
+  function capturedBattleEspionageUseful(root, target, espionage) {
+    let military = finite(target.government.mil), spies = target.input.spyCount;
+    if (military === void 0) return !1;
+    switch (espionage) {
+      case "influence":
+        return target.hostility !== void 0 && target.hostility > (spies > 0 ? 0 : 10);
+      case "sabotage":
+        return spies < 1 || military > (spies > 1 ? 50 : 74);
+      case "annex": {
+        let morale = finite(
+          readProperty(readProperty(root, "city"), "morale") && readProperty(
+            readProperty(readProperty(root, "city"), "morale"),
+            "current"
+          )
+        );
+        return target.hostility !== void 0 && target.unrest !== void 0 && target.hostility <= 50 && target.unrest >= 50 && morale !== void 0 && morale >= 200 + target.hostility - target.unrest;
+      }
+      case "purchase": {
+        let price = capturedBattleGovernmentPrice(target), money = capturedBattleResourceAmount(root, "Money");
+        return spies >= 3 && price !== void 0 && money !== void 0 && money >= price;
+      }
+    }
+  }
+  function capturedBattleWithPolicy(target, policy) {
+    return target.input.policy === policy ? target : Object.freeze({
+      ...target,
+      input: Object.freeze({ ...target.input, policy })
+    });
+  }
+  function capturedBattleForeignStrategy(root, settings, governments) {
+    let achievementGoal = capturedBattleAchievementGoal(
+      root,
+      settings,
+      governments
+    ), achievementPolicy = achievementGoal === "world-domination" ? "Occupy" : achievementGoal === "syndicate" ? "Purchase" : null, active = governments.map(
+      (target) => target.input.governmentId < 3 && achievementPolicy !== null ? capturedBattleWithPolicy(target, achievementPolicy) : target
+    ), unificationRequested = capturedBattleSettingBoolean(settings, "foreignUnification", !0) || achievementGoal !== null, controlledForeigns = active.filter(
+      (target) => target.input.annexed && target.input.policy === "Annex" || target.input.purchased && target.input.policy === "Purchase" || target.input.occupied && target.input.policy === "Occupy"
+    ).length, currentTarget = active.find(
+      (target) => target.rank === "Inferior" && !target.input.annexed && !target.input.purchased
+    );
+    if (currentTarget = currentTarget ?? active.find((target) => target.input.occupied) ?? active[0], currentTarget === void 0)
+      return Object.freeze({
+        governments: Object.freeze(active),
+        currentTargetId: null
+      });
+    let readyToUnify = unificationRequested && controlledForeigns >= 2 && readProperty(readProperty(root, "tech"), "unify") === 1;
+    if (!readyToUnify && (currentTarget.input.policy === "Annex" || currentTarget.input.policy === "Purchase") && capturedBattleEspionageUseful(
+      root,
+      currentTarget,
+      currentTarget.input.policy === "Annex" ? "annex" : "purchase"
+    )) {
+      let replacement = capturedBattleWithPolicy(currentTarget, "Ignore");
+      active.splice(
+        active.findIndex(
+          (candidate) => candidate.input.governmentId === replacement.input.governmentId
+        ),
+        1,
+        replacement
+      ), currentTarget = replacement;
+    }
+    if (!readyToUnify && capturedBattleSettingBoolean(settings, "foreignForceSabotage", !0) && currentTarget.input.governmentId !== 3 && capturedBattleEspionageUseful(root, currentTarget, "sabotage")) {
+      let replacement = capturedBattleWithPolicy(currentTarget, "Sabotage");
+      active.splice(
+        active.findIndex(
+          (candidate) => candidate.input.governmentId === replacement.input.governmentId
+        ),
+        1,
+        replacement
+      ), currentTarget = replacement;
+    }
+    if (unificationRequested && capturedBattleSettingBoolean(settings, "foreignOccupyLast", !0) && !readProperty(readProperty(root, "tech"), "world_control")) {
+      let superiorPolicy = capturedBattleSettingString(
+        settings,
+        "foreignPolicySuperior",
+        "Ignore"
+      ), lastTargetId = ["Occupy", "Sabotage"].includes(superiorPolicy) ? 2 : currentTarget.input.governmentId, lastTargetIndex = active.findIndex(
+        (candidate) => candidate.input.governmentId === lastTargetId
+      );
+      lastTargetIndex >= 0 && active.splice(
+        lastTargetIndex,
+        1,
+        capturedBattleWithPolicy(
+          active[lastTargetIndex],
+          readyToUnify ? achievementPolicy ?? "Occupy" : "Sabotage"
+        )
+      );
+    }
+    let refreshedTarget = active.find(
+      (candidate) => candidate.input.governmentId === currentTarget.input.governmentId
+    ), stopTarget = refreshedTarget === void 0 || refreshedTarget.input.policy === "Influence" || readyToUnify && refreshedTarget.input.policy !== "Occupy" || refreshedTarget.input.policy === "Betrayal" && finite(refreshedTarget.government.mil) > 75;
+    return Object.freeze({
+      governments: Object.freeze(active),
+      currentTargetId: stopTarget ? null : refreshedTarget.input.governmentId
+    });
+  }
+  function capturedBattleHellReserveKnown(root, settings) {
+    let portal = readProperty(root, "portal"), soulForge = readProperty(portal, "soul_forge");
+    if (isRecord(soulForge) && (finite(soulForge.count) ?? 0) > 0)
+      return !1;
+    let guardPost = readProperty(portal, "guard_post");
+    if (isRecord(guardPost) && (finite(guardPost.count) ?? 0) > 0)
+      return !1;
+    let assaultForge = readProperty(portal, "assault_forge"), hellPit = finite(readProperty(readProperty(root, "tech"), "hell_pit"));
+    return !(capturedBattleSettingBoolean(settings, "autoBuild", !1) && capturedBattleSettingBoolean(settings, "hellAssaultReserve", !0) && (hellPit === 2 || isRecord(assaultForge) && (finite(assaultForge.count) ?? 0) === 0));
   }
   function capturedBattleEmptyCycle() {
     return Object.freeze({
@@ -22486,7 +22713,7 @@ Only continue if you trust the source. Injected code:
     let root = dependencies.rootState.readRoot();
     if (!isRecord(root) || capturedBattleModifierHeld(root, dependencies.keyState)) return;
     let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {};
-    if (capturedBattleSettingBoolean(settings, "foreignPacifist", !1))
+    if (capturedBattleSettingBoolean(settings, "foreignPacifist", !1) || capturedBattlePacifistGuardActive(root, settings))
       return;
     let foreign = capturedBattleResolveControl(
       dependencies.controls,
@@ -22518,7 +22745,10 @@ Only continue if you trust the source. Injected code:
       "auto"
     );
     if (protectMode === "auto" && wounded > 0) return;
-    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), city = readProperty(root, "city"), planetTraits = readProperty(city, "ptrait"), autoHell = capturedBattleSettingBoolean(settings, "autoHell", !1), hell, hellSoldiers = 0, hellGarrison = 0, hellPatrolSize = 1, hellAvailable = !1, fortress = readProperty(readProperty(root, "portal"), "fortress");
+    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), city = readProperty(root, "city"), planetTraits = readProperty(city, "ptrait");
+    if (protectMode !== "never" && (readProperty(race, "frail") || readProperty(race, "high_pop")))
+      return;
+    let occupationCost = capturedBattleOccupationCost(root), occupationSupported = occupationCost !== void 0, autoHell = capturedBattleSettingBoolean(settings, "autoHell", !1), hell, hellSoldiers = 0, hellGarrison = 0, hellPatrolSize = 1, hellAvailable = !1, hellReserveKnown = capturedBattleHellReserveKnown(root, settings), fortress = readProperty(readProperty(root, "portal"), "fortress");
     if (autoHell && isRecord(fortress) && !Array.isArray(fortress) && readProperty(race, "warlord") !== !0) {
       let fortressGarrison = finite(fortress.garrison), patrolSize = finite(fortress.patrol_size);
       hell = capturedBattleResolveControl(
@@ -22532,6 +22762,7 @@ Only continue if you trust the source. Injected code:
       );
       fortressGarrison !== void 0 && patrolSize !== void 0 && patrolSize > 0 && stationed !== void 0 ? (hellSoldiers = fortressGarrison, hellPatrolSize = patrolSize, hellGarrison = stationed, hellAvailable = !0) : hell = void 0;
     }
+    hellReserveKnown || (hell = void 0, hellAvailable = !1, hellSoldiers = 0, hellGarrison = 0, hellPatrolSize = 1);
     let input = Object.freeze({
       available: !0,
       wounded,
@@ -22585,7 +22816,7 @@ Only continue if you trust the source. Injected code:
       hellSoldiers,
       hellGarrison,
       hellPatrolSize,
-      occupationCost: capturedBattleOccupationCost(root),
+      occupationCost: occupationCost ?? 0,
       portalVisible: readProperty(readProperty(root, "settings"), "showPortal") === !0,
       unificationEnabled: capturedBattleSettingBoolean(
         settings,
@@ -22606,7 +22837,8 @@ Only continue if you trust the source. Injected code:
       input,
       currentTactic,
       raid,
-      attacks
+      attacks,
+      occupationSupported
     });
   }
   function capturedBattleReadTarget(root, controls, foreign, index, settings) {
@@ -22624,14 +22856,6 @@ Only continue if you trust the source. Injected code:
     return capturedBattleInvokeBoolean(controls, foreign, "gvis", [
       index
     ]) === !0 ? capturedBattleReadGovernment(root, index, policy.policy, policy.rank) : void 0;
-  }
-  function capturedBattleSelectTarget(governments) {
-    let actionable = governments.filter(
-      (candidate) => candidate.input.policy !== "Ignore" && candidate.input.policy !== "Influence" && !(candidate.input.occupied && candidate.input.policy === "Occupy")
-    );
-    return actionable.find(
-      (candidate) => candidate.rank === "Inferior" && !candidate.input.annexed && !candidate.input.purchased
-    ) ?? actionable.find((candidate) => candidate.input.occupied) ?? actionable[0];
   }
   function capturedBattleReadPlunderTarget(root, controls, garrison, parameters, target) {
     let minimumSoldiers = [...CAPTURED_BATTLE_EMPTY_TACTICS], maximumSoldiers = [...CAPTURED_BATTLE_EMPTY_TACTICS], upper = Math.max(
@@ -22770,9 +22994,17 @@ Only continue if you trust the source. Injected code:
           );
           target !== void 0 && governments.set(index, target);
         }
-        let occupationTargets = [];
-        for (let target of governments.values()) {
-          if (target.input.policy !== "Occupy" || target.input.occupied) continue;
+        let strategy = capturedBattleForeignStrategy(active.root, settings, [
+          ...governments.values()
+        ]), effectiveGovernments = new Map(
+          strategy.governments.map((target) => [
+            target.input.governmentId,
+            target
+          ])
+        ), occupationTargets = [];
+        for (let target of strategy.governments) {
+          if (!active.occupationSupported || target.input.policy !== "Occupy" || target.input.occupied)
+            continue;
           let rating = capturedBattleEnemyRating(active.root, target, 4);
           if (rating === void 0) continue;
           let minimumSiegeSoldiers = capturedBattleSoldiersForRating(
@@ -22804,12 +23036,12 @@ Only continue if you trust the source. Injected code:
             })
           );
         }
-        let selected = capturedBattleSelectTarget([...governments.values()]), currentTarget = selected === void 0 ? null : capturedBattleReadPlunderTarget(
+        let selected = strategy.currentTargetId === null ? void 0 : effectiveGovernments.get(strategy.currentTargetId), plunderTarget = selected !== void 0 && !active.occupationSupported && selected.input.policy === "Occupy" ? void 0 : selected, currentTarget = plunderTarget === void 0 ? null : capturedBattleReadPlunderTarget(
           active.root,
           dependencies.controls,
           active.garrison,
           parameters,
-          selected
+          plunderTarget
         ), battlefield = Object.freeze({
           currentTarget: currentTarget ?? null,
           occupationTargets: Object.freeze(occupationTargets)
@@ -22818,7 +23050,7 @@ Only continue if you trust the source. Injected code:
           ...active,
           parameters,
           battlefield,
-          governments
+          governments: effectiveGovernments
         }), battlefield;
       }
     }), executor = Object.freeze({
