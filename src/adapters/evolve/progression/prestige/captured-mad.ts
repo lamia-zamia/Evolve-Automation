@@ -224,12 +224,8 @@ function readCapturedResetCount(
   );
 }
 
-function readCapturedWitchResetStat(
-  root: unknown,
-  type: "ascension" | "demonic",
-): CapturedResetStat {
-  return type === "demonic" &&
-    finite(readProperty(readProperty(root, "tech"), "forbidden")) === 5
+function readCapturedWitchResetStat(root: unknown): CapturedResetStat {
+  return finite(readProperty(readProperty(root, "tech"), "forbidden")) === 5
     ? "descend"
     : "ascension";
 }
@@ -951,13 +947,7 @@ export function createCapturedMadPrestige(
           ) {
             throw new Error("captured Witch-Hunter action was redrawn");
           }
-          const prestigeType = capturedMadSettingsRecord(
-            dependencies.readSettings(),
-          )["prestigeType"];
-          const resetStat = readCapturedWitchResetStat(
-            sampledRoot,
-            prestigeType === "demonic" ? "demonic" : "ascension",
-          );
+          const resetStat = readCapturedWitchResetStat(sampledRoot);
           const resetCountBefore = readCapturedResetCount(
             sampledRoot,
             resetStat,

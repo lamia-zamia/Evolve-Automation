@@ -606,9 +606,10 @@ for (const scenario of [
 // eligibility gate still requires a completed chamber, full soul energy, and the configured pillar
 // state; Demonic additionally requires the forbidden grant (and fasting's final ingredient grant).
 for (const scenario of [
-  { prestigeType: "ascension", fasting: false },
-  { prestigeType: "demonic", fasting: false },
-  { prestigeType: "demonic", fasting: true },
+  { prestigeType: "ascension", fasting: false, forbidden: 5 },
+  { prestigeType: "ascension", fasting: false, forbidden: 4 },
+  { prestigeType: "demonic", fasting: false, forbidden: 5 },
+  { prestigeType: "demonic", fasting: true, forbidden: 5 },
 ]) {
   const trace = [];
   let goal = "Normal";
@@ -625,7 +626,7 @@ for (const scenario of [
       absorption_chamber: { count: 100 },
       soul_capacitor: { energy: 100000000 },
     },
-    tech: { forbidden: 5, dish_reset: 2 },
+    tech: { forbidden: scenario.forbidden, dish_reset: 2 },
   });
   const controls = {
     resolve(id) {
@@ -644,10 +645,10 @@ for (const scenario of [
       if (method === "action") {
         assert.equal(handle.elementId, CAPTURED_WITCH_ASCENSION_ACTION);
         trace.push(handle.elementId);
-        if (scenario.prestigeType === "ascension") {
-          modalOpen = true;
-        } else {
+        if (root.tech.forbidden === 5) {
           root.stats.descend += 1;
+        } else {
+          modalOpen = true;
         }
       } else {
         assert.equal(handle.elementId, CAPTURED_CELESTIAL_LAB);
@@ -693,13 +694,13 @@ for (const scenario of [
   assert.deepEqual(trace, [
     ["goal", "Reset"],
     CAPTURED_WITCH_ASCENSION_ACTION,
-    ...(scenario.prestigeType === "ascension"
-      ? [
+    ...(scenario.forbidden === 5
+      ? ["Prestiged", ["goal", "GameOverMan"]]
+      : [
           [CAPTURED_CELESTIAL_LAB, "setRace"],
           "Prestiged",
           ["goal", "GameOverMan"],
-        ]
-      : ["Prestiged", ["goal", "GameOverMan"]]),
+        ]),
   ]);
 }
 

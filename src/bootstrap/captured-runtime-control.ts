@@ -326,6 +326,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
+    keyState: pageCapture.keyState,
   });
   const runCapturedEvolution = () =>
     runEvolution({

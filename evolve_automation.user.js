@@ -5610,8 +5610,8 @@
       )
     );
   }
-  function readCapturedWitchResetStat(root, type) {
-    return type === "demonic" && finite(readProperty(readProperty(root, "tech"), "forbidden")) === 5 ? "descend" : "ascension";
+  function readCapturedWitchResetStat(root) {
+    return finite(readProperty(readProperty(root, "tech"), "forbidden")) === 5 ? "descend" : "ascension";
   }
   function celestialLabMethod(mode) {
     return mode === "terraform" ? "setPlanet" : "setRace";
@@ -6000,12 +6000,7 @@
             );
             if (currentHandle === void 0 || currentHandle.generation !== handle.generation || !currentHandle.methods.includes("action"))
               throw new Error("captured Witch-Hunter action was redrawn");
-            let prestigeType = capturedMadSettingsRecord(
-              dependencies.readSettings()
-            ).prestigeType, resetStat = readCapturedWitchResetStat(
-              sampledRoot,
-              prestigeType === "demonic" ? "demonic" : "ascension"
-            ), resetCountBefore = readCapturedResetCount(
+            let resetStat = readCapturedWitchResetStat(sampledRoot), resetCountBefore = readCapturedResetCount(
               sampledRoot,
               resetStat
             ), result = invokeCapturedPrestigeAction(
@@ -18641,6 +18636,23 @@
   function nestedRecord(owner, key) {
     return capturedEvolutionRecord(readProperty(owner, key));
   }
+  function capturedEvolutionMutationFingerprint(rootState) {
+    let root = rootRecord(rootState);
+    if (root !== void 0)
+      try {
+        return JSON.stringify({
+          race: readProperty(root, "race"),
+          resource: readProperty(root, "resource"),
+          evolution: readProperty(root, "evolution"),
+          tech: readProperty(root, "tech"),
+          genes: readProperty(root, "genes"),
+          queue: readProperty(root, "queue"),
+          researchQueue: readProperty(root, "r_queue")
+        });
+      } catch {
+        return;
+      }
+  }
   function readRace(rootState) {
     return nestedRecord(rootRecord(rootState), "race");
   }
@@ -18796,7 +18808,11 @@
       let handle = dependencies.controls.resolve(
         `${EVOLUTION_ACTION_PREFIX}${id}`
       );
-      return handle === void 0 ? !1 : dependencies.controls.invoke(handle, "action").ok;
+      if (handle === void 0) return !1;
+      let before = capturedEvolutionMutationFingerprint(dependencies.rootState);
+      if (!dependencies.controls.invoke(handle, "action").ok) return !1;
+      let after = capturedEvolutionMutationFingerprint(dependencies.rootState);
+      return before !== void 0 && after !== void 0 && before !== after;
     }, invokeRepeated = (id, count2) => {
       for (let index = 0; index < count2; index++)
         if (!invokeAction(id))
@@ -22179,7 +22195,7 @@ Only continue if you trust the source. Injected code:
       available: !1,
       enabled: !1,
       buildMode: "none",
-      queueKeyEnabled: !1,
+      queueKeyHeld: !1,
       infernal: !1,
       designSize: "",
       designSpace: 0,
@@ -22194,13 +22210,20 @@ Only continue if you trust the source. Injected code:
     let result = controls.invoke(control, method, args);
     return result.ok ? finite(result.value) : void 0;
   }
-  function readCapturedMechSample(rootState, controls, settingsValue) {
+  function readCapturedMechQueueKeyHeld(gameSettings, keyState) {
+    if (readProperty(gameSettings, "qKey") !== !0) return !1;
+    let mappedKey = readProperty(readProperty(gameSettings, "keyMap"), "q");
+    return typeof mappedKey == "string" && mappedKey.length > 0 || typeof mappedKey == "number" && Number.isFinite(mappedKey) ? keyState.readPressed(mappedKey) : !1;
+  }
+  function readCapturedMechSample(rootState, controls, settingsValue, keyState) {
     let root = rootState.readRoot();
     if (!isNonArrayRecord(root)) return;
     let settings = isNonArrayRecord(settingsValue) ? settingsValue : void 0;
     if (settings?.autoMech !== !0 || settings.mechBuild !== "user")
       return;
-    let gameSettings = readProperty(root, "settings"), queueKeyEnabled = readProperty(gameSettings, "qKey") === !0, portal = readProperty(root, "portal"), mechbay = readProperty(portal, "mechbay"), blueprint = readProperty(mechbay, "blueprint"), purifier = readProperty(portal, "purifier"), resources = readProperty(root, "resource"), soulGem = readProperty(resources, "Soul_Gem");
+    let gameSettings = readProperty(root, "settings"), queueKeyHeld = readCapturedMechQueueKeyHeld(gameSettings, keyState);
+    if (queueKeyHeld === void 0) return;
+    let portal = readProperty(root, "portal"), mechbay = readProperty(portal, "mechbay"), blueprint = readProperty(mechbay, "blueprint"), purifier = readProperty(portal, "purifier"), resources = readProperty(root, "resource"), soulGem = readProperty(resources, "Soul_Gem");
     if (!isNonArrayRecord(mechbay) || !isNonArrayRecord(blueprint) || !isNonArrayRecord(purifier) || !isNonArrayRecord(soulGem))
       return;
     let designSize = blueprint.size;
@@ -22220,7 +22243,7 @@ Only continue if you trust the source. Injected code:
           available: !0,
           enabled: !0,
           buildMode: "user",
-          queueKeyEnabled,
+          queueKeyHeld,
           // The settings hint says infernal designs are never automatic. A missing legacy field is
           // falsy in the game's own `mechCost` call, so the capture keeps that lazy coercion.
           infernal: !!blueprint.infernal,
@@ -22235,7 +22258,7 @@ Only continue if you trust the source. Injected code:
       });
   }
   function sameCapturedMechInput(left, right) {
-    return left.available === right.available && left.enabled === right.enabled && left.buildMode === right.buildMode && left.queueKeyEnabled === right.queueKeyEnabled && left.infernal === right.infernal && left.designSize === right.designSize && left.designSpace === right.designSpace && left.designSupply === right.designSupply && left.designSoul === right.designSoul && left.baySpace === right.baySpace && left.purifierSupply === right.purifierSupply && left.soulGems === right.soulGems;
+    return left.available === right.available && left.enabled === right.enabled && left.buildMode === right.buildMode && left.queueKeyHeld === right.queueKeyHeld && left.infernal === right.infernal && left.designSize === right.designSize && left.designSpace === right.designSpace && left.designSupply === right.designSupply && left.designSoul === right.designSoul && left.baySpace === right.baySpace && left.purifierSupply === right.purifierSupply && left.soulGems === right.soulGems;
   }
   function createCapturedMech(dependencies) {
     let session, reader = Object.freeze({
@@ -22244,7 +22267,8 @@ Only continue if you trust the source. Injected code:
         let sample = readCapturedMechSample(
           dependencies.rootState,
           dependencies.controls,
-          dependencies.readSettings()
+          dependencies.readSettings(),
+          dependencies.keyState
         );
         return sample === void 0 ? capturedMechUnavailable() : (session = sample, sample.input);
       }
@@ -22277,7 +22301,8 @@ Only continue if you trust the source. Injected code:
         let current = readCapturedMechSample(
           dependencies.rootState,
           dependencies.controls,
-          dependencies.readSettings()
+          dependencies.readSettings(),
+          dependencies.keyState
         );
         if (current === void 0 || current.control.generation !== active.control.generation || !sameCapturedMechInput(current.input, active.input))
           return stale(
@@ -22293,7 +22318,8 @@ Only continue if you trust the source. Injected code:
         let after = readCapturedMechSample(
           dependencies.rootState,
           dependencies.controls,
-          dependencies.readSettings()
+          dependencies.readSettings(),
+          dependencies.keyState
         );
         return after === void 0 || after.input.baySpace !== active.input.baySpace - active.input.designSpace || after.input.purifierSupply !== active.input.purifierSupply - active.input.designSupply || after.input.soulGems !== active.input.soulGems - active.input.designSoul ? stale(
           "captured-mech-not-built",
@@ -22306,7 +22332,7 @@ Only continue if you trust the source. Injected code:
 
   // src/domain/combat/captured-mech.ts
   function planCapturedMechBuild(input) {
-    return !input.available || !input.enabled || input.buildMode !== "user" || input.queueKeyEnabled || input.infernal || input.designSize.length === 0 || !Number.isFinite(input.designSpace) || input.designSpace <= 0 || !Number.isFinite(input.designSupply) || input.designSupply < 0 || !Number.isFinite(input.designSoul) || input.designSoul < 0 || !Number.isFinite(input.baySpace) || input.baySpace < input.designSpace || !Number.isFinite(input.purifierSupply) || input.purifierSupply < input.designSupply || !Number.isFinite(input.soulGems) || input.soulGems < input.designSoul ? null : Object.freeze({
+    return !input.available || !input.enabled || input.buildMode !== "user" || input.queueKeyHeld || input.infernal || input.designSize.length === 0 || !Number.isFinite(input.designSpace) || input.designSpace <= 0 || !Number.isFinite(input.designSupply) || input.designSupply < 0 || !Number.isFinite(input.designSoul) || input.designSoul < 0 || !Number.isFinite(input.baySpace) || input.baySpace < input.designSpace || !Number.isFinite(input.purifierSupply) || input.purifierSupply < input.designSupply || !Number.isFinite(input.soulGems) || input.soulGems < input.designSoul ? null : Object.freeze({
       kind: "build-captured-mech",
       designSize: input.designSize,
       expectedBaySpace: input.baySpace,
@@ -22457,7 +22483,8 @@ Only continue if you trust the source. Injected code:
     }), capturedMech = createCapturedMech({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => settingsStore.readRaw()
+      readSettings: () => settingsStore.readRaw(),
+      keyState: pageCapture2.keyState
     }), runCapturedEvolution = () => runEvolution({
       reader: capturedEvolution.reader,
       executor: capturedEvolution.executor,

@@ -5,7 +5,7 @@ import { createCapturedMech } from "../src/adapters/evolve/combat/captured-mech.
 import { planCapturedMechBuild } from "../src/domain/combat/captured-mech.ts";
 
 const root = {
-  settings: { qKey: false },
+  settings: { qKey: false, keyMap: { q: "q" } },
   portal: {
     mechbay: {
       max: 10,
@@ -18,6 +18,7 @@ const root = {
 };
 const settings = { autoMech: true, mechBuild: "user" };
 const trace = [];
+let queueKeyPressed = false;
 const assembly = {
   elementId: "mechAssembly",
   generation: 1,
@@ -50,6 +51,12 @@ const adapter = createCapturedMech({
   },
   controls,
   readSettings: () => settings,
+  keyState: {
+    readPressed: (key) => {
+      assert.equal(key, "q");
+      return queueKeyPressed;
+    },
+  },
 });
 
 assert.equal(adapter.reader.read().available, true);
@@ -67,8 +74,18 @@ assert.equal(root.portal.purifier.supply, 0);
 assert.equal(root.resource.Soul_Gem.amount, 0);
 
 root.settings.qKey = true;
+root.portal.mechbay.bay = 0;
+root.portal.purifier.supply = 75_000;
+root.resource.Soul_Gem.amount = 1;
+assert.equal(adapter.reader.read().available, true);
+assert.equal(
+  planCapturedMechBuild(adapter.reader.read()).kind,
+  "build-captured-mech",
+);
+queueKeyPressed = true;
 assert.equal(adapter.reader.read().available, true);
 assert.equal(planCapturedMechBuild(adapter.reader.read()), null);
+queueKeyPressed = false;
 root.settings.qKey = false;
 settings.mechBuild = "random";
 assert.equal(adapter.reader.read().available, false);
@@ -82,7 +99,7 @@ assert.equal(
     available: true,
     enabled: true,
     buildMode: "user",
-    queueKeyEnabled: false,
+    queueKeyHeld: false,
     infernal: false,
     designSize: "small",
     designSpace: 1,

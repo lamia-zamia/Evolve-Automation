@@ -13,7 +13,12 @@ const root = {
   },
   stats: { achieve: {} },
   resource: { RNA: { amount: 0, max: 0 }, DNA: { amount: 0, max: 0 } },
-  evolution: {},
+  evolution: {
+    mitochondria: { count: 0 },
+    eukaryotic_cell: { count: 0 },
+    nucleus: { count: 0 },
+    organelles: { count: 0 },
+  },
 };
 
 const settings = {
@@ -35,14 +40,30 @@ const actionRows = [
 ];
 
 const handles = new Map();
-for (const id of ["evolution-rna", "evolution-dna", "evolution-bunker"]) {
+for (const id of [
+  "evolution-rna",
+  "evolution-dna",
+  "evolution-bunker",
+  "evolution-mitochondria",
+  "evolution-eukaryotic_cell",
+  "evolution-membrane",
+  "evolution-nucleus",
+  "evolution-organelles",
+]) {
   handles.set(id, { elementId: id, generation: 1, methods: ["action"] });
 }
+let mutateBunker = true;
 const controls = {
   resolve: (id) => handles.get(id),
   invoke: (handle, method) => {
     assert.equal(method, "action");
     trace.push(["invoke", handle.elementId]);
+    if (handle.elementId === "evolution-bunker" && mutateBunker) {
+      root.evolution.bunker = 1;
+    }
+    if (handle.elementId === "evolution-s-human") {
+      root.race.imitation = "human";
+    }
     return { ok: true, value: undefined };
   },
   capturedElementIds: () => [...handles.keys()],
@@ -119,10 +140,32 @@ assert.deepEqual(trace, [
 ]);
 assert.equal(evolution.reader.storedTargetId(), "human");
 
+// A Vue action wrapper can report success even when its underlying action could not pay its
+// costs. The failed tree action must therefore fall through to the cell-upgrade phase rather
+// than returning before the capacity upgrades run.
+mutateBunker = false;
+trace.length = 0;
+runEvolution({
+  reader: evolution.reader,
+  executor: evolution.executor,
+  runUniverseSelection: evolution.runUniverseSelection,
+  runPlanetSelection: () => {},
+  challengeGroups: [],
+});
+assert.deepEqual(trace, [
+  ["invoke", "evolution-bunker"],
+  ["invoke", "evolution-mitochondria"],
+  ["invoke", "evolution-eukaryotic_cell"],
+  ["invoke", "evolution-membrane"],
+  ["invoke", "evolution-nucleus"],
+  ["invoke", "evolution-organelles"],
+]);
+
 // DeadSpace's final menu exposes imitation rows only. The configured imitation must win even if
 // another row appears first in the DOM.
 settings.imitateRace = "human";
 root.race.evoFinalMenu = "synth";
+trace.length = 0;
 actionRows.unshift({ id: "evolution-s-other", cost: {} });
 actionRows.push({ id: "evolution-s-human", cost: {} });
 handles.set("evolution-s-human", {
@@ -137,12 +180,7 @@ runEvolution({
   runPlanetSelection: () => {},
   challengeGroups: [],
 });
-assert.deepEqual(trace, [
-  ["queue"],
-  ["activity", "Attempting evolution of human."],
-  ["invoke", "evolution-bunker"],
-  ["invoke", "evolution-s-human"],
-]);
+assert.deepEqual(trace, [["invoke", "evolution-s-human"]]);
 
 // Auto selection cannot be guessed from the root; the pure planner therefore waits rather than
 // importing or duplicating DeadSpace's private Race catalog.

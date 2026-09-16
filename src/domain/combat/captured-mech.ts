@@ -4,8 +4,8 @@ export interface CapturedMechBuildInput {
   readonly available: boolean;
   readonly enabled: boolean;
   readonly buildMode: string;
-  /** The page's queue-key setting changes `build()` into queue admission. */
-  readonly queueKeyEnabled: boolean;
+  /** The page's mapped queue key is currently held, changing `build()` into queue admission. */
+  readonly queueKeyHeld: boolean;
   readonly infernal: boolean;
   readonly designSize: string;
   /** Values returned by the game's captured `bay`, `price`, and `soul` methods. */
@@ -32,7 +32,7 @@ export function planCapturedMechBuild(
     !input.available ||
     !input.enabled ||
     input.buildMode !== "user" ||
-    input.queueKeyEnabled ||
+    input.queueKeyHeld ||
     input.infernal ||
     input.designSize.length === 0 ||
     !Number.isFinite(input.designSpace) ||

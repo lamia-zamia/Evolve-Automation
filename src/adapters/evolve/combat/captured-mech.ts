@@ -13,6 +13,7 @@ import type {
   GameControlRegistry,
 } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
+import type { GameKeyStateReader } from "../../../ports/game-key-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isNonArrayRecord, readProperty } from "../../validation.ts";
 
@@ -31,7 +32,7 @@ function capturedMechUnavailable(): CapturedMechBuildInput {
     available: false,
     enabled: false,
     buildMode: "none",
-    queueKeyEnabled: false,
+    queueKeyHeld: false,
     infernal: false,
     designSize: "",
     designSpace: 0,
@@ -53,10 +54,27 @@ function readControlNumber(
   return result.ok ? finite(result.value) : undefined;
 }
 
+function readCapturedMechQueueKeyHeld(
+  gameSettings: unknown,
+  keyState: GameKeyStateReader,
+): boolean | undefined {
+  if (readProperty(gameSettings, "qKey") !== true) return false;
+  const mappedKey = readProperty(readProperty(gameSettings, "keyMap"), "q");
+  if (!(
+    (typeof mappedKey === "string" && mappedKey.length > 0) ||
+    (typeof mappedKey === "number" && Number.isFinite(mappedKey))
+  )) {
+    // DeadSpace's module-local keyMap starts false until a configured mapping is observed.
+    return false;
+  }
+  return keyState.readPressed(mappedKey);
+}
+
 function readCapturedMechSample(
   rootState: GameRootStateSource,
   controls: GameControlRegistry,
   settingsValue: unknown,
+  keyState: GameKeyStateReader,
 ): CapturedMechSample | undefined {
   const root = rootState.readRoot();
   if (!isNonArrayRecord(root)) return undefined;
@@ -66,9 +84,9 @@ function readCapturedMechSample(
   }
 
   const gameSettings = readProperty(root, "settings");
-  // `build()` queues rather than builds when both qKey and the q key are active. The
-  // independent runtime has no queue-admission transaction yet, so qKey is a safe stand-down.
-  const queueKeyEnabled = readProperty(gameSettings, "qKey") === true;
+  // `build()` queues rather than builds only when qKey and the mapped key are both active.
+  const queueKeyHeld = readCapturedMechQueueKeyHeld(gameSettings, keyState);
+  if (queueKeyHeld === undefined) return undefined;
 
   const portal = readProperty(root, "portal");
   const mechbay = readProperty(portal, "mechbay");
@@ -129,7 +147,7 @@ function readCapturedMechSample(
       available: true,
       enabled: true,
       buildMode: "user",
-      queueKeyEnabled,
+      queueKeyHeld,
       // The settings hint says infernal designs are never automatic. A missing legacy field is
       // falsy in the game's own `mechCost` call, so the capture keeps that lazy coercion.
       infernal: Boolean(blueprint["infernal"]),
@@ -152,7 +170,7 @@ function sameCapturedMechInput(
     left.available === right.available &&
     left.enabled === right.enabled &&
     left.buildMode === right.buildMode &&
-    left.queueKeyEnabled === right.queueKeyEnabled &&
+    left.queueKeyHeld === right.queueKeyHeld &&
     left.infernal === right.infernal &&
     left.designSize === right.designSize &&
     left.designSpace === right.designSpace &&
@@ -168,6 +186,7 @@ export interface CapturedMechDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
+  readonly keyState: GameKeyStateReader;
 }
 
 export function createCapturedMech(dependencies: CapturedMechDependencies): {
@@ -183,6 +202,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         dependencies.rootState,
         dependencies.controls,
         dependencies.readSettings(),
+        dependencies.keyState,
       );
       if (sample === undefined) return capturedMechUnavailable();
       session = sample;
@@ -236,6 +256,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         dependencies.rootState,
         dependencies.controls,
         dependencies.readSettings(),
+        dependencies.keyState,
       );
       if (
         current === undefined ||
@@ -259,6 +280,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         dependencies.rootState,
         dependencies.controls,
         dependencies.readSettings(),
+        dependencies.keyState,
       );
       if (
         after === undefined ||

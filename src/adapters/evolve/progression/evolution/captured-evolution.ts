@@ -73,6 +73,26 @@ function nestedRecord(
   return capturedEvolutionRecord(readProperty(owner, key));
 }
 
+function capturedEvolutionMutationFingerprint(
+  rootState: GameRootStateSource,
+): string | undefined {
+  const root = rootRecord(rootState);
+  if (root === undefined) return undefined;
+  try {
+    return JSON.stringify({
+      race: readProperty(root, "race"),
+      resource: readProperty(root, "resource"),
+      evolution: readProperty(root, "evolution"),
+      tech: readProperty(root, "tech"),
+      genes: readProperty(root, "genes"),
+      queue: readProperty(root, "queue"),
+      researchQueue: readProperty(root, "r_queue"),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 function readRace(
   rootState: GameRootStateSource,
 ): Record<string, unknown> | undefined {
@@ -326,7 +346,11 @@ export function createCapturedEvolution(
       `${EVOLUTION_ACTION_PREFIX}${id}`,
     );
     if (handle === undefined) return false;
-    return dependencies.controls.invoke(handle, "action").ok;
+    const before = capturedEvolutionMutationFingerprint(dependencies.rootState);
+    const result = dependencies.controls.invoke(handle, "action");
+    if (!result.ok) return false;
+    const after = capturedEvolutionMutationFingerprint(dependencies.rootState);
+    return before !== undefined && after !== undefined && before !== after;
   };
 
   const invokeRepeated = (id: string, count: number): void => {
