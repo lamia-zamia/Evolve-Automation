@@ -141,8 +141,10 @@ import {
 import { runEvolution } from "../application/evolution.ts";
 import { runCapturedPlanetSelection } from "../application/captured-planet-selection.ts";
 import { runCapturedSpyTraining } from "../application/captured-spy-training.ts";
+import { runBattleAutomation } from "../application/battle.ts";
 import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runtime-catalogs.ts";
 import { createCapturedSpyTraining } from "../adapters/evolve/combat/captured-spy-training.ts";
+import { createCapturedBattle } from "../adapters/evolve/combat/battle.ts";
 import {
   CAPTURED_MECH_ASSEMBLY_CONTROL,
   createCapturedMech,
@@ -321,6 +323,13 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
+  });
+  const capturedBattle = createCapturedBattle({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    keyState: pageCapture.keyState,
+    readSettings: () => settingsStore.readRaw(),
+    onActivity,
   });
   const capturedMech = createCapturedMech({
     rootState: pageCapture.rootState,
@@ -1740,6 +1749,19 @@ export function startCapturedRuntime({
         if (outcome !== undefined && outcome.status !== "succeeded") {
           reportOnce(
             `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`,
+          );
+        }
+        const battleOutcome = runPhase("autoFight.battle", () => {
+          ensureCivicControls();
+          if (isEnabled(settings, "autoHell")) ensureHellGarrisonControls();
+          return runBattleAutomation(capturedBattle);
+        });
+        if (
+          battleOutcome !== undefined &&
+          battleOutcome.status !== "succeeded"
+        ) {
+          reportOnce(
+            `autoFight.battle: ${battleOutcome.failure.code}: ${battleOutcome.failure.message}`,
           );
         }
       }

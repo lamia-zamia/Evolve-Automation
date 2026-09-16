@@ -21996,6 +21996,142 @@ Only continue if you trust the source. Injected code:
     return CAPTURED_SPY_TRAINING_SUCCEEDED;
   }
 
+  // src/domain/combat/battle.ts
+  function classifyOccupationCandidate(parameters, foreign) {
+    if (foreign.policy !== "Occupy" || foreign.occupied) return "skip";
+    let capacity = parameters.autoHell && parameters.hellAvailable ? parameters.maximumSoldiers - parameters.hellReservedSoldiers : parameters.maxCityGarrison;
+    if (foreign.minimumSiegeSoldiers > capacity) return "skip";
+    let requiredBattalion = Math.max(
+      foreign.minimumSiegeSoldiers,
+      Math.min(parameters.availableGarrison, foreign.maximumSiegeSoldiers - 1)
+    );
+    return parameters.availableGarrison < requiredBattalion / 2 + parameters.occupationCost && parameters.availableGarrison < parameters.maxCityGarrison ? "wait" : "select";
+  }
+  function canUsePlunderTactic(parameters, tactic, minimumSoldiers) {
+    return minimumSoldiers <= parameters.maximumBattalion[tactic];
+  }
+  var TACTICS = Object.freeze([0, 1, 2, 3, 4]);
+  function unavailableParameters() {
+    return null;
+  }
+  function prepareBattle(input) {
+    if (!input.available) return unavailableParameters();
+    let healthyMinimum = input.healthySoldiersPercent / 100, livingMinimum = input.protectMode === "auto" && input.wounded <= 0 ? 0 : input.livingSoldiersPercent / 100;
+    if (input.wounded > (1 - healthyMinimum) * input.maxCityGarrison || input.currentCityGarrison < livingMinimum * input.maxCityGarrison)
+      return null;
+    let protectSoldiers = input.protectMode === "always";
+    if (input.protectMode === "auto") {
+      let timeToRecruit = (input.deadSoldiers * 100 - input.recruitmentProgress) / (input.recruitmentRate * 4), timeToHeal = input.wounded / input.healingRate * 5;
+      protectSoldiers = timeToRecruit > timeToHeal;
+    }
+    let minimumAdvantage = protectSoldiers ? Math.max(input.minimumAdvantage, 80) : input.minimumAdvantage, maximumAdvantage = protectSoldiers ? Math.max(input.maximumAdvantage, minimumAdvantage) : input.maximumAdvantage, maximumBattalion = TACTICS.map(() => input.availableGarrison), initialRequiredBattalion = input.maxCityGarrison;
+    if (protectSoldiers) {
+      let armor = (input.scalesArmor + input.armorTechnology) / input.armoredDivisor - input.frailPenalty, extraProtection = input.ragePlanet ? 1 : 2;
+      maximumBattalion = [5, 10, 25, 50, 999].map((cap, tactic) => {
+        let protectedBattalion = armor >= cap * input.highPopulationMultiplier ? Number.MAX_SAFE_INTEGER : (5 - tactic) * (armor + extraProtection) - 1;
+        return Math.min(protectedBattalion, input.availableGarrison);
+      }), initialRequiredBattalion = 0;
+    }
+    return maximumBattalion[4] = Math.min(
+      maximumBattalion[4] ?? input.availableGarrison,
+      input.maximumSiegeBattalion
+    ), Object.freeze({
+      minimumAdvantage,
+      maximumAdvantage,
+      maximumBattalion: Object.freeze(maximumBattalion),
+      initialRequiredBattalion,
+      currentCityGarrison: input.currentCityGarrison,
+      maxCityGarrison: input.maxCityGarrison,
+      availableGarrison: input.availableGarrison,
+      autoHell: input.autoHell,
+      hellAvailable: input.hellAvailable,
+      maximumSoldiers: input.maximumSoldiers,
+      hellReservedSoldiers: input.hellReservedSoldiers,
+      hellSoldiers: input.hellSoldiers,
+      hellGarrison: input.hellGarrison,
+      hellPatrolSize: input.hellPatrolSize,
+      occupationCost: input.occupationCost,
+      portalVisible: input.portalVisible,
+      unificationEnabled: input.unificationEnabled,
+      occupyLast: input.occupyLast
+    });
+  }
+  function planBattle(parameters, battlefield) {
+    let currentTarget = battlefield.currentTarget, requiredBattalion = parameters.initialRequiredBattalion, requiredTactic = 0;
+    for (let foreign of battlefield.occupationTargets) {
+      let disposition = classifyOccupationCandidate(parameters, foreign);
+      if (disposition !== "skip") {
+        if (currentTarget = foreign, requiredBattalion = Math.max(
+          foreign.minimumSiegeSoldiers,
+          Math.min(parameters.availableGarrison, foreign.maximumSiegeSoldiers - 1)
+        ), requiredTactic = 4, disposition === "wait") return null;
+        break;
+      }
+    }
+    if (currentTarget === null || currentTarget.occupied && currentTarget.policy === "Occupy")
+      return null;
+    if (requiredTactic !== 4) {
+      let plunderTarget = battlefield.currentTarget;
+      if (plunderTarget === null) return null;
+      let startingTactic = !parameters.unificationEnabled || parameters.occupyLast ? 4 : 3;
+      for (let rawTactic = startingTactic; rawTactic >= 0; rawTactic--) {
+        let tactic = rawTactic, soldiersMinimum = plunderTarget.minimumSoldiers[tactic];
+        if (canUsePlunderTactic(parameters, tactic, soldiersMinimum)) {
+          requiredBattalion = Math.max(
+            soldiersMinimum,
+            Math.min(
+              parameters.maximumBattalion[tactic],
+              parameters.availableGarrison,
+              plunderTarget.maximumSoldiers[tactic] - 1
+            )
+          ), requiredTactic = tactic;
+          break;
+        }
+      }
+      if (!requiredBattalion || requiredBattalion > parameters.availableGarrison)
+        return null;
+    }
+    let releaseControl = !currentTarget.released && (currentTarget.annexed || currentTarget.purchased || currentTarget.occupied), hellPatrolsToRemove = 0, hellGarrisonToRemove = 0;
+    if (!releaseControl && requiredTactic === 4 && parameters.portalVisible) {
+      let missingSoldiers = parameters.occupationCost - (parameters.currentCityGarrison - requiredBattalion);
+      if (missingSoldiers > 0) {
+        if (!parameters.autoHell || !parameters.hellAvailable || parameters.hellSoldiers - parameters.hellReservedSoldiers < missingSoldiers)
+          return null;
+        hellPatrolsToRemove = Math.ceil(
+          (missingSoldiers - parameters.hellGarrison) / parameters.hellPatrolSize
+        ), hellGarrisonToRemove = missingSoldiers;
+      }
+    }
+    return Object.freeze({
+      kind: "launch-battle",
+      governmentId: currentTarget.governmentId,
+      expectedReleased: currentTarget.released,
+      expectedOccupied: currentTarget.occupied,
+      expectedAnnexed: currentTarget.annexed,
+      expectedPurchased: currentTarget.purchased,
+      spyCount: currentTarget.spyCount,
+      tactic: requiredTactic,
+      battalionSize: requiredBattalion,
+      releaseControl,
+      hellPatrolsToRemove: Math.max(0, hellPatrolsToRemove),
+      hellGarrisonToRemove
+    });
+  }
+
+  // src/application/battle.ts
+  var SUCCEEDED12 = Object.freeze({
+    status: "succeeded"
+  });
+  function runBattleAutomation(dependencies) {
+    let parameters = prepareBattle(dependencies.reader.readCycle());
+    if (parameters === null) return SUCCEEDED12;
+    let decision = planBattle(
+      parameters,
+      dependencies.reader.readBattlefield(parameters)
+    );
+    return decision === null ? SUCCEEDED12 : dependencies.executor.execute(decision);
+  }
+
   // src/adapters/evolve/runtime-catalogs.ts
   var challenges = [
     [
@@ -22183,6 +22319,617 @@ Only continue if you trust the source. Injected code:
           "captured-spy-training-not-started",
           "the game did not start spy training"
         ) : (lastInput = void 0, SUCCEEDED);
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/adapters/evolve/combat/battle.ts
+  var CAPTURED_BATTLE_FOREIGN_CONTROL = "foreign", CAPTURED_BATTLE_GARRISON_CONTROLS = ["garrison", "c_garrison"], CAPTURED_BATTLE_MAX_FOREIGN_INDEX = 4, CAPTURED_BATTLE_ENEMY_FACTORS = Object.freeze([
+    5,
+    27.5,
+    62.5,
+    125,
+    300
+  ]), CAPTURED_BATTLE_EMPTY_TACTICS = Object.freeze([
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY
+  ]), CAPTURED_BATTLE_MAX_ADJUSTMENT_STEPS = 1e5;
+  function capturedBattleSettingNumber(settings, key, fallback) {
+    return finite(settings[key]) ?? fallback;
+  }
+  function capturedBattleSettingBoolean(settings, key, fallback) {
+    return typeof settings[key] == "boolean" ? settings[key] : fallback;
+  }
+  function capturedBattleSettingString(settings, key, fallback) {
+    return typeof settings[key] == "string" ? settings[key] : fallback;
+  }
+  function capturedBattleHasMethods(control, methods) {
+    return control !== void 0 && methods.every((method) => control.methods.includes(method));
+  }
+  function capturedBattleResolveControl(controls, elementIds, methods) {
+    for (let elementId of elementIds) {
+      let control = controls.resolve(elementId);
+      if (capturedBattleHasMethods(control, methods)) return control;
+    }
+  }
+  function capturedBattleInvokeNumber(controls, control, method, args = []) {
+    let result = controls.invoke(control, method, args);
+    return result.ok ? finite(result.value) : void 0;
+  }
+  function capturedBattleInvokeBoolean(controls, control, method, args = []) {
+    let result = controls.invoke(control, method, args);
+    return result.ok && typeof result.value == "boolean" ? result.value : void 0;
+  }
+  function capturedBattleReadGovernment(root, index, policy, rank) {
+    let government = readProperty(
+      readProperty(readProperty(root, "civic"), "foreign"),
+      `gov${index}`
+    );
+    if (!isRecord(government) || Array.isArray(government) || finite(government.mil) === void 0) return;
+    let spyCount = finite(government.spy) ?? 0, input = Object.freeze({
+      governmentId: index,
+      policy,
+      // Upstream has no `released` field. A controlled foreign power is released by
+      // the same campaign closure that clears occ/anx/buy, so this is a per-cycle
+      // action marker rather than a copied manager state field.
+      released: !1,
+      occupied: !!government.occ,
+      annexed: !!government.anx,
+      purchased: !!government.buy,
+      spyCount,
+      minimumSoldiers: CAPTURED_BATTLE_EMPTY_TACTICS,
+      maximumSoldiers: CAPTURED_BATTLE_EMPTY_TACTICS
+    });
+    return Object.freeze({ input, government, rank });
+  }
+  function capturedBattleEnemyRating(root, government, tactic) {
+    let factor = CAPTURED_BATTLE_ENEMY_FACTORS[tactic], military = finite(government.government.mil);
+    if (factor === void 0 || military === void 0 || military < 0)
+      return;
+    let rating = factor * military / 100, race = readProperty(root, "race"), city = readProperty(root, "city");
+    return readProperty(race, "banana") && (rating *= 2), readProperty(city, "biome") === "swamp" && (rating *= 1.4), Number.isFinite(rating) && rating >= 0 ? rating : void 0;
+  }
+  function capturedBattleOwnRating(controls, control, soldiers) {
+    if (!(!Number.isSafeInteger(soldiers) || soldiers < 0))
+      return capturedBattleInvokeNumber(controls, control, "rating", [
+        soldiers,
+        !1
+      ]);
+  }
+  function capturedBattleSoldiersForRating(controls, control, targetRating, capacity) {
+    if (!Number.isFinite(targetRating) || targetRating <= 0) return 0;
+    let upper = Math.floor(capacity);
+    if (!Number.isSafeInteger(upper) || upper < 1) return;
+    let upperRating = capturedBattleOwnRating(controls, control, upper);
+    if (upperRating === void 0) return;
+    if (upperRating < targetRating) return upper + 1;
+    let low = 1, high = upper;
+    for (; low < high; ) {
+      let middle = Math.floor((low + high) / 2), rating = capturedBattleOwnRating(controls, control, middle);
+      if (rating === void 0) return;
+      rating >= targetRating ? high = middle : low = middle + 1;
+    }
+    return low;
+  }
+  function capturedBattlePolicy(settings, index, military) {
+    let threshold = capturedBattleSettingNumber(
+      settings,
+      "foreignPowerRequired",
+      75
+    ), rank = index === 3 ? "Rival" : military <= threshold ? "Inferior" : "Superior";
+    return Object.freeze({
+      rank,
+      policy: capturedBattleSettingString(
+        settings,
+        `foreignPolicy${rank}`,
+        "Ignore"
+      )
+    });
+  }
+  function capturedBattleOccupationCost(root) {
+    let government = readProperty(readProperty(root, "civic"), "govern");
+    return readProperty(government, "type") === "federation" ? 15 : 20;
+  }
+  function capturedBattleEmptyCycle() {
+    return Object.freeze({
+      available: !1,
+      wounded: 0,
+      deadSoldiers: 0,
+      currentCityGarrison: 0,
+      maxCityGarrison: 0,
+      availableGarrison: 0,
+      healthySoldiersPercent: 0,
+      livingSoldiersPercent: 0,
+      protectMode: "never",
+      minimumAdvantage: 0,
+      maximumAdvantage: 0,
+      maximumSiegeBattalion: 0,
+      recruitmentProgress: 0,
+      recruitmentRate: 1,
+      healingRate: 1,
+      scalesArmor: 0,
+      armorTechnology: 0,
+      armoredDivisor: 1,
+      frailPenalty: 0,
+      highPopulationMultiplier: 1,
+      ragePlanet: !1,
+      autoHell: !1,
+      hellAvailable: !1,
+      maximumSoldiers: 0,
+      hellReservedSoldiers: 0,
+      hellSoldiers: 0,
+      hellGarrison: 0,
+      hellPatrolSize: 1,
+      occupationCost: 0,
+      portalVisible: !1,
+      unificationEnabled: !1,
+      occupyLast: !1
+    });
+  }
+  function capturedBattleModifierHeld(root, keyState) {
+    if (keyState === void 0) return !1;
+    let settings = readProperty(root, "settings");
+    if (readProperty(settings, "mKeys") !== !0) return !1;
+    let keyMap = readProperty(settings, "keyMap");
+    for (let key of ["x10", "x25", "x100"]) {
+      let mapped = readProperty(keyMap, key);
+      if ((typeof mapped == "string" || typeof mapped == "number") && keyState.readPressed(mapped) === !0)
+        return !0;
+    }
+    return !1;
+  }
+  function capturedBattleReadCycle(dependencies) {
+    let root = dependencies.rootState.readRoot();
+    if (!isRecord(root) || capturedBattleModifierHeld(root, dependencies.keyState)) return;
+    let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {};
+    if (capturedBattleSettingBoolean(settings, "foreignPacifist", !1))
+      return;
+    let foreign = capturedBattleResolveControl(
+      dependencies.controls,
+      [CAPTURED_BATTLE_FOREIGN_CONTROL],
+      ["vis", "gvis"]
+    ), garrison = capturedBattleResolveControl(
+      dependencies.controls,
+      CAPTURED_BATTLE_GARRISON_CONTROLS,
+      ["campaign", "next", "last", "aNext", "aLast", "rating", "hell", "s_max"]
+    );
+    if (foreign === void 0 || garrison === void 0 || capturedBattleInvokeBoolean(dependencies.controls, foreign, "vis") !== !0)
+      return;
+    let civic = readProperty(root, "civic"), rawGarrison = readProperty(civic, "garrison");
+    if (!isRecord(rawGarrison) || Array.isArray(rawGarrison)) return;
+    let workers = finite(rawGarrison.workers), maximumWorkers = finite(rawGarrison.max), crew = finite(rawGarrison.crew), wounded = finite(rawGarrison.wounded), raid = finite(rawGarrison.raid), currentTactic = finite(rawGarrison.tactic), currentCityGarrison = capturedBattleInvokeNumber(
+      dependencies.controls,
+      garrison,
+      "hell"
+    ), maxCityGarrison = capturedBattleInvokeNumber(
+      dependencies.controls,
+      garrison,
+      "s_max"
+    ), attacks = finite(readProperty(readProperty(root, "stats"), "attacks"));
+    if (workers === void 0 || maximumWorkers === void 0 || crew === void 0 || wounded === void 0 || raid === void 0 || currentTactic === void 0 || currentCityGarrison === void 0 || maxCityGarrison === void 0 || attacks === void 0 || maxCityGarrison <= 0)
+      return;
+    let protectMode = capturedBattleSettingString(
+      settings,
+      "foreignProtect",
+      "auto"
+    );
+    if (protectMode === "auto" && wounded > 0) return;
+    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), city = readProperty(root, "city"), planetTraits = readProperty(city, "ptrait"), autoHell = capturedBattleSettingBoolean(settings, "autoHell", !1), hell, hellSoldiers = 0, hellGarrison = 0, hellPatrolSize = 1, hellAvailable = !1, fortress = readProperty(readProperty(root, "portal"), "fortress");
+    if (autoHell && isRecord(fortress) && !Array.isArray(fortress) && readProperty(race, "warlord") !== !0) {
+      let fortressGarrison = finite(fortress.garrison), patrolSize = finite(fortress.patrol_size);
+      hell = capturedBattleResolveControl(
+        dependencies.controls,
+        HELL_GARRISON_CONTROLS,
+        ["aLast", "patDec", "patrolling"]
+      );
+      let stationed = hell === void 0 ? void 0 : readCapturedHellGarrison(
+        dependencies.rootState,
+        dependencies.controls
+      );
+      fortressGarrison !== void 0 && patrolSize !== void 0 && patrolSize > 0 && stationed !== void 0 ? (hellSoldiers = fortressGarrison, hellPatrolSize = patrolSize, hellGarrison = stationed, hellAvailable = !0) : hell = void 0;
+    }
+    let input = Object.freeze({
+      available: !0,
+      wounded,
+      deadSoldiers: Math.max(0, maximumWorkers - workers),
+      currentCityGarrison,
+      maxCityGarrison,
+      availableGarrison: readProperty(race, "rage") ? currentCityGarrison : currentCityGarrison - wounded,
+      healthySoldiersPercent: capturedBattleSettingNumber(
+        settings,
+        "foreignAttackHealthySoldiersPercent",
+        90
+      ),
+      livingSoldiersPercent: capturedBattleSettingNumber(
+        settings,
+        "foreignAttackLivingSoldiersPercent",
+        90
+      ),
+      protectMode,
+      minimumAdvantage: capturedBattleSettingNumber(
+        settings,
+        "foreignMinAdvantage",
+        40
+      ),
+      maximumAdvantage: capturedBattleSettingNumber(
+        settings,
+        "foreignMaxAdvantage",
+        80
+      ),
+      maximumSiegeBattalion: capturedBattleSettingNumber(
+        settings,
+        "foreignMaxSiegeBattalion",
+        10
+      ),
+      // These are lazily absent only on a not-yet-started garrison; the game treats the missing
+      // values as zero/progressing at one for arithmetic in the same phase.
+      recruitmentProgress: finite(rawGarrison.progress) ?? 0,
+      recruitmentRate: finite(rawGarrison.rate) ?? 1,
+      healingRate: 1,
+      // Trait vars are module-lexical and not exposed by the captured garrison. Zero/one keeps
+      // protected planning conservative without copying the compatibility trait evaluator.
+      scalesArmor: 0,
+      armorTechnology: finite(readProperty(tech, "armor")) ?? 0,
+      armoredDivisor: 1,
+      frailPenalty: 0,
+      highPopulationMultiplier: 1,
+      ragePlanet: Array.isArray(planetTraits) && planetTraits.includes("rage"),
+      autoHell,
+      hellAvailable,
+      maximumSoldiers: hellAvailable ? maxCityGarrison + hellSoldiers : 0,
+      hellReservedSoldiers: 0,
+      hellSoldiers,
+      hellGarrison,
+      hellPatrolSize,
+      occupationCost: capturedBattleOccupationCost(root),
+      portalVisible: readProperty(readProperty(root, "settings"), "showPortal") === !0,
+      unificationEnabled: capturedBattleSettingBoolean(
+        settings,
+        "foreignUnification",
+        !0
+      ),
+      occupyLast: capturedBattleSettingBoolean(
+        settings,
+        "foreignOccupyLast",
+        !0
+      )
+    });
+    return Object.freeze({
+      root,
+      garrison,
+      foreign,
+      hell: hellAvailable ? hell : void 0,
+      input,
+      currentTactic,
+      raid,
+      attacks
+    });
+  }
+  function capturedBattleReadTarget(root, controls, foreign, index, settings) {
+    let military = finite(
+      readProperty(
+        readProperty(
+          readProperty(readProperty(root, "civic"), "foreign"),
+          `gov${index}`
+        ),
+        "mil"
+      )
+    );
+    if (military === void 0) return;
+    let policy = capturedBattlePolicy(settings, index, military);
+    return capturedBattleInvokeBoolean(controls, foreign, "gvis", [
+      index
+    ]) === !0 ? capturedBattleReadGovernment(root, index, policy.policy, policy.rank) : void 0;
+  }
+  function capturedBattleSelectTarget(governments) {
+    let actionable = governments.filter(
+      (candidate) => candidate.input.policy !== "Ignore" && candidate.input.policy !== "Influence" && !(candidate.input.occupied && candidate.input.policy === "Occupy")
+    );
+    return actionable.find(
+      (candidate) => candidate.rank === "Inferior" && !candidate.input.annexed && !candidate.input.purchased
+    ) ?? actionable.find((candidate) => candidate.input.occupied) ?? actionable[0];
+  }
+  function capturedBattleReadPlunderTarget(root, controls, garrison, parameters, target) {
+    let minimumSoldiers = [...CAPTURED_BATTLE_EMPTY_TACTICS], maximumSoldiers = [...CAPTURED_BATTLE_EMPTY_TACTICS], upper = Math.max(
+      1,
+      Math.floor(
+        parameters.autoHell && parameters.hellAvailable ? parameters.maximumSoldiers : parameters.maxCityGarrison
+      )
+    );
+    for (let rawTactic of [0, 1, 2, 3, 4]) {
+      let tactic = rawTactic, rating = capturedBattleEnemyRating(root, target, tactic);
+      if (rating === void 0) return;
+      let minimum = capturedBattleSoldiersForRating(
+        controls,
+        garrison,
+        rating / (1 - parameters.minimumAdvantage / 100),
+        upper
+      ), maximum = capturedBattleSoldiersForRating(
+        controls,
+        garrison,
+        rating / (1 - parameters.maximumAdvantage / 100),
+        upper
+      );
+      if (minimum === void 0 || maximum === void 0) return;
+      minimumSoldiers[tactic] = minimum, maximumSoldiers[tactic] = maximum;
+    }
+    return Object.freeze({
+      ...target.input,
+      minimumSoldiers: Object.freeze(minimumSoldiers),
+      maximumSoldiers: Object.freeze(maximumSoldiers)
+    });
+  }
+  function capturedBattleDecisionsMatch(left, right) {
+    return left.kind === right.kind && left.governmentId === right.governmentId && left.expectedReleased === right.expectedReleased && left.expectedOccupied === right.expectedOccupied && left.expectedAnnexed === right.expectedAnnexed && left.expectedPurchased === right.expectedPurchased && left.spyCount === right.spyCount && left.tactic === right.tactic && left.battalionSize === right.battalionSize && left.releaseControl === right.releaseControl && left.hellPatrolsToRemove === right.hellPatrolsToRemove && left.hellGarrisonToRemove === right.hellGarrisonToRemove;
+  }
+  function capturedBattleTargetMatches(target, decision) {
+    return target.input.governmentId === decision.governmentId && target.input.released === decision.expectedReleased && target.input.occupied === decision.expectedOccupied && target.input.annexed === decision.expectedAnnexed && target.input.purchased === decision.expectedPurchased && target.input.spyCount === decision.spyCount;
+  }
+  function capturedBattleRefreshGovernment(root, governmentId) {
+    let value = readProperty(
+      readProperty(readProperty(root, "civic"), "foreign"),
+      `gov${governmentId}`
+    );
+    return isRecord(value) && !Array.isArray(value) ? value : void 0;
+  }
+  function capturedBattleDriveTactic(dependencies, active, target) {
+    for (let step = 0; step <= 5; step += 1) {
+      let current = finite(
+        readProperty(
+          readProperty(readProperty(active.root, "civic"), "garrison"),
+          "tactic"
+        )
+      );
+      if (current === target) return !0;
+      if (current === void 0 || current < 0 || current > 4) return !1;
+      let method = current < target ? "next" : "last";
+      if (!dependencies.controls.invoke(active.garrison, method).ok) return !1;
+    }
+    return !1;
+  }
+  function capturedBattleDriveRaid(dependencies, active, target) {
+    if (!Number.isSafeInteger(target) || target < 0) return !1;
+    for (let step = 0; step <= CAPTURED_BATTLE_MAX_ADJUSTMENT_STEPS; step += 1) {
+      let current = finite(
+        readProperty(
+          readProperty(readProperty(active.root, "civic"), "garrison"),
+          "raid"
+        )
+      );
+      if (current === target) return !0;
+      if (current === void 0) return !1;
+      let method = current < target ? "aNext" : "aLast";
+      if (!dependencies.controls.invoke(active.garrison, method).ok) return !1;
+    }
+    return !1;
+  }
+  function capturedBattleDriveHell(dependencies, active, decision) {
+    if (decision.hellPatrolsToRemove > 0 || decision.hellGarrisonToRemove > 0) {
+      if (active.hell === void 0) return !1;
+      let fortress = readProperty(
+        readProperty(active.root, "portal"),
+        "fortress"
+      ), patrolsBefore = finite(readProperty(fortress, "patrols")), garrisonBefore = finite(readProperty(fortress, "garrison"));
+      if (patrolsBefore === void 0 || garrisonBefore === void 0)
+        return !1;
+      let patrolTarget = Math.max(
+        0,
+        patrolsBefore - decision.hellPatrolsToRemove
+      );
+      for (let step = 0; step <= CAPTURED_BATTLE_MAX_ADJUSTMENT_STEPS; step += 1) {
+        let patrols = finite(readProperty(fortress, "patrols"));
+        if (patrols === void 0) return !1;
+        if (patrols <= patrolTarget) break;
+        if (!dependencies.controls.invoke(active.hell, "patDec").ok) return !1;
+      }
+      let patrolsAfter = finite(readProperty(fortress, "patrols"));
+      if (patrolsAfter === void 0 || patrolsAfter > patrolTarget) return !1;
+      let garrisonTarget = Math.max(
+        0,
+        garrisonBefore - decision.hellGarrisonToRemove
+      );
+      for (let step = 0; step <= CAPTURED_BATTLE_MAX_ADJUSTMENT_STEPS; step += 1) {
+        let garrison = finite(readProperty(fortress, "garrison"));
+        if (garrison === void 0) return !1;
+        if (garrison <= garrisonTarget) break;
+        if (!dependencies.controls.invoke(active.hell, "aLast").ok) return !1;
+      }
+      let garrisonAfter = finite(readProperty(fortress, "garrison"));
+      if (garrisonAfter === void 0 || garrisonAfter > garrisonTarget)
+        return !1;
+    }
+    return !0;
+  }
+  function createCapturedBattle(dependencies) {
+    let reportActivity = dependencies.onActivity ?? (() => {
+    }), cycle, session, reader = Object.freeze({
+      readCycle() {
+        cycle = void 0, session = void 0;
+        let sample = capturedBattleReadCycle(dependencies);
+        return sample === void 0 ? capturedBattleEmptyCycle() : (cycle = sample, sample.input);
+      },
+      readBattlefield(parameters) {
+        let active = cycle;
+        if (active === void 0)
+          return Object.freeze({
+            currentTarget: null,
+            occupationTargets: Object.freeze([])
+          });
+        let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, governments = /* @__PURE__ */ new Map();
+        for (let index = 0; index <= CAPTURED_BATTLE_MAX_FOREIGN_INDEX; index += 1) {
+          let target = capturedBattleReadTarget(
+            active.root,
+            dependencies.controls,
+            active.foreign,
+            index,
+            settings
+          );
+          target !== void 0 && governments.set(index, target);
+        }
+        let occupationTargets = [];
+        for (let target of governments.values()) {
+          if (target.input.policy !== "Occupy" || target.input.occupied) continue;
+          let rating = capturedBattleEnemyRating(active.root, target, 4);
+          if (rating === void 0) continue;
+          let minimumSiegeSoldiers = capturedBattleSoldiersForRating(
+            dependencies.controls,
+            active.garrison,
+            rating / (1 - parameters.minimumAdvantage / 100),
+            Math.max(
+              1,
+              Math.floor(
+                parameters.maximumSoldiers || parameters.maxCityGarrison
+              )
+            )
+          ), maximumSiegeSoldiers = capturedBattleSoldiersForRating(
+            dependencies.controls,
+            active.garrison,
+            rating / (1 - parameters.maximumAdvantage / 100),
+            Math.max(
+              1,
+              Math.floor(
+                parameters.maximumSoldiers || parameters.maxCityGarrison
+              )
+            )
+          );
+          minimumSiegeSoldiers === void 0 || maximumSiegeSoldiers === void 0 || occupationTargets.push(
+            Object.freeze({
+              ...target.input,
+              minimumSiegeSoldiers,
+              maximumSiegeSoldiers
+            })
+          );
+        }
+        let selected = capturedBattleSelectTarget([...governments.values()]), currentTarget = selected === void 0 ? null : capturedBattleReadPlunderTarget(
+          active.root,
+          dependencies.controls,
+          active.garrison,
+          parameters,
+          selected
+        ), battlefield = Object.freeze({
+          currentTarget: currentTarget ?? null,
+          occupationTargets: Object.freeze(occupationTargets)
+        });
+        return session = Object.freeze({
+          ...active,
+          parameters,
+          battlefield,
+          governments
+        }), battlefield;
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        let active = session;
+        if (active === void 0)
+          return stale(
+            "captured-battle-session-missing",
+            "captured battle session is missing"
+          );
+        if (dependencies.rootState.readRoot() !== active.root)
+          return stale(
+            "captured-battle-root-changed",
+            "captured game root changed"
+          );
+        let expected = planBattle(active.parameters, active.battlefield);
+        if (expected === null || !capturedBattleDecisionsMatch(expected, decision))
+          return rejected(
+            "invalid-captured-battle-decision",
+            "captured battle decision does not match the sampled plan"
+          );
+        let target = active.governments.get(decision.governmentId), government = capturedBattleRefreshGovernment(
+          active.root,
+          decision.governmentId
+        ), attacks = finite(
+          readProperty(readProperty(active.root, "stats"), "attacks")
+        ), tactic = finite(
+          readProperty(
+            readProperty(readProperty(active.root, "civic"), "garrison"),
+            "tactic"
+          )
+        ), raid = finite(
+          readProperty(
+            readProperty(readProperty(active.root, "civic"), "garrison"),
+            "raid"
+          )
+        );
+        if (target === void 0 || government === void 0 || attacks !== active.attacks || tactic !== active.currentTactic || raid !== active.raid || !capturedBattleTargetMatches(target, decision) || !!government.occ !== decision.expectedOccupied || !!government.anx !== decision.expectedAnnexed || !!government.buy !== decision.expectedPurchased || (finite(government.spy) ?? 0) !== decision.spyCount)
+          return stale(
+            "captured-battle-state-changed",
+            "captured battle state changed"
+          );
+        if (dependencies.controls.resolve(
+          active.garrison.elementId
+        )?.generation !== active.garrison.generation)
+          return stale(
+            "captured-battle-garrison-changed",
+            "captured garrison control changed"
+          );
+        if (active.hell !== void 0 && dependencies.controls.resolve(
+          active.hell.elementId
+        )?.generation !== active.hell.generation)
+          return stale(
+            "captured-battle-hell-changed",
+            "captured Hell control changed"
+          );
+        if (session = void 0, decision.releaseControl) {
+          let result2 = dependencies.controls.invoke(
+            active.garrison,
+            "campaign",
+            [decision.governmentId]
+          );
+          if (!result2.ok)
+            return stale(
+              "captured-battle-campaign-failed",
+              `campaign failed: ${result2.reason}`
+            );
+          let released = capturedBattleRefreshGovernment(
+            active.root,
+            decision.governmentId
+          );
+          return released === void 0 || released.occ || released.anx || released.buy ? stale(
+            "captured-battle-release-not-applied",
+            "the game did not release the foreign power"
+          ) : (reportActivity({
+            message: `Released foreign power ${decision.governmentId + 1}`,
+            color: "success",
+            tags: Object.freeze(["combat"])
+          }), SUCCEEDED);
+        }
+        if (!capturedBattleDriveHell(dependencies, active, decision))
+          return stale(
+            "captured-battle-hell-adjustment-failed",
+            "Hell garrison adjustment failed"
+          );
+        if (!capturedBattleDriveTactic(dependencies, active, decision.tactic))
+          return stale(
+            "captured-battle-tactic-failed",
+            "garrison tactic did not reach the planned value"
+          );
+        if (!capturedBattleDriveRaid(dependencies, active, decision.battalionSize))
+          return stale(
+            "captured-battle-battalion-failed",
+            "garrison battalion did not reach the planned value"
+          );
+        let result = dependencies.controls.invoke(active.garrison, "campaign", [
+          decision.governmentId
+        ]);
+        return result.ok ? finite(
+          readProperty(readProperty(active.root, "stats"), "attacks")
+        ) !== active.attacks + 1 ? stale(
+          "captured-battle-not-started",
+          "the game did not start the campaign"
+        ) : (reportActivity({
+          message: `Launched battle against foreign power ${decision.governmentId + 1}`,
+          color: "success",
+          tags: Object.freeze(["combat"])
+        }), SUCCEEDED) : stale(
+          "captured-battle-campaign-failed",
+          `campaign failed: ${result.reason}`
+        );
       }
     });
     return Object.freeze({ reader, executor });
@@ -22480,6 +23227,12 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw()
+    }), capturedBattle = createCapturedBattle({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      keyState: pageCapture2.keyState,
+      readSettings: () => settingsStore.readRaw(),
+      onActivity
     }), capturedMech = createCapturedMech({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -23333,6 +24086,10 @@ Only continue if you trust the source. Injected code:
           let outcome = runPhase("autoFight.spy", () => (ensureCivicControls(), runCapturedSpyTraining(capturedSpyTraining)));
           outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`
+          );
+          let battleOutcome = runPhase("autoFight.battle", () => (ensureCivicControls(), isEnabled(settings, "autoHell") && ensureHellGarrisonControls(), runBattleAutomation(capturedBattle)));
+          battleOutcome !== void 0 && battleOutcome.status !== "succeeded" && reportOnce(
+            `autoFight.battle: ${battleOutcome.failure.code}: ${battleOutcome.failure.message}`
           );
         }
         let triggerActive = !1;

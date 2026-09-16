@@ -1,7 +1,7 @@
 import {
   createBattleAdapter,
   type BattleAdapterDependencies,
-} from "../adapters/evolve/combat/battle.ts";
+} from "../adapters/evolve/combat/compatibility-battle.ts";
 import { runBattleAutomation } from "../application/battle.ts";
 
 // Composition seam for the battle slice: owns the Evolve battle adapter
