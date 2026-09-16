@@ -246,4 +246,82 @@ assert.deepEqual(measuredPhases, [
   "flush",
 ]);
 
+// This is the executable runner boundary, so keep the legacy-sensitive subsequence observable even
+// though the captured runtime has its own composition seam.
+const phaseCalls = [];
+const trackPhase = (name) => () => phaseCalls.push(name);
+const phaseControls = {
+  markGameTickConsumed: trackPhase("markGameTickConsumed"),
+  setScriptTick: trackPhase("setScriptTick"),
+  setPlannerFreshTick: trackPhase("setPlannerFreshTick"),
+  updateScriptData: trackPhase("updateScriptData"),
+  updateOverrides: trackPhase("updateOverrides"),
+  finalizeScriptData: trackPhase("finalizeScriptData"),
+  updateState: trackPhase("updateState"),
+  updateUI: trackPhase("updateUI"),
+  keyManagerReset: trackPhase("keyManagerReset"),
+  autoGatherResources: trackPhase("autoGatherResources"),
+  autoTrigger: () => false,
+  autoResearch: trackPhase("autoResearch"),
+  autoBuild: trackPhase("autoBuild"),
+  autoMerc: trackPhase("autoMerc"),
+  autoSpy: trackPhase("autoSpy"),
+  autoBattle: trackPhase("autoBattle"),
+  autoTax: trackPhase("autoTax"),
+  autoGovernment: trackPhase("autoGovernment"),
+  isPrestigeAllowed: () => false,
+  updateBuildPlanner: trackPhase("updateBuildPlanner"),
+  keyManagerFinish: trackPhase("keyManagerFinish"),
+  recordSoulGem: trackPhase("recordSoulGem"),
+};
+assert.equal(
+  runTick({
+    reader: {
+      samplePreamble: () => ({
+        goal: "Standard",
+        forcedUpdate: false,
+        gameTicked: true,
+        scriptTick: 0,
+        tickRate: 1,
+        accelerated: false,
+      }),
+      sampleAutomation: () => ({
+        goal: "Standard",
+        masterScriptToggle: true,
+        autoBuild: true,
+        autoResearch: true,
+        autoFight: true,
+        autoTax: true,
+        autoGovernment: true,
+        autoTrigger: false,
+        stateLogEnabled: false,
+      }),
+    },
+    controls: phaseControls,
+  }),
+  true,
+);
+assert.deepEqual(
+  phaseCalls.filter((name) =>
+    [
+      "autoResearch",
+      "autoBuild",
+      "autoMerc",
+      "autoSpy",
+      "autoBattle",
+      "autoTax",
+      "autoGovernment",
+    ].includes(name),
+  ),
+  [
+    "autoResearch",
+    "autoBuild",
+    "autoMerc",
+    "autoSpy",
+    "autoBattle",
+    "autoTax",
+    "autoGovernment",
+  ],
+);
+
 console.log("Tick orchestration slice tests passed");

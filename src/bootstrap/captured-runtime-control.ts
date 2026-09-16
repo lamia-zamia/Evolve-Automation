@@ -1694,18 +1694,6 @@ export function startCapturedRuntime({
       ) {
         runPhase("buildingAlwaysClick", () => gatherResources());
       }
-      if (isEnabled(settings, "autoTax")) {
-        runPhase("autoTax", () => {
-          ensureCivicControls();
-          tax.autoTax();
-        });
-      }
-      if (isEnabled(settings, "autoGovernment")) {
-        runPhase("autoGovernment", () => {
-          ensureCivicControls();
-          runCapturedGovernmentAutomation(government);
-        });
-      }
       if (isEnabled(settings, "autoHell")) {
         runPhase("autoHell", () => {
           ensureCivicControls();
@@ -1805,6 +1793,43 @@ export function startCapturedRuntime({
           runCraftAutomation(craft);
         });
       }
+
+      // Keep the legacy-sensitive progression order: research precedes construction, and both
+      // complete before combat. The trigger gate stays immediately before them because a trigger
+      // that acted this cycle owns the resources they would otherwise spend.
+      let triggerActive = false;
+      if (isEnabled(settings, "autoTrigger")) {
+        const completed = runPhase("autoTrigger", () => {
+          triggerActive = triggerPhaseActive(
+            runTriggerAutomation({
+              reader: triggerActions.reader,
+              executor: triggerActions.executor,
+            }),
+          );
+          return true;
+        });
+        // A trigger phase that threw may already have pressed something, and cannot say what the
+        // rest of the list was saving for. Construction and research stand down rather than spend
+        // it — which is what the whole-cycle `try` did for this case, and the only part of that
+        // behavior worth keeping.
+        if (completed !== true) triggerActive = true;
+      }
+      if (!triggerActive && isEnabled(settings, "autoResearch")) {
+        runPhase("autoResearch", () => progression.runResearchCycle());
+      }
+      if (
+        !triggerActive &&
+        (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))
+      ) {
+        const outcome = runPhase("autoBuild", () =>
+          progression.runConstructionCycle(),
+        );
+        if (outcome !== undefined && outcome.status !== "succeeded") {
+          reportOnce(
+            `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`,
+          );
+        }
+      }
       if (isEnabled(settings, "autoFight")) {
         const outcome = runPhase("autoFight.spy", () => {
           ensureCivicControls();
@@ -1851,37 +1876,19 @@ export function startCapturedRuntime({
           }
         }
       }
-      // Triggers are commitments: when one of them buys something this cycle, construction and
-      // research stand down so they cannot spend what the next trigger is saving for.
-      let triggerActive = false;
-      if (isEnabled(settings, "autoTrigger")) {
-        const completed = runPhase("autoTrigger", () => {
-          triggerActive = triggerPhaseActive(
-            runTriggerAutomation({
-              reader: triggerActions.reader,
-              executor: triggerActions.executor,
-            }),
-          );
-          return true;
+      // Tax and government intentionally observe the completed combat pass, matching runTick's
+      // autoMerc → autoSpy → autoBattle → autoTax → autoGovernment tail where those controls exist.
+      if (isEnabled(settings, "autoTax")) {
+        runPhase("autoTax", () => {
+          ensureCivicControls();
+          tax.autoTax();
         });
-        // A trigger phase that threw may already have pressed something, and cannot say what the
-        // rest of the list was saving for. Construction and research stand down rather than spend
-        // it — which is what the whole-cycle `try` did for this case, and the only part of that
-        // behavior worth keeping.
-        if (completed !== true) triggerActive = true;
       }
-      if (
-        !triggerActive &&
-        (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))
-      ) {
-        const outcome = runPhase("autoBuild", () =>
-          progression.runConstructionCycle(),
-        );
-        if (outcome !== undefined && outcome.status !== "succeeded") {
-          reportOnce(
-            `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`,
-          );
-        }
+      if (isEnabled(settings, "autoGovernment")) {
+        runPhase("autoGovernment", () => {
+          ensureCivicControls();
+          runCapturedGovernmentAutomation(government);
+        });
       }
       if (isEnabled(settings, "autoMech")) {
         runPhase("autoMech", () => {
@@ -1946,9 +1953,6 @@ export function startCapturedRuntime({
             });
           }
         });
-      }
-      if (!triggerActive && isEnabled(settings, "autoResearch")) {
-        runPhase("autoResearch", () => progression.runResearchCycle());
       }
       // After construction and research, so neither is outbid for the Knowledge a gene costs.
       if (isEnabled(settings, "autoGenetics")) {

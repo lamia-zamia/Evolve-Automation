@@ -1016,4 +1016,73 @@ assert.equal(unsubscribeCount, 1);
   );
 }
 
+// The production captured cycle is a separate orchestration boundary from runTick. These phase
+// failures make its actual order observable without relying on source-text ordering or a test-only
+// expected-phase constant.
+{
+  const phaseFailures = [];
+  let cycle;
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => {
+          throw new Error("phase stub");
+        },
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: {
+        resolve: () => undefined,
+        invoke: () => ({ ok: false, reason: "unknown-control" }),
+        capturedElementIds: () => [],
+      },
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          tickRate: 1,
+          autoResearch: true,
+          autoBuild: true,
+          autoFight: true,
+          autoTax: true,
+          autoGovernment: true,
+        }),
+    },
+    logError: (message) => phaseFailures.push(message),
+  });
+  cycle({ periods: 1 });
+  stopCycle();
+
+  assert.deepEqual(
+    phaseFailures
+      .filter(
+        (message) =>
+          message.includes(" stopped: ") &&
+          !message.startsWith("buildingAlwaysClick stopped: "),
+      )
+      .map((message) => message.slice(0, message.indexOf(" stopped: "))),
+    [
+      "autoResearch",
+      "autoBuild",
+      "autoFight.spy",
+      "autoFight.espionage",
+      "autoTax",
+      "autoGovernment",
+    ],
+  );
+}
+
 console.log("captured-runtime-control ok");

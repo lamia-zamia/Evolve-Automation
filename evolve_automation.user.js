@@ -24873,11 +24873,7 @@ Only continue if you trust the source. Injected code:
           ensureGalaxyMarketControls(), galaxyMarketAutomation.run();
         }), isEnabled(settings, "autoStorage") && runPhase("autoStorage", () => {
           ensureStorageControls(), storageAutomation.run();
-        }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && runPhase("buildingAlwaysClick", () => gatherResources()), isEnabled(settings, "autoTax") && runPhase("autoTax", () => {
-          ensureCivicControls(), tax.autoTax();
-        }), isEnabled(settings, "autoGovernment") && runPhase("autoGovernment", () => {
-          ensureCivicControls(), runCapturedGovernmentAutomation(government);
-        }), isEnabled(settings, "autoHell") && runPhase("autoHell", () => {
+        }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && runPhase("buildingAlwaysClick", () => gatherResources()), isEnabled(settings, "autoHell") && runPhase("autoHell", () => {
           ensureCivicControls(), hell.run();
         }), isEnabled(settings, "autoMiningDroid") && runPhase("autoMiningDroid", () => {
           ensureMiningDroidControls(), miningDroid.run();
@@ -24909,7 +24905,7 @@ Only continue if you trust the source. Injected code:
           ensurePylonControls(), pylon.run();
         });
         let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
-        if (autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
+        autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
           ensureCivicControls(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1);
         }) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPhase("autoJobs", () => {
           ensureCivicControls(), runJobsAutomation(ordinaryJobs, !1);
@@ -24917,7 +24913,23 @@ Only continue if you trust the source. Injected code:
           ensureCivicControls(), runJobsAutomation(craftsmen, !0);
         }), isEnabled(settings, "autoCraft") && runPhase("autoCraft", () => {
           runCraftAutomation(craft);
-        }), isEnabled(settings, "autoFight")) {
+        });
+        let triggerActive = !1;
+        if (isEnabled(settings, "autoTrigger") && runPhase("autoTrigger", () => (triggerActive = triggerPhaseActive(
+          runTriggerAutomation({
+            reader: triggerActions.reader,
+            executor: triggerActions.executor
+          })
+        ), !0)) !== !0 && (triggerActive = !0), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle()), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
+          let outcome = runPhase(
+            "autoBuild",
+            () => progression.runConstructionCycle()
+          );
+          outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
+            `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`
+          );
+        }
+        if (isEnabled(settings, "autoFight")) {
           let outcome = runPhase("autoFight.spy", () => (ensureCivicControls(), runCapturedSpyTraining(capturedSpyTraining)));
           outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`
@@ -24936,22 +24948,11 @@ Only continue if you trust the source. Injected code:
             );
           }
         }
-        let triggerActive = !1;
-        if (isEnabled(settings, "autoTrigger") && runPhase("autoTrigger", () => (triggerActive = triggerPhaseActive(
-          runTriggerAutomation({
-            reader: triggerActions.reader,
-            executor: triggerActions.executor
-          })
-        ), !0)) !== !0 && (triggerActive = !0), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
-          let outcome = runPhase(
-            "autoBuild",
-            () => progression.runConstructionCycle()
-          );
-          outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
-            `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`
-          );
-        }
-        isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
+        isEnabled(settings, "autoTax") && runPhase("autoTax", () => {
+          ensureCivicControls(), tax.autoTax();
+        }), isEnabled(settings, "autoGovernment") && runPhase("autoGovernment", () => {
+          ensureCivicControls(), runCapturedGovernmentAutomation(government);
+        }), isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
           ensureMechControls();
           let outcome = runCapturedMech(capturedMech);
           outcome.status !== "succeeded" && reportOnce(
@@ -24977,7 +24978,7 @@ Only continue if you trust the source. Injected code:
             reader: fleet.reader,
             executor: fleet.executor
           }));
-        }), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle()), isEnabled(settings, "autoGenetics") && runPhase("autoGenetics", () => {
+        }), isEnabled(settings, "autoGenetics") && runPhase("autoGenetics", () => {
           ensureGeneticsControls(), runGeneticsAutomation(genetics);
         });
         let prestigeType = settings.prestigeType;
