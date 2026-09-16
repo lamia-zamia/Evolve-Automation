@@ -16,7 +16,10 @@ import {
   type ForeignAchievementGoal,
   type ForeignAchievementState,
 } from "../../../domain/combat/foreign-achievements.ts";
-import { isAchievementGuardActive } from "../../../domain/progression/prestige/achievement-guards.ts";
+import {
+  calculateAchievementStarLevel,
+  isAchievementGuardActive,
+} from "../../../domain/progression/prestige/achievement-guards.ts";
 import type { BattleExecutor, BattleReader } from "../../../ports/battle.ts";
 import type { GameActivitySink } from "../../../ports/game-message-log.ts";
 import type {
@@ -27,7 +30,6 @@ import type { GameKeyStateReader } from "../../../ports/game-key-state.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
-import { readCapturedAscensionLevel } from "../ascension-level.ts";
 import {
   HELL_GARRISON_CONTROLS,
   readCapturedHellGarrison,
@@ -341,15 +343,16 @@ function capturedBattlePacifistGuardActive(
   }
   const attacks = finite(readProperty(readProperty(root, "stats"), "attacks"));
   const earnedStar = capturedBattleAchievementStar(root, "pacifist");
-  const targetStar = readCapturedAscensionLevel(root);
+  const race = readProperty(root, "race");
+  const targetStar = calculateAchievementStarLevel({
+    challengePlasmid: Boolean(readProperty(race, "no_plasmid")),
+    challengeTrade: Boolean(readProperty(race, "no_trade")),
+    challengeCraft: Boolean(readProperty(race, "no_craft")),
+    challengeCrispr: Boolean(readProperty(race, "no_crispr")),
+  });
   // An enabled achievement guard with an incomplete capture must not be
   // treated as inactive before an automatic campaign is launched.
-  if (
-    attacks === undefined ||
-    earnedStar === undefined ||
-    targetStar === undefined
-  )
-    return true;
+  if (attacks === undefined || earnedStar === undefined) return true;
   return isAchievementGuardActive({
     guard: "guardPacifist",
     enabled: true,

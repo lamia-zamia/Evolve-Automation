@@ -22332,6 +22332,9 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/domain/progression/prestige/achievement-guards.ts
+  function calculateAchievementStarLevel(context) {
+    return 1 + Number(context.challengePlasmid) + Number(context.challengeTrade) + Number(context.challengeCraft) + Number(context.challengeCrispr);
+  }
   function isAchievementGuardActive(input) {
     if (!input.enabled || input.earnedStar >= input.targetStar) return !1;
     switch (input.guard) {
@@ -22501,8 +22504,13 @@ Only continue if you trust the source. Injected code:
   function capturedBattlePacifistGuardActive(root, settings) {
     if (settings.achievementGuards !== !0 || settings.guardPacifist === !1)
       return !1;
-    let attacks = finite(readProperty(readProperty(root, "stats"), "attacks")), earnedStar = capturedBattleAchievementStar(root, "pacifist"), targetStar = readCapturedAscensionLevel(root);
-    return attacks === void 0 || earnedStar === void 0 || targetStar === void 0 ? !0 : isAchievementGuardActive({
+    let attacks = finite(readProperty(readProperty(root, "stats"), "attacks")), earnedStar = capturedBattleAchievementStar(root, "pacifist"), race = readProperty(root, "race"), targetStar = calculateAchievementStarLevel({
+      challengePlasmid: !!readProperty(race, "no_plasmid"),
+      challengeTrade: !!readProperty(race, "no_trade"),
+      challengeCraft: !!readProperty(race, "no_craft"),
+      challengeCrispr: !!readProperty(race, "no_crispr")
+    });
+    return attacks === void 0 || earnedStar === void 0 ? !0 : isAchievementGuardActive({
       guard: "guardPacifist",
       enabled: !0,
       earnedStar,

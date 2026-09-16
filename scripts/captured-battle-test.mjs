@@ -306,6 +306,29 @@ for (const trait of ["frail", "high_pop"]) {
   assert.equal(root.stats.attacks, 0);
 }
 
+// Non-star challenge modifiers do not raise the achievement guard target.
+{
+  const guardedSettings = {
+    ...settings,
+    achievementGuards: true,
+    guardPacifist: true,
+  };
+  const root = makeRoot({
+    race: { universe: "standard", nerfed: 1 },
+    stats: {
+      attacks: 0,
+      achieve: { pacifist: { l: 1 } },
+    },
+  });
+  const automation = makeAutomation(root, guardedSettings);
+  assert.equal(runBattleAutomation(automation.adapter).status, "succeeded");
+  assert.deepEqual(
+    automation.trace.filter((entry) => entry[1] === "campaign"),
+    [["garrison", "campaign", 0]],
+  );
+  assert.equal(root.stats.attacks, 1);
+}
+
 // Once two powers are controlled, unification deliberately pauses a non-Occupy
 // farm target instead of continuing to attack it.
 {
