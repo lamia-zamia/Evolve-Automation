@@ -50,6 +50,7 @@ const CAPTURED_ESPIONAGE_MODAL_METHODS = [
 const CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES = 3;
 const CAPTURED_ESPIONAGE_ACTIVE_MODAL_SELECTOR = ".modal.is-active";
 const CAPTURED_ESPIONAGE_MODAL_BACKGROUND_SELECTOR = ".modal-background";
+const CAPTURED_ESPIONAGE_GOVERNOR_TASKS = ["combo_spy", "spyop"] as const;
 
 interface CapturedEspionageModalLifecycle {
   readonly owns: (candidate: unknown) => boolean;
@@ -109,6 +110,21 @@ function capturedEspionageForeignGovernment(
     `gov${governmentId}`,
   );
   return isRecord(value) && !Array.isArray(value) ? value : undefined;
+}
+
+function capturedEspionageGovernorOwnsEspionage(root: unknown): boolean {
+  const tasks = readProperty(
+    readProperty(readProperty(root, "race"), "governor"),
+    "tasks",
+  );
+  return (
+    isRecord(tasks) &&
+    Object.values(tasks).some((task) =>
+      CAPTURED_ESPIONAGE_GOVERNOR_TASKS.some(
+        (governorTask) => governorTask === task,
+      ),
+    )
+  );
 }
 
 function capturedEspionageControl(
@@ -361,6 +377,8 @@ export function createCapturedEspionage(
   readonly reader: CapturedEspionageReader;
   readonly executor: CapturedEspionageExecutor;
   readonly isBusy: () => boolean;
+  readonly isGovernorEspionageOwned: () => boolean;
+  readonly standDown: () => void;
 } {
   const reportActivity = dependencies.onActivity ?? (() => {});
   let sample: CapturedEspionageSample | undefined;
@@ -408,6 +426,25 @@ export function createCapturedEspionage(
     const activeSample = sample;
     sample = undefined;
     activeSample?.modalLifecycle?.cleanup();
+  }
+
+  function standDown(): void {
+    if (
+      sample === undefined &&
+      pending === undefined &&
+      opening === undefined &&
+      !cycleAction
+    ) {
+      return;
+    }
+    const activeSample = sample;
+    const activeOpening = opening;
+    sample = undefined;
+    pending = undefined;
+    opening = undefined;
+    cycleAction = false;
+    activeSample?.modalLifecycle?.cleanup();
+    activeOpening?.modalLifecycle?.cleanup();
   }
 
   const reader: CapturedEspionageReader = Object.freeze({
@@ -809,6 +846,9 @@ export function createCapturedEspionage(
   return Object.freeze({
     reader,
     executor,
+    isGovernorEspionageOwned: () =>
+      capturedEspionageGovernorOwnsEspionage(dependencies.rootState.readRoot()),
+    standDown,
     isBusy: () =>
       cycleAction ||
       pending !== undefined ||

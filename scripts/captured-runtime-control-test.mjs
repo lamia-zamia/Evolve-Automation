@@ -1019,14 +1019,14 @@ assert.equal(unsubscribeCount, 1);
 // The production captured cycle is a separate orchestration boundary from runTick. These phase
 // failures make its actual order observable without relying on source-text ordering or a test-only
 // expected-phase constant. The always-on buildingAlwaysClick preflight consumes the first root
-// failure, so four failures reach research, build, and spy before one valid root enables the
+// failure, so four failures reach research, build, and spy before two valid root reads enable the
 // successful espionage no-op. The following root failure then makes the conditional battle phase
 // observable before tax and government.
 {
   const phaseFailures = [];
   const observedPhases = [];
   let remainingRootFailures = 4;
-  let espionageRootRead = false;
+  let espionageRootReads = 0;
   const root = {
     tech: { spy: 2 },
     civic: {
@@ -1061,8 +1061,8 @@ assert.equal(unsubscribeCount, 1);
             remainingRootFailures -= 1;
             throw new Error("phase stub");
           }
-          if (!espionageRootRead) {
-            espionageRootRead = true;
+          if (espionageRootReads < 2) {
+            espionageRootReads += 1;
             return root;
           }
           throw new Error("battle phase stub");

@@ -22065,8 +22065,10 @@ Only continue if you trust the source. Injected code:
     status: "succeeded"
   });
   function runCapturedEspionage(dependencies) {
+    if (dependencies.isGovernorEspionageOwned())
+      return dependencies.standDown(), CAPTURED_ESPIONAGE_SUCCEEDED;
     let decision = planCapturedEspionage(dependencies.reader.read());
-    return decision === null ? CAPTURED_ESPIONAGE_SUCCEEDED : dependencies.executor.execute(decision);
+    return decision === null ? CAPTURED_ESPIONAGE_SUCCEEDED : dependencies.isGovernorEspionageOwned() ? (dependencies.standDown(), CAPTURED_ESPIONAGE_SUCCEEDED) : dependencies.executor.execute(decision);
   }
 
   // src/domain/combat/battle.ts
@@ -22716,13 +22718,24 @@ Only continue if you trust the source. Injected code:
     "incite",
     "annex",
     "purchase"
-  ], CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES = 3, CAPTURED_ESPIONAGE_ACTIVE_MODAL_SELECTOR = ".modal.is-active", CAPTURED_ESPIONAGE_MODAL_BACKGROUND_SELECTOR = ".modal-background";
+  ], CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES = 3, CAPTURED_ESPIONAGE_ACTIVE_MODAL_SELECTOR = ".modal.is-active", CAPTURED_ESPIONAGE_MODAL_BACKGROUND_SELECTOR = ".modal-background", CAPTURED_ESPIONAGE_GOVERNOR_TASKS = ["combo_spy", "spyop"];
   function capturedEspionageForeignGovernment(root, governmentId) {
     let value = readProperty(
       readProperty(readProperty(root, "civic"), "foreign"),
       `gov${governmentId}`
     );
     return isRecord(value) && !Array.isArray(value) ? value : void 0;
+  }
+  function capturedEspionageGovernorOwnsEspionage(root) {
+    let tasks = readProperty(
+      readProperty(readProperty(root, "race"), "governor"),
+      "tasks"
+    );
+    return isRecord(tasks) && Object.values(tasks).some(
+      (task) => CAPTURED_ESPIONAGE_GOVERNOR_TASKS.some(
+        (governorTask) => governorTask === task
+      )
+    );
   }
   function capturedEspionageControl(controls, elementId, methods) {
     let control = controls.resolve(elementId);
@@ -22905,6 +22918,12 @@ Only continue if you trust the source. Injected code:
     function discardCapturedEspionageSample() {
       let activeSample = sample;
       sample = void 0, activeSample?.modalLifecycle?.cleanup();
+    }
+    function standDown() {
+      if (sample === void 0 && pending === void 0 && opening === void 0 && !cycleAction)
+        return;
+      let activeSample = sample, activeOpening = opening;
+      sample = void 0, pending = void 0, opening = void 0, cycleAction = !1, activeSample?.modalLifecycle?.cleanup(), activeOpening?.modalLifecycle?.cleanup();
     }
     let reader = Object.freeze({
       read() {
@@ -23135,6 +23154,8 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({
       reader,
       executor,
+      isGovernorEspionageOwned: () => capturedEspionageGovernorOwnsEspionage(dependencies.rootState.readRoot()),
+      standDown,
       isBusy: () => cycleAction || pending !== void 0 || opening !== void 0 || sample?.modalLifecycle !== void 0
     });
   }

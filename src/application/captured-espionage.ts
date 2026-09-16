@@ -12,9 +12,18 @@ const CAPTURED_ESPIONAGE_SUCCEEDED: CommandExecutionOutcome = Object.freeze({
 export function runCapturedEspionage(dependencies: {
   readonly reader: CapturedEspionageReader;
   readonly executor: CapturedEspionageExecutor;
+  readonly isGovernorEspionageOwned: () => boolean;
+  readonly standDown: () => void;
 }): CommandExecutionOutcome {
+  if (dependencies.isGovernorEspionageOwned()) {
+    dependencies.standDown();
+    return CAPTURED_ESPIONAGE_SUCCEEDED;
+  }
   const decision = planCapturedEspionage(dependencies.reader.read());
-  return decision === null
-    ? CAPTURED_ESPIONAGE_SUCCEEDED
-    : dependencies.executor.execute(decision);
+  if (decision === null) return CAPTURED_ESPIONAGE_SUCCEEDED;
+  if (dependencies.isGovernorEspionageOwned()) {
+    dependencies.standDown();
+    return CAPTURED_ESPIONAGE_SUCCEEDED;
+  }
+  return dependencies.executor.execute(decision);
 }

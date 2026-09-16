@@ -41,6 +41,7 @@ function makeControls(
   modalMethods,
   { visibleGovernmentIds = [0], initialModalGovernmentId = 0 } = {},
 ) {
+  let invokeCalls = 0;
   const methods = {
     vis: () => true,
     gvis: (index) => visibleGovernmentIds.includes(index),
@@ -73,6 +74,7 @@ function makeControls(
       return current.get(elementId);
     },
     invoke(control, method, args = []) {
+      invokeCalls += 1;
       if (current.get(control.elementId)?.generation !== control.generation) {
         return { ok: false, reason: "stale-control" };
       }
@@ -95,6 +97,9 @@ function makeControls(
     },
     current,
     installModal,
+    get invokeCalls() {
+      return invokeCalls;
+    },
   };
 }
 
@@ -107,6 +112,198 @@ function makeSettings(policy) {
     foreignUnification: false,
     foreignOccupyLast: false,
   };
+}
+
+function countCapturedCalls(adapter) {
+  let readerCalls = 0;
+  let executorCalls = 0;
+  return {
+    adapter: {
+      ...adapter,
+      reader: {
+        read() {
+          readerCalls += 1;
+          return adapter.reader.read();
+        },
+      },
+      executor: {
+        execute(decision) {
+          executorCalls += 1;
+          return adapter.executor.execute(decision);
+        },
+      },
+    },
+    calls: {
+      get reader() {
+        return readerCalls;
+      },
+      get executor() {
+        return executorCalls;
+      },
+    },
+  };
+}
+
+function governorTasks(activeTask) {
+  return { t0: activeTask, t1: "none", t2: "none" };
+}
+
+function runGovernorOwnershipCase(activeTask) {
+  const root = makeRoot("Influence", { hstl: 30 });
+  root.race = { governor: { tasks: governorTasks(activeTask) } };
+  const controls = makeControls(root, { influence() {} });
+  let documentCalls = 0;
+  let ensureCalls = 0;
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings("Influence"),
+    getDocument: () => {
+      documentCalls += 1;
+      return {};
+    },
+    ensureForeignModal: () => {
+      ensureCalls += 1;
+      return true;
+    },
+  });
+  assert.equal(adapter.isGovernorEspionageOwned(), true);
+  const counted = countCapturedCalls(adapter);
+  const outcome = runCapturedEspionage(counted.adapter);
+  assert.equal(outcome.status, "succeeded");
+  assert.equal(counted.calls.reader, 0);
+  assert.equal(counted.calls.executor, 0);
+  assert.equal(controls.invokeCalls, 0);
+  assert.equal(documentCalls, 0);
+  assert.equal(ensureCalls, 0);
+  assert.equal(adapter.isBusy(), false);
+}
+
+runGovernorOwnershipCase("combo_spy");
+runGovernorOwnershipCase("spyop");
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  let influenceCalls = 0;
+  const controls = makeControls(root, {
+    influence(currentRoot) {
+      influenceCalls += 1;
+      currentRoot.civic.foreign.gov0.hstl -= 5;
+    },
+  });
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings("Influence"),
+    onActivity: () => {},
+  });
+  const counted = countCapturedCalls(adapter);
+  const outcome = runCapturedEspionage(counted.adapter);
+  assert.equal(outcome.status, "succeeded");
+  assert.equal(counted.calls.reader, 1);
+  assert.equal(counted.calls.executor, 1);
+  assert.equal(controls.invokeCalls > 0, true);
+  assert.equal(root.civic.foreign.gov0.hstl, 25);
+  assert.equal(influenceCalls, 1);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const controls = makeControls(
+    root,
+    {
+      influence(currentRoot) {
+        currentRoot.civic.foreign.gov0.sab = 300;
+        currentRoot.civic.foreign.gov0.act = "influence";
+      },
+    },
+    { initialModalGovernmentId: null },
+  );
+  const activeModals = [];
+  const createdModal = makeModalFixture(activeModals);
+  let ensureCalls = 0;
+  let documentCalls = 0;
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings("Influence"),
+    getDocument: () => {
+      documentCalls += 1;
+      return {
+        querySelector: () => null,
+        querySelectorAll: () => activeModals,
+      };
+    },
+    ensureForeignModal: (governmentId) => {
+      ensureCalls += 1;
+      activeModals.push(createdModal);
+      controls.installModal(governmentId);
+      return true;
+    },
+  });
+  const counted = countCapturedCalls(adapter);
+  const opened = runCapturedEspionage(counted.adapter);
+  assert.equal(opened.status, "stale");
+  assert.equal(opened.failure.code, "captured-espionage-modal-pending");
+  assert.equal(counted.calls.reader, 1);
+  assert.equal(counted.calls.executor, 1);
+  assert.equal(adapter.isBusy(), true);
+  assert.equal(createdModal.style.visibility, "hidden");
+  const documentCallsBeforeStandDown = documentCalls;
+
+  root.race = { governor: { tasks: governorTasks("combo_spy") } };
+  const stoodDown = runCapturedEspionage(counted.adapter);
+  assert.equal(stoodDown.status, "succeeded");
+  assert.equal(counted.calls.reader, 1);
+  assert.equal(counted.calls.executor, 1);
+  assert.equal(documentCalls, documentCallsBeforeStandDown);
+  assert.equal(ensureCalls, 1);
+  assert.equal(createdModal.closed, true);
+  assert.deepEqual(activeModals, []);
+  assert.equal(adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const controls = makeControls(root, {
+    influence(currentRoot) {
+      currentRoot.civic.foreign.gov0.sab = 300;
+      currentRoot.civic.foreign.gov0.act = "influence";
+    },
+  });
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings("Influence"),
+  });
+  const counted = countCapturedCalls(adapter);
+  const queued = runCapturedEspionage(counted.adapter);
+  assert.equal(queued.status, "stale");
+  assert.equal(queued.failure.code, "captured-espionage-postcondition-pending");
+  assert.equal(adapter.isBusy(), true);
+
+  root.race = { governor: { tasks: governorTasks("spyop") } };
+  const stoodDown = runCapturedEspionage(counted.adapter);
+  assert.equal(stoodDown.status, "succeeded");
+  assert.equal(counted.calls.reader, 1);
+  assert.equal(counted.calls.executor, 1);
+  assert.equal(adapter.isBusy(), false);
 }
 
 function makeModalFixture(activeModals) {
