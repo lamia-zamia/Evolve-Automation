@@ -19,6 +19,7 @@ import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 import {
   CAPTURED_FOREIGN_CONTROL,
+  CAPTURED_FOREIGN_MAX_INDEX,
   capturedForeignEspionageTriggerSelector,
   capturedForeignEspionageUseful,
   capturedForeignOperationMethod,
@@ -49,6 +50,8 @@ interface CapturedEspionageSample {
   readonly root: unknown;
   readonly foreign: GameControlHandle;
   readonly modal: GameControlHandle | undefined;
+  readonly modalGovernmentId: number | undefined;
+  readonly modalToReplace: GameControlHandle | undefined;
   readonly target: CapturedForeignGovernment;
   readonly input: CapturedEspionageInput;
 }
@@ -70,6 +73,7 @@ interface CapturedEspionageModalOpening {
   readonly root: unknown;
   readonly foreign: GameControlHandle;
   readonly governmentId: number;
+  readonly previousModal: GameControlHandle | undefined;
 }
 
 export interface CapturedEspionageDependencies {
@@ -78,6 +82,8 @@ export interface CapturedEspionageDependencies {
   readonly readSettings: () => unknown;
   /** The page document is used only to click the game-owned modal trigger. */
   readonly getDocument?: () => unknown;
+  /** Opens the modal through a genuinely mounted Foreign component when its panel is off-tab. */
+  readonly ensureForeignModal?: (governmentId: number) => boolean;
   readonly onActivity?: GameActivitySink;
 }
 
@@ -132,6 +138,24 @@ function capturedEspionageState(
     action:
       typeof government["act"] === "string" ? government["act"] : undefined,
   });
+}
+
+function capturedEspionageModalGovernmentId(
+  root: unknown,
+  modal: GameControlHandle,
+): number | undefined {
+  const data = modal.data;
+  if (data === undefined) return undefined;
+  for (
+    let governmentId = 0;
+    governmentId <= CAPTURED_FOREIGN_MAX_INDEX;
+    governmentId += 1
+  ) {
+    if (data === capturedEspionageForeignGovernment(root, governmentId)) {
+      return governmentId;
+    }
+  }
+  return undefined;
 }
 
 function capturedEspionageTarget(
@@ -200,7 +224,7 @@ function capturedEspionagePostconditionChanged(
     case "influence":
       return after.hostility !== before.hostility;
     case "sabotage":
-      return after.military !== before.military || after.sabotageProgress > 0;
+      return after.military !== before.military;
     case "incite":
       return after.unrest !== before.unrest;
     case "annex":
@@ -274,25 +298,37 @@ export function createCapturedEspionage(
       cycleAction = false;
       const root = dependencies.rootState.readRoot();
       if (!isRecord(root)) return capturedEspionageEmptyInput();
-      completePending(root);
-      if (pending !== undefined) return capturedEspionageEmptyInput();
+      const pendingCompleted = completePending(root);
+      if (pending !== undefined || pendingCompleted) {
+        return capturedEspionageEmptyInput();
+      }
 
+      let modalFromOpening: GameControlHandle | undefined;
+      let modalGovernmentId: number | undefined;
       if (opening !== undefined) {
+        const activeOpening = opening;
         if (
-          opening.root !== root ||
+          activeOpening.root !== root ||
           dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL)
-            ?.generation !== opening.foreign.generation
+            ?.generation !== activeOpening.foreign.generation
         ) {
           opening = undefined;
-        } else if (
-          capturedEspionageControl(
+        } else {
+          const currentModal = capturedEspionageControl(
             dependencies.controls,
             CAPTURED_ESPIONAGE_MODAL,
             CAPTURED_ESPIONAGE_MODAL_METHODS,
-          ) === undefined
-        ) {
-          return capturedEspionageEmptyInput();
-        } else {
+          );
+          if (
+            currentModal === undefined ||
+            (activeOpening.previousModal !== undefined &&
+              currentModal.generation ===
+                activeOpening.previousModal.generation)
+          ) {
+            return capturedEspionageEmptyInput();
+          }
+          modalFromOpening = currentModal;
+          modalGovernmentId = activeOpening.governmentId;
           opening = undefined;
         }
       }
@@ -326,13 +362,44 @@ export function createCapturedEspionage(
         (candidate) => candidate.governmentId === strategy.selectedTargetId,
       );
       if (target === undefined) return capturedEspionageEmptyInput();
-      const modal = capturedEspionageControl(
-        dependencies.controls,
-        CAPTURED_ESPIONAGE_MODAL,
-        CAPTURED_ESPIONAGE_MODAL_METHODS,
-      );
+      let modal =
+        modalFromOpening ??
+        capturedEspionageControl(
+          dependencies.controls,
+          CAPTURED_ESPIONAGE_MODAL,
+          CAPTURED_ESPIONAGE_MODAL_METHODS,
+        );
+      let modalToReplace: GameControlHandle | undefined;
+      const capturedModalGovernmentId =
+        modal === undefined
+          ? undefined
+          : capturedEspionageModalGovernmentId(root, modal);
+      if (
+        modal !== undefined &&
+        ((capturedModalGovernmentId !== undefined &&
+          capturedModalGovernmentId !== target.governmentId) ||
+          (capturedModalGovernmentId === undefined &&
+            modalFromOpening === undefined) ||
+          (modalFromOpening !== undefined &&
+            modalGovernmentId !== target.governmentId))
+      ) {
+        modalToReplace = modal;
+        modal = undefined;
+        modalGovernmentId = undefined;
+      } else if (modal !== undefined) {
+        modalGovernmentId =
+          capturedModalGovernmentId ?? modalGovernmentId ?? target.governmentId;
+      }
       const input = capturedEspionageInput(root, target);
-      sample = Object.freeze({ root, foreign, modal, target, input });
+      sample = Object.freeze({
+        root,
+        foreign,
+        modal,
+        modalGovernmentId,
+        modalToReplace,
+        target,
+        input,
+      });
       return input;
     },
   });
@@ -362,6 +429,15 @@ export function createCapturedEspionage(
         return stale(
           "captured-espionage-foreign-changed",
           "captured foreign control changed",
+        );
+      }
+      if (
+        active.modal !== undefined &&
+        active.modalGovernmentId !== decision.governmentId
+      ) {
+        return stale(
+          "captured-espionage-modal-target-changed",
+          "captured espionage modal targets a different government",
         );
       }
       if (
@@ -447,7 +523,7 @@ export function createCapturedEspionage(
       sample = undefined;
       const modal = active.modal;
       if (modal === undefined) {
-        cycleAction = true;
+        let opened = false;
         const document = dependencies.getDocument?.();
         const trigger =
           isRecord(document) && typeof document["querySelector"] === "function"
@@ -461,23 +537,25 @@ export function createCapturedEspionage(
             trigger,
             [],
           );
-        } else {
-          const result = dependencies.controls.invoke(
-            active.foreign,
-            "trigModal",
-            [decision.governmentId],
-          );
-          if (!result.ok) {
-            return stale(
-              "captured-espionage-modal-failed",
-              `espionage modal failed: ${result.reason}`,
-            );
-          }
+          opened = true;
+        } else if (dependencies.ensureForeignModal?.(decision.governmentId)) {
+          opened = true;
         }
+        if (!opened) {
+          return stale(
+            "captured-espionage-modal-trigger-missing",
+            "the game-owned espionage modal trigger is not mounted",
+          );
+        }
+        cycleAction = true;
+        const openingForeign =
+          dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL) ??
+          active.foreign;
         opening = Object.freeze({
           root: active.root,
-          foreign: active.foreign,
+          foreign: openingForeign,
           governmentId: decision.governmentId,
+          previousModal: active.modalToReplace,
         });
         return stale(
           "captured-espionage-modal-pending",

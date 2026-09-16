@@ -22409,7 +22409,7 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/combat/captured-foreign-state.ts
-  var CAPTURED_FOREIGN_CONTROL2 = "foreign", CAPTURED_FOREIGN_MAX_INDEX = 4;
+  var CAPTURED_FOREIGN_CONTROL2 = "foreign", CAPTURED_FOREIGN_PANEL_SELECTOR = "#foreign", CAPTURED_FOREIGN_MAX_INDEX = 4;
   function capturedForeignSettingBoolean(settings, key, fallback) {
     return typeof settings[key] == "boolean" ? settings[key] : fallback;
   }
@@ -22722,6 +22722,14 @@ Only continue if you trust the source. Injected code:
         action: typeof government.act == "string" ? government.act : void 0
       });
   }
+  function capturedEspionageModalGovernmentId(root, modal) {
+    let data = modal.data;
+    if (data !== void 0) {
+      for (let governmentId = 0; governmentId <= CAPTURED_FOREIGN_MAX_INDEX; governmentId += 1)
+        if (data === capturedEspionageForeignGovernment(root, governmentId))
+          return governmentId;
+    }
+  }
   function capturedEspionageTarget(root, target) {
     return readCapturedForeignGovernment(
       root,
@@ -22773,7 +22781,7 @@ Only continue if you trust the source. Injected code:
       case "influence":
         return after.hostility !== before.hostility;
       case "sabotage":
-        return after.military !== before.military || after.sabotageProgress > 0;
+        return after.military !== before.military;
       case "incite":
         return after.unrest !== before.unrest;
       case "annex":
@@ -22811,19 +22819,26 @@ Only continue if you trust the source. Injected code:
       read() {
         sample = void 0, cycleAction = !1;
         let root = dependencies.rootState.readRoot();
-        if (!isRecord(root) || (completePending(root), pending !== void 0)) return capturedEspionageEmptyInput();
-        if (opening !== void 0)
-          if (opening.root !== root || dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL2)?.generation !== opening.foreign.generation)
+        if (!isRecord(root)) return capturedEspionageEmptyInput();
+        let pendingCompleted = completePending(root);
+        if (pending !== void 0 || pendingCompleted)
+          return capturedEspionageEmptyInput();
+        let modalFromOpening, modalGovernmentId;
+        if (opening !== void 0) {
+          let activeOpening = opening;
+          if (activeOpening.root !== root || dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL2)?.generation !== activeOpening.foreign.generation)
             opening = void 0;
           else {
-            if (capturedEspionageControl(
+            let currentModal = capturedEspionageControl(
               dependencies.controls,
               CAPTURED_ESPIONAGE_MODAL,
               CAPTURED_ESPIONAGE_MODAL_METHODS
-            ) === void 0)
+            );
+            if (currentModal === void 0 || activeOpening.previousModal !== void 0 && currentModal.generation === activeOpening.previousModal.generation)
               return capturedEspionageEmptyInput();
-            opening = void 0;
+            modalFromOpening = currentModal, modalGovernmentId = activeOpening.governmentId, opening = void 0;
           }
+        }
         let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, foreign = capturedEspionageControl(
           dependencies.controls,
           CAPTURED_FOREIGN_CONTROL2,
@@ -22847,12 +22862,22 @@ Only continue if you trust the source. Injected code:
           (candidate) => candidate.governmentId === strategy.selectedTargetId
         );
         if (target === void 0) return capturedEspionageEmptyInput();
-        let modal = capturedEspionageControl(
+        let modal = modalFromOpening ?? capturedEspionageControl(
           dependencies.controls,
           CAPTURED_ESPIONAGE_MODAL,
           CAPTURED_ESPIONAGE_MODAL_METHODS
-        ), input = capturedEspionageInput(root, target);
-        return sample = Object.freeze({ root, foreign, modal, target, input }), input;
+        ), modalToReplace, capturedModalGovernmentId = modal === void 0 ? void 0 : capturedEspionageModalGovernmentId(root, modal);
+        modal !== void 0 && (capturedModalGovernmentId !== void 0 && capturedModalGovernmentId !== target.governmentId || capturedModalGovernmentId === void 0 && modalFromOpening === void 0 || modalFromOpening !== void 0 && modalGovernmentId !== target.governmentId) ? (modalToReplace = modal, modal = void 0, modalGovernmentId = void 0) : modal !== void 0 && (modalGovernmentId = capturedModalGovernmentId ?? modalGovernmentId ?? target.governmentId);
+        let input = capturedEspionageInput(root, target);
+        return sample = Object.freeze({
+          root,
+          foreign,
+          modal,
+          modalGovernmentId,
+          modalToReplace,
+          target,
+          input
+        }), input;
       }
     }), executor = Object.freeze({
       execute(decision) {
@@ -22874,6 +22899,11 @@ Only continue if you trust the source. Injected code:
           return stale(
             "captured-espionage-foreign-changed",
             "captured foreign control changed"
+          );
+        if (active.modal !== void 0 && active.modalGovernmentId !== decision.governmentId)
+          return stale(
+            "captured-espionage-modal-target-changed",
+            "captured espionage modal targets a different government"
           );
         if (decision.kind !== "captured-espionage" || decision.governmentId !== active.input.governmentId || decision.expectedSpyCount !== active.input.spyCount || decision.expectedSabotageProgress !== active.input.sabotageProgress || decision.expectedMilitary !== active.input.military || decision.expectedHostility !== active.input.hostility || decision.expectedUnrest !== active.input.unrest || decision.expectedOccupied !== active.input.occupied || decision.expectedAnnexed !== active.input.annexed || decision.expectedPurchased !== active.input.purchased)
           return rejected(
@@ -22912,32 +22942,25 @@ Only continue if you trust the source. Injected code:
         sample = void 0;
         let modal = active.modal;
         if (modal === void 0) {
-          cycleAction = !0;
-          let document = dependencies.getDocument?.(), trigger = isRecord(document) && typeof document.querySelector == "function" ? document.querySelector(
+          let opened = !1, document = dependencies.getDocument?.(), trigger = isRecord(document) && typeof document.querySelector == "function" ? document.querySelector(
             capturedForeignEspionageTriggerSelector(decision.governmentId)
           ) : void 0;
-          if (isRecord(trigger) && typeof trigger.click == "function")
-            Reflect.apply(
-              trigger.click,
-              trigger,
-              []
+          if (isRecord(trigger) && typeof trigger.click == "function" ? (Reflect.apply(
+            trigger.click,
+            trigger,
+            []
+          ), opened = !0) : dependencies.ensureForeignModal?.(decision.governmentId) && (opened = !0), !opened)
+            return stale(
+              "captured-espionage-modal-trigger-missing",
+              "the game-owned espionage modal trigger is not mounted"
             );
-          else {
-            let result2 = dependencies.controls.invoke(
-              active.foreign,
-              "trigModal",
-              [decision.governmentId]
-            );
-            if (!result2.ok)
-              return stale(
-                "captured-espionage-modal-failed",
-                `espionage modal failed: ${result2.reason}`
-              );
-          }
+          cycleAction = !0;
+          let openingForeign = dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL2) ?? active.foreign;
           return opening = Object.freeze({
             root: active.root,
-            foreign: active.foreign,
-            governmentId: decision.governmentId
+            foreign: openingForeign,
+            governmentId: decision.governmentId,
+            previousModal: active.modalToReplace
           }), stale(
             "captured-espionage-modal-pending",
             "the game is still opening the espionage modal"
@@ -23875,11 +23898,12 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw()
-    }), capturedEspionage = createCapturedEspionage({
+    }), openCapturedForeignModal = () => !1, capturedEspionage = createCapturedEspionage({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       getDocument: () => document,
+      ensureForeignModal: (governmentId) => openCapturedForeignModal(governmentId),
       onActivity
     }), capturedBattle = createCapturedBattle({
       rootState: pageCapture2.rootState,
@@ -24195,7 +24219,43 @@ Only continue if you trust the source. Injected code:
       result.outcome.status !== "succeeded" && logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
-    }, ensureMechControls = () => {
+    };
+    openCapturedForeignModal = (governmentId) => {
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      if (govTabs === void 0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
+        return !1;
+      let clicked = !1, result = civicDiscovery.discover(
+        [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic
+          }),
+          Object.freeze({
+            setting: GOV_TABS_SETTING,
+            control: govTabs,
+            index: GOV_TAB_INDEX.civic
+          })
+        ],
+        {
+          mount: [CAPTURED_FOREIGN_PANEL_SELECTOR],
+          whileDrawn: () => {
+            let trigger = document.querySelector(
+              capturedForeignEspionageTriggerSelector(governmentId)
+            );
+            if (trigger === null || typeof trigger.click != "function")
+              throw new Error(
+                "the game-owned espionage modal trigger is not mounted"
+              );
+            trigger.click(), clicked = !0;
+          }
+        }
+      );
+      return result.outcome.status !== "succeeded" && logError(
+        `foreign espionage modal discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      ), result.outcome.status === "succeeded" && clicked;
+    };
+    let ensureMechControls = () => {
       if (pageCapture2.controls.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL)?.methods.includes("build"))
         return;
       let root = pageCapture2.rootState.readRoot(), portal = readProperty(root, "portal"), mechbay = readProperty(portal, "mechbay"), gameSettings = readProperty(root, "settings"), race = readProperty(root, "race");

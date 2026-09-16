@@ -16,6 +16,7 @@ import type {
 import { finite, isRecord, readProperty } from "../../validation.ts";
 
 export const CAPTURED_FOREIGN_CONTROL = "foreign";
+export const CAPTURED_FOREIGN_PANEL_SELECTOR = "#foreign";
 export const CAPTURED_FOREIGN_MAX_INDEX = 4;
 
 export type CapturedForeignRank = "Inferior" | "Superior" | "Rival";

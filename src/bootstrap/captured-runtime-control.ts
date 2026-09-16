@@ -165,6 +165,10 @@ import {
   SPACE_TAB_INDEX,
   SUB_TAB_CONTROLS,
 } from "../adapters/evolve/captured-tab-discovery.ts";
+import {
+  CAPTURED_FOREIGN_PANEL_SELECTOR,
+  capturedForeignEspionageTriggerSelector,
+} from "../adapters/evolve/combat/captured-foreign-state.ts";
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-handlers.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
@@ -326,11 +330,14 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
   });
+  let openCapturedForeignModal: (governmentId: number) => boolean = () => false;
   const capturedEspionage = createCapturedEspionage({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
     getDocument: () => document,
+    ensureForeignModal: (governmentId) =>
+      openCapturedForeignModal(governmentId),
     onActivity,
   });
   const capturedBattle = createCapturedBattle({
@@ -774,6 +781,51 @@ export function startCapturedRuntime({
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
     }
+  };
+  openCapturedForeignModal = (governmentId) => {
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (
+      govTabs === undefined ||
+      pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined
+    ) {
+      return false;
+    }
+    let clicked = false;
+    const result = civicDiscovery.discover(
+      [
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic,
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.civic,
+        }),
+      ],
+      {
+        mount: [CAPTURED_FOREIGN_PANEL_SELECTOR],
+        whileDrawn: () => {
+          const trigger = document.querySelector(
+            capturedForeignEspionageTriggerSelector(governmentId),
+          );
+          if (trigger === null || typeof trigger.click !== "function") {
+            throw new Error(
+              "the game-owned espionage modal trigger is not mounted",
+            );
+          }
+          trigger.click();
+          clicked = true;
+        },
+      },
+    );
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `foreign espionage modal discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+    return result.outcome.status === "succeeded" && clicked;
   };
   const ensureMechControls = () => {
     if (
