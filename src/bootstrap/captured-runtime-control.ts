@@ -142,10 +142,15 @@ import { runEvolution } from "../application/evolution.ts";
 import { runCapturedPlanetSelection } from "../application/captured-planet-selection.ts";
 import { runCapturedSpyTraining } from "../application/captured-spy-training.ts";
 import { runCapturedEspionage } from "../application/captured-espionage.ts";
+import { runMercenaryAutomation } from "../application/mercenary.ts";
 import { runBattleAutomation } from "../application/battle.ts";
 import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runtime-catalogs.ts";
 import { createCapturedSpyTraining } from "../adapters/evolve/combat/captured-spy-training.ts";
 import { createCapturedEspionage } from "../adapters/evolve/combat/captured-espionage.ts";
+import {
+  CAPTURED_MERCENARY_CONTROLS,
+  createCapturedMercenary,
+} from "../adapters/evolve/combat/captured-mercenary.ts";
 import { createCapturedBattle } from "../adapters/evolve/combat/battle.ts";
 import {
   CAPTURED_MECH_ASSEMBLY_CONTROL,
@@ -347,6 +352,19 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     onActivity,
   });
+  // The captured runtime has no compatibility state object. This application-instance goal is
+  // only the one-tick handoff used by the captured prestige planner and is discarded on reload.
+  let capturedPrestigeGoal = "Standard";
+  const capturedMercenary = createCapturedMercenary({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => settingsStore.readRaw(),
+    readGoal: () => capturedPrestigeGoal,
+    readMoneyRequested: () => readDemand().requestedQuantity("Money"),
+    readMoneyStorageRequired: () => readDemand().storageRequired("Money"),
+    keyState: pageCapture.keyState,
+    onActivity,
+  });
   const capturedMech = createCapturedMech({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -372,9 +390,6 @@ export function startCapturedRuntime({
   // local bundle is loaded after the game). Automation still fails closed below until capture is
   // complete, but configuration should not disappear with it.
   settingsPanel.ensurePanel();
-  // The captured runtime has no compatibility state object. This application-instance goal is
-  // only the one-tick handoff used by the captured prestige planner and is discarded on reload.
-  let capturedPrestigeGoal = "Standard";
   const reported = new Set<string>();
   const reportOnce = (message: string) => {
     if (reported.has(message)) return;
@@ -716,6 +731,7 @@ export function startCapturedRuntime({
     diagnostics,
   });
   let civicControlsDiscoveryAttempted = false;
+  let mercenaryDiscoveryAttempted = false;
   let mechDiscoveryAttempted = false;
   let hellGarrisonDiscoveryAttempted = false;
   let madDiscoveryAttemptedEpoch: string | undefined;
@@ -779,6 +795,40 @@ export function startCapturedRuntime({
     if (result.outcome.status !== "succeeded") {
       logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+  const ensureMercenaryControls = () => {
+    if (
+      CAPTURED_MERCENARY_CONTROLS.some((id) =>
+        pageCapture.controls.resolve(id)?.methods.includes("hire"),
+      )
+    ) {
+      return;
+    }
+    const root = pageCapture.rootState.readRoot();
+    const garrison = readProperty(readProperty(root, "civic"), "garrison");
+    if (!isRecord(garrison) || garrison["mercs"] !== true) return;
+    if (mercenaryDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs === undefined) return;
+    mercenaryDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: MAIN_TAB_INDEX.civic,
+      }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.military,
+      }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `Mercenary discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
     }
   };
@@ -1831,6 +1881,18 @@ export function startCapturedRuntime({
         }
       }
       if (isEnabled(settings, "autoFight")) {
+        const mercenaryOutcome = runPhase("autoFight.mercenary", () => {
+          ensureMercenaryControls();
+          return runMercenaryAutomation(capturedMercenary);
+        });
+        if (
+          mercenaryOutcome !== undefined &&
+          mercenaryOutcome.status !== "succeeded"
+        ) {
+          reportOnce(
+            `autoFight.mercenary: ${mercenaryOutcome.failure.code}: ${mercenaryOutcome.failure.message}`,
+          );
+        }
         const outcome = runPhase("autoFight.spy", () => {
           ensureCivicControls();
           return runCapturedSpyTraining(capturedSpyTraining);

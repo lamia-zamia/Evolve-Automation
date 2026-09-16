@@ -22071,6 +22071,69 @@ Only continue if you trust the source. Injected code:
     return decision === null ? CAPTURED_ESPIONAGE_SUCCEEDED : dependencies.isGovernorEspionageOwned() ? (dependencies.standDown(), CAPTURED_ESPIONAGE_SUCCEEDED) : dependencies.executor.execute(decision);
   }
 
+  // src/domain/combat/mercenary.ts
+  function planMercenaryCycle(input) {
+    if (!input.available || input.saveInflationMoney && input.goal !== "Reset")
+      return null;
+    if (input.goal === "Reset")
+      return Object.freeze({
+        soldierLimit: input.maxSoldiers,
+        minimumMoney: 0,
+        maximumCheapCost: Number.MAX_SAFE_INTEGER
+      });
+    let maximumCheapCost = input.moneyMedian * input.costIncomeMultiplier, minimumMoney = Math.max(
+      input.moneyMaximum * input.moneyStoragePercent / 100,
+      Math.min(
+        input.moneyMaximum - maximumCheapCost,
+        input.storageAssignExtra ? input.moneyStorageRequired / 1.03 : input.moneyStorageRequired
+      )
+    );
+    return Object.freeze({
+      soldierLimit: input.maxSoldiers - input.deadSoldierReserve,
+      minimumMoney,
+      maximumCheapCost
+    });
+  }
+  function planMercenaryHire(cycle, state) {
+    return state.currentSoldiers >= cycle.soldierLimit || state.moneyCurrent < state.mercenaryCost || !(state.moneySpare - state.mercenaryCost > cycle.minimumMoney || state.mercenaryCost < cycle.maximumCheapCost) ? null : Object.freeze({
+      kind: "hire-mercenary",
+      expectedSoldiers: state.currentSoldiers,
+      expectedCost: state.mercenaryCost,
+      expectedMoneyCurrent: state.moneyCurrent,
+      expectedMoneySpare: state.moneySpare
+    });
+  }
+  function planMercenaryLog(count2) {
+    return count2 <= 0 ? null : Object.freeze({
+      id: "mercenary",
+      message: count2 === 1 ? "Hired a mercenary to join the garrison." : `Hired ${count2} mercenaries to join the garrison.`,
+      categories: Object.freeze(["combat"])
+    });
+  }
+
+  // src/application/mercenary.ts
+  var SUCCEEDED12 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMercenaryAutomation(dependencies) {
+    let cycle = planMercenaryCycle(dependencies.reader.readCycle());
+    if (cycle === null) return SUCCEEDED12;
+    let hired = 0, outcome = SUCCEEDED12;
+    for (; ; ) {
+      let decision = planMercenaryHire(cycle, dependencies.reader.readState());
+      if (decision === null) break;
+      let result = dependencies.executor.hire(decision);
+      if (result.status === "hired") {
+        hired++;
+        continue;
+      }
+      result.status !== "not-hired" && (outcome = result);
+      break;
+    }
+    let event = planMercenaryLog(hired);
+    return event !== null && dependencies.logger.write(event), outcome;
+  }
+
   // src/domain/combat/battle.ts
   function classifyOccupationCandidate(parameters, foreign) {
     if (foreign.policy !== "Occupy" || foreign.occupied) return "skip";
@@ -22194,17 +22257,17 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/application/battle.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function runBattleAutomation(dependencies) {
     let parameters = prepareBattle(dependencies.reader.readCycle());
-    if (parameters === null) return SUCCEEDED12;
+    if (parameters === null) return SUCCEEDED13;
     let decision = planBattle(
       parameters,
       dependencies.reader.readBattlefield(parameters)
     );
-    return decision === null ? SUCCEEDED12 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED13 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/runtime-catalogs.ts
@@ -23160,6 +23223,343 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/domain/state-update.ts
+  function computeMoneyWindow(incomes, rate) {
+    let next = incomes.slice(1);
+    for (let i = next.length; i < 11; i++)
+      next.push(rate);
+    let median = [...next].sort((a, b) => a - b)[5] ?? 0;
+    return { incomes: next, median };
+  }
+
+  // src/adapters/evolve/combat/captured-mercenary.ts
+  var CAPTURED_MERCENARY_CONTROLS = Object.freeze([
+    "garrison",
+    "c_garrison"
+  ]), CAPTURED_MERCENARY_METHODS = Object.freeze([
+    "vis",
+    "hire",
+    "hell",
+    "s_max"
+  ]), CAPTURED_MERCENARY_EMPTY_STATE = Object.freeze({
+    currentSoldiers: Number.MAX_SAFE_INTEGER,
+    mercenaryCost: Number.POSITIVE_INFINITY,
+    moneyCurrent: 0,
+    moneySpare: 0
+  }), CAPTURED_MERCENARY_EMPTY_CYCLE = Object.freeze({
+    available: !1,
+    saveInflationMoney: !1,
+    goal: "Normal",
+    maxSoldiers: 0,
+    deadSoldierReserve: 0,
+    moneyMedian: 0,
+    costIncomeMultiplier: 0,
+    moneyStoragePercent: 0,
+    storageAssignExtra: !1,
+    moneyMaximum: 0,
+    moneyStorageRequired: 0
+  });
+  function capturedMercenarySettingNumber(settings, key, fallback) {
+    let value = settings[key];
+    return value === void 0 ? fallback : finite(value);
+  }
+  function capturedMercenarySettingBoolean(settings, key, fallback) {
+    let value = settings[key];
+    return value === void 0 ? fallback : typeof value == "boolean" ? value : void 0;
+  }
+  function capturedMercenaryControl(controls) {
+    return CAPTURED_MERCENARY_CONTROLS.map(
+      (elementId) => controls.resolve(elementId)
+    ).find(
+      (control) => control !== void 0 && CAPTURED_MERCENARY_METHODS.every(
+        (method) => control.methods.includes(method)
+      )
+    );
+  }
+  function capturedMercenaryInvokeNumber(controls, control, method) {
+    let result = controls.invoke(control, method, []);
+    return result.ok ? finite(result.value) : void 0;
+  }
+  function capturedMercenaryVisible(controls, control) {
+    let result = controls.invoke(control, "vis", []);
+    return result.ok && result.value === !0;
+  }
+  function capturedMercenaryTraitScale(rank, low, mid, high) {
+    let effectiveRank = Math.max(0.1, rank), from = effectiveRank < 1 ? low : mid, to = effectiveRank < 1 ? mid : high, fraction = effectiveRank < 1 ? (effectiveRank - 0.1) / 0.9 : effectiveRank <= 2 ? effectiveRank - 1 : 1 + (effectiveRank - 2) / 2;
+    return Object.freeze(
+      mid.map((value, index) => {
+        let fromValue = from[index], toValue = to[index];
+        return typeof fromValue == "number" && typeof toValue == "number" ? Number((fromValue + (toValue - fromValue) * fraction).toFixed(6)) : value;
+      })
+    );
+  }
+  function capturedMercenaryTraitRank(race, trait, kind) {
+    let rank = finite(race[trait]);
+    if (rank === void 0) return;
+    if (!race.empowered) return rank;
+    let empoweredRank = finite(race.empowered);
+    if (empoweredRank === void 0) return;
+    let bonus = capturedMercenaryTraitScale(
+      Math.min(2, empoweredRank),
+      [0.01, 5e-3],
+      [0.2, 0.1],
+      [0.4, 0.2]
+    )[kind === "major" ? 0 : 1];
+    return bonus === void 0 ? void 0 : Number((rank + bonus).toFixed(6));
+  }
+  function capturedMercenaryCost(root, workers, uses) {
+    let race = readProperty(root, "race");
+    if (!isRecord(race)) return;
+    let cost = Math.round(1.24 ** workers * 75) - 50;
+    if (cost > 25e3 && (cost = 25e3), uses > 0 && (cost *= 1.1 ** uses), race.brute) {
+      let rank = capturedMercenaryTraitRank(race, "brute", "major");
+      if (rank === void 0) return;
+      let discount = capturedMercenaryTraitScale(
+        rank,
+        [15, 40],
+        [50, 100],
+        [70, 150]
+      )[0];
+      if (discount === void 0) return;
+      cost *= 1 - discount / 100;
+    }
+    let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers"), housing = readProperty(city, "captive_housing");
+    if (race.unfathomable && Array.isArray(dwellers) && dwellers.includes("orc") && housing) {
+      let index = dwellers.indexOf("orc"), active = finite(readProperty(housing, `race${index}`)), torturerWorkers = finite(
+        readProperty(
+          readProperty(readProperty(root, "civic"), "torturer"),
+          "workers"
+        )
+      );
+      if (active === void 0 || torturerWorkers === void 0) return;
+      let adjusted = Math.min(active, 100);
+      adjusted > torturerWorkers && (adjusted -= Math.ceil((adjusted - torturerWorkers) / 3));
+      let nightmare = finite(
+        readProperty(
+          readProperty(
+            readProperty(readProperty(root, "stats"), "achieve"),
+            "nightmare"
+          ),
+          "mg"
+        )
+      ) ?? 0, fathom2 = adjusted / 100 * (nightmare / 5);
+      if (fathom2 > 0) {
+        let fathomDiscount = capturedMercenaryTraitScale(
+          1,
+          [15, 40],
+          [50, 100],
+          [70, 150]
+        )[0];
+        if (fathomDiscount === void 0) return;
+        cost *= 1 - fathomDiscount / 100 * fathom2;
+      }
+    }
+    let inflation = race.inflation;
+    if (inflation) {
+      let level = finite(inflation);
+      if (level === void 0) return;
+      cost *= 1 + level / 500;
+    }
+    if (race.high_pop) {
+      let rank = capturedMercenaryTraitRank(race, "high_pop", "genus");
+      if (rank === void 0) return;
+      let multiplier = capturedMercenaryTraitScale(
+        rank,
+        [2, 50, 1.2],
+        [4, 26, 3.5],
+        [7, 15.8, 6.5]
+      )[1];
+      if (multiplier === void 0) return;
+      cost *= multiplier / 100;
+    }
+    return Number.isFinite(cost) ? Math.round(cost) : void 0;
+  }
+  function capturedMercenaryMetrics(root, controls, control) {
+    let garrison = readProperty(readProperty(root, "civic"), "garrison"), money = readProperty(readProperty(root, "resource"), "Money");
+    if (!isRecord(garrison) || !isRecord(money)) return;
+    let workers = finite(garrison.workers), crew = finite(garrison.crew), maximumWorkers = finite(garrison.max), uses = finite(garrison.m_use), moneyCurrent = finite(money.amount), moneyMaximum = finite(money.max), moneyRate = finite(money.diff), citySoldiers = capturedMercenaryInvokeNumber(controls, control, "hell"), cityMaximum = capturedMercenaryInvokeNumber(controls, control, "s_max");
+    if (workers === void 0 || crew === void 0 || maximumWorkers === void 0 || uses === void 0 || moneyCurrent === void 0 || moneyMaximum === void 0 || moneyRate === void 0 || citySoldiers === void 0 || cityMaximum === void 0)
+      return;
+    let mercenaryCost = capturedMercenaryCost(root, workers, uses);
+    if (mercenaryCost !== void 0)
+      return Object.freeze({
+        workers,
+        crew,
+        maximumWorkers,
+        currentSoldiers: workers - crew,
+        maxSoldiers: maximumWorkers - crew,
+        uses,
+        moneyCurrent,
+        moneyMaximum,
+        moneyRate,
+        citySoldiers,
+        cityMaximum,
+        mercenaryCost
+      });
+  }
+  function capturedMercenaryState(root, controls, control, readMoneyRequested) {
+    let metrics = capturedMercenaryMetrics(root, controls, control);
+    if (metrics === void 0) return CAPTURED_MERCENARY_EMPTY_STATE;
+    let requested = readMoneyRequested === void 0 ? 0 : finite(readMoneyRequested());
+    return requested === void 0 ? CAPTURED_MERCENARY_EMPTY_STATE : Object.freeze({
+      currentSoldiers: metrics.currentSoldiers,
+      mercenaryCost: metrics.mercenaryCost,
+      moneyCurrent: metrics.moneyCurrent,
+      moneySpare: metrics.moneyCurrent - requested
+    });
+  }
+  function capturedMercenaryDecisionsMatch(decision, state) {
+    return decision.kind === "hire-mercenary" && decision.expectedSoldiers === state.currentSoldiers && decision.expectedCost === state.mercenaryCost && decision.expectedMoneyCurrent === state.moneyCurrent && decision.expectedMoneySpare === state.moneySpare;
+  }
+  function capturedMercenaryModifierHeld(root, keyState) {
+    if (keyState === void 0) return !1;
+    let settings = readProperty(root, "settings");
+    if (readProperty(settings, "mKeys") !== !0) return !1;
+    let keyMap = readProperty(settings, "keyMap");
+    return ["x10", "x25", "x100"].some((key) => {
+      let mapped = readProperty(keyMap, key);
+      return (typeof mapped == "string" || typeof mapped == "number") && keyState.readPressed(mapped) === !0;
+    });
+  }
+  function createCapturedMercenary(dependencies) {
+    let session, lastState, moneyIncomes = [], reportActivity = dependencies.onActivity ?? (() => {
+    }), reader = Object.freeze({
+      readCycle() {
+        session = void 0, lastState = void 0;
+        let root = dependencies.rootState.readRoot();
+        if (!isRecord(root)) return CAPTURED_MERCENARY_EMPTY_CYCLE;
+        let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, tech = readProperty(root, "tech"), civicGarrison = readProperty(
+          readProperty(root, "civic"),
+          "garrison"
+        );
+        if (!isRecord(tech) || !readProperty(tech, "mercs") || !isRecord(civicGarrison) || civicGarrison.mercs !== !0)
+          return CAPTURED_MERCENARY_EMPTY_CYCLE;
+        let control = capturedMercenaryControl(dependencies.controls);
+        if (control === void 0 || !capturedMercenaryVisible(dependencies.controls, control))
+          return CAPTURED_MERCENARY_EMPTY_CYCLE;
+        let cycle = capturedMercenaryMetrics(
+          root,
+          dependencies.controls,
+          control
+        );
+        if (cycle === void 0 || cycle.maxSoldiers <= 0 || cycle.cityMaximum <= 0 || capturedMercenaryModifierHeld(root, dependencies.keyState))
+          return CAPTURED_MERCENARY_EMPTY_CYCLE;
+        let deadSoldierReserve = capturedMercenarySettingNumber(
+          settings,
+          "foreignHireMercDeadSoldiers",
+          1
+        ), costIncomeMultiplier = capturedMercenarySettingNumber(
+          settings,
+          "foreignHireMercCostLowerThanIncome",
+          1
+        ), moneyStoragePercent = capturedMercenarySettingNumber(
+          settings,
+          "foreignHireMercMoneyStoragePercent",
+          90
+        ), storageAssignExtra = capturedMercenarySettingBoolean(
+          settings,
+          "storageAssignExtra",
+          !0
+        ), moneyStorageRequired = dependencies.readMoneyStorageRequired === void 0 ? 1 : finite(dependencies.readMoneyStorageRequired());
+        if (deadSoldierReserve === void 0 || costIncomeMultiplier === void 0 || moneyStoragePercent === void 0 || storageAssignExtra === void 0 || moneyStorageRequired === void 0)
+          return CAPTURED_MERCENARY_EMPTY_CYCLE;
+        let moneyWindow = computeMoneyWindow(moneyIncomes, cycle.moneyRate);
+        moneyIncomes = moneyWindow.incomes;
+        let goalValue = dependencies.readGoal?.(), goal = typeof goalValue == "string" ? goalValue : "Standard";
+        return session = Object.freeze({ root, control, cycle }), Object.freeze({
+          available: !0,
+          saveInflationMoney: readCapturedInflationSaveMoney(root, settings),
+          goal,
+          maxSoldiers: cycle.maxSoldiers,
+          deadSoldierReserve,
+          moneyMedian: moneyWindow.median,
+          costIncomeMultiplier,
+          moneyStoragePercent,
+          storageAssignExtra,
+          moneyMaximum: cycle.moneyMaximum,
+          moneyStorageRequired
+        });
+      },
+      readState() {
+        let active = session;
+        return active === void 0 ? (lastState = CAPTURED_MERCENARY_EMPTY_STATE, lastState) : (lastState = capturedMercenaryState(
+          active.root,
+          dependencies.controls,
+          active.control,
+          dependencies.readMoneyRequested
+        ), lastState);
+      }
+    }), executor = Object.freeze({
+      hire(decision) {
+        let active = session, sampled3 = lastState;
+        if (active === void 0 || sampled3 === void 0)
+          return stale(
+            "captured-mercenary-session-missing",
+            "captured mercenary session is missing"
+          );
+        if (decision.expectedSoldiers < 0 || !Number.isFinite(decision.expectedCost) || !Number.isFinite(decision.expectedMoneyCurrent) || !Number.isFinite(decision.expectedMoneySpare) || !capturedMercenaryDecisionsMatch(decision, sampled3))
+          return rejected(
+            "invalid-captured-mercenary-decision",
+            "captured mercenary decision does not match the sampled state"
+          );
+        if (dependencies.rootState.readRoot() !== active.root || dependencies.controls.resolve(active.control.elementId)?.generation !== active.control.generation)
+          return stale(
+            "captured-mercenary-state-changed",
+            "captured mercenary state or control changed"
+          );
+        if (capturedMercenaryModifierHeld(active.root, dependencies.keyState))
+          return Object.freeze({ status: "not-hired" });
+        let current = capturedMercenaryMetrics(
+          active.root,
+          dependencies.controls,
+          active.control
+        );
+        if (current === void 0 || !capturedMercenaryDecisionsMatch(decision, {
+          currentSoldiers: current.currentSoldiers,
+          mercenaryCost: current.mercenaryCost,
+          moneyCurrent: current.moneyCurrent,
+          moneySpare: current.moneyCurrent - (dependencies.readMoneyRequested === void 0 ? 0 : finite(dependencies.readMoneyRequested()) ?? Number.NaN)
+        }))
+          return stale(
+            "captured-mercenary-state-changed",
+            "captured mercenary state changed"
+          );
+        if (current.citySoldiers >= current.cityMaximum)
+          return Object.freeze({ status: "not-hired" });
+        let result = dependencies.controls.invoke(active.control, "hire", []);
+        if (!result.ok)
+          return stale(
+            "captured-mercenary-hire-failed",
+            `captured mercenary hire failed: ${result.reason}`
+          );
+        let afterRoot = dependencies.rootState.readRoot();
+        if (afterRoot !== active.root)
+          return stale(
+            "captured-mercenary-root-changed",
+            "captured game root changed after mercenary hire"
+          );
+        let after = capturedMercenaryMetrics(
+          afterRoot,
+          dependencies.controls,
+          active.control
+        );
+        return after === void 0 || after.workers !== current.workers + 1 || after.uses !== current.uses + 1 || after.moneyCurrent >= current.moneyCurrent ? stale(
+          "captured-mercenary-not-hired",
+          "the game did not hire a mercenary"
+        ) : (lastState = void 0, Object.freeze({ status: "hired" }));
+      }
+    }), logger = Object.freeze({
+      write(event) {
+        reportActivity({
+          message: event.message,
+          color: "success",
+          tags: Object.freeze(["combat"])
+        });
+      }
+    });
+    return Object.freeze({ reader, executor, logger });
+  }
+
   // src/adapters/evolve/combat/battle.ts
   var CAPTURED_BATTLE_GARRISON_CONTROLS = ["garrison", "c_garrison"], CAPTURED_BATTLE_ENEMY_FACTORS = Object.freeze([
     5,
@@ -24050,6 +24450,15 @@ Only continue if you trust the source. Injected code:
       keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
       onActivity
+    }), capturedPrestigeGoal = "Standard", capturedMercenary = createCapturedMercenary({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => settingsStore.readRaw(),
+      readGoal: () => capturedPrestigeGoal,
+      readMoneyRequested: () => readDemand().requestedQuantity("Money"),
+      readMoneyStorageRequired: () => readDemand().storageRequired("Money"),
+      keyState: pageCapture2.keyState,
+      onActivity
     }), capturedMech = createCapturedMech({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -24068,7 +24477,7 @@ Only continue if you trust the source. Injected code:
       challengeGroups: evolutionChallengeGroups
     });
     settingsPanel.ensurePanel();
-    let capturedPrestigeGoal = "Standard", reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
+    let reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
     }, runPhase = (name, body) => {
       try {
@@ -24319,7 +24728,7 @@ Only continue if you trust the source. Injected code:
       mountSuppression: pageCapture2.mountSuppression,
       panels,
       diagnostics
-    }), civicControlsDiscoveryAttempted = !1, mechDiscoveryAttempted = !1, hellGarrisonDiscoveryAttempted = !1, madDiscoveryAttemptedEpoch, ensureHellGarrisonControls = () => {
+    }), civicControlsDiscoveryAttempted = !1, mercenaryDiscoveryAttempted = !1, mechDiscoveryAttempted = !1, hellGarrisonDiscoveryAttempted = !1, madDiscoveryAttemptedEpoch, ensureHellGarrisonControls = () => {
       if (HELL_GARRISON_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("patrolling")
       ))
@@ -24357,6 +24766,31 @@ Only continue if you trust the source. Injected code:
       ]);
       result.outcome.status !== "succeeded" && logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
+    }, ensureMercenaryControls = () => {
+      if (CAPTURED_MERCENARY_CONTROLS.some(
+        (id) => pageCapture2.controls.resolve(id)?.methods.includes("hire")
+      ))
+        return;
+      let root = pageCapture2.rootState.readRoot(), garrison = readProperty(readProperty(root, "civic"), "garrison");
+      if (!isRecord(garrison) || garrison.mercs !== !0 || mercenaryDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      if (govTabs === void 0) return;
+      mercenaryDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.military
+        })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `Mercenary discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
     };
     openCapturedForeignModal = (governmentId) => {
@@ -24951,6 +25385,10 @@ Only continue if you trust the source. Injected code:
           );
         }
         if (isEnabled(settings, "autoFight")) {
+          let mercenaryOutcome = runPhase("autoFight.mercenary", () => (ensureMercenaryControls(), runMercenaryAutomation(capturedMercenary)));
+          mercenaryOutcome !== void 0 && mercenaryOutcome.status !== "succeeded" && reportOnce(
+            `autoFight.mercenary: ${mercenaryOutcome.failure.code}: ${mercenaryOutcome.failure.message}`
+          );
           let outcome = runPhase("autoFight.spy", () => (ensureCivicControls(), runCapturedSpyTraining(capturedSpyTraining)));
           outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`

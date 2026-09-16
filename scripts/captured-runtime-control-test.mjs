@@ -1019,9 +1019,10 @@ assert.equal(unsubscribeCount, 1);
 // The production captured cycle is a separate orchestration boundary from runTick. These phase
 // failures make its actual order observable without relying on source-text ordering or a test-only
 // expected-phase constant. The always-on buildingAlwaysClick preflight consumes the first root
-// failure, so four failures reach research, build, and spy before two valid root reads enable the
-// successful espionage no-op. The following root failure then makes the conditional battle phase
-// observable before tax and government.
+// failure, and the captured mercenary phase is included before the existing spy/espionage/battle
+// sequence. The failure fixture stops espionage before battle, so this block focuses on the
+// ordering boundary; the combat fixture below covers a successful mercenary pass before foreign
+// combat reads.
 {
   const phaseFailures = [];
   const observedPhases = [];
@@ -1050,7 +1051,24 @@ assert.equal(unsubscribeCount, 1);
     generation: 1,
     methods: ["vis", "gvis", "trigModal", "spy_disabled", "spy"],
   };
+  const garrison = {
+    elementId: "garrison",
+    generation: 1,
+    methods: [
+      "vis",
+      "hire",
+      "hell",
+      "s_max",
+      "campaign",
+      "next",
+      "last",
+      "aNext",
+      "aLast",
+      "rating",
+    ],
+  };
   const controlCalls = [];
+  let mercenaryPhaseObserved = false;
   let cycle;
   const stopCycle = startCapturedRuntime({
     pageCapture: {
@@ -1071,9 +1089,29 @@ assert.equal(unsubscribeCount, 1);
         subscribeRootReplaced: () => () => {},
       },
       controls: {
-        resolve: (id) => (id === "foreign" ? foreign : undefined),
+        resolve: (id) => {
+          if (
+            id === "garrison" &&
+            !mercenaryPhaseObserved &&
+            observedPhases[observedPhases.length - 1] === "autoBuild"
+          ) {
+            mercenaryPhaseObserved = true;
+            observedPhases.push("autoFight.mercenary");
+          }
+          return id === "foreign"
+            ? foreign
+            : id === "garrison"
+              ? garrison
+              : undefined;
+        },
         invoke: (handle, method, args = []) => {
           if (
+            handle === foreign &&
+            method === "vis" &&
+            observedPhases[observedPhases.length - 1] === "autoFight.mercenary"
+          ) {
+            observedPhases.push("autoFight.spy");
+          } else if (
             handle === foreign &&
             method === "vis" &&
             observedPhases[observedPhases.length - 1] === "autoFight.spy"
@@ -1141,9 +1179,8 @@ assert.equal(unsubscribeCount, 1);
   assert.deepEqual(observedPhases, [
     "autoResearch",
     "autoBuild",
+    "autoFight.mercenary",
     "autoFight.spy",
-    "autoFight.espionage",
-    "autoFight.battle",
     "autoTax",
     "autoGovernment",
   ]);
@@ -1159,12 +1196,139 @@ assert.equal(unsubscribeCount, 1);
     [
       "autoResearch",
       "autoBuild",
-      "autoFight.spy",
-      "autoFight.battle",
+      "autoFight.mercenary",
+      "autoFight.espionage",
       "autoTax",
       "autoGovernment",
     ],
   );
+}
+
+function runCombatRuntime(autoFight) {
+  const calls = [];
+  const activities = [];
+  const errors = [];
+  const root = {
+    race: {},
+    tech: { mercs: 1 },
+    civic: {
+      garrison: {
+        display: true,
+        mercs: true,
+        workers: 0,
+        max: 1,
+        crew: 0,
+        m_use: 0,
+      },
+      foreign: {},
+    },
+    space: {},
+    portal: {},
+    eden: {},
+    stats: { achieve: {} },
+    resource: {
+      Money: { amount: 100, max: 1_000, diff: 100, display: true },
+    },
+    settings: {},
+  };
+  const garrison = {
+    elementId: "garrison",
+    generation: 1,
+    methods: ["vis", "hire", "hell", "s_max"],
+  };
+  const foreign = {
+    elementId: "foreign",
+    generation: 1,
+    methods: ["vis", "gvis", "trigModal", "spy_disabled", "spy"],
+  };
+  let cycle;
+  const stop = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: {
+        resolve: (id) =>
+          id === "garrison" ? garrison : id === "foreign" ? foreign : undefined,
+        invoke: (handle, method) => {
+          calls.push(`${handle.elementId}.${method}`);
+          if (handle === garrison && method === "vis") {
+            return { ok: true, value: true };
+          }
+          if (handle === garrison && method === "hell") {
+            return { ok: true, value: root.civic.garrison.workers };
+          }
+          if (handle === garrison && method === "s_max") {
+            return { ok: true, value: root.civic.garrison.max };
+          }
+          if (handle === garrison && method === "hire") {
+            root.resource.Money.amount -= 25;
+            root.civic.garrison.workers += 1;
+            root.civic.garrison.m_use += 1;
+            return { ok: true, value: undefined };
+          }
+          if (handle === foreign && method === "vis") {
+            return { ok: true, value: false };
+          }
+          return { ok: true, value: false };
+        },
+        capturedElementIds: () => ["garrison", "foreign"],
+      },
+      controlUsage: { readUsage: () => [] },
+      keyState: { readPressed: () => false },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          tickRate: 1,
+          autoFight,
+          foreignTrainSpy: true,
+          foreignSpyMax: 10,
+          foreignHireMercDeadSoldiers: 0,
+          foreignHireMercCostLowerThanIncome: 1,
+          foreignHireMercMoneyStoragePercent: 0,
+          storageAssignExtra: false,
+        }),
+    },
+    onActivity: (activity) => activities.push(activity),
+    logError: (message) => errors.push(message),
+  });
+  cycle({ periods: 1 });
+  stop();
+  return { calls, activities, errors, root };
+}
+
+{
+  const disabled = runCombatRuntime(false);
+  assert.equal(disabled.calls.includes("garrison.hire"), false);
+  assert.deepEqual(disabled.activities, []);
+
+  const enabled = runCombatRuntime(true);
+  assert.equal(enabled.root.civic.garrison.workers, 1);
+  assert.equal(
+    enabled.calls.filter((call) => call === "garrison.hire").length,
+    1,
+  );
+  assert.ok(
+    enabled.calls.indexOf("garrison.hire") <
+      enabled.calls.indexOf("foreign.vis"),
+    `mercenary action did not precede the rest of autoFight: ${JSON.stringify(enabled.calls)}`,
+  );
+  assert.equal(enabled.activities.length, 1);
 }
 
 console.log("captured-runtime-control ok");
