@@ -109,6 +109,29 @@ function makeSettings(policy) {
   };
 }
 
+function makeModalFixture(activeModals) {
+  let modal;
+  const remove = () => {
+    const index = activeModals.indexOf(modal);
+    if (index >= 0) activeModals.splice(index, 1);
+  };
+  const modalBackground = {
+    click() {
+      modal.closed = true;
+      remove();
+    },
+  };
+  modal = {
+    style: { visibility: "visible" },
+    querySelector(selector) {
+      assert.equal(selector, ".modal-background");
+      return modalBackground;
+    },
+    remove,
+  };
+  return modal;
+}
+
 function runOne(policy, overrides, mutate) {
   const root = makeRoot(policy, overrides);
   const activities = [];
@@ -269,23 +292,7 @@ runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
     { initialModalGovernmentId: null },
   );
   const activeModals = [];
-  let createdModal;
-  const modalBackground = {
-    click() {
-      createdModal.closed = true;
-      activeModals.splice(activeModals.indexOf(createdModal), 1);
-    },
-  };
-  createdModal = {
-    style: { visibility: "visible" },
-    querySelector(selector) {
-      assert.equal(selector, ".modal-background");
-      return modalBackground;
-    },
-    remove() {
-      activeModals.splice(activeModals.indexOf(createdModal), 1);
-    },
-  };
+  const createdModal = makeModalFixture(activeModals);
   const adapter = createCapturedEspionage({
     rootState: {
       readRoot: () => root,
@@ -320,6 +327,87 @@ runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
   assert.equal(adapter.isBusy(), true);
   adapter.reader.read();
   assert.equal(adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const controls = makeControls(
+    root,
+    {
+      influence() {},
+    },
+    { initialModalGovernmentId: null },
+  );
+  const activeModals = [];
+  const createdModal = makeModalFixture(activeModals);
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings("Influence"),
+    getDocument: () => ({
+      querySelector: () => null,
+      querySelectorAll: () => activeModals,
+    }),
+    ensureForeignModal: () => {
+      activeModals.push(createdModal);
+      controls.installModal(0);
+      return true;
+    },
+  });
+  const opened = runCapturedEspionage(adapter);
+  assert.equal(opened.status, "stale");
+  assert.equal(opened.failure.code, "captured-espionage-modal-pending");
+  root.tech.spy = 1;
+  const eligibilityChanged = runCapturedEspionage(adapter);
+  assert.equal(eligibilityChanged.status, "succeeded");
+  assert.equal(createdModal.closed, true);
+  assert.equal(activeModals.length, 0);
+  assert.equal(adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const controls = makeControls(
+    root,
+    {
+      influence() {},
+    },
+    { initialModalGovernmentId: null },
+  );
+  const playerModal = { style: { visibility: "visible" } };
+  const activeModals = [playerModal];
+  let ensureCalls = 0;
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings("Influence"),
+    getDocument: () => ({
+      querySelector: () => null,
+      querySelectorAll: () => activeModals,
+    }),
+    ensureForeignModal: () => {
+      ensureCalls += 1;
+      return true;
+    },
+  });
+  const deferred = runCapturedEspionage(adapter);
+  assert.equal(deferred.status, "stale");
+  assert.equal(deferred.failure.code, "captured-espionage-modal-conflict");
+  assert.equal(ensureCalls, 0);
+  assert.equal(playerModal.style.visibility, "visible");
+  activeModals.length = 0;
+  const retried = runCapturedEspionage(adapter);
+  assert.equal(retried.status, "stale");
+  assert.equal(retried.failure.code, "captured-espionage-modal-pending");
+  assert.equal(ensureCalls, 1);
 }
 
 {

@@ -1825,6 +1825,7 @@ export function startCapturedRuntime({
           ![
             "captured-espionage-modal-pending",
             "captured-espionage-postcondition-pending",
+            "captured-espionage-modal-conflict",
           ].includes(espionageOutcome.failure.code)
         ) {
           reportOnce(
