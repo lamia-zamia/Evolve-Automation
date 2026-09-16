@@ -479,6 +479,11 @@
           throw new Error(
             "no Vue was captured, so mounting cannot be suppressed"
           );
+        },
+        withMountingEnabled: () => {
+          throw new Error(
+            "no Vue was captured, so mounting cannot be re-enabled"
+          );
         }
       }),
       uninstall: () => {
@@ -490,7 +495,7 @@
     let isRootCandidate = options.isRootCandidate ?? isGameRootShape, reportError = options.onCaptureError ?? (() => {
     }), existingDescriptor = Object.getOwnPropertyDescriptor(pageWindow, "Vue"), existingMarker = readMarker(readProperty(readProperty(pageWindow, "Vue"), "reactive")) ?? readMarker(existingDescriptor?.get);
     if (existingMarker?.capture !== void 0) return existingMarker.capture;
-    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls = /* @__PURE__ */ new Map(), captureOrder = [], usage = /* @__PURE__ */ new Map(), createAppHooked = !1, suppressionScopes = [], mountedInScope = [], restoreVue;
+    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls = /* @__PURE__ */ new Map(), captureOrder = [], usage = /* @__PURE__ */ new Map(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue;
     function notifyRootReplaced() {
       for (let listener of [...rootListeners])
         try {
@@ -588,7 +593,7 @@
         } catch (error) {
           reportError("createApp", String(error));
         }
-        if (suppressionScopes.length === 0 || stopped)
+        if (suppressionScopes.length === 0 || stopped || mountingEnabled > 0)
           return Reflect.apply(original, this, args);
         let selector = readProperty(args[0], "el"), wanted = !1;
         if (typeof selector == "string")
@@ -725,6 +730,18 @@
                 reportError("scope-unmount", String(error));
               }
           }
+        }
+      },
+      withMountingEnabled(draw) {
+        if (!createAppHooked || stopped)
+          throw new Error(
+            "Vue.createApp is not wrapped, so mounting cannot be re-enabled"
+          );
+        mountingEnabled += 1;
+        try {
+          return draw();
+        } finally {
+          mountingEnabled -= 1;
         }
       }
     }), capture = Object.freeze({
@@ -22811,9 +22828,9 @@ Only continue if you trust the source. Injected code:
       if (currentForeign === void 0 || currentForeign.generation !== active.foreign.generation)
         return pending = void 0, !1;
       let state = capturedEspionageState(root, active.governmentId);
-      return state === void 0 ? !1 : capturedEspionagePostconditionChanged(active.operation, active, state) ? (pending = void 0, reportActivity(
+      return state === void 0 || state.sabotageProgress > 0 ? !1 : capturedEspionagePostconditionChanged(active.operation, active, state) ? (pending = void 0, reportActivity(
         capturedEspionageActivity(active.operation, active.governmentId)
-      ), !0) : (state.sabotageProgress === 0 && state.action !== active.operation && (pending = void 0), !1);
+      ), !0) : (pending = void 0, !1);
     }
     let reader = Object.freeze({
       read() {
@@ -24247,7 +24264,10 @@ Only continue if you trust the source. Injected code:
               throw new Error(
                 "the game-owned espionage modal trigger is not mounted"
               );
-            trigger.click(), clicked = !0;
+            let click = trigger.click;
+            pageCapture2.mountSuppression.withMountingEnabled(() => {
+              click.call(trigger);
+            }), clicked = !0;
           }
         }
       );

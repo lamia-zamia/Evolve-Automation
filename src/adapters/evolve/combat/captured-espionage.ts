@@ -277,6 +277,10 @@ export function createCapturedEspionage(
     }
     const state = capturedEspionageState(root, active.governmentId);
     if (state === undefined) return false;
+    // DeadSpace starts every espionage operation by setting sab/act and only applies its result
+    // when the sab timer reaches zero. A foreign military change during that interval is not this
+    // operation's completion.
+    if (state.sabotageProgress > 0) return false;
     if (
       capturedEspionagePostconditionChanged(active.operation, active, state)
     ) {
@@ -286,9 +290,7 @@ export function createCapturedEspionage(
       );
       return true;
     }
-    if (state.sabotageProgress === 0 && state.action !== active.operation) {
-      pending = undefined;
-    }
+    pending = undefined;
     return false;
   }
 

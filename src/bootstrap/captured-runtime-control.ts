@@ -815,7 +815,10 @@ export function startCapturedRuntime({
               "the game-owned espionage modal trigger is not mounted",
             );
           }
-          trigger.click();
+          const click = trigger.click;
+          pageCapture.mountSuppression.withMountingEnabled(() => {
+            click.call(trigger);
+          });
           clicked = true;
         },
       },

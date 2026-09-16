@@ -557,9 +557,94 @@ listenerCapture.uninstall();
     () => inert.mountSuppression.withoutMounting(() => 1),
     /cannot be suppressed/,
   );
+  assert.throws(
+    () => inert.mountSuppression.withMountingEnabled(() => 1),
+    /cannot be re-enabled/,
+  );
 }
 
 // --- letting one component through a suppressed scope --------------------------------------------
+
+// A Buefy programmatic modal creates a second, selectorless Vue app from inside the mounted
+// Foreign component. The escape must reach the real Vue createApp while the Foreign scratch app
+// remains the only app owned by the discovery scope.
+{
+  const page = {};
+  const capture = installVueCapture(page);
+  const realApps = [];
+  let trigger;
+  const vue = makeVue();
+  vue.createApp = (options) => {
+    const app = {
+      options,
+      mountedOn: undefined,
+      unmounted: false,
+      use: () => app,
+      mount(el) {
+        app.mountedOn = el;
+        if (options.el === "#foreign") {
+          trigger = {
+            click() {
+              const buefyModal = page.Vue.createApp({ component: "modal" });
+              buefyModal.use({ name: "Buefy" }).mount({ id: "modalBox" });
+              page.Vue.createApp({
+                el: "#espModal",
+                methods: { influence: () => "captured" },
+              }).mount({ id: "espModal" });
+            },
+          };
+        }
+        return { $forceUpdate: () => {} };
+      },
+      unmount() {
+        app.unmounted = true;
+      },
+    };
+    realApps.push(app);
+    return app;
+  };
+  page.Vue = vue;
+
+  capture.mountSuppression.withoutMounting(
+    () => {
+      const foreign = page.Vue.createApp({
+        el: "#foreign",
+        methods: { trigModal: () => {} },
+      });
+      foreign.mount({ id: "foreign" });
+      assert.notEqual(trigger, undefined);
+      capture.mountSuppression.withMountingEnabled(() => trigger.click());
+      const stillSuppressed = page.Vue.createApp({
+        el: "#foreign-row",
+        methods: { action: () => {} },
+      });
+      stillSuppressed.mount({ id: "foreign-row" });
+      assert.equal(
+        stillSuppressed[Symbol.for("evolve-automation.disposable-vue-app")],
+        true,
+      );
+    },
+    { shouldMount: (selector) => selector === "#foreign" },
+  );
+
+  assert.equal(realApps.length, 3);
+  assert.equal(realApps[0].unmounted, true, "scratch Foreign app is scoped");
+  assert.equal(
+    realApps[1][Symbol.for("evolve-automation.disposable-vue-app")],
+    undefined,
+    "Buefy's selectorless app mounts for real",
+  );
+  assert.equal(realApps[1].mountedOn.id, "modalBox");
+  assert.equal(realApps[2].mountedOn.id, "espModal");
+  assert.notEqual(
+    capture.controls.resolve("espModal"),
+    undefined,
+    "the modal vBind is captured during the mounting escape",
+  );
+  assert.equal(realApps[1].unmounted, false);
+  assert.equal(realApps[2].unmounted, false);
+  capture.uninstall();
+}
 
 {
   const page = {};

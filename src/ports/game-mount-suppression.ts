@@ -52,4 +52,10 @@ export interface GameMountSuppression {
    * ends. Throws when `available` is false.
    */
   withoutMounting<T>(draw: () => T, scope?: Readonly<MountSuppressionScope>): T;
+  /**
+   * Temporarily restores real Vue mounting inside a suppressed draw. The escaped apps are not
+   * owned by the discovery scope; this is for game actions that intentionally create a separate
+   * component tree, such as Buefy's programmatic modal service.
+   */
+  withMountingEnabled<T>(draw: () => T): T;
 }

@@ -158,6 +158,11 @@ function inertCapture(): VueCapture {
           "no Vue was captured, so mounting cannot be suppressed",
         );
       },
+      withMountingEnabled: () => {
+        throw new Error(
+          "no Vue was captured, so mounting cannot be re-enabled",
+        );
+      },
     }),
     uninstall: () => {},
   });
@@ -192,6 +197,7 @@ export function installVueCapture(
   const usage = new Map<string, GameControlUsage>();
 
   let createAppHooked = false;
+  let mountingEnabled = 0;
   const suppressionScopes: Array<Readonly<MountSuppressionScope>> = [];
   /** Apps a scope let through, newest first, so a scope's end can take them down again. */
   const mountedInScope: Array<{
@@ -372,7 +378,7 @@ export function installVueCapture(
         }
         // Recording happens either way: the selector and the game-owned closures come from the
         // options, so a control discovered inside a suppressed scope is as callable as any other.
-        if (suppressionScopes.length === 0 || stopped) {
+        if (suppressionScopes.length === 0 || stopped || mountingEnabled > 0) {
           return Reflect.apply(original, this, args);
         }
         const selector = readProperty(args[0], "el");
@@ -563,6 +569,19 @@ export function installVueCapture(
             reportError("scope-unmount", String(error));
           }
         }
+      }
+    },
+    withMountingEnabled<T>(draw: () => T): T {
+      if (!createAppHooked || stopped) {
+        throw new Error(
+          "Vue.createApp is not wrapped, so mounting cannot be re-enabled",
+        );
+      }
+      mountingEnabled += 1;
+      try {
+        return draw();
+      } finally {
+        mountingEnabled -= 1;
       }
     },
   });
