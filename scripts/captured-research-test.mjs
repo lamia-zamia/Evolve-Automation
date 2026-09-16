@@ -7,7 +7,13 @@ import { createCapturedResearchControl } from "../src/bootstrap/captured-researc
  * the technologies it currently offers, and one `action()` per technology that pays and grants
  * exactly as `runAction` does.
  */
-function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
+function makePage({
+  offered,
+  resources,
+  tech = { primitive: 3 },
+  queue = [],
+  actionModes = {},
+}) {
   const root = {
     settings: { civTabs: 4, animated: true, qAny: false },
     race: { species: "human" },
@@ -40,6 +46,7 @@ function makePage({ offered, resources, tech = { primitive: 3 }, queue = [] }) {
       methods: {
         action() {
           clicks.push(entry.id);
+          if (actionModes[entry.id] === "no-op") return undefined;
           for (const [res, amount] of Object.entries(entry.cost)) {
             if ((root.resource[res]?.amount ?? 0) < amount) return false;
           }
@@ -207,6 +214,21 @@ const SMELTING = {
   // Both granted: the panel now offers nothing and the next cycle does nothing.
   page.control.runCycle();
   assert.deepEqual(page.clicks, ["tech-theology", "tech-mining"]);
+}
+
+{
+  // An invoked action that leaves the game's research state unchanged is not a safe skip. The
+  // lower-ranked technology is eligible, but must wait for a later automation cycle.
+  const page = makePage({
+    offered: [THEOLOGY, MINING],
+    resources: { Knowledge: { amount: 100000 } },
+    actionModes: { "tech-theology": "no-op" },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+  assert.equal(page.root.tech.theology, undefined);
+  assert.equal(page.root.tech.mining, undefined);
+  assert.equal(page.root.resource.Knowledge.amount, 100000);
 }
 
 // --- what the queue is saving for ------------------------------------------

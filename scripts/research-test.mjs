@@ -4,6 +4,7 @@ import {
   createResearchCommandExecutor,
   createResearchReader,
 } from "../src/adapters/evolve/progression/research/research.ts";
+import { runResearchAutomation } from "../src/application/research.ts";
 import { planResearch } from "../src/domain/progression/research/research.ts";
 
 assert.deepEqual(
@@ -26,6 +27,86 @@ assert.deepEqual(
   { index: 4, techId: "available" },
   "the pure planner selects the first eligible observation",
 );
+
+const RESEARCHABLE_CANDIDATES = [
+  {
+    index: 0,
+    id: "candidate-a",
+    affordable: true,
+    hasCostConflict: false,
+  },
+  {
+    index: 1,
+    id: "candidate-b",
+    affordable: true,
+    hasCostConflict: false,
+  },
+];
+
+function runResearchWithResult(resultFor) {
+  const executed = [];
+  const readIndexes = [];
+  const outcome = runResearchAutomation({
+    reader: {
+      read(startIndex) {
+        readIndexes.push(startIndex);
+        return { techs: RESEARCHABLE_CANDIDATES.slice(startIndex) };
+      },
+    },
+    executor: {
+      execute(decision) {
+        executed.push(decision.techId);
+        return resultFor(decision.techId);
+      },
+    },
+  });
+  return { executed, readIndexes, outcome };
+}
+
+// A successful command with no observed research is not permission to buy the next candidate.
+{
+  const result = runResearchWithResult(() => ({
+    outcome: { status: "succeeded" },
+    disposition: "no-observed-research",
+  }));
+  assert.deepEqual(result.executed, ["candidate-a"]);
+  assert.deepEqual(result.readIndexes, [0]);
+  assert.equal(result.outcome.status, "succeeded");
+}
+
+// A successful research is also one action per cycle.
+{
+  const result = runResearchWithResult((id) => ({
+    outcome: { status: "succeeded" },
+    disposition: id === "candidate-a" ? "researched" : "no-observed-research",
+  }));
+  assert.deepEqual(result.executed, ["candidate-a"]);
+  assert.deepEqual(result.readIndexes, [0]);
+}
+
+// Failed or uncertain execution stops the cycle before a lower-ranked purchase.
+for (const outcome of [
+  { status: "rejected", failure: { code: "failed", message: "failed" } },
+  { status: "stale", failure: { code: "pending", message: "uncertain" } },
+]) {
+  const result = runResearchWithResult(() => ({
+    outcome,
+    disposition: "stopped",
+  }));
+  assert.deepEqual(result.executed, ["candidate-a"]);
+  assert.deepEqual(result.readIndexes, [0]);
+  assert.equal(result.outcome, outcome);
+}
+
+// Legacy's safe click is a narrower, candidate-specific rejection: only it may continue scanning.
+{
+  const result = runResearchWithResult((id) => ({
+    outcome: { status: "succeeded" },
+    disposition: id === "candidate-a" ? "candidate-rejected" : "researched",
+  }));
+  assert.deepEqual(result.executed, ["candidate-a", "candidate-b"]);
+  assert.deepEqual(result.readIndexes, [0, 1]);
+}
 
 let irrelevantConflictReads = 0;
 const gatedReader = createResearchReader({
@@ -89,13 +170,23 @@ const successfulResult = createResearchCommandExecutor({
     flushPerformance: () => {},
   },
 }).execute({ index: 0, techId: "ready" });
-assert.equal(successfulResult.researched, true);
+assert.equal(successfulResult.disposition, "researched");
 assert.deepEqual(successfulActions, ["click", "buildings", "projects"]);
 assert.deepEqual(researchPhases, [
   "autoResearch.executeClick",
   "autoResearch.executeBuildings",
   "autoResearch.executeProjects",
 ]);
+
+const candidateRejectedResult = createResearchCommandExecutor({
+  getState: () => ({
+    unlockedTechs: [{ id: "not-clickable", click: () => false }],
+  }),
+  getBuildingManager: () => ({ updateBuildings: () => {} }),
+  getProjectManager: () => ({ updateProjects: () => {} }),
+}).execute({ index: 0, techId: "not-clickable" });
+assert.equal(candidateRejectedResult.outcome.status, "succeeded");
+assert.equal(candidateRejectedResult.disposition, "candidate-rejected");
 
 assert.throws(
   () =>

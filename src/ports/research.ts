@@ -9,10 +9,19 @@ export interface ResearchReader {
   read(startIndex: number): ResearchInput;
 }
 
+/** Describes what the executor learned about the selected technology. */
+export type ResearchExecutionDisposition =
+  | "researched"
+  /** The game's exact candidate-specific safe-click gate rejected this technology. */
+  | "candidate-rejected"
+  /** The command was invoked, but no research mutation was observed. */
+  | "no-observed-research"
+  /** Execution did not establish that it is safe to consider another technology. */
+  | "stopped";
+
 export interface ResearchExecutionResult {
   readonly outcome: CommandExecutionOutcome;
-  /** False means the safe click declined and the next phase may be sampled. */
-  readonly researched: boolean;
+  readonly disposition: ResearchExecutionDisposition;
 }
 
 export interface ResearchCommandExecutor {

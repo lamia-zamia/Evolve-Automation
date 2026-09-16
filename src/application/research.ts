@@ -18,9 +18,8 @@ const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
 });
 
 /**
- * Runs ordered research attempts. A declined safe click is the only event that
- * starts another read phase; successful research and stale/rejected commands
- * stop the use case immediately.
+ * Runs ordered research attempts. Only an exact candidate-specific safe-click
+ * rejection starts another read phase; every other result stops this cycle.
  */
 export function runResearchAutomation(
   dependencies: ResearchAutomationDependencies,
@@ -41,7 +40,10 @@ export function runResearchAutomation(
     const result = measure("autoResearch.execute", () =>
       dependencies.executor.execute(decision),
     );
-    if (result.outcome.status !== "succeeded" || result.researched) {
+    if (
+      result.outcome.status !== "succeeded" ||
+      result.disposition !== "candidate-rejected"
+    ) {
       return result.outcome;
     }
     startIndex = decision.index + 1;

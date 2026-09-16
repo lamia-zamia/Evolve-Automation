@@ -4154,7 +4154,7 @@
         "autoResearch.execute",
         () => dependencies.executor.execute(decision)
       );
-      if (result.outcome.status !== "succeeded" || result.researched)
+      if (result.outcome.status !== "succeeded" || result.disposition !== "candidate-rejected")
         return result.outcome;
       startIndex = decision.index + 1;
     }
@@ -4174,8 +4174,8 @@
   var NOTHING_OFFERED = Object.freeze({
     techs: Object.freeze([])
   });
-  function executionResult(outcome, researched) {
-    return Object.freeze({ outcome, researched });
+  function executionResult(outcome, disposition) {
+    return Object.freeze({ outcome, disposition });
   }
   function createCapturedResearchAdapter(dependencies) {
     let { rootState, offered, resources, conflicts, controls } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
@@ -4221,7 +4221,7 @@
                 actualTechId: tech?.elementId ?? null
               }
             ),
-            !1
+            "stopped"
           );
         let handle = controls.resolve(decision.techId);
         if (handle === void 0)
@@ -4230,7 +4230,7 @@
               "research-control-missing",
               `no captured control for ${decision.techId}`
             ),
-            !1
+            "stopped"
           );
         if (handle.generation !== tech.generation)
           return executionResult(
@@ -4239,7 +4239,7 @@
               `${decision.techId} generation ${tech.generation}, current ${handle.generation}`,
               { techId: decision.techId }
             ),
-            !1
+            "stopped"
           );
         let before = readCapturedTechState(rootState.readRoot()), result = controls.invoke(handle, "action");
         if (!result.ok)
@@ -4247,7 +4247,7 @@
             result.reason === "stale-control" ? stale("stale-research-control", result.detail ?? result.reason, {
               techId: decision.techId
             }) : rejected("research-click-failed", result.detail ?? result.reason),
-            !1
+            "stopped"
           );
         let researched = readCapturedTechState(rootState.readRoot()) !== before;
         if (researched) {
@@ -4258,7 +4258,10 @@
             tags: Object.freeze(["queue", "research_queue"])
           });
         }
-        return executionResult(SUCCEEDED, researched);
+        return executionResult(
+          SUCCEEDED,
+          researched ? "researched" : "no-observed-research"
+        );
       }
     });
     return Object.freeze({ reader, executor });

@@ -21,6 +21,7 @@ import type {
 import { canAfford } from "../../../../domain/game-world.ts";
 import type {
   ResearchCommandExecutor,
+  ResearchExecutionDisposition,
   ResearchExecutionResult,
   ResearchReader,
 } from "../../../../ports/research.ts";
@@ -56,9 +57,9 @@ const NOTHING_OFFERED: ResearchInput = Object.freeze({
 
 function executionResult(
   outcome: ResearchExecutionResult["outcome"],
-  researched: boolean,
+  disposition: ResearchExecutionDisposition,
 ): ResearchExecutionResult {
-  return Object.freeze({ outcome, researched });
+  return Object.freeze({ outcome, disposition });
 }
 
 export function createCapturedResearchAdapter(
@@ -118,7 +119,7 @@ export function createCapturedResearchAdapter(
               actualTechId: tech?.elementId ?? null,
             },
           ),
-          false,
+          "stopped",
         );
       }
       const handle = controls.resolve(decision.techId);
@@ -130,7 +131,7 @@ export function createCapturedResearchAdapter(
             "research-control-missing",
             `no captured control for ${decision.techId}`,
           ),
-          false,
+          "stopped",
         );
       }
       if (handle.generation !== tech.generation) {
@@ -142,7 +143,7 @@ export function createCapturedResearchAdapter(
             `${decision.techId} generation ${tech.generation}, current ${handle.generation}`,
             { techId: decision.techId },
           ),
-          false,
+          "stopped",
         );
       }
       const before = readCapturedTechState(rootState.readRoot());
@@ -154,11 +155,12 @@ export function createCapturedResearchAdapter(
                 techId: decision.techId,
               })
             : rejected("research-click-failed", result.detail ?? result.reason),
-          false,
+          "stopped",
         );
       }
-      // The game's own action reports nothing useful; the state it changed does. A click the game
-      // declined is a decision that produced no research, not a failure.
+      // DeadSpace's action wrapper returns no useful result, but runAction/gainTech apply a grant
+      // synchronously before it returns. The immediate state it changed is therefore evidence for
+      // this invocation; no mutation is uncertainty, not permission to try another technology.
       const researched = readCapturedTechState(rootState.readRoot()) !== before;
       if (researched) {
         const label = readCapturedControlLabel(handle, decision.techId);
@@ -168,7 +170,10 @@ export function createCapturedResearchAdapter(
           tags: Object.freeze(["queue", "research_queue"]),
         });
       }
-      return executionResult(SUCCEEDED, researched);
+      return executionResult(
+        SUCCEEDED,
+        researched ? "researched" : "no-observed-research",
+      );
     },
   });
 

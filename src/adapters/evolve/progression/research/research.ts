@@ -4,6 +4,7 @@ import type {
 } from "../../../../domain/progression/research/research.ts";
 import type {
   ResearchCommandExecutor,
+  ResearchExecutionDisposition,
   ResearchExecutionResult,
   ResearchReader,
 } from "../../../../ports/research.ts";
@@ -89,9 +90,9 @@ export function createResearchReader(
 
 function executionResult(
   outcome: ResearchExecutionResult["outcome"],
-  researched: boolean,
+  disposition: ResearchExecutionDisposition,
 ): ResearchExecutionResult {
-  return Object.freeze({ outcome, researched });
+  return Object.freeze({ outcome, disposition });
 }
 
 export function createResearchCommandExecutor(
@@ -106,7 +107,7 @@ export function createResearchCommandExecutor(
             "invalid-research-index",
             "research index must be a non-negative integer",
           ),
-          false,
+          "stopped",
         );
       }
 
@@ -125,7 +126,7 @@ export function createResearchCommandExecutor(
             index: decision.index,
             actualTechId: actualId,
           }),
-          false,
+          "stopped",
         );
       }
 
@@ -157,7 +158,7 @@ export function createResearchCommandExecutor(
           Reflect.apply(click, tech, []),
         )
       ) {
-        return executionResult(SUCCEEDED, false);
+        return executionResult(SUCCEEDED, "candidate-rejected");
       }
       measure("autoResearch.executeBuildings", () =>
         Reflect.apply(updateBuildings, buildingManager, []),
@@ -165,7 +166,7 @@ export function createResearchCommandExecutor(
       measure("autoResearch.executeProjects", () =>
         Reflect.apply(updateProjects, projectManager, []),
       );
-      return executionResult(SUCCEEDED, true);
+      return executionResult(SUCCEEDED, "researched");
     },
   });
 }

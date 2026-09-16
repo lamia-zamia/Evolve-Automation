@@ -7,10 +7,9 @@ export interface ResearchTechView {
 }
 
 /**
- * A research read stops after the first eligible technology. If its safe click
- * fails, the application layer explicitly reads a new phase from the next
- * index, preserving the legacy short-circuit order without hiding live reads
- * inside this policy.
+ * A research read stops after the first eligible technology. The application
+ * layer may read from the next index only when the executor explicitly reports
+ * that this exact candidate failed its safe-click gate.
  */
 export interface ResearchInput {
   readonly techs: readonly ResearchTechView[];
