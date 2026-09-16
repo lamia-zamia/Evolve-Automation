@@ -141,9 +141,11 @@ import {
 import { runEvolution } from "../application/evolution.ts";
 import { runCapturedPlanetSelection } from "../application/captured-planet-selection.ts";
 import { runCapturedSpyTraining } from "../application/captured-spy-training.ts";
+import { runCapturedEspionage } from "../application/captured-espionage.ts";
 import { runBattleAutomation } from "../application/battle.ts";
 import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runtime-catalogs.ts";
 import { createCapturedSpyTraining } from "../adapters/evolve/combat/captured-spy-training.ts";
+import { createCapturedEspionage } from "../adapters/evolve/combat/captured-espionage.ts";
 import { createCapturedBattle } from "../adapters/evolve/combat/battle.ts";
 import {
   CAPTURED_MECH_ASSEMBLY_CONTROL,
@@ -323,6 +325,13 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
+  });
+  const capturedEspionage = createCapturedEspionage({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => settingsStore.readRaw(),
+    getDocument: () => document,
+    onActivity,
   });
   const capturedBattle = createCapturedBattle({
     rootState: pageCapture.rootState,
@@ -1751,18 +1760,39 @@ export function startCapturedRuntime({
             `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`,
           );
         }
-        const battleOutcome = runPhase("autoFight.battle", () => {
+        const espionageOutcome = runPhase("autoFight.espionage", () => {
           ensureCivicControls();
-          if (isEnabled(settings, "autoHell")) ensureHellGarrisonControls();
-          return runBattleAutomation(capturedBattle);
+          return runCapturedEspionage(capturedEspionage);
         });
         if (
-          battleOutcome !== undefined &&
-          battleOutcome.status !== "succeeded"
+          espionageOutcome !== undefined &&
+          espionageOutcome.status !== "succeeded" &&
+          ![
+            "captured-espionage-modal-pending",
+            "captured-espionage-postcondition-pending",
+          ].includes(espionageOutcome.failure.code)
         ) {
           reportOnce(
-            `autoFight.battle: ${battleOutcome.failure.code}: ${battleOutcome.failure.message}`,
+            `autoFight.espionage: ${espionageOutcome.failure.code}: ${espionageOutcome.failure.message}`,
           );
+        }
+        if (
+          espionageOutcome?.status === "succeeded" &&
+          !capturedEspionage.isBusy()
+        ) {
+          const battleOutcome = runPhase("autoFight.battle", () => {
+            ensureCivicControls();
+            if (isEnabled(settings, "autoHell")) ensureHellGarrisonControls();
+            return runBattleAutomation(capturedBattle);
+          });
+          if (
+            battleOutcome !== undefined &&
+            battleOutcome.status !== "succeeded"
+          ) {
+            reportOnce(
+              `autoFight.battle: ${battleOutcome.failure.code}: ${battleOutcome.failure.message}`,
+            );
+          }
         }
       }
       // Triggers are commitments: when one of them buys something this cycle, construction and
