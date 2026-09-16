@@ -1018,24 +1018,78 @@ assert.equal(unsubscribeCount, 1);
 
 // The production captured cycle is a separate orchestration boundary from runTick. These phase
 // failures make its actual order observable without relying on source-text ordering or a test-only
-// expected-phase constant.
+// expected-phase constant. The always-on buildingAlwaysClick preflight consumes the first root
+// failure, so four failures reach research, build, and spy before one valid root enables the
+// successful espionage no-op. The following root failure then makes the conditional battle phase
+// observable before tax and government.
 {
   const phaseFailures = [];
+  const observedPhases = [];
+  let remainingRootFailures = 4;
+  let espionageRootRead = false;
+  const root = {
+    tech: { spy: 2 },
+    civic: {
+      foreign: {
+        gov0: {
+          mil: 10,
+          spy: 3,
+          sab: 0,
+          hstl: 0,
+          unrest: 0,
+          eco: 1,
+          occ: false,
+          anx: false,
+          buy: false,
+        },
+      },
+    },
+  };
+  const foreign = {
+    elementId: "foreign",
+    generation: 1,
+    methods: ["vis", "gvis", "trigModal", "spy_disabled", "spy"],
+  };
+  const controlCalls = [];
   let cycle;
   const stopCycle = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
       rootState: {
         readRoot: () => {
-          throw new Error("phase stub");
+          if (remainingRootFailures > 0) {
+            remainingRootFailures -= 1;
+            throw new Error("phase stub");
+          }
+          if (!espionageRootRead) {
+            espionageRootRead = true;
+            return root;
+          }
+          throw new Error("battle phase stub");
         },
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
       controls: {
-        resolve: () => undefined,
-        invoke: () => ({ ok: false, reason: "unknown-control" }),
-        capturedElementIds: () => [],
+        resolve: (id) => (id === "foreign" ? foreign : undefined),
+        invoke: (handle, method, args = []) => {
+          if (
+            handle === foreign &&
+            method === "vis" &&
+            observedPhases[observedPhases.length - 1] === "autoFight.spy"
+          ) {
+            observedPhases.push("autoFight.espionage");
+          }
+          controlCalls.push([handle.elementId, method, ...args]);
+          if (handle === foreign && method === "vis") {
+            return { ok: true, value: true };
+          }
+          if (handle === foreign && method === "gvis") {
+            return { ok: true, value: args[0] === 0 };
+          }
+          return { ok: true, value: false };
+        },
+        capturedElementIds: () => ["foreign"],
       },
       controlUsage: { readUsage: () => [] },
       periods: {
@@ -1059,13 +1113,41 @@ assert.equal(unsubscribeCount, 1);
           autoFight: true,
           autoTax: true,
           autoGovernment: true,
+          foreignPolicyInferior: "Ignore",
+          foreignPolicySuperior: "Ignore",
+          foreignPolicyRival: "Ignore",
         }),
     },
-    logError: (message) => phaseFailures.push(message),
+    logError: (message) => {
+      phaseFailures.push(message);
+      const phase = message.slice(0, message.indexOf(" stopped: "));
+      if (
+        [
+          "autoResearch",
+          "autoBuild",
+          "autoFight.spy",
+          "autoFight.battle",
+          "autoTax",
+          "autoGovernment",
+        ].includes(phase)
+      ) {
+        observedPhases.push(phase);
+      }
+    },
   });
   cycle({ periods: 1 });
   stopCycle();
 
+  assert.deepEqual(observedPhases, [
+    "autoResearch",
+    "autoBuild",
+    "autoFight.spy",
+    "autoFight.espionage",
+    "autoFight.battle",
+    "autoTax",
+    "autoGovernment",
+  ]);
+  assert.deepEqual(controlCalls[0], ["foreign", "vis"]);
   assert.deepEqual(
     phaseFailures
       .filter(
@@ -1078,7 +1160,7 @@ assert.equal(unsubscribeCount, 1);
       "autoResearch",
       "autoBuild",
       "autoFight.spy",
-      "autoFight.espionage",
+      "autoFight.battle",
       "autoTax",
       "autoGovernment",
     ],
