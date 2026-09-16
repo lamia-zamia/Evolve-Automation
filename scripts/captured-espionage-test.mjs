@@ -411,6 +411,81 @@ runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
 }
 
 {
+  const root = makeRoot("Influence", { hstl: 30 });
+  let influenceCalls = 0;
+  const controls = makeControls(root, {
+    influence() {
+      influenceCalls += 1;
+    },
+  });
+  const playerModal = { style: { visibility: "visible" } };
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings("Influence"),
+    getDocument: () => ({
+      querySelectorAll: () => [playerModal],
+    }),
+  });
+  const deferred = runCapturedEspionage(adapter);
+  assert.equal(deferred.status, "stale");
+  assert.equal(deferred.failure.code, "captured-espionage-modal-conflict");
+  assert.equal(influenceCalls, 0);
+  assert.equal(playerModal.style.visibility, "visible");
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  let influenceCalls = 0;
+  const controls = makeControls(
+    root,
+    {
+      influence() {
+        influenceCalls += 1;
+      },
+    },
+    { initialModalGovernmentId: null },
+  );
+  const activeModals = [];
+  const automationModal = makeModalFixture(activeModals);
+  const playerModal = { style: { visibility: "visible" } };
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings("Influence"),
+    getDocument: () => ({
+      querySelector: () => null,
+      querySelectorAll: () => activeModals,
+    }),
+    ensureForeignModal: () => {
+      activeModals.push(automationModal);
+      controls.installModal(0);
+      return true;
+    },
+  });
+  const opened = runCapturedEspionage(adapter);
+  assert.equal(opened.status, "stale");
+  assert.equal(opened.failure.code, "captured-espionage-modal-pending");
+  assert.equal(automationModal.style.visibility, "hidden");
+  activeModals.push(playerModal);
+  const deferred = runCapturedEspionage(adapter);
+  assert.equal(deferred.status, "stale");
+  assert.equal(deferred.failure.code, "captured-espionage-modal-conflict");
+  assert.equal(influenceCalls, 0);
+  assert.equal(automationModal.closed, true);
+  assert.deepEqual(activeModals, [playerModal]);
+  assert.equal(playerModal.style.visibility, "visible");
+}
+
+{
   const root = makeRoot("Influence", {
     hstl: 90,
     gov1: { mil: 60, spy: 3, hstl: 20, unrest: 60 },

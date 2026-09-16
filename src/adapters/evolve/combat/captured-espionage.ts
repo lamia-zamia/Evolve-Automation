@@ -52,6 +52,7 @@ const CAPTURED_ESPIONAGE_ACTIVE_MODAL_SELECTOR = ".modal.is-active";
 const CAPTURED_ESPIONAGE_MODAL_BACKGROUND_SELECTOR = ".modal-background";
 
 interface CapturedEspionageModalLifecycle {
+  readonly owns: (candidate: unknown) => boolean;
   readonly cleanup: () => void;
 }
 
@@ -272,6 +273,7 @@ function capturedEspionageNewModalLifecycle(
 
   let cleaned = false;
   return Object.freeze({
+    owns: (candidate: unknown) => candidate === modal,
     cleanup: () => {
       if (cleaned) return;
       cleaned = true;
@@ -300,6 +302,19 @@ function capturedEspionageNewModalLifecycle(
       }
     },
   });
+}
+
+function capturedEspionageModalConflicts(
+  document: unknown,
+  ownedModal: CapturedEspionageModalLifecycle | undefined,
+): boolean {
+  const activeModals = capturedEspionageActiveModals(document);
+  return (
+    activeModals !== undefined &&
+    activeModals.some(
+      (candidate) => ownedModal === undefined || !ownedModal.owns(candidate),
+    )
+  );
 }
 
 function capturedEspionagePostconditionChanged(
@@ -716,6 +731,19 @@ export function createCapturedEspionage(
         return stale(
           "captured-espionage-modal-changed",
           "captured espionage modal changed",
+        );
+      }
+      if (
+        capturedEspionageModalConflicts(
+          dependencies.getDocument?.(),
+          active.modalLifecycle,
+        )
+      ) {
+        active.modalLifecycle?.cleanup();
+        cycleAction = true;
+        return stale(
+          "captured-espionage-modal-conflict",
+          "another modal is active; espionage is deferred",
         );
       }
       const result = dependencies.controls.invoke(

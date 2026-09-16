@@ -22829,6 +22829,7 @@ Only continue if you trust the source. Injected code:
     }
     let cleaned = !1;
     return Object.freeze({
+      owns: (candidate) => candidate === modal,
       cleanup: () => {
         if (cleaned) return;
         cleaned = !0;
@@ -22852,6 +22853,12 @@ Only continue if you trust the source. Injected code:
           }
       }
     });
+  }
+  function capturedEspionageModalConflicts(document, ownedModal) {
+    let activeModals = capturedEspionageActiveModals(document);
+    return activeModals !== void 0 && activeModals.some(
+      (candidate) => ownedModal === void 0 || !ownedModal.owns(candidate)
+    );
   }
   function capturedEspionagePostconditionChanged(operation2, before, after) {
     switch (operation2) {
@@ -23070,6 +23077,14 @@ Only continue if you trust the source. Injected code:
           return stale(
             "captured-espionage-modal-changed",
             "captured espionage modal changed"
+          );
+        if (capturedEspionageModalConflicts(
+          dependencies.getDocument?.(),
+          active.modalLifecycle
+        ))
+          return active.modalLifecycle?.cleanup(), cycleAction = !0, stale(
+            "captured-espionage-modal-conflict",
+            "another modal is active; espionage is deferred"
           );
         let result = dependencies.controls.invoke(
           modal,
