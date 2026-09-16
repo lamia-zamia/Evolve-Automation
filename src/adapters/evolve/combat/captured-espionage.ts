@@ -45,11 +45,21 @@ const CAPTURED_ESPIONAGE_MODAL_METHODS = [
   "annex",
   "purchase",
 ] as const;
+// Buefy's trigger polls for #modalBox asynchronously; bound missed captures so a hidden modal
+// cannot keep autoFight busy forever.
+const CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES = 3;
+const CAPTURED_ESPIONAGE_ACTIVE_MODAL_SELECTOR = ".modal.is-active";
+const CAPTURED_ESPIONAGE_MODAL_BACKGROUND_SELECTOR = ".modal-background";
+
+interface CapturedEspionageModalLifecycle {
+  readonly cleanup: () => void;
+}
 
 interface CapturedEspionageSample {
   readonly root: unknown;
   readonly foreign: GameControlHandle;
   readonly modal: GameControlHandle | undefined;
+  readonly modalLifecycle: CapturedEspionageModalLifecycle | undefined;
   readonly modalGovernmentId: number | undefined;
   readonly modalToReplace: GameControlHandle | undefined;
   readonly target: CapturedForeignGovernment;
@@ -74,6 +84,8 @@ interface CapturedEspionageModalOpening {
   readonly foreign: GameControlHandle;
   readonly governmentId: number;
   readonly previousModal: GameControlHandle | undefined;
+  readonly modalLifecycle: CapturedEspionageModalLifecycle | undefined;
+  readonly waitedCycles: number;
 }
 
 export interface CapturedEspionageDependencies {
@@ -215,6 +227,81 @@ function capturedEspionageEmptyInput(): CapturedEspionageInput {
   });
 }
 
+function capturedEspionageActiveModals(
+  document: unknown,
+): readonly unknown[] | undefined {
+  const querySelectorAll = readProperty(document, "querySelectorAll");
+  if (typeof querySelectorAll !== "function") return undefined;
+  let result: unknown;
+  try {
+    result = Reflect.apply(querySelectorAll, document, [
+      CAPTURED_ESPIONAGE_ACTIVE_MODAL_SELECTOR,
+    ]);
+  } catch {
+    return undefined;
+  }
+  const length = finite(readProperty(result, "length"));
+  if (length === undefined || !Number.isSafeInteger(length) || length < 0) {
+    return undefined;
+  }
+  const modals: unknown[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const modal = readProperty(result, String(index));
+    if (modal !== undefined && modal !== null) modals.push(modal);
+  }
+  return Object.freeze(modals);
+}
+
+function capturedEspionageNewModalLifecycle(
+  document: unknown,
+  previousModals: readonly unknown[] | undefined,
+): CapturedEspionageModalLifecycle | undefined {
+  if (previousModals === undefined) return undefined;
+  const activeModals = capturedEspionageActiveModals(document);
+  if (activeModals === undefined) return undefined;
+  const previous = new Set(previousModals);
+  const modal = activeModals.find((candidate) => !previous.has(candidate));
+  if (modal === undefined) return undefined;
+  const style = readProperty(modal, "style");
+  if (!isRecord(style)) return undefined;
+  try {
+    Reflect.set(style, "visibility", "hidden");
+  } catch {
+    return undefined;
+  }
+
+  let cleaned = false;
+  return Object.freeze({
+    cleanup: () => {
+      if (cleaned) return;
+      cleaned = true;
+      const querySelector = readProperty(modal, "querySelector");
+      if (typeof querySelector === "function") {
+        try {
+          const background = Reflect.apply(querySelector, modal, [
+            CAPTURED_ESPIONAGE_MODAL_BACKGROUND_SELECTOR,
+          ]);
+          const click = readProperty(background, "click");
+          if (typeof click === "function") {
+            Reflect.apply(click, background, []);
+            return;
+          }
+        } catch {
+          // Fall through to removing a modal that could not close itself.
+        }
+      }
+      const remove = readProperty(modal, "remove");
+      if (typeof remove === "function") {
+        try {
+          Reflect.apply(remove, modal, []);
+        } catch {
+          // The modal is already gone or its owner rejected the removal.
+        }
+      }
+    },
+  });
+}
+
 function capturedEspionagePostconditionChanged(
   operation: CapturedEspionageOperation,
   before: CapturedEspionagePending,
@@ -222,15 +309,23 @@ function capturedEspionagePostconditionChanged(
 ): boolean {
   switch (operation) {
     case "influence":
-      return after.hostility !== before.hostility;
+      return (
+        after.hostility !== undefined &&
+        before.hostility !== undefined &&
+        after.hostility < before.hostility
+      );
     case "sabotage":
-      return after.military !== before.military;
+      return after.military !== undefined && after.military < before.military;
     case "incite":
-      return after.unrest !== before.unrest;
+      return (
+        after.unrest !== undefined &&
+        before.unrest !== undefined &&
+        after.unrest > before.unrest
+      );
     case "annex":
-      return after.annexed !== before.annexed;
+      return !before.annexed && after.annexed;
     case "purchase":
-      return after.purchased !== before.purchased;
+      return !before.purchased && after.purchased;
   }
 }
 
@@ -306,6 +401,8 @@ export function createCapturedEspionage(
       }
 
       let modalFromOpening: GameControlHandle | undefined;
+      let modalLifecycleFromOpening:
+        CapturedEspionageModalLifecycle | undefined;
       let modalGovernmentId: number | undefined;
       if (opening !== undefined) {
         const activeOpening = opening;
@@ -314,7 +411,10 @@ export function createCapturedEspionage(
           dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL)
             ?.generation !== activeOpening.foreign.generation
         ) {
+          activeOpening.modalLifecycle?.cleanup();
           opening = undefined;
+          cycleAction = true;
+          return capturedEspionageEmptyInput();
         } else {
           const currentModal = capturedEspionageControl(
             dependencies.controls,
@@ -327,9 +427,18 @@ export function createCapturedEspionage(
               currentModal.generation ===
                 activeOpening.previousModal.generation)
           ) {
+            const waitedCycles = activeOpening.waitedCycles + 1;
+            if (waitedCycles >= CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES) {
+              activeOpening.modalLifecycle?.cleanup();
+              opening = undefined;
+              cycleAction = true;
+              return capturedEspionageEmptyInput();
+            }
+            opening = Object.freeze({ ...activeOpening, waitedCycles });
             return capturedEspionageEmptyInput();
           }
           modalFromOpening = currentModal;
+          modalLifecycleFromOpening = activeOpening.modalLifecycle;
           modalGovernmentId = activeOpening.governmentId;
           opening = undefined;
         }
@@ -385,6 +494,10 @@ export function createCapturedEspionage(
           (modalFromOpening !== undefined &&
             modalGovernmentId !== target.governmentId))
       ) {
+        if (modalFromOpening !== undefined) {
+          modalLifecycleFromOpening?.cleanup();
+          modalLifecycleFromOpening = undefined;
+        }
         modalToReplace = modal;
         modal = undefined;
         modalGovernmentId = undefined;
@@ -397,6 +510,7 @@ export function createCapturedEspionage(
         root,
         foreign,
         modal,
+        modalLifecycle: modalLifecycleFromOpening,
         modalGovernmentId,
         modalToReplace,
         target,
@@ -527,6 +641,7 @@ export function createCapturedEspionage(
       if (modal === undefined) {
         let opened = false;
         const document = dependencies.getDocument?.();
+        const previousModals = capturedEspionageActiveModals(document);
         const trigger =
           isRecord(document) && typeof document["querySelector"] === "function"
             ? document["querySelector"](
@@ -549,6 +664,10 @@ export function createCapturedEspionage(
             "the game-owned espionage modal trigger is not mounted",
           );
         }
+        const modalLifecycle = capturedEspionageNewModalLifecycle(
+          document,
+          previousModals,
+        );
         cycleAction = true;
         const openingForeign =
           dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL) ??
@@ -558,6 +677,8 @@ export function createCapturedEspionage(
           foreign: openingForeign,
           governmentId: decision.governmentId,
           previousModal: active.modalToReplace,
+          modalLifecycle,
+          waitedCycles: 0,
         });
         return stale(
           "captured-espionage-modal-pending",
@@ -581,6 +702,7 @@ export function createCapturedEspionage(
       );
       cycleAction = true;
       if (!result.ok) {
+        active.modalLifecycle?.cleanup();
         return stale(
           "captured-espionage-operation-failed",
           `captured espionage operation failed: ${result.reason}`,
@@ -588,6 +710,7 @@ export function createCapturedEspionage(
       }
       const after = capturedEspionageState(active.root, decision.governmentId);
       if (after === undefined) {
+        active.modalLifecycle?.cleanup();
         return stale(
           "captured-espionage-postcondition-unreadable",
           "the foreign espionage postcondition is unreadable",
@@ -618,6 +741,7 @@ export function createCapturedEspionage(
         return SUCCEEDED;
       }
       if (after.sabotageProgress <= 0 || after.action !== decision.operation) {
+        active.modalLifecycle?.cleanup();
         return stale(
           "captured-espionage-not-applied",
           "the game did not apply the espionage operation",

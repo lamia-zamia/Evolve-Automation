@@ -22713,7 +22713,7 @@ Only continue if you trust the source. Injected code:
     "incite",
     "annex",
     "purchase"
-  ];
+  ], CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES = 3, CAPTURED_ESPIONAGE_ACTIVE_MODAL_SELECTOR = ".modal.is-active", CAPTURED_ESPIONAGE_MODAL_BACKGROUND_SELECTOR = ".modal-background";
   function capturedEspionageForeignGovernment(root, governmentId) {
     let value = readProperty(
       readProperty(readProperty(root, "civic"), "foreign"),
@@ -22793,18 +22793,78 @@ Only continue if you trust the source. Injected code:
       useful: !1
     });
   }
+  function capturedEspionageActiveModals(document) {
+    let querySelectorAll = readProperty(document, "querySelectorAll");
+    if (typeof querySelectorAll != "function") return;
+    let result;
+    try {
+      result = Reflect.apply(querySelectorAll, document, [
+        CAPTURED_ESPIONAGE_ACTIVE_MODAL_SELECTOR
+      ]);
+    } catch {
+      return;
+    }
+    let length = finite(readProperty(result, "length"));
+    if (length === void 0 || !Number.isSafeInteger(length) || length < 0)
+      return;
+    let modals = [];
+    for (let index = 0; index < length; index += 1) {
+      let modal = readProperty(result, String(index));
+      modal != null && modals.push(modal);
+    }
+    return Object.freeze(modals);
+  }
+  function capturedEspionageNewModalLifecycle(document, previousModals) {
+    if (previousModals === void 0) return;
+    let activeModals = capturedEspionageActiveModals(document);
+    if (activeModals === void 0) return;
+    let previous = new Set(previousModals), modal = activeModals.find((candidate) => !previous.has(candidate));
+    if (modal === void 0) return;
+    let style = readProperty(modal, "style");
+    if (!isRecord(style)) return;
+    try {
+      Reflect.set(style, "visibility", "hidden");
+    } catch {
+      return;
+    }
+    let cleaned = !1;
+    return Object.freeze({
+      cleanup: () => {
+        if (cleaned) return;
+        cleaned = !0;
+        let querySelector = readProperty(modal, "querySelector");
+        if (typeof querySelector == "function")
+          try {
+            let background = Reflect.apply(querySelector, modal, [
+              CAPTURED_ESPIONAGE_MODAL_BACKGROUND_SELECTOR
+            ]), click = readProperty(background, "click");
+            if (typeof click == "function") {
+              Reflect.apply(click, background, []);
+              return;
+            }
+          } catch {
+          }
+        let remove = readProperty(modal, "remove");
+        if (typeof remove == "function")
+          try {
+            Reflect.apply(remove, modal, []);
+          } catch {
+          }
+      }
+    });
+  }
   function capturedEspionagePostconditionChanged(operation2, before, after) {
     switch (operation2) {
       case "influence":
-        return after.hostility !== before.hostility;
+        return after.hostility !== void 0 && before.hostility !== void 0 && after.hostility < before.hostility;
       case "sabotage":
-        return after.military !== before.military;
+        return after.military !== void 0 && after.military < before.military;
       case "incite":
-        return after.unrest !== before.unrest;
+        return after.unrest !== void 0 && before.unrest !== void 0 && after.unrest > before.unrest;
       case "annex":
-        return after.annexed !== before.annexed;
+        return !before.annexed && after.annexed;
       case "purchase":
-        return after.purchased !== before.purchased;
+        return !before.purchased && after.purchased;
     }
   }
   function capturedEspionageActivity(operation2, governmentId) {
@@ -22840,20 +22900,22 @@ Only continue if you trust the source. Injected code:
         let pendingCompleted = completePending(root);
         if (pending !== void 0 || pendingCompleted)
           return capturedEspionageEmptyInput();
-        let modalFromOpening, modalGovernmentId;
+        let modalFromOpening, modalLifecycleFromOpening, modalGovernmentId;
         if (opening !== void 0) {
           let activeOpening = opening;
           if (activeOpening.root !== root || dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL2)?.generation !== activeOpening.foreign.generation)
-            opening = void 0;
-          else {
+            return activeOpening.modalLifecycle?.cleanup(), opening = void 0, cycleAction = !0, capturedEspionageEmptyInput();
+          {
             let currentModal = capturedEspionageControl(
               dependencies.controls,
               CAPTURED_ESPIONAGE_MODAL,
               CAPTURED_ESPIONAGE_MODAL_METHODS
             );
-            if (currentModal === void 0 || activeOpening.previousModal !== void 0 && currentModal.generation === activeOpening.previousModal.generation)
-              return capturedEspionageEmptyInput();
-            modalFromOpening = currentModal, modalGovernmentId = activeOpening.governmentId, opening = void 0;
+            if (currentModal === void 0 || activeOpening.previousModal !== void 0 && currentModal.generation === activeOpening.previousModal.generation) {
+              let waitedCycles = activeOpening.waitedCycles + 1;
+              return waitedCycles >= CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES ? (activeOpening.modalLifecycle?.cleanup(), opening = void 0, cycleAction = !0, capturedEspionageEmptyInput()) : (opening = Object.freeze({ ...activeOpening, waitedCycles }), capturedEspionageEmptyInput());
+            }
+            modalFromOpening = currentModal, modalLifecycleFromOpening = activeOpening.modalLifecycle, modalGovernmentId = activeOpening.governmentId, opening = void 0;
           }
         }
         let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, foreign = capturedEspionageControl(
@@ -22884,12 +22946,13 @@ Only continue if you trust the source. Injected code:
           CAPTURED_ESPIONAGE_MODAL,
           CAPTURED_ESPIONAGE_MODAL_METHODS
         ), modalToReplace, capturedModalGovernmentId = modal === void 0 ? void 0 : capturedEspionageModalGovernmentId(root, modal);
-        modal !== void 0 && (capturedModalGovernmentId !== void 0 && capturedModalGovernmentId !== target.governmentId || capturedModalGovernmentId === void 0 && modalFromOpening === void 0 || modalFromOpening !== void 0 && modalGovernmentId !== target.governmentId) ? (modalToReplace = modal, modal = void 0, modalGovernmentId = void 0) : modal !== void 0 && (modalGovernmentId = capturedModalGovernmentId ?? modalGovernmentId ?? target.governmentId);
+        modal !== void 0 && (capturedModalGovernmentId !== void 0 && capturedModalGovernmentId !== target.governmentId || capturedModalGovernmentId === void 0 && modalFromOpening === void 0 || modalFromOpening !== void 0 && modalGovernmentId !== target.governmentId) ? (modalFromOpening !== void 0 && (modalLifecycleFromOpening?.cleanup(), modalLifecycleFromOpening = void 0), modalToReplace = modal, modal = void 0, modalGovernmentId = void 0) : modal !== void 0 && (modalGovernmentId = capturedModalGovernmentId ?? modalGovernmentId ?? target.governmentId);
         let input = capturedEspionageInput(root, target);
         return sample = Object.freeze({
           root,
           foreign,
           modal,
+          modalLifecycle: modalLifecycleFromOpening,
           modalGovernmentId,
           modalToReplace,
           target,
@@ -22959,7 +23022,7 @@ Only continue if you trust the source. Injected code:
         sample = void 0;
         let modal = active.modal;
         if (modal === void 0) {
-          let opened = !1, document = dependencies.getDocument?.(), trigger = isRecord(document) && typeof document.querySelector == "function" ? document.querySelector(
+          let opened = !1, document = dependencies.getDocument?.(), previousModals = capturedEspionageActiveModals(document), trigger = isRecord(document) && typeof document.querySelector == "function" ? document.querySelector(
             capturedForeignEspionageTriggerSelector(decision.governmentId)
           ) : void 0;
           if (isRecord(trigger) && typeof trigger.click == "function" ? (Reflect.apply(
@@ -22971,13 +23034,19 @@ Only continue if you trust the source. Injected code:
               "captured-espionage-modal-trigger-missing",
               "the game-owned espionage modal trigger is not mounted"
             );
+          let modalLifecycle = capturedEspionageNewModalLifecycle(
+            document,
+            previousModals
+          );
           cycleAction = !0;
           let openingForeign = dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL2) ?? active.foreign;
           return opening = Object.freeze({
             root: active.root,
             foreign: openingForeign,
             governmentId: decision.governmentId,
-            previousModal: active.modalToReplace
+            previousModal: active.modalToReplace,
+            modalLifecycle,
+            waitedCycles: 0
           }), stale(
             "captured-espionage-modal-pending",
             "the game is still opening the espionage modal"
@@ -22994,13 +23063,13 @@ Only continue if you trust the source. Injected code:
           [decision.governmentId]
         );
         if (cycleAction = !0, !result.ok)
-          return stale(
+          return active.modalLifecycle?.cleanup(), stale(
             "captured-espionage-operation-failed",
             `captured espionage operation failed: ${result.reason}`
           );
         let after = capturedEspionageState(active.root, decision.governmentId);
         if (after === void 0)
-          return stale(
+          return active.modalLifecycle?.cleanup(), stale(
             "captured-espionage-postcondition-unreadable",
             "the foreign espionage postcondition is unreadable"
           );
@@ -23022,10 +23091,10 @@ Only continue if you trust the source. Injected code:
           after
         ) ? (reportActivity(
           capturedEspionageActivity(decision.operation, decision.governmentId)
-        ), SUCCEEDED) : after.sabotageProgress <= 0 || after.action !== decision.operation ? stale(
+        ), SUCCEEDED) : after.sabotageProgress <= 0 || after.action !== decision.operation ? (active.modalLifecycle?.cleanup(), stale(
           "captured-espionage-not-applied",
           "the game did not apply the espionage operation"
-        ) : (pending = baseline, stale(
+        )) : (pending = baseline, stale(
           "captured-espionage-postcondition-pending",
           "the game queued the espionage operation but its result is pending"
         ));

@@ -191,6 +191,37 @@ runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
 {
   const root = makeRoot("Influence", { hstl: 30 });
   const activities = [];
+  let policy = "Influence";
+  const controls = makeControls(root, {
+    influence(currentRoot) {
+      currentRoot.civic.foreign.gov0.sab = 300;
+      currentRoot.civic.foreign.gov0.act = "influence";
+    },
+  });
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings(policy),
+    onActivity: (activity) => activities.push(activity),
+  });
+  const queued = runCapturedEspionage(adapter);
+  assert.equal(queued.status, "stale");
+  assert.equal(queued.failure.code, "captured-espionage-postcondition-pending");
+  policy = "Ignore";
+  root.civic.foreign.gov0.hstl = 34;
+  root.civic.foreign.gov0.sab = 0;
+  const failed = runCapturedEspionage(adapter);
+  assert.equal(failed.status, "succeeded");
+  assert.equal(activities.length, 0);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const activities = [];
   const controls = makeControls(
     root,
     {
@@ -226,6 +257,69 @@ runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
   assert.equal(completed.status, "succeeded");
   assert.equal(root.civic.foreign.gov0.hstl, 25);
   assert.equal(activities.length, 1);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const controls = makeControls(
+    root,
+    {
+      influence() {},
+    },
+    { initialModalGovernmentId: null },
+  );
+  const activeModals = [];
+  let createdModal;
+  const modalBackground = {
+    click() {
+      createdModal.closed = true;
+      activeModals.splice(activeModals.indexOf(createdModal), 1);
+    },
+  };
+  createdModal = {
+    style: { visibility: "visible" },
+    querySelector(selector) {
+      assert.equal(selector, ".modal-background");
+      return modalBackground;
+    },
+    remove() {
+      activeModals.splice(activeModals.indexOf(createdModal), 1);
+    },
+  };
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings("Influence"),
+    getDocument: () => ({
+      querySelector: () => null,
+      querySelectorAll: (selector) => {
+        assert.equal(selector, ".modal.is-active");
+        return activeModals;
+      },
+    }),
+    ensureForeignModal: () => {
+      activeModals.push(createdModal);
+      return true;
+    },
+  });
+  const opened = runCapturedEspionage(adapter);
+  assert.equal(opened.status, "stale");
+  assert.equal(opened.failure.code, "captured-espionage-modal-pending");
+  assert.equal(createdModal.style.visibility, "hidden");
+  assert.equal(activeModals.length, 1);
+  runCapturedEspionage(adapter);
+  runCapturedEspionage(adapter);
+  const expired = runCapturedEspionage(adapter);
+  assert.equal(expired.status, "succeeded");
+  assert.equal(createdModal.closed, true);
+  assert.equal(activeModals.length, 0);
+  assert.equal(adapter.isBusy(), true);
+  adapter.reader.read();
+  assert.equal(adapter.isBusy(), false);
 }
 
 {
