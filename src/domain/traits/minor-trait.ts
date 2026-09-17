@@ -41,12 +41,16 @@ export interface GeneticsMinorTraitCandidate {
   /** Null because the live geneCost() method is a localized presentation string. */
   readonly cost: number | null;
   readonly eligible: boolean | null;
+  /** Script policy remains separate from the live panel's affordability predicate. */
+  readonly enabled: boolean | null;
+  readonly priority: number | null;
+  readonly weighting: number | null;
 }
 
 export interface GeneticsMinorTraitInput {
   readonly available: boolean;
   readonly currentGenes: number;
-  /** Ordered by the live global.settings.mtorder list; the first eligible item wins. */
+  /** Ordered by the live global.settings.mtorder list; policy chooses among these candidates. */
   readonly traits: readonly GeneticsMinorTraitCandidate[];
 }
 
@@ -107,31 +111,64 @@ export function planMinorTraitPurchase(
   });
 }
 
-/** Select one live Genetics 2.0 minor-trait upgrade in panel order. */
+/**
+ * Select one live Genetics 2.0 minor-trait upgrade using script policy over live game offers.
+ * Lower configured priority wins; weighting divided by a known cost breaks ties, and live panel
+ * order is the final tie-break when the current game does not expose a numeric gene cost.
+ */
 export function planGeneticsMinorTrait(
   input: Readonly<GeneticsMinorTraitInput>,
 ): GeneticsMinorTraitUpgradeDecision | null {
   if (!input.available || !Number.isFinite(input.currentGenes)) return null;
 
-  for (const candidate of input.traits) {
-    if (candidate.eligible !== true) continue;
-    if (
-      !Number.isFinite(candidate.rank) ||
-      candidate.rank < 0 ||
-      (candidate.cost !== null &&
-        (!Number.isFinite(candidate.cost) ||
-          candidate.cost < 0 ||
-          input.currentGenes < candidate.cost))
-    ) {
-      continue;
-    }
+  const candidates = input.traits
+    .map((candidate, index) => ({ candidate, index }))
+    .filter(({ candidate }) => {
+      const priority = candidate.priority;
+      const weighting = candidate.weighting;
+      if (
+        candidate.eligible !== true ||
+        candidate.enabled !== true ||
+        !Number.isFinite(candidate.rank) ||
+        candidate.rank < 0 ||
+        priority === null ||
+        !Number.isFinite(priority) ||
+        priority < 0 ||
+        weighting === null ||
+        !Number.isFinite(weighting) ||
+        weighting <= 0
+      ) {
+        return false;
+      }
+      return (
+        candidate.cost === null ||
+        (Number.isFinite(candidate.cost) &&
+          candidate.cost >= 0 &&
+          input.currentGenes >= candidate.cost)
+      );
+    })
+    .sort((left, right) => {
+      const priority = left.candidate.priority! - right.candidate.priority!;
+      if (priority !== 0) return priority;
+      const leftCost = left.candidate.cost;
+      const rightCost = right.candidate.cost;
+      const leftPreference =
+        left.candidate.weighting! /
+        (leftCost !== null && leftCost > 0 ? leftCost : 1);
+      const rightPreference =
+        right.candidate.weighting! /
+        (rightCost !== null && rightCost > 0 ? rightCost : 1);
+      return rightPreference - leftPreference || left.index - right.index;
+    });
+  const selected = candidates[0]?.candidate;
+  if (selected !== undefined) {
     return Object.freeze({
       kind: "upgrade-minor-trait",
-      traitId: candidate.traitId,
-      source: candidate.source,
-      expectedRank: candidate.rank,
+      traitId: selected.traitId,
+      source: selected.source,
+      expectedRank: selected.rank,
       expectedGenes: input.currentGenes,
-      expectedCost: candidate.cost,
+      expectedCost: selected.cost,
     });
   }
   return null;

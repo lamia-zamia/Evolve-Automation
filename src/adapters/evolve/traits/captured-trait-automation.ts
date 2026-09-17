@@ -68,6 +68,12 @@ interface MinorBlock {
   readonly expectedGenes: number;
 }
 
+interface CapturedMinorPolicy {
+  readonly enabled: boolean | null;
+  readonly priority: number | null;
+  readonly weighting: number | null;
+}
+
 interface MutationBlock {
   readonly root: unknown;
   readonly generation: number;
@@ -237,6 +243,34 @@ function readMinorRows(document: unknown): readonly unknown[] | undefined {
 
 function readMinorTraitId(row: unknown): string | undefined {
   return readElementText(queryOne(row, "h4"));
+}
+
+function readMinorPolicy(
+  settings: unknown,
+  traitId: string,
+): CapturedMinorPolicy {
+  const rawEnabled = readProperty(settings, `mTrait_${traitId}`);
+  const rawPriority = finite(readProperty(settings, `mTrait_p_${traitId}`));
+  const rawWeighting = finite(readProperty(settings, `mTrait_w_${traitId}`));
+  return Object.freeze({
+    enabled: typeof rawEnabled === "boolean" ? rawEnabled : null,
+    priority:
+      rawPriority !== undefined && rawPriority >= 0 ? rawPriority : null,
+    weighting:
+      rawWeighting !== undefined && rawWeighting >= 0 ? rawWeighting : null,
+  });
+}
+
+function sameMinorPolicy(
+  candidate: GeneticsMinorTraitCandidate,
+  settings: unknown,
+): boolean {
+  const policy = readMinorPolicy(settings, candidate.traitId);
+  return (
+    policy.enabled === candidate.enabled &&
+    policy.priority === candidate.priority &&
+    policy.weighting === candidate.weighting
+  );
 }
 
 function readRaceRank(
@@ -434,6 +468,7 @@ export function createCapturedTraitAutomation(
 
       const targets: MinorTarget[] = [];
       const candidates: GeneticsMinorTraitCandidate[] = [];
+      const settings = dependencies.readSettings();
       for (const traitId of order) {
         const row = rowsByTrait.get(traitId);
         if (row === undefined) continue;
@@ -458,6 +493,7 @@ export function createCapturedTraitAutomation(
           : (invokeBoolean(dependencies.controls, handle, "genePurchasable", [
               traitId,
             ]) ?? null);
+        const policy = readMinorPolicy(settings, traitId);
         const candidate = Object.freeze({
           traitId,
           source: "genetic-breakdown" as const,
@@ -465,6 +501,9 @@ export function createCapturedTraitAutomation(
           // geneCost() is localized; genePurchasable()/gene() own affordability and spending.
           cost: null,
           eligible,
+          enabled: policy.enabled,
+          priority: policy.priority,
+          weighting: policy.weighting,
         });
         candidates.push(candidate);
         targets.push({
@@ -537,6 +576,12 @@ export function createCapturedTraitAutomation(
         );
         if (currentRank !== decision.expectedRank) {
           return stale("minor-trait-rank-changed", "minor-trait rank changed");
+        }
+        if (!sameMinorPolicy(target.candidate, dependencies.readSettings())) {
+          return stale(
+            "minor-trait-policy-changed",
+            "minor-trait policy changed",
+          );
         }
         const legal = invokeBoolean(
           dependencies.controls,

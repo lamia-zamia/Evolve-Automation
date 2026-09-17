@@ -7774,17 +7774,23 @@
   // src/domain/traits/minor-trait.ts
   function planGeneticsMinorTrait(input) {
     if (!input.available || !Number.isFinite(input.currentGenes)) return null;
-    for (let candidate of input.traits)
-      if (candidate.eligible === !0 && !(!Number.isFinite(candidate.rank) || candidate.rank < 0 || candidate.cost !== null && (!Number.isFinite(candidate.cost) || candidate.cost < 0 || input.currentGenes < candidate.cost)))
-        return Object.freeze({
-          kind: "upgrade-minor-trait",
-          traitId: candidate.traitId,
-          source: candidate.source,
-          expectedRank: candidate.rank,
-          expectedGenes: input.currentGenes,
-          expectedCost: candidate.cost
-        });
-    return null;
+    let selected = input.traits.map((candidate, index) => ({ candidate, index })).filter(({ candidate }) => {
+      let priority = candidate.priority, weighting = candidate.weighting;
+      return candidate.eligible !== !0 || candidate.enabled !== !0 || !Number.isFinite(candidate.rank) || candidate.rank < 0 || priority === null || !Number.isFinite(priority) || priority < 0 || weighting === null || !Number.isFinite(weighting) || weighting <= 0 ? !1 : candidate.cost === null || Number.isFinite(candidate.cost) && candidate.cost >= 0 && input.currentGenes >= candidate.cost;
+    }).sort((left, right) => {
+      let priority = left.candidate.priority - right.candidate.priority;
+      if (priority !== 0) return priority;
+      let leftCost = left.candidate.cost, rightCost = right.candidate.cost, leftPreference = left.candidate.weighting / (leftCost !== null && leftCost > 0 ? leftCost : 1);
+      return right.candidate.weighting / (rightCost !== null && rightCost > 0 ? rightCost : 1) - leftPreference || left.index - right.index;
+    })[0]?.candidate;
+    return selected !== void 0 ? Object.freeze({
+      kind: "upgrade-minor-trait",
+      traitId: selected.traitId,
+      source: selected.source,
+      expectedRank: selected.rank,
+      expectedGenes: input.currentGenes,
+      expectedCost: selected.cost
+    }) : null;
   }
 
   // src/domain/traits/mutation.ts
@@ -7913,6 +7919,18 @@
   function readMinorTraitId(row) {
     return readElementText(queryOne(row, "h4"));
   }
+  function readMinorPolicy(settings, traitId) {
+    let rawEnabled = readProperty(settings, `mTrait_${traitId}`), rawPriority = finite(readProperty(settings, `mTrait_p_${traitId}`)), rawWeighting = finite(readProperty(settings, `mTrait_w_${traitId}`));
+    return Object.freeze({
+      enabled: typeof rawEnabled == "boolean" ? rawEnabled : null,
+      priority: rawPriority !== void 0 && rawPriority >= 0 ? rawPriority : null,
+      weighting: rawWeighting !== void 0 && rawWeighting >= 0 ? rawWeighting : null
+    });
+  }
+  function sameMinorPolicy(candidate, settings) {
+    let policy = readMinorPolicy(settings, candidate.traitId);
+    return policy.enabled === candidate.enabled && policy.priority === candidate.priority && policy.weighting === candidate.weighting;
+  }
   function readRaceRank(race, traitId) {
     let value = readProperty(race, traitId);
     if (value === void 0) return 0;
@@ -8006,7 +8024,7 @@
             return minorSession = null, unavailableMinor();
           rowsByTrait.set(traitId, row);
         }
-        let targets = [], candidates = [];
+        let targets = [], candidates = [], settings = dependencies.readSettings();
         for (let traitId of order) {
           if (rowsByTrait.get(traitId) === void 0) continue;
           let rank = finite(readProperty(minor, traitId)), expectedTotalRank = readRaceRank(race, traitId);
@@ -8019,13 +8037,16 @@
             currentGenes
           ) ? !1 : invokeBoolean(dependencies.controls, handle, "genePurchasable", [
             traitId
-          ]) ?? null, candidate = Object.freeze({
+          ]) ?? null, policy = readMinorPolicy(settings, traitId), candidate = Object.freeze({
             traitId,
             source: "genetic-breakdown",
             rank,
             // geneCost() is localized; genePurchasable()/gene() own affordability and spending.
             cost: null,
-            eligible
+            eligible,
+            enabled: policy.enabled,
+            priority: policy.priority,
+            weighting: policy.weighting
           });
           candidates.push(candidate), targets.push({
             candidate,
@@ -8080,6 +8101,11 @@
           readProperty(target.minor, target.candidate.traitId)
         ) !== decision.expectedRank)
           return stale("minor-trait-rank-changed", "minor-trait rank changed");
+        if (!sameMinorPolicy(target.candidate, dependencies.readSettings()))
+          return stale(
+            "minor-trait-policy-changed",
+            "minor-trait policy changed"
+          );
         if (invokeBoolean(
           dependencies.controls,
           target.handle,
@@ -8363,6 +8389,239 @@
     return SUCCEEDED7;
   }
 
+  // src/adapters/evolve/traits/captured-mutation-cost.ts
+  var CURRENT_CAPTURED_MUTATION_TRAIT_VALUES = Object.freeze({
+    humanoid: 3,
+    wasteful: -3,
+    xenophobic: -5,
+    carnivore: 3,
+    beast: 2,
+    cautious: -2,
+    herbivore: -7,
+    instinct: 5,
+    forager: 4,
+    small: 6,
+    weak: -3,
+    large: -5,
+    strong: 5,
+    cold_blooded: -2,
+    scales: 5,
+    flier: 3,
+    hollow_bones: 2,
+    sky_lover: -2,
+    rigid: -2,
+    high_pop: 3,
+    fast_growth: 2,
+    high_metabolism: -1,
+    photosynth: 3,
+    sappy: 4,
+    asymmetrical: -3,
+    detritivore: 2,
+    spores: 2,
+    spongy: -2,
+    submerged: 3,
+    low_light: -2,
+    elusive: 7,
+    iron_allergy: -4,
+    smoldering: 7,
+    cold_intolerance: -4,
+    chilled: 7,
+    heat_intolerance: -4,
+    scavenger: 3,
+    nomadic: -5,
+    immoral: 4,
+    evil: 0,
+    blissful: 3,
+    pompous: -6,
+    holy: 4,
+    artifical: 5,
+    powered: -6,
+    psychic: 10,
+    tormented: -25,
+    darkness: 1,
+    unfathomable: 15,
+    creative: 8,
+    diverse: -4,
+    studious: 2,
+    arrogant: -2,
+    brute: 7,
+    angry: -1,
+    lazy: -4,
+    curious: 4,
+    pack_mentality: 4,
+    tracker: 2,
+    playful: 5,
+    freespirit: -3,
+    beast_of_burden: 6,
+    sniper: 6,
+    hooved: -4,
+    rage: 4,
+    heavy: -4,
+    gnawer: -1,
+    calm: 6,
+    pack_rat: 3,
+    paranoid: -3,
+    greedy: -5,
+    merchant: 3,
+    smart: 6,
+    puny: -4,
+    dumb: -5,
+    tough: 4,
+    nearsighted: -4,
+    intelligent: 7,
+    regenerative: 8,
+    gluttony: -2,
+    slow: -6,
+    armored: 4,
+    optimistic: 3,
+    chameleon: 6,
+    slow_digestion: 1,
+    astrologer: 3,
+    hard_of_hearing: -3,
+    resourceful: 4,
+    selenophobia: -6,
+    leathery: 2,
+    pessimistic: -1,
+    hoarder: 4,
+    solitary: -1,
+    kindling_kindred: 8,
+    iron_wood: 4,
+    pyrophobia: -4,
+    catnip: 1,
+    hyper: 4,
+    skittish: -4,
+    fragrant: -3,
+    sticky: 3,
+    anise: 1,
+    infectious: 4,
+    parasite: -4,
+    toxic: 5,
+    nyctophilia: -3,
+    infiltrator: 4,
+    hibernator: -3,
+    cannibalize: 5,
+    frail: -2,
+    malnutrition: 1,
+    claws: 5,
+    atrophy: -1,
+    hivemind: 9,
+    tunneler: 2,
+    blood_thirst: 5,
+    apex_predator: 6,
+    invertebrate: -2,
+    suction_grip: 4,
+    befuddle: 4,
+    environmentalist: -5,
+    unorganized: -2,
+    musical: 5,
+    revive: 4,
+    slow_regen: -4,
+    forge: 4,
+    autoignition: -4,
+    blurry: 5,
+    snowy: -3,
+    ravenous: -5,
+    ghostly: 5,
+    lawless: 3,
+    mistrustful: -1,
+    humpback: 4,
+    thalassophobia: -4,
+    unfavored: -4,
+    fiery: 10,
+    terrifying: 6,
+    slaver: 12,
+    compact: 10,
+    conniving: 4,
+    pathetic: -5,
+    spiritual: 4,
+    truthful: -7,
+    unified: 4,
+    rainbow: 3,
+    gloomy: 3,
+    magnificent: 6,
+    noble: -3,
+    imitation: 9,
+    emotionless: -4,
+    logical: 8,
+    shapeshifter: 10,
+    deconstructor: -4,
+    linked: 4,
+    dark_dweller: -3,
+    swift: 10,
+    anthropophagite: -2,
+    living_tool: 12,
+    bloated: -10,
+    artisan: 9,
+    stubborn: -5,
+    rogue: 6,
+    untrustworthy: -4,
+    living_materials: 6,
+    unstable: -5,
+    elemental: 5,
+    chicken: -8,
+    tusk: 6,
+    blubber: -3,
+    ocular_power: 9,
+    floating: -3,
+    wish: 13,
+    devious: -4,
+    grenadier: 6,
+    aggressive: -2,
+    empowered: 8,
+    blasphemous: -5,
+    deep_power: 9,
+    ancient: -8,
+    scrounger: 5,
+    nostalgic: -6,
+    humongous: 12,
+    limited: -6,
+    wooly: 5,
+    mourning: -5,
+    ooze: -50,
+    soul_eater: 0,
+    untapped: 0,
+    emfield: -1
+  });
+  function readCapturedMutationRace(root) {
+    let race = readProperty(root, "race");
+    return isRecord(race) ? race : void 0;
+  }
+  function readCapturedMutationRank(race, traitId) {
+    let rawRank = readProperty(race, traitId);
+    if (rawRank == null || rawRank === !1) return 0;
+    let rank = finite(rawRank);
+    return rank === void 0 || rank < 0 ? void 0 : rank;
+  }
+  function readCapturedMutationAdjustment(race, traitValue2, operation2) {
+    let rawModified = readProperty(race, "modified");
+    if (rawModified == null || rawModified === !1)
+      return 0;
+    let modified = isRecord(rawModified) ? rawModified : void 0;
+    if (modified === void 0) return;
+    let time = finite(readProperty(modified, "t")), operationCountKey = operation2 === "purge" ? traitValue2 < 0 ? "nr" : void 0 : traitValue2 >= 0 ? "pa" : void 0, operationCount = operationCountKey === void 0 ? 0 : finite(readProperty(modified, operationCountKey));
+    return time !== void 0 && time >= 0 && operationCount !== void 0 && operationCount >= 0 ? (time + operationCount) * 10 : void 0;
+  }
+  function readCapturedMutationCost(root, traitId, operation2) {
+    if (typeof traitId != "string" || operation2 !== "gain" && operation2 !== "purge")
+      return;
+    let race = readCapturedMutationRace(root), traitValue2 = CURRENT_CAPTURED_MUTATION_TRAIT_VALUES[traitId], species = readProperty(race, "species");
+    if (race === void 0 || traitValue2 === void 0 || !Number.isFinite(traitValue2) || typeof species != "string")
+      return;
+    let cost = Math.abs(traitValue2 * 5);
+    if (["custom", "hybrid", "sludge", "ultra_sludge"].includes(species) && (cost *= 10), operation2 === "purge" && traitValue2 < 0) {
+      let rank = readCapturedMutationRank(race, traitId);
+      if (rank === void 0) return;
+      rank === 0.1 ? cost *= 4 : rank === 0.25 ? cost *= 3 : rank === 0.5 && (cost *= 2);
+    }
+    let adjustment = readCapturedMutationAdjustment(
+      race,
+      traitValue2,
+      operation2
+    );
+    if (adjustment !== void 0)
+      return cost += adjustment, Number.isFinite(cost) && cost >= 0 ? cost : void 0;
+  }
+
   // src/application/genetics-traits.ts
   var GENETICS_TRAITS_SUCCEEDED = Object.freeze({
     status: "succeeded"
@@ -8378,7 +8637,10 @@
 
   // src/bootstrap/captured-trait-control.ts
   function createCapturedTraitControl(dependencies) {
-    let captured = createCapturedTraitAutomation(dependencies);
+    let captured = createCapturedTraitAutomation({
+      ...dependencies,
+      readMutationCost: dependencies.readMutationCost ?? readCapturedMutationCost
+    });
     return Object.freeze({
       autoMinorTrait: () => runGeneticsMinorTraitAutomation({
         reader: captured.minor.reader,

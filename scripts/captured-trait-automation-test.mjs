@@ -4,6 +4,7 @@ import {
   createCapturedTraitAutomation,
   GENETICS_BREAKDOWN_CONTROL,
 } from "../src/adapters/evolve/traits/captured-trait-automation.ts";
+import { readCapturedMutationCost } from "../src/adapters/evolve/traits/captured-mutation-cost.ts";
 import { planGeneticsMinorTrait } from "../src/domain/traits/minor-trait.ts";
 import { planGeneticsMutation } from "../src/domain/traits/mutation.ts";
 import {
@@ -11,6 +12,7 @@ import {
   runGeneticsMutationAutomation,
 } from "../src/application/genetics-traits.ts";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
+import { createCapturedTraitControl } from "../src/bootstrap/captured-trait-control.ts";
 
 function gameFibonacci(index) {
   let previous = 1;
@@ -94,6 +96,7 @@ function createFixture({
     settings: { mtorder },
     race: {
       universe: "standard",
+      species: "human",
       minor: { ...minor },
     },
     resource: { Genes: { amount: genes } },
@@ -189,7 +192,14 @@ function createFixture({
       return { ok: false, reason: "unknown-method" };
     },
   };
-  const captured = createCapturedTraitAutomation({
+  const minorPolicy = Object.fromEntries(
+    minorRows.flatMap((traitId, index) => [
+      [`mTrait_${traitId}`, true],
+      [`mTrait_p_${traitId}`, index],
+      [`mTrait_w_${traitId}`, 1],
+    ]),
+  );
+  const dependencies = {
     rootState: { readRoot: () => root },
     controls,
     keyState: { readPressed: () => false },
@@ -197,6 +207,7 @@ function createFixture({
     readSettings: () => ({
       doNotGoBelowPlasmidSoftcap: false,
       minimumPlasmidsToPreserve: 0,
+      ...minorPolicy,
       ...settings,
     }),
     ...(readMutationCost
@@ -205,10 +216,12 @@ function createFixture({
             mutationCost(traitId, operation),
         }
       : {}),
-  });
+  };
+  const captured = createCapturedTraitAutomation(dependencies);
   return {
     root,
     captured,
+    dependencies,
     calls,
     bumpGeneration: () => {
       generation += 1;
@@ -235,6 +248,9 @@ function createFixture({
       rank: 1,
       cost: null,
       eligible: true,
+      enabled: true,
+      priority: 1,
+      weighting: 1,
     },
     {
       traitId: "smart",
@@ -242,6 +258,9 @@ function createFixture({
       rank: 0,
       cost: null,
       eligible: true,
+      enabled: true,
+      priority: 0,
+      weighting: 1,
     },
   ]);
   assert.deepEqual(
@@ -271,9 +290,70 @@ function createFixture({
     minor: { smart: 0, mastery: 0 },
     minorRows: ["smart", "mastery"],
     mtorder: ["mastery", "smart"],
+    settings: {
+      mTrait_p_smart: 0,
+      mTrait_p_mastery: 0,
+    },
   });
   assert.equal(
     planGeneticsMinorTrait(fixture.captured.minor.reader.read())?.traitId,
+    "mastery",
+  );
+}
+
+// Script policy can disable a live offer, and weighting remains meaningful when candidates share
+// a configured priority. The live mtorder list is only the final tie-break.
+{
+  const disabled = createFixture({
+    genes: 50,
+    minor: { smart: 0, mastery: 0 },
+    minorRows: ["smart", "mastery"],
+    mtorder: ["smart", "mastery"],
+    settings: { mTrait_smart: false },
+  });
+  assert.equal(
+    planGeneticsMinorTrait(disabled.captured.minor.reader.read())?.traitId,
+    "mastery",
+  );
+  assert.deepEqual(disabled.captured.minor.reader.read().traits[0], {
+    traitId: "smart",
+    source: "genetic-breakdown",
+    rank: 0,
+    cost: null,
+    eligible: true,
+    enabled: false,
+    priority: 0,
+    weighting: 1,
+  });
+  const disabledOnly = createFixture({
+    genes: 50,
+    minor: { smart: 0 },
+    minorRows: ["smart"],
+    settings: { mTrait_smart: false },
+  });
+  assert.deepEqual(
+    runGeneticsMinorTraitAutomation(disabledOnly.captured.minor),
+    { status: "succeeded" },
+  );
+  assert.equal(
+    disabledOnly.calls.some(({ method }) => method === "gene"),
+    false,
+  );
+
+  const weighted = createFixture({
+    genes: 50,
+    minor: { smart: 0, mastery: 0 },
+    minorRows: ["smart", "mastery"],
+    mtorder: ["smart", "mastery"],
+    settings: {
+      mTrait_p_smart: 0,
+      mTrait_p_mastery: 0,
+      mTrait_w_smart: 1,
+      mTrait_w_mastery: 3,
+    },
+  });
+  assert.equal(
+    planGeneticsMinorTrait(weighted.captured.minor.reader.read())?.traitId,
     "mastery",
   );
 }
@@ -482,6 +562,63 @@ function createFixture({
   });
   assert.equal(fixture.root.race.new, 1);
   assert.equal(fixture.root.prestige.Plasmid.count, 490);
+}
+
+// Production composition supplies the current numeric capability, so the normal Phage+250
+// reserve path can act while the public addCost() method remains a localized display string.
+{
+  const fixture = createFixture({
+    mutationRows: [{ operation: "gain", traitId: "smart" }],
+    mutationCosts: { "gain:smart": 30 },
+    plasmids: 500,
+    phage: 0,
+    settings: {
+      doNotGoBelowPlasmidSoftcap: true,
+      mutableTrait_gain_smart: true,
+      mutableTrait_p_smart: 0,
+    },
+  });
+  const control = createCapturedTraitControl(fixture.dependencies);
+  assert.deepEqual(control.autoMutateTrait(), { status: "succeeded" });
+  assert.equal(fixture.root.race.smart, 1);
+  assert.equal(fixture.root.prestige.Plasmid.count, 470);
+}
+
+// The narrow cost capability mirrors the current game-owned formula and rejects unknown catalog
+// entries instead of turning a localized presentation value into a guessed number.
+{
+  assert.equal(
+    readCapturedMutationCost({ race: { species: "human" } }, "smart", "gain"),
+    30,
+  );
+  assert.equal(
+    readCapturedMutationCost({ race: { species: "custom" } }, "smart", "gain"),
+    300,
+  );
+  assert.equal(
+    readCapturedMutationCost(
+      { race: { species: "human", dumb: 0.5 } },
+      "dumb",
+      "purge",
+    ),
+    50,
+  );
+  assert.equal(
+    readCapturedMutationCost(
+      { race: { species: "human", modified: { t: 2, pa: 3 } } },
+      "smart",
+      "gain",
+    ),
+    80,
+  );
+  assert.equal(
+    readCapturedMutationCost(
+      { race: { species: "human" } },
+      "future_trait",
+      "gain",
+    ),
+    undefined,
+  );
 }
 
 // A no-op mutation blocks the sampled target and does not try another destructive alternative.

@@ -2,6 +2,7 @@ import {
   createCapturedTraitAutomation,
   type CapturedTraitAutomationDependencies,
 } from "../adapters/evolve/traits/captured-trait-automation.ts";
+import { readCapturedMutationCost } from "../adapters/evolve/traits/captured-mutation-cost.ts";
 import {
   runGeneticsMinorTraitAutomation,
   runGeneticsMutationAutomation,
@@ -10,7 +11,10 @@ import {
 export function createCapturedTraitControl(
   dependencies: CapturedTraitAutomationDependencies,
 ) {
-  const captured = createCapturedTraitAutomation(dependencies);
+  const captured = createCapturedTraitAutomation({
+    ...dependencies,
+    readMutationCost: dependencies.readMutationCost ?? readCapturedMutationCost,
+  });
   return Object.freeze({
     autoMinorTrait: () =>
       runGeneticsMinorTraitAutomation({
