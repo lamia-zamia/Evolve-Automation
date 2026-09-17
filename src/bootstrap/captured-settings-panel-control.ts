@@ -1,16 +1,14 @@
 /**
  * The script's settings panel, composed for the captured runtime.
  *
- * The captured runtime owns the top-level automation toggles and the record-only settings sections.
+ * The captured runtime owns the top-level automation toggles and the captured settings sections.
  * This control wires those existing typed browser builders to the captured settings record instead
  * of to the legacy closure; game-backed sections remain outside this slice until their captures exist.
  *
  * TRANSITIONAL: the remaining per-section builders (the Settings tab, and the toggle strips
- * injected into the game's own Building/ARPA/Storage/Market/Eject/Supply panels) still reach the mutable
- * managers under `src/game/`, which are not in the production bundle. They are diagnosed once by
- * name rather than silently doing nothing, and each is replaced by its captured equivalent in a
- * later slice. Automation itself does not depend on any of them — it reads the same settings
- * record this panel writes.
+ * injected into the game's own ARPA/Storage/Market/Eject/Supply panels) are still unavailable on
+ * the captured path. They are diagnosed once by name rather than silently doing nothing. Automation
+ * itself does not depend on any of them — it reads the same settings record this panel writes.
  */
 
 import { createAutomationContainer } from "../ui/automation-container.ts";
@@ -19,8 +17,18 @@ import {
   type CraftToggleBrowserDependencies,
 } from "../adapters/browser/craft-toggles.ts";
 import { createCapturedCraftToggleReader } from "../adapters/evolve/economy/production/captured-craft-toggles.ts";
+import {
+  createBuildingSettingsBrowserAdapter,
+  type BuildingSettingsBrowserActions,
+} from "../adapters/browser/building-settings.ts";
+import { createBuildingSettingsIntentHandler } from "../application/building-settings.ts";
+import { createCapturedBuildingSettingsAdapter } from "../adapters/evolve/progression/build/captured-building-settings.ts";
+import { createCapturedBuildingToggleReader } from "../adapters/evolve/progression/build/captured-building-toggles.ts";
+import { createBuildingToggleBrowserAdapter } from "../adapters/browser/building-toggles.ts";
+import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import { overrideComparisons } from "../settings/override-comparators.ts";
 import { createAutocomplete } from "../adapters/browser/autocomplete.ts";
 import {
   createGeneralSettingsBrowserAdapter,
@@ -146,6 +154,29 @@ type CraftToggles = ReturnType<typeof createCraftToggleBrowserAdapter>;
 type CraftToggleJQuery = ReturnType<
   CraftToggleBrowserDependencies["getJQuery"]
 >;
+type BuildingSettings = ReturnType<typeof createBuildingSettingsBrowserAdapter>;
+type BuildingToggles = ReturnType<typeof createBuildingToggleBrowserAdapter>;
+type BuildingSettingsDocument = ReturnType<
+  Parameters<typeof createBuildingSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type BuildingSettingsJQuery = ReturnType<
+  Parameters<typeof createBuildingSettingsBrowserAdapter>[0]["getJQuery"]
+>;
+type BuildingSettingsNode = Parameters<
+  BuildingSettingsBrowserActions["addToggleCallbacks"]
+>[0];
+type BuildingToggleNode = Parameters<
+  Parameters<typeof createBuildingToggleBrowserAdapter>[0]["addToggleCallbacks"]
+>[0];
+type BuildingSettingsSelectOptions = Parameters<
+  ReturnType<typeof createSettingsEditorControl>["addSettingsSelect"]
+>[4];
+type BuildingToggleDocument = ReturnType<
+  Parameters<typeof createCapturedBuildingToggleReader>[0]["getDocument"]
+>;
+type BuildingToggleJQuery = ReturnType<
+  Parameters<typeof createBuildingToggleBrowserAdapter>[0]["getJQuery"]
+>;
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
@@ -158,6 +189,12 @@ export interface CapturedSettingsPanelDependencies {
   readonly craftToggles?: {
     readonly rootState: GameRootStateSource;
     readonly controls: GameControlRegistry;
+  };
+  readonly buildingSettings?: {
+    readonly rootState: GameRootStateSource;
+    readonly controls: GameControlRegistry;
+    readonly ensureControls?: () => void;
+    readonly costs?: GameActionCostReader;
   };
   readonly onDiagnostic?: (message: string) => void;
   readonly logError?: (message: string) => void;
@@ -242,6 +279,7 @@ export function createCapturedSettingsPanel({
   settingsLifecycle,
   refreshEffectiveSettings,
   craftToggles: capturedCraftToggles,
+  buildingSettings: capturedBuildingSettings,
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -386,6 +424,8 @@ export function createCapturedSettingsPanel({
         readonly hell: HellSettings;
         readonly weighting: WeightingSettings;
         readonly job: JobSettings;
+        readonly building: BuildingSettings | undefined;
+        readonly buildingToggles: BuildingToggles | undefined;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -511,6 +551,8 @@ export function createCapturedSettingsPanel({
     let stateLog: StateLogSettings | undefined;
     let authority: AuthoritySettings | undefined;
     let job: JobSettings | undefined;
+    let building: BuildingSettings | undefined;
+    let buildingToggles: BuildingToggles | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -555,11 +597,12 @@ export function createCapturedSettingsPanel({
       buildMagicSettings: () => {},
       buildProductionSettings: () => {},
       buildJobSettings: () => job?.buildJobSettings(),
-      buildBuildingSettings: () => {},
+      buildBuildingSettings: () => building?.buildBuildingSettings(),
       buildWeightingSettings: () => weighting?.buildWeightingSettings(),
       buildProjectSettings: () => {},
       buildLoggingSettings: () => {},
-      filterBuildingSettingsTable: () => {},
+      filterBuildingSettingsTable: () =>
+        building?.filterBuildingSettingsTable(),
       updateSettingsFromState: persistSettings,
       importSettings: importScriptSettings,
       exportSettings: () => JSON.stringify(settings.readRaw()),
@@ -932,6 +975,106 @@ export function createCapturedSettingsPanel({
           ? Actions
           : never,
     });
+    if (capturedBuildingSettings !== undefined) {
+      const capturedAdapter = createCapturedBuildingSettingsAdapter({
+        rootState: capturedBuildingSettings.rootState,
+        controls: capturedBuildingSettings.controls,
+        getSettingsRaw: settings.readRaw,
+        getOverrideKey: () =>
+          overrideKeyLabelFor(capturedPanelWindow) === "Alt"
+            ? "altKey"
+            : "ctrlKey",
+        getRealNumber: formatting.getRealNumber,
+        getComparison: (operator) => overrideComparisons[operator],
+        ...(capturedBuildingSettings.ensureControls === undefined
+          ? {}
+          : { ensureControls: capturedBuildingSettings.ensureControls }),
+        ...(capturedBuildingSettings.costs === undefined
+          ? {}
+          : { costs: capturedBuildingSettings.costs }),
+      });
+      let buildingIntent: ReturnType<
+        typeof createBuildingSettingsIntentHandler
+      >;
+      building = createBuildingSettingsBrowserAdapter({
+        getDocument: () => documentForUi as unknown as BuildingSettingsDocument,
+        getJQuery: () => getJQuery() as unknown as BuildingSettingsJQuery,
+        getReadModel: capturedAdapter.readBuildingSettingsReadModel,
+        getFilterMatches: capturedAdapter.filterBuildingSettings,
+        intents: { handle: (intent) => buildingIntent.handle(intent) },
+        getActions: () =>
+          ({
+            ...simpleActions,
+            addSettingsSelect: (
+              node: unknown,
+              settingName: string,
+              label: string,
+              hint: string,
+              options: readonly unknown[],
+            ) =>
+              controls.addSettingsSelect(
+                node as SettingsControlNode,
+                settingName,
+                label,
+                hint,
+                options as BuildingSettingsSelectOptions,
+              ),
+            addTableToggle: (node: unknown, settingName: string) =>
+              controls.addTableToggle(node as SettingsControlNode, settingName),
+            addToggleCallbacks: (node: unknown, settingName: string) =>
+              controls.addToggleCallbacks(
+                node as SettingsControlNode,
+                settingName,
+              ) as unknown as BuildingSettingsNode,
+            buildTableLabel: (label: string, title: string, color: string) =>
+              controls.buildTableLabel(label, title, color),
+            getTableSorter: () => tableSorter,
+            confirm: (message: string) =>
+              confirmInPanelWindow(capturedPanelWindow, message),
+          }) as unknown as BuildingSettingsBrowserActions,
+      });
+      buildingIntent = createBuildingSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("building");
+            } else {
+              capturedAdapter.resetToDefaults();
+            }
+          },
+          persist: persistSettings,
+          resetPriorities: capturedAdapter.resetPriorities,
+          reorderBuildings: capturedAdapter.reorderBuildings,
+          setAllAutoBuild: capturedAdapter.setAllAutoBuild,
+          setAllAutoPower: capturedAdapter.setAllAutoPower,
+          setLinkedSmartState: capturedAdapter.setLinkedSmartState,
+        },
+        renderSettingsContent: () => building?.updateBuildingSettingsContent(),
+        effects: {
+          resetCheckboxes: () =>
+            controls.resetCheckbox("autoBuild", "autoPower"),
+          removeBuildingToggles: () => buildingToggles?.removeBuildingToggles(),
+        },
+      });
+      buildingToggles = createBuildingToggleBrowserAdapter({
+        getJQuery: () => getJQuery() as unknown as BuildingToggleJQuery,
+        reader: createCapturedBuildingToggleReader({
+          rootState: capturedBuildingSettings.rootState,
+          controls: capturedBuildingSettings.controls,
+          getDocument: () => documentForUi as unknown as BuildingToggleDocument,
+          getSettingsRaw: settings.readRaw,
+          ...(capturedBuildingSettings.ensureControls === undefined
+            ? {}
+            : { ensureControls: capturedBuildingSettings.ensureControls }),
+        }),
+        getCountWriter: () => ({ setCount: () => {} }),
+        addToggleCallbacks: (node, settingName) =>
+          controls.addToggleCallbacks(
+            node as unknown as SettingsControlNode,
+            settingName,
+          ) as unknown as BuildingToggleNode,
+      });
+    }
     settingsUi = {
       general,
       achievementGuard,
@@ -942,6 +1085,8 @@ export function createCapturedSettingsPanel({
       hell,
       weighting,
       job,
+      building,
+      buildingToggles,
       craftToggles,
       shell,
     };
@@ -1004,6 +1149,7 @@ export function createCapturedSettingsPanel({
     if (capturedJobCatalogReader?.() !== undefined) {
       ui.job.buildJobSettings();
     }
+    ui.building?.buildBuildingSettings();
   };
 
   const removeScriptSettings = () => {
@@ -1030,6 +1176,28 @@ export function createCapturedSettingsPanel({
       return;
     }
     adapter.removeCraftToggles();
+  };
+
+  const createBuildingToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).buildingToggles;
+    if (adapter === undefined) {
+      unported("building toggles")();
+      return;
+    }
+    adapter.createBuildingToggles();
+  };
+
+  const removeBuildingToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).buildingToggles;
+    if (adapter === undefined) {
+      unported("building toggles")();
+      return;
+    }
+    adapter.removeBuildingToggles();
   };
 
   let openOverrideModal: OptionsModalDependencies["openOverrideModal"] = (
@@ -1099,8 +1267,8 @@ export function createCapturedSettingsPanel({
       removeMechInfo: unported("mech info panel"),
       createCraftToggles,
       removeCraftToggles,
-      createBuildingToggles: unported("building toggles"),
-      removeBuildingToggles: unported("building toggles"),
+      createBuildingToggles,
+      removeBuildingToggles,
       createArpaToggles: unported("ARPA toggles"),
       removeArpaToggles: unported("ARPA toggles"),
       createStorageToggles: unported("storage toggles"),
@@ -1123,6 +1291,11 @@ export function createCapturedSettingsPanel({
       try {
         prepareSettingsForUi();
         ensureAutomationContainer();
+        if (settings.readRaw()["autoBuild"] === true) {
+          settingsUi?.buildingToggles?.ensureBuildingToggles();
+        } else {
+          settingsUi?.buildingToggles?.removeBuildingToggles();
+        }
         optionsModal.createOptionsModal();
         if (settings.readRaw()["showSettings"] === true) buildScriptSettings();
       } catch (error) {

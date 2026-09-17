@@ -45,6 +45,10 @@ import {
 import { readCapturedJobResetContext } from "./civic/captured-job-catalog.ts";
 import { ALCHEMY_CONTROL_PREFIX } from "./economy/production/captured-alchemy.ts";
 import { isRecord, readProperty } from "../validation.ts";
+import {
+  readCapturedBuildingBindingMap,
+  readCapturedBuildingEntries,
+} from "./progression/build/captured-building-catalog.ts";
 
 export interface CapturedSettingsDefaultsDependencies {
   readonly rootState: GameRootStateSource;
@@ -194,33 +198,15 @@ function readBuildingContext(
   root: unknown,
   controls: GameControlRegistry,
 ): BuildingResetContext {
-  const buildings = controls
-    .capturedElementIds()
-    .filter((binding) => {
-      const separator = binding.indexOf("-");
-      if (separator <= 0 || binding.startsWith("civ-")) return false;
-      const region = binding.slice(0, separator);
-      const id = binding.slice(separator + 1);
-      return isRecord(readProperty(readProperty(root, region), id));
-    })
-    .map((binding, index) => ({
-      binding,
-      switchable: false,
-      smart: false,
-      index,
-    }))
-    .sort((left, right) => left.index - right.index)
-    .map(({ binding, switchable, smart }) => ({
-      binding,
-      switchable,
-      smart,
-    }));
-  const bindingByKey: Record<string, string> = {};
-  buildings.forEach(({ binding }) => {
-    const id = binding.slice(binding.indexOf("-") + 1);
-    bindingByKey[titleCaseKey(id)] = binding;
-  });
-  return { buildings, bindingByKey };
+  const entries = readCapturedBuildingEntries(root, controls);
+  return {
+    buildings: entries.map((entry) => ({
+      binding: entry.binding,
+      switchable: entry.switchable,
+      smart: entry.smart,
+    })),
+    bindingByKey: readCapturedBuildingBindingMap(entries),
+  };
 }
 
 function readProduction(root: unknown): ProductionResetContext {

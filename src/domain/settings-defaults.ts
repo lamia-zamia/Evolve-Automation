@@ -742,7 +742,7 @@ export function computeJobDefaults(context: JobResetContext): ResetPlan {
 }
 
 export interface BuildingResetContext {
-  /** Buildings in `BuildingManager.priorityList` order (sampled after `initBuildingState`). */
+  /** Buildings in the adapter's current order, with script metadata already validated. */
   readonly buildings: readonly {
     readonly binding: string;
     readonly switchable: boolean;

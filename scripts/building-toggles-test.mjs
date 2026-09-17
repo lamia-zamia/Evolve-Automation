@@ -29,7 +29,7 @@ assert.throws(
 const trace = [];
 const selectorLengths = new Map([
   ["#mTabCivil .ea-building-toggle", 1],
-  ["#city1", 1],
+  ["#live-city1", 1],
   ["#missing", 0],
 ]);
 function node(selector) {
@@ -48,7 +48,12 @@ function node(selector) {
 }
 const jquery = (selector) => node(String(selector));
 const items = [
-  { binding: "city1", settingKey: "batcity1", enabled: true },
+  {
+    binding: "city1",
+    elementId: "live-city1",
+    settingKey: "batcity1",
+    enabled: true,
+  },
   { binding: "missing", settingKey: "batmissing", enabled: false },
 ];
 const counts = [];
@@ -66,6 +71,7 @@ const browserAdapter = createBuildingToggleBrowserAdapter({
 });
 
 browserAdapter.createBuildingToggles();
+browserAdapter.ensureBuildingToggles();
 const checkedToggle = trace.find(
   (entry) => entry.kind === "toggle" && entry.settingKey === "batcity1",
 ).toggle;

@@ -325,6 +325,11 @@ export function startCapturedRuntime({
     replaceRaw: settingsStorage.replaceRaw,
     persist: settingsStorage.persist,
   });
+  const buildCosts = createCapturedActionCostReader({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+  });
+  let ensureCapturedBuildingControls: () => void = () => {};
   const reportDiagnostic = (message: string) => {
     if (diagnostics?.readPerformanceEnabled() === true) log(message);
   };
@@ -336,6 +341,12 @@ export function startCapturedRuntime({
     craftToggles: {
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
+    },
+    buildingSettings: {
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+      ensureControls: () => ensureCapturedBuildingControls(),
+      costs: buildCosts,
     },
     onDiagnostic: (message) => reportDiagnostic(message),
     logError: (message) => logError(message),
@@ -461,10 +472,6 @@ export function startCapturedRuntime({
   // question, so one of the two has to be late-bound. This one is, with a real empty sample until
   // the cycle exists, rather than a mutable object either side could hold a stale reference to.
   let readDemand: () => CapturedDemandSample = () => EMPTY_DEMAND_SAMPLE;
-  const buildCosts = createCapturedActionCostReader({
-    rootState: pageCapture.rootState,
-    controls: pageCapture.controls,
-  });
   const progression = createCapturedProgressionControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -509,6 +516,7 @@ export function startCapturedRuntime({
     onDiagnostic: reportDiagnostic,
     onActivity,
   });
+  ensureCapturedBuildingControls = progression.ensureBuildControls;
   const gatherResources = createCapturedGatherResourcesControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,

@@ -24,6 +24,7 @@ export interface BuildingToggleBrowserDependencies {
 
 export interface BuildingToggleBrowserAdapter {
   createBuildingToggles(): void;
+  ensureBuildingToggles(): void;
   removeBuildingToggles(): void;
 }
 
@@ -43,6 +44,13 @@ export function createBuildingToggleBrowserAdapter({
   getCountWriter,
   addToggleCallbacks,
 }: BuildingToggleBrowserDependencies): BuildingToggleBrowserAdapter {
+  let lastCreatedCount = 0;
+
+  function setCount(count: number): void {
+    lastCreatedCount = count;
+    getCountWriter().setCount(count);
+  }
+
   function createBuildingToggles(): void {
     removeBuildingToggles();
     if (!reader.readVisible()) return;
@@ -50,7 +58,7 @@ export function createBuildingToggleBrowserAdapter({
     const $ = getJQuery();
     let count = 0;
     for (const item of reader.readItems()) {
-      const buildingElement = $("#" + item.binding);
+      const buildingElement = $("#" + (item.elementId ?? item.binding));
       if (buildingElement.length === 0) continue;
 
       buildingElement.append(
@@ -58,13 +66,28 @@ export function createBuildingToggleBrowserAdapter({
       );
       count++;
     }
-    getCountWriter().setCount(count);
+    setCount(count);
+  }
+
+  function ensureBuildingToggles(): void {
+    if (!reader.readVisible()) {
+      if (lastCreatedCount !== 0) removeBuildingToggles();
+      return;
+    }
+    const currentCount = getJQuery()("#mTabCivil .ea-building-toggle").length;
+    if (currentCount === 0 || currentCount !== lastCreatedCount) {
+      createBuildingToggles();
+    }
   }
 
   function removeBuildingToggles(): void {
     getJQuery()("#mTabCivil .ea-building-toggle").remove();
-    getCountWriter().setCount(0);
+    setCount(0);
   }
 
-  return Object.freeze({ createBuildingToggles, removeBuildingToggles });
+  return Object.freeze({
+    createBuildingToggles,
+    ensureBuildingToggles,
+    removeBuildingToggles,
+  });
 }

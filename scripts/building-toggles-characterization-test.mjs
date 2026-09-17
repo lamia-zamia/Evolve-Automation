@@ -76,6 +76,7 @@ const { hooks } = await loadCharacterizationBundle({
 assert.equal(typeof hooks.setBuildingTogglesTestContext, "function");
 assert.deepEqual(Object.keys(hooks.buildingToggles), [
   "createBuildingToggles",
+  "ensureBuildingToggles",
   "removeBuildingToggles",
 ]);
 const settings = { showSettings: true };

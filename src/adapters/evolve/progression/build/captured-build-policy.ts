@@ -36,6 +36,10 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { isRecord, readProperty, splitActionId } from "../../../validation.ts";
 import type { CapturedBuildTarget } from "./captured-build.ts";
 import type { ScriptBuildPolicy } from "./script-build-policy.ts";
+import {
+  CAPTURED_BUILD_REGIONS,
+  CITY_ELEMENT_BINDING_ALIASES,
+} from "./captured-building-metadata.ts";
 
 export interface CapturedBuildPolicyDependencies {
   readonly rootState: GameRootStateSource;
@@ -93,18 +97,6 @@ const KNOWLEDGE_BUILDINGS: ReadonlySet<string> = new Set([
  * controls such as `tech-*`, `evolution-*`, and `arpa-*` are not construction targets even when
  * a persisted setting happens to contain a similarly named key.
  */
-const CAPTURED_BUILD_REGIONS: ReadonlySet<string> = new Set([
-  "city",
-  "space",
-  "interstellar",
-  "galaxy",
-  "portal",
-  "eden",
-  "surface",
-  "tauceti",
-  "underground",
-]);
-
 /**
  * DeadSpace's non-city rule deliberately leaves these smart/multi-segment actions alone. Their
  * `on` count can be below `count` while the game is prebuilding or balancing a grouped structure.
@@ -121,12 +113,6 @@ const NON_CITY_NON_OPERATING_EXCEPTIONS: ReadonlySet<string> = new Set([
 // DeadSpace 1.5.0 creates city gather actions without passing the city region to `buildTemplate`,
 // so their live controls render as `undefined-food`/`undefined-stone`. The persisted automation
 // settings still use the stable city binding; keep both identities in the captured target.
-const CITY_ELEMENT_BINDING_ALIASES: Readonly<Record<string, string>> =
-  Object.freeze({
-    "undefined-food": "city-food",
-    "undefined-stone": "city-stone",
-  });
-
 function readFiniteSetting(
   settings: Record<PropertyKey, unknown>,
   key: string,
