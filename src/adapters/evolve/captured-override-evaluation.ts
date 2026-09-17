@@ -21,7 +21,7 @@ import type {
 } from "../../ports/override-settings.ts";
 import { isRecord, readProperty } from "../validation.ts";
 
-const CAPTURED_OPERAND_TYPES = new Set([
+export const CAPTURED_OVERRIDE_OPERAND_TYPES = [
   "Boolean",
   "BuildingAffordable",
   "BuildingClickable",
@@ -67,7 +67,9 @@ const CAPTURED_OPERAND_TYPES = new Set([
   "Soldiers",
   "TraitLevel",
   "Universe",
-]);
+] as const;
+
+const CAPTURED_OPERAND_TYPES = new Set<string>(CAPTURED_OVERRIDE_OPERAND_TYPES);
 
 function readRootSafely(rootState: GameRootStateSource): unknown {
   try {

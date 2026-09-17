@@ -55,6 +55,7 @@ import {
 import { getWeightingSettingsReadModel } from "../domain/economy/resources/weighting-settings.ts";
 import { createJobSettingsBrowserAdapter } from "../adapters/browser/job-settings.ts";
 import { createTableSorter } from "../adapters/browser/table-sorter.ts";
+import { createCapturedOverrideEditorCatalog } from "./captured-override-editor-catalog.ts";
 import { createJobSettingsReadModel } from "../domain/civic/job-settings.ts";
 import { createJobSettingsIntentHandler } from "../application/job-settings.ts";
 import {
@@ -90,11 +91,12 @@ import {
   createFileDownload,
   type FileDownloadDependencies,
 } from "../adapters/browser/file-download.ts";
-import { createSettingsControls } from "../ui/settings-controls.ts";
-import { createSettingsInputs } from "../ui/settings-inputs.ts";
+import { createSettingsEditorControl } from "./settings-editor-control.ts";
+import type { JQueryNode } from "../ui/jquery.ts";
 import { createSettingsShell } from "../ui/settings-shell.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
 import type { CapturedSettingsLifecycle } from "../application/captured-settings-lifecycle.ts";
+import type { SettingsRecord } from "../domain/settings-migration.ts";
 
 type OptionsModalDependencies = Parameters<
   typeof createOptionsModalBrowserAdapter
@@ -110,10 +112,12 @@ type OptionsModalNode = Parameters<
 type GeneralSettingsDependencies = Parameters<
   typeof createGeneralSettingsBrowserAdapter
 >[0];
-type SettingsControlsDependencies = Parameters<
-  typeof createSettingsControls
+type SettingsEditorDependencies = Parameters<
+  typeof createSettingsEditorControl
 >[0];
-type SettingsInputsDependencies = Parameters<typeof createSettingsInputs>[0];
+type SettingsControlsDependencies =
+  SettingsEditorDependencies["settingsControls"];
+type SettingsInputsDependencies = SettingsEditorDependencies["settingsInputs"];
 type SettingsShell = ReturnType<typeof createSettingsShell>;
 type GeneralSettings = ReturnType<typeof createGeneralSettingsBrowserAdapter>;
 type AchievementGuardSettings = ReturnType<
@@ -136,7 +140,7 @@ type WeightingSettings = ReturnType<
 type JobSettings = ReturnType<typeof createJobSettingsBrowserAdapter>;
 type SettingsShellDependencies = Parameters<typeof createSettingsShell>[0];
 type SettingsControlNode = Parameters<
-  ReturnType<typeof createSettingsControls>["addSettingsNumber"]
+  ReturnType<typeof createSettingsEditorControl>["addSettingsNumber"]
 >[0];
 type CraftToggles = ReturnType<typeof createCraftToggleBrowserAdapter>;
 type CraftToggleJQuery = ReturnType<
@@ -149,6 +153,8 @@ export interface CapturedSettingsPanelDependencies {
   readonly settings: CapturedSettingsStore;
   /** The captured raw/effective settings boundary; absent only for panel contract tests. */
   readonly settingsLifecycle?: CapturedSettingsLifecycle;
+  /** Recomputes the effective layer after a UI mutation of the raw record. */
+  readonly refreshEffectiveSettings?: () => void;
   readonly craftToggles?: {
     readonly rootState: GameRootStateSource;
     readonly controls: GameControlRegistry;
@@ -234,6 +240,7 @@ export function createCapturedSettingsPanel({
   capturedPanelWindow,
   settings,
   settingsLifecycle,
+  refreshEffectiveSettings,
   craftToggles: capturedCraftToggles,
   onDiagnostic = () => {},
   logError = () => {},
@@ -273,6 +280,11 @@ export function createCapturedSettingsPanel({
     logError("this page cannot offer a settings file download");
   };
 
+  const persistSettings = () => {
+    settings.persist();
+    refreshEffectiveSettings?.();
+  };
+
   const generalDefaults = computeGeneralDefaults().def;
   const capturedRecordDefaults = [
     generalDefaults,
@@ -284,6 +296,7 @@ export function createCapturedSettingsPanel({
   ];
   const prepareSettingsForUi = () => {
     settingsLifecycle?.initialize();
+    refreshEffectiveSettings?.();
     const raw = settings.readRaw();
     if (!isRecord(raw["overrides"]) || Array.isArray(raw["overrides"])) {
       raw["overrides"] = {};
@@ -391,25 +404,87 @@ export function createCapturedSettingsPanel({
     });
     const getJQuery = () =>
       dom as unknown as ReturnType<SettingsControlsDependencies["getJQuery"]>;
-    const inputs = createSettingsInputs({
-      getAutocomplete: () => autocomplete,
-      getJQuery: getJQuery as SettingsInputsDependencies["getJQuery"],
-      getRealNumber: () => formatting.getRealNumber,
+    const tableSorter = createTableSorter({
+      getSortable: () => readProperty(capturedPanelWindow, "Sortable"),
     });
-    const controls = createSettingsControls({
-      getAutocomplete: () => autocomplete,
-      getJQuery: getJQuery as SettingsControlsDependencies["getJQuery"],
-      getSettingsRaw: () => {
-        prepareSettingsForUi();
-        return settings.readRaw() as ReturnType<
-          SettingsControlsDependencies["getSettingsRaw"]
-        >;
+    const overrideCatalog = createCapturedOverrideEditorCatalog();
+    const settingsEditor = createSettingsEditorControl({
+      overrideEditor: {
+        getSettingsRaw: () => settings.readRaw() as SettingsRecord,
+        persistence: { save: persistSettings },
       },
-      getRealNumber: () => formatting.getRealNumber,
-      getUpdateSettingsFromState: () => () => settings.persist(),
-      openOverrideModal: unported("per-setting override editor"),
-      buildSelectOptions: inputs.buildSelectOptions,
+      settingsInputs: {
+        getAutocomplete: () => autocomplete,
+        getJQuery: getJQuery as SettingsInputsDependencies["getJQuery"],
+        getRealNumber: () => formatting.getRealNumber,
+      },
+      conditionControls: {
+        getJQuery: getJQuery as SettingsControlsDependencies["getJQuery"],
+        getSettingsRaw: () => {
+          prepareSettingsForUi();
+          return settings.readRaw() as ReturnType<
+            Parameters<
+              typeof createSettingsEditorControl
+            >[0]["overrideControls"]["getSettingsRaw"]
+          >;
+        },
+        getWin: () => ({
+          prompt: (message: string, value: string) => {
+            const prompt = readProperty(capturedPanelWindow, "prompt");
+            return typeof prompt === "function"
+              ? Reflect.apply(prompt, capturedPanelWindow, [message, value])
+              : undefined;
+          },
+        }),
+        getCheckCompareExpressions: () =>
+          overrideCatalog.checkCompareExpressions,
+        getCheckCustom: () => overrideCatalog.checkCustom,
+        getCheckTypes: () => overrideCatalog.checkTypes,
+      },
+      overrideControls: {
+        getJQuery: getJQuery as SettingsControlsDependencies["getJQuery"],
+        getSettingsRaw: () => {
+          prepareSettingsForUi();
+          return settings.readRaw() as ReturnType<
+            Parameters<
+              typeof createSettingsEditorControl
+            >[0]["overrideControls"]["getSettingsRaw"]
+          >;
+        },
+        getSettings: () =>
+          settingsLifecycle?.readEffective() ?? settings.readRaw(),
+        getTechIds: () => ({}),
+        getCheckCustom: () => overrideCatalog.checkCustom,
+        getOverrideKey: () =>
+          overrideKeyLabelFor(capturedPanelWindow) === "Alt"
+            ? "altKey"
+            : "ctrlKey",
+        getOpenOptionsModal: () => (title, buildOptions) =>
+          optionsModal.openOptionsModal(title, (modal) =>
+            buildOptions(modal as unknown as JQueryNode),
+          ),
+        getTableSorter: () => tableSorter,
+      },
+      settingsControls: {
+        getAutocomplete: () => autocomplete,
+        getJQuery: getJQuery as SettingsControlsDependencies["getJQuery"],
+        getSettingsRaw: () => {
+          prepareSettingsForUi();
+          return settings.readRaw() as ReturnType<
+            SettingsControlsDependencies["getSettingsRaw"]
+          >;
+        },
+        getRealNumber: () => formatting.getRealNumber,
+        getUpdateSettingsFromState: () => persistSettings,
+      },
     });
+    const controls = settingsEditor;
+    openOverrideModal = (event) =>
+      settingsEditor.openOverrideModal(
+        event as unknown as Parameters<
+          typeof settingsEditor.openOverrideModal
+        >[0],
+      );
     const craftToggles =
       capturedCraftToggles === undefined
         ? undefined
@@ -485,7 +560,7 @@ export function createCapturedSettingsPanel({
       buildProjectSettings: () => {},
       buildLoggingSettings: () => {},
       filterBuildingSettingsTable: () => {},
-      updateSettingsFromState: () => settings.persist(),
+      updateSettingsFromState: persistSettings,
       importSettings: importScriptSettings,
       exportSettings: () => JSON.stringify(settings.readRaw()),
       triggerFileDownload: fileDownload ?? reportNoFileDownload,
@@ -506,7 +581,7 @@ export function createCapturedSettingsPanel({
           }
           Object.assign(raw, generalDefaults);
         },
-        persist: () => settings.persist(),
+        persist: persistSettings,
       },
       renderSettingsContent: () => general?.updateGeneralSettingsContent(),
       effects: {
@@ -607,7 +682,7 @@ export function createCapturedSettingsPanel({
       section: string,
     ) => ({
       resetToDefaults: () => resetCapturedSectionRecord(defaults, section),
-      persist: () => settings.persist(),
+      persist: persistSettings,
     });
     let achievementIntent: ReturnType<
       typeof createAchievementGuardSettingsIntentHandler
@@ -730,7 +805,7 @@ export function createCapturedSettingsPanel({
             resetCapturedSectionRecord(computeHellDefaults().def);
           }
         },
-        persist: () => settings.persist(),
+        persist: persistSettings,
       },
       renderSettingsContent: (secondaryPrefix) =>
         hell?.updateHellSettingsContent(secondaryPrefix),
@@ -781,7 +856,7 @@ export function createCapturedSettingsPanel({
             resetCapturedSectionRecord(computeWeightingDefaults().def);
           }
         },
-        persist: () => settings.persist(),
+        persist: persistSettings,
       },
       renderSettingsContent: () => weighting?.updateWeightingSettingsContent(),
     });
@@ -798,9 +873,6 @@ export function createCapturedSettingsPanel({
             controls.addTableInput(node as SettingsControlNode, settingName),
         }) as unknown as WeightingSettingsBrowserActions,
       getReadModel: getWeightingSettingsReadModel,
-    });
-    const tableSorter = createTableSorter({
-      getSortable: () => readProperty(capturedPanelWindow, "Sortable"),
     });
     const jobIntent = createJobSettingsIntentHandler({
       writer: {
@@ -896,9 +968,10 @@ export function createCapturedSettingsPanel({
     }
     if (settingsLifecycle === undefined) {
       settings.replaceRaw(inspection.settings);
-      settings.persist();
+      persistSettings();
     } else {
       settingsLifecycle.replaceAndInitialize(inspection.settings);
+      refreshEffectiveSettings?.();
     }
     // Everything drawn from the replaced record goes, so the next `ensurePanel` rebuilds the
     // container and every section from the imported one. The import/export buttons sit outside
@@ -959,6 +1032,16 @@ export function createCapturedSettingsPanel({
     adapter.removeCraftToggles();
   };
 
+  let openOverrideModal: OptionsModalDependencies["openOverrideModal"] = (
+    event,
+  ) => {
+    const dom = getQuery();
+    if (dom === undefined) {
+      return;
+    }
+    ensureSettingsUi(dom);
+    openOverrideModal(event);
+  };
   const optionsModal = createOptionsModalBrowserAdapter({
     getDocument: () => documentValue as OptionsModalDocument,
     getJQuery: () => getQuery() as unknown as OptionsModalQuery,
@@ -979,7 +1062,7 @@ export function createCapturedSettingsPanel({
       setToggle: (settingName: string, checked: boolean) => {
         settings.readRaw()[settingName] = checked;
       },
-      persist: () => settings.persist(),
+      persist: persistSettings,
     }),
     // TRANSITIONAL: the four secondary-option modals (Government, Foreign Affairs, Hell, Fleet)
     // build their contents from legacy managers.
@@ -989,7 +1072,7 @@ export function createCapturedSettingsPanel({
       hell: unported("Hell options"),
       fleet: unported("Fleet options"),
     }),
-    openOverrideModal: unported("per-setting override editor"),
+    openOverrideModal: (event) => openOverrideModal(event),
   });
 
   const { ensureAutomationContainer } = createAutomationContainer({
@@ -1009,7 +1092,7 @@ export function createCapturedSettingsPanel({
           onEnable,
           onDisable,
         ),
-      updateSettingsFromState: () => settings.persist(),
+      updateSettingsFromState: persistSettings,
       buildScriptSettings,
       removeScriptSettings,
       createMechInfo: unported("mech info panel"),
@@ -1040,6 +1123,7 @@ export function createCapturedSettingsPanel({
       try {
         prepareSettingsForUi();
         ensureAutomationContainer();
+        optionsModal.createOptionsModal();
         if (settings.readRaw()["showSettings"] === true) buildScriptSettings();
       } catch (error) {
         // A panel that fails to draw must never stop the automation tick.

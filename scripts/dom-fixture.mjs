@@ -192,8 +192,8 @@ export class TestElement {
   }
 
   /** Dispatches to this element's own listeners, then bubbles the same event upward. */
-  dispatch(type, target = this) {
-    const event = { type, target, preventDefault() {} };
+  dispatch(type, target = this, properties = {}) {
+    const event = { type, target, preventDefault() {}, ...properties };
     let node = this;
     while (node !== null) {
       for (const record of [...node.listeners]) {

@@ -4,6 +4,9 @@ import { createCapturedSettingsPanel } from "../src/bootstrap/captured-settings-
 import { createSettingsStore } from "../src/adapters/browser/settings-store.ts";
 import { createCapturedSettingsDefaults } from "../src/adapters/evolve/captured-settings-defaults.ts";
 import { createCapturedSettingsLifecycle } from "../src/application/captured-settings-lifecycle.ts";
+import { createCapturedOverrideEvaluation } from "../src/adapters/evolve/captured-override-evaluation.ts";
+import { createOverrideSettings } from "../src/application/override-settings.ts";
+import { overrideComparisons } from "../src/settings/override-comparators.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
 /** A `localStorage` stand-in that records what the panel writes back. */
@@ -75,19 +78,40 @@ function createPage(
     storage,
     logError: (message) => logged.push(message),
   });
+  const gameRoot = { race: { governor: { tasks: {} } } };
   const settingsLifecycle = useLifecycle
     ? createCapturedSettingsLifecycle({
         settings,
         defaults: createCapturedSettingsDefaults({
-          rootState: { readRoot: () => ({}) },
+          rootState: { readRoot: () => gameRoot },
           controls: { capturedElementIds: () => [] },
         }),
       })
     : undefined;
+  const effectiveSettings = settingsLifecycle?.readEffective();
+  const overrideSettings =
+    settingsLifecycle === undefined
+      ? undefined
+      : createOverrideSettings({
+          getSafeMode: () => false,
+          getSettings: () => effectiveSettings,
+          getSettingsRaw: settingsLifecycle.readRaw,
+          source: createCapturedOverrideEvaluation({
+            rootState: { readRoot: () => gameRoot },
+            readSettings: settingsLifecycle.readRaw,
+            comparatorSource: {
+              comparisons: overrideComparisons,
+              rightOperandComparators: ["A?B", "!A?B"],
+            },
+          }),
+          reporter: { report: () => {} },
+          display: { publish: () => {} },
+        });
   const panel = createCapturedSettingsPanel({
     capturedPanelWindow: pageWindow,
     settings,
     settingsLifecycle,
+    refreshEffectiveSettings: () => overrideSettings?.updateOverrides(),
     onDiagnostic: (message) => diagnostics.push(message),
     logError: (message) => logged.push(message),
   });
@@ -101,6 +125,8 @@ function createPage(
     confirmed,
     downloads,
     saveText,
+    effectiveSettings,
+    gameRoot,
   };
 }
 
@@ -240,6 +266,116 @@ function createPage(
     true,
     "a flipped toggle must be persisted, not just held in memory",
   );
+}
+
+// --- the captured settings UI opens and edits the persisted override definition ---------------
+
+{
+  const page = createPage(JSON.stringify({ autoBuild: false }), {
+    useLifecycle: true,
+  });
+  page.panel.ensurePanel();
+  const target = page.root.querySelectorAll(".script_autoBuild")[0];
+  target.parentElement.dispatch("click", target, { ctrlKey: true });
+  assert.equal(
+    page.root.querySelectorAll("#script_autoBuildModal").length,
+    1,
+    "Ctrl-clicking a captured setting opens the real override editor",
+  );
+  assert.deepEqual(page.diagnostics, []);
+
+  const add = page.root
+    .querySelectorAll("#script_autoBuild_d")[0]
+    .querySelectorAll("a")[0];
+  add.dispatch("click");
+  assert.equal(page.settings.readRaw().autoBuild, false);
+  assert.equal(page.settings.readRaw().overrides.autoBuild.length, 1);
+
+  const row = page.root.querySelectorAll("#script_autoBuild_o0")[0];
+  const conditionInputs = row.querySelectorAll("input");
+  conditionInputs[0].checked = false;
+  conditionInputs[0].dispatch("change");
+  const resultInput = conditionInputs.at(-1);
+  resultInput.checked = true;
+  resultInput.dispatch("change");
+  assert.equal(page.settings.readRaw().autoBuild, false);
+  assert.equal(page.effectiveSettings.autoBuild, true);
+
+  // Editing the base setting while the override matches changes raw state only.
+  target.checked = true;
+  target.dispatch("change");
+  assert.equal(page.settings.readRaw().autoBuild, true);
+  assert.equal(page.effectiveSettings.autoBuild, true);
+
+  // The condition stops matching, so the effective value falls back to the new raw value.
+  conditionInputs[1].checked = true;
+  conditionInputs[1].dispatch("change");
+  assert.equal(page.effectiveSettings.autoBuild, true);
+
+  // Editing the override itself still leaves the base value alone.
+  conditionInputs[1].checked = false;
+  conditionInputs[1].dispatch("change");
+  const editedResult = row.querySelectorAll("input").at(-1);
+  editedResult.checked = false;
+  editedResult.dispatch("change");
+  assert.equal(page.settings.readRaw().autoBuild, true);
+  assert.equal(page.settings.readRaw().overrides.autoBuild[0].ret, false);
+  assert.equal(page.effectiveSettings.autoBuild, false);
+
+  const savedWithOverride = page.storage.writes();
+  const reloaded = createPage(savedWithOverride, { useLifecycle: true });
+  reloaded.panel.ensurePanel();
+  assert.equal(reloaded.settings.readRaw().autoBuild, true);
+  assert.equal(reloaded.settings.readRaw().overrides.autoBuild.length, 1);
+  assert.equal(reloaded.effectiveSettings.autoBuild, false);
+
+  // Deleting the authored definition restores the raw value and persists the deletion.
+  const remove = page.root
+    .querySelectorAll("#script_autoBuild_o0")[0]
+    .querySelectorAll("a")[0];
+  remove.dispatch("click");
+  assert.equal(page.settings.readRaw().overrides.autoBuild, undefined);
+  assert.equal(page.settings.readRaw().autoBuild, true);
+  assert.equal(page.effectiveSettings.autoBuild, true);
+  assert.equal(
+    JSON.parse(page.storage.writes()).overrides.autoBuild,
+    undefined,
+  );
+}
+
+// The top-level controls can open the same editor before the settings section is shown.
+{
+  const page = createPage(JSON.stringify({ showSettings: false }), {
+    useLifecycle: true,
+  });
+  page.panel.ensurePanel();
+  const target = page.root.querySelectorAll(".script_autoBuild")[0];
+  target.parentElement.dispatch("click", target, { ctrlKey: true });
+  assert.equal(page.root.querySelectorAll("#script_autoBuildModal").length, 1);
+}
+
+// --- a captured override still yields to governor/task suppression ------------------------------
+
+{
+  const page = createPage(JSON.stringify({ autoStorage: true }), {
+    useLifecycle: true,
+  });
+  page.gameRoot.race.governor.tasks.storage = "storage";
+  page.panel.ensurePanel();
+  const target = page.root.querySelectorAll(".script_autoStorage")[0];
+  target.parentElement.dispatch("click", target, { ctrlKey: true });
+  page.root
+    .querySelectorAll("#script_autoStorage_d")[0]
+    .querySelectorAll("a")[0]
+    .dispatch("click");
+  const conditionInputs = page.root
+    .querySelectorAll("#script_autoStorage_o0")[0]
+    .querySelectorAll("input");
+  conditionInputs[1].checked = true;
+  conditionInputs[1].dispatch("change");
+  assert.equal(page.settings.readRaw().autoStorage, true);
+  assert.equal(page.settings.readRaw().overrides.autoStorage.length, 1);
+  assert.equal(page.effectiveSettings.autoStorage, false);
 }
 
 // --- an enable callback for an unported section is reported by name, once ------------------------

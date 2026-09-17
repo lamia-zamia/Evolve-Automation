@@ -332,6 +332,7 @@ export function startCapturedRuntime({
     capturedPanelWindow: settingsHostWindow,
     settings: settingsStorage,
     settingsLifecycle,
+    refreshEffectiveSettings,
     craftToggles: {
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,

@@ -22758,7 +22758,7 @@
   }
 
   // src/adapters/evolve/captured-override-evaluation.ts
-  var CAPTURED_OPERAND_TYPES = /* @__PURE__ */ new Set([
+  var CAPTURED_OVERRIDE_OPERAND_TYPES = [
     "Boolean",
     "BuildingAffordable",
     "BuildingClickable",
@@ -22804,7 +22804,7 @@
     "Soldiers",
     "TraitLevel",
     "Universe"
-  ]);
+  ], CAPTURED_OPERAND_TYPES = new Set(CAPTURED_OVERRIDE_OPERAND_TYPES);
   function readRootSafely2(rootState) {
     try {
       return rootState.readRoot();
@@ -24948,6 +24948,136 @@
     return Object.freeze({ attach, readOrder });
   }
 
+  // src/settings/override-comparators.ts
+  function asNumber(value) {
+    return typeof value == "symbol" ? Number.NaN : Number(value);
+  }
+  function orderedBy(ordered) {
+    return (left, right) => typeof left == "string" && typeof right == "string" ? ordered(left, right) : ordered(asNumber(left), asNumber(right));
+  }
+  var overrideComparators = {
+    "==": {
+      compare: (left, right) => left == right,
+      express: (left, right) => `${left} == ${right}`
+    },
+    "!=": {
+      compare: (left, right) => left != right,
+      express: (left, right) => `${left} != ${right}`
+    },
+    ">": {
+      compare: orderedBy((left, right) => left > right),
+      express: (left, right) => `${left} > ${right}`
+    },
+    "<": {
+      compare: orderedBy((left, right) => left < right),
+      express: (left, right) => `${left} < ${right}`
+    },
+    ">=": {
+      compare: orderedBy((left, right) => left >= right),
+      express: (left, right) => `${left} >= ${right}`
+    },
+    "<=": {
+      compare: orderedBy((left, right) => left <= right),
+      express: (left, right) => `${left} <= ${right}`
+    },
+    "===": {
+      compare: (left, right) => left === right,
+      express: (left, right) => `${left} === ${right}`
+    },
+    "!==": {
+      compare: (left, right) => left !== right,
+      express: (left, right) => `${left} !== ${right}`
+    },
+    AND: {
+      compare: (left, right) => !!left && !!right,
+      express: (left, right) => `${left} && ${right}`
+    },
+    OR: {
+      compare: (left, right) => !!left || !!right,
+      express: (left, right) => `${left} || ${right}`
+    },
+    NAND: {
+      compare: (left, right) => !(left && right),
+      express: (left, right) => `!(${left} && ${right})`
+    },
+    NOR: {
+      compare: (left, right) => !(left || right),
+      express: (left, right) => `!(${left} || ${right})`
+    },
+    XOR: {
+      compare: (left, right) => !left != !right,
+      express: (left, right) => `!${left} != !${right}`
+    },
+    XNOR: {
+      compare: (left, right) => !left == !right,
+      express: (left, right) => `!${left} == !${right}`
+    },
+    "AND!": {
+      compare: (left, right) => !!left && !right,
+      express: (left, right) => `${left} && !${right}`
+    },
+    "OR!": {
+      compare: (left, right) => !!left || !right,
+      express: (left, right) => `${left} || !${right}`
+    },
+    "A?B": {
+      compare: (left) => !!left,
+      express: (left) => left
+    },
+    "!A?B": {
+      compare: (left) => !left,
+      express: (left) => `!${left}`
+    }
+  };
+  function byComparator(select) {
+    return Object.fromEntries(
+      Object.entries(overrideComparators).map(([id, comparator]) => [
+        id,
+        select(comparator)
+      ])
+    );
+  }
+  var overrideComparisons = byComparator(
+    (comparator) => comparator.compare
+  ), overrideComparatorExpressions = byComparator(
+    (comparator) => comparator.express
+  );
+
+  // src/bootstrap/captured-override-editor-catalog.ts
+  var BOOLEAN_OPERAND = {
+    fn: (argument) => argument,
+    arg: "boolean",
+    def: !1,
+    desc: "Returns a boolean"
+  }, NUMBER_OPERAND = {
+    fn: (argument) => argument,
+    arg: "number",
+    def: 0,
+    desc: "Returns a number"
+  }, STRING_OPERAND = {
+    fn: (argument) => argument,
+    arg: "string",
+    def: "",
+    desc: "Reads a captured operand by its game or setting id"
+  };
+  function createCapturedOverrideEditorCatalog() {
+    let checkTypes = {
+      String: STRING_OPERAND,
+      Number: NUMBER_OPERAND,
+      Boolean: BOOLEAN_OPERAND
+    };
+    for (let operandType of CAPTURED_OVERRIDE_OPERAND_TYPES)
+      checkTypes[operandType] === void 0 && (checkTypes[operandType] = STRING_OPERAND);
+    return Object.freeze({
+      checkTypes: Object.freeze(checkTypes),
+      checkCompareExpressions: overrideComparatorExpressions,
+      checkCustom: Object.freeze({
+        "A?B": "Special check, uses Var2 as result if Var1 is truthy",
+        "!A?B": "Special check, uses Var2 as result if Var1 is falsy"
+      })
+    });
+  }
+
   // src/application/job-settings.ts
   function createJobSettingsIntentHandler({
     writer,
@@ -25713,6 +25843,354 @@
     };
   }
 
+  // src/ui/override-condition-controls.ts
+  function readOperandType(condition, slot) {
+    return slot === 1 ? condition.type1 : condition.type2;
+  }
+  function readOperandArgument(condition, slot) {
+    return slot === 1 ? condition.arg1 : condition.arg2;
+  }
+  function operandExpression(condition, slot) {
+    let operandType = readOperandType(condition, slot), argument = readOperandArgument(condition, slot);
+    switch (operandType) {
+      case "Number":
+      case "Boolean":
+        return String(argument);
+      case "Eval":
+        return `(${String(argument)})`;
+      case "String":
+        return JSON.stringify(argument);
+      default:
+        return `_("${operandType}",${JSON.stringify(argument)})`;
+    }
+  }
+  function createOverrideConditionControls({
+    overrideEditor,
+    getJQuery,
+    getSettingsRaw,
+    getWin,
+    getCheckCompareExpressions,
+    getCheckCustom,
+    getCheckTypes,
+    buildInputNode
+  }) {
+    let $ = getJQuery();
+    function evaluateCheck(operandTypeId, argument) {
+      return getCheckTypes()[operandTypeId]?.fn(argument);
+    }
+    function buildConditionType(settingName, index, condition, slot, rebuild) {
+      let types = Object.entries(getCheckTypes()).map(
+        ([id, type]) => `<option value="${id}" title="${type?.desc}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
+      ).join();
+      return $(`<select style="width: 100%">${types}</select>`).val(readOperandType(condition, slot)).on("change", function() {
+        overrideEditor.applyEdit({
+          kind: "set-operand",
+          settingKey: settingName,
+          index,
+          slot,
+          operandType: this.value,
+          argument: getCheckTypes()[this.value]?.def
+        }), rebuild();
+      });
+    }
+    function buildConditionArg(settingName, index, condition, slot) {
+      let check = getCheckTypes()[readOperandType(condition, slot)];
+      return check ? buildInputNode(
+        check.arg,
+        check.options,
+        readOperandArgument(condition, slot),
+        (result) => {
+          overrideEditor.applyEdit({
+            kind: "set-operand-argument",
+            settingKey: settingName,
+            index,
+            slot,
+            argument: result
+          });
+        }
+      ) : "";
+    }
+    function buildConditionComparator(settingName, index, condition, rebuild) {
+      let types = Object.entries(getCheckCompareExpressions()).map(
+        ([id, express]) => `<option value="${id}" title="${getCheckCustom()[id] ?? express?.("a", "b")}">${id}</option>`
+      ).join();
+      return $(`<select style="width: 100%">${types}</select>`).val(condition.comparator).on("change", function() {
+        overrideEditor.applyEdit({
+          kind: "set-comparator",
+          settingKey: settingName,
+          index,
+          comparator: this.value
+        }), rebuild();
+      });
+    }
+    function buildConditionRemove(settingName, index, rebuild) {
+      return $(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span>-</span></a>'
+      ).on("click", () => {
+        overrideEditor.applyEdit({
+          kind: "remove-condition",
+          settingKey: settingName,
+          index
+        }).conditionCount === 0 && $(".script_bg_" + settingName).removeClass("inactive-row"), rebuild();
+      });
+    }
+    function buildConditionDuplicate(settingName, index, rebuild) {
+      return $(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 1.2rem;">&#9282;</span></a>'
+      ).on("click", () => {
+        overrideEditor.applyEdit({
+          kind: "duplicate-condition",
+          settingKey: settingName,
+          index
+        }), rebuild();
+      });
+    }
+    function buildConditionEvalize(settingName, index) {
+      return $(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 0.9rem;">E</span></a>'
+      ).on("click", () => {
+        let condition = parseOverrideCondition(
+          getSettingsRaw().overrides[settingName]?.[index]
+        ), express = condition && getCheckCompareExpressions()[condition.comparator];
+        condition === void 0 || express === void 0 || getWin().prompt(
+          "Eval of this condition:",
+          express(
+            operandExpression(condition, 1),
+            operandExpression(condition, 2)
+          )
+        );
+      });
+    }
+    function buildConditionRet(settingName, index, condition, type, options) {
+      return buildInputNode(type, options, condition.result, (result) => {
+        overrideEditor.applyEdit({
+          kind: "set-result",
+          settingKey: settingName,
+          index,
+          result
+        });
+      });
+    }
+    return {
+      evaluateCheck,
+      buildConditionType,
+      buildConditionArg,
+      buildConditionComparator,
+      buildConditionRemove,
+      buildConditionDuplicate,
+      buildConditionEvalize,
+      buildConditionRet
+    };
+  }
+
+  // src/ui/override-editor.ts
+  function listNames(value, nameOf) {
+    return Array.isArray(value) ? value.map((item) => nameOf(item) ?? "[Invalid item]").join(", ") : "";
+  }
+  function createOverrideEditorControls({
+    overrideEditor,
+    conditionControls,
+    getJQuery,
+    getSettingsRaw,
+    getSettings,
+    getTechIds,
+    getCheckCustom,
+    getOverrideKey,
+    getOpenOptionsModal,
+    getTableSorter,
+    buildInputNode
+  }) {
+    let $ = getJQuery();
+    function openOverrideModal(event) {
+      event[getOverrideKey()] && (event.preventDefault(), getOpenOptionsModal()(event.data.label, (modal) => {
+        modal.append(
+          `<div style="margin-top: 10px; margin-bottom: 10px;" id="script_${event.data.name}Modal"></div>`
+        ), $(".script-modal-content").addClass("override-modal"), buildOverrideSettings(
+          event.data.name,
+          event.data.type,
+          event.data.options
+        );
+      }));
+    }
+    function buildOverrideSettings(settingName, type, options) {
+      let rebuild = () => buildOverrideSettings(settingName, type, options), overrides = getSettingsRaw().overrides[settingName] ?? [], currentNode = $(`#script_${settingName}Modal`);
+      currentNode.empty().off("*"), currentNode.append(`
+          <table style="width:100%; text-align: left">
+            <tr>
+              <th class="has-text-warning" colspan="2">Variable 1</th>
+              <th class="has-text-warning" colspan="1">Check</th>
+              <th class="has-text-warning" colspan="2">Variable 2</th>
+              <th class="has-text-warning" colspan="3">Result</th>
+            </tr>
+            <tr>
+              <th class="has-text-warning" style="width:16%">Type</th>
+              <th class="has-text-warning" style="width:16%">Value</th>
+              <th class="has-text-warning" style="width:10%"></th>
+              <th class="has-text-warning" style="width:16%">Type</th>
+              <th class="has-text-warning" style="width:16%">Value</th>
+              <th class="has-text-warning" style="width:14%"></th>
+              <th style="width:12%"></th>
+            </tr>
+            <tbody id="script_${settingName}ModalTable"></tbody>
+          </table>`);
+      let newTableBodyText = "";
+      for (let i = 0; i < overrides.length; i++)
+        newTableBodyText += `<tr id="script_${settingName}_o${i}" value="${i}" class="script-draggable"><td style="width:16%"></td><td style="width:16%"></td><td style="width:10%"></td><td style="width:16%"></td><td style="width:16%"></td><td style="width:14%"></td><td style="width:12%"><span class="script-lastcolumn"></span></td></tr>`;
+      let listField = typeof getSettingsRaw()[settingName] == "object", note = listField ? "All values passed checks will be added or removed from list" : "First value passed check will be used. Default value:", note_2 = "The current value:", current = listField ? `<td style="width:32%" colspan="2">${note_2}</td>
+          <td style="width:56%" colspan="4"></td>` : `<td style="width:74%" colspan="5">${note_2}</td>
+          <td style="width:14%"></td>`;
+      newTableBodyText += `
+          <tr id="script_${settingName}_d" class="unsortable">
+            <td style="width:74%" colspan="5">${note}</td>
+            <td style="width:14%"></td>
+            <td style="width:12%"><a class="button is-small" style="width: 26px; height: 26px"><span>+</span></a></td>
+          </tr>
+          <tr id="script_override_true_value" class="unsortable" value="${settingName}" type="${type}">
+            ${current}
+            <td style="width:12%"></td>
+          </tr>`;
+      let tableBodyNode = $(`#script_${settingName}ModalTable`);
+      tableBodyNode.append($(newTableBodyText)), listField || $(`#script_${settingName}_d td:eq(1)`).append(
+        buildInputNode(
+          type,
+          options,
+          getSettingsRaw()[settingName],
+          (result) => {
+            overrideEditor.setSettingValue(settingName, result);
+            let retType = typeof result == "boolean" ? "checked" : "value";
+            $(".script_" + settingName).prop(
+              retType,
+              getSettingsRaw()[settingName]
+            );
+          }
+        )
+      ), $("#script_override_true_value td:eq(1)").append(
+        buildInputNodeForDisplay(type, options, getSettings()[settingName])
+      ), $(`#script_${settingName}_d a`).on("click", () => {
+        overrideEditor.applyEdit({
+          kind: "add-condition",
+          settingKey: settingName,
+          result: getSettingsRaw()[settingName]
+        }).conditionCount === 1 && $(".script_bg_" + settingName).addClass("inactive-row"), rebuild();
+      });
+      for (let i = 0; i < overrides.length; i++) {
+        let condition = parseOverrideCondition(overrides[i]);
+        if (condition === void 0)
+          continue;
+        let tableElement = $(`#script_${settingName}_o${i}`).children().eq(0);
+        tableElement.append(
+          conditionControls.buildConditionType(
+            settingName,
+            i,
+            condition,
+            1,
+            rebuild
+          )
+        ), tableElement = tableElement.next(), tableElement.append(
+          conditionControls.buildConditionArg(settingName, i, condition, 1)
+        ), tableElement = tableElement.next(), tableElement.append(
+          conditionControls.buildConditionComparator(
+            settingName,
+            i,
+            condition,
+            rebuild
+          )
+        ), tableElement = tableElement.next(), tableElement.append(
+          conditionControls.buildConditionType(
+            settingName,
+            i,
+            condition,
+            2,
+            rebuild
+          )
+        ), tableElement = tableElement.next(), tableElement.append(
+          conditionControls.buildConditionArg(settingName, i, condition, 2)
+        ), tableElement = tableElement.next(), getCheckCustom()[condition.comparator] || tableElement.append(
+          conditionControls.buildConditionRet(
+            settingName,
+            i,
+            condition,
+            type,
+            options
+          )
+        ), tableElement = tableElement.next(), tableElement.append(
+          conditionControls.buildConditionRemove(settingName, i, rebuild)
+        ), tableElement.append(
+          conditionControls.buildConditionDuplicate(settingName, i, rebuild)
+        ), tableElement.append(
+          conditionControls.buildConditionEvalize(settingName, i)
+        );
+      }
+      getTableSorter().attach(tableBodyNode[0], {
+        items: "tr:not(.unsortable)",
+        attribute: "value",
+        onOrderChanged: (newOrder) => {
+          overrideEditor.applyEdit({
+            kind: "reorder-conditions",
+            settingKey: settingName,
+            order: newOrder.map((position) => Number(position))
+          }), rebuild();
+        }
+      });
+    }
+    function buildInputNodeForDisplay(type, options, value) {
+      switch (type) {
+        case "string":
+        case "number":
+          return $(`
+                  <input type="text" class="input is-small" style="height: 22px; width:100%" disabled="disabled"/>`).val(
+            value
+          );
+        case "boolean":
+          return $(`
+                  <label tabindex="0" disabled="disabled" class="switch is-disabled" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+                    <input type="checkbox"  disabled="disabled">
+                    <span class="check" style="height:5px; max-width:15px"></span><span style="margin-left: 20px;"></span>
+                  </label>`).find("input").prop("checked", value).end();
+        case "select":
+          return $(`
+                  <select style="width: 100%"  disabled="disabled" class="dropdown is-disabled">${options}</select>`).val(
+            value
+          );
+        case "list": {
+          let list = options.list;
+          return $(`
+                  <span></span>`).text(
+            listNames(value, (item) => list[String(item)]?.name)
+          );
+        }
+        default:
+          return $(`
+                  <span></span>`).text(JSON.stringify(value));
+      }
+    }
+    function changeDisplayInputNode(currentNode) {
+      let type = currentNode.attr("type"), id = currentNode.attr("value"), value = getSettings()[String(id)], node = currentNode.find("td:eq(1)>*:first-child");
+      switch (type) {
+        case "string":
+        case "number":
+        case "select":
+          return node.val(value);
+        case "boolean":
+          return node.find("input").prop("checked", value);
+        case "list":
+          if (id === "researchIgnore")
+            return node.text(
+              listNames(value, (item) => getTechIds()[String(item)]?.name)
+            );
+        // fall through
+        default:
+          return node.text(JSON.stringify(value));
+      }
+    }
+    return {
+      openOverrideModal,
+      buildOverrideSettings,
+      buildInputNodeForDisplay,
+      changeDisplayInputNode
+    };
+  }
+
   // src/ui/settings-controls.ts
   function createSettingsControls({
     getAutocomplete,
@@ -26056,6 +26534,124 @@
     return { buildSelectOptions, buildInputNode, buildObjectListInput };
   }
 
+  // src/domain/override-editing.ts
+  function newCondition(result) {
+    return {
+      type1: "Boolean",
+      arg1: !0,
+      type2: "Boolean",
+      arg2: !1,
+      cmp: "==",
+      ret: result
+    };
+  }
+  function isPermutation(order, length) {
+    return order.length === length && new Set(order).size === length && order.every(
+      (index) => Number.isInteger(index) && index >= 0 && index < length
+    );
+  }
+  function applyOverrideEdit(overrides, edit) {
+    let current = overrides[edit.settingKey] ?? [], conditions = [...current], unchanged = () => ({
+      overrides: copyOverrides(overrides),
+      conditionCount: current.length,
+      applied: !1
+    });
+    if (edit.kind === "add-condition")
+      return conditions.push(newCondition(edit.result)), replaced(overrides, edit.settingKey, conditions);
+    if (edit.kind === "reorder-conditions")
+      return isPermutation(edit.order, conditions.length) ? replaced(
+        overrides,
+        edit.settingKey,
+        edit.order.map((index) => conditions[index])
+      ) : unchanged();
+    let condition = conditions[edit.index];
+    if (condition === void 0) return unchanged();
+    switch (edit.kind) {
+      case "remove-condition":
+        conditions.splice(edit.index, 1);
+        break;
+      case "duplicate-condition":
+        conditions.splice(edit.index, 0, { ...condition });
+        break;
+      case "set-operand":
+        conditions[edit.index] = {
+          ...condition,
+          [`type${edit.slot}`]: edit.operandType,
+          [`arg${edit.slot}`]: edit.argument
+        };
+        break;
+      case "set-operand-argument":
+        conditions[edit.index] = {
+          ...condition,
+          [`arg${edit.slot}`]: edit.argument
+        };
+        break;
+      case "set-comparator":
+        conditions[edit.index] = { ...condition, cmp: edit.comparator };
+        break;
+      case "set-result":
+        conditions[edit.index] = { ...condition, ret: edit.result };
+        break;
+    }
+    return replaced(overrides, edit.settingKey, conditions);
+  }
+  function copyOverrides(overrides) {
+    let copy = {};
+    for (let [settingKey, conditions] of Object.entries(overrides))
+      copy[settingKey] = [...conditions];
+    return copy;
+  }
+  function replaced(overrides, settingKey, conditions) {
+    let next = copyOverrides(overrides);
+    return conditions.length === 0 ? delete next[settingKey] : next[settingKey] = conditions, { overrides: next, conditionCount: conditions.length, applied: !0 };
+  }
+
+  // src/application/override-editing.ts
+  function createOverrideEditor({
+    getSettingsRaw,
+    persistence
+  }) {
+    return {
+      applyEdit(edit) {
+        let settingsRaw = getSettingsRaw(), result = applyOverrideEdit(settingsRaw.overrides, edit);
+        return result.applied && (settingsRaw.overrides = result.overrides, persistence.save()), { conditionCount: result.conditionCount };
+      },
+      setSettingValue(settingKey, value) {
+        getSettingsRaw()[settingKey] = value, persistence.save();
+      }
+    };
+  }
+
+  // src/bootstrap/settings-editor-control.ts
+  function createSettingsEditorControl({
+    overrideEditor: overrideEditorDependencies,
+    settingsInputs: settingsInputDependencies,
+    conditionControls: conditionDependencies,
+    overrideControls: overrideControlDependencies,
+    settingsControls: settingsControlDependencies
+  }) {
+    let overrideEditor = createOverrideEditor(overrideEditorDependencies), inputs = createSettingsInputs(settingsInputDependencies), conditionControls = createOverrideConditionControls({
+      ...conditionDependencies,
+      overrideEditor,
+      buildInputNode: inputs.buildInputNode
+    }), overrideControls = createOverrideEditorControls({
+      ...overrideControlDependencies,
+      overrideEditor,
+      conditionControls,
+      buildInputNode: inputs.buildInputNode
+    }), settingsControls = createSettingsControls({
+      ...settingsControlDependencies,
+      openOverrideModal: (event) => overrideControls.openOverrideModal(event),
+      buildSelectOptions: inputs.buildSelectOptions
+    });
+    return Object.freeze({
+      ...inputs,
+      ...conditionControls,
+      ...overrideControls,
+      ...settingsControls
+    });
+  }
+
   // src/ui/settings-shell.ts
   function createSettingsShell({
     $,
@@ -26244,6 +26840,7 @@
     capturedPanelWindow,
     settings,
     settingsLifecycle,
+    refreshEffectiveSettings,
     craftToggles: capturedCraftToggles,
     onDiagnostic = () => {
     },
@@ -26262,6 +26859,8 @@
       reportedSections.has(section) || (reportedSections.add(section), onDiagnostic(`settings panel section not ported yet: ${section}`));
     }, fileDownload = panelFileDownloadFor(capturedPanelWindow, documentValue), reportNoFileDownload = () => {
       reportedSections.has("settings file download") || (reportedSections.add("settings file download"), logError("this page cannot offer a settings file download"));
+    }, persistSettings = () => {
+      settings.persist(), refreshEffectiveSettings?.();
     }, generalDefaults = computeGeneralDefaults().def, capturedRecordDefaults = [
       generalDefaults,
       computeInterfaceDefaults().def,
@@ -26270,7 +26869,7 @@
       computeChallengeHelperDefaults().def,
       computeAuthorityDefaults().def
     ], prepareSettingsForUi = () => {
-      settingsLifecycle?.initialize();
+      settingsLifecycle?.initialize(), refreshEffectiveSettings?.();
       let raw = settings.readRaw();
       (!isRecord(raw.overrides) || Array.isArray(raw.overrides)) && (raw.overrides = {});
       for (let defaults of capturedRecordDefaults)
@@ -26317,19 +26916,56 @@
         getDocument: () => documentValue
       }), formatting = createNumberFormatting({
         numberSuffix
-      }), getJQuery = () => dom, inputs = createSettingsInputs({
-        getAutocomplete: () => autocomplete,
-        getJQuery,
-        getRealNumber: () => formatting.getRealNumber
-      }), controls2 = createSettingsControls({
-        getAutocomplete: () => autocomplete,
-        getJQuery,
-        getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
-        getRealNumber: () => formatting.getRealNumber,
-        getUpdateSettingsFromState: () => () => settings.persist(),
-        openOverrideModal: unported("per-setting override editor"),
-        buildSelectOptions: inputs.buildSelectOptions
-      }), craftToggles = capturedCraftToggles === void 0 ? void 0 : createCraftToggleBrowserAdapter({
+      }), getJQuery = () => dom, tableSorter = createTableSorter({
+        getSortable: () => readProperty(capturedPanelWindow, "Sortable")
+      }), overrideCatalog = createCapturedOverrideEditorCatalog(), settingsEditor = createSettingsEditorControl({
+        overrideEditor: {
+          getSettingsRaw: () => settings.readRaw(),
+          persistence: { save: persistSettings }
+        },
+        settingsInputs: {
+          getAutocomplete: () => autocomplete,
+          getJQuery,
+          getRealNumber: () => formatting.getRealNumber
+        },
+        conditionControls: {
+          getJQuery,
+          getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
+          getWin: () => ({
+            prompt: (message, value) => {
+              let prompt = readProperty(capturedPanelWindow, "prompt");
+              return typeof prompt == "function" ? Reflect.apply(prompt, capturedPanelWindow, [message, value]) : void 0;
+            }
+          }),
+          getCheckCompareExpressions: () => overrideCatalog.checkCompareExpressions,
+          getCheckCustom: () => overrideCatalog.checkCustom,
+          getCheckTypes: () => overrideCatalog.checkTypes
+        },
+        overrideControls: {
+          getJQuery,
+          getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
+          getSettings: () => settingsLifecycle?.readEffective() ?? settings.readRaw(),
+          getTechIds: () => ({}),
+          getCheckCustom: () => overrideCatalog.checkCustom,
+          getOverrideKey: () => overrideKeyLabelFor(capturedPanelWindow) === "Alt" ? "altKey" : "ctrlKey",
+          getOpenOptionsModal: () => (title, buildOptions) => optionsModal.openOptionsModal(
+            title,
+            (modal) => buildOptions(modal)
+          ),
+          getTableSorter: () => tableSorter
+        },
+        settingsControls: {
+          getAutocomplete: () => autocomplete,
+          getJQuery,
+          getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
+          getRealNumber: () => formatting.getRealNumber,
+          getUpdateSettingsFromState: () => persistSettings
+        }
+      }), controls2 = settingsEditor;
+      openOverrideModal = (event) => settingsEditor.openOverrideModal(
+        event
+      );
+      let craftToggles = capturedCraftToggles === void 0 ? void 0 : createCraftToggleBrowserAdapter({
         getJQuery: () => getJQuery(),
         reader: createCapturedCraftToggleReader({
           rootState: capturedCraftToggles.rootState,
@@ -26401,7 +27037,7 @@
         },
         filterBuildingSettingsTable: () => {
         },
-        updateSettingsFromState: () => settings.persist(),
+        updateSettingsFromState: persistSettings,
         importSettings: importScriptSettings,
         exportSettings: () => JSON.stringify(settings.readRaw()),
         triggerFileDownload: fileDownload ?? reportNoFileDownload,
@@ -26419,7 +27055,7 @@
                 delete overrides[key];
             Object.assign(raw, generalDefaults);
           },
-          persist: () => settings.persist()
+          persist: persistSettings
         },
         renderSettingsContent: () => general?.updateGeneralSettingsContent(),
         effects: {
@@ -26491,7 +27127,7 @@
         )
       }, createSimpleWriter = (defaults, section) => ({
         resetToDefaults: () => resetCapturedSectionRecord(defaults, section),
-        persist: () => settings.persist()
+        persist: persistSettings
       }), achievementIntent;
       achievementIntent = createAchievementGuardSettingsIntentHandler({
         writer: createSimpleWriter(
@@ -26584,7 +27220,7 @@
           resetToDefaults: () => {
             settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("hell") : resetCapturedSectionRecord(computeHellDefaults().def);
           },
-          persist: () => settings.persist()
+          persist: persistSettings
         },
         renderSettingsContent: (secondaryPrefix) => hell?.updateHellSettingsContent(secondaryPrefix),
         effects: { resetCheckboxes: () => controls2.resetCheckbox("autoHell") }
@@ -26620,7 +27256,7 @@
           resetToDefaults: () => {
             settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("weighting") : resetCapturedSectionRecord(computeWeightingDefaults().def);
           },
-          persist: () => settings.persist()
+          persist: persistSettings
         },
         renderSettingsContent: () => weighting?.updateWeightingSettingsContent()
       });
@@ -26634,9 +27270,7 @@
         }),
         getReadModel: getWeightingSettingsReadModel
       });
-      let tableSorter = createTableSorter({
-        getSortable: () => readProperty(capturedPanelWindow, "Sortable")
-      }), jobIntent = createJobSettingsIntentHandler({
+      let jobIntent = createJobSettingsIntentHandler({
         writer: {
           resetToDefaults: () => settingsLifecycle?.resetSection("job"),
           persist: () => settings.persist(),
@@ -26705,7 +27339,7 @@ Only continue if you trust the source. Injected code:
 `)
       ))
         return !1;
-      settingsLifecycle === void 0 ? (settings.replaceRaw(inspection.settings), settings.persist()) : settingsLifecycle.replaceAndInitialize(inspection.settings);
+      settingsLifecycle === void 0 ? (settings.replaceRaw(inspection.settings), persistSettings()) : (settingsLifecycle.replaceAndInitialize(inspection.settings), refreshEffectiveSettings?.());
       let dom = getQuery();
       return dom?.("#script_settings").remove(), dom?.("#autoScriptContainer").remove(), !0;
     }, buildScriptSettings = () => {
@@ -26731,6 +27365,9 @@ Only continue if you trust the source. Injected code:
         return;
       }
       adapter.removeCraftToggles();
+    }, openOverrideModal = (event) => {
+      let dom = getQuery();
+      dom !== void 0 && (ensureSettingsUi(dom), openOverrideModal(event));
     }, optionsModal = createOptionsModalBrowserAdapter({
       getDocument: () => documentValue,
       getJQuery: () => getQuery(),
@@ -26748,7 +27385,7 @@ Only continue if you trust the source. Injected code:
         setToggle: (settingName, checked) => {
           settings.readRaw()[settingName] = checked;
         },
-        persist: () => settings.persist()
+        persist: persistSettings
       }),
       // TRANSITIONAL: the four secondary-option modals (Government, Foreign Affairs, Hell, Fleet)
       // build their contents from legacy managers.
@@ -26758,7 +27395,7 @@ Only continue if you trust the source. Injected code:
         hell: unported("Hell options"),
         fleet: unported("Fleet options")
       }),
-      openOverrideModal: unported("per-setting override editor")
+      openOverrideModal: (event) => openOverrideModal(event)
     }), { ensureAutomationContainer } = createAutomationContainer({
       getSettingsRaw: () => settings.readRaw(),
       getJQuery: () => getQuery(),
@@ -26775,7 +27412,7 @@ Only continue if you trust the source. Injected code:
           onEnable,
           onDisable
         ),
-        updateSettingsFromState: () => settings.persist(),
+        updateSettingsFromState: persistSettings,
         buildScriptSettings,
         removeScriptSettings,
         createMechInfo: unported("mech info panel"),
@@ -26803,7 +27440,7 @@ Only continue if you trust the source. Injected code:
       ensurePanel() {
         if (getQuery() !== void 0)
           try {
-            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().showSettings === !0 && buildScriptSettings();
+            prepareSettingsForUi(), ensureAutomationContainer(), optionsModal.createOptionsModal(), settings.readRaw().showSettings === !0 && buildScriptSettings();
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }
@@ -29369,101 +30006,6 @@ Only continue if you trust the source. Injected code:
     });
   }
 
-  // src/settings/override-comparators.ts
-  function asNumber(value) {
-    return typeof value == "symbol" ? Number.NaN : Number(value);
-  }
-  function orderedBy(ordered) {
-    return (left, right) => typeof left == "string" && typeof right == "string" ? ordered(left, right) : ordered(asNumber(left), asNumber(right));
-  }
-  var overrideComparators = {
-    "==": {
-      compare: (left, right) => left == right,
-      express: (left, right) => `${left} == ${right}`
-    },
-    "!=": {
-      compare: (left, right) => left != right,
-      express: (left, right) => `${left} != ${right}`
-    },
-    ">": {
-      compare: orderedBy((left, right) => left > right),
-      express: (left, right) => `${left} > ${right}`
-    },
-    "<": {
-      compare: orderedBy((left, right) => left < right),
-      express: (left, right) => `${left} < ${right}`
-    },
-    ">=": {
-      compare: orderedBy((left, right) => left >= right),
-      express: (left, right) => `${left} >= ${right}`
-    },
-    "<=": {
-      compare: orderedBy((left, right) => left <= right),
-      express: (left, right) => `${left} <= ${right}`
-    },
-    "===": {
-      compare: (left, right) => left === right,
-      express: (left, right) => `${left} === ${right}`
-    },
-    "!==": {
-      compare: (left, right) => left !== right,
-      express: (left, right) => `${left} !== ${right}`
-    },
-    AND: {
-      compare: (left, right) => !!left && !!right,
-      express: (left, right) => `${left} && ${right}`
-    },
-    OR: {
-      compare: (left, right) => !!left || !!right,
-      express: (left, right) => `${left} || ${right}`
-    },
-    NAND: {
-      compare: (left, right) => !(left && right),
-      express: (left, right) => `!(${left} && ${right})`
-    },
-    NOR: {
-      compare: (left, right) => !(left || right),
-      express: (left, right) => `!(${left} || ${right})`
-    },
-    XOR: {
-      compare: (left, right) => !left != !right,
-      express: (left, right) => `!${left} != !${right}`
-    },
-    XNOR: {
-      compare: (left, right) => !left == !right,
-      express: (left, right) => `!${left} == !${right}`
-    },
-    "AND!": {
-      compare: (left, right) => !!left && !right,
-      express: (left, right) => `${left} && !${right}`
-    },
-    "OR!": {
-      compare: (left, right) => !!left || !right,
-      express: (left, right) => `${left} || !${right}`
-    },
-    "A?B": {
-      compare: (left) => !!left,
-      express: (left) => left
-    },
-    "!A?B": {
-      compare: (left) => !left,
-      express: (left) => `!${left}`
-    }
-  };
-  function byComparator(select) {
-    return Object.fromEntries(
-      Object.entries(overrideComparators).map(([id, comparator]) => [
-        id,
-        select(comparator)
-      ])
-    );
-  }
-  var overrideComparisons = byComparator(
-    (comparator) => comparator.compare
-  ), overrideComparatorExpressions = byComparator(
-    (comparator) => comparator.express
-  );
-
   // src/bootstrap/captured-runtime-control.ts
   function isEnabled(settings, key) {
     return settings[key] === !0;
@@ -29540,6 +30082,7 @@ Only continue if you trust the source. Injected code:
       capturedPanelWindow: settingsHostWindow2,
       settings: settingsStorage,
       settingsLifecycle,
+      refreshEffectiveSettings,
       craftToggles: {
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls
