@@ -17,7 +17,9 @@ import {
   createCapturedGenetics,
   GENETICS_CONTROL,
 } from "../adapters/evolve/traits/captured-genetics.ts";
+import { GENE_SLOTS_CONTROL } from "../adapters/evolve/traits/captured-trait-automation.ts";
 import { runGeneticsAutomation } from "../application/genetics.ts";
+import { createCapturedTraitControl } from "./captured-trait-control.ts";
 import {
   HELL_GARRISON_CONTROLS,
   readCapturedHellGarrison,
@@ -241,6 +243,8 @@ const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
   autoGovernment: false,
   autoHell: false,
   autoMech: false,
+  autoMinorTrait: false,
+  autoMutateTraits: false,
 });
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
@@ -494,6 +498,13 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
+  });
+  const traits = createCapturedTraitControl({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    keyState: pageCapture.keyState,
+    getDocument: () => document,
+    readSettings: () => settingsStore.readRaw(),
   });
   const costs = createCapturedCraftCosts({
     rootState: pageCapture.rootState,
@@ -1031,9 +1042,16 @@ export function startCapturedRuntime({
    * sequencer panel itself exists only above `tech.genetics` 1.
    */
   const ensureGeneticsControls = () => {
-    if (pageCapture.controls.resolve(GENETICS_CONTROL) !== undefined) return;
     const root = pageCapture.rootState.readRoot();
     const level = readProperty(readProperty(root, "tech"), "genetics");
+    if (
+      pageCapture.controls.resolve(GENETICS_CONTROL) !== undefined &&
+      (typeof level !== "number" ||
+        level <= 2 ||
+        pageCapture.controls.resolve(GENE_SLOTS_CONTROL) !== undefined)
+    ) {
+      return;
+    }
     const panelOffered = readProperty(
       readProperty(readProperty(root, "settings"), "arpa"),
       "genetics",
@@ -2068,11 +2086,28 @@ export function startCapturedRuntime({
         });
       }
       // After construction and research, so neither is outbid for the Knowledge a gene costs.
-      if (isEnabled(settings, "autoGenetics")) {
+      const geneticsAutomationEnabled =
+        isEnabled(settings, "autoGenetics") ||
+        isEnabled(settings, "autoMinorTrait") ||
+        isEnabled(settings, "autoMutateTraits");
+      if (geneticsAutomationEnabled) {
         runPhase("autoGenetics", () => {
           ensureGeneticsControls();
-          runGeneticsAutomation(genetics);
+          if (isEnabled(settings, "autoGenetics")) {
+            runGeneticsAutomation(genetics);
+          }
         });
+      }
+      if (isEnabled(settings, "autoMinorTrait")) {
+        const outcome = runPhase("autoMinorTrait", () => {
+          ensureGeneticsControls();
+          return traits.autoMinorTrait();
+        });
+        if (outcome !== undefined && outcome.status !== "succeeded") {
+          reportOnce(
+            `autoMinorTrait: ${outcome.failure.code}: ${outcome.failure.message}`,
+          );
+        }
       }
       const prestigeType = settings["prestigeType"];
       if (
@@ -2100,6 +2135,17 @@ export function startCapturedRuntime({
           }
           prestige.run();
         });
+      }
+      if (isEnabled(settings, "autoMutateTraits")) {
+        const outcome = runPhase("autoMutateTraits", () => {
+          ensureGeneticsControls();
+          return traits.autoMutateTrait();
+        });
+        if (outcome !== undefined && outcome.status !== "succeeded") {
+          reportOnce(
+            `autoMutateTraits: ${outcome.failure.code}: ${outcome.failure.message}`,
+          );
+        }
       }
     } catch (error) {
       // Backstop for anything outside a phase boundary. Each feature now catches its own throw, so

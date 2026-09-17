@@ -31,6 +31,38 @@ export interface MinorTraitPurchaseDecision {
   readonly expectedGenes: number;
 }
 
+export type GeneticsMinorTraitSource = "ecosystem";
+
+/** A minor upgrade offered by the live Genetics 2.0 panels. */
+export interface GeneticsMinorTraitCandidate {
+  readonly traitId: string;
+  readonly source: GeneticsMinorTraitSource;
+  readonly ecosystem: string;
+  readonly ecosystemTrait: string;
+  readonly rank: number;
+  /** Null means the live capability did not expose a structured price. */
+  readonly cost: number | null;
+  readonly eligible: boolean | null;
+}
+
+export interface GeneticsMinorTraitInput {
+  readonly available: boolean;
+  readonly currentGenes: number;
+  /** Ordered by the current game panels; the first eligible item wins. */
+  readonly traits: readonly GeneticsMinorTraitCandidate[];
+}
+
+export interface GeneticsMinorTraitUpgradeDecision {
+  readonly kind: "upgrade-minor-trait";
+  readonly traitId: string;
+  readonly source: GeneticsMinorTraitSource;
+  readonly ecosystem: string;
+  readonly ecosystemTrait: string;
+  readonly expectedRank: number;
+  readonly expectedGenes: number;
+  readonly expectedCost: number | null;
+}
+
 export function summarizeMinorTraits(
   input: Readonly<MinorTraitSummaryInput>,
 ): MinorTraitSummary | null {
@@ -77,4 +109,36 @@ export function planMinorTraitPurchase(
     geneCost: candidate.geneCost,
     expectedGenes: candidate.currentGenes,
   });
+}
+
+/** Select one live Genetics 2.0 minor-trait upgrade in panel order. */
+export function planGeneticsMinorTrait(
+  input: Readonly<GeneticsMinorTraitInput>,
+): GeneticsMinorTraitUpgradeDecision | null {
+  if (!input.available || !Number.isFinite(input.currentGenes)) return null;
+
+  for (const candidate of input.traits) {
+    if (candidate.eligible !== true) continue;
+    if (
+      !Number.isFinite(candidate.rank) ||
+      candidate.rank < 0 ||
+      candidate.cost === null ||
+      !Number.isFinite(candidate.cost) ||
+      candidate.cost < 0 ||
+      input.currentGenes < candidate.cost
+    ) {
+      continue;
+    }
+    return Object.freeze({
+      kind: "upgrade-minor-trait",
+      traitId: candidate.traitId,
+      source: candidate.source,
+      ecosystem: candidate.ecosystem,
+      ecosystemTrait: candidate.ecosystemTrait,
+      expectedRank: candidate.rank,
+      expectedGenes: input.currentGenes,
+      expectedCost: candidate.cost,
+    });
+  }
+  return null;
 }

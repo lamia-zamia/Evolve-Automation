@@ -1,4 +1,5 @@
 import type {
+  GeneticsMinorTraitInput,
   MinorTraitCandidateInput,
   MinorTraitSummaryInput,
 } from "../domain/traits/minor-trait.ts";
@@ -7,4 +8,8 @@ import type {
 export interface MinorTraitReader {
   readSummary(): MinorTraitSummaryInput;
   readCandidate(index: number): MinorTraitCandidateInput | null;
+}
+
+export interface GeneticsMinorTraitReader {
+  read(): GeneticsMinorTraitInput;
 }

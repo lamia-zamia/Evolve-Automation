@@ -107,7 +107,7 @@ function sequenceFlag(
   return readProperty(sequence, key) === true;
 }
 
-function readClickMultiplierState(
+export function readCapturedClickMultiplierState(
   root: unknown,
   keyState: GameKeyStateReader,
 ): boolean | undefined {
@@ -334,7 +334,7 @@ export function createCapturedGenetics(
         return stale("genetics-balances-changed", "genetics balances changed");
       }
       if (funds < GENE_KNOWLEDGE_COST) break;
-      const multiplierState = readClickMultiplierState(
+      const multiplierState = readCapturedClickMultiplierState(
         active.root,
         dependencies.keyState,
       );
