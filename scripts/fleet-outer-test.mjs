@@ -20,6 +20,7 @@ function createFixture(scenario = {}) {
   let nextShipName = "previous name";
   const regions = scenario.regions ?? ["spc_red"];
   const manager = {
+    _pendingDispatch: scenario.pendingDispatch ?? null,
     Regions: regions,
     ClassCrew: {
       corvette: scenario.corvetteCrew ?? 2,
@@ -108,6 +109,9 @@ function createFixture(scenario = {}) {
         blueprint: blueprint.kind,
         region,
       });
+      if (scenario.buildTransition !== false) {
+        this._pendingDispatch = { index: 0, region, attempts: 0 };
+      }
       return scenario.buildSuccess ?? true;
     },
   };
@@ -213,6 +217,9 @@ function createAutomation(fixture, overrides = {}) {
     assessAuthorityRemoval:
       overrides.assessAuthorityRemoval ?? fixture.assessAuthorityRemoval,
     getGameLog: overrides.getGameLog ?? (() => fixture.GameLog),
+    ...(overrides.executeBuild === undefined
+      ? {}
+      : { executeBuild: overrides.executeBuild }),
   });
 }
 
@@ -251,6 +258,116 @@ malformed.settings.fleetOuterShips = 1;
 assert.throws(
   () => runOuterFleetAutomation(createAutomation(malformed)),
   /settings\.fleetOuterShips must be a string/,
+);
+
+const disabled = createFixture({ mode: "none" });
+runOuterFleetAutomation(createAutomation(disabled));
+assert.equal(
+  disabled.trace
+    .snapshot()
+    .some(
+      (event) =>
+        event.category === "command" && event.name === "build-outer-ship",
+    ),
+  false,
+);
+
+const noTarget = createFixture({ lockedRegions: ["spc_red"] });
+runOuterFleetAutomation(createAutomation(noTarget));
+assert.equal(
+  noTarget.trace
+    .snapshot()
+    .some(
+      (event) =>
+        event.category === "command" && event.name === "build-outer-ship",
+    ),
+  false,
+);
+
+const unavailable = createFixture({ unavailableBlueprints: ["fighter"] });
+runOuterFleetAutomation(createAutomation(unavailable));
+assert.equal(
+  unavailable.trace
+    .snapshot()
+    .some(
+      (event) =>
+        event.category === "command" && event.name === "build-outer-ship",
+    ),
+  false,
+);
+
+const busy = createFixture({
+  pendingDispatch: { index: 0, region: "spc_red", attempts: 1 },
+});
+const busyOutcome = runOuterFleetAutomation(createAutomation(busy));
+assert.equal(busyOutcome.status, "succeeded");
+assert.equal(
+  busy.trace
+    .snapshot()
+    .some(
+      (event) =>
+        event.category === "command" && event.name === "build-outer-ship",
+    ),
+  false,
+);
+
+const ready = createFixture();
+const readyOutcome = runOuterFleetAutomation(createAutomation(ready));
+assert.equal(readyOutcome.status, "succeeded");
+assert.deepEqual(ready.manager._pendingDispatch, {
+  index: 0,
+  region: "spc_red",
+  attempts: 0,
+});
+
+const noTransition = createFixture({ buildTransition: false });
+const noTransitionOutcome = runOuterFleetAutomation(
+  createAutomation(noTransition),
+);
+assert.equal(noTransitionOutcome.status, "stale");
+assert.equal(
+  noTransition.trace
+    .snapshot()
+    .filter(
+      (event) =>
+        event.category === "manager-call" && event.name === "logSuccess",
+    ).length,
+  0,
+);
+
+const capturedNoTransition = createFixture();
+const capturedNoTransitionOutcome = runOuterFleetAutomation(
+  createAutomation(capturedNoTransition, {
+    executeBuild: () => ({
+      invoked: true,
+      started: false,
+      builtIndex: null,
+    }),
+  }),
+);
+assert.equal(capturedNoTransitionOutcome.status, "stale");
+assert.equal(
+  capturedNoTransition.trace
+    .snapshot()
+    .filter(
+      (event) =>
+        event.category === "manager-call" && event.name === "logSuccess",
+    ).length,
+  0,
+);
+
+const repeated = createFixture();
+const repeatedAutomation = createAutomation(repeated);
+assert.equal(runOuterFleetAutomation(repeatedAutomation).status, "succeeded");
+assert.equal(runOuterFleetAutomation(repeatedAutomation).status, "succeeded");
+assert.equal(
+  repeated.trace
+    .snapshot()
+    .filter(
+      (event) =>
+        event.category === "command" && event.name === "build-outer-ship",
+    ).length,
+  1,
 );
 
 const stale = createFixture({ mode: "none" });

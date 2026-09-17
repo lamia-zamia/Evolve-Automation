@@ -1344,7 +1344,7 @@
     supplyZones: 5
   }), NOTHING = Object.freeze([]);
   function describeTabPath(path) {
-    return path.map((step) => `${step.setting}:${step.index}`).join("/");
+    return path.map((step2) => `${step2.setting}:${step2.index}`).join("/");
   }
   function failure(code, message) {
     return Object.freeze({
@@ -1361,9 +1361,9 @@
       }
     return Object.freeze({ outcome: SUCCEEDED, discovered: NOTHING });
   }
-  function isValidStep(step) {
-    let index = readProperty(step, "index");
-    return typeof readProperty(step, "setting") == "string" && typeof readProperty(step, "control") == "string" && typeof index == "number" && Number.isSafeInteger(index) && index >= 0;
+  function isValidStep(step2) {
+    let index = readProperty(step2, "index");
+    return typeof readProperty(step2, "setting") == "string" && typeof readProperty(step2, "control") == "string" && typeof index == "number" && Number.isSafeInteger(index) && index >= 0;
   }
   function createCapturedTabDiscovery(dependencies) {
     let { rootState, controls, mountSuppression, panels, diagnostics } = dependencies;
@@ -1385,17 +1385,17 @@
             "game-state-not-captured",
             "the game has not created its settings yet"
           );
-        if (path.every((step) => settings[step.setting] === step.index) && (isPanelDrawn === void 0 || isPanelDrawn()))
+        if (path.every((step2) => settings[step2.setting] === step2.index) && (isPanelDrawn === void 0 || isPanelDrawn()))
           return tally.count("discovery.observed"), observed(whileDrawn);
         let playerTabs = /* @__PURE__ */ new Map();
-        for (let step of path) {
-          let current = settings[step.setting];
+        for (let step2 of path) {
+          let current = settings[step2.setting];
           if (typeof current != "number" || !Number.isFinite(current))
             return refused(
               "unknown-player-tab",
-              `the game has not recorded settings.${step.setting}`
+              `the game has not recorded settings.${step2.setting}`
             );
-          playerTabs.has(step.setting) || playerTabs.set(step.setting, current);
+          playerTabs.has(step2.setting) || playerTabs.set(step2.setting, current);
         }
         if (controls.resolve(first.control) === void 0)
           return refused(
@@ -1430,17 +1430,17 @@
           try {
             settings.animated = !1, mountSuppression.withoutMounting(
               () => {
-                for (let step of path) {
-                  let handle = controls.resolve(step.control);
+                for (let step2 of path) {
+                  let handle = controls.resolve(step2.control);
                   if (handle === void 0) {
                     stepFailure = failure(
                       "tab-control-missing",
-                      `no captured control for ${step.control}`
+                      `no captured control for ${step2.control}`
                     );
                     break;
                   }
-                  settings[step.setting] = step.index;
-                  let swap = controls.invoke(handle, "swapTab", [step.index]);
+                  settings[step2.setting] = step2.index;
+                  let swap = controls.invoke(handle, "swapTab", [step2.index]);
                   if (!swap.ok) {
                     let detail = swap.detail ?? swap.reason;
                     stepFailure = Object.freeze({
@@ -12590,6 +12590,1379 @@
     return Object.freeze({ reader, executor });
   }
 
+  // src/adapters/evolve/combat/captured-fleet-controls.ts
+  var NOT_ACTIONABLE = Object.freeze({
+    actionable: !1,
+    builtIndex: null
+  });
+  function fleetDocument2(value) {
+    return isRecord(value) && typeof value.querySelector == "function" ? value : void 0;
+  }
+  function liveShipList(handle) {
+    let yard = readProperty(handle.data, "s"), ships = readProperty(yard, "ships");
+    return Array.isArray(ships) ? ships : null;
+  }
+  function methodValue(dependencies, elementId, method, args = []) {
+    let handle = dependencies.controls.resolve(elementId);
+    if (handle === void 0 || !handle.methods.includes(method))
+      return { ok: !1, value: void 0 };
+    let result = dependencies.controls.invoke(handle, method, args);
+    return result.ok ? result : { ok: !1, value: void 0 };
+  }
+  function step(dependencies, request, method) {
+    return request.count <= 0 ? !0 : methodValue(dependencies, request.elementId, method, [
+      request.region,
+      request.ship
+    ]).ok;
+  }
+  function createCapturedFleetControls(dependencies) {
+    return Object.freeze({
+      isRendered(elementId) {
+        return dependencies.controls.resolve(elementId) !== void 0;
+      },
+      isPartAvailable(request) {
+        if (request.index === void 0) return !1;
+        let result = methodValue(dependencies, request.elementId, "avail", [
+          request.type,
+          request.index,
+          request.part
+        ]);
+        return result.ok && result.value === !0;
+      },
+      setPart(request) {
+        return methodValue(dependencies, request.elementId, "setVal", [
+          request.type,
+          request.part
+        ]).ok;
+      },
+      hasShipPower(elementId) {
+        let result = methodValue(dependencies, elementId, "powerText");
+        return result.ok && typeof result.value == "string" && !result.value.includes("danger");
+      },
+      buildShip(request) {
+        let handle = dependencies.controls.resolve(request.elementId);
+        if (handle === void 0 || !handle.methods.includes("build"))
+          return NOT_ACTIONABLE;
+        let beforeList = liveShipList(handle);
+        if (beforeList === null) return NOT_ACTIONABLE;
+        let before = [...beforeList];
+        if (!dependencies.controls.invoke(handle, "build").ok) return NOT_ACTIONABLE;
+        let after = liveShipList(handle);
+        if (after === null || after.length <= before.length)
+          return { actionable: !0, builtIndex: null };
+        let newIndex = after.findIndex((ship) => !before.includes(ship));
+        return {
+          actionable: !0,
+          builtIndex: newIndex >= 0 ? newIndex : after.length - 1
+        };
+      },
+      dispatchTrigger(index) {
+        return `#ship${index}loc`;
+      },
+      dispatchShip(request) {
+        let destination = fleetDocument2(
+          dependencies.getDocument()
+        )?.querySelector(`#modalBox .shipDispatch button.${request.region}`);
+        return typeof destination?.click != "function" ? !1 : (destination.click(), !0);
+      },
+      addShips(request) {
+        return step(dependencies, request, "add");
+      },
+      subShips(request) {
+        return step(dependencies, request, "sub");
+      }
+    });
+  }
+
+  // src/domain/combat/fleet-outer.ts
+  function status(blueprint, messageBeforeUpdate, messageAfterUpdate, nextShipName = null) {
+    return Object.freeze({
+      kind: "outer-fleet-status",
+      blueprint,
+      nextShipName,
+      messageBeforeUpdate,
+      messageAfterUpdate
+    });
+  }
+  function planOuterFleetCycle(input) {
+    return input.initialized ? input.busy === !0 ? status(null, null, "Outer fleet action pending") : input.mode === "none" ? status(null, null, "Ship construction is disabled") : input.mode === "manual" ? status(
+      input.manualBlueprintAvailable ? "yard" : null,
+      null,
+      "Ships managed manually"
+    ) : Object.freeze({
+      kind: "select-target",
+      mode: input.mode,
+      configuredMinimumCrew: input.configuredMinimumCrew
+    }) : status(null, "No ships needed yet", null);
+  }
+  function calculateOuterFleetDefenseTarget(region) {
+    if (!region.digsiteIncomplete) return region.maximumDefense;
+    let requestedUnits = region.requestedTroopers + region.requestedTanks, supportedUnits = region.reportedSupport === null ? requestedUnits : Math.min(requestedUnits, region.reportedSupport), activeTroopers = Math.min(region.requestedTroopers, supportedUnits), activeTanks = Math.min(
+      region.requestedTanks,
+      Math.max(0, supportedUnits - activeTroopers)
+    ), conservativeGroundPower = activeTroopers + activeTanks * 100, digsiteDefense = conservativeGroundPower > 0 ? Math.min(0.9, 350 / conservativeGroundPower) : 0.5;
+    return Math.max(region.maximumDefense, digsiteDefense);
+  }
+  function planOuterFleetTarget(cycle, input) {
+    if (input.exploreTau && input.tauTechnology === 1 && input.explorerAvailable && input.explorerCount < 1)
+      return Object.freeze({
+        kind: "select-blueprint",
+        mode: cycle.mode,
+        targetRegion: "tauceti",
+        minimumCrew: 0,
+        forcedBlueprint: "explorer"
+      });
+    if (input.erisTechnology === 1 && input.erisWeighting > 0 && input.erisSensor < 50)
+      return Object.freeze({
+        kind: "select-blueprint",
+        mode: cycle.mode,
+        targetRegion: "spc_eris",
+        minimumCrew: 0,
+        forcedBlueprint: null
+      });
+    let target = input.regions.filter(
+      (region) => region.unlocked && region.weighting > 0 && region.syndicateRatio < calculateOuterFleetDefenseTarget(region)
+    ).sort(
+      (left, right) => (1 - right.syndicateRatio) * right.weighting - (1 - left.syndicateRatio) * left.weighting
+    )[0];
+    return target === void 0 ? status(null, null, "No more ships currently needed") : Object.freeze({
+      kind: "select-blueprint",
+      mode: cycle.mode,
+      targetRegion: target.id,
+      minimumCrew: cycle.configuredMinimumCrew,
+      forcedBlueprint: null
+    });
+  }
+  function planOuterFleetBlueprint(input) {
+    let blueprint = input.target.forcedBlueprint;
+    return blueprint === null && input.target.mode === "user" ? blueprint = input.yardAvailable ? "yard" : null : blueprint === null && (input.scoutAvailable && input.scoutCount < input.maximumScouts && (blueprint = "scout"), blueprint === null && input.fighterAvailable && (blueprint = "fighter")), blueprint === null ? status(
+      null,
+      null,
+      `No suitable blueprint for ship to ${input.targetLocationName}`
+    ) : Object.freeze({
+      kind: "check-candidate",
+      blueprint,
+      targetRegion: input.target.targetRegion,
+      targetLocationName: input.targetLocationName,
+      minimumCrew: input.target.minimumCrew
+    });
+  }
+  function planOuterFleetCandidate(input) {
+    let nextShipName = `${input.shipName} to ${input.candidate.targetLocationName}`;
+    return input.authority.status === "unavailable" ? status(
+      input.candidate.blueprint,
+      null,
+      "Authority data unavailable; ship construction paused",
+      nextShipName
+    ) : input.authority.status === "ready" && input.authority.blocksRemoval ? status(
+      input.candidate.blueprint,
+      null,
+      `Next ship(${nextShipName}) would lower Authority to ${input.authority.predicted}, below the ${input.authority.target} target`,
+      nextShipName
+    ) : Object.freeze({
+      kind: "check-build-readiness",
+      blueprint: input.candidate.blueprint,
+      targetRegion: input.candidate.targetRegion,
+      targetLocationName: input.candidate.targetLocationName,
+      minimumCrew: input.candidate.minimumCrew,
+      shipName: input.shipName,
+      shipCrew: input.shipCrew,
+      nextShipName
+    });
+  }
+  function planOuterFleetBuild(input) {
+    return input.missingResourceName !== null ? status(
+      input.plan.blueprint,
+      null,
+      `Next ship(${input.plan.nextShipName}) is missing ${input.missingResourceName}`,
+      input.plan.nextShipName
+    ) : input.currentCityGarrison - input.plan.shipCrew < input.plan.minimumCrew ? status(
+      input.plan.blueprint,
+      null,
+      `Next ship(${input.plan.nextShipName}) is missing crew`,
+      input.plan.nextShipName
+    ) : Object.freeze({
+      kind: "build-outer-fleet",
+      blueprint: input.plan.blueprint,
+      targetRegion: input.plan.targetRegion,
+      targetLocationName: input.plan.targetLocationName,
+      shipName: input.plan.shipName,
+      shipCrew: input.plan.shipCrew,
+      nextShipName: input.plan.nextShipName
+    });
+  }
+
+  // src/adapters/evolve/combat/fleet-outer.ts
+  var GRENADIER_CREW = Object.freeze({
+    corvette: 1,
+    frigate: 2,
+    destroyer: 3,
+    cruiser: 4,
+    battlecruiser: 5,
+    dreadnought: 6,
+    explorer: 6
+  });
+  function decisionMatches3(expected, actual) {
+    return expected.kind !== actual.kind || expected.blueprint !== actual.blueprint ? !1 : expected.kind === "outer-fleet-status" && actual.kind === "outer-fleet-status" ? expected.nextShipName === actual.nextShipName && expected.messageBeforeUpdate === actual.messageBeforeUpdate && expected.messageAfterUpdate === actual.messageAfterUpdate : expected.kind === "build-outer-fleet" && actual.kind === "build-outer-fleet" && expected.targetRegion === actual.targetRegion && expected.targetLocationName === actual.targetLocationName && expected.shipName === actual.shipName && expected.shipCrew === actual.shipCrew && expected.nextShipName === actual.nextShipName;
+  }
+  function readAuthorityAssessment(dependencies, shipCrew) {
+    let raw = requireRecord(
+      dependencies.assessAuthorityRemoval(shipCrew),
+      "Authority removal assessment"
+    ), status2 = requireString(
+      raw.status,
+      "Authority removal assessment.status"
+    );
+    if (status2 === "unavailable") return Object.freeze({ status: status2 });
+    if (status2 === "unmanaged") return Object.freeze({ status: status2 });
+    if (status2 !== "ready")
+      throw new TypeError(`unknown Authority removal status: ${status2}`);
+    return Object.freeze({
+      status: status2,
+      target: requireNumber(raw.target, "Authority removal assessment.target"),
+      predicted: requireNumber(
+        raw.predicted,
+        "Authority removal assessment.predicted"
+      ),
+      blocksRemoval: requireBoolean(
+        raw.blocksRemoval,
+        "Authority removal assessment.blocksRemoval"
+      )
+    });
+  }
+  function createOuterFleetAdapter(dependencies) {
+    let session = null, expectedDecision = null, blueprints = /* @__PURE__ */ new Map();
+    function activeSession() {
+      if (session === null)
+        throw new Error("outer fleet cycle has not been sampled");
+      return session;
+    }
+    function storeBlueprint(token, rawBlueprint, path) {
+      let blueprint = requireRecord(rawBlueprint, path);
+      return blueprints.set(token, blueprint), blueprint;
+    }
+    let reader = Object.freeze({
+      readCycle() {
+        session = null, expectedDecision = null, blueprints.clear();
+        let manager = requireRecord(
+          dependencies.getFleetManagerOuter(),
+          "FleetManagerOuter"
+        ), warManager = requireRecord(
+          dependencies.getWarManager(),
+          "WarManager"
+        ), game = requireRecord(dependencies.getGame(), "game"), settings = requireRecord(dependencies.getSettings(), "settings"), resources = requireRecord(dependencies.getResources(), "resources");
+        session = Object.freeze({
+          manager,
+          warManager,
+          game,
+          settings,
+          resources,
+          blueprints
+        });
+        let initFleet = requireFunction(
+          manager.initFleet,
+          "FleetManagerOuter.initFleet"
+        ), initialized = !!Reflect.apply(initFleet, manager, []), mode = "none", manualBlueprintAvailable = !1, configuredMinimumCrew = 0;
+        if (initialized)
+          if (mode = requireString(
+            settings.fleetOuterShips,
+            "settings.fleetOuterShips"
+          ), mode === "manual") {
+            let global = requireRecord(game.global, "game.global"), space = requireRecord(global.space, "game.global.space"), yard = requireRecord(
+              space.shipyard,
+              "game.global.space.shipyard"
+            ), yardBlueprint = storeBlueprint(
+              "yard",
+              yard.blueprint,
+              "game.global.space.shipyard.blueprint"
+            ), avail = requireFunction(
+              manager.avail,
+              "FleetManagerOuter.avail"
+            );
+            manualBlueprintAvailable = !!Reflect.apply(avail, manager, [yardBlueprint]);
+          } else mode !== "none" && (configuredMinimumCrew = requireNumber(
+            settings.fleetOuterCrew,
+            "settings.fleetOuterCrew"
+          ));
+        let input = Object.freeze({
+          initialized,
+          busy: initialized && isRecord(manager._pendingDispatch),
+          mode,
+          manualBlueprintAvailable,
+          configuredMinimumCrew
+        }), planned = planOuterFleetCycle(input);
+        return expectedDecision = planned.kind === "outer-fleet-status" ? planned : null, input;
+      },
+      readTargeting(cycle) {
+        let active = activeSession();
+        expectedDecision = null;
+        let global = requireRecord(active.game.global, "game.global"), tech = requireRecord(global.tech, "game.global.tech"), space = requireRecord(global.space, "game.global.space"), exploreTau = requireBoolean(
+          active.settings.fleetExploreTau,
+          "settings.fleetExploreTau"
+        ), tauTechnology = tech.tauceti === void 0 ? 0 : requireNumber(tech.tauceti, "game.global.tech.tauceti"), explorerAvailable = !1, explorerCount = 0;
+        if (exploreTau && tauTechnology === 1) {
+          let explorer = storeBlueprint(
+            "explorer",
+            active.manager._explorerBlueprint,
+            "FleetManagerOuter._explorerBlueprint"
+          );
+          explorerAvailable = !!Reflect.apply(
+            requireFunction(active.manager.avail, "FleetManagerOuter.avail"),
+            active.manager,
+            [explorer]
+          ), explorerAvailable && (explorerCount = requireNumber(
+            Reflect.apply(
+              requireFunction(
+                active.manager.shipCount,
+                "FleetManagerOuter.shipCount"
+              ),
+              active.manager,
+              ["tauceti", explorer]
+            ),
+            "Tau explorer count"
+          ));
+        }
+        let tauSelected = exploreTau && tauTechnology === 1 && explorerAvailable && explorerCount < 1, erisTechnology = tech.eris === void 0 ? 0 : requireNumber(tech.eris, "game.global.tech.eris"), erisWeighting = 0, erisSensor = 50;
+        if (!tauSelected && erisTechnology === 1 && (erisWeighting = requireNumber(
+          Reflect.apply(
+            requireFunction(
+              active.manager.getWeighting,
+              "FleetManagerOuter.getWeighting"
+            ),
+            active.manager,
+            ["spc_eris"]
+          ),
+          "Eris fleet weighting"
+        ), erisWeighting > 0)) {
+          let assessment = requireRecord(
+            Reflect.apply(
+              requireFunction(
+                active.manager.syndicate,
+                "FleetManagerOuter.syndicate"
+              ),
+              active.manager,
+              ["spc_eris", !0, !0]
+            ),
+            "Eris syndicate assessment"
+          );
+          erisSensor = requireNumber(
+            assessment.s,
+            "Eris syndicate assessment.s"
+          );
+        }
+        let erisSelected = !tauSelected && erisTechnology === 1 && erisWeighting > 0 && erisSensor < 50, regions = [];
+        if (!tauSelected && !erisSelected) {
+          let rawRegions = active.manager.Regions;
+          if (!Array.isArray(rawRegions))
+            throw new TypeError("FleetManagerOuter.Regions must be an array");
+          let isUnlocked = requireFunction(
+            active.manager.isUnlocked,
+            "FleetManagerOuter.isUnlocked"
+          ), getWeighting = requireFunction(
+            active.manager.getWeighting,
+            "FleetManagerOuter.getWeighting"
+          ), syndicate = requireFunction(
+            active.manager.syndicate,
+            "FleetManagerOuter.syndicate"
+          ), getMaxDefense = requireFunction(
+            active.manager.getMaxDefense,
+            "FleetManagerOuter.getMaxDefense"
+          );
+          for (let index = 0; index < rawRegions.length; index++) {
+            let id = requireString(
+              rawRegions[index],
+              `FleetManagerOuter.Regions[${index}]`
+            ), unlocked = !!Reflect.apply(isUnlocked, active.manager, [id]), weighting = unlocked ? requireNumber(
+              Reflect.apply(getWeighting, active.manager, [id]),
+              `fleet weighting ${id}`
+            ) : 0, syndicateRatio = unlocked && weighting > 0 ? requireNumber(
+              Reflect.apply(syndicate, active.manager, [id, !1, !0]),
+              `syndicate ratio ${id}`
+            ) : 1, maximumDefense = unlocked && weighting > 0 ? requireNumber(
+              Reflect.apply(getMaxDefense, active.manager, [id]),
+              `maximum fleet defense ${id}`
+            ) : 0, digsiteIncomplete = !1, requestedTroopers = 0, requestedTanks = 0, reportedSupport = null;
+            if (id === "spc_eris") {
+              let rawDigsite = space.digsite;
+              if (rawDigsite !== void 0) {
+                let count2 = requireRecord(
+                  rawDigsite,
+                  "game.global.space.digsite"
+                ).count;
+                count2 !== void 0 && (digsiteIncomplete = requireNumber(count2, "game.global.space.digsite.count") < 100);
+              }
+              if (digsiteIncomplete) {
+                let trooper = space.shock_trooper, tank = space.tank;
+                requestedTroopers = trooper === void 0 ? 0 : requireNumber(
+                  requireRecord(trooper, "game.global.space.shock_trooper").on ?? 0,
+                  "game.global.space.shock_trooper.on"
+                ), requestedTanks = tank === void 0 ? 0 : requireNumber(
+                  requireRecord(tank, "game.global.space.tank").on ?? 0,
+                  "game.global.space.tank.on"
+                );
+                let support = active.resources.Eris_Support;
+                if (typeof support == "object" && support !== null) {
+                  let rawSupport = support.currentQuantity;
+                  reportedSupport = typeof rawSupport == "number" && Number.isFinite(rawSupport) ? rawSupport : null;
+                }
+              }
+            }
+            regions.push(
+              Object.freeze({
+                id,
+                unlocked,
+                weighting,
+                syndicateRatio,
+                maximumDefense,
+                digsiteIncomplete,
+                requestedTroopers,
+                requestedTanks,
+                reportedSupport
+              })
+            );
+          }
+        }
+        let input = Object.freeze({
+          exploreTau,
+          tauTechnology,
+          explorerAvailable,
+          explorerCount,
+          erisTechnology,
+          erisWeighting,
+          erisSensor,
+          regions: Object.freeze(regions)
+        }), planned = planOuterFleetTarget(cycle, input);
+        return expectedDecision = planned.kind === "outer-fleet-status" ? planned : null, input;
+      },
+      readBlueprint(target) {
+        let active = activeSession();
+        expectedDecision = null;
+        let global = requireRecord(active.game.global, "game.global"), space = requireRecord(global.space, "game.global.space"), yard = requireRecord(
+          space.shipyard,
+          "game.global.space.shipyard"
+        ), avail = requireFunction(
+          active.manager.avail,
+          "FleetManagerOuter.avail"
+        ), yardAvailable = !1, scoutAvailable = !1, scoutCount = 0, maximumScouts = 0, fighterAvailable = !1;
+        if (target.forcedBlueprint !== "explorer" && target.mode === "user") {
+          let yardBlueprint = storeBlueprint(
+            "yard",
+            yard.blueprint,
+            "game.global.space.shipyard.blueprint"
+          );
+          yardAvailable = !!Reflect.apply(avail, active.manager, [yardBlueprint]);
+        } else if (target.forcedBlueprint === null) {
+          let getScout = requireFunction(
+            active.manager.getScoutBlueprint,
+            "FleetManagerOuter.getScoutBlueprint"
+          ), scout = storeBlueprint(
+            "scout",
+            Reflect.apply(getScout, active.manager, []),
+            "scout blueprint"
+          );
+          if (scoutAvailable = !!Reflect.apply(avail, active.manager, [scout]), scoutAvailable && (scoutCount = requireNumber(
+            Reflect.apply(
+              requireFunction(
+                active.manager.shipCount,
+                "FleetManagerOuter.shipCount"
+              ),
+              active.manager,
+              [target.targetRegion, scout]
+            ),
+            `scout count ${target.targetRegion}`
+          ), maximumScouts = requireNumber(
+            Reflect.apply(
+              requireFunction(
+                active.manager.getMaxScouts,
+                "FleetManagerOuter.getMaxScouts"
+              ),
+              active.manager,
+              [target.targetRegion]
+            ),
+            `maximum scouts ${target.targetRegion}`
+          )), !scoutAvailable || scoutCount >= maximumScouts) {
+            let getFighter = requireFunction(
+              active.manager.getFighterBlueprint,
+              "FleetManagerOuter.getFighterBlueprint"
+            ), fighter = storeBlueprint(
+              "fighter",
+              Reflect.apply(getFighter, active.manager, []),
+              "fighter blueprint"
+            );
+            fighterAvailable = !!Reflect.apply(avail, active.manager, [fighter]);
+          }
+        }
+        let targetLocationName = requireString(
+          Reflect.apply(
+            requireFunction(
+              active.manager.getLocName,
+              "FleetManagerOuter.getLocName"
+            ),
+            active.manager,
+            [target.targetRegion]
+          ),
+          `location name ${target.targetRegion}`
+        ), input = Object.freeze({
+          target,
+          targetLocationName,
+          yardAvailable,
+          scoutAvailable,
+          scoutCount,
+          maximumScouts,
+          fighterAvailable
+        }), planned = planOuterFleetBlueprint(input);
+        return expectedDecision = planned.kind === "outer-fleet-status" ? planned : null, input;
+      },
+      readCandidate(candidate) {
+        let active = activeSession();
+        expectedDecision = null;
+        let blueprint = blueprints.get(candidate.blueprint);
+        if (blueprint === void 0)
+          throw new Error(
+            `outer fleet blueprint ${candidate.blueprint} is missing`
+          );
+        let shipName = requireString(
+          Reflect.apply(
+            requireFunction(
+              active.manager.getShipName,
+              "FleetManagerOuter.getShipName"
+            ),
+            active.manager,
+            [blueprint]
+          ),
+          `ship name ${candidate.blueprint}`
+        ), shipClass = requireString(
+          blueprint.class,
+          `${candidate.blueprint} blueprint.class`
+        ), global = requireRecord(active.game.global, "game.global"), race = requireRecord(global.race, "game.global.race"), shipCrew = (race.grenadier ? requireNumber(
+          GRENADIER_CREW[shipClass],
+          `grenadier crew for ${shipClass}`
+        ) : requireNumber(
+          requireRecord(
+            active.manager.ClassCrew,
+            "FleetManagerOuter.ClassCrew"
+          )[shipClass],
+          `FleetManagerOuter.ClassCrew.${shipClass}`
+        )) * requireNumber(
+          dependencies.traitVal("high_pop", 0, 1),
+          "traitVal(high_pop)"
+        ), authority = Object.freeze({
+          status: "not-required"
+        }), manageAuthority = requireBoolean(
+          active.settings.authorityManage,
+          "settings.authorityManage"
+        ), minimumAuthority = requireNumber(
+          active.settings.generalMinimumAuthority,
+          "settings.generalMinimumAuthority"
+        );
+        if (manageAuthority && minimumAuthority !== 0 && race.universe === "evil") {
+          let authorityResource = requireRecord(
+            active.resources.Authority,
+            "resources.Authority"
+          ), isUnlocked = requireFunction(
+            authorityResource.isUnlocked,
+            "resources.Authority.isUnlocked"
+          );
+          Reflect.apply(isUnlocked, authorityResource, []) && (authority = readAuthorityAssessment(dependencies, shipCrew));
+        }
+        let input = Object.freeze({
+          candidate,
+          shipName,
+          shipCrew,
+          authority
+        }), planned = planOuterFleetCandidate(input);
+        return expectedDecision = planned.kind === "outer-fleet-status" ? planned : null, input;
+      },
+      readBuildReadiness(plan) {
+        let active = activeSession();
+        expectedDecision = null;
+        let blueprint = blueprints.get(plan.blueprint);
+        if (blueprint === void 0)
+          throw new Error(`outer fleet blueprint ${plan.blueprint} is missing`);
+        let missingResource = Reflect.apply(
+          requireFunction(
+            active.manager.getMissingResource,
+            "FleetManagerOuter.getMissingResource"
+          ),
+          active.manager,
+          [blueprint]
+        ), missingResourceName = null, currentCityGarrison = 0;
+        if (missingResource) {
+          let resourceId = requireString(
+            missingResource,
+            "missing outer-fleet resource id"
+          ), resource = requireRecord(
+            active.resources[resourceId],
+            `resources.${resourceId}`
+          );
+          missingResourceName = requireString(
+            resource.name,
+            `resources.${resourceId}.name`
+          );
+        } else
+          currentCityGarrison = requireNumber(
+            active.warManager.currentCityGarrison,
+            "WarManager.currentCityGarrison"
+          );
+        let input = Object.freeze({
+          plan,
+          missingResourceName,
+          currentCityGarrison
+        });
+        return expectedDecision = planOuterFleetBuild(input), input;
+      }
+    }), executor = Object.freeze({
+      execute(decision) {
+        let active = session, expected = expectedDecision;
+        if (active === null || expected === null)
+          return stale(
+            "outer-fleet-session-missing",
+            "outer fleet session is missing"
+          );
+        if (dependencies.getFleetManagerOuter() !== active.manager || dependencies.getWarManager() !== active.warManager || dependencies.getGame() !== active.game || dependencies.getSettings() !== active.settings || dependencies.getResources() !== active.resources)
+          return stale(
+            "outer-fleet-source-changed",
+            "outer fleet source changed"
+          );
+        if (!decisionMatches3(expected, decision))
+          return rejected(
+            "invalid-outer-fleet-decision",
+            "outer fleet decision does not match the sampled plan"
+          );
+        let blueprint = decision.blueprint === null ? null : blueprints.get(decision.blueprint) ?? null;
+        if (decision.blueprint !== null && blueprint === null)
+          return stale(
+            "outer-fleet-blueprint-changed",
+            "outer fleet blueprint changed"
+          );
+        let updateNextShip = requireFunction(
+          active.manager.updateNextShip,
+          "FleetManagerOuter.updateNextShip"
+        ), build = decision.kind === "build-outer-fleet" ? requireFunction(active.manager.build, "FleetManagerOuter.build") : null;
+        if (expectedDecision = null, decision.kind === "outer-fleet-status" && decision.messageBeforeUpdate !== null && (active.manager.nextShipMsg = decision.messageBeforeUpdate), Reflect.apply(updateNextShip, active.manager, [blueprint]), decision.nextShipName !== null && (active.manager.nextShipName = decision.nextShipName), decision.kind === "outer-fleet-status" && decision.messageAfterUpdate !== null && (active.manager.nextShipMsg = decision.messageAfterUpdate), decision.kind === "outer-fleet-status") return SUCCEEDED;
+        let buildResult = dependencies.executeBuild === void 0 ? {
+          invoked: !0,
+          started: !!Reflect.apply(build, active.manager, [
+            blueprint,
+            decision.targetRegion
+          ]),
+          builtIndex: null
+        } : dependencies.executeBuild(blueprint, decision.targetRegion);
+        if (!buildResult.invoked)
+          return rejected(
+            "outer-fleet-build-not-invoked",
+            "outer fleet build control was not invoked"
+          );
+        if (!buildResult.started)
+          return stale(
+            "outer-fleet-build-no-transition",
+            "outer fleet build returned without starting an action"
+          );
+        if (dependencies.executeBuild === void 0 && !isRecord(active.manager._pendingDispatch))
+          return stale(
+            "outer-fleet-build-no-transition",
+            "outer fleet build returned without adding a ship or queueing dispatch"
+          );
+        if (dependencies.executeBuild !== void 0) {
+          if (buildResult.builtIndex === null)
+            return stale(
+              "outer-fleet-build-no-transition",
+              "outer fleet build returned without adding a ship"
+            );
+          active.manager._pendingDispatch = {
+            index: buildResult.builtIndex,
+            region: decision.targetRegion,
+            attempts: 0
+          };
+        }
+        let gameLog = requireRecord(dependencies.getGameLog(), "GameLog"), logSuccess = requireFunction(
+          gameLog.logSuccess,
+          "GameLog.logSuccess"
+        );
+        return Reflect.apply(logSuccess, gameLog, [
+          "outer_fleet",
+          `${decision.shipName} has been assembled, and dispatched to ${decision.targetLocationName}.`,
+          ["combat"]
+        ]), SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/application/fleet-outer.ts
+  function execute(executor, decision) {
+    return executor.execute(decision);
+  }
+  function runOuterFleetAutomation(dependencies) {
+    let cycle = planOuterFleetCycle(dependencies.reader.readCycle());
+    if (cycle.kind === "outer-fleet-status")
+      return execute(dependencies.executor, cycle);
+    let target = planOuterFleetTarget(
+      cycle,
+      dependencies.reader.readTargeting(cycle)
+    );
+    if (target.kind === "outer-fleet-status")
+      return execute(dependencies.executor, target);
+    let candidate = planOuterFleetBlueprint(
+      dependencies.reader.readBlueprint(target)
+    );
+    if (candidate.kind === "outer-fleet-status")
+      return execute(dependencies.executor, candidate);
+    let readiness = planOuterFleetCandidate(
+      dependencies.reader.readCandidate(candidate)
+    );
+    return readiness.kind === "outer-fleet-status" ? execute(dependencies.executor, readiness) : execute(
+      dependencies.executor,
+      planOuterFleetBuild(dependencies.reader.readBuildReadiness(readiness))
+    );
+  }
+
+  // src/game/fleet-managers.ts
+  function createFleetManagers({
+    getGame,
+    getSettings,
+    getResources,
+    getBuildings,
+    getPoly,
+    getHaveTech,
+    fleetControls,
+    gameModal
+  }) {
+    let haveTech = (...args) => getHaveTech()(...args);
+    return { FleetManagerOuter: {
+      _fleetElementId: "shipPlans",
+      _pendingDispatch: null,
+      _explorerBlueprint: {
+        class: "explorer",
+        armor: "neutronium",
+        weapon: "railgun",
+        engine: "emdrive",
+        power: "elerium",
+        sensor: "quantum"
+      },
+      nextShipName: null,
+      nextShipCost: null,
+      nextShipAffordable: null,
+      nextShipExpandable: null,
+      nextShipMsg: null,
+      WeaponPower: {
+        railgun: 36,
+        laser: 64,
+        p_laser: 54,
+        plasma: 90,
+        phaser: 114,
+        disruptor: 156
+      },
+      SensorRange: { visual: 1, radar: 20, lidar: 35, quantum: 60 },
+      ClassPower: {
+        corvette: 1,
+        frigate: 1.5,
+        destroyer: 2.75,
+        cruiser: 5.5,
+        battlecruiser: 10,
+        dreadnought: 22,
+        explorer: 1.2
+      },
+      ClassCrew: {
+        corvette: 2,
+        frigate: 3,
+        destroyer: 4,
+        cruiser: 6,
+        battlecruiser: 8,
+        dreadnought: 10,
+        explorer: 10
+      },
+      // spc_dwarf is ignored, never having any syndicate
+      Regions: [
+        "spc_moon",
+        "spc_red",
+        "spc_gas",
+        "spc_gas_moon",
+        "spc_belt",
+        "spc_titan",
+        "spc_enceladus",
+        "spc_triton",
+        "spc_makemake",
+        "spc_eris"
+      ],
+      ShipConfig: {
+        class: [
+          "corvette",
+          "frigate",
+          "destroyer",
+          "cruiser",
+          "battlecruiser",
+          "dreadnought",
+          "explorer"
+        ],
+        power: ["solar", "diesel", "fission", "fusion", "elerium"],
+        weapon: ["railgun", "laser", "p_laser", "plasma", "phaser", "disruptor"],
+        armor: ["steel", "alloy", "neutronium"],
+        engine: ["ion", "tie", "pulse", "photon", "vacuum", "emdrive"],
+        sensor: ["visual", "radar", "lidar", "quantum"]
+      },
+      getWeighting(id) {
+        return getSettings()["fleet_outer_pr_" + id];
+      },
+      getMaxDefense(id) {
+        return getSettings()["fleet_outer_def_" + id];
+      },
+      getMaxScouts(id) {
+        return getSettings()["fleet_outer_sc_" + id];
+      },
+      getShipName(ship) {
+        return getGame().loc(`outer_shipyard_class_${ship.class}`);
+      },
+      getLocName(loc) {
+        let game = getGame(), locRef = loc === "tauceti" ? game.loc("tech_era_tauceti") : game.actions.space[loc].info.name;
+        return typeof locRef == "function" ? locRef() : locRef;
+      },
+      isUnlocked(id) {
+        let game = getGame();
+        return id === "spc_moon" && game.global.race.orbit_decayed ? !1 : game.actions.space[id].info.syndicate?.() ?? !1;
+      },
+      updateNextShip(ship) {
+        if (ship) {
+          let poly = getPoly(), resources = getResources(), cost = poly.shipCosts(ship);
+          this.nextShipCost = cost, this.nextShipAffordable = !0, this.nextShipExpandable = !0, this.nextShipMsg = null, this.nextShipName = null;
+          for (let res in cost)
+            resources[res].maxQuantity < cost[res] && (this.nextShipAffordable = !1, resources[res].hasStorage() || (this.nextShipExpandable = !1));
+        } else
+          this.nextShipCost = null, this.nextShipAffordable = null, this.nextShipExpandable = null, this.nextShipMsg = null, this.nextShipName = null;
+      },
+      initFleet() {
+        let game = getGame();
+        return !game.global.tech.syndicate || !Object.hasOwn(game.global.space.shipyard ?? {}, "blueprint") ? !1 : (this.dispatchPendingShip(), fleetControls.isRendered(this._fleetElementId));
+      },
+      getFighterBlueprint() {
+        let settings = getSettings();
+        return Object.fromEntries(
+          Object.keys(this.ShipConfig).map((type) => [
+            type,
+            settings["fleet_outer_" + type]
+          ])
+        );
+      },
+      getScoutBlueprint() {
+        let settings = getSettings();
+        return Object.fromEntries(
+          Object.keys(this.ShipConfig).map((type) => [
+            type,
+            settings["fleet_scout_" + type]
+          ])
+        );
+      },
+      getMissingResource(ship) {
+        let poly = getPoly(), resources = getResources(), cost = poly.shipCosts(ship);
+        for (let res in cost)
+          if (resources[res].currentQuantity < cost[res])
+            return res;
+        return null;
+      },
+      avail(ship) {
+        let yard = getGame().global.space.shipyard;
+        if (!yard || ship.class === "explorer" && (ship.weapon !== "railgun" || ship.sensor !== "quantum"))
+          return !1;
+        for (let [type, part] of Object.entries(ship))
+          if (type !== "name" && yard.blueprint[type] !== part && !(ship.class === "explorer" && (part === "weapon" || part === "sensor")) && !fleetControls.isPartAvailable({
+            elementId: this._fleetElementId,
+            type,
+            part,
+            index: this.ShipConfig[type].indexOf(part)
+          }))
+            return !1;
+        return !0;
+      },
+      build(ship, region) {
+        let game = getGame(), poly = getPoly(), resources = getResources(), yard = game.global.space.shipyard;
+        if (!yard)
+          return !1;
+        for (let [type, part] of Object.entries(ship))
+          type !== "name" && (yard.blueprint[type] !== part || ship.class === "explorer" || yard.blueprint.class === "explorer") && fleetControls.setPart({
+            elementId: this._fleetElementId,
+            type,
+            part
+          });
+        if (!fleetControls.hasShipPower(this._fleetElementId))
+          return !1;
+        let cost = poly.shipCosts(ship);
+        for (let res in cost)
+          resources[res].currentQuantity -= cost[res];
+        let result = fleetControls.buildShip({
+          elementId: this._fleetElementId
+        });
+        return result.builtIndex !== null && (this._pendingDispatch = {
+          index: result.builtIndex,
+          region,
+          attempts: 0
+        }), result.actionable;
+      },
+      /**
+       * Drives one queued dispatch. It gives up once the ship reports the region,
+       * and once the attempt budget runs out — the window can be unopenable for
+       * reasons this manager cannot see, and a request that can never complete
+       * must not block later ones forever.
+       */
+      dispatchPendingShip() {
+        let pending = this._pendingDispatch;
+        if (pending === null)
+          return;
+        if (pending.attempts >= 30) {
+          this._pendingDispatch = null;
+          return;
+        }
+        let game = getGame(), ship = game.global.space.shipyard?.ships?.[pending.index];
+        if (ship !== void 0 && ship.location === pending.region) {
+          this._pendingDispatch = null;
+          return;
+        }
+        ship === void 0 || gameModal.isOpen() || (pending.attempts += 1, gameModal.open({
+          triggerSelector: fleetControls.dispatchTrigger(pending.index),
+          title: game.loc("outer_shipyard_dispatch", [ship.name]),
+          action: () => {
+            fleetControls.dispatchShip({
+              index: pending.index,
+              region: pending.region
+            });
+          }
+        }));
+      },
+      getShipAttackPower(ship) {
+        return Math.round(
+          this.WeaponPower[ship.weapon] * this.ClassPower[ship.class]
+        );
+      },
+      shipCount(loc, template) {
+        let game = getGame(), count2 = 0;
+        for (let ship of game.global.space.shipyard?.ships ?? [])
+          ship.location === loc && ship.class === template.class && ship.power === template.power && ship.weapon === template.weapon && ship.armor === template.armor && ship.engine === template.engine && ship.sensor === template.sensor && count2++;
+        return count2;
+      },
+      // export function syndicate(region,extra) from truepath.js with added "all" argument
+      syndicate(region, extra, all) {
+        let game = getGame(), buildings = getBuildings();
+        if (!game.global.tech.syndicate || !game.global.race.truepath || !Object.hasOwn(game.global.space.syndicate ?? {}, region))
+          return extra ? { p: 1, r: 0, s: 0 } : 1;
+        let rivalRel = game.global.civic.foreign.gov3.hstl, rival = rivalRel < 10 ? 250 - 25 * rivalRel : rivalRel > 60 ? -13 * (rivalRel - 60) : 0, divisor = 1e3;
+        switch (region) {
+          case "spc_home":
+          case "spc_moon":
+          case "spc_red":
+          case "spc_hell":
+            divisor = 1250 + rival;
+            break;
+          case "spc_gas":
+          case "spc_gas_moon":
+          case "spc_belt":
+            divisor = 1020 + rival;
+            break;
+          case "spc_titan":
+          case "spc_enceladus":
+            divisor = haveTech("triton") ? game.actions.space[region].info.syndicate_cap() : 600;
+            break;
+          case "spc_triton":
+          case "spc_makemake":
+          case "spc_eris":
+            divisor = game.actions.space[region].info.syndicate_cap();
+            break;
+        }
+        let piracy = game.global.space.syndicate?.[region] ?? 0, patrol = 0, sensor = 0, ships = game.global.space.shipyard?.ships;
+        if (ships) {
+          for (let ship of ships)
+            if (ship.location === region && (ship.transit === 0 && ship.fueled || all)) {
+              let rating = this.getShipAttackPower(ship);
+              patrol += ship.damage > 0 ? Math.round(rating * (100 - ship.damage) / 100) : rating, sensor += this.SensorRange[ship.sensor];
+            }
+          region === "spc_enceladus" ? patrol += buildings.EnceladusBase.stateOnCount * 50 : region === "spc_titan" ? patrol += buildings.TitanSAM.stateOnCount * 25 : region === "spc_triton" && buildings.TritonFOB.stateOnCount > 0 && (patrol += 500, sensor += 10), sensor > 100 && (sensor = Math.round((sensor - 100) / (sensor - 100 + 200) * 100) + 100), patrol = Math.round(patrol * ((sensor + 25) / 125)), piracy = piracy - patrol > 0 ? piracy - patrol : 0;
+        }
+        return extra ? {
+          p: 1 - +(piracy / divisor).toFixed(4),
+          r: piracy,
+          s: sensor
+        } : 1 - +(piracy / divisor).toFixed(4);
+      }
+    }, FleetManager: {
+      _fleetElementId: "fleet",
+      neededShips: null,
+      initFleet() {
+        return getGame().global.tech.piracy ? fleetControls.isRendered(this._fleetElementId) : !1;
+      },
+      addShip(region, ship, count2) {
+        return fleetControls.addShips({
+          elementId: this._fleetElementId,
+          region,
+          ship,
+          count: count2
+        });
+      },
+      subShip(region, ship, count2) {
+        return fleetControls.subShips({
+          elementId: this._fleetElementId,
+          region,
+          ship,
+          count: count2
+        });
+      }
+    } };
+  }
+
+  // src/bootstrap/captured-fleet-outer-control.ts
+  var COST_RESOURCES = Object.freeze([
+    "Money",
+    "Aluminium",
+    "Adamantite",
+    "Steel",
+    "Alloy",
+    "Neutronium",
+    "Aerographene",
+    "Titanium",
+    "Orichalcum",
+    "Copper",
+    "Iridium",
+    "Iron",
+    "Nano_Tube",
+    "Quantium",
+    "Tungsten"
+  ]), OUTER_REGIONS = Object.freeze([
+    "spc_moon",
+    "spc_red",
+    "spc_gas",
+    "spc_gas_moon",
+    "spc_belt",
+    "spc_titan",
+    "spc_enceladus",
+    "spc_triton",
+    "spc_makemake",
+    "spc_eris"
+  ]);
+  function finite2(value, fallback = 0) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function rootRecord(rootState) {
+    let root = rootState.readRoot();
+    return isRecord(root) ? root : {};
+  }
+  function resourceValue(root, resourceId, field) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId), capturedField = field === "amount" ? "amount" : "max", legacyField = field === "amount" ? "currentQuantity" : "maxQuantity";
+    return finite2(
+      readProperty(resource, capturedField),
+      finite2(readProperty(resource, legacyField))
+    );
+  }
+  function regionEnabled(root, region) {
+    let tech = readProperty(root, "tech"), space = readProperty(root, "space");
+    if (readProperty(readProperty(root, "race"), "orbit_decayed") && region === "spc_moon" || readProperty(readProperty(root, "tech"), "resettle")) return !1;
+    let syndicate = readProperty(space, "syndicate");
+    if (!isRecord(syndicate) || !Object.hasOwn(syndicate, region)) return !1;
+    switch (region) {
+      case "spc_moon":
+      case "spc_red":
+      case "spc_gas":
+      case "spc_gas_moon":
+      case "spc_belt":
+        return !0;
+      case "spc_titan":
+      case "spc_enceladus":
+        return finite2(readProperty(tech, "titan")) >= 3 && finite2(readProperty(tech, "enceladus")) >= 2;
+      case "spc_triton":
+        return finite2(readProperty(tech, "triton")) >= 2;
+      case "spc_makemake":
+        return finite2(readProperty(tech, "makemake")) >= 1;
+      case "spc_eris":
+        return finite2(readProperty(tech, "eris")) >= 1;
+      default:
+        return !1;
+    }
+  }
+  function regionCap(root, region) {
+    let tech = readProperty(root, "tech");
+    switch (region) {
+      case "spc_titan":
+        return finite2(readProperty(tech, "triton")) > 0 ? finite2(readProperty(tech, "outer")) >= 4 ? 2e3 : 1e3 : 600;
+      case "spc_enceladus":
+        return finite2(readProperty(tech, "triton")) > 0 ? finite2(readProperty(tech, "outer")) >= 4 ? 1500 : 1e3 : 600;
+      case "spc_triton":
+        return finite2(readProperty(tech, "outer")) >= 4 ? 5e3 : 3e3;
+      case "spc_makemake":
+        return 2500;
+      case "spc_eris":
+        return 7500;
+      default:
+        return region === "spc_moon" || region === "spc_red" ? 1250 : 1020;
+    }
+  }
+  function shipCosts(blueprint, ships) {
+    let costs = {}, healthInflate = 1, powerInflate = 1, creepFactor = 1, shipClass = String(blueprint.class ?? "");
+    switch (String(blueprint.class ?? "")) {
+      case "corvette":
+        costs.Money = 25e5, costs.Aluminium = 5e5, creepFactor = 2;
+        break;
+      case "frigate":
+        costs.Money = 5e6, costs.Aluminium = 125e4, healthInflate = 1.1, powerInflate = 1.09, creepFactor = 1.5;
+        break;
+      case "destroyer":
+        costs.Money = 15e6, costs.Aluminium = 35e5, healthInflate = 1.2, powerInflate = 1.18, creepFactor = 1.2;
+        break;
+      case "cruiser":
+        costs.Money = 5e7, costs.Adamantite = 1e6, healthInflate = 1.3, powerInflate = 1.25;
+        break;
+      case "battlecruiser":
+        costs.Money = 125e6, costs.Adamantite = 26e5, healthInflate = 1.35, powerInflate = 1.3, creepFactor = 0.8;
+        break;
+      case "dreadnought":
+        costs.Money = 5e8, costs.Adamantite = 8e6, healthInflate = 1.4, powerInflate = 1.35, creepFactor = 0.5;
+        break;
+      case "explorer":
+        costs.Money = 8e8, costs.Adamantite = 95e5, healthInflate = 1.45;
+        break;
+      default:
+        return costs;
+    }
+    switch (blueprint.armor) {
+      case "steel":
+        costs.Steel = Math.round(35e4 ** healthInflate);
+        break;
+      case "alloy":
+        costs.Alloy = Math.round(25e4 ** healthInflate);
+        break;
+      case "neutronium":
+        costs.Neutronium = Math.round(1e4 ** healthInflate);
+        break;
+    }
+    let alternateCost = shipClass === "freighter" || shipClass === "supply_ship", engine = {
+      ion: alternateCost ? 1e4 : 75e3,
+      tie: alternateCost ? 45e3 : 15e4,
+      pulse: alternateCost ? 3e4 : 125e3,
+      photon: alternateCost ? 75e3 : 21e4,
+      vacuum: alternateCost ? 125e3 : 3e5,
+      emdrive: 125e4
+    }[String(blueprint.engine ?? "")];
+    engine !== void 0 && (costs.Titanium = Math.round(engine ** powerInflate));
+    let alternateMaterial = shipClass === "explorer", power = {
+      solar: 4e4,
+      diesel: 4e4,
+      fission: 5e4,
+      fusion: 5e4,
+      elerium: 6e4
+    }[String(blueprint.power ?? "")];
+    if (power !== void 0) {
+      costs[alternateMaterial ? "Orichalcum" : "Copper"] = Math.round(
+        power ** healthInflate
+      );
+      let iridium = {
+        solar: 15e3,
+        diesel: 15e3,
+        fission: 3e4,
+        fusion: 4e4,
+        elerium: 55e3
+      }[String(blueprint.power ?? "")];
+      iridium !== void 0 && (costs.Iridium = Math.round(iridium ** powerInflate));
+    }
+    if (shipClass !== "explorer") {
+      let sensorPower = { radar: 1.04, lidar: 1.08, quantum: 1.12 }[String(blueprint.sensor ?? "")];
+      sensorPower !== void 0 && (costs.Money = Math.round((costs.Money ?? 0) ** sensorPower));
+    }
+    switch (blueprint.weapon) {
+      case "railgun":
+        costs.Iron = Math.round(25e3 ** healthInflate);
+        break;
+      case "laser":
+        costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.05), costs.Nano_Tube = Math.round(12e3 ** healthInflate);
+        break;
+      case "p_laser":
+        costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.035), costs.Nano_Tube = Math.round(12e3 ** healthInflate);
+        break;
+      case "plasma":
+        costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.1), costs.Nano_Tube = Math.round(2e4 ** healthInflate);
+        break;
+      case "phaser":
+        costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.15), costs.Quantium = Math.round(18e3 ** healthInflate);
+        break;
+      case "disruptor":
+        costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.2), costs.Quantium = Math.round(35e3 ** healthInflate);
+        break;
+    }
+    blueprint.special === "massdriver" && (costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.2), costs.Tungsten = Math.round(75e4 ** healthInflate), costs.Quantium = Math.round(4e4 ** healthInflate)), shipClass === "explorer" && (costs.Iron = (costs.Iron ?? 0) * 10, costs.Titanium = (costs.Titanium ?? 0) * 5, costs.Iridium = (costs.Iridium ?? 0) * 50);
+    let sameTier = ships.filter((ship) => {
+      let value = isRecord(ship) ? ship : {};
+      return value.class === blueprint.class && (shipClass !== "freighter" && shipClass !== "supply_ship" || value.special === blueprint.special);
+    }).length, creep = 1 + (sameTier - 2) / 25 * creepFactor;
+    for (let resourceId of Object.keys(costs))
+      costs[resourceId] = shipClass === "explorer" ? Math.ceil(costs[resourceId] * (sameTier + 1) * 3) : sameTier < 2 ? Math.ceil(costs[resourceId] * (sameTier === 0 ? 0.75 : 0.9)) : sameTier > 2 ? Math.ceil(costs[resourceId] * creep) : costs[resourceId];
+    return costs;
+  }
+  function createGameModal(getDocument) {
+    let pending = null, document = () => {
+      let value = getDocument();
+      return isRecord(value) && typeof value.querySelector == "function" ? value : void 0;
+    }, close = () => document()?.querySelector(".modal .modal-close")?.click?.();
+    return Object.freeze({
+      isOpen() {
+        if (pending !== null)
+          return typeof document()?.querySelector(
+            "#modalBox .shipDispatch button"
+          )?.click == "function" && (pending.action(), close(), pending = null), !0;
+        let modal = document()?.getElementById?.("modalBox");
+        return modal != null;
+      },
+      canOpen(triggerSelector) {
+        return document()?.querySelector(triggerSelector) !== null;
+      },
+      open(request) {
+        if (pending !== null || this.isOpen()) return;
+        let trigger = document()?.querySelector(request.triggerSelector);
+        typeof trigger?.click == "function" && (pending = Object.freeze({
+          action: request.action
+        }), trigger.click());
+      },
+      isAwaitingScriptModal() {
+        return pending !== null;
+      },
+      captureScriptModal() {
+      }
+    });
+  }
+  function createCapturedOuterFleetControl(dependencies) {
+    let fleetControls = createCapturedFleetControls({
+      controls: dependencies.controls,
+      getDocument: dependencies.getDocument
+    }), settingsSurface = {}, resourcesSurface = {}, buildingsSurface = {}, actionsSpace = {}, gameSurface = {
+      global: {},
+      actions: { space: actionsSpace },
+      loc: (key) => key
+    }, polySurface = { shipCosts: () => ({}) }, haveTech = (id, level = 1) => finite2(
+      readProperty(
+        readProperty(rootRecord(dependencies.rootState), "tech"),
+        id
+      )
+    ) >= level, syncSettings = () => {
+      let raw = dependencies.readSettings();
+      if (isRecord(raw)) {
+        for (let key of Object.keys(settingsSurface)) delete settingsSurface[key];
+        Object.assign(settingsSurface, raw);
+      }
+    }, syncGame = () => {
+      let root = rootRecord(dependencies.rootState);
+      gameSurface.global = root;
+      for (let region of OUTER_REGIONS)
+        actionsSpace[region] ??= {
+          info: {
+            name: () => region,
+            syndicate: () => regionEnabled(root, region),
+            syndicate_cap: () => regionCap(root, region)
+          }
+        };
+    }, syncResources = () => {
+      let ids = /* @__PURE__ */ new Set([...COST_RESOURCES, "Authority", "Eris_Support"]), root = rootRecord(dependencies.rootState), resourceRoot = readProperty(root, "resource");
+      if (isRecord(resourceRoot))
+        for (let id of Object.keys(resourceRoot)) ids.add(id);
+      for (let id of ids)
+        resourcesSurface[id] ??= {
+          get currentQuantity() {
+            return resourceValue(
+              rootRecord(dependencies.rootState),
+              id,
+              "amount"
+            );
+          },
+          get maxQuantity() {
+            return resourceValue(rootRecord(dependencies.rootState), id, "max");
+          },
+          hasStorage: () => resourceValue(rootRecord(dependencies.rootState), id, "max") > 0
+        };
+    }, syncBuildings = () => {
+      let ids = {
+        EnceladusBase: "operating_base",
+        TitanSAM: "sam",
+        TritonFOB: "fob"
+      };
+      for (let [name, id] of Object.entries(ids))
+        buildingsSurface[name] ??= {
+          get stateOnCount() {
+            return finite2(
+              readProperty(
+                readProperty(
+                  readProperty(rootRecord(dependencies.rootState), "space"),
+                  id
+                ),
+                "on"
+              )
+            );
+          }
+        };
+    };
+    Object.assign(polySurface, {
+      shipCosts(blueprint) {
+        let root = rootRecord(dependencies.rootState), ships = readProperty(
+          readProperty(readProperty(root, "space"), "shipyard"),
+          "ships"
+        );
+        return shipCosts(blueprint, Array.isArray(ships) ? ships : []);
+      }
+    });
+    let gameModal = createGameModal(dependencies.getDocument), manager = createFleetManagers({
+      getGame: () => (syncGame(), gameSurface),
+      getSettings: () => (syncSettings(), settingsSurface),
+      getResources: () => (syncResources(), resourcesSurface),
+      getBuildings: () => (syncBuildings(), buildingsSurface),
+      getPoly: () => polySurface,
+      getHaveTech: () => haveTech,
+      fleetControls,
+      gameModal
+    }).FleetManagerOuter, warManager = {
+      get currentCityGarrison() {
+        let root = rootRecord(dependencies.rootState), garrison = readProperty(readProperty(root, "civic"), "garrison"), fortress = readProperty(
+          readProperty(readProperty(root, "portal"), "fortress"),
+          "garrison"
+        ), fob = readProperty(
+          readProperty(readProperty(root, "space"), "fob"),
+          "troops"
+        );
+        return finite2(readProperty(garrison, "workers")) - finite2(readProperty(garrison, "crew")) - finite2(fortress) - finite2(fob);
+      }
+    }, activity = {
+      logSuccess(_kind, message, tags) {
+        dependencies.onActivity?.({ message, color: "success", tags });
+      }
+    }, adapter = createOuterFleetAdapter({
+      getFleetManagerOuter: () => manager,
+      getWarManager: () => warManager,
+      getGame: () => (syncGame(), gameSurface),
+      getSettings: () => (syncSettings(), settingsSurface),
+      getResources: () => (syncResources(), resourcesSurface),
+      traitVal: (trait, _index, operation2) => readProperty(
+        readProperty(rootRecord(dependencies.rootState), "race"),
+        trait
+      ) && operation2 === 1 || operation2 === "+" || operation2 === "-" || operation2 === "=" ? 1 : operation2 ?? 0,
+      assessAuthorityRemoval: () => ({ status: "unmanaged" }),
+      getGameLog: () => activity,
+      executeBuild: (blueprint, _targetRegion) => {
+        for (let [type, part] of Object.entries(blueprint))
+          if (!(type === "name" || typeof part != "string") && !fleetControls.setPart({ elementId: "shipPlans", type, part }))
+            return Object.freeze({
+              invoked: !1,
+              started: !1,
+              builtIndex: null
+            });
+        if (!fleetControls.hasShipPower("shipPlans"))
+          return Object.freeze({
+            invoked: !1,
+            started: !1,
+            builtIndex: null
+          });
+        let result = fleetControls.buildShip({ elementId: "shipPlans" });
+        return Object.freeze({
+          invoked: result.actionable,
+          started: result.actionable && result.builtIndex !== null,
+          builtIndex: result.builtIndex
+        });
+      }
+    });
+    return Object.freeze({
+      autoFleetOuter: () => runOuterFleetAutomation(adapter)
+    });
+  }
+
   // src/adapters/evolve/captured-conditions.ts
   var SWARM_SATELLITE_ACTION_ID = "space-swarm_satellite", BOOLEAN_OPERANDS = /* @__PURE__ */ new Set([
     "Boolean",
@@ -18650,14 +20023,14 @@
   function capturedEvolutionRecord(value) {
     return isNonArrayRecord(value) ? value : void 0;
   }
-  function rootRecord(rootState) {
+  function rootRecord2(rootState) {
     return capturedEvolutionRecord(rootState.readRoot());
   }
   function nestedRecord(owner, key) {
     return capturedEvolutionRecord(readProperty(owner, key));
   }
   function capturedEvolutionMutationFingerprint(rootState) {
-    let root = rootRecord(rootState);
+    let root = rootRecord2(rootState);
     if (root !== void 0)
       try {
         return JSON.stringify({
@@ -18674,7 +20047,7 @@
       }
   }
   function readRace(rootState) {
-    return nestedRecord(rootRecord(rootState), "race");
+    return nestedRecord(rootRecord2(rootState), "race");
   }
   function capturedEvolutionReadSettings(getSettings) {
     return capturedEvolutionRecord(getSettings());
@@ -18686,11 +20059,11 @@
     return rowId.slice(EVOLUTION_ACTION_PREFIX.length);
   }
   function resourceAmount(rootState, id, field) {
-    let root = rootRecord(rootState), resource = nestedRecord(nestedRecord(root, "resource"), id);
+    let root = rootRecord2(rootState), resource = nestedRecord(nestedRecord(root, "resource"), id);
     return Number(readProperty(resource, field));
   }
   function evolutionCount(rootState, id) {
-    let root = rootRecord(rootState), evolution = nestedRecord(nestedRecord(root, "evolution"), id);
+    let root = rootRecord2(rootState), evolution = nestedRecord(nestedRecord(root, "evolution"), id);
     return Number(readProperty(evolution, "count"));
   }
   function actionRowsForTree(rows, challengeIds, targetId, rootState) {
@@ -18742,7 +20115,7 @@
             genus: "captured",
             name: target
           })
-        ] : []), stats = nestedRecord(rootRecord(dependencies.rootState), "stats"), achieve = nestedRecord(stats, "achieve"), queue = settings?.evolutionQueue;
+        ] : []), stats = nestedRecord(rootRecord2(dependencies.rootState), "stats"), achieve = nestedRecord(stats, "achieve"), queue = settings?.evolutionQueue;
         return Object.freeze({
           races,
           userEvolutionTarget: typeof settings?.userEvolutionTarget == "string" ? settings.userEvolutionTarget : "unreadable",
@@ -19307,7 +20680,7 @@
         if (menu !== null)
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            let step = event.key === "ArrowDown" ? 1 : -1, next = (activeIndex + step + items.length) % items.length;
+            let step2 = event.key === "ArrowDown" ? 1 : -1, next = (activeIndex + step2 + items.length) % items.length;
             setActive(next);
             let item = items[next];
             item !== void 0 && fire(options.focus, item);
@@ -23885,7 +25258,7 @@ Only continue if you trust the source. Injected code:
     return isRecord(value) && !Array.isArray(value) ? value : void 0;
   }
   function capturedBattleDriveTactic(dependencies, active, target) {
-    for (let step = 0; step <= 5; step += 1) {
+    for (let step2 = 0; step2 <= 5; step2 += 1) {
       let current = finite(
         readProperty(
           readProperty(readProperty(active.root, "civic"), "garrison"),
@@ -23901,7 +25274,7 @@ Only continue if you trust the source. Injected code:
   }
   function capturedBattleDriveRaid(dependencies, active, target) {
     if (!Number.isSafeInteger(target) || target < 0) return !1;
-    for (let step = 0; step <= CAPTURED_BATTLE_MAX_ADJUSTMENT_STEPS; step += 1) {
+    for (let step2 = 0; step2 <= CAPTURED_BATTLE_MAX_ADJUSTMENT_STEPS; step2 += 1) {
       let current = finite(
         readProperty(
           readProperty(readProperty(active.root, "civic"), "garrison"),
@@ -23928,7 +25301,7 @@ Only continue if you trust the source. Injected code:
         0,
         patrolsBefore - decision.hellPatrolsToRemove
       );
-      for (let step = 0; step <= CAPTURED_BATTLE_MAX_ADJUSTMENT_STEPS; step += 1) {
+      for (let step2 = 0; step2 <= CAPTURED_BATTLE_MAX_ADJUSTMENT_STEPS; step2 += 1) {
         let patrols = finite(readProperty(fortress, "patrols"));
         if (patrols === void 0) return !1;
         if (patrols <= patrolTarget) break;
@@ -23940,7 +25313,7 @@ Only continue if you trust the source. Injected code:
         0,
         garrisonBefore - decision.hellGarrisonToRemove
       );
-      for (let step = 0; step <= CAPTURED_BATTLE_MAX_ADJUSTMENT_STEPS; step += 1) {
+      for (let step2 = 0; step2 <= CAPTURED_BATTLE_MAX_ADJUSTMENT_STEPS; step2 += 1) {
         let garrison = finite(readProperty(fortress, "garrison"));
         if (garrison === void 0) return !1;
         if (garrison <= garrisonTarget) break;
@@ -24767,6 +26140,29 @@ Only continue if you trust the source. Injected code:
       result.outcome.status !== "succeeded" && logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
       );
+    }, outerFleetDiscoveryAttempted = !1, ensureOuterFleetControls = () => {
+      if (pageCapture2.controls.resolve("shipPlans")?.methods.includes("build"))
+        return;
+      let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), settings = readProperty(root, "settings"), shipyard = readProperty(readProperty(root, "space"), "shipyard"), syndicate = readProperty(tech, "syndicate");
+      if (!isRecord(shipyard) || !(typeof syndicate == "number" && syndicate > 0) || readProperty(settings, "showShipYard") !== !0 || outerFleetDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      if (govTabs === void 0) return;
+      outerFleetDiscoveryAttempted = !0;
+      let result = civicDiscovery.discover([
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.dwarfShipYard
+        })
+      ]);
+      result.outcome.status !== "succeeded" && logError(
+        `outer fleet discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      );
     }, ensureMercenaryControls = () => {
       if (CAPTURED_MERCENARY_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("hire")
@@ -25304,6 +26700,12 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand()
+    }), outerFleet = createCapturedOuterFleetControl({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      getDocument: () => document,
+      readSettings: () => settingsStore.readRaw(),
+      onActivity
     }), runCycle = () => {
       demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel();
       let settings = settingsStore.readRaw();
@@ -25321,7 +26723,7 @@ Only continue if you trust the source. Injected code:
           readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),
             "truepath"
-          ) === !0 ? ensureCivicControls() : ensureGalaxyFleetControls();
+          ) === !0 ? ensureOuterFleetControls() : ensureGalaxyFleetControls();
         }), isEnabled(settings, "autoMarket") && runPhase("autoMarket", () => {
           ensureMarketControls(), marketAutomation.run();
         }), isEnabled(settings, "autoGalaxyMarket") && runPhase("autoGalaxyMarket", () => {
@@ -25433,7 +26835,7 @@ Only continue if you trust the source. Injected code:
           readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),
             "truepath"
-          ) === !0 || (ensureGalaxyFleetControls(), runFleetAutomation({
+          ) === !0 ? (ensureOuterFleetControls(), outerFleet.autoFleetOuter()) : (ensureGalaxyFleetControls(), runFleetAutomation({
             reader: fleet.reader,
             executor: fleet.executor
           }));

@@ -27,6 +27,7 @@ import {
   requireNumber,
   requireRecord,
   requireString,
+  isRecord,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -46,6 +47,15 @@ export interface OuterFleetAdapterDependencies {
   ) => unknown;
   readonly assessAuthorityRemoval: (removedSoldiers: number) => unknown;
   readonly getGameLog: () => unknown;
+  /** Optional captured executor; the compatibility manager remains the default path. */
+  readonly executeBuild?: (
+    blueprint: Readonly<UnknownRecord>,
+    targetRegion: string,
+  ) => Readonly<{
+    readonly invoked: boolean;
+    readonly started: boolean;
+    readonly builtIndex: number | null;
+  }>;
 }
 
 interface OuterFleetSession {
@@ -221,6 +231,7 @@ export function createOuterFleetAdapter(
       }
       const input = Object.freeze({
         initialized,
+        busy: initialized && isRecord(manager["_pendingDispatch"]),
         mode,
         manualBlueprintAvailable,
         configuredMinimumCrew,
@@ -746,15 +757,52 @@ export function createOuterFleetAdapter(
       }
       if (decision.kind === "outer-fleet-status") return SUCCEEDED;
 
+      const buildResult =
+        dependencies.executeBuild === undefined
+          ? {
+              invoked: true,
+              started: Boolean(
+                Reflect.apply(build!, active.manager, [
+                  blueprint,
+                  decision.targetRegion,
+                ]),
+              ),
+              builtIndex: null,
+            }
+          : dependencies.executeBuild(blueprint!, decision.targetRegion);
+      if (!buildResult.invoked) {
+        return rejected(
+          "outer-fleet-build-not-invoked",
+          "outer fleet build control was not invoked",
+        );
+      }
+      if (!buildResult.started) {
+        return stale(
+          "outer-fleet-build-no-transition",
+          "outer fleet build returned without starting an action",
+        );
+      }
       if (
-        !Reflect.apply(build!, active.manager, [
-          blueprint,
-          decision.targetRegion,
-        ])
+        dependencies.executeBuild === undefined &&
+        !isRecord(active.manager["_pendingDispatch"])
       ) {
-        active.manager["nextShipMsg"] =
-          `Invalid design! Next ship(${decision.nextShipName}) is missing power`;
-        return SUCCEEDED;
+        return stale(
+          "outer-fleet-build-no-transition",
+          "outer fleet build returned without adding a ship or queueing dispatch",
+        );
+      }
+      if (dependencies.executeBuild !== undefined) {
+        if (buildResult.builtIndex === null) {
+          return stale(
+            "outer-fleet-build-no-transition",
+            "outer fleet build returned without adding a ship",
+          );
+        }
+        active.manager["_pendingDispatch"] = {
+          index: buildResult.builtIndex,
+          region: decision.targetRegion,
+          attempts: 0,
+        };
       }
       const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
       const logSuccess = requireFunction(

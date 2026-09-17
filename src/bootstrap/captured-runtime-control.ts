@@ -60,6 +60,7 @@ import {
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
+import { createCapturedOuterFleetControl } from "./captured-fleet-outer-control.ts";
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import {
   createCapturedTriggers,
@@ -795,6 +796,46 @@ export function startCapturedRuntime({
     if (result.outcome.status !== "succeeded") {
       logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
+      );
+    }
+  };
+  let outerFleetDiscoveryAttempted = false;
+  const ensureOuterFleetControls = () => {
+    if (pageCapture.controls.resolve("shipPlans")?.methods.includes("build")) {
+      return;
+    }
+    const root = pageCapture.rootState.readRoot();
+    const tech = readProperty(root, "tech");
+    const settings = readProperty(root, "settings");
+    const shipyard = readProperty(readProperty(root, "space"), "shipyard");
+    const syndicate = readProperty(tech, "syndicate");
+    if (
+      !isRecord(shipyard) ||
+      !(typeof syndicate === "number" && syndicate > 0) ||
+      readProperty(settings, "showShipYard") !== true
+    ) {
+      return;
+    }
+    if (outerFleetDiscoveryAttempted) return;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs === undefined) return;
+    outerFleetDiscoveryAttempted = true;
+    const result = civicDiscovery.discover([
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: MAIN_TAB_INDEX.civic,
+      }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.dwarfShipYard,
+      }),
+    ]);
+    if (result.outcome.status !== "succeeded") {
+      logError(
+        `outer fleet discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
     }
   };
@@ -1667,6 +1708,13 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
+  const outerFleet = createCapturedOuterFleetControl({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    getDocument: () => document,
+    readSettings: () => settingsStore.readRaw(),
+    onActivity,
+  });
 
   const runCycle = () => {
     demandThisCycle = undefined;
@@ -1716,7 +1764,7 @@ export function startCapturedRuntime({
               readProperty(pageCapture.rootState.readRoot(), "race"),
               "truepath",
             ) === true;
-          if (truepath) ensureCivicControls();
+          if (truepath) ensureOuterFleetControls();
           else ensureGalaxyFleetControls();
         });
       }
@@ -2007,7 +2055,10 @@ export function startCapturedRuntime({
               readProperty(pageCapture.rootState.readRoot(), "race"),
               "truepath",
             ) === true;
-          if (!truepath) {
+          if (truepath) {
+            ensureOuterFleetControls();
+            outerFleet.autoFleetOuter();
+          } else {
             ensureGalaxyFleetControls();
             runFleetAutomation({
               reader: fleet.reader,

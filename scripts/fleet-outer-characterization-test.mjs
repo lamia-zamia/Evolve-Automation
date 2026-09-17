@@ -22,6 +22,7 @@ const { hooks } = await loadCharacterizationBundle({
 assert.equal(typeof hooks.autoFleetOuter, "function");
 const fighter = { class: "corvette", kind: "fighter" };
 const manager = {
+  _pendingDispatch: null,
   Regions: ["spc_red"],
   ClassCrew: { corvette: 2 },
   _explorerBlueprint: { class: "explorer", kind: "explorer" },
@@ -41,6 +42,7 @@ const manager = {
   getMissingResource: () => null,
   build: (ship, region) => {
     actions.push(["build", ship.kind, region]);
+    manager._pendingDispatch = { index: 0, region, attempts: 0 };
     return true;
   },
 };

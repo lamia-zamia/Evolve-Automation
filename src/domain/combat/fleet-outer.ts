@@ -2,6 +2,8 @@ export type OuterFleetBlueprint = "yard" | "explorer" | "scout" | "fighter";
 
 export interface OuterFleetCycleInput {
   readonly initialized: boolean;
+  /** A built ship is still waiting for the game-owned dispatch window. */
+  readonly busy?: boolean;
   readonly mode: string;
   readonly manualBlueprintAvailable: boolean;
   readonly configuredMinimumCrew: number;
@@ -137,6 +139,9 @@ export function planOuterFleetCycle(
 ): Readonly<OuterFleetAutomaticPlan | OuterFleetStatusDecision> {
   if (!input.initialized) {
     return status(null, "No ships needed yet", null);
+  }
+  if (input.busy === true) {
+    return status(null, null, "Outer fleet action pending");
   }
   if (input.mode === "none") {
     return status(null, null, "Ship construction is disabled");
