@@ -440,18 +440,23 @@ export function createFleetManagers({
       if (pending === null) {
         return;
       }
-      if (pending.attempts >= DISPATCH_ATTEMPT_LIMIT) {
-        this._pendingDispatch = null;
-        return;
-      }
       const game = getGame();
       const ship = game.global.space.shipyard?.ships?.[pending.index];
       if (ship !== undefined && ship.location === pending.region) {
         this._pendingDispatch = null;
         return;
       }
+      if (ship === undefined) {
+        return;
+      }
       // A modal the player or another feature owns keeps the request queued.
-      if (ship === undefined || gameModal.isOpen()) {
+      // This check must precede the attempt-limit exit so a captured script-owned modal can
+      // release its final bounded wait before the manager drops its dispatch request.
+      if (gameModal.isOpen()) {
+        return;
+      }
+      if (pending.attempts >= DISPATCH_ATTEMPT_LIMIT) {
+        this._pendingDispatch = null;
         return;
       }
       pending.attempts += 1;

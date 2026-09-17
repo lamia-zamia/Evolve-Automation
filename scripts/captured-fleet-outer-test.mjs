@@ -284,12 +284,44 @@ capturedSettings.authorityManage = false;
 capturedSettings.generalMinimumAuthority = 0;
 yard.ships.length = 0;
 let stalledModalOpen = false;
+let stalledModalShip = null;
+let allowStalledDestination = false;
+const stalledDispatchTriggers = new Map([
+  ["#ship0loc", 0],
+  ["#ship1loc", 1],
+]);
 const stalledDocument = {
   querySelector: (selector) => {
-    if (selector === "#ship0loc")
-      return { click: () => (stalledModalOpen = true) };
+    const shipIndex = stalledDispatchTriggers.get(selector);
+    if (shipIndex !== undefined) {
+      return {
+        click: () => {
+          stalledModalOpen = true;
+          stalledModalShip = shipIndex;
+        },
+      };
+    }
+    if (
+      (selector === "#modalBox .shipDispatch button" ||
+        selector === "#modalBox .shipDispatch button.spc_red") &&
+      stalledModalOpen &&
+      allowStalledDestination
+    ) {
+      return {
+        click: () => {
+          yard.ships[stalledModalShip].location = "spc_red";
+          stalledModalOpen = false;
+          stalledModalShip = null;
+        },
+      };
+    }
     if (selector === ".modal .modal-close" && stalledModalOpen)
-      return { click: () => (stalledModalOpen = false) };
+      return {
+        click: () => {
+          stalledModalOpen = false;
+          stalledModalShip = null;
+        },
+      };
     return null;
   },
   getElementById: (id) => (id === "modalBox" && stalledModalOpen ? {} : null),
@@ -311,8 +343,21 @@ for (let cycle = 0; cycle < 200; cycle++) {
   stalledControl.autoFleetOuter();
 }
 assert.equal(yard.ships.length, 1);
+assert.equal(stalledModalOpen, false);
+assert.equal(stalledModalShip, null);
 capturedSettings.fleetOuterShips = "custom";
 assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
 assert.equal(yard.ships.length, 2);
+capturedSettings.fleetOuterShips = "none";
+allowStalledDestination = true;
+assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
+assert.equal(stalledModalOpen, true);
+assert.equal(stalledModalShip, 1);
+assert.equal(yard.ships[1].location, "spc_dwarf");
+assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
+assert.equal(stalledModalOpen, false);
+assert.equal(stalledModalShip, null);
+assert.equal(yard.ships[1].location, "spc_red");
+assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
 
 console.log("Captured outer-fleet control postcondition tests passed");

@@ -13661,25 +13661,27 @@
         let pending = this._pendingDispatch;
         if (pending === null)
           return;
-        if (pending.attempts >= 30) {
-          this._pendingDispatch = null;
-          return;
-        }
         let game = getGame(), ship = game.global.space.shipyard?.ships?.[pending.index];
         if (ship !== void 0 && ship.location === pending.region) {
           this._pendingDispatch = null;
           return;
         }
-        ship === void 0 || gameModal.isOpen() || (pending.attempts += 1, gameModal.open({
-          triggerSelector: fleetControls.dispatchTrigger(pending.index),
-          title: game.loc("outer_shipyard_dispatch", [ship.name]),
-          action: () => {
-            fleetControls.dispatchShip({
-              index: pending.index,
-              region: pending.region
-            });
+        if (ship !== void 0 && !gameModal.isOpen()) {
+          if (pending.attempts >= 30) {
+            this._pendingDispatch = null;
+            return;
           }
-        }));
+          pending.attempts += 1, gameModal.open({
+            triggerSelector: fleetControls.dispatchTrigger(pending.index),
+            title: game.loc("outer_shipyard_dispatch", [ship.name]),
+            action: () => {
+              fleetControls.dispatchShip({
+                index: pending.index,
+                region: pending.region
+              });
+            }
+          });
+        }
       },
       getShipAttackPower(ship) {
         return Math.round(
