@@ -70,7 +70,6 @@ interface MinorBlock {
 
 interface CapturedMinorPolicy {
   readonly enabled: boolean | null;
-  readonly priority: number | null;
   readonly weighting: number | null;
 }
 
@@ -250,12 +249,9 @@ function readMinorPolicy(
   traitId: string,
 ): CapturedMinorPolicy {
   const rawEnabled = readProperty(settings, `mTrait_${traitId}`);
-  const rawPriority = finite(readProperty(settings, `mTrait_p_${traitId}`));
   const rawWeighting = finite(readProperty(settings, `mTrait_w_${traitId}`));
   return Object.freeze({
     enabled: typeof rawEnabled === "boolean" ? rawEnabled : null,
-    priority:
-      rawPriority !== undefined && rawPriority >= 0 ? rawPriority : null,
     weighting:
       rawWeighting !== undefined && rawWeighting >= 0 ? rawWeighting : null,
   });
@@ -268,7 +264,6 @@ function sameMinorPolicy(
   const policy = readMinorPolicy(settings, candidate.traitId);
   return (
     policy.enabled === candidate.enabled &&
-    policy.priority === candidate.priority &&
     policy.weighting === candidate.weighting
   );
 }
@@ -469,7 +464,7 @@ export function createCapturedTraitAutomation(
       const targets: MinorTarget[] = [];
       const candidates: GeneticsMinorTraitCandidate[] = [];
       const settings = dependencies.readSettings();
-      for (const traitId of order) {
+      for (const [orderIndex, traitId] of order.entries()) {
         const row = rowsByTrait.get(traitId);
         if (row === undefined) continue;
         const rank = finite(readProperty(minor, traitId));
@@ -502,7 +497,7 @@ export function createCapturedTraitAutomation(
           cost: null,
           eligible,
           enabled: policy.enabled,
-          priority: policy.priority,
+          priority: orderIndex,
           weighting: policy.weighting,
         });
         candidates.push(candidate);
@@ -576,6 +571,16 @@ export function createCapturedTraitAutomation(
         );
         if (currentRank !== decision.expectedRank) {
           return stale("minor-trait-rank-changed", "minor-trait rank changed");
+        }
+        const currentOrder = readMinorOrder(active.root);
+        if (
+          currentOrder === undefined ||
+          currentOrder.indexOf(decision.traitId) !== target.candidate.priority
+        ) {
+          return stale(
+            "minor-trait-order-changed",
+            "minor-trait order changed",
+          );
         }
         if (!sameMinorPolicy(target.candidate, dependencies.readSettings())) {
           return stale(

@@ -43,6 +43,7 @@ export interface GeneticsMinorTraitCandidate {
   readonly eligible: boolean | null;
   /** Script policy remains separate from the live panel's affordability predicate. */
   readonly enabled: boolean | null;
+  /** Position in live `global.settings.mtorder`; this is not a script setting. */
   readonly priority: number | null;
   readonly weighting: number | null;
 }
@@ -113,8 +114,9 @@ export function planMinorTraitPurchase(
 
 /**
  * Select one live Genetics 2.0 minor-trait upgrade using script policy over live game offers.
- * Lower configured priority wins; weighting divided by a known cost breaks ties, and live panel
- * order is the final tie-break when the current game does not expose a numeric gene cost.
+ * The live `global.settings.mtorder` position is the priority. Positive weighting keeps the
+ * legacy enabled-by-policy gate; the current game does not expose a numeric minor cost, so this
+ * planner does not invent a weighting/cost ratio.
  */
 export function planGeneticsMinorTrait(
   input: Readonly<GeneticsMinorTraitInput>,
@@ -148,17 +150,10 @@ export function planGeneticsMinorTrait(
       );
     })
     .sort((left, right) => {
-      const priority = left.candidate.priority! - right.candidate.priority!;
-      if (priority !== 0) return priority;
-      const leftCost = left.candidate.cost;
-      const rightCost = right.candidate.cost;
-      const leftPreference =
-        left.candidate.weighting! /
-        (leftCost !== null && leftCost > 0 ? leftCost : 1);
-      const rightPreference =
-        right.candidate.weighting! /
-        (rightCost !== null && rightCost > 0 ? rightCost : 1);
-      return rightPreference - leftPreference || left.index - right.index;
+      return (
+        left.candidate.priority! - right.candidate.priority! ||
+        left.index - right.index
+      );
     });
   const selected = candidates[0]?.candidate;
   if (selected !== undefined) {

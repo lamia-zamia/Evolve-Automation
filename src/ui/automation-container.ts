@@ -312,7 +312,7 @@ export function createAutomationContainer({
       createSettingToggle(
         togglesNode,
         "autoMinorTrait",
-        "Purchase minor traits using genes according to their weighting settings. Also manages Mimic genus, Psychic powers, Ocular powers and wishes.",
+        "Purchase eligible minor traits in the game's order, honoring enabled and weighting settings. Also manages Mimic genus, Psychic powers, Ocular powers and wishes.",
       );
       createSettingToggle(
         togglesNode,

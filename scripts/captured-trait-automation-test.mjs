@@ -193,9 +193,8 @@ function createFixture({
     },
   };
   const minorPolicy = Object.fromEntries(
-    minorRows.flatMap((traitId, index) => [
+    minorRows.flatMap((traitId) => [
       [`mTrait_${traitId}`, true],
-      [`mTrait_p_${traitId}`, index],
       [`mTrait_w_${traitId}`, 1],
     ]),
   );
@@ -249,7 +248,7 @@ function createFixture({
       cost: null,
       eligible: true,
       enabled: true,
-      priority: 1,
+      priority: 0,
       weighting: 1,
     },
     {
@@ -259,7 +258,7 @@ function createFixture({
       cost: null,
       eligible: true,
       enabled: true,
-      priority: 0,
+      priority: 1,
       weighting: 1,
     },
   ]);
@@ -290,10 +289,6 @@ function createFixture({
     minor: { smart: 0, mastery: 0 },
     minorRows: ["smart", "mastery"],
     mtorder: ["mastery", "smart"],
-    settings: {
-      mTrait_p_smart: 0,
-      mTrait_p_mastery: 0,
-    },
   });
   assert.equal(
     planGeneticsMinorTrait(fixture.captured.minor.reader.read())?.traitId,
@@ -301,8 +296,8 @@ function createFixture({
   );
 }
 
-// Script policy can disable a live offer, and weighting remains meaningful when candidates share
-// a configured priority. The live mtorder list is only the final tie-break.
+// Script policy can disable a live offer, and a non-positive weighting skips it. The live mtorder
+// list is the deterministic priority because the current game does not expose numeric gene costs.
 {
   const disabled = createFixture({
     genes: 50,
@@ -346,14 +341,27 @@ function createFixture({
     minorRows: ["smart", "mastery"],
     mtorder: ["smart", "mastery"],
     settings: {
-      mTrait_p_smart: 0,
-      mTrait_p_mastery: 0,
       mTrait_w_smart: 1,
       mTrait_w_mastery: 3,
     },
   });
   assert.equal(
     planGeneticsMinorTrait(weighted.captured.minor.reader.read())?.traitId,
+    "smart",
+  );
+
+  const zeroWeighted = createFixture({
+    genes: 50,
+    minor: { smart: 0, mastery: 0 },
+    minorRows: ["smart", "mastery"],
+    mtorder: ["smart", "mastery"],
+    settings: {
+      mTrait_w_smart: 0,
+      mTrait_w_mastery: 3,
+    },
+  });
+  assert.equal(
+    planGeneticsMinorTrait(zeroWeighted.captured.minor.reader.read())?.traitId,
     "mastery",
   );
 }
@@ -392,6 +400,27 @@ function createFixture({
   const decision = planGeneticsMinorTrait(fixture.captured.minor.reader.read());
   assert.ok(decision);
   fixture.bumpGeneration();
+  assert.equal(
+    fixture.captured.minor.executor.execute(decision).status,
+    "stale",
+  );
+  assert.equal(
+    fixture.calls.some(({ method }) => method === "gene"),
+    false,
+  );
+}
+
+// Reordering the live minor list after planning invalidates the sampled priority.
+{
+  const fixture = createFixture({
+    genes: 50,
+    minor: { smart: 0, mastery: 0 },
+    minorRows: ["smart", "mastery"],
+    mtorder: ["smart", "mastery"],
+  });
+  const decision = planGeneticsMinorTrait(fixture.captured.minor.reader.read());
+  assert.ok(decision);
+  fixture.root.settings.mtorder = ["mastery", "smart"];
   assert.equal(
     fixture.captured.minor.executor.execute(decision).status,
     "stale",

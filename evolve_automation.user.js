@@ -7777,12 +7777,7 @@
     let selected = input.traits.map((candidate, index) => ({ candidate, index })).filter(({ candidate }) => {
       let priority = candidate.priority, weighting = candidate.weighting;
       return candidate.eligible !== !0 || candidate.enabled !== !0 || !Number.isFinite(candidate.rank) || candidate.rank < 0 || priority === null || !Number.isFinite(priority) || priority < 0 || weighting === null || !Number.isFinite(weighting) || weighting <= 0 ? !1 : candidate.cost === null || Number.isFinite(candidate.cost) && candidate.cost >= 0 && input.currentGenes >= candidate.cost;
-    }).sort((left, right) => {
-      let priority = left.candidate.priority - right.candidate.priority;
-      if (priority !== 0) return priority;
-      let leftCost = left.candidate.cost, rightCost = right.candidate.cost, leftPreference = left.candidate.weighting / (leftCost !== null && leftCost > 0 ? leftCost : 1);
-      return right.candidate.weighting / (rightCost !== null && rightCost > 0 ? rightCost : 1) - leftPreference || left.index - right.index;
-    })[0]?.candidate;
+    }).sort((left, right) => left.candidate.priority - right.candidate.priority || left.index - right.index)[0]?.candidate;
     return selected !== void 0 ? Object.freeze({
       kind: "upgrade-minor-trait",
       traitId: selected.traitId,
@@ -7920,16 +7915,15 @@
     return readElementText(queryOne(row, "h4"));
   }
   function readMinorPolicy(settings, traitId) {
-    let rawEnabled = readProperty(settings, `mTrait_${traitId}`), rawPriority = finite(readProperty(settings, `mTrait_p_${traitId}`)), rawWeighting = finite(readProperty(settings, `mTrait_w_${traitId}`));
+    let rawEnabled = readProperty(settings, `mTrait_${traitId}`), rawWeighting = finite(readProperty(settings, `mTrait_w_${traitId}`));
     return Object.freeze({
       enabled: typeof rawEnabled == "boolean" ? rawEnabled : null,
-      priority: rawPriority !== void 0 && rawPriority >= 0 ? rawPriority : null,
       weighting: rawWeighting !== void 0 && rawWeighting >= 0 ? rawWeighting : null
     });
   }
   function sameMinorPolicy(candidate, settings) {
     let policy = readMinorPolicy(settings, candidate.traitId);
-    return policy.enabled === candidate.enabled && policy.priority === candidate.priority && policy.weighting === candidate.weighting;
+    return policy.enabled === candidate.enabled && policy.weighting === candidate.weighting;
   }
   function readRaceRank(race, traitId) {
     let value = readProperty(race, traitId);
@@ -8025,7 +8019,7 @@
           rowsByTrait.set(traitId, row);
         }
         let targets = [], candidates = [], settings = dependencies.readSettings();
-        for (let traitId of order) {
+        for (let [orderIndex, traitId] of order.entries()) {
           if (rowsByTrait.get(traitId) === void 0) continue;
           let rank = finite(readProperty(minor, traitId)), expectedTotalRank = readRaceRank(race, traitId);
           if (rank === void 0 || !Number.isSafeInteger(rank) || rank < 0 || expectedTotalRank === void 0)
@@ -8045,7 +8039,7 @@
             cost: null,
             eligible,
             enabled: policy.enabled,
-            priority: policy.priority,
+            priority: orderIndex,
             weighting: policy.weighting
           });
           candidates.push(candidate), targets.push({
@@ -8101,6 +8095,12 @@
           readProperty(target.minor, target.candidate.traitId)
         ) !== decision.expectedRank)
           return stale("minor-trait-rank-changed", "minor-trait rank changed");
+        let currentOrder = readMinorOrder(active.root);
+        if (currentOrder === void 0 || currentOrder.indexOf(decision.traitId) !== target.candidate.priority)
+          return stale(
+            "minor-trait-order-changed",
+            "minor-trait order changed"
+          );
         if (!sameMinorPolicy(target.candidate, dependencies.readSettings()))
           return stale(
             "minor-trait-policy-changed",
@@ -21498,7 +21498,7 @@
         ), createSettingToggle(
           togglesNode,
           "autoMinorTrait",
-          "Purchase minor traits using genes according to their weighting settings. Also manages Mimic genus, Psychic powers, Ocular powers and wishes."
+          "Purchase eligible minor traits in the game's order, honoring enabled and weighting settings. Also manages Mimic genus, Psychic powers, Ocular powers and wishes."
         ), createSettingToggle(
           togglesNode,
           "autoMutateTraits",
