@@ -296,6 +296,29 @@ assert.equal(
   false,
 );
 
+const authorityBlocked = createFixture({
+  authorityManage: true,
+  authority: 100,
+  authorityTarget: 99,
+});
+assert.equal(
+  runOuterFleetAutomation(createAutomation(authorityBlocked)).status,
+  "succeeded",
+);
+assert.match(
+  authorityBlocked.manager.nextShipMsg,
+  /would lower Authority to 98, below the 99 target/,
+);
+assert.equal(
+  authorityBlocked.trace
+    .snapshot()
+    .some(
+      (event) =>
+        event.category === "command" && event.name === "build-outer-ship",
+    ),
+  false,
+);
+
 const busy = createFixture({
   pendingDispatch: { index: 0, region: "spc_red", attempts: 1 },
 });

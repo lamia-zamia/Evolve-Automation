@@ -2911,10 +2911,10 @@
       readReservations() {
         let root = rootState.readRoot();
         if (root === void 0) return NO_RESERVATIONS2;
-        let settings = readProperty(root, "settings"), targets = [], unavailable = !1;
+        let settings = readProperty(root, "settings"), targets = [], unavailable2 = !1;
         function reserve(item, cause, price, reason) {
           if (price === void 0) {
-            reportUnavailable(item.id, reason), unavailable = !0;
+            reportUnavailable(item.id, reason), unavailable2 = !0;
             return;
           }
           couldBeStored(root, price) && targets.push(
@@ -2961,9 +2961,9 @@
               );
           }
         }
-        return targets.length === 0 && !unavailable ? NO_RESERVATIONS2 : Object.freeze({
+        return targets.length === 0 && !unavailable2 ? NO_RESERVATIONS2 : Object.freeze({
           targets: Object.freeze(targets),
-          unavailable
+          unavailable: unavailable2
         });
       }
     });
@@ -7493,7 +7493,7 @@
       return Math.ceil(targetRating / perSoldier);
   }
   function readHellAuthority(root, input) {
-    let unavailable = Object.freeze({
+    let unavailable2 = Object.freeze({
       unlocked: !1,
       current: 0,
       maximum: 0,
@@ -7501,10 +7501,10 @@
       debugEnabled: !1
     });
     if (!input.manageAuthority || input.minimumAuthority === 0)
-      return unavailable;
+      return unavailable2;
     let authority = readProperty(readProperty(root, "resource"), "Authority");
     if (!isRecord(authority) || authority.display === !1)
-      return unavailable;
+      return unavailable2;
     let current = finite(readProperty(authority, "amount")), maximum = finite(readProperty(authority, "max"));
     if (!(current === void 0 || maximum === void 0))
       return Object.freeze({
@@ -8005,6 +8005,10 @@
   function readHighPopulationWorkerEffect(root) {
     let factors = readHighPopulationFactors(readProperty(root, "race"));
     return factors === void 0 ? void 0 : factors?.workerEffect ?? 1;
+  }
+  function readCapturedHighPopulationPercent(root) {
+    let factors = readHighPopulationFactors(readProperty(root, "race"));
+    return factors === void 0 ? void 0 : (factors?.workerEffect ?? 1) * 100;
   }
   function readCapturedPopulationResource(root) {
     let resources = readProperty(root, "resource");
@@ -12590,6 +12594,59 @@
     return Object.freeze({ reader, executor });
   }
 
+  // src/adapters/evolve/civic/authority.ts
+  function unavailable(reason) {
+    return Object.freeze({ status: "unavailable", reason });
+  }
+  function readAuthorityQuantity(rawQuantity) {
+    return isFiniteNumber(rawQuantity) && rawQuantity >= 0 ? Object.freeze({ status: "ready", value: rawQuantity }) : Object.freeze({ status: "unavailable", reason: "invalid-input" });
+  }
+  function readAuthorityPolicyView(rawGame, rawSettings, rawResources, readHighPopulationPercent) {
+    try {
+      if (!isRecord(rawSettings) || typeof rawSettings.authorityManage != "boolean" || !isFiniteNumber(rawSettings.generalMinimumAuthority))
+        return unavailable("invalid-settings");
+      if (!isRecord(rawResources) || !isRecord(rawResources.Authority))
+        return unavailable("invalid-resource");
+      let authority = rawResources.Authority, current = authority.currentQuantity, maximum = authority.maxQuantity;
+      if (!isFiniteNumber(current) || current < 0 || !isFiniteNumber(maximum) || maximum < 0)
+        return unavailable("invalid-resource");
+      if (!isRecord(rawGame) || !isRecord(rawGame.global))
+        return unavailable("invalid-game-state");
+      let global = rawGame.global;
+      if (!isRecord(global.tech) || !isRecord(global.race) || !isRecord(global.civic))
+        return unavailable("invalid-game-state");
+      let civic = global.civic;
+      if (!isRecord(civic.govern))
+        return unavailable("invalid-game-state");
+      let governmentType = civic.govern.type;
+      if (typeof governmentType != "string")
+        return unavailable("invalid-game-state");
+      let evilTechLevel = global.tech.evil ?? 0;
+      if (!isFiniteNumber(evilTechLevel) || evilTechLevel < 0)
+        return unavailable("invalid-game-state");
+      let highPopulationPercent = readHighPopulationPercent();
+      return !isFiniteNumber(highPopulationPercent) || highPopulationPercent < 0 ? unavailable("invalid-trait-value") : Object.freeze({
+        status: "ready",
+        view: Object.freeze({
+          target: Object.freeze({
+            manage: rawSettings.authorityManage,
+            configuredTarget: rawSettings.generalMinimumAuthority,
+            maximum
+          }),
+          current,
+          modifiers: Object.freeze({
+            evilTechLevel,
+            highPopulationPercent,
+            grenadier: !!global.race.grenadier,
+            governmentType
+          })
+        })
+      });
+    } catch {
+      return unavailable("inaccessible-data");
+    }
+  }
+
   // src/adapters/evolve/combat/captured-fleet-controls.ts
   var NOT_ACTIONABLE = Object.freeze({
     actionable: !1,
@@ -13317,6 +13374,103 @@
     );
   }
 
+  // src/domain/civic/authority.ts
+  function resolveAuthorityTarget(input) {
+    return !input.manage || input.configuredTarget === 0 ? null : input.configuredTarget < 0 ? input.maximum : input.configuredTarget;
+  }
+  function calculateAuthorityPerSoldier(modifiers) {
+    let authorityPerSoldier = (0.7 + 0.1 * modifiers.evilTechLevel) * (modifiers.highPopulationPercent / 100);
+    return modifiers.grenadier && (authorityPerSoldier *= 1.75), modifiers.governmentType === "autocracy" ? authorityPerSoldier *= 1.08 : modifiers.governmentType === "dictator" && (authorityPerSoldier *= 1.12), authorityPerSoldier;
+  }
+  function calculateRequiredAuthorityGarrison(view, currentGarrison) {
+    let target = resolveAuthorityTarget(view.target);
+    if (target === null)
+      return Object.freeze({ status: "ready", requiredGarrison: 0 });
+    let authorityPerSoldier = calculateAuthorityPerSoldier(view.modifiers);
+    if (authorityPerSoldier <= 0)
+      return Object.freeze({
+        status: "ready",
+        requiredGarrison: currentGarrison
+      });
+    let nonGarrisonAuthority = view.current - currentGarrison * authorityPerSoldier;
+    return Object.freeze({
+      status: "ready",
+      requiredGarrison: Math.max(
+        0,
+        Math.ceil((target - nonGarrisonAuthority) / authorityPerSoldier - 1e-9)
+      )
+    });
+  }
+  function predictAuthorityAfterRemovingSoldiers(view, removedSoldiers) {
+    return Math.floor(
+      view.current - removedSoldiers * calculateAuthorityPerSoldier(view.modifiers)
+    );
+  }
+  function assessAuthorityRemoval(view, removedSoldiers) {
+    let target = resolveAuthorityTarget(view.target);
+    if (target === null) return Object.freeze({ status: "unmanaged" });
+    let predicted = predictAuthorityAfterRemovingSoldiers(
+      view,
+      removedSoldiers
+    );
+    return Object.freeze({
+      status: "ready",
+      target,
+      predicted,
+      blocksRemoval: predicted < target
+    });
+  }
+
+  // src/game/authority-policy.ts
+  function createAuthorityPolicy({
+    getGame,
+    getSettings,
+    getResources,
+    readHighPopulationPercent,
+    readAuthorityPolicyView: readAuthorityPolicyView2,
+    readAuthorityQuantity: readAuthorityQuantity2
+  }) {
+    let readView = () => readAuthorityPolicyView2(
+      getGame(),
+      getSettings(),
+      getResources(),
+      readHighPopulationPercent
+    );
+    function getAuthorityTarget() {
+      let view = readView();
+      return view.status === "ready" ? resolveAuthorityTarget(view.view.target) : view;
+    }
+    function getAuthorityPerSoldier() {
+      let view = readView();
+      return view.status === "ready" ? calculateAuthorityPerSoldier(view.view.modifiers) : view;
+    }
+    function getRequiredAuthorityGarrison(currentGarrison) {
+      let quantity = readAuthorityQuantity2(currentGarrison);
+      if (quantity.status === "unavailable") return quantity;
+      let view = readView();
+      return view.status === "ready" ? calculateRequiredAuthorityGarrison(view.view, quantity.value) : view;
+    }
+    function getPredictedAuthorityAfterRemovingSoldiers(removedSoldiers) {
+      let quantity = readAuthorityQuantity2(removedSoldiers);
+      if (quantity.status === "unavailable") return quantity;
+      let view = readView();
+      return view.status === "ready" ? predictAuthorityAfterRemovingSoldiers(view.view, quantity.value) : view;
+    }
+    function assessAuthorityRemoval2(removedSoldiers) {
+      let quantity = readAuthorityQuantity2(removedSoldiers);
+      if (quantity.status === "unavailable") return quantity;
+      let view = readView();
+      return view.status === "ready" ? assessAuthorityRemoval(view.view, quantity.value) : view;
+    }
+    return {
+      getAuthorityTarget,
+      getAuthorityPerSoldier,
+      getRequiredAuthorityGarrison,
+      getPredictedAuthorityAfterRemovingSoldiers,
+      assessAuthorityRemoval: assessAuthorityRemoval2
+    };
+  }
+
   // src/game/fleet-managers.ts
   function createFleetManagers({
     getGame,
@@ -13634,7 +13788,7 @@
     "spc_triton",
     "spc_makemake",
     "spc_eris"
-  ]);
+  ]), MODAL_WAIT_LIMIT = 3;
   function finite2(value, fallback = 0) {
     return typeof value == "number" && Number.isFinite(value) ? value : fallback;
   }
@@ -13801,7 +13955,7 @@
         if (pending !== null)
           return typeof document()?.querySelector(
             "#modalBox .shipDispatch button"
-          )?.click == "function" && (pending.action(), close(), pending = null), !0;
+          )?.click == "function" ? (pending.action(), close(), pending = null, !0) : (pending.waits += 1, pending.waits >= MODAL_WAIT_LIMIT ? (pending = null, close(), !1) : !0);
         let modal = document()?.getElementById?.("modalBox");
         return modal != null;
       },
@@ -13811,9 +13965,7 @@
       open(request) {
         if (pending !== null || this.isOpen()) return;
         let trigger = document()?.querySelector(request.triggerSelector);
-        typeof trigger?.click == "function" && (pending = Object.freeze({
-          action: request.action
-        }), trigger.click());
+        typeof trigger?.click == "function" && (pending = { action: request.action, waits: 0 }, trigger.click());
       },
       isAwaitingScriptModal() {
         return pending !== null;
@@ -13856,8 +14008,9 @@
       let ids = /* @__PURE__ */ new Set([...COST_RESOURCES, "Authority", "Eris_Support"]), root = rootRecord(dependencies.rootState), resourceRoot = readProperty(root, "resource");
       if (isRecord(resourceRoot))
         for (let id of Object.keys(resourceRoot)) ids.add(id);
-      for (let id of ids)
-        resourcesSurface[id] ??= {
+      for (let id of ids) {
+        if (resourcesSurface[id] !== void 0) continue;
+        let resource = {
           get currentQuantity() {
             return resourceValue(
               rootRecord(dependencies.rootState),
@@ -13870,6 +14023,16 @@
           },
           hasStorage: () => resourceValue(rootRecord(dependencies.rootState), id, "max") > 0
         };
+        id === "Authority" && Object.assign(resource, {
+          isUnlocked: () => {
+            let authority = readProperty(
+              readProperty(rootRecord(dependencies.rootState), "resource"),
+              "Authority"
+            );
+            return readProperty(authority, "display") !== !1;
+          }
+        }), resourcesSurface[id] = resource;
+      }
     }, syncBuildings = () => {
       let ids = {
         EnceladusBase: "operating_base",
@@ -13900,7 +14063,7 @@
         return shipCosts(blueprint, Array.isArray(ships) ? ships : []);
       }
     });
-    let gameModal = createGameModal(dependencies.getDocument), manager = createFleetManagers({
+    let gameModal = createGameModal(dependencies.getDocument), managers = createFleetManagers({
       getGame: () => (syncGame(), gameSurface),
       getSettings: () => (syncSettings(), settingsSurface),
       getResources: () => (syncResources(), resourcesSurface),
@@ -13909,7 +14072,14 @@
       getHaveTech: () => haveTech,
       fleetControls,
       gameModal
-    }).FleetManagerOuter, warManager = {
+    }), authorityPolicy = createAuthorityPolicy({
+      getGame: () => (syncGame(), gameSurface),
+      getSettings: () => (syncSettings(), settingsSurface),
+      getResources: () => (syncResources(), resourcesSurface),
+      readHighPopulationPercent: () => readCapturedHighPopulationPercent(rootRecord(dependencies.rootState)),
+      readAuthorityPolicyView,
+      readAuthorityQuantity
+    }), manager = managers.FleetManagerOuter, warManager = {
       get currentCityGarrison() {
         let root = rootRecord(dependencies.rootState), garrison = readProperty(readProperty(root, "civic"), "garrison"), fortress = readProperty(
           readProperty(readProperty(root, "portal"), "fortress"),
@@ -13924,7 +14094,7 @@
       logSuccess(_kind, message, tags) {
         dependencies.onActivity?.({ message, color: "success", tags });
       }
-    }, adapter = createOuterFleetAdapter({
+    }, adapterDependencies = {
       getFleetManagerOuter: () => manager,
       getWarManager: () => warManager,
       getGame: () => (syncGame(), gameSurface),
@@ -13934,7 +14104,7 @@
         readProperty(rootRecord(dependencies.rootState), "race"),
         trait
       ) && operation2 === 1 || operation2 === "+" || operation2 === "-" || operation2 === "=" ? 1 : operation2 ?? 0,
-      assessAuthorityRemoval: () => ({ status: "unmanaged" }),
+      assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
       getGameLog: () => activity,
       executeBuild: (blueprint, _targetRegion) => {
         for (let [type, part] of Object.entries(blueprint))
@@ -13957,7 +14127,7 @@
           builtIndex: result.builtIndex
         });
       }
-    });
+    }, adapter = createOuterFleetAdapter(adapterDependencies);
     return Object.freeze({
       autoFleetOuter: () => runOuterFleetAutomation(adapter)
     });

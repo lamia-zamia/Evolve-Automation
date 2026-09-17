@@ -126,26 +126,30 @@ const root = {
   },
   civic: {
     foreign: { gov3: { hstl: 50 } },
+    govern: { type: "democracy" },
     garrison: { workers: 100, crew: 0 },
   },
   portal: {},
-  resource: Object.fromEntries(
-    [
-      "Money",
-      "Aluminium",
-      "Adamantite",
-      "Steel",
-      "Alloy",
-      "Neutronium",
-      "Titanium",
-      "Copper",
-      "Iridium",
-      "Iron",
-      "Nano_Tube",
-      "Quantium",
-      "Orichalcum",
-      "Tungsten",
-    ].map((id) => [id, { amount: 1e12, max: 1e12 }]),
+  resource: Object.assign(
+    Object.fromEntries(
+      [
+        "Money",
+        "Aluminium",
+        "Adamantite",
+        "Steel",
+        "Alloy",
+        "Neutronium",
+        "Titanium",
+        "Copper",
+        "Iridium",
+        "Iron",
+        "Nano_Tube",
+        "Quantium",
+        "Orichalcum",
+        "Tungsten",
+      ].map((id) => [id, { amount: 1e12, max: 1e12 }]),
+    ),
+    { Authority: { amount: 100, max: 100, display: true } },
   ),
 };
 const capturedSettings = {
@@ -171,6 +175,7 @@ const capturedSettings = {
   generalMinimumAuthority: 100,
 };
 let modalOpen = false;
+let capturedBuilds = 0;
 const capturedMethods = {
   avail: () => true,
   setVal: (type, part) => {
@@ -178,6 +183,7 @@ const capturedMethods = {
   },
   powerText: () => "100kW",
   build: () => {
+    capturedBuilds++;
     yard.ships.push({
       class: yard.blueprint.class,
       power: yard.blueprint.power,
@@ -250,5 +256,63 @@ assert.equal(outerControl.autoFleetOuter().status, "succeeded");
 assert.equal(modalOpen, true);
 assert.equal(outerControl.autoFleetOuter().status, "succeeded");
 assert.equal(yard.ships[0].location, "spc_red");
+
+// Authority management must reach the existing policy before build execution. A corvette removes
+// two soldiers; at 100 Authority and a 99 target, the policy predicts 98 and must stand down.
+const buildsBeforeAuthority = capturedBuilds;
+capturedSettings.authorityManage = true;
+capturedSettings.generalMinimumAuthority = 99;
+yard.ships.length = 0;
+const authorityControl = createCapturedOuterFleetControl({
+  rootState: {
+    readRoot: () => root,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: capturedRegistry,
+  getDocument: () => capturedDocument,
+  readSettings: () => capturedSettings,
+});
+assert.equal(authorityControl.autoFleetOuter().status, "succeeded");
+assert.equal(capturedBuilds, buildsBeforeAuthority);
+assert.equal(yard.ships.length, 0);
+
+// A trigger can click successfully while the dispatch modal never mounts its destination. The
+// captured modal adapter must let FleetManagerOuter's retry budget advance instead of holding the
+// manager busy forever.
+capturedSettings.authorityManage = false;
+capturedSettings.generalMinimumAuthority = 0;
+yard.ships.length = 0;
+let stalledModalOpen = false;
+const stalledDocument = {
+  querySelector: (selector) => {
+    if (selector === "#ship0loc")
+      return { click: () => (stalledModalOpen = true) };
+    if (selector === ".modal .modal-close" && stalledModalOpen)
+      return { click: () => (stalledModalOpen = false) };
+    return null;
+  },
+  getElementById: (id) => (id === "modalBox" && stalledModalOpen ? {} : null),
+};
+const stalledControl = createCapturedOuterFleetControl({
+  rootState: {
+    readRoot: () => root,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: capturedRegistry,
+  getDocument: () => stalledDocument,
+  readSettings: () => capturedSettings,
+});
+assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
+assert.equal(yard.ships.length, 1);
+capturedSettings.fleetOuterShips = "none";
+for (let cycle = 0; cycle < 200; cycle++) {
+  stalledControl.autoFleetOuter();
+}
+assert.equal(yard.ships.length, 1);
+capturedSettings.fleetOuterShips = "custom";
+assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
+assert.equal(yard.ships.length, 2);
 
 console.log("Captured outer-fleet control postcondition tests passed");

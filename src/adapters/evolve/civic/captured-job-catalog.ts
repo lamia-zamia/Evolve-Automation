@@ -421,6 +421,13 @@ function readHighPopulationWorkerEffect(root: unknown): number | undefined {
   return factors === undefined ? undefined : (factors?.workerEffect ?? 1);
 }
 
+export function readCapturedHighPopulationPercent(
+  root: unknown,
+): number | undefined {
+  const factors = readHighPopulationFactors(readProperty(root, "race"));
+  return factors === undefined ? undefined : (factors?.workerEffect ?? 1) * 100;
+}
+
 /**
  * DeadSpace stores population under the current race id (`resource[race.species]`), not under
  * the legacy compatibility name `resource.Population`. Fixtures without a race id retain the

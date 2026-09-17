@@ -4,12 +4,18 @@ import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameModalPort, GameModalRequest } from "../ports/game-modal.ts";
+import {
+  readAuthorityPolicyView,
+  readAuthorityQuantity,
+} from "../adapters/evolve/civic/authority.ts";
+import { readCapturedHighPopulationPercent } from "../adapters/evolve/civic/captured-job-catalog.ts";
 import { createCapturedFleetControls } from "../adapters/evolve/combat/captured-fleet-controls.ts";
 import {
   createOuterFleetAdapter,
   type OuterFleetAdapterDependencies,
 } from "../adapters/evolve/combat/fleet-outer.ts";
 import { runOuterFleetAutomation } from "../application/fleet-outer.ts";
+import { createAuthorityPolicy } from "../game/authority-policy.ts";
 import { createFleetManagers } from "../game/fleet-managers.ts";
 import {
   isRecord,
@@ -63,6 +69,8 @@ const OUTER_REGIONS = Object.freeze([
   "spc_makemake",
   "spc_eris",
 ]);
+
+const MODAL_WAIT_LIMIT = 3;
 
 function finite(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -319,7 +327,7 @@ function shipCosts(
 }
 
 function createGameModal(getDocument: () => unknown): GameModalPort {
-  let pending: Readonly<{ readonly action: () => void }> | null = null;
+  let pending: { action: () => void; waits: number } | null = null;
   const document = () => {
     const value = getDocument();
     return isRecord(value) && typeof value["querySelector"] === "function"
@@ -341,6 +349,13 @@ function createGameModal(getDocument: () => unknown): GameModalPort {
           pending.action();
           close();
           pending = null;
+          return true;
+        }
+        pending.waits += 1;
+        if (pending.waits >= MODAL_WAIT_LIMIT) {
+          pending = null;
+          close();
+          return false;
         }
         return true;
       }
@@ -354,9 +369,7 @@ function createGameModal(getDocument: () => unknown): GameModalPort {
       if (pending !== null || this.isOpen()) return;
       const trigger = document()?.querySelector(request.triggerSelector);
       if (typeof trigger?.click !== "function") return;
-      pending = Object.freeze({
-        action: request.action,
-      });
+      pending = { action: request.action, waits: 0 };
       trigger.click();
     },
     isAwaitingScriptModal(): boolean {
@@ -419,7 +432,8 @@ export function createCapturedOuterFleetControl(
     if (isRecord(resourceRoot))
       for (const id of Object.keys(resourceRoot)) ids.add(id);
     for (const id of ids) {
-      resourcesSurface[id] ??= {
+      if (resourcesSurface[id] !== undefined) continue;
+      const resource = {
         get currentQuantity() {
           return resourceValue(
             rootRecord(dependencies.rootState),
@@ -433,6 +447,18 @@ export function createCapturedOuterFleetControl(
         hasStorage: () =>
           resourceValue(rootRecord(dependencies.rootState), id, "max") > 0,
       };
+      if (id === "Authority") {
+        Object.assign(resource, {
+          isUnlocked: () => {
+            const authority = readProperty(
+              readProperty(rootRecord(dependencies.rootState), "resource"),
+              "Authority",
+            );
+            return readProperty(authority, "display") !== false;
+          },
+        });
+      }
+      resourcesSurface[id] = resource;
     }
   };
   const syncBuildings = (): void => {
@@ -491,6 +517,24 @@ export function createCapturedOuterFleetControl(
     fleetControls,
     gameModal,
   });
+  const authorityPolicy = createAuthorityPolicy({
+    getGame: () => {
+      syncGame();
+      return gameSurface;
+    },
+    getSettings: () => {
+      syncSettings();
+      return settingsSurface;
+    },
+    getResources: () => {
+      syncResources();
+      return resourcesSurface;
+    },
+    readHighPopulationPercent: () =>
+      readCapturedHighPopulationPercent(rootRecord(dependencies.rootState)),
+    readAuthorityPolicyView,
+    readAuthorityQuantity,
+  });
   const manager = managers.FleetManagerOuter as unknown as UnknownRecord;
   const warManager = {
     get currentCityGarrison() {
@@ -541,7 +585,7 @@ export function createCapturedOuterFleetControl(
       if (operation === "+" || operation === "-" || operation === "=") return 1;
       return operation ?? 0;
     },
-    assessAuthorityRemoval: () => ({ status: "unmanaged" }),
+    assessAuthorityRemoval: authorityPolicy.assessAuthorityRemoval,
     getGameLog: () => activity,
     executeBuild: (blueprint, _targetRegion) => {
       for (const [type, part] of Object.entries(blueprint)) {
