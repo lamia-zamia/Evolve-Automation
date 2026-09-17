@@ -517,7 +517,10 @@ function queued(id, label = id) {
 
 {
   const page = makePage({
-    buildings: { farm: { count: 0, priceAt: () => ({ Money: 10 }) } },
+    buildings: {
+      farm: { count: 0, priceAt: () => ({ Money: 10 }) },
+      mine: { count: 0, priceAt: () => ({ Money: 10 }) },
+    },
     resources: { Money: { amount: 500 } },
   });
   page.controls.delete("city-farm");
@@ -548,7 +551,7 @@ function queued(id, label = id) {
           ? { elementId, generation: 99, methods: ["action"] }
           : page.registry.resolve(elementId),
     },
-    readPolicy: policy([target("farm", 50)]),
+    readPolicy: policy([target("farm", 50), target("mine", 40)]),
   });
   const outcome = control.runCycle();
   assert.equal(outcome.status, "stale");

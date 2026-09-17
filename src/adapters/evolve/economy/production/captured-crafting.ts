@@ -27,8 +27,11 @@ import type {
   CraftGateInput,
   CraftMaterialView,
 } from "../../../../domain/economy/production/craft.ts";
-import type { CraftReader } from "../../../../ports/craft.ts";
-import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
+import type {
+  CraftExecutionResult,
+  CraftExecutor,
+  CraftReader,
+} from "../../../../ports/craft.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
@@ -70,9 +73,14 @@ export interface CapturedCraftingDependencies {
 
 interface CraftingSession {
   readonly root: unknown;
-  readonly candidates: readonly string[];
+  readonly candidates: readonly CapturedCraftCandidate[];
   readonly ticksPerSecond: number;
   readonly demand: CapturedDemandSample;
+}
+
+interface CapturedCraftCandidate {
+  readonly id: string;
+  readonly generation: number;
 }
 
 /** The two questions about the craftable itself that decide how its materials are judged. */
@@ -115,23 +123,24 @@ function craftAllButtonRendered(
 function readCandidates(
   dependencies: CapturedCraftingDependencies,
   root: unknown,
-): readonly string[] {
+): readonly CapturedCraftCandidate[] {
   const resources = readProperty(root, "resource");
   if (!isRecord(resources)) return [];
   const settings = readSettingsRecord(dependencies.readSettings());
-  const candidates: string[] = [];
+  const candidates: CapturedCraftCandidate[] = [];
   for (const id of Object.keys(resources)) {
     const resource = resources[id];
     if (
       readProperty(resource, "max") !== UNCAPPED_MAXIMUM ||
       readProperty(resource, "display") !== true ||
       !craftEnabled(settings, id) ||
-      dependencies.controls.resolve(`${CRAFT_ROW_PREFIX}${id}`) === undefined ||
       !craftAllButtonRendered(dependencies.getDocument, id)
     ) {
       continue;
     }
-    candidates.push(id);
+    const handle = dependencies.controls.resolve(`${CRAFT_ROW_PREFIX}${id}`);
+    if (handle === undefined) continue;
+    candidates.push(Object.freeze({ id, generation: handle.generation }));
   }
   return Object.freeze(candidates);
 }
@@ -238,13 +247,23 @@ export function createCapturedCraftReader(
 
     readCandidate(index: number): CraftCandidateInput | null {
       if (session === null || index >= session.candidates.length) return null;
-      const craftableId = session.candidates[index];
-      if (craftableId === undefined) return null;
+      const candidate = session.candidates[index];
+      if (candidate === undefined) return null;
+      const craftableId = candidate.id;
       const craftable = readProperty(
         readProperty(session.root, "resource"),
         craftableId,
       );
-      const craftableAmount = finite(readProperty(craftable, "amount")) ?? 0;
+      const craftableAmount = finite(readProperty(craftable, "amount"));
+      if (craftableAmount === undefined) {
+        return Object.freeze({
+          index,
+          craftableId: null,
+          unlocked: true,
+          autoCraftEnabled: false,
+          materials: Object.freeze([]),
+        });
+      }
       const materials = readMaterials(
         dependencies,
         {
@@ -273,6 +292,8 @@ export function createCapturedCraftReader(
         unlocked: true,
         autoCraftEnabled: true,
         materials,
+        controlGeneration: candidate.generation,
+        expectedOutputQuantity: craftableAmount,
       });
     },
   });
@@ -280,43 +301,86 @@ export function createCapturedCraftReader(
 
 export function createCapturedCraftExecutor(
   dependencies: Pick<CapturedCraftingDependencies, "rootState" | "controls">,
-): DecisionExecutor<CraftDecision> {
+): CraftExecutor {
+  function executionResult(
+    outcome: CraftExecutionResult["outcome"],
+    disposition: CraftExecutionResult["disposition"],
+  ): CraftExecutionResult {
+    return Object.freeze({ outcome, disposition });
+  }
+
   return Object.freeze({
     execute(decision: Readonly<CraftDecision>) {
       if (!Number.isSafeInteger(decision.count) || decision.count < 1) {
-        return rejected(
-          "invalid-craft-count",
-          "craft count must be a positive safe integer",
+        return executionResult(
+          rejected(
+            "invalid-craft-count",
+            "craft count must be a positive safe integer",
+          ),
+          "stopped",
         );
       }
       const handle = dependencies.controls.resolve(
         `${CRAFT_ROW_PREFIX}${decision.craftableId}`,
       );
       if (handle === undefined) {
-        return stale(
-          "craft-control-missing",
-          "captured craft row is unavailable",
-          { craftableId: decision.craftableId },
+        return executionResult(
+          stale("craft-control-missing", "captured craft row is unavailable", {
+            craftableId: decision.craftableId,
+          }),
+          "stopped",
         );
       }
 
-      const resources = readProperty(
-        dependencies.rootState.readRoot(),
-        "resource",
+      if (
+        decision.controlGeneration !== undefined &&
+        handle.generation !== decision.controlGeneration
+      ) {
+        return executionResult(
+          stale("stale-craft-control", "captured craft row was redrawn", {
+            craftableId: decision.craftableId,
+            expectedGeneration: decision.controlGeneration,
+            actualGeneration: handle.generation,
+          }),
+          "stopped",
+        );
+      }
+
+      const rootBefore = dependencies.rootState.readRoot();
+      const resources = readProperty(rootBefore, "resource");
+      const outputBefore = finite(
+        readProperty(readProperty(resources, decision.craftableId), "amount"),
       );
+      if (
+        outputBefore === undefined ||
+        (decision.expectedOutputQuantity !== undefined &&
+          outputBefore !== decision.expectedOutputQuantity)
+      ) {
+        return executionResult(
+          stale(
+            "stale-craft-output",
+            "craft output changed before invocation",
+            {
+              craftableId: decision.craftableId,
+              expected: decision.expectedOutputQuantity ?? null,
+              actual: outputBefore ?? null,
+            },
+          ),
+          "stopped",
+        );
+      }
       for (const spend of decision.spend) {
         const actual = finite(
           readProperty(readProperty(resources, spend.resourceId), "amount"),
         );
         if (actual !== spend.expectedCurrentQuantity) {
-          return stale(
-            "stale-craft-material",
-            "craft material amount changed",
-            {
+          return executionResult(
+            stale("stale-craft-material", "craft material amount changed", {
               resourceId: spend.resourceId,
               expected: spend.expectedCurrentQuantity,
               actual: actual ?? null,
-            },
+            }),
+            "stopped",
           );
         }
       }
@@ -326,27 +390,56 @@ export function createCapturedCraftExecutor(
         decision.count,
       ]);
       if (!result.ok) {
-        return rejected("craft-control-failed", result.detail ?? result.reason);
+        return executionResult(
+          rejected("craft-control-failed", result.detail ?? result.reason),
+          "stopped",
+        );
       }
+
+      const rootAfter = dependencies.rootState.readRoot();
+      const resourcesAfter = readProperty(rootAfter, "resource");
 
       // The game owns the amounts it spends; this only confirms it stayed inside the plan, which
       // it would not if the player's craft multiplier changed between the cost read and the craft.
       for (const spend of decision.spend) {
         const actual = finite(
-          readProperty(readProperty(resources, spend.resourceId), "amount"),
+          readProperty(
+            readProperty(resourcesAfter, spend.resourceId),
+            "amount",
+          ),
         );
         if (
           actual === undefined ||
           actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount
         ) {
-          return stale("craft-overspent", "craft spent more than planned", {
-            resourceId: spend.resourceId,
-            planned: spend.amount,
-            actual: actual ?? null,
-          });
+          return executionResult(
+            stale("craft-overspent", "craft spent more than planned", {
+              resourceId: spend.resourceId,
+              planned: spend.amount,
+              actual: actual ?? null,
+            }),
+            "stopped",
+          );
         }
       }
-      return SUCCEEDED;
+
+      const outputAfter = finite(
+        readProperty(
+          readProperty(resourcesAfter, decision.craftableId),
+          "amount",
+        ),
+      );
+      if (outputAfter === undefined || outputAfter <= outputBefore) {
+        return executionResult(
+          stale("craft-noop", "craft invocation produced no verified output", {
+            craftableId: decision.craftableId,
+            before: outputBefore,
+            after: outputAfter ?? null,
+          }),
+          "invoked-but-unverified",
+        );
+      }
+      return executionResult(SUCCEEDED, "verified-success");
     },
   });
 }

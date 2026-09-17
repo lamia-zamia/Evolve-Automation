@@ -9,6 +9,7 @@ import {
 
 const RECIPES = {
   Plywood: [{ id: "Lumber", amount: 100 }],
+  Brick: [{ id: "Lumber", amount: 50 }],
   Scarletite: [{ id: "Iron", amount: 250000 }],
 };
 
@@ -26,6 +27,7 @@ function createWorld(overrides = {}) {
       },
       Iron: { name: "Iron", display: true, amount: 500, max: 1000, diff: 10 },
       Plywood: { name: "Plywood", display: true, amount: 5, max: -1, diff: 0 },
+      Brick: { name: "Brick", display: true, amount: 0, max: -1, diff: 0 },
       Scarletite: {
         name: "Scarletite",
         display: true,
@@ -39,6 +41,7 @@ function createWorld(overrides = {}) {
   };
 
   const calls = [];
+  const actionModes = overrides.actionModes ?? {};
   const controls = {
     capturedElementIds: () =>
       Object.keys(root.resource).map((id) => `res${id}`),
@@ -62,6 +65,9 @@ function createWorld(overrides = {}) {
         };
       }
       calls.push({ resourceId, volume });
+      if (actionModes[resourceId] === "no-op") {
+        return { ok: true, value: undefined };
+      }
       let crafted = Math.min(
         ...recipe.map((entry) =>
           Math.floor(root.resource[entry.id].amount / entry.amount),
@@ -71,7 +77,9 @@ function createWorld(overrides = {}) {
       for (const entry of recipe) {
         root.resource[entry.id].amount -= crafted * entry.amount;
       }
-      root.resource[resourceId].amount += crafted;
+      if (actionModes[resourceId] !== "input-only") {
+        root.resource[resourceId].amount += crafted;
+      }
       return { ok: true, value: undefined };
     },
   };
@@ -277,7 +285,7 @@ function createWorld(overrides = {}) {
       invoke: () => ({ ok: true, value: undefined }),
     },
   };
-  const outcome = createCapturedCraftExecutor(dependencies).execute({
+  const execution = createCapturedCraftExecutor(dependencies).execute({
     index: 0,
     craftableId: "Plywood",
     count: 1,
@@ -285,8 +293,42 @@ function createWorld(overrides = {}) {
       { resourceId: "Lumber", expectedCurrentQuantity: 999, amount: 100 },
     ],
   });
-  assert.equal(outcome.status, "stale");
-  assert.equal(outcome.failure.code, "stale-craft-material");
+  assert.equal(execution.outcome.status, "stale");
+  assert.equal(execution.outcome.failure.code, "stale-craft-material");
+}
+
+// A rebound craft row is stale before invocation, even when the resource balances are unchanged.
+{
+  const world = createWorld();
+  let invoked = false;
+  const dependencies = {
+    rootState: { readRoot: () => world.root },
+    controls: {
+      capturedElementIds: () => ["resPlywood"],
+      resolve: (elementId) => ({
+        elementId,
+        generation: 2,
+        methods: ["craft"],
+      }),
+      invoke: () => {
+        invoked = true;
+        return { ok: true, value: undefined };
+      },
+    },
+  };
+  const execution = createCapturedCraftExecutor(dependencies).execute({
+    index: 0,
+    craftableId: "Plywood",
+    count: 1,
+    controlGeneration: 1,
+    expectedOutputQuantity: 5,
+    spend: [
+      { resourceId: "Lumber", expectedCurrentQuantity: 1000, amount: 100 },
+    ],
+  });
+  assert.equal(execution.outcome.status, "stale");
+  assert.equal(execution.outcome.failure.code, "stale-craft-control");
+  assert.equal(invoked, false);
 }
 
 // Spending more than planned is reported rather than silently accepted.
@@ -307,7 +349,7 @@ function createWorld(overrides = {}) {
       },
     },
   };
-  const outcome = createCapturedCraftExecutor(dependencies).execute({
+  const execution = createCapturedCraftExecutor(dependencies).execute({
     index: 0,
     craftableId: "Plywood",
     count: 1,
@@ -315,8 +357,38 @@ function createWorld(overrides = {}) {
       { resourceId: "Lumber", expectedCurrentQuantity: 1000, amount: 100 },
     ],
   });
+  assert.equal(execution.outcome.status, "stale");
+  assert.equal(execution.outcome.failure.code, "craft-overspent");
+}
+
+// Inputs can move without the output changing; that invocation is uncertain and cannot fall
+// through to the next craftable.
+{
+  const world = createWorld({
+    actionModes: { Plywood: "input-only" },
+    rendered: ["incPlywoodA", "incBrickA"],
+  });
+  const outcome = world.run();
   assert.equal(outcome.status, "stale");
-  assert.equal(outcome.failure.code, "craft-overspent");
+  assert.equal(outcome.failure.code, "craft-noop");
+  assert.deepEqual(world.calls, [{ resourceId: "Plywood", volume: 1 }]);
+  assert.equal(world.root.resource.Lumber.amount, 900);
+  assert.equal(world.root.resource.Plywood.amount, 5);
+  assert.equal(world.root.resource.Brick.amount, 0);
+}
+
+// A successful method return with no state change is also uncertain and cannot invoke another
+// destructive craft candidate.
+{
+  const world = createWorld({
+    actionModes: { Plywood: "no-op" },
+    rendered: ["incPlywoodA", "incBrickA"],
+  });
+  const outcome = world.run();
+  assert.equal(outcome.status, "stale");
+  assert.equal(outcome.failure.code, "craft-noop");
+  assert.deepEqual(world.calls, [{ resourceId: "Plywood", volume: 1 }]);
+  assert.equal(world.root.resource.Brick.amount, 0);
 }
 
 console.log("Captured manual crafting adapter and cost reader tests passed");

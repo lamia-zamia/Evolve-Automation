@@ -31,6 +31,10 @@ export interface CraftCandidateInput {
   readonly unlocked: boolean;
   readonly autoCraftEnabled: boolean;
   readonly materials: readonly CraftMaterialView[];
+  /** Generation of the captured craft control used to plan this decision. */
+  readonly controlGeneration?: number;
+  /** Output quantity captured before planning, when the adapter can observe it. */
+  readonly expectedOutputQuantity?: number;
 }
 
 export interface CraftSpend {
@@ -44,6 +48,8 @@ export interface CraftDecision {
   readonly craftableId: string;
   readonly count: number;
   readonly spend: readonly CraftSpend[];
+  readonly controlGeneration?: number;
+  readonly expectedOutputQuantity?: number;
 }
 
 export function shouldRunCraft(input: Readonly<CraftGateInput>): boolean {
@@ -111,5 +117,11 @@ export function planCraft(
         }),
       ),
     ),
+    ...(input.controlGeneration === undefined
+      ? {}
+      : { controlGeneration: input.controlGeneration }),
+    ...(input.expectedOutputQuantity === undefined
+      ? {}
+      : { expectedOutputQuantity: input.expectedOutputQuantity }),
   });
 }

@@ -309,13 +309,29 @@ function makeAdapter({
 
 // The executor refuses a redrawn closure and a project whose rank/progress moved after planning.
 {
-  const redrawn = makeAdapter({ generation: 3 });
-  redrawn.adapter.reader.beginCycle();
-  assert.equal(
-    redrawn.adapter.executor.executeClick({ index: 0, key: "arpalhc" }).outcome
-      .failure.code,
-    "stale-project-control",
-  );
+  const redrawn = makeAdapter({
+    generation: 3,
+    catalog: [
+      offered("lhc", { rank: 1, progress: 20, generation: 2 }),
+      offered("monument", { rank: 1, progress: 20, generation: 2 }),
+    ],
+    settings: {
+      autoARPA: true,
+      arpaStep: 5,
+      arpaScaleWeighting: false,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+      arpa_monument: true,
+      arpa_p_monument: 1,
+      arpa_m_monument: -1,
+      arpa_w_monument: 1,
+    },
+  });
+  const redrawnOutcome = runBuildAutomation(redrawn.adapter);
+  assert.equal(redrawnOutcome.status, "stale");
+  assert.equal(redrawnOutcome.failure.code, "stale-project-control");
   assert.deepEqual(redrawn.calls, []);
 
   const moved = makeAdapter();

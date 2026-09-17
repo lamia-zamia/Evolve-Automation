@@ -5147,7 +5147,9 @@
             amount: material.costPerCraft * count2
           })
         )
-      )
+      ),
+      ...input.controlGeneration === void 0 ? {} : { controlGeneration: input.controlGeneration },
+      ...input.expectedOutputQuantity === void 0 ? {} : { expectedOutputQuantity: input.expectedOutputQuantity }
     });
   }
 
@@ -5165,9 +5167,18 @@
       let decision = planCraft(candidate);
       if (decision === null)
         continue;
-      let outcome = dependencies.executor.execute(decision);
-      if (outcome.status !== "succeeded")
-        return outcome;
+      let execution = dependencies.executor.execute(decision);
+      if ("outcome" in execution) {
+        if (execution.outcome.status !== "succeeded")
+          return execution.outcome;
+        if (execution.disposition === "candidate-rejected")
+          continue;
+        if (execution.disposition !== "verified-success")
+          return execution.outcome;
+        continue;
+      }
+      if (execution.status !== "succeeded")
+        return execution;
     }
   }
 
@@ -20562,7 +20573,10 @@
     let settings = readSettingsRecord(dependencies.readSettings()), candidates = [];
     for (let id of Object.keys(resources)) {
       let resource = resources[id];
-      readProperty(resource, "max") !== UNCAPPED_MAXIMUM || readProperty(resource, "display") !== !0 || !craftEnabled(settings, id) || dependencies.controls.resolve(`${CRAFT_ROW_PREFIX}${id}`) === void 0 || !craftAllButtonRendered(dependencies.getDocument, id) || candidates.push(id);
+      if (readProperty(resource, "max") !== UNCAPPED_MAXIMUM || readProperty(resource, "display") !== !0 || !craftEnabled(settings, id) || !craftAllButtonRendered(dependencies.getDocument, id))
+        continue;
+      let handle = dependencies.controls.resolve(`${CRAFT_ROW_PREFIX}${id}`);
+      handle !== void 0 && candidates.push(Object.freeze({ id, generation: handle.generation }));
     }
     return Object.freeze(candidates);
   }
@@ -20625,12 +20639,21 @@
       },
       readCandidate(index) {
         if (session === null || index >= session.candidates.length) return null;
-        let craftableId = session.candidates[index];
-        if (craftableId === void 0) return null;
-        let craftable = readProperty(
+        let candidate = session.candidates[index];
+        if (candidate === void 0) return null;
+        let craftableId = candidate.id, craftable = readProperty(
           readProperty(session.root, "resource"),
           craftableId
-        ), craftableAmount = finite(readProperty(craftable, "amount")) ?? 0, materials = readMaterials(
+        ), craftableAmount = finite(readProperty(craftable, "amount"));
+        if (craftableAmount === void 0)
+          return Object.freeze({
+            index,
+            craftableId: null,
+            unlocked: !0,
+            autoCraftEnabled: !1,
+            materials: Object.freeze([])
+          });
+        let materials = readMaterials(
           dependencies,
           {
             ...session,
@@ -20652,45 +20675,74 @@
           craftableId,
           unlocked: !0,
           autoCraftEnabled: !0,
-          materials
+          materials,
+          controlGeneration: candidate.generation,
+          expectedOutputQuantity: craftableAmount
         });
       }
     });
   }
   function createCapturedCraftExecutor(dependencies) {
+    function executionResult2(outcome, disposition) {
+      return Object.freeze({ outcome, disposition });
+    }
     return Object.freeze({
       execute(decision) {
         if (!Number.isSafeInteger(decision.count) || decision.count < 1)
-          return rejected(
-            "invalid-craft-count",
-            "craft count must be a positive safe integer"
+          return executionResult2(
+            rejected(
+              "invalid-craft-count",
+              "craft count must be a positive safe integer"
+            ),
+            "stopped"
           );
         let handle = dependencies.controls.resolve(
           `${CRAFT_ROW_PREFIX}${decision.craftableId}`
         );
         if (handle === void 0)
-          return stale(
-            "craft-control-missing",
-            "captured craft row is unavailable",
-            { craftableId: decision.craftableId }
+          return executionResult2(
+            stale("craft-control-missing", "captured craft row is unavailable", {
+              craftableId: decision.craftableId
+            }),
+            "stopped"
           );
-        let resources = readProperty(
-          dependencies.rootState.readRoot(),
-          "resource"
+        if (decision.controlGeneration !== void 0 && handle.generation !== decision.controlGeneration)
+          return executionResult2(
+            stale("stale-craft-control", "captured craft row was redrawn", {
+              craftableId: decision.craftableId,
+              expectedGeneration: decision.controlGeneration,
+              actualGeneration: handle.generation
+            }),
+            "stopped"
+          );
+        let rootBefore = dependencies.rootState.readRoot(), resources = readProperty(rootBefore, "resource"), outputBefore = finite(
+          readProperty(readProperty(resources, decision.craftableId), "amount")
         );
+        if (outputBefore === void 0 || decision.expectedOutputQuantity !== void 0 && outputBefore !== decision.expectedOutputQuantity)
+          return executionResult2(
+            stale(
+              "stale-craft-output",
+              "craft output changed before invocation",
+              {
+                craftableId: decision.craftableId,
+                expected: decision.expectedOutputQuantity ?? null,
+                actual: outputBefore ?? null
+              }
+            ),
+            "stopped"
+          );
         for (let spend of decision.spend) {
           let actual = finite(
             readProperty(readProperty(resources, spend.resourceId), "amount")
           );
           if (actual !== spend.expectedCurrentQuantity)
-            return stale(
-              "stale-craft-material",
-              "craft material amount changed",
-              {
+            return executionResult2(
+              stale("stale-craft-material", "craft material amount changed", {
                 resourceId: spend.resourceId,
                 expected: spend.expectedCurrentQuantity,
                 actual: actual ?? null
-              }
+              }),
+              "stopped"
             );
         }
         let result = dependencies.controls.invoke(handle, "craft", [
@@ -20698,19 +20750,42 @@
           decision.count
         ]);
         if (!result.ok)
-          return rejected("craft-control-failed", result.detail ?? result.reason);
+          return executionResult2(
+            rejected("craft-control-failed", result.detail ?? result.reason),
+            "stopped"
+          );
+        let rootAfter = dependencies.rootState.readRoot(), resourcesAfter = readProperty(rootAfter, "resource");
         for (let spend of decision.spend) {
           let actual = finite(
-            readProperty(readProperty(resources, spend.resourceId), "amount")
+            readProperty(
+              readProperty(resourcesAfter, spend.resourceId),
+              "amount"
+            )
           );
           if (actual === void 0 || actual + SPEND_EPSILON < spend.expectedCurrentQuantity - spend.amount)
-            return stale("craft-overspent", "craft spent more than planned", {
-              resourceId: spend.resourceId,
-              planned: spend.amount,
-              actual: actual ?? null
-            });
+            return executionResult2(
+              stale("craft-overspent", "craft spent more than planned", {
+                resourceId: spend.resourceId,
+                planned: spend.amount,
+                actual: actual ?? null
+              }),
+              "stopped"
+            );
         }
-        return SUCCEEDED;
+        let outputAfter = finite(
+          readProperty(
+            readProperty(resourcesAfter, decision.craftableId),
+            "amount"
+          )
+        );
+        return outputAfter === void 0 || outputAfter <= outputBefore ? executionResult2(
+          stale("craft-noop", "craft invocation produced no verified output", {
+            craftableId: decision.craftableId,
+            before: outputBefore,
+            after: outputAfter ?? null
+          }),
+          "invoked-but-unverified"
+        ) : executionResult2(SUCCEEDED, "verified-success");
       }
     });
   }

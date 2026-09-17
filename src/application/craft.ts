@@ -4,12 +4,13 @@ import {
   shouldRunCraft,
   type CraftDecision,
 } from "../domain/economy/production/craft.ts";
-import type { CraftReader } from "../ports/craft.ts";
+import type { CraftExecutor, CraftReader } from "../ports/craft.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 
 export interface CraftAutomationDependencies {
   readonly reader: CraftReader;
-  readonly executor: DecisionExecutor<CraftDecision>;
+  /** Captured executors return a disposition; the legacy executor remains outcome-only. */
+  readonly executor: CraftExecutor | DecisionExecutor<CraftDecision>;
 }
 
 const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
@@ -36,9 +37,21 @@ export function runCraftAutomation(
     if (decision === null) {
       continue;
     }
-    const outcome = dependencies.executor.execute(decision);
-    if (outcome.status !== "succeeded") {
-      return outcome;
+    const execution = dependencies.executor.execute(decision);
+    if ("outcome" in execution) {
+      if (execution.outcome.status !== "succeeded") {
+        return execution.outcome;
+      }
+      if (execution.disposition === "candidate-rejected") {
+        continue;
+      }
+      if (execution.disposition !== "verified-success") {
+        return execution.outcome;
+      }
+      continue;
+    }
+    if (execution.status !== "succeeded") {
+      return execution;
     }
   }
 }
