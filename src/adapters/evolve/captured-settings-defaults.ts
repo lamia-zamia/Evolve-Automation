@@ -27,7 +27,10 @@ import type {
   SettingsResetEffects,
   SettingsResetReader,
 } from "../../ports/settings-reset.ts";
-import type { CapturedSettingsDefaults } from "../../ports/captured-settings-defaults.ts";
+import type {
+  CapturedSettingsDefaults,
+  CapturedSettingsMigrationCatalogs,
+} from "../../ports/captured-settings-defaults.ts";
 import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import {
@@ -40,12 +43,25 @@ import {
   traitList,
 } from "./runtime-catalogs.ts";
 import { readCapturedJobResetContext } from "./civic/captured-job-catalog.ts";
+import { ALCHEMY_CONTROL_PREFIX } from "./economy/production/captured-alchemy.ts";
 import { isRecord, readProperty } from "../validation.ts";
 
 export interface CapturedSettingsDefaultsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
 }
+
+const CRAFTER_RESOURCE_KEYS = Object.freeze([
+  "Plywood",
+  "Brick",
+  "Wrought_Iron",
+  "Sheet_Metal",
+  "Mythril",
+  "Aerogel",
+  "Nanoweave",
+  "Scarletite",
+  "Quantium",
+]);
 
 function readRootSafely(rootState: GameRootStateSource): unknown {
   try {
@@ -88,6 +104,60 @@ function readResourceIds(root: unknown, property: string): readonly string[] {
     .map(([id]) => id);
 }
 
+function readResourceControlIds(
+  root: unknown,
+  controls: GameControlRegistry,
+  prefix: string,
+): readonly string[] {
+  const resourceIds = new Set(readResources(root).map(([id]) => id));
+  const result: string[] = [];
+  for (const controlId of controls.capturedElementIds()) {
+    if (!controlId.startsWith(prefix)) continue;
+    const resourceId = controlId.slice(prefix.length);
+    if (resourceId.length > 0 && resourceIds.has(resourceId)) {
+      result.push(resourceId);
+    }
+  }
+  return result;
+}
+
+function mergeResourceIds(
+  root: unknown,
+  property: string,
+  controls: GameControlRegistry,
+  controlPrefix: string,
+): readonly string[] {
+  const result = [...readResourceIds(root, property)];
+  const seen = new Set(result);
+  for (const id of readResourceControlIds(root, controls, controlPrefix)) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
+}
+
+function readTechIds(root: unknown): Record<string, unknown> {
+  const tech = readProperty(root, "tech");
+  if (!isRecord(tech)) return {};
+  const result: Record<string, unknown> = {};
+  for (const id of Object.keys(tech)) {
+    result[id.startsWith("tech-") ? id : "tech-" + id] = true;
+  }
+  return result;
+}
+
+function readControlSuffixIds(
+  controls: GameControlRegistry,
+  prefix: string,
+): readonly string[] {
+  return controls
+    .capturedElementIds()
+    .filter((id) => id.startsWith(prefix) && id.length > prefix.length)
+    .map((id) => id.slice(prefix.length))
+    .filter((id, index, ids) => ids.indexOf(id) === index);
+}
+
 function readKnownResourceId(root: unknown, id: string): string {
   return readResources(root).some(([resourceId]) => resourceId === id)
     ? id
@@ -109,10 +179,10 @@ function readEvolution(): EvolutionResetContext {
 }
 
 function readProjects(root: unknown): ProjectResetContext {
-  const projects = recordEntries(root, "arpa");
-  const projectIds = projects
-    .map(([id]) => id)
-    .filter((id) => id !== "sequence");
+  const projects = readProperty(root, "arpa");
+  const projectIds = isRecord(projects)
+    ? Object.keys(projects).filter((id) => id !== "sequence")
+    : [];
   const idByKey: Record<string, string> = {};
   projectIds.forEach((id) => {
     idByKey[titleCaseKey(id)] = id;
@@ -121,11 +191,18 @@ function readProjects(root: unknown): ProjectResetContext {
 }
 
 function readBuildingContext(
+  root: unknown,
   controls: GameControlRegistry,
 ): BuildingResetContext {
   const buildings = controls
     .capturedElementIds()
-    .filter((id) => id.includes("-") && !id.startsWith("civ-"))
+    .filter((binding) => {
+      const separator = binding.indexOf("-");
+      if (separator <= 0 || binding.startsWith("civ-")) return false;
+      const region = binding.slice(0, separator);
+      const id = binding.slice(separator + 1);
+      return isRecord(readProperty(readProperty(root, region), id));
+    })
     .map((binding, index) => ({
       binding,
       switchable: false,
@@ -158,21 +235,47 @@ function readProduction(root: unknown): ProductionResetContext {
   };
 }
 
-function readEjector(root: unknown): EjectorResetContext {
+function readEjector(
+  root: unknown,
+  controls: GameControlRegistry,
+): EjectorResetContext {
+  const capturedIds = new Set(controls.capturedElementIds());
+  const atomicMasses = readProperty(root, "atomic_mass");
+  const supplyValues = readProperty(root, "supplyValue");
   const resources = readResources(root).map(([id, resource]) => ({
     id,
-    isTradable: readProperty(resource, "tradable") === true,
+    // DeadSpace keeps tradability in the module-local resource table; a rendered market row is
+    // the captured proof available here. Retain the root/nested forms for compatible builds.
+    isTradable:
+      readProperty(resource, "tradable") === true ||
+      readProperty(readProperty(resource, "is"), "tradable") === true ||
+      capturedIds.has("market-" + id),
     atomicMass:
       typeof readProperty(resource, "atomicMass") === "number"
         ? (readProperty(resource, "atomicMass") as number)
-        : 0,
-    ejectConsumable: readProperty(resource, "ejectConsumable") === true,
-    supplyConsumable: readProperty(resource, "supplyConsumable") === true,
-    naniteConsumable: readProperty(resource, "naniteConsumable") === true,
+        : typeof readProperty(atomicMasses, id) === "number"
+          ? (readProperty(atomicMasses, id) as number)
+          : 0,
+    ejectConsumable: capturedIds.has("eject" + id),
+    supplyConsumable: capturedIds.has("supply" + id),
+    naniteConsumable: isRecord(
+      readProperty(readProperty(root, "city"), "nanite_factory"),
+    )
+      ? Object.hasOwn(
+          readProperty(readProperty(root, "city"), "nanite_factory") as object,
+          id,
+        )
+      : false,
     supplyIn:
       typeof readProperty(resource, "supplyIn") === "number"
         ? (readProperty(resource, "supplyIn") as number)
-        : 0,
+        : typeof readProperty(supplyValues, id) === "number"
+          ? (readProperty(supplyValues, id) as number)
+          : isRecord(readProperty(supplyValues, id)) &&
+              typeof readProperty(readProperty(supplyValues, id), "in") ===
+                "number"
+            ? (readProperty(readProperty(supplyValues, id), "in") as number)
+            : 0,
   }));
   return {
     universe: String(
@@ -200,16 +303,20 @@ export function createCapturedSettingsDefaults({
       extraList,
     }),
     readMarket: (): MarketResetContext => ({
-      tradableResourceIds: readResourceIds(
+      tradableResourceIds: mergeResourceIds(
         readRootSafely(rootState),
         "tradable",
+        controls,
+        "market-",
       ),
       galaxyOfferResourceIds: [],
     }),
     readStorage: (): StorageResetContext => ({
-      storableResourceIds: readResourceIds(
+      storableResourceIds: mergeResourceIds(
         readRootSafely(rootState),
         "stackable",
+        controls,
+        "stack-",
       ),
       orichalcumId: readKnownResourceId(
         readRootSafely(rootState),
@@ -227,14 +334,18 @@ export function createCapturedSettingsDefaults({
       genusOrder: [],
     }),
     readJob: (): JobResetContext => readCapturedJobResetContext(controls),
-    readBuilding: () => readBuildingContext(controls),
+    readBuilding: () =>
+      readBuildingContext(readRootSafely(rootState), controls),
     readProject: () => readProjects(readRootSafely(rootState)),
     readMagic: (): MagicResetContext => ({
-      alchemyResourceIds: [],
+      alchemyResourceIds: readControlSuffixIds(
+        controls,
+        ALCHEMY_CONTROL_PREFIX,
+      ),
       ritualProductionIds: [],
     }),
     readProduction: () => readProduction(readRootSafely(rootState)),
-    readEjector: () => readEjector(readRootSafely(rootState)),
+    readEjector: () => readEjector(readRootSafely(rootState), controls),
   };
   const startupReader: SettingsResetReader = {
     ...reader,
@@ -274,6 +385,33 @@ export function createCapturedSettingsDefaults({
     rebuildDefaultTriggers: () => [],
   };
 
+  const readMigrationCatalogs = (): CapturedSettingsMigrationCatalogs => {
+    const root = readRootSafely(rootState);
+    const buildingContext = readBuildingContext(root, controls);
+    const productionContext = readProduction(root);
+    const foundryResourceIds = new Set(
+      Object.values(productionContext.foundryResourceIdByKey),
+    );
+    return {
+      techIds: readTechIds(root),
+      marketPriorityIds: mergeResourceIds(
+        root,
+        "tradable",
+        controls,
+        "market-",
+      ),
+      resourceIds: readResources(root).map(([id]) => id),
+      projectIds: readProjects(root).projectIds,
+      buildings: buildingContext.buildings.map((building) => ({
+        vueBinding: building.binding,
+        switchable: building.switchable,
+      })),
+      crafterOriginalIds: CRAFTER_RESOURCE_KEYS.filter((key) =>
+        foundryResourceIds.has(key),
+      ),
+    };
+  };
+
   return {
     startupReader,
     reader,
@@ -283,11 +421,29 @@ export function createCapturedSettingsDefaults({
     marketPriorityIds: [],
     resourceIds: [],
     projectIds: [],
-    buildings: readBuildingContext(controls).buildings.map((building) => ({
+    buildings: readBuildingContext(
+      readRootSafely(rootState),
+      controls,
+    ).buildings.map((building) => ({
       vueBinding: building.binding,
       switchable: building.switchable,
     })),
-    crafterOriginalIds: [],
-    discoveredResetNames: ["resetJobSettings"],
+    crafterOriginalIds: CRAFTER_RESOURCE_KEYS.filter((key) =>
+      Object.hasOwn(
+        readProduction(readRootSafely(rootState)).foundryResourceIdByKey,
+        key,
+      ),
+    ),
+    discoveredResetNames: [
+      "resetBuildingSettings",
+      "resetMarketSettings",
+      "resetStorageSettings",
+      "resetProjectSettings",
+      "resetJobSettings",
+      "resetMagicSettings",
+      "resetProductionSettings",
+      "resetEjectorSettings",
+    ],
+    readMigrationCatalogs,
   };
 }

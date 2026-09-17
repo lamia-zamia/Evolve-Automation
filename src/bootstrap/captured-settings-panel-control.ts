@@ -615,7 +615,7 @@ export function createCapturedSettingsPanel({
     achievementIntent = createAchievementGuardSettingsIntentHandler({
       writer: createSimpleWriter(
         computeAchievementGuardDefaults().def,
-        "achievement",
+        "achievementguard",
       ),
       renderSettingsContent: () =>
         achievementGuard?.updateAchievementGuardSettingsContent(),

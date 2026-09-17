@@ -21353,6 +21353,17 @@
   ];
 
   // src/adapters/evolve/captured-settings-defaults.ts
+  var CRAFTER_RESOURCE_KEYS = Object.freeze([
+    "Plywood",
+    "Brick",
+    "Wrought_Iron",
+    "Sheet_Metal",
+    "Mythril",
+    "Aerogel",
+    "Nanoweave",
+    "Scarletite",
+    "Quantium"
+  ]);
   function readRootSafely(rootState) {
     try {
       return rootState.readRoot();
@@ -21375,6 +21386,32 @@
   function readResourceIds(root, property) {
     return readResources(root).filter(([, resource]) => readProperty(resource, property) === !0).map(([id]) => id);
   }
+  function readResourceControlIds(root, controls2, prefix) {
+    let resourceIds = new Set(readResources(root).map(([id]) => id)), result = [];
+    for (let controlId of controls2.capturedElementIds()) {
+      if (!controlId.startsWith(prefix)) continue;
+      let resourceId = controlId.slice(prefix.length);
+      resourceId.length > 0 && resourceIds.has(resourceId) && result.push(resourceId);
+    }
+    return result;
+  }
+  function mergeResourceIds(root, property, controls2, controlPrefix) {
+    let result = [...readResourceIds(root, property)], seen = new Set(result);
+    for (let id of readResourceControlIds(root, controls2, controlPrefix))
+      seen.has(id) || (seen.add(id), result.push(id));
+    return result;
+  }
+  function readTechIds(root) {
+    let tech = readProperty(root, "tech");
+    if (!isRecord(tech)) return {};
+    let result = {};
+    for (let id of Object.keys(tech))
+      result[id.startsWith("tech-") ? id : "tech-" + id] = !0;
+    return result;
+  }
+  function readControlSuffixIds(controls2, prefix) {
+    return controls2.capturedElementIds().filter((id) => id.startsWith(prefix) && id.length > prefix.length).map((id) => id.slice(prefix.length)).filter((id, index, ids) => ids.indexOf(id) === index);
+  }
   function readKnownResourceId(root, id) {
     return readResources(root).some(([resourceId]) => resourceId === id) ? id : "";
   }
@@ -21389,13 +21426,18 @@
     return { challengeIds: challenges.map((set) => set[0].id) };
   }
   function readProjects(root) {
-    let projectIds = recordEntries(root, "arpa").map(([id]) => id).filter((id) => id !== "sequence"), idByKey = {};
+    let projects = readProperty(root, "arpa"), projectIds = isRecord(projects) ? Object.keys(projects).filter((id) => id !== "sequence") : [], idByKey = {};
     return projectIds.forEach((id) => {
       idByKey[titleCaseKey(id)] = id;
     }), { projectIds, idByKey };
   }
-  function readBuildingContext(controls2) {
-    let buildings = controls2.capturedElementIds().filter((id) => id.includes("-") && !id.startsWith("civ-")).map((binding, index) => ({
+  function readBuildingContext(root, controls2) {
+    let buildings = controls2.capturedElementIds().filter((binding) => {
+      let separator = binding.indexOf("-");
+      if (separator <= 0 || binding.startsWith("civ-")) return !1;
+      let region = binding.slice(0, separator), id = binding.slice(separator + 1);
+      return isRecord(readProperty(readProperty(root, region), id));
+    }).map((binding, index) => ({
       binding,
       switchable: !1,
       smart: !1,
@@ -21420,15 +21462,22 @@
       replicatorProductionIds: []
     };
   }
-  function readEjector(root) {
-    let resources = readResources(root).map(([id, resource]) => ({
+  function readEjector(root, controls2) {
+    let capturedIds = new Set(controls2.capturedElementIds()), atomicMasses = readProperty(root, "atomic_mass"), supplyValues = readProperty(root, "supplyValue"), resources = readResources(root).map(([id, resource]) => ({
       id,
-      isTradable: readProperty(resource, "tradable") === !0,
-      atomicMass: typeof readProperty(resource, "atomicMass") == "number" ? readProperty(resource, "atomicMass") : 0,
-      ejectConsumable: readProperty(resource, "ejectConsumable") === !0,
-      supplyConsumable: readProperty(resource, "supplyConsumable") === !0,
-      naniteConsumable: readProperty(resource, "naniteConsumable") === !0,
-      supplyIn: typeof readProperty(resource, "supplyIn") == "number" ? readProperty(resource, "supplyIn") : 0
+      // DeadSpace keeps tradability in the module-local resource table; a rendered market row is
+      // the captured proof available here. Retain the root/nested forms for compatible builds.
+      isTradable: readProperty(resource, "tradable") === !0 || readProperty(readProperty(resource, "is"), "tradable") === !0 || capturedIds.has("market-" + id),
+      atomicMass: typeof readProperty(resource, "atomicMass") == "number" ? readProperty(resource, "atomicMass") : typeof readProperty(atomicMasses, id) == "number" ? readProperty(atomicMasses, id) : 0,
+      ejectConsumable: capturedIds.has("eject" + id),
+      supplyConsumable: capturedIds.has("supply" + id),
+      naniteConsumable: isRecord(
+        readProperty(readProperty(root, "city"), "nanite_factory")
+      ) ? Object.hasOwn(
+        readProperty(readProperty(root, "city"), "nanite_factory"),
+        id
+      ) : !1,
+      supplyIn: typeof readProperty(resource, "supplyIn") == "number" ? readProperty(resource, "supplyIn") : typeof readProperty(supplyValues, id) == "number" ? readProperty(supplyValues, id) : isRecord(readProperty(supplyValues, id)) && typeof readProperty(readProperty(supplyValues, id), "in") == "number" ? readProperty(readProperty(supplyValues, id), "in") : 0
     }));
     return {
       universe: String(
@@ -21455,16 +21504,20 @@
         extraList
       }),
       readMarket: () => ({
-        tradableResourceIds: readResourceIds(
+        tradableResourceIds: mergeResourceIds(
           readRootSafely(rootState),
-          "tradable"
+          "tradable",
+          controls2,
+          "market-"
         ),
         galaxyOfferResourceIds: []
       }),
       readStorage: () => ({
-        storableResourceIds: readResourceIds(
+        storableResourceIds: mergeResourceIds(
           readRootSafely(rootState),
-          "stackable"
+          "stackable",
+          controls2,
+          "stack-"
         ),
         orichalcumId: readKnownResourceId(
           readRootSafely(rootState),
@@ -21482,67 +21535,110 @@
         genusOrder: []
       }),
       readJob: () => readCapturedJobResetContext(controls2),
-      readBuilding: () => readBuildingContext(controls2),
+      readBuilding: () => readBuildingContext(readRootSafely(rootState), controls2),
       readProject: () => readProjects(readRootSafely(rootState)),
       readMagic: () => ({
-        alchemyResourceIds: [],
+        alchemyResourceIds: readControlSuffixIds(
+          controls2,
+          ALCHEMY_CONTROL_PREFIX
+        ),
         ritualProductionIds: []
       }),
       readProduction: () => readProduction(readRootSafely(rootState)),
-      readEjector: () => readEjector(readRootSafely(rootState))
+      readEjector: () => readEjector(readRootSafely(rootState), controls2)
+    }, startupReader = {
+      ...reader,
+      readMarket: () => ({
+        tradableResourceIds: [],
+        galaxyOfferResourceIds: []
+      }),
+      readStorage: () => ({
+        storableResourceIds: [],
+        orichalcumId: "",
+        vitreloyId: "",
+        bolognumId: ""
+      }),
+      readJob: () => ({ jobs: [] }),
+      readBuilding: () => ({ buildings: [], bindingByKey: {} }),
+      readProject: () => ({ projectIds: [], idByKey: {} }),
+      readMagic: () => ({ alchemyResourceIds: [], ritualProductionIds: [] }),
+      readProduction: () => ({
+        foundryResourceIdByKey: {},
+        smelterFuelIds: [],
+        factoryResourceIdByKey: {},
+        droidResourceIdByKey: {},
+        replicatorProductionIds: []
+      }),
+      readEjector: () => ({
+        universe: "",
+        resources: [],
+        eleriumId: "",
+        inferniteId: ""
+      })
+    }, effects = {
+      setPriorityList: () => {
+      },
+      sortByPriority: () => {
+      },
+      initBuildingState: () => {
+      },
+      rebuildDefaultTriggers: () => []
+    }, readMigrationCatalogs = () => {
+      let root = readRootSafely(rootState), buildingContext = readBuildingContext(root, controls2), productionContext = readProduction(root), foundryResourceIds = new Set(
+        Object.values(productionContext.foundryResourceIdByKey)
+      );
+      return {
+        techIds: readTechIds(root),
+        marketPriorityIds: mergeResourceIds(
+          root,
+          "tradable",
+          controls2,
+          "market-"
+        ),
+        resourceIds: readResources(root).map(([id]) => id),
+        projectIds: readProjects(root).projectIds,
+        buildings: buildingContext.buildings.map((building) => ({
+          vueBinding: building.binding,
+          switchable: building.switchable
+        })),
+        crafterOriginalIds: CRAFTER_RESOURCE_KEYS.filter(
+          (key) => foundryResourceIds.has(key)
+        )
+      };
     };
     return {
-      startupReader: {
-        ...reader,
-        readMarket: () => ({
-          tradableResourceIds: [],
-          galaxyOfferResourceIds: []
-        }),
-        readStorage: () => ({
-          storableResourceIds: [],
-          orichalcumId: "",
-          vitreloyId: "",
-          bolognumId: ""
-        }),
-        readJob: () => ({ jobs: [] }),
-        readBuilding: () => ({ buildings: [], bindingByKey: {} }),
-        readProject: () => ({ projectIds: [], idByKey: {} }),
-        readMagic: () => ({ alchemyResourceIds: [], ritualProductionIds: [] }),
-        readProduction: () => ({
-          foundryResourceIdByKey: {},
-          smelterFuelIds: [],
-          factoryResourceIdByKey: {},
-          droidResourceIdByKey: {},
-          replicatorProductionIds: []
-        }),
-        readEjector: () => ({
-          universe: "",
-          resources: [],
-          eleriumId: "",
-          inferniteId: ""
-        })
-      },
+      startupReader,
       reader,
-      effects: {
-        setPriorityList: () => {
-        },
-        sortByPriority: () => {
-        },
-        initBuildingState: () => {
-        },
-        rebuildDefaultTriggers: () => []
-      },
+      effects,
       settingsSections,
       techIds: {},
       marketPriorityIds: [],
       resourceIds: [],
       projectIds: [],
-      buildings: readBuildingContext(controls2).buildings.map((building) => ({
+      buildings: readBuildingContext(
+        readRootSafely(rootState),
+        controls2
+      ).buildings.map((building) => ({
         vueBinding: building.binding,
         switchable: building.switchable
       })),
-      crafterOriginalIds: [],
-      discoveredResetNames: ["resetJobSettings"]
+      crafterOriginalIds: CRAFTER_RESOURCE_KEYS.filter(
+        (key) => Object.hasOwn(
+          readProduction(readRootSafely(rootState)).foundryResourceIdByKey,
+          key
+        )
+      ),
+      discoveredResetNames: [
+        "resetBuildingSettings",
+        "resetMarketSettings",
+        "resetStorageSettings",
+        "resetProjectSettings",
+        "resetJobSettings",
+        "resetMagicSettings",
+        "resetProductionSettings",
+        "resetEjectorSettings"
+      ],
+      readMigrationCatalogs
     };
   }
 
@@ -22205,7 +22301,9 @@
       settingsRaw
     );
     return settingsRaw.overrides = normalizedOverrides.overrides, settingsRaw.triggers.forEach((t) => {
-      t.requirementType === "Boolean" && t.requirementCount !== 1 && (t.requirementId = t.requirementCount ? t.requirementId : !t.requirementId, t.requirementCount = 1), (t.requirementType === "unlocked" || t.requirementType === "researched") && techIds["tech-" + t.requirementId] && (t.requirementId = "tech-" + t.requirementId), t.actionType === "research" && techIds["tech-" + t.actionId] && (t.actionId = "tech-" + t.actionId), t.requirementType === "unlocked" && (t.requirementType = "ResearchUnlocked", t.requirementCount = 1), t.requirementType === "researched" && (t.requirementType = "ResearchComplete", t.requirementCount = 1), t.requirementType === "built" && (t.requirementType = "BuildingCount");
+      t.requirementType === "Boolean" && t.requirementCount !== 1 && (t.requirementId = t.requirementCount ? t.requirementId : !t.requirementId, t.requirementCount = 1);
+      let requirementTechId = typeof t.requirementId == "string" ? t.requirementId.startsWith("tech-") ? t.requirementId : "tech-" + t.requirementId : void 0, techCatalogAvailable = Object.keys(techIds).length > 0, requirementTechKnown = requirementTechId !== void 0 && !!techIds[requirementTechId];
+      (t.requirementType === "unlocked" || t.requirementType === "researched") && techCatalogAvailable && (requirementTechKnown && (t.requirementId = requirementTechId), t.requirementType = t.requirementType === "unlocked" ? "ResearchUnlocked" : "ResearchComplete", t.requirementCount = 1), t.actionType === "research" && techIds["tech-" + t.actionId] && (t.actionId = "tech-" + t.actionId), t.requirementType === "built" && (t.requirementType = "BuildingCount");
     }), has(settingsRaw, "productionPrioritizeDemanded") && (settingsRaw.productionFoundryWeighting = settingsRaw.productionPrioritizeDemanded ? "demanded" : "none"), settingsRaw.challenge_plasmid = settingsRaw.challenge_mastery || settingsRaw.challenge_plasmid, has(settingsRaw, "res_trade_buy_mtr_Food") && marketPriorityIds.forEach(
       (id) => settingsRaw["res_trade_buy_" + id] = !0
     ), has(settingsRaw, "arpa") && Object.entries(settingsRaw.arpa).forEach(
@@ -22487,14 +22585,66 @@
     "resetTriggerSettings",
     "resetMinorTraitSettings",
     "resetMutableTraitSettings"
-  ], SECTION_TO_RESET = Object.freeze(
-    Object.fromEntries(
-      RESET_ORDER.map((name) => [
-        name.replace(/^reset|Settings$/gu, "").toLowerCase(),
-        name
-      ])
-    )
-  );
+  ], SECTION_TO_RESET = Object.freeze({
+    evolution: "resetEvolutionSettings",
+    war: "resetWarSettings",
+    hell: "resetHellSettings",
+    mech: "resetMechSettings",
+    fleet: "resetFleetSettings",
+    government: "resetGovernmentSettings",
+    authority: "resetAuthoritySettings",
+    building: "resetBuildingSettings",
+    weighting: "resetWeightingSettings",
+    market: "resetMarketSettings",
+    research: "resetResearchSettings",
+    project: "resetProjectSettings",
+    job: "resetJobSettings",
+    magic: "resetMagicSettings",
+    production: "resetProductionSettings",
+    storage: "resetStorageSettings",
+    general: "resetGeneralSettings",
+    interface: "resetInterfaceSettings",
+    statelog: "resetStateLogSettings",
+    achievementguard: "resetAchievementGuardSettings",
+    challengehelper: "resetChallengeHelperSettings",
+    prestige: "resetPrestigeSettings",
+    ejector: "resetEjectorSettings",
+    planet: "resetPlanetSettings",
+    logging: "resetLoggingSettings",
+    trigger: "resetTriggerSettings",
+    minortrait: "resetMinorTraitSettings",
+    mutabletrait: "resetMutableTraitSettings"
+  }), DYNAMIC_OVERRIDE_PREFIXES = Object.freeze({
+    building: ["bat", "bld_"],
+    market: [
+      "buy",
+      "sell",
+      "res_buy_",
+      "res_sell_",
+      "res_trade_",
+      "res_galaxy_"
+    ],
+    storage: [
+      "res_storage",
+      "res_min_store",
+      "res_max_store",
+      "res_containers_m_",
+      "res_crates_m_"
+    ],
+    project: ["arpa_"],
+    job: ["job_"],
+    magic: ["res_alchemy_", "spell_w_"],
+    production: [
+      "craft",
+      "foundry_",
+      "production_",
+      "droid_",
+      "replicator_",
+      "smelter_",
+      "job_"
+    ],
+    ejector: ["res_eject", "res_supply", "res_nanite"]
+  });
   function asSettingsRecord(raw) {
     return isNonArrayRecord(raw.overrides) ? raw.overrides = normalizeStoredOverrides(raw.overrides, raw).overrides : raw.overrides = {}, Array.isArray(raw.triggers) ? raw.triggers = raw.triggers.filter(isNonArrayRecord) : raw.triggers = [], Object.prototype.hasOwnProperty.call(raw, "arpa") && !isRecord(raw.arpa) && delete raw.arpa, raw;
   }
@@ -22530,26 +22680,36 @@
       projectIds: defaults.projectIds,
       buildings: defaults.buildings,
       crafterOriginalIds: defaults.crafterOriginalIds
-    }), persistIfChanged = (before) => {
+    }), purgeDynamicOverrides = (section) => {
+      let prefixes = DYNAMIC_OVERRIDE_PREFIXES[section.toLowerCase()];
+      if (prefixes === void 0) return;
+      let overrides = raw().overrides;
+      for (let key of Object.keys(overrides))
+        prefixes.some((prefix) => key.startsWith(prefix)) && delete overrides[key];
+    }, initialize = () => {
+      let before = snapshot(settings.readRaw());
+      migrateSettingsRecord(raw(), migrationContext()), initialized = !0, persistIfChanged(before);
+    }, persistIfChanged = (before) => {
       snapshot(settings.readRaw()) !== before && settings.persist();
     };
     return Object.freeze({
-      initialize() {
-        let before = snapshot(settings.readRaw());
-        migrateSettingsRecord(raw(), migrationContext()), initialized = !0, persistIfChanged(before);
-      },
+      initialize,
       replaceAndInitialize(next) {
-        settings.replaceRaw(next), initialized = !1, this.initialize();
+        settings.replaceRaw(next), initialized = !1, initialize(), settings.persist();
       },
       resetSection(section) {
         let resetName = SECTION_TO_RESET[section.toLowerCase()];
         if (resetName === void 0) return;
         let before = snapshot(settings.readRaw());
-        resetByName[resetName](!0), persistIfChanged(before);
+        resetByName[resetName](!0), purgeDynamicOverrides(section), persistIfChanged(before);
       },
       ensureDynamicDefaults() {
-        initialized || this.initialize();
-        let before = snapshot(settings.readRaw());
+        initialized || initialize();
+        let before = snapshot(settings.readRaw()), catalogs = defaults.readMigrationCatalogs(), liveContext = {
+          ...migrationContext(),
+          ...catalogs
+        };
+        migrateSettingsRecord(raw(), liveContext);
         for (let name of defaults.discoveredResetNames)
           RESET_ORDER.includes(name) && resetByName[name](!1);
         persistIfChanged(before);
@@ -25530,8 +25690,6 @@
     }
     if (!isNonArrayRecord(parsed))
       return { ok: !1, reason: "not a settings object" };
-    if (Object.keys(parsed).length === 0)
-      return { ok: !1, reason: "settings object is empty" };
     let evalSources = [];
     collectOverrideEvalSources(readProperty(parsed, "overrides"), evalSources), collectTriggerEvalSources(readProperty(parsed, "triggers"), evalSources);
     let prestigeFormat = readProperty(parsed, "log_prestige_format");
@@ -26338,7 +26496,7 @@
       achievementIntent = createAchievementGuardSettingsIntentHandler({
         writer: createSimpleWriter(
           computeAchievementGuardDefaults().def,
-          "achievement"
+          "achievementguard"
         ),
         renderSettingsContent: () => achievementGuard?.updateAchievementGuardSettingsContent()
       }), achievementGuard = createAchievementGuardSettingsBrowserAdapter({
@@ -29307,39 +29465,8 @@ Only continue if you trust the source. Injected code:
   );
 
   // src/bootstrap/captured-runtime-control.ts
-  var DEFAULT_SETTINGS2 = Object.freeze({
-    masterScriptToggle: !0,
-    autoPrestige: !1,
-    autoBuild: !1,
-    autoARPA: !1,
-    autoResearch: !1,
-    autoTax: !1,
-    autoMiningDroid: !1,
-    autoGraphenePlant: !1,
-    autoReplicator: !1,
-    autoMarket: !1,
-    autoAlchemy: !1,
-    autoCraft: !1,
-    autoQuarry: !1,
-    autoMine: !1,
-    autoExtractor: !1,
-    autoPower: !1,
-    autoFactory: !1,
-    autoStorage: !1,
-    autoNanite: !1,
-    autoEject: !1,
-    autoSupply: !1,
-    autoJobs: !1,
-    autoGalaxyMarket: !1,
-    autoGovernment: !1,
-    autoHell: !1,
-    autoMech: !1,
-    autoMinorTrait: !1,
-    autoMutateTraits: !1
-  });
   function isEnabled(settings, key) {
-    let value = settings[key];
-    return typeof value == "boolean" ? value : DEFAULT_SETTINGS2[key] ?? !1;
+    return settings[key] === !0;
   }
   function startCapturedRuntime({
     pageCapture: pageCapture2,
@@ -29401,6 +29528,8 @@ Only continue if you trust the source. Injected code:
     }), refreshEffectiveSettings = () => {
       let overrides = settingsLifecycle.readRaw().overrides;
       readSafeMode() || isRecord(overrides) && Object.keys(overrides).length > 0 ? overrideSettings.updateOverrides() : overrideSettings.syncStoredSettings();
+    }, refreshDiscoveredSettings = () => {
+      settingsLifecycle.ensureDynamicDefaults(), refreshEffectiveSettings();
     }, settingsStore = Object.freeze({
       readRaw: settingsLifecycle.readEffective,
       replaceRaw: settingsStorage.replaceRaw,
@@ -29788,7 +29917,7 @@ Only continue if you trust the source. Injected code:
         );
         return;
       }
-      settingsLifecycle.ensureDynamicDefaults(), settingsPanel.refreshSettings();
+      refreshDiscoveredSettings(), settingsPanel.refreshSettings();
     }, outerFleetDiscoveryAttempted = !1, ensureOuterFleetControls = () => {
       if (pageCapture2.controls.resolve("shipPlans")?.methods.includes("build"))
         return;
@@ -30359,7 +30488,7 @@ Only continue if you trust the source. Injected code:
       onActivity
     }), runCycle = () => {
       if (demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel(), !pageCapture2.isComplete()) return;
-      settingsLifecycle.ensureDynamicDefaults(), refreshEffectiveSettings();
+      refreshDiscoveredSettings();
       let settings = settingsStore.readRaw();
       if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle"))
         return;
@@ -30370,18 +30499,18 @@ Only continue if you trust the source. Injected code:
           return;
         }
         isEnabled(settings, "autoTrigger") && runPhase("autoTrigger discovery", () => {
-          progression.ensureBuildControls();
+          progression.ensureBuildControls(), refreshDiscoveredSettings();
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet discovery", () => {
           readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),
             "truepath"
           ) === !0 ? ensureOuterFleetControls() : ensureGalaxyFleetControls();
         }), isEnabled(settings, "autoMarket") && runPhase("autoMarket", () => {
-          ensureMarketControls(), marketAutomation.run();
+          ensureMarketControls(), refreshDiscoveredSettings(), marketAutomation.run();
         }), isEnabled(settings, "autoGalaxyMarket") && runPhase("autoGalaxyMarket", () => {
-          ensureGalaxyMarketControls(), galaxyMarketAutomation.run();
+          ensureGalaxyMarketControls(), refreshDiscoveredSettings(), galaxyMarketAutomation.run();
         }), isEnabled(settings, "autoStorage") && runPhase("autoStorage", () => {
-          ensureStorageControls(), storageAutomation.run();
+          ensureStorageControls(), refreshDiscoveredSettings(), storageAutomation.run();
         }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && runPhase("buildingAlwaysClick", () => gatherResources()), isEnabled(settings, "autoHell") && runPhase("autoHell", () => {
           ensureCivicControls(), hell.run();
         }), isEnabled(settings, "autoMiningDroid") && runPhase("autoMiningDroid", () => {
@@ -30409,15 +30538,15 @@ Only continue if you trust the source. Injected code:
             structureCount3("tauceti", "mining_ship") >= 1
           ), ratios.miningShip();
         }), isEnabled(settings, "autoAlchemy") && runPhase("autoAlchemy", () => {
-          ensureAlchemyControls(), alchemy.run();
+          ensureAlchemyControls(), refreshDiscoveredSettings(), alchemy.run();
         }), isEnabled(settings, "autoPylon") && runPhase("autoPylon", () => {
-          ensurePylonControls(), pylon.run();
+          ensurePylonControls(), refreshDiscoveredSettings(), pylon.run();
         });
         let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
         autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
-          ensureCivicControls(), settingsLifecycle.ensureDynamicDefaults(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1);
+          ensureCivicControls(), refreshDiscoveredSettings(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1);
         }) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPhase("autoJobs", () => {
-          ensureCivicControls(), settingsLifecycle.ensureDynamicDefaults(), runJobsAutomation(ordinaryJobs, !1);
+          ensureCivicControls(), refreshDiscoveredSettings(), runJobsAutomation(ordinaryJobs, !1);
         }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
           ensureCivicControls(), runJobsAutomation(craftsmen, !0);
         }), isEnabled(settings, "autoCraft") && runPhase("autoCraft", () => {
@@ -30472,17 +30601,17 @@ Only continue if you trust the source. Injected code:
             `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`
           );
         }), isEnabled(settings, "autoNanite") && runPhase("autoNanite", () => {
-          ensureNaniteControls(), nanite.run();
+          ensureNaniteControls(), refreshDiscoveredSettings(), nanite.run();
         }), isEnabled(settings, "autoSupply") && runPhase("autoSupply", () => {
-          ensureSupplyControls(), supply.run();
+          ensureSupplyControls(), refreshDiscoveredSettings(), supply.run();
         }), isEnabled(settings, "autoEject") && runPhase("autoEject", () => {
-          ensureEjectorControls(), ejector.run();
+          ensureEjectorControls(), refreshDiscoveredSettings(), ejector.run();
         }), isEnabled(settings, "autoPower") && runPhase("autoPower", () => {
           ensureCityControls(), powerProducers.run(), powerWarnings.run();
         }), isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
-          ensureSmelterControls(), smelter.run();
+          ensureSmelterControls(), refreshDiscoveredSettings(), smelter.run();
         }), isEnabled(settings, "autoFactory") && runPhase("autoFactory", () => {
-          ensureFactoryControls(), factory.run();
+          ensureFactoryControls(), refreshDiscoveredSettings(), factory.run();
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet", () => {
           readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),

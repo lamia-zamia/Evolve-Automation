@@ -66,6 +66,143 @@ assert.deepEqual(errors, []);
 stop();
 assert.equal(unsubscribeCount, 1);
 
+// A genuinely empty profile is normalized by the production runtime before its first consumer
+// runs. A second runtime then proves that the captured market row uses those persisted settings.
+{
+  const invoked = [];
+  const root = {
+    race: {},
+    tech: { trade: true, currency: 0 },
+    civic: {},
+    settings: { showMarket: true },
+    city: { market: { qty: 1, mtrade: 1, trade: 0 } },
+    resource: {
+      Money: { amount: 1000, max: 10000, display: true, diff: 0, value: 1 },
+      Food: {
+        amount: 0,
+        max: 100,
+        display: true,
+        diff: 0,
+        value: 1,
+        trade: 0,
+        stackable: true,
+      },
+    },
+  };
+  const market = root.city.market;
+  const handles = new Map([
+    [
+      "market-qty",
+      {
+        elementId: "market-qty",
+        generation: 1,
+        methods: [],
+        data: market,
+      },
+    ],
+    [
+      "market-Food",
+      {
+        elementId: "market-Food",
+        generation: 1,
+        methods: ["autoBuy", "autoSell", "zero", "purchase", "sell"],
+      },
+    ],
+  ]);
+  let cycle;
+  const persisted = { value: null };
+  const pageCapture = {
+    isComplete: () => true,
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      resolve: (id) => handles.get(id),
+      invoke: (handle, method, args = []) => {
+        invoked.push(`${handle.elementId}.${method}`);
+        const resourceId = args[0];
+        if (method === "purchase" && resourceId === "Food") {
+          const quantity = market.qty;
+          root.resource.Food.amount += quantity;
+          root.resource.Money.amount -= quantity * root.resource.Food.value;
+        }
+        if (method === "sell" && resourceId === "Food") {
+          const quantity = market.qty;
+          root.resource.Food.amount -= quantity;
+          root.resource.Money.amount += quantity * root.resource.Food.value;
+        }
+        if (method === "autoBuy" && resourceId === "Food") {
+          root.city.market.trade += 1;
+          root.resource.Food.trade += 1;
+        }
+        if (method === "autoSell" && resourceId === "Food") {
+          root.city.market.trade -= 1;
+          root.resource.Food.trade -= 1;
+        }
+        if (method === "zero" && resourceId === "Food") {
+          root.city.market.trade -= root.resource.Food.trade;
+          root.resource.Food.trade = 0;
+        }
+        return { ok: true, value: undefined };
+      },
+      capturedElementIds: () => [...handles.keys()],
+    },
+    controlUsage: { readUsage: () => [] },
+    periods: {
+      subscribe(next) {
+        cycle = next;
+        return () => {};
+      },
+    },
+    mountSuppression: { available: false, withoutMounting: () => undefined },
+    uninstall: () => {},
+  };
+  const firstStop = startCapturedRuntime({
+    pageCapture,
+    document: {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () => persisted.value,
+      setItem: (_key, value) => {
+        persisted.value = value;
+      },
+    },
+    logError: (message) => {
+      throw new Error(message);
+    },
+  });
+  cycle({ periods: 4 });
+  firstStop();
+  const fresh = JSON.parse(persisted.value);
+  assert.equal(fresh.res_trade_buy_Food, true);
+  assert.equal(fresh.res_storageFood, true);
+
+  persisted.value = JSON.stringify({
+    ...fresh,
+    autoMarket: true,
+    buyFood: true,
+  });
+  const secondStop = startCapturedRuntime({
+    pageCapture,
+    document: {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () => persisted.value,
+      setItem: (_key, value) => {
+        persisted.value = value;
+      },
+    },
+    logError: (message) => {
+      throw new Error(message);
+    },
+  });
+  cycle({ periods: 4 });
+  secondStop();
+  assert.ok(invoked.includes("market-Food.purchase"));
+}
+
 // The persisted settings must reach the construction policy: a quiet trigger phase — including a
 // configured trigger whose building is not captured yet — must not suppress autoBuild.
 {
@@ -1013,14 +1150,14 @@ assert.equal(unsubscribeCount, 1);
 
 // The production captured cycle is a separate orchestration boundary from runTick. These phase
 // failures make its actual order observable without relying on source-text ordering or a test-only
-// expected-phase constant. The always-on buildingAlwaysClick preflight consumes the first root
-// failure, and the captured mercenary phase is included before the existing spy/espionage/battle
-// sequence. Three valid combat root reads account for the current espionage guards; the following
-// root failure makes the conditional battle phase observable before tax and government. The
-// combat fixture below separately covers a successful mercenary pass before foreign combat reads.
+// expected-phase constant. The always-on building preflight consumes the first root failure, and
+// the captured mercenary phase is included before the existing spy/espionage/battle sequence. The
+// extra bootstrap reads are the captured settings catalogs sampled before feature phases; they
+// return the root unchanged so the original phase-failure boundary remains observable.
 {
   const phaseFailures = [];
   const observedPhases = [];
+  let bootstrapRootReads = 20;
   let remainingRootFailures = 4;
   let validCombatRootReads = 0;
   const root = {
@@ -1070,6 +1207,10 @@ assert.equal(unsubscribeCount, 1);
       isComplete: () => true,
       rootState: {
         readRoot: () => {
+          if (bootstrapRootReads > 0) {
+            bootstrapRootReads -= 1;
+            return root;
+          }
           if (remainingRootFailures > 0) {
             remainingRootFailures -= 1;
             throw new Error("phase stub");

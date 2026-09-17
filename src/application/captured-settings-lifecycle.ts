@@ -64,14 +64,69 @@ export interface CapturedSettingsLifecycle {
 }
 
 const SECTION_TO_RESET: Readonly<Record<string, (typeof RESET_ORDER)[number]>> =
-  Object.freeze(
-    Object.fromEntries(
-      RESET_ORDER.map((name) => [
-        name.replace(/^reset|Settings$/gu, "").toLowerCase(),
-        name,
-      ]),
-    ),
-  ) as Readonly<Record<string, (typeof RESET_ORDER)[number]>>;
+  Object.freeze({
+    evolution: "resetEvolutionSettings",
+    war: "resetWarSettings",
+    hell: "resetHellSettings",
+    mech: "resetMechSettings",
+    fleet: "resetFleetSettings",
+    government: "resetGovernmentSettings",
+    authority: "resetAuthoritySettings",
+    building: "resetBuildingSettings",
+    weighting: "resetWeightingSettings",
+    market: "resetMarketSettings",
+    research: "resetResearchSettings",
+    project: "resetProjectSettings",
+    job: "resetJobSettings",
+    magic: "resetMagicSettings",
+    production: "resetProductionSettings",
+    storage: "resetStorageSettings",
+    general: "resetGeneralSettings",
+    interface: "resetInterfaceSettings",
+    statelog: "resetStateLogSettings",
+    achievementguard: "resetAchievementGuardSettings",
+    challengehelper: "resetChallengeHelperSettings",
+    prestige: "resetPrestigeSettings",
+    ejector: "resetEjectorSettings",
+    planet: "resetPlanetSettings",
+    logging: "resetLoggingSettings",
+    trigger: "resetTriggerSettings",
+    minortrait: "resetMinorTraitSettings",
+    mutabletrait: "resetMutableTraitSettings",
+  });
+
+const DYNAMIC_OVERRIDE_PREFIXES: Readonly<Record<string, readonly string[]>> =
+  Object.freeze({
+    building: ["bat", "bld_"],
+    market: [
+      "buy",
+      "sell",
+      "res_buy_",
+      "res_sell_",
+      "res_trade_",
+      "res_galaxy_",
+    ],
+    storage: [
+      "res_storage",
+      "res_min_store",
+      "res_max_store",
+      "res_containers_m_",
+      "res_crates_m_",
+    ],
+    project: ["arpa_"],
+    job: ["job_"],
+    magic: ["res_alchemy_", "spell_w_"],
+    production: [
+      "craft",
+      "foundry_",
+      "production_",
+      "droid_",
+      "replicator_",
+      "smelter_",
+      "job_",
+    ],
+    ejector: ["res_eject", "res_supply", "res_nanite"],
+  });
 
 function asSettingsRecord(raw: Record<string, unknown>): SettingsRecord {
   if (!isNonArrayRecord(raw.overrides)) raw.overrides = {};
@@ -136,34 +191,59 @@ export function createCapturedSettingsLifecycle({
     crafterOriginalIds: defaults.crafterOriginalIds,
   });
 
+  const purgeDynamicOverrides = (section: string): void => {
+    const prefixes = DYNAMIC_OVERRIDE_PREFIXES[section.toLowerCase()];
+    if (prefixes === undefined) return;
+    const overrides = raw().overrides;
+    for (const key of Object.keys(overrides)) {
+      if (prefixes.some((prefix) => key.startsWith(prefix))) {
+        delete overrides[key];
+      }
+    }
+  };
+
+  const initialize = (): void => {
+    const before = snapshot(settings.readRaw());
+    migrateSettingsRecord(raw(), migrationContext());
+    initialized = true;
+    persistIfChanged(before);
+  };
+
   const persistIfChanged = (before: string) => {
     if (snapshot(settings.readRaw()) !== before) settings.persist();
   };
 
   return Object.freeze({
-    initialize() {
-      const before = snapshot(settings.readRaw());
-      migrateSettingsRecord(raw(), migrationContext());
-      initialized = true;
-      persistIfChanged(before);
-    },
+    initialize,
     replaceAndInitialize(next: Record<string, unknown>) {
       settings.replaceRaw(next);
       initialized = false;
-      this.initialize();
+      // The imported record is authoritative even when it is already normalized and migration
+      // has nothing to change. Persist after initialization rather than relying on a diff.
+      initialize();
+      settings.persist();
     },
     resetSection(section: string) {
       const resetName = SECTION_TO_RESET[section.toLowerCase()];
       if (resetName === undefined) return;
       const before = snapshot(settings.readRaw());
       resetByName[resetName](true);
+      purgeDynamicOverrides(section);
       persistIfChanged(before);
     },
     ensureDynamicDefaults() {
-      if (!initialized) this.initialize();
+      if (!initialized) initialize();
       const before = snapshot(settings.readRaw());
-      // Jobs and the other game-backed catalogs are discovered lazily. Re-running their
-      // non-resetting builders after a draw fills dynamic keys without touching edits.
+      const catalogs = defaults.readMigrationCatalogs();
+      const liveContext: SettingsMigrationContext = {
+        ...migrationContext(),
+        ...catalogs,
+      };
+      // The game-backed catalogs are discovered lazily. Re-running their non-resetting builders
+      // after a draw fills dynamic keys without touching edits. The live migration context is
+      // equally important: data-dependent migrations must be retried only once their catalogs
+      // prove the referenced ids exist.
+      migrateSettingsRecord(raw(), liveContext);
       for (const name of defaults.discoveredResetNames) {
         if (!RESET_ORDER.includes(name as (typeof RESET_ORDER)[number]))
           continue;

@@ -204,25 +204,32 @@ export function migrateSettingsRecord(
       t.requirementId = t.requirementCount ? t.requirementId : !t.requirementId;
       t.requirementCount = 1;
     }
-    // Migrate old trigger IDs
+    // Migrate old trigger checks only after a captured tech catalog exists. Startup can run before
+    // tech is captured; changing the discriminator without that catalog would make an otherwise
+    // recoverable trigger impossible to retry. Prefix an id only when the catalog recognizes it.
+    const requirementTechId =
+      typeof t.requirementId === "string"
+        ? t.requirementId.startsWith("tech-")
+          ? t.requirementId
+          : "tech-" + t.requirementId
+        : undefined;
+    const techCatalogAvailable = Object.keys(techIds).length > 0;
+    const requirementTechKnown =
+      requirementTechId !== undefined && Boolean(techIds[requirementTechId]);
     if (
       (t.requirementType === "unlocked" ||
         t.requirementType === "researched") &&
-      techIds["tech-" + t.requirementId]
+      techCatalogAvailable
     ) {
-      t.requirementId = "tech-" + t.requirementId;
+      if (requirementTechKnown) t.requirementId = requirementTechId;
+      t.requirementType =
+        t.requirementType === "unlocked"
+          ? "ResearchUnlocked"
+          : "ResearchComplete";
+      t.requirementCount = 1;
     }
-    if (t.actionType === "research" && techIds["tech-" + t.actionId]) {
+    if (t.actionType === "research" && Boolean(techIds["tech-" + t.actionId])) {
       t.actionId = "tech-" + t.actionId;
-    }
-    // Migrate old trigger checks to overrides
-    if (t.requirementType === "unlocked") {
-      t.requirementType = "ResearchUnlocked";
-      t.requirementCount = 1;
-    }
-    if (t.requirementType === "researched") {
-      t.requirementType = "ResearchComplete";
-      t.requirementCount = 1;
     }
     if (t.requirementType === "built") {
       t.requirementType = "BuildingCount";

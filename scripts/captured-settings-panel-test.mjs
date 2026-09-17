@@ -354,6 +354,7 @@ function createPage(
 {
   const { panel, root, saveText, settings, logged } = createPage(
     JSON.stringify({ autoBuild: true }),
+    { useLifecycle: true },
   );
   panel.ensurePanel();
   const importButton = root.querySelectorAll("#script_settingsImport")[0];
@@ -361,7 +362,6 @@ function createPage(
   for (const [text, reason] of [
     ["{", /not valid JSON/],
     ["[1,2]", /not a settings object/],
-    ["{}", /empty/],
   ]) {
     saveText.value = text;
     importButton.dispatch("click");
@@ -369,6 +369,10 @@ function createPage(
     assert.match(logged.at(-1), reason);
     assert.equal(saveText.value, text, "a refused blob stays in the field");
   }
+  saveText.value = "{}";
+  importButton.dispatch("click");
+  assert.equal(settings.readRaw()["autoBuild"], false);
+  assert.equal(saveText.value, "");
 }
 
 {

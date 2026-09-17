@@ -221,40 +221,8 @@ export interface CapturedRuntimeControlDependencies {
   readonly logError?: (message: string) => void;
 }
 
-const DEFAULT_SETTINGS: Readonly<Record<string, boolean>> = Object.freeze({
-  masterScriptToggle: true,
-  autoPrestige: false,
-  autoBuild: false,
-  autoARPA: false,
-  autoResearch: false,
-  autoTax: false,
-  autoMiningDroid: false,
-  autoGraphenePlant: false,
-  autoReplicator: false,
-  autoMarket: false,
-  autoAlchemy: false,
-  autoCraft: false,
-  autoQuarry: false,
-  autoMine: false,
-  autoExtractor: false,
-  autoPower: false,
-  autoFactory: false,
-  autoStorage: false,
-  autoNanite: false,
-  autoEject: false,
-  autoSupply: false,
-  autoJobs: false,
-  autoGalaxyMarket: false,
-  autoGovernment: false,
-  autoHell: false,
-  autoMech: false,
-  autoMinorTrait: false,
-  autoMutateTraits: false,
-});
-
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
-  const value = settings[key];
-  return typeof value === "boolean" ? value : (DEFAULT_SETTINGS[key] ?? false);
+  return settings[key] === true;
 }
 
 /** Starts the captured runtime from completed game periods, without a debug clone or game object. */
@@ -344,6 +312,10 @@ export function startCapturedRuntime({
     } else {
       overrideSettings.syncStoredSettings();
     }
+  };
+  const refreshDiscoveredSettings = () => {
+    settingsLifecycle.ensureDynamicDefaults();
+    refreshEffectiveSettings();
   };
   // Feature adapters retain their existing SettingsStore-shaped capability, but its read is now
   // the effective layer. The panel and queued-settings loader receive settingsStorage directly
@@ -875,7 +847,7 @@ export function startCapturedRuntime({
       );
       return;
     }
-    settingsLifecycle.ensureDynamicDefaults();
+    refreshDiscoveredSettings();
     settingsPanel.refreshSettings();
   };
   let outerFleetDiscoveryAttempted = false;
@@ -1814,8 +1786,7 @@ export function startCapturedRuntime({
     // could never be switched on.
     settingsPanel.ensurePanel();
     if (!pageCapture.isComplete()) return;
-    settingsLifecycle.ensureDynamicDefaults();
-    refreshEffectiveSettings();
+    refreshDiscoveredSettings();
     const settings = settingsStore.readRaw();
     if (
       !pageCapture.isComplete() ||
@@ -1845,6 +1816,7 @@ export function startCapturedRuntime({
           // Trigger targets are only the actions whose controls were captured, so the sample the
           // demand model shares has to be taken after construction discovery, not before it.
           progression.ensureBuildControls();
+          refreshDiscoveredSettings();
         });
       }
       if (isEnabled(settings, "autoFleet")) {
@@ -1861,18 +1833,21 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoMarket")) {
         runPhase("autoMarket", () => {
           ensureMarketControls();
+          refreshDiscoveredSettings();
           marketAutomation.run();
         });
       }
       if (isEnabled(settings, "autoGalaxyMarket")) {
         runPhase("autoGalaxyMarket", () => {
           ensureGalaxyMarketControls();
+          refreshDiscoveredSettings();
           galaxyMarketAutomation.run();
         });
       }
       if (isEnabled(settings, "autoStorage")) {
         runPhase("autoStorage", () => {
           ensureStorageControls();
+          refreshDiscoveredSettings();
           storageAutomation.run();
         });
       }
@@ -1941,12 +1916,14 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoAlchemy")) {
         runPhase("autoAlchemy", () => {
           ensureAlchemyControls();
+          refreshDiscoveredSettings();
           alchemy.run();
         });
       }
       if (isEnabled(settings, "autoPylon")) {
         runPhase("autoPylon", () => {
           ensurePylonControls();
+          refreshDiscoveredSettings();
           pylon.run();
         });
       }
@@ -1956,7 +1933,7 @@ export function startCapturedRuntime({
       if (autoJobs && autoCraftsmen) {
         const completed = runPhase("autoJobs with autoCraftsmen", () => {
           ensureCivicControls();
-          settingsLifecycle.ensureDynamicDefaults();
+          refreshDiscoveredSettings();
           combinedJobs = fullJobs.isAvailable();
           if (combinedJobs) runJobsAutomation(fullJobs, false);
         });
@@ -1968,7 +1945,7 @@ export function startCapturedRuntime({
       if (autoJobs && !combinedJobs) {
         runPhase("autoJobs", () => {
           ensureCivicControls();
-          settingsLifecycle.ensureDynamicDefaults();
+          refreshDiscoveredSettings();
           runJobsAutomation(ordinaryJobs, false);
         });
       }
@@ -2106,18 +2083,21 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoNanite")) {
         runPhase("autoNanite", () => {
           ensureNaniteControls();
+          refreshDiscoveredSettings();
           nanite.run();
         });
       }
       if (isEnabled(settings, "autoSupply")) {
         runPhase("autoSupply", () => {
           ensureSupplyControls();
+          refreshDiscoveredSettings();
           supply.run();
         });
       }
       if (isEnabled(settings, "autoEject")) {
         runPhase("autoEject", () => {
           ensureEjectorControls();
+          refreshDiscoveredSettings();
           ejector.run();
         });
       }
@@ -2131,12 +2111,14 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoSmelter")) {
         runPhase("autoSmelter", () => {
           ensureSmelterControls();
+          refreshDiscoveredSettings();
           smelter.run();
         });
       }
       if (isEnabled(settings, "autoFactory")) {
         runPhase("autoFactory", () => {
           ensureFactoryControls();
+          refreshDiscoveredSettings();
           factory.run();
         });
       }

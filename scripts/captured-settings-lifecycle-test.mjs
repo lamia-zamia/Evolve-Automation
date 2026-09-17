@@ -5,6 +5,7 @@ import { createCapturedSettingsLifecycle } from "../src/application/captured-set
 import { createOverrideSettings } from "../src/application/override-settings.ts";
 import { createCapturedOverrideEvaluation } from "../src/adapters/evolve/captured-override-evaluation.ts";
 import { overrideComparisons } from "../src/settings/override-comparators.ts";
+import { inspectImportedSettings } from "../src/adapters/browser/settings-import.ts";
 
 function storage(initial) {
   let value = initial;
@@ -174,6 +175,118 @@ function createLifecycle(
   nextLifecycle.ensureDynamicDefaults();
   assert.equal(settings.readRaw().job_p_farmer, 77);
   assert.equal(settings.readRaw().job_b1_scientist, 3);
+}
+
+// Captured catalogs discovered after startup fill every dynamic section, not only Jobs.
+{
+  const gameRoot = root();
+  gameRoot.resource = {
+    Food: {
+      amount: 10,
+      max: 100,
+      display: true,
+      diff: 0,
+      trade: 0,
+      stackable: true,
+    },
+    Plywood: {
+      amount: 10,
+      max: 100,
+      display: true,
+      diff: 0,
+      trade: 0,
+      stackable: true,
+    },
+  };
+  gameRoot.arpa = { launch_facility: { display: true } };
+  const saved = storage(null);
+  const settings = createSettingsStore({ storage: saved });
+  const lifecycle = createCapturedSettingsLifecycle({
+    settings,
+    defaults: createCapturedSettingsDefaults({
+      rootState: { readRoot: () => gameRoot },
+      controls: controls([
+        "civ-unemployed",
+        "civ-farmer",
+        "market-Food",
+        "market-Plywood",
+      ]),
+    }),
+  });
+  lifecycle.initialize();
+  lifecycle.ensureDynamicDefaults();
+  const raw = settings.readRaw();
+  assert.equal(raw.res_trade_buy_Food, true);
+  assert.equal(raw.buyFood, false);
+  assert.equal(raw.res_storageFood, true);
+  assert.equal(raw.craftPlywood, true);
+  assert.equal(raw.arpa_launch_facility, true);
+}
+
+// A tech-dependent trigger remains in its old form until a real captured tech catalog is present.
+{
+  const { lifecycle, settings, gameRoot } = createLifecycle(
+    JSON.stringify({
+      masterScriptToggle: true,
+      autoTrigger: true,
+      triggers: [
+        {
+          requirementType: "unlocked",
+          requirementId: "trade",
+          requirementCount: 1,
+          actionType: "research",
+          actionId: "trade",
+        },
+      ],
+    }),
+  );
+  lifecycle.initialize();
+  assert.equal(settings.readRaw().triggers[0].requirementType, "unlocked");
+  gameRoot.tech = { trade: { display: true } };
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(
+    settings.readRaw().triggers[0].requirementType,
+    "ResearchUnlocked",
+  );
+  assert.equal(settings.readRaw().triggers[0].requirementId, "tech-trade");
+  assert.equal(settings.readRaw().triggers[0].actionId, "tech-trade");
+}
+
+// An authoritative replacement is persisted even when migration makes no further edits, and a
+// fresh lifecycle instance reads the replacement rather than the previous stored record.
+{
+  const { lifecycle, saved } = createLifecycle(
+    JSON.stringify({ masterScriptToggle: true, autoJobs: false }),
+  );
+  lifecycle.initialize();
+  lifecycle.replaceAndInitialize({ masterScriptToggle: true, autoJobs: true });
+  assert.equal(JSON.parse(saved.read()).autoJobs, true);
+  const second = createLifecycle(saved.read());
+  second.lifecycle.initialize();
+  assert.equal(second.settings.readRaw().autoJobs, true);
+}
+
+// Resetting a dynamic section removes stale entity overrides even when the entity is no longer in
+// the current captured catalog, while leaving another section untouched.
+{
+  const { lifecycle, settings } = createLifecycle();
+  lifecycle.initialize();
+  settings.readRaw().overrides.job_old = [];
+  settings.readRaw().overrides.res_trade_buy_Old = [];
+  settings.readRaw().overrides.tickRate = [];
+  lifecycle.resetSection("job");
+  assert.equal(settings.readRaw().overrides.job_old, undefined);
+  assert.notEqual(settings.readRaw().overrides.res_trade_buy_Old, undefined);
+  assert.notEqual(settings.readRaw().overrides.tickRate, undefined);
+  lifecycle.resetSection("market");
+  assert.equal(settings.readRaw().overrides.res_trade_buy_Old, undefined);
+  assert.notEqual(settings.readRaw().overrides.tickRate, undefined);
+}
+
+// An empty object is a valid partial import: initialization supplies the missing defaults.
+{
+  const inspection = inspectImportedSettings("{}");
+  assert.equal(inspection.ok, true);
 }
 
 // Section reset is authoritative: it clears the section's overrides, force-writes defaults, and

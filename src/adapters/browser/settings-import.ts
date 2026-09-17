@@ -76,9 +76,6 @@ export function inspectImportedSettings(
   if (!isNonArrayRecord(parsed)) {
     return { ok: false, reason: "not a settings object" };
   }
-  if (Object.keys(parsed).length === 0) {
-    return { ok: false, reason: "settings object is empty" };
-  }
   const evalSources: string[] = [];
   collectOverrideEvalSources(readProperty(parsed, "overrides"), evalSources);
   collectTriggerEvalSources(readProperty(parsed, "triggers"), evalSources);
