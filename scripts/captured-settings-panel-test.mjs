@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 
 import { createCapturedSettingsPanel } from "../src/bootstrap/captured-settings-panel-control.ts";
 import { createSettingsStore } from "../src/adapters/browser/settings-store.ts";
+import { createCapturedSettingsDefaults } from "../src/adapters/evolve/captured-settings-defaults.ts";
+import { createCapturedSettingsLifecycle } from "../src/application/captured-settings-lifecycle.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
 /** A `localStorage` stand-in that records what the panel writes back. */
@@ -16,7 +18,12 @@ function createStorage(initial) {
 
 function createPage(
   settingsText,
-  { platform = "Win32", url = "https://x/", confirmAnswer = true } = {},
+  {
+    platform = "Win32",
+    url = "https://x/",
+    confirmAnswer = true,
+    useLifecycle = false,
+  } = {},
 ) {
   const root = element("div", { id: "root" });
   const resources = element("div", { id: "resources" });
@@ -68,9 +75,19 @@ function createPage(
     storage,
     logError: (message) => logged.push(message),
   });
+  const settingsLifecycle = useLifecycle
+    ? createCapturedSettingsLifecycle({
+        settings,
+        defaults: createCapturedSettingsDefaults({
+          rootState: { readRoot: () => ({}) },
+          controls: { capturedElementIds: () => [] },
+        }),
+      })
+    : undefined;
   const panel = createCapturedSettingsPanel({
     capturedPanelWindow: pageWindow,
     settings,
+    settingsLifecycle,
     onDiagnostic: (message) => diagnostics.push(message),
     logError: (message) => logged.push(message),
   });
@@ -101,13 +118,15 @@ function createPage(
   assert.equal(toggles.length, 1);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
   assert.equal(root.querySelectorAll("#script_generalSettings").length, 1);
-  assert.equal(root.querySelectorAll("button.script-collapsible").length, 6);
+  assert.equal(root.querySelectorAll("button.script-collapsible").length, 8);
   for (const section of [
     "interface",
     "stateLog",
     "achievementGuard",
     "challengeHelper",
     "authority",
+    "hell",
+    "weighting",
   ]) {
     assert.equal(
       root.querySelectorAll(`#script_${section}Settings`).length,
@@ -145,6 +164,7 @@ function createPage(
 {
   const { panel, settings, root } = createPage(
     JSON.stringify({ autoBuild: true, activeTargetsUI: true }),
+    { useLifecycle: true },
   );
   panel.ensurePanel();
   root.querySelectorAll("#script_resetinterface")[0].dispatch("click");
@@ -288,6 +308,7 @@ function createPage(
 {
   const { panel, root, saveText, settings, storage, downloads } = createPage(
     JSON.stringify({ autoBuild: true }),
+    { useLifecycle: true },
   );
   panel.ensurePanel();
   const buttons = root.querySelectorAll("#script_importExportButtons");
@@ -310,6 +331,8 @@ function createPage(
   assert.equal(saveText.value, "");
   assert.equal(settings.readRaw()["autoBuild"], false);
   assert.equal(settings.readRaw()["autoResearch"], true);
+  assert.equal(settings.readRaw()["autoJobs"], false);
+  assert.equal(settings.readRaw()["tickRate"], 4);
   assert.equal(JSON.parse(storage.writes())["autoResearch"], true);
   // The panel drawn from the replaced record is gone, and the next tick rebuilds it.
   assert.equal(root.querySelectorAll("#autoScriptContainer").length, 0);

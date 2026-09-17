@@ -133,6 +133,10 @@ import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-pr
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
 import { createGameModalCloser } from "../adapters/browser/game-modal.ts";
 import { createSettingsStore } from "../adapters/browser/settings-store.ts";
+import { createCapturedSettingsDefaults } from "../adapters/evolve/captured-settings-defaults.ts";
+import { createCapturedSettingsLifecycle } from "../application/captured-settings-lifecycle.ts";
+import { createOverrideSettings } from "../application/override-settings.ts";
+import { createCapturedOverrideEvaluation } from "../adapters/evolve/captured-override-evaluation.ts";
 import { createCapturedQueuedSettings } from "../adapters/evolve/progression/evolution/captured-queued-settings.ts";
 import { createCapturedEvolution } from "../adapters/evolve/progression/evolution/captured-evolution.ts";
 import { createCapturedPlanetSelection } from "../adapters/evolve/progression/evolution/captured-planet-selection.ts";
@@ -182,6 +186,7 @@ import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-ha
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
+import { overrideComparisons } from "../settings/override-comparators.ts";
 
 type WorkspaceDocument = ReturnType<
   Parameters<typeof createGamePanelWorkspace>[0]["getDocument"]
@@ -285,16 +290,76 @@ export function startCapturedRuntime({
           constructor(_type: "mouseover" | "mouseout") {}
         };
   const panels = createGamePanelWorkspace({ getDocument: () => document });
-  const settingsStore = createSettingsStore({
+  const settingsStorage = createSettingsStore({
     storage,
     logError: (message) => logError(message),
+  });
+  const settingsLifecycle = createCapturedSettingsLifecycle({
+    settings: settingsStorage,
+    defaults: createCapturedSettingsDefaults({
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+    }),
+  });
+  settingsLifecycle.initialize();
+  const effectiveSettings = settingsLifecycle.readEffective();
+  const reportedOverrideFailures = new Set<string>();
+  const readSafeMode = () => {
+    const location = readProperty(settingsHostWindow, "location");
+    return String(location ?? "")
+      .toLowerCase()
+      .includes("safemode");
+  };
+  const overrideSettings = createOverrideSettings({
+    getSafeMode: readSafeMode,
+    getSettings: () => effectiveSettings,
+    getSettingsRaw: settingsLifecycle.readRaw,
+    source: createCapturedOverrideEvaluation({
+      rootState: pageCapture.rootState,
+      readSettings: settingsLifecycle.readRaw,
+      comparatorSource: {
+        comparisons: overrideComparisons,
+        rightOperandComparators: ["A?B", "!A?B"],
+      },
+    }),
+    reporter: {
+      report: (failures) =>
+        failures.forEach((failure) => {
+          const message = `override ${failure.settingKey} #${failure.conditionNumber} unavailable: ${failure.reason.kind}`;
+          if (reportedOverrideFailures.has(message)) return;
+          reportedOverrideFailures.add(message);
+          logError(message);
+        }),
+    },
+    display: { publish: () => {} },
+  });
+  const refreshEffectiveSettings = () => {
+    const raw = settingsLifecycle.readRaw();
+    const overrides = raw.overrides;
+    if (
+      readSafeMode() ||
+      (isRecord(overrides) && Object.keys(overrides).length > 0)
+    ) {
+      overrideSettings.updateOverrides();
+    } else {
+      overrideSettings.syncStoredSettings();
+    }
+  };
+  // Feature adapters retain their existing SettingsStore-shaped capability, but its read is now
+  // the effective layer. The panel and queued-settings loader receive settingsStorage directly
+  // so imports and edits always operate on the raw persisted record.
+  const settingsStore = Object.freeze({
+    readRaw: settingsLifecycle.readEffective,
+    replaceRaw: settingsStorage.replaceRaw,
+    persist: settingsStorage.persist,
   });
   const reportDiagnostic = (message: string) => {
     if (diagnostics?.readPerformanceEnabled() === true) log(message);
   };
   const settingsPanel = createCapturedSettingsPanel({
     capturedPanelWindow: settingsHostWindow,
-    settings: settingsStore,
+    settings: settingsStorage,
+    settingsLifecycle,
     craftToggles: {
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
@@ -303,7 +368,7 @@ export function startCapturedRuntime({
     logError: (message) => logError(message),
   });
   const queuedSettings = createCapturedQueuedSettings({
-    settings: settingsStore,
+    settings: settingsStorage,
     refreshSettings: settingsPanel.refreshSettings,
     onWarning: (message) => logError(message),
   });
@@ -808,7 +873,10 @@ export function startCapturedRuntime({
       logError(
         `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
+      return;
     }
+    settingsLifecycle.ensureDynamicDefaults();
+    settingsPanel.refreshSettings();
   };
   let outerFleetDiscoveryAttempted = false;
   const ensureOuterFleetControls = () => {
@@ -1745,6 +1813,9 @@ export function startCapturedRuntime({
     // carries no settings at all, so a script that only drew its interface while already enabled
     // could never be switched on.
     settingsPanel.ensurePanel();
+    if (!pageCapture.isComplete()) return;
+    settingsLifecycle.ensureDynamicDefaults();
+    refreshEffectiveSettings();
     const settings = settingsStore.readRaw();
     if (
       !pageCapture.isComplete() ||
@@ -1885,6 +1956,7 @@ export function startCapturedRuntime({
       if (autoJobs && autoCraftsmen) {
         const completed = runPhase("autoJobs with autoCraftsmen", () => {
           ensureCivicControls();
+          settingsLifecycle.ensureDynamicDefaults();
           combinedJobs = fullJobs.isAvailable();
           if (combinedJobs) runJobsAutomation(fullJobs, false);
         });
@@ -1896,6 +1968,7 @@ export function startCapturedRuntime({
       if (autoJobs && !combinedJobs) {
         runPhase("autoJobs", () => {
           ensureCivicControls();
+          settingsLifecycle.ensureDynamicDefaults();
           runJobsAutomation(ordinaryJobs, false);
         });
       }
@@ -2168,6 +2241,9 @@ export function startCapturedRuntime({
   // pays for, was re-made four times more often than the setting asks for.
   let pendingPeriods = 0;
   return pageCapture.periods.subscribe((period) => {
+    // The gate is the first effective-settings consumer after a browser wake. Refresh before it
+    // reads tickRate so an override can change cadence without waiting for a completed cycle.
+    refreshEffectiveSettings();
     const gate = advancePeriodGate({
       pendingPeriods,
       completedPeriods: period.periods,

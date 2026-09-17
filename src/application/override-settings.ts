@@ -80,5 +80,9 @@ export function createOverrideSettings({
     display.publish();
   }
 
-  return { updateOverrides };
+  function syncStoredSettings(): void {
+    rebaseOnStoredSettings(getSettings(), getSettingsRaw());
+  }
+
+  return { updateOverrides, syncStoredSettings };
 }

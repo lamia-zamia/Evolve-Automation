@@ -43,6 +43,25 @@ import {
   createAuthoritySettingsBrowserAdapter,
   type AuthoritySettingsBrowserActions,
 } from "../adapters/browser/authority-settings.ts";
+import {
+  createHellSettingsBrowserAdapter,
+  type HellSettingsBrowserActions,
+} from "../adapters/browser/hell-settings.ts";
+import { getHellSettingsReadModel } from "../domain/combat/hell-settings.ts";
+import {
+  createWeightingSettingsBrowserAdapter,
+  type WeightingSettingsBrowserActions,
+} from "../adapters/browser/weighting-settings.ts";
+import { getWeightingSettingsReadModel } from "../domain/economy/resources/weighting-settings.ts";
+import { createJobSettingsBrowserAdapter } from "../adapters/browser/job-settings.ts";
+import { createTableSorter } from "../adapters/browser/table-sorter.ts";
+import { createJobSettingsReadModel } from "../domain/civic/job-settings.ts";
+import { createJobSettingsIntentHandler } from "../application/job-settings.ts";
+import {
+  createCapturedJobCatalogReader,
+  isCapturedSmartJob,
+} from "../adapters/evolve/civic/captured-job-catalog.ts";
+import { readCapturedControlLabel } from "../adapters/evolve/captured-control-label.ts";
 import { createOptionsModalBrowserAdapter } from "../adapters/browser/options-modal.ts";
 import { createBrowserDomQuery } from "../adapters/browser/dom.ts";
 import { createNumberFormatting } from "../formatting/numbers.ts";
@@ -53,15 +72,19 @@ import { createChallengeHelperSettingsIntentHandler } from "../application/chall
 import { createInterfaceSettingsIntentHandler } from "../application/interface-settings.ts";
 import { createStateLogSettingsIntentHandler } from "../application/state-log-settings.ts";
 import { createAuthoritySettingsIntentHandler } from "../application/authority-settings.ts";
+import { createHellSettingsIntentHandler } from "../application/hell-settings.ts";
+import { createWeightingSettingsIntentHandler } from "../application/weighting-settings.ts";
 import {
   computeAchievementGuardDefaults,
   computeAuthorityDefaults,
   computeChallengeHelperDefaults,
   computeGeneralDefaults,
+  computeHellDefaults,
   computeInterfaceDefaults,
   computeStateLogDefaults,
+  computeWeightingDefaults,
 } from "../domain/settings-defaults.ts";
-import type { SettingsStore } from "../adapters/browser/settings-store.ts";
+import type { CapturedSettingsStore } from "../ports/captured-settings-store.ts";
 import { inspectImportedSettings } from "../adapters/browser/settings-import.ts";
 import {
   createFileDownload,
@@ -71,6 +94,7 @@ import { createSettingsControls } from "../ui/settings-controls.ts";
 import { createSettingsInputs } from "../ui/settings-inputs.ts";
 import { createSettingsShell } from "../ui/settings-shell.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
+import type { CapturedSettingsLifecycle } from "../application/captured-settings-lifecycle.ts";
 
 type OptionsModalDependencies = Parameters<
   typeof createOptionsModalBrowserAdapter
@@ -105,6 +129,11 @@ type StateLogSettings = ReturnType<typeof createStateLogSettingsBrowserAdapter>;
 type AuthoritySettings = ReturnType<
   typeof createAuthoritySettingsBrowserAdapter
 >;
+type HellSettings = ReturnType<typeof createHellSettingsBrowserAdapter>;
+type WeightingSettings = ReturnType<
+  typeof createWeightingSettingsBrowserAdapter
+>;
+type JobSettings = ReturnType<typeof createJobSettingsBrowserAdapter>;
 type SettingsShellDependencies = Parameters<typeof createSettingsShell>[0];
 type SettingsControlNode = Parameters<
   ReturnType<typeof createSettingsControls>["addSettingsNumber"]
@@ -117,7 +146,9 @@ type CraftToggleJQuery = ReturnType<
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
   readonly capturedPanelWindow: unknown;
-  readonly settings: SettingsStore;
+  readonly settings: CapturedSettingsStore;
+  /** The captured raw/effective settings boundary; absent only for panel contract tests. */
+  readonly settingsLifecycle?: CapturedSettingsLifecycle;
   readonly craftToggles?: {
     readonly rootState: GameRootStateSource;
     readonly controls: GameControlRegistry;
@@ -202,6 +233,7 @@ function panelFileDownloadFor(
 export function createCapturedSettingsPanel({
   capturedPanelWindow,
   settings,
+  settingsLifecycle,
   craftToggles: capturedCraftToggles,
   onDiagnostic = () => {},
   logError = () => {},
@@ -251,6 +283,7 @@ export function createCapturedSettingsPanel({
     computeAuthorityDefaults().def,
   ];
   const prepareSettingsForUi = () => {
+    settingsLifecycle?.initialize();
     const raw = settings.readRaw();
     if (!isRecord(raw["overrides"]) || Array.isArray(raw["overrides"])) {
       raw["overrides"] = {};
@@ -264,13 +297,69 @@ export function createCapturedSettingsPanel({
 
   const resetCapturedSectionRecord = (
     defaults: Readonly<Record<string, unknown>>,
+    section?: string,
   ) => {
+    if (settingsLifecycle !== undefined && section !== undefined) {
+      settingsLifecycle.resetSection(section);
+      return;
+    }
     const raw = settings.readRaw();
     const overrides = raw["overrides"];
     if (isRecord(overrides) && !Array.isArray(overrides)) {
       for (const key of Object.keys(defaults)) delete overrides[key];
     }
     Object.assign(raw, defaults);
+  };
+
+  const capturedJobCatalogReader =
+    capturedCraftToggles === undefined
+      ? undefined
+      : createCapturedJobCatalogReader({
+          rootState: capturedCraftToggles.rootState,
+          controls: capturedCraftToggles.controls,
+          readSettings: settings.readRaw,
+          onSkipped: (controlId, reason) =>
+            onDiagnostic(`settings job row skipped ${controlId}: ${reason}`),
+        });
+
+  const readCapturedJobSettings = () => {
+    const catalog = capturedJobCatalogReader?.();
+    const raw = settings.readRaw();
+    const overrides = isRecord(raw.overrides) ? raw.overrides : {};
+    return createJobSettingsReadModel({
+      rows: (catalog?.jobs ?? []).map((job) => {
+        const settingName = `job_${job.id}`;
+        const handle = capturedCraftToggles!.controls.resolve(job.controlId);
+        return {
+          id: job.id,
+          label:
+            handle === undefined
+              ? job.id
+              : readCapturedControlLabel(handle, job.id),
+          color:
+            job.id === "unemployed"
+              ? "warning"
+              : job.kind === "other"
+                ? "advanced"
+                : "info",
+          enabledSettingName: settingName,
+          enabled: raw[settingName] !== false,
+          hasOverride:
+            Array.isArray(overrides[settingName]) &&
+            overrides[settingName].length > 0,
+          breakpoints: [
+            { kind: "input", settingName: `job_b1_${job.id}` },
+            { kind: "input", settingName: `job_b2_${job.id}` },
+            job.split
+              ? { kind: "weighted" }
+              : { kind: "input", settingName: `job_b3_${job.id}` },
+          ],
+          ...(isCapturedSmartJob(job.id)
+            ? { smartSettingName: `job_s_${job.id}` }
+            : {}),
+        };
+      }),
+    });
   };
 
   let settingsUi:
@@ -281,6 +370,9 @@ export function createCapturedSettingsPanel({
         readonly interface: InterfaceSettings;
         readonly stateLog: StateLogSettings;
         readonly authority: AuthoritySettings;
+        readonly hell: HellSettings;
+        readonly weighting: WeightingSettings;
+        readonly job: JobSettings;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -343,6 +435,7 @@ export function createCapturedSettingsPanel({
     let interfaceSettings: InterfaceSettings | undefined;
     let stateLog: StateLogSettings | undefined;
     let authority: AuthoritySettings | undefined;
+    let job: JobSettings | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -372,7 +465,13 @@ export function createCapturedSettingsPanel({
       buildTriggerSettings: () => {},
       buildResearchSettings: () => {},
       buildWarSettings: () => {},
-      buildHellSettings: () => {},
+      buildHellSettings: (parentNode, secondaryPrefix) =>
+        hell?.buildHellSettings(
+          parentNode as unknown as Parameters<
+            HellSettings["buildHellSettings"]
+          >[0],
+          secondaryPrefix,
+        ),
       buildMechSettings: () => {},
       buildFleetSettings: () => {},
       buildEjectorSettings: () => {},
@@ -380,9 +479,9 @@ export function createCapturedSettingsPanel({
       buildStorageSettings: () => {},
       buildMagicSettings: () => {},
       buildProductionSettings: () => {},
-      buildJobSettings: () => {},
+      buildJobSettings: () => job?.buildJobSettings(),
       buildBuildingSettings: () => {},
-      buildWeightingSettings: () => {},
+      buildWeightingSettings: () => weighting?.buildWeightingSettings(),
       buildProjectSettings: () => {},
       buildLoggingSettings: () => {},
       filterBuildingSettingsTable: () => {},
@@ -395,6 +494,10 @@ export function createCapturedSettingsPanel({
     const generalIntent = createGeneralSettingsIntentHandler({
       writer: {
         resetToDefaults: () => {
+          if (settingsLifecycle !== undefined) {
+            settingsLifecycle.resetSection("general");
+            return;
+          }
           const raw = settings.readRaw();
           const overrides = raw["overrides"];
           if (isRecord(overrides) && !Array.isArray(overrides)) {
@@ -484,18 +587,36 @@ export function createCapturedSettingsPanel({
           label,
           hint,
         ),
+      addTableInput: (node: unknown, settingName: string) =>
+        controls.addTableInput(node as SettingsControlNode, settingName),
+      addSettingsString: (
+        node: unknown,
+        settingName: string,
+        label: string,
+        hint: string,
+      ) =>
+        controls.addSettingsString(
+          node as SettingsControlNode,
+          settingName,
+          label,
+          hint,
+        ),
     };
     const createSimpleWriter = (
       defaults: Readonly<Record<string, unknown>>,
+      section: string,
     ) => ({
-      resetToDefaults: () => resetCapturedSectionRecord(defaults),
+      resetToDefaults: () => resetCapturedSectionRecord(defaults, section),
       persist: () => settings.persist(),
     });
     let achievementIntent: ReturnType<
       typeof createAchievementGuardSettingsIntentHandler
     >;
     achievementIntent = createAchievementGuardSettingsIntentHandler({
-      writer: createSimpleWriter(computeAchievementGuardDefaults().def),
+      writer: createSimpleWriter(
+        computeAchievementGuardDefaults().def,
+        "achievement",
+      ),
       renderSettingsContent: () =>
         achievementGuard?.updateAchievementGuardSettingsContent(),
     });
@@ -511,7 +632,10 @@ export function createCapturedSettingsPanel({
       typeof createChallengeHelperSettingsIntentHandler
     >;
     challengeIntent = createChallengeHelperSettingsIntentHandler({
-      writer: createSimpleWriter(computeChallengeHelperDefaults().def),
+      writer: createSimpleWriter(
+        computeChallengeHelperDefaults().def,
+        "challengehelper",
+      ),
       renderSettingsContent: () =>
         challengeHelper?.updateChallengeHelperSettingsContent(),
     });
@@ -527,7 +651,7 @@ export function createCapturedSettingsPanel({
       typeof createInterfaceSettingsIntentHandler
     >;
     interfaceIntent = createInterfaceSettingsIntentHandler({
-      writer: createSimpleWriter(computeInterfaceDefaults().def),
+      writer: createSimpleWriter(computeInterfaceDefaults().def, "interface"),
       reader: {
         read: () => ({
           activeTargetsUI: settings.readRaw()["activeTargetsUI"] === true,
@@ -556,7 +680,7 @@ export function createCapturedSettingsPanel({
 
     let stateLogIntent: ReturnType<typeof createStateLogSettingsIntentHandler>;
     stateLogIntent = createStateLogSettingsIntentHandler({
-      writer: createSimpleWriter(computeStateLogDefaults().def),
+      writer: createSimpleWriter(computeStateLogDefaults().def, "statelog"),
       renderSettingsContent: () => stateLog?.updateStateLogSettingsContent(),
     });
     stateLog = createStateLogSettingsBrowserAdapter({
@@ -586,7 +710,7 @@ export function createCapturedSettingsPanel({
       typeof createAuthoritySettingsIntentHandler
     >;
     authorityIntent = createAuthoritySettingsIntentHandler({
-      writer: createSimpleWriter(computeAuthorityDefaults().def),
+      writer: createSimpleWriter(computeAuthorityDefaults().def, "authority"),
       renderSettingsContent: () => authority?.updateAuthoritySettingsContent(),
     });
     authority = createAuthoritySettingsBrowserAdapter({
@@ -596,6 +720,146 @@ export function createCapturedSettingsPanel({
       getActions: () =>
         simpleActions as unknown as AuthoritySettingsBrowserActions,
     });
+    let hell: HellSettings | undefined;
+    const hellIntent = createHellSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => {
+          if (settingsLifecycle !== undefined) {
+            settingsLifecycle.resetSection("hell");
+          } else {
+            resetCapturedSectionRecord(computeHellDefaults().def);
+          }
+        },
+        persist: () => settings.persist(),
+      },
+      renderSettingsContent: (secondaryPrefix) =>
+        hell?.updateHellSettingsContent(secondaryPrefix),
+      effects: { resetCheckboxes: () => controls.resetCheckbox("autoHell") },
+    });
+    hell = createHellSettingsBrowserAdapter({
+      getDocument: () => documentForUi,
+      getJQuery: getJQuery as Parameters<
+        typeof createHellSettingsBrowserAdapter
+      >[0]["getJQuery"],
+      reader: { read: getHellSettingsReadModel },
+      intents: hellIntent,
+      getActions: () =>
+        ({
+          ...simpleActions,
+          addSettingsHeader1: shell.addSettingsHeader1,
+          buildSettingsSection2: (
+            ...args: Parameters<
+              HellSettingsBrowserActions["buildSettingsSection2"]
+            >
+          ) => {
+            const [
+              _parentNode,
+              secondaryPrefix,
+              sectionId,
+              sectionName,
+              resetFunction,
+              updateSettingsContentFunction,
+            ] = args;
+            if (secondaryPrefix === "") {
+              shell.buildSettingsSection(
+                sectionId,
+                sectionName,
+                resetFunction,
+                () => updateSettingsContentFunction(""),
+              );
+            }
+          },
+        }) as unknown as HellSettingsBrowserActions,
+    });
+    let weighting: WeightingSettings | undefined;
+    const weightingIntent = createWeightingSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => {
+          if (settingsLifecycle !== undefined) {
+            settingsLifecycle.resetSection("weighting");
+          } else {
+            resetCapturedSectionRecord(computeWeightingDefaults().def);
+          }
+        },
+        persist: () => settings.persist(),
+      },
+      renderSettingsContent: () => weighting?.updateWeightingSettingsContent(),
+    });
+    weighting = createWeightingSettingsBrowserAdapter({
+      getDocument: () => documentForUi,
+      getJQuery: getJQuery as Parameters<
+        typeof createWeightingSettingsBrowserAdapter
+      >[0]["getJQuery"],
+      intents: weightingIntent,
+      getActions: () =>
+        ({
+          ...simpleActions,
+          addTableInput: (node: unknown, settingName: string) =>
+            controls.addTableInput(node as SettingsControlNode, settingName),
+        }) as unknown as WeightingSettingsBrowserActions,
+      getReadModel: getWeightingSettingsReadModel,
+    });
+    const tableSorter = createTableSorter({
+      getSortable: () => readProperty(capturedPanelWindow, "Sortable"),
+    });
+    const jobIntent = createJobSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => settingsLifecycle?.resetSection("job"),
+        persist: () => settings.persist(),
+        resetPriorities: () => {
+          const catalog = capturedJobCatalogReader?.();
+          catalog?.jobs.forEach((entry, index) => {
+            settings.readRaw()[`job_p_${entry.id}`] = index;
+          });
+        },
+        reorderJobs: (jobIds) => {
+          const known = new Set(
+            capturedJobCatalogReader?.()?.jobs.map((entry) => entry.id),
+          );
+          jobIds.forEach((jobId, index) => {
+            if (known.has(jobId)) settings.readRaw()[`job_p_${jobId}`] = index;
+          });
+        },
+      },
+      renderSettingsContent: () => job?.updateJobSettingsContent(),
+      effects: {
+        resetCheckboxes: () => {
+          const catalog = capturedJobCatalogReader?.();
+          if (catalog === undefined) return;
+          controls.resetCheckbox(
+            ...catalog.jobs.map((entry) => `job_${entry.id}`),
+          );
+        },
+      },
+    });
+    job = createJobSettingsBrowserAdapter({
+      getDocument: () => documentForUi,
+      getJQuery: getJQuery as Parameters<
+        typeof createJobSettingsBrowserAdapter
+      >[0]["getJQuery"],
+      getReadModel: readCapturedJobSettings,
+      intents: jobIntent,
+      getActions: () =>
+        ({
+          ...simpleActions,
+          addTableInput: (node: unknown, settingName: string) =>
+            controls.addTableInput(node as SettingsControlNode, settingName),
+          addTableToggle: (node: unknown, settingName: string) =>
+            controls.addTableToggle(node as SettingsControlNode, settingName),
+          addToggleCallbacks: (node: unknown, settingName: string) =>
+            controls.addToggleCallbacks(
+              node as SettingsControlNode,
+              settingName,
+            ),
+          getTableSorter: () => tableSorter,
+          confirm: (message: string) =>
+            confirmInPanelWindow(capturedPanelWindow, message),
+        }) as unknown as Parameters<
+          typeof createJobSettingsBrowserAdapter
+        >[0]["getActions"] extends () => infer Actions
+          ? Actions
+          : never,
+    });
     settingsUi = {
       general,
       achievementGuard,
@@ -603,6 +867,9 @@ export function createCapturedSettingsPanel({
       interface: interfaceSettings,
       stateLog,
       authority,
+      hell,
+      weighting,
+      job,
       craftToggles,
       shell,
     };
@@ -627,8 +894,12 @@ export function createCapturedSettingsPanel({
     ) {
       return false;
     }
-    settings.replaceRaw(inspection.settings);
-    settings.persist();
+    if (settingsLifecycle === undefined) {
+      settings.replaceRaw(inspection.settings);
+      settings.persist();
+    } else {
+      settingsLifecycle.replaceAndInitialize(inspection.settings);
+    }
     // Everything drawn from the replaced record goes, so the next `ensurePanel` rebuilds the
     // container and every section from the imported one. The import/export buttons sit outside
     // both and keep working. Automation needs no signal: it reads the store on every cycle.
@@ -655,6 +926,11 @@ export function createCapturedSettingsPanel({
     ui.achievementGuard.buildAchievementGuardSettings();
     ui.challengeHelper.buildChallengeHelperSettings();
     ui.authority.buildAuthoritySettings();
+    ui.hell.buildHellSettings(dom("#script_settings"), "");
+    ui.weighting.buildWeightingSettings();
+    if (capturedJobCatalogReader?.() !== undefined) {
+      ui.job.buildJobSettings();
+    }
   };
 
   const removeScriptSettings = () => {

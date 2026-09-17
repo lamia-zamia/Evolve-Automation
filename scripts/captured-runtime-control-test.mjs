@@ -39,11 +39,17 @@ const stop = startCapturedRuntime({
     getItem() {
       return storageValue;
     },
+    setItem(_key, value) {
+      storageValue = value;
+    },
   },
   logError: (message) => errors.push(message),
 });
 
 assert.equal(typeof listener, "function");
+assert.notEqual(storageValue, null);
+assert.equal(JSON.parse(storageValue).autoBuild, false);
+assert.equal(JSON.parse(storageValue).autoMarket, false);
 
 // A fresh install inherits the game's defaults: the captured runtime must not start an
 // automation family merely because the script settings key is absent.
@@ -488,17 +494,6 @@ assert.equal(unsubscribeCount, 1);
         JSON.stringify({
           masterScriptToggle: true,
           autoJobs: true,
-          job_unemployed: true,
-          job_farmer: true,
-          jobSetDefault: true,
-          // A profile that has been through a job settings reset; without breakpoints the
-          // captured catalog plans nothing rather than reading every absence as a zero target.
-          job_b1_unemployed: 0,
-          job_b2_unemployed: 0,
-          job_b3_unemployed: 0,
-          job_b1_farmer: -1,
-          job_b2_farmer: -1,
-          job_b3_farmer: -1,
         }),
     },
     logError: () => {},

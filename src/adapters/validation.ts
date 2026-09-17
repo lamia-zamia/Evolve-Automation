@@ -1,4 +1,11 @@
-export type UnknownRecord = Record<PropertyKey, unknown>;
+import {
+  isNonArrayRecord,
+  isRecord,
+  type UnknownRecord,
+} from "../validation/records.ts";
+
+export { isNonArrayRecord, isRecord };
+export type { UnknownRecord };
 
 const MAX_DESCRIBED_STRING_LENGTH = 60;
 
@@ -54,11 +61,6 @@ function describeValue(value: unknown): string {
   }
 }
 
-/** Non-throwing counterpart of `requireRecord`: any non-null object, arrays included. */
-export function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null;
-}
-
 /**
  * As `isRecord`, for callers that need the bag rather than a verdict: the value itself, or
  * `undefined`. Single owner for the module-local `readRecord` guards the settings controls
@@ -68,15 +70,6 @@ export function readRecord(
   value: unknown,
 ): Record<string, unknown> | undefined {
   return isRecord(value) ? value : undefined;
-}
-
-/**
- * As `isRecord`, but rejects arrays. Game data that must be a keyed bag reads through this one,
- * because an array satisfies `typeof value === "object"` and would otherwise pass as a record
- * whose keys are its indices.
- */
-export function isNonArrayRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**

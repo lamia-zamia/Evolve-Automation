@@ -4,12 +4,12 @@
  * of the captured runtime. The queue mutation itself is shared with the compatibility helper.
  */
 
-import type { SettingsStore } from "../../../browser/settings-store.ts";
+import type { CapturedSettingsStore } from "../../../../ports/captured-settings-store.ts";
 import { isNonArrayRecord } from "../../../validation.ts";
 import { applyQueuedSettings } from "../../../../utils/queued-settings.ts";
 
 export interface CapturedQueuedSettingsDependencies {
-  readonly settings: SettingsStore;
+  readonly settings: CapturedSettingsStore;
   /** Rebuilds the script settings section when the game-facing panel is enabled. */
   readonly refreshSettings?: () => void;
   readonly onWarning?: (message: string) => void;

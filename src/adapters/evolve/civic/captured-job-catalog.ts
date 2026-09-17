@@ -14,6 +14,7 @@ import type {
   JobsCycleInput,
   JobsJobInput,
 } from "../../../domain/civic/jobs.ts";
+import type { JobResetContext } from "../../../domain/settings-defaults.ts";
 import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
 import {
   finite,
@@ -640,7 +641,10 @@ function readFarmerSmartMaximum(
   const maximum = finiteNonNegative(readProperty(food, "max"));
   let rate = finite(readProperty(food, "diff"));
   if (amount === undefined || maximum === undefined || rate === undefined) {
-    return undefined;
+    // Food is initialized after the ordinary Civics controls on a new/partial draw. Leaving the
+    // cap open keeps a smart default from disabling the whole Jobs pass; the next complete root
+    // sample will replace this provisional answer with the game's food cap.
+    return null;
   }
   if (amount >= maximum) return 0;
   const population = finiteNonNegative(
@@ -1131,6 +1135,10 @@ const SMART_MAXIMUM_IDS: ReadonlySet<string> = new Set([
   "entertainer",
 ]);
 
+export function isCapturedSmartJob(id: string): boolean {
+  return SMART_MAXIMUM_IDS.has(id);
+}
+
 const JOB_TOKENS: Readonly<Record<string, number>> = Object.freeze({
   unemployed: 0,
   hunter: 1,
@@ -1176,6 +1184,32 @@ const SPLIT_JOB_IDS: ReadonlySet<string> = new Set([
   "crystal_miner",
   "scavenger",
 ]);
+
+/**
+ * The captured job controls are the only job catalog available to the DeadSpace runtime. The
+ * settings reset needs the same canonical keys as the old job map, but it must not import that
+ * map or a manager just to spell them. DeadSpace's control ids are the original ids, so the
+ * PascalCase form is the stable bridge for the pure breakpoint table.
+ */
+export function readCapturedJobResetContext(
+  controls: GameControlRegistry,
+): JobResetContext {
+  const jobs = controls
+    .capturedElementIds()
+    .filter((id) => id.startsWith("civ-") && id.length > "civ-".length)
+    .map((controlId) => controlId.slice("civ-".length))
+    .filter((id, index, ids) => ids.indexOf(id) === index)
+    .map((originalId) => ({
+      key: originalId
+        .split(/[_-]/u)
+        .filter((part) => part.length > 0)
+        .map((part) => part[0]!.toUpperCase() + part.slice(1))
+        .join(""),
+      originalId,
+      isSmart: SMART_MAXIMUM_IDS.has(originalId),
+    }));
+  return { jobs };
+}
 
 function jobKind(id: string): JobKind {
   return JOB_KINDS[id] ?? "other";

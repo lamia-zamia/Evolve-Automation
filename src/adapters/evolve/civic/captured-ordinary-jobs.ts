@@ -194,7 +194,9 @@ function readAuthorityInput(
   }
   const resources = readProperty(root, "resource");
   const authority = readProperty(resources, "Authority");
-  if (!isRecord(authority)) return undefined;
+  // Authority is created lazily by DeadSpace. A fresh profile has no such resource yet; that is
+  // the same unavailable authority input as a hidden resource, not an incomplete job catalog.
+  if (!isRecord(authority)) return unavailableInput().authority;
   // The legacy input gated the whole authority block on `Authority.isUnlocked()`, which is this
   // flag. Reading it first keeps a run that never unlocks Authority from needing the rest.
   const display = readProperty(authority, "display");

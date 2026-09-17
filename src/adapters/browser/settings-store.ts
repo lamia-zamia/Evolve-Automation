@@ -13,18 +13,7 @@
  */
 
 import { isNonArrayRecord, readProperty } from "../validation.ts";
-
-export interface SettingsStore {
-  /** The live record. Mutating it is how the settings UI writes; then call `persist`. */
-  readRaw(): Record<string, unknown>;
-  /**
-   * Replaces the whole record, which is what a settings import is. Every reader goes through
-   * `readRaw` on each use, so the next read — automation's included — sees the imported record.
-   */
-  replaceRaw(next: Record<string, unknown>): void;
-  /** Writes the record back to storage. A storage failure is reported, never thrown. */
-  persist(): void;
-}
+import type { CapturedSettingsStore } from "../../ports/captured-settings-store.ts";
 
 export interface SettingsStoreDependencies {
   readonly storage: unknown;
@@ -42,7 +31,7 @@ function readSettingsText(storage: unknown): string | undefined {
 export function createSettingsStore({
   storage,
   logError = () => {},
-}: SettingsStoreDependencies): SettingsStore {
+}: SettingsStoreDependencies): CapturedSettingsStore {
   let record: Record<string, unknown> | undefined;
   const load = (): Record<string, unknown> => {
     const text = readSettingsText(storage);

@@ -539,9 +539,13 @@ export function computeStorageDefaults(
   });
 
   // Enable overflow for endgame resources
-  def["res_storage_o_" + context.orichalcumId] = true;
-  def["res_storage_o_" + context.vitreloyId] = true;
-  def["res_storage_o_" + context.bolognumId] = true;
+  for (const id of [
+    context.orichalcumId,
+    context.vitreloyId,
+    context.bolognumId,
+  ]) {
+    if (id.length > 0) def["res_storage_o_" + id] = true;
+  }
 
   return {
     def,
@@ -697,6 +701,7 @@ export function computeJobDefaults(context: JobResetContext): ResetPlan {
 
   const setBreakpoints = (key: string, b1: number, b2: number, b3: number) => {
     const originalId = originalIdByKey[key];
+    if (originalId === undefined) return;
     def["job_b1_" + originalId] = b1;
     def["job_b2_" + originalId] = b2;
     def["job_b3_" + originalId] = b3;
@@ -813,18 +818,29 @@ export function computeBuildingDefaults(
     "TauGas2Name6",
     "TauGas2Name7",
     "TauGas2Name8",
-  ].forEach((b) => (def["bat" + bindingByKey[b]] = false));
+  ].forEach((b) => {
+    const binding = bindingByKey[b];
+    if (binding !== undefined) def["bat" + binding] = false;
+  });
 
   // Exotic Zoo: enabled by default with a reduced weighting
-  def["bat" + bindingByKey.AlphaExoticZoo] = true;
-  def["bld_w_" + bindingByKey.AlphaExoticZoo] = 50;
+  const exoticZoo = bindingByKey.AlphaExoticZoo;
+  if (exoticZoo !== undefined) {
+    def["bat" + exoticZoo] = true;
+    def["bld_w_" + exoticZoo] = 50;
+  }
 
   // Limit max for belt ships, and horseshoes
-  def["bld_m_" + bindingByKey.ForgeHorseshoe] = 20;
-  def["bld_m_" + bindingByKey.RedForgeHorseshoe] = 20;
-  def["bld_m_" + bindingByKey.TauForgeHorseshoe] = 20;
-  def["bld_m_" + bindingByKey.BeltEleriumShip] = 15;
-  def["bld_m_" + bindingByKey.BeltIridiumShip] = 15;
+  for (const [key, maximum] of [
+    ["ForgeHorseshoe", 20],
+    ["RedForgeHorseshoe", 20],
+    ["TauForgeHorseshoe", 20],
+    ["BeltEleriumShip", 15],
+    ["BeltIridiumShip", 15],
+  ] as const) {
+    const binding = bindingByKey[key];
+    if (binding !== undefined) def["bld_m_" + binding] = maximum;
+  }
 
   return { def };
 }
@@ -854,6 +870,7 @@ export function computeProjectDefaults(
     weighting: number,
   ) => {
     const id = idByKey[key];
+    if (id === undefined) return;
     def["arpa_" + id] = autoBuildEnabled;
     def["arpa_p_" + id] = projectPriority++;
     def["arpa_m_" + id] = autoMax;
@@ -966,6 +983,7 @@ export function computeProductionDefaults(
     craftPreserve: number,
   ) => {
     const id = context.foundryResourceIdByKey[key];
+    if (id === undefined) return;
     def["craft" + id] = autoCraftEnabled;
     def["job_" + id] = crafterEnabled;
     def["foundry_w_" + id] = craftWeighting;
@@ -994,6 +1012,7 @@ export function computeProductionDefaults(
     priority: number,
   ) => {
     const id = context.factoryResourceIdByKey[key];
+    if (id === undefined) return;
     def["production_" + id] = enabled;
     def["production_w_" + id] = weighting;
     def["production_p_" + id] = priority;
@@ -1012,6 +1031,7 @@ export function computeProductionDefaults(
     priority: number,
   ) => {
     const id = context.droidResourceIdByKey[key];
+    if (id === undefined) return;
     def["droid_w_" + id] = weighting;
     def["droid_pr_" + id] = priority;
   };
@@ -1097,8 +1117,8 @@ export function computeEjectorDefaults(
   supplyList.forEach((r) => (def["res_supply" + r.id] = r.isTradable));
   naniteList.forEach((r) => (def["res_nanite" + r.id] = r.isTradable));
 
-  def["res_eject" + eleriumId] = true;
-  def["res_eject" + inferniteId] = true;
+  if (eleriumId.length > 0) def["res_eject" + eleriumId] = true;
+  if (inferniteId.length > 0) def["res_eject" + inferniteId] = true;
 
   return {
     def,
