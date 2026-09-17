@@ -1020,14 +1020,14 @@ assert.equal(unsubscribeCount, 1);
 // failures make its actual order observable without relying on source-text ordering or a test-only
 // expected-phase constant. The always-on buildingAlwaysClick preflight consumes the first root
 // failure, and the captured mercenary phase is included before the existing spy/espionage/battle
-// sequence. The failure fixture stops espionage before battle, so this block focuses on the
-// ordering boundary; the combat fixture below covers a successful mercenary pass before foreign
-// combat reads.
+// sequence. Three valid combat root reads account for the current espionage guards; the following
+// root failure makes the conditional battle phase observable before tax and government. The
+// combat fixture below separately covers a successful mercenary pass before foreign combat reads.
 {
   const phaseFailures = [];
   const observedPhases = [];
   let remainingRootFailures = 4;
-  let espionageRootReads = 0;
+  let validCombatRootReads = 0;
   const root = {
     tech: { spy: 2 },
     civic: {
@@ -1079,8 +1079,8 @@ assert.equal(unsubscribeCount, 1);
             remainingRootFailures -= 1;
             throw new Error("phase stub");
           }
-          if (espionageRootReads < 2) {
-            espionageRootReads += 1;
+          if (validCombatRootReads < 3) {
+            validCombatRootReads += 1;
             return root;
           }
           throw new Error("battle phase stub");
@@ -1181,6 +1181,8 @@ assert.equal(unsubscribeCount, 1);
     "autoBuild",
     "autoFight.mercenary",
     "autoFight.spy",
+    "autoFight.espionage",
+    "autoFight.battle",
     "autoTax",
     "autoGovernment",
   ]);
@@ -1197,7 +1199,7 @@ assert.equal(unsubscribeCount, 1);
       "autoResearch",
       "autoBuild",
       "autoFight.mercenary",
-      "autoFight.espionage",
+      "autoFight.battle",
       "autoTax",
       "autoGovernment",
     ],
