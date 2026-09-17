@@ -62,7 +62,8 @@ export interface GeneticsMutationDecision {
   readonly traitId: string;
   readonly fromPresent: boolean;
   readonly toPresent: boolean;
-  readonly cost: number;
+  /** Null when the game will decide affordability at invocation time. */
+  readonly cost: number | null;
   readonly expectedCurrencyQuantity: number;
   readonly currencyId: MutationCurrencyId;
   readonly reserve: number;
@@ -102,7 +103,12 @@ export function planMutation(
   return null;
 }
 
-/** Select at most one live mutation that leaves the configured reserve intact. */
+/**
+ * Select at most one live mutation that leaves the configured reserve intact.
+ *
+ * A null cost is safe only when the configured reserve is zero: the game can then remain the sole
+ * affordability authority without the planner promising a balance it cannot verify in advance.
+ */
 export function planGeneticsMutation(
   input: Readonly<GeneticsMutationInput>,
 ): GeneticsMutationDecision | null {
@@ -119,9 +125,10 @@ export function planGeneticsMutation(
 
   for (const operation of input.operations) {
     const cost = operation.cost;
-    if (
-      operation.eligible !== true ||
-      cost === null ||
+    if (operation.eligible !== true) continue;
+    if (cost === null) {
+      if (currency.reserve !== 0) continue;
+    } else if (
       !Number.isFinite(cost) ||
       cost < 0 ||
       currency.currentQuantity - cost < currency.reserve

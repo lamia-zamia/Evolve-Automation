@@ -17,7 +17,7 @@ import {
   createCapturedGenetics,
   GENETICS_CONTROL,
 } from "../adapters/evolve/traits/captured-genetics.ts";
-import { GENE_SLOTS_CONTROL } from "../adapters/evolve/traits/captured-trait-automation.ts";
+import { GENETICS_BREAKDOWN_CONTROL } from "../adapters/evolve/traits/captured-trait-automation.ts";
 import { runGeneticsAutomation } from "../application/genetics.ts";
 import { createCapturedTraitControl } from "./captured-trait-control.ts";
 import {
@@ -1037,7 +1037,8 @@ export function startCapturedRuntime({
   let geneticsDiscoveryAttempted = false;
   /**
    * Draws the A.R.P.A. tab, where `loadTab` calls `arpa('Genetics')` in the same pass that draws the
-   * project panel, and `genetics()` binds `#arpaSequence`. Both of its own gates are checked first:
+   * project panel, and `genetics()` binds `#arpaSequence` plus the Genetics 2.0 `#geneticBreakdown`.
+   * Both of its own gates are checked first:
    * `genetics()` returns before drawing anything unless `settings.arpa.genetics` is set, and the
    * sequencer panel itself exists only above `tech.genetics` 1.
    */
@@ -1048,7 +1049,7 @@ export function startCapturedRuntime({
       pageCapture.controls.resolve(GENETICS_CONTROL) !== undefined &&
       (typeof level !== "number" ||
         level <= 2 ||
-        pageCapture.controls.resolve(GENE_SLOTS_CONTROL) !== undefined)
+        pageCapture.controls.resolve(GENETICS_BREAKDOWN_CONTROL) !== undefined)
     ) {
       return;
     }

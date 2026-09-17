@@ -24,28 +24,27 @@ import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 import { readCapturedClickMultiplierState } from "./captured-genetics.ts";
 
-/** The live Genetics 2.0 ecosystem panels owned by `drawEcosystem()`. */
-export const GENETICS_ECOSYSTEM_TYPES = Object.freeze([
-  "trees",
-  "herbivores",
-  "carnivores",
-  "scavengers",
-] as const);
-
-/** The `geneSlotPanel()` binding that owns ranking and mutation methods. */
-export const GENE_SLOTS_CONTROL = "geneSlots";
+/** The one Genetics 2.0 binding created by `genetics()` for the live breakdown. */
+export const GENETICS_BREAKDOWN_CONTROL = "geneticBreakdown";
 
 interface MinorTarget {
   readonly candidate: GeneticsMinorTraitCandidate;
   readonly handle: GameControlHandle;
-  readonly surface: Record<PropertyKey, unknown>;
-  readonly traits: Record<PropertyKey, unknown>;
+  readonly minor: Record<PropertyKey, unknown>;
+  readonly race: Record<PropertyKey, unknown>;
+  readonly expectedTotalRank: number;
 }
 
 interface MinorSession {
   readonly root: unknown;
   readonly genes: Record<PropertyKey, unknown>;
   readonly targets: readonly MinorTarget[];
+}
+
+interface MutationAction {
+  readonly traitId: string;
+  readonly operation: MutationKind;
+  readonly rowIndex: number;
 }
 
 interface MutationTarget {
@@ -81,6 +80,17 @@ export interface CapturedTraitAutomationDependencies {
   readonly keyState: GameKeyStateReader;
   readonly getDocument: () => unknown;
   readonly readSettings: () => unknown;
+  /**
+   * Optional structured numeric mutation-cost capability supplied by a game-owned adapter.
+   * `addCost` and `removeCost` are deliberately not used: the public Vue methods return localized
+   * presentation strings. Without this capability the executor can only safely act with a zero
+   * reserve, where the game's `gain`/`purge` method remains the affordability authority.
+   */
+  readonly readMutationCost?: (
+    root: unknown,
+    traitId: string,
+    operation: MutationKind,
+  ) => unknown;
 }
 
 export interface CapturedTraitAutomation {
@@ -175,16 +185,6 @@ function invokeBoolean(
     : undefined;
 }
 
-function invokeFinite(
-  controls: GameControlRegistry,
-  handle: GameControlHandle,
-  method: string,
-  args: readonly unknown[] = [],
-): number | undefined {
-  const result = invoke(controls, handle, method, args);
-  return result?.ok === true ? finite(result.value) : undefined;
-}
-
 function unavailableMinor(): GeneticsMinorTraitInput {
   return Object.freeze({
     available: false,
@@ -211,17 +211,44 @@ function readGenes(root: unknown): Record<PropertyKey, unknown> | undefined {
   return isRecord(genes) ? genes : undefined;
 }
 
-function readEcoType(row: unknown): string | undefined {
-  const heading = queryOne(row, "h4");
-  const text = readElementText(heading);
-  return text === undefined ? undefined : text;
+function readRace(root: unknown): Record<PropertyKey, unknown> | undefined {
+  const race = readProperty(root, "race");
+  return isRecord(race) ? race : undefined;
 }
 
-function readMinorRows(
-  document: unknown,
-  ecosystem: string,
-): readonly unknown[] | undefined {
-  return queryMany(document, `#geneticMinor_${ecosystem} .traitRow`);
+function readMinorOrder(root: unknown): readonly string[] | undefined {
+  const order = readProperty(readProperty(root, "settings"), "mtorder");
+  if (!Array.isArray(order)) return undefined;
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const value of order) {
+    if (typeof value !== "string" || value.length === 0 || seen.has(value)) {
+      return undefined;
+    }
+    seen.add(value);
+    result.push(value);
+  }
+  return Object.freeze(result);
+}
+
+function readMinorRows(document: unknown): readonly unknown[] | undefined {
+  return queryMany(document, "#geneticBreakdown #geneticMinor .traitRow");
+}
+
+function readMinorTraitId(row: unknown): string | undefined {
+  return readElementText(queryOne(row, "h4"));
+}
+
+function readRaceRank(
+  race: Record<PropertyKey, unknown>,
+  traitId: string,
+): number | undefined {
+  const value = readProperty(race, traitId);
+  if (value === undefined) return 0;
+  const rank = finite(value);
+  return rank !== undefined && Number.isSafeInteger(rank) && rank >= 0
+    ? rank
+    : undefined;
 }
 
 function isBlockedMinor(
@@ -240,7 +267,8 @@ function isBlockedMinor(
 
 function readMutationAction(
   row: unknown,
-): { readonly traitId: string; readonly operation: MutationKind } | undefined {
+  rowIndex: number,
+): MutationAction | undefined {
   const descendants = queryMany(row, "*");
   const elements = descendants === undefined ? [row] : [row, ...descendants];
   for (const element of elements) {
@@ -249,12 +277,14 @@ function readMutationAction(
         return Object.freeze({
           traitId: token.slice(3),
           operation: "gain",
+          rowIndex,
         });
       }
       if (token.startsWith("remove") && token.length > 6) {
         return Object.freeze({
           traitId: token.slice(6),
           operation: "purge",
+          rowIndex,
         });
       }
     }
@@ -264,25 +294,15 @@ function readMutationAction(
 
 function readMutationActions(
   document: unknown,
-):
-  | readonly { readonly traitId: string; readonly operation: MutationKind }[]
-  | undefined {
-  const rows = queryMany(document, "#geneSlots .traitRow");
+): readonly MutationAction[] | undefined {
+  const rows = queryMany(document, "#geneticBreakdown .traitRow");
   if (rows === undefined) return undefined;
-  const actions: Array<{
-    readonly traitId: string;
-    readonly operation: MutationKind;
-  }> = [];
-  for (const row of rows) {
-    const action = readMutationAction(row);
+  const actions: MutationAction[] = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const action = readMutationAction(rows[index], index);
     if (action !== undefined) actions.push(action);
   }
-  // Legacy intent preferred adding a trait before removing one. The rows within either group
-  // remain in the order the current Genetics 2.0 panel rendered them.
-  return Object.freeze([
-    ...actions.filter(({ operation }) => operation === "gain"),
-    ...actions.filter(({ operation }) => operation === "purge"),
-  ]);
+  return Object.freeze(actions);
 }
 
 function readMutationReserve(
@@ -305,6 +325,58 @@ function readMutationReserve(
     : Math.max(minimum, phageCount + 250);
 }
 
+function readOptionalFlag(settings: unknown, key: string): boolean | undefined {
+  const value = readProperty(settings, key);
+  return value === undefined
+    ? false
+    : typeof value === "boolean"
+      ? value
+      : undefined;
+}
+
+function readPriority(settings: unknown, traitId: string): number | undefined {
+  return finite(readProperty(settings, `mutableTrait_p_${traitId}`));
+}
+
+function readAuthoritativeMutationCost(
+  dependencies: CapturedTraitAutomationDependencies,
+  root: unknown,
+  traitId: string,
+  operation: MutationKind,
+): number | null {
+  const readCost = dependencies.readMutationCost;
+  if (readCost === undefined) return null;
+  try {
+    const value = finite(readCost(root, traitId, operation));
+    return value !== undefined && value >= 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function readCurrentMutationEligibility(
+  settings: unknown,
+  race: Record<PropertyKey, unknown>,
+  action: MutationAction,
+  handle: GameControlHandle,
+): boolean | null {
+  if (!handle.methods.includes(action.operation)) return null;
+  const gain = readOptionalFlag(
+    settings,
+    `mutableTrait_gain_${action.traitId}`,
+  );
+  const purge = readOptionalFlag(
+    settings,
+    `mutableTrait_purge_${action.traitId}`,
+  );
+  if (gain === undefined || purge === undefined) return null;
+  if (gain && purge) return false;
+  if (action.operation === "gain") {
+    return gain && !own(race, action.traitId) ? true : false;
+  }
+  return purge && own(race, action.traitId) ? true : false;
+}
+
 export function createCapturedTraitAutomation(
   dependencies: CapturedTraitAutomationDependencies,
 ): CapturedTraitAutomation {
@@ -318,13 +390,23 @@ export function createCapturedTraitAutomation(
       const root = dependencies.rootState.readRoot();
       const level = readTraitGeneticsLevel(root);
       const genes = readGenes(root);
+      const race = readRace(root);
+      const minor = readProperty(race, "minor");
+      const order = readMinorOrder(root);
       const document = dependencies.getDocument();
+      const handle = dependencies.controls.resolve(GENETICS_BREAKDOWN_CONTROL);
       if (
         level === undefined ||
         level <= 2 ||
         genes === undefined ||
+        race === undefined ||
+        !isRecord(minor) ||
+        order === undefined ||
         document === undefined ||
-        document === null
+        document === null ||
+        handle === undefined ||
+        !handle.methods.includes("gene") ||
+        !handle.methods.includes("genePurchasable")
       ) {
         minorSession = null;
         return unavailableMinor();
@@ -334,49 +416,64 @@ export function createCapturedTraitAutomation(
         minorSession = null;
         return unavailableMinor();
       }
+      const rows = readMinorRows(document);
+      if (rows === undefined) {
+        minorSession = null;
+        return unavailableMinor();
+      }
+
+      const rowsByTrait = new Map<string, unknown>();
+      for (const row of rows) {
+        const traitId = readMinorTraitId(row);
+        if (traitId === undefined || rowsByTrait.has(traitId)) {
+          minorSession = null;
+          return unavailableMinor();
+        }
+        rowsByTrait.set(traitId, row);
+      }
 
       const targets: MinorTarget[] = [];
       const candidates: GeneticsMinorTraitCandidate[] = [];
-      for (const ecosystem of GENETICS_ECOSYSTEM_TYPES) {
-        const surface = readProperty(readProperty(root, "surface"), ecosystem);
-        const traits = readProperty(surface, "traits");
-        const handle = dependencies.controls.resolve(
-          `geneticMinor_${ecosystem}`,
-        );
-        if (!isRecord(surface) || !isRecord(traits) || handle === undefined) {
-          continue;
+      for (const traitId of order) {
+        const row = rowsByTrait.get(traitId);
+        if (row === undefined) continue;
+        const rank = finite(readProperty(minor, traitId));
+        const expectedTotalRank = readRaceRank(race, traitId);
+        if (
+          rank === undefined ||
+          !Number.isSafeInteger(rank) ||
+          rank < 0 ||
+          expectedTotalRank === undefined
+        ) {
+          minorSession = null;
+          return unavailableMinor();
         }
-        const rows = readMinorRows(document, ecosystem);
-        if (rows === undefined) continue;
-        for (const row of rows) {
-          const ecosystemTrait = readEcoType(row);
-          if (ecosystemTrait === undefined) continue;
-          const rank = finite(readProperty(traits, ecosystemTrait));
-          if (rank === undefined || rank < 0) continue;
-          const cost = invokeFinite(dependencies.controls, handle, "geneCost", [
-            ecosystem,
-            ecosystemTrait,
-          ]);
-          const legal = invokeBoolean(
-            dependencies.controls,
-            handle,
-            "genePurchasable",
-            [ecosystem, ecosystemTrait],
-          );
-          const candidate = Object.freeze({
-            traitId: `${ecosystem}:${ecosystemTrait}`,
-            source: "ecosystem" as const,
-            ecosystem,
-            ecosystemTrait,
-            rank,
-            cost: cost ?? null,
-            eligible: isBlockedMinor(blockedMinor, root, handle, currentGenes)
-              ? false
-              : (legal ?? null),
-          });
-          candidates.push(candidate);
-          targets.push({ candidate, handle, surface, traits });
-        }
+        const eligible = isBlockedMinor(
+          blockedMinor,
+          root,
+          handle,
+          currentGenes,
+        )
+          ? false
+          : (invokeBoolean(dependencies.controls, handle, "genePurchasable", [
+              traitId,
+            ]) ?? null);
+        const candidate = Object.freeze({
+          traitId,
+          source: "genetic-breakdown" as const,
+          rank,
+          // geneCost() is localized; genePurchasable()/gene() own affordability and spending.
+          cost: null,
+          eligible,
+        });
+        candidates.push(candidate);
+        targets.push({
+          candidate,
+          handle,
+          minor,
+          race,
+          expectedTotalRank,
+        });
       }
 
       minorSession = Object.freeze({
@@ -410,9 +507,8 @@ export function createCapturedTraitAutomation(
             "captured game root changed",
           );
         }
-        const genes = readGenes(active.root);
-        const actualGenes = finite(readProperty(genes, "amount"));
-        if (genes !== active.genes || actualGenes !== decision.expectedGenes) {
+        const actualGenes = finite(readProperty(active.genes, "amount"));
+        if (actualGenes !== decision.expectedGenes) {
           return stale("minor-trait-genes-changed", "Genes balance changed");
         }
         const target = active.targets.find(
@@ -425,7 +521,7 @@ export function createCapturedTraitAutomation(
           );
         }
         const currentHandle = dependencies.controls.resolve(
-          `geneticMinor_${target.candidate.ecosystem}`,
+          GENETICS_BREAKDOWN_CONTROL,
         );
         if (
           currentHandle === undefined ||
@@ -433,11 +529,11 @@ export function createCapturedTraitAutomation(
         ) {
           return stale(
             "minor-trait-control-stale",
-            "minor-trait control was rebound",
+            "genetics breakdown control was rebound",
           );
         }
         const currentRank = finite(
-          readProperty(target.traits, target.candidate.ecosystemTrait),
+          readProperty(target.minor, target.candidate.traitId),
         );
         if (currentRank !== decision.expectedRank) {
           return stale("minor-trait-rank-changed", "minor-trait rank changed");
@@ -446,15 +542,9 @@ export function createCapturedTraitAutomation(
           dependencies.controls,
           target.handle,
           "genePurchasable",
-          [target.candidate.ecosystem, target.candidate.ecosystemTrait],
+          [decision.traitId],
         );
-        const cost = invokeFinite(
-          dependencies.controls,
-          target.handle,
-          "geneCost",
-          [target.candidate.ecosystem, target.candidate.ecosystemTrait],
-        );
-        if (legal !== true || cost !== decision.expectedCost) {
+        if (legal !== true) {
           return stale(
             "minor-trait-capability-changed",
             "minor-trait capability changed",
@@ -475,8 +565,7 @@ export function createCapturedTraitAutomation(
           );
         }
         const result = invoke(dependencies.controls, target.handle, "gene", [
-          target.candidate.ecosystem,
-          target.candidate.ecosystemTrait,
+          decision.traitId,
         ]);
         if (result?.ok !== true) {
           blockedMinor = Object.freeze({
@@ -491,11 +580,17 @@ export function createCapturedTraitAutomation(
         }
         const afterGenes = finite(readProperty(active.genes, "amount"));
         const afterRank = finite(
-          readProperty(target.traits, target.candidate.ecosystemTrait),
+          readProperty(target.minor, target.candidate.traitId),
+        );
+        const afterTotalRank = readRaceRank(
+          target.race,
+          target.candidate.traitId,
         );
         if (
-          afterGenes !== decision.expectedGenes - decision.expectedCost ||
-          afterRank !== decision.expectedRank + 1
+          afterGenes === undefined ||
+          afterGenes >= decision.expectedGenes ||
+          afterRank !== decision.expectedRank + 1 ||
+          afterTotalRank !== target.expectedTotalRank + 1
         ) {
           blockedMinor = Object.freeze({
             root: active.root,
@@ -516,19 +611,19 @@ export function createCapturedTraitAutomation(
     read(): GeneticsMutationInput {
       const root = dependencies.rootState.readRoot();
       const level = readTraitGeneticsLevel(root);
-      const race = readProperty(root, "race");
+      const race = readRace(root);
       const prestige = readProperty(root, "prestige");
       const universe = readProperty(race, "universe");
       const currencyId = universe === "antimatter" ? "AntiPlasmid" : "Plasmid";
       const bank = readProperty(prestige, currencyId);
-      const handle = dependencies.controls.resolve(GENE_SLOTS_CONTROL);
+      const handle = dependencies.controls.resolve(GENETICS_BREAKDOWN_CONTROL);
       const reserve = readMutationReserve(dependencies.readSettings(), root);
       const currentQuantity = finite(readProperty(bank, "count"));
       const document = dependencies.getDocument();
       if (
         level === undefined ||
         level <= 2 ||
-        !isRecord(race) ||
+        race === undefined ||
         typeof universe !== "string" ||
         !isRecord(bank) ||
         reserve === undefined ||
@@ -536,7 +631,8 @@ export function createCapturedTraitAutomation(
         currentQuantity < 0 ||
         handle === undefined ||
         document === undefined ||
-        document === null
+        document === null ||
+        (!handle.methods.includes("gain") && !handle.methods.includes("purge"))
       ) {
         mutationSession = null;
         return unavailableMutation();
@@ -547,28 +643,46 @@ export function createCapturedTraitAutomation(
         return unavailableMutation();
       }
 
+      const settings = dependencies.readSettings();
+      const orderedActions = actions
+        .map((action) => {
+          const priority = readPriority(settings, action.traitId);
+          return priority === undefined ? undefined : { action, priority };
+        })
+        .filter(
+          (value): value is { action: MutationAction; priority: number } =>
+            value !== undefined,
+        )
+        .sort(
+          (left, right) =>
+            left.priority - right.priority ||
+            left.action.rowIndex - right.action.rowIndex,
+        );
+
       const targets: MutationTarget[] = [];
-      const gains: GeneticsMutationOperation[] = [];
-      const purges: GeneticsMutationOperation[] = [];
-      for (const action of actions) {
-        const fromPresent = action.operation === "purge";
-        if (own(race, action.traitId) !== fromPresent) continue;
-        const costMethod =
-          action.operation === "gain" ? "addCost" : "removeCost";
-        const cost = invokeFinite(dependencies.controls, handle, costMethod, [
-          action.traitId,
-        ]);
+      const operations: GeneticsMutationOperation[] = [];
+      for (const { action } of orderedActions) {
+        const eligible = readCurrentMutationEligibility(
+          settings,
+          race,
+          action,
+          handle,
+        );
         const operation = Object.freeze({
           traitId: action.traitId,
           kind: action.operation,
-          cost: cost ?? null,
-          eligible: cost === undefined ? null : true,
-          fromPresent,
+          cost: readAuthoritativeMutationCost(
+            dependencies,
+            root,
+            action.traitId,
+            action.operation,
+          ),
+          eligible,
+          fromPresent: action.operation === "purge",
         });
-        (action.operation === "gain" ? gains : purges).push(operation);
+        operations.push(operation);
         targets.push({ operation, handle, race, bank });
       }
-      const operations = Object.freeze([...gains, ...purges]);
       const visibleOperations = operations.map((operation) => {
         const blocked =
           blockedMutation !== null &&
@@ -637,49 +751,66 @@ export function createCapturedTraitAutomation(
         if (target === undefined) {
           return stale("mutation-target-changed", "mutation target changed");
         }
-        const currentHandle = dependencies.controls.resolve(GENE_SLOTS_CONTROL);
+        const currentHandle = dependencies.controls.resolve(
+          GENETICS_BREAKDOWN_CONTROL,
+        );
         if (
           currentHandle === undefined ||
           currentHandle.generation !== target.handle.generation
         ) {
           return stale(
             "mutation-control-stale",
-            "mutation control was rebound",
+            "genetics breakdown control was rebound",
           );
         }
         if (own(active.race, decision.traitId) !== decision.fromPresent) {
           return stale("mutation-trait-changed", "mutation trait changed");
         }
         const currentActions = readMutationActions(dependencies.getDocument());
-        if (
-          currentActions === undefined ||
-          !currentActions.some(
-            (action) =>
-              action.traitId === decision.traitId &&
-              action.operation === decision.operation,
-          )
-        ) {
+        const currentAction = currentActions?.find(
+          (action) =>
+            action.traitId === decision.traitId &&
+            action.operation === decision.operation,
+        );
+        if (currentAction === undefined) {
           return stale(
             "mutation-capability-changed",
             "mutation is no longer offered",
           );
         }
-        const costMethod =
-          decision.operation === "gain" ? "addCost" : "removeCost";
-        const currentCost = invokeFinite(
-          dependencies.controls,
+        const currentEligibility = readCurrentMutationEligibility(
+          dependencies.readSettings(),
+          active.race,
+          currentAction,
           target.handle,
-          costMethod,
-          [decision.traitId],
         );
-        if (
-          currentCost === undefined ||
-          currentCost !== decision.cost ||
-          actualQuantity - currentCost < decision.reserve
-        ) {
+        if (currentEligibility !== true) {
           return stale(
-            "mutation-cost-changed",
-            "mutation cost or reserve changed",
+            "mutation-policy-changed",
+            "mutation policy or capability changed",
+          );
+        }
+        if (decision.cost !== null) {
+          const currentCost = readAuthoritativeMutationCost(
+            dependencies,
+            active.root,
+            decision.traitId,
+            decision.operation,
+          );
+          if (
+            currentCost === null ||
+            currentCost !== decision.cost ||
+            actualQuantity - currentCost < decision.reserve
+          ) {
+            return stale(
+              "mutation-cost-changed",
+              "mutation cost or reserve changed",
+            );
+          }
+        } else if (decision.reserve !== 0) {
+          return stale(
+            "mutation-cost-unknown",
+            "mutation cost is unknown while a reserve is configured",
           );
         }
         const multiplier = readCapturedClickMultiplierState(
@@ -715,10 +846,15 @@ export function createCapturedTraitAutomation(
         }
         const afterQuantity = finite(readProperty(active.bank, "count"));
         const afterPresent = own(active.race, decision.traitId);
-        if (
-          afterQuantity !== decision.expectedCurrencyQuantity - decision.cost ||
-          afterPresent !== decision.toPresent
-        ) {
+        const postcondition =
+          afterQuantity !== undefined &&
+          afterQuantity >= decision.reserve &&
+          afterPresent === decision.toPresent &&
+          (decision.cost === null
+            ? afterQuantity <= decision.expectedCurrencyQuantity
+            : afterQuantity ===
+              decision.expectedCurrencyQuantity - decision.cost);
+        if (!postcondition) {
           blockedMutation = Object.freeze({
             root: active.root,
             generation: target.handle.generation,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   createCapturedTraitAutomation,
-  GENE_SLOTS_CONTROL,
+  GENETICS_BREAKDOWN_CONTROL,
 } from "../src/adapters/evolve/traits/captured-trait-automation.ts";
 import { planGeneticsMinorTrait } from "../src/domain/traits/minor-trait.ts";
 import { planGeneticsMutation } from "../src/domain/traits/mutation.ts";
@@ -12,15 +12,32 @@ import {
 } from "../src/application/genetics-traits.ts";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 
-function node({ className = "", textContent = "", children = [] } = {}) {
+function gameFibonacci(index) {
+  let previous = 1;
+  let current = 1;
+  for (let step = 0; step < index; step += 1) {
+    const next = previous + current;
+    previous = current;
+    current = next;
+  }
+  return previous;
+}
+
+function node({
+  className = "",
+  textContent = "",
+  tagName,
+  children = [],
+} = {}) {
   return {
     className,
     textContent,
+    tagName,
     querySelector(selector) {
       if (selector === "h4") {
         return children.find((child) => child.tagName === "H4") ?? null;
       }
-      return children.find((child) => child.selector === selector) ?? null;
+      return null;
     },
     querySelectorAll(selector) {
       return selector === "*" ? children : [];
@@ -28,8 +45,9 @@ function node({ className = "", textContent = "", children = [] } = {}) {
   };
 }
 
-function ecosystemRow(traitId) {
+function minorRow(traitId) {
   return node({
+    className: `trait t-${traitId} traitRow`,
     children: [
       { tagName: "H4", textContent: traitId },
       node({ className: "basic-button gene gbuy" }),
@@ -39,6 +57,7 @@ function ecosystemRow(traitId) {
 
 function mutationRow(operation, traitId) {
   return node({
+    className: "traitRow",
     children: [
       node({
         className: `${operation === "gain" ? "add" : "remove"}${traitId} basic-button`,
@@ -49,23 +68,33 @@ function mutationRow(operation, traitId) {
 
 function createFixture({
   genes = 100,
-  ecosystemTraits = { promiscuous: 0 },
-  ecosystemRows = Object.keys(ecosystemTraits),
-  ecosystemCost = (rank) => rank + 2,
+  minor = { smart: 0 },
+  minorRows = Object.keys(minor),
+  mtorder = minorRows,
   livingExtinction = false,
   mutationRows = [],
   mutationCosts = {},
+  readMutationCost = false,
   plasmids = 1000,
   phage = 0,
   settings = {},
   noop = false,
-  minorMethods = ["gene", "geneCost", "genePurchasable"],
+  methods = [
+    "gene",
+    "genePurchasable",
+    "geneCost",
+    "gain",
+    "purge",
+    "addCost",
+    "removeCost",
+  ],
 } = {}) {
   const root = {
     tech: { genetics: 3, living_extinction: livingExtinction },
+    settings: { mtorder },
     race: {
       universe: "standard",
-      geneSlots: [{ g: "curious", r: 2 }],
+      minor: { ...minor },
     },
     resource: { Genes: { amount: genes } },
     prestige: {
@@ -73,96 +102,89 @@ function createFixture({
       AntiPlasmid: { count: plasmids },
       Phage: { count: phage },
     },
-    surface: { trees: { traits: { ...ecosystemTraits } } },
-    settings: { mKeys: false },
   };
   const calls = [];
   let generation = 1;
-  const handles = new Map();
-  const treesHandle = {
-    elementId: "geneticMinor_trees",
+  const handle = {
+    elementId: GENETICS_BREAKDOWN_CONTROL,
     generation: 1,
-    methods: minorMethods,
+    methods,
   };
-  handles.set("geneticMinor_trees", treesHandle);
-  const geneSlotsHandle = {
-    elementId: GENE_SLOTS_CONTROL,
-    generation: 1,
-    methods: ["gain", "purge", "addCost", "removeCost"],
+  const mutationCost = (traitId, operation) =>
+    mutationCosts[`${operation}:${traitId}`];
+  const minorCost = (traitId) => {
+    const rank = root.race.minor[traitId] ?? 0;
+    return gameFibonacci(rank + 4) * (traitId === "mastery" ? 5 : 1);
   };
-  handles.set(GENE_SLOTS_CONTROL, geneSlotsHandle);
-
   const document = {
     querySelectorAll(selector) {
-      if (selector === "#geneticMinor_trees .traitRow") {
-        return ecosystemRows.map(ecosystemRow);
+      if (selector === "#geneticBreakdown #geneticMinor .traitRow") {
+        return minorRows.map(minorRow);
       }
-      if (selector === "#geneSlots .traitRow") {
-        return mutationRows.map(({ operation, traitId }) =>
-          mutationRow(operation, traitId),
-        );
+      if (selector === "#geneticBreakdown .traitRow") {
+        return [
+          ...minorRows.map(minorRow),
+          ...mutationRows.map(({ operation, traitId }) =>
+            mutationRow(operation, traitId),
+          ),
+        ];
       }
       return [];
     },
   };
   const controls = {
-    resolve: (id) => {
-      const handle = handles.get(id);
-      return handle === undefined ? undefined : { ...handle, generation };
-    },
-    capturedElementIds: () => [...handles.keys()],
-    invoke: (handle, method, args = []) => {
-      calls.push({ elementId: handle.elementId, method, args: [...args] });
-      if (handle.elementId === "geneticMinor_trees") {
-        const [ecosystem, traitId] = args;
-        const rank = root.surface[ecosystem].traits[traitId];
-        if (method === "geneCost") {
-          return { ok: true, value: ecosystemCost(rank, traitId) };
-        }
-        if (method === "genePurchasable") {
-          return {
-            ok: true,
-            value:
-              !root.tech.living_extinction &&
-              root.resource.Genes.amount >= ecosystemCost(rank, traitId),
-          };
-        }
-        if (method === "gene") {
-          if (noop) return { ok: true, value: undefined };
-          const cost = ecosystemCost(rank, traitId);
-          if (
-            root.tech.living_extinction ||
-            root.resource.Genes.amount < cost
-          ) {
-            return { ok: true, value: undefined };
-          }
-          root.resource.Genes.amount -= cost;
-          root.surface[ecosystem].traits[traitId] += 1;
-          return { ok: true, value: undefined };
-        }
+    resolve: (id) =>
+      id === GENETICS_BREAKDOWN_CONTROL ? { ...handle, generation } : undefined,
+    capturedElementIds: () => [GENETICS_BREAKDOWN_CONTROL],
+    invoke: (currentHandle, method, args = []) => {
+      calls.push({
+        elementId: currentHandle.elementId,
+        method,
+        args: [...args],
+      });
+      const [traitId] = args;
+      if (method === "geneCost") {
+        return {
+          ok: true,
+          value: `Buy ${traitId} for ${minorCost(traitId)} Genes`,
+        };
       }
-      if (handle.elementId === GENE_SLOTS_CONTROL) {
-        const [traitId] = args;
-        const cost =
-          mutationCosts[`${method}:${traitId}`] ??
-          mutationCosts[
-            `${method === "gain" ? "addCost" : "removeCost"}:${traitId}`
-          ];
-        if (method === "addCost" || method === "removeCost") {
-          return cost === undefined
-            ? { ok: false, reason: "unknown-method" }
-            : { ok: true, value: cost };
-        }
-        if (method === "gain" || method === "purge") {
-          if (noop) return { ok: true, value: undefined };
-          const amount = cost;
-          if (amount === undefined)
-            return { ok: false, reason: "unknown-method" };
-          root.prestige.Plasmid.count -= amount;
-          if (method === "gain") root.race[traitId] = 1;
-          else delete root.race[traitId];
+      if (method === "genePurchasable") {
+        return {
+          ok: true,
+          value:
+            !root.tech.living_extinction &&
+            root.resource.Genes.amount >= minorCost(traitId),
+        };
+      }
+      if (method === "gene") {
+        if (noop) return { ok: true, value: undefined };
+        const cost = minorCost(traitId);
+        if (root.tech.living_extinction || root.resource.Genes.amount < cost) {
           return { ok: true, value: undefined };
         }
+        root.resource.Genes.amount -= cost;
+        root.race.minor[traitId] = (root.race.minor[traitId] ?? 0) + 1;
+        root.race[traitId] = (root.race[traitId] ?? 0) + 1;
+        return { ok: true, value: undefined };
+      }
+      if (method === "addCost" || method === "removeCost") {
+        const operation = method === "addCost" ? "gain" : "purge";
+        return {
+          ok: true,
+          value: `${operation} ${traitId} for ${mutationCost(traitId, operation)} Plasmids`,
+        };
+      }
+      if (method === "gain" || method === "purge") {
+        if (noop) return { ok: true, value: undefined };
+        const cost = mutationCost(traitId, method);
+        if (cost === undefined || root.prestige.Plasmid.count < cost) {
+          return { ok: true, value: undefined };
+        }
+        root.prestige.Plasmid.count -= cost;
+        if (method === "gain") root.race[traitId] = 1;
+        else delete root.race[traitId];
+        return { ok: true, value: undefined };
       }
       return { ok: false, reason: "unknown-method" };
     },
@@ -177,6 +199,12 @@ function createFixture({
       minimumPlasmidsToPreserve: 0,
       ...settings,
     }),
+    ...(readMutationCost
+      ? {
+          readMutationCost: (_root, traitId, operation) =>
+            mutationCost(traitId, operation),
+        }
+      : {}),
   });
   return {
     root,
@@ -188,54 +216,45 @@ function createFixture({
   };
 }
 
-// The normalized sample follows the live Genetics 2.0 state: ecosystem rows are read from the
-// rendered panel, while the slotted gene is observed state but not guessed into an old priority list.
+// The normalized sample follows the live contract: one #geneticBreakdown binding, minor rows
+// under #geneticMinor, and levels in race.minor. The presentation methods are intentionally
+// strings and must not be consulted for numeric costs.
 {
   const fixture = createFixture({
-    ecosystemTraits: { promiscuous: 1 },
-    ecosystemCost: () => 7,
+    genes: 100,
+    minor: { smart: 0, mastery: 1 },
+    minorRows: ["smart", "mastery"],
+    mtorder: ["mastery", "smart"],
   });
   const input = fixture.captured.minor.reader.read();
   assert.equal(input.available, true);
   assert.deepEqual(input.traits, [
     {
-      traitId: "trees:promiscuous",
-      source: "ecosystem",
-      ecosystem: "trees",
-      ecosystemTrait: "promiscuous",
+      traitId: "mastery",
+      source: "genetic-breakdown",
       rank: 1,
-      cost: 7,
+      cost: null,
+      eligible: true,
+    },
+    {
+      traitId: "smart",
+      source: "genetic-breakdown",
+      rank: 0,
+      cost: null,
       eligible: true,
     },
   ]);
-}
-
-// No ecosystem trait is eligible while the game's living-extinction gate is active.
-{
-  const fixture = createFixture({ livingExtinction: true });
-  assert.deepEqual(runGeneticsMinorTraitAutomation(fixture.captured.minor), {
-    status: "succeeded",
-  });
   assert.deepEqual(
-    fixture.calls.filter(({ method }) => method === "gene"),
+    fixture.calls.filter(({ method }) =>
+      ["geneCost", "addCost", "removeCost"].includes(method),
+    ),
     [],
   );
 }
 
-// The selected ecosystem trait is upgraded by the captured game-owned method and both
-// postconditions are verified.
+// The game predicate can make every currently rendered minor trait ineligible.
 {
-  const fixture = createFixture({ genes: 10, ecosystemCost: () => 4 });
-  assert.deepEqual(runGeneticsMinorTraitAutomation(fixture.captured.minor), {
-    status: "succeeded",
-  });
-  assert.equal(fixture.root.surface.trees.traits.promiscuous, 1);
-  assert.equal(fixture.root.resource.Genes.amount, 6);
-}
-
-// Insufficient Genes is answered by the live game predicate, so the planner emits no command.
-{
-  const fixture = createFixture({ genes: 1, ecosystemCost: () => 4 });
+  const fixture = createFixture({ genes: 1 });
   assert.deepEqual(runGeneticsMinorTraitAutomation(fixture.captured.minor), {
     status: "succeeded",
   });
@@ -245,53 +264,39 @@ function createFixture({
   );
 }
 
-// Candidate order is the current panel order, which is the only defensible priority after the
-// legacy weighting table disappeared.
+// The ordered mtorder list is the current game's meaningful minor-trait priority.
 {
   const fixture = createFixture({
-    ecosystemTraits: { hardy: 0, promiscuous: 0 },
-    ecosystemRows: ["hardy", "promiscuous"],
-    ecosystemCost: () => 3,
+    genes: 50,
+    minor: { smart: 0, mastery: 0 },
+    minorRows: ["smart", "mastery"],
+    mtorder: ["mastery", "smart"],
   });
   assert.equal(
     planGeneticsMinorTrait(fixture.captured.minor.reader.read())?.traitId,
-    "trees:hardy",
+    "mastery",
   );
 }
 
-// A rebound live control is stale and cannot execute a decision from the old generation.
+// A live minor upgrade spends the game-derived cost and verifies both race.minor and race[trait].
 {
-  const fixture = createFixture();
-  fixture.captured.minor.reader.read();
-  fixture.captured.minor.executor.execute({
-    kind: "upgrade-minor-trait",
-    traitId: "trees:promiscuous",
-    source: "ecosystem",
-    ecosystem: "trees",
-    ecosystemTrait: "promiscuous",
-    expectedRank: 0,
-    expectedGenes: 100,
-    expectedCost: 2,
+  const fixture = createFixture({ genes: 10 });
+  fixture.root.race.smart = 1;
+  assert.deepEqual(runGeneticsMinorTraitAutomation(fixture.captured.minor), {
+    status: "succeeded",
   });
-  fixture.bumpGeneration();
+  assert.equal(fixture.root.race.minor.smart, 1);
+  assert.equal(fixture.root.race.smart, 2);
+  assert.equal(fixture.root.resource.Genes.amount, 5);
   assert.equal(
-    fixture.captured.minor.executor.execute({
-      kind: "upgrade-minor-trait",
-      traitId: "trees:promiscuous",
-      source: "ecosystem",
-      ecosystem: "trees",
-      ecosystemTrait: "promiscuous",
-      expectedRank: 0,
-      expectedGenes: 100,
-      expectedCost: 2,
-    }).status,
-    "stale",
+    fixture.calls.some(({ method }) => method === "geneCost"),
+    false,
   );
 }
 
-// A missing live cost capability is unknown, not an invitation to invoke the action.
+// An unknown minor capability is a stand-down, not a fallback to the display method.
 {
-  const fixture = createFixture({ minorMethods: ["gene", "genePurchasable"] });
+  const fixture = createFixture({ methods: ["gene", "geneCost"] });
   assert.deepEqual(runGeneticsMinorTraitAutomation(fixture.captured.minor), {
     status: "succeeded",
   });
@@ -301,15 +306,64 @@ function createFixture({
   );
 }
 
-// Gain remains ahead of purge, while each group keeps the live panel order.
+// A rebound breakdown control is stale and cannot execute a sampled decision.
+{
+  const fixture = createFixture({ genes: 10 });
+  const decision = planGeneticsMinorTrait(fixture.captured.minor.reader.read());
+  assert.ok(decision);
+  fixture.bumpGeneration();
+  assert.equal(
+    fixture.captured.minor.executor.execute(decision).status,
+    "stale",
+  );
+  assert.equal(
+    fixture.calls.some(({ method }) => method === "gene"),
+    false,
+  );
+}
+
+// A successful invocation with no verified state blocks the unchanged target and all alternatives.
+{
+  const fixture = createFixture({
+    minor: { smart: 0, hardy: 0 },
+    minorRows: ["smart", "hardy"],
+    mtorder: ["smart", "hardy"],
+    genes: 20,
+    noop: true,
+  });
+  assert.equal(
+    runGeneticsMinorTraitAutomation(fixture.captured.minor).status,
+    "stale",
+  );
+  assert.equal(
+    runGeneticsMinorTraitAutomation(fixture.captured.minor).status,
+    "succeeded",
+  );
+  assert.deepEqual(
+    fixture.calls
+      .filter(({ method }) => method === "gene")
+      .map(({ args }) => args[0]),
+    ["smart"],
+  );
+}
+
+// Legacy mutation policy remains meaningful through explicit gain/purge flags and numeric
+// priorities, while the live panel rows determine which operations the game currently offers.
 {
   const fixture = createFixture({
     mutationRows: [
       { operation: "purge", traitId: "old" },
       { operation: "gain", traitId: "new" },
     ],
-    mutationCosts: { "addCost:new": 10, "removeCost:old": 10 },
+    mutationCosts: { "purge:old": 10, "gain:new": 10 },
+    readMutationCost: true,
     plasmids: 100,
+    settings: {
+      mutableTrait_gain_new: true,
+      mutableTrait_p_new: 1,
+      mutableTrait_purge_old: true,
+      mutableTrait_p_old: 10,
+    },
   });
   fixture.root.race.old = 1;
   assert.equal(
@@ -321,68 +375,132 @@ function createFixture({
   });
   assert.equal(fixture.root.race.new, 1);
   assert.equal(fixture.root.prestige.Plasmid.count, 90);
+  assert.equal(
+    fixture.calls.some(({ method }) =>
+      ["addCost", "removeCost"].includes(method),
+    ),
+    false,
+  );
 }
 
-// The reserve follows legacy settings intent but the mutation itself uses current live cost data.
+// A mutation absent from the live breakdown is illegal even if the script has a policy and cost.
+{
+  const fixture = createFixture({
+    mutationCosts: { "gain:new": 10 },
+    readMutationCost: true,
+    settings: { mutableTrait_gain_new: true, mutableTrait_p_new: 0 },
+  });
+  assert.deepEqual(runGeneticsMutationAutomation(fixture.captured.mutation), {
+    status: "succeeded",
+  });
+  assert.equal(
+    fixture.calls.some(({ method }) => method === "gain"),
+    false,
+  );
+}
+
+// A missing action method is an unknown game capability, not an invitation to invoke a display
+// helper or guess a mutation operation.
 {
   const fixture = createFixture({
     mutationRows: [{ operation: "gain", traitId: "new" }],
-    mutationCosts: { "addCost:new": 300 },
+    methods: ["gene", "genePurchasable"],
+    settings: { mutableTrait_gain_new: true, mutableTrait_p_new: 0 },
+  });
+  assert.deepEqual(runGeneticsMutationAutomation(fixture.captured.mutation), {
+    status: "succeeded",
+  });
+  assert.equal(
+    fixture.calls.some(({ method }) => method === "gain"),
+    false,
+  );
+  assert.equal(fixture.root.race.new, undefined);
+}
+
+// Without numeric mutation costs, a configured reserve is preserved by refusing to act.
+{
+  const fixture = createFixture({
+    mutationRows: [{ operation: "gain", traitId: "new" }],
+    mutationCosts: { "gain:new": 10 },
     plasmids: 500,
-    settings: { doNotGoBelowPlasmidSoftcap: true },
+    phage: 0,
+    settings: {
+      doNotGoBelowPlasmidSoftcap: true,
+      mutableTrait_gain_new: true,
+      mutableTrait_p_new: 0,
+    },
   });
   assert.deepEqual(runGeneticsMutationAutomation(fixture.captured.mutation), {
     status: "succeeded",
   });
   assert.equal(fixture.root.race.new, undefined);
   assert.equal(fixture.root.prestige.Plasmid.count, 500);
+  assert.equal(
+    fixture.calls.some(({ method }) =>
+      ["addCost", "removeCost", "gain", "purge"].includes(method),
+    ),
+    false,
+  );
 }
 
-// A mutation absent from the current panel is illegal even if a cost method is available.
+// With reserve zero, the game-owned gain method can decide affordability and the executor verifies
+// the resulting trait/currency state without ever treating addCost() as numeric.
 {
   const fixture = createFixture({
-    mutationRows: [],
-    mutationCosts: { "addCost:new": 10 },
+    mutationRows: [{ operation: "gain", traitId: "new" }],
+    mutationCosts: { "gain:new": 10 },
+    plasmids: 10,
+    settings: {
+      doNotGoBelowPlasmidSoftcap: false,
+      mutableTrait_gain_new: true,
+      mutableTrait_p_new: 0,
+    },
+  });
+  assert.equal(
+    planGeneticsMutation(fixture.captured.mutation.reader.read())?.cost,
+    null,
+  );
+  assert.deepEqual(runGeneticsMutationAutomation(fixture.captured.mutation), {
+    status: "succeeded",
+  });
+  assert.equal(fixture.root.race.new, 1);
+  assert.equal(fixture.root.prestige.Plasmid.count, 0);
+}
+
+// A structured current-game numeric capability permits reserve-aware mutation and is rechecked
+// immediately before invocation.
+{
+  const fixture = createFixture({
+    mutationRows: [{ operation: "gain", traitId: "new" }],
+    mutationCosts: { "gain:new": 10 },
+    readMutationCost: true,
+    plasmids: 500,
+    settings: { mutableTrait_gain_new: true, mutableTrait_p_new: 0 },
   });
   assert.deepEqual(runGeneticsMutationAutomation(fixture.captured.mutation), {
     status: "succeeded",
   });
-  assert.equal(
-    fixture.calls.some(({ method }) => method === "gain"),
-    false,
-  );
+  assert.equal(fixture.root.race.new, 1);
+  assert.equal(fixture.root.prestige.Plasmid.count, 490);
 }
 
-// A rebound control is stale and cannot execute a decision sampled from the old generation.
-{
-  const fixture = createFixture({
-    mutationRows: [{ operation: "gain", traitId: "new" }],
-    mutationCosts: { "addCost:new": 10 },
-  });
-  const input = fixture.captured.mutation.reader.read();
-  const decision = planGeneticsMutation(input);
-  assert.ok(decision);
-  fixture.bumpGeneration();
-  assert.equal(
-    fixture.captured.mutation.executor.execute(decision).status,
-    "stale",
-  );
-  assert.equal(
-    fixture.calls.some(({ method }) => method === "gain"),
-    false,
-  );
-}
-
-// A successful invocation with no postcondition is blocked for the unchanged target; no alternate
-// destructive mutation is attempted on the next run.
+// A no-op mutation blocks the sampled target and does not try another destructive alternative.
 {
   const fixture = createFixture({
     mutationRows: [
       { operation: "gain", traitId: "first" },
       { operation: "gain", traitId: "second" },
     ],
-    mutationCosts: { "addCost:first": 10, "addCost:second": 10 },
+    mutationCosts: { "gain:first": 10, "gain:second": 10 },
+    readMutationCost: true,
+    plasmids: 100,
     noop: true,
+    settings: {
+      mutableTrait_gain_first: true,
+      mutableTrait_p_first: 0,
+      mutableTrait_gain_second: true,
+      mutableTrait_p_second: 1,
+    },
   });
   assert.equal(
     runGeneticsMutationAutomation(fixture.captured.mutation).status,
@@ -400,8 +518,7 @@ function createFixture({
   );
 }
 
-// Runtime orchestration does not call a trait reader or discovery path when the automation toggle
-// is disabled, even though the captured runtime is active.
+// Runtime orchestration does not discover or read trait controls while both automations are off.
 {
   let periodListener;
   let resolveCalls = 0;

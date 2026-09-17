@@ -31,16 +31,14 @@ export interface MinorTraitPurchaseDecision {
   readonly expectedGenes: number;
 }
 
-export type GeneticsMinorTraitSource = "ecosystem";
+export type GeneticsMinorTraitSource = "genetic-breakdown";
 
 /** A minor upgrade offered by the live Genetics 2.0 panels. */
 export interface GeneticsMinorTraitCandidate {
   readonly traitId: string;
   readonly source: GeneticsMinorTraitSource;
-  readonly ecosystem: string;
-  readonly ecosystemTrait: string;
   readonly rank: number;
-  /** Null means the live capability did not expose a structured price. */
+  /** Null because the live geneCost() method is a localized presentation string. */
   readonly cost: number | null;
   readonly eligible: boolean | null;
 }
@@ -48,7 +46,7 @@ export interface GeneticsMinorTraitCandidate {
 export interface GeneticsMinorTraitInput {
   readonly available: boolean;
   readonly currentGenes: number;
-  /** Ordered by the current game panels; the first eligible item wins. */
+  /** Ordered by the live global.settings.mtorder list; the first eligible item wins. */
   readonly traits: readonly GeneticsMinorTraitCandidate[];
 }
 
@@ -56,8 +54,6 @@ export interface GeneticsMinorTraitUpgradeDecision {
   readonly kind: "upgrade-minor-trait";
   readonly traitId: string;
   readonly source: GeneticsMinorTraitSource;
-  readonly ecosystem: string;
-  readonly ecosystemTrait: string;
   readonly expectedRank: number;
   readonly expectedGenes: number;
   readonly expectedCost: number | null;
@@ -122,10 +118,10 @@ export function planGeneticsMinorTrait(
     if (
       !Number.isFinite(candidate.rank) ||
       candidate.rank < 0 ||
-      candidate.cost === null ||
-      !Number.isFinite(candidate.cost) ||
-      candidate.cost < 0 ||
-      input.currentGenes < candidate.cost
+      (candidate.cost !== null &&
+        (!Number.isFinite(candidate.cost) ||
+          candidate.cost < 0 ||
+          input.currentGenes < candidate.cost))
     ) {
       continue;
     }
@@ -133,8 +129,6 @@ export function planGeneticsMinorTrait(
       kind: "upgrade-minor-trait",
       traitId: candidate.traitId,
       source: candidate.source,
-      ecosystem: candidate.ecosystem,
-      ecosystemTrait: candidate.ecosystemTrait,
       expectedRank: candidate.rank,
       expectedGenes: input.currentGenes,
       expectedCost: candidate.cost,

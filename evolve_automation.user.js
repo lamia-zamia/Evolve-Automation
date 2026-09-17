@@ -7775,13 +7775,11 @@
   function planGeneticsMinorTrait(input) {
     if (!input.available || !Number.isFinite(input.currentGenes)) return null;
     for (let candidate of input.traits)
-      if (candidate.eligible === !0 && !(!Number.isFinite(candidate.rank) || candidate.rank < 0 || candidate.cost === null || !Number.isFinite(candidate.cost) || candidate.cost < 0 || input.currentGenes < candidate.cost))
+      if (candidate.eligible === !0 && !(!Number.isFinite(candidate.rank) || candidate.rank < 0 || candidate.cost !== null && (!Number.isFinite(candidate.cost) || candidate.cost < 0 || input.currentGenes < candidate.cost)))
         return Object.freeze({
           kind: "upgrade-minor-trait",
           traitId: candidate.traitId,
           source: candidate.source,
-          ecosystem: candidate.ecosystem,
-          ecosystemTrait: candidate.ecosystemTrait,
           expectedRank: candidate.rank,
           expectedGenes: input.currentGenes,
           expectedCost: candidate.cost
@@ -7796,7 +7794,11 @@
       return null;
     for (let operation2 of input.operations) {
       let cost = operation2.cost;
-      if (!(operation2.eligible !== !0 || cost === null || !Number.isFinite(cost) || cost < 0 || currency.currentQuantity - cost < currency.reserve))
+      if (operation2.eligible === !0) {
+        if (cost === null) {
+          if (currency.reserve !== 0) continue;
+        } else if (!Number.isFinite(cost) || cost < 0 || currency.currentQuantity - cost < currency.reserve)
+          continue;
         return Object.freeze({
           kind: "mutate-trait",
           operation: operation2.kind,
@@ -7808,17 +7810,13 @@
           currencyId: currency.id,
           reserve: currency.reserve
         });
+      }
     }
     return null;
   }
 
   // src/adapters/evolve/traits/captured-trait-automation.ts
-  var GENETICS_ECOSYSTEM_TYPES = Object.freeze([
-    "trees",
-    "herbivores",
-    "carnivores",
-    "scavengers"
-  ]), GENE_SLOTS_CONTROL = "geneSlots";
+  var GENETICS_BREAKDOWN_CONTROL = "geneticBreakdown";
   function queryOne(owner, selector) {
     let query = readProperty(owner, "querySelector");
     if (typeof query == "function")
@@ -7873,10 +7871,6 @@
     let result = invoke(controls, handle, method, args);
     return result?.ok === !0 && typeof result.value == "boolean" ? result.value : void 0;
   }
-  function invokeFinite(controls, handle, method, args = []) {
-    let result = invoke(controls, handle, method, args);
-    return result?.ok === !0 ? finite(result.value) : void 0;
-  }
   function unavailableMinor() {
     return Object.freeze({
       available: !1,
@@ -7898,44 +7892,63 @@
     let resource = readProperty(root, "resource"), genes = readProperty(resource, "Genes");
     return isRecord(genes) ? genes : void 0;
   }
-  function readEcoType(row) {
-    let heading = queryOne(row, "h4"), text = readElementText(heading);
-    return text === void 0 ? void 0 : text;
+  function readRace(root) {
+    let race = readProperty(root, "race");
+    return isRecord(race) ? race : void 0;
   }
-  function readMinorRows(document, ecosystem) {
-    return queryMany(document, `#geneticMinor_${ecosystem} .traitRow`);
+  function readMinorOrder(root) {
+    let order = readProperty(readProperty(root, "settings"), "mtorder");
+    if (!Array.isArray(order)) return;
+    let result = [], seen = /* @__PURE__ */ new Set();
+    for (let value of order) {
+      if (typeof value != "string" || value.length === 0 || seen.has(value))
+        return;
+      seen.add(value), result.push(value);
+    }
+    return Object.freeze(result);
+  }
+  function readMinorRows(document) {
+    return queryMany(document, "#geneticBreakdown #geneticMinor .traitRow");
+  }
+  function readMinorTraitId(row) {
+    return readElementText(queryOne(row, "h4"));
+  }
+  function readRaceRank(race, traitId) {
+    let value = readProperty(race, traitId);
+    if (value === void 0) return 0;
+    let rank = finite(value);
+    return rank !== void 0 && Number.isSafeInteger(rank) && rank >= 0 ? rank : void 0;
   }
   function isBlockedMinor(blocked, root, handle, genes) {
     return blocked !== null && blocked.root === root && blocked.generation === handle.generation && blocked.expectedGenes === genes;
   }
-  function readMutationAction(row) {
+  function readMutationAction(row, rowIndex) {
     let descendants = queryMany(row, "*"), elements = descendants === void 0 ? [row] : [row, ...descendants];
     for (let element of elements)
       for (let token of classTokens(element)) {
         if (token.startsWith("add") && token.length > 3)
           return Object.freeze({
             traitId: token.slice(3),
-            operation: "gain"
+            operation: "gain",
+            rowIndex
           });
         if (token.startsWith("remove") && token.length > 6)
           return Object.freeze({
             traitId: token.slice(6),
-            operation: "purge"
+            operation: "purge",
+            rowIndex
           });
       }
   }
   function readMutationActions(document) {
-    let rows = queryMany(document, "#geneSlots .traitRow");
+    let rows = queryMany(document, "#geneticBreakdown .traitRow");
     if (rows === void 0) return;
     let actions = [];
-    for (let row of rows) {
-      let action = readMutationAction(row);
+    for (let index = 0; index < rows.length; index += 1) {
+      let action = readMutationAction(rows[index], index);
       action !== void 0 && actions.push(action);
     }
-    return Object.freeze([
-      ...actions.filter(({ operation: operation2 }) => operation2 === "gain"),
-      ...actions.filter(({ operation: operation2 }) => operation2 === "purge")
-    ]);
+    return Object.freeze(actions);
   }
   function readMutationReserve(settings, root) {
     let rawMinimum = readProperty(settings, "minimumPlasmidsToPreserve"), minimum = rawMinimum === void 0 ? 0 : finite(rawMinimum);
@@ -7946,48 +7959,81 @@
     let phage = readProperty(readProperty(root, "prestige"), "Phage"), phageCount = finite(readProperty(phage, "count"));
     return phageCount === void 0 || phageCount < 0 ? void 0 : Math.max(minimum, phageCount + 250);
   }
+  function readOptionalFlag(settings, key) {
+    let value = readProperty(settings, key);
+    return value === void 0 ? !1 : typeof value == "boolean" ? value : void 0;
+  }
+  function readPriority(settings, traitId) {
+    return finite(readProperty(settings, `mutableTrait_p_${traitId}`));
+  }
+  function readAuthoritativeMutationCost(dependencies, root, traitId, operation2) {
+    let readCost5 = dependencies.readMutationCost;
+    if (readCost5 === void 0) return null;
+    try {
+      let value = finite(readCost5(root, traitId, operation2));
+      return value !== void 0 && value >= 0 ? value : null;
+    } catch {
+      return null;
+    }
+  }
+  function readCurrentMutationEligibility(settings, race, action, handle) {
+    if (!handle.methods.includes(action.operation)) return null;
+    let gain = readOptionalFlag(
+      settings,
+      `mutableTrait_gain_${action.traitId}`
+    ), purge = readOptionalFlag(
+      settings,
+      `mutableTrait_purge_${action.traitId}`
+    );
+    return gain === void 0 || purge === void 0 ? null : gain && purge ? !1 : action.operation === "gain" ? !!(gain && !own(race, action.traitId)) : !!(purge && own(race, action.traitId));
+  }
   function createCapturedTraitAutomation(dependencies) {
     let minorSession = null, mutationSession = null, blockedMinor = null, blockedMutation = null, minorReader = Object.freeze({
       read() {
-        let root = dependencies.rootState.readRoot(), level = readTraitGeneticsLevel(root), genes = readGenes(root), document = dependencies.getDocument();
-        if (level === void 0 || level <= 2 || genes === void 0 || document === void 0 || document === null)
+        let root = dependencies.rootState.readRoot(), level = readTraitGeneticsLevel(root), genes = readGenes(root), race = readRace(root), minor = readProperty(race, "minor"), order = readMinorOrder(root), document = dependencies.getDocument(), handle = dependencies.controls.resolve(GENETICS_BREAKDOWN_CONTROL);
+        if (level === void 0 || level <= 2 || genes === void 0 || race === void 0 || !isRecord(minor) || order === void 0 || document === void 0 || document === null || handle === void 0 || !handle.methods.includes("gene") || !handle.methods.includes("genePurchasable"))
           return minorSession = null, unavailableMinor();
         let currentGenes = finite(readProperty(genes, "amount"));
         if (currentGenes === void 0 || currentGenes < 0)
           return minorSession = null, unavailableMinor();
+        let rows = readMinorRows(document);
+        if (rows === void 0)
+          return minorSession = null, unavailableMinor();
+        let rowsByTrait = /* @__PURE__ */ new Map();
+        for (let row of rows) {
+          let traitId = readMinorTraitId(row);
+          if (traitId === void 0 || rowsByTrait.has(traitId))
+            return minorSession = null, unavailableMinor();
+          rowsByTrait.set(traitId, row);
+        }
         let targets = [], candidates = [];
-        for (let ecosystem of GENETICS_ECOSYSTEM_TYPES) {
-          let surface = readProperty(readProperty(root, "surface"), ecosystem), traits = readProperty(surface, "traits"), handle = dependencies.controls.resolve(
-            `geneticMinor_${ecosystem}`
-          );
-          if (!isRecord(surface) || !isRecord(traits) || handle === void 0)
-            continue;
-          let rows = readMinorRows(document, ecosystem);
-          if (rows !== void 0)
-            for (let row of rows) {
-              let ecosystemTrait = readEcoType(row);
-              if (ecosystemTrait === void 0) continue;
-              let rank = finite(readProperty(traits, ecosystemTrait));
-              if (rank === void 0 || rank < 0) continue;
-              let cost = invokeFinite(dependencies.controls, handle, "geneCost", [
-                ecosystem,
-                ecosystemTrait
-              ]), legal = invokeBoolean(
-                dependencies.controls,
-                handle,
-                "genePurchasable",
-                [ecosystem, ecosystemTrait]
-              ), candidate = Object.freeze({
-                traitId: `${ecosystem}:${ecosystemTrait}`,
-                source: "ecosystem",
-                ecosystem,
-                ecosystemTrait,
-                rank,
-                cost: cost ?? null,
-                eligible: isBlockedMinor(blockedMinor, root, handle, currentGenes) ? !1 : legal ?? null
-              });
-              candidates.push(candidate), targets.push({ candidate, handle, surface, traits });
-            }
+        for (let traitId of order) {
+          if (rowsByTrait.get(traitId) === void 0) continue;
+          let rank = finite(readProperty(minor, traitId)), expectedTotalRank = readRaceRank(race, traitId);
+          if (rank === void 0 || !Number.isSafeInteger(rank) || rank < 0 || expectedTotalRank === void 0)
+            return minorSession = null, unavailableMinor();
+          let eligible = isBlockedMinor(
+            blockedMinor,
+            root,
+            handle,
+            currentGenes
+          ) ? !1 : invokeBoolean(dependencies.controls, handle, "genePurchasable", [
+            traitId
+          ]) ?? null, candidate = Object.freeze({
+            traitId,
+            source: "genetic-breakdown",
+            rank,
+            // geneCost() is localized; genePurchasable()/gene() own affordability and spending.
+            cost: null,
+            eligible
+          });
+          candidates.push(candidate), targets.push({
+            candidate,
+            handle,
+            minor,
+            race,
+            expectedTotalRank
+          });
         }
         return minorSession = Object.freeze({
           root,
@@ -8012,8 +8058,7 @@
             "minor-trait-root-changed",
             "captured game root changed"
           );
-        let genes = readGenes(active.root), actualGenes = finite(readProperty(genes, "amount"));
-        if (genes !== active.genes || actualGenes !== decision.expectedGenes)
+        if (finite(readProperty(active.genes, "amount")) !== decision.expectedGenes)
           return stale("minor-trait-genes-changed", "Genes balance changed");
         let target = active.targets.find(
           ({ candidate }) => candidate.traitId === decision.traitId
@@ -8024,29 +8069,23 @@
             "minor-trait target changed"
           );
         let currentHandle = dependencies.controls.resolve(
-          `geneticMinor_${target.candidate.ecosystem}`
+          GENETICS_BREAKDOWN_CONTROL
         );
         if (currentHandle === void 0 || currentHandle.generation !== target.handle.generation)
           return stale(
             "minor-trait-control-stale",
-            "minor-trait control was rebound"
+            "genetics breakdown control was rebound"
           );
         if (finite(
-          readProperty(target.traits, target.candidate.ecosystemTrait)
+          readProperty(target.minor, target.candidate.traitId)
         ) !== decision.expectedRank)
           return stale("minor-trait-rank-changed", "minor-trait rank changed");
-        let legal = invokeBoolean(
+        if (invokeBoolean(
           dependencies.controls,
           target.handle,
           "genePurchasable",
-          [target.candidate.ecosystem, target.candidate.ecosystemTrait]
-        ), cost = invokeFinite(
-          dependencies.controls,
-          target.handle,
-          "geneCost",
-          [target.candidate.ecosystem, target.candidate.ecosystemTrait]
-        );
-        if (legal !== !0 || cost !== decision.expectedCost)
+          [decision.traitId]
+        ) !== !0)
           return stale(
             "minor-trait-capability-changed",
             "minor-trait capability changed"
@@ -8061,8 +8100,7 @@
             multiplier === !0 ? "click multiplier is held" : "click multiplier state is unavailable"
           );
         let result = invoke(dependencies.controls, target.handle, "gene", [
-          target.candidate.ecosystem,
-          target.candidate.ecosystemTrait
+          decision.traitId
         ]);
         if (result?.ok !== !0)
           return blockedMinor = Object.freeze({
@@ -8074,9 +8112,12 @@
             result?.reason ?? "minor-trait invocation failed"
           );
         let afterGenes = finite(readProperty(active.genes, "amount")), afterRank = finite(
-          readProperty(target.traits, target.candidate.ecosystemTrait)
+          readProperty(target.minor, target.candidate.traitId)
+        ), afterTotalRank = readRaceRank(
+          target.race,
+          target.candidate.traitId
         );
-        return afterGenes !== decision.expectedGenes - decision.expectedCost || afterRank !== decision.expectedRank + 1 ? (blockedMinor = Object.freeze({
+        return afterGenes === void 0 || afterGenes >= decision.expectedGenes || afterRank !== decision.expectedRank + 1 || afterTotalRank !== target.expectedTotalRank + 1 ? (blockedMinor = Object.freeze({
           root: active.root,
           generation: target.handle.generation,
           expectedGenes: decision.expectedGenes
@@ -8087,28 +8128,41 @@
       }
     }), mutationReader = Object.freeze({
       read() {
-        let root = dependencies.rootState.readRoot(), level = readTraitGeneticsLevel(root), race = readProperty(root, "race"), prestige = readProperty(root, "prestige"), universe = readProperty(race, "universe"), currencyId = universe === "antimatter" ? "AntiPlasmid" : "Plasmid", bank = readProperty(prestige, currencyId), handle = dependencies.controls.resolve(GENE_SLOTS_CONTROL), reserve = readMutationReserve(dependencies.readSettings(), root), currentQuantity2 = finite(readProperty(bank, "count")), document = dependencies.getDocument();
-        if (level === void 0 || level <= 2 || !isRecord(race) || typeof universe != "string" || !isRecord(bank) || reserve === void 0 || currentQuantity2 === void 0 || currentQuantity2 < 0 || handle === void 0 || document === void 0 || document === null)
+        let root = dependencies.rootState.readRoot(), level = readTraitGeneticsLevel(root), race = readRace(root), prestige = readProperty(root, "prestige"), universe = readProperty(race, "universe"), currencyId = universe === "antimatter" ? "AntiPlasmid" : "Plasmid", bank = readProperty(prestige, currencyId), handle = dependencies.controls.resolve(GENETICS_BREAKDOWN_CONTROL), reserve = readMutationReserve(dependencies.readSettings(), root), currentQuantity2 = finite(readProperty(bank, "count")), document = dependencies.getDocument();
+        if (level === void 0 || level <= 2 || race === void 0 || typeof universe != "string" || !isRecord(bank) || reserve === void 0 || currentQuantity2 === void 0 || currentQuantity2 < 0 || handle === void 0 || document === void 0 || document === null || !handle.methods.includes("gain") && !handle.methods.includes("purge"))
           return mutationSession = null, unavailableMutation();
         let actions = readMutationActions(document);
         if (actions === void 0)
           return mutationSession = null, unavailableMutation();
-        let targets = [], gains = [], purges = [];
-        for (let action of actions) {
-          let fromPresent = action.operation === "purge";
-          if (own(race, action.traitId) !== fromPresent) continue;
-          let costMethod = action.operation === "gain" ? "addCost" : "removeCost", cost = invokeFinite(dependencies.controls, handle, costMethod, [
-            action.traitId
-          ]), operation2 = Object.freeze({
+        let settings = dependencies.readSettings(), orderedActions = actions.map((action) => {
+          let priority = readPriority(settings, action.traitId);
+          return priority === void 0 ? void 0 : { action, priority };
+        }).filter(
+          (value) => value !== void 0
+        ).sort(
+          (left, right) => left.priority - right.priority || left.action.rowIndex - right.action.rowIndex
+        ), targets = [], operations = [];
+        for (let { action } of orderedActions) {
+          let eligible = readCurrentMutationEligibility(
+            settings,
+            race,
+            action,
+            handle
+          ), operation2 = Object.freeze({
             traitId: action.traitId,
             kind: action.operation,
-            cost: cost ?? null,
-            eligible: cost === void 0 ? null : !0,
-            fromPresent
+            cost: readAuthoritativeMutationCost(
+              dependencies,
+              root,
+              action.traitId,
+              action.operation
+            ),
+            eligible,
+            fromPresent: action.operation === "purge"
           });
-          (action.operation === "gain" ? gains : purges).push(operation2), targets.push({ operation: operation2, handle, race, bank });
+          operations.push(operation2), targets.push({ operation: operation2, handle, race, bank });
         }
-        let visibleOperations = Object.freeze([...gains, ...purges]).map((operation2) => blockedMutation !== null && blockedMutation.root === root && blockedMutation.generation === handle.generation && blockedMutation.expectedCurrencyQuantity === currentQuantity2 ? Object.freeze({ ...operation2, eligible: !1 }) : operation2);
+        let visibleOperations = operations.map((operation2) => blockedMutation !== null && blockedMutation.root === root && blockedMutation.generation === handle.generation && blockedMutation.expectedCurrencyQuantity === currentQuantity2 ? Object.freeze({ ...operation2, eligible: !1 }) : operation2);
         return mutationSession = Object.freeze({
           root,
           race,
@@ -8146,32 +8200,50 @@
         );
         if (target === void 0)
           return stale("mutation-target-changed", "mutation target changed");
-        let currentHandle = dependencies.controls.resolve(GENE_SLOTS_CONTROL);
+        let currentHandle = dependencies.controls.resolve(
+          GENETICS_BREAKDOWN_CONTROL
+        );
         if (currentHandle === void 0 || currentHandle.generation !== target.handle.generation)
           return stale(
             "mutation-control-stale",
-            "mutation control was rebound"
+            "genetics breakdown control was rebound"
           );
         if (own(active.race, decision.traitId) !== decision.fromPresent)
           return stale("mutation-trait-changed", "mutation trait changed");
-        let currentActions = readMutationActions(dependencies.getDocument());
-        if (currentActions === void 0 || !currentActions.some(
+        let currentAction = readMutationActions(dependencies.getDocument())?.find(
           (action) => action.traitId === decision.traitId && action.operation === decision.operation
-        ))
+        );
+        if (currentAction === void 0)
           return stale(
             "mutation-capability-changed",
             "mutation is no longer offered"
           );
-        let costMethod = decision.operation === "gain" ? "addCost" : "removeCost", currentCost = invokeFinite(
-          dependencies.controls,
-          target.handle,
-          costMethod,
-          [decision.traitId]
-        );
-        if (currentCost === void 0 || currentCost !== decision.cost || actualQuantity - currentCost < decision.reserve)
+        if (readCurrentMutationEligibility(
+          dependencies.readSettings(),
+          active.race,
+          currentAction,
+          target.handle
+        ) !== !0)
           return stale(
-            "mutation-cost-changed",
-            "mutation cost or reserve changed"
+            "mutation-policy-changed",
+            "mutation policy or capability changed"
+          );
+        if (decision.cost !== null) {
+          let currentCost = readAuthoritativeMutationCost(
+            dependencies,
+            active.root,
+            decision.traitId,
+            decision.operation
+          );
+          if (currentCost === null || currentCost !== decision.cost || actualQuantity - currentCost < decision.reserve)
+            return stale(
+              "mutation-cost-changed",
+              "mutation cost or reserve changed"
+            );
+        } else if (decision.reserve !== 0)
+          return stale(
+            "mutation-cost-unknown",
+            "mutation cost is unknown while a reserve is configured"
           );
         let multiplier = readCapturedClickMultiplierState(
           active.root,
@@ -8198,14 +8270,14 @@
             result?.reason ?? "mutation invocation failed"
           );
         let afterQuantity = finite(readProperty(active.bank, "count")), afterPresent = own(active.race, decision.traitId);
-        return afterQuantity !== decision.expectedCurrencyQuantity - decision.cost || afterPresent !== decision.toPresent ? (blockedMutation = Object.freeze({
+        return afterQuantity !== void 0 && afterQuantity >= decision.reserve && afterPresent === decision.toPresent && (decision.cost === null ? afterQuantity <= decision.expectedCurrencyQuantity : afterQuantity === decision.expectedCurrencyQuantity - decision.cost) ? (blockedMutation = null, SUCCEEDED) : (blockedMutation = Object.freeze({
           root: active.root,
           generation: target.handle.generation,
           expectedCurrencyQuantity: decision.expectedCurrencyQuantity
         }), stale(
           "mutation-noop",
           "mutation invocation produced no verified state change"
-        )) : (blockedMutation = null, SUCCEEDED);
+        ));
       }
     });
     return Object.freeze({
@@ -20692,7 +20764,7 @@
         return;
       }
   }
-  function readRace(rootState) {
+  function readRace2(rootState) {
     return nestedRecord(rootRecord2(rootState), "race");
   }
   function capturedEvolutionReadSettings(getSettings) {
@@ -20716,7 +20788,7 @@
     let targetRow = rows.find(
       (row) => capturedEvolutionActionId(row.id) === targetId
     );
-    return typeof readProperty(readRace(rootState), "evoFinalMenu") == "string" && targetRow !== void 0 ? Object.freeze([targetRow]) : Object.freeze(
+    return typeof readProperty(readRace2(rootState), "evoFinalMenu") == "string" && targetRow !== void 0 ? Object.freeze([targetRow]) : Object.freeze(
       rows.filter((row) => {
         let id = capturedEvolutionActionId(row.id);
         return !challengeIds.has(id) && !RESOURCE_ACTION_IDS.has(id);
@@ -20735,11 +20807,11 @@
     let storedTarget, lastSpecies, reportActivity = dependencies.onActivity ?? (() => {
     }), reader = Object.freeze({
       sampleSpecies() {
-        let species = readProperty(readRace(dependencies.rootState), "species"), value = typeof species == "string" ? species : "";
+        let species = readProperty(readRace2(dependencies.rootState), "species"), value = typeof species == "string" ? species : "";
         return lastSpecies === "protoplasm" && value !== "protoplasm" && (storedTarget = void 0), lastSpecies = value, value;
       },
       sampleLandingGate() {
-        let race = readRace(dependencies.rootState), universe = readProperty(race, "universe");
+        let race = readRace2(dependencies.rootState), universe = readProperty(race, "universe");
         return Object.freeze({
           universe: typeof universe == "string" ? universe : null,
           seeded: !!readProperty(race, "seeded"),
@@ -20773,7 +20845,7 @@
         });
       },
       sampleRaceTrait(trait) {
-        return Number(readProperty(readRace(dependencies.rootState), trait));
+        return Number(readProperty(readRace2(dependencies.rootState), trait));
       },
       sampleCosts(targetId) {
         let rows = actionRowsForTree(
@@ -20799,7 +20871,7 @@
           challengeIds,
           targetId,
           dependencies.rootState
-        ), race = readRace(dependencies.rootState);
+        ), race = readRace2(dependencies.rootState);
         return Object.freeze(
           rows.map((row) => {
             let id = capturedEvolutionActionId(row.id), trait = challengeTraitById.get(id);
@@ -20828,7 +20900,7 @@
         });
       },
       sampleImitation() {
-        let race = readRace(dependencies.rootState), settings = capturedEvolutionReadSettings(dependencies.readSettings), imitateRace = typeof settings?.imitateRace == "string" ? settings.imitateRace : "", wanted = `${EVOLUTION_ACTION_PREFIX}s-${imitateRace}`, imitationExists = readActionRows(dependencies.drawnActions).some(
+        let race = readRace2(dependencies.rootState), settings = capturedEvolutionReadSettings(dependencies.readSettings), imitateRace = typeof settings?.imitateRace == "string" ? settings.imitateRace : "", wanted = `${EVOLUTION_ACTION_PREFIX}s-${imitateRace}`, imitationExists = readActionRows(dependencies.drawnActions).some(
           (row) => row.id === wanted
         );
         return Object.freeze({
@@ -20895,7 +20967,7 @@
       reader,
       executor,
       runUniverseSelection: () => {
-        let race = readRace(dependencies.rootState), targetName = capturedEvolutionReadSettings(dependencies.readSettings)?.userUniverseTargetName;
+        let race = readRace2(dependencies.rootState), targetName = capturedEvolutionReadSettings(dependencies.readSettings)?.userUniverseTargetName;
         if (typeof targetName != "string") return;
         let universe = readProperty(race, "universe"), target = planUniverseSelection({
           hasBigbang: !!readProperty(race, "bigbang"),
@@ -20923,13 +20995,13 @@
   function capturedPlanetRecord(value) {
     return isNonArrayRecord(value) ? value : void 0;
   }
-  function readRace2(rootState) {
+  function readRace3(rootState) {
     return capturedPlanetRecord(
       readProperty(capturedPlanetRecord(rootState.readRoot()), "race")
     );
   }
   function readGate(rootState, readSettings) {
-    let race = readRace2(rootState), targetName = capturedPlanetRecord(readSettings())?.userPlanetTargetName, universe = race?.universe;
+    let race = readRace3(rootState), targetName = capturedPlanetRecord(readSettings())?.userPlanetTargetName, universe = race?.universe;
     return Object.freeze({
       universe: typeof universe == "string" ? universe : null,
       seeded: !!race?.seeded,
@@ -26944,7 +27016,7 @@ Only continue if you trust the source. Injected code:
       loadQueuedSettings: queuedSettings.loadQueuedSettings
     }), geneticsDiscoveryAttempted = !1, ensureGeneticsControls = () => {
       let root = pageCapture2.rootState.readRoot(), level = readProperty(readProperty(root, "tech"), "genetics");
-      if (pageCapture2.controls.resolve(GENETICS_CONTROL) !== void 0 && (typeof level != "number" || level <= 2 || pageCapture2.controls.resolve(GENE_SLOTS_CONTROL) !== void 0))
+      if (pageCapture2.controls.resolve(GENETICS_CONTROL) !== void 0 && (typeof level != "number" || level <= 2 || pageCapture2.controls.resolve(GENETICS_BREAKDOWN_CONTROL) !== void 0))
         return;
       let panelOffered = readProperty(
         readProperty(readProperty(root, "settings"), "arpa"),
