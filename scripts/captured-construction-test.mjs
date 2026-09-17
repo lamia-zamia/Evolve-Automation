@@ -42,6 +42,7 @@ function makeSource(family, candidates, holdings, bought) {
       bought.push(key);
       return {
         outcome: { status: "succeeded" },
+        disposition: "verified-success",
         clicked: true,
         mission: false,
         consumption: candidate.consumption ?? [],

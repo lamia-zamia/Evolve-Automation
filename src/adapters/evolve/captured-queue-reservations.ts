@@ -82,6 +82,21 @@ function readQueueEntries(
   return Array.isArray(entries) ? entries : undefined;
 }
 
+/** Count a specific build action in the live queue for post-invocation verification. */
+export function readCapturedBuildQueueEntryCount(
+  root: unknown,
+  elementId: string,
+): number {
+  const queue = readProperty(root, "queue");
+  const entries = readProperty(queue, "queue");
+  if (!Array.isArray(entries)) return 0;
+  let count = 0;
+  for (const entry of entries) {
+    if (readProperty(entry, "id") === elementId) count++;
+  }
+  return count;
+}
+
 function readQueuedItems(root: unknown): readonly QueuedItem[] | undefined {
   const entries = readQueueEntries(root, "queue");
   if (entries === undefined) return undefined;

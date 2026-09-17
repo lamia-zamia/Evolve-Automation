@@ -118,6 +118,12 @@ export function runBuildAutomation(
     if (result.outcome.status !== "succeeded") {
       return result.outcome;
     }
+    if (result.disposition === "candidate-rejected") {
+      continue;
+    }
+    if (result.disposition !== "verified-success") {
+      return result.outcome;
+    }
     const application = measure("autoBuild.applyClickResult", () =>
       applyBuildClickResult(setup, index, result, state),
     );

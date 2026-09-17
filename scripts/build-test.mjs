@@ -173,6 +173,28 @@ assert.deepEqual(
   ["city-house"],
 );
 
+// The legacy entity's false return is its explicit pre-invocation affordability rejection, so the
+// application may consider the next candidate.
+world = runScenario("explicit candidate rejection", () => {
+  const w = makeWorld();
+  makeResource(w, "Lumber", { quantity: 100 });
+  makeTarget(w, "city-rejected", {
+    weighting: 10,
+    cost: { Lumber: 20 },
+    clickSucceeds: false,
+  });
+  makeTarget(w, "city-house", { weighting: 5, cost: { Lumber: 20 } });
+  return w;
+});
+assert.deepEqual(world.trace, [
+  ["weighting", "buildings"],
+  ["weighting", "projects"],
+  ["conflict-check", "city-rejected"],
+  ["click-failed", "city-rejected"],
+  ["conflict-check", "city-house"],
+  ["click", "city-house"],
+]);
+
 // Opt-in profiling separates the build adapter reads from pure planning and execution.
 {
   const phases = [];

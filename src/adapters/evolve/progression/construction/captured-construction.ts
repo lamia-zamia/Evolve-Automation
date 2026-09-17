@@ -372,6 +372,7 @@ export function createCapturedConstructionAdapter(
             "construction candidate list changed",
             { key: decision.key, index: decision.index },
           ),
+          disposition: "stopped" as const,
           clicked: false,
           mission: false,
           consumption: NO_CONSUMPTION,

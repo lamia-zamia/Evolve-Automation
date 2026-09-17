@@ -453,6 +453,7 @@ export function createBuildAdapter(
             "no-build-cycle",
             "executeClick requires an active build cycle",
           ),
+          disposition: "stopped" as const,
           clicked: false,
           mission: false,
           consumption: EMPTY_CONSUMPTION,
@@ -462,6 +463,7 @@ export function createBuildAdapter(
       if (entity === null) {
         return Object.freeze({
           outcome: staleTarget(decision.index, decision.key),
+          disposition: "stopped" as const,
           clicked: false,
           mission: false,
           consumption: EMPTY_CONSUMPTION,
@@ -474,6 +476,7 @@ export function createBuildAdapter(
       if (!clicked) {
         return Object.freeze({
           outcome: SUCCEEDED,
+          disposition: "candidate-rejected" as const,
           clicked: false,
           mission: false,
           consumption: EMPTY_CONSUMPTION,
@@ -482,6 +485,7 @@ export function createBuildAdapter(
       // Sampled after the click, matching the legacy post-click reads.
       return Object.freeze({
         outcome: SUCCEEDED,
+        disposition: "verified-success" as const,
         clicked: true,
         mission: Boolean(callMethod(entity, "isMission", path)),
         consumption: sampleConsumption(entity, path),

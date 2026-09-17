@@ -47,6 +47,10 @@ function makePage({
         action() {
           clicks.push(`city-${id}`);
           if (building.noop === true) return;
+          if (building.queueOnAction === true) {
+            root.queue.queue.push({ id: `city-${id}` });
+            return;
+          }
           const price = building.priceAt(root.city[id].count);
           for (const [res, amount] of Object.entries(price)) {
             if (root.resource[res] === undefined) return;
@@ -294,12 +298,14 @@ function queued(id, label = id) {
   ]);
 }
 
-// A successful invocation that changes neither count nor queue is observable as a no-op.
+// A successful invocation that changes neither count nor queue is observable as an unverified
+// execution, so the lower-weighted candidate is not invoked.
 {
   const page = makePage({
     touch: true,
     buildings: {
       farm: { count: 0, noop: true, priceAt: () => ({ Money: 10 }) },
+      mine: { count: 0, priceAt: () => ({ Money: 10 }) },
     },
     resources: { Money: { amount: 500 } },
   });
@@ -307,15 +313,45 @@ function queued(id, label = id) {
   const control = makeControl({
     rootState: page.rootState,
     controls: page.registry,
-    readPolicy: policy([target("farm", 50)]),
+    readPolicy: policy([target("farm", 50), target("mine", 40)]),
     onDiagnostic: (message) => messages.push(message),
   });
-  assert.equal(control.runCycle().status, "succeeded");
+  const outcome = control.runCycle();
+  assert.equal(outcome.status, "succeeded");
+  assert.deepEqual(page.clicks, ["city-farm"]);
+  assert.equal(page.root.city.mine.count, 0);
   assert.ok(messages.includes("build.execute.touch true"));
   assert.ok(messages.includes("build.execute.invokeOk true"));
   assert.ok(messages.includes("build.execute.built false"));
   assert.ok(messages.includes("build.execute.queued false"));
   assert.ok(messages.includes("build.execute.noop true"));
+}
+
+// A successful invocation that queues the expected construction is verified even when the
+// building count remains unchanged.
+{
+  const page = makePage({
+    buildings: {
+      farm: {
+        count: 0,
+        queueOnAction: true,
+        priceAt: () => ({ Money: 10 }),
+      },
+    },
+    resources: { Money: { amount: 500 } },
+    queueDisplay: true,
+  });
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)]),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["city-farm"]);
+  assert.deepEqual(
+    page.root.queue.queue.map((entry) => entry.id),
+    ["city-farm"],
+  );
 }
 
 // --- unaffordable is a decision, not an error ---------------------------------------------------------

@@ -2861,6 +2861,14 @@
     let entries = readProperty(queue, "queue");
     return Array.isArray(entries) ? entries : void 0;
   }
+  function readCapturedBuildQueueEntryCount(root, elementId) {
+    let queue = readProperty(root, "queue"), entries = readProperty(queue, "queue");
+    if (!Array.isArray(entries)) return 0;
+    let count2 = 0;
+    for (let entry of entries)
+      readProperty(entry, "id") === elementId && count2++;
+    return count2;
+  }
   function readQueuedItems(root) {
     let entries = readQueueEntries(root, "queue");
     if (entries === void 0) return;
@@ -3064,6 +3072,7 @@
             outcome: stale("stale-build-target", "build candidate list changed", {
               key
             }),
+            disposition: "stopped",
             ...base
           });
         let handle = controls.resolve(candidate.target.elementId);
@@ -3073,22 +3082,30 @@
               "build-control-missing",
               `no captured control for ${candidate.target.elementId}`
             ),
+            disposition: "stopped",
             ...base
           });
         let rootBefore = rootState.readRoot(), before = Number(
           readProperty(readBuilding(rootBefore, candidate.target), "count")
-        ), queueBefore = readQueueLength(rootBefore), touch = readProperty(readProperty(rootBefore, "settings"), "touch") === !0;
+        ), queueBefore = readQueueLength(rootBefore), candidateQueueBefore = readCapturedBuildQueueEntryCount(
+          rootBefore,
+          candidate.target.elementId
+        ), touch = readProperty(readProperty(rootBefore, "settings"), "touch") === !0;
         reportDiagnostic(`build.execute.attempt ${key}`), reportDiagnostic(`build.execute.touch ${touch}`), reportDiagnostic(`build.execute.before ${before}`), reportDiagnostic(`build.execute.queueBefore ${queueBefore}`);
         let result = controls.invoke(handle, "action");
         reportDiagnostic(`build.execute.invokeOk ${result.ok}`);
         let rootAfter = rootState.readRoot(), after = Number(
           readProperty(readBuilding(rootAfter, candidate.target), "count")
-        ), queueAfter = readQueueLength(rootAfter), built = after > before, queued = queueAfter > queueBefore;
+        ), queueAfter = readQueueLength(rootAfter), candidateQueueAfter = readCapturedBuildQueueEntryCount(
+          rootAfter,
+          candidate.target.elementId
+        ), built = after > before, queued = candidateQueueAfter > candidateQueueBefore;
         if (reportDiagnostic(`build.execute.after ${after}`), reportDiagnostic(`build.execute.queueAfter ${queueAfter}`), reportDiagnostic(`build.execute.built ${built}`), reportDiagnostic(`build.execute.queued ${queued}`), reportDiagnostic(`build.execute.noop ${!built && !queued}`), !result.ok)
           return Object.freeze({
             outcome: result.reason === "stale-control" ? stale("stale-build-control", result.detail ?? result.reason, {
               key
             }) : rejected("build-click-failed", result.detail ?? result.reason),
+            disposition: "stopped",
             ...base
           });
         if (built) {
@@ -3103,7 +3120,8 @@
           outcome: SUCCEEDED,
           clicked: built,
           mission: !1,
-          consumption: NO_CONSUMPTION
+          consumption: NO_CONSUMPTION,
+          disposition: built || queued ? "verified-success" : "invoked-but-unverified"
         });
       }
     });
@@ -3357,6 +3375,7 @@
             "construction candidate list changed",
             { key: decision.key, index: decision.index }
           ),
+          disposition: "stopped",
           clicked: !1,
           mission: !1,
           consumption: NO_CONSUMPTION2
@@ -3644,6 +3663,7 @@
               "stale-project-target",
               "project candidate list changed"
             ),
+            disposition: "stopped",
             ...base
           });
         let handle = controls.resolve(candidate.project.elementId);
@@ -3653,6 +3673,7 @@
               "project-control-missing",
               `no captured control for ${candidate.project.elementId}`
             ),
+            disposition: "stopped",
             ...base
           });
         if (handle.generation !== candidate.project.generation)
@@ -3661,6 +3682,7 @@
               "stale-project-control",
               `${candidate.project.elementId} was redrawn`
             ),
+            disposition: "stopped",
             ...base
           });
         let before = projectState(
@@ -3673,24 +3695,30 @@
               "stale-project-state",
               `${candidate.project.projectId} moved after sampling`
             ),
+            disposition: "stopped",
             ...base
           });
-        let result = controls.invoke(handle, "build", [
+        let rootBefore = rootState.readRoot(), queueBefore = readCapturedBuildQueueEntryCount(
+          rootBefore,
+          candidate.project.elementId
+        ), result = controls.invoke(handle, "build", [
           candidate.project.projectId,
           candidate.project.steps
-        ]), after = projectState(
-          rootState.readRoot(),
-          candidate.project.projectId
-        ), clicked = after !== void 0 && (after.rank > before.rank || after.progress > before.progress);
+        ]), rootAfter = rootState.readRoot(), after = projectState(rootAfter, candidate.project.projectId), progressed = after !== void 0 && (after.rank > before.rank || after.progress > before.progress), queued = readCapturedBuildQueueEntryCount(
+          rootAfter,
+          candidate.project.elementId
+        ) > queueBefore;
         if (!result.ok)
           return Object.freeze({
             outcome: result.reason === "stale-control" ? stale("stale-project-control", result.detail ?? result.reason) : rejected(
               "project-build-failed",
               result.detail ?? result.reason
             ),
+            disposition: "stopped",
             ...base
           });
-        if (clicked) {
+        let clicked = progressed || queued;
+        if (progressed) {
           let label = readCapturedControlLabel(
             handle,
             candidate.project.projectId
@@ -3705,7 +3733,8 @@
           outcome: SUCCEEDED,
           clicked,
           mission: !1,
-          consumption: NO_CONSUMPTION3
+          consumption: NO_CONSUMPTION3,
+          disposition: clicked ? "verified-success" : "invoked-but-unverified"
         });
       }
     });
@@ -4013,6 +4042,10 @@
         () => executor.executeClick(competition.decision)
       );
       if (reportDiagnostic(`autoBuild.outcome ${result.outcome.status}`), result.outcome.status !== "succeeded")
+        return result.outcome;
+      if (result.disposition === "candidate-rejected")
+        continue;
+      if (result.disposition !== "verified-success")
         return result.outcome;
       let application = measure(
         "autoBuild.applyClickResult",

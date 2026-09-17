@@ -30,6 +30,7 @@ import type { CapturedProjectContextReader } from "./captured-project-context.ts
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
+import { readCapturedBuildQueueEntryCount } from "../../captured-queue-reservations.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedProjectDependencies {
@@ -205,6 +206,7 @@ export function createCapturedProjectSource(
             "stale-project-target",
             "project candidate list changed",
           ),
+          disposition: "stopped" as const,
           ...base,
         });
       }
@@ -215,6 +217,7 @@ export function createCapturedProjectSource(
             "project-control-missing",
             `no captured control for ${candidate.project.elementId}`,
           ),
+          disposition: "stopped" as const,
           ...base,
         });
       }
@@ -224,6 +227,7 @@ export function createCapturedProjectSource(
             "stale-project-control",
             `${candidate.project.elementId} was redrawn`,
           ),
+          disposition: "stopped" as const,
           ...base,
         });
       }
@@ -241,20 +245,29 @@ export function createCapturedProjectSource(
             "stale-project-state",
             `${candidate.project.projectId} moved after sampling`,
           ),
+          disposition: "stopped" as const,
           ...base,
         });
       }
+      const rootBefore = rootState.readRoot();
+      const queueBefore = readCapturedBuildQueueEntryCount(
+        rootBefore,
+        candidate.project.elementId,
+      );
       const result = controls.invoke(handle, "build", [
         candidate.project.projectId,
         candidate.project.steps,
       ]);
-      const after = projectState(
-        rootState.readRoot(),
-        candidate.project.projectId,
-      );
-      const clicked =
+      const rootAfter = rootState.readRoot();
+      const after = projectState(rootAfter, candidate.project.projectId);
+      const progressed =
         after !== undefined &&
         (after.rank > before.rank || after.progress > before.progress);
+      const queueAfter = readCapturedBuildQueueEntryCount(
+        rootAfter,
+        candidate.project.elementId,
+      );
+      const queued = queueAfter > queueBefore;
       if (!result.ok) {
         return Object.freeze({
           outcome:
@@ -264,10 +277,12 @@ export function createCapturedProjectSource(
                   "project-build-failed",
                   result.detail ?? result.reason,
                 ),
+          disposition: "stopped" as const,
           ...base,
         });
       }
-      if (clicked) {
+      const clicked = progressed || queued;
+      if (progressed) {
         const label = readCapturedControlLabel(
           handle,
           candidate.project.projectId,
@@ -283,6 +298,9 @@ export function createCapturedProjectSource(
         clicked,
         mission: false,
         consumption: NO_CONSUMPTION,
+        disposition: clicked
+          ? ("verified-success" as const)
+          : ("invoked-but-unverified" as const),
       });
     },
   });

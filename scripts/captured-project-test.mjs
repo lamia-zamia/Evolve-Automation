@@ -124,6 +124,7 @@ function makeAdapter({
   catalog = undefined,
   settings = undefined,
   context = NO_PROJECT_CONTEXT,
+  actionModes = {},
 } = {}) {
   if (catalog === undefined) {
     catalog = [offered("lhc", { rank: 1, progress, generation: 2 })];
@@ -137,8 +138,14 @@ function makeAdapter({
     arpa_m_lhc: -1,
     arpa_w_lhc: 2,
   };
+  const entries = catalog ?? [];
   const root = {
-    arpa: { lhc: { rank: 1, complete: progress } },
+    arpa: Object.fromEntries(
+      entries.map((project) => [
+        project.projectId,
+        { rank: project.rank, complete: project.progress },
+      ]),
+    ),
     resource: { Money: { display: true, amount: 1000, max: 1000, diff: 10 } },
     queue: { queue },
   };
@@ -151,19 +158,27 @@ function makeAdapter({
       methods: ["build"],
       data: { title: "Large Hadron Collider" },
     }),
-    capturedElementIds: () => ["arpalhc"],
+    capturedElementIds: () => entries.map((project) => project.elementId),
     invoke(handle, method, args = []) {
       calls.push([handle.elementId, method, ...args]);
       if (handle.generation !== generation)
         return { ok: false, reason: "stale-control" };
-      const steps = args[1];
-      if (root.resource.Money.amount < steps * 10)
+      const project = entries.find((entry) => entry.projectId === args[0]);
+      if (project === undefined)
+        return { ok: false, reason: "unknown-control" };
+      if (actionModes[project.projectId] === "no-op") {
         return { ok: true, value: undefined };
-      root.resource.Money.amount -= steps * 10;
-      root.arpa.lhc.complete += steps;
-      if (root.arpa.lhc.complete >= 100) {
-        root.arpa.lhc.rank++;
-        root.arpa.lhc.complete = 0;
+      }
+      const steps = args[1];
+      const price = project.cost.Money ?? 0;
+      if (root.resource.Money.amount < steps * price)
+        return { ok: true, value: undefined };
+      root.resource.Money.amount -= steps * price;
+      const state = root.arpa[project.projectId];
+      state.complete += steps;
+      if (state.complete >= 100) {
+        state.rank++;
+        state.complete = 0;
       }
       return { ok: true, value: undefined };
     },
@@ -231,6 +246,35 @@ function makeAdapter({
     }),
   });
   return { adapter, root, calls, activity, reads: () => catalogReads };
+}
+
+// A successful project invocation that leaves both project progress and the expected queue entry
+// unchanged is unverified, so the lower-ranked project is not invoked.
+{
+  const page = makeAdapter({
+    catalog: [
+      offered("lhc", { rank: 1, progress: 20, generation: 2 }),
+      offered("monument", { rank: 1, progress: 20, generation: 2 }),
+    ],
+    settings: {
+      autoARPA: true,
+      arpaStep: 5,
+      arpaScaleWeighting: false,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+      arpa_monument: true,
+      arpa_p_monument: 1,
+      arpa_m_monument: -1,
+      arpa_w_monument: 1,
+    },
+    actionModes: { lhc: "no-op" },
+  });
+  const outcome = runBuildAutomation(page.adapter);
+  assert.equal(outcome.status, "succeeded");
+  assert.deepEqual(page.calls, [["arpalhc", "build", "lhc", 5]]);
+  assert.equal(page.root.arpa.monument.complete, 20);
 }
 
 // The captured row's build method advances the sampled project and no redraw method is involved.

@@ -11,6 +11,13 @@ import type {
 } from "../domain/progression/build/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 
+/** Describes whether a build executor may safely let the application consider another candidate. */
+export type BuildExecutionDisposition =
+  | "verified-success"
+  | "candidate-rejected"
+  | "invoked-but-unverified"
+  | "stopped";
+
 /**
  * Phased reads for one autoBuild cycle. beginCycle refreshes weightings and
  * captures the sorted candidate list; the per-candidate samplers read live
@@ -32,6 +39,7 @@ export interface BuildReader {
 
 export interface BuildClickResult extends BuildClickReport {
   readonly outcome: CommandExecutionOutcome;
+  readonly disposition: BuildExecutionDisposition;
 }
 
 export interface BuildExecutor {

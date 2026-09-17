@@ -27,6 +27,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { costFitsStorage } from "../../captured-affordability.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
+import { readCapturedBuildQueueEntryCount } from "../../captured-queue-reservations.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
 /** One building the caller manages, with the settings the planners need. */
@@ -185,6 +186,7 @@ export function createCapturedBuildSource(
           outcome: stale("stale-build-target", "build candidate list changed", {
             key,
           }),
+          disposition: "stopped" as const,
           ...base,
         });
       }
@@ -197,6 +199,7 @@ export function createCapturedBuildSource(
             "build-control-missing",
             `no captured control for ${candidate.target.elementId}`,
           ),
+          disposition: "stopped" as const,
           ...base,
         });
       }
@@ -205,6 +208,10 @@ export function createCapturedBuildSource(
         readProperty(readBuilding(rootBefore, candidate.target), "count"),
       );
       const queueBefore = readQueueLength(rootBefore);
+      const candidateQueueBefore = readCapturedBuildQueueEntryCount(
+        rootBefore,
+        candidate.target.elementId,
+      );
       const touch =
         readProperty(readProperty(rootBefore, "settings"), "touch") === true;
       reportDiagnostic(`build.execute.attempt ${key}`);
@@ -218,8 +225,12 @@ export function createCapturedBuildSource(
         readProperty(readBuilding(rootAfter, candidate.target), "count"),
       );
       const queueAfter = readQueueLength(rootAfter);
+      const candidateQueueAfter = readCapturedBuildQueueEntryCount(
+        rootAfter,
+        candidate.target.elementId,
+      );
       const built = after > before;
-      const queued = queueAfter > queueBefore;
+      const queued = candidateQueueAfter > candidateQueueBefore;
       reportDiagnostic(`build.execute.after ${after}`);
       reportDiagnostic(`build.execute.queueAfter ${queueAfter}`);
       reportDiagnostic(`build.execute.built ${built}`);
@@ -233,6 +244,7 @@ export function createCapturedBuildSource(
                   key,
                 })
               : rejected("build-click-failed", result.detail ?? result.reason),
+          disposition: "stopped" as const,
           ...base,
         });
       }
@@ -250,6 +262,10 @@ export function createCapturedBuildSource(
         clicked: built,
         mission: false,
         consumption: NO_CONSUMPTION,
+        disposition:
+          built || queued
+            ? ("verified-success" as const)
+            : ("invoked-but-unverified" as const),
       });
     },
   });
