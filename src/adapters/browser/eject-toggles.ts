@@ -20,6 +20,7 @@ export interface EjectToggleBrowserDependencies {
 
 export interface EjectToggleBrowserAdapter {
   createEjectToggles(): void;
+  ensureEjectToggles(): void;
   removeEjectToggles(): void;
 }
 
@@ -39,6 +40,8 @@ export function createEjectToggleBrowserAdapter({
   reader,
   addToggleCallbacks,
 }: EjectToggleBrowserDependencies): EjectToggleBrowserAdapter {
+  let lastCreatedEjectCount = 0;
+
   function createEjectToggles(): void {
     removeEjectToggles();
 
@@ -46,6 +49,7 @@ export function createEjectToggleBrowserAdapter({
     $("#eject").append(
       '<span id="script_eject_top_row" style="margin-left: auto; margin-right: 0.2rem; float: right;" class="has-text-danger">Auto Eject</span>',
     );
+    let count = 0;
     for (const item of reader.readItems()) {
       const ejectElement = $("#eject" + item.resourceId);
       if (ejectElement.length === 0) continue;
@@ -53,6 +57,19 @@ export function createEjectToggleBrowserAdapter({
       ejectElement.append(
         addToggleCallbacks($(createToggleMarkup(item)), item.settingKey),
       );
+      count++;
+    }
+    lastCreatedEjectCount = count;
+  }
+
+  function ensureEjectToggles(): void {
+    if (getJQuery()("#resEjector").length === 0) {
+      if (lastCreatedEjectCount !== 0) removeEjectToggles();
+      return;
+    }
+    const currentCount = getJQuery()("#resEjector .ea-eject-toggle").length;
+    if (currentCount === 0 || currentCount !== lastCreatedEjectCount) {
+      createEjectToggles();
     }
   }
 
@@ -60,7 +77,12 @@ export function createEjectToggleBrowserAdapter({
     const $ = getJQuery();
     $("#resEjector .ea-eject-toggle").remove();
     $("#script_eject_top_row").remove();
+    lastCreatedEjectCount = 0;
   }
 
-  return Object.freeze({ createEjectToggles, removeEjectToggles });
+  return Object.freeze({
+    createEjectToggles,
+    ensureEjectToggles,
+    removeEjectToggles,
+  });
 }

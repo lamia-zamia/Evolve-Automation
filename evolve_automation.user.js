@@ -21681,7 +21681,14 @@
     };
   }
   function readEjector(root, controls2) {
-    let capturedIds = new Set(controls2.capturedElementIds()), atomicMasses = readProperty(root, "atomic_mass"), supplyValues = readProperty(root, "supplyValue"), resources = readResources(root).map(([id, resource]) => ({
+    let capturedIds = new Set(controls2.capturedElementIds()), atomicMasses = readProperty(root, "atomic_mass"), supplyValues = readProperty(root, "supplyValue"), readSupplyFigure = (resource, id, resourceField, supplyField) => {
+      if (typeof readProperty(resource, resourceField) == "number")
+        return readProperty(resource, resourceField);
+      let supply = readProperty(supplyValues, id);
+      if (typeof supply == "number") return supply;
+      let nested = isRecord(supply) ? readProperty(supply, supplyField) : void 0;
+      return typeof nested == "number" ? nested : 0;
+    }, resources = readResources(root).map(([id, resource]) => ({
       id,
       // DeadSpace keeps tradability in the module-local resource table; a rendered market row is
       // the captured proof available here. Retain the root/nested forms for compatible builds.
@@ -21695,7 +21702,8 @@
         readProperty(readProperty(root, "city"), "nanite_factory"),
         id
       ) : !1,
-      supplyIn: typeof readProperty(resource, "supplyIn") == "number" ? readProperty(resource, "supplyIn") : typeof readProperty(supplyValues, id) == "number" ? readProperty(supplyValues, id) : isRecord(readProperty(supplyValues, id)) && typeof readProperty(readProperty(supplyValues, id), "in") == "number" ? readProperty(readProperty(supplyValues, id), "in") : 0
+      supplyIn: readSupplyFigure(resource, id, "supplyIn", "in"),
+      supplyOut: readSupplyFigure(resource, id, "supplyOut", "out")
     }));
     return {
       universe: String(
@@ -25388,6 +25396,415 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/adapters/browser/ejector-settings.ts
+  function createEjectorSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function buildEjectorSettings() {
+      let readModel = reader.read();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-ejector-settings" }),
+        updateEjectorSettingsContent
+      );
+    }
+    function updateEjectorSettingsContent() {
+      let readModel = reader.read(), actions = getActions(), jquery = getJQuery();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderEjectorContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderEjectorContent(currentNode, readModel, actions, jquery) {
+      for (let control of readModel.controls)
+        renderControl(currentNode, control, actions);
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Resource</th>
+              <th class="has-text-warning" style="width:20%">Atomic Mass</th>
+              <th class="has-text-warning" style="width:10%">Eject</th>
+              <th class="has-text-warning" style="width:10%">Nanite</th>
+              <th class="has-text-warning" style="width:30%">Supply Value</th>
+              <th class="has-text-warning" style="width:10%">Supply</th>
+            </tr>
+            <tbody id="script_ejectorTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = jquery("#script_ejectorTableBody"), newTableBodyText = "";
+      for (let row of readModel.rows)
+        newTableBodyText += `<tr><td id="script_eject_${row.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:30%"></td><td style="width:10%"></td></tr>`;
+      tableBodyNode.append(jquery(newTableBodyText));
+      for (let row of readModel.rows) {
+        let cell = jquery(`#script_eject_${row.id}`);
+        cell.append(actions.buildTableLabel(row.label, "", row.color)), cell = cell.next(), row.atomicMass > 0 && cell.append(
+          `<span class="mass"><span class="has-text-warning">${row.atomicMass}</span> kt</span>`
+        ), cell = cell.next(), row.showEject && actions.addTableToggle(cell, row.ejectSettingName), cell = cell.next(), row.showNanite && actions.addTableToggle(cell, row.naniteSettingName), row.showSupply && (cell = cell.next(), cell.append(
+          `<span class="mass">Export <span class="has-text-caution">${row.supplyOut}</span>, Gain <span class="has-text-success">${row.supplyIn}</span></span>`
+        ), cell = cell.next(), actions.addTableToggle(cell, row.supplySettingName));
+      }
+    }
+    function renderControl(node, control, actions) {
+      control.kind === "select" ? actions.addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      ) : control.kind === "toggle" ? actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      ) : actions.addSettingsNumber(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    return Object.freeze({
+      buildEjectorSettings,
+      updateEjectorSettingsContent
+    });
+  }
+
+  // src/application/ejector-settings.ts
+  function createEjectorSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-ejector-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes(), effects.removeEjectToggles(), effects.removeSupplyToggles();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/domain/economy/resources/ejector-settings.ts
+  var ejectorSpendOptions = Object.freeze([
+    Object.freeze({ val: "cap", label: "Capped", hint: "Use capped resources" }),
+    Object.freeze({
+      val: "excess",
+      label: "Excess",
+      hint: "Use excess resources"
+    }),
+    Object.freeze({
+      val: "all",
+      label: "All",
+      hint: "Use all resources. This option can prevent script from progressing, and intended to use with additional conditions."
+    }),
+    Object.freeze({
+      val: "mixed",
+      label: "Capped > Excess",
+      hint: "Use capped resources first, switching to excess resources when capped alone is not enough."
+    }),
+    Object.freeze({
+      val: "full",
+      label: "Capped > Excess > All",
+      hint: "Use capped first, then excess, then everything else. Same as 'All' option can be potentialy dungerous."
+    })
+  ]), spendDescription = "Configures threshold when script will be allowed to use resources. With any option script will try to use most expensive of allowed resources within selected group. Craftables, when enabled, always use excess amount as threshold, having no cap.", ejectorHeaderControls = Object.freeze([
+    Object.freeze({
+      kind: "select",
+      settingName: "ejectMode",
+      label: "Eject mode",
+      hint: spendDescription,
+      options: ejectorSpendOptions
+    }),
+    Object.freeze({
+      kind: "select",
+      settingName: "supplyMode",
+      label: "Supply mode",
+      hint: spendDescription,
+      options: ejectorSpendOptions
+    }),
+    Object.freeze({
+      kind: "select",
+      settingName: "naniteMode",
+      label: "Nanite mode",
+      hint: spendDescription,
+      options: ejectorSpendOptions
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "prestigeWhiteholeStabiliseMass",
+      label: "Stabilize blackhole",
+      hint: "Stabilizes the blackhole with exotic materials, disabled on whitehole runs"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "prestigeWhiteholeStabiliseCooldown",
+      label: "Cooldown between stabilizes",
+      hint: "Waits this many seconds between stabilizes. Stabilizing too frequently may cause significant lag in late game due to frequent full page redraws. Set to 0 to disable cooldown."
+    })
+  ]);
+  function createEjectorSettingsReadModel(rows) {
+    return Object.freeze({
+      sectionId: "ejector",
+      sectionName: "Ejector, Supply & Nanite",
+      controls: ejectorHeaderControls,
+      rows: Object.freeze(rows.map((row) => Object.freeze({ ...row })))
+    });
+  }
+
+  // src/adapters/evolve/economy/resources/captured-ejector-settings-catalog.ts
+  function readCapturedEjectorResourceTitle(root, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId);
+    if (!isRecord(resource)) return resourceId;
+    let title = readProperty(resource, "title");
+    if (typeof title == "string" && title.length > 0) return title;
+    let name = readProperty(resource, "name");
+    return typeof name == "string" && name.length > 0 ? name : resourceId;
+  }
+  function readCapturedEjectorColor(descriptor) {
+    return descriptor.id === "Elerium" || descriptor.id === "Infernite" ? "has-text-caution" : descriptor.isTradable ? "has-text-info" : "has-text-advanced";
+  }
+  function readCapturedEjectorSettingsEntries(root, controls2) {
+    let { resources } = readEjector(root, controls2), entries = [];
+    for (let descriptor of resources)
+      !descriptor.ejectConsumable && !descriptor.naniteConsumable && !descriptor.supplyConsumable || entries.push(
+        Object.freeze({
+          resourceId: descriptor.id,
+          ejectElementId: `eject${descriptor.id}`,
+          supplyElementId: `supply${descriptor.id}`,
+          label: readCapturedEjectorResourceTitle(root, descriptor.id),
+          color: readCapturedEjectorColor(descriptor),
+          atomicMass: descriptor.atomicMass,
+          ejectConsumable: descriptor.ejectConsumable,
+          naniteConsumable: descriptor.naniteConsumable,
+          supplyConsumable: descriptor.supplyConsumable,
+          supplyOut: descriptor.supplyConsumable ? String(descriptor.supplyOut) : "",
+          supplyIn: descriptor.supplyConsumable ? String(descriptor.supplyIn) : ""
+        })
+      );
+    return Object.freeze(entries);
+  }
+
+  // src/adapters/evolve/economy/resources/captured-ejector-settings.ts
+  var EJECTOR_OVERRIDE_PREFIXES = Object.freeze([
+    "res_eject",
+    "res_supply",
+    "res_nanite"
+  ]);
+  function readCapturedEjectorSettingsRecord(raw) {
+    return isRecord(raw) ? raw : {};
+  }
+  function readEjectorContext(rootState, controls2) {
+    return readEjector(rootState.readRoot(), controls2);
+  }
+  function createCapturedEjectorSettingsAdapter({
+    rootState,
+    controls: controls2,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readEjectorSettingsReadModel: () => {
+        let raw = readCapturedEjectorSettingsRecord(getSettingsRaw()), entries = readCapturedEjectorSettingsEntries(rootState.readRoot(), controls2);
+        return createEjectorSettingsReadModel(
+          entries.map((entry) => ({
+            id: entry.resourceId,
+            label: entry.label,
+            color: entry.color,
+            atomicMass: entry.atomicMass,
+            ejectEnabled: raw[`res_eject${entry.resourceId}`] === !0,
+            naniteEnabled: raw[`res_nanite${entry.resourceId}`] === !0,
+            supplyEnabled: raw[`res_supply${entry.resourceId}`] === !0,
+            ejectSettingName: `res_eject${entry.resourceId}`,
+            naniteSettingName: `res_nanite${entry.resourceId}`,
+            supplySettingName: `res_supply${entry.resourceId}`,
+            supplyOut: entry.supplyOut,
+            supplyIn: entry.supplyIn,
+            showEject: entry.ejectConsumable,
+            showNanite: entry.naniteConsumable,
+            showSupply: entry.supplyConsumable
+          }))
+        );
+      },
+      resetToDefaults() {
+        let raw = readCapturedEjectorSettingsRecord(getSettingsRaw()), defaults = computeEjectorDefaults(
+          readEjectorContext(rootState, controls2)
+        ).def, overrides = raw.overrides;
+        if (isRecord(overrides) && !Array.isArray(overrides))
+          for (let key of Object.keys(overrides))
+            EJECTOR_OVERRIDE_PREFIXES.some((prefix) => key.startsWith(prefix)) && delete overrides[key];
+        Object.assign(raw, defaults);
+      }
+    });
+  }
+
+  // src/adapters/evolve/economy/resources/captured-eject-toggles.ts
+  function createCapturedEjectToggleReader({
+    rootState,
+    controls: controls2,
+    getDocument,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readItems() {
+        let settings = getSettingsRaw(), entries = readCapturedEjectorSettingsEntries(
+          rootState.readRoot(),
+          controls2
+        );
+        return Object.freeze(
+          entries.filter((entry) => {
+            if (!entry.ejectConsumable) return !1;
+            let element = getDocument().getElementById(entry.ejectElementId);
+            return element != null;
+          }).map(
+            (entry) => Object.freeze({
+              resourceId: entry.resourceId,
+              settingKey: `res_eject${entry.resourceId}`,
+              enabled: isRecord(settings) && settings[`res_eject${entry.resourceId}`] === !0
+            })
+          )
+        );
+      }
+    });
+  }
+
+  // src/adapters/browser/eject-toggles.ts
+  function createToggleMarkup4(item) {
+    return `
+                  <label tabindex="0" title="Enable ejecting of this resource. When to eject is set in the Prestige Settings tab." class="switch ea-eject-toggle" style="margin-left:auto; margin-right:0.2rem;">
+                    <input class="script_${item.settingKey}" type="checkbox"${item.enabled ? " checked" : ""}>
+                    <span class="check" style="height:5px;"></span>
+                    <span class="state"></span>
+                  </label>`;
+  }
+  function createEjectToggleBrowserAdapter({
+    getJQuery,
+    reader,
+    addToggleCallbacks
+  }) {
+    let lastCreatedEjectCount = 0;
+    function createEjectToggles() {
+      removeEjectToggles();
+      let $ = getJQuery();
+      $("#eject").append(
+        '<span id="script_eject_top_row" style="margin-left: auto; margin-right: 0.2rem; float: right;" class="has-text-danger">Auto Eject</span>'
+      );
+      let count2 = 0;
+      for (let item of reader.readItems()) {
+        let ejectElement = $("#eject" + item.resourceId);
+        ejectElement.length !== 0 && (ejectElement.append(
+          addToggleCallbacks($(createToggleMarkup4(item)), item.settingKey)
+        ), count2++);
+      }
+      lastCreatedEjectCount = count2;
+    }
+    function ensureEjectToggles() {
+      if (getJQuery()("#resEjector").length === 0) {
+        lastCreatedEjectCount !== 0 && removeEjectToggles();
+        return;
+      }
+      let currentCount3 = getJQuery()("#resEjector .ea-eject-toggle").length;
+      (currentCount3 === 0 || currentCount3 !== lastCreatedEjectCount) && createEjectToggles();
+    }
+    function removeEjectToggles() {
+      let $ = getJQuery();
+      $("#resEjector .ea-eject-toggle").remove(), $("#script_eject_top_row").remove(), lastCreatedEjectCount = 0;
+    }
+    return Object.freeze({
+      createEjectToggles,
+      ensureEjectToggles,
+      removeEjectToggles
+    });
+  }
+
+  // src/adapters/evolve/economy/resources/captured-supply-toggles.ts
+  function createCapturedSupplyToggleReader({
+    rootState,
+    controls: controls2,
+    getDocument,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readItems() {
+        let settings = getSettingsRaw(), entries = readCapturedEjectorSettingsEntries(
+          rootState.readRoot(),
+          controls2
+        );
+        return Object.freeze(
+          entries.filter((entry) => {
+            if (!entry.supplyConsumable) return !1;
+            let element = getDocument().getElementById(entry.supplyElementId);
+            return element != null;
+          }).map(
+            (entry) => Object.freeze({
+              resourceId: entry.resourceId,
+              settingKey: `res_supply${entry.resourceId}`,
+              enabled: isRecord(settings) && settings[`res_supply${entry.resourceId}`] === !0
+            })
+          )
+        );
+      }
+    });
+  }
+
+  // src/adapters/browser/supply-toggles.ts
+  function createToggleMarkup5(item) {
+    return `
+                  <label tabindex="0" title="Enable supply of this resource."  class="switch ea-supply-toggle" style="margin-left:auto; margin-right:0.2rem;">
+                    <input class="script_${item.settingKey}" type="checkbox"${item.enabled ? " checked" : ""}>
+                    <span class="check" style="height:5px;"></span>
+                    <span class="state"></span>
+                  </label>`;
+  }
+  function createSupplyToggleBrowserAdapter({
+    getJQuery,
+    reader,
+    addToggleCallbacks
+  }) {
+    let lastCreatedSupplyCount = 0;
+    function createSupplyToggles() {
+      removeSupplyToggles();
+      let $ = getJQuery();
+      $("#spireSupply").append(
+        '<span id="script_supply_top_row" style="margin-left: auto; margin-right: 0.2rem; float: right;" class="has-text-danger">Auto Supply</span>'
+      );
+      let count2 = 0;
+      for (let item of reader.readItems()) {
+        let supplyElement = $("#supply" + item.resourceId);
+        supplyElement.length !== 0 && (supplyElement.append(
+          addToggleCallbacks($(createToggleMarkup5(item)), item.settingKey)
+        ), count2++);
+      }
+      lastCreatedSupplyCount = count2;
+    }
+    function ensureSupplyToggles() {
+      if (getJQuery()("#resCargo").length === 0) {
+        lastCreatedSupplyCount !== 0 && removeSupplyToggles();
+        return;
+      }
+      let currentCount3 = getJQuery()("#resCargo .ea-supply-toggle").length;
+      (currentCount3 === 0 || currentCount3 !== lastCreatedSupplyCount) && createSupplyToggles();
+    }
+    function removeSupplyToggles() {
+      let $ = getJQuery();
+      $("#resCargo .ea-supply-toggle").remove(), $("#script_supply_top_row").remove(), lastCreatedSupplyCount = 0;
+    }
+    return Object.freeze({
+      createSupplyToggles,
+      ensureSupplyToggles,
+      removeSupplyToggles
+    });
+  }
+
   // src/settings/override-comparators.ts
   function asNumber(value) {
     return typeof value == "symbol" ? Number.NaN : Number(value);
@@ -28685,6 +29102,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     projectSettings: capturedProjectSettings,
     storageSettings: capturedStorageSettings,
     marketSettings: capturedMarketSettings,
+    ejectorSettings: capturedEjectorSettings,
     onDiagnostic = () => {
     },
     logError = () => {
@@ -28820,7 +29238,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -28860,8 +29278,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         },
         buildFleetSettings: () => {
         },
-        buildEjectorSettings: () => {
-        },
+        buildEjectorSettings: () => ejector?.buildEjectorSettings(),
         buildMarketSettings: () => market?.buildMarketSettings(),
         buildStorageSettings: () => storage?.buildStorageSettings(),
         buildMagicSettings: () => {
@@ -29379,6 +29796,68 @@ If script is allowed to reassign non-empty storage it might waste time producing
           )
         });
       }
+      if (capturedEjectorSettings !== void 0) {
+        let capturedAdapter = createCapturedEjectorSettingsAdapter({
+          rootState: capturedEjectorSettings.rootState,
+          controls: capturedEjectorSettings.controls,
+          getSettingsRaw: settings.readRaw
+        }), ejectorIntent;
+        ejector = createEjectorSettingsBrowserAdapter({
+          getDocument: () => documentForUi,
+          getJQuery: () => getJQuery(),
+          reader: { read: capturedAdapter.readEjectorSettingsReadModel },
+          intents: { handle: (intent) => ejectorIntent.handle(intent) },
+          getActions: () => ({
+            ...simpleActions,
+            addSettingsSelect: (node, settingName, label, hint, options) => controls2.addSettingsSelect(
+              node,
+              settingName,
+              label,
+              hint,
+              options
+            ),
+            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
+            buildTableLabel: (label, title, color) => controls2.buildTableLabel(label, title, color)
+          })
+        }), ejectorIntent = createEjectorSettingsIntentHandler({
+          writer: {
+            resetToDefaults: () => {
+              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("ejector") : capturedAdapter.resetToDefaults();
+            },
+            persist: persistSettings
+          },
+          renderSettingsContent: () => ejector?.updateEjectorSettingsContent(),
+          effects: {
+            resetCheckboxes: () => controls2.resetCheckbox("autoEject", "autoSupply", "autoNanite"),
+            removeEjectToggles: () => ejectToggles?.removeEjectToggles(),
+            removeSupplyToggles: () => supplyToggles?.removeSupplyToggles()
+          }
+        }), ejectToggles = createEjectToggleBrowserAdapter({
+          getJQuery: () => getJQuery(),
+          reader: createCapturedEjectToggleReader({
+            rootState: capturedEjectorSettings.rootState,
+            controls: capturedEjectorSettings.controls,
+            getDocument: () => documentForUi,
+            getSettingsRaw: settings.readRaw
+          }),
+          addToggleCallbacks: (node, settingName) => controls2.addToggleCallbacks(
+            node,
+            settingName
+          )
+        }), supplyToggles = createSupplyToggleBrowserAdapter({
+          getJQuery: () => getJQuery(),
+          reader: createCapturedSupplyToggleReader({
+            rootState: capturedEjectorSettings.rootState,
+            controls: capturedEjectorSettings.controls,
+            getDocument: () => documentForUi,
+            getSettingsRaw: settings.readRaw
+          }),
+          addToggleCallbacks: (node, settingName) => controls2.addToggleCallbacks(
+            node,
+            settingName
+          )
+        });
+      }
       return settingsUi = {
         general,
         achievementGuard,
@@ -29397,6 +29876,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
         storageToggles,
         market,
         marketToggles,
+        ejector,
+        ejectToggles,
+        supplyToggles,
         craftToggles,
         shell
       }, settingsUi;
@@ -29421,7 +29903,7 @@ Only continue if you trust the source. Injected code:
       let ui = ensureSettingsUi(dom);
       ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings());
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings());
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
     }, createArpaToggles = () => {
@@ -29452,6 +29934,34 @@ Only continue if you trust the source. Injected code:
         return;
       }
       adapter.removeMarketToggles();
+    }, createEjectToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).ejectToggles;
+      if (adapter === void 0) {
+        unported("eject toggles")();
+        return;
+      }
+      adapter.createEjectToggles();
+    }, removeEjectToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).ejectToggles;
+      if (adapter === void 0) {
+        unported("eject toggles")();
+        return;
+      }
+      adapter.removeEjectToggles();
+    }, createSupplyToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).supplyToggles;
+      if (adapter === void 0) {
+        unported("supply toggles")();
+        return;
+      }
+      adapter.createSupplyToggles();
+    }, removeSupplyToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).supplyToggles;
+      if (adapter === void 0) {
+        unported("supply toggles")();
+        return;
+      }
+      adapter.removeSupplyToggles();
     }, createStorageToggles = () => {
       let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).storageToggles;
       if (adapter === void 0) {
@@ -29556,10 +30066,10 @@ Only continue if you trust the source. Injected code:
         removeStorageToggles,
         createMarketToggles,
         removeMarketToggles,
-        createEjectToggles: unported("eject toggles"),
-        removeEjectToggles: unported("eject toggles"),
-        createSupplyToggles: unported("supply toggles"),
-        removeSupplyToggles: unported("supply toggles"),
+        createEjectToggles,
+        removeEjectToggles,
+        createSupplyToggles,
+        removeSupplyToggles,
         updateScriptData: unported("script data readouts"),
         finalizeScriptData: unported("script data readouts"),
         autoMarket: unported("bulk sell button")
@@ -29569,7 +30079,7 @@ Only continue if you trust the source. Injected code:
       ensurePanel() {
         if (getQuery() !== void 0)
           try {
-            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), settings.readRaw().autoStorage === !0 ? settingsUi?.storageToggles?.ensureStorageToggles() : settingsUi?.storageToggles?.removeStorageToggles(), settings.readRaw().autoMarket === !0 ? settingsUi?.marketToggles?.ensureMarketToggles() : settingsUi?.marketToggles?.removeMarketToggles(), optionsModal.createOptionsModal(), settings.readRaw().showSettings === !0 && buildScriptSettings();
+            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), settings.readRaw().autoStorage === !0 ? settingsUi?.storageToggles?.ensureStorageToggles() : settingsUi?.storageToggles?.removeStorageToggles(), settings.readRaw().autoMarket === !0 ? settingsUi?.marketToggles?.ensureMarketToggles() : settingsUi?.marketToggles?.removeMarketToggles(), settings.readRaw().autoEject === !0 ? settingsUi?.ejectToggles?.ensureEjectToggles() : settingsUi?.ejectToggles?.removeEjectToggles(), settings.readRaw().autoSupply === !0 ? settingsUi?.supplyToggles?.ensureSupplyToggles() : settingsUi?.supplyToggles?.removeSupplyToggles(), optionsModal.createOptionsModal(), settings.readRaw().showSettings === !0 && buildScriptSettings();
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }
@@ -32235,6 +32745,10 @@ Only continue if you trust the source. Injected code:
         controls: pageCapture2.controls
       },
       marketSettings: {
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls
+      },
+      ejectorSettings: {
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls
       },

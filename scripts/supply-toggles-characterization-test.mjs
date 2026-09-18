@@ -78,6 +78,7 @@ const { hooks } = await loadCharacterizationBundle({
 assert.equal(typeof hooks.setSupplyTogglesTestContext, "function");
 assert.deepEqual(Object.keys(hooks.supplyToggles), [
   "createSupplyToggles",
+  "ensureSupplyToggles",
   "removeSupplyToggles",
 ]);
 hooks.setSupplyTogglesTestContext({

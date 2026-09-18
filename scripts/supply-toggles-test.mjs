@@ -83,4 +83,24 @@ assert.deepEqual(trace, [
   { kind: "remove", selector: "#script_supply_top_row" },
 ]);
 
+// ensureSupplyToggles repairs toggles the game's own redraw dropped.
+nodeBySelector.set("#resCargo .ea-supply-toggle", { length: 0 });
+trace.length = 0;
+browserAdapter.ensureSupplyToggles();
+assert.deepEqual(
+  trace
+    .filter((entry) => entry.kind === "toggle")
+    .map((entry) => entry.settingKey),
+  ["res_supplyCoal", "res_supplyIron"],
+);
+
+// Without the panel there is nothing to repair; a stale count is cleared.
+nodeBySelector.set("#resCargo", { length: 0 });
+trace.length = 0;
+browserAdapter.ensureSupplyToggles();
+assert.deepEqual(trace, [
+  { kind: "remove", selector: "#resCargo .ea-supply-toggle" },
+  { kind: "remove", selector: "#script_supply_top_row" },
+]);
+
 console.log("Supply toggles browser and Evolve adapter tests passed");

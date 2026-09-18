@@ -5,8 +5,7 @@
  * This control wires those existing typed browser builders to the captured settings record instead
  * of to the legacy closure; game-backed sections remain outside this slice until their captures exist.
  *
- * TRANSITIONAL: the remaining per-section builders (the Settings tab, and the toggle strips
- * injected into the game's own Eject/Supply panels) are still unavailable on
+ * TRANSITIONAL: the remaining per-section builders (the Settings tab) are still unavailable on
  * the captured path. They are diagnosed once by name rather than silently doing nothing. Automation
  * itself does not depend on any of them — it reads the same settings record this panel writes.
  */
@@ -48,6 +47,16 @@ import {
 import { createMarketSettingsIntentHandler } from "../application/market-settings.ts";
 import { createCapturedMarketSettingsAdapter } from "../adapters/evolve/economy/market/captured-market-settings.ts";
 import { createCapturedMarketToggleReader } from "../adapters/evolve/economy/market/captured-market-toggles.ts";
+import {
+  createEjectorSettingsBrowserAdapter,
+  type EjectorSettingsBrowserActions,
+} from "../adapters/browser/ejector-settings.ts";
+import { createEjectorSettingsIntentHandler } from "../application/ejector-settings.ts";
+import { createCapturedEjectorSettingsAdapter } from "../adapters/evolve/economy/resources/captured-ejector-settings.ts";
+import { createCapturedEjectToggleReader } from "../adapters/evolve/economy/resources/captured-eject-toggles.ts";
+import { createEjectToggleBrowserAdapter } from "../adapters/browser/eject-toggles.ts";
+import { createCapturedSupplyToggleReader } from "../adapters/evolve/economy/resources/captured-supply-toggles.ts";
+import { createSupplyToggleBrowserAdapter } from "../adapters/browser/supply-toggles.ts";
 import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
@@ -248,6 +257,33 @@ type MarketToggleDocument = ReturnType<
 type MarketToggleJQuery = ReturnType<
   Parameters<typeof createResourceToggleBrowserAdapter>[0]["getJQuery"]
 >;
+type EjectorSettings = ReturnType<typeof createEjectorSettingsBrowserAdapter>;
+type EjectToggles = ReturnType<typeof createEjectToggleBrowserAdapter>;
+type SupplyToggles = ReturnType<typeof createSupplyToggleBrowserAdapter>;
+type EjectorSettingsDocument = ReturnType<
+  Parameters<typeof createEjectorSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type EjectorSettingsJQuery = ReturnType<
+  Parameters<typeof createEjectorSettingsBrowserAdapter>[0]["getJQuery"]
+>;
+type EjectToggleDocument = ReturnType<
+  Parameters<typeof createCapturedEjectToggleReader>[0]["getDocument"]
+>;
+type EjectToggleJQuery = ReturnType<
+  Parameters<typeof createEjectToggleBrowserAdapter>[0]["getJQuery"]
+>;
+type EjectToggleNode = Parameters<
+  Parameters<typeof createEjectToggleBrowserAdapter>[0]["addToggleCallbacks"]
+>[0];
+type SupplyToggleDocument = ReturnType<
+  Parameters<typeof createCapturedSupplyToggleReader>[0]["getDocument"]
+>;
+type SupplyToggleJQuery = ReturnType<
+  Parameters<typeof createSupplyToggleBrowserAdapter>[0]["getJQuery"]
+>;
+type SupplyToggleNode = Parameters<
+  Parameters<typeof createSupplyToggleBrowserAdapter>[0]["addToggleCallbacks"]
+>[0];
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
@@ -276,6 +312,10 @@ export interface CapturedSettingsPanelDependencies {
     readonly controls: GameControlRegistry;
   };
   readonly marketSettings?: {
+    readonly rootState: GameRootStateSource;
+    readonly controls: GameControlRegistry;
+  };
+  readonly ejectorSettings?: {
     readonly rootState: GameRootStateSource;
     readonly controls: GameControlRegistry;
   };
@@ -366,6 +406,7 @@ export function createCapturedSettingsPanel({
   projectSettings: capturedProjectSettings,
   storageSettings: capturedStorageSettings,
   marketSettings: capturedMarketSettings,
+  ejectorSettings: capturedEjectorSettings,
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -518,6 +559,9 @@ export function createCapturedSettingsPanel({
         readonly storageToggles: StorageToggles | undefined;
         readonly market: MarketSettings | undefined;
         readonly marketToggles: MarketToggles | undefined;
+        readonly ejector: EjectorSettings | undefined;
+        readonly ejectToggles: EjectToggles | undefined;
+        readonly supplyToggles: SupplyToggles | undefined;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -651,6 +695,9 @@ export function createCapturedSettingsPanel({
     let storageToggles: StorageToggles | undefined;
     let market: MarketSettings | undefined;
     let marketToggles: MarketToggles | undefined;
+    let ejector: EjectorSettings | undefined;
+    let ejectToggles: EjectToggles | undefined;
+    let supplyToggles: SupplyToggles | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -689,7 +736,7 @@ export function createCapturedSettingsPanel({
         ),
       buildMechSettings: () => {},
       buildFleetSettings: () => {},
-      buildEjectorSettings: () => {},
+      buildEjectorSettings: () => ejector?.buildEjectorSettings(),
       buildMarketSettings: () => market?.buildMarketSettings(),
       buildStorageSettings: () => storage?.buildStorageSettings(),
       buildMagicSettings: () => {},
@@ -1386,6 +1433,89 @@ export function createCapturedSettingsPanel({
           ) as unknown as StorageToggleNode,
       });
     }
+    if (capturedEjectorSettings !== undefined) {
+      const capturedAdapter = createCapturedEjectorSettingsAdapter({
+        rootState: capturedEjectorSettings.rootState,
+        controls: capturedEjectorSettings.controls,
+        getSettingsRaw: settings.readRaw,
+      });
+      let ejectorIntent: ReturnType<typeof createEjectorSettingsIntentHandler>;
+      ejector = createEjectorSettingsBrowserAdapter({
+        getDocument: () => documentForUi as unknown as EjectorSettingsDocument,
+        getJQuery: () => getJQuery() as unknown as EjectorSettingsJQuery,
+        reader: { read: capturedAdapter.readEjectorSettingsReadModel },
+        intents: { handle: (intent) => ejectorIntent.handle(intent) },
+        getActions: () =>
+          ({
+            ...simpleActions,
+            addSettingsSelect: (
+              node: unknown,
+              settingName: string,
+              label: string,
+              hint: string,
+              options: readonly unknown[],
+            ) =>
+              controls.addSettingsSelect(
+                node as SettingsControlNode,
+                settingName,
+                label,
+                hint,
+                options as BuildingSettingsSelectOptions,
+              ),
+            addTableToggle: (node: unknown, settingName: string) =>
+              controls.addTableToggle(node as SettingsControlNode, settingName),
+            buildTableLabel: (label: string, title: string, color: string) =>
+              controls.buildTableLabel(label, title, color),
+          }) as unknown as EjectorSettingsBrowserActions,
+      });
+      ejectorIntent = createEjectorSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("ejector");
+            } else {
+              capturedAdapter.resetToDefaults();
+            }
+          },
+          persist: persistSettings,
+        },
+        renderSettingsContent: () => ejector?.updateEjectorSettingsContent(),
+        effects: {
+          resetCheckboxes: () =>
+            controls.resetCheckbox("autoEject", "autoSupply", "autoNanite"),
+          removeEjectToggles: () => ejectToggles?.removeEjectToggles(),
+          removeSupplyToggles: () => supplyToggles?.removeSupplyToggles(),
+        },
+      });
+      ejectToggles = createEjectToggleBrowserAdapter({
+        getJQuery: () => getJQuery() as unknown as EjectToggleJQuery,
+        reader: createCapturedEjectToggleReader({
+          rootState: capturedEjectorSettings.rootState,
+          controls: capturedEjectorSettings.controls,
+          getDocument: () => documentForUi as unknown as EjectToggleDocument,
+          getSettingsRaw: settings.readRaw,
+        }),
+        addToggleCallbacks: (node, settingName) =>
+          controls.addToggleCallbacks(
+            node as unknown as SettingsControlNode,
+            settingName,
+          ) as unknown as EjectToggleNode,
+      });
+      supplyToggles = createSupplyToggleBrowserAdapter({
+        getJQuery: () => getJQuery() as unknown as SupplyToggleJQuery,
+        reader: createCapturedSupplyToggleReader({
+          rootState: capturedEjectorSettings.rootState,
+          controls: capturedEjectorSettings.controls,
+          getDocument: () => documentForUi as unknown as SupplyToggleDocument,
+          getSettingsRaw: settings.readRaw,
+        }),
+        addToggleCallbacks: (node, settingName) =>
+          controls.addToggleCallbacks(
+            node as unknown as SettingsControlNode,
+            settingName,
+          ) as unknown as SupplyToggleNode,
+      });
+    }
     settingsUi = {
       general,
       achievementGuard,
@@ -1404,6 +1534,9 @@ export function createCapturedSettingsPanel({
       storageToggles,
       market,
       marketToggles,
+      ejector,
+      ejectToggles,
+      supplyToggles,
       craftToggles,
       shell,
     };
@@ -1470,6 +1603,7 @@ export function createCapturedSettingsPanel({
     ui.project?.buildProjectSettings();
     ui.storage?.buildStorageSettings();
     ui.market?.buildMarketSettings();
+    ui.ejector?.buildEjectorSettings();
   };
 
   const removeScriptSettings = () => {
@@ -1518,6 +1652,50 @@ export function createCapturedSettingsPanel({
       return;
     }
     adapter.removeMarketToggles();
+  };
+
+  const createEjectToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).ejectToggles;
+    if (adapter === undefined) {
+      unported("eject toggles")();
+      return;
+    }
+    adapter.createEjectToggles();
+  };
+
+  const removeEjectToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).ejectToggles;
+    if (adapter === undefined) {
+      unported("eject toggles")();
+      return;
+    }
+    adapter.removeEjectToggles();
+  };
+
+  const createSupplyToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).supplyToggles;
+    if (adapter === undefined) {
+      unported("supply toggles")();
+      return;
+    }
+    adapter.createSupplyToggles();
+  };
+
+  const removeSupplyToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).supplyToggles;
+    if (adapter === undefined) {
+      unported("supply toggles")();
+      return;
+    }
+    adapter.removeSupplyToggles();
   };
 
   const createStorageToggles = () => {
@@ -1661,10 +1839,10 @@ export function createCapturedSettingsPanel({
       removeStorageToggles,
       createMarketToggles,
       removeMarketToggles,
-      createEjectToggles: unported("eject toggles"),
-      removeEjectToggles: unported("eject toggles"),
-      createSupplyToggles: unported("supply toggles"),
-      removeSupplyToggles: unported("supply toggles"),
+      createEjectToggles,
+      removeEjectToggles,
+      createSupplyToggles,
+      removeSupplyToggles,
       updateScriptData: unported("script data readouts"),
       finalizeScriptData: unported("script data readouts"),
       autoMarket: unported("bulk sell button"),
@@ -1696,6 +1874,16 @@ export function createCapturedSettingsPanel({
           settingsUi?.marketToggles?.ensureMarketToggles();
         } else {
           settingsUi?.marketToggles?.removeMarketToggles();
+        }
+        if (settings.readRaw()["autoEject"] === true) {
+          settingsUi?.ejectToggles?.ensureEjectToggles();
+        } else {
+          settingsUi?.ejectToggles?.removeEjectToggles();
+        }
+        if (settings.readRaw()["autoSupply"] === true) {
+          settingsUi?.supplyToggles?.ensureSupplyToggles();
+        } else {
+          settingsUi?.supplyToggles?.removeSupplyToggles();
         }
         optionsModal.createOptionsModal();
         if (settings.readRaw()["showSettings"] === true) buildScriptSettings();

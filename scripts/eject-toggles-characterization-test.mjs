@@ -78,6 +78,7 @@ const { hooks } = await loadCharacterizationBundle({
 assert.equal(typeof hooks.setEjectTogglesTestContext, "function");
 assert.deepEqual(Object.keys(hooks.ejectToggles), [
   "createEjectToggles",
+  "ensureEjectToggles",
   "removeEjectToggles",
 ]);
 hooks.setEjectTogglesTestContext({

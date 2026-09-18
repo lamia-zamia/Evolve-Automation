@@ -300,13 +300,29 @@ function readProduction(root: unknown): ProductionResetContext {
   };
 }
 
-function readEjector(
+export function readEjector(
   root: unknown,
   controls: GameControlRegistry,
 ): EjectorResetContext {
   const capturedIds = new Set(controls.capturedElementIds());
   const atomicMasses = readProperty(root, "atomic_mass");
   const supplyValues = readProperty(root, "supplyValue");
+  const readSupplyFigure = (
+    resource: Record<string, unknown>,
+    id: string,
+    resourceField: string,
+    supplyField: string,
+  ): number => {
+    if (typeof readProperty(resource, resourceField) === "number") {
+      return readProperty(resource, resourceField) as number;
+    }
+    const supply = readProperty(supplyValues, id);
+    if (typeof supply === "number") return supply;
+    const nested = isRecord(supply)
+      ? readProperty(supply, supplyField)
+      : undefined;
+    return typeof nested === "number" ? nested : 0;
+  };
   const resources = readResources(root).map(([id, resource]) => ({
     id,
     // DeadSpace keeps tradability in the module-local resource table; a rendered market row is
@@ -331,16 +347,8 @@ function readEjector(
           id,
         )
       : false,
-    supplyIn:
-      typeof readProperty(resource, "supplyIn") === "number"
-        ? (readProperty(resource, "supplyIn") as number)
-        : typeof readProperty(supplyValues, id) === "number"
-          ? (readProperty(supplyValues, id) as number)
-          : isRecord(readProperty(supplyValues, id)) &&
-              typeof readProperty(readProperty(supplyValues, id), "in") ===
-                "number"
-            ? (readProperty(readProperty(supplyValues, id), "in") as number)
-            : 0,
+    supplyIn: readSupplyFigure(resource, id, "supplyIn", "in"),
+    supplyOut: readSupplyFigure(resource, id, "supplyOut", "out"),
   }));
   return {
     universe: String(

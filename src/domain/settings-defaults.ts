@@ -1059,6 +1059,8 @@ export interface EjectorResourceDescriptor {
   readonly naniteConsumable: boolean;
   /** `SupplyManager.supplyIn(id)`. */
   readonly supplyIn: number;
+  /** `SupplyManager.supplyOut(id)`. */
+  readonly supplyOut: number;
 }
 
 export interface EjectorResetContext {

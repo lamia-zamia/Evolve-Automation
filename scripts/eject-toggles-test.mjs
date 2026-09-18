@@ -83,4 +83,24 @@ assert.deepEqual(trace, [
   { kind: "remove", selector: "#script_eject_top_row" },
 ]);
 
+// ensureEjectToggles repairs toggles the game's own redraw dropped.
+nodeBySelector.set("#resEjector .ea-eject-toggle", { length: 0 });
+trace.length = 0;
+browserAdapter.ensureEjectToggles();
+assert.deepEqual(
+  trace
+    .filter((entry) => entry.kind === "toggle")
+    .map((entry) => entry.settingKey),
+  ["res_ejectIron", "res_ejectCopper"],
+);
+
+// Without the panel there is nothing to repair; a stale count is cleared.
+nodeBySelector.set("#resEjector", { length: 0 });
+trace.length = 0;
+browserAdapter.ensureEjectToggles();
+assert.deepEqual(trace, [
+  { kind: "remove", selector: "#resEjector .ea-eject-toggle" },
+  { kind: "remove", selector: "#script_eject_top_row" },
+]);
+
 console.log("Eject toggles browser and Evolve adapter tests passed");

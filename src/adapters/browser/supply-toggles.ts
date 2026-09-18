@@ -20,6 +20,7 @@ export interface SupplyToggleBrowserDependencies {
 
 export interface SupplyToggleBrowserAdapter {
   createSupplyToggles(): void;
+  ensureSupplyToggles(): void;
   removeSupplyToggles(): void;
 }
 
@@ -39,6 +40,8 @@ export function createSupplyToggleBrowserAdapter({
   reader,
   addToggleCallbacks,
 }: SupplyToggleBrowserDependencies): SupplyToggleBrowserAdapter {
+  let lastCreatedSupplyCount = 0;
+
   function createSupplyToggles(): void {
     removeSupplyToggles();
 
@@ -46,6 +49,7 @@ export function createSupplyToggleBrowserAdapter({
     $("#spireSupply").append(
       '<span id="script_supply_top_row" style="margin-left: auto; margin-right: 0.2rem; float: right;" class="has-text-danger">Auto Supply</span>',
     );
+    let count = 0;
     for (const item of reader.readItems()) {
       const supplyElement = $("#supply" + item.resourceId);
       if (supplyElement.length === 0) continue;
@@ -53,6 +57,19 @@ export function createSupplyToggleBrowserAdapter({
       supplyElement.append(
         addToggleCallbacks($(createToggleMarkup(item)), item.settingKey),
       );
+      count++;
+    }
+    lastCreatedSupplyCount = count;
+  }
+
+  function ensureSupplyToggles(): void {
+    if (getJQuery()("#resCargo").length === 0) {
+      if (lastCreatedSupplyCount !== 0) removeSupplyToggles();
+      return;
+    }
+    const currentCount = getJQuery()("#resCargo .ea-supply-toggle").length;
+    if (currentCount === 0 || currentCount !== lastCreatedSupplyCount) {
+      createSupplyToggles();
     }
   }
 
@@ -60,7 +77,12 @@ export function createSupplyToggleBrowserAdapter({
     const $ = getJQuery();
     $("#resCargo .ea-supply-toggle").remove();
     $("#script_supply_top_row").remove();
+    lastCreatedSupplyCount = 0;
   }
 
-  return Object.freeze({ createSupplyToggles, removeSupplyToggles });
+  return Object.freeze({
+    createSupplyToggles,
+    ensureSupplyToggles,
+    removeSupplyToggles,
+  });
 }

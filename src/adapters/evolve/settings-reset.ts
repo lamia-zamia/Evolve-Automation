@@ -117,6 +117,7 @@ interface RitualManager {
 interface DisposalManager extends PriorityManager {
   isConsumable: (resource: ResetResource) => boolean;
   supplyIn?: (id: string) => number;
+  supplyOut?: (id: string) => number;
 }
 
 interface TraitInstance {
@@ -370,8 +371,9 @@ export function createEvolveSettingsResetAdapter(
           ejectConsumable: EjectManager.isConsumable(r),
           supplyConsumable,
           naniteConsumable: NaniteManager.isConsumable(r),
-          // supplyIn is only consulted for the supply list; guard non-supply resources.
+          // supplyIn/supplyOut are only consulted for the supply list; guard non-supply resources.
           supplyIn: supplyConsumable ? SupplyManager.supplyIn!(r.id) : 0,
+          supplyOut: supplyConsumable ? SupplyManager.supplyOut!(r.id) : 0,
         };
       });
       return {

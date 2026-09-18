@@ -48,7 +48,7 @@ export type EjectorSettingsIntent = Readonly<{
   type: "reset-ejector-settings";
 }>;
 
-const spendOptions: readonly EjectorSettingsOption[] = Object.freeze([
+const ejectorSpendOptions: readonly EjectorSettingsOption[] = Object.freeze([
   Object.freeze({ val: "cap", label: "Capped", hint: "Use capped resources" }),
   Object.freeze({
     val: "excess",
@@ -75,27 +75,27 @@ const spendOptions: readonly EjectorSettingsOption[] = Object.freeze([
 const spendDescription =
   "Configures threshold when script will be allowed to use resources. With any option script will try to use most expensive of allowed resources within selected group. Craftables, when enabled, always use excess amount as threshold, having no cap.";
 
-const controls: readonly EjectorSettingsControl[] = Object.freeze([
+const ejectorHeaderControls: readonly EjectorSettingsControl[] = Object.freeze([
   Object.freeze({
     kind: "select",
     settingName: "ejectMode",
     label: "Eject mode",
     hint: spendDescription,
-    options: spendOptions,
+    options: ejectorSpendOptions,
   }),
   Object.freeze({
     kind: "select",
     settingName: "supplyMode",
     label: "Supply mode",
     hint: spendDescription,
-    options: spendOptions,
+    options: ejectorSpendOptions,
   }),
   Object.freeze({
     kind: "select",
     settingName: "naniteMode",
     label: "Nanite mode",
     hint: spendDescription,
-    options: spendOptions,
+    options: ejectorSpendOptions,
   }),
   Object.freeze({
     kind: "toggle",
@@ -117,7 +117,7 @@ export function createEjectorSettingsReadModel(
   return Object.freeze({
     sectionId: "ejector",
     sectionName: "Ejector, Supply & Nanite",
-    controls,
+    controls: ejectorHeaderControls,
     rows: Object.freeze(rows.map((row) => Object.freeze({ ...row }))),
   });
 }
