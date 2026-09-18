@@ -63,6 +63,9 @@ import {
 } from "../adapters/browser/magic-settings.ts";
 import { createMagicSettingsIntentHandler } from "../application/magic-settings.ts";
 import { createCapturedMagicSettingsAdapter } from "../adapters/evolve/economy/production/captured-magic-settings.ts";
+import { createProductionSettingsBrowserAdapter } from "../adapters/browser/production-settings.ts";
+import { createProductionSettingsIntentHandler } from "../application/production-settings.ts";
+import { createCapturedProductionSettingsAdapter } from "../adapters/evolve/economy/production/captured-production-settings.ts";
 import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
@@ -297,6 +300,15 @@ type MagicSettingsDocument = ReturnType<
 type MagicSettingsJQuery = ReturnType<
   Parameters<typeof createMagicSettingsBrowserAdapter>[0]["getJQuery"]
 >;
+type ProductionSettings = ReturnType<
+  typeof createProductionSettingsBrowserAdapter
+>;
+type ProductionSettingsDocument = ReturnType<
+  Parameters<typeof createProductionSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type ProductionSettingsJQuery = ReturnType<
+  Parameters<typeof createProductionSettingsBrowserAdapter>[0]["getJQuery"]
+>;
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
@@ -335,6 +347,9 @@ export interface CapturedSettingsPanelDependencies {
   readonly magicSettings?: {
     readonly rootState: GameRootStateSource;
     readonly controls: GameControlRegistry;
+  };
+  readonly productionSettings?: {
+    readonly rootState: GameRootStateSource;
   };
   readonly onDiagnostic?: (message: string) => void;
   readonly logError?: (message: string) => void;
@@ -425,6 +440,7 @@ export function createCapturedSettingsPanel({
   marketSettings: capturedMarketSettings,
   ejectorSettings: capturedEjectorSettings,
   magicSettings: capturedMagicSettings,
+  productionSettings: capturedProductionSettings,
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -581,6 +597,7 @@ export function createCapturedSettingsPanel({
         readonly ejectToggles: EjectToggles | undefined;
         readonly supplyToggles: SupplyToggles | undefined;
         readonly magic: MagicSettings | undefined;
+        readonly production: ProductionSettings | undefined;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -718,6 +735,7 @@ export function createCapturedSettingsPanel({
     let ejectToggles: EjectToggles | undefined;
     let supplyToggles: SupplyToggles | undefined;
     let magic: MagicSettings | undefined;
+    let production: ProductionSettings | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -760,7 +778,7 @@ export function createCapturedSettingsPanel({
       buildMarketSettings: () => market?.buildMarketSettings(),
       buildStorageSettings: () => storage?.buildStorageSettings(),
       buildMagicSettings: () => magic?.buildMagicSettings(),
-      buildProductionSettings: () => {},
+      buildProductionSettings: () => production?.buildProductionSettings(),
       buildJobSettings: () => job?.buildJobSettings(),
       buildBuildingSettings: () => building?.buildBuildingSettings(),
       buildWeightingSettings: () => weighting?.buildWeightingSettings(),
@@ -1588,6 +1606,102 @@ export function createCapturedSettingsPanel({
         },
       });
     }
+    if (capturedProductionSettings !== undefined) {
+      const capturedAdapter = createCapturedProductionSettingsAdapter({
+        rootState: capturedProductionSettings.rootState,
+        getSettingsRaw: settings.readRaw,
+      });
+      let productionIntent: ReturnType<
+        typeof createProductionSettingsIntentHandler
+      >;
+      production = createProductionSettingsBrowserAdapter({
+        getDocument: () =>
+          documentForUi as unknown as ProductionSettingsDocument,
+        getJQuery: () => getJQuery() as unknown as ProductionSettingsJQuery,
+        getReadModel: capturedAdapter.readProductionSettingsReadModel,
+        intents: { handle: (intent) => productionIntent.handle(intent) },
+        buildSettingsSection: shell.buildSettingsSection,
+        addSettingsNumber: (
+          node: unknown,
+          settingName: string,
+          labelText: string,
+          hintText: string,
+        ) =>
+          controls.addSettingsNumber(
+            node as SettingsControlNode,
+            settingName,
+            labelText,
+            hintText,
+          ),
+        addSettingsToggle: (
+          node: unknown,
+          settingName: string,
+          labelText: string,
+          hintText: string,
+        ) =>
+          controls.addSettingsToggle(
+            node as SettingsControlNode,
+            settingName,
+            labelText,
+            hintText,
+          ),
+        addSettingsSelect: (
+          node: unknown,
+          settingName: string,
+          labelText: string,
+          hintText: string,
+          options: readonly { val: string; label: string; hint: string }[],
+        ) =>
+          controls.addSettingsSelect(
+            node as SettingsControlNode,
+            settingName,
+            labelText,
+            hintText,
+            options as BuildingSettingsSelectOptions,
+          ),
+        addStandardHeading: (node: unknown, heading: string) =>
+          shell.addStandardHeading(
+            node as unknown as Parameters<typeof shell.addStandardHeading>[0],
+            heading,
+          ),
+        addTableToggle: (node: unknown, settingName: string) =>
+          controls.addTableToggle(node as SettingsControlNode, settingName),
+        addTableInput: (node: unknown, settingName: string) =>
+          controls.addTableInput(node as SettingsControlNode, settingName),
+        buildTableLabel: (label: string) => controls.buildTableLabel(label),
+        getTableSorter: () => tableSorter,
+      });
+      productionIntent = createProductionSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("production");
+            } else {
+              capturedAdapter.resetToDefaults();
+            }
+          },
+          persist: persistSettings,
+          reorderSmelterFuels: capturedAdapter.reorderSmelterFuels,
+        },
+        renderSettingsContent: () =>
+          production?.updateProductionSettingsContent(),
+        effects: {
+          resetCheckboxes: () =>
+            controls.resetCheckbox(
+              "autoQuarry",
+              "autoMine",
+              "autoExtractor",
+              "autoGraphenePlant",
+              "autoSmelter",
+              "autoCraft",
+              "autoFactory",
+              "autoMiningDroid",
+              "autoReplicator",
+            ),
+          removeCraftToggles: () => craftToggles?.removeCraftToggles(),
+        },
+      });
+    }
     settingsUi = {
       general,
       achievementGuard,
@@ -1610,6 +1724,7 @@ export function createCapturedSettingsPanel({
       ejectToggles,
       supplyToggles,
       magic,
+      production,
       craftToggles,
       shell,
     };
@@ -1678,6 +1793,7 @@ export function createCapturedSettingsPanel({
     ui.market?.buildMarketSettings();
     ui.ejector?.buildEjectorSettings();
     ui.magic?.buildMagicSettings();
+    ui.production?.buildProductionSettings();
   };
 
   const removeScriptSettings = () => {

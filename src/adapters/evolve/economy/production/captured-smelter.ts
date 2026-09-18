@@ -45,6 +45,13 @@ const FUEL_IDS = Object.freeze([
 ] as const);
 type FuelId = (typeof FUEL_IDS)[number];
 
+/**
+ * The smelter fuel identities in default-priority order, shared with the
+ * settings catalog and the lifecycle defaults. Verified against the
+ * `smelting` fuel set the automation prices.
+ */
+export const SMELTER_FUEL_IDS: readonly string[] = FUEL_IDS;
+
 function readCount(value: unknown): number | undefined {
   const count = finite(value);
   return count !== undefined && Number.isSafeInteger(count) && count >= 0
@@ -203,7 +210,7 @@ function readFuel(
       : id === "Wood" || id === "Oil" || id === "Coal" || id === "Super"
         ? 2
         : 50;
-  const priorityValue = settings[`smelter_fuel_p_${id.toLowerCase()}`];
+  const priorityValue = settings[`smelter_fuel_p_${id}`];
   const priority = finite(priorityValue) ?? FUEL_IDS.indexOf(id);
   if (!Number.isFinite(priority)) return undefined;
   const costs =
@@ -296,9 +303,9 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     .filter((fuel): fuel is SmelterFuelView => fuel !== undefined)
     .sort(
       (left, right) =>
-        (finite(settings[`smelter_fuel_p_${left.id.toLowerCase()}`]) ??
+        (finite(settings[`smelter_fuel_p_${left.id}`]) ??
           FUEL_IDS.indexOf(left.id as FuelId)) -
-        (finite(settings[`smelter_fuel_p_${right.id.toLowerCase()}`]) ??
+        (finite(settings[`smelter_fuel_p_${right.id}`]) ??
           FUEL_IDS.indexOf(right.id as FuelId)),
     )
     .map((fuel, index, list) =>

@@ -11540,7 +11540,9 @@
       weighting: 1,
       priority: 1
     })
-  ]);
+  ]), MINING_DROID_OUTPUT_IDS = Object.freeze(
+    PRODUCTS.map((product) => product.resource)
+  );
   function settingNumber5(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : finite(value);
@@ -11990,6 +11992,9 @@
     "Quantium",
     "Super_Fuel"
   ]);
+  function isReplicableResourceId(id) {
+    return Object.hasOwn(ATOMIC_MASS, id) && !ALWAYS_BLACKLISTED.has(id);
+  }
   function settingBoolean2(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : typeof value == "boolean" ? value : void 0;
@@ -16845,7 +16850,7 @@
     "Wood",
     "Inferno",
     "Super"
-  ]);
+  ]), SMELTER_FUEL_IDS = FUEL_IDS;
   function readCount(value) {
     let count2 = finite(value);
     return count2 !== void 0 && Number.isSafeInteger(count2) && count2 >= 0 ? count2 : void 0;
@@ -16918,7 +16923,7 @@
         cost: Object.freeze([])
       });
     if (resource === void 0) return;
-    let quantity = id === "Wood" ? evil && (!race.soul_eater || species === "wendigo") ? 1 : 3 : id === "Coal" ? isLumberRace ? 0.25 : 0.15 : id === "Oil" ? 0.35 : id === "Super" ? 1 : 50, minRateOfChange = id === "Inferno" ? 50 : id === "Wood" || id === "Oil" || id === "Coal" || id === "Super" ? 2 : 50, priorityValue = settings[`smelter_fuel_p_${id.toLowerCase()}`], priority = finite(priorityValue) ?? FUEL_IDS.indexOf(id);
+    let quantity = id === "Wood" ? evil && (!race.soul_eater || species === "wendigo") ? 1 : 3 : id === "Coal" ? isLumberRace ? 0.25 : 0.15 : id === "Oil" ? 0.35 : id === "Super" ? 1 : 50, minRateOfChange = id === "Inferno" ? 50 : id === "Wood" || id === "Oil" || id === "Coal" || id === "Super" ? 2 : 50, priorityValue = settings[`smelter_fuel_p_${id}`], priority = finite(priorityValue) ?? FUEL_IDS.indexOf(id);
     if (!Number.isFinite(priority)) return;
     let costs = id === "Inferno" ? (() => {
       let oil = readResource2(resources, "Oil"), infernite = readResource2(resources, "Infernite");
@@ -16965,7 +16970,7 @@
     if (fuels.some((fuel) => fuel === void 0))
       return Object.freeze({ root, input: emptyInput7() });
     let withSmelterCounts = [...fuels].filter((fuel) => fuel !== void 0).sort(
-      (left, right) => (finite(settings[`smelter_fuel_p_${left.id.toLowerCase()}`]) ?? FUEL_IDS.indexOf(left.id)) - (finite(settings[`smelter_fuel_p_${right.id.toLowerCase()}`]) ?? FUEL_IDS.indexOf(right.id))
+      (left, right) => (finite(settings[`smelter_fuel_p_${left.id}`]) ?? FUEL_IDS.indexOf(left.id)) - (finite(settings[`smelter_fuel_p_${right.id}`]) ?? FUEL_IDS.indexOf(right.id))
     ).map(
       (fuel, index, list) => Object.freeze({
         ...fuel,
@@ -17987,7 +17992,16 @@
         })
       ])
     })
-  ]), DEFAULT_WEIGHTINGS = Object.freeze({
+  ]), FACTORY_OUTPUT_IDS = Object.freeze(
+    PRODUCT_SPECS.map((spec) => spec.outputResourceId)
+  ), FACTORY_RESOURCE_ID_BY_KEY = Object.freeze({
+    LuxuryGoods: "Money",
+    Furs: "Furs",
+    Alloy: "Alloy",
+    Polymer: "Polymer",
+    NanoTube: "Nano_Tube",
+    Stanene: "Stanene"
+  }), DEFAULT_WEIGHTINGS = Object.freeze({
     Lux: 1,
     Furs: 1,
     Alloy: 1,
@@ -21680,10 +21694,10 @@
     let ids = readResources(root).map(([id]) => id), identityMap = Object.fromEntries(ids.map((id) => [id, id]));
     return {
       foundryResourceIdByKey: identityMap,
-      smelterFuelIds: [],
-      factoryResourceIdByKey: identityMap,
+      smelterFuelIds: [...SMELTER_FUEL_IDS],
+      factoryResourceIdByKey: { ...FACTORY_RESOURCE_ID_BY_KEY },
       droidResourceIdByKey: identityMap,
-      replicatorProductionIds: []
+      replicatorProductionIds: ids.filter((id) => isReplicableResourceId(id))
     };
   }
   function readEjector(root, controls2) {
@@ -26068,6 +26082,564 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/domain/economy/production/production-settings.ts
+  function freezeControl(control) {
+    return Object.freeze({
+      ...control,
+      ...control.kind === "select" ? {
+        options: Object.freeze(
+          control.options.map((option) => Object.freeze({ ...option }))
+        )
+      } : {}
+    });
+  }
+  var productionSettingsControls = [
+    {
+      kind: "number",
+      settingName: "productionChrysotileWeight",
+      label: "Chrysotile weighting (Quarry, Smoldering)",
+      hint: "Chrysotile weighting for autoQuarry, applies after adjusting to difference between current amounts of Stone and Chrysotile"
+    },
+    {
+      kind: "number",
+      settingName: "productionAdamantiteWeight",
+      label: "Adamantite weighting (Mine, The True Path)",
+      hint: "Adamantite weighting for autoMine, applies after adjusting to difference between current amounts of Aluminium and Adamantite"
+    },
+    {
+      kind: "number",
+      settingName: "productionExtWeight_common",
+      label: "Aluminium weighting (Extractor Ship, The True Path)",
+      hint: "Aluminium weighting for autoExtractor, applies after adjusting to difference between current amounts of Iron and Aluminium"
+    },
+    {
+      kind: "number",
+      settingName: "productionExtWeight_uncommon",
+      label: "Neutronium weighting (Extractor Ship, The True Path)",
+      hint: "Neutronium weighting for autoExtractor, applies after adjusting to difference between current amounts of Iridium and Neutronium"
+    },
+    {
+      kind: "number",
+      settingName: "productionExtWeight_rare",
+      label: "Elerium weighting (Extractor Ship, The True Path)",
+      hint: "Elerium weighting for autoExtractor, applies after adjusting to difference between current amounts of Orichalcum and Elerium"
+    },
+    {
+      kind: "toggle",
+      settingName: "productionFactoryFocusMaterials",
+      label: "Prioritize keeping materials stockpiled",
+      hint: ""
+    },
+    {
+      kind: "select",
+      settingName: "productionSmelting",
+      label: "Smelters production",
+      hint: "Distribution of smelters between iron and steel",
+      options: [
+        {
+          val: "iron",
+          label: "Prioritize Iron",
+          hint: "Produce only Iron, untill storage capped, and switch to Steel after that"
+        },
+        {
+          val: "steel",
+          label: "Prioritize Steel",
+          hint: "Produce as much Steel as possible, untill storage capped, and switch to Iron after that"
+        },
+        {
+          val: "storage",
+          label: "Up to full storages",
+          hint: "Produce both Iron and Steel at ratio which will fill both storages at same time for both"
+        },
+        {
+          val: "required",
+          label: "Up to required amounts",
+          hint: "Produce both Iron and Steel at ratio which will produce maximum amount of resources required for buildings at same time for both"
+        }
+      ]
+    },
+    {
+      kind: "number",
+      settingName: "productionSmeltingIridium",
+      label: "Iridium ratio",
+      hint: "Share of smelters dedicated to Iridium"
+    },
+    {
+      kind: "select",
+      settingName: "productionFoundryWeighting",
+      label: "Weightings adjustments",
+      hint: "Configures how exactly craftables will be weighted against each other",
+      options: [
+        {
+          val: "none",
+          label: "None",
+          hint: "Use configured weightings with no additional adjustments, craftables with x2 weighting will be crafted two times more intense than with x1, etc."
+        },
+        {
+          val: "demanded",
+          label: "Prioritize demanded",
+          hint: "Ignore craftables once stored amount surpass cost of most expensive building, until all missing resources will be crafted. After that works as with 'none' adjustments."
+        },
+        {
+          val: "buildings",
+          label: "Buildings weightings",
+          hint: "Uses weightings of buildings which are waiting for craftables, as multipliers to craftables weighting. This option requires autoBuild."
+        }
+      ]
+    },
+    {
+      kind: "select",
+      settingName: "productionCraftsmen",
+      label: "Assign craftsmen",
+      hint: "Configures when workers should be assigned to crafting jobs",
+      options: [
+        { val: "always", label: "Always", hint: "Always assign all craftsmens" },
+        {
+          val: "nocraft",
+          label: "No Manual Crafting",
+          hint: "Assign workers only manual crafting is not possible, servants still always will be assigned"
+        },
+        {
+          val: "advanced",
+          label: "Advanced",
+          hint: "Assign workers only to advanced craftables(Scarletite, Quantium), basic craftables will be crafted by servants"
+        },
+        { val: "servants", label: "Servants", hint: "Assign only servants" }
+      ]
+    },
+    {
+      kind: "select",
+      settingName: "productionFactoryWeighting",
+      label: "Weightings adjustments",
+      hint: "Configures how exactly the resources will be weighted against each other",
+      options: [
+        {
+          val: "none",
+          label: "None",
+          hint: "Use configured weightings with no additional adjustments, resources with x2 weighting will be produced two times more intense than with x1, etc."
+        },
+        {
+          val: "demanded",
+          label: "Prioritize demanded",
+          hint: "Ignore resources once stored amount surpass cost of most expensive building, until all missing resources will be crafted. After that works as with 'none' adjustments."
+        },
+        {
+          val: "buildings",
+          label: "Buildings weightings",
+          hint: "Uses weightings of buildings which are waiting for resources, as multipliers to production weighting. This option requires autoBuild."
+        }
+      ]
+    },
+    {
+      kind: "number",
+      settingName: "productionFactoryMinIngredients",
+      label: "Minimum materials to preserve",
+      hint: "Factory will craft resources only when all required materials above given ratio"
+    },
+    {
+      kind: "toggle",
+      settingName: "replicatorAssignGovernorTask",
+      label: "Assign governor task",
+      hint: "If active, the replicator scheduler governor task will be set, the power adjustment will be enabled."
+    },
+    {
+      kind: "select",
+      settingName: "replicatorWeightingMode",
+      label: "Weighting mode",
+      hint: "Replicator only picks from enabled resources with the current highest valid priority (or -1 priority). After that, replicator use is split between resources of identical weighting. Setting configures how that split happens.",
+      options: [
+        {
+          val: "mass",
+          label: "By atomic mass",
+          hint: "Spends more time on resources that are easy to replicate. A resource with 2x the weighting will have roughly 2x the time spent. Based on differences in atomic mass, resources at similar weightings may have very different quantities."
+        },
+        {
+          val: "quantity",
+          label: "By resource quantity",
+          hint: "Spends more time on resources that are hard to replicate. A resource with 2x the weighting will be focused until you have roughly 2x the amount. Resources at similar weightings will have similar quantities."
+        },
+        {
+          val: "legacy",
+          label: "Legacy (deprecated)",
+          hint: "Legacy mode, similar to previous script behavior. Only the resource with the lowest weighting is picked. If multiple resources have the same weighting then it will focus exclusively on one of those resources. This mode exists only to give you time to migrate your config to using the priority field."
+        }
+      ]
+    }
+  ];
+  function createProductionSettingsReadModel({
+    consumptionBalanceTarget,
+    smelterFuels,
+    foundryRows,
+    factoryRows,
+    miningDroidRows,
+    replicatorRows
+  }) {
+    let controls2 = productionSettingsControls.map(
+      (control) => control.settingName === "productionFactoryFocusMaterials" ? {
+        ...control,
+        hint: `Aggressively request stockpiling ${consumptionBalanceTarget}s + min materials worth of materials to ensure factory and craftsmen can always produce`
+      } : control
+    );
+    return Object.freeze({
+      sectionId: "production",
+      sectionName: "Production",
+      controls: Object.freeze(controls2.map(freezeControl)),
+      smelterFuels: Object.freeze(
+        smelterFuels.map((row) => Object.freeze({ ...row }))
+      ),
+      foundryRows: Object.freeze(
+        foundryRows.map((row) => Object.freeze({ ...row }))
+      ),
+      factoryRows: Object.freeze(
+        factoryRows.map((row) => Object.freeze({ ...row }))
+      ),
+      miningDroidRows: Object.freeze(
+        miningDroidRows.map((row) => Object.freeze({ ...row }))
+      ),
+      replicatorRows: Object.freeze(
+        replicatorRows.map((row) => Object.freeze({ ...row }))
+      )
+    });
+  }
+
+  // src/adapters/browser/production-settings.ts
+  function createProductionSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    buildSettingsSection,
+    addSettingsNumber,
+    addSettingsToggle,
+    addSettingsSelect,
+    addStandardHeading,
+    addTableToggle,
+    addTableInput,
+    buildTableLabel,
+    getTableSorter
+  }) {
+    function buildProductionSettings() {
+      let readModel = getReadModel();
+      buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-production-settings" }),
+        updateProductionSettingsContent
+      );
+    }
+    function updateProductionSettingsContent() {
+      let readModel = getReadModel();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderProductionContent(currentNode, readModel);
+        }
+      );
+    }
+    function renderProductionContent(currentNode, readModel) {
+      let tableControlNames = /* @__PURE__ */ new Set([
+        "productionSmelting",
+        "productionSmeltingIridium",
+        "productionFoundryWeighting",
+        "productionCraftsmen",
+        "productionFactoryWeighting",
+        "productionFactoryMinIngredients",
+        "replicatorAssignGovernorTask",
+        "replicatorWeightingMode"
+      ]);
+      for (let control of readModel.controls)
+        tableControlNames.has(control.settingName) || renderControl(currentNode, control);
+      updateProductionTableSmelter(currentNode), updateProductionTableFoundry(currentNode), updateProductionTableFactory(currentNode), updateProductionTableMiningDrone(currentNode), updateProductionTableReplicator(currentNode);
+    }
+    function renderControl(node, control) {
+      control.kind === "number" ? addSettingsNumber(node, control.settingName, control.label, control.hint) : control.kind === "toggle" ? addSettingsToggle(node, control.settingName, control.label, control.hint) : addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      );
+    }
+    function renderControlBySetting(node, settingName) {
+      let control = getReadModel().controls.find(
+        (candidate) => candidate.settingName === settingName
+      );
+      if (!control) throw new Error(`Missing Production control: ${settingName}`);
+      renderControl(node, control);
+    }
+    function updateProductionTableSmelter(currentNode) {
+      let readModel = getReadModel();
+      addStandardHeading(currentNode, "Smelter"), renderControlBySetting(currentNode, "productionSmelting"), renderControlBySetting(currentNode, "productionSmeltingIridium"), currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:95%">Fuel</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_productionTableBodySmelter"></tbody>
+          </table>`);
+      let $ = getJQuery(), tableBodyNode = $("#script_productionTableBodySmelter"), newTableBodyText = "", smelterFuels = readModel.smelterFuels;
+      for (let i = 0; i < smelterFuels.length; i++) {
+        let fuel = smelterFuels[i];
+        newTableBodyText += `<tr value="${fuel.id}" class="script-draggable"><td id="script_smelter_${fuel.id}" style="width:95%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      }
+      tableBodyNode.append($(newTableBodyText));
+      for (let i = 0; i < smelterFuels.length; i++) {
+        let fuel = smelterFuels[i];
+        $("#script_smelter_" + fuel.id).append(buildTableLabel(fuel.id));
+      }
+      getTableSorter().attach(tableBodyNode[0], {
+        items: "tr:not(.unsortable)",
+        attribute: "value",
+        onOrderChanged: (fuelIds) => {
+          intents.handle({ type: "reorder-smelter-fuels", fuelIds });
+        }
+      });
+    }
+    function updateProductionTableFactory(currentNode) {
+      addStandardHeading(currentNode, "Factory"), renderControlBySetting(currentNode, "productionFactoryWeighting"), renderControlBySetting(currentNode, "productionFactoryMinIngredients"), currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Resource</th>
+              <th class="has-text-warning" style="width:20%">Enabled</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Priority</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_productionTableBodyFactory"></tbody>
+          </table>`);
+      let $ = getJQuery(), tableBodyNode = $("#script_productionTableBodyFactory"), newTableBodyText = "", productionSettings = getReadModel().factoryRows;
+      for (let i = 0; i < productionSettings.length; i++) {
+        let production = productionSettings[i];
+        newTableBodyText += `<tr><td id="script_factory_${production.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append($(newTableBodyText));
+      for (let i = 0; i < productionSettings.length; i++) {
+        let production = productionSettings[i], productionElement = $("#script_factory_" + production.id);
+        productionElement.append(buildTableLabel(production.label)), productionElement = productionElement.next(), addTableToggle(productionElement, "production_" + production.id), productionElement = productionElement.next(), addTableInput(productionElement, "production_w_" + production.id), productionElement = productionElement.next(), addTableInput(productionElement, "production_p_" + production.id);
+      }
+    }
+    function updateProductionTableFoundry(currentNode) {
+      addStandardHeading(currentNode, "Foundry"), renderControlBySetting(currentNode, "productionFoundryWeighting"), renderControlBySetting(currentNode, "productionCraftsmen"), currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:21%" title="Resource name">Resource</th>
+              <th class="has-text-warning" style="width:17%" title="Resource won't ever be crafted with this option disabled">Enabled</th>
+              <th class="has-text-warning" style="width:17%" title="Resource won't use foundry workers for craft with this option disabled">Craftsmen</th>
+              <th class="has-text-warning" style="width:20%" title="Ratio between resources. Script assign craftsmans to resource with lowest 'amount / weighting'. Ignored by manual crafting.">Weighting</th>
+              <th class="has-text-warning" style="width:20%" title="Only craft resource when storage ratio of all required materials above given number. E.g. bricks with 0.1 min materials will be crafted only when cement storage at least 10% filled.">Min Materials</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_productionTableBodyFoundry"></tbody>
+          </table>`);
+      let $ = getJQuery(), tableBodyNode = $("#script_productionTableBodyFoundry"), newTableBodyText = "", craftablesList = getReadModel().foundryRows;
+      for (let i = 0; i < craftablesList.length; i++) {
+        let resource = craftablesList[i];
+        newTableBodyText += `<tr><td id="script_foundry_${resource.id}" style="width:21%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append($(newTableBodyText));
+      for (let i = 0; i < craftablesList.length; i++) {
+        let resource = craftablesList[i], productionElement = $("#script_foundry_" + resource.id);
+        productionElement.append(buildTableLabel(resource.label)), productionElement = productionElement.next(), addTableToggle(productionElement, "craft" + resource.id), productionElement = productionElement.next(), addTableToggle(productionElement, "job_" + resource.id), productionElement = productionElement.next(), resource.managed ? productionElement.append("<span>Managed</span>") : addTableInput(productionElement, "foundry_w_" + resource.id), productionElement = productionElement.next(), addTableInput(productionElement, "foundry_p_" + resource.id);
+      }
+    }
+    function updateProductionTableMiningDrone(currentNode) {
+      let readModel = getReadModel();
+      addStandardHeading(currentNode, "Mining Droid"), currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Resource</th>
+              <th class="has-text-warning" style="width:20%"></th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Priority</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_productionTableBodyMiningDrone"></tbody>
+          </table>`);
+      let $ = getJQuery(), tableBodyNode = $("#script_productionTableBodyMiningDrone"), newTableBodyText = "", droidProducts = readModel.miningDroidRows;
+      for (let i = 0; i < droidProducts.length; i++) {
+        let production = droidProducts[i];
+        newTableBodyText += `<tr><td id="script_droid_${production.id}" style="width:35%"><td style="width:20%"></td><td style="width:20%"></td></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append($(newTableBodyText));
+      for (let i = 0; i < droidProducts.length; i++) {
+        let production = droidProducts[i], productionElement = $("#script_droid_" + production.id);
+        productionElement.append(buildTableLabel(production.label)), productionElement = productionElement.next().next(), addTableInput(productionElement, "droid_w_" + production.id), productionElement = productionElement.next(), addTableInput(productionElement, "droid_pr_" + production.id);
+      }
+    }
+    function updateProductionTableReplicator(currentNode) {
+      addStandardHeading(currentNode, "Replicator"), renderControlBySetting(currentNode, "replicatorAssignGovernorTask"), renderControlBySetting(currentNode, "replicatorWeightingMode"), currentNode.append(`
+        <table style="width:100%">
+          <tr>
+            <th class="has-text-warning" style="width:35%">Resource</th>
+            <th class="has-text-warning" style="width:20%">Enabled</th>
+            <th class="has-text-warning" style="width:20%">Weighting</th>
+            <th class="has-text-warning" style="width:20%">Priority</th>
+            <th style="width:5%"></th>
+          </tr>
+          <tbody id="script_productionTableBodyReplicator"></tbody>
+        </table>`);
+      let $ = getJQuery(), tableBodyNode = $("#script_productionTableBodyReplicator"), newTableBodyText = "", replicatorProducts = getReadModel().replicatorRows;
+      for (let i = 0; i < replicatorProducts.length; i++) {
+        let production = replicatorProducts[i];
+        newTableBodyText += `<tr><td id="script_replicator_${production.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append($(newTableBodyText));
+      for (let i = 0; i < replicatorProducts.length; i++) {
+        let production = replicatorProducts[i], productionElement = $("#script_replicator_" + production.id);
+        productionElement.append(buildTableLabel(production.label)), productionElement = productionElement.next(), addTableToggle(productionElement, "replicator_" + production.id), productionElement = productionElement.next(), addTableInput(productionElement, "replicator_w_" + production.id), productionElement = productionElement.next(), addTableInput(productionElement, "replicator_p_" + production.id);
+      }
+    }
+    return {
+      buildProductionSettings,
+      updateProductionSettingsContent,
+      updateProductionTableSmelter,
+      updateProductionTableFoundry,
+      updateProductionTableFactory,
+      updateProductionTableMiningDrone,
+      updateProductionTableReplicator
+    };
+  }
+
+  // src/application/production-settings.ts
+  function createProductionSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-production-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes(), effects.removeCraftToggles();
+            return;
+          case "reorder-smelter-fuels":
+            writer.reorderSmelterFuels(intent.fuelIds), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/adapters/evolve/economy/production/captured-production-settings-catalog.ts
+  function readCapturedProductionTitle(root, id) {
+    let resource = readProperty(readProperty(root, "resource"), id);
+    if (!isRecord(resource)) return id;
+    let title = readProperty(resource, "title");
+    if (typeof title == "string" && title.length > 0) return title;
+    let name = readProperty(resource, "name");
+    return typeof name == "string" && name.length > 0 ? name : id;
+  }
+  function readRootResourceIds(root) {
+    let resources = readProperty(root, "resource");
+    return isRecord(resources) ? Object.freeze(Object.keys(resources)) : [];
+  }
+  function finiteFuelPriority(value, fallback) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function readCapturedSmelterFuelRows(getSettingsRaw) {
+    let settingsValue = getSettingsRaw(), raw = isRecord(settingsValue) ? settingsValue : {};
+    return Object.freeze(
+      [...SMELTER_FUEL_IDS].map((id, index) => ({
+        id,
+        index,
+        priority: finiteFuelPriority(raw[`smelter_fuel_p_${id}`], index)
+      })).sort(
+        (left, right) => left.priority - right.priority || left.index - right.index
+      ).map(({ id }) => Object.freeze({ id, label: id }))
+    );
+  }
+  function readCapturedFoundryRows(rootState) {
+    let root = rootState.readRoot(), resources = readProperty(root, "resource"), managedIds = new Set(
+      ["Scarletite", "Quantium"].filter(
+        (id) => isRecord(resources) && resources[id] !== void 0
+      )
+    );
+    return Object.freeze(
+      [...CRAFTER_RESOURCE_KEYS].map(
+        (id) => Object.freeze({
+          id,
+          label: readCapturedProductionTitle(root, id),
+          managed: managedIds.has(id)
+        })
+      )
+    );
+  }
+  function readLabeledRows(root, ids) {
+    return Object.freeze(
+      ids.map(
+        (id) => Object.freeze({ id, label: readCapturedProductionTitle(root, id) })
+      )
+    );
+  }
+  function readCapturedFactoryRows(rootState) {
+    return readLabeledRows(rootState.readRoot(), FACTORY_OUTPUT_IDS);
+  }
+  function readCapturedMiningDroidRows(rootState) {
+    return readLabeledRows(rootState.readRoot(), MINING_DROID_OUTPUT_IDS);
+  }
+  function readCapturedReplicatorRows(rootState) {
+    let root = rootState.readRoot();
+    return readLabeledRows(
+      root,
+      readRootResourceIds(root).filter((id) => isReplicableResourceId(id))
+    );
+  }
+
+  // src/adapters/evolve/economy/production/captured-production-settings.ts
+  var PRODUCTION_OVERRIDE_PREFIXES = Object.freeze([
+    "craft",
+    "foundry_",
+    "production_",
+    "droid_",
+    "replicator_",
+    "smelter_",
+    "job_"
+  ]);
+  function readCapturedProductionSettingsRecord(raw) {
+    return isRecord(raw) ? raw : {};
+  }
+  function readProductionContext(rootState) {
+    return readProduction(rootState.readRoot());
+  }
+  function createCapturedProductionSettingsAdapter({
+    rootState,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readProductionSettingsReadModel: () => createProductionSettingsReadModel({
+        consumptionBalanceTarget: 120,
+        smelterFuels: readCapturedSmelterFuelRows(getSettingsRaw),
+        foundryRows: readCapturedFoundryRows(rootState),
+        factoryRows: readCapturedFactoryRows(rootState),
+        miningDroidRows: readCapturedMiningDroidRows(rootState),
+        replicatorRows: readCapturedReplicatorRows(rootState)
+      }),
+      resetToDefaults() {
+        let raw = readCapturedProductionSettingsRecord(getSettingsRaw()), defaults = computeProductionDefaults(
+          readProductionContext(rootState)
+        ).def, overrides = raw.overrides;
+        if (isRecord(overrides) && !Array.isArray(overrides))
+          for (let key of Object.keys(overrides))
+            PRODUCTION_OVERRIDE_PREFIXES.some(
+              (prefix) => key.startsWith(prefix)
+            ) && delete overrides[key];
+        Object.assign(raw, defaults);
+      },
+      reorderSmelterFuels(fuelIds) {
+        let raw = readCapturedProductionSettingsRecord(getSettingsRaw()), known = new Set(
+          readCapturedSmelterFuelRows(getSettingsRaw).map((fuel) => fuel.id)
+        );
+        fuelIds.forEach((fuelId, index) => {
+          known.has(fuelId) && (raw[`smelter_fuel_p_${fuelId}`] = index);
+        });
+      }
+    });
+  }
+
   // src/settings/override-comparators.ts
   function asNumber(value) {
     return typeof value == "symbol" ? Number.NaN : Number(value);
@@ -29367,6 +29939,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     marketSettings: capturedMarketSettings,
     ejectorSettings: capturedEjectorSettings,
     magicSettings: capturedMagicSettings,
+    productionSettings: capturedProductionSettings,
     onDiagnostic = () => {
     },
     logError = () => {
@@ -29502,7 +30075,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -29546,8 +30119,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         buildMarketSettings: () => market?.buildMarketSettings(),
         buildStorageSettings: () => storage?.buildStorageSettings(),
         buildMagicSettings: () => magic?.buildMagicSettings(),
-        buildProductionSettings: () => {
-        },
+        buildProductionSettings: () => production?.buildProductionSettings(),
         buildJobSettings: () => job?.buildJobSettings(),
         buildBuildingSettings: () => building?.buildBuildingSettings(),
         buildWeightingSettings: () => weighting?.buildWeightingSettings(),
@@ -30159,6 +30731,69 @@ If script is allowed to reassign non-empty storage it might waste time producing
           }
         });
       }
+      if (capturedProductionSettings !== void 0) {
+        let capturedAdapter = createCapturedProductionSettingsAdapter({
+          rootState: capturedProductionSettings.rootState,
+          getSettingsRaw: settings.readRaw
+        }), productionIntent;
+        production = createProductionSettingsBrowserAdapter({
+          getDocument: () => documentForUi,
+          getJQuery: () => getJQuery(),
+          getReadModel: capturedAdapter.readProductionSettingsReadModel,
+          intents: { handle: (intent) => productionIntent.handle(intent) },
+          buildSettingsSection: shell.buildSettingsSection,
+          addSettingsNumber: (node, settingName, labelText, hintText) => controls2.addSettingsNumber(
+            node,
+            settingName,
+            labelText,
+            hintText
+          ),
+          addSettingsToggle: (node, settingName, labelText, hintText) => controls2.addSettingsToggle(
+            node,
+            settingName,
+            labelText,
+            hintText
+          ),
+          addSettingsSelect: (node, settingName, labelText, hintText, options) => controls2.addSettingsSelect(
+            node,
+            settingName,
+            labelText,
+            hintText,
+            options
+          ),
+          addStandardHeading: (node, heading) => shell.addStandardHeading(
+            node,
+            heading
+          ),
+          addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
+          addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
+          buildTableLabel: (label) => controls2.buildTableLabel(label),
+          getTableSorter: () => tableSorter
+        }), productionIntent = createProductionSettingsIntentHandler({
+          writer: {
+            resetToDefaults: () => {
+              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("production") : capturedAdapter.resetToDefaults();
+            },
+            persist: persistSettings,
+            reorderSmelterFuels: capturedAdapter.reorderSmelterFuels
+          },
+          renderSettingsContent: () => production?.updateProductionSettingsContent(),
+          effects: {
+            resetCheckboxes: () => controls2.resetCheckbox(
+              "autoQuarry",
+              "autoMine",
+              "autoExtractor",
+              "autoGraphenePlant",
+              "autoSmelter",
+              "autoCraft",
+              "autoFactory",
+              "autoMiningDroid",
+              "autoReplicator"
+            ),
+            removeCraftToggles: () => craftToggles?.removeCraftToggles()
+          }
+        });
+      }
       return settingsUi = {
         general,
         achievementGuard,
@@ -30181,6 +30816,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         ejectToggles,
         supplyToggles,
         magic,
+        production,
         craftToggles,
         shell
       }, settingsUi;
@@ -30205,7 +30841,7 @@ Only continue if you trust the source. Injected code:
       let ui = ensureSettingsUi(dom);
       ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings(), ui.magic?.buildMagicSettings());
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings(), ui.magic?.buildMagicSettings(), ui.production?.buildProductionSettings());
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
     }, createArpaToggles = () => {
@@ -33057,6 +33693,9 @@ Only continue if you trust the source. Injected code:
       magicSettings: {
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls
+      },
+      productionSettings: {
+        rootState: pageCapture2.rootState
       },
       onDiagnostic: (message) => reportDiagnostic(message),
       logError: (message) => logError(message)

@@ -138,7 +138,7 @@ const superFuelAutomation = createCapturedSmelterAutomation({
   controls,
   readSettings: () => ({
     productionSmelting: "steel",
-    smelter_fuel_p_super: 0,
+    smelter_fuel_p_Super: 0,
   }),
 });
 assert.equal(superFuelAutomation.run().status, "succeeded");
@@ -160,7 +160,7 @@ assert.equal(
   createCapturedSmelterAutomation({
     rootState: { readRoot: () => root },
     controls,
-    readSettings: () => ({ smelter_fuel_p_super: 0 }),
+    readSettings: () => ({ smelter_fuel_p_Super: 0 }),
   }).run().status,
   "succeeded",
 );

@@ -161,6 +161,26 @@ const PRODUCT_SPECS: readonly ProductSpec[] = Object.freeze([
   }),
 ]);
 
+/** Factory output resources in line order, shared with the settings catalog. */
+export const FACTORY_OUTPUT_IDS: readonly string[] = Object.freeze(
+  PRODUCT_SPECS.map((spec) => spec.outputResourceId),
+);
+
+/**
+ * Production-key to output resource, matching the defaults table's legacy
+ * keys (`LuxuryGoods` and `NanoTube` differ from the line ids). Shared with
+ * the lifecycle defaults so the `production_*` keys cannot drift.
+ */
+export const FACTORY_RESOURCE_ID_BY_KEY: Readonly<Record<string, string>> =
+  Object.freeze({
+    LuxuryGoods: "Money",
+    Furs: "Furs",
+    Alloy: "Alloy",
+    Polymer: "Polymer",
+    NanoTube: "Nano_Tube",
+    Stanene: "Stanene",
+  });
+
 const DEFAULT_WEIGHTINGS = Object.freeze({
   Lux: 1,
   Furs: 1,

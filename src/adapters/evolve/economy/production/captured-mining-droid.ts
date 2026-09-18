@@ -36,6 +36,11 @@ const PRODUCTS = Object.freeze([
   }),
 ]);
 
+/** Droid output resources in panel order, shared with the settings catalog. */
+export const MINING_DROID_OUTPUT_IDS: readonly string[] = Object.freeze(
+  PRODUCTS.map((product) => product.resource),
+);
+
 export interface CapturedMiningDroidDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;

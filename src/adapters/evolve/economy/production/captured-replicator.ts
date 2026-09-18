@@ -79,6 +79,15 @@ const ALWAYS_BLACKLISTED = new Set([
   "Super_Fuel",
 ]);
 
+/**
+ * Whether upstream offers a resource to the replicator at all: an atomic-mass
+ * entry outside the never-offered set. Run-time fasting/iceage exclusions
+ * still apply in automation; the settings table lists every candidate.
+ */
+export function isReplicableResourceId(id: string): boolean {
+  return Object.hasOwn(ATOMIC_MASS, id) && !ALWAYS_BLACKLISTED.has(id);
+}
+
 export interface CapturedReplicatorDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;

@@ -46,6 +46,9 @@ import { readCapturedJobResetContext } from "./civic/captured-job-catalog.ts";
 import { capturedGalaxyOfferIdentities } from "./economy/market/captured-galaxy-market.ts";
 import { ALCHEMY_CONTROL_PREFIX } from "./economy/production/captured-alchemy.ts";
 import { PYLON_SPELL_IDS } from "./economy/production/captured-pylon.ts";
+import { SMELTER_FUEL_IDS } from "./economy/production/captured-smelter.ts";
+import { FACTORY_RESOURCE_ID_BY_KEY } from "./economy/production/captured-factory.ts";
+import { isReplicableResourceId } from "./economy/production/captured-replicator.ts";
 import { isRecord, readProperty } from "../validation.ts";
 import {
   readCapturedBuildingBindingMap,
@@ -57,7 +60,8 @@ export interface CapturedSettingsDefaultsDependencies {
   readonly controls: GameControlRegistry;
 }
 
-const CRAFTER_RESOURCE_KEYS = Object.freeze([
+/** The nine crafted resources, shared with the foundry settings table. */
+export const CRAFTER_RESOURCE_KEYS = Object.freeze([
   "Plywood",
   "Brick",
   "Wrought_Iron",
@@ -304,15 +308,15 @@ export function readMagicResetContext(
   };
 }
 
-function readProduction(root: unknown): ProductionResetContext {
+export function readProduction(root: unknown): ProductionResetContext {
   const ids = readResources(root).map(([id]) => id);
   const identityMap = Object.fromEntries(ids.map((id) => [id, id]));
   return {
     foundryResourceIdByKey: identityMap,
-    smelterFuelIds: [],
-    factoryResourceIdByKey: identityMap,
+    smelterFuelIds: [...SMELTER_FUEL_IDS],
+    factoryResourceIdByKey: { ...FACTORY_RESOURCE_ID_BY_KEY },
     droidResourceIdByKey: identityMap,
-    replicatorProductionIds: [],
+    replicatorProductionIds: ids.filter((id) => isReplicableResourceId(id)),
   };
 }
 
