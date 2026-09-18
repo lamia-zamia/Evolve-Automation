@@ -76,4 +76,23 @@ assert.deepEqual(trace, [
   { kind: "remove", selector: "#arpaPhysics .ea-arpa-toggle" },
 ]);
 
+// ensureArpaToggles repairs toggles the game's own redraw dropped.
+selectorLengths.set("#arpaPhysics .ea-arpa-toggle", 0);
+trace.length = 0;
+browserAdapter.ensureArpaToggles();
+assert.deepEqual(
+  trace
+    .filter((entry) => entry.kind === "toggle")
+    .map((entry) => entry.settingKey),
+  ["arpa_Physics"],
+);
+
+// Without the panel there is nothing to repair; a stale count is cleared.
+selectorLengths.set("#arpaPhysics", 0);
+trace.length = 0;
+browserAdapter.ensureArpaToggles();
+assert.deepEqual(trace, [
+  { kind: "remove", selector: "#arpaPhysics .ea-arpa-toggle" },
+]);
+
 console.log("Arpa toggles browser and Evolve adapter tests passed");

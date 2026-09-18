@@ -21569,6 +21569,21 @@
   function titleCaseKey(id) {
     return id.split(/[_-]/u).filter((part) => part.length > 0).map((part) => part[0].toUpperCase() + part.slice(1)).join("");
   }
+  var PROJECT_DISPLAY_KEY_ALIASES = Object.freeze({
+    SuperCollider: "lhc",
+    ManaSyphon: "syphon",
+    Depot: "tp_depot"
+  });
+  function projectIdByKey(projectIds) {
+    let present = new Set(projectIds), idByKey = {};
+    for (let id of projectIds)
+      idByKey[titleCaseKey(id)] = id;
+    for (let [displayKey, rawId] of Object.entries(
+      PROJECT_DISPLAY_KEY_ALIASES
+    ))
+      present.has(rawId) && idByKey[displayKey] === void 0 && (idByKey[displayKey] = rawId);
+    return idByKey;
+  }
   function readResources(root) {
     return recordEntries(root, "resource");
   }
@@ -21615,10 +21630,8 @@
     return { challengeIds: challenges.map((set) => set[0].id) };
   }
   function readProjects(root) {
-    let projects = readProperty(root, "arpa"), projectIds = isRecord(projects) ? Object.keys(projects).filter((id) => id !== "sequence") : [], idByKey = {};
-    return projectIds.forEach((id) => {
-      idByKey[titleCaseKey(id)] = id;
-    }), { projectIds, idByKey };
+    let projects = readProperty(root, "arpa"), projectIds = isRecord(projects) ? Object.keys(projects).filter((id) => id !== "sequence") : [];
+    return { projectIds, idByKey: projectIdByKey(projectIds) };
   }
   function readBuildingContext(root, controls2) {
     let entries = readCapturedBuildingEntries(root, controls2);
@@ -24286,6 +24299,274 @@
     });
   }
 
+  // src/domain/progression/research/project-settings.ts
+  function freezeRow2(row) {
+    return Object.freeze({ ...row });
+  }
+  function createProjectSettingsReadModel(rows) {
+    return Object.freeze({
+      sectionId: "project",
+      sectionName: "A.R.P.A.",
+      rows: Object.freeze(rows.map(freezeRow2))
+    });
+  }
+
+  // src/adapters/browser/project-settings.ts
+  function createProjectSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildProjectSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-project-settings" }),
+        updateProjectSettingsContent
+      );
+    }
+    function updateProjectSettingsContent() {
+      let readModel = getReadModel(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderProjectContent(currentNode, readModel, actions);
+        }
+      );
+    }
+    function renderProjectContent(currentNode, readModel, actions) {
+      actions.addSettingsToggle(
+        currentNode,
+        "arpaScaleWeighting",
+        "Scale weighting with progress",
+        "Projects weighting scales  with current progress, making script more eager to spend resources on finishing nearly constructed projects."
+      ), actions.addSettingsNumber(
+        currentNode,
+        "arpaStep",
+        "Preferred progress step",
+        "Projects will be weighted and build in this steps. Increasing number can speed up constructing. Step will be adjusted down when preferred step above remaining amount, or surpass storage caps. Weightings below will be multiplied by current step. Projects builded by triggers will always have maximum possible step."
+      ), currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:25%">Project</th>
+              <th class="has-text-warning" style="width:25%">Auto Build</th>
+              <th class="has-text-warning" style="width:25%">Max Build</th>
+              <th class="has-text-warning" style="width:25%">Weighting</th>
+            </tr>
+            <tbody id="script_projectTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = getJQuery()("#script_projectTableBody"), newTableBodyText = "";
+      for (let row of readModel.rows)
+        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_${row.id}" style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td></tr>`;
+      tableBodyNode.append(getJQuery()(newTableBodyText));
+      for (let row of readModel.rows) {
+        let projectElement = getJQuery()(`#script_${row.id}`);
+        projectElement.append(actions.buildTableLabel(row.label)), projectElement = projectElement.next(), actions.addTableToggle(projectElement, row.enabledSettingName), projectElement = projectElement.next(), actions.addTableInput(projectElement, row.maximumSettingName), projectElement = projectElement.next(), actions.addTableInput(projectElement, row.weightingSettingName);
+      }
+      actions.getTableSorter().attach(tableBodyNode[0], {
+        items: "tr:not(.unsortable)",
+        attribute: "value",
+        onOrderChanged: (projectIds) => {
+          intents.handle({ type: "reorder-projects", projectIds });
+        }
+      });
+    }
+    return Object.freeze({
+      buildProjectSettings,
+      updateProjectSettingsContent
+    });
+  }
+
+  // src/application/project-settings.ts
+  function createProjectSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-project-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckbox();
+            return;
+          case "reorder-projects":
+            writer.reorderProjects(intent.projectIds), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/research/captured-project-settings-catalog.ts
+  var NON_PROJECT_ARPA_KEY = "sequence";
+  function readCapturedProjectSettingsEntries(root, controls2) {
+    let arpa = readProperty(root, "arpa");
+    if (!isRecord(arpa)) return Object.freeze([]);
+    let entries = [];
+    for (let projectId of Object.keys(arpa)) {
+      if (projectId === NON_PROJECT_ARPA_KEY || projectId.length === 0) continue;
+      let elementId = `arpa${projectId}`, handle = controls2.resolve(elementId);
+      entries.push(
+        Object.freeze({
+          projectId,
+          elementId,
+          label: handle === void 0 ? projectId : readCapturedControlLabel(handle, projectId)
+        })
+      );
+    }
+    return Object.freeze(entries);
+  }
+
+  // src/adapters/evolve/progression/research/captured-project-settings.ts
+  function readCapturedProjectSettingsRecord(raw) {
+    return isRecord(raw) ? raw : {};
+  }
+  function finiteProjectPriority(value, fallback) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function sortCapturedProjectEntries(entries, raw) {
+    return Object.freeze(
+      entries.map((entry, index) => ({
+        entry,
+        index,
+        priority: finiteProjectPriority(
+          raw[`arpa_p_${entry.projectId}`],
+          index
+        )
+      })).sort(
+        (left, right) => left.priority - right.priority || left.index - right.index
+      ).map(({ entry }) => entry)
+    );
+  }
+  function createCapturedProjectSettingsAdapter({
+    rootState,
+    controls: controls2,
+    getSettingsRaw
+  }) {
+    let readProjectEntriesForSettings = () => readCapturedProjectSettingsEntries(rootState.readRoot(), controls2);
+    return Object.freeze({
+      readProjectSettingsReadModel: () => {
+        let raw = readCapturedProjectSettingsRecord(getSettingsRaw()), entries = sortCapturedProjectEntries(
+          readProjectEntriesForSettings(),
+          raw
+        );
+        return createProjectSettingsReadModel(
+          entries.map((entry) => ({
+            id: entry.projectId,
+            label: entry.label,
+            enabledSettingName: `arpa_${entry.projectId}`,
+            maximumSettingName: `arpa_m_${entry.projectId}`,
+            weightingSettingName: `arpa_w_${entry.projectId}`
+          }))
+        );
+      },
+      resetToDefaults() {
+        let raw = readCapturedProjectSettingsRecord(getSettingsRaw()), entries = readProjectEntriesForSettings(), defaults = computeProjectDefaults({
+          projectIds: entries.map((entry) => entry.projectId),
+          idByKey: projectIdByKey(entries.map((entry) => entry.projectId))
+        }).def, overrides = raw.overrides;
+        if (isRecord(overrides) && !Array.isArray(overrides))
+          for (let key of Object.keys(overrides))
+            key.startsWith("arpa_") && delete overrides[key];
+        Object.assign(raw, defaults);
+      },
+      resetPriorities() {
+        let raw = readCapturedProjectSettingsRecord(getSettingsRaw());
+        readProjectEntriesForSettings().forEach((entry, index) => {
+          raw[`arpa_p_${entry.projectId}`] = index;
+        });
+      },
+      reorderProjects(projectIds) {
+        let known = new Set(
+          readProjectEntriesForSettings().map((entry) => entry.projectId)
+        ), raw = readCapturedProjectSettingsRecord(getSettingsRaw());
+        projectIds.forEach((projectId, index) => {
+          known.has(projectId) && (raw[`arpa_p_${projectId}`] = index);
+        });
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/research/captured-arpa-toggles.ts
+  function createCapturedArpaToggleReader({
+    rootState,
+    controls: controls2,
+    getDocument,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readItems() {
+        let settings = getSettingsRaw(), entries = readCapturedProjectSettingsEntries(
+          rootState.readRoot(),
+          controls2
+        );
+        return Object.freeze(
+          entries.filter((entry) => {
+            let element = getDocument().getElementById(entry.elementId);
+            return element != null;
+          }).map(
+            (entry) => Object.freeze({
+              projectId: entry.projectId,
+              settingKey: `arpa_${entry.projectId}`,
+              enabled: isRecord(settings) && settings[`arpa_${entry.projectId}`] === !0
+            })
+          )
+        );
+      }
+    });
+  }
+
+  // src/adapters/browser/arpa-toggles.ts
+  function createToggleMarkup3(item) {
+    return `
+                  <label tabindex="0" class="switch ea-arpa-toggle" style="position:relative; max-width:75px; margin-top:-36px; left:59%; float:left;">
+                    <input class="script_${item.settingKey}" type="checkbox"${item.enabled ? " checked" : ""}>
+                    <span class="check" style="height:5px;"></span>
+                  </label>`;
+  }
+  function createArpaToggleBrowserAdapter({
+    getJQuery,
+    reader,
+    addToggleCallbacks
+  }) {
+    let lastCreatedArpaCount = 0;
+    function createArpaToggles() {
+      removeArpaToggles();
+      let $ = getJQuery(), count2 = 0;
+      for (let item of reader.readItems()) {
+        let projectElement = $("#arpa" + item.projectId + " .head");
+        projectElement.length !== 0 && (projectElement.append(
+          addToggleCallbacks($(createToggleMarkup3(item)), item.settingKey)
+        ), count2++);
+      }
+      lastCreatedArpaCount = count2;
+    }
+    function ensureArpaToggles() {
+      let $ = getJQuery();
+      if ($("#arpaPhysics").length === 0) {
+        lastCreatedArpaCount !== 0 && removeArpaToggles();
+        return;
+      }
+      let currentCount3 = $("#arpaPhysics .ea-arpa-toggle").length;
+      (currentCount3 === 0 || currentCount3 !== lastCreatedArpaCount) && createArpaToggles();
+    }
+    function removeArpaToggles() {
+      getJQuery()("#arpaPhysics .ea-arpa-toggle").remove(), lastCreatedArpaCount = 0;
+    }
+    return Object.freeze({
+      createArpaToggles,
+      ensureArpaToggles,
+      removeArpaToggles
+    });
+  }
+
   // src/settings/override-comparators.ts
   function asNumber(value) {
     return typeof value == "symbol" ? Number.NaN : Number(value);
@@ -25538,7 +25819,7 @@
   function freezeBreakpoint(breakpoint) {
     return Object.freeze({ ...breakpoint });
   }
-  function freezeRow2(row) {
+  function freezeRow3(row) {
     return Object.freeze({
       ...row,
       breakpoints: Object.freeze(
@@ -25614,7 +25895,7 @@
           hint: "Civilians kept out of ship crew and available for jobs. Enter an absolute count (e.g. 800) or a percentage of population (e.g. 50%). When ship crew exceeds population minus this reserve, the lowest-value crewed ships (trade freighters first, combat ships last) are idled to return workers to jobs. 0 disables it."
         })
       ]),
-      rows: Object.freeze(rows.map(freezeRow2))
+      rows: Object.freeze(rows.map(freezeRow3))
     });
   }
 
@@ -27580,6 +27861,7 @@
     refreshEffectiveSettings,
     craftToggles: capturedCraftToggles,
     buildingSettings: capturedBuildingSettings,
+    projectSettings: capturedProjectSettings,
     onDiagnostic = () => {
     },
     logError = () => {
@@ -27715,7 +27997,7 @@
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -27768,8 +28050,7 @@
         buildJobSettings: () => job?.buildJobSettings(),
         buildBuildingSettings: () => building?.buildBuildingSettings(),
         buildWeightingSettings: () => weighting?.buildWeightingSettings(),
-        buildProjectSettings: () => {
-        },
+        buildProjectSettings: () => project?.buildProjectSettings(),
         buildLoggingSettings: () => {
         },
         filterBuildingSettingsTable: () => building?.filterBuildingSettingsTable(),
@@ -28119,6 +28400,49 @@
           )
         });
       }
+      if (capturedProjectSettings !== void 0) {
+        let capturedAdapter = createCapturedProjectSettingsAdapter({
+          rootState: capturedProjectSettings.rootState,
+          controls: capturedProjectSettings.controls,
+          getSettingsRaw: settings.readRaw
+        }), projectIntent;
+        project = createProjectSettingsBrowserAdapter({
+          getDocument: () => documentForUi,
+          getJQuery: () => getJQuery(),
+          getReadModel: capturedAdapter.readProjectSettingsReadModel,
+          intents: { handle: (intent) => projectIntent.handle(intent) },
+          getActions: () => ({
+            ...simpleActions,
+            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
+            buildTableLabel: (label) => controls2.buildTableLabel(label),
+            getTableSorter: () => tableSorter
+          })
+        }), projectIntent = createProjectSettingsIntentHandler({
+          writer: {
+            resetToDefaults: () => {
+              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("project") : capturedAdapter.resetToDefaults();
+            },
+            persist: persistSettings,
+            reorderProjects: capturedAdapter.reorderProjects
+          },
+          renderSettingsContent: () => project?.updateProjectSettingsContent(),
+          effects: {
+            resetCheckbox: () => controls2.resetCheckbox("autoARPA")
+          }
+        }), arpaToggles = createArpaToggleBrowserAdapter({
+          getJQuery: () => getJQuery(),
+          reader: createCapturedArpaToggleReader({
+            rootState: capturedProjectSettings.rootState,
+            controls: capturedProjectSettings.controls,
+            getDocument: () => documentForUi,
+            getSettingsRaw: settings.readRaw
+          }),
+          addToggleCallbacks: (node, settingName) => controls2.addToggleCallbacks(
+            node,
+            settingName
+          )
+        });
+      }
       return settingsUi = {
         general,
         achievementGuard,
@@ -28131,6 +28455,8 @@
         job,
         building,
         buildingToggles,
+        project,
+        arpaToggles,
         craftToggles,
         shell
       }, settingsUi;
@@ -28155,9 +28481,23 @@ Only continue if you trust the source. Injected code:
       let ui = ensureSettingsUi(dom);
       ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings());
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings());
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
+    }, createArpaToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).arpaToggles;
+      if (adapter === void 0) {
+        unported("ARPA toggles")();
+        return;
+      }
+      adapter.createArpaToggles();
+    }, removeArpaToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).arpaToggles;
+      if (adapter === void 0) {
+        unported("ARPA toggles")();
+        return;
+      }
+      adapter.removeArpaToggles();
     }, createCraftToggles = () => {
       let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).craftToggles;
       if (adapter === void 0) {
@@ -28242,8 +28582,8 @@ Only continue if you trust the source. Injected code:
         removeCraftToggles,
         createBuildingToggles,
         removeBuildingToggles,
-        createArpaToggles: unported("ARPA toggles"),
-        removeArpaToggles: unported("ARPA toggles"),
+        createArpaToggles,
+        removeArpaToggles,
         createStorageToggles: unported("storage toggles"),
         removeStorageToggles: unported("storage toggles"),
         createMarketToggles: unported("market toggles"),
@@ -28261,7 +28601,7 @@ Only continue if you trust the source. Injected code:
       ensurePanel() {
         if (getQuery() !== void 0)
           try {
-            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), optionsModal.createOptionsModal(), settings.readRaw().showSettings === !0 && buildScriptSettings();
+            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), optionsModal.createOptionsModal(), settings.readRaw().showSettings === !0 && buildScriptSettings();
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }
@@ -30917,6 +31257,10 @@ Only continue if you trust the source. Injected code:
         controls: pageCapture2.controls,
         ensureControls: () => ensureCapturedBuildingControls(),
         costs: buildCosts
+      },
+      projectSettings: {
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls
       },
       onDiagnostic: (message) => reportDiagnostic(message),
       logError: (message) => logError(message)

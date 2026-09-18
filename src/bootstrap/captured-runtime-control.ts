@@ -348,6 +348,10 @@ export function startCapturedRuntime({
       ensureControls: () => ensureCapturedBuildingControls(),
       costs: buildCosts,
     },
+    projectSettings: {
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+    },
     onDiagnostic: (message) => reportDiagnostic(message),
     logError: (message) => logError(message),
   });

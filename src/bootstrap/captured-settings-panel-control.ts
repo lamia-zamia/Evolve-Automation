@@ -6,7 +6,7 @@
  * of to the legacy closure; game-backed sections remain outside this slice until their captures exist.
  *
  * TRANSITIONAL: the remaining per-section builders (the Settings tab, and the toggle strips
- * injected into the game's own ARPA/Storage/Market/Eject/Supply panels) are still unavailable on
+ * injected into the game's own Storage/Market/Eject/Supply panels) are still unavailable on
  * the captured path. They are diagnosed once by name rather than silently doing nothing. Automation
  * itself does not depend on any of them — it reads the same settings record this panel writes.
  */
@@ -25,6 +25,14 @@ import { createBuildingSettingsIntentHandler } from "../application/building-set
 import { createCapturedBuildingSettingsAdapter } from "../adapters/evolve/progression/build/captured-building-settings.ts";
 import { createCapturedBuildingToggleReader } from "../adapters/evolve/progression/build/captured-building-toggles.ts";
 import { createBuildingToggleBrowserAdapter } from "../adapters/browser/building-toggles.ts";
+import {
+  createProjectSettingsBrowserAdapter,
+  type ProjectSettingsBrowserActions,
+} from "../adapters/browser/project-settings.ts";
+import { createProjectSettingsIntentHandler } from "../application/project-settings.ts";
+import { createCapturedProjectSettingsAdapter } from "../adapters/evolve/progression/research/captured-project-settings.ts";
+import { createCapturedArpaToggleReader } from "../adapters/evolve/progression/research/captured-arpa-toggles.ts";
+import { createArpaToggleBrowserAdapter } from "../adapters/browser/arpa-toggles.ts";
 import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
@@ -177,6 +185,23 @@ type BuildingToggleDocument = ReturnType<
 type BuildingToggleJQuery = ReturnType<
   Parameters<typeof createBuildingToggleBrowserAdapter>[0]["getJQuery"]
 >;
+type ProjectSettings = ReturnType<typeof createProjectSettingsBrowserAdapter>;
+type ArpaToggles = ReturnType<typeof createArpaToggleBrowserAdapter>;
+type ProjectSettingsDocument = ReturnType<
+  Parameters<typeof createProjectSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type ProjectSettingsJQuery = ReturnType<
+  Parameters<typeof createProjectSettingsBrowserAdapter>[0]["getJQuery"]
+>;
+type ArpaToggleDocument = ReturnType<
+  Parameters<typeof createCapturedArpaToggleReader>[0]["getDocument"]
+>;
+type ArpaToggleJQuery = ReturnType<
+  Parameters<typeof createArpaToggleBrowserAdapter>[0]["getJQuery"]
+>;
+type ArpaToggleNode = Parameters<
+  Parameters<typeof createArpaToggleBrowserAdapter>[0]["addToggleCallbacks"]
+>[0];
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
@@ -195,6 +220,10 @@ export interface CapturedSettingsPanelDependencies {
     readonly controls: GameControlRegistry;
     readonly ensureControls?: () => void;
     readonly costs?: GameActionCostReader;
+  };
+  readonly projectSettings?: {
+    readonly rootState: GameRootStateSource;
+    readonly controls: GameControlRegistry;
   };
   readonly onDiagnostic?: (message: string) => void;
   readonly logError?: (message: string) => void;
@@ -280,6 +309,7 @@ export function createCapturedSettingsPanel({
   refreshEffectiveSettings,
   craftToggles: capturedCraftToggles,
   buildingSettings: capturedBuildingSettings,
+  projectSettings: capturedProjectSettings,
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -426,6 +456,8 @@ export function createCapturedSettingsPanel({
         readonly job: JobSettings;
         readonly building: BuildingSettings | undefined;
         readonly buildingToggles: BuildingToggles | undefined;
+        readonly project: ProjectSettings | undefined;
+        readonly arpaToggles: ArpaToggles | undefined;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -553,6 +585,8 @@ export function createCapturedSettingsPanel({
     let job: JobSettings | undefined;
     let building: BuildingSettings | undefined;
     let buildingToggles: BuildingToggles | undefined;
+    let project: ProjectSettings | undefined;
+    let arpaToggles: ArpaToggles | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -599,7 +633,7 @@ export function createCapturedSettingsPanel({
       buildJobSettings: () => job?.buildJobSettings(),
       buildBuildingSettings: () => building?.buildBuildingSettings(),
       buildWeightingSettings: () => weighting?.buildWeightingSettings(),
-      buildProjectSettings: () => {},
+      buildProjectSettings: () => project?.buildProjectSettings(),
       buildLoggingSettings: () => {},
       filterBuildingSettingsTable: () =>
         building?.filterBuildingSettingsTable(),
@@ -1075,6 +1109,59 @@ export function createCapturedSettingsPanel({
           ) as unknown as BuildingToggleNode,
       });
     }
+    if (capturedProjectSettings !== undefined) {
+      const capturedAdapter = createCapturedProjectSettingsAdapter({
+        rootState: capturedProjectSettings.rootState,
+        controls: capturedProjectSettings.controls,
+        getSettingsRaw: settings.readRaw,
+      });
+      let projectIntent: ReturnType<typeof createProjectSettingsIntentHandler>;
+      project = createProjectSettingsBrowserAdapter({
+        getDocument: () => documentForUi as unknown as ProjectSettingsDocument,
+        getJQuery: () => getJQuery() as unknown as ProjectSettingsJQuery,
+        getReadModel: capturedAdapter.readProjectSettingsReadModel,
+        intents: { handle: (intent) => projectIntent.handle(intent) },
+        getActions: () =>
+          ({
+            ...simpleActions,
+            addTableToggle: (node: unknown, settingName: string) =>
+              controls.addTableToggle(node as SettingsControlNode, settingName),
+            buildTableLabel: (label: string) => controls.buildTableLabel(label),
+            getTableSorter: () => tableSorter,
+          }) as unknown as ProjectSettingsBrowserActions,
+      });
+      projectIntent = createProjectSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("project");
+            } else {
+              capturedAdapter.resetToDefaults();
+            }
+          },
+          persist: persistSettings,
+          reorderProjects: capturedAdapter.reorderProjects,
+        },
+        renderSettingsContent: () => project?.updateProjectSettingsContent(),
+        effects: {
+          resetCheckbox: () => controls.resetCheckbox("autoARPA"),
+        },
+      });
+      arpaToggles = createArpaToggleBrowserAdapter({
+        getJQuery: () => getJQuery() as unknown as ArpaToggleJQuery,
+        reader: createCapturedArpaToggleReader({
+          rootState: capturedProjectSettings.rootState,
+          controls: capturedProjectSettings.controls,
+          getDocument: () => documentForUi as unknown as ArpaToggleDocument,
+          getSettingsRaw: settings.readRaw,
+        }),
+        addToggleCallbacks: (node, settingName) =>
+          controls.addToggleCallbacks(
+            node as unknown as SettingsControlNode,
+            settingName,
+          ) as unknown as ArpaToggleNode,
+      });
+    }
     settingsUi = {
       general,
       achievementGuard,
@@ -1087,6 +1174,8 @@ export function createCapturedSettingsPanel({
       job,
       building,
       buildingToggles,
+      project,
+      arpaToggles,
       craftToggles,
       shell,
     };
@@ -1150,10 +1239,33 @@ export function createCapturedSettingsPanel({
       ui.job.buildJobSettings();
     }
     ui.building?.buildBuildingSettings();
+    ui.project?.buildProjectSettings();
   };
 
   const removeScriptSettings = () => {
     getQuery()?.("#script_settings").remove();
+  };
+
+  const createArpaToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).arpaToggles;
+    if (adapter === undefined) {
+      unported("ARPA toggles")();
+      return;
+    }
+    adapter.createArpaToggles();
+  };
+
+  const removeArpaToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).arpaToggles;
+    if (adapter === undefined) {
+      unported("ARPA toggles")();
+      return;
+    }
+    adapter.removeArpaToggles();
   };
 
   const createCraftToggles = () => {
@@ -1269,8 +1381,8 @@ export function createCapturedSettingsPanel({
       removeCraftToggles,
       createBuildingToggles,
       removeBuildingToggles,
-      createArpaToggles: unported("ARPA toggles"),
-      removeArpaToggles: unported("ARPA toggles"),
+      createArpaToggles,
+      removeArpaToggles,
       createStorageToggles: unported("storage toggles"),
       removeStorageToggles: unported("storage toggles"),
       createMarketToggles: unported("market toggles"),
@@ -1295,6 +1407,11 @@ export function createCapturedSettingsPanel({
           settingsUi?.buildingToggles?.ensureBuildingToggles();
         } else {
           settingsUi?.buildingToggles?.removeBuildingToggles();
+        }
+        if (settings.readRaw()["autoARPA"] === true) {
+          settingsUi?.arpaToggles?.ensureArpaToggles();
+        } else {
+          settingsUi?.arpaToggles?.removeArpaToggles();
         }
         optionsModal.createOptionsModal();
         if (settings.readRaw()["showSettings"] === true) buildScriptSettings();

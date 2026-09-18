@@ -88,12 +88,46 @@ function recordEntries(
   );
 }
 
-function titleCaseKey(id: string): string {
+/** Title-cases a catalog id the way the default priority tables key it. Shared with the captured settings adapters so the one mapping cannot drift. */
+export function titleCaseKey(id: string): string {
   return id
     .split(/[_-]/u)
     .filter((part) => part.length > 0)
     .map((part) => part[0]!.toUpperCase() + part.slice(1))
     .join("");
+}
+
+/**
+ * Legacy display keys whose title-cased root id does not match. Upstream names
+ * its `arpaProjects` catalog entries `lhc`, `syphon` and `tp_depot`
+ * (`src/arpa.js` at the port reference commit); the script's default table
+ * still keys them `SuperCollider`, `ManaSyphon` and `Depot`, the way the
+ * compatibility project catalog did. Without the alias those three projects
+ * silently miss their defaults on the captured path.
+ */
+const PROJECT_DISPLAY_KEY_ALIASES: Readonly<Record<string, string>> =
+  Object.freeze({
+    SuperCollider: "lhc",
+    ManaSyphon: "syphon",
+    Depot: "tp_depot",
+  });
+
+export function projectIdByKey(
+  projectIds: readonly string[],
+): Record<string, string> {
+  const present = new Set(projectIds);
+  const idByKey: Record<string, string> = {};
+  for (const id of projectIds) {
+    idByKey[titleCaseKey(id)] = id;
+  }
+  for (const [displayKey, rawId] of Object.entries(
+    PROJECT_DISPLAY_KEY_ALIASES,
+  )) {
+    if (present.has(rawId) && idByKey[displayKey] === undefined) {
+      idByKey[displayKey] = rawId;
+    }
+  }
+  return idByKey;
 }
 
 function readResources(
@@ -187,11 +221,7 @@ function readProjects(root: unknown): ProjectResetContext {
   const projectIds = isRecord(projects)
     ? Object.keys(projects).filter((id) => id !== "sequence")
     : [];
-  const idByKey: Record<string, string> = {};
-  projectIds.forEach((id) => {
-    idByKey[titleCaseKey(id)] = id;
-  });
-  return { projectIds, idByKey };
+  return { projectIds, idByKey: projectIdByKey(projectIds) };
 }
 
 function readBuildingContext(

@@ -76,6 +76,7 @@ const { hooks } = await loadCharacterizationBundle({
 assert.equal(typeof hooks.setArpaTogglesTestContext, "function");
 assert.deepEqual(Object.keys(hooks.arpaToggles), [
   "createArpaToggles",
+  "ensureArpaToggles",
   "removeArpaToggles",
 ]);
 hooks.setArpaTogglesTestContext({
