@@ -14,6 +14,7 @@ interface JQueryNode {
   append(...content: readonly unknown[]): JQueryNode;
   appendTo(target: JQueryNode): JQueryNode;
   remove(): JQueryNode;
+  text(): string;
   text(content: string): JQueryNode;
   width(value: string): JQueryNode;
 }
@@ -32,6 +33,7 @@ export interface ResourceToggleBrowserDependencies {
 
 export interface ResourceToggleBrowserAdapter {
   createMarketToggles(): void;
+  ensureMarketToggles(): void;
   removeMarketToggles(): void;
   createStorageToggles(): void;
   ensureStorageToggles(): void;
@@ -169,17 +171,49 @@ export function createResourceToggleBrowserAdapter({
   addToggleCallbacks,
 }: ResourceToggleBrowserDependencies): ResourceToggleBrowserAdapter {
   let lastCreatedStorageCount = 0;
+  let lastCreatedMarketCount = 0;
+  /**
+   * The button labels the last create overwrote with its B/S/R/× shorthand.
+   * Restoring the live labels keeps a locale the script cannot localize;
+   * nothing is restored when nothing was overwritten.
+   */
+  let stashedMarketLabels:
+    | Readonly<{
+        buy: string;
+        sell: string;
+        routes: string;
+        cancelRoutes: string;
+      }>
+    | undefined;
+
+  function removeMarketElements(jquery: JQuery): void {
+    jquery("#market .ea-market-toggle").remove();
+    jquery("#script_market_top_row").remove();
+  }
 
   function createMarketToggles(): void {
-    removeMarketToggles();
     const jquery = getJQuery();
     const view = marketReader.readMarket();
+    if (!view.noTrade) {
+      stashedMarketLabels = Object.freeze({
+        buy: jquery("#market .market-item[id] .buy span").text(),
+        sell: jquery("#market .market-item[id] .sell span").text(),
+        routes: jquery("#market .market-item[id] .trade > :first-child").text(),
+        cancelRoutes: jquery("#market .market-item[id] .trade .zero").text(),
+      });
+    } else {
+      stashedMarketLabels = undefined;
+    }
+    removeMarketElements(jquery);
+    let count = 0;
     if (!view.noTrade) {
       jquery("#market .market-item[id] .res").width("5rem");
       jquery("#market .market-item[id] .buy span").text("B");
       jquery("#market .market-item[id] .sell span").text("S");
       jquery("#market .market-item[id] .trade > :first-child").text("R");
       jquery("#market .market-item[id] .trade .zero").text("×");
+    } else {
+      stashedMarketLabels = undefined;
     }
     jquery("#market-qty").after(createMarketHeader(view));
     for (const item of view.items) {
@@ -188,25 +222,38 @@ export function createResourceToggleBrowserAdapter({
       createMarketRow(view, item, jquery, addToggleCallbacks).appendTo(
         marketElement,
       );
+      count++;
+    }
+    lastCreatedMarketCount = count;
+  }
+
+  function ensureMarketToggles(): void {
+    const jquery = getJQuery();
+    if (jquery("#market").length === 0) {
+      if (lastCreatedMarketCount !== 0) removeMarketToggles();
+      return;
+    }
+    const currentCount = jquery("#market .ea-market-toggle").length;
+    if (currentCount === 0 || currentCount !== lastCreatedMarketCount) {
+      createMarketToggles();
     }
   }
 
   function removeMarketToggles(): void {
     const jquery = getJQuery();
     const view = marketReader.readMarket();
-    jquery("#market .ea-market-toggle").remove();
-    jquery("#script_market_top_row").remove();
-    if (!view.noTrade) {
-      jquery("#market .market-item[id] .res").width("7.5rem");
-      jquery("#market .market-item[id] .buy span").text(view.labels.buy);
-      jquery("#market .market-item[id] .sell span").text(view.labels.sell);
-      jquery("#market .market-item[id] .trade > :first-child").text(
-        view.labels.routes,
-      );
-      jquery("#market .market-item[id] .trade .zero").text(
-        view.labels.cancelRoutes,
-      );
-    }
+    removeMarketElements(jquery);
+    lastCreatedMarketCount = 0;
+    const labels = stashedMarketLabels ?? view.labels;
+    stashedMarketLabels = undefined;
+    if (view.noTrade) return;
+    jquery("#market .market-item[id] .res").width("7.5rem");
+    jquery("#market .market-item[id] .buy span").text(labels.buy);
+    jquery("#market .market-item[id] .sell span").text(labels.sell);
+    jquery("#market .market-item[id] .trade > :first-child").text(
+      labels.routes,
+    );
+    jquery("#market .market-item[id] .trade .zero").text(labels.cancelRoutes);
   }
 
   function createStorageToggles(): void {
@@ -253,6 +300,7 @@ export function createResourceToggleBrowserAdapter({
 
   return Object.freeze({
     createMarketToggles,
+    ensureMarketToggles,
     removeMarketToggles,
     createStorageToggles,
     ensureStorageToggles,

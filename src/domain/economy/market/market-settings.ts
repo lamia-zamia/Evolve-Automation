@@ -50,7 +50,7 @@ export type MarketSettingsIntent =
       resourceIds: readonly string[];
     }>;
 
-const controls: readonly MarketSettingsControl[] = Object.freeze([
+const marketSectionControls: readonly MarketSettingsControl[] = Object.freeze([
   Object.freeze({
     kind: "number",
     settingName: "minimumMoney",
@@ -100,7 +100,7 @@ export function createMarketSettingsReadModel({
   return Object.freeze({
     sectionId: "market",
     sectionName: "Market",
-    controls,
+    controls: marketSectionControls,
     rows: Object.freeze(rows.map((row) => Object.freeze({ ...row }))),
     galaxyRows: Object.freeze(
       galaxyRows.map((row) => Object.freeze({ ...row })),

@@ -27,6 +27,8 @@ interface OfferIdentity {
   readonly sellResourceId: string;
 }
 
+export type { OfferIdentity as CapturedGalaxyOfferIdentity };
+
 interface GalaxyMarketSession {
   readonly root: unknown;
   readonly control: GameControlHandle;
@@ -102,7 +104,8 @@ function capturedGalaxySettingNumber(
   return value === undefined ? fallback : value;
 }
 
-function capturedGalaxyOfferIdentities(
+/** The fixed nine-route offer identities with the race-dependent sell resolved. Shared with the captured market settings catalog so the galaxy table cannot drift from the automation. */
+export function capturedGalaxyOfferIdentities(
   root: unknown,
 ): readonly OfferIdentity[] {
   const race = readProperty(root, "race");

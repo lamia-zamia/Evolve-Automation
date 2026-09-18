@@ -84,6 +84,12 @@ const lengths = new Map([
   ["#stack-Iron", 1],
   ["#market-Food", 0],
 ]);
+const texts = new Map([
+  ["#market .market-item[id] .buy span", "Buy"],
+  ["#market .market-item[id] .sell span", "Sell"],
+  ["#market .market-item[id] .trade > :first-child", "Trade Routes"],
+  ["#market .market-item[id] .trade .zero", "Cancel Routes"],
+]);
 function node(selector) {
   return {
     selector,
@@ -105,6 +111,8 @@ function node(selector) {
       return this;
     },
     text(content) {
+      if (content === undefined) return texts.get(selector) ?? "";
+      texts.set(selector, content);
       trace.push({ kind: "text", selector, content });
       return this;
     },
@@ -141,6 +149,46 @@ assert.match(
     (entry) => entry.kind === "after" && entry.selector === "#market-qty",
   ).content,
   /script_market_top_row/,
+);
+
+// Removing restores the live labels the create overwrote, not a restatement.
+trace.length = 0;
+browserAdapter.removeMarketToggles();
+assert.deepEqual(
+  trace
+    .filter((entry) => entry.kind === "text")
+    .map((entry) => [entry.selector, entry.content]),
+  [
+    ["#market .market-item[id] .buy span", "Buy"],
+    ["#market .market-item[id] .sell span", "Sell"],
+    ["#market .market-item[id] .trade > :first-child", "Trade Routes"],
+    ["#market .market-item[id] .trade .zero", "Cancel Routes"],
+  ],
+);
+
+// ensureMarketToggles repairs toggles the game's own redraw dropped.
+lengths.set("#market .ea-market-toggle", 0);
+trace.length = 0;
+callbackKeys.length = 0;
+browserAdapter.ensureMarketToggles();
+assert.deepEqual(callbackKeys, [
+  "buyIron",
+  "sellIron",
+  "res_trade_buy_Iron",
+  "res_trade_sell_Iron",
+]);
+
+// Without the panel there is nothing to repair; a stale count is cleared.
+lengths.set("#market", 0);
+trace.length = 0;
+callbackKeys.length = 0;
+browserAdapter.ensureMarketToggles();
+assert.deepEqual(callbackKeys, []);
+assert.deepEqual(
+  trace
+    .filter((entry) => entry.kind === "remove")
+    .map((entry) => entry.selector),
+  ["#market .ea-market-toggle", "#script_market_top_row"],
 );
 
 trace.length = 0;

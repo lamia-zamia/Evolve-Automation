@@ -21619,6 +21619,19 @@
   function readKnownResourceId(root, id) {
     return readResources(root).some(([resourceId]) => resourceId === id) ? id : "";
   }
+  function readMarketResetContext(root, controls2) {
+    return {
+      tradableResourceIds: mergeResourceIds(
+        root,
+        "tradable",
+        controls2,
+        "market-"
+      ),
+      galaxyOfferResourceIds: capturedGalaxyOfferIdentities(root).map(
+        (offer) => offer.buyResourceId
+      )
+    };
+  }
   function readStorageResetContext(root, controls2) {
     return {
       storableResourceIds: mergeResourceIds(
@@ -21708,15 +21721,7 @@
         planetTraits,
         extraList
       }),
-      readMarket: () => ({
-        tradableResourceIds: mergeResourceIds(
-          readRootSafely(rootState),
-          "tradable",
-          controls2,
-          "market-"
-        ),
-        galaxyOfferResourceIds: []
-      }),
+      readMarket: () => readMarketResetContext(readRootSafely(rootState), controls2),
       readStorage: () => readStorageResetContext(readRootSafely(rootState), controls2),
       readMinorTrait: () => ({
         traitNames: [],
@@ -24932,25 +24937,44 @@ If script is allowed to reassign non-empty storage it might waste time producing
     storageReader,
     addToggleCallbacks
   }) {
-    let lastCreatedStorageCount = 0;
+    let lastCreatedStorageCount = 0, lastCreatedMarketCount = 0, stashedMarketLabels;
+    function removeMarketElements(jquery) {
+      jquery("#market .ea-market-toggle").remove(), jquery("#script_market_top_row").remove();
+    }
     function createMarketToggles() {
-      removeMarketToggles();
       let jquery = getJQuery(), view = marketReader.readMarket();
-      view.noTrade || (jquery("#market .market-item[id] .res").width("5rem"), jquery("#market .market-item[id] .buy span").text("B"), jquery("#market .market-item[id] .sell span").text("S"), jquery("#market .market-item[id] .trade > :first-child").text("R"), jquery("#market .market-item[id] .trade .zero").text("×")), jquery("#market-qty").after(createMarketHeader(view));
+      view.noTrade ? stashedMarketLabels = void 0 : stashedMarketLabels = Object.freeze({
+        buy: jquery("#market .market-item[id] .buy span").text(),
+        sell: jquery("#market .market-item[id] .sell span").text(),
+        routes: jquery("#market .market-item[id] .trade > :first-child").text(),
+        cancelRoutes: jquery("#market .market-item[id] .trade .zero").text()
+      }), removeMarketElements(jquery);
+      let count2 = 0;
+      view.noTrade ? stashedMarketLabels = void 0 : (jquery("#market .market-item[id] .res").width("5rem"), jquery("#market .market-item[id] .buy span").text("B"), jquery("#market .market-item[id] .sell span").text("S"), jquery("#market .market-item[id] .trade > :first-child").text("R"), jquery("#market .market-item[id] .trade .zero").text("×")), jquery("#market-qty").after(createMarketHeader(view));
       for (let item of view.items) {
         let marketElement = jquery(`#market-${item.resourceId}`);
-        marketElement.length !== 0 && createMarketRow(view, item, jquery, addToggleCallbacks).appendTo(
+        marketElement.length !== 0 && (createMarketRow(view, item, jquery, addToggleCallbacks).appendTo(
           marketElement
-        );
+        ), count2++);
       }
+      lastCreatedMarketCount = count2;
+    }
+    function ensureMarketToggles() {
+      let jquery = getJQuery();
+      if (jquery("#market").length === 0) {
+        lastCreatedMarketCount !== 0 && removeMarketToggles();
+        return;
+      }
+      let currentCount3 = jquery("#market .ea-market-toggle").length;
+      (currentCount3 === 0 || currentCount3 !== lastCreatedMarketCount) && createMarketToggles();
     }
     function removeMarketToggles() {
       let jquery = getJQuery(), view = marketReader.readMarket();
-      jquery("#market .ea-market-toggle").remove(), jquery("#script_market_top_row").remove(), view.noTrade || (jquery("#market .market-item[id] .res").width("7.5rem"), jquery("#market .market-item[id] .buy span").text(view.labels.buy), jquery("#market .market-item[id] .sell span").text(view.labels.sell), jquery("#market .market-item[id] .trade > :first-child").text(
-        view.labels.routes
-      ), jquery("#market .market-item[id] .trade .zero").text(
-        view.labels.cancelRoutes
-      ));
+      removeMarketElements(jquery), lastCreatedMarketCount = 0;
+      let labels = stashedMarketLabels ?? view.labels;
+      stashedMarketLabels = void 0, !view.noTrade && (jquery("#market .market-item[id] .res").width("7.5rem"), jquery("#market .market-item[id] .buy span").text(labels.buy), jquery("#market .market-item[id] .sell span").text(labels.sell), jquery("#market .market-item[id] .trade > :first-child").text(
+        labels.routes
+      ), jquery("#market .market-item[id] .trade .zero").text(labels.cancelRoutes));
     }
     function createStorageToggles() {
       removeStorageToggles();
@@ -24985,10 +25009,382 @@ If script is allowed to reassign non-empty storage it might waste time producing
     }
     return Object.freeze({
       createMarketToggles,
+      ensureMarketToggles,
       removeMarketToggles,
       createStorageToggles,
       ensureStorageToggles,
       removeStorageToggles
+    });
+  }
+
+  // src/adapters/browser/market-settings.ts
+  function createMarketSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function buildMarketSettings() {
+      let readModel = reader.read();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-market-settings" }),
+        updateMarketSettingsContent
+      );
+    }
+    function updateMarketSettingsContent() {
+      let readModel = reader.read(), actions = getActions(), jquery = getJQuery();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderMarketContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderMarketContent(currentNode, readModel, actions, jquery) {
+      for (let control of readModel.controls) {
+        if (control.kind === "heading") break;
+        renderControl(currentNode, control, actions);
+      }
+      renderMarketTable(currentNode, readModel, actions, jquery, intents);
+      let galaxyHeading = readModel.controls.find(
+        (control) => control.kind === "heading"
+      );
+      galaxyHeading?.kind === "heading" && actions.addStandardHeading(currentNode, galaxyHeading.label);
+      let galaxyControl = readModel.controls[readModel.controls.length - 1];
+      galaxyControl?.kind === "number" && renderControl(currentNode, galaxyControl, actions), renderGalaxyTable(currentNode, readModel, actions, jquery);
+    }
+    function renderControl(node, control, actions) {
+      control.kind === "number" ? actions.addSettingsNumber(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      ) : actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function renderMarketTable(node, readModel, actions, jquery, intents2) {
+      node.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" colspan="1"></th>
+              <th class="has-text-warning" colspan="4">Manual Trades</th>
+              <th class="has-text-warning" colspan="4">Trade Routes</th>
+              <th class="has-text-warning" colspan="1"></th>
+            </tr>
+            <tr>
+              <th class="has-text-warning" style="width:15%">Resource</th>
+              <th class="has-text-warning" style="width:10%">Buy</th>
+              <th class="has-text-warning" style="width:10%">Ratio</th>
+              <th class="has-text-warning" style="width:10%">Sell</th>
+              <th class="has-text-warning" style="width:10%">Ratio</th>
+              <th class="has-text-warning" style="width:10%">In</th>
+              <th class="has-text-warning" style="width:10%">Away</th>
+              <th class="has-text-warning" style="width:10%">Weighting</th>
+              <th class="has-text-warning" style="width:10%">Priority</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_marketTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = jquery("#script_marketTableBody"), rows = "";
+      for (let row of readModel.rows)
+        rows += `<tr value="${row.id}" class="script-draggable"><td id="script_market_${row.id}" style="width:15%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%;border-right-width:1px"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      tableBodyNode.append(jquery(rows));
+      for (let row of readModel.rows) renderMarketRow(row, actions, jquery);
+      actions.getTableSorter().attach(tableBodyNode[0], {
+        items: "tr:not(.unsortable)",
+        attribute: "value",
+        onOrderChanged: (resourceIds) => {
+          intents2.handle({ type: "reorder-market-resources", resourceIds });
+        }
+      });
+    }
+    function renderMarketRow(row, actions, jquery) {
+      let cell = jquery(`#script_market_${row.id}`);
+      cell.append(actions.buildTableLabel(row.label)), cell = cell.next(), actions.addTableToggle(cell, row.buySettingName), cell = cell.next(), actions.addTableInput(cell, row.buyRatioSettingName), cell = cell.next(), actions.addTableToggle(cell, row.sellSettingName), cell = cell.next(), actions.addTableInput(cell, row.sellRatioSettingName), cell = cell.next(), actions.addTableToggle(cell, row.tradeBuySettingName), cell = cell.next(), actions.addTableToggle(cell, row.tradeSellSettingName), cell = cell.next(), actions.addTableInput(cell, row.tradeWeightingSettingName), cell = cell.next(), actions.addTableInput(cell, row.tradePrioritySettingName);
+    }
+    function renderGalaxyTable(node, readModel, actions, jquery) {
+      node.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:30%">Buy</th>
+              <th class="has-text-warning" style="width:30%">Sell</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Priority</th>
+            </tr>
+            <tbody id="script_marketGalaxyTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = jquery("#script_marketGalaxyTableBody"), rows = "";
+      readModel.galaxyRows.forEach(
+        (_row, index) => rows += `<tr><td id="script_market_galaxy_${index}" style="width:30%"><td style="width:30%"></td></td><td style="width:20%"></td><td style="width:20%"></td></tr>`
+      ), tableBodyNode.append(jquery(rows)), readModel.galaxyRows.forEach((row, index) => {
+        let cell = jquery(`#script_market_galaxy_${index}`);
+        cell.append(
+          actions.buildTableLabel(row.buyLabel, "", "has-text-success")
+        ), cell = cell.next(), cell.append(
+          actions.buildTableLabel(row.sellLabel, "", "has-text-danger")
+        ), cell = cell.next(), actions.addTableInput(cell, row.weightingSettingName), cell = cell.next(), actions.addTableInput(cell, row.prioritySettingName);
+      });
+    }
+    return Object.freeze({ buildMarketSettings, updateMarketSettingsContent });
+  }
+
+  // src/application/market-settings.ts
+  function createMarketSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-market-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes(), effects.removeMarketToggles();
+            return;
+          case "reorder-market-resources":
+            writer.reorderResources(intent.resourceIds), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/economy/market/market-settings.ts
+  var marketSectionControls = Object.freeze([
+    Object.freeze({
+      kind: "number",
+      settingName: "minimumMoney",
+      label: "Manual trade minimum money",
+      hint: "Minimum money to keep after bulk buying"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "minimumMoneyPercentage",
+      label: "Manual trade minimum money percentage",
+      hint: "Minimum percentage of money to keep after bulk buying"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "tradeRouteMinimumMoneyPerSecond",
+      label: "Trade minimum money /s",
+      hint: "Uses the highest per second amount of these two values. Will trade for resources until this minimum money per second amount is hit"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "tradeRouteMinimumMoneyPercentage",
+      label: "Trade minimum money percentage /s",
+      hint: "Uses the highest per second amount of these two values. Will trade for resources until this percentage of your money per second amount is hit"
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "tradeRouteSellExcess",
+      label: "Sell excess resources",
+      hint: "With this option enabled script will be allowed to sell resources above amounts needed for constructions or researches, without it script sell only capped resources. As side effect boughts will also be limited to that amounts, to avoid 'buy up to cap -> sell excess' loops."
+    }),
+    Object.freeze({ kind: "heading", label: "Galaxy Trades" }),
+    Object.freeze({
+      kind: "number",
+      settingName: "marketMinIngredients",
+      label: "Minimum materials to preserve",
+      hint: "Galaxy Market will buy resources only when all selling materials above given ratio"
+    })
+  ]);
+  function createMarketSettingsReadModel({
+    rows,
+    galaxyRows
+  }) {
+    return Object.freeze({
+      sectionId: "market",
+      sectionName: "Market",
+      controls: marketSectionControls,
+      rows: Object.freeze(rows.map((row) => Object.freeze({ ...row }))),
+      galaxyRows: Object.freeze(
+        galaxyRows.map((row) => Object.freeze({ ...row }))
+      )
+    });
+  }
+
+  // src/adapters/evolve/economy/market/captured-market-settings-catalog.ts
+  function readCapturedMarketResourceTitle(root, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId);
+    if (!isRecord(resource)) return resourceId;
+    let title = readProperty(resource, "title");
+    if (typeof title == "string" && title.length > 0) return title;
+    let name = readProperty(resource, "name");
+    return typeof name == "string" && name.length > 0 ? name : resourceId;
+  }
+  function readCapturedMarketSettingsEntries(root, controls2) {
+    let { tradableResourceIds } = readMarketResetContext(root, controls2);
+    return Object.freeze(
+      tradableResourceIds.map(
+        (resourceId) => Object.freeze({
+          resourceId,
+          elementId: `market-${resourceId}`,
+          label: readCapturedMarketResourceTitle(root, resourceId)
+        })
+      )
+    );
+  }
+  function readCapturedMarketGalaxyEntries(root) {
+    let offers = capturedGalaxyOfferIdentities(root);
+    return Object.freeze(
+      offers.map(
+        (offer) => Object.freeze({
+          buyId: offer.buyResourceId,
+          buyLabel: readCapturedMarketResourceTitle(root, offer.buyResourceId),
+          sellId: offer.sellResourceId,
+          sellLabel: readCapturedMarketResourceTitle(root, offer.sellResourceId)
+        })
+      )
+    );
+  }
+
+  // src/adapters/evolve/economy/market/captured-market-settings.ts
+  var MARKET_OVERRIDE_PREFIXES = Object.freeze([
+    "buy",
+    "sell",
+    "res_buy_",
+    "res_sell_",
+    "res_trade_",
+    "res_galaxy_"
+  ]);
+  function readCapturedMarketSettingsRecord(raw) {
+    return isRecord(raw) ? raw : {};
+  }
+  function finiteMarketPriority(value, fallback) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function sortCapturedMarketEntries(entries, raw) {
+    return Object.freeze(
+      entries.map((entry, index) => ({
+        entry,
+        index,
+        priority: finiteMarketPriority(
+          raw[`res_buy_p_${entry.resourceId}`],
+          index
+        )
+      })).sort(
+        (left, right) => left.priority - right.priority || left.index - right.index
+      ).map(({ entry }) => entry)
+    );
+  }
+  function readMarketContext(rootState, controls2) {
+    return readMarketResetContext(rootState.readRoot(), controls2);
+  }
+  function createCapturedMarketSettingsAdapter({
+    rootState,
+    controls: controls2,
+    getSettingsRaw
+  }) {
+    let readMarketEntriesForSettings = () => readCapturedMarketSettingsEntries(rootState.readRoot(), controls2);
+    return Object.freeze({
+      readMarketSettingsReadModel: () => {
+        let raw = readCapturedMarketSettingsRecord(getSettingsRaw()), root = rootState.readRoot(), entries = sortCapturedMarketEntries(
+          readMarketEntriesForSettings(),
+          raw
+        );
+        return createMarketSettingsReadModel({
+          rows: entries.map((entry) => ({
+            id: entry.resourceId,
+            label: entry.label,
+            buySettingName: `buy${entry.resourceId}`,
+            buyRatioSettingName: `res_buy_r_${entry.resourceId}`,
+            sellSettingName: `sell${entry.resourceId}`,
+            sellRatioSettingName: `res_sell_r_${entry.resourceId}`,
+            tradeBuySettingName: `res_trade_buy_${entry.resourceId}`,
+            tradeSellSettingName: `res_trade_sell_${entry.resourceId}`,
+            tradeWeightingSettingName: `res_trade_w_${entry.resourceId}`,
+            tradePrioritySettingName: `res_trade_p_${entry.resourceId}`
+          })),
+          galaxyRows: readCapturedMarketGalaxyEntries(root).map((entry) => ({
+            buyId: entry.buyId,
+            buyLabel: entry.buyLabel,
+            sellLabel: entry.sellLabel,
+            weightingSettingName: `res_galaxy_w_${entry.buyId}`,
+            prioritySettingName: `res_galaxy_p_${entry.buyId}`
+          }))
+        });
+      },
+      resetToDefaults() {
+        let raw = readCapturedMarketSettingsRecord(getSettingsRaw()), defaults = computeMarketDefaults(
+          readMarketContext(rootState, controls2)
+        ).def, overrides = raw.overrides;
+        if (isRecord(overrides) && !Array.isArray(overrides))
+          for (let key of Object.keys(overrides))
+            MARKET_OVERRIDE_PREFIXES.some((prefix) => key.startsWith(prefix)) && delete overrides[key];
+        Object.assign(raw, defaults);
+      },
+      resetPriorities() {
+        let raw = readCapturedMarketSettingsRecord(getSettingsRaw()), { tradableResourceIds } = readMarketContext(rootState, controls2);
+        tradableResourceIds.forEach((resourceId, index) => {
+          raw[`res_buy_p_${resourceId}`] = index;
+        });
+      },
+      reorderResources(resourceIds) {
+        let known = new Set(
+          readMarketEntriesForSettings().map((entry) => entry.resourceId)
+        ), raw = readCapturedMarketSettingsRecord(getSettingsRaw());
+        resourceIds.forEach((resourceId, index) => {
+          known.has(resourceId) && (raw[`res_buy_p_${resourceId}`] = index);
+        });
+      }
+    });
+  }
+
+  // src/adapters/evolve/economy/market/captured-market-toggles.ts
+  function readRaceFlag(root, flag) {
+    return readProperty(readProperty(root, "race"), flag) === !0;
+  }
+  function isFoodExcluded(root, resourceId) {
+    return resourceId === "Food" && (readRaceFlag(root, "artifical") || readRaceFlag(root, "fasting"));
+  }
+  function createCapturedMarketToggleReader({
+    rootState,
+    controls: controls2,
+    getDocument,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readMarket() {
+        let root = rootState.readRoot(), settings = getSettingsRaw(), record = isRecord(settings) ? settings : {}, entries = readCapturedMarketSettingsEntries(root, controls2), items = [];
+        for (let entry of entries) {
+          if (isFoodExcluded(root, entry.resourceId) || getDocument().getElementById(entry.elementId) == null) continue;
+          let buyKey = `buy${entry.resourceId}`, sellKey = `sell${entry.resourceId}`, tradeBuyKey = `res_trade_buy_${entry.resourceId}`, tradeSellKey = `res_trade_sell_${entry.resourceId}`;
+          items.push(
+            Object.freeze({
+              resourceId: entry.resourceId,
+              buyKey,
+              sellKey,
+              tradeBuyKey,
+              tradeSellKey,
+              buyEnabled: record[buyKey] === !0,
+              sellEnabled: record[sellKey] === !0,
+              tradeBuyEnabled: record[tradeBuyKey] === !0,
+              tradeSellEnabled: record[tradeSellKey] === !0
+            })
+          );
+        }
+        return Object.freeze({
+          noTrade: readRaceFlag(root, "no_trade"),
+          labels: Object.freeze({
+            buy: "",
+            sell: "",
+            routes: "",
+            cancelRoutes: ""
+          }),
+          items: Object.freeze(items)
+        });
+      }
     });
   }
 
@@ -28288,6 +28684,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     buildingSettings: capturedBuildingSettings,
     projectSettings: capturedProjectSettings,
     storageSettings: capturedStorageSettings,
+    marketSettings: capturedMarketSettings,
     onDiagnostic = () => {
     },
     logError = () => {
@@ -28423,7 +28820,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -28465,8 +28862,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         },
         buildEjectorSettings: () => {
         },
-        buildMarketSettings: () => {
-        },
+        buildMarketSettings: () => market?.buildMarketSettings(),
         buildStorageSettings: () => storage?.buildStorageSettings(),
         buildMagicSettings: () => {
         },
@@ -28868,6 +29264,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
           )
         });
       }
+      let marketToggleReader = capturedMarketSettings === void 0 ? void 0 : createCapturedMarketToggleReader({
+        rootState: capturedMarketSettings.rootState,
+        controls: capturedMarketSettings.controls,
+        getDocument: () => documentForUi,
+        getSettingsRaw: settings.readRaw
+      });
       if (capturedStorageSettings !== void 0) {
         let capturedAdapter = createCapturedStorageSettingsAdapter({
           rootState: capturedStorageSettings.rootState,
@@ -28900,12 +29302,72 @@ If script is allowed to reassign non-empty storage it might waste time producing
           }
         }), storageToggles = createResourceToggleBrowserAdapter({
           getJQuery: () => getJQuery(),
-          marketReader: {
+          marketReader: marketToggleReader ?? {
             readMarket: () => {
               throw new Error("market toggles are not ported yet");
             }
           },
           storageReader: createCapturedStorageToggleReader({
+            rootState: capturedStorageSettings.rootState,
+            controls: capturedStorageSettings.controls,
+            getDocument: () => documentForUi,
+            getSettingsRaw: settings.readRaw
+          }),
+          addToggleCallbacks: (node, settingName) => controls2.addToggleCallbacks(
+            node,
+            settingName
+          )
+        });
+      }
+      if (capturedMarketSettings !== void 0 && marketToggleReader !== void 0) {
+        let capturedAdapter = createCapturedMarketSettingsAdapter({
+          rootState: capturedMarketSettings.rootState,
+          controls: capturedMarketSettings.controls,
+          getSettingsRaw: settings.readRaw
+        }), marketIntent;
+        market = createMarketSettingsBrowserAdapter({
+          getDocument: () => documentForUi,
+          getJQuery: () => getJQuery(),
+          reader: { read: capturedAdapter.readMarketSettingsReadModel },
+          intents: { handle: (intent) => marketIntent.handle(intent) },
+          getActions: () => ({
+            ...simpleActions,
+            addSettingsNumber: (node, settingName, label, hint) => controls2.addSettingsNumber(
+              node,
+              settingName,
+              label,
+              hint
+            ),
+            addStandardHeading: (node, label) => shell.addStandardHeading(
+              node,
+              label
+            ),
+            addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
+            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
+            buildTableLabel: (label, title, className) => controls2.buildTableLabel(label, title, className),
+            getTableSorter: () => tableSorter
+          })
+        }), marketIntent = createMarketSettingsIntentHandler({
+          writer: {
+            resetToDefaults: () => {
+              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("market") : capturedAdapter.resetToDefaults();
+            },
+            persist: persistSettings,
+            reorderResources: capturedAdapter.reorderResources
+          },
+          renderSettingsContent: () => market?.updateMarketSettingsContent(),
+          effects: {
+            resetCheckboxes: () => controls2.resetCheckbox("autoMarket", "autoGalaxyMarket"),
+            removeMarketToggles: () => marketToggles?.removeMarketToggles()
+          }
+        }), marketToggles = createResourceToggleBrowserAdapter({
+          getJQuery: () => getJQuery(),
+          marketReader: marketToggleReader,
+          storageReader: capturedStorageSettings === void 0 ? {
+            readStorage: () => {
+              throw new Error("storage toggles are not ported yet");
+            }
+          } : createCapturedStorageToggleReader({
             rootState: capturedStorageSettings.rootState,
             controls: capturedStorageSettings.controls,
             getDocument: () => documentForUi,
@@ -28933,6 +29395,8 @@ If script is allowed to reassign non-empty storage it might waste time producing
         arpaToggles,
         storage,
         storageToggles,
+        market,
+        marketToggles,
         craftToggles,
         shell
       }, settingsUi;
@@ -28957,7 +29421,7 @@ Only continue if you trust the source. Injected code:
       let ui = ensureSettingsUi(dom);
       ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings());
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings());
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
     }, createArpaToggles = () => {
@@ -28974,6 +29438,20 @@ Only continue if you trust the source. Injected code:
         return;
       }
       adapter.removeArpaToggles();
+    }, createMarketToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).marketToggles;
+      if (adapter === void 0) {
+        unported("market toggles")();
+        return;
+      }
+      adapter.createMarketToggles();
+    }, removeMarketToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).marketToggles;
+      if (adapter === void 0) {
+        unported("market toggles")();
+        return;
+      }
+      adapter.removeMarketToggles();
     }, createStorageToggles = () => {
       let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).storageToggles;
       if (adapter === void 0) {
@@ -29076,8 +29554,8 @@ Only continue if you trust the source. Injected code:
         removeArpaToggles,
         createStorageToggles,
         removeStorageToggles,
-        createMarketToggles: unported("market toggles"),
-        removeMarketToggles: unported("market toggles"),
+        createMarketToggles,
+        removeMarketToggles,
         createEjectToggles: unported("eject toggles"),
         removeEjectToggles: unported("eject toggles"),
         createSupplyToggles: unported("supply toggles"),
@@ -29091,7 +29569,7 @@ Only continue if you trust the source. Injected code:
       ensurePanel() {
         if (getQuery() !== void 0)
           try {
-            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), settings.readRaw().autoStorage === !0 ? settingsUi?.storageToggles?.ensureStorageToggles() : settingsUi?.storageToggles?.removeStorageToggles(), optionsModal.createOptionsModal(), settings.readRaw().showSettings === !0 && buildScriptSettings();
+            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), settings.readRaw().autoStorage === !0 ? settingsUi?.storageToggles?.ensureStorageToggles() : settingsUi?.storageToggles?.removeStorageToggles(), settings.readRaw().autoMarket === !0 ? settingsUi?.marketToggles?.ensureMarketToggles() : settingsUi?.marketToggles?.removeMarketToggles(), optionsModal.createOptionsModal(), settings.readRaw().showSettings === !0 && buildScriptSettings();
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }
@@ -31753,6 +32231,10 @@ Only continue if you trust the source. Injected code:
         controls: pageCapture2.controls
       },
       storageSettings: {
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls
+      },
+      marketSettings: {
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls
       },

@@ -101,6 +101,7 @@ const { hooks } = await loadCharacterizationBundle({
 assert.equal(typeof hooks.setResourceTogglesTestContext, "function");
 assert.deepEqual(Object.keys(hooks.resourceToggles), [
   "createMarketToggles",
+  "ensureMarketToggles",
   "removeMarketToggles",
   "createStorageToggles",
   "ensureStorageToggles",

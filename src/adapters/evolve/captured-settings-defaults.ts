@@ -43,6 +43,7 @@ import {
   traitList,
 } from "./runtime-catalogs.ts";
 import { readCapturedJobResetContext } from "./civic/captured-job-catalog.ts";
+import { capturedGalaxyOfferIdentities } from "./economy/market/captured-galaxy-market.ts";
 import { ALCHEMY_CONTROL_PREFIX } from "./economy/production/captured-alchemy.ts";
 import { isRecord, readProperty } from "../validation.ts";
 import {
@@ -203,6 +204,31 @@ function readKnownResourceId(root: unknown, id: string): string {
 }
 
 /**
+ * The resources the market settings govern, in table order: every resource
+ * whose root record is tradable, plus any `market-` row the page captured for
+ * a resource the root does not flag. Galaxy offer buy ids come from the same
+ * resolved offer identities the galaxy automation clicks. Shared with the
+ * captured market settings adapter so the table and the defaults cannot
+ * disagree. Previously the galaxy half defaulted to nothing on this path.
+ */
+export function readMarketResetContext(
+  root: unknown,
+  controls: GameControlRegistry,
+): MarketResetContext {
+  return {
+    tradableResourceIds: mergeResourceIds(
+      root,
+      "tradable",
+      controls,
+      "market-",
+    ),
+    galaxyOfferResourceIds: capturedGalaxyOfferIdentities(root).map(
+      (offer) => offer.buyResourceId,
+    ),
+  };
+}
+
+/**
  * The resources the storage settings govern, in table order: every resource
  * whose root record is stackable, plus any `stack-<id>` row the page captured
  * for a resource the root does not flag. Shared with the captured storage
@@ -341,15 +367,8 @@ export function createCapturedSettingsDefaults({
       planetTraits,
       extraList,
     }),
-    readMarket: (): MarketResetContext => ({
-      tradableResourceIds: mergeResourceIds(
-        readRootSafely(rootState),
-        "tradable",
-        controls,
-        "market-",
-      ),
-      galaxyOfferResourceIds: [],
-    }),
+    readMarket: (): MarketResetContext =>
+      readMarketResetContext(readRootSafely(rootState), controls),
     readStorage: (): StorageResetContext =>
       readStorageResetContext(readRootSafely(rootState), controls),
     readMinorTrait: (): MinorTraitResetContext => ({

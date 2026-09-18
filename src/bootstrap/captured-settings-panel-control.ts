@@ -6,7 +6,7 @@
  * of to the legacy closure; game-backed sections remain outside this slice until their captures exist.
  *
  * TRANSITIONAL: the remaining per-section builders (the Settings tab, and the toggle strips
- * injected into the game's own Market/Eject/Supply panels) are still unavailable on
+ * injected into the game's own Eject/Supply panels) are still unavailable on
  * the captured path. They are diagnosed once by name rather than silently doing nothing. Automation
  * itself does not depend on any of them — it reads the same settings record this panel writes.
  */
@@ -41,6 +41,13 @@ import { createStorageSettingsIntentHandler } from "../application/storage-setti
 import { createCapturedStorageSettingsAdapter } from "../adapters/evolve/economy/storage/captured-storage-settings.ts";
 import { createCapturedStorageToggleReader } from "../adapters/evolve/economy/storage/captured-storage-toggles.ts";
 import { createResourceToggleBrowserAdapter } from "../adapters/browser/resource-toggles.ts";
+import {
+  createMarketSettingsBrowserAdapter,
+  type MarketSettingsBrowserActions,
+} from "../adapters/browser/market-settings.ts";
+import { createMarketSettingsIntentHandler } from "../application/market-settings.ts";
+import { createCapturedMarketSettingsAdapter } from "../adapters/evolve/economy/market/captured-market-settings.ts";
+import { createCapturedMarketToggleReader } from "../adapters/evolve/economy/market/captured-market-toggles.ts";
 import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
@@ -227,6 +234,20 @@ type StorageToggleJQuery = ReturnType<
 type StorageToggleNode = Parameters<
   Parameters<typeof createResourceToggleBrowserAdapter>[0]["addToggleCallbacks"]
 >[0];
+type MarketSettings = ReturnType<typeof createMarketSettingsBrowserAdapter>;
+type MarketToggles = ReturnType<typeof createResourceToggleBrowserAdapter>;
+type MarketSettingsDocument = ReturnType<
+  Parameters<typeof createMarketSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type MarketSettingsJQuery = ReturnType<
+  Parameters<typeof createMarketSettingsBrowserAdapter>[0]["getJQuery"]
+>;
+type MarketToggleDocument = ReturnType<
+  Parameters<typeof createCapturedMarketToggleReader>[0]["getDocument"]
+>;
+type MarketToggleJQuery = ReturnType<
+  Parameters<typeof createResourceToggleBrowserAdapter>[0]["getJQuery"]
+>;
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
@@ -251,6 +272,10 @@ export interface CapturedSettingsPanelDependencies {
     readonly controls: GameControlRegistry;
   };
   readonly storageSettings?: {
+    readonly rootState: GameRootStateSource;
+    readonly controls: GameControlRegistry;
+  };
+  readonly marketSettings?: {
     readonly rootState: GameRootStateSource;
     readonly controls: GameControlRegistry;
   };
@@ -340,6 +365,7 @@ export function createCapturedSettingsPanel({
   buildingSettings: capturedBuildingSettings,
   projectSettings: capturedProjectSettings,
   storageSettings: capturedStorageSettings,
+  marketSettings: capturedMarketSettings,
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -490,6 +516,8 @@ export function createCapturedSettingsPanel({
         readonly arpaToggles: ArpaToggles | undefined;
         readonly storage: StorageSettings | undefined;
         readonly storageToggles: StorageToggles | undefined;
+        readonly market: MarketSettings | undefined;
+        readonly marketToggles: MarketToggles | undefined;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -621,6 +649,8 @@ export function createCapturedSettingsPanel({
     let arpaToggles: ArpaToggles | undefined;
     let storage: StorageSettings | undefined;
     let storageToggles: StorageToggles | undefined;
+    let market: MarketSettings | undefined;
+    let marketToggles: MarketToggles | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -660,7 +690,7 @@ export function createCapturedSettingsPanel({
       buildMechSettings: () => {},
       buildFleetSettings: () => {},
       buildEjectorSettings: () => {},
-      buildMarketSettings: () => {},
+      buildMarketSettings: () => market?.buildMarketSettings(),
       buildStorageSettings: () => storage?.buildStorageSettings(),
       buildMagicSettings: () => {},
       buildProductionSettings: () => {},
@@ -1196,6 +1226,15 @@ export function createCapturedSettingsPanel({
           ) as unknown as ArpaToggleNode,
       });
     }
+    const marketToggleReader =
+      capturedMarketSettings === undefined
+        ? undefined
+        : createCapturedMarketToggleReader({
+            rootState: capturedMarketSettings.rootState,
+            controls: capturedMarketSettings.controls,
+            getDocument: () => documentForUi as unknown as MarketToggleDocument,
+            getSettingsRaw: settings.readRaw,
+          });
     if (capturedStorageSettings !== undefined) {
       const capturedAdapter = createCapturedStorageSettingsAdapter({
         rootState: capturedStorageSettings.rootState,
@@ -1237,7 +1276,7 @@ export function createCapturedSettingsPanel({
       });
       storageToggles = createResourceToggleBrowserAdapter({
         getJQuery: () => getJQuery() as unknown as StorageToggleJQuery,
-        marketReader: {
+        marketReader: marketToggleReader ?? {
           readMarket: () => {
             throw new Error("market toggles are not ported yet");
           },
@@ -1248,6 +1287,98 @@ export function createCapturedSettingsPanel({
           getDocument: () => documentForUi as unknown as StorageToggleDocument,
           getSettingsRaw: settings.readRaw,
         }),
+        addToggleCallbacks: (node, settingName) =>
+          controls.addToggleCallbacks(
+            node as unknown as SettingsControlNode,
+            settingName,
+          ) as unknown as StorageToggleNode,
+      });
+    }
+    if (
+      capturedMarketSettings !== undefined &&
+      marketToggleReader !== undefined
+    ) {
+      const capturedAdapter = createCapturedMarketSettingsAdapter({
+        rootState: capturedMarketSettings.rootState,
+        controls: capturedMarketSettings.controls,
+        getSettingsRaw: settings.readRaw,
+      });
+      let marketIntent: ReturnType<typeof createMarketSettingsIntentHandler>;
+      market = createMarketSettingsBrowserAdapter({
+        getDocument: () => documentForUi as unknown as MarketSettingsDocument,
+        getJQuery: () => getJQuery() as unknown as MarketSettingsJQuery,
+        reader: { read: capturedAdapter.readMarketSettingsReadModel },
+        intents: { handle: (intent) => marketIntent.handle(intent) },
+        getActions: () =>
+          ({
+            ...simpleActions,
+            addSettingsNumber: (
+              node: unknown,
+              settingName: string,
+              label: string,
+              hint: string,
+            ) =>
+              controls.addSettingsNumber(
+                node as SettingsControlNode,
+                settingName,
+                label,
+                hint,
+              ),
+            addStandardHeading: (node: unknown, label: string) =>
+              shell.addStandardHeading(
+                node as unknown as Parameters<
+                  typeof shell.addStandardHeading
+                >[0],
+                label,
+              ),
+            addTableInput: (node: unknown, settingName: string) =>
+              controls.addTableInput(node as SettingsControlNode, settingName),
+            addTableToggle: (node: unknown, settingName: string) =>
+              controls.addTableToggle(node as SettingsControlNode, settingName),
+            buildTableLabel: (
+              label: string,
+              title?: string,
+              className?: string,
+            ) => controls.buildTableLabel(label, title, className),
+            getTableSorter: () => tableSorter,
+          }) as unknown as MarketSettingsBrowserActions,
+      });
+      marketIntent = createMarketSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("market");
+            } else {
+              capturedAdapter.resetToDefaults();
+            }
+          },
+          persist: persistSettings,
+          reorderResources: capturedAdapter.reorderResources,
+        },
+        renderSettingsContent: () => market?.updateMarketSettingsContent(),
+        effects: {
+          resetCheckboxes: () =>
+            controls.resetCheckbox("autoMarket", "autoGalaxyMarket"),
+          removeMarketToggles: () => marketToggles?.removeMarketToggles(),
+        },
+      });
+      marketToggles = createResourceToggleBrowserAdapter({
+        getJQuery: () => getJQuery() as unknown as MarketToggleJQuery,
+        marketReader: marketToggleReader,
+        storageReader:
+          capturedStorageSettings === undefined
+            ? {
+                readStorage: () => {
+                  throw new Error("storage toggles are not ported yet");
+                },
+              }
+            : createCapturedStorageToggleReader({
+                rootState: capturedStorageSettings.rootState,
+                controls: capturedStorageSettings.controls,
+                getDocument: () =>
+                  documentForUi as unknown as StorageToggleDocument,
+                getSettingsRaw: settings.readRaw,
+              }),
         addToggleCallbacks: (node, settingName) =>
           controls.addToggleCallbacks(
             node as unknown as SettingsControlNode,
@@ -1271,6 +1402,8 @@ export function createCapturedSettingsPanel({
       arpaToggles,
       storage,
       storageToggles,
+      market,
+      marketToggles,
       craftToggles,
       shell,
     };
@@ -1336,6 +1469,7 @@ export function createCapturedSettingsPanel({
     ui.building?.buildBuildingSettings();
     ui.project?.buildProjectSettings();
     ui.storage?.buildStorageSettings();
+    ui.market?.buildMarketSettings();
   };
 
   const removeScriptSettings = () => {
@@ -1362,6 +1496,28 @@ export function createCapturedSettingsPanel({
       return;
     }
     adapter.removeArpaToggles();
+  };
+
+  const createMarketToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).marketToggles;
+    if (adapter === undefined) {
+      unported("market toggles")();
+      return;
+    }
+    adapter.createMarketToggles();
+  };
+
+  const removeMarketToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).marketToggles;
+    if (adapter === undefined) {
+      unported("market toggles")();
+      return;
+    }
+    adapter.removeMarketToggles();
   };
 
   const createStorageToggles = () => {
@@ -1503,8 +1659,8 @@ export function createCapturedSettingsPanel({
       removeArpaToggles,
       createStorageToggles,
       removeStorageToggles,
-      createMarketToggles: unported("market toggles"),
-      removeMarketToggles: unported("market toggles"),
+      createMarketToggles,
+      removeMarketToggles,
       createEjectToggles: unported("eject toggles"),
       removeEjectToggles: unported("eject toggles"),
       createSupplyToggles: unported("supply toggles"),
@@ -1535,6 +1691,11 @@ export function createCapturedSettingsPanel({
           settingsUi?.storageToggles?.ensureStorageToggles();
         } else {
           settingsUi?.storageToggles?.removeStorageToggles();
+        }
+        if (settings.readRaw()["autoMarket"] === true) {
+          settingsUi?.marketToggles?.ensureMarketToggles();
+        } else {
+          settingsUi?.marketToggles?.removeMarketToggles();
         }
         optionsModal.createOptionsModal();
         if (settings.readRaw()["showSettings"] === true) buildScriptSettings();
