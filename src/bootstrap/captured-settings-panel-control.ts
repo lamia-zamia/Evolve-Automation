@@ -57,6 +57,12 @@ import { createCapturedEjectToggleReader } from "../adapters/evolve/economy/reso
 import { createEjectToggleBrowserAdapter } from "../adapters/browser/eject-toggles.ts";
 import { createCapturedSupplyToggleReader } from "../adapters/evolve/economy/resources/captured-supply-toggles.ts";
 import { createSupplyToggleBrowserAdapter } from "../adapters/browser/supply-toggles.ts";
+import {
+  createMagicSettingsBrowserAdapter,
+  type MagicSettingsBrowserActions,
+} from "../adapters/browser/magic-settings.ts";
+import { createMagicSettingsIntentHandler } from "../application/magic-settings.ts";
+import { createCapturedMagicSettingsAdapter } from "../adapters/evolve/economy/production/captured-magic-settings.ts";
 import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
@@ -284,6 +290,13 @@ type SupplyToggleJQuery = ReturnType<
 type SupplyToggleNode = Parameters<
   Parameters<typeof createSupplyToggleBrowserAdapter>[0]["addToggleCallbacks"]
 >[0];
+type MagicSettings = ReturnType<typeof createMagicSettingsBrowserAdapter>;
+type MagicSettingsDocument = ReturnType<
+  Parameters<typeof createMagicSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type MagicSettingsJQuery = ReturnType<
+  Parameters<typeof createMagicSettingsBrowserAdapter>[0]["getJQuery"]
+>;
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
@@ -316,6 +329,10 @@ export interface CapturedSettingsPanelDependencies {
     readonly controls: GameControlRegistry;
   };
   readonly ejectorSettings?: {
+    readonly rootState: GameRootStateSource;
+    readonly controls: GameControlRegistry;
+  };
+  readonly magicSettings?: {
     readonly rootState: GameRootStateSource;
     readonly controls: GameControlRegistry;
   };
@@ -407,6 +424,7 @@ export function createCapturedSettingsPanel({
   storageSettings: capturedStorageSettings,
   marketSettings: capturedMarketSettings,
   ejectorSettings: capturedEjectorSettings,
+  magicSettings: capturedMagicSettings,
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -562,6 +580,7 @@ export function createCapturedSettingsPanel({
         readonly ejector: EjectorSettings | undefined;
         readonly ejectToggles: EjectToggles | undefined;
         readonly supplyToggles: SupplyToggles | undefined;
+        readonly magic: MagicSettings | undefined;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -698,6 +717,7 @@ export function createCapturedSettingsPanel({
     let ejector: EjectorSettings | undefined;
     let ejectToggles: EjectToggles | undefined;
     let supplyToggles: SupplyToggles | undefined;
+    let magic: MagicSettings | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -739,7 +759,7 @@ export function createCapturedSettingsPanel({
       buildEjectorSettings: () => ejector?.buildEjectorSettings(),
       buildMarketSettings: () => market?.buildMarketSettings(),
       buildStorageSettings: () => storage?.buildStorageSettings(),
-      buildMagicSettings: () => {},
+      buildMagicSettings: () => magic?.buildMagicSettings(),
       buildProductionSettings: () => {},
       buildJobSettings: () => job?.buildJobSettings(),
       buildBuildingSettings: () => building?.buildBuildingSettings(),
@@ -1516,6 +1536,58 @@ export function createCapturedSettingsPanel({
           ) as unknown as SupplyToggleNode,
       });
     }
+    if (capturedMagicSettings !== undefined) {
+      const capturedAdapter = createCapturedMagicSettingsAdapter({
+        rootState: capturedMagicSettings.rootState,
+        controls: capturedMagicSettings.controls,
+        getSettingsRaw: settings.readRaw,
+      });
+      let magicIntent: ReturnType<typeof createMagicSettingsIntentHandler>;
+      magic = createMagicSettingsBrowserAdapter({
+        getDocument: () => documentForUi as unknown as MagicSettingsDocument,
+        getJQuery: () => getJQuery() as unknown as MagicSettingsJQuery,
+        getReadModel: capturedAdapter.readMagicSettingsReadModel,
+        intents: { handle: (intent) => magicIntent.handle(intent) },
+        getActions: () =>
+          ({
+            ...simpleActions,
+            addStandardHeading: (node: unknown, label: string) =>
+              shell.addStandardHeading(
+                node as unknown as Parameters<
+                  typeof shell.addStandardHeading
+                >[0],
+                label,
+              ),
+            addTableInput: (node: unknown, settingName: string) =>
+              controls.addTableInput(node as SettingsControlNode, settingName),
+            addTableToggle: (node: unknown, settingName: string) =>
+              controls.addTableToggle(node as SettingsControlNode, settingName),
+            buildTableLabel: (label: string, title?: string, color?: string) =>
+              controls.buildTableLabel(label, title, color),
+          }) as unknown as MagicSettingsBrowserActions,
+      });
+      magicIntent = createMagicSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("magic");
+            } else {
+              capturedAdapter.resetToDefaults();
+            }
+          },
+          persist: persistSettings,
+        },
+        renderSettingsContent: () => magic?.updateMagicSettingsContent(),
+        effects: {
+          resetCheckboxes: () =>
+            controls.resetCheckbox(
+              "autoAlchemy",
+              "autoPylon",
+              "magicFullmetalHelper",
+            ),
+        },
+      });
+    }
     settingsUi = {
       general,
       achievementGuard,
@@ -1537,6 +1609,7 @@ export function createCapturedSettingsPanel({
       ejector,
       ejectToggles,
       supplyToggles,
+      magic,
       craftToggles,
       shell,
     };
@@ -1604,6 +1677,7 @@ export function createCapturedSettingsPanel({
     ui.storage?.buildStorageSettings();
     ui.market?.buildMarketSettings();
     ui.ejector?.buildEjectorSettings();
+    ui.magic?.buildMagicSettings();
   };
 
   const removeScriptSettings = () => {

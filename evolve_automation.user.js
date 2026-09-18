@@ -11049,7 +11049,7 @@
   }
 
   // src/adapters/evolve/economy/production/captured-pylon.ts
-  var PYLON_CONTROL = "iPylon", SPELL_IDS = [
+  var PYLON_CONTROL = "iPylon", PYLON_SPELL_IDS = Object.freeze([
     "farmer",
     "miner",
     "lumberjack",
@@ -11058,7 +11058,7 @@
     "army",
     "hunting",
     "crafting"
-  ], DEFAULT_SPELL_WEIGHTING = 100, DEFAULT_HUNTING_WEIGHTING = 10, DEFAULT_FARMER_WEIGHTING = 1;
+  ]), DEFAULT_SPELL_WEIGHTING = 100, DEFAULT_HUNTING_WEIGHTING = 10, DEFAULT_FARMER_WEIGHTING = 1;
   function settingNumber3(settings, key, fallback) {
     let value = settings[key];
     return value === void 0 ? fallback : finite(value);
@@ -11125,7 +11125,7 @@
     if (ritualManaUse === void 0)
       return Object.freeze({ root, input: emptyInput2() });
     let spells = [];
-    for (let id of SPELL_IDS) {
+    for (let id of PYLON_SPELL_IDS) {
       if (!spellAvailable(id, race, magic)) continue;
       let currentSpells2 = finite(readProperty(casting, id));
       if (currentSpells2 === void 0 || currentSpells2 < 0) continue;
@@ -21670,6 +21670,12 @@
       bindingByKey: readCapturedBuildingBindingMap(entries)
     };
   }
+  function readMagicResetContext(controls2) {
+    return {
+      alchemyResourceIds: readControlSuffixIds(controls2, ALCHEMY_CONTROL_PREFIX),
+      ritualProductionIds: [...PYLON_SPELL_IDS]
+    };
+  }
   function readProduction(root) {
     let ids = readResources(root).map(([id]) => id), identityMap = Object.fromEntries(ids.map((id) => [id, id]));
     return {
@@ -21742,13 +21748,7 @@
       readJob: () => readCapturedJobResetContext(controls2),
       readBuilding: () => readBuildingContext(readRootSafely(rootState), controls2),
       readProject: () => readProjects(readRootSafely(rootState)),
-      readMagic: () => ({
-        alchemyResourceIds: readControlSuffixIds(
-          controls2,
-          ALCHEMY_CONTROL_PREFIX
-        ),
-        ritualProductionIds: []
-      }),
+      readMagic: () => readMagicResetContext(controls2),
       readProduction: () => readProduction(readRootSafely(rootState)),
       readEjector: () => readEjector(readRootSafely(rootState), controls2)
     }, startupReader = {
@@ -25805,6 +25805,269 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/domain/economy/production/magic-settings.ts
+  function freezeAlchemyRow(row) {
+    return Object.freeze({ ...row });
+  }
+  function freezePylonRow(row) {
+    return Object.freeze({ ...row });
+  }
+  function createMagicSettingsReadModel({
+    alchemyRows,
+    pylonRows
+  }) {
+    return Object.freeze({
+      sectionId: "magic",
+      sectionName: "Magic",
+      alchemyControls: Object.freeze([
+        Object.freeze({ kind: "heading", label: "Alchemy" }),
+        Object.freeze({
+          kind: "number",
+          settingName: "magicAlchemyManaUse",
+          label: "Mana income used",
+          hint: "Income portion to use on alchemy. Setting to 1 is not recommended, leftover mana will be used for rituals."
+        }),
+        Object.freeze({
+          kind: "toggle",
+          settingName: "magicFullmetalHelper",
+          label: "Fullmetal helper",
+          hint: "In Magic universe with Alchemy II, keep one non-basic alchemy transmutation active long enough to claim Fullmetal if the achievement is still below the current star level. Requires autoAlchemy."
+        })
+      ]),
+      pylonControls: Object.freeze([
+        Object.freeze({ kind: "heading", label: "Pylon" }),
+        Object.freeze({
+          kind: "number",
+          settingName: "productionRitualManaUse",
+          label: "Mana income used",
+          hint: "Income portion to use on rituals. Setting to 1 is not recommended, as it will halt mana regeneration. Applied only when mana not capped - with capped mana script will always use all income."
+        }),
+        Object.freeze({
+          kind: "toggle",
+          settingName: "productionRitualSafe",
+          label: "Safe rituals",
+          hint: "Limit max rituals to safe, unsuspicious amount. Have no effect out of Witch Hunter scenario."
+        })
+      ]),
+      alchemyRows: Object.freeze(alchemyRows.map(freezeAlchemyRow)),
+      pylonRows: Object.freeze(pylonRows.map(freezePylonRow))
+    });
+  }
+
+  // src/adapters/browser/magic-settings.ts
+  function createMagicSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildMagicSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-magic-settings" }),
+        updateMagicSettingsContent
+      );
+    }
+    function updateMagicSettingsContent() {
+      let readModel = getReadModel(), actions = getActions(), jquery = getJQuery();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery,
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderMagicContent(currentNode, readModel, actions, jquery);
+        }
+      );
+    }
+    function renderMagicContent(currentNode, readModel, actions, jquery) {
+      for (let control of readModel.alchemyControls)
+        renderControl(currentNode, control, actions);
+      renderAlchemy(currentNode, readModel.alchemyRows, actions, jquery);
+      for (let control of readModel.pylonControls)
+        renderControl(currentNode, control, actions);
+      renderPylon(currentNode, readModel.pylonRows, actions, jquery);
+    }
+    function renderControl(node, control, actions) {
+      switch (control.kind) {
+        case "heading":
+          actions.addStandardHeading(node, control.label);
+          return;
+        case "number":
+          actions.addSettingsNumber(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "toggle":
+          actions.addSettingsToggle(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+      }
+    }
+    function renderAlchemy(currentNode, rows, actions, getJQuery2) {
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Resource</th>
+              <th class="has-text-warning" style="width:20%">Enabled</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:40%"></th>
+            </tr>
+            <tbody id="script_alchemyTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = getJQuery2("#script_alchemyTableBody"), newTableBodyText = "";
+      for (let row of rows)
+        newTableBodyText += `<tr><td id="script_alchemy_${row.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"></td></tr>`;
+      tableBodyNode.append(getJQuery2(newTableBodyText));
+      for (let row of rows) {
+        let node = getJQuery2(`#script_alchemy_${row.id}`);
+        node.append(actions.buildTableLabel(row.label, "", row.color)), node = node.next(), actions.addTableToggle(node, row.enabledSettingName), node = node.next(), actions.addTableInput(node, row.weightingSettingName);
+      }
+    }
+    function renderPylon(currentNode, rows, actions, getJQuery2) {
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:55%">Ritual</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th style="width:25%"></th>
+            </tr>
+            <tbody id="script_magicTableBodyPylon"></tbody>
+          </table>`);
+      let tableBodyNode = getJQuery2("#script_magicTableBodyPylon"), newTableBodyText = "";
+      for (let row of rows)
+        newTableBodyText += `<tr><td id="script_pylon_${row.id}" style="width:55%"></td><td style="width:20%"></td><td style="width:25%"></td></tr>`;
+      tableBodyNode.append(getJQuery2(newTableBodyText));
+      for (let row of rows) {
+        let node = getJQuery2(`#script_pylon_${row.id}`);
+        node.append(actions.buildTableLabel(row.label)), node = node.next(), actions.addTableInput(node, row.weightingSettingName);
+      }
+    }
+    return Object.freeze({
+      buildMagicSettings,
+      updateMagicSettingsContent
+    });
+  }
+
+  // src/application/magic-settings.ts
+  function createMagicSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-magic-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/adapters/evolve/economy/production/captured-magic-settings-catalog.ts
+  var PYLON_SPELL_LABELS = Object.freeze({
+    farmer: "Farming",
+    miner: "Mining",
+    lumberjack: "Lumber",
+    science: "Science",
+    factory: "Cement",
+    army: "War",
+    hunting: "Hunting",
+    crafting: "Crafting"
+  });
+  function readCapturedMagicResourceTitle(root, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId);
+    if (!isRecord(resource)) return resourceId;
+    let title = readProperty(resource, "title");
+    if (typeof title == "string" && title.length > 0) return title;
+    let name = readProperty(resource, "name");
+    return typeof name == "string" && name.length > 0 ? name : resourceId;
+  }
+  function readCapturedMagicTradable(root, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId);
+    return isRecord(resource) ? readProperty(resource, "tradable") === !0 || readProperty(readProperty(resource, "is"), "tradable") === !0 : !1;
+  }
+  function readCapturedMagicAlchemyEntries(root, controls2) {
+    let { alchemyResourceIds } = readMagicResetContext(controls2);
+    return Object.freeze(
+      alchemyResourceIds.map(
+        (resourceId) => Object.freeze({
+          resourceId,
+          label: readCapturedMagicResourceTitle(root, resourceId),
+          color: readCapturedMagicTradable(root, resourceId) ? "has-text-info" : "has-text-advanced"
+        })
+      )
+    );
+  }
+  function readCapturedMagicPylonEntries() {
+    return Object.freeze(
+      PYLON_SPELL_IDS.map(
+        (spellId) => Object.freeze({
+          spellId,
+          label: PYLON_SPELL_LABELS[spellId] ?? spellId
+        })
+      )
+    );
+  }
+
+  // src/adapters/evolve/economy/production/captured-magic-settings.ts
+  var MAGIC_OVERRIDE_PREFIXES = Object.freeze([
+    "res_alchemy_",
+    "spell_w_"
+  ]);
+  function readCapturedMagicSettingsRecord(raw) {
+    return isRecord(raw) ? raw : {};
+  }
+  function readMagicContext(controls2) {
+    return readMagicResetContext(controls2);
+  }
+  function createCapturedMagicSettingsAdapter({
+    rootState,
+    controls: controls2,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readMagicSettingsReadModel: () => {
+        let root = rootState.readRoot();
+        return createMagicSettingsReadModel({
+          alchemyRows: readCapturedMagicAlchemyEntries(root, controls2).map(
+            (entry) => ({
+              id: entry.resourceId,
+              label: entry.label,
+              color: entry.color,
+              enabledSettingName: `res_alchemy_${entry.resourceId}`,
+              weightingSettingName: `res_alchemy_w_${entry.resourceId}`
+            })
+          ),
+          pylonRows: readCapturedMagicPylonEntries().map((entry) => ({
+            id: entry.spellId,
+            label: entry.label,
+            weightingSettingName: `spell_w_${entry.spellId}`
+          }))
+        });
+      },
+      resetToDefaults() {
+        let raw = readCapturedMagicSettingsRecord(getSettingsRaw()), defaults = computeMagicDefaults(readMagicContext(controls2)).def, overrides = raw.overrides;
+        if (isRecord(overrides) && !Array.isArray(overrides))
+          for (let key of Object.keys(overrides))
+            MAGIC_OVERRIDE_PREFIXES.some((prefix) => key.startsWith(prefix)) && delete overrides[key];
+        Object.assign(raw, defaults);
+      }
+    });
+  }
+
   // src/settings/override-comparators.ts
   function asNumber(value) {
     return typeof value == "symbol" ? Number.NaN : Number(value);
@@ -29103,6 +29366,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     storageSettings: capturedStorageSettings,
     marketSettings: capturedMarketSettings,
     ejectorSettings: capturedEjectorSettings,
+    magicSettings: capturedMagicSettings,
     onDiagnostic = () => {
     },
     logError = () => {
@@ -29238,7 +29502,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -29281,8 +29545,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         buildEjectorSettings: () => ejector?.buildEjectorSettings(),
         buildMarketSettings: () => market?.buildMarketSettings(),
         buildStorageSettings: () => storage?.buildStorageSettings(),
-        buildMagicSettings: () => {
-        },
+        buildMagicSettings: () => magic?.buildMagicSettings(),
         buildProductionSettings: () => {
         },
         buildJobSettings: () => job?.buildJobSettings(),
@@ -29858,6 +30121,44 @@ If script is allowed to reassign non-empty storage it might waste time producing
           )
         });
       }
+      if (capturedMagicSettings !== void 0) {
+        let capturedAdapter = createCapturedMagicSettingsAdapter({
+          rootState: capturedMagicSettings.rootState,
+          controls: capturedMagicSettings.controls,
+          getSettingsRaw: settings.readRaw
+        }), magicIntent;
+        magic = createMagicSettingsBrowserAdapter({
+          getDocument: () => documentForUi,
+          getJQuery: () => getJQuery(),
+          getReadModel: capturedAdapter.readMagicSettingsReadModel,
+          intents: { handle: (intent) => magicIntent.handle(intent) },
+          getActions: () => ({
+            ...simpleActions,
+            addStandardHeading: (node, label) => shell.addStandardHeading(
+              node,
+              label
+            ),
+            addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
+            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
+            buildTableLabel: (label, title, color) => controls2.buildTableLabel(label, title, color)
+          })
+        }), magicIntent = createMagicSettingsIntentHandler({
+          writer: {
+            resetToDefaults: () => {
+              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("magic") : capturedAdapter.resetToDefaults();
+            },
+            persist: persistSettings
+          },
+          renderSettingsContent: () => magic?.updateMagicSettingsContent(),
+          effects: {
+            resetCheckboxes: () => controls2.resetCheckbox(
+              "autoAlchemy",
+              "autoPylon",
+              "magicFullmetalHelper"
+            )
+          }
+        });
+      }
       return settingsUi = {
         general,
         achievementGuard,
@@ -29879,6 +30180,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         ejector,
         ejectToggles,
         supplyToggles,
+        magic,
         craftToggles,
         shell
       }, settingsUi;
@@ -29903,7 +30205,7 @@ Only continue if you trust the source. Injected code:
       let ui = ensureSettingsUi(dom);
       ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings());
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings(), ui.magic?.buildMagicSettings());
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
     }, createArpaToggles = () => {
@@ -32749,6 +33051,10 @@ Only continue if you trust the source. Injected code:
         controls: pageCapture2.controls
       },
       ejectorSettings: {
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls
+      },
+      magicSettings: {
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls
       },

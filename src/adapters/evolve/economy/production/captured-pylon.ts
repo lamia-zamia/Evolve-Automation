@@ -12,7 +12,12 @@ import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export const PYLON_CONTROL = "iPylon";
-const SPELL_IDS = [
+/**
+ * The fixed ritual set the pylon automation clicks, in panel order. Shared
+ * with the settings catalog and the lifecycle defaults so the `spell_w_`
+ * keys cannot drift from the automation.
+ */
+export const PYLON_SPELL_IDS: readonly string[] = Object.freeze([
   "farmer",
   "miner",
   "lumberjack",
@@ -21,7 +26,7 @@ const SPELL_IDS = [
   "army",
   "hunting",
   "crafting",
-] as const;
+]);
 
 const DEFAULT_SPELL_WEIGHTING = 100;
 const DEFAULT_HUNTING_WEIGHTING = 10;
@@ -144,7 +149,7 @@ function readPylonInput(dependencies: CapturedPylonDependencies): {
   }
 
   const spells = [];
-  for (const id of SPELL_IDS) {
+  for (const id of PYLON_SPELL_IDS) {
     if (!spellAvailable(id, race, magic)) continue;
     const currentSpells = finite(readProperty(casting, id));
     if (currentSpells === undefined || currentSpells < 0) continue;

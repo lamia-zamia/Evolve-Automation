@@ -45,6 +45,7 @@ import {
 import { readCapturedJobResetContext } from "./civic/captured-job-catalog.ts";
 import { capturedGalaxyOfferIdentities } from "./economy/market/captured-galaxy-market.ts";
 import { ALCHEMY_CONTROL_PREFIX } from "./economy/production/captured-alchemy.ts";
+import { PYLON_SPELL_IDS } from "./economy/production/captured-pylon.ts";
 import { isRecord, readProperty } from "../validation.ts";
 import {
   readCapturedBuildingBindingMap,
@@ -288,6 +289,21 @@ function readBuildingContext(
   };
 }
 
+/**
+ * The magic settings catalog: alchemy resources in captured-control order and
+ * the fixed ritual set. Shared with the captured magic settings adapter so the
+ * table and the defaults cannot disagree. Previously the ritual half defaulted
+ * to nothing on this path.
+ */
+export function readMagicResetContext(
+  controls: GameControlRegistry,
+): MagicResetContext {
+  return {
+    alchemyResourceIds: readControlSuffixIds(controls, ALCHEMY_CONTROL_PREFIX),
+    ritualProductionIds: [...PYLON_SPELL_IDS],
+  };
+}
+
 function readProduction(root: unknown): ProductionResetContext {
   const ids = readResources(root).map(([id]) => id);
   const identityMap = Object.fromEntries(ids.map((id) => [id, id]));
@@ -391,13 +407,7 @@ export function createCapturedSettingsDefaults({
     readBuilding: () =>
       readBuildingContext(readRootSafely(rootState), controls),
     readProject: () => readProjects(readRootSafely(rootState)),
-    readMagic: (): MagicResetContext => ({
-      alchemyResourceIds: readControlSuffixIds(
-        controls,
-        ALCHEMY_CONTROL_PREFIX,
-      ),
-      ritualProductionIds: [],
-    }),
+    readMagic: (): MagicResetContext => readMagicResetContext(controls),
     readProduction: () => readProduction(readRootSafely(rootState)),
     readEjector: () => readEjector(readRootSafely(rootState), controls),
   };
