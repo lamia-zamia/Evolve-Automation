@@ -352,6 +352,10 @@ export function startCapturedRuntime({
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
     },
+    storageSettings: {
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+    },
     onDiagnostic: (message) => reportDiagnostic(message),
     logError: (message) => logError(message),
   });

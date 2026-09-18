@@ -199,7 +199,8 @@ const toggleReader = createResourceToggleEvolveAdapter({
 });
 const toggleUI = createResourceToggleBrowserAdapter({
   getJQuery: () => jquery,
-  reader: toggleReader,
+  marketReader: toggleReader,
+  storageReader: toggleReader,
   addToggleCallbacks: (node, key) => {
     toggleKeys.push(key);
     return node;

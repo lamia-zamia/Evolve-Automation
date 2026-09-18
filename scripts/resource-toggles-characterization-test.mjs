@@ -103,6 +103,7 @@ assert.deepEqual(Object.keys(hooks.resourceToggles), [
   "createMarketToggles",
   "removeMarketToggles",
   "createStorageToggles",
+  "ensureStorageToggles",
   "removeStorageToggles",
 ]);
 

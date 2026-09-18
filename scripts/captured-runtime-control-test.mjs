@@ -1153,11 +1153,13 @@ assert.equal(unsubscribeCount, 1);
 // expected-phase constant. The always-on building preflight consumes the first root failure, and
 // the captured mercenary phase is included before the existing spy/espionage/battle sequence. The
 // extra bootstrap reads are the captured settings catalogs sampled before feature phases; they
-// return the root unchanged so the original phase-failure boundary remains observable.
+// return the root unchanged so the original phase-failure boundary remains observable. The count
+// is exact: the storage reset context samples the root once, so adding or removing a bootstrap
+// root read moves the failure window and this number moves with it.
 {
   const phaseFailures = [];
   const observedPhases = [];
-  let bootstrapRootReads = 20;
+  let bootstrapRootReads = 17;
   let remainingRootFailures = 4;
   let validCombatRootReads = 0;
   const root = {

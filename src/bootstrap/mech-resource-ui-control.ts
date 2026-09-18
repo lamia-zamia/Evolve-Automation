@@ -63,7 +63,8 @@ export function createMechResourceUiControl({
   });
   const resourceToggleBrowser = createResourceToggleBrowserAdapter({
     getJQuery: getResourceToggleJQuery,
-    reader: resourceToggleReader,
+    marketReader: resourceToggleReader,
+    storageReader: resourceToggleReader,
     addToggleCallbacks,
   });
 

@@ -117,7 +117,8 @@ function node(selector) {
 const jquery = (selector) => node(String(selector));
 const browserAdapter = createResourceToggleBrowserAdapter({
   getJQuery: () => jquery,
-  reader,
+  marketReader: reader,
+  storageReader: reader,
   addToggleCallbacks: (toggle, settingKey) => {
     callbackKeys.push(settingKey);
     return toggle;
@@ -153,6 +154,24 @@ assert.equal(
 
 trace.length = 0;
 browserAdapter.removeStorageToggles();
+assert.deepEqual(
+  trace
+    .filter((entry) => entry.kind === "remove")
+    .map((entry) => entry.selector),
+  ["#resStorage .ea-storage-toggle", "#script_storage_top_row"],
+);
+
+// ensureStorageToggles repairs toggles the game's own redraw dropped.
+lengths.set("#resStorage .ea-storage-toggle", 0);
+trace.length = 0;
+callbackKeys.length = 0;
+browserAdapter.ensureStorageToggles();
+assert.deepEqual(callbackKeys, ["res_storageIron", "res_storage_o_Iron"]);
+
+// Without the panel there is nothing to repair; a stale count is cleared.
+lengths.set("#resStorage", 0);
+trace.length = 0;
+browserAdapter.ensureStorageToggles();
 assert.deepEqual(
   trace
     .filter((entry) => entry.kind === "remove")

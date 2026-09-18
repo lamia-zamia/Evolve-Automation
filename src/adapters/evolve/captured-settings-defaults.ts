@@ -202,6 +202,29 @@ function readKnownResourceId(root: unknown, id: string): string {
     : "";
 }
 
+/**
+ * The resources the storage settings govern, in table order: every resource
+ * whose root record is stackable, plus any `stack-<id>` row the page captured
+ * for a resource the root does not flag. Shared with the captured storage
+ * settings adapter so the table and the defaults cannot disagree.
+ */
+export function readStorageResetContext(
+  root: unknown,
+  controls: GameControlRegistry,
+): StorageResetContext {
+  return {
+    storableResourceIds: mergeResourceIds(
+      root,
+      "stackable",
+      controls,
+      "stack-",
+    ),
+    orichalcumId: readKnownResourceId(root, "Orichalcum"),
+    vitreloyId: readKnownResourceId(root, "Vitreloy"),
+    bolognumId: readKnownResourceId(root, "Bolognium"),
+  };
+}
+
 function readGovernment(): GovernmentResetContext {
   // DeadSpace's GovernmentManager.Types has these stable ids; no manager read is needed for the
   // captured path, and the values are verified against civics.js at the port reference commit.
@@ -327,20 +350,8 @@ export function createCapturedSettingsDefaults({
       ),
       galaxyOfferResourceIds: [],
     }),
-    readStorage: (): StorageResetContext => ({
-      storableResourceIds: mergeResourceIds(
-        readRootSafely(rootState),
-        "stackable",
-        controls,
-        "stack-",
-      ),
-      orichalcumId: readKnownResourceId(
-        readRootSafely(rootState),
-        "Orichalcum",
-      ),
-      vitreloyId: readKnownResourceId(readRootSafely(rootState), "Vitreloy"),
-      bolognumId: readKnownResourceId(readRootSafely(rootState), "Bolognium"),
-    }),
+    readStorage: (): StorageResetContext =>
+      readStorageResetContext(readRootSafely(rootState), controls),
     readMinorTrait: (): MinorTraitResetContext => ({
       traitNames: [],
       ocularPowerIds: [],

@@ -21619,6 +21619,19 @@
   function readKnownResourceId(root, id) {
     return readResources(root).some(([resourceId]) => resourceId === id) ? id : "";
   }
+  function readStorageResetContext(root, controls2) {
+    return {
+      storableResourceIds: mergeResourceIds(
+        root,
+        "stackable",
+        controls2,
+        "stack-"
+      ),
+      orichalcumId: readKnownResourceId(root, "Orichalcum"),
+      vitreloyId: readKnownResourceId(root, "Vitreloy"),
+      bolognumId: readKnownResourceId(root, "Bolognium")
+    };
+  }
   function readGovernment() {
     return {
       democracyId: "democracy",
@@ -21704,20 +21717,7 @@
         ),
         galaxyOfferResourceIds: []
       }),
-      readStorage: () => ({
-        storableResourceIds: mergeResourceIds(
-          readRootSafely(rootState),
-          "stackable",
-          controls2,
-          "stack-"
-        ),
-        orichalcumId: readKnownResourceId(
-          readRootSafely(rootState),
-          "Orichalcum"
-        ),
-        vitreloyId: readKnownResourceId(readRootSafely(rootState), "Vitreloy"),
-        bolognumId: readKnownResourceId(readRootSafely(rootState), "Bolognium")
-      }),
+      readStorage: () => readStorageResetContext(readRootSafely(rootState), controls2),
       readMinorTrait: () => ({
         traitNames: [],
         ocularPowerIds: []
@@ -24567,6 +24567,431 @@
     });
   }
 
+  // src/domain/economy/storage/storage-settings.ts
+  function freezeRow3(row) {
+    return Object.freeze({ ...row });
+  }
+  function createStorageSettingsReadModel(rows) {
+    return Object.freeze({
+      sectionId: "storage",
+      sectionName: "Storage",
+      controls: Object.freeze([
+        Object.freeze({
+          settingName: "storageLimitPreMad",
+          label: "Limit Pre-MAD Storage",
+          hint: "Saves resources and shortens run time by limiting storage pre-MAD"
+        }),
+        Object.freeze({
+          settingName: "storageSafeReassign",
+          label: "Reassign only empty storages",
+          hint: "Wait until storage is empty before reassigning containers to another resource, to prevent overflowing and wasting resources"
+        }),
+        Object.freeze({
+          settingName: "storageAssignExtra",
+          label: "Assign buffer storage",
+          hint: "Assigns 3% extra strorage above required amounts, ensuring that required quantity will be actually reached, even if other part of script trying to sell\\eject\\switch production, etc. When manual trades enabled applies additional adjust derieved from selling threshold."
+        }),
+        Object.freeze({
+          settingName: "storageAssignPart",
+          label: "Assign partial storage",
+          hint: `When enabled script will be allowed to assign some crates and containers even if resulting storage space won't be enough to build new building. It allows to pre-build stock of resources for further use, but can be potentially dungerous.
+If script not allowed to reassign non-empty storage it can lock storage in position when stored resources can't be used.
+If script is allowed to reassign non-empty storage it might waste time producing materials which might need to be disposed.`
+        })
+      ]),
+      rows: Object.freeze(rows.map(freezeRow3))
+    });
+  }
+
+  // src/adapters/browser/storage-settings.ts
+  function createStorageSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildStorageSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-storage-settings" }),
+        updateStorageSettingsContent
+      );
+    }
+    function updateStorageSettingsContent() {
+      let readModel = getReadModel(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderStorageContent(currentNode, readModel, actions);
+        }
+      );
+    }
+    function renderStorageContent(currentNode, readModel, actions) {
+      for (let control of readModel.controls)
+        renderControl(currentNode, control, actions);
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Resource</th>
+              <th class="has-text-warning" style="width:15%">Enabled</th>
+              <th class="has-text-warning" style="width:15%">Store Overflow</th>
+              <th class="has-text-warning" style="width:15%">Min Storage</th>
+              <th class="has-text-warning" style="width:15%">Max Storage</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_storageTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = getJQuery()("#script_storageTableBody"), newTableBodyText = "";
+      for (let row of readModel.rows)
+        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_storage_${row.id}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      tableBodyNode.append(getJQuery()(newTableBodyText));
+      for (let row of readModel.rows) {
+        let storageElement = getJQuery()(`#script_storage_${row.id}`);
+        storageElement.append(actions.buildTableLabel(row.label)), storageElement = storageElement.next(), actions.addTableToggle(storageElement, row.enabledSettingName), storageElement = storageElement.next(), actions.addTableToggle(storageElement, row.overflowSettingName), storageElement = storageElement.next(), actions.addTableInput(storageElement, row.minimumSettingName), storageElement = storageElement.next(), actions.addTableInput(storageElement, row.maximumSettingName);
+      }
+      actions.getTableSorter().attach(tableBodyNode[0], {
+        items: "tr:not(.unsortable)",
+        attribute: "value",
+        onOrderChanged: (resourceIds) => {
+          intents.handle({ type: "reorder-storage-resources", resourceIds });
+        }
+      });
+    }
+    function renderControl(node, control, actions) {
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    return Object.freeze({
+      buildStorageSettings,
+      updateStorageSettingsContent
+    });
+  }
+
+  // src/application/storage-settings.ts
+  function createStorageSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-storage-settings":
+            writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckbox(), effects.removeStorageToggles();
+            return;
+          case "reorder-storage-resources":
+            writer.reorderResources(intent.resourceIds), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/adapters/evolve/economy/storage/captured-storage-settings-catalog.ts
+  function readCapturedStorageResourceTitle(root, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId);
+    if (!isRecord(resource)) return resourceId;
+    let title = readProperty(resource, "title");
+    if (typeof title == "string" && title.length > 0) return title;
+    let name = readProperty(resource, "name");
+    return typeof name == "string" && name.length > 0 ? name : resourceId;
+  }
+  function readCapturedStorageSettingsEntries(root, controls2) {
+    let { storableResourceIds } = readStorageResetContext(root, controls2);
+    return Object.freeze(
+      storableResourceIds.map(
+        (resourceId) => Object.freeze({
+          resourceId,
+          elementId: `stack-${resourceId}`,
+          label: readCapturedStorageResourceTitle(root, resourceId)
+        })
+      )
+    );
+  }
+
+  // src/adapters/evolve/economy/storage/captured-storage-settings.ts
+  var STORAGE_OVERRIDE_PREFIXES = Object.freeze([
+    "res_storage",
+    "res_min_store",
+    "res_max_store",
+    "res_containers_m_",
+    "res_crates_m_"
+  ]);
+  function readCapturedStorageSettingsRecord(raw) {
+    return isRecord(raw) ? raw : {};
+  }
+  function finiteStoragePriority(value, fallback) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function sortCapturedStorageEntries(entries, raw) {
+    return Object.freeze(
+      entries.map((entry, index) => ({
+        entry,
+        index,
+        priority: finiteStoragePriority(
+          raw[`res_storage_p_${entry.resourceId}`],
+          index
+        )
+      })).sort(
+        (left, right) => left.priority - right.priority || left.index - right.index
+      ).map(({ entry }) => entry)
+    );
+  }
+  function readStorageContext(rootState, controls2) {
+    return readStorageResetContext(rootState.readRoot(), controls2);
+  }
+  function createCapturedStorageSettingsAdapter({
+    rootState,
+    controls: controls2,
+    getSettingsRaw
+  }) {
+    let readStorageEntriesForSettings = () => readCapturedStorageSettingsEntries(rootState.readRoot(), controls2);
+    return Object.freeze({
+      readStorageSettingsReadModel: () => {
+        let raw = readCapturedStorageSettingsRecord(getSettingsRaw()), entries = sortCapturedStorageEntries(
+          readStorageEntriesForSettings(),
+          raw
+        );
+        return createStorageSettingsReadModel(
+          entries.map((entry) => ({
+            id: entry.resourceId,
+            label: entry.label,
+            enabledSettingName: `res_storage${entry.resourceId}`,
+            overflowSettingName: `res_storage_o_${entry.resourceId}`,
+            minimumSettingName: `res_min_store${entry.resourceId}`,
+            maximumSettingName: `res_max_store${entry.resourceId}`
+          }))
+        );
+      },
+      resetToDefaults() {
+        let raw = readCapturedStorageSettingsRecord(getSettingsRaw()), defaults = computeStorageDefaults(
+          readStorageContext(rootState, controls2)
+        ).def, overrides = raw.overrides;
+        if (isRecord(overrides) && !Array.isArray(overrides))
+          for (let key of Object.keys(overrides))
+            STORAGE_OVERRIDE_PREFIXES.some((prefix) => key.startsWith(prefix)) && delete overrides[key];
+        Object.assign(raw, defaults);
+      },
+      resetPriorities() {
+        let raw = readCapturedStorageSettingsRecord(getSettingsRaw()), { storableResourceIds } = readStorageContext(rootState, controls2);
+        storableResourceIds.forEach((resourceId, index) => {
+          raw[`res_storage_p_${resourceId}`] = index;
+        });
+      },
+      reorderResources(resourceIds) {
+        let known = new Set(
+          readStorageEntriesForSettings().map((entry) => entry.resourceId)
+        ), raw = readCapturedStorageSettingsRecord(getSettingsRaw());
+        resourceIds.forEach((resourceId, index) => {
+          known.has(resourceId) && (raw[`res_storage_p_${resourceId}`] = index);
+        });
+      }
+    });
+  }
+
+  // src/adapters/evolve/economy/storage/captured-storage-toggles.ts
+  function createCapturedStorageToggleReader({
+    rootState,
+    controls: controls2,
+    getDocument,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readStorage() {
+        let settings = getSettingsRaw(), entries = readCapturedStorageSettingsEntries(
+          rootState.readRoot(),
+          controls2
+        );
+        return Object.freeze({
+          items: Object.freeze(
+            entries.filter((entry) => {
+              let element = getDocument().getElementById(entry.elementId);
+              return element != null;
+            }).map(
+              (entry) => Object.freeze({
+                resourceId: entry.resourceId,
+                storeKey: `res_storage${entry.resourceId}`,
+                overKey: `res_storage_o_${entry.resourceId}`,
+                storeEnabled: isRecord(settings) && settings[`res_storage${entry.resourceId}`] === !0,
+                overEnabled: isRecord(settings) && settings[`res_storage_o_${entry.resourceId}`] === !0
+              })
+            )
+          )
+        });
+      }
+    });
+  }
+
+  // src/adapters/browser/resource-toggles.ts
+  function createMarketHeader(view) {
+    return `
+          <div class="market-item vb" id="script_market_top_row" style="overflow:hidden">
+            <span style="margin-left: auto; margin-right: 0.2rem; float:right;">
+              ${view.noTrade ? "" : `
+              <span class="has-text-success" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Buy</span>
+              <span class="has-text-danger" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Sell</span>`}
+              <span class="has-text-warning" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">In</span>
+              <span class="has-text-warning" style="width: 2.75rem; display: inline-block; text-align: center;">Away</span>
+            </span>
+          </div>`;
+  }
+  function createMarketToggleMarkup(title, settingKey, enabled) {
+    return `<label tabindex="0" title="${title}" class="switch"><input class="script_${settingKey}" type="checkbox"${enabled ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`;
+  }
+  function createStorageToggleMarkup(title, settingKey, enabled) {
+    return createMarketToggleMarkup(title, settingKey, enabled);
+  }
+  function createMarketRow(view, item, jquery, addToggleCallbacks) {
+    let marketRow = jquery(
+      '<span class="ea-market-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>'
+    );
+    return view.noTrade || marketRow.append(
+      addToggleCallbacks(
+        jquery(
+          createMarketToggleMarkup(
+            "Enable buying of this resource.",
+            item.buyKey,
+            item.buyEnabled
+          )
+        ),
+        item.buyKey
+      ),
+      addToggleCallbacks(
+        jquery(
+          createMarketToggleMarkup(
+            "Enable selling of this resource.",
+            item.sellKey,
+            item.sellEnabled
+          )
+        ),
+        item.sellKey
+      )
+    ), marketRow.append(
+      addToggleCallbacks(
+        jquery(
+          createMarketToggleMarkup(
+            "Enable trading for this resource.",
+            item.tradeBuyKey,
+            item.tradeBuyEnabled
+          )
+        ),
+        item.tradeBuyKey
+      ),
+      addToggleCallbacks(
+        jquery(
+          createMarketToggleMarkup(
+            "Enable trading this resource away.",
+            item.tradeSellKey,
+            item.tradeSellEnabled
+          )
+        ),
+        item.tradeSellKey
+      )
+    ), marketRow;
+  }
+  function createStorageRow(item, jquery, addToggleCallbacks) {
+    return jquery(
+      '<span class="ea-storage-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>'
+    ).append(
+      addToggleCallbacks(
+        jquery(
+          createStorageToggleMarkup(
+            "Enable storing of this resource.",
+            item.storeKey,
+            item.storeEnabled
+          )
+        ),
+        item.storeKey
+      ),
+      addToggleCallbacks(
+        jquery(
+          createStorageToggleMarkup(
+            "Enable storing overflow of this resource.",
+            item.overKey,
+            item.overEnabled
+          )
+        ),
+        item.overKey
+      )
+    );
+  }
+  function createResourceToggleBrowserAdapter({
+    getJQuery,
+    marketReader,
+    storageReader,
+    addToggleCallbacks
+  }) {
+    let lastCreatedStorageCount = 0;
+    function createMarketToggles() {
+      removeMarketToggles();
+      let jquery = getJQuery(), view = marketReader.readMarket();
+      view.noTrade || (jquery("#market .market-item[id] .res").width("5rem"), jquery("#market .market-item[id] .buy span").text("B"), jquery("#market .market-item[id] .sell span").text("S"), jquery("#market .market-item[id] .trade > :first-child").text("R"), jquery("#market .market-item[id] .trade .zero").text("×")), jquery("#market-qty").after(createMarketHeader(view));
+      for (let item of view.items) {
+        let marketElement = jquery(`#market-${item.resourceId}`);
+        marketElement.length !== 0 && createMarketRow(view, item, jquery, addToggleCallbacks).appendTo(
+          marketElement
+        );
+      }
+    }
+    function removeMarketToggles() {
+      let jquery = getJQuery(), view = marketReader.readMarket();
+      jquery("#market .ea-market-toggle").remove(), jquery("#script_market_top_row").remove(), view.noTrade || (jquery("#market .market-item[id] .res").width("7.5rem"), jquery("#market .market-item[id] .buy span").text(view.labels.buy), jquery("#market .market-item[id] .sell span").text(view.labels.sell), jquery("#market .market-item[id] .trade > :first-child").text(
+        view.labels.routes
+      ), jquery("#market .market-item[id] .trade .zero").text(
+        view.labels.cancelRoutes
+      ));
+    }
+    function createStorageToggles() {
+      removeStorageToggles();
+      let jquery = getJQuery(), view = storageReader.readStorage(), count2 = 0;
+      jquery("#createHead").after(`
+          <div class="market-item vb" id="script_storage_top_row" style="overflow:hidden">
+            <span style="margin-left: auto; margin-right: 0.2rem; float:right;">
+              <span class="has-text-warning" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Auto</span>
+              <span class="has-text-warning" style="width: 2.75rem; display: inline-block; text-align: center;">Over</span>
+            </span>
+          </div>`);
+      for (let item of view.items) {
+        let storageElement = jquery(`#stack-${item.resourceId}`);
+        storageElement.length !== 0 && (createStorageRow(item, jquery, addToggleCallbacks).appendTo(
+          storageElement
+        ), count2++);
+      }
+      lastCreatedStorageCount = count2;
+    }
+    function ensureStorageToggles() {
+      let jquery = getJQuery();
+      if (jquery("#resStorage").length === 0) {
+        lastCreatedStorageCount !== 0 && removeStorageToggles();
+        return;
+      }
+      let currentCount3 = jquery("#resStorage .ea-storage-toggle").length;
+      (currentCount3 === 0 || currentCount3 !== lastCreatedStorageCount) && createStorageToggles();
+    }
+    function removeStorageToggles() {
+      let jquery = getJQuery();
+      jquery("#resStorage .ea-storage-toggle").remove(), jquery("#script_storage_top_row").remove(), lastCreatedStorageCount = 0;
+    }
+    return Object.freeze({
+      createMarketToggles,
+      removeMarketToggles,
+      createStorageToggles,
+      ensureStorageToggles,
+      removeStorageToggles
+    });
+  }
+
   // src/settings/override-comparators.ts
   function asNumber(value) {
     return typeof value == "symbol" ? Number.NaN : Number(value);
@@ -25819,7 +26244,7 @@
   function freezeBreakpoint(breakpoint) {
     return Object.freeze({ ...breakpoint });
   }
-  function freezeRow3(row) {
+  function freezeRow4(row) {
     return Object.freeze({
       ...row,
       breakpoints: Object.freeze(
@@ -25895,7 +26320,7 @@
           hint: "Civilians kept out of ship crew and available for jobs. Enter an absolute count (e.g. 800) or a percentage of population (e.g. 50%). When ship crew exceeds population minus this reserve, the lowest-value crewed ships (trade freighters first, combat ships last) are idled to return workers to jobs. 0 disables it."
         })
       ]),
-      rows: Object.freeze(rows.map(freezeRow3))
+      rows: Object.freeze(rows.map(freezeRow4))
     });
   }
 
@@ -27862,6 +28287,7 @@
     craftToggles: capturedCraftToggles,
     buildingSettings: capturedBuildingSettings,
     projectSettings: capturedProjectSettings,
+    storageSettings: capturedStorageSettings,
     onDiagnostic = () => {
     },
     logError = () => {
@@ -27997,7 +28423,7 @@
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -28041,8 +28467,7 @@
         },
         buildMarketSettings: () => {
         },
-        buildStorageSettings: () => {
-        },
+        buildStorageSettings: () => storage?.buildStorageSettings(),
         buildMagicSettings: () => {
         },
         buildProductionSettings: () => {
@@ -28443,6 +28868,55 @@
           )
         });
       }
+      if (capturedStorageSettings !== void 0) {
+        let capturedAdapter = createCapturedStorageSettingsAdapter({
+          rootState: capturedStorageSettings.rootState,
+          controls: capturedStorageSettings.controls,
+          getSettingsRaw: settings.readRaw
+        }), storageIntent;
+        storage = createStorageSettingsBrowserAdapter({
+          getDocument: () => documentForUi,
+          getJQuery: () => getJQuery(),
+          getReadModel: capturedAdapter.readStorageSettingsReadModel,
+          intents: { handle: (intent) => storageIntent.handle(intent) },
+          getActions: () => ({
+            ...simpleActions,
+            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
+            buildTableLabel: (label) => controls2.buildTableLabel(label),
+            getTableSorter: () => tableSorter
+          })
+        }), storageIntent = createStorageSettingsIntentHandler({
+          writer: {
+            resetToDefaults: () => {
+              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("storage") : capturedAdapter.resetToDefaults();
+            },
+            persist: persistSettings,
+            reorderResources: capturedAdapter.reorderResources
+          },
+          renderSettingsContent: () => storage?.updateStorageSettingsContent(),
+          effects: {
+            resetCheckbox: () => controls2.resetCheckbox("autoStorage"),
+            removeStorageToggles: () => storageToggles?.removeStorageToggles()
+          }
+        }), storageToggles = createResourceToggleBrowserAdapter({
+          getJQuery: () => getJQuery(),
+          marketReader: {
+            readMarket: () => {
+              throw new Error("market toggles are not ported yet");
+            }
+          },
+          storageReader: createCapturedStorageToggleReader({
+            rootState: capturedStorageSettings.rootState,
+            controls: capturedStorageSettings.controls,
+            getDocument: () => documentForUi,
+            getSettingsRaw: settings.readRaw
+          }),
+          addToggleCallbacks: (node, settingName) => controls2.addToggleCallbacks(
+            node,
+            settingName
+          )
+        });
+      }
       return settingsUi = {
         general,
         achievementGuard,
@@ -28457,6 +28931,8 @@
         buildingToggles,
         project,
         arpaToggles,
+        storage,
+        storageToggles,
         craftToggles,
         shell
       }, settingsUi;
@@ -28481,7 +28957,7 @@ Only continue if you trust the source. Injected code:
       let ui = ensureSettingsUi(dom);
       ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings());
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings());
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
     }, createArpaToggles = () => {
@@ -28498,6 +28974,20 @@ Only continue if you trust the source. Injected code:
         return;
       }
       adapter.removeArpaToggles();
+    }, createStorageToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).storageToggles;
+      if (adapter === void 0) {
+        unported("storage toggles")();
+        return;
+      }
+      adapter.createStorageToggles();
+    }, removeStorageToggles = () => {
+      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).storageToggles;
+      if (adapter === void 0) {
+        unported("storage toggles")();
+        return;
+      }
+      adapter.removeStorageToggles();
     }, createCraftToggles = () => {
       let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).craftToggles;
       if (adapter === void 0) {
@@ -28584,8 +29074,8 @@ Only continue if you trust the source. Injected code:
         removeBuildingToggles,
         createArpaToggles,
         removeArpaToggles,
-        createStorageToggles: unported("storage toggles"),
-        removeStorageToggles: unported("storage toggles"),
+        createStorageToggles,
+        removeStorageToggles,
         createMarketToggles: unported("market toggles"),
         removeMarketToggles: unported("market toggles"),
         createEjectToggles: unported("eject toggles"),
@@ -28601,7 +29091,7 @@ Only continue if you trust the source. Injected code:
       ensurePanel() {
         if (getQuery() !== void 0)
           try {
-            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), optionsModal.createOptionsModal(), settings.readRaw().showSettings === !0 && buildScriptSettings();
+            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), settings.readRaw().autoStorage === !0 ? settingsUi?.storageToggles?.ensureStorageToggles() : settingsUi?.storageToggles?.removeStorageToggles(), optionsModal.createOptionsModal(), settings.readRaw().showSettings === !0 && buildScriptSettings();
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }
@@ -31259,6 +31749,10 @@ Only continue if you trust the source. Injected code:
         costs: buildCosts
       },
       projectSettings: {
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls
+      },
+      storageSettings: {
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls
       },

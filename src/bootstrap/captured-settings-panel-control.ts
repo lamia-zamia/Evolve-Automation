@@ -6,7 +6,7 @@
  * of to the legacy closure; game-backed sections remain outside this slice until their captures exist.
  *
  * TRANSITIONAL: the remaining per-section builders (the Settings tab, and the toggle strips
- * injected into the game's own Storage/Market/Eject/Supply panels) are still unavailable on
+ * injected into the game's own Market/Eject/Supply panels) are still unavailable on
  * the captured path. They are diagnosed once by name rather than silently doing nothing. Automation
  * itself does not depend on any of them — it reads the same settings record this panel writes.
  */
@@ -33,6 +33,14 @@ import { createProjectSettingsIntentHandler } from "../application/project-setti
 import { createCapturedProjectSettingsAdapter } from "../adapters/evolve/progression/research/captured-project-settings.ts";
 import { createCapturedArpaToggleReader } from "../adapters/evolve/progression/research/captured-arpa-toggles.ts";
 import { createArpaToggleBrowserAdapter } from "../adapters/browser/arpa-toggles.ts";
+import {
+  createStorageSettingsBrowserAdapter,
+  type StorageSettingsBrowserActions,
+} from "../adapters/browser/storage-settings.ts";
+import { createStorageSettingsIntentHandler } from "../application/storage-settings.ts";
+import { createCapturedStorageSettingsAdapter } from "../adapters/evolve/economy/storage/captured-storage-settings.ts";
+import { createCapturedStorageToggleReader } from "../adapters/evolve/economy/storage/captured-storage-toggles.ts";
+import { createResourceToggleBrowserAdapter } from "../adapters/browser/resource-toggles.ts";
 import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
@@ -202,6 +210,23 @@ type ArpaToggleJQuery = ReturnType<
 type ArpaToggleNode = Parameters<
   Parameters<typeof createArpaToggleBrowserAdapter>[0]["addToggleCallbacks"]
 >[0];
+type StorageSettings = ReturnType<typeof createStorageSettingsBrowserAdapter>;
+type StorageToggles = ReturnType<typeof createResourceToggleBrowserAdapter>;
+type StorageSettingsDocument = ReturnType<
+  Parameters<typeof createStorageSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type StorageSettingsJQuery = ReturnType<
+  Parameters<typeof createStorageSettingsBrowserAdapter>[0]["getJQuery"]
+>;
+type StorageToggleDocument = ReturnType<
+  Parameters<typeof createCapturedStorageToggleReader>[0]["getDocument"]
+>;
+type StorageToggleJQuery = ReturnType<
+  Parameters<typeof createResourceToggleBrowserAdapter>[0]["getJQuery"]
+>;
+type StorageToggleNode = Parameters<
+  Parameters<typeof createResourceToggleBrowserAdapter>[0]["addToggleCallbacks"]
+>[0];
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
@@ -222,6 +247,10 @@ export interface CapturedSettingsPanelDependencies {
     readonly costs?: GameActionCostReader;
   };
   readonly projectSettings?: {
+    readonly rootState: GameRootStateSource;
+    readonly controls: GameControlRegistry;
+  };
+  readonly storageSettings?: {
     readonly rootState: GameRootStateSource;
     readonly controls: GameControlRegistry;
   };
@@ -310,6 +339,7 @@ export function createCapturedSettingsPanel({
   craftToggles: capturedCraftToggles,
   buildingSettings: capturedBuildingSettings,
   projectSettings: capturedProjectSettings,
+  storageSettings: capturedStorageSettings,
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -458,6 +488,8 @@ export function createCapturedSettingsPanel({
         readonly buildingToggles: BuildingToggles | undefined;
         readonly project: ProjectSettings | undefined;
         readonly arpaToggles: ArpaToggles | undefined;
+        readonly storage: StorageSettings | undefined;
+        readonly storageToggles: StorageToggles | undefined;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -587,6 +619,8 @@ export function createCapturedSettingsPanel({
     let buildingToggles: BuildingToggles | undefined;
     let project: ProjectSettings | undefined;
     let arpaToggles: ArpaToggles | undefined;
+    let storage: StorageSettings | undefined;
+    let storageToggles: StorageToggles | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -627,7 +661,7 @@ export function createCapturedSettingsPanel({
       buildFleetSettings: () => {},
       buildEjectorSettings: () => {},
       buildMarketSettings: () => {},
-      buildStorageSettings: () => {},
+      buildStorageSettings: () => storage?.buildStorageSettings(),
       buildMagicSettings: () => {},
       buildProductionSettings: () => {},
       buildJobSettings: () => job?.buildJobSettings(),
@@ -1162,6 +1196,65 @@ export function createCapturedSettingsPanel({
           ) as unknown as ArpaToggleNode,
       });
     }
+    if (capturedStorageSettings !== undefined) {
+      const capturedAdapter = createCapturedStorageSettingsAdapter({
+        rootState: capturedStorageSettings.rootState,
+        controls: capturedStorageSettings.controls,
+        getSettingsRaw: settings.readRaw,
+      });
+      let storageIntent: ReturnType<typeof createStorageSettingsIntentHandler>;
+      storage = createStorageSettingsBrowserAdapter({
+        getDocument: () => documentForUi as unknown as StorageSettingsDocument,
+        getJQuery: () => getJQuery() as unknown as StorageSettingsJQuery,
+        getReadModel: capturedAdapter.readStorageSettingsReadModel,
+        intents: { handle: (intent) => storageIntent.handle(intent) },
+        getActions: () =>
+          ({
+            ...simpleActions,
+            addTableToggle: (node: unknown, settingName: string) =>
+              controls.addTableToggle(node as SettingsControlNode, settingName),
+            buildTableLabel: (label: string) => controls.buildTableLabel(label),
+            getTableSorter: () => tableSorter,
+          }) as unknown as StorageSettingsBrowserActions,
+      });
+      storageIntent = createStorageSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("storage");
+            } else {
+              capturedAdapter.resetToDefaults();
+            }
+          },
+          persist: persistSettings,
+          reorderResources: capturedAdapter.reorderResources,
+        },
+        renderSettingsContent: () => storage?.updateStorageSettingsContent(),
+        effects: {
+          resetCheckbox: () => controls.resetCheckbox("autoStorage"),
+          removeStorageToggles: () => storageToggles?.removeStorageToggles(),
+        },
+      });
+      storageToggles = createResourceToggleBrowserAdapter({
+        getJQuery: () => getJQuery() as unknown as StorageToggleJQuery,
+        marketReader: {
+          readMarket: () => {
+            throw new Error("market toggles are not ported yet");
+          },
+        },
+        storageReader: createCapturedStorageToggleReader({
+          rootState: capturedStorageSettings.rootState,
+          controls: capturedStorageSettings.controls,
+          getDocument: () => documentForUi as unknown as StorageToggleDocument,
+          getSettingsRaw: settings.readRaw,
+        }),
+        addToggleCallbacks: (node, settingName) =>
+          controls.addToggleCallbacks(
+            node as unknown as SettingsControlNode,
+            settingName,
+          ) as unknown as StorageToggleNode,
+      });
+    }
     settingsUi = {
       general,
       achievementGuard,
@@ -1176,6 +1269,8 @@ export function createCapturedSettingsPanel({
       buildingToggles,
       project,
       arpaToggles,
+      storage,
+      storageToggles,
       craftToggles,
       shell,
     };
@@ -1240,6 +1335,7 @@ export function createCapturedSettingsPanel({
     }
     ui.building?.buildBuildingSettings();
     ui.project?.buildProjectSettings();
+    ui.storage?.buildStorageSettings();
   };
 
   const removeScriptSettings = () => {
@@ -1266,6 +1362,28 @@ export function createCapturedSettingsPanel({
       return;
     }
     adapter.removeArpaToggles();
+  };
+
+  const createStorageToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).storageToggles;
+    if (adapter === undefined) {
+      unported("storage toggles")();
+      return;
+    }
+    adapter.createStorageToggles();
+  };
+
+  const removeStorageToggles = () => {
+    const dom = getQuery();
+    const adapter =
+      dom === undefined ? undefined : ensureSettingsUi(dom).storageToggles;
+    if (adapter === undefined) {
+      unported("storage toggles")();
+      return;
+    }
+    adapter.removeStorageToggles();
   };
 
   const createCraftToggles = () => {
@@ -1383,8 +1501,8 @@ export function createCapturedSettingsPanel({
       removeBuildingToggles,
       createArpaToggles,
       removeArpaToggles,
-      createStorageToggles: unported("storage toggles"),
-      removeStorageToggles: unported("storage toggles"),
+      createStorageToggles,
+      removeStorageToggles,
       createMarketToggles: unported("market toggles"),
       removeMarketToggles: unported("market toggles"),
       createEjectToggles: unported("eject toggles"),
@@ -1412,6 +1530,11 @@ export function createCapturedSettingsPanel({
           settingsUi?.arpaToggles?.ensureArpaToggles();
         } else {
           settingsUi?.arpaToggles?.removeArpaToggles();
+        }
+        if (settings.readRaw()["autoStorage"] === true) {
+          settingsUi?.storageToggles?.ensureStorageToggles();
+        } else {
+          settingsUi?.storageToggles?.removeStorageToggles();
         }
         optionsModal.createOptionsModal();
         if (settings.readRaw()["showSettings"] === true) buildScriptSettings();

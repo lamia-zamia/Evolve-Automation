@@ -3,7 +3,10 @@ import type {
   MarketToggleView,
   StorageToggleItem,
 } from "../../domain/economy/resources/resource-toggles.ts";
-import type { ResourceToggleReader } from "../../ports/resource-toggles.ts";
+import type {
+  ResourceToggleReader,
+  StorageToggleReader,
+} from "../../ports/resource-toggles.ts";
 
 interface JQueryNode {
   readonly length: number;
@@ -19,7 +22,8 @@ type JQuery = (selector: unknown) => JQueryNode;
 
 export interface ResourceToggleBrowserDependencies {
   readonly getJQuery: () => JQuery;
-  readonly reader: ResourceToggleReader;
+  readonly marketReader: Pick<ResourceToggleReader, "readMarket">;
+  readonly storageReader: StorageToggleReader;
   readonly addToggleCallbacks: (
     node: JQueryNode,
     settingKey: string,
@@ -30,6 +34,7 @@ export interface ResourceToggleBrowserAdapter {
   createMarketToggles(): void;
   removeMarketToggles(): void;
   createStorageToggles(): void;
+  ensureStorageToggles(): void;
   removeStorageToggles(): void;
 }
 
@@ -159,13 +164,16 @@ function createStorageRow(
 
 export function createResourceToggleBrowserAdapter({
   getJQuery,
-  reader,
+  marketReader,
+  storageReader,
   addToggleCallbacks,
 }: ResourceToggleBrowserDependencies): ResourceToggleBrowserAdapter {
+  let lastCreatedStorageCount = 0;
+
   function createMarketToggles(): void {
     removeMarketToggles();
     const jquery = getJQuery();
-    const view = reader.readMarket();
+    const view = marketReader.readMarket();
     if (!view.noTrade) {
       jquery("#market .market-item[id] .res").width("5rem");
       jquery("#market .market-item[id] .buy span").text("B");
@@ -185,7 +193,7 @@ export function createResourceToggleBrowserAdapter({
 
   function removeMarketToggles(): void {
     const jquery = getJQuery();
-    const view = reader.readMarket();
+    const view = marketReader.readMarket();
     jquery("#market .ea-market-toggle").remove();
     jquery("#script_market_top_row").remove();
     if (!view.noTrade) {
@@ -204,7 +212,8 @@ export function createResourceToggleBrowserAdapter({
   function createStorageToggles(): void {
     removeStorageToggles();
     const jquery = getJQuery();
-    const view = reader.readStorage();
+    const view = storageReader.readStorage();
+    let count = 0;
     jquery("#createHead").after(`
           <div class="market-item vb" id="script_storage_top_row" style="overflow:hidden">
             <span style="margin-left: auto; margin-right: 0.2rem; float:right;">
@@ -218,6 +227,20 @@ export function createResourceToggleBrowserAdapter({
       createStorageRow(item, jquery, addToggleCallbacks).appendTo(
         storageElement,
       );
+      count++;
+    }
+    lastCreatedStorageCount = count;
+  }
+
+  function ensureStorageToggles(): void {
+    const jquery = getJQuery();
+    if (jquery("#resStorage").length === 0) {
+      if (lastCreatedStorageCount !== 0) removeStorageToggles();
+      return;
+    }
+    const currentCount = jquery("#resStorage .ea-storage-toggle").length;
+    if (currentCount === 0 || currentCount !== lastCreatedStorageCount) {
+      createStorageToggles();
     }
   }
 
@@ -225,12 +248,14 @@ export function createResourceToggleBrowserAdapter({
     const jquery = getJQuery();
     jquery("#resStorage .ea-storage-toggle").remove();
     jquery("#script_storage_top_row").remove();
+    lastCreatedStorageCount = 0;
   }
 
   return Object.freeze({
     createMarketToggles,
     removeMarketToggles,
     createStorageToggles,
+    ensureStorageToggles,
     removeStorageToggles,
   });
 }
