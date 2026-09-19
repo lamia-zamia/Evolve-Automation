@@ -267,6 +267,11 @@ function readGovernment(): GovernmentResetContext {
   };
 }
 
+/** The stable government ids above, shared with the captured government settings adapter. */
+export function readGovernmentResetContext(): GovernmentResetContext {
+  return readGovernment();
+}
+
 function readEvolution(): EvolutionResetContext {
   return { challengeIds: challenges.map((set) => set[0]!.id) };
 }

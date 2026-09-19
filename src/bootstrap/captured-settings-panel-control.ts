@@ -115,6 +115,12 @@ import {
 } from "../adapters/browser/research-settings.ts";
 import { createResearchSettingsIntentHandler } from "../application/research-settings.ts";
 import { createCapturedResearchSettingsAdapter } from "../adapters/evolve/progression/research/captured-research-settings.ts";
+import {
+  createGovernmentSettingsBrowserAdapter,
+  type GovernmentSettingsBrowserActions,
+} from "../adapters/browser/government-settings.ts";
+import { createGovernmentSettingsIntentHandler } from "../application/government-settings.ts";
+import { createCapturedGovernmentSettingsAdapter } from "../adapters/evolve/civic/captured-government-settings.ts";
 import type { TriggerValue } from "../domain/progression/build/trigger-settings.ts";
 import type {
   ObjectList,
@@ -340,6 +346,15 @@ type ResearchSettingsDocument = ReturnType<
 >;
 type ResearchSettingsJQuery = ReturnType<
   Parameters<typeof createResearchSettingsBrowserAdapter>[0]["getJQuery"]
+>;
+type GovernmentSettings = ReturnType<
+  typeof createGovernmentSettingsBrowserAdapter
+>;
+type GovernmentSettingsDocument = ReturnType<
+  Parameters<typeof createGovernmentSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type GovernmentSettingsJQuery = ReturnType<
+  Parameters<typeof createGovernmentSettingsBrowserAdapter>[0]["getJQuery"]
 >;
 
 export interface CapturedSettingsPanelDependencies {
@@ -635,6 +650,7 @@ export function createCapturedSettingsPanel({
         readonly supplyToggles: SupplyToggles | undefined;
         readonly magic: MagicSettings | undefined;
         readonly production: ProductionSettings | undefined;
+        readonly government: GovernmentSettings | undefined;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -773,6 +789,7 @@ export function createCapturedSettingsPanel({
     let supplyToggles: SupplyToggles | undefined;
     let magic: MagicSettings | undefined;
     let production: ProductionSettings | undefined;
+    let government: GovernmentSettings | undefined;
     let research: ResearchSettings | undefined;
     let trigger: TriggerSettings | undefined;
     const shell = createSettingsShell({
@@ -942,6 +959,85 @@ export function createCapturedSettingsPanel({
           hint,
         ),
     };
+    // Government options are static captured copy, so this section needs no game
+    // draw and is always built. It renders into the secondary options modal.
+    const capturedGovernmentAdapter = createCapturedGovernmentSettingsAdapter({
+      getSettingsRaw: settings.readRaw,
+    });
+    let governmentIntent: ReturnType<
+      typeof createGovernmentSettingsIntentHandler
+    >;
+    government = createGovernmentSettingsBrowserAdapter({
+      getDocument: () => documentForUi as unknown as GovernmentSettingsDocument,
+      getJQuery: () => getJQuery() as unknown as GovernmentSettingsJQuery,
+      getReadModel: capturedGovernmentAdapter.readGovernmentSettingsReadModel,
+      intents: { handle: (intent) => governmentIntent.handle(intent) },
+      getActions: () =>
+        ({
+          buildSettingsSection2: (
+            parentNode: unknown,
+            secondaryPrefix: string,
+            sectionId: string,
+            sectionName: string,
+            resetFunction: () => void,
+            updateSettingsContentFunction: (prefix: string) => void,
+          ) =>
+            shell.buildSettingsSection2(
+              parentNode as Parameters<
+                SettingsShell["buildSettingsSection2"]
+              >[0],
+              secondaryPrefix,
+              sectionId,
+              sectionName,
+              resetFunction,
+              updateSettingsContentFunction,
+            ),
+          addSettingsNumber: (
+            node: unknown,
+            settingName: string,
+            labelText: string,
+            hintText: string,
+          ) =>
+            controls.addSettingsNumber(
+              node as SettingsControlNode,
+              settingName,
+              labelText,
+              hintText,
+            ),
+          addSettingsSelect: (
+            node: unknown,
+            settingName: string,
+            labelText: string,
+            hintText: string,
+            options: readonly { val: string; label: string; hint: string }[],
+          ) =>
+            controls.addSettingsSelect(
+              node as SettingsControlNode,
+              settingName,
+              labelText,
+              hintText,
+              options,
+            ),
+        }) as unknown as GovernmentSettingsBrowserActions,
+    });
+    governmentIntent = createGovernmentSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => {
+          if (settingsLifecycle !== undefined) {
+            settingsLifecycle.resetSection("government");
+          } else {
+            capturedGovernmentAdapter.resetToDefaults();
+          }
+        },
+        persist: persistSettings,
+      },
+      renderSettingsContent: (secondaryPrefix) =>
+        government?.updateGovernmentSettingsContent(secondaryPrefix),
+      effects: {
+        resetCheckboxes: () =>
+          controls.resetCheckbox("autoTax", "autoGovernment"),
+      },
+    });
     // Trigger rows and catalogs are settings-record data plus static captured
     // operand copy, so this section needs no game draw and is always built.
     const capturedTriggerAdapter = createCapturedTriggerSettingsAdapter({
@@ -1884,6 +1980,7 @@ export function createCapturedSettingsPanel({
       supplyToggles,
       magic,
       production,
+      government,
       craftToggles,
       shell,
     };
@@ -2148,7 +2245,21 @@ export function createCapturedSettingsPanel({
     // TRANSITIONAL: the four secondary-option modals (Government, Foreign Affairs, Hell, Fleet)
     // build their contents from legacy managers.
     getBuilders: () => ({
-      government: unported("Government options"),
+      government: (node, prefix) => {
+        const dom = getQuery();
+        const adapter =
+          dom === undefined ? undefined : ensureSettingsUi(dom).government;
+        if (adapter === undefined) {
+          unported("Government options")();
+          return;
+        }
+        adapter.buildGovernmentSettings(
+          node as unknown as Parameters<
+            GovernmentSettingsBrowserActions["buildSettingsSection2"]
+          >[0],
+          prefix,
+        );
+      },
       war: unported("Foreign Affairs options"),
       hell: unported("Hell options"),
       fleet: unported("Fleet options"),

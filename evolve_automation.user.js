@@ -21708,6 +21708,9 @@
       corpocracyId: "corpocracy"
     };
   }
+  function readGovernmentResetContext() {
+    return readGovernment();
+  }
   function readEvolution() {
     return { challengeIds: challenges.map((set) => set[0].id) };
   }
@@ -28757,6 +28760,227 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/domain/civic/government-settings.ts
+  function freezeOption2(option) {
+    return Object.freeze({ ...option });
+  }
+  function freezeOptions(options) {
+    return Object.freeze(options.map(freezeOption2));
+  }
+  function createGovernmentSettingsReadModel({
+    governmentOptions,
+    governorOptions
+  }) {
+    let frozenGovernmentOptions = freezeOptions(governmentOptions), frozenGovernorOptions = freezeOptions(governorOptions);
+    return Object.freeze({
+      sectionId: "government",
+      sectionName: "Government",
+      controls: Object.freeze([
+        Object.freeze({
+          kind: "number",
+          settingName: "generalRequestedTaxRate",
+          label: "Forced tax rate",
+          hint: "Set tax rate as close to this value as possible, ignores morale. Set to -1 to disable this option"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "generalMinimumTaxRate",
+          label: "Minimum allowed tax rate",
+          hint: "Minimum tax rate for autoTax. Will still go below this amount if money storage is full"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "generalMinimumMorale",
+          label: "Minimum allowed morale",
+          hint: "Use this to set a minimum allowed morale. Remember that less than 100% can cause riots and weather can cause sudden swings"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "generalMaximumMorale",
+          label: "Maximum allowed morale",
+          hint: "Use this to set a maximum allowed morale. The tax rate will be raised to lower morale to this maximum"
+        }),
+        Object.freeze({
+          kind: "select",
+          settingName: "govInterim",
+          label: "Interim Government",
+          hint: "Temporary low tier government until you research other governments",
+          options: frozenGovernmentOptions
+        }),
+        Object.freeze({
+          kind: "select",
+          settingName: "govFinal",
+          label: "Second Government",
+          hint: "Second government choice, chosen once becomes available. Can be the same as above",
+          options: frozenGovernmentOptions
+        }),
+        Object.freeze({
+          kind: "select",
+          settingName: "govSpace",
+          label: "Space Government",
+          hint: "Government for bioseed+. Chosen once you researched Quantum Manufacturing. Can be the same as above",
+          options: frozenGovernmentOptions
+        }),
+        Object.freeze({
+          kind: "select",
+          settingName: "govGovernor",
+          label: "Governor",
+          hint: "Chosen governor will be appointed.",
+          options: frozenGovernorOptions
+        })
+      ])
+    });
+  }
+
+  // src/adapters/browser/government-settings.ts
+  function createGovernmentSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      if (control.kind === "number") {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      );
+    }
+    function buildGovernmentSettings(parentNode, secondaryPrefix) {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection2(
+        parentNode,
+        secondaryPrefix,
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({
+            type: "reset-government-settings",
+            secondaryPrefix
+          });
+        },
+        updateGovernmentSettingsContent
+      );
+    }
+    function updateGovernmentSettingsContent(secondaryPrefix) {
+      let readModel = getReadModel(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${secondaryPrefix}${readModel.sectionId}`
+        },
+        (currentNode) => {
+          for (let control of readModel.controls)
+            renderControl(currentNode, control, actions);
+        }
+      );
+    }
+    return Object.freeze({
+      buildGovernmentSettings,
+      updateGovernmentSettingsContent
+    });
+  }
+
+  // src/application/government-settings.ts
+  function createGovernmentSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-government-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent(intent.secondaryPrefix), effects.resetCheckboxes();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/adapters/evolve/civic/captured-government-settings-catalog.ts
+  var GOVERNMENT_IDS = Object.freeze([
+    "autocracy",
+    "democracy",
+    "oligarchy",
+    "theocracy",
+    "republic",
+    "socialist",
+    "corpocracy",
+    "technocracy",
+    "federation",
+    "magocracy",
+    "dictator"
+  ]), GOVERNOR_IDS = Object.freeze([
+    "soldier",
+    "criminal",
+    "entrepreneur",
+    "educator",
+    "spiritual",
+    "bluecollar",
+    "noble",
+    "media",
+    "sports",
+    "bureaucrat"
+  ]);
+  function readStaticOptions(ids) {
+    return Object.freeze(
+      ids.map((id) => Object.freeze({ val: id, label: id, hint: "" }))
+    );
+  }
+  var GOVERNMENT_OPTIONS = readStaticOptions(GOVERNMENT_IDS), GOVERNOR_OPTIONS = readStaticOptions(GOVERNOR_IDS);
+  function readCapturedGovernmentOptions() {
+    return GOVERNMENT_OPTIONS;
+  }
+  function readCapturedGovernorOptions() {
+    return GOVERNOR_OPTIONS;
+  }
+
+  // src/adapters/evolve/civic/captured-government-settings.ts
+  function withNoneOption(options, hint) {
+    return Object.freeze([
+      Object.freeze({ val: "none", label: "None", hint }),
+      ...options
+    ]);
+  }
+  function createCapturedGovernmentSettingsAdapter({
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readGovernmentSettingsReadModel() {
+        return createGovernmentSettingsReadModel({
+          governmentOptions: withNoneOption(
+            readCapturedGovernmentOptions(),
+            "Do not select government"
+          ),
+          governorOptions: withNoneOption(
+            readCapturedGovernorOptions(),
+            "Do not select governor"
+          )
+        });
+      },
+      resetToDefaults() {
+        let raw = getSettingsRaw();
+        isRecord(raw) && Object.assign(
+          raw,
+          computeGovernmentDefaults(readGovernmentResetContext()).def
+        );
+      }
+    });
+  }
+
   // src/adapters/browser/table-sorter.ts
   function readMembers(value) {
     return value === null || typeof value != "object" && typeof value != "function" ? null : value;
@@ -30747,7 +30971,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, research, trigger, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, government, research, trigger, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -30885,7 +31109,50 @@ If script is allowed to reassign non-empty storage it might waste time producing
           label,
           hint
         )
-      }, capturedTriggerAdapter = createCapturedTriggerSettingsAdapter({
+      }, capturedGovernmentAdapter = createCapturedGovernmentSettingsAdapter({
+        getSettingsRaw: settings.readRaw
+      }), governmentIntent;
+      government = createGovernmentSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery: () => getJQuery(),
+        getReadModel: capturedGovernmentAdapter.readGovernmentSettingsReadModel,
+        intents: { handle: (intent) => governmentIntent.handle(intent) },
+        getActions: () => ({
+          buildSettingsSection2: (parentNode, secondaryPrefix, sectionId, sectionName, resetFunction, updateSettingsContentFunction) => shell.buildSettingsSection2(
+            parentNode,
+            secondaryPrefix,
+            sectionId,
+            sectionName,
+            resetFunction,
+            updateSettingsContentFunction
+          ),
+          addSettingsNumber: (node, settingName, labelText, hintText) => controls2.addSettingsNumber(
+            node,
+            settingName,
+            labelText,
+            hintText
+          ),
+          addSettingsSelect: (node, settingName, labelText, hintText, options) => controls2.addSettingsSelect(
+            node,
+            settingName,
+            labelText,
+            hintText,
+            options
+          )
+        })
+      }), governmentIntent = createGovernmentSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("government") : capturedGovernmentAdapter.resetToDefaults();
+          },
+          persist: persistSettings
+        },
+        renderSettingsContent: (secondaryPrefix) => government?.updateGovernmentSettingsContent(secondaryPrefix),
+        effects: {
+          resetCheckboxes: () => controls2.resetCheckbox("autoTax", "autoGovernment")
+        }
+      });
+      let capturedTriggerAdapter = createCapturedTriggerSettingsAdapter({
         getSettingsRaw: settings.readRaw,
         promptEval: (message, value) => {
           let prompt = readProperty(capturedPanelWindow, "prompt");
@@ -31568,6 +31835,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         supplyToggles,
         magic,
         production,
+        government,
         craftToggles,
         shell
       }, settingsUi;
@@ -31718,7 +31986,17 @@ Only continue if you trust the source. Injected code:
       // TRANSITIONAL: the four secondary-option modals (Government, Foreign Affairs, Hell, Fleet)
       // build their contents from legacy managers.
       getBuilders: () => ({
-        government: unported("Government options"),
+        government: (node, prefix) => {
+          let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).government;
+          if (adapter === void 0) {
+            unported("Government options")();
+            return;
+          }
+          adapter.buildGovernmentSettings(
+            node,
+            prefix
+          );
+        },
         war: unported("Foreign Affairs options"),
         hell: unported("Hell options"),
         fleet: unported("Fleet options")
