@@ -4,7 +4,6 @@ import {
   createMarketSettingsReadModel,
   type MarketSettingsReadModel,
 } from "../../../../domain/economy/market/market-settings.ts";
-import { computeMarketDefaults } from "../../../../domain/settings-defaults.ts";
 import type { MarketResetContext } from "../../../../domain/settings-defaults.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
@@ -24,20 +23,9 @@ export interface CapturedMarketSettingsDependencies {
 
 export interface CapturedMarketSettingsAdapter {
   readMarketSettingsReadModel(): MarketSettingsReadModel;
-  resetToDefaults(): void;
   resetPriorities(): void;
   reorderResources(resourceIds: readonly string[]): void;
 }
-
-/** The dynamic override prefixes the lifecycle owns for the market section. */
-const MARKET_OVERRIDE_PREFIXES: readonly string[] = Object.freeze([
-  "buy",
-  "sell",
-  "res_buy_",
-  "res_sell_",
-  "res_trade_",
-  "res_galaxy_",
-]);
 
 function readCapturedMarketSettingsRecord(
   raw: unknown,
@@ -119,23 +107,6 @@ export function createCapturedMarketSettingsAdapter({
 
   return Object.freeze({
     readMarketSettingsReadModel: readModel,
-    resetToDefaults() {
-      const raw = readCapturedMarketSettingsRecord(getSettingsRaw());
-      const defaults = computeMarketDefaults(
-        readMarketContext(rootState, controls),
-      ).def;
-      const overrides = raw["overrides"];
-      if (isRecord(overrides) && !Array.isArray(overrides)) {
-        for (const key of Object.keys(overrides)) {
-          if (
-            MARKET_OVERRIDE_PREFIXES.some((prefix) => key.startsWith(prefix))
-          ) {
-            delete overrides[key];
-          }
-        }
-      }
-      Object.assign(raw, defaults);
-    },
     resetPriorities() {
       const raw = readCapturedMarketSettingsRecord(getSettingsRaw());
       const { tradableResourceIds } = readMarketContext(rootState, controls);

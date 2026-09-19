@@ -7,7 +7,22 @@ import { createCapturedSettingsLifecycle } from "../src/application/captured-set
 import { createCapturedOverrideEvaluation } from "../src/adapters/evolve/captured-override-evaluation.ts";
 import { createOverrideSettings } from "../src/application/override-settings.ts";
 import { overrideComparisons } from "../src/settings/override-comparators.ts";
+import { settingsSections } from "../src/adapters/evolve/runtime-catalogs.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
+
+/**
+ * The lifecycle's own defaults start every section collapsed, and a collapsed section does not
+ * build its contents. These tests assert on the controls inside them, so the stored record opens
+ * them up front unless the case under test says otherwise.
+ */
+function withSectionsExpanded(settingsText) {
+  const stored = settingsText === undefined ? {} : JSON.parse(settingsText);
+  const expanded = {};
+  for (const id of settingsSections) {
+    expanded[`${id}SettingsCollapsed`] = false;
+  }
+  return JSON.stringify({ ...expanded, ...stored });
+}
 
 /** A `localStorage` stand-in that records what the panel writes back. */
 function createStorage(initial) {
@@ -25,9 +40,12 @@ function createPage(
     platform = "Win32",
     url = "https://x/",
     confirmAnswer = true,
-    useLifecycle = false,
+    collapsed = false,
   } = {},
 ) {
+  const storedText = collapsed
+    ? settingsText
+    : withSectionsExpanded(settingsText);
   const root = element("div", { id: "root" });
   const resources = element("div", { id: "resources" });
   const settingsTab = element("div");
@@ -47,7 +65,7 @@ function createPage(
   root.appendChild(resources);
   root.appendChild(settingsTab);
   const document = createTestDocument(root);
-  const storage = createStorage(settingsText);
+  const storage = createStorage(storedText);
   const logged = [];
   const diagnostics = [];
   const confirmed = [];
@@ -79,35 +97,30 @@ function createPage(
     logError: (message) => logged.push(message),
   });
   const gameRoot = { race: { governor: { tasks: {} } } };
-  const settingsLifecycle = useLifecycle
-    ? createCapturedSettingsLifecycle({
-        settings,
-        defaults: createCapturedSettingsDefaults({
-          rootState: { readRoot: () => gameRoot },
-          controls: { capturedElementIds: () => [] },
-        }),
-      })
-    : undefined;
-  const effectiveSettings = settingsLifecycle?.readEffective();
-  const overrideSettings =
-    settingsLifecycle === undefined
-      ? undefined
-      : createOverrideSettings({
-          getSafeMode: () => false,
-          getSettings: () => effectiveSettings,
-          getSettingsRaw: settingsLifecycle.readRaw,
-          source: createCapturedOverrideEvaluation({
-            rootState: { readRoot: () => gameRoot },
-            readSettings: settingsLifecycle.readRaw,
-            comparatorSource: {
-              comparisons: overrideComparisons,
-              rightOperandComparators: ["A?B", "!A?B"],
-            },
-          }),
-          reporter: { report: () => {} },
-          display: { publish: () => {} },
-        });
-  const refreshEffectiveSettings = () => overrideSettings?.updateOverrides();
+  const settingsLifecycle = createCapturedSettingsLifecycle({
+    settings,
+    defaults: createCapturedSettingsDefaults({
+      rootState: { readRoot: () => gameRoot },
+      controls: { capturedElementIds: () => [] },
+    }),
+  });
+  const effectiveSettings = settingsLifecycle.readEffective();
+  const overrideSettings = createOverrideSettings({
+    getSafeMode: () => false,
+    getSettings: () => effectiveSettings,
+    getSettingsRaw: settingsLifecycle.readRaw,
+    source: createCapturedOverrideEvaluation({
+      rootState: { readRoot: () => gameRoot },
+      readSettings: settingsLifecycle.readRaw,
+      comparatorSource: {
+        comparisons: overrideComparisons,
+        rightOperandComparators: ["A?B", "!A?B"],
+      },
+    }),
+    reporter: { report: () => {} },
+    display: { publish: () => {} },
+  });
+  const refreshEffectiveSettings = () => overrideSettings.updateOverrides();
   const panel = createCapturedSettingsPanel({
     capturedPanelWindow: pageWindow,
     settings,
@@ -200,7 +213,6 @@ function createPage(
 {
   const { panel, settings, root } = createPage(
     JSON.stringify({ autoBuild: true, activeTargetsUI: true }),
-    { useLifecycle: true },
   );
   panel.ensurePanel();
   root.querySelectorAll("#script_resetinterface")[0].dispatch("click");
@@ -282,9 +294,7 @@ function createPage(
 // --- the captured settings UI opens and edits the persisted override definition ---------------
 
 {
-  const page = createPage(JSON.stringify({ autoBuild: false }), {
-    useLifecycle: true,
-  });
+  const page = createPage(JSON.stringify({ autoBuild: false }));
   page.panel.ensurePanel();
   const target = page.root.querySelectorAll(".script_autoBuild")[0];
   target.parentElement.dispatch("click", target, { ctrlKey: true });
@@ -334,7 +344,7 @@ function createPage(
   assert.equal(page.effectiveSettings.autoBuild, false);
 
   const savedWithOverride = page.storage.writes();
-  const reloaded = createPage(savedWithOverride, { useLifecycle: true });
+  const reloaded = createPage(savedWithOverride);
   reloaded.panel.ensurePanel();
   assert.equal(reloaded.settings.readRaw().autoBuild, true);
   assert.equal(reloaded.settings.readRaw().overrides.autoBuild.length, 1);
@@ -363,7 +373,6 @@ function createPage(
       generalSettingsCollapsed: false,
       tickRate: 4,
     }),
-    { useLifecycle: true },
   );
   page.panel.ensurePanel();
   const target = page.root.querySelectorAll(".script_tickRate")[0];
@@ -401,7 +410,7 @@ function createPage(
   );
 
   const savedWhileActive = page.storage.writes();
-  const reloaded = createPage(savedWhileActive, { useLifecycle: true });
+  const reloaded = createPage(savedWhileActive);
   reloaded.panel.ensurePanel();
   reloaded.refreshEffectiveSettings();
   assert.equal(reloaded.settings.readRaw().tickRate, 9);
@@ -454,7 +463,6 @@ function createPage(
         ],
       },
     }),
-    { useLifecycle: true },
   );
   page.panel.ensurePanel();
   assert.deepEqual(page.settings.readRaw().overrides.autoBuild, [
@@ -496,7 +504,6 @@ function createPage(
       generalSettingsCollapsed: false,
       tickRate: 4,
     }),
-    { useLifecycle: true },
   );
   page.panel.ensurePanel();
   const target = page.root.querySelectorAll(".script_tickRate")[0];
@@ -526,7 +533,6 @@ function createPage(
       generalSettingsCollapsed: false,
       scriptSettingsExportFilename: "base-settings.json",
     }),
-    { useLifecycle: true },
   );
   page.panel.ensurePanel();
   const target = page.root.querySelectorAll(
@@ -563,9 +569,7 @@ function createPage(
 
 // The top-level controls can open the same editor before the settings section is shown.
 {
-  const page = createPage(JSON.stringify({ showSettings: false }), {
-    useLifecycle: true,
-  });
+  const page = createPage(JSON.stringify({ showSettings: false }));
   page.panel.ensurePanel();
   const target = page.root.querySelectorAll(".script_autoBuild")[0];
   target.parentElement.dispatch("click", target, { ctrlKey: true });
@@ -575,9 +579,7 @@ function createPage(
 // --- an editor-authored autoTax override still yields to the active tax task ------------------
 
 {
-  const page = createPage(JSON.stringify({ autoTax: true }), {
-    useLifecycle: true,
-  });
+  const page = createPage(JSON.stringify({ autoTax: true }));
   page.gameRoot.race.governor.tasks.tax = "tax";
   page.panel.ensurePanel();
   const target = page.root.querySelectorAll(".script_autoTax")[0];
@@ -601,7 +603,6 @@ function createPage(
 {
   const page = createPage(
     JSON.stringify({ autoBuild: false, autoResearch: false }),
-    { useLifecycle: true },
   );
   page.panel.ensurePanel();
   for (const settingName of ["autoBuild", "autoResearch"]) {
@@ -668,9 +669,17 @@ function createPage(
 
 {
   const logged = [];
+  const settings = createSettingsStore({ storage: createStorage("{}") });
   const panel = createCapturedSettingsPanel({
     capturedPanelWindow: {},
-    settings: createSettingsStore({ storage: createStorage("{}") }),
+    settings,
+    settingsLifecycle: createCapturedSettingsLifecycle({
+      settings,
+      defaults: createCapturedSettingsDefaults({
+        rootState: { readRoot: () => ({}) },
+        controls: { capturedElementIds: () => [] },
+      }),
+    }),
     logError: (message) => logged.push(message),
   });
   panel.ensurePanel();
@@ -687,7 +696,6 @@ function createPage(
 {
   const { panel, root, saveText, settings, storage, downloads } = createPage(
     JSON.stringify({ autoBuild: true }),
-    { useLifecycle: true },
   );
   panel.ensurePanel();
   const buttons = root.querySelectorAll("#script_importExportButtons");
@@ -733,7 +741,6 @@ function createPage(
 {
   const { panel, root, saveText, settings, logged } = createPage(
     JSON.stringify({ autoBuild: true }),
-    { useLifecycle: true },
   );
   panel.ensurePanel();
   const importButton = root.querySelectorAll("#script_settingsImport")[0];

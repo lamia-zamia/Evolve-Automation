@@ -8,6 +8,7 @@ import {
   CAPTURED_SHIP_COMPONENTS,
 } from "../src/adapters/evolve/combat/captured-fleet-settings-catalog.ts";
 import { createCapturedFleetSettingsAdapter } from "../src/adapters/evolve/combat/captured-fleet-settings.ts";
+import { createRecordSettingsLifecycle } from "./test-support/captured-settings.mjs";
 
 // The ten syndicate regions (spc_dwarf excepted), in script order.
 assert.deepEqual(
@@ -177,7 +178,13 @@ assert.equal(raw.fleet_pr_gxy_gateway, 0);
 assert.equal(raw.fleet_pr_gxy_alien1, 1);
 
 // Reset applies the shared fleet defaults, including the default andromeda order.
-adapter.resetToDefaults();
+const sectionLifecycle = createRecordSettingsLifecycle({
+  raw,
+  rootState: { readRoot: () => ({}) },
+  controls,
+});
+
+sectionLifecycle.resetSection("fleet");
 assert.equal(raw.fleetOuterShips, "custom");
 assert.equal(raw.fleetOuterCrew, 30);
 assert.equal(raw.fleetExploreTau, true);
@@ -200,7 +207,6 @@ const missing = createCapturedFleetSettingsAdapter({
   controls: { resolve: () => undefined, capturedElementIds: () => [] },
   getSettingsRaw: () => undefined,
 });
-missing.resetToDefaults();
 missing.reorderAndromeda(["gxy_gateway"]);
 
 console.log("captured fleet settings ok");

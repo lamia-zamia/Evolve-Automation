@@ -5,6 +5,7 @@ import {
   readCapturedGovernorOptions,
 } from "../src/adapters/evolve/civic/captured-government-settings-catalog.ts";
 import { createCapturedGovernmentSettingsAdapter } from "../src/adapters/evolve/civic/captured-government-settings.ts";
+import { createRecordSettingsLifecycle } from "./test-support/captured-settings.mjs";
 
 // The eleven governments drawGovModal offers, in its order; anarchy is never offered.
 assert.deepEqual(
@@ -95,7 +96,13 @@ assert.deepEqual(
   ],
 );
 
-adapter.resetToDefaults();
+const sectionLifecycle = createRecordSettingsLifecycle({
+  raw,
+  rootState: { readRoot: () => ({}) },
+  controls: { resolve: () => undefined, capturedElementIds: () => [] },
+});
+
+sectionLifecycle.resetSection("government");
 assert.deepEqual(raw, {
   autoGovernment: false,
   autoTax: false,
@@ -107,12 +114,8 @@ assert.deepEqual(raw, {
   govFinal: "technocracy",
   govSpace: "corpocracy",
   govGovernor: "none",
+  overrides: {},
+  triggers: [],
 });
-
-// A missing record is a no-op rather than a crash.
-const missing = createCapturedGovernmentSettingsAdapter({
-  getSettingsRaw: () => undefined,
-});
-missing.resetToDefaults();
 
 console.log("captured government settings ok");

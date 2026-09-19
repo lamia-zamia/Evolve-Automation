@@ -6,6 +6,7 @@ import {
   readTechElementId,
 } from "../src/adapters/evolve/progression/research/captured-research-settings-catalog.ts";
 import { createCapturedResearchSettingsAdapter } from "../src/adapters/evolve/progression/research/captured-research-settings.ts";
+import { createRecordSettingsLifecycle } from "./test-support/captured-settings.mjs";
 
 assert.equal(readTechElementId("mining"), "tech-mining");
 assert.equal(readTechElementId("tech-mining"), "tech-mining");
@@ -111,20 +112,20 @@ assert.deepEqual(Object.keys(ignore.list), [
   "tech-steel",
 ]);
 
-adapter.resetToDefaults();
+const sectionLifecycle = createRecordSettingsLifecycle({
+  raw,
+  rootState: game.rootState,
+  controls: game.controls,
+});
+
+sectionLifecycle.resetSection("research");
 assert.deepEqual(raw, {
   autoResearch: false,
   userResearchTheology_1: "auto",
   userResearchTheology_2: "auto",
   researchIgnore: ["tech-purify"],
+  overrides: {},
+  triggers: [],
 });
-
-// A missing record is a no-op rather than a crash.
-const missing = createCapturedResearchSettingsAdapter({
-  rootState: game.rootState,
-  controls: game.controls,
-  getSettingsRaw: () => undefined,
-});
-missing.resetToDefaults();
 
 console.log("captured research settings ok");

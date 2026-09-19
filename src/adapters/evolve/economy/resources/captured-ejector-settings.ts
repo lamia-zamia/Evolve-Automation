@@ -4,11 +4,8 @@ import {
   createEjectorSettingsReadModel,
   type EjectorSettingsReadModel,
 } from "../../../../domain/economy/resources/ejector-settings.ts";
-import { computeEjectorDefaults } from "../../../../domain/settings-defaults.ts";
-import type { EjectorResetContext } from "../../../../domain/settings-defaults.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
-import { readEjector } from "../../captured-settings-defaults.ts";
 import { isRecord } from "../../../validation.ts";
 import {
   readCapturedEjectorSettingsEntries,
@@ -23,27 +20,12 @@ export interface CapturedEjectorSettingsDependencies {
 
 export interface CapturedEjectorSettingsAdapter {
   readEjectorSettingsReadModel(): EjectorSettingsReadModel;
-  resetToDefaults(): void;
 }
-
-/** The dynamic override prefixes the lifecycle owns for the ejector section. */
-const EJECTOR_OVERRIDE_PREFIXES: readonly string[] = Object.freeze([
-  "res_eject",
-  "res_supply",
-  "res_nanite",
-]);
 
 function readCapturedEjectorSettingsRecord(
   raw: unknown,
 ): Record<string, unknown> {
   return isRecord(raw) ? raw : {};
-}
-
-function readEjectorContext(
-  rootState: GameRootStateSource,
-  controls: GameControlRegistry,
-): EjectorResetContext {
-  return readEjector(rootState.readRoot(), controls);
 }
 
 export function createCapturedEjectorSettingsAdapter({
@@ -78,22 +60,5 @@ export function createCapturedEjectorSettingsAdapter({
 
   return Object.freeze({
     readEjectorSettingsReadModel: readModel,
-    resetToDefaults() {
-      const raw = readCapturedEjectorSettingsRecord(getSettingsRaw());
-      const defaults = computeEjectorDefaults(
-        readEjectorContext(rootState, controls),
-      ).def;
-      const overrides = raw["overrides"];
-      if (isRecord(overrides) && !Array.isArray(overrides)) {
-        for (const key of Object.keys(overrides)) {
-          if (
-            EJECTOR_OVERRIDE_PREFIXES.some((prefix) => key.startsWith(prefix))
-          ) {
-            delete overrides[key];
-          }
-        }
-      }
-      Object.assign(raw, defaults);
-    },
   });
 }

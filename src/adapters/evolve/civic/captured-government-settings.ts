@@ -5,21 +5,13 @@ import {
   type GovernmentSettingsOption,
   type GovernmentSettingsReadModel,
 } from "../../../domain/civic/government-settings.ts";
-import { computeGovernmentDefaults } from "../../../domain/settings-defaults.ts";
-import { readGovernmentResetContext } from "../captured-settings-defaults.ts";
-import { isRecord } from "../../validation.ts";
 import {
   readCapturedGovernmentOptions,
   readCapturedGovernorOptions,
 } from "./captured-government-settings-catalog.ts";
 
-export interface CapturedGovernmentSettingsDependencies {
-  readonly getSettingsRaw: () => unknown;
-}
-
 export interface CapturedGovernmentSettingsAdapter {
   readGovernmentSettingsReadModel(): GovernmentSettingsReadModel;
-  resetToDefaults(): void;
 }
 
 function withNoneOption(
@@ -32,9 +24,7 @@ function withNoneOption(
   ]);
 }
 
-export function createCapturedGovernmentSettingsAdapter({
-  getSettingsRaw,
-}: CapturedGovernmentSettingsDependencies): CapturedGovernmentSettingsAdapter {
+export function createCapturedGovernmentSettingsAdapter(): CapturedGovernmentSettingsAdapter {
   return Object.freeze({
     readGovernmentSettingsReadModel(): GovernmentSettingsReadModel {
       return createGovernmentSettingsReadModel({
@@ -47,14 +37,6 @@ export function createCapturedGovernmentSettingsAdapter({
           "Do not select governor",
         ),
       });
-    },
-    resetToDefaults() {
-      const raw = getSettingsRaw();
-      if (!isRecord(raw)) return;
-      Object.assign(
-        raw,
-        computeGovernmentDefaults(readGovernmentResetContext()).def,
-      );
     },
   });
 }

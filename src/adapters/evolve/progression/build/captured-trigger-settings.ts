@@ -35,7 +35,6 @@ export interface CapturedTriggerSettingsDependencies {
 
 export interface CapturedTriggerSettingsAdapter {
   readTriggerSettingsReadModel(): TriggerSettingsReadModel;
-  resetToDefaults(): void;
   addDefault(): void;
   update(
     seq: number,
@@ -101,12 +100,6 @@ export function createCapturedTriggerSettingsAdapter({
         actionInputs: readCapturedTriggerActionInputs(),
         booleanResultChecks: readCapturedTriggerBooleanChecks(),
       });
-    },
-    resetToDefaults() {
-      const value = getSettingsRaw();
-      if (!isRecord(value)) return;
-      value["triggers"] = [];
-      value["autoTrigger"] = false;
     },
     addDefault() {
       const list = readTriggerList(getSettingsRaw());

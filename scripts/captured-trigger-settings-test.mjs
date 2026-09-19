@@ -8,6 +8,7 @@ import {
   readCapturedTriggerRows,
 } from "../src/adapters/evolve/progression/build/captured-trigger-settings-catalog.ts";
 import { createCapturedTriggerSettingsAdapter } from "../src/adapters/evolve/progression/build/captured-trigger-settings.ts";
+import { createRecordSettingsLifecycle } from "./test-support/captured-settings.mjs";
 
 function rowsOf(triggers) {
   return readCapturedTriggerRows(() => ({ triggers }));
@@ -235,7 +236,13 @@ assert.deepEqual(
 adapter.remove(99);
 assert.equal(raw.triggers.length, 2);
 
-adapter.resetToDefaults();
+const sectionLifecycle = createRecordSettingsLifecycle({
+  raw,
+  rootState: { readRoot: () => ({}) },
+  controls: { resolve: () => undefined, capturedElementIds: () => [] },
+});
+
+sectionLifecycle.resetSection("trigger");
 assert.deepEqual(raw.triggers, []);
 assert.equal(raw.autoTrigger, false);
 
@@ -251,7 +258,5 @@ quiet.duplicate(0);
 quiet.evalize(0);
 quiet.reorder([0]);
 assert.deepEqual(empty, {});
-quiet.resetToDefaults();
-assert.deepEqual(empty, { triggers: [], autoTrigger: false });
 
 console.log("captured trigger settings ok");

@@ -4,10 +4,8 @@ import {
   createProjectSettingsReadModel,
   type ProjectSettingsReadModel,
 } from "../../../../domain/progression/research/project-settings.ts";
-import { computeProjectDefaults } from "../../../../domain/settings-defaults.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
-import { projectIdByKey } from "../../captured-settings-defaults.ts";
 import { isRecord } from "../../../validation.ts";
 import {
   readCapturedProjectSettingsEntries,
@@ -22,7 +20,6 @@ export interface CapturedProjectSettingsDependencies {
 
 export interface CapturedProjectSettingsAdapter {
   readProjectSettingsReadModel(): ProjectSettingsReadModel;
-  resetToDefaults(): void;
   resetPriorities(): void;
   reorderProjects(projectIds: readonly string[]): void;
 }
@@ -87,21 +84,6 @@ export function createCapturedProjectSettingsAdapter({
 
   return Object.freeze({
     readProjectSettingsReadModel: readModel,
-    resetToDefaults() {
-      const raw = readCapturedProjectSettingsRecord(getSettingsRaw());
-      const entries = readProjectEntriesForSettings();
-      const defaults = computeProjectDefaults({
-        projectIds: entries.map((entry) => entry.projectId),
-        idByKey: projectIdByKey(entries.map((entry) => entry.projectId)),
-      }).def;
-      const overrides = raw["overrides"];
-      if (isRecord(overrides) && !Array.isArray(overrides)) {
-        for (const key of Object.keys(overrides)) {
-          if (key.startsWith("arpa_")) delete overrides[key];
-        }
-      }
-      Object.assign(raw, defaults);
-    },
     resetPriorities() {
       const raw = readCapturedProjectSettingsRecord(getSettingsRaw());
       readProjectEntriesForSettings().forEach((entry, index) => {

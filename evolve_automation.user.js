@@ -24206,9 +24206,6 @@
       corpocracyId: "corpocracy"
     };
   }
-  function readGovernmentResetContext() {
-    return readGovernment();
-  }
   function readEvolution() {
     return { challengeIds: challenges.map((set) => set[0].id) };
   }
@@ -26828,21 +26825,6 @@
     return Object.freeze({
       readBuildingSettingsReadModel: readModel,
       filterBuildingSettings,
-      resetToDefaults() {
-        writeForEntries((raw, entries) => {
-          let context = {
-            buildings: entries.map((entry) => ({
-              binding: entry.binding,
-              switchable: entry.switchable,
-              smart: entry.smart
-            })),
-            bindingByKey: readCapturedBuildingBindingMap(entries)
-          }, defaults = computeBuildingDefaults(context).def, overrides = readCapturedBuildingOverrides(raw);
-          for (let key of Object.keys(overrides))
-            (key.startsWith("bat") || key.startsWith("bld_")) && delete overrides[key];
-          Object.assign(raw, defaults);
-        });
-      },
       resetPriorities() {
         writeForEntries((raw, entries) => {
           entries.forEach((entry, index) => {
@@ -27128,16 +27110,6 @@
           }))
         );
       },
-      resetToDefaults() {
-        let raw = readCapturedProjectSettingsRecord(getSettingsRaw()), entries = readProjectEntriesForSettings(), defaults = computeProjectDefaults({
-          projectIds: entries.map((entry) => entry.projectId),
-          idByKey: projectIdByKey(entries.map((entry) => entry.projectId))
-        }).def, overrides = raw.overrides;
-        if (isRecord(overrides) && !Array.isArray(overrides))
-          for (let key of Object.keys(overrides))
-            key.startsWith("arpa_") && delete overrides[key];
-        Object.assign(raw, defaults);
-      },
       resetPriorities() {
         let raw = readCapturedProjectSettingsRecord(getSettingsRaw());
         readProjectEntriesForSettings().forEach((entry, index) => {
@@ -27382,13 +27354,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/evolve/economy/storage/captured-storage-settings.ts
-  var STORAGE_OVERRIDE_PREFIXES = Object.freeze([
-    "res_storage",
-    "res_min_store",
-    "res_max_store",
-    "res_containers_m_",
-    "res_crates_m_"
-  ]);
   function readCapturedStorageSettingsRecord(raw) {
     return isRecord(raw) ? raw : {};
   }
@@ -27434,15 +27399,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
             maximumSettingName: `res_max_store${entry.resourceId}`
           }))
         );
-      },
-      resetToDefaults() {
-        let raw = readCapturedStorageSettingsRecord(getSettingsRaw()), defaults = computeStorageDefaults(
-          readStorageContext(rootState, controls2)
-        ).def, overrides = raw.overrides;
-        if (isRecord(overrides) && !Array.isArray(overrides))
-          for (let key of Object.keys(overrides))
-            STORAGE_OVERRIDE_PREFIXES.some((prefix) => key.startsWith(prefix)) && delete overrides[key];
-        Object.assign(raw, defaults);
       },
       resetPriorities() {
         let raw = readCapturedStorageSettingsRecord(getSettingsRaw()), { storableResourceIds } = readStorageContext(rootState, controls2);
@@ -27906,14 +27862,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/evolve/economy/market/captured-market-settings.ts
-  var MARKET_OVERRIDE_PREFIXES = Object.freeze([
-    "buy",
-    "sell",
-    "res_buy_",
-    "res_sell_",
-    "res_trade_",
-    "res_galaxy_"
-  ]);
   function readCapturedMarketSettingsRecord(raw) {
     return isRecord(raw) ? raw : {};
   }
@@ -27970,15 +27918,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
             prioritySettingName: `res_galaxy_p_${entry.buyId}`
           }))
         });
-      },
-      resetToDefaults() {
-        let raw = readCapturedMarketSettingsRecord(getSettingsRaw()), defaults = computeMarketDefaults(
-          readMarketContext(rootState, controls2)
-        ).def, overrides = raw.overrides;
-        if (isRecord(overrides) && !Array.isArray(overrides))
-          for (let key of Object.keys(overrides))
-            MARKET_OVERRIDE_PREFIXES.some((prefix) => key.startsWith(prefix)) && delete overrides[key];
-        Object.assign(raw, defaults);
       },
       resetPriorities() {
         let raw = readCapturedMarketSettingsRecord(getSettingsRaw()), { tradableResourceIds } = readMarketContext(rootState, controls2);
@@ -28244,16 +28183,8 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/evolve/economy/resources/captured-ejector-settings.ts
-  var EJECTOR_OVERRIDE_PREFIXES = Object.freeze([
-    "res_eject",
-    "res_supply",
-    "res_nanite"
-  ]);
   function readCapturedEjectorSettingsRecord(raw) {
     return isRecord(raw) ? raw : {};
-  }
-  function readEjectorContext(rootState, controls2) {
-    return readEjector(rootState.readRoot(), controls2);
   }
   function createCapturedEjectorSettingsAdapter({
     rootState,
@@ -28282,15 +28213,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
             showSupply: entry.supplyConsumable
           }))
         );
-      },
-      resetToDefaults() {
-        let raw = readCapturedEjectorSettingsRecord(getSettingsRaw()), defaults = computeEjectorDefaults(
-          readEjectorContext(rootState, controls2)
-        ).def, overrides = raw.overrides;
-        if (isRecord(overrides) && !Array.isArray(overrides))
-          for (let key of Object.keys(overrides))
-            EJECTOR_OVERRIDE_PREFIXES.some((prefix) => key.startsWith(prefix)) && delete overrides[key];
-        Object.assign(raw, defaults);
       }
     });
   }
@@ -28671,20 +28593,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/evolve/economy/production/captured-magic-settings.ts
-  var MAGIC_OVERRIDE_PREFIXES = Object.freeze([
-    "res_alchemy_",
-    "spell_w_"
-  ]);
-  function readCapturedMagicSettingsRecord(raw) {
-    return isRecord(raw) ? raw : {};
-  }
-  function readMagicContext(controls2) {
-    return readMagicResetContext(controls2);
-  }
   function createCapturedMagicSettingsAdapter({
     rootState,
-    controls: controls2,
-    getSettingsRaw
+    controls: controls2
   }) {
     return Object.freeze({
       readMagicSettingsReadModel: () => {
@@ -28705,13 +28616,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
             weightingSettingName: `spell_w_${entry.spellId}`
           }))
         });
-      },
-      resetToDefaults() {
-        let raw = readCapturedMagicSettingsRecord(getSettingsRaw()), defaults = computeMagicDefaults(readMagicContext(controls2)).def, overrides = raw.overrides;
-        if (isRecord(overrides) && !Array.isArray(overrides))
-          for (let key of Object.keys(overrides))
-            MAGIC_OVERRIDE_PREFIXES.some((prefix) => key.startsWith(prefix)) && delete overrides[key];
-        Object.assign(raw, defaults);
       }
     });
   }
@@ -29224,20 +29128,8 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/evolve/economy/production/captured-production-settings.ts
-  var PRODUCTION_OVERRIDE_PREFIXES = Object.freeze([
-    "craft",
-    "foundry_",
-    "production_",
-    "droid_",
-    "replicator_",
-    "smelter_",
-    "job_"
-  ]);
   function readCapturedProductionSettingsRecord(raw) {
     return isRecord(raw) ? raw : {};
-  }
-  function readProductionContext(rootState) {
-    return readProduction(rootState.readRoot());
   }
   function createCapturedProductionSettingsAdapter({
     rootState,
@@ -29252,17 +29144,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
         miningDroidRows: readCapturedMiningDroidRows(rootState),
         replicatorRows: readCapturedReplicatorRows(rootState)
       }),
-      resetToDefaults() {
-        let raw = readCapturedProductionSettingsRecord(getSettingsRaw()), defaults = computeProductionDefaults(
-          readProductionContext(rootState)
-        ).def, overrides = raw.overrides;
-        if (isRecord(overrides) && !Array.isArray(overrides))
-          for (let key of Object.keys(overrides))
-            PRODUCTION_OVERRIDE_PREFIXES.some(
-              (prefix) => key.startsWith(prefix)
-            ) && delete overrides[key];
-        Object.assign(raw, defaults);
-      },
       reorderSmelterFuels(fuelIds) {
         let raw = readCapturedProductionSettingsRecord(getSettingsRaw()), known = new Set(
           readCapturedSmelterFuelRows(getSettingsRaw).map((fuel) => fuel.id)
@@ -31113,10 +30994,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
           booleanResultChecks: readCapturedTriggerBooleanChecks()
         });
       },
-      resetToDefaults() {
-        let value = getSettingsRaw();
-        isRecord(value) && (value.triggers = [], value.autoTrigger = !1);
-      },
       addDefault() {
         let list = readTriggerList(getSettingsRaw());
         if (list === void 0) return;
@@ -31332,8 +31209,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   // src/adapters/evolve/progression/research/captured-research-settings.ts
   function createCapturedResearchSettingsAdapter({
     rootState,
-    controls: controls2,
-    getSettingsRaw
+    controls: controls2
   }) {
     return Object.freeze({
       readResearchSettingsReadModel() {
@@ -31341,10 +31217,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
           localize: createCapturedResearchLocalize(controls2),
           technologies: readCapturedResearchTechnologies(rootState, controls2)
         });
-      },
-      resetToDefaults() {
-        let raw = getSettingsRaw();
-        isRecord(raw) && Object.assign(raw, computeResearchDefaults().def);
       }
     });
   }
@@ -31544,9 +31416,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       ...options
     ]);
   }
-  function createCapturedGovernmentSettingsAdapter({
-    getSettingsRaw
-  }) {
+  function createCapturedGovernmentSettingsAdapter() {
     return Object.freeze({
       readGovernmentSettingsReadModel() {
         return createGovernmentSettingsReadModel({
@@ -31559,13 +31429,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
             "Do not select governor"
           )
         });
-      },
-      resetToDefaults() {
-        let raw = getSettingsRaw();
-        isRecord(raw) && Object.assign(
-          raw,
-          computeGovernmentDefaults(readGovernmentResetContext()).def
-        );
       }
     });
   }
@@ -32015,10 +31878,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
           andromedaControls: CAPTURED_FLEET_ANDROMEDA_CONTROLS,
           andromedaRegions: readAndromedaRegions(controls2, settings)
         });
-      },
-      resetToDefaults() {
-        let raw = getSettingsRaw();
-        isRecord(raw) && Object.assign(raw, computeFleetDefaults().def);
       },
       reorderAndromeda(regionIds) {
         let raw = getSettingsRaw();
@@ -32491,20 +32350,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
           minorRows: readMinorRows2(settings),
           mutableRows: readMutableRows(settings)
         });
-      },
-      resetMinorTraits() {
-        let raw = getSettingsRaw();
-        isRecord(raw) && Object.assign(
-          raw,
-          computeMinorTraitDefaults(readCapturedMinorTraitContext()).def
-        );
-      },
-      resetMutableTraits() {
-        let raw = getSettingsRaw();
-        isRecord(raw) && Object.assign(
-          raw,
-          computeMutableTraitDefaults(readCapturedMutableTraitContext()).def
-        );
       },
       reorderMinorTraits(traitIds) {
         let raw = getSettingsRaw();
@@ -34445,30 +34290,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
       reportedSections.has("settings file download") || (reportedSections.add("settings file download"), logError("this page cannot offer a settings file download"));
     }, persistSettings = () => {
       settings.persist(), refreshEffectiveSettings?.();
-    }, generalDefaults = computeGeneralDefaults().def, capturedRecordDefaults = [
-      generalDefaults,
-      computeInterfaceDefaults().def,
-      computeStateLogDefaults().def,
-      computeAchievementGuardDefaults().def,
-      computeChallengeHelperDefaults().def,
-      computeAuthorityDefaults().def
-    ], prepareSettingsForUi = () => {
-      settingsLifecycle?.initialize(), refreshEffectiveSettings?.();
-      let raw = settings.readRaw();
-      (!isRecord(raw.overrides) || Array.isArray(raw.overrides)) && (raw.overrides = {});
-      for (let defaults of capturedRecordDefaults)
-        for (let [key, value] of Object.entries(defaults))
-          Object.hasOwn(raw, key) || (raw[key] = value);
-    }, resetCapturedSectionRecord = (defaults, section) => {
-      if (settingsLifecycle !== void 0 && section !== void 0) {
-        settingsLifecycle.resetSection(section);
-        return;
-      }
-      let raw = settings.readRaw(), overrides = raw.overrides;
-      if (isRecord(overrides) && !Array.isArray(overrides))
-        for (let key of Object.keys(defaults)) delete overrides[key];
-      Object.assign(raw, defaults);
-    }, capturedJobCatalogReader = capturedCraftToggles === void 0 ? void 0 : createCapturedJobCatalogReader({
+    }, prepareSettingsForUi = () => {
+      settingsLifecycle.initialize(), refreshEffectiveSettings?.();
+    }, resetSection = (section) => () => settingsLifecycle.resetSection(section), capturedJobCatalogReader = capturedCraftToggles === void 0 ? void 0 : createCapturedJobCatalogReader({
       rootState: capturedCraftToggles.rootState,
       controls: capturedCraftToggles.controls,
       readSettings: settings.readRaw,
@@ -34528,7 +34352,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         overrideControls: {
           getJQuery,
           getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
-          getSettings: () => settingsLifecycle?.readEffective() ?? settings.readRaw(),
+          getSettings: () => settingsLifecycle.readEffective(),
           getTechIds: () => ({}),
           getCheckCustom: () => overrideCatalog.checkCustom,
           getOverrideKey: () => overrideKeyLabelFor(capturedPanelWindow) === "Alt" ? "altKey" : "ctrlKey",
@@ -34617,17 +34441,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         confirm: (message) => confirmInPanelWindow(capturedPanelWindow, message)
       }), generalIntent = createGeneralSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            if (settingsLifecycle !== void 0) {
-              settingsLifecycle.resetSection("general");
-              return;
-            }
-            let raw = settings.readRaw(), overrides = raw.overrides;
-            if (isRecord(overrides) && !Array.isArray(overrides))
-              for (let key of Object.keys(generalDefaults))
-                delete overrides[key];
-            Object.assign(raw, generalDefaults);
-          },
+          resetToDefaults: resetSection("general"),
           persist: persistSettings
         },
         renderSettingsContent: () => general?.updateGeneralSettingsContent(),
@@ -34698,9 +34512,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           label,
           hint
         )
-      }, capturedGovernmentAdapter = createCapturedGovernmentSettingsAdapter({
-        getSettingsRaw: settings.readRaw
-      }), governmentIntent;
+      }, capturedGovernmentAdapter = createCapturedGovernmentSettingsAdapter(), governmentIntent;
       government = createGovernmentSettingsBrowserAdapter({
         getDocument: () => documentForUi,
         getJQuery: () => getJQuery(),
@@ -34731,9 +34543,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         })
       }), governmentIntent = createGovernmentSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("government") : capturedGovernmentAdapter.resetToDefaults();
-          },
+          resetToDefaults: resetSection("government"),
           persist: persistSettings
         },
         renderSettingsContent: (secondaryPrefix) => government?.updateGovernmentSettingsContent(secondaryPrefix),
@@ -34765,9 +34575,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         })
       }), triggerIntent = createTriggerSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("trigger") : capturedTriggerAdapter.resetToDefaults();
-          },
+          resetToDefaults: resetSection("trigger"),
           addDefault: capturedTriggerAdapter.addDefault,
           update: capturedTriggerAdapter.update,
           remove: capturedTriggerAdapter.remove,
@@ -34781,15 +34589,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
           resetCheckbox: () => controls2.resetCheckbox("autoTrigger")
         }
       });
-      let createSimpleWriter = (defaults, section) => ({
-        resetToDefaults: () => resetCapturedSectionRecord(defaults, section),
+      let createSimpleWriter = (section) => ({
+        resetToDefaults: resetSection(section),
         persist: persistSettings
       }), achievementIntent;
       achievementIntent = createAchievementGuardSettingsIntentHandler({
-        writer: createSimpleWriter(
-          computeAchievementGuardDefaults().def,
-          "achievementguard"
-        ),
+        writer: createSimpleWriter("achievementguard"),
         renderSettingsContent: () => achievementGuard?.updateAchievementGuardSettingsContent()
       }), achievementGuard = createAchievementGuardSettingsBrowserAdapter({
         getDocument: () => documentForUi,
@@ -34799,10 +34604,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       });
       let challengeIntent;
       challengeIntent = createChallengeHelperSettingsIntentHandler({
-        writer: createSimpleWriter(
-          computeChallengeHelperDefaults().def,
-          "challengehelper"
-        ),
+        writer: createSimpleWriter("challengehelper"),
         renderSettingsContent: () => challengeHelper?.updateChallengeHelperSettingsContent()
       }), challengeHelper = createChallengeHelperSettingsBrowserAdapter({
         getDocument: () => documentForUi,
@@ -34812,7 +34614,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       });
       let interfaceIntent;
       interfaceIntent = createInterfaceSettingsIntentHandler({
-        writer: createSimpleWriter(computeInterfaceDefaults().def, "interface"),
+        writer: createSimpleWriter("interface"),
         reader: {
           read: () => ({
             activeTargetsUI: settings.readRaw().activeTargetsUI === !0,
@@ -34841,7 +34643,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       });
       let stateLogIntent;
       stateLogIntent = createStateLogSettingsIntentHandler({
-        writer: createSimpleWriter(computeStateLogDefaults().def, "statelog"),
+        writer: createSimpleWriter("statelog"),
         renderSettingsContent: () => stateLog?.updateStateLogSettingsContent()
       }), stateLog = createStateLogSettingsBrowserAdapter({
         getDocument: () => documentForUi,
@@ -34863,7 +34665,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       });
       let authorityIntent;
       authorityIntent = createAuthoritySettingsIntentHandler({
-        writer: createSimpleWriter(computeAuthorityDefaults().def, "authority"),
+        writer: createSimpleWriter("authority"),
         renderSettingsContent: () => authority?.updateAuthoritySettingsContent()
       }), authority = createAuthoritySettingsBrowserAdapter({
         getDocument: () => documentForUi,
@@ -34873,9 +34675,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       });
       let hell, hellIntent = createHellSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("hell") : resetCapturedSectionRecord(computeHellDefaults().def);
-          },
+          resetToDefaults: resetSection("hell"),
           persist: persistSettings
         },
         renderSettingsContent: (secondaryPrefix) => hell?.updateHellSettingsContent(secondaryPrefix),
@@ -34909,9 +34709,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       });
       let weighting, weightingIntent = createWeightingSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("weighting") : resetCapturedSectionRecord(computeWeightingDefaults().def);
-          },
+          resetToDefaults: resetSection("weighting"),
           persist: persistSettings
         },
         renderSettingsContent: () => weighting?.updateWeightingSettingsContent()
@@ -34928,7 +34726,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       });
       let jobIntent = createJobSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => settingsLifecycle?.resetSection("job"),
+          resetToDefaults: resetSection("job"),
           persist: () => settings.persist(),
           resetPriorities: () => {
             capturedJobCatalogReader?.()?.jobs.forEach((entry, index) => {
@@ -35007,9 +34805,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           })
         }), buildingIntent = createBuildingSettingsIntentHandler({
           writer: {
-            resetToDefaults: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("building") : capturedAdapter.resetToDefaults();
-            },
+            resetToDefaults: resetSection("building"),
             persist: persistSettings,
             resetPriorities: capturedAdapter.resetPriorities,
             reorderBuildings: capturedAdapter.reorderBuildings,
@@ -35042,8 +34838,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       if (capturedResearchSettings !== void 0) {
         let capturedAdapter = createCapturedResearchSettingsAdapter({
           rootState: capturedResearchSettings.rootState,
-          controls: capturedResearchSettings.controls,
-          getSettingsRaw: settings.readRaw
+          controls: capturedResearchSettings.controls
         }), researchIntent;
         research = createResearchSettingsBrowserAdapter({
           getDocument: () => documentForUi,
@@ -35069,9 +34864,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           })
         }), researchIntent = createResearchSettingsIntentHandler({
           writer: {
-            resetToDefaults: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("research") : capturedAdapter.resetToDefaults();
-            },
+            resetToDefaults: resetSection("research"),
             persist: persistSettings
           },
           renderSettingsContent: () => research?.updateResearchSettingsContent(),
@@ -35132,9 +34925,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           })
         }), fleetIntent = createFleetSettingsIntentHandler({
           writer: {
-            resetToDefaults: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("fleet") : capturedAdapter.resetToDefaults();
-            },
+            resetToDefaults: resetSection("fleet"),
             reorderAndromeda: (regionIds) => {
               capturedAdapter.reorderAndromeda(regionIds);
             },
@@ -35186,12 +34977,8 @@ If script is allowed to reassign non-empty storage it might waste time producing
           buildTableLabel: (label, title, color) => controls2.buildTableLabel(label, title, color)
         }), traitIntent = createTraitSettingsIntentHandler({
           writer: {
-            resetMinorTraits: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("minortrait") : capturedAdapter.resetMinorTraits();
-            },
-            resetMutableTraits: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("mutabletrait") : capturedAdapter.resetMutableTraits();
-            },
+            resetMinorTraits: resetSection("minortrait"),
+            resetMutableTraits: resetSection("mutabletrait"),
             persist: persistSettings,
             // No captured session target exists: the captured evolution samples
             // its target from settings on every cycle, so there is nothing to clear.
@@ -35236,9 +35023,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           })
         }), projectIntent = createProjectSettingsIntentHandler({
           writer: {
-            resetToDefaults: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("project") : capturedAdapter.resetToDefaults();
-            },
+            resetToDefaults: resetSection("project"),
             persist: persistSettings,
             reorderProjects: capturedAdapter.reorderProjects
           },
@@ -35285,9 +35070,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           })
         }), storageIntent = createStorageSettingsIntentHandler({
           writer: {
-            resetToDefaults: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("storage") : capturedAdapter.resetToDefaults();
-            },
+            resetToDefaults: resetSection("storage"),
             persist: persistSettings,
             reorderResources: capturedAdapter.reorderResources
           },
@@ -35345,9 +35128,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           })
         }), marketIntent = createMarketSettingsIntentHandler({
           writer: {
-            resetToDefaults: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("market") : capturedAdapter.resetToDefaults();
-            },
+            resetToDefaults: resetSection("market"),
             persist: persistSettings,
             reorderResources: capturedAdapter.reorderResources
           },
@@ -35400,9 +35181,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           })
         }), ejectorIntent = createEjectorSettingsIntentHandler({
           writer: {
-            resetToDefaults: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("ejector") : capturedAdapter.resetToDefaults();
-            },
+            resetToDefaults: resetSection("ejector"),
             persist: persistSettings
           },
           renderSettingsContent: () => ejector?.updateEjectorSettingsContent(),
@@ -35440,8 +35219,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       if (capturedMagicSettings !== void 0) {
         let capturedAdapter = createCapturedMagicSettingsAdapter({
           rootState: capturedMagicSettings.rootState,
-          controls: capturedMagicSettings.controls,
-          getSettingsRaw: settings.readRaw
+          controls: capturedMagicSettings.controls
         }), magicIntent;
         magic = createMagicSettingsBrowserAdapter({
           getDocument: () => documentForUi,
@@ -35460,9 +35238,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           })
         }), magicIntent = createMagicSettingsIntentHandler({
           writer: {
-            resetToDefaults: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("magic") : capturedAdapter.resetToDefaults();
-            },
+            resetToDefaults: resetSection("magic"),
             persist: persistSettings
           },
           renderSettingsContent: () => magic?.updateMagicSettingsContent(),
@@ -35515,9 +35291,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           getTableSorter: () => tableSorter
         }), productionIntent = createProductionSettingsIntentHandler({
           writer: {
-            resetToDefaults: () => {
-              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("production") : capturedAdapter.resetToDefaults();
-            },
+            resetToDefaults: resetSection("production"),
             persist: persistSettings,
             reorderSmelterFuels: capturedAdapter.reorderSmelterFuels
           },
@@ -35579,7 +35353,7 @@ Only continue if you trust the source. Injected code:
 `)
       ))
         return !1;
-      settingsLifecycle === void 0 ? (settings.replaceRaw(inspection.settings), persistSettings()) : (settingsLifecycle.replaceAndInitialize(inspection.settings), refreshEffectiveSettings?.());
+      settingsLifecycle.replaceAndInitialize(inspection.settings), refreshEffectiveSettings?.();
       let dom = getQuery();
       return dom?.("#script_settings").remove(), dom?.("#autoScriptContainer").remove(), !0;
     }, buildScriptSettings = () => {

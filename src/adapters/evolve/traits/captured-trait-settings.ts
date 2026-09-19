@@ -6,10 +6,7 @@ import {
   type TraitSettingsReadModel,
   type TraitSettingsSelectOption,
 } from "../../../domain/traits/trait-settings.ts";
-import {
-  computeMinorTraitDefaults,
-  computeMutableTraitDefaults,
-} from "../../../domain/settings-defaults.ts";
+import {} from "../../../domain/settings-defaults.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 import {
@@ -26,8 +23,6 @@ import {
   CAPTURED_TRAIT_OCULAR,
   CAPTURED_TRAIT_RACES,
   CAPTURED_TRAIT_STATIC_CONTROLS,
-  readCapturedMinorTraitContext,
-  readCapturedMutableTraitContext,
 } from "./captured-trait-settings-catalog.ts";
 import {
   CAPTURED_MUTATION_MULTIPLIED_SPECIES,
@@ -43,8 +38,6 @@ export interface CapturedTraitSettingsDependencies {
 
 export interface CapturedTraitSettingsAdapter {
   readTraitSettingsReadModel(): TraitSettingsReadModel;
-  resetMinorTraits(): void;
-  resetMutableTraits(): void;
   reorderMinorTraits(traitIds: readonly string[]): void;
   reorderMutableTraits(traitIds: readonly string[]): void;
   setBoolean(settingName: string, value: boolean): void;
@@ -228,22 +221,6 @@ export function createCapturedTraitSettingsAdapter({
         minorRows: readMinorRows(settings),
         mutableRows: readMutableRows(settings),
       });
-    },
-    resetMinorTraits() {
-      const raw = getSettingsRaw();
-      if (!isRecord(raw)) return;
-      Object.assign(
-        raw,
-        computeMinorTraitDefaults(readCapturedMinorTraitContext()).def,
-      );
-    },
-    resetMutableTraits() {
-      const raw = getSettingsRaw();
-      if (!isRecord(raw)) return;
-      Object.assign(
-        raw,
-        computeMutableTraitDefaults(readCapturedMutableTraitContext()).def,
-      );
     },
     reorderMinorTraits(traitIds: readonly string[]) {
       const raw = getSettingsRaw();

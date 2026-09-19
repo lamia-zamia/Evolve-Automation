@@ -6,6 +6,10 @@ import {
   readCapturedMagicPylonEntries,
 } from "../src/adapters/evolve/economy/production/captured-magic-settings-catalog.ts";
 import { createCapturedMagicSettingsAdapter } from "../src/adapters/evolve/economy/production/captured-magic-settings.ts";
+import {
+  ALWAYS_TRUE_OVERRIDE,
+  createRecordSettingsLifecycle,
+} from "./test-support/captured-settings.mjs";
 
 function makeCapturedGame() {
   const root = {
@@ -82,9 +86,9 @@ const raw = {
   res_alchemy_w_Stone: 5,
   spell_w_farmer: 7,
   overrides: {
-    res_alchemy_Iron: [{ condition: "Money>0" }],
-    spell_w_miner: [{ condition: "Food>0" }],
-    job_farmer: [{ condition: "Food>0" }],
+    res_alchemy_Iron: ALWAYS_TRUE_OVERRIDE,
+    spell_w_miner: ALWAYS_TRUE_OVERRIDE,
+    job_farmer: ALWAYS_TRUE_OVERRIDE,
   },
 };
 const adapter = createCapturedMagicSettingsAdapter({
@@ -123,7 +127,13 @@ assert.equal(model.pylonRows.length, 8);
 // deliberately not allowed to turn the displayed value into the effective one.
 assert.equal(raw["res_alchemy_Iron"], false);
 
-adapter.resetToDefaults();
+const sectionLifecycle = createRecordSettingsLifecycle({
+  raw,
+  rootState: game.rootState,
+  controls: game.controls,
+});
+
+sectionLifecycle.resetSection("magic");
 assert.deepEqual(
   {
     alchemyIron: raw["res_alchemy_Iron"],
@@ -143,7 +153,7 @@ assert.deepEqual(
   },
 );
 assert.deepEqual(raw["overrides"], {
-  job_farmer: [{ condition: "Food>0" }],
+  job_farmer: ALWAYS_TRUE_OVERRIDE,
 });
 
 console.log("captured magic settings ok");

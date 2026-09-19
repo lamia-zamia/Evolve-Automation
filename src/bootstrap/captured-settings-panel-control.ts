@@ -158,16 +158,7 @@ import { createStateLogSettingsIntentHandler } from "../application/state-log-se
 import { createAuthoritySettingsIntentHandler } from "../application/authority-settings.ts";
 import { createHellSettingsIntentHandler } from "../application/hell-settings.ts";
 import { createWeightingSettingsIntentHandler } from "../application/weighting-settings.ts";
-import {
-  computeAchievementGuardDefaults,
-  computeAuthorityDefaults,
-  computeChallengeHelperDefaults,
-  computeGeneralDefaults,
-  computeHellDefaults,
-  computeInterfaceDefaults,
-  computeStateLogDefaults,
-  computeWeightingDefaults,
-} from "../domain/settings-defaults.ts";
+import {} from "../domain/settings-defaults.ts";
 import type { CapturedSettingsStore } from "../ports/captured-settings-store.ts";
 import { inspectImportedSettings } from "../adapters/browser/settings-import.ts";
 import {
@@ -386,7 +377,7 @@ export interface CapturedSettingsPanelDependencies {
   readonly capturedPanelWindow: unknown;
   readonly settings: CapturedSettingsStore;
   /** The captured raw/effective settings boundary; absent only for panel contract tests. */
-  readonly settingsLifecycle?: CapturedSettingsLifecycle;
+  readonly settingsLifecycle: CapturedSettingsLifecycle;
   /** Recomputes the effective layer after a UI mutation of the raw record. */
   readonly refreshEffectiveSettings?: () => void;
   readonly craftToggles?: {
@@ -568,44 +559,20 @@ export function createCapturedSettingsPanel({
     refreshEffectiveSettings?.();
   };
 
-  const generalDefaults = computeGeneralDefaults().def;
-  const capturedRecordDefaults = [
-    generalDefaults,
-    computeInterfaceDefaults().def,
-    computeStateLogDefaults().def,
-    computeAchievementGuardDefaults().def,
-    computeChallengeHelperDefaults().def,
-    computeAuthorityDefaults().def,
-  ];
   const prepareSettingsForUi = () => {
-    settingsLifecycle?.initialize();
+    // One authoritative route: storage -> lifecycle -> initialized raw record -> panel. The panel
+    // supplies no runtime defaults of its own; by the time anything is drawn the lifecycle has
+    // already shaped, migrated and defaulted the record the UI edits.
+    settingsLifecycle.initialize();
     refreshEffectiveSettings?.();
-    const raw = settings.readRaw();
-    if (!isRecord(raw["overrides"]) || Array.isArray(raw["overrides"])) {
-      raw["overrides"] = {};
-    }
-    for (const defaults of capturedRecordDefaults) {
-      for (const [key, value] of Object.entries(defaults)) {
-        if (!Object.hasOwn(raw, key)) raw[key] = value;
-      }
-    }
   };
 
-  const resetCapturedSectionRecord = (
-    defaults: Readonly<Record<string, unknown>>,
-    section?: string,
-  ) => {
-    if (settingsLifecycle !== undefined && section !== undefined) {
-      settingsLifecycle.resetSection(section);
-      return;
-    }
-    const raw = settings.readRaw();
-    const overrides = raw["overrides"];
-    if (isRecord(overrides) && !Array.isArray(overrides)) {
-      for (const key of Object.keys(defaults)) delete overrides[key];
-    }
-    Object.assign(raw, defaults);
-  };
+  /**
+   * The one reset a section button performs. Every section names itself and nothing else;
+   * what that section owns is decided by the section policy, not restated per callback.
+   */
+  const resetSection = (section: string) => () =>
+    settingsLifecycle.resetSection(section);
 
   const capturedJobCatalogReader =
     capturedCraftToggles === undefined
@@ -750,8 +717,7 @@ export function createCapturedSettingsPanel({
             >[0]["overrideControls"]["getSettingsRaw"]
           >;
         },
-        getSettings: () =>
-          settingsLifecycle?.readEffective() ?? settings.readRaw(),
+        getSettings: () => settingsLifecycle.readEffective(),
         getTechIds: () => ({}),
         getCheckCustom: () => overrideCatalog.checkCustom,
         getOverrideKey: () =>
@@ -886,19 +852,7 @@ export function createCapturedSettingsPanel({
     });
     const generalIntent = createGeneralSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => {
-          if (settingsLifecycle !== undefined) {
-            settingsLifecycle.resetSection("general");
-            return;
-          }
-          const raw = settings.readRaw();
-          const overrides = raw["overrides"];
-          if (isRecord(overrides) && !Array.isArray(overrides)) {
-            for (const key of Object.keys(generalDefaults))
-              delete overrides[key];
-          }
-          Object.assign(raw, generalDefaults);
-        },
+        resetToDefaults: resetSection("general"),
         persist: persistSettings,
       },
       renderSettingsContent: () => general?.updateGeneralSettingsContent(),
@@ -997,9 +951,7 @@ export function createCapturedSettingsPanel({
     };
     // Government options are static captured copy, so this section needs no game
     // draw and is always built. It renders into the secondary options modal.
-    const capturedGovernmentAdapter = createCapturedGovernmentSettingsAdapter({
-      getSettingsRaw: settings.readRaw,
-    });
+    const capturedGovernmentAdapter = createCapturedGovernmentSettingsAdapter();
     let governmentIntent: ReturnType<
       typeof createGovernmentSettingsIntentHandler
     >;
@@ -1058,13 +1010,7 @@ export function createCapturedSettingsPanel({
     });
     governmentIntent = createGovernmentSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => {
-          if (settingsLifecycle !== undefined) {
-            settingsLifecycle.resetSection("government");
-          } else {
-            capturedGovernmentAdapter.resetToDefaults();
-          }
-        },
+        resetToDefaults: resetSection("government"),
         persist: persistSettings,
       },
       renderSettingsContent: (secondaryPrefix) =>
@@ -1110,13 +1056,7 @@ export function createCapturedSettingsPanel({
     });
     triggerIntent = createTriggerSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => {
-          if (settingsLifecycle !== undefined) {
-            settingsLifecycle.resetSection("trigger");
-          } else {
-            capturedTriggerAdapter.resetToDefaults();
-          }
-        },
+        resetToDefaults: resetSection("trigger"),
         addDefault: capturedTriggerAdapter.addDefault,
         update: capturedTriggerAdapter.update,
         remove: capturedTriggerAdapter.remove,
@@ -1130,21 +1070,15 @@ export function createCapturedSettingsPanel({
         resetCheckbox: () => controls.resetCheckbox("autoTrigger"),
       },
     });
-    const createSimpleWriter = (
-      defaults: Readonly<Record<string, unknown>>,
-      section: string,
-    ) => ({
-      resetToDefaults: () => resetCapturedSectionRecord(defaults, section),
+    const createSimpleWriter = (section: string) => ({
+      resetToDefaults: resetSection(section),
       persist: persistSettings,
     });
     let achievementIntent: ReturnType<
       typeof createAchievementGuardSettingsIntentHandler
     >;
     achievementIntent = createAchievementGuardSettingsIntentHandler({
-      writer: createSimpleWriter(
-        computeAchievementGuardDefaults().def,
-        "achievementguard",
-      ),
+      writer: createSimpleWriter("achievementguard"),
       renderSettingsContent: () =>
         achievementGuard?.updateAchievementGuardSettingsContent(),
     });
@@ -1160,10 +1094,7 @@ export function createCapturedSettingsPanel({
       typeof createChallengeHelperSettingsIntentHandler
     >;
     challengeIntent = createChallengeHelperSettingsIntentHandler({
-      writer: createSimpleWriter(
-        computeChallengeHelperDefaults().def,
-        "challengehelper",
-      ),
+      writer: createSimpleWriter("challengehelper"),
       renderSettingsContent: () =>
         challengeHelper?.updateChallengeHelperSettingsContent(),
     });
@@ -1179,7 +1110,7 @@ export function createCapturedSettingsPanel({
       typeof createInterfaceSettingsIntentHandler
     >;
     interfaceIntent = createInterfaceSettingsIntentHandler({
-      writer: createSimpleWriter(computeInterfaceDefaults().def, "interface"),
+      writer: createSimpleWriter("interface"),
       reader: {
         read: () => ({
           activeTargetsUI: settings.readRaw()["activeTargetsUI"] === true,
@@ -1208,7 +1139,7 @@ export function createCapturedSettingsPanel({
 
     let stateLogIntent: ReturnType<typeof createStateLogSettingsIntentHandler>;
     stateLogIntent = createStateLogSettingsIntentHandler({
-      writer: createSimpleWriter(computeStateLogDefaults().def, "statelog"),
+      writer: createSimpleWriter("statelog"),
       renderSettingsContent: () => stateLog?.updateStateLogSettingsContent(),
     });
     stateLog = createStateLogSettingsBrowserAdapter({
@@ -1238,7 +1169,7 @@ export function createCapturedSettingsPanel({
       typeof createAuthoritySettingsIntentHandler
     >;
     authorityIntent = createAuthoritySettingsIntentHandler({
-      writer: createSimpleWriter(computeAuthorityDefaults().def, "authority"),
+      writer: createSimpleWriter("authority"),
       renderSettingsContent: () => authority?.updateAuthoritySettingsContent(),
     });
     authority = createAuthoritySettingsBrowserAdapter({
@@ -1251,13 +1182,7 @@ export function createCapturedSettingsPanel({
     let hell: HellSettings | undefined;
     const hellIntent = createHellSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => {
-          if (settingsLifecycle !== undefined) {
-            settingsLifecycle.resetSection("hell");
-          } else {
-            resetCapturedSectionRecord(computeHellDefaults().def);
-          }
-        },
+        resetToDefaults: resetSection("hell"),
         persist: persistSettings,
       },
       renderSettingsContent: (secondaryPrefix) =>
@@ -1302,13 +1227,7 @@ export function createCapturedSettingsPanel({
     let weighting: WeightingSettings | undefined;
     const weightingIntent = createWeightingSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => {
-          if (settingsLifecycle !== undefined) {
-            settingsLifecycle.resetSection("weighting");
-          } else {
-            resetCapturedSectionRecord(computeWeightingDefaults().def);
-          }
-        },
+        resetToDefaults: resetSection("weighting"),
         persist: persistSettings,
       },
       renderSettingsContent: () => weighting?.updateWeightingSettingsContent(),
@@ -1329,7 +1248,7 @@ export function createCapturedSettingsPanel({
     });
     const jobIntent = createJobSettingsIntentHandler({
       writer: {
-        resetToDefaults: () => settingsLifecycle?.resetSection("job"),
+        resetToDefaults: resetSection("job"),
         persist: () => settings.persist(),
         resetPriorities: () => {
           const catalog = capturedJobCatalogReader?.();
@@ -1445,13 +1364,7 @@ export function createCapturedSettingsPanel({
       });
       buildingIntent = createBuildingSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("building");
-            } else {
-              capturedAdapter.resetToDefaults();
-            }
-          },
+          resetToDefaults: resetSection("building"),
           persist: persistSettings,
           resetPriorities: capturedAdapter.resetPriorities,
           reorderBuildings: capturedAdapter.reorderBuildings,
@@ -1489,7 +1402,6 @@ export function createCapturedSettingsPanel({
       const capturedAdapter = createCapturedResearchSettingsAdapter({
         rootState: capturedResearchSettings.rootState,
         controls: capturedResearchSettings.controls,
-        getSettingsRaw: settings.readRaw,
       });
       let researchIntent: ReturnType<
         typeof createResearchSettingsIntentHandler
@@ -1534,13 +1446,7 @@ export function createCapturedSettingsPanel({
       });
       researchIntent = createResearchSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("research");
-            } else {
-              capturedAdapter.resetToDefaults();
-            }
-          },
+          resetToDefaults: resetSection("research"),
           persist: persistSettings,
         },
         renderSettingsContent: () => research?.updateResearchSettingsContent(),
@@ -1638,13 +1544,7 @@ export function createCapturedSettingsPanel({
       });
       fleetIntent = createFleetSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("fleet");
-            } else {
-              capturedAdapter.resetToDefaults();
-            }
-          },
+          resetToDefaults: resetSection("fleet"),
           reorderAndromeda: (regionIds) => {
             capturedAdapter.reorderAndromeda(regionIds);
           },
@@ -1724,20 +1624,8 @@ export function createCapturedSettingsPanel({
       });
       traitIntent = createTraitSettingsIntentHandler({
         writer: {
-          resetMinorTraits: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("minortrait");
-            } else {
-              capturedAdapter.resetMinorTraits();
-            }
-          },
-          resetMutableTraits: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("mutabletrait");
-            } else {
-              capturedAdapter.resetMutableTraits();
-            }
-          },
+          resetMinorTraits: resetSection("minortrait"),
+          resetMutableTraits: resetSection("mutabletrait"),
           persist: persistSettings,
           // No captured session target exists: the captured evolution samples
           // its target from settings on every cycle, so there is nothing to clear.
@@ -1786,13 +1674,7 @@ export function createCapturedSettingsPanel({
       });
       projectIntent = createProjectSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("project");
-            } else {
-              capturedAdapter.resetToDefaults();
-            }
-          },
+          resetToDefaults: resetSection("project"),
           persist: persistSettings,
           reorderProjects: capturedAdapter.reorderProjects,
         },
@@ -1848,13 +1730,7 @@ export function createCapturedSettingsPanel({
       });
       storageIntent = createStorageSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("storage");
-            } else {
-              capturedAdapter.resetToDefaults();
-            }
-          },
+          resetToDefaults: resetSection("storage"),
           persist: persistSettings,
           reorderResources: capturedAdapter.reorderResources,
         },
@@ -1935,13 +1811,7 @@ export function createCapturedSettingsPanel({
       });
       marketIntent = createMarketSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("market");
-            } else {
-              capturedAdapter.resetToDefaults();
-            }
-          },
+          resetToDefaults: resetSection("market"),
           persist: persistSettings,
           reorderResources: capturedAdapter.reorderResources,
         },
@@ -2013,13 +1883,7 @@ export function createCapturedSettingsPanel({
       });
       ejectorIntent = createEjectorSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("ejector");
-            } else {
-              capturedAdapter.resetToDefaults();
-            }
-          },
+          resetToDefaults: resetSection("ejector"),
           persist: persistSettings,
         },
         renderSettingsContent: () => ejector?.updateEjectorSettingsContent(),
@@ -2063,7 +1927,6 @@ export function createCapturedSettingsPanel({
       const capturedAdapter = createCapturedMagicSettingsAdapter({
         rootState: capturedMagicSettings.rootState,
         controls: capturedMagicSettings.controls,
-        getSettingsRaw: settings.readRaw,
       });
       let magicIntent: ReturnType<typeof createMagicSettingsIntentHandler>;
       magic = createMagicSettingsBrowserAdapter({
@@ -2091,13 +1954,7 @@ export function createCapturedSettingsPanel({
       });
       magicIntent = createMagicSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("magic");
-            } else {
-              capturedAdapter.resetToDefaults();
-            }
-          },
+          resetToDefaults: resetSection("magic"),
           persist: persistSettings,
         },
         renderSettingsContent: () => magic?.updateMagicSettingsContent(),
@@ -2178,13 +2035,7 @@ export function createCapturedSettingsPanel({
       });
       productionIntent = createProductionSettingsIntentHandler({
         writer: {
-          resetToDefaults: () => {
-            if (settingsLifecycle !== undefined) {
-              settingsLifecycle.resetSection("production");
-            } else {
-              capturedAdapter.resetToDefaults();
-            }
-          },
+          resetToDefaults: resetSection("production"),
           persist: persistSettings,
           reorderSmelterFuels: capturedAdapter.reorderSmelterFuels,
         },
@@ -2257,13 +2108,8 @@ export function createCapturedSettingsPanel({
     ) {
       return false;
     }
-    if (settingsLifecycle === undefined) {
-      settings.replaceRaw(inspection.settings);
-      persistSettings();
-    } else {
-      settingsLifecycle.replaceAndInitialize(inspection.settings);
-      refreshEffectiveSettings?.();
-    }
+    settingsLifecycle.replaceAndInitialize(inspection.settings);
+    refreshEffectiveSettings?.();
     // Everything drawn from the replaced record goes, so the next `ensurePanel` rebuilds the
     // container and every section from the imported one. The import/export buttons sit outside
     // both and keep working. Automation needs no signal: it reads the store on every cycle.

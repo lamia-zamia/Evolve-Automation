@@ -92,6 +92,18 @@ export function createSettingsFixture({
   return { saved, settings, lifecycle, gameRoot };
 }
 
+/** One valid, always-true override definition — the shape the editor and the store accept. */
+export const ALWAYS_TRUE_OVERRIDE = Object.freeze([
+  Object.freeze({
+    type1: "Boolean",
+    arg1: true,
+    type2: "Boolean",
+    arg2: true,
+    cmp: "==",
+    ret: true,
+  }),
+]);
+
 /** Seeds `overrides` with a bare (always-true) definition per key, as the editor stores them. */
 export function seedOverrides(settings, keys) {
   const overrides = settings.readRaw().overrides;
@@ -108,4 +120,20 @@ export function seedOverrides(settings, keys) {
     ];
   }
   return overrides;
+}
+
+/**
+ * A lifecycle over a plain settings object, for adapter tests that already hold one. Section
+ * reset is the lifecycle's job, so a test that asserts what a reset writes drives it from here
+ * rather than from the adapter under test.
+ */
+export function createRecordSettingsLifecycle({ raw, rootState, controls }) {
+  return createCapturedSettingsLifecycle({
+    settings: {
+      readRaw: () => raw,
+      persist: () => {},
+      replaceRaw: () => {},
+    },
+    defaults: createCapturedSettingsDefaults({ rootState, controls }),
+  });
 }

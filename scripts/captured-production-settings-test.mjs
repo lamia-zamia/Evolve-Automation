@@ -9,6 +9,10 @@ import {
   readCapturedSmelterFuelRows,
 } from "../src/adapters/evolve/economy/production/captured-production-settings-catalog.ts";
 import { createCapturedProductionSettingsAdapter } from "../src/adapters/evolve/economy/production/captured-production-settings.ts";
+import {
+  ALWAYS_TRUE_OVERRIDE,
+  createRecordSettingsLifecycle,
+} from "./test-support/captured-settings.mjs";
 
 function makeCapturedGame() {
   const root = {
@@ -164,10 +168,10 @@ const raw = {
   craftPlywood: false,
   job_Brick: true,
   overrides: {
-    craftPlywood: [{ condition: "Money>0" }],
-    production_Furs: [{ condition: "Food>0" }],
-    job_Brick: [{ condition: "Food>0" }],
-    droid_w_Coal: [{ condition: "Food>0" }],
+    craftPlywood: ALWAYS_TRUE_OVERRIDE,
+    production_Furs: ALWAYS_TRUE_OVERRIDE,
+    job_Brick: ALWAYS_TRUE_OVERRIDE,
+    droid_w_Coal: ALWAYS_TRUE_OVERRIDE,
   },
 };
 const adapter = createCapturedProductionSettingsAdapter({
@@ -203,7 +207,13 @@ assert.equal(raw["smelter_fuel_p_Super"], 0);
 assert.equal(raw["smelter_fuel_p_Oil"], 1);
 assert.equal(raw["smelter_fuel_p_not-a-fuel"], undefined);
 
-adapter.resetToDefaults();
+const sectionLifecycle = createRecordSettingsLifecycle({
+  raw,
+  rootState: game.rootState,
+  controls: { resolve: () => undefined, capturedElementIds: () => [] },
+});
+
+sectionLifecycle.resetSection("production");
 assert.deepEqual(
   {
     craft: raw["craftPlywood"],

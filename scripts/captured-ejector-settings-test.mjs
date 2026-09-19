@@ -5,6 +5,10 @@ import { readCapturedEjectorSettingsEntries } from "../src/adapters/evolve/econo
 import { createCapturedEjectorSettingsAdapter } from "../src/adapters/evolve/economy/resources/captured-ejector-settings.ts";
 import { createCapturedEjectToggleReader } from "../src/adapters/evolve/economy/resources/captured-eject-toggles.ts";
 import { createCapturedSupplyToggleReader } from "../src/adapters/evolve/economy/resources/captured-supply-toggles.ts";
+import {
+  ALWAYS_TRUE_OVERRIDE,
+  createRecordSettingsLifecycle,
+} from "./test-support/captured-settings.mjs";
 
 function makeCapturedGame() {
   const root = {
@@ -118,9 +122,9 @@ const raw = {
   res_ejectIron: false,
   res_supplyLumber: true,
   overrides: {
-    res_ejectIron: [{ condition: "Money>0" }],
-    res_naniteCopper: [{ condition: "Food>0" }],
-    job_farmer: [{ condition: "Food>0" }],
+    res_ejectIron: ALWAYS_TRUE_OVERRIDE,
+    res_naniteCopper: ALWAYS_TRUE_OVERRIDE,
+    job_farmer: ALWAYS_TRUE_OVERRIDE,
   },
 };
 const adapter = createCapturedEjectorSettingsAdapter({
@@ -176,7 +180,13 @@ assert.deepEqual(
 // deliberately not allowed to turn the displayed value into the effective one.
 assert.equal(raw["res_ejectIron"], false);
 
-adapter.resetToDefaults();
+const sectionLifecycle = createRecordSettingsLifecycle({
+  raw,
+  rootState: game.rootState,
+  controls: game.controls,
+});
+
+sectionLifecycle.resetSection("ejector");
 assert.deepEqual(
   {
     ejectIron: raw["res_ejectIron"],
@@ -198,7 +208,7 @@ assert.deepEqual(
   },
 );
 assert.deepEqual(raw["overrides"], {
-  job_farmer: [{ condition: "Food>0" }],
+  job_farmer: ALWAYS_TRUE_OVERRIDE,
 });
 
 const document = {

@@ -4,13 +4,11 @@ import {
   createBuildingSettingsReadModel,
   type BuildingSettingsReadModel,
 } from "../../../../domain/progression/build/building-settings.ts";
-import { computeBuildingDefaults } from "../../../../domain/settings-defaults.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 import {
-  readCapturedBuildingBindingMap,
   readCapturedBuildingEntries,
   type CapturedBuildingEntry,
 } from "./captured-building-catalog.ts";
@@ -32,7 +30,6 @@ export interface CapturedBuildingSettingsDependencies {
 export interface CapturedBuildingSettingsAdapter {
   readBuildingSettingsReadModel(): BuildingSettingsReadModel;
   filterBuildingSettings(query: string): readonly string[] | undefined;
-  resetToDefaults(): void;
   resetPriorities(): void;
   reorderBuildings(buildingIds: readonly string[]): void;
   setAllAutoBuild(enabled: boolean): void;
@@ -257,25 +254,6 @@ export function createCapturedBuildingSettingsAdapter({
   return Object.freeze({
     readBuildingSettingsReadModel: readModel,
     filterBuildingSettings,
-    resetToDefaults() {
-      writeForEntries((raw, entries) => {
-        const context = {
-          buildings: entries.map((entry) => ({
-            binding: entry.binding,
-            switchable: entry.switchable,
-            smart: entry.smart,
-          })),
-          bindingByKey: readCapturedBuildingBindingMap(entries),
-        };
-        const defaults = computeBuildingDefaults(context).def;
-        const overrides = readCapturedBuildingOverrides(raw);
-        for (const key of Object.keys(overrides)) {
-          if (key.startsWith("bat") || key.startsWith("bld_"))
-            delete overrides[key];
-        }
-        Object.assign(raw, defaults);
-      });
-    },
     resetPriorities() {
       writeForEntries((raw, entries) => {
         entries.forEach((entry, index) => {

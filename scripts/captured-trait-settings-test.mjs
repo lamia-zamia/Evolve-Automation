@@ -27,6 +27,7 @@ import {
   readCapturedMutationMultipliedBaseCost,
   readCapturedMutationTraitValue,
 } from "../src/adapters/evolve/traits/captured-mutation-cost.ts";
+import { createRecordSettingsLifecycle } from "./test-support/captured-settings.mjs";
 
 // Upstream id sets, in upstream order.
 assert.equal(CAPTURED_TRAIT_RACES.length, 67);
@@ -268,13 +269,19 @@ assert.equal(raw.mutableTrait_p_creative, 0);
 assert.equal(raw.mutableTrait_p_adaptable, 1);
 adapter.setBoolean("mTrait_tactical", false);
 assert.equal(raw.mTrait_tactical, false);
-adapter.resetMinorTraits();
+const sectionLifecycle = createRecordSettingsLifecycle({
+  raw,
+  rootState,
+  controls: { resolve: () => undefined, capturedElementIds: () => [] },
+});
+
+sectionLifecycle.resetSection("minortrait");
 assert.equal(raw.shifterGenus, "ignore");
 assert.equal(raw.imitateRace, "ignore");
 assert.equal(raw.mTrait_tactical, true);
 assert.equal(raw.mTrait_p_tactical, 0);
 assert.equal(raw.ocularPower_disintegration, true);
-adapter.resetMutableTraits();
+sectionLifecycle.resetSection("mutabletrait");
 assert.equal(raw.mutableTrait_p_adaptable, 0);
 assert.equal(raw.mutableTrait_purge_adaptable, false);
 
@@ -291,8 +298,6 @@ assert.equal(
   missing.readTraitSettingsReadModel().imitateRaceCompleted,
   undefined,
 );
-missing.resetMinorTraits();
-missing.resetMutableTraits();
 missing.reorderMinorTraits(["tactical"]);
 missing.reorderMutableTraits(["adaptable"]);
 missing.setBoolean("mTrait_tactical", true);

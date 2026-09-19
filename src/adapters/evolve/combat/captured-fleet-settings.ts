@@ -5,7 +5,6 @@ import {
   type FleetSettingsReadModel,
   type FleetSettingsRegion,
 } from "../../../domain/combat/fleet-settings.ts";
-import { computeFleetDefaults } from "../../../domain/settings-defaults.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import { isRecord } from "../../validation.ts";
 import {
@@ -24,7 +23,6 @@ export interface CapturedFleetSettingsDependencies {
 
 export interface CapturedFleetSettingsAdapter {
   readFleetSettingsReadModel(): FleetSettingsReadModel;
-  resetToDefaults(): void;
   reorderAndromeda(regionIds: readonly string[]): void;
 }
 
@@ -93,11 +91,6 @@ export function createCapturedFleetSettingsAdapter({
         andromedaControls: CAPTURED_FLEET_ANDROMEDA_CONTROLS,
         andromedaRegions: readAndromedaRegions(controls, settings),
       });
-    },
-    resetToDefaults() {
-      const raw = getSettingsRaw();
-      if (!isRecord(raw)) return;
-      Object.assign(raw, computeFleetDefaults().def);
     },
     reorderAndromeda(regionIds: readonly string[]) {
       const raw = getSettingsRaw();

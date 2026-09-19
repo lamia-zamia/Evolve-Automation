@@ -4,6 +4,10 @@ import { readStorageResetContext } from "../src/adapters/evolve/captured-setting
 import { readCapturedStorageSettingsEntries } from "../src/adapters/evolve/economy/storage/captured-storage-settings-catalog.ts";
 import { createCapturedStorageSettingsAdapter } from "../src/adapters/evolve/economy/storage/captured-storage-settings.ts";
 import { createCapturedStorageToggleReader } from "../src/adapters/evolve/economy/storage/captured-storage-toggles.ts";
+import {
+  ALWAYS_TRUE_OVERRIDE,
+  createRecordSettingsLifecycle,
+} from "./test-support/captured-settings.mjs";
 
 function makeCapturedGame() {
   const root = {
@@ -63,9 +67,9 @@ const raw = {
   res_storage_p_Orichalcum: 1,
   res_max_storeCoal: 100,
   overrides: {
-    res_storageCoal: [{ condition: "Money>0" }],
-    res_crates_m_Iron: [{ condition: "Food>0" }],
-    job_farmer: [{ condition: "Food>0" }],
+    res_storageCoal: ALWAYS_TRUE_OVERRIDE,
+    res_crates_m_Iron: ALWAYS_TRUE_OVERRIDE,
+    job_farmer: ALWAYS_TRUE_OVERRIDE,
   },
 };
 const adapter = createCapturedStorageSettingsAdapter({
@@ -120,7 +124,13 @@ assert.equal(raw["res_storage_p_Copper"], 0);
 assert.equal(raw["res_storage_p_Iron"], 1);
 assert.equal(raw["res_storage_p_not-captured"], undefined);
 
-adapter.resetToDefaults();
+const sectionLifecycle = createRecordSettingsLifecycle({
+  raw,
+  rootState: game.rootState,
+  controls: game.controls,
+});
+
+sectionLifecycle.resetSection("storage");
 assert.deepEqual(
   {
     iron: raw["res_storageIron"],
@@ -142,7 +152,7 @@ assert.deepEqual(
   },
 );
 assert.deepEqual(raw["overrides"], {
-  job_farmer: [{ condition: "Food>0" }],
+  job_farmer: ALWAYS_TRUE_OVERRIDE,
 });
 
 const toggleReader = createCapturedStorageToggleReader({

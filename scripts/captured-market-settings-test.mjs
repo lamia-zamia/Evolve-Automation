@@ -7,6 +7,10 @@ import {
 } from "../src/adapters/evolve/economy/market/captured-market-settings-catalog.ts";
 import { createCapturedMarketSettingsAdapter } from "../src/adapters/evolve/economy/market/captured-market-settings.ts";
 import { createCapturedMarketToggleReader } from "../src/adapters/evolve/economy/market/captured-market-toggles.ts";
+import {
+  ALWAYS_TRUE_OVERRIDE,
+  createRecordSettingsLifecycle,
+} from "./test-support/captured-settings.mjs";
 
 function makeCapturedGame({ smoldering = false } = {}) {
   const root = {
@@ -102,10 +106,10 @@ const raw = {
   res_buy_p_Food: 1,
   res_galaxy_w_Deuterium: 3,
   overrides: {
-    buyIron: [{ condition: "Money>0" }],
-    res_trade_w_Coal: [{ condition: "Food>0" }],
-    res_galaxy_w_Deuterium: [{ condition: "Food>0" }],
-    job_farmer: [{ condition: "Food>0" }],
+    buyIron: ALWAYS_TRUE_OVERRIDE,
+    res_trade_w_Coal: ALWAYS_TRUE_OVERRIDE,
+    res_galaxy_w_Deuterium: ALWAYS_TRUE_OVERRIDE,
+    job_farmer: ALWAYS_TRUE_OVERRIDE,
   },
 };
 const adapter = createCapturedMarketSettingsAdapter({
@@ -190,7 +194,13 @@ assert.equal(raw["res_buy_p_Oil"], 0);
 assert.equal(raw["res_buy_p_Iron"], 1);
 assert.equal(raw["res_buy_p_not-captured"], undefined);
 
-adapter.resetToDefaults();
+const sectionLifecycle = createRecordSettingsLifecycle({
+  raw,
+  rootState: game.rootState,
+  controls: game.controls,
+});
+
+sectionLifecycle.resetSection("market");
 assert.deepEqual(
   {
     buy: raw["buyIron"],
@@ -214,7 +224,7 @@ assert.deepEqual(
   },
 );
 assert.deepEqual(raw["overrides"], {
-  job_farmer: [{ condition: "Food>0" }],
+  job_farmer: ALWAYS_TRUE_OVERRIDE,
 });
 
 const toggleReader = createCapturedMarketToggleReader({
