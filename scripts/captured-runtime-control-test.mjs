@@ -1159,8 +1159,14 @@ assert.equal(unsubscribeCount, 1);
 {
   const phaseFailures = [];
   const observedPhases = [];
-  let bootstrapRootReads = 17;
-  let remainingRootFailures = 4;
+  // Startup reads the root freely; only the reads the tick itself makes are scripted below. This
+  // used to be a fixed read budget, which made the case fail whenever startup changed how many
+  // times it looked at the root.
+  let bootstrapping = true;
+  // Tuned to the tick's own read schedule: the first reads of the tick throw so the earlier
+  // phases report failures, and the next three succeed so the espionage and battle phases run.
+  // Re-tune by sweeping this number if the tick changes how often it reads the root.
+  let remainingRootFailures = 12;
   let validCombatRootReads = 0;
   const root = {
     tech: { spy: 2 },
@@ -1209,10 +1215,7 @@ assert.equal(unsubscribeCount, 1);
       isComplete: () => true,
       rootState: {
         readRoot: () => {
-          if (bootstrapRootReads > 0) {
-            bootstrapRootReads -= 1;
-            return root;
-          }
+          if (bootstrapping) return root;
           if (remainingRootFailures > 0) {
             remainingRootFailures -= 1;
             throw new Error("phase stub");
@@ -1311,6 +1314,7 @@ assert.equal(unsubscribeCount, 1);
       }
     },
   });
+  bootstrapping = false;
   cycle({ periods: 1 });
   stopCycle();
 

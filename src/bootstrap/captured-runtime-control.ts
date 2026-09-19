@@ -271,6 +271,11 @@ export function startCapturedRuntime({
     }),
   });
   settingsLifecycle.initialize();
+  // The settings catalogs are read out of the game's root object, so a replacement can change
+  // them without changing any count the lifecycle's own generation can see.
+  pageCapture.rootState.subscribeRootReplaced(() => {
+    settingsLifecycle.invalidateDynamicDefaults();
+  });
   const effectiveSettings = settingsLifecycle.readEffective();
   const reportedOverrideFailures = new Set<string>();
   const readSafeMode = () => {

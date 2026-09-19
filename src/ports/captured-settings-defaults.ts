@@ -36,4 +36,10 @@ export interface CapturedSettingsDefaults {
   readonly discoveredResetNames: readonly string[];
   /** Reads migration catalogs after the page has exposed its current controls and root. */
   readonly readMigrationCatalogs: () => CapturedSettingsMigrationCatalogs;
+  /**
+   * A value that changes whenever the captured catalogs could name a dynamic key they did not
+   * name before. The lifecycle skips its migration and default work while this is unchanged, so
+   * it must be cheap — cheaper than the work it guards — and it must never miss a growth.
+   */
+  readonly readCatalogGeneration: () => string;
 }

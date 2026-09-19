@@ -474,6 +474,30 @@ export function createCapturedSettingsDefaults({
     };
   };
 
+  /**
+   * Counts rather than contents.
+   *
+   * Every dynamic settings key is named after an entry in one of these catalogs, so a key the
+   * record does not have yet implies a catalog that has grown. The game only ever adds ids to
+   * these lists — a resource, tech, project, building or captured control appears and stays — so
+   * a length is a sufficient witness and a rename at constant length is not a shape the game
+   * produces. Buildings also carry a switchable flag, which decides whether `bld_s_` keys exist
+   * at all, so the switchable count is carried separately.
+   */
+  const readCatalogGeneration = (): string => {
+    const catalogs = readMigrationCatalogs();
+    return [
+      Object.keys(catalogs.techIds).length,
+      catalogs.marketPriorityIds.length,
+      catalogs.resourceIds.length,
+      catalogs.projectIds.length,
+      catalogs.buildings.length,
+      catalogs.buildings.filter((building) => building.switchable).length,
+      catalogs.crafterOriginalIds.length,
+      controls.capturedElementIds().length,
+    ].join(":");
+  };
+
   return {
     startupReader,
     reader,
@@ -507,5 +531,6 @@ export function createCapturedSettingsDefaults({
       "resetEjectorSettings",
     ],
     readMigrationCatalogs,
+    readCatalogGeneration,
   };
 }

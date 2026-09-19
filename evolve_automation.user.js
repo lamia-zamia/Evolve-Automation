@@ -24373,6 +24373,18 @@
           (key) => foundryResourceIds.has(key)
         )
       };
+    }, readCatalogGeneration = () => {
+      let catalogs = readMigrationCatalogs();
+      return [
+        Object.keys(catalogs.techIds).length,
+        catalogs.marketPriorityIds.length,
+        catalogs.resourceIds.length,
+        catalogs.projectIds.length,
+        catalogs.buildings.length,
+        catalogs.buildings.filter((building) => building.switchable).length,
+        catalogs.crafterOriginalIds.length,
+        controls2.capturedElementIds().length
+      ].join(":");
     };
     return {
       startupReader,
@@ -24406,7 +24418,8 @@
         "resetProductionSettings",
         "resetEjectorSettings"
       ],
-      readMigrationCatalogs
+      readMigrationCatalogs,
+      readCatalogGeneration
     };
   }
 
@@ -25539,7 +25552,7 @@
       getSettingsRaw: raw,
       reader: defaults.reader,
       effects: defaults.effects
-    }), byName = (table) => Object.fromEntries(SETTINGS_RESET_ORDER.map((name) => [name, table[name]])), resetByName = byName(resets), startupResetByName = byName(startupResets), effective = /* @__PURE__ */ Object.create(null), initialized = !1, migrationContext = () => ({
+    }), byName = (table) => Object.fromEntries(SETTINGS_RESET_ORDER.map((name) => [name, table[name]])), resetByName = byName(resets), startupResetByName = byName(startupResets), effective = /* @__PURE__ */ Object.create(null), initialized = !1, migratedGeneration, appliedGeneration, initializations = 0, dynamicDefaultRuns = 0, dynamicDefaultSkips = 0, migrationContext = () => ({
       settingsSections: defaults.settingsSections,
       defaultResets: SETTINGS_RESET_ORDER.flatMap(
         (name) => startupResetByName[name] ?? []
@@ -25557,23 +25570,31 @@
         ownsDynamicKey(key) && delete overrides[key];
     }, initialize = () => {
       let before = snapshot(settings.readRaw());
-      migrateSettingsRecord(raw(), migrationContext()), initialized = !0, persistIfChanged(before);
+      migrateSettingsRecord(raw(), migrationContext()), initialized = !0, initializations += 1, persistIfChanged(before);
     }, persistIfChanged = (before) => {
       snapshot(settings.readRaw()) !== before && settings.persist();
     };
     return Object.freeze({
-      initialize,
+      initialize() {
+        let generation = defaults.readCatalogGeneration();
+        initialized && migratedGeneration === generation || (initialize(), migratedGeneration = generation);
+      },
       replaceAndInitialize(next) {
-        settings.replaceRaw(next), initialized = !1, initialize(), settings.persist();
+        settings.replaceRaw(next), initialized = !1, migratedGeneration = void 0, appliedGeneration = void 0, initialize(), settings.persist();
       },
       resetSection(section) {
         let policy = findSettingsSectionPolicy(section);
         if (policy === void 0) return;
         let before = snapshot(settings.readRaw());
-        resetByName[policy.resetName]?.(!0), purgeDynamicOverrides(policy.ownsDynamicKey), persistIfChanged(before);
+        resetByName[policy.resetName]?.(!0), purgeDynamicOverrides(policy.ownsDynamicKey), migratedGeneration = void 0, appliedGeneration = void 0, persistIfChanged(before);
       },
       ensureDynamicDefaults() {
-        initialized || initialize();
+        let generation = defaults.readCatalogGeneration();
+        if (initialized && appliedGeneration === generation) {
+          dynamicDefaultSkips += 1;
+          return;
+        }
+        initialized || initialize(), dynamicDefaultRuns += 1;
         let before = snapshot(settings.readRaw()), catalogs = defaults.readMigrationCatalogs(), liveContext = {
           ...migrationContext(),
           ...catalogs
@@ -25583,8 +25604,16 @@
           let reset = resetByName[name];
           reset !== void 0 && reset(!1);
         }
-        persistIfChanged(before);
+        appliedGeneration = generation, persistIfChanged(before);
       },
+      invalidateDynamicDefaults() {
+        migratedGeneration = void 0, appliedGeneration = void 0;
+      },
+      stats: () => ({
+        initializations,
+        dynamicDefaultRuns,
+        dynamicDefaultSkips
+      }),
       readRaw: settings.readRaw,
       readEffective: () => effective
     });
@@ -39730,7 +39759,9 @@ Only continue if you trust the source. Injected code:
         controls: pageCapture2.controls
       })
     });
-    settingsLifecycle.initialize();
+    settingsLifecycle.initialize(), pageCapture2.rootState.subscribeRootReplaced(() => {
+      settingsLifecycle.invalidateDynamicDefaults();
+    });
     let effectiveSettings = settingsLifecycle.readEffective(), reportedOverrideFailures = /* @__PURE__ */ new Set(), readSafeMode = () => {
       let location = readProperty(settingsHostWindow2, "location");
       return String(location ?? "").toLowerCase().includes("safemode");
