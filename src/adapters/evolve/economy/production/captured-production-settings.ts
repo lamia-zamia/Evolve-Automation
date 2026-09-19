@@ -7,6 +7,7 @@ import {
 } from "../../../../domain/economy/production/production-settings.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { isRecord } from "../../../validation.ts";
+import { writeExplicitPriorityOrder } from "../../../../domain/settings-priority-order.ts";
 import {
   readCapturedFactoryRows,
   readCapturedFoundryRows,
@@ -48,13 +49,12 @@ export function createCapturedProductionSettingsAdapter({
   return Object.freeze({
     readProductionSettingsReadModel: readModel,
     reorderSmelterFuels(fuelIds: readonly string[]) {
-      const raw = readCapturedProductionSettingsRecord(getSettingsRaw());
-      const known = new Set(
+      writeExplicitPriorityOrder(
+        readCapturedProductionSettingsRecord(getSettingsRaw()),
+        fuelIds,
         readCapturedSmelterFuelRows(getSettingsRaw).map((fuel) => fuel.id),
+        (fuelId) => `smelter_fuel_p_${fuelId}`,
       );
-      fuelIds.forEach((fuelId: string, index: number) => {
-        if (known.has(fuelId)) raw[`smelter_fuel_p_${fuelId}`] = index;
-      });
     },
   });
 }

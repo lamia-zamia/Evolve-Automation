@@ -13,6 +13,13 @@ import {
   type CapturedBuildingEntry,
 } from "./captured-building-catalog.ts";
 
+import {
+  sortByStoredPriority,
+  writeDefaultPriorityOrder,
+  writeExplicitPriorityOrder,
+} from "../../../../domain/settings-priority-order.ts";
+import { readCapturedResourceLabel } from "../../captured-resource-metadata.ts";
+
 export interface CapturedBuildingSettingsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
@@ -58,10 +65,6 @@ function hasCapturedBuildingOverride(
   return Array.isArray(value) && value.length > 0;
 }
 
-function finiteBuildingPriority(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
 function readCapturedBuildingColor(region: string) {
   if (region === "space") return "has-text-danger" as const;
   if (region === "galaxy" || region === "eden")
@@ -70,25 +73,6 @@ function readCapturedBuildingColor(region: string) {
   if (region === "portal" || region === "tauceti")
     return "has-text-warning" as const;
   return "has-text-info" as const;
-}
-
-function sortCapturedBuildingEntries(
-  entries: readonly Readonly<CapturedBuildingEntry>[],
-  raw: Record<string, unknown>,
-): readonly Readonly<CapturedBuildingEntry>[] {
-  return Object.freeze(
-    entries
-      .map((entry, index) => ({
-        entry,
-        index,
-        priority: finiteBuildingPriority(raw[`bld_p_${entry.binding}`], index),
-      }))
-      .sort(
-        (left, right) =>
-          left.priority - right.priority || left.index - right.index,
-      )
-      .map(({ entry }) => entry),
-  );
 }
 
 function readCapturedBuildingFilterNumber(
@@ -100,17 +84,6 @@ function readCapturedBuildingFilterNumber(
   } catch {
     return Number.NaN;
   }
-}
-
-function readCapturedBuildingResourceTitle(
-  root: unknown,
-  resourceId: string,
-): string {
-  const resource = readProperty(readProperty(root, "resource"), resourceId);
-  const title = readProperty(resource, "title");
-  if (typeof title === "string") return title;
-  const name = readProperty(resource, "name");
-  return typeof name === "string" ? name : resourceId;
 }
 
 export function createCapturedBuildingSettingsAdapter({
@@ -132,9 +105,10 @@ export function createCapturedBuildingSettingsAdapter({
   const readModel = (): BuildingSettingsReadModel => {
     const raw = readCapturedBuildingSettingsRecord(getSettingsRaw());
     const overrides = readCapturedBuildingOverrides(raw);
-    const entries = sortCapturedBuildingEntries(
+    const entries = sortByStoredPriority(
       readBuildingEntriesForSettings(),
       raw,
+      (entry) => `bld_p_${entry.binding}`,
     );
     return createBuildingSettingsReadModel({
       rows: entries.map((entry) => {
@@ -226,7 +200,7 @@ export function createCapturedBuildingSettingsAdapter({
           const price = costs?.readCost(entry.elementId);
           if (price === undefined) return 0;
           const cost = Object.entries(price.cost).find(([resourceId]) =>
-            readCapturedBuildingResourceTitle(root, resourceId)
+            readCapturedResourceLabel(root, resourceId)
               .toUpperCase()
               .includes(left),
           );
@@ -256,19 +230,20 @@ export function createCapturedBuildingSettingsAdapter({
     filterBuildingSettings,
     resetPriorities() {
       writeForEntries((raw, entries) => {
-        entries.forEach((entry, index) => {
-          raw[`bld_p_${entry.binding}`] = index;
-        });
+        writeDefaultPriorityOrder(
+          raw,
+          entries.map((entry) => entry.binding),
+          (binding) => `bld_p_${binding}`,
+        );
       });
     },
     reorderBuildings(buildingIds: readonly string[]) {
-      const known = new Set(
+      writeExplicitPriorityOrder(
+        readCapturedBuildingSettingsRecord(getSettingsRaw()),
+        buildingIds,
         readBuildingEntriesForSettings().map((entry) => entry.binding),
+        (buildingId) => `bld_p_${buildingId}`,
       );
-      const raw = readCapturedBuildingSettingsRecord(getSettingsRaw());
-      buildingIds.forEach((buildingId: string, index: number) => {
-        if (known.has(buildingId)) raw[`bld_p_${buildingId}`] = index;
-      });
     },
     setAllAutoBuild(enabled: boolean) {
       writeForEntries((raw, entries) => {

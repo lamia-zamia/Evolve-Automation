@@ -12,6 +12,12 @@ import {
   type CapturedProjectSettingsEntry,
 } from "./captured-project-settings-catalog.ts";
 
+import {
+  sortByStoredPriority,
+  writeDefaultPriorityOrder,
+  writeExplicitPriorityOrder,
+} from "../../../../domain/settings-priority-order.ts";
+
 export interface CapturedProjectSettingsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
@@ -30,32 +36,6 @@ function readCapturedProjectSettingsRecord(
   return isRecord(raw) ? raw : {};
 }
 
-function finiteProjectPriority(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function sortCapturedProjectEntries(
-  entries: readonly Readonly<CapturedProjectSettingsEntry>[],
-  raw: Record<string, unknown>,
-): readonly Readonly<CapturedProjectSettingsEntry>[] {
-  return Object.freeze(
-    entries
-      .map((entry, index) => ({
-        entry,
-        index,
-        priority: finiteProjectPriority(
-          raw[`arpa_p_${entry.projectId}`],
-          index,
-        ),
-      }))
-      .sort(
-        (left, right) =>
-          left.priority - right.priority || left.index - right.index,
-      )
-      .map(({ entry }) => entry),
-  );
-}
-
 export function createCapturedProjectSettingsAdapter({
   rootState,
   controls,
@@ -67,9 +47,10 @@ export function createCapturedProjectSettingsAdapter({
 
   const readModel = (): ProjectSettingsReadModel => {
     const raw = readCapturedProjectSettingsRecord(getSettingsRaw());
-    const entries = sortCapturedProjectEntries(
+    const entries = sortByStoredPriority(
       readProjectEntriesForSettings(),
       raw,
+      (entry) => `arpa_p_${entry.projectId}`,
     );
     return createProjectSettingsReadModel(
       entries.map((entry) => ({
@@ -85,19 +66,19 @@ export function createCapturedProjectSettingsAdapter({
   return Object.freeze({
     readProjectSettingsReadModel: readModel,
     resetPriorities() {
-      const raw = readCapturedProjectSettingsRecord(getSettingsRaw());
-      readProjectEntriesForSettings().forEach((entry, index) => {
-        raw[`arpa_p_${entry.projectId}`] = index;
-      });
+      writeDefaultPriorityOrder(
+        readCapturedProjectSettingsRecord(getSettingsRaw()),
+        readProjectEntriesForSettings().map((entry) => entry.projectId),
+        (projectId) => `arpa_p_${projectId}`,
+      );
     },
     reorderProjects(projectIds: readonly string[]) {
-      const known = new Set(
+      writeExplicitPriorityOrder(
+        readCapturedProjectSettingsRecord(getSettingsRaw()),
+        projectIds,
         readProjectEntriesForSettings().map((entry) => entry.projectId),
+        (projectId) => `arpa_p_${projectId}`,
       );
-      const raw = readCapturedProjectSettingsRecord(getSettingsRaw());
-      projectIds.forEach((projectId: string, index: number) => {
-        if (known.has(projectId)) raw[`arpa_p_${projectId}`] = index;
-      });
     },
   });
 }

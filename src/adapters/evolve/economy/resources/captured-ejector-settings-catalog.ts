@@ -15,7 +15,7 @@
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import { readEjector } from "../../captured-settings-defaults.ts";
 import type { EjectorResourceDescriptor } from "../../../../domain/settings-defaults.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { readCapturedResourceLabel } from "../../captured-resource-metadata.ts";
 
 export interface CapturedEjectorSettingsEntry {
   readonly resourceId: string;
@@ -29,18 +29,6 @@ export interface CapturedEjectorSettingsEntry {
   readonly supplyConsumable: boolean;
   readonly supplyOut: string;
   readonly supplyIn: string;
-}
-
-function readCapturedEjectorResourceTitle(
-  root: unknown,
-  resourceId: string,
-): string {
-  const resource = readProperty(readProperty(root, "resource"), resourceId);
-  if (!isRecord(resource)) return resourceId;
-  const title = readProperty(resource, "title");
-  if (typeof title === "string" && title.length > 0) return title;
-  const name = readProperty(resource, "name");
-  return typeof name === "string" && name.length > 0 ? name : resourceId;
 }
 
 function readCapturedEjectorColor(
@@ -71,7 +59,7 @@ export function readCapturedEjectorSettingsEntries(
         resourceId: descriptor.id,
         ejectElementId: `eject${descriptor.id}`,
         supplyElementId: `supply${descriptor.id}`,
-        label: readCapturedEjectorResourceTitle(root, descriptor.id),
+        label: readCapturedResourceLabel(root, descriptor.id),
         color: readCapturedEjectorColor(descriptor),
         atomicMass: descriptor.atomicMass,
         ejectConsumable: descriptor.ejectConsumable,

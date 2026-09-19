@@ -15,6 +15,12 @@ import {
   type CapturedMarketSettingsEntry,
 } from "./captured-market-settings-catalog.ts";
 
+import {
+  sortByStoredPriority,
+  writeDefaultPriorityOrder,
+  writeExplicitPriorityOrder,
+} from "../../../../domain/settings-priority-order.ts";
+
 export interface CapturedMarketSettingsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
@@ -31,32 +37,6 @@ function readCapturedMarketSettingsRecord(
   raw: unknown,
 ): Record<string, unknown> {
   return isRecord(raw) ? raw : {};
-}
-
-function finiteMarketPriority(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function sortCapturedMarketEntries(
-  entries: readonly Readonly<CapturedMarketSettingsEntry>[],
-  raw: Record<string, unknown>,
-): readonly Readonly<CapturedMarketSettingsEntry>[] {
-  return Object.freeze(
-    entries
-      .map((entry, index) => ({
-        entry,
-        index,
-        priority: finiteMarketPriority(
-          raw[`res_buy_p_${entry.resourceId}`],
-          index,
-        ),
-      }))
-      .sort(
-        (left, right) =>
-          left.priority - right.priority || left.index - right.index,
-      )
-      .map(({ entry }) => entry),
-  );
 }
 
 function readMarketContext(
@@ -78,9 +58,10 @@ export function createCapturedMarketSettingsAdapter({
   const readModel = (): MarketSettingsReadModel => {
     const raw = readCapturedMarketSettingsRecord(getSettingsRaw());
     const root = rootState.readRoot();
-    const entries = sortCapturedMarketEntries(
+    const entries = sortByStoredPriority(
       readMarketEntriesForSettings(),
       raw,
+      (entry) => `res_buy_p_${entry.resourceId}`,
     );
     return createMarketSettingsReadModel({
       rows: entries.map((entry) => ({
@@ -110,18 +91,19 @@ export function createCapturedMarketSettingsAdapter({
     resetPriorities() {
       const raw = readCapturedMarketSettingsRecord(getSettingsRaw());
       const { tradableResourceIds } = readMarketContext(rootState, controls);
-      tradableResourceIds.forEach((resourceId, index) => {
-        raw[`res_buy_p_${resourceId}`] = index;
-      });
+      writeDefaultPriorityOrder(
+        raw,
+        tradableResourceIds,
+        (resourceId) => `res_buy_p_${resourceId}`,
+      );
     },
     reorderResources(resourceIds: readonly string[]) {
-      const known = new Set(
+      writeExplicitPriorityOrder(
+        readCapturedMarketSettingsRecord(getSettingsRaw()),
+        resourceIds,
         readMarketEntriesForSettings().map((entry) => entry.resourceId),
+        (resourceId) => `res_buy_p_${resourceId}`,
       );
-      const raw = readCapturedMarketSettingsRecord(getSettingsRaw());
-      resourceIds.forEach((resourceId: string, index: number) => {
-        if (known.has(resourceId)) raw[`res_buy_p_${resourceId}`] = index;
-      });
     },
   });
 }

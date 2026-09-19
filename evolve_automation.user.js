@@ -26699,6 +26699,47 @@
     });
   }
 
+  // src/domain/settings-priority-order.ts
+  function storedPriority(value, fallback) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function sortByStoredPriority(entries, raw, prioritySettingName) {
+    return Object.freeze(
+      entries.map((entry, index) => ({
+        entry,
+        index,
+        priority: storedPriority(raw[prioritySettingName(entry)], index)
+      })).sort(
+        (left, right) => left.priority - right.priority || left.index - right.index
+      ).map(({ entry }) => entry)
+    );
+  }
+  function writeDefaultPriorityOrder(raw, ids, prioritySettingName) {
+    ids.forEach((id, index) => {
+      raw[prioritySettingName(id)] = index;
+    });
+  }
+  function writeExplicitPriorityOrder(raw, requestedIds, knownIds, prioritySettingName) {
+    let known = knownIds instanceof Set ? knownIds : new Set(knownIds);
+    requestedIds.forEach((id, index) => {
+      known.has(id) && (raw[prioritySettingName(id)] = index);
+    });
+  }
+
+  // src/adapters/evolve/captured-resource-metadata.ts
+  function readCapturedResource(root, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId);
+    return isRecord(resource) ? resource : void 0;
+  }
+  function readCapturedResourceLabel(root, resourceId) {
+    let resource = readCapturedResource(root, resourceId);
+    if (resource === void 0) return resourceId;
+    let title = readProperty(resource, "title");
+    if (typeof title == "string" && title.length > 0) return title;
+    let name = readProperty(resource, "name");
+    return typeof name == "string" && name.length > 0 ? name : resourceId;
+  }
+
   // src/adapters/evolve/progression/build/captured-building-settings.ts
   function readCapturedBuildingSettingsRecord(raw) {
     return isRecord(raw) ? raw : {};
@@ -26711,22 +26752,8 @@
     let value = overrides[key];
     return Array.isArray(value) && value.length > 0;
   }
-  function finiteBuildingPriority(value, fallback) {
-    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
-  }
   function readCapturedBuildingColor(region) {
     return region === "space" ? "has-text-danger" : region === "galaxy" || region === "eden" ? "has-text-advanced" : region === "interstellar" ? "has-text-special" : region === "portal" || region === "tauceti" ? "has-text-warning" : "has-text-info";
-  }
-  function sortCapturedBuildingEntries(entries, raw) {
-    return Object.freeze(
-      entries.map((entry, index) => ({
-        entry,
-        index,
-        priority: finiteBuildingPriority(raw[`bld_p_${entry.binding}`], index)
-      })).sort(
-        (left, right) => left.priority - right.priority || left.index - right.index
-      ).map(({ entry }) => entry)
-    );
   }
   function readCapturedBuildingFilterNumber(getRealNumber, value) {
     try {
@@ -26734,12 +26761,6 @@
     } catch {
       return Number.NaN;
     }
-  }
-  function readCapturedBuildingResourceTitle(root, resourceId) {
-    let resource = readProperty(readProperty(root, "resource"), resourceId), title = readProperty(resource, "title");
-    if (typeof title == "string") return title;
-    let name = readProperty(resource, "name");
-    return typeof name == "string" ? name : resourceId;
   }
   function createCapturedBuildingSettingsAdapter({
     rootState,
@@ -26752,9 +26773,10 @@
     costs
   }) {
     let readBuildingEntriesForSettings = () => (ensureControls?.(), readCapturedBuildingEntries(rootState.readRoot(), controls2)), readModel = () => {
-      let raw = readCapturedBuildingSettingsRecord(getSettingsRaw()), overrides = readCapturedBuildingOverrides(raw), entries = sortCapturedBuildingEntries(
+      let raw = readCapturedBuildingSettingsRecord(getSettingsRaw()), overrides = readCapturedBuildingOverrides(raw), entries = sortByStoredPriority(
         readBuildingEntriesForSettings(),
-        raw
+        raw,
+        (entry) => `bld_p_${entry.binding}`
       );
       return createBuildingSettingsReadModel({
         rows: entries.map((entry) => {
@@ -26810,7 +26832,7 @@
           default: {
             let price = costs?.readCost(entry.elementId);
             return price === void 0 ? 0 : Object.entries(price.cost).find(
-              ([resourceId]) => readCapturedBuildingResourceTitle(root, resourceId).toUpperCase().includes(left)
+              ([resourceId]) => readCapturedResourceLabel(root, resourceId).toUpperCase().includes(left)
             )?.[1] ?? 0;
           }
         }
@@ -26827,18 +26849,20 @@
       filterBuildingSettings,
       resetPriorities() {
         writeForEntries((raw, entries) => {
-          entries.forEach((entry, index) => {
-            raw[`bld_p_${entry.binding}`] = index;
-          });
+          writeDefaultPriorityOrder(
+            raw,
+            entries.map((entry) => entry.binding),
+            (binding) => `bld_p_${binding}`
+          );
         });
       },
       reorderBuildings(buildingIds) {
-        let known = new Set(
-          readBuildingEntriesForSettings().map((entry) => entry.binding)
-        ), raw = readCapturedBuildingSettingsRecord(getSettingsRaw());
-        buildingIds.forEach((buildingId, index) => {
-          known.has(buildingId) && (raw[`bld_p_${buildingId}`] = index);
-        });
+        writeExplicitPriorityOrder(
+          readCapturedBuildingSettingsRecord(getSettingsRaw()),
+          buildingIds,
+          readBuildingEntriesForSettings().map((entry) => entry.binding),
+          (buildingId) => `bld_p_${buildingId}`
+        );
       },
       setAllAutoBuild(enabled) {
         writeForEntries((raw, entries) => {
@@ -27071,23 +27095,6 @@
   function readCapturedProjectSettingsRecord(raw) {
     return isRecord(raw) ? raw : {};
   }
-  function finiteProjectPriority(value, fallback) {
-    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
-  }
-  function sortCapturedProjectEntries(entries, raw) {
-    return Object.freeze(
-      entries.map((entry, index) => ({
-        entry,
-        index,
-        priority: finiteProjectPriority(
-          raw[`arpa_p_${entry.projectId}`],
-          index
-        )
-      })).sort(
-        (left, right) => left.priority - right.priority || left.index - right.index
-      ).map(({ entry }) => entry)
-    );
-  }
   function createCapturedProjectSettingsAdapter({
     rootState,
     controls: controls2,
@@ -27096,9 +27103,10 @@
     let readProjectEntriesForSettings = () => readCapturedProjectSettingsEntries(rootState.readRoot(), controls2);
     return Object.freeze({
       readProjectSettingsReadModel: () => {
-        let raw = readCapturedProjectSettingsRecord(getSettingsRaw()), entries = sortCapturedProjectEntries(
+        let raw = readCapturedProjectSettingsRecord(getSettingsRaw()), entries = sortByStoredPriority(
           readProjectEntriesForSettings(),
-          raw
+          raw,
+          (entry) => `arpa_p_${entry.projectId}`
         );
         return createProjectSettingsReadModel(
           entries.map((entry) => ({
@@ -27111,18 +27119,19 @@
         );
       },
       resetPriorities() {
-        let raw = readCapturedProjectSettingsRecord(getSettingsRaw());
-        readProjectEntriesForSettings().forEach((entry, index) => {
-          raw[`arpa_p_${entry.projectId}`] = index;
-        });
+        writeDefaultPriorityOrder(
+          readCapturedProjectSettingsRecord(getSettingsRaw()),
+          readProjectEntriesForSettings().map((entry) => entry.projectId),
+          (projectId) => `arpa_p_${projectId}`
+        );
       },
       reorderProjects(projectIds) {
-        let known = new Set(
-          readProjectEntriesForSettings().map((entry) => entry.projectId)
-        ), raw = readCapturedProjectSettingsRecord(getSettingsRaw());
-        projectIds.forEach((projectId, index) => {
-          known.has(projectId) && (raw[`arpa_p_${projectId}`] = index);
-        });
+        writeExplicitPriorityOrder(
+          readCapturedProjectSettingsRecord(getSettingsRaw()),
+          projectIds,
+          readProjectEntriesForSettings().map((entry) => entry.projectId),
+          (projectId) => `arpa_p_${projectId}`
+        );
       }
     });
   }
@@ -27332,14 +27341,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/evolve/economy/storage/captured-storage-settings-catalog.ts
-  function readCapturedStorageResourceTitle(root, resourceId) {
-    let resource = readProperty(readProperty(root, "resource"), resourceId);
-    if (!isRecord(resource)) return resourceId;
-    let title = readProperty(resource, "title");
-    if (typeof title == "string" && title.length > 0) return title;
-    let name = readProperty(resource, "name");
-    return typeof name == "string" && name.length > 0 ? name : resourceId;
-  }
   function readCapturedStorageSettingsEntries(root, controls2) {
     let { storableResourceIds } = readStorageResetContext(root, controls2);
     return Object.freeze(
@@ -27347,7 +27348,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         (resourceId) => Object.freeze({
           resourceId,
           elementId: `stack-${resourceId}`,
-          label: readCapturedStorageResourceTitle(root, resourceId)
+          label: readCapturedResourceLabel(root, resourceId)
         })
       )
     );
@@ -27356,23 +27357,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
   // src/adapters/evolve/economy/storage/captured-storage-settings.ts
   function readCapturedStorageSettingsRecord(raw) {
     return isRecord(raw) ? raw : {};
-  }
-  function finiteStoragePriority(value, fallback) {
-    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
-  }
-  function sortCapturedStorageEntries(entries, raw) {
-    return Object.freeze(
-      entries.map((entry, index) => ({
-        entry,
-        index,
-        priority: finiteStoragePriority(
-          raw[`res_storage_p_${entry.resourceId}`],
-          index
-        )
-      })).sort(
-        (left, right) => left.priority - right.priority || left.index - right.index
-      ).map(({ entry }) => entry)
-    );
   }
   function readStorageContext(rootState, controls2) {
     return readStorageResetContext(rootState.readRoot(), controls2);
@@ -27385,9 +27369,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
     let readStorageEntriesForSettings = () => readCapturedStorageSettingsEntries(rootState.readRoot(), controls2);
     return Object.freeze({
       readStorageSettingsReadModel: () => {
-        let raw = readCapturedStorageSettingsRecord(getSettingsRaw()), entries = sortCapturedStorageEntries(
+        let raw = readCapturedStorageSettingsRecord(getSettingsRaw()), entries = sortByStoredPriority(
           readStorageEntriesForSettings(),
-          raw
+          raw,
+          (entry) => `res_storage_p_${entry.resourceId}`
         );
         return createStorageSettingsReadModel(
           entries.map((entry) => ({
@@ -27402,17 +27387,19 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       resetPriorities() {
         let raw = readCapturedStorageSettingsRecord(getSettingsRaw()), { storableResourceIds } = readStorageContext(rootState, controls2);
-        storableResourceIds.forEach((resourceId, index) => {
-          raw[`res_storage_p_${resourceId}`] = index;
-        });
+        writeDefaultPriorityOrder(
+          raw,
+          storableResourceIds,
+          (resourceId) => `res_storage_p_${resourceId}`
+        );
       },
       reorderResources(resourceIds) {
-        let known = new Set(
-          readStorageEntriesForSettings().map((entry) => entry.resourceId)
-        ), raw = readCapturedStorageSettingsRecord(getSettingsRaw());
-        resourceIds.forEach((resourceId, index) => {
-          known.has(resourceId) && (raw[`res_storage_p_${resourceId}`] = index);
-        });
+        writeExplicitPriorityOrder(
+          readCapturedStorageSettingsRecord(getSettingsRaw()),
+          resourceIds,
+          readStorageEntriesForSettings().map((entry) => entry.resourceId),
+          (resourceId) => `res_storage_p_${resourceId}`
+        );
       }
     });
   }
@@ -27827,14 +27814,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/evolve/economy/market/captured-market-settings-catalog.ts
-  function readCapturedMarketResourceTitle(root, resourceId) {
-    let resource = readProperty(readProperty(root, "resource"), resourceId);
-    if (!isRecord(resource)) return resourceId;
-    let title = readProperty(resource, "title");
-    if (typeof title == "string" && title.length > 0) return title;
-    let name = readProperty(resource, "name");
-    return typeof name == "string" && name.length > 0 ? name : resourceId;
-  }
   function readCapturedMarketSettingsEntries(root, controls2) {
     let { tradableResourceIds } = readMarketResetContext(root, controls2);
     return Object.freeze(
@@ -27842,7 +27821,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         (resourceId) => Object.freeze({
           resourceId,
           elementId: `market-${resourceId}`,
-          label: readCapturedMarketResourceTitle(root, resourceId)
+          label: readCapturedResourceLabel(root, resourceId)
         })
       )
     );
@@ -27853,9 +27832,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
       offers.map(
         (offer) => Object.freeze({
           buyId: offer.buyResourceId,
-          buyLabel: readCapturedMarketResourceTitle(root, offer.buyResourceId),
+          buyLabel: readCapturedResourceLabel(root, offer.buyResourceId),
           sellId: offer.sellResourceId,
-          sellLabel: readCapturedMarketResourceTitle(root, offer.sellResourceId)
+          sellLabel: readCapturedResourceLabel(root, offer.sellResourceId)
         })
       )
     );
@@ -27864,23 +27843,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
   // src/adapters/evolve/economy/market/captured-market-settings.ts
   function readCapturedMarketSettingsRecord(raw) {
     return isRecord(raw) ? raw : {};
-  }
-  function finiteMarketPriority(value, fallback) {
-    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
-  }
-  function sortCapturedMarketEntries(entries, raw) {
-    return Object.freeze(
-      entries.map((entry, index) => ({
-        entry,
-        index,
-        priority: finiteMarketPriority(
-          raw[`res_buy_p_${entry.resourceId}`],
-          index
-        )
-      })).sort(
-        (left, right) => left.priority - right.priority || left.index - right.index
-      ).map(({ entry }) => entry)
-    );
   }
   function readMarketContext(rootState, controls2) {
     return readMarketResetContext(rootState.readRoot(), controls2);
@@ -27893,9 +27855,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
     let readMarketEntriesForSettings = () => readCapturedMarketSettingsEntries(rootState.readRoot(), controls2);
     return Object.freeze({
       readMarketSettingsReadModel: () => {
-        let raw = readCapturedMarketSettingsRecord(getSettingsRaw()), root = rootState.readRoot(), entries = sortCapturedMarketEntries(
+        let raw = readCapturedMarketSettingsRecord(getSettingsRaw()), root = rootState.readRoot(), entries = sortByStoredPriority(
           readMarketEntriesForSettings(),
-          raw
+          raw,
+          (entry) => `res_buy_p_${entry.resourceId}`
         );
         return createMarketSettingsReadModel({
           rows: entries.map((entry) => ({
@@ -27921,17 +27884,19 @@ If script is allowed to reassign non-empty storage it might waste time producing
       },
       resetPriorities() {
         let raw = readCapturedMarketSettingsRecord(getSettingsRaw()), { tradableResourceIds } = readMarketContext(rootState, controls2);
-        tradableResourceIds.forEach((resourceId, index) => {
-          raw[`res_buy_p_${resourceId}`] = index;
-        });
+        writeDefaultPriorityOrder(
+          raw,
+          tradableResourceIds,
+          (resourceId) => `res_buy_p_${resourceId}`
+        );
       },
       reorderResources(resourceIds) {
-        let known = new Set(
-          readMarketEntriesForSettings().map((entry) => entry.resourceId)
-        ), raw = readCapturedMarketSettingsRecord(getSettingsRaw());
-        resourceIds.forEach((resourceId, index) => {
-          known.has(resourceId) && (raw[`res_buy_p_${resourceId}`] = index);
-        });
+        writeExplicitPriorityOrder(
+          readCapturedMarketSettingsRecord(getSettingsRaw()),
+          resourceIds,
+          readMarketEntriesForSettings().map((entry) => entry.resourceId),
+          (resourceId) => `res_buy_p_${resourceId}`
+        );
       }
     });
   }
@@ -28150,14 +28115,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/evolve/economy/resources/captured-ejector-settings-catalog.ts
-  function readCapturedEjectorResourceTitle(root, resourceId) {
-    let resource = readProperty(readProperty(root, "resource"), resourceId);
-    if (!isRecord(resource)) return resourceId;
-    let title = readProperty(resource, "title");
-    if (typeof title == "string" && title.length > 0) return title;
-    let name = readProperty(resource, "name");
-    return typeof name == "string" && name.length > 0 ? name : resourceId;
-  }
   function readCapturedEjectorColor(descriptor) {
     return descriptor.id === "Elerium" || descriptor.id === "Infernite" ? "has-text-caution" : descriptor.isTradable ? "has-text-info" : "has-text-advanced";
   }
@@ -28169,7 +28126,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           resourceId: descriptor.id,
           ejectElementId: `eject${descriptor.id}`,
           supplyElementId: `supply${descriptor.id}`,
-          label: readCapturedEjectorResourceTitle(root, descriptor.id),
+          label: readCapturedResourceLabel(root, descriptor.id),
           color: readCapturedEjectorColor(descriptor),
           atomicMass: descriptor.atomicMass,
           ejectConsumable: descriptor.ejectConsumable,
@@ -28557,14 +28514,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     hunting: "Hunting",
     crafting: "Crafting"
   });
-  function readCapturedMagicResourceTitle(root, resourceId) {
-    let resource = readProperty(readProperty(root, "resource"), resourceId);
-    if (!isRecord(resource)) return resourceId;
-    let title = readProperty(resource, "title");
-    if (typeof title == "string" && title.length > 0) return title;
-    let name = readProperty(resource, "name");
-    return typeof name == "string" && name.length > 0 ? name : resourceId;
-  }
   function readCapturedMagicTradable(root, resourceId) {
     let resource = readProperty(readProperty(root, "resource"), resourceId);
     return isRecord(resource) ? readProperty(resource, "tradable") === !0 || readProperty(readProperty(resource, "is"), "tradable") === !0 : !1;
@@ -28575,7 +28524,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       alchemyResourceIds.map(
         (resourceId) => Object.freeze({
           resourceId,
-          label: readCapturedMagicResourceTitle(root, resourceId),
+          label: readCapturedResourceLabel(root, resourceId),
           color: readCapturedMagicTradable(root, resourceId) ? "has-text-info" : "has-text-advanced"
         })
       )
@@ -29063,31 +29012,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/evolve/economy/production/captured-production-settings-catalog.ts
-  function readCapturedProductionTitle(root, id) {
-    let resource = readProperty(readProperty(root, "resource"), id);
-    if (!isRecord(resource)) return id;
-    let title = readProperty(resource, "title");
-    if (typeof title == "string" && title.length > 0) return title;
-    let name = readProperty(resource, "name");
-    return typeof name == "string" && name.length > 0 ? name : id;
-  }
   function readRootResourceIds(root) {
     let resources = readProperty(root, "resource");
     return isRecord(resources) ? Object.freeze(Object.keys(resources)) : [];
   }
-  function finiteFuelPriority(value, fallback) {
-    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
-  }
   function readCapturedSmelterFuelRows(getSettingsRaw) {
     let settingsValue = getSettingsRaw(), raw = isRecord(settingsValue) ? settingsValue : {};
     return Object.freeze(
-      [...SMELTER_FUEL_IDS].map((id, index) => ({
-        id,
-        index,
-        priority: finiteFuelPriority(raw[`smelter_fuel_p_${id}`], index)
-      })).sort(
-        (left, right) => left.priority - right.priority || left.index - right.index
-      ).map(({ id }) => Object.freeze({ id, label: id }))
+      sortByStoredPriority(
+        [...SMELTER_FUEL_IDS],
+        raw,
+        (id) => `smelter_fuel_p_${id}`
+      ).map((id) => Object.freeze({ id, label: id }))
     );
   }
   function readCapturedFoundryRows(rootState) {
@@ -29100,7 +29036,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       [...CRAFTER_RESOURCE_KEYS].map(
         (id) => Object.freeze({
           id,
-          label: readCapturedProductionTitle(root, id),
+          label: readCapturedResourceLabel(root, id),
           managed: managedIds.has(id)
         })
       )
@@ -29109,7 +29045,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   function readLabeledRows(root, ids) {
     return Object.freeze(
       ids.map(
-        (id) => Object.freeze({ id, label: readCapturedProductionTitle(root, id) })
+        (id) => Object.freeze({ id, label: readCapturedResourceLabel(root, id) })
       )
     );
   }
@@ -29145,12 +29081,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
         replicatorRows: readCapturedReplicatorRows(rootState)
       }),
       reorderSmelterFuels(fuelIds) {
-        let raw = readCapturedProductionSettingsRecord(getSettingsRaw()), known = new Set(
-          readCapturedSmelterFuelRows(getSettingsRaw).map((fuel) => fuel.id)
+        writeExplicitPriorityOrder(
+          readCapturedProductionSettingsRecord(getSettingsRaw()),
+          fuelIds,
+          readCapturedSmelterFuelRows(getSettingsRaw).map((fuel) => fuel.id),
+          (fuelId) => `smelter_fuel_p_${fuelId}`
         );
-        fuelIds.forEach((fuelId, index) => {
-          known.has(fuelId) && (raw[`smelter_fuel_p_${fuelId}`] = index);
-        });
       }
     });
   }

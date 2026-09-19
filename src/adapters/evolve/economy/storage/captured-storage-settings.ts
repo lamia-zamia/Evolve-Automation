@@ -14,6 +14,12 @@ import {
   type CapturedStorageSettingsEntry,
 } from "./captured-storage-settings-catalog.ts";
 
+import {
+  sortByStoredPriority,
+  writeDefaultPriorityOrder,
+  writeExplicitPriorityOrder,
+} from "../../../../domain/settings-priority-order.ts";
+
 export interface CapturedStorageSettingsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
@@ -30,32 +36,6 @@ function readCapturedStorageSettingsRecord(
   raw: unknown,
 ): Record<string, unknown> {
   return isRecord(raw) ? raw : {};
-}
-
-function finiteStoragePriority(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function sortCapturedStorageEntries(
-  entries: readonly Readonly<CapturedStorageSettingsEntry>[],
-  raw: Record<string, unknown>,
-): readonly Readonly<CapturedStorageSettingsEntry>[] {
-  return Object.freeze(
-    entries
-      .map((entry, index) => ({
-        entry,
-        index,
-        priority: finiteStoragePriority(
-          raw[`res_storage_p_${entry.resourceId}`],
-          index,
-        ),
-      }))
-      .sort(
-        (left, right) =>
-          left.priority - right.priority || left.index - right.index,
-      )
-      .map(({ entry }) => entry),
-  );
 }
 
 function readStorageContext(
@@ -76,9 +56,10 @@ export function createCapturedStorageSettingsAdapter({
 
   const readModel = (): StorageSettingsReadModel => {
     const raw = readCapturedStorageSettingsRecord(getSettingsRaw());
-    const entries = sortCapturedStorageEntries(
+    const entries = sortByStoredPriority(
       readStorageEntriesForSettings(),
       raw,
+      (entry) => `res_storage_p_${entry.resourceId}`,
     );
     return createStorageSettingsReadModel(
       entries.map((entry) => ({
@@ -97,18 +78,19 @@ export function createCapturedStorageSettingsAdapter({
     resetPriorities() {
       const raw = readCapturedStorageSettingsRecord(getSettingsRaw());
       const { storableResourceIds } = readStorageContext(rootState, controls);
-      storableResourceIds.forEach((resourceId, index) => {
-        raw[`res_storage_p_${resourceId}`] = index;
-      });
+      writeDefaultPriorityOrder(
+        raw,
+        storableResourceIds,
+        (resourceId) => `res_storage_p_${resourceId}`,
+      );
     },
     reorderResources(resourceIds: readonly string[]) {
-      const known = new Set(
+      writeExplicitPriorityOrder(
+        readCapturedStorageSettingsRecord(getSettingsRaw()),
+        resourceIds,
         readStorageEntriesForSettings().map((entry) => entry.resourceId),
+        (resourceId) => `res_storage_p_${resourceId}`,
       );
-      const raw = readCapturedStorageSettingsRecord(getSettingsRaw());
-      resourceIds.forEach((resourceId: string, index: number) => {
-        if (known.has(resourceId)) raw[`res_storage_p_${resourceId}`] = index;
-      });
     },
   });
 }

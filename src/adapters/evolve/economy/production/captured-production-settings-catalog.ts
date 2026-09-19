@@ -18,6 +18,8 @@ import { FACTORY_OUTPUT_IDS } from "./captured-factory.ts";
 import { MINING_DROID_OUTPUT_IDS } from "./captured-mining-droid.ts";
 import { isReplicableResourceId } from "./captured-replicator.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
+import { sortByStoredPriority } from "../../../../domain/settings-priority-order.ts";
+import { readCapturedResourceLabel } from "../../captured-resource-metadata.ts";
 
 export interface CapturedProductionRow {
   readonly id: string;
@@ -28,22 +30,9 @@ export interface CapturedFoundryRow extends CapturedProductionRow {
   readonly managed: boolean;
 }
 
-function readCapturedProductionTitle(root: unknown, id: string): string {
-  const resource = readProperty(readProperty(root, "resource"), id);
-  if (!isRecord(resource)) return id;
-  const title = readProperty(resource, "title");
-  if (typeof title === "string" && title.length > 0) return title;
-  const name = readProperty(resource, "name");
-  return typeof name === "string" && name.length > 0 ? name : id;
-}
-
 function readRootResourceIds(root: unknown): readonly string[] {
   const resources = readProperty(root, "resource");
   return isRecord(resources) ? Object.freeze(Object.keys(resources)) : [];
-}
-
-function finiteFuelPriority(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 export function readCapturedSmelterFuelRows(
@@ -52,17 +41,11 @@ export function readCapturedSmelterFuelRows(
   const settingsValue = getSettingsRaw();
   const raw = isRecord(settingsValue) ? settingsValue : {};
   return Object.freeze(
-    [...SMELTER_FUEL_IDS]
-      .map((id, index) => ({
-        id,
-        index,
-        priority: finiteFuelPriority(raw[`smelter_fuel_p_${id}`], index),
-      }))
-      .sort(
-        (left, right) =>
-          left.priority - right.priority || left.index - right.index,
-      )
-      .map(({ id }) => Object.freeze({ id, label: id })),
+    sortByStoredPriority(
+      [...SMELTER_FUEL_IDS],
+      raw,
+      (id) => `smelter_fuel_p_${id}`,
+    ).map((id) => Object.freeze({ id, label: id })),
   );
 }
 
@@ -80,7 +63,7 @@ export function readCapturedFoundryRows(
     [...CRAFTER_RESOURCE_KEYS].map((id) =>
       Object.freeze({
         id,
-        label: readCapturedProductionTitle(root, id),
+        label: readCapturedResourceLabel(root, id),
         managed: managedIds.has(id),
       }),
     ),
@@ -93,7 +76,7 @@ function readLabeledRows(
 ): readonly Readonly<CapturedProductionRow>[] {
   return Object.freeze(
     ids.map((id) =>
-      Object.freeze({ id, label: readCapturedProductionTitle(root, id) }),
+      Object.freeze({ id, label: readCapturedResourceLabel(root, id) }),
     ),
   );
 }

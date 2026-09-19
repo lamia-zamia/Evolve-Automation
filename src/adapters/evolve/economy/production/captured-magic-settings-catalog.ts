@@ -18,6 +18,7 @@ import type { GameControlRegistry } from "../../../../ports/game-control-registr
 import { readMagicResetContext } from "../../captured-settings-defaults.ts";
 import { PYLON_SPELL_IDS } from "./captured-pylon.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
+import { readCapturedResourceLabel } from "../../captured-resource-metadata.ts";
 
 export interface CapturedMagicAlchemyEntry {
   readonly resourceId: string;
@@ -41,18 +42,6 @@ const PYLON_SPELL_LABELS: Readonly<Record<string, string>> = Object.freeze({
   crafting: "Crafting",
 });
 
-function readCapturedMagicResourceTitle(
-  root: unknown,
-  resourceId: string,
-): string {
-  const resource = readProperty(readProperty(root, "resource"), resourceId);
-  if (!isRecord(resource)) return resourceId;
-  const title = readProperty(resource, "title");
-  if (typeof title === "string" && title.length > 0) return title;
-  const name = readProperty(resource, "name");
-  return typeof name === "string" && name.length > 0 ? name : resourceId;
-}
-
 function readCapturedMagicTradable(root: unknown, resourceId: string): boolean {
   const resource = readProperty(readProperty(root, "resource"), resourceId);
   if (!isRecord(resource)) return false;
@@ -71,7 +60,7 @@ export function readCapturedMagicAlchemyEntries(
     alchemyResourceIds.map((resourceId) =>
       Object.freeze({
         resourceId,
-        label: readCapturedMagicResourceTitle(root, resourceId),
+        label: readCapturedResourceLabel(root, resourceId),
         color: readCapturedMagicTradable(root, resourceId)
           ? ("has-text-info" as const)
           : ("has-text-advanced" as const),

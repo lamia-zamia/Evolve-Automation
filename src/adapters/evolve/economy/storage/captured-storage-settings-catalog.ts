@@ -11,24 +11,12 @@
 
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import { readStorageResetContext } from "../../captured-settings-defaults.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import { readCapturedResourceLabel } from "../../captured-resource-metadata.ts";
 
 export interface CapturedStorageSettingsEntry {
   readonly resourceId: string;
   readonly elementId: string;
   readonly label: string;
-}
-
-function readCapturedStorageResourceTitle(
-  root: unknown,
-  resourceId: string,
-): string {
-  const resource = readProperty(readProperty(root, "resource"), resourceId);
-  if (!isRecord(resource)) return resourceId;
-  const title = readProperty(resource, "title");
-  if (typeof title === "string" && title.length > 0) return title;
-  const name = readProperty(resource, "name");
-  return typeof name === "string" && name.length > 0 ? name : resourceId;
 }
 
 export function readCapturedStorageSettingsEntries(
@@ -41,7 +29,7 @@ export function readCapturedStorageSettingsEntries(
       Object.freeze({
         resourceId,
         elementId: `stack-${resourceId}`,
-        label: readCapturedStorageResourceTitle(root, resourceId),
+        label: readCapturedResourceLabel(root, resourceId),
       }),
     ),
   );
