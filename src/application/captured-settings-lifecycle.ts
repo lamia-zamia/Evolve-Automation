@@ -15,6 +15,7 @@ import {
   type SettingsRecord,
 } from "../domain/settings-migration.ts";
 import { normalizeStoredOverrides } from "../domain/override-resolution.ts";
+import { materializeSettings } from "../domain/settings-layer.ts";
 import type { CapturedSettingsDefaults } from "../ports/captured-settings-defaults.ts";
 import { isNonArrayRecord, isRecord } from "../validation/records.ts";
 import {
@@ -48,9 +49,24 @@ export interface CapturedSettingsLifecycle {
    */
   invalidateDynamicDefaults(): void;
   readonly stats: () => CapturedSettingsLifecycleStats;
+  /** The persisted, player-editable record. Safely enumerable, and the only thing imports write. */
   readRaw(): Record<string, unknown>;
-  /** Mutable effective layer; only the override application writes own properties here. */
+  /**
+   * The layered lookup view the tick reads: own properties are this pass's override decisions and
+   * every other key resolves through the raw record behind it.
+   *
+   * **Not safely enumerable as a complete record.** Spreading it, `Object.keys`, `Object.entries`,
+   * `Object.assign`, `JSON.stringify`, `structuredClone` and `hasOwnProperty` all see the overrides
+   * alone. Read keys off it — `settings[key]` — and where a complete record is genuinely required,
+   * call `materializeEffective` instead of copying this object.
+   */
   readEffective(): Record<string, unknown>;
+  /**
+   * A complete own-property snapshot of the effective settings: every raw key plus every override,
+   * with the override winning. For enumeration and serialization only — it walks the whole record,
+   * so no hot path should call it.
+   */
+  materializeEffective(): Record<string, unknown>;
 }
 
 function asSettingsRecord(raw: Record<string, unknown>): SettingsRecord {
@@ -224,5 +240,6 @@ export function createCapturedSettingsLifecycle({
     }),
     readRaw: settings.readRaw,
     readEffective: () => effective,
+    materializeEffective: () => materializeSettings(effective),
   });
 }

@@ -15,6 +15,7 @@ import {
   type OuterFleetAdapterDependencies,
 } from "../adapters/evolve/combat/fleet-outer.ts";
 import { runOuterFleetAutomation } from "../application/fleet-outer.ts";
+import { layerSettingsOver } from "../domain/settings-layer.ts";
 import { createAuthorityPolicy } from "../game/authority-policy.ts";
 import { createFleetManagers } from "../game/fleet-managers.ts";
 import {
@@ -406,11 +407,17 @@ export function createCapturedOuterFleetControl(
       ),
     ) >= level;
 
+  // `readSettings` answers with the layered effective view, whose own properties are only the
+  // active overrides — copying it would hand the outer-fleet managers a record missing every
+  // ordinary setting. Layering the surface over it instead resolves each `settings[key]` the
+  // managers read, and costs nothing per cycle.
   const syncSettings = (): void => {
     const raw = dependencies.readSettings();
     if (!isRecord(raw)) return;
-    for (const key of Object.keys(settingsSurface)) delete settingsSurface[key];
-    Object.assign(settingsSurface, raw);
+    layerSettingsOver(
+      settingsSurface as unknown as Record<string, unknown>,
+      raw as Record<string, unknown>,
+    );
   };
   const syncGame = (): void => {
     const root = rootRecord(dependencies.rootState);

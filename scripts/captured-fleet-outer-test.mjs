@@ -174,6 +174,13 @@ const capturedSettings = {
   authorityManage: false,
   generalMinimumAuthority: 100,
 };
+/**
+ * What the runtime actually hands this control: the layered effective view, whose own properties
+ * are the active overrides alone and whose every other key resolves through the raw record behind
+ * it. Copying such a view rather than layering over it loses every ordinary setting, so the outer
+ * fleet is driven through the layered shape here and nowhere through a copy of it.
+ */
+const effectiveSettings = Object.create(capturedSettings);
 let modalOpen = false;
 let capturedBuilds = 0;
 const capturedMethods = {
@@ -247,7 +254,7 @@ const outerControl = createCapturedOuterFleetControl({
   },
   controls: capturedRegistry,
   getDocument: () => capturedDocument,
-  readSettings: () => capturedSettings,
+  readSettings: () => effectiveSettings,
 });
 assert.equal(outerControl.autoFleetOuter().status, "succeeded");
 assert.equal(yard.ships.length, 1);
@@ -271,7 +278,7 @@ const authorityControl = createCapturedOuterFleetControl({
   },
   controls: capturedRegistry,
   getDocument: () => capturedDocument,
-  readSettings: () => capturedSettings,
+  readSettings: () => effectiveSettings,
 });
 assert.equal(authorityControl.autoFleetOuter().status, "succeeded");
 assert.equal(capturedBuilds, buildsBeforeAuthority);
@@ -334,7 +341,7 @@ const stalledControl = createCapturedOuterFleetControl({
   },
   controls: capturedRegistry,
   getDocument: () => stalledDocument,
-  readSettings: () => capturedSettings,
+  readSettings: () => effectiveSettings,
 });
 assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
 assert.equal(yard.ships.length, 1);

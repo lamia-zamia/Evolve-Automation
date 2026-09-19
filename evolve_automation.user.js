@@ -14552,6 +14552,23 @@
     );
   }
 
+  // src/domain/settings-layer.ts
+  function layerSettingsOver(layered, base) {
+    if (layered !== base) {
+      Object.getPrototypeOf(layered) !== base && Object.setPrototypeOf(layered, base);
+      for (let key of Object.keys(layered))
+        delete layered[key];
+    }
+  }
+  function materializeSettings(layered) {
+    let keys = /* @__PURE__ */ new Set();
+    for (let level = layered; level !== null; level = Object.getPrototypeOf(level))
+      for (let key of Object.keys(level)) keys.add(key);
+    let materialized = {};
+    for (let key of keys) materialized[key] = layered[key];
+    return materialized;
+  }
+
   // src/domain/civic/authority.ts
   function resolveAuthorityTarget(input) {
     return !input.manage || input.configuredTarget === 0 ? null : input.configuredTarget < 0 ? input.maximum : input.configuredTarget;
@@ -15169,10 +15186,10 @@
       )
     ) >= level, syncSettings = () => {
       let raw = dependencies.readSettings();
-      if (isRecord(raw)) {
-        for (let key of Object.keys(settingsSurface)) delete settingsSurface[key];
-        Object.assign(settingsSurface, raw);
-      }
+      isRecord(raw) && layerSettingsOver(
+        settingsSurface,
+        raw
+      );
     }, syncGame = () => {
       let root = rootRecord(dependencies.rootState);
       gameSurface.global = root;
@@ -25615,18 +25632,12 @@
         dynamicDefaultSkips
       }),
       readRaw: settings.readRaw,
-      readEffective: () => effective
+      readEffective: () => effective,
+      materializeEffective: () => materializeSettings(effective)
     });
   }
 
   // src/application/override-settings.ts
-  function rebaseOnStoredSettings(settings, settingsRaw) {
-    if (settings !== settingsRaw) {
-      Object.getPrototypeOf(settings) !== settingsRaw && Object.setPrototypeOf(settings, settingsRaw);
-      for (let key of Object.keys(settings))
-        delete settings[key];
-    }
-  }
   function createOverrideSettings({
     getSafeMode,
     getSettings,
@@ -25637,7 +25648,7 @@
   }) {
     function updateOverrides() {
       let settings = getSettings(), settingsRaw = getSettingsRaw();
-      if (rebaseOnStoredSettings(settings, settingsRaw), getSafeMode()) {
+      if (layerSettingsOver(settings, settingsRaw), getSafeMode()) {
         settings.masterScriptToggle = !1;
         return;
       }
@@ -25652,7 +25663,7 @@
       reporter.report(resolution.failures), display.publish();
     }
     function syncStoredSettings() {
-      rebaseOnStoredSettings(getSettings(), getSettingsRaw());
+      layerSettingsOver(getSettings(), getSettingsRaw());
     }
     return { updateOverrides, syncStoredSettings };
   }
