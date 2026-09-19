@@ -1250,32 +1250,10 @@ export function createCapturedSettingsPanel({
       >[0]["getJQuery"],
       reader: { read: getHellSettingsReadModel },
       intents: hellIntent,
-      getActions: () =>
-        ({
-          ...panelActions,
-          buildSettingsSection2: (
-            ...args: Parameters<
-              HellSettingsBrowserActions["buildSettingsSection2"]
-            >
-          ) => {
-            const [
-              _parentNode,
-              secondaryPrefix,
-              sectionId,
-              sectionName,
-              resetFunction,
-              updateSettingsContentFunction,
-            ] = args;
-            if (secondaryPrefix === "") {
-              shell.buildSettingsSection(
-                sectionId,
-                sectionName,
-                resetFunction,
-                () => updateSettingsContentFunction(""),
-              );
-            }
-          },
-        }) as unknown as HellSettingsBrowserActions,
+      // The shell's own `buildSettingsSection2` already routes by prefix: an empty one draws the
+      // ordinary section into `parentNode`, a non-empty one draws the same read model into the
+      // secondary options modal. Hell needs no wrapper of its own for either.
+      getActions: () => panelActions as unknown as HellSettingsBrowserActions,
     });
     // Evolution targets, challenges and the queue are static captured copy plus settings-record
     // data, so this section needs no game draw and is always built.
@@ -2202,7 +2180,19 @@ export function createCapturedSettingsPanel({
           prefix,
         );
       },
-      hell: unported("Hell options"),
+      hell: (node, prefix) => {
+        const dom = getQuery();
+        const adapter =
+          dom === undefined ? undefined : ensureSettingsUi(dom).hell;
+        if (adapter === undefined) {
+          unported("Hell options")();
+          return;
+        }
+        adapter.buildHellSettings(
+          node as unknown as Parameters<HellSettings["buildHellSettings"]>[0],
+          prefix,
+        );
+      },
       fleet: (node, prefix) => {
         const dom = getQuery();
         const adapter =
@@ -2301,6 +2291,11 @@ export function createCapturedSettingsPanel({
           settingsUi?.supplyToggles?.removeSupplyToggles();
         }
         optionsModal.createOptionsModal();
+        // The four secondary-option buttons the game's own panels carry. Each is a second
+        // rendering of a section the captured panel already owns, so they are added here rather
+        // than in the compatibility UI refresh; `addOptionDefinition` is idempotent and skips a
+        // panel the game has not drawn yet.
+        optionsModal.updateOptionsUI();
         if (settings.readRaw()["showSettings"] === true) buildScriptSettings();
       } catch (error) {
         // A panel that fails to draw must never stop the automation tick.

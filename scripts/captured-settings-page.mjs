@@ -74,10 +74,18 @@ export function createCapturedSettingsPage(stored = {}) {
     reporter: { report: () => {} },
     display: { publish: () => {} },
   });
+  // The one game-backed capture the secondary options surface needs. An empty control registry is
+  // enough: the Fleet read model is static copy plus settings-record priorities.
+  const sectionControls = {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-method" }),
+    capturedElementIds: () => [],
+  };
   const panel = createCapturedSettingsPanel({
     capturedPanelWindow: pageWindow,
     settings,
     settingsLifecycle,
+    fleetSettings: { controls: sectionControls },
     refreshEffectiveSettings: () => overrideSettings.updateOverrides(),
     onDiagnostic: (message) => diagnostics.push(message),
     logError: (message) => logged.push(message),

@@ -36312,25 +36312,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getJQuery,
         reader: { read: getHellSettingsReadModel },
         intents: hellIntent,
-        getActions: () => ({
-          ...panelActions,
-          buildSettingsSection2: (...args) => {
-            let [
-              _parentNode,
-              secondaryPrefix,
-              sectionId,
-              sectionName,
-              resetFunction,
-              updateSettingsContentFunction
-            ] = args;
-            secondaryPrefix === "" && shell.buildSettingsSection(
-              sectionId,
-              sectionName,
-              resetFunction,
-              () => updateSettingsContentFunction("")
-            );
-          }
-        })
+        // The shell's own `buildSettingsSection2` already routes by prefix: an empty one draws the
+        // ordinary section into `parentNode`, a non-empty one draws the same read model into the
+        // secondary options modal. Hell needs no wrapper of its own for either.
+        getActions: () => panelActions
       });
       let capturedEvolutionAdapter = createCapturedEvolutionSettingsAdapter({
         getSettingsRaw: settings.readRaw,
@@ -37043,7 +37028,17 @@ Only continue if you trust the source. Injected code:
             prefix
           );
         },
-        hell: unported("Hell options"),
+        hell: (node, prefix) => {
+          let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).hell;
+          if (adapter === void 0) {
+            unported("Hell options")();
+            return;
+          }
+          adapter.buildHellSettings(
+            node,
+            prefix
+          );
+        },
         fleet: (node, prefix) => {
           let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).fleet;
           if (adapter === void 0) {
@@ -37101,7 +37096,7 @@ Only continue if you trust the source. Injected code:
       ensurePanel() {
         if (getQuery() !== void 0)
           try {
-            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), settings.readRaw().autoStorage === !0 ? settingsUi?.storageToggles?.ensureStorageToggles() : settingsUi?.storageToggles?.removeStorageToggles(), settings.readRaw().autoMarket === !0 ? settingsUi?.marketToggles?.ensureMarketToggles() : settingsUi?.marketToggles?.removeMarketToggles(), settings.readRaw().autoEject === !0 ? settingsUi?.ejectToggles?.ensureEjectToggles() : settingsUi?.ejectToggles?.removeEjectToggles(), settings.readRaw().autoSupply === !0 ? settingsUi?.supplyToggles?.ensureSupplyToggles() : settingsUi?.supplyToggles?.removeSupplyToggles(), optionsModal.createOptionsModal(), settings.readRaw().showSettings === !0 && buildScriptSettings();
+            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), settings.readRaw().autoStorage === !0 ? settingsUi?.storageToggles?.ensureStorageToggles() : settingsUi?.storageToggles?.removeStorageToggles(), settings.readRaw().autoMarket === !0 ? settingsUi?.marketToggles?.ensureMarketToggles() : settingsUi?.marketToggles?.removeMarketToggles(), settings.readRaw().autoEject === !0 ? settingsUi?.ejectToggles?.ensureEjectToggles() : settingsUi?.ejectToggles?.removeEjectToggles(), settings.readRaw().autoSupply === !0 ? settingsUi?.supplyToggles?.ensureSupplyToggles() : settingsUi?.supplyToggles?.removeSupplyToggles(), optionsModal.createOptionsModal(), optionsModal.updateOptionsUI(), settings.readRaw().showSettings === !0 && buildScriptSettings();
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }
