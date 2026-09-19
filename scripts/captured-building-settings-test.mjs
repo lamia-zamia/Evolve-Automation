@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { createCapturedBuildingSettingsAdapter } from "../src/adapters/evolve/progression/build/captured-building-settings.ts";
 import { createCapturedBuildingToggleReader } from "../src/adapters/evolve/progression/build/captured-building-toggles.ts";
 import { overrideComparisons } from "../src/settings/override-comparators.ts";
+import {
+  createCapturedControls,
+  createCapturedRootState,
+} from "./test-support/captured-settings.mjs";
 
 function makeCapturedGame() {
   const root = {
@@ -88,16 +92,8 @@ function makeCapturedGame() {
       },
     ],
   ]);
-  const controls = {
-    resolve: (id) => controlsById.get(id),
-    invoke: () => ({ ok: false, reason: "unknown-method" }),
-    capturedElementIds: () => [...controlsById.keys()],
-  };
-  const rootState = {
-    readRoot: () => root,
-    isReactivitySuppressed: () => false,
-    subscribeRootReplaced: () => () => {},
-  };
+  const controls = createCapturedControls(controlsById);
+  const rootState = createCapturedRootState(() => root);
   return { root, controls, rootState };
 }
 

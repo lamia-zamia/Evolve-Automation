@@ -6,7 +6,11 @@ import {
   readTechElementId,
 } from "../src/adapters/evolve/progression/research/captured-research-settings-catalog.ts";
 import { createCapturedResearchSettingsAdapter } from "../src/adapters/evolve/progression/research/captured-research-settings.ts";
-import { createRecordSettingsLifecycle } from "./test-support/captured-settings.mjs";
+import {
+  createCapturedControls,
+  createCapturedRootState,
+  createRecordSettingsLifecycle,
+} from "./test-support/captured-settings.mjs";
 
 assert.equal(readTechElementId("mining"), "tech-mining");
 assert.equal(readTechElementId("tech-mining"), "tech-mining");
@@ -18,16 +22,8 @@ function harness({ root = {}, titles = {} } = {}) {
       { elementId: id, generation: 1, methods: [], data: { title } },
     ]),
   );
-  const controls = {
-    resolve: (id) => controlsById.get(id),
-    invoke: () => ({ ok: false, reason: "unknown-method" }),
-    capturedElementIds: () => [...controlsById.keys()],
-  };
-  const rootState = {
-    readRoot: () => root,
-    isReactivitySuppressed: () => false,
-    subscribeRootReplaced: () => () => {},
-  };
+  const controls = createCapturedControls(controlsById);
+  const rootState = createCapturedRootState(() => root);
   return { controls, rootState };
 }
 

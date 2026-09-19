@@ -9,6 +9,8 @@ import { createCapturedMarketSettingsAdapter } from "../src/adapters/evolve/econ
 import { createCapturedMarketToggleReader } from "../src/adapters/evolve/economy/market/captured-market-toggles.ts";
 import {
   ALWAYS_TRUE_OVERRIDE,
+  createCapturedControls,
+  createCapturedRootState,
   createRecordSettingsLifecycle,
 } from "./test-support/captured-settings.mjs";
 
@@ -29,16 +31,8 @@ function makeCapturedGame({ smoldering = false } = {}) {
   const controlsById = new Map([
     ["market-Oil", { elementId: "market-Oil", generation: 1, methods: [] }],
   ]);
-  const controls = {
-    resolve: (id) => controlsById.get(id),
-    invoke: () => ({ ok: false, reason: "unknown-method" }),
-    capturedElementIds: () => [...controlsById.keys()],
-  };
-  const rootState = {
-    readRoot: () => root,
-    isReactivitySuppressed: () => false,
-    subscribeRootReplaced: () => () => {},
-  };
+  const controls = createCapturedControls(controlsById);
+  const rootState = createCapturedRootState(() => root);
   return { root, controls, rootState };
 }
 

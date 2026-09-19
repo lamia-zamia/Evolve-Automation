@@ -11,6 +11,7 @@ import {
 import { createCapturedProductionSettingsAdapter } from "../src/adapters/evolve/economy/production/captured-production-settings.ts";
 import {
   ALWAYS_TRUE_OVERRIDE,
+  createCapturedRootState,
   createRecordSettingsLifecycle,
 } from "./test-support/captured-settings.mjs";
 
@@ -42,11 +43,7 @@ function makeCapturedGame() {
       Stone: { title: "Stone" },
     },
   };
-  const rootState = {
-    readRoot: () => root,
-    isReactivitySuppressed: () => false,
-    subscribeRootReplaced: () => () => {},
-  };
+  const rootState = createCapturedRootState(() => root);
   return { root, rootState };
 }
 

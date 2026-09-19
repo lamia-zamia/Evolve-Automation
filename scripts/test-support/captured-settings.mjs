@@ -26,6 +26,29 @@ export function createFakeStorage(initial = null) {
   };
 }
 
+/**
+ * A `GameControlRegistry` over an explicit id -> handle map. Tests that care which handles exist
+ * build the map; nothing here decides what a handle looks like.
+ */
+export function createCapturedControls(controlsById) {
+  const byId =
+    controlsById instanceof Map ? controlsById : new Map(controlsById ?? []);
+  return {
+    resolve: (id) => byId.get(id),
+    invoke: () => ({ ok: false, reason: "unknown-method" }),
+    capturedElementIds: () => [...byId.keys()],
+  };
+}
+
+/** A `GameRootStateSource` over a root the test owns, with reactivity and replacement inert. */
+export function createCapturedRootState(readRoot) {
+  return {
+    readRoot,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  };
+}
+
 /** A `GameControlRegistry` that resolves exactly the ids it was given. */
 export function createControlRegistry(ids = []) {
   return {

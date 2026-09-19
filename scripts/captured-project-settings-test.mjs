@@ -6,6 +6,8 @@ import { createCapturedProjectSettingsAdapter } from "../src/adapters/evolve/pro
 import { createCapturedArpaToggleReader } from "../src/adapters/evolve/progression/research/captured-arpa-toggles.ts";
 import {
   ALWAYS_TRUE_OVERRIDE,
+  createCapturedControls,
+  createCapturedRootState,
   createRecordSettingsLifecycle,
 } from "./test-support/captured-settings.mjs";
 
@@ -38,16 +40,8 @@ function makeCapturedGame() {
       },
     ],
   ]);
-  const controls = {
-    resolve: (id) => controlsById.get(id),
-    invoke: () => ({ ok: false, reason: "unknown-method" }),
-    capturedElementIds: () => [...controlsById.keys()],
-  };
-  const rootState = {
-    readRoot: () => root,
-    isReactivitySuppressed: () => false,
-    subscribeRootReplaced: () => () => {},
-  };
+  const controls = createCapturedControls(controlsById);
+  const rootState = createCapturedRootState(() => root);
   return { root, controls, rootState };
 }
 
