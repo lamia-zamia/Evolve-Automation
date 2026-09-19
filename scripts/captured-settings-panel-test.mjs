@@ -223,7 +223,7 @@ function createPage(
   assert.equal(toggles.length, 1);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
   assert.equal(root.querySelectorAll("#script_generalSettings").length, 1);
-  assert.equal(root.querySelectorAll("button.script-collapsible").length, 9);
+  assert.equal(root.querySelectorAll("button.script-collapsible").length, 10);
   for (const section of [
     "interface",
     "stateLog",
@@ -231,6 +231,7 @@ function createPage(
     "challengeHelper",
     "authority",
     "hell",
+    "war",
     "weighting",
     "trait",
   ]) {
@@ -902,6 +903,7 @@ console.log("captured settings panel tests passed");
     "challengeHelper",
     "authority",
     "hell",
+    "war",
     "weighting",
     "building",
     "project",
@@ -919,7 +921,13 @@ console.log("captured settings panel tests passed");
     );
   }
   // Every section's reset button is drawn, and clicking one must not throw.
-  for (const section of ["building", "market", "storage", "production"]) {
+  for (const section of [
+    "building",
+    "market",
+    "storage",
+    "production",
+    "war",
+  ]) {
     const reset = root.querySelectorAll(`#script_reset${section}`)[0];
     assert.ok(reset, `${section} should offer a reset button`);
     reset.dispatch("click");

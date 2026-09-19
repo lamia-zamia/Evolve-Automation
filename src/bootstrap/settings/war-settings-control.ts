@@ -3,7 +3,7 @@ import {
   createWarSettingsBrowserAdapter,
   type WarSettingsBrowserActions,
 } from "../../adapters/browser/war-settings.ts";
-import { createWarSettingsEvolveAdapter } from "../../adapters/evolve/combat/war-settings.ts";
+import { createWarSettingsReadModel } from "../../domain/combat/war-settings.ts";
 import { readRecord } from "../../adapters/validation.ts";
 
 declare global {
@@ -50,8 +50,6 @@ interface WarSettingsControlDependencies {
   readonly getDocument: BrowserDependencies["getDocument"];
   readonly getJQuery: BrowserDependencies["getJQuery"];
   readonly actions: WarSettingsBrowserActions;
-  readonly getSpyManager: () => unknown;
-  readonly getGame: () => unknown;
   readonly resetWarSettings: RuntimeFunction;
   readonly persistSettings: RuntimeFunction;
   readonly resetCheckbox: (...keys: string[]) => unknown;
@@ -62,8 +60,6 @@ export function createWarSettingsControl({
   getDocument,
   getJQuery,
   actions,
-  getSpyManager,
-  getGame,
   resetWarSettings,
   persistSettings,
   resetCheckbox,
@@ -71,11 +67,9 @@ export function createWarSettingsControl({
 }: WarSettingsControlDependencies) {
   const getTestContext = getTestContextReader(testSurface);
   const context = () => getTestContext("warSettings");
-  const reader = createWarSettingsEvolveAdapter({
-    getSpyManager: () =>
-      readContextValue(context(), "SpyManager", getSpyManager()),
-    getGame: () => readContextValue(context(), "game", getGame()),
-  });
+  // The policy vocabulary is static captured data, so the read model needs no game access at all;
+  // the compatibility runtime keeps only its reset/persist wiring here.
+  const reader = { read: createWarSettingsReadModel };
   const intentHandler = createWarSettingsIntentHandler({
     writer: {
       resetToDefaults: () =>

@@ -42,8 +42,6 @@ const { hooks } = await loadCharacterizationBundle({
 });
 
 hooks.setWarSettingsTestContext({
-  game: { loc: (key) => key },
-  SpyManager: { Types: { Annex: { id: "annex" } } },
   actions: {
     buildSettingsSection2(...args) {
       registration = args;

@@ -98,6 +98,11 @@ import {
 } from "../adapters/browser/hell-settings.ts";
 import { getHellSettingsReadModel } from "../domain/combat/hell-settings.ts";
 import {
+  createWarSettingsBrowserAdapter,
+  type WarSettingsBrowserActions,
+} from "../adapters/browser/war-settings.ts";
+import { createWarSettingsReadModel } from "../domain/combat/war-settings.ts";
+import {
   createWeightingSettingsBrowserAdapter,
   type WeightingSettingsBrowserActions,
 } from "../adapters/browser/weighting-settings.ts";
@@ -163,6 +168,7 @@ import { createInterfaceSettingsIntentHandler } from "../application/interface-s
 import { createStateLogSettingsIntentHandler } from "../application/state-log-settings.ts";
 import { createAuthoritySettingsIntentHandler } from "../application/authority-settings.ts";
 import { createHellSettingsIntentHandler } from "../application/hell-settings.ts";
+import { createWarSettingsIntentHandler } from "../application/war-settings.ts";
 import { createWeightingSettingsIntentHandler } from "../application/weighting-settings.ts";
 import {} from "../domain/settings-defaults.ts";
 import type { CapturedSettingsStore } from "../ports/captured-settings-store.ts";
@@ -363,6 +369,17 @@ type GovernmentSettingsDocument = ReturnType<
 type GovernmentSettingsJQuery = ReturnType<
   Parameters<typeof createGovernmentSettingsBrowserAdapter>[0]["getJQuery"]
 >;
+type WarSettings = ReturnType<typeof createWarSettingsBrowserAdapter>;
+type WarSettingsDocument = Parameters<
+  typeof createWarSettingsBrowserAdapter
+>[0]["getDocument"] extends () => infer D
+  ? D
+  : never;
+type WarSettingsJQuery = Parameters<
+  typeof createWarSettingsBrowserAdapter
+>[0]["getJQuery"] extends () => infer J
+  ? J
+  : never;
 type FleetSettings = ReturnType<typeof createFleetSettingsBrowserAdapter>;
 type FleetSettingsDocument = ReturnType<
   Parameters<typeof createFleetSettingsBrowserAdapter>[0]["getDocument"]
@@ -515,6 +532,7 @@ interface SettingsUi {
   readonly stateLog: StateLogSettings;
   readonly authority: AuthoritySettings;
   readonly hell: HellSettings;
+  readonly war: WarSettings;
   readonly weighting: WeightingSettings;
   readonly job: JobSettings;
   readonly building: BuildingSettings | undefined;
@@ -829,7 +847,13 @@ export function createCapturedSettingsPanel({
       buildTraitSettings: () => trait?.buildTraitSettings(),
       buildTriggerSettings: () => trigger?.buildTriggerSettings(),
       buildResearchSettings: () => research?.buildResearchSettings(),
-      buildWarSettings: () => {},
+      buildWarSettings: (parentNode, secondaryPrefix) =>
+        war?.buildWarSettings(
+          parentNode as unknown as Parameters<
+            WarSettings["buildWarSettings"]
+          >[0],
+          secondaryPrefix,
+        ),
       buildHellSettings: (parentNode, secondaryPrefix) =>
         hell?.buildHellSettings(
           parentNode as unknown as Parameters<
@@ -1192,6 +1216,26 @@ export function createCapturedSettingsPanel({
             }
           },
         }) as unknown as HellSettingsBrowserActions,
+    });
+    // The Foreign Affairs vocabulary — policies, protect modes, labels — is static captured copy,
+    // so this section needs no game draw and is always built. It renders both as an ordinary
+    // section and into the secondary options modal; `buildSettingsSection2` picks by prefix.
+    let war: WarSettings | undefined;
+    const warIntent = createWarSettingsIntentHandler({
+      writer: {
+        resetToDefaults: resetSection("war"),
+        persist: persistSettings,
+      },
+      renderSettingsContent: (secondaryPrefix) =>
+        war?.updateWarSettingsContent(secondaryPrefix),
+      effects: { resetCheckboxes: () => controls.resetCheckbox("autoFight") },
+    });
+    war = createWarSettingsBrowserAdapter({
+      getDocument: () => documentForUi as unknown as WarSettingsDocument,
+      getJQuery: () => getJQuery() as unknown as WarSettingsJQuery,
+      reader: { read: createWarSettingsReadModel },
+      intents: warIntent,
+      getActions: () => panelActions as unknown as WarSettingsBrowserActions,
     });
     let weighting: WeightingSettings | undefined;
     const weightingIntent = createWeightingSettingsIntentHandler({
@@ -1770,6 +1814,7 @@ export function createCapturedSettingsPanel({
       stateLog,
       authority,
       hell,
+      war,
       weighting,
       job,
       building,
@@ -1841,6 +1886,12 @@ export function createCapturedSettingsPanel({
     ui.challengeHelper.buildChallengeHelperSettings();
     ui.authority.buildAuthoritySettings();
     ui.hell.buildHellSettings(dom("#script_settings"), "");
+    ui.war.buildWarSettings(
+      dom("#script_settings") as unknown as Parameters<
+        WarSettings["buildWarSettings"]
+      >[0],
+      "",
+    );
     ui.weighting.buildWeightingSettings();
     if (capturedJobCatalogReader?.() !== undefined) {
       ui.job.buildJobSettings();
@@ -1976,7 +2027,19 @@ export function createCapturedSettingsPanel({
           prefix,
         );
       },
-      war: unported("Foreign Affairs options"),
+      war: (node, prefix) => {
+        const dom = getQuery();
+        const adapter =
+          dom === undefined ? undefined : ensureSettingsUi(dom).war;
+        if (adapter === undefined) {
+          unported("Foreign Affairs options")();
+          return;
+        }
+        adapter.buildWarSettings(
+          node as unknown as Parameters<WarSettings["buildWarSettings"]>[0],
+          prefix,
+        );
+      },
       hell: unported("Hell options"),
       fleet: (node, prefix) => {
         const dom = getQuery();

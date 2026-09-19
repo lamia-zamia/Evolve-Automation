@@ -2,14 +2,10 @@ import assert from "node:assert/strict";
 
 import { createWarSettingsIntentHandler } from "../src/application/war-settings.ts";
 import { createWarSettingsBrowserAdapter } from "../src/adapters/browser/war-settings.ts";
-import { createWarSettingsEvolveAdapter } from "../src/adapters/evolve/combat/war-settings.ts";
+import { createWarSettingsReadModel } from "../src/domain/combat/war-settings.ts";
+import { capturedEspionageOperationForPolicy } from "../src/domain/combat/captured-espionage.ts";
 
-const reader = createWarSettingsEvolveAdapter({
-  getSpyManager: () => ({
-    Types: { Annex: { id: "annex" }, Purchase: { id: "purchase" } },
-  }),
-  getGame: () => ({ loc: (key) => `localized:${key}` }),
-});
+const reader = { read: createWarSettingsReadModel };
 const model = reader.read();
 assert.equal(model.sectionName, "Foreign Affairs");
 const policy = model.controls.find(
@@ -18,12 +14,29 @@ const policy = model.controls.find(
     control.settingName === "foreignPolicyInferior",
 );
 assert.deepEqual(
-  policy.options.map(({ val, label }) => ({ val, label })),
+  policy.options.map(({ val }) => val),
+  ["Ignore", "Influence", "Sabotage", "Incite", "Annex", "Purchase", "Occupy"],
+);
+
+// Every selectable policy has to reach an espionage operation or be one of the two the script
+// owns outright. A policy offered in the panel with no runtime meaning is the bug this guards.
+for (const { val } of policy.options) {
+  const operation = capturedEspionageOperationForPolicy(val, 50, 0);
+  if (val === "Ignore") assert.equal(operation, null);
+  else assert.ok(operation !== null, `${val} must map to an espionage mission`);
+}
+
+const rival = model.controls.find(
+  (control) =>
+    control.kind === "select" && control.settingName === "foreignPolicyRival",
+);
+assert.deepEqual(
+  rival.options.map(({ val, label }) => [val, label]),
   [
-    { val: "Ignore", label: "Ignore" },
-    { val: "Annex", label: "localized:civics_spy_annex" },
-    { val: "Purchase", label: "localized:civics_spy_purchase" },
-    { val: "Occupy", label: "Occupy" },
+    ["Ignore", "Ignore"],
+    ["Influence", "Alliance"],
+    ["Sabotage", "War"],
+    ["Betrayal", "Betrayal"],
   ],
 );
 

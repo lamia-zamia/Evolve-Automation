@@ -1,11 +1,4 @@
-import type {
-  WarSettingsIntent,
-  WarSettingsReadModel,
-} from "../domain/combat/war-settings.ts";
-
-export interface WarSettingsReader {
-  read(): WarSettingsReadModel;
-}
+import type { WarSettingsIntent } from "../domain/combat/war-settings.ts";
 
 export interface WarSettingsIntentHandler {
   handle(intent: WarSettingsIntent): void;

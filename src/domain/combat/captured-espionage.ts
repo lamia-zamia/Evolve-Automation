@@ -1,7 +1,11 @@
 /** Pure planning for one captured foreign espionage operation. */
 
-export type CapturedEspionageOperation =
-  "influence" | "sabotage" | "incite" | "annex" | "purchase";
+import {
+  capturedForeignPolicyEspionageOperation,
+  type CapturedEspionageOperation,
+} from "./captured-foreign-policies.ts";
+
+export type { CapturedEspionageOperation };
 
 export interface CapturedEspionageInput {
   readonly enabled: boolean;
@@ -43,21 +47,10 @@ export function capturedEspionageOperationForPolicy(
       ? "sabotage"
       : "influence";
   }
+  // Occupy prepares by force rather than by mission, so it borrows sabotage instead of carrying
+  // an operation of its own in the catalog.
   if (policy === "Occupy") return "sabotage";
-  switch (policy) {
-    case "Influence":
-      return "influence";
-    case "Sabotage":
-      return "sabotage";
-    case "Incite":
-      return "incite";
-    case "Annex":
-      return "annex";
-    case "Purchase":
-      return "purchase";
-    default:
-      return null;
-  }
+  return capturedForeignPolicyEspionageOperation(policy);
 }
 
 function capturedEspionageOperation(

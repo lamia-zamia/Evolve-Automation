@@ -1085,8 +1085,6 @@ export function startEvolveRuntimeComposition(
         addSettingsSelect,
         addSettingsToggle,
       },
-      getSpyManager: () => SpyManager,
-      getGame: () => game,
       resetWarSettings: (...args) => resetWarSettings(...args),
       persistSettings: () => updateSettingsFromState(),
       resetCheckbox: (...args) => resetCheckbox(...args),

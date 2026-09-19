@@ -1,4 +1,11 @@
 /** Immutable description of the Foreign Affairs settings panel. */
+
+import {
+  CAPTURED_FOREIGN_POLICIES,
+  CAPTURED_FOREIGN_RIVAL_POLICIES,
+  type CapturedForeignPolicyEntry,
+} from "./captured-foreign-policies.ts";
+
 export interface WarSettingsOption {
   readonly val: string;
   readonly label: string;
@@ -38,25 +45,6 @@ export type WarSettingsIntent = Readonly<{
   secondaryPrefix: string;
 }>;
 
-const rivalOptions: readonly WarSettingsOption[] = Object.freeze([
-  Object.freeze({ val: "Ignore", label: "Ignore", hint: "Does nothing" }),
-  Object.freeze({
-    val: "Influence",
-    label: "Alliance",
-    hint: "Influence rival up to best relations",
-  }),
-  Object.freeze({
-    val: "Sabotage",
-    label: "War",
-    hint: "Sabotage and plunder rival",
-  }),
-  Object.freeze({
-    val: "Betrayal",
-    label: "Betrayal",
-    hint: "Influence rival up to best relations, and start sabotaging. Once military power reached minimum - start plundering it",
-  }),
-]);
-
 const protectOptions: readonly WarSettingsOption[] = Object.freeze([
   Object.freeze({
     val: "never",
@@ -75,9 +63,20 @@ const protectOptions: readonly WarSettingsOption[] = Object.freeze([
   }),
 ]);
 
-export function createWarSettingsReadModel(
-  policyOptions: readonly WarSettingsOption[],
-): WarSettingsReadModel {
+function toWarSettingsOptions(
+  entries: readonly CapturedForeignPolicyEntry[],
+): readonly WarSettingsOption[] {
+  return Object.freeze(
+    entries.map(({ id, label, hint }) =>
+      Object.freeze({ val: id, label, hint }),
+    ),
+  );
+}
+
+const policyOptions = toWarSettingsOptions(CAPTURED_FOREIGN_POLICIES);
+const rivalOptions = toWarSettingsOptions(CAPTURED_FOREIGN_RIVAL_POLICIES);
+
+export function createWarSettingsReadModel(): WarSettingsReadModel {
   const controls: readonly WarSettingsControl[] = Object.freeze([
     Object.freeze({ kind: "header", label: "Foreign Powers" }),
     Object.freeze({
