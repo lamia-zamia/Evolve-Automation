@@ -7,6 +7,7 @@ import { finite, isRecord, readProperty } from "../../validation.ts";
 // Keep unknown ids conservative so an upstream trait addition cannot bypass a configured reserve.
 const CURRENT_CAPTURED_MUTATION_TRAIT_VALUES: Readonly<Record<string, number>> =
   Object.freeze({
+    adaptable: 3,
     humanoid: 3,
     wasteful: -3,
     xenophobic: -5,
@@ -253,6 +254,69 @@ function readCapturedMutationAdjustment(
 }
 
 /**
+ * The normalized upstream value for one trait, or undefined when the catalog has no entry.
+ * Single owner for the Genetics 2.0 trait values; the settings panel derives display costs
+ * from the same table the automation reserves against.
+ */
+export function readCapturedMutationTraitValue(
+  traitId: string,
+): number | undefined {
+  const value = CURRENT_CAPTURED_MUTATION_TRAIT_VALUES[traitId];
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+/**
+ * The species whose Genetics 2.0 mutation costs upstream multiplies by ten, with the display
+ * names the settings hint uses. One owner for both halves: a species added upstream must appear
+ * in the reserve arithmetic and in the hint together.
+ */
+export const CAPTURED_MUTATION_MULTIPLIED_SPECIES: Readonly<
+  Record<string, string>
+> = Object.freeze({
+  custom: "Custom",
+  hybrid: "Hybrid",
+  sludge: "Sludge",
+  ultra_sludge: "Ultra Sludge",
+});
+
+const CAPTURED_MUTATION_SPECIES_MULTIPLIER = 10;
+
+/**
+ * The base Genetics 2.0 mutation cost for one trait, before the purge rank scaling and the
+ * live adjustment terms. Single owner of `Math.abs(value * 5)` and the species multiplier:
+ * reserve-aware planning and the settings panel's displayed cost read the same rule.
+ *
+ * Pass `species` to apply the multiplier; omit it for the unmultiplied base cost.
+ */
+export function readCapturedMutationBaseCost(
+  traitId: string,
+  species?: string,
+): number | undefined {
+  const traitValue = readCapturedMutationTraitValue(traitId);
+  if (traitValue === undefined) return undefined;
+  const cost = Math.abs(traitValue * 5);
+  return species !== undefined &&
+    Object.hasOwn(CAPTURED_MUTATION_MULTIPLIED_SPECIES, species)
+    ? cost * CAPTURED_MUTATION_SPECIES_MULTIPLIER
+    : cost;
+}
+
+/**
+ * The base cost as the multiplied species pay it. Every multiplied species pays the same figure,
+ * so the settings panel quotes this one number for all of them.
+ */
+export function readCapturedMutationMultipliedBaseCost(
+  traitId: string,
+): number | undefined {
+  const cost = readCapturedMutationBaseCost(traitId);
+  return cost === undefined
+    ? undefined
+    : cost * CAPTURED_MUTATION_SPECIES_MULTIPLIER;
+}
+
+/**
  * Read the numeric Genetics 2.0 mutation cost needed for reserve-aware planning.
  *
  * This mirrors the upstream private `addCost(t, false)` / `rmCost(t, false)` mechanics from
@@ -272,21 +336,19 @@ export function readCapturedMutationCost(
     return undefined;
   }
   const race = readCapturedMutationRace(root);
-  const traitValue = CURRENT_CAPTURED_MUTATION_TRAIT_VALUES[traitId];
+  const traitValue = readCapturedMutationTraitValue(traitId);
   const species = readProperty(race, "species");
   if (
     race === undefined ||
     traitValue === undefined ||
-    !Number.isFinite(traitValue) ||
     typeof species !== "string"
   ) {
     return undefined;
   }
+  const baseCost = readCapturedMutationBaseCost(traitId, species);
+  if (baseCost === undefined) return undefined;
 
-  let cost = Math.abs(traitValue * 5);
-  if (["custom", "hybrid", "sludge", "ultra_sludge"].includes(species)) {
-    cost *= 10;
-  }
+  let cost = baseCost;
   if (operation === "purge" && traitValue < 0) {
     const rank = readCapturedMutationRank(race, traitId);
     if (rank === undefined) return undefined;

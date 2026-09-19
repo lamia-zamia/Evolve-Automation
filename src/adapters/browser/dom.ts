@@ -275,13 +275,18 @@ export class DomList {
 
   val(): string;
   val(value: unknown): DomList;
-  val(value?: unknown): string | DomList {
-    if (value === undefined) {
+  // Setter or getter by argument count, as jQuery does: `.val(undefined)` on a setting the
+  // stored record has never held is a setter that blanks the field, not a read. Deciding on
+  // `value === undefined` instead returned a string mid-chain and threw on the next call.
+  val(...args: readonly unknown[]): string | DomList {
+    if (args.length === 0) {
       const element = this.first_ as HTMLInputElement | undefined;
       return element?.value ?? "";
     }
+    const [value] = args;
+    const text = value === undefined || value === null ? "" : String(value);
     for (const element of this.elements) {
-      (element as HTMLInputElement).value = String(value);
+      (element as HTMLInputElement).value = text;
     }
     return this;
   }

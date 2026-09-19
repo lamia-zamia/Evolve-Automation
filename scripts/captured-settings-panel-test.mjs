@@ -113,6 +113,13 @@ function createPage(
     settings,
     settingsLifecycle,
     refreshEffectiveSettings,
+    traitSettings: {
+      rootState: {
+        readRoot: () => gameRoot,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+    },
     onDiagnostic: (message) => diagnostics.push(message),
     logError: (message) => logged.push(message),
   });
@@ -146,7 +153,7 @@ function createPage(
   assert.equal(toggles.length, 1);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
   assert.equal(root.querySelectorAll("#script_generalSettings").length, 1);
-  assert.equal(root.querySelectorAll("button.script-collapsible").length, 8);
+  assert.equal(root.querySelectorAll("button.script-collapsible").length, 9);
   for (const section of [
     "interface",
     "stateLog",
@@ -155,6 +162,7 @@ function createPage(
     "authority",
     "hell",
     "weighting",
+    "trait",
   ]) {
     assert.equal(
       root.querySelectorAll(`#script_${section}Settings`).length,
@@ -203,8 +211,9 @@ function createPage(
 // --- show settings has a usable caption and removes the panel when disabled ---------------------
 
 {
-  const { panel, settings, root } = createPage(JSON.stringify({}));
+  const { panel, settings, root, logged } = createPage(JSON.stringify({}));
   panel.ensurePanel();
+  assert.deepEqual(logged, [], "the panel must draw with no stored settings");
   const showSettings = root.querySelectorAll(".script_showSettings")[0];
   assert.ok(showSettings, "the show-settings toggle should be rendered");
   assert.equal(

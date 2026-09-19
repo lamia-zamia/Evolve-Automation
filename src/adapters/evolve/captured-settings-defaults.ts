@@ -34,6 +34,10 @@ import type {
 import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import {
+  readCapturedMinorTraitContext,
+  readCapturedMutableTraitContext,
+} from "./traits/captured-trait-settings-catalog.ts";
+import {
   biomeList,
   challenges,
   extraList,
@@ -405,14 +409,10 @@ export function createCapturedSettingsDefaults({
       readMarketResetContext(readRootSafely(rootState), controls),
     readStorage: (): StorageResetContext =>
       readStorageResetContext(readRootSafely(rootState), controls),
-    readMinorTrait: (): MinorTraitResetContext => ({
-      traitNames: [],
-      ocularPowerIds: [],
-    }),
-    readMutableTrait: (): MutableTraitResetContext => ({
-      traits: [],
-      genusOrder: [],
-    }),
+    readMinorTrait: (): MinorTraitResetContext =>
+      readCapturedMinorTraitContext(),
+    readMutableTrait: (): MutableTraitResetContext =>
+      readCapturedMutableTraitContext(),
     readJob: (): JobResetContext => readCapturedJobResetContext(controls),
     readBuilding: () =>
       readBuildingContext(readRootSafely(rootState), controls),

@@ -128,6 +128,9 @@ import {
 } from "../adapters/browser/fleet-settings.ts";
 import { createFleetSettingsIntentHandler } from "../application/fleet-settings.ts";
 import { createCapturedFleetSettingsAdapter } from "../adapters/evolve/combat/captured-fleet-settings.ts";
+import { createTraitSettingsBrowserAdapter } from "../adapters/browser/trait-settings.ts";
+import { createTraitSettingsIntentHandler } from "../application/trait-settings.ts";
+import { createCapturedTraitSettingsAdapter } from "../adapters/evolve/traits/captured-trait-settings.ts";
 import type { TriggerValue } from "../domain/progression/build/trigger-settings.ts";
 import type {
   ObjectList,
@@ -370,6 +373,13 @@ type FleetSettingsDocument = ReturnType<
 type FleetSettingsJQuery = ReturnType<
   Parameters<typeof createFleetSettingsBrowserAdapter>[0]["getJQuery"]
 >;
+type TraitSettings = ReturnType<typeof createTraitSettingsBrowserAdapter>;
+type TraitSettingsDocument = ReturnType<
+  Parameters<typeof createTraitSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type TraitSettingsJQuery = ReturnType<
+  Parameters<typeof createTraitSettingsBrowserAdapter>[0]["getJQuery"]
+>;
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
@@ -418,6 +428,9 @@ export interface CapturedSettingsPanelDependencies {
   };
   readonly fleetSettings?: {
     readonly controls: GameControlRegistry;
+  };
+  readonly traitSettings?: {
+    readonly rootState: GameRootStateSource;
   };
   readonly onDiagnostic?: (message: string) => void;
   readonly logError?: (message: string) => void;
@@ -511,6 +524,7 @@ export function createCapturedSettingsPanel({
   productionSettings: capturedProductionSettings,
   researchSettings: capturedResearchSettings,
   fleetSettings: capturedFleetSettings,
+  traitSettings: capturedTraitSettings,
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -670,6 +684,7 @@ export function createCapturedSettingsPanel({
         readonly production: ProductionSettings | undefined;
         readonly government: GovernmentSettings | undefined;
         readonly fleet: FleetSettings | undefined;
+        readonly trait: TraitSettings | undefined;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -810,6 +825,7 @@ export function createCapturedSettingsPanel({
     let production: ProductionSettings | undefined;
     let government: GovernmentSettings | undefined;
     let fleet: FleetSettings | undefined;
+    let trait: TraitSettings | undefined;
     let research: ResearchSettings | undefined;
     let trigger: TriggerSettings | undefined;
     const shell = createSettingsShell({
@@ -837,7 +853,7 @@ export function createCapturedSettingsPanel({
       buildAuthoritySettings: () => authority?.buildAuthoritySettings(),
       buildEvolutionSettings: () => {},
       buildPlanetSettings: () => {},
-      buildTraitSettings: () => {},
+      buildTraitSettings: () => trait?.buildTraitSettings(),
       buildTriggerSettings: () => trigger?.buildTriggerSettings(),
       buildResearchSettings: () => research?.buildResearchSettings(),
       buildWarSettings: () => {},
@@ -1641,6 +1657,112 @@ export function createCapturedSettingsPanel({
         },
       });
     }
+    if (capturedTraitSettings !== undefined) {
+      const capturedAdapter = createCapturedTraitSettingsAdapter({
+        rootState: capturedTraitSettings.rootState,
+        getSettingsRaw: settings.readRaw,
+      });
+      let traitIntent: ReturnType<typeof createTraitSettingsIntentHandler>;
+      trait = createTraitSettingsBrowserAdapter({
+        getReadModel: capturedAdapter.readTraitSettingsReadModel,
+        getDocument: () => documentForUi as unknown as TraitSettingsDocument,
+        getJQuery: () => getJQuery() as unknown as TraitSettingsJQuery,
+        intents: { handle: (intent) => traitIntent.handle(intent) },
+        getTableSorter: () => tableSorter,
+        buildSettingsSection: shell.buildSettingsSection,
+        addStandardHeading: (node: unknown, heading: string) =>
+          shell.addStandardHeading(
+            node as unknown as Parameters<typeof shell.addStandardHeading>[0],
+            heading,
+          ),
+        addSettingsSelect: ((
+          node: unknown,
+          settingName: string,
+          labelText: string,
+          hintText: string,
+          options: readonly { val: string; label: string; hint: string }[],
+        ) =>
+          controls.addSettingsSelect(
+            node as SettingsControlNode,
+            settingName,
+            labelText,
+            hintText,
+            options,
+          )) as unknown as Parameters<
+          typeof createTraitSettingsBrowserAdapter
+        >[0]["addSettingsSelect"],
+        addSettingsNumber: (
+          node: unknown,
+          settingName: string,
+          labelText: string,
+          hintText: string,
+        ) =>
+          controls.addSettingsNumber(
+            node as SettingsControlNode,
+            settingName,
+            labelText,
+            hintText,
+          ),
+        addSettingsToggle: (
+          node: unknown,
+          settingName: string,
+          labelText: string,
+          hintText: string,
+        ) =>
+          controls.addSettingsToggle(
+            node as SettingsControlNode,
+            settingName,
+            labelText,
+            hintText,
+          ),
+        addTableToggle: (node: unknown, settingName: string) =>
+          controls.addTableToggle(node as SettingsControlNode, settingName),
+        addTableInput: (node: unknown, settingName: string) =>
+          controls.addTableInput(node as SettingsControlNode, settingName),
+        buildTableLabel: (label: string, title?: string, color?: string) =>
+          controls.buildTableLabel(label, title, color),
+      });
+      traitIntent = createTraitSettingsIntentHandler({
+        writer: {
+          resetMinorTraits: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("minortrait");
+            } else {
+              capturedAdapter.resetMinorTraits();
+            }
+          },
+          resetMutableTraits: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("mutabletrait");
+            } else {
+              capturedAdapter.resetMutableTraits();
+            }
+          },
+          persist: persistSettings,
+          // No captured session target exists: the captured evolution samples
+          // its target from settings on every cycle, so there is nothing to clear.
+          clearEvolutionTarget: () => {},
+          reorderMinorTraits: (traitIds) => {
+            capturedAdapter.reorderMinorTraits(traitIds);
+          },
+          reorderMutableTraits: (traitIds) => {
+            capturedAdapter.reorderMutableTraits(traitIds);
+          },
+          setBoolean: (settingName, value) => {
+            capturedAdapter.setBoolean(settingName, value);
+          },
+        },
+        renderSettingsContent: () => trait?.updateTraitSettingsContent(),
+        effects: {
+          resetCheckboxes: () =>
+            controls.resetCheckbox(
+              "autoMinorTrait",
+              "autoMutateTraits",
+              "autoGenetics",
+            ),
+        },
+      });
+    }
     if (capturedProjectSettings !== undefined) {
       const capturedAdapter = createCapturedProjectSettingsAdapter({
         rootState: capturedProjectSettings.rootState,
@@ -2110,6 +2232,7 @@ export function createCapturedSettingsPanel({
       production,
       government,
       fleet,
+      trait,
       craftToggles,
       shell,
     };
@@ -2179,6 +2302,7 @@ export function createCapturedSettingsPanel({
     ui.ejector?.buildEjectorSettings();
     ui.magic?.buildMagicSettings();
     ui.production?.buildProductionSettings();
+    ui.trait?.buildTraitSettings();
   };
 
   const removeScriptSettings = () => {

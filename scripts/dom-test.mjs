@@ -112,6 +112,12 @@ import { createTestDocument, element, setUp } from "./dom-fixture.mjs";
 
   $("#field").val("7");
   assert.equal($("#field").val(), "7");
+  // A setting the stored record has never held reaches val() as an explicit undefined.
+  // jQuery treats that as a setter, so the chain must continue rather than yield a string.
+  assert.equal(typeof $("#field").val(undefined).on, "function");
+  assert.equal($("#field").val(), "");
+  $("#field").val(null);
+  assert.equal($("#field").val(), "");
 
   $("#field").text("shown");
   assert.equal($("#field").text(), "shown");
