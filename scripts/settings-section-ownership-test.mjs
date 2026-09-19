@@ -61,7 +61,20 @@ import {
     "res_naniteFood",
     "tickRate",
     "autoBuild",
+    "challenge_plasmid",
+    "biome_w_forest",
+    "trait_w_smart",
+    "extra_w_Achievement",
+    "log_mercenary",
+    "mTrait_hardy",
     "mTrait_p_hardy",
+    "mTrait_w_hardy",
+    "ocularPower_hardy",
+    "ocularPower_p_hardy",
+    "mutableTrait_p_creative",
+    "mutableTrait_purge_creative",
+    "mutableTrait_gain_creative",
+    "mutableTrait_reset_creative",
   ];
   for (const key of keys) {
     const owners = SETTINGS_SECTION_POLICIES.filter((policy) =>
@@ -126,8 +139,38 @@ const RESET_CASES = [
   },
   {
     section: "minortrait",
-    own: [],
-    other: ["job_p_farmer", "res_storageOld", "batold-building"],
+    own: [
+      "mTrait_old_trait",
+      "mTrait_p_old_trait",
+      "mTrait_w_old_trait",
+      "ocularPower_old_trait",
+    ],
+    other: ["mutableTrait_p_old_trait", "job_p_farmer", "batold-building"],
+  },
+  {
+    section: "mutabletrait",
+    own: [
+      "mutableTrait_p_old_trait",
+      "mutableTrait_purge_old_trait",
+      "mutableTrait_gain_old_trait",
+      "mutableTrait_reset_old_trait",
+    ],
+    other: ["mTrait_old_trait", "mTrait_p_old_trait", "job_p_farmer"],
+  },
+  {
+    section: "evolution",
+    own: ["challenge_old_challenge"],
+    other: ["mTrait_old_trait", "biome_w_old_biome", "job_p_farmer"],
+  },
+  {
+    section: "planet",
+    own: ["biome_w_old_biome", "trait_w_old_trait", "extra_w_old_extra"],
+    other: ["challenge_old_challenge", "mTrait_old_trait", "job_p_farmer"],
+  },
+  {
+    section: "logging",
+    own: ["log_old_type"],
+    other: ["challenge_old_challenge", "biome_w_old_biome", "job_p_farmer"],
   },
 ];
 

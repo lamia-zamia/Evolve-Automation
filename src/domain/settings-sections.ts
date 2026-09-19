@@ -55,7 +55,8 @@ export const SETTINGS_SECTION_POLICIES: readonly SettingsSectionPolicy[] =
     {
       id: "evolution",
       resetName: "resetEvolutionSettings",
-      ownsDynamicKey: OWNS_NOTHING_DYNAMIC,
+      // One toggle per challenge the universe offers.
+      ownsDynamicKey: ownsPrefix("challenge_"),
     },
     {
       id: "war",
@@ -189,12 +190,14 @@ export const SETTINGS_SECTION_POLICIES: readonly SettingsSectionPolicy[] =
     {
       id: "planet",
       resetName: "resetPlanetSettings",
-      ownsDynamicKey: OWNS_NOTHING_DYNAMIC,
+      // Per-biome, per-genus-trait and per-extra weightings for planet scoring.
+      ownsDynamicKey: ownsPrefix("biome_w_", "trait_w_", "extra_w_"),
     },
     {
       id: "logging",
       resetName: "resetLoggingSettings",
-      ownsDynamicKey: OWNS_NOTHING_DYNAMIC,
+      // One toggle per game log type, plus the script's own log settings under the same prefix.
+      ownsDynamicKey: ownsPrefix("log_"),
     },
     {
       id: "trigger",
@@ -204,12 +207,15 @@ export const SETTINGS_SECTION_POLICIES: readonly SettingsSectionPolicy[] =
     {
       id: "minortrait",
       resetName: "resetMinorTraitSettings",
-      ownsDynamicKey: OWNS_NOTHING_DYNAMIC,
+      // `mTrait_<id>`, its `_p_`/`_w_` variants, and the Ocular Power trait choices.
+      // `mutableTrait_*` does not start with `mTrait_`, so the two trait sections stay disjoint.
+      ownsDynamicKey: ownsPrefix("mTrait_", "ocularPower_"),
     },
     {
       id: "mutabletrait",
       resetName: "resetMutableTraitSettings",
-      ownsDynamicKey: OWNS_NOTHING_DYNAMIC,
+      // Priority plus the purge/gain/reset toggles for each mutable trait.
+      ownsDynamicKey: ownsPrefix("mutableTrait_"),
     },
   ]);
 
