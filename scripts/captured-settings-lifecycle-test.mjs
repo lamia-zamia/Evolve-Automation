@@ -1,88 +1,16 @@
 import assert from "node:assert/strict";
-import { createSettingsStore } from "../src/adapters/browser/settings-store.ts";
-import { createCapturedSettingsDefaults } from "../src/adapters/evolve/captured-settings-defaults.ts";
-import { createCapturedSettingsLifecycle } from "../src/application/captured-settings-lifecycle.ts";
 import { createOverrideSettings } from "../src/application/override-settings.ts";
 import { createCapturedOverrideEvaluation } from "../src/adapters/evolve/captured-override-evaluation.ts";
 import { overrideComparisons } from "../src/settings/override-comparators.ts";
 import { inspectImportedSettings } from "../src/adapters/browser/settings-import.ts";
+import {
+  createSettingsFixture,
+  createSettingsRoot as root,
+  DEFAULT_CONTROL_IDS,
+} from "./test-support/captured-settings.mjs";
 
-function storage(initial) {
-  let value = initial;
-  return {
-    getItem(key) {
-      return key === "settings" ? value : null;
-    },
-    setItem(key, next) {
-      if (key === "settings") value = next;
-    },
-    read() {
-      return value;
-    },
-  };
-}
-
-function controls(ids) {
-  return {
-    capturedElementIds: () => ids,
-    resolve: (id) =>
-      ids.includes(id)
-        ? {
-            elementId: id,
-            generation: 1,
-            methods: ["add", "sub", "setDefault"],
-          }
-        : undefined,
-  };
-}
-
-function root() {
-  return {
-    race: { universe: "standard", governor: { tasks: {} } },
-    civic: {
-      d_job: "unemployed",
-      unemployed: {
-        job: "unemployed",
-        assigned: 0,
-        workers: 10,
-        max: -1,
-        display: true,
-      },
-      farmer: {
-        job: "farmer",
-        assigned: 0,
-        workers: 0,
-        max: -1,
-        display: true,
-      },
-      teamster: {
-        job: "teamster",
-        assigned: 0,
-        workers: 0,
-        max: -1,
-        display: true,
-      },
-    },
-    resource: {},
-    tech: {},
-  };
-}
-
-function createLifecycle(
-  rawText = null,
-  ids = ["civ-unemployed", "civ-farmer", "civ-teamster"],
-) {
-  const saved = storage(rawText);
-  const settings = createSettingsStore({ storage: saved });
-  const gameRoot = root();
-  const lifecycle = createCapturedSettingsLifecycle({
-    settings,
-    defaults: createCapturedSettingsDefaults({
-      rootState: { readRoot: () => gameRoot },
-      controls: controls(ids),
-    }),
-  });
-  return { saved, settings, lifecycle, gameRoot };
+function createLifecycle(rawText = null, ids = DEFAULT_CONTROL_IDS) {
+  return createSettingsFixture({ rawText, controlIds: ids });
 }
 
 // Empty profiles get the complete record baseline and the job breakpoint/priority keys needed by
@@ -165,12 +93,10 @@ function createLifecycle(
     "civ-teamster",
     "civ-scientist",
   ];
-  const nextLifecycle = createCapturedSettingsLifecycle({
+  const { lifecycle: nextLifecycle } = createSettingsFixture({
     settings,
-    defaults: createCapturedSettingsDefaults({
-      rootState: { readRoot: () => gameRoot },
-      controls: controls(nextIds),
-    }),
+    gameRoot,
+    controlIds: nextIds,
   });
   nextLifecycle.ensureDynamicDefaults();
   assert.equal(settings.readRaw().job_p_farmer, 77);
@@ -199,19 +125,14 @@ function createLifecycle(
     },
   };
   gameRoot.arpa = { launch_facility: { display: true } };
-  const saved = storage(null);
-  const settings = createSettingsStore({ storage: saved });
-  const lifecycle = createCapturedSettingsLifecycle({
-    settings,
-    defaults: createCapturedSettingsDefaults({
-      rootState: { readRoot: () => gameRoot },
-      controls: controls([
-        "civ-unemployed",
-        "civ-farmer",
-        "market-Food",
-        "market-Plywood",
-      ]),
-    }),
+  const { lifecycle, settings } = createSettingsFixture({
+    gameRoot,
+    controlIds: [
+      "civ-unemployed",
+      "civ-farmer",
+      "market-Food",
+      "market-Plywood",
+    ],
   });
   lifecycle.initialize();
   lifecycle.ensureDynamicDefaults();

@@ -59,24 +59,12 @@ import {
   readCapturedBuildingEntries,
 } from "./progression/build/captured-building-catalog.ts";
 import { readTechElementId } from "./progression/research/captured-research-settings-catalog.ts";
+import { CRAFTER_RESOURCE_KEYS } from "../../domain/economy/production/crafter-resources.ts";
 
 export interface CapturedSettingsDefaultsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
 }
-
-/** The nine crafted resources, shared with the foundry settings table. */
-export const CRAFTER_RESOURCE_KEYS = Object.freeze([
-  "Plywood",
-  "Brick",
-  "Wrought_Iron",
-  "Sheet_Metal",
-  "Mythril",
-  "Aerogel",
-  "Nanoweave",
-  "Scarletite",
-  "Quantium",
-]);
 
 function readRootSafely(rootState: GameRootStateSource): unknown {
   try {

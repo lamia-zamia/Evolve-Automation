@@ -12,7 +12,7 @@
  */
 
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
-import { CRAFTER_RESOURCE_KEYS } from "../../captured-settings-defaults.ts";
+import { CRAFTER_RESOURCE_KEYS } from "../../../../domain/economy/production/crafter-resources.ts";
 import { SMELTER_FUEL_IDS } from "./captured-smelter.ts";
 import { FACTORY_OUTPUT_IDS } from "./captured-factory.ts";
 import { MINING_DROID_OUTPUT_IDS } from "./captured-mining-droid.ts";

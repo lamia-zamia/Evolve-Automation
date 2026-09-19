@@ -13,6 +13,10 @@ import {
   DEFAULT_VACUUM_MANA_REQUIREMENT,
   DEFAULT_VACUUM_WEIGHTING_MULTIPLIER,
 } from "./progression/prestige/vacuum.ts";
+import {
+  CRAFTER_RESOURCE_KEYS,
+  type CrafterResourceKey,
+} from "./economy/production/crafter-resources.ts";
 
 /** Managers whose priority list a reset rebuilds. */
 export type PriorityManagerKey =
@@ -974,30 +978,28 @@ export function computeProductionDefaults(
     replicatorWeightingMode: "mass",
   };
 
-  // Foundry
-  const setFoundryProduct = (
-    key: string,
-    autoCraftEnabled: boolean,
-    crafterEnabled: boolean,
-    craftWeighting: number,
-    craftPreserve: number,
-  ) => {
+  // Foundry. The crafter set itself is owned by CRAFTER_RESOURCE_KEYS; only the per-crafter
+  // weighting differs here, and the typed record makes a crafter added there a compile error
+  // until its weighting is given.
+  const FOUNDRY_WEIGHTING: Readonly<Record<CrafterResourceKey, number>> = {
+    Plywood: 1,
+    Brick: 1,
+    Wrought_Iron: 1,
+    Sheet_Metal: 2,
+    Mythril: 3,
+    Aerogel: 3,
+    Nanoweave: 10,
+    Scarletite: 1,
+    Quantium: 1,
+  };
+  CRAFTER_RESOURCE_KEYS.forEach((key) => {
     const id = context.foundryResourceIdByKey[key];
     if (id === undefined) return;
-    def["craft" + id] = autoCraftEnabled;
-    def["job_" + id] = crafterEnabled;
-    def["foundry_w_" + id] = craftWeighting;
-    def["foundry_p_" + id] = craftPreserve;
-  };
-  setFoundryProduct("Plywood", true, true, 1, 0);
-  setFoundryProduct("Brick", true, true, 1, 0);
-  setFoundryProduct("Wrought_Iron", true, true, 1, 0);
-  setFoundryProduct("Sheet_Metal", true, true, 2, 0);
-  setFoundryProduct("Mythril", true, true, 3, 0);
-  setFoundryProduct("Aerogel", true, true, 3, 0);
-  setFoundryProduct("Nanoweave", true, true, 10, 0);
-  setFoundryProduct("Scarletite", true, true, 1, 0);
-  setFoundryProduct("Quantium", true, true, 1, 0);
+    def["craft" + id] = true; // autoCraftEnabled
+    def["job_" + id] = true; // crafterEnabled
+    def["foundry_w_" + id] = FOUNDRY_WEIGHTING[key];
+    def["foundry_p_" + id] = 0; // craftPreserve
+  });
 
   // Smelter
   context.smelterFuelIds.forEach((id, i) => {

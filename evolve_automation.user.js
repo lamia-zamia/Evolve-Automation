@@ -24093,7 +24093,7 @@
     };
   }
 
-  // src/adapters/evolve/captured-settings-defaults.ts
+  // src/domain/economy/production/crafter-resources.ts
   var CRAFTER_RESOURCE_KEYS = Object.freeze([
     "Plywood",
     "Brick",
@@ -24105,6 +24105,8 @@
     "Scarletite",
     "Quantium"
   ]);
+
+  // src/adapters/evolve/captured-settings-defaults.ts
   function readRootSafely(rootState) {
     try {
       return rootState.readRoot();
@@ -24962,11 +24964,21 @@
       productionFactoryFocusMaterials: !1,
       replicatorAssignGovernorTask: !0,
       replicatorWeightingMode: "mass"
-    }, setFoundryProduct = (key, autoCraftEnabled, crafterEnabled, craftWeighting, craftPreserve2) => {
-      let id = context.foundryResourceIdByKey[key];
-      id !== void 0 && (def["craft" + id] = autoCraftEnabled, def["job_" + id] = crafterEnabled, def["foundry_w_" + id] = craftWeighting, def["foundry_p_" + id] = craftPreserve2);
+    }, FOUNDRY_WEIGHTING = {
+      Plywood: 1,
+      Brick: 1,
+      Wrought_Iron: 1,
+      Sheet_Metal: 2,
+      Mythril: 3,
+      Aerogel: 3,
+      Nanoweave: 10,
+      Scarletite: 1,
+      Quantium: 1
     };
-    setFoundryProduct("Plywood", !0, !0, 1, 0), setFoundryProduct("Brick", !0, !0, 1, 0), setFoundryProduct("Wrought_Iron", !0, !0, 1, 0), setFoundryProduct("Sheet_Metal", !0, !0, 2, 0), setFoundryProduct("Mythril", !0, !0, 3, 0), setFoundryProduct("Aerogel", !0, !0, 3, 0), setFoundryProduct("Nanoweave", !0, !0, 10, 0), setFoundryProduct("Scarletite", !0, !0, 1, 0), setFoundryProduct("Quantium", !0, !0, 1, 0), context.smelterFuelIds.forEach((id, i) => {
+    CRAFTER_RESOURCE_KEYS.forEach((key) => {
+      let id = context.foundryResourceIdByKey[key];
+      id !== void 0 && (def["craft" + id] = !0, def["job_" + id] = !0, def["foundry_w_" + id] = FOUNDRY_WEIGHTING[key], def["foundry_p_" + id] = 0);
+    }), context.smelterFuelIds.forEach((id, i) => {
       def["smelter_fuel_p_" + id] = i;
     });
     let setFactoryProduct = (key, enabled, weighting, priority) => {
@@ -25309,96 +25321,188 @@
     };
   }
 
+  // src/domain/settings-sections.ts
+  var CRAFTER_JOB_KEYS = new Set(
+    CRAFTER_RESOURCE_KEYS.map((id) => `job_${id}`)
+  ), OWNS_NOTHING_DYNAMIC = () => !1;
+  function ownsPrefix(...prefixes) {
+    return (key) => prefixes.some((prefix) => key.startsWith(prefix));
+  }
+  var ownsProductionPrefix = ownsPrefix(
+    "craft",
+    "foundry_",
+    "production_",
+    "droid_",
+    "replicator_",
+    "smelter_"
+  ), SETTINGS_SECTION_POLICIES = Object.freeze([
+    {
+      id: "evolution",
+      resetName: "resetEvolutionSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "war",
+      resetName: "resetWarSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "hell",
+      resetName: "resetHellSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "mech",
+      resetName: "resetMechSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "fleet",
+      resetName: "resetFleetSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "government",
+      resetName: "resetGovernmentSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "authority",
+      resetName: "resetAuthoritySettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "building",
+      resetName: "resetBuildingSettings",
+      ownsDynamicKey: ownsPrefix("bat", "bld_")
+    },
+    {
+      id: "weighting",
+      resetName: "resetWeightingSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "market",
+      resetName: "resetMarketSettings",
+      ownsDynamicKey: ownsPrefix(
+        "buy",
+        "sell",
+        "res_buy_",
+        "res_sell_",
+        "res_trade_",
+        "res_galaxy_"
+      )
+    },
+    {
+      id: "research",
+      resetName: "resetResearchSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "project",
+      resetName: "resetProjectSettings",
+      ownsDynamicKey: ownsPrefix("arpa_")
+    },
+    {
+      id: "job",
+      resetName: "resetJobSettings",
+      // Ordinary jobs, their priorities and their breakpoints. The crafter toggles Production
+      // writes into the same namespace are explicitly not ours.
+      ownsDynamicKey: (key) => key.startsWith("job_") && !CRAFTER_JOB_KEYS.has(key)
+    },
+    {
+      id: "magic",
+      resetName: "resetMagicSettings",
+      ownsDynamicKey: ownsPrefix("res_alchemy_", "spell_w_")
+    },
+    {
+      id: "production",
+      resetName: "resetProductionSettings",
+      // Crafters, foundry, factory, droids, replicator and smelter. `job_<crafter>` is the
+      // crafter's own enable toggle and is the only `job_*` key this section may delete.
+      ownsDynamicKey: (key) => CRAFTER_JOB_KEYS.has(key) || ownsProductionPrefix(key)
+    },
+    {
+      id: "storage",
+      resetName: "resetStorageSettings",
+      ownsDynamicKey: ownsPrefix(
+        "res_storage",
+        "res_min_store",
+        "res_max_store",
+        "res_containers_m_",
+        "res_crates_m_"
+      )
+    },
+    {
+      id: "general",
+      resetName: "resetGeneralSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "interface",
+      resetName: "resetInterfaceSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "statelog",
+      resetName: "resetStateLogSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "achievementguard",
+      resetName: "resetAchievementGuardSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "challengehelper",
+      resetName: "resetChallengeHelperSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "prestige",
+      resetName: "resetPrestigeSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "ejector",
+      resetName: "resetEjectorSettings",
+      ownsDynamicKey: ownsPrefix("res_eject", "res_supply", "res_nanite")
+    },
+    {
+      id: "planet",
+      resetName: "resetPlanetSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "logging",
+      resetName: "resetLoggingSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "trigger",
+      resetName: "resetTriggerSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "minortrait",
+      resetName: "resetMinorTraitSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    },
+    {
+      id: "mutabletrait",
+      resetName: "resetMutableTraitSettings",
+      ownsDynamicKey: OWNS_NOTHING_DYNAMIC
+    }
+  ]), SETTINGS_RESET_ORDER = Object.freeze(
+    SETTINGS_SECTION_POLICIES.map((policy) => policy.resetName)
+  ), POLICY_BY_ID = new Map(
+    SETTINGS_SECTION_POLICIES.map((policy) => [policy.id, policy])
+  );
+  function findSettingsSectionPolicy(section) {
+    return POLICY_BY_ID.get(section.toLowerCase());
+  }
+
   // src/application/captured-settings-lifecycle.ts
-  var RESET_ORDER = [
-    "resetEvolutionSettings",
-    "resetWarSettings",
-    "resetHellSettings",
-    "resetMechSettings",
-    "resetFleetSettings",
-    "resetGovernmentSettings",
-    "resetAuthoritySettings",
-    "resetBuildingSettings",
-    "resetWeightingSettings",
-    "resetMarketSettings",
-    "resetResearchSettings",
-    "resetProjectSettings",
-    "resetJobSettings",
-    "resetMagicSettings",
-    "resetProductionSettings",
-    "resetStorageSettings",
-    "resetGeneralSettings",
-    "resetInterfaceSettings",
-    "resetStateLogSettings",
-    "resetAchievementGuardSettings",
-    "resetChallengeHelperSettings",
-    "resetPrestigeSettings",
-    "resetEjectorSettings",
-    "resetPlanetSettings",
-    "resetLoggingSettings",
-    "resetTriggerSettings",
-    "resetMinorTraitSettings",
-    "resetMutableTraitSettings"
-  ], SECTION_TO_RESET = Object.freeze({
-    evolution: "resetEvolutionSettings",
-    war: "resetWarSettings",
-    hell: "resetHellSettings",
-    mech: "resetMechSettings",
-    fleet: "resetFleetSettings",
-    government: "resetGovernmentSettings",
-    authority: "resetAuthoritySettings",
-    building: "resetBuildingSettings",
-    weighting: "resetWeightingSettings",
-    market: "resetMarketSettings",
-    research: "resetResearchSettings",
-    project: "resetProjectSettings",
-    job: "resetJobSettings",
-    magic: "resetMagicSettings",
-    production: "resetProductionSettings",
-    storage: "resetStorageSettings",
-    general: "resetGeneralSettings",
-    interface: "resetInterfaceSettings",
-    statelog: "resetStateLogSettings",
-    achievementguard: "resetAchievementGuardSettings",
-    challengehelper: "resetChallengeHelperSettings",
-    prestige: "resetPrestigeSettings",
-    ejector: "resetEjectorSettings",
-    planet: "resetPlanetSettings",
-    logging: "resetLoggingSettings",
-    trigger: "resetTriggerSettings",
-    minortrait: "resetMinorTraitSettings",
-    mutabletrait: "resetMutableTraitSettings"
-  }), DYNAMIC_OVERRIDE_PREFIXES = Object.freeze({
-    building: ["bat", "bld_"],
-    market: [
-      "buy",
-      "sell",
-      "res_buy_",
-      "res_sell_",
-      "res_trade_",
-      "res_galaxy_"
-    ],
-    storage: [
-      "res_storage",
-      "res_min_store",
-      "res_max_store",
-      "res_containers_m_",
-      "res_crates_m_"
-    ],
-    project: ["arpa_"],
-    job: ["job_"],
-    magic: ["res_alchemy_", "spell_w_"],
-    production: [
-      "craft",
-      "foundry_",
-      "production_",
-      "droid_",
-      "replicator_",
-      "smelter_",
-      "job_"
-    ],
-    ejector: ["res_eject", "res_supply", "res_nanite"]
-  });
   function asSettingsRecord(raw) {
     return isNonArrayRecord(raw.overrides) ? raw.overrides = normalizeStoredOverrides(raw.overrides, raw).overrides : raw.overrides = {}, Array.isArray(raw.triggers) ? raw.triggers = raw.triggers.filter(isNonArrayRecord) : raw.triggers = [], Object.prototype.hasOwnProperty.call(raw, "arpa") && !isRecord(raw.arpa) && delete raw.arpa, raw;
   }
@@ -25417,16 +25521,11 @@
       getSettingsRaw: raw,
       reader: defaults.reader,
       effects: defaults.effects
-    }), resetByName = Object.fromEntries(
-      RESET_ORDER.map((name) => [name, resets[name]])
-    ), startupResetByName = Object.fromEntries(
-      RESET_ORDER.map((name) => [
-        name,
-        startupResets[name]
-      ])
-    ), effective = /* @__PURE__ */ Object.create(null), initialized = !1, migrationContext = () => ({
+    }), byName = (table) => Object.fromEntries(SETTINGS_RESET_ORDER.map((name) => [name, table[name]])), resetByName = byName(resets), startupResetByName = byName(startupResets), effective = /* @__PURE__ */ Object.create(null), initialized = !1, migrationContext = () => ({
       settingsSections: defaults.settingsSections,
-      defaultResets: RESET_ORDER.map((name) => startupResetByName[name]),
+      defaultResets: SETTINGS_RESET_ORDER.flatMap(
+        (name) => startupResetByName[name] ?? []
+      ),
       prestigeAscensionSkipCustom: raw().prestigeAscensionSkipCustom !== !1,
       techIds: defaults.techIds,
       marketPriorityIds: defaults.marketPriorityIds,
@@ -25434,12 +25533,10 @@
       projectIds: defaults.projectIds,
       buildings: defaults.buildings,
       crafterOriginalIds: defaults.crafterOriginalIds
-    }), purgeDynamicOverrides = (section) => {
-      let prefixes = DYNAMIC_OVERRIDE_PREFIXES[section.toLowerCase()];
-      if (prefixes === void 0) return;
+    }), purgeDynamicOverrides = (ownsDynamicKey) => {
       let overrides = raw().overrides;
       for (let key of Object.keys(overrides))
-        prefixes.some((prefix) => key.startsWith(prefix)) && delete overrides[key];
+        ownsDynamicKey(key) && delete overrides[key];
     }, initialize = () => {
       let before = snapshot(settings.readRaw());
       migrateSettingsRecord(raw(), migrationContext()), initialized = !0, persistIfChanged(before);
@@ -25452,10 +25549,10 @@
         settings.replaceRaw(next), initialized = !1, initialize(), settings.persist();
       },
       resetSection(section) {
-        let resetName = SECTION_TO_RESET[section.toLowerCase()];
-        if (resetName === void 0) return;
+        let policy = findSettingsSectionPolicy(section);
+        if (policy === void 0) return;
         let before = snapshot(settings.readRaw());
-        resetByName[resetName](!0), purgeDynamicOverrides(section), persistIfChanged(before);
+        resetByName[policy.resetName]?.(!0), purgeDynamicOverrides(policy.ownsDynamicKey), persistIfChanged(before);
       },
       ensureDynamicDefaults() {
         initialized || initialize();
@@ -25464,8 +25561,10 @@
           ...catalogs
         };
         migrateSettingsRecord(raw(), liveContext);
-        for (let name of defaults.discoveredResetNames)
-          RESET_ORDER.includes(name) && resetByName[name](!1);
+        for (let name of defaults.discoveredResetNames) {
+          let reset = resetByName[name];
+          reset !== void 0 && reset(!1);
+        }
         persistIfChanged(before);
       },
       readRaw: settings.readRaw,

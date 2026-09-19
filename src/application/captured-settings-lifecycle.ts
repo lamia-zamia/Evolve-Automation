@@ -17,37 +17,10 @@ import {
 import { normalizeStoredOverrides } from "../domain/override-resolution.ts";
 import type { CapturedSettingsDefaults } from "../ports/captured-settings-defaults.ts";
 import { isNonArrayRecord, isRecord } from "../validation/records.ts";
-
-const RESET_ORDER = [
-  "resetEvolutionSettings",
-  "resetWarSettings",
-  "resetHellSettings",
-  "resetMechSettings",
-  "resetFleetSettings",
-  "resetGovernmentSettings",
-  "resetAuthoritySettings",
-  "resetBuildingSettings",
-  "resetWeightingSettings",
-  "resetMarketSettings",
-  "resetResearchSettings",
-  "resetProjectSettings",
-  "resetJobSettings",
-  "resetMagicSettings",
-  "resetProductionSettings",
-  "resetStorageSettings",
-  "resetGeneralSettings",
-  "resetInterfaceSettings",
-  "resetStateLogSettings",
-  "resetAchievementGuardSettings",
-  "resetChallengeHelperSettings",
-  "resetPrestigeSettings",
-  "resetEjectorSettings",
-  "resetPlanetSettings",
-  "resetLoggingSettings",
-  "resetTriggerSettings",
-  "resetMinorTraitSettings",
-  "resetMutableTraitSettings",
-] as const;
+import {
+  findSettingsSectionPolicy,
+  SETTINGS_RESET_ORDER,
+} from "../domain/settings-sections.ts";
 
 export interface CapturedSettingsLifecycle {
   /** Loads, shapes, migrates, defaults, normalizes, and persists the raw record. */
@@ -62,71 +35,6 @@ export interface CapturedSettingsLifecycle {
   /** Mutable effective layer; only the override application writes own properties here. */
   readEffective(): Record<string, unknown>;
 }
-
-const SECTION_TO_RESET: Readonly<Record<string, (typeof RESET_ORDER)[number]>> =
-  Object.freeze({
-    evolution: "resetEvolutionSettings",
-    war: "resetWarSettings",
-    hell: "resetHellSettings",
-    mech: "resetMechSettings",
-    fleet: "resetFleetSettings",
-    government: "resetGovernmentSettings",
-    authority: "resetAuthoritySettings",
-    building: "resetBuildingSettings",
-    weighting: "resetWeightingSettings",
-    market: "resetMarketSettings",
-    research: "resetResearchSettings",
-    project: "resetProjectSettings",
-    job: "resetJobSettings",
-    magic: "resetMagicSettings",
-    production: "resetProductionSettings",
-    storage: "resetStorageSettings",
-    general: "resetGeneralSettings",
-    interface: "resetInterfaceSettings",
-    statelog: "resetStateLogSettings",
-    achievementguard: "resetAchievementGuardSettings",
-    challengehelper: "resetChallengeHelperSettings",
-    prestige: "resetPrestigeSettings",
-    ejector: "resetEjectorSettings",
-    planet: "resetPlanetSettings",
-    logging: "resetLoggingSettings",
-    trigger: "resetTriggerSettings",
-    minortrait: "resetMinorTraitSettings",
-    mutabletrait: "resetMutableTraitSettings",
-  });
-
-const DYNAMIC_OVERRIDE_PREFIXES: Readonly<Record<string, readonly string[]>> =
-  Object.freeze({
-    building: ["bat", "bld_"],
-    market: [
-      "buy",
-      "sell",
-      "res_buy_",
-      "res_sell_",
-      "res_trade_",
-      "res_galaxy_",
-    ],
-    storage: [
-      "res_storage",
-      "res_min_store",
-      "res_max_store",
-      "res_containers_m_",
-      "res_crates_m_",
-    ],
-    project: ["arpa_"],
-    job: ["job_"],
-    magic: ["res_alchemy_", "spell_w_"],
-    production: [
-      "craft",
-      "foundry_",
-      "production_",
-      "droid_",
-      "replicator_",
-      "smelter_",
-      "job_",
-    ],
-    ejector: ["res_eject", "res_supply", "res_nanite"],
-  });
 
 function asSettingsRecord(raw: Record<string, unknown>): SettingsRecord {
   if (!isNonArrayRecord(raw.overrides)) raw.overrides = {};
@@ -167,21 +75,21 @@ export function createCapturedSettingsLifecycle({
     reader: defaults.reader,
     effects: defaults.effects,
   });
-  const resetByName = Object.fromEntries(
-    RESET_ORDER.map((name) => [name, resets[name as keyof typeof resets]]),
-  ) as Record<(typeof RESET_ORDER)[number], (reset: boolean) => void>;
-  const startupResetByName = Object.fromEntries(
-    RESET_ORDER.map((name) => [
-      name,
-      startupResets[name as keyof typeof startupResets],
-    ]),
-  ) as Record<(typeof RESET_ORDER)[number], (reset: boolean) => void>;
+  type SectionReset = (reset: boolean) => void;
+  const byName = (
+    table: Record<string, SectionReset>,
+  ): Record<string, SectionReset | undefined> =>
+    Object.fromEntries(SETTINGS_RESET_ORDER.map((name) => [name, table[name]]));
+  const resetByName = byName(resets);
+  const startupResetByName = byName(startupResets);
   const effective = Object.create(null) as Record<string, unknown>;
   let initialized = false;
 
   const migrationContext = (): SettingsMigrationContext => ({
     settingsSections: defaults.settingsSections,
-    defaultResets: RESET_ORDER.map((name) => startupResetByName[name]),
+    defaultResets: SETTINGS_RESET_ORDER.flatMap(
+      (name) => startupResetByName[name] ?? [],
+    ),
     prestigeAscensionSkipCustom: raw().prestigeAscensionSkipCustom !== false,
     techIds: defaults.techIds,
     marketPriorityIds: defaults.marketPriorityIds,
@@ -191,14 +99,12 @@ export function createCapturedSettingsLifecycle({
     crafterOriginalIds: defaults.crafterOriginalIds,
   });
 
-  const purgeDynamicOverrides = (section: string): void => {
-    const prefixes = DYNAMIC_OVERRIDE_PREFIXES[section.toLowerCase()];
-    if (prefixes === undefined) return;
+  const purgeDynamicOverrides = (
+    ownsDynamicKey: (key: string) => boolean,
+  ): void => {
     const overrides = raw().overrides;
     for (const key of Object.keys(overrides)) {
-      if (prefixes.some((prefix) => key.startsWith(prefix))) {
-        delete overrides[key];
-      }
+      if (ownsDynamicKey(key)) delete overrides[key];
     }
   };
 
@@ -224,11 +130,14 @@ export function createCapturedSettingsLifecycle({
       settings.persist();
     },
     resetSection(section: string) {
-      const resetName = SECTION_TO_RESET[section.toLowerCase()];
-      if (resetName === undefined) return;
+      const policy = findSettingsSectionPolicy(section);
+      if (policy === undefined) return;
       const before = snapshot(settings.readRaw());
-      resetByName[resetName](true);
-      purgeDynamicOverrides(section);
+      // `applySettings(..., true)` already drops the overrides of every key the section's
+      // defaults name. The purge is for the rest: keys named after an entity the current
+      // catalogs no longer produce, which no computed default can reach.
+      resetByName[policy.resetName]?.(true);
+      purgeDynamicOverrides(policy.ownsDynamicKey);
       persistIfChanged(before);
     },
     ensureDynamicDefaults() {
@@ -245,9 +154,9 @@ export function createCapturedSettingsLifecycle({
       // prove the referenced ids exist.
       migrateSettingsRecord(raw(), liveContext);
       for (const name of defaults.discoveredResetNames) {
-        if (!RESET_ORDER.includes(name as (typeof RESET_ORDER)[number]))
-          continue;
-        resetByName[name as (typeof RESET_ORDER)[number]](false);
+        const reset = resetByName[name];
+        if (reset === undefined) continue;
+        reset(false);
       }
       persistIfChanged(before);
     },
