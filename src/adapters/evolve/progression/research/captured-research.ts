@@ -31,6 +31,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
+import type { CapturedTechConflictReader } from "./captured-tech-conflicts.ts";
 import { readCapturedTechState } from "../../captured-tech-state.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
@@ -41,7 +42,11 @@ export interface CapturedResearchDependencies {
   readonly offered: readonly Readonly<OfferedTech>[] | undefined;
   readonly resources: GameResourceSource;
   readonly conflicts: CapturedCostConflictReader;
+  /** Research exclusions, applied to every candidate before one is chosen. */
+  readonly techConflicts: CapturedTechConflictReader;
   readonly controls: GameControlRegistry;
+  /** Reports a candidate the exclusions rejected, and why. */
+  readonly onRejected?: (techId: string, reason: string) => void;
   /** Reports a successful research after the captured technology state changed. */
   readonly onActivity?: GameActivitySink;
 }
@@ -65,8 +70,26 @@ function executionResult(
 export function createCapturedResearchAdapter(
   dependencies: CapturedResearchDependencies,
 ): CapturedResearchAdapter {
-  const { rootState, offered, resources, conflicts, controls } = dependencies;
+  const { rootState, offered, resources, conflicts, techConflicts, controls } =
+    dependencies;
   const reportActivity = dependencies.onActivity ?? (() => {});
+  const reportRejected = dependencies.onRejected ?? (() => {});
+
+  /**
+   * Whether a research exclusion rejects this candidate. An exclusion the reader could not decide
+   * rejects too: a fact it cannot establish is never permission to click.
+   */
+  function hasTechConflict(tech: Readonly<OfferedTech>): boolean {
+    const decision = techConflicts.evaluate(tech);
+    if (decision.status === "none") return false;
+    reportRejected(
+      tech.elementId,
+      decision.status === "conflict"
+        ? decision.conflict.code
+        : `unavailable: ${decision.reason}${decision.field === undefined ? "" : ` (${decision.field})`}`,
+    );
+    return true;
+  }
 
   function isAffordable(cost: Readonly<Record<string, number>>): boolean {
     const sample = resources.readResources(Object.keys(cost));
@@ -97,9 +120,14 @@ export function createCapturedResearchAdapter(
           // that could otherwise be bought right now.
           hasCostConflict:
             affordable && conflicts.evaluate(tech.cost).status !== "none",
+          // The same applies to exclusions: an unaffordable technology is not a decision yet, and
+          // sampling guard and achievement facts for it would be work the cycle cannot use.
+          hasTechConflict: affordable && hasTechConflict(tech),
         });
         techs.push(view);
-        if (view.affordable && !view.hasCostConflict) break;
+        if (view.affordable && !view.hasCostConflict && !view.hasTechConflict) {
+          break;
+        }
       }
       return Object.freeze({ techs: Object.freeze(techs) });
     },

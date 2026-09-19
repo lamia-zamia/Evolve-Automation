@@ -548,6 +548,7 @@ export function createCapturedProgressionControl(
   const research = createCapturedResearchControl({
     rootState,
     controls,
+    readSettings,
     drawnActions,
     mountSuppression,
     panels,

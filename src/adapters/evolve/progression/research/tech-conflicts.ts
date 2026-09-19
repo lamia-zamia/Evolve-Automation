@@ -76,6 +76,67 @@ function readBooleanResult(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
+export type TechConflictSettingsReadResult =
+  | {
+      readonly status: "ready";
+      readonly settings: TechConflictInput["settings"];
+    }
+  | { readonly status: "unavailable"; readonly field?: string };
+
+/**
+ * The one reader of the settings a research conflict decides on.
+ *
+ * Every consumer of the conflict policy — the compatibility runtime and the captured research
+ * cycle — normalizes the player's record through this, so the set of keys a conflict depends on
+ * and the strictness applied to them are stated once.
+ */
+export function readTechConflictSettings(
+  rawSettings: unknown,
+): TechConflictSettingsReadResult {
+  if (!isNonArrayRecord(rawSettings))
+    return Object.freeze({ status: "unavailable" });
+  const rawIgnoredResearch = rawSettings["researchIgnore"];
+  if (
+    !Array.isArray(rawIgnoredResearch) ||
+    !rawIgnoredResearch.every((value) => typeof value === "string")
+  ) {
+    return Object.freeze({ status: "unavailable", field: "researchIgnore" });
+  }
+  const settings = {
+    ignoredResearch: Object.freeze([...rawIgnoredResearch] as string[]),
+    prestigeType: stringSetting(rawSettings, "prestigeType"),
+    saveWhiteholeSoulGems: booleanSetting(
+      rawSettings,
+      "prestigeWhiteholeSaveGems",
+    ),
+    vaccinationStrategy: stringSetting(rawSettings, "prestigeVaxStrat"),
+    useDemonicBomb: booleanSetting(rawSettings, "prestigeDemonicBomb"),
+    allowForeignUnification: booleanSetting(rawSettings, "foreignUnification"),
+    stabilizeBlackhole: booleanSetting(
+      rawSettings,
+      "prestigeWhiteholeStabiliseMass",
+    ),
+    stabilizationCooldownSeconds: numberSetting(
+      rawSettings,
+      "prestigeWhiteholeStabiliseCooldown",
+    ),
+    theologyChoiceOne: stringSetting(rawSettings, "userResearchTheology_1"),
+    theologyChoiceTwo: stringSetting(rawSettings, "userResearchTheology_2"),
+    alienGiftKnowledge: numberSetting(rawSettings, "fleetAlienGiftKnowledge"),
+  };
+  for (const [field, value] of Object.entries(settings)) {
+    if (value === undefined) {
+      return Object.freeze({ status: "unavailable", field });
+    }
+  }
+  return Object.freeze({
+    status: "ready",
+    settings: Object.freeze(
+      settings as unknown as TechConflictInput["settings"],
+    ),
+  });
+}
+
 /** Maps one complete research-conflict decision, including a deterministic time sample. */
 export function readTechConflictInput(
   rawTech: unknown,
@@ -99,42 +160,11 @@ export function readTechConflictInput(
       return unavailable("invalid-target", "cost.Soul_Gem");
     }
 
-    if (!isNonArrayRecord(rawSettings)) return unavailable("invalid-settings");
-    const rawIgnoredResearch = rawSettings["researchIgnore"];
-    if (
-      !Array.isArray(rawIgnoredResearch) ||
-      !rawIgnoredResearch.every((value) => typeof value === "string")
-    ) {
-      return unavailable("invalid-settings", "researchIgnore");
+    const settingsRead = readTechConflictSettings(rawSettings);
+    if (settingsRead.status !== "ready") {
+      return unavailable("invalid-settings", settingsRead.field);
     }
-    const settings = {
-      ignoredResearch: Object.freeze([...rawIgnoredResearch] as string[]),
-      prestigeType: stringSetting(rawSettings, "prestigeType"),
-      saveWhiteholeSoulGems: booleanSetting(
-        rawSettings,
-        "prestigeWhiteholeSaveGems",
-      ),
-      vaccinationStrategy: stringSetting(rawSettings, "prestigeVaxStrat"),
-      useDemonicBomb: booleanSetting(rawSettings, "prestigeDemonicBomb"),
-      allowForeignUnification: booleanSetting(
-        rawSettings,
-        "foreignUnification",
-      ),
-      stabilizeBlackhole: booleanSetting(
-        rawSettings,
-        "prestigeWhiteholeStabiliseMass",
-      ),
-      stabilizationCooldownSeconds: numberSetting(
-        rawSettings,
-        "prestigeWhiteholeStabiliseCooldown",
-      ),
-      theologyChoiceOne: stringSetting(rawSettings, "userResearchTheology_1"),
-      theologyChoiceTwo: stringSetting(rawSettings, "userResearchTheology_2"),
-      alienGiftKnowledge: numberSetting(rawSettings, "fleetAlienGiftKnowledge"),
-    };
-    for (const [field, value] of Object.entries(settings)) {
-      if (value === undefined) return unavailable("invalid-settings", field);
-    }
+    const settings = settingsRead.settings;
 
     if (!isNonArrayRecord(rawResources)) return unavailable("invalid-resource");
     const soulGems = rawResources["Soul_Gem"];
@@ -291,9 +321,7 @@ export function readTechConflictInput(
       itemId,
       soulGemCost:
         rawSoulGemCost === undefined ? null : (rawSoulGemCost as number),
-      settings: Object.freeze(
-        settings as unknown as TechConflictInput["settings"],
-      ),
+      settings,
       resources: Object.freeze({
         soulGems: soulGems["currentQuantity"],
         maximumKnowledge: knowledge["maxQuantity"],

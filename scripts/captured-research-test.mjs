@@ -13,10 +13,14 @@ function makePage({
   tech = { primitive: 3 },
   queue = [],
   actionModes = {},
+  settings = {},
+  race = {},
+  stats = {},
 }) {
   const root = {
     settings: { civTabs: 4, animated: true, qAny: false },
-    race: { species: "human" },
+    race: { species: "human", gods: "none", ...race },
+    stats: { attacks: 0, achieve: {}, ...stats },
     tech,
     resource: {},
     city: {},
@@ -127,12 +131,36 @@ function makePage({
       drawnActions,
       mountSuppression,
       panels,
+      readSettings: () => ({ ...DEFAULT_CONFLICT_SETTINGS, ...settings }),
       onUnavailable: (reason) => unavailable.push(reason),
       onActivity: (activityEntry) => activity.push(activityEntry.message),
     }),
     activity,
   };
 }
+
+/**
+ * The settings every research exclusion reads, at the record's own defaults. A page that wants a
+ * particular exclusion to fire overrides only the keys that rule names.
+ */
+const DEFAULT_CONFLICT_SETTINGS = Object.freeze({
+  researchIgnore: [],
+  prestigeType: "none",
+  prestigeWhiteholeSaveGems: true,
+  prestigeVaxStrat: "none",
+  prestigeDemonicBomb: false,
+  foreignUnification: true,
+  prestigeWhiteholeStabiliseMass: true,
+  prestigeWhiteholeStabiliseCooldown: 120,
+  userResearchTheology_1: "auto",
+  userResearchTheology_2: "auto",
+  fleetAlienGiftKnowledge: 6500000,
+  achievementGuards: false,
+  guardPacifist: true,
+  guardCultOfPersonality: true,
+  guardSecondEvolution: true,
+  retirementChallengeAssist: true,
+});
 
 const THEOLOGY = {
   id: "tech-theology",
@@ -351,10 +379,343 @@ const SMELTING = {
     drawnActions: { read: () => [], exists: () => false },
     mountSuppression: { available: true, withoutMounting: (draw) => draw() },
     panels: { open: () => undefined },
+    readSettings: () => ({}),
   });
   const outcome = control.runCycle();
   assert.equal(outcome.status, "rejected");
   assert.equal(outcome.failure.code, "game-state-not-captured");
+}
+
+// --- research exclusions decide candidates before anything is invoked ---------
+
+const ANTHROPOLOGY = {
+  id: "tech-anthropology",
+  title: "Anthropology",
+  grant: "anthropology",
+  cost: { Knowledge: 900 },
+};
+const FANATICISM = {
+  id: "tech-fanaticism",
+  title: "Fanaticism",
+  grant: "fanaticism",
+  cost: { Knowledge: 900 },
+};
+const STABILIZE = {
+  id: "tech-stabilize_blackhole",
+  title: "Stabilize Blackhole",
+  grant: "stabilize_blackhole",
+  cost: { Knowledge: 900 },
+};
+const DARK_BOMB = {
+  id: "tech-dark_bomb",
+  title: "Dark Bomb",
+  grant: "dark_bomb",
+  cost: { Knowledge: 900 },
+};
+const XENO_GIFT = {
+  id: "tech-xeno_gift",
+  title: "Xenoarchaeology",
+  grant: "xeno_gift",
+  cost: { Knowledge: 900 },
+};
+
+{
+  // Nothing any rule names: the cycle behaves exactly as it did before the exclusions existed.
+  const page = makePage({
+    offered: [THEOLOGY, MINING],
+    resources: { Knowledge: { amount: 1000 } },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+  assert.deepEqual(page.unavailable, []);
+}
+
+{
+  // The ignore list rejects the first candidate before invocation, so the second may be considered.
+  // The rejected technology is never clicked, and the reason is reported once.
+  const page = makePage({
+    offered: [THEOLOGY, MINING],
+    resources: { Knowledge: { amount: 10000 } },
+    settings: { researchIgnore: ["tech-theology"] },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-mining"]);
+  assert.equal(page.root.tech.theology, undefined);
+  assert.equal(page.root.tech.mining, 1);
+  assert.deepEqual(page.unavailable, [
+    "tech-theology: research excluded (ignored-research)",
+  ]);
+}
+
+{
+  // An excluded technology is not researched even when it is the only candidate: an exclusion is a
+  // rejection, not a preference.
+  const page = makePage({
+    offered: [THEOLOGY],
+    resources: { Knowledge: { amount: 10000 } },
+    settings: { researchIgnore: ["tech-theology"] },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.equal(page.root.tech.theology, undefined);
+}
+
+// --- one real mutually exclusive fork, decided both ways ----------------------
+
+for (const [choice, offered, taken, reported] of [
+  // The chosen branch is offered first, is accepted, and ends the read before the other is looked
+  // at; reversing the offer order shows the other branch being rejected before invocation.
+  ["tech-anthropology", [ANTHROPOLOGY, FANATICISM], "tech-anthropology", []],
+  [
+    "tech-anthropology",
+    [FANATICISM, ANTHROPOLOGY],
+    "tech-anthropology",
+    ["tech-fanaticism: research excluded (theology-path)"],
+  ],
+  ["tech-fanaticism", [FANATICISM, ANTHROPOLOGY], "tech-fanaticism", []],
+  [
+    "tech-fanaticism",
+    [ANTHROPOLOGY, FANATICISM],
+    "tech-fanaticism",
+    ["tech-anthropology: research excluded (theology-path)"],
+  ],
+]) {
+  const page = makePage({
+    offered,
+    resources: { Knowledge: { amount: 10000 } },
+    settings: { userResearchTheology_1: choice },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    [taken],
+    `theology choice ${choice} must take exactly its own branch`,
+  );
+  assert.deepEqual(page.unavailable, reported);
+}
+
+{
+  // The Demonic Bomb is offered only for a demonic run with the setting on. Both halves of the
+  // gate are the player's, and neither is guessed.
+  const page = makePage({
+    offered: [DARK_BOMB],
+    resources: { Knowledge: { amount: 10000 } },
+    settings: { prestigeDemonicBomb: false, prestigeType: "demonic" },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.deepEqual(page.unavailable, [
+    "tech-dark_bomb: research excluded (dark-bomb-disabled)",
+  ]);
+
+  const enabled = makePage({
+    offered: [DARK_BOMB],
+    resources: { Knowledge: { amount: 10000 } },
+    settings: { prestigeDemonicBomb: true, prestigeType: "demonic" },
+  });
+  assert.equal(enabled.control.runCycle().status, "succeeded");
+  assert.deepEqual(enabled.clicks, ["tech-dark_bomb"]);
+  assert.equal(enabled.root.tech.dark_bomb, 1);
+}
+
+{
+  // The Knowledge ceiling gate reads the live captured maximum, not the snapshot price.
+  const page = makePage({
+    offered: [XENO_GIFT],
+    resources: { Knowledge: { amount: 10000, max: 1000 } },
+    settings: { fleetAlienGiftKnowledge: 6500000 },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.deepEqual(page.unavailable, [
+    "tech-xeno_gift: research excluded (maximum-knowledge)",
+  ]);
+
+  const ready = makePage({
+    offered: [XENO_GIFT],
+    resources: { Knowledge: { amount: 10000, max: 7000000 } },
+    settings: { fleetAlienGiftKnowledge: 6500000 },
+  });
+  assert.equal(ready.control.runCycle().status, "succeeded");
+  assert.deepEqual(ready.clicks, ["tech-xeno_gift"]);
+}
+
+// --- an exclusion fact the capture cannot establish rejects, never guesses ----
+
+{
+  // Stabilizing depends on script state the captured runtime does not keep. Failing closed means
+  // the technology is left alone and the reason is named.
+  const page = makePage({
+    offered: [STABILIZE, MINING],
+    resources: { Knowledge: { amount: 10000 } },
+    settings: { prestigeWhiteholeStabiliseMass: true },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-mining"]);
+  assert.equal(page.root.tech.stabilize_blackhole, undefined);
+  assert.deepEqual(page.unavailable, [
+    "tech-stabilize_blackhole: research excluded " +
+      "(unavailable: stabilization-state (whiteholeLastStabilise))",
+  ]);
+}
+
+{
+  // A settings record missing a key an exclusion reads is the same kind of uncertainty: no
+  // candidate is researched on an undecided rule.
+  const page = makePage({
+    offered: [THEOLOGY],
+    resources: { Knowledge: { amount: 10000 } },
+    settings: { prestigeType: undefined },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.equal(
+    page.unavailable.some((reason) =>
+      reason.includes("unavailable: invalid-settings"),
+    ),
+    true,
+  );
+}
+
+// --- an accepted candidate that shows no mutation still stops the cycle -------
+
+{
+  // The exclusions may reject before invocation; they must never turn an unverified click into a
+  // reason to try the next technology.
+  const page = makePage({
+    offered: [THEOLOGY, MINING],
+    resources: { Knowledge: { amount: 10000 } },
+    actionModes: { "tech-theology": "no-op" },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+  assert.equal(page.root.tech.mining, undefined);
+}
+
+// --- the guard-backed and fail-closed exclusions, over captured facts alone ---
+
+const UNIFICATION = {
+  id: "tech-unification2",
+  title: "Unification",
+  grant: "unification2",
+  cost: { Knowledge: 900 },
+};
+const ISOLATION = {
+  id: "tech-isolation_protocol",
+  title: "Isolation Protocol",
+  grant: "isolation_protocol",
+  cost: { Knowledge: 900 },
+};
+
+{
+  // Unification is the player's call, and a run that has not enabled it does not get it.
+  const page = makePage({
+    offered: [UNIFICATION],
+    resources: { Knowledge: { amount: 10000 } },
+    settings: { foreignUnification: false },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.deepEqual(page.unavailable, [
+    "tech-unification2: research excluded (unification-disabled)",
+  ]);
+}
+
+{
+  // With the Cult of Personality guard on and its achievement unearned, unification would spend the
+  // run's eligibility, so the guard rejects it.
+  const page = makePage({
+    offered: [UNIFICATION],
+    resources: { Knowledge: { amount: 10000 } },
+    race: { universe: "standard" },
+    stats: { attacks: 3, achieve: {} },
+    settings: { achievementGuards: true, guardCultOfPersonality: true },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.deepEqual(page.unavailable, [
+    "tech-unification2: research excluded (cult-of-personality-guard)",
+  ]);
+}
+
+{
+  // A banana run needs the objective progress the capture cannot read, so unification is rejected
+  // rather than taken on a guess. Outside a banana run the same settings research it.
+  const banana = makePage({
+    offered: [UNIFICATION],
+    resources: { Knowledge: { amount: 10000 } },
+    race: { banana: true },
+  });
+  assert.equal(banana.control.runCycle().status, "succeeded");
+  assert.deepEqual(banana.clicks, []);
+  assert.deepEqual(banana.unavailable, [
+    "tech-unification2: research excluded " +
+      "(unavailable: banana-republic-progress (race.banana))",
+  ]);
+
+  const ordinary = makePage({
+    offered: [UNIFICATION],
+    resources: { Knowledge: { amount: 10000 } },
+  });
+  assert.equal(ordinary.control.runCycle().status, "succeeded");
+  assert.deepEqual(ordinary.clicks, ["tech-unification2"]);
+}
+
+{
+  // Second Evolution keeps Anthropology off the table for a race whose gods are its own species.
+  const page = makePage({
+    offered: [ANTHROPOLOGY],
+    resources: { Knowledge: { amount: 10000 } },
+    race: { species: "human", gods: "human", universe: "standard" },
+    settings: { achievementGuards: true, guardSecondEvolution: true },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.deepEqual(page.unavailable, [
+    "tech-anthropology: research excluded (second-evolution-guard)",
+  ]);
+}
+
+{
+  // Isolation Protocol commits the run to retirement, so a run aimed anywhere else never takes it.
+  const page = makePage({
+    offered: [ISOLATION],
+    resources: { Knowledge: { amount: 10000 } },
+    settings: { prestigeType: "none" },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.deepEqual(page.unavailable, [
+    "tech-isolation_protocol: research excluded (retirement-fork)",
+  ]);
+}
+
+{
+  // A retirement run with the challenge assist on still owes its Tau build-out, and the shortfall
+  // list needs facts the capture does not sample: retiring early is irreversible, so it is rejected.
+  const page = makePage({
+    offered: [ISOLATION],
+    resources: { Knowledge: { amount: 10000 } },
+    race: { truepath: true },
+    settings: { prestigeType: "retire", retirementChallengeAssist: true },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  assert.deepEqual(page.unavailable, [
+    "tech-isolation_protocol: research excluded " +
+      "(unavailable: retirement-preparation (TauFusionGenerator))",
+  ]);
+
+  // With the assist off, the same run researches it: the rule the capture cannot feed is the
+  // preparation check, not the fork.
+  const unassisted = makePage({
+    offered: [ISOLATION],
+    resources: { Knowledge: { amount: 10000 } },
+    race: { truepath: true },
+    settings: { prestigeType: "retire", retirementChallengeAssist: false },
+  });
+  assert.equal(unassisted.control.runCycle().status, "succeeded");
+  assert.deepEqual(unassisted.clicks, ["tech-isolation_protocol"]);
 }
 
 console.log("captured-research ok");

@@ -28,6 +28,45 @@ assert.deepEqual(
   "the pure planner selects the first eligible observation",
 );
 
+assert.deepEqual(
+  planResearch({
+    techs: [
+      {
+        index: 0,
+        id: "excluded",
+        affordable: true,
+        hasCostConflict: false,
+        hasTechConflict: true,
+      },
+      {
+        index: 1,
+        id: "allowed",
+        affordable: true,
+        hasCostConflict: false,
+        hasTechConflict: false,
+      },
+    ],
+  }),
+  { index: 1, techId: "allowed" },
+  "a research exclusion rejects its candidate before anything is invoked",
+);
+
+assert.equal(
+  planResearch({
+    techs: [
+      {
+        index: 0,
+        id: "excluded",
+        affordable: true,
+        hasCostConflict: false,
+        hasTechConflict: true,
+      },
+    ],
+  }),
+  null,
+  "an excluded technology is never the plan, even as the only candidate",
+);
+
 const RESEARCHABLE_CANDIDATES = [
   {
     index: 0,
@@ -133,12 +172,14 @@ assert.deepEqual(gatedReader.read(0).techs, [
     id: "locked",
     affordable: false,
     hasCostConflict: false,
+    hasTechConflict: false,
   },
   {
     index: 1,
     id: "ready",
     affordable: true,
     hasCostConflict: false,
+    hasTechConflict: false,
   },
 ]);
 assert.equal(

@@ -96,7 +96,7 @@ const LONG_RUN_PRESTIGE = new Set([
   "eden",
 ]);
 
-function conflict<T extends TechConflict>(value: T): Readonly<T> {
+function techExclusion<T extends TechConflict>(value: T): Readonly<T> {
   return Object.freeze(value);
 }
 
@@ -107,10 +107,10 @@ export function findTechConflict(
   const { itemId, settings } = input;
 
   if (settings.ignoredResearch.includes(itemId)) {
-    return conflict({ code: "ignored-research" });
+    return techExclusion({ code: "ignored-research" });
   }
   if (RESET_RESEARCH.has(itemId)) {
-    return conflict({ code: "reset-research" });
+    return techExclusion({ code: "reset-research" });
   }
   if (
     settings.prestigeType === "whitehole" &&
@@ -119,18 +119,18 @@ export function findTechConflict(
     input.soulGemCost !== null &&
     input.soulGemCost > input.resources.soulGems - 10
   ) {
-    return conflict({ code: "saving-soul-gems" });
+    return techExclusion({ code: "saving-soul-gems" });
   }
 
   if (itemId === "tech-isolation_protocol") {
     if (settings.prestigeType !== "retire") {
-      return conflict({ code: "retirement-fork" });
+      return techExclusion({ code: "retirement-fork" });
     }
     if (
       input.guards.retirementAssist &&
       input.guards.retirementMissing.length > 0
     ) {
-      return conflict({
+      return techExclusion({
         code: "retirement-preparation",
         missing: Object.freeze([...input.guards.retirementMissing]),
       });
@@ -141,41 +141,41 @@ export function findTechConflict(
     itemId === "tech-outerplane_summon" &&
     settings.prestigeType !== "demonic"
   ) {
-    return conflict({ code: "witch-demonic-fork" });
+    return techExclusion({ code: "witch-demonic-fork" });
   }
   if (itemId === "tech-focus_cure" && settings.prestigeType !== "matrix") {
-    return conflict({ code: "matrix-fork" });
+    return techExclusion({ code: "matrix-fork" });
   }
   if (
     itemId === "tech-purify_essence" &&
     settings.prestigeType !== "apotheosis"
   ) {
-    return conflict({ code: "apotheosis-fork" });
+    return techExclusion({ code: "apotheosis-fork" });
   }
   if (
     /^tech-vax_strat[1-4]$/.test(itemId) &&
     !itemId.includes(settings.vaccinationStrategy)
   ) {
-    return conflict({ code: "vaccination-strategy" });
+    return techExclusion({ code: "vaccination-strategy" });
   }
   if (
     itemId === "tech-dark_bomb" &&
     (!settings.useDemonicBomb || settings.prestigeType !== "demonic")
   ) {
-    return conflict({ code: "dark-bomb-disabled" });
+    return techExclusion({ code: "dark-bomb-disabled" });
   }
   if (
     (itemId === "tech-incorporeal" || itemId === "tech-tech_ascension") &&
     settings.prestigeType !== "ascension" &&
     settings.prestigeType !== "apotheosis"
   ) {
-    return conflict({ code: "prestige-unneeded" });
+    return techExclusion({ code: "prestige-unneeded" });
   }
   if (
     itemId === "tech-xeno_gift" &&
     input.resources.maximumKnowledge < settings.alienGiftKnowledge
   ) {
-    return conflict({
+    return techExclusion({
       code: "maximum-knowledge",
       required: settings.alienGiftKnowledge,
     });
@@ -183,13 +183,13 @@ export function findTechConflict(
 
   if (itemId === "tech-unification2" || itemId === "tech-unite") {
     if (input.guards.bananaRepublic) {
-      return conflict({ code: "banana-republic-guard" });
+      return techExclusion({ code: "banana-republic-guard" });
     }
     if (input.guards.cultOfPersonality) {
-      return conflict({ code: "cult-of-personality-guard" });
+      return techExclusion({ code: "cult-of-personality-guard" });
     }
     if (!settings.allowForeignUnification && !input.guards.pacifist) {
-      return conflict({ code: "unification-disabled" });
+      return techExclusion({ code: "unification-disabled" });
     }
   }
 
@@ -205,10 +205,10 @@ export function findTechConflict(
       return null;
     }
     if (!settings.stabilizeBlackhole) {
-      return conflict({ code: "stabilization-disabled" });
+      return techExclusion({ code: "stabilization-disabled" });
     }
     if (settings.prestigeType === "whitehole") {
-      return conflict({ code: "stabilization-during-whitehole" });
+      return techExclusion({ code: "stabilization-during-whitehole" });
     }
     if (
       settings.stabilizationCooldownSeconds > 0 &&
@@ -217,7 +217,7 @@ export function findTechConflict(
       const elapsedSeconds =
         (input.stabilization.nowMs - input.stabilization.lastAtMs) / 1000;
       if (elapsedSeconds < settings.stabilizationCooldownSeconds) {
-        return conflict({
+        return techExclusion({
           code: "stabilization-cooldown",
           seconds: Math.ceil(
             settings.stabilizationCooldownSeconds - elapsedSeconds,
@@ -230,7 +230,7 @@ export function findTechConflict(
   if (itemId === "tech-anthropology" || itemId === "tech-fanaticism") {
     if (input.guards.secondEvolution) {
       if (itemId === "tech-anthropology") {
-        return conflict({ code: "second-evolution-guard" });
+        return techExclusion({ code: "second-evolution-guard" });
       }
     } else if (itemId !== settings.theologyChoiceOne) {
       const isFanaticismRace = input.fanaticismAchievements.some(
@@ -247,7 +247,7 @@ export function findTechConflict(
           !isFanaticismRace
         )
       ) {
-        return conflict({ code: "theology-path" });
+        return techExclusion({ code: "theology-path" });
       }
       if (
         itemId === "tech-fanaticism" &&
@@ -256,7 +256,7 @@ export function findTechConflict(
           (settings.prestigeType !== "mad" || isFanaticismRace)
         )
       ) {
-        return conflict({ code: "theology-path" });
+        return techExclusion({ code: "theology-path" });
       }
     }
   }
@@ -270,13 +270,13 @@ export function findTechConflict(
       itemId === "tech-deify" &&
       !(settings.theologyChoiceTwo === "auto" && longRun)
     ) {
-      return conflict({ code: "theology-path" });
+      return techExclusion({ code: "theology-path" });
     }
     if (
       itemId === "tech-study" &&
       !(settings.theologyChoiceTwo === "auto" && !longRun)
     ) {
-      return conflict({ code: "theology-path" });
+      return techExclusion({ code: "theology-path" });
     }
   }
 

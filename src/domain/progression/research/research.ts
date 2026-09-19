@@ -4,6 +4,11 @@ export interface ResearchTechView {
   readonly id: string;
   readonly affordable: boolean;
   readonly hasCostConflict: boolean;
+  /**
+   * A research exclusion rejected this technology before anything was invoked — an ignore list, a
+   * prestige fork the run is not taking, or a conflict fact the reader could not establish.
+   */
+  readonly hasTechConflict: boolean;
 }
 
 /**
@@ -20,12 +25,20 @@ export interface ResearchDecision {
   readonly techId: string;
 }
 
-/** Select the first affordable technology whose costs do not conflict. */
+/**
+ * Select the first affordable technology that neither a cost reservation nor a research exclusion
+ * rejects. Both rejections are decided before any game action, so skipping to the next candidate
+ * here is the explicit pre-invocation rejection the research rule allows — never a retry after an
+ * invocation failed to show its effect.
+ */
 export function planResearch(
   input: Readonly<ResearchInput>,
 ): ResearchDecision | null {
   const tech = input.techs.find(
-    (candidate) => candidate.affordable && !candidate.hasCostConflict,
+    (candidate) =>
+      candidate.affordable &&
+      !candidate.hasCostConflict &&
+      !candidate.hasTechConflict,
   );
   return tech === undefined
     ? null

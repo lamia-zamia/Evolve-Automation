@@ -4298,7 +4298,7 @@
   // src/domain/progression/research/research.ts
   function planResearch(input) {
     let tech = input.techs.find(
-      (candidate) => candidate.affordable && !candidate.hasCostConflict
+      (candidate) => candidate.affordable && !candidate.hasCostConflict && !candidate.hasTechConflict
     );
     return tech === void 0 ? null : Object.freeze({ index: tech.index, techId: tech.id });
   }
@@ -4347,8 +4347,16 @@
     return Object.freeze({ outcome, disposition });
   }
   function createCapturedResearchAdapter(dependencies) {
-    let { rootState, offered, resources, conflicts, controls: controls2 } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
+    let { rootState, offered, resources, conflicts, techConflicts, controls: controls2 } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
+    }), reportRejected = dependencies.onRejected ?? (() => {
     });
+    function hasTechConflict(tech) {
+      let decision = techConflicts.evaluate(tech);
+      return decision.status === "none" ? !1 : (reportRejected(
+        tech.elementId,
+        decision.status === "conflict" ? decision.conflict.code : `unavailable: ${decision.reason}${decision.field === void 0 ? "" : ` (${decision.field})`}`
+      ), !0);
+    }
     function isAffordable(cost) {
       let sample = resources.readResources(Object.keys(cost));
       return sample !== void 0 && canAfford(sample, cost);
@@ -4370,9 +4378,13 @@
             affordable,
             // Match the legacy gate: what a reservation is saving for only matters for something
             // that could otherwise be bought right now.
-            hasCostConflict: affordable && conflicts.evaluate(tech.cost).status !== "none"
+            hasCostConflict: affordable && conflicts.evaluate(tech.cost).status !== "none",
+            // The same applies to exclusions: an unaffordable technology is not a decision yet, and
+            // sampling guard and achievement facts for it would be work the cycle cannot use.
+            hasTechConflict: affordable && hasTechConflict(tech)
           });
-          if (techs.push(view), view.affordable && !view.hasCostConflict) break;
+          if (techs.push(view), view.affordable && !view.hasCostConflict && !view.hasTechConflict)
+            break;
         }
         return Object.freeze({ techs: Object.freeze(techs) });
       }
@@ -4436,6 +4448,724 @@
     return Object.freeze({ reader, executor });
   }
 
+  // src/domain/progression/research/tech-conflicts.ts
+  var RESET_RESEARCH = /* @__PURE__ */ new Set([
+    "tech-exotic_infusion",
+    "tech-infusion_check",
+    "tech-infusion_confirm",
+    "tech-dial_it_to_11",
+    "tech-limit_collider",
+    "tech-demonic_infusion",
+    "tech-protocol66",
+    "tech-protocol66a",
+    "tech-final_ingredient"
+  ]), LONG_RUN_PRESTIGE = /* @__PURE__ */ new Set([
+    "ascension",
+    "demonic",
+    "apotheosis",
+    "apocalypse",
+    "terraform",
+    "matrix",
+    "retire",
+    "eden"
+  ]);
+  function techExclusion(value) {
+    return Object.freeze(value);
+  }
+  function findTechConflict(input) {
+    let { itemId, settings } = input;
+    if (settings.ignoredResearch.includes(itemId))
+      return techExclusion({ code: "ignored-research" });
+    if (RESET_RESEARCH.has(itemId))
+      return techExclusion({ code: "reset-research" });
+    if (settings.prestigeType === "whitehole" && settings.saveWhiteholeSoulGems && itemId !== "tech-virtual_reality" && input.soulGemCost !== null && input.soulGemCost > input.resources.soulGems - 10)
+      return techExclusion({ code: "saving-soul-gems" });
+    if (itemId === "tech-isolation_protocol") {
+      if (settings.prestigeType !== "retire")
+        return techExclusion({ code: "retirement-fork" });
+      if (input.guards.retirementAssist && input.guards.retirementMissing.length > 0)
+        return techExclusion({
+          code: "retirement-preparation",
+          missing: Object.freeze([...input.guards.retirementMissing])
+        });
+    }
+    if (itemId === "tech-outerplane_summon" && settings.prestigeType !== "demonic")
+      return techExclusion({ code: "witch-demonic-fork" });
+    if (itemId === "tech-focus_cure" && settings.prestigeType !== "matrix")
+      return techExclusion({ code: "matrix-fork" });
+    if (itemId === "tech-purify_essence" && settings.prestigeType !== "apotheosis")
+      return techExclusion({ code: "apotheosis-fork" });
+    if (/^tech-vax_strat[1-4]$/.test(itemId) && !itemId.includes(settings.vaccinationStrategy))
+      return techExclusion({ code: "vaccination-strategy" });
+    if (itemId === "tech-dark_bomb" && (!settings.useDemonicBomb || settings.prestigeType !== "demonic"))
+      return techExclusion({ code: "dark-bomb-disabled" });
+    if ((itemId === "tech-incorporeal" || itemId === "tech-tech_ascension") && settings.prestigeType !== "ascension" && settings.prestigeType !== "apotheosis")
+      return techExclusion({ code: "prestige-unneeded" });
+    if (itemId === "tech-xeno_gift" && input.resources.maximumKnowledge < settings.alienGiftKnowledge)
+      return techExclusion({
+        code: "maximum-knowledge",
+        required: settings.alienGiftKnowledge
+      });
+    if (itemId === "tech-unification2" || itemId === "tech-unite") {
+      if (input.guards.bananaRepublic)
+        return techExclusion({ code: "banana-republic-guard" });
+      if (input.guards.cultOfPersonality)
+        return techExclusion({ code: "cult-of-personality-guard" });
+      if (!settings.allowForeignUnification && !input.guards.pacifist)
+        return techExclusion({ code: "unification-disabled" });
+    }
+    if (itemId === "tech-stabilize_blackhole") {
+      if (input.stabilization.whiteholeResetInterrupted)
+        return null;
+      if (!settings.stabilizeBlackhole)
+        return techExclusion({ code: "stabilization-disabled" });
+      if (settings.prestigeType === "whitehole")
+        return techExclusion({ code: "stabilization-during-whitehole" });
+      if (settings.stabilizationCooldownSeconds > 0 && input.stabilization.lastAtMs !== null) {
+        let elapsedSeconds = (input.stabilization.nowMs - input.stabilization.lastAtMs) / 1e3;
+        if (elapsedSeconds < settings.stabilizationCooldownSeconds)
+          return techExclusion({
+            code: "stabilization-cooldown",
+            seconds: Math.ceil(
+              settings.stabilizationCooldownSeconds - elapsedSeconds
+            )
+          });
+      }
+    }
+    if (itemId === "tech-anthropology" || itemId === "tech-fanaticism") {
+      if (input.guards.secondEvolution) {
+        if (itemId === "tech-anthropology")
+          return techExclusion({ code: "second-evolution-guard" });
+      } else if (itemId !== settings.theologyChoiceOne) {
+        let isFanaticismRace = input.fanaticismAchievements.some(
+          (combination) => input.race.species === combination.race && input.race.gods === combination.god && !combination.unlocked
+        );
+        if (itemId === "tech-anthropology" && !(settings.theologyChoiceOne === "auto" && settings.prestigeType === "mad" && !isFanaticismRace))
+          return techExclusion({ code: "theology-path" });
+        if (itemId === "tech-fanaticism" && !(settings.theologyChoiceOne === "auto" && (settings.prestigeType !== "mad" || isFanaticismRace)))
+          return techExclusion({ code: "theology-path" });
+      }
+    }
+    if (itemId !== settings.theologyChoiceTwo && (itemId === "tech-deify" || itemId === "tech-study")) {
+      let longRun = LONG_RUN_PRESTIGE.has(settings.prestigeType);
+      if (itemId === "tech-deify" && !(settings.theologyChoiceTwo === "auto" && longRun))
+        return techExclusion({ code: "theology-path" });
+      if (itemId === "tech-study" && !(settings.theologyChoiceTwo === "auto" && !longRun))
+        return techExclusion({ code: "theology-path" });
+    }
+    return null;
+  }
+
+  // src/domain/progression/prestige/retirement-prep.ts
+  function isRetirementAssistActive(input) {
+    return input.assistEnabled && input.truepath && input.retirePrestige && !input.isolationResearched;
+  }
+
+  // src/adapters/evolve/ascension-level.ts
+  var ASCENSION_CHALLENGE_FLAGS = Object.freeze([
+    "no_plasmid",
+    "no_trade",
+    "no_craft",
+    "no_crispr",
+    "weak_mastery",
+    "nerfed",
+    "badgenes"
+  ]);
+  function readCapturedAscensionLevel(root) {
+    let race = readProperty(root, "race");
+    if (!isRecord(race)) return;
+    let level = 1;
+    for (let flag of ASCENSION_CHALLENGE_FLAGS)
+      readProperty(race, flag) && level++;
+    return level > 5 ? 5 : level;
+  }
+
+  // src/adapters/evolve/captured-achievements.ts
+  function finiteStar(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readCapturedUniverseAffix(root) {
+    let universe = readProperty(readProperty(root, "race"), "universe");
+    if (typeof universe == "string")
+      switch (universe) {
+        case "evil":
+          return "e";
+        case "antimatter":
+          return "a";
+        case "heavy":
+          return "h";
+        case "micro":
+          return "m";
+        case "magic":
+          return "mg";
+        default:
+          return "l";
+      }
+  }
+  function readCapturedAchievementStar(root, achievementId) {
+    let achievement = readProperty(
+      readProperty(readProperty(root, "stats"), "achieve"),
+      achievementId
+    ), affix = readCapturedUniverseAffix(root);
+    if (achievement == null) return 0;
+    if (!isRecord(achievement) || affix === void 0) return;
+    let star = readProperty(achievement, affix);
+    return star == null ? 0 : finiteStar(star);
+  }
+  function isCapturedAchievementUnlocked(root, achievementId, starLevel) {
+    let star = readCapturedAchievementStar(root, achievementId);
+    return star === void 0 ? void 0 : star >= starLevel;
+  }
+
+  // src/domain/progression/prestige/achievement-guards.ts
+  function calculateAchievementStarLevel(context) {
+    return 1 + Number(context.challengePlasmid) + Number(context.challengeTrade) + Number(context.challengeCraft) + Number(context.challengeCrispr);
+  }
+  function isAchievementGuardActive(input) {
+    if (!input.enabled || input.earnedStar >= input.targetStar) return !1;
+    switch (input.guard) {
+      case "guardPacifist":
+        return input.attacks === 0;
+      case "guardDreaded":
+        return input.prestigeType === "ascension" && input.dreadnoughts === 0;
+      case "guardCultOfPersonality":
+        return !isAchievementGuardActive(input.pacifist);
+      case "guardAnarchist":
+        return input.prestigeType === "mad" && input.government === "anarchy";
+      case "guardEnergetic":
+        return input.prestigeType === "ascension" && input.thermalCollectors === 0;
+      case "guardRedDead":
+        return (input.prestigeType === "whitehole" || input.prestigeType === "vacuum") && input.redSpaceports === 0;
+      case "guardSecondEvolution":
+        return input.gods === input.species;
+    }
+  }
+
+  // src/adapters/evolve/progression/prestige/captured-achievement-guards.ts
+  var GUARD_ACHIEVEMENT_IDS = Object.freeze({
+    guardPacifist: "pacifist",
+    guardCultOfPersonality: "cult_of_personality",
+    guardSecondEvolution: "second_evolution"
+  });
+  function unavailableGuard(field) {
+    return Object.freeze({ status: "unavailable", field });
+  }
+  function readGuardBase(root, settings, guard) {
+    let master = settings.achievementGuards, selected = settings[guard];
+    if (master === !1 || selected === !1)
+      return Object.freeze({ status: "inactive" });
+    if (typeof master != "boolean" || typeof selected != "boolean")
+      return unavailableGuard(guard);
+    let achievementId = GUARD_ACHIEVEMENT_IDS[guard];
+    if (achievementId === void 0) return unavailableGuard(guard);
+    let earnedStar = readCapturedAchievementStar(root, achievementId);
+    if (earnedStar === void 0)
+      return unavailableGuard(`stats.achieve.${achievementId}`);
+    let targetStar = readCapturedAscensionLevel(root);
+    return targetStar === void 0 ? unavailableGuard("race") : Object.freeze({ enabled: !0, earnedStar, targetStar });
+  }
+  function isGuardResult(value) {
+    return isRecord(value) && typeof value.status == "string";
+  }
+  function readPacifistInput(root, settings) {
+    let base = readGuardBase(root, settings, "guardPacifist");
+    if (isGuardResult(base))
+      return base.status === "inactive" ? Object.freeze({
+        guard: "guardPacifist",
+        enabled: !1,
+        earnedStar: 0,
+        targetStar: 0,
+        attacks: 0
+      }) : base;
+    let attacks = readProperty(readProperty(root, "stats"), "attacks");
+    return typeof attacks != "number" || !Number.isFinite(attacks) ? unavailableGuard("stats.attacks") : Object.freeze({ ...base, guard: "guardPacifist", attacks });
+  }
+  function readCapturedAchievementGuard(root, settingsValue, guard) {
+    let settings = isRecord(settingsValue) ? settingsValue : {};
+    if (guard === "guardPacifist") {
+      let input = readPacifistInput(root, settings);
+      return isGuardResult(input) ? input : Object.freeze({
+        status: isAchievementGuardActive(input) ? "active" : "inactive"
+      });
+    }
+    if (guard === "guardCultOfPersonality" || guard === "guardSecondEvolution") {
+      let base = readGuardBase(root, settings, guard);
+      if (isGuardResult(base)) return base;
+      if (guard === "guardSecondEvolution") {
+        let race = readProperty(root, "race"), species = readProperty(race, "species"), gods = readProperty(race, "gods");
+        return typeof species != "string" || typeof gods != "string" ? unavailableGuard("race.species") : Object.freeze({
+          status: isAchievementGuardActive({
+            ...base,
+            guard,
+            species,
+            gods
+          }) ? "active" : "inactive"
+        });
+      }
+      let pacifist = readPacifistInput(root, settings);
+      return isGuardResult(pacifist) ? pacifist : Object.freeze({
+        status: isAchievementGuardActive({ ...base, guard, pacifist }) ? "active" : "inactive"
+      });
+    }
+    return unavailableGuard(guard);
+  }
+
+  // src/adapters/evolve/runtime-catalogs.ts
+  var biomeList = [
+    "grassland",
+    "oceanic",
+    "forest",
+    "desert",
+    "volcanic",
+    "tundra",
+    "savanna",
+    "swamp",
+    "taiga",
+    "ashland",
+    "hellscape",
+    "eden"
+  ], traitList = [
+    "none",
+    "toxic",
+    "mellow",
+    "rage",
+    "stormy",
+    "ozone",
+    "magnetic",
+    "trashed",
+    "elliptical",
+    "flare",
+    "dense",
+    "unstable",
+    "permafrost",
+    "retrograde",
+    "kamikaze"
+  ], extraList = [
+    "Achievement",
+    "Orbit",
+    "Copper",
+    "Iron",
+    "Aluminium",
+    "Coal",
+    "Oil",
+    "Titanium",
+    "Uranium",
+    "Iridium"
+  ], planetBiomes = [
+    "eden",
+    "ashland",
+    "volcanic",
+    "taiga",
+    "tundra",
+    "swamp",
+    "oceanic",
+    "forest",
+    "savanna",
+    "grassland",
+    "desert",
+    "hellscape"
+  ], planetTraits = [
+    "elliptical",
+    "magnetic",
+    "permafrost",
+    "rage",
+    "retrograde",
+    "none",
+    "stormy",
+    "toxic",
+    "trashed",
+    "dense",
+    "unstable",
+    "ozone",
+    "mellow",
+    "flare",
+    "kamikaze"
+  ], planetBiomeGenus = {
+    hellscape: "demonic",
+    eden: "angelic",
+    oceanic: "aquatic",
+    forest: "fey",
+    desert: "sand",
+    volcanic: "heat",
+    tundra: "polar"
+  }, fanatAchievements = [
+    { god: "sharkin", race: "entish", achieve: "madagascar_tree" },
+    { god: "sporgar", race: "human", achieve: "infested" },
+    { god: "shroomi", race: "troll", achieve: "godwin" }
+  ], challenges = [
+    [
+      { id: "plasmid", trait: "no_plasmid" },
+      { id: "mastery", trait: "weak_mastery" },
+      { id: "nerfed", trait: "nerfed" }
+    ],
+    [
+      { id: "crispr", trait: "no_crispr" },
+      { id: "badgenes", trait: "badgenes" }
+    ],
+    [{ id: "trade", trait: "no_trade" }],
+    [{ id: "craft", trait: "no_craft" }],
+    [{ id: "joyless", trait: "joyless" }],
+    [{ id: "steelen", trait: "steelen" }],
+    [{ id: "decay", trait: "decay" }],
+    [{ id: "emfield", trait: "emfield" }],
+    [{ id: "inflation", trait: "inflation" }],
+    [{ id: "sludge", trait: "sludge" }],
+    [{ id: "ultra_sludge", trait: "ultra_sludge" }],
+    [{ id: "orbit_decay", trait: "orbit_decay" }],
+    [
+      { id: "gravity_well", trait: "gravity_well" },
+      { id: "witch_hunter", trait: "witch_hunter" },
+      { id: "warlord", trait: "warlord" }
+    ],
+    [{ id: "junker", trait: "junker" }],
+    [{ id: "cataclysm", trait: "cataclysm" }],
+    [{ id: "banana", trait: "banana" }],
+    [{ id: "truepath", trait: "truepath" }],
+    [{ id: "lone_survivor", trait: "lone_survivor" }],
+    [{ id: "fasting", trait: "fasting" }]
+  ];
+  var evolutionSettingsToStore = [
+    "userEvolutionTarget",
+    "userEvolutionGenus",
+    "prestigeType",
+    ...challenges.map((c) => "challenge_" + c[0].id)
+  ];
+  var settingsSections = [
+    "toggle",
+    "general",
+    "prestige",
+    "evolution",
+    "research",
+    "market",
+    "storage",
+    "production",
+    "war",
+    "hell",
+    "fleet",
+    "job",
+    "building",
+    "project",
+    "government",
+    "authority",
+    "logging",
+    "trait",
+    "weighting",
+    "ejector",
+    "planet",
+    "mech",
+    "magic",
+    "trigger"
+  ];
+
+  // src/domain/progression/prestige/prestige.ts
+  var WHITEHOLE_REPAIR_TECH_ID = "tech-stabilize_blackhole", WITCH_ASCENSION_ACT = [
+    { kind: "reset-modifier-keys" },
+    { kind: "log-prestige" },
+    { kind: "absorption-chamber-action" },
+    { kind: "set-goal", goal: "GameOverMan" }
+  ];
+  function tryReset(goal, check, act) {
+    return check ? goal !== "Reset" ? [{ kind: "set-goal", goal: "Reset" }] : act : [];
+  }
+  function planPrestige(input) {
+    let { goal, branch } = input;
+    switch (branch.type) {
+      case "noop":
+        return [];
+      case "mad": {
+        let act = [];
+        return branch.armed && act.push({ kind: "arm-mad" }), (!branch.waitForPopulation || branch.currentSoldiers >= branch.maxSoldiers && branch.currentPopulation >= branch.maxPopulation && branch.currentSoldiers + branch.currentPopulation >= branch.requiredPopulation) && act.push(
+          { kind: "set-goal", goal: "GameOverMan" },
+          { kind: "log-prestige" },
+          { kind: "launch-mad" }
+        ), tryReset(goal, branch.eligible, act);
+      }
+      case "bioseed": {
+        let act = branch.launchUnlocked ? [{ kind: "click-building", id: "GasSpaceDockLaunch" }] : branch.prepUnlocked ? [{ kind: "click-building", id: "GasSpaceDockPrepForLaunch" }] : [{ kind: "cache-building-options", id: "GasSpaceDock" }];
+        return tryReset(goal, branch.eligible, act);
+      }
+      case "cataclysm": {
+        let act = [];
+        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push(
+          { kind: "log-prestige" },
+          { kind: "click-tech", id: "tech-dial_it_to_11" }
+        ), tryReset(goal, branch.eligible, act);
+      }
+      case "whitehole": {
+        if (branch.whiteholeLevel >= 4)
+          return [];
+        let act = [];
+        branch.exoticInfusionReady && act.push({ kind: "log-prestige" });
+        for (let id of [
+          "tech-infusion_confirm",
+          "tech-infusion_check",
+          "tech-exotic_infusion"
+        ])
+          act.push({ kind: "click-tech", id });
+        return branch.confirmReady && act.push({ kind: "mark-whitehole-reset-started" }), tryReset(goal, branch.eligible, act);
+      }
+      case "whitehole-repair":
+        return tryReset(
+          goal,
+          branch.eligible,
+          branch.repairReady ? [{ kind: "click-tech", id: WHITEHOLE_REPAIR_TECH_ID }] : []
+        );
+      case "apocalypse":
+        return tryReset(goal, branch.eligible, [
+          { kind: "log-prestige" },
+          { kind: "click-tech", id: "tech-protocol66" },
+          { kind: "click-tech", id: "tech-protocol66a" }
+        ]);
+      case "ascension":
+        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
+          { kind: "reset-modifier-keys" },
+          { kind: "click-building", id: "SiriusAscend" }
+        ]);
+      case "demonic":
+        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
+          { kind: "log-prestige" },
+          {
+            kind: "click-tech",
+            id: branch.fasting ? "tech-final_ingredient" : "tech-demonic_infusion"
+          }
+        ]);
+      case "building-reset":
+        return tryReset(goal, branch.unlocked, [
+          { kind: "reset-modifier-keys" },
+          { kind: "click-building", id: branch.building }
+        ]);
+      case "celestial-lab":
+        return tryReset(goal, branch.eligible, [
+          { kind: "complete-celestial-lab", mode: branch.mode }
+        ]);
+    }
+  }
+
+  // src/adapters/evolve/progression/research/tech-conflicts.ts
+  function booleanSetting(settings, field) {
+    let value = settings[field];
+    return typeof value == "boolean" ? value : void 0;
+  }
+  function stringSetting(settings, field) {
+    let value = settings[field];
+    return typeof value == "string" ? value : void 0;
+  }
+  function numberSetting(settings, field) {
+    let value = settings[field];
+    return isNonNegativeNumber(value) ? value : void 0;
+  }
+  function readTechConflictSettings(rawSettings) {
+    if (!isNonArrayRecord(rawSettings))
+      return Object.freeze({ status: "unavailable" });
+    let rawIgnoredResearch = rawSettings.researchIgnore;
+    if (!Array.isArray(rawIgnoredResearch) || !rawIgnoredResearch.every((value) => typeof value == "string"))
+      return Object.freeze({ status: "unavailable", field: "researchIgnore" });
+    let settings = {
+      ignoredResearch: Object.freeze([...rawIgnoredResearch]),
+      prestigeType: stringSetting(rawSettings, "prestigeType"),
+      saveWhiteholeSoulGems: booleanSetting(
+        rawSettings,
+        "prestigeWhiteholeSaveGems"
+      ),
+      vaccinationStrategy: stringSetting(rawSettings, "prestigeVaxStrat"),
+      useDemonicBomb: booleanSetting(rawSettings, "prestigeDemonicBomb"),
+      allowForeignUnification: booleanSetting(rawSettings, "foreignUnification"),
+      stabilizeBlackhole: booleanSetting(
+        rawSettings,
+        "prestigeWhiteholeStabiliseMass"
+      ),
+      stabilizationCooldownSeconds: numberSetting(
+        rawSettings,
+        "prestigeWhiteholeStabiliseCooldown"
+      ),
+      theologyChoiceOne: stringSetting(rawSettings, "userResearchTheology_1"),
+      theologyChoiceTwo: stringSetting(rawSettings, "userResearchTheology_2"),
+      alienGiftKnowledge: numberSetting(rawSettings, "fleetAlienGiftKnowledge")
+    };
+    for (let [field, value] of Object.entries(settings))
+      if (value === void 0)
+        return Object.freeze({ status: "unavailable", field });
+    return Object.freeze({
+      status: "ready",
+      settings: Object.freeze(
+        settings
+      )
+    });
+  }
+
+  // src/adapters/evolve/progression/research/captured-tech-conflicts.ts
+  var SOUL_GEM_SENSITIVE = "tech-virtual_reality", KNOWLEDGE_GATED = "tech-xeno_gift", UNIFICATION_IDS = /* @__PURE__ */ new Set([
+    "tech-unification2",
+    "tech-unite"
+  ]), THEOLOGY_IDS = /* @__PURE__ */ new Set([
+    "tech-anthropology",
+    "tech-fanaticism"
+  ]), ISOLATION_ID = "tech-isolation_protocol", STABILIZE_ID = "tech-stabilize_blackhole", NO_CONFLICT = Object.freeze({
+    status: "none"
+  }), EMPTY_SHORTFALL = Object.freeze([]);
+  function conflictUnavailable(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function finiteAmount(value) {
+    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
+  }
+  function createCapturedTechConflictReader(dependencies) {
+    let { rootState, readSettings, resources } = dependencies;
+    function readResourceFacts(itemId, needsSoulGems) {
+      let needsKnowledge = itemId === KNOWLEDGE_GATED;
+      if (!needsSoulGems && !needsKnowledge)
+        return Object.freeze({ soulGems: 0, maximumKnowledge: 0 });
+      let ids = [];
+      needsSoulGems && ids.push("Soul_Gem"), needsKnowledge && ids.push("Knowledge");
+      let sample = resources.readResources(ids);
+      if (sample === void 0) return;
+      let soulGems = needsSoulGems ? finiteAmount(sample.resources.get("Soul_Gem")?.amount) : 0, maximumKnowledge = needsKnowledge ? finiteAmount(sample.resources.get("Knowledge")?.max) : 0;
+      if (!(soulGems === void 0 || maximumKnowledge === void 0))
+        return Object.freeze({ soulGems, maximumKnowledge });
+    }
+    return Object.freeze({
+      evaluate(tech) {
+        let itemId = tech.elementId, settingsRead = readTechConflictSettings(readSettings());
+        if (settingsRead.status !== "ready")
+          return conflictUnavailable("invalid-settings", settingsRead.field);
+        let settings = settingsRead.settings;
+        if (itemId === STABILIZE_ID)
+          return conflictUnavailable(
+            "stabilization-state",
+            "whiteholeLastStabilise"
+          );
+        let root = rootState.readRoot();
+        if (root === void 0) return conflictUnavailable("invalid-game-state");
+        let race = readProperty(root, "race"), species = readProperty(race, "species"), gods = readProperty(race, "gods");
+        if (typeof species != "string" || typeof gods != "string")
+          return conflictUnavailable("invalid-game-state", "race.species");
+        let guardStarLevel = readCapturedAscensionLevel(root);
+        if (guardStarLevel === void 0)
+          return conflictUnavailable("invalid-game-state", "race");
+        let rawSoulGemCost = readProperty(tech.cost, "Soul_Gem"), soulGemCost = rawSoulGemCost === void 0 ? null : finiteAmount(rawSoulGemCost);
+        if (soulGemCost === void 0)
+          return conflictUnavailable("invalid-resource", "cost.Soul_Gem");
+        let needsSoulGems = settings.prestigeType === "whitehole" && settings.saveWhiteholeSoulGems && itemId !== SOUL_GEM_SENSITIVE && soulGemCost !== null, resourceFacts = readResourceFacts(itemId, needsSoulGems);
+        if (resourceFacts === void 0)
+          return conflictUnavailable("invalid-resource");
+        let cultOfPersonality = !1, pacifist = !1;
+        if (UNIFICATION_IDS.has(itemId)) {
+          if (readProperty(race, "banana") === !0)
+            return conflictUnavailable("banana-republic-progress", "race.banana");
+          for (let [guard, assign] of [
+            [
+              "guardCultOfPersonality",
+              (value) => {
+                cultOfPersonality = value;
+              }
+            ],
+            [
+              "guardPacifist",
+              (value) => {
+                pacifist = value;
+              }
+            ]
+          ]) {
+            let result = readCapturedAchievementGuard(
+              root,
+              readSettings(),
+              guard
+            );
+            if (result.status === "unavailable")
+              return conflictUnavailable("achievement-guard", result.field);
+            assign(result.status === "active");
+          }
+        }
+        if (itemId === ISOLATION_ID && settings.prestigeType === "retire") {
+          let rawAssist = readProperty(
+            readSettings(),
+            "retirementChallengeAssist"
+          );
+          if (rawAssist !== void 0 && typeof rawAssist != "boolean")
+            return conflictUnavailable(
+              "invalid-settings",
+              "retirementChallengeAssist"
+            );
+          let assistInput = Object.freeze({
+            assistEnabled: rawAssist === !0,
+            truepath: readProperty(race, "truepath") === !0,
+            retirePrestige: !0,
+            isolationResearched: (finiteAmount(
+              readProperty(readProperty(root, "tech"), "isolation")
+            ) ?? 0) >= 1
+          });
+          if (isRetirementAssistActive(assistInput))
+            return conflictUnavailable(
+              "retirement-preparation",
+              "TauFusionGenerator"
+            );
+        }
+        let secondEvolution = !1, fanaticismAchievements = [];
+        if (THEOLOGY_IDS.has(itemId)) {
+          let guard = readCapturedAchievementGuard(
+            root,
+            readSettings(),
+            "guardSecondEvolution"
+          );
+          if (guard.status === "unavailable")
+            return conflictUnavailable("achievement-guard", guard.field);
+          if (secondEvolution = guard.status === "active", !secondEvolution)
+            for (let combination of fanatAchievements) {
+              let unlocked = isCapturedAchievementUnlocked(
+                root,
+                combination.achieve,
+                guardStarLevel
+              );
+              if (unlocked === void 0)
+                return conflictUnavailable(
+                  "invalid-game-state",
+                  `stats.achieve.${combination.achieve}`
+                );
+              fanaticismAchievements.push(
+                Object.freeze({
+                  race: combination.race,
+                  god: combination.god,
+                  unlocked
+                })
+              );
+            }
+        }
+        let input = Object.freeze({
+          itemId,
+          soulGemCost,
+          settings,
+          resources: resourceFacts,
+          // Reached only by the stabilization rule, which returned above.
+          stabilization: Object.freeze({
+            lastAtMs: null,
+            nowMs: 0,
+            whiteholeResetInterrupted: !1
+          }),
+          race: Object.freeze({
+            species,
+            gods,
+            achievementLevel: guardStarLevel
+          }),
+          guards: Object.freeze({
+            // A banana run rejected the candidate above, so the policy only ever sees this guard off.
+            bananaRepublic: !1,
+            cultOfPersonality,
+            pacifist,
+            secondEvolution,
+            // An active assist rejected the candidate above, so the policy only ever sees it off and
+            // its shortfall list empty.
+            retirementAssist: !1,
+            retirementMissing: EMPTY_SHORTFALL
+          }),
+          fanaticismAchievements: Object.freeze(fanaticismAchievements)
+        }), exclusion = findTechConflict(input);
+        return exclusion === null ? NO_CONFLICT : Object.freeze({ status: "conflict", conflict: exclusion });
+      }
+    });
+  }
+
   // src/bootstrap/captured-research-control.ts
   var NOT_CAPTURED2 = Object.freeze({
     status: "rejected",
@@ -4479,7 +5209,15 @@
     }), conflicts = createCapturedCostConflictReader({
       resources,
       reservations
-    });
+    }), techConflicts = createCapturedTechConflictReader({
+      rootState,
+      readSettings: dependencies.readSettings,
+      resources
+    }), reportedRejections = /* @__PURE__ */ new Set(), onRejected = (techId, reason) => {
+      if (onUnavailable === void 0) return;
+      let message = `${techId}: research excluded (${reason})`;
+      reportedRejections.has(message) || (reportedRejections.add(message), onUnavailable(message));
+    };
     return Object.freeze({
       runCycle() {
         if (rootState.readRoot() === void 0) return NOT_CAPTURED2;
@@ -4490,7 +5228,9 @@
             offered: offeredThisCycle,
             resources,
             conflicts,
+            techConflicts,
             controls: controls2,
+            onRejected,
             ...onActivity === void 0 ? {} : { onActivity }
           });
           return runResearchAutomation({ reader, executor, diagnostics });
@@ -5183,6 +5923,7 @@
     }), research = createCapturedResearchControl({
       rootState,
       controls: controls2,
+      readSettings,
       drawnActions,
       mountSuppression,
       panels,
@@ -5745,90 +6486,6 @@
     return decision === null ? SUCCEEDED5 : dependencies.executor.execute(decision);
   }
 
-  // src/domain/progression/prestige/prestige.ts
-  var WHITEHOLE_REPAIR_TECH_ID = "tech-stabilize_blackhole", WITCH_ASCENSION_ACT = [
-    { kind: "reset-modifier-keys" },
-    { kind: "log-prestige" },
-    { kind: "absorption-chamber-action" },
-    { kind: "set-goal", goal: "GameOverMan" }
-  ];
-  function tryReset(goal, check, act) {
-    return check ? goal !== "Reset" ? [{ kind: "set-goal", goal: "Reset" }] : act : [];
-  }
-  function planPrestige(input) {
-    let { goal, branch } = input;
-    switch (branch.type) {
-      case "noop":
-        return [];
-      case "mad": {
-        let act = [];
-        return branch.armed && act.push({ kind: "arm-mad" }), (!branch.waitForPopulation || branch.currentSoldiers >= branch.maxSoldiers && branch.currentPopulation >= branch.maxPopulation && branch.currentSoldiers + branch.currentPopulation >= branch.requiredPopulation) && act.push(
-          { kind: "set-goal", goal: "GameOverMan" },
-          { kind: "log-prestige" },
-          { kind: "launch-mad" }
-        ), tryReset(goal, branch.eligible, act);
-      }
-      case "bioseed": {
-        let act = branch.launchUnlocked ? [{ kind: "click-building", id: "GasSpaceDockLaunch" }] : branch.prepUnlocked ? [{ kind: "click-building", id: "GasSpaceDockPrepForLaunch" }] : [{ kind: "cache-building-options", id: "GasSpaceDock" }];
-        return tryReset(goal, branch.eligible, act);
-      }
-      case "cataclysm": {
-        let act = [];
-        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push(
-          { kind: "log-prestige" },
-          { kind: "click-tech", id: "tech-dial_it_to_11" }
-        ), tryReset(goal, branch.eligible, act);
-      }
-      case "whitehole": {
-        if (branch.whiteholeLevel >= 4)
-          return [];
-        let act = [];
-        branch.exoticInfusionReady && act.push({ kind: "log-prestige" });
-        for (let id of [
-          "tech-infusion_confirm",
-          "tech-infusion_check",
-          "tech-exotic_infusion"
-        ])
-          act.push({ kind: "click-tech", id });
-        return branch.confirmReady && act.push({ kind: "mark-whitehole-reset-started" }), tryReset(goal, branch.eligible, act);
-      }
-      case "whitehole-repair":
-        return tryReset(
-          goal,
-          branch.eligible,
-          branch.repairReady ? [{ kind: "click-tech", id: WHITEHOLE_REPAIR_TECH_ID }] : []
-        );
-      case "apocalypse":
-        return tryReset(goal, branch.eligible, [
-          { kind: "log-prestige" },
-          { kind: "click-tech", id: "tech-protocol66" },
-          { kind: "click-tech", id: "tech-protocol66a" }
-        ]);
-      case "ascension":
-        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
-          { kind: "reset-modifier-keys" },
-          { kind: "click-building", id: "SiriusAscend" }
-        ]);
-      case "demonic":
-        return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
-          { kind: "log-prestige" },
-          {
-            kind: "click-tech",
-            id: branch.fasting ? "tech-final_ingredient" : "tech-demonic_infusion"
-          }
-        ]);
-      case "building-reset":
-        return tryReset(goal, branch.unlocked, [
-          { kind: "reset-modifier-keys" },
-          { kind: "click-building", id: branch.building }
-        ]);
-      case "celestial-lab":
-        return tryReset(goal, branch.eligible, [
-          { kind: "complete-celestial-lab", mode: branch.mode }
-        ]);
-    }
-  }
-
   // src/application/prestige.ts
   function runPrestige({
     reader,
@@ -5852,25 +6509,6 @@
   }
   function isWitchAscensionPrestigeAvailable(view, demonic = !1) {
     return demonic && (!view.tech.forbiddenLevelFive || view.game.fasting && !view.tech.dishLevelTwo) ? !1 : view.buildings.absorptionChambers >= 100 && view.buildings.soulCapacitorEnergy >= 1e8 && isPillarFinished(view);
-  }
-
-  // src/adapters/evolve/ascension-level.ts
-  var ASCENSION_CHALLENGE_FLAGS = Object.freeze([
-    "no_plasmid",
-    "no_trade",
-    "no_craft",
-    "no_crispr",
-    "weak_mastery",
-    "nerfed",
-    "badgenes"
-  ]);
-  function readCapturedAscensionLevel(root) {
-    let race = readProperty(root, "race");
-    if (!isRecord(race)) return;
-    let level = 1;
-    for (let flag of ASCENSION_CHALLENGE_FLAGS)
-      readProperty(race, flag) && level++;
-    return level > 5 ? 5 : level;
   }
 
   // src/adapters/evolve/progression/prestige/captured-mad.ts
@@ -23883,150 +24521,6 @@
     });
   }
 
-  // src/adapters/evolve/runtime-catalogs.ts
-  var biomeList = [
-    "grassland",
-    "oceanic",
-    "forest",
-    "desert",
-    "volcanic",
-    "tundra",
-    "savanna",
-    "swamp",
-    "taiga",
-    "ashland",
-    "hellscape",
-    "eden"
-  ], traitList = [
-    "none",
-    "toxic",
-    "mellow",
-    "rage",
-    "stormy",
-    "ozone",
-    "magnetic",
-    "trashed",
-    "elliptical",
-    "flare",
-    "dense",
-    "unstable",
-    "permafrost",
-    "retrograde",
-    "kamikaze"
-  ], extraList = [
-    "Achievement",
-    "Orbit",
-    "Copper",
-    "Iron",
-    "Aluminium",
-    "Coal",
-    "Oil",
-    "Titanium",
-    "Uranium",
-    "Iridium"
-  ], planetBiomes = [
-    "eden",
-    "ashland",
-    "volcanic",
-    "taiga",
-    "tundra",
-    "swamp",
-    "oceanic",
-    "forest",
-    "savanna",
-    "grassland",
-    "desert",
-    "hellscape"
-  ], planetTraits = [
-    "elliptical",
-    "magnetic",
-    "permafrost",
-    "rage",
-    "retrograde",
-    "none",
-    "stormy",
-    "toxic",
-    "trashed",
-    "dense",
-    "unstable",
-    "ozone",
-    "mellow",
-    "flare",
-    "kamikaze"
-  ], planetBiomeGenus = {
-    hellscape: "demonic",
-    eden: "angelic",
-    oceanic: "aquatic",
-    forest: "fey",
-    desert: "sand",
-    volcanic: "heat",
-    tundra: "polar"
-  };
-  var challenges = [
-    [
-      { id: "plasmid", trait: "no_plasmid" },
-      { id: "mastery", trait: "weak_mastery" },
-      { id: "nerfed", trait: "nerfed" }
-    ],
-    [
-      { id: "crispr", trait: "no_crispr" },
-      { id: "badgenes", trait: "badgenes" }
-    ],
-    [{ id: "trade", trait: "no_trade" }],
-    [{ id: "craft", trait: "no_craft" }],
-    [{ id: "joyless", trait: "joyless" }],
-    [{ id: "steelen", trait: "steelen" }],
-    [{ id: "decay", trait: "decay" }],
-    [{ id: "emfield", trait: "emfield" }],
-    [{ id: "inflation", trait: "inflation" }],
-    [{ id: "sludge", trait: "sludge" }],
-    [{ id: "ultra_sludge", trait: "ultra_sludge" }],
-    [{ id: "orbit_decay", trait: "orbit_decay" }],
-    [
-      { id: "gravity_well", trait: "gravity_well" },
-      { id: "witch_hunter", trait: "witch_hunter" },
-      { id: "warlord", trait: "warlord" }
-    ],
-    [{ id: "junker", trait: "junker" }],
-    [{ id: "cataclysm", trait: "cataclysm" }],
-    [{ id: "banana", trait: "banana" }],
-    [{ id: "truepath", trait: "truepath" }],
-    [{ id: "lone_survivor", trait: "lone_survivor" }],
-    [{ id: "fasting", trait: "fasting" }]
-  ];
-  var evolutionSettingsToStore = [
-    "userEvolutionTarget",
-    "userEvolutionGenus",
-    "prestigeType",
-    ...challenges.map((c) => "challenge_" + c[0].id)
-  ];
-  var settingsSections = [
-    "toggle",
-    "general",
-    "prestige",
-    "evolution",
-    "research",
-    "market",
-    "storage",
-    "production",
-    "war",
-    "hell",
-    "fleet",
-    "job",
-    "building",
-    "project",
-    "government",
-    "authority",
-    "logging",
-    "trait",
-    "weighting",
-    "ejector",
-    "planet",
-    "mech",
-    "magic",
-    "trigger"
-  ];
-
   // src/adapters/evolve/progression/build/captured-building-catalog.ts
   function readCapturedBuildingRootStateRecord(root, binding, act) {
     let parts = splitActionId(binding);
@@ -26157,30 +26651,6 @@
     ), Object.freeze({ elementId: ordered[0].planet.id });
   }
 
-  // src/domain/progression/prestige/achievement-guards.ts
-  function calculateAchievementStarLevel(context) {
-    return 1 + Number(context.challengePlasmid) + Number(context.challengeTrade) + Number(context.challengeCraft) + Number(context.challengeCrispr);
-  }
-  function isAchievementGuardActive(input) {
-    if (!input.enabled || input.earnedStar >= input.targetStar) return !1;
-    switch (input.guard) {
-      case "guardPacifist":
-        return input.attacks === 0;
-      case "guardDreaded":
-        return input.prestigeType === "ascension" && input.dreadnoughts === 0;
-      case "guardCultOfPersonality":
-        return !isAchievementGuardActive(input.pacifist);
-      case "guardAnarchist":
-        return input.prestigeType === "mad" && input.government === "anarchy";
-      case "guardEnergetic":
-        return input.prestigeType === "ascension" && input.thermalCollectors === 0;
-      case "guardRedDead":
-        return (input.prestigeType === "whitehole" || input.prestigeType === "vacuum") && input.redSpaceports === 0;
-      case "guardSecondEvolution":
-        return input.gods === input.species;
-    }
-  }
-
   // src/adapters/evolve/progression/prestige/achievement-guards.ts
   function levelUnavailable(reason, field) {
     return Object.freeze(
@@ -26208,43 +26678,6 @@
       context[target] = value === !0;
     }
     return Object.freeze({ status: "ready", context: Object.freeze(context) });
-  }
-
-  // src/adapters/evolve/captured-achievements.ts
-  function finiteStar(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
-  function readCapturedUniverseAffix(root) {
-    let universe = readProperty(readProperty(root, "race"), "universe");
-    if (typeof universe == "string")
-      switch (universe) {
-        case "evil":
-          return "e";
-        case "antimatter":
-          return "a";
-        case "heavy":
-          return "h";
-        case "micro":
-          return "m";
-        case "magic":
-          return "mg";
-        default:
-          return "l";
-      }
-  }
-  function readCapturedAchievementStar(root, achievementId) {
-    let achievement = readProperty(
-      readProperty(readProperty(root, "stats"), "achieve"),
-      achievementId
-    ), affix = readCapturedUniverseAffix(root);
-    if (achievement == null) return 0;
-    if (!isRecord(achievement) || affix === void 0) return;
-    let star = readProperty(achievement, affix);
-    return star == null ? 0 : finiteStar(star);
-  }
-  function isCapturedAchievementUnlocked(root, achievementId, starLevel) {
-    let star = readCapturedAchievementStar(root, achievementId);
-    return star === void 0 ? void 0 : star >= starLevel;
   }
 
   // src/adapters/evolve/progression/evolution/captured-evolution-catalog.ts

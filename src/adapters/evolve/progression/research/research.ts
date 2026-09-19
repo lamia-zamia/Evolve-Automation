@@ -76,6 +76,11 @@ export function createResearchReader(
           hasCostConflict: affordable
             ? Boolean(dependencies.getCostConflict(tech))
             : false,
+          // The compatibility runtime applies research exclusions upstream of this reader: only
+          // technologies `getTechConflict` cleared reach `state.unlockedTechs` in
+          // `planning/priority-targets.ts`. The captured cycle has no such stage and asks its own
+          // conflict reader per candidate instead.
+          hasTechConflict: false,
         });
         techs.push(view);
         if (view.affordable && !view.hasCostConflict) {

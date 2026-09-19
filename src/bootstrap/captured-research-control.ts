@@ -15,6 +15,7 @@ import { createCapturedTabDiscovery } from "../adapters/evolve/captured-tab-disc
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
 import { createCapturedResearchAdapter } from "../adapters/evolve/progression/research/captured-research.ts";
+import { createCapturedTechConflictReader } from "../adapters/evolve/progression/research/captured-tech-conflicts.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
@@ -27,6 +28,8 @@ import type { TickDiagnostics } from "../ports/tick.ts";
 export interface CapturedResearchControlDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  /** The effective settings the research exclusions decide on. */
+  readonly readSettings: () => unknown;
   readonly drawnActions: GameDrawnActionsReader;
   readonly mountSuppression: GameMountSuppression;
   readonly panels: GamePanelWorkspace;
@@ -107,6 +110,22 @@ export function createCapturedResearchControl(
     resources,
     reservations,
   });
+  const techConflicts = createCapturedTechConflictReader({
+    rootState,
+    readSettings: dependencies.readSettings,
+    resources,
+  });
+  // A rejected candidate is reported once per technology and reason. The exclusions that fail closed
+  // do so for as long as the game keeps offering that technology, and a line per cycle would bury
+  // everything else.
+  const reportedRejections = new Set<string>();
+  const onRejected = (techId: string, reason: string) => {
+    if (onUnavailable === undefined) return;
+    const message = `${techId}: research excluded (${reason})`;
+    if (reportedRejections.has(message)) return;
+    reportedRejections.add(message);
+    onUnavailable(message);
+  };
 
   return Object.freeze({
     runCycle(): CommandExecutionOutcome {
@@ -123,7 +142,9 @@ export function createCapturedResearchControl(
           offered: offeredThisCycle,
           resources,
           conflicts,
+          techConflicts,
           controls,
+          onRejected,
           ...(onActivity === undefined ? {} : { onActivity }),
         });
         return runResearchAutomation({ reader, executor, diagnostics });
